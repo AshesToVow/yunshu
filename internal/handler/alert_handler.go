@@ -40,7 +40,7 @@ func (h *AlertHandler) CreateChannel(c *gin.Context) {
 func (h *AlertHandler) UpdateChannel(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertChannelUpsertRequest) (*model.AlertChannel, error) {
@@ -52,11 +52,11 @@ func (h *AlertHandler) UpdateChannel(c *gin.Context) {
 func (h *AlertHandler) DeleteChannel(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	if err := h.svc.DeleteChannel(c.Request.Context(), id); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "deleted"})
@@ -66,7 +66,7 @@ func (h *AlertHandler) DeleteChannel(c *gin.Context) {
 func (h *AlertHandler) TestChannel(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSONOK(c, gin.H{"message": "test sent"}, func(ctx context.Context, req service.AlertTestRequest) error {
@@ -88,7 +88,7 @@ func (h *AlertHandler) ListEvents(c *gin.Context) {
 	}
 	list, total, page, pageSize, err := h.svc.ListEvents(c.Request.Context(), q)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{
@@ -104,7 +104,7 @@ func (h *AlertHandler) ListEvents(c *gin.Context) {
 func (h *AlertHandler) HistoryStats(c *gin.Context) {
 	stats, err := h.svc.HistoryStats(c.Request.Context())
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, stats)
@@ -135,7 +135,7 @@ func (h *AlertHandler) ReceiveAlertmanager(c *gin.Context) {
 
 	// Service 内 Redis 入队成功即返回；失败时同步降级处理，避免 handler 再套无界 goroutine。
 	if err := h.svc.ReceiveAlertmanager(c.Request.Context(), payload); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 

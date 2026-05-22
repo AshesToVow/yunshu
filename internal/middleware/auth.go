@@ -9,8 +9,8 @@ import (
 	"yunshu/internal/pkg/auth"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/svclog"
-	"yunshu/internal/repository"
+	"yunshu/internal/pkg/logutil"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/store"
 
 	"github.com/gin-gonic/gin"
@@ -22,14 +22,14 @@ func respondSessionStoreError(c *gin.Context, _ *logx.Logger, err error) {
 	case errors.Is(err, store.ErrSessionNotFound):
 		response.Error(c, constants.ErrLoginSessionExpired)
 	case errors.Is(err, store.ErrRedisRequired), errors.Is(err, store.ErrRedisUnavailable):
-		svclog.HTTP("http.auth").Error("redis session validation failed", "error", err)
+		logutil.HTTP("http.auth").Error("redis session validation failed", "error", err)
 		response.Error(c, constants.ErrInternal)
 	default:
-		svclog.HTTP("http.auth").Error("session validation failed", "error", err)
+		logutil.HTTP("http.auth").Error("session validation failed", "error", err)
 	}
 }
 
-func Auth(secret string, redisClient *redis.Client, userRepo *repository.UserRepository, logger *logx.Logger) gin.HandlerFunc {
+func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepository, logger *logx.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
 		if header == "" || !strings.HasPrefix(header, "Bearer ") {
@@ -41,7 +41,7 @@ func Auth(secret string, redisClient *redis.Client, userRepo *repository.UserRep
 		tokenString := strings.TrimPrefix(header, "Bearer ")
 		claims, err := auth.ParseToken(secret, tokenString)
 		if err != nil {
-			svclog.HTTP("http.auth").Warn("parse token failed", "error", err)
+			logutil.HTTP("http.auth").Warn("parse token failed", "error", err)
 			response.Error(c, constants.ErrAccessTokenInvalid)
 			c.Abort()
 			return
@@ -84,7 +84,7 @@ func Auth(secret string, redisClient *redis.Client, userRepo *repository.UserRep
 
 		c.Set(auth.ContextClaimsKey, claims)
 		c.Set(auth.ContextUserKey, currentUser)
-		c.Request = c.Request.WithContext(logx.WithUser(c.Request.Context(), user.ID, user.Username))
+		c.Request = c.Request.WithContext(logutil.WithUser(c.Request.Context(), user.ID, user.Username))
 		c.Next()
 	}
 }

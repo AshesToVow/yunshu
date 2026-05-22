@@ -132,25 +132,25 @@ type RoleListQuery struct {
 }
 
 type UserGroupCreateRequest struct {
-	Name             string `json:"name" binding:"required,max=64"`
-	Code             string `json:"code" binding:"required,max=64"`
-	Description      string `json:"description" binding:"omitempty,max=255"`
-	Status           int    `json:"status"`
-	ScopeProjectID   *uint  `json:"scope_project_id"`
+	Name           string `json:"name" binding:"required,max=64"`
+	Code           string `json:"code" binding:"required,max=64"`
+	Description    string `json:"description" binding:"omitempty,max=255"`
+	Status         int    `json:"status"`
+	ScopeProjectID *uint  `json:"scope_project_id"`
 }
 
 type UserGroupUpdateRequest struct {
-	Name             *string `json:"name" binding:"omitempty,max=64"`
-	Description      *string `json:"description" binding:"omitempty,max=255"`
-	Status           *int    `json:"status"`
-	ScopeProjectID   *uint   `json:"scope_project_id"`
+	Name           *string `json:"name" binding:"omitempty,max=64"`
+	Description    *string `json:"description" binding:"omitempty,max=255"`
+	Status         *int    `json:"status"`
+	ScopeProjectID *uint   `json:"scope_project_id"`
 }
 
 type UserGroupListQuery struct {
-	Keyword          string `form:"keyword"`
-	Page             int    `form:"page"`
-	PageSize         int    `form:"page_size"`
-	ScopeProjectID   *uint  `form:"scope_project_id"`
+	Keyword        string `form:"keyword"`
+	Page           int    `form:"page"`
+	PageSize       int    `form:"page_size"`
+	ScopeProjectID *uint  `form:"scope_project_id"`
 }
 
 type UserGroupAssignUsersRequest struct {
@@ -219,7 +219,7 @@ type UserDetailResponse struct {
 	Nickname       string           `json:"nickname"`
 	Status         int              `json:"status"`
 	DepartmentID   *uint            `json:"department_id,omitempty"`
-	DepartmentName string          `json:"department_name"`
+	DepartmentName string           `json:"department_name"`
 	Roles          []RoleItem       `json:"roles"`
 	Groups         []UserGroupBrief `json:"groups"`
 	CreatedAt      time.Time        `json:"created_at"`

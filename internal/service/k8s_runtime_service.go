@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -9,14 +9,14 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"yunshu/internal/pkg/apperror"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/eventbus"
 	"yunshu/internal/pkg/extension"
-	"yunshu/internal/repository"
 
 	"github.com/weibaohui/kom/callbacks"
 	kom "github.com/weibaohui/kom/kom"
@@ -26,7 +26,7 @@ import (
 )
 
 type K8sRuntimeService struct {
-	repo *repository.K8sClusterRepository
+	repo interfaces.K8sClusterRepository
 
 	komInitOnce    sync.Once
 	komMu          sync.Mutex
@@ -44,7 +44,7 @@ type ClusterConnState struct {
 }
 
 // NewK8sRuntimeService 创建相关逻辑。
-func NewK8sRuntimeService(repo *repository.K8sClusterRepository) *K8sRuntimeService {
+func NewK8sRuntimeService(repo interfaces.K8sClusterRepository) *K8sRuntimeService {
 	return &K8sRuntimeService{
 		repo:           repo,
 		registeredHash: map[string]string{},
@@ -108,10 +108,10 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 		s.komMu.Unlock()
 		extension.NotifyKomRegister(clusterID, false, err.Error())
 		eventbus.Default().Publish(eventbus.Event{
-			Type: eventbus.ClusterKomRegisterFail,
+			Type:    eventbus.ClusterKomRegisterFail,
 			Payload: map[string]any{"cluster_id": clusterID, "error": err.Error()},
 		})
-		return apperror.MarkLogged(err)
+		return bizerrors.MarkLogged(err)
 	}
 	s.komMu.Lock()
 	s.registeredHash[clusterID] = hash
@@ -257,7 +257,7 @@ func (s *K8sRuntimeService) CheckClusterHeartbeat(ctx context.Context, id uint) 
 		st.ConsecutiveFailures++
 		s.connState[clusterID] = st
 		s.komMu.Unlock()
-		if _, ok := apperror.IsAppError(probeErr); ok {
+		if _, ok := bizerrors.As(probeErr); ok {
 			return "", s.GetClusterConnState(id), probeErr
 		}
 		return "", s.GetClusterConnState(id), svcerr.InternalMsg(ctx, "k8s.runtime", "CheckClusterHeartbeat", errMsg, "cluster_id", id)

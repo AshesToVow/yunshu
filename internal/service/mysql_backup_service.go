@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	cryptox "yunshu/internal/pkg/crypto"
@@ -22,23 +23,24 @@ import (
 	"yunshu/internal/service/svcerr"
 
 	"crypto/cipher"
+
 	"gorm.io/gorm"
 )
 
 type MysqlBackupService struct {
-	backupRepo *repository.MysqlBackupRepository
-	serverRepo *repository.ServerRepository
-	projectRepo *repository.ProjectRepository
-	db          *gorm.DB
-	aead        cipher.AEAD
+	backupRepo   interfaces.MysqlBackupRepository
+	serverRepo   interfaces.ServerRepository
+	projectRepo  interfaces.ProjectRepository
+	db           *gorm.DB
+	aead         cipher.AEAD
 	schedMu      sync.Mutex
 	schedRunning map[uint]bool
 }
 
 func NewMysqlBackupService(
-	backupRepo *repository.MysqlBackupRepository,
-	serverRepo *repository.ServerRepository,
-	projectRepo *repository.ProjectRepository,
+	backupRepo interfaces.MysqlBackupRepository,
+	serverRepo interfaces.ServerRepository,
+	projectRepo interfaces.ProjectRepository,
 	db *gorm.DB,
 	encryptionKey string,
 ) (*MysqlBackupService, error) {
@@ -57,20 +59,20 @@ func NewMysqlBackupService(
 }
 
 type MysqlBackupInstanceItem struct {
-	ID            uint   `json:"id"`
-	ProjectID     uint   `json:"project_id"`
-	ServerID      uint   `json:"server_id"`
-	ServerName    string `json:"server_name,omitempty"`
-	Name          string `json:"name"`
-	Enabled       bool   `json:"enabled"`
-	MysqlHost     string `json:"mysql_host"`
-	MysqlPort     int    `json:"mysql_port"`
-	MysqlUser     string `json:"mysql_user"`
-	BackupMode    string `json:"backup_mode"`
-	BackupScope   string `json:"backup_scope"`
-	DatabaseName  string `json:"database_name"`
-	TableName     string `json:"table_name"`
-	DatabaseNames string `json:"database_names"`
+	ID                 uint     `json:"id"`
+	ProjectID          uint     `json:"project_id"`
+	ServerID           uint     `json:"server_id"`
+	ServerName         string   `json:"server_name,omitempty"`
+	Name               string   `json:"name"`
+	Enabled            bool     `json:"enabled"`
+	MysqlHost          string   `json:"mysql_host"`
+	MysqlPort          int      `json:"mysql_port"`
+	MysqlUser          string   `json:"mysql_user"`
+	BackupMode         string   `json:"backup_mode"`
+	BackupScope        string   `json:"backup_scope"`
+	DatabaseName       string   `json:"database_name"`
+	TableName          string   `json:"table_name"`
+	DatabaseNames      string   `json:"database_names"`
 	RemoteDataDir      string   `json:"remote_data_dir"`
 	RemoteLogDir       string   `json:"remote_log_dir"`
 	MysqlDataDir       string   `json:"mysql_datadir"`
@@ -79,26 +81,26 @@ type MysqlBackupInstanceItem struct {
 	MysqldumpOptions   []string `json:"mysqldump_options"`
 	MysqldumpExtraArgs string   `json:"mysqldump_extra_args"`
 	ScheduleEnabled    bool     `json:"schedule_enabled"`
-	CronSpec        string `json:"cron_spec"`
-	LastScheduledAt string `json:"last_scheduled_at,omitempty"`
-	CreatedAt     string `json:"created_at,omitempty"`
-	UpdatedAt     string `json:"updated_at,omitempty"`
+	CronSpec           string   `json:"cron_spec"`
+	LastScheduledAt    string   `json:"last_scheduled_at,omitempty"`
+	CreatedAt          string   `json:"created_at,omitempty"`
+	UpdatedAt          string   `json:"updated_at,omitempty"`
 }
 
 type MysqlBackupInstanceUpsertRequest struct {
-	ProjectID     uint   `json:"project_id"`
-	ServerID      uint   `json:"server_id" binding:"required"`
-	Name          string `json:"name" binding:"required,max=128"`
-	Enabled       *bool  `json:"enabled"`
-	MysqlHost     string `json:"mysql_host"`
-	MysqlPort     int    `json:"mysql_port"`
-	MysqlUser     string `json:"mysql_user" binding:"required"`
-	MysqlPassword string `json:"mysql_password"`
-	BackupMode    string `json:"backup_mode"`
-	BackupScope   string `json:"backup_scope"`
-	DatabaseName  string `json:"database_name"`
-	TableName     string `json:"table_name"`
-	DatabaseNames string `json:"database_names"`
+	ProjectID          uint     `json:"project_id"`
+	ServerID           uint     `json:"server_id" binding:"required"`
+	Name               string   `json:"name" binding:"required,max=128"`
+	Enabled            *bool    `json:"enabled"`
+	MysqlHost          string   `json:"mysql_host"`
+	MysqlPort          int      `json:"mysql_port"`
+	MysqlUser          string   `json:"mysql_user" binding:"required"`
+	MysqlPassword      string   `json:"mysql_password"`
+	BackupMode         string   `json:"backup_mode"`
+	BackupScope        string   `json:"backup_scope"`
+	DatabaseName       string   `json:"database_name"`
+	TableName          string   `json:"table_name"`
+	DatabaseNames      string   `json:"database_names"`
 	RemoteDataDir      string   `json:"remote_data_dir"`
 	RemoteLogDir       string   `json:"remote_log_dir"`
 	MysqlDataDir       string   `json:"mysql_datadir"`
@@ -107,7 +109,7 @@ type MysqlBackupInstanceUpsertRequest struct {
 	MysqldumpOptions   []string `json:"mysqldump_options"`
 	MysqldumpExtraArgs string   `json:"mysqldump_extra_args"`
 	ScheduleEnabled    *bool    `json:"schedule_enabled"`
-	CronSpec        string `json:"cron_spec"`
+	CronSpec           string   `json:"cron_spec"`
 }
 
 type MysqlBackupInstanceListQuery struct {
@@ -871,7 +873,7 @@ func (s *MysqlBackupService) toInstanceItem(ctx context.Context, inst model.Mysq
 		MysqlUser: inst.MysqlUser, BackupMode: inst.BackupMode,
 		BackupScope: inst.BackupScope, DatabaseName: inst.DatabaseName, TableName: inst.BackupTable,
 		DatabaseNames: inst.DatabaseNames, RemoteDataDir: inst.RemoteDataDir, RemoteLogDir: inst.RemoteLogDir,
-		MysqlDataDir: inst.MysqlDataDir,
+		MysqlDataDir:  inst.MysqlDataDir,
 		UploadToMinio: inst.UploadToMinio, MysqldumpWorkDir: inst.MysqldumpWorkDir, MysqldumpExtraArgs: inst.MysqldumpExtraArgs,
 		ScheduleEnabled: inst.ScheduleEnabled, CronSpec: inst.CronSpec,
 	}

@@ -1,24 +1,26 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"strings"
-	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
 
 type AlertReceiverGroupService struct {
-	db    *gorm.DB
+	repo  interfaces.AlertReceiverGroupRepository
 	cache *ReceiverGroupCache
 }
 
-func NewAlertReceiverGroupService(db *gorm.DB, cache *ReceiverGroupCache) *AlertReceiverGroupService {
-	return &AlertReceiverGroupService{db: db, cache: cache}
+func NewAlertReceiverGroupService(repo interfaces.AlertReceiverGroupRepository, cache *ReceiverGroupCache) *AlertReceiverGroupService {
+	return &AlertReceiverGroupService{repo: repo, cache: cache}
 }
 
 type AlertReceiverGroupListQuery struct {
@@ -31,24 +33,13 @@ type AlertReceiverGroupListQuery struct {
 
 func (s *AlertReceiverGroupService) List(ctx context.Context, q AlertReceiverGroupListQuery) ([]model.AlertReceiverGroup, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	tx := s.db.WithContext(ctx).Model(&model.AlertReceiverGroup{})
-	if q.ProjectID > 0 {
-		tx = tx.Where("project_id = ?", q.ProjectID)
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("name LIKE ? OR description LIKE ?", like, like)
-	}
-	if q.Enabled != nil {
-		tx = tx.Where("enabled = ?", *q.Enabled)
-	}
-	var total int64
-	if err := tx.Count(&total).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert.receiver", "List", err)
-	}
-	var list []model.AlertReceiverGroup
-	if err := tx.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert.receiver", "List", err)
+	list, total, err := s.repo.List(ctx, repository.AlertReceiverGroupListFilter{
+		ProjectID: q.ProjectID,
+		Keyword:   q.Keyword,
+		Enabled:   q.Enabled,
+	}, (page-1)*pageSize, pageSize)
+	if err != nil {
+		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.receiver", "List", err)
 	}
 	for i := range list {
 		hydrateReceiverGroup(&list[i])
@@ -90,8 +81,8 @@ func (s *AlertReceiverGroupService) Create(ctx context.Context, req AlertReceive
 		EscalationLevel:     req.EscalationLevel,
 		Enabled:             enabled,
 	}
-	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.receiver", "Create", err)
+	if err := s.repo.Create(ctx, row); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.receiver", "Create", err)
 	}
 	if s.cache != nil {
 		s.cache.Invalidate()
@@ -101,9 +92,12 @@ func (s *AlertReceiverGroupService) Create(ctx context.Context, req AlertReceive
 }
 
 func (s *AlertReceiverGroupService) Update(ctx context.Context, id uint, req AlertReceiverGroupUpsertRequest) (*model.AlertReceiverGroup, error) {
-	var row model.AlertReceiverGroup
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
-		return nil, constants.ErrNotFoundWithMsg(constants.ErrMsg7628a50dd0ab)
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsg7628a50dd0ab)
+		}
+		return nil, bizerrors.Pass(ctx, "alert.receiver", "Update", err)
 	}
 	if req.ProjectID > 0 && req.ProjectID != row.ProjectID {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgd165b6af9d52)
@@ -121,22 +115,22 @@ func (s *AlertReceiverGroupService) Update(ctx context.Context, id uint, req Ale
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.receiver", "Update", err)
+	if err := s.repo.Save(ctx, row); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.receiver", "Update", err)
 	}
 	if s.cache != nil {
 		s.cache.Invalidate()
 	}
-	hydrateReceiverGroup(&row)
-	return &row, nil
+	hydrateReceiverGroup(row)
+	return row, nil
 }
 
 func (s *AlertReceiverGroupService) Delete(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&model.AlertReceiverGroup{}, id)
-	if res.Error != nil {
-		return svcerr.Pass(ctx, "alert.receiver", "Delete", res.Error)
+	n, err := s.repo.Delete(ctx, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.receiver", "Delete", err)
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFoundWithMsg(constants.ErrMsg7628a50dd0ab)
 	}
 	if s.cache != nil {

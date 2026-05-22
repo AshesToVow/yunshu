@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
@@ -15,12 +16,12 @@ import (
 )
 
 type RoleService struct {
-	roleRepo *repository.RoleRepository
+	roleRepo interfaces.RoleRepository
 	enforcer *casbin.SyncedEnforcer
 }
 
 // NewRoleService 创建相关逻辑。
-func NewRoleService(roleRepo *repository.RoleRepository, enforcer *casbin.SyncedEnforcer) *RoleService {
+func NewRoleService(roleRepo interfaces.RoleRepository, enforcer *casbin.SyncedEnforcer) *RoleService {
 	return &RoleService{
 		roleRepo: roleRepo,
 		enforcer: enforcer,

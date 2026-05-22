@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"strings"
@@ -8,8 +8,8 @@ import (
 	"yunshu/internal/pkg/auth"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/svclog"
-	"yunshu/internal/repository"
+	"yunshu/internal/pkg/logutil"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/store"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +19,7 @@ import (
 // WSAuth authenticates websocket handshake requests.
 // Browsers can't set custom headers for WebSocket, so we accept token from query:
 // - token=<jwt>  or access_token=<jwt>
-func WSAuth(secret string, redisClient *redis.Client, userRepo *repository.UserRepository, logger *logx.Logger) gin.HandlerFunc {
+func WSAuth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepository, logger *logx.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := strings.TrimSpace(c.Query("token"))
 		if tokenString == "" {
@@ -33,7 +33,7 @@ func WSAuth(secret string, redisClient *redis.Client, userRepo *repository.UserR
 
 		claims, err := auth.ParseToken(secret, tokenString)
 		if err != nil {
-			svclog.HTTP("http.ws_auth").Warn("parse ws token failed", "error", err)
+			logutil.HTTP("http.ws_auth").Warn("parse ws token failed", "error", err)
 			response.Error(c, constants.ErrAccessTokenInvalid)
 			c.Abort()
 			return

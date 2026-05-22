@@ -14,7 +14,7 @@ type AgentDiscoveryRepository struct {
 	db *gorm.DB
 }
 
-func NewAgentDiscoveryRepository(db *gorm.DB) *AgentDiscoveryRepository {
+func NewAgentDiscoveryRepository(db *gorm.DB) AgentDiscoveryRepo {
 	return &AgentDiscoveryRepository{db: db}
 }
 

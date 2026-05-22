@@ -31,12 +31,12 @@ func (s *AlertService) evaluateMonitorRuleNoRedis(ctx context.Context, rule *mod
 			GroupLabels:  map[string]string{"alertname": rule.Name},
 			CommonLabels: labels,
 			Alerts: []AlertManagerAlert{{
-				Status:       "resolved",
-				Labels:       labels,
-				Annotations:  annotations,
-				StartsAt:     now.Add(-time.Minute),
-				EndsAt:       now,
-				Fingerprint:  fp,
+				Status:      "resolved",
+				Labels:      labels,
+				Annotations: annotations,
+				StartsAt:    now.Add(-time.Minute),
+				EndsAt:      now,
+				Fingerprint: fp,
 			}},
 		})
 	}

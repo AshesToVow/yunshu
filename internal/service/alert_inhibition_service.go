@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -8,20 +8,20 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
-
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/repository"
 
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 )
 
 // AlertInhibitionService 告警抑制服务
 type AlertInhibitionService struct {
-	db    *gorm.DB
-	redis *redis.Client
+	ruleRepo interfaces.AlertInhibitionRuleRepository
+	redis    *redis.Client
 
 	cacheMu          sync.RWMutex
 	cachedRules      []model.AlertInhibitionRule
@@ -40,9 +40,9 @@ type inhibitionCompiledMatchers struct {
 }
 
 // NewAlertInhibitionService 创建告警抑制服务
-func NewAlertInhibitionService(db *gorm.DB, redisClient *redis.Client) *AlertInhibitionService {
+func NewAlertInhibitionServiceWithRepo(ruleRepo interfaces.AlertInhibitionRuleRepository, redisClient *redis.Client) *AlertInhibitionService {
 	svc := &AlertInhibitionService{
-		db:               db,
+		ruleRepo:         ruleRepo,
 		redis:            redisClient,
 		compiledMatchers: make(map[uint]*inhibitionCompiledMatchers),
 	}
@@ -80,26 +80,13 @@ type AlertInhibitionRuleListQuery struct {
 // List 查询抑制规则列表
 func (s *AlertInhibitionService) List(ctx context.Context, q AlertInhibitionRuleListQuery) ([]model.AlertInhibitionRule, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	tx := s.db.WithContext(ctx).Model(&model.AlertInhibitionRule{})
-	if q.ProjectID > 0 {
-		tx = tx.Where("project_id = ?", q.ProjectID)
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("name LIKE ? OR description LIKE ?", like, like)
-	}
-	if q.Enabled != nil {
-		tx = tx.Where("enabled = ?", *q.Enabled)
-	}
-
-	var total int64
-	if err := tx.Count(&total).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert.inhibition", "List", err)
-	}
-
-	var list []model.AlertInhibitionRule
-	if err := tx.Order("priority ASC, id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert.inhibition", "List", err)
+	list, total, err := s.ruleRepo.ListFiltered(ctx, repository.AlertInhibitionListFilter{
+		ProjectID: q.ProjectID,
+		Keyword:   q.Keyword,
+		Enabled:   q.Enabled,
+	}, (page-1)*pageSize, pageSize)
+	if err != nil {
+		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.inhibition", "List", err)
 	}
 
 	// 填充解析后的数据
@@ -113,7 +100,7 @@ func (s *AlertInhibitionService) List(ctx context.Context, q AlertInhibitionRule
 // Create 创建抑制规则
 func (s *AlertInhibitionService) Create(ctx context.Context, req AlertInhibitionRuleUpsertRequest) (*model.AlertInhibitionRule, error) {
 	if err := validateInhibitionRule(req); err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "Create", err)
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "Create", err)
 	}
 
 	rule := &model.AlertInhibitionRule{
@@ -141,8 +128,8 @@ func (s *AlertInhibitionService) Create(ctx context.Context, req AlertInhibition
 		rule.DurationSeconds = 3600 // 默认1小时
 	}
 
-	if err := s.db.WithContext(ctx).Create(rule).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "Create", err)
+	if err := s.ruleRepo.Create(ctx, rule); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "Create", err)
 	}
 
 	s.InvalidateCache()
@@ -152,13 +139,13 @@ func (s *AlertInhibitionService) Create(ctx context.Context, req AlertInhibition
 
 // Update 更新抑制规则
 func (s *AlertInhibitionService) Update(ctx context.Context, id uint, req AlertInhibitionRuleUpsertRequest) (*model.AlertInhibitionRule, error) {
-	var rule model.AlertInhibitionRule
-	if err := s.db.WithContext(ctx).First(&rule, id).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "Update", err)
+	rule, err := s.ruleRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "Update", err)
 	}
 
 	if err := validateInhibitionRule(req); err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "Update", err)
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "Update", err)
 	}
 
 	rule.Name = strings.TrimSpace(req.Name)
@@ -179,22 +166,22 @@ func (s *AlertInhibitionService) Update(ctx context.Context, id uint, req AlertI
 		rule.DurationSeconds = 3600
 	}
 
-	if err := s.db.WithContext(ctx).Save(&rule).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "Update", err)
+	if err := s.ruleRepo.Save(ctx, rule); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "Update", err)
 	}
 
 	s.InvalidateCache()
-	hydrateInhibitionRule(&rule)
-	return &rule, nil
+	hydrateInhibitionRule(rule)
+	return rule, nil
 }
 
 // Delete 删除抑制规则
 func (s *AlertInhibitionService) Delete(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&model.AlertInhibitionRule{}, id)
-	if res.Error != nil {
-		return svcerr.Pass(ctx, "alert.inhibition", "Delete", res.Error)
+	n, err := s.ruleRepo.Delete(ctx, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.inhibition", "Delete", err)
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFoundWithMsg(constants.ErrMsge4f20d76fd0d)
 	}
 	s.InvalidateCache()
@@ -226,12 +213,9 @@ func (s *AlertInhibitionService) refreshCache(ctx context.Context) error {
 		return nil
 	}
 
-	var rules []model.AlertInhibitionRule
-	if err := s.db.WithContext(ctx).
-		Where("enabled = ?", true).
-		Order("priority ASC, id ASC").
-		Find(&rules).Error; err != nil {
-		return svcerr.Pass(ctx, "alert.inhibition", "refreshCache", err)
+	rules, err := s.ruleRepo.ListEnabled(ctx)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.inhibition", "refreshCache", err)
 	}
 
 	s.cachedRules = rules
@@ -248,7 +232,7 @@ func (s *AlertInhibitionService) refreshCache(ctx context.Context) error {
 // ListEnabledRules 获取启用的规则（带缓存）
 func (s *AlertInhibitionService) ListEnabledRules(ctx context.Context) ([]model.AlertInhibitionRule, error) {
 	if err := s.refreshCache(ctx); err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "ListEnabledRules", err)
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "ListEnabledRules", err)
 	}
 	s.cacheMu.RLock()
 	defer s.cacheMu.RUnlock()
@@ -262,7 +246,7 @@ func (s *AlertInhibitionService) ListEnabledRules(ctx context.Context) ([]model.
 func (s *AlertInhibitionService) CheckSourceMatch(ctx context.Context, labels map[string]string) ([]uint, error) {
 	rules, err := s.ListEnabledRules(ctx)
 	if err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "CheckSourceMatch", err)
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "CheckSourceMatch", err)
 	}
 
 	matched := make([]uint, 0)
@@ -291,7 +275,7 @@ func (s *AlertInhibitionService) CheckInhibition(ctx context.Context, targetLabe
 
 	rules, err := s.ListEnabledRules(ctx)
 	if err != nil {
-		return false, nil, svcerr.Pass(ctx, "alert.inhibition", "CheckInhibition", err)
+		return false, nil, bizerrors.Pass(ctx, "alert.inhibition", "CheckInhibition", err)
 	}
 
 	s.cacheMu.RLock()
@@ -361,7 +345,7 @@ func (s *AlertInhibitionService) RecordSourceAlert(ctx context.Context, ruleID u
 
 	rule, err := s.getRuleByIDFromCache(ruleID)
 	if err != nil {
-		return svcerr.Pass(ctx, "alert.inhibition", "RecordSourceAlert", err)
+		return bizerrors.Pass(ctx, "alert.inhibition", "RecordSourceAlert", err)
 	}
 
 	key := inhibitionSourceKey(ruleID, fingerprint)
@@ -388,7 +372,7 @@ func (s *AlertInhibitionService) getActiveSources(ctx context.Context, ruleID ui
 	for {
 		keys, next, err := s.redis.Scan(ctx, cursor, pattern, 128).Result()
 		if err != nil {
-			return nil, svcerr.Pass(ctx, "alert.inhibition", "getActiveSources", err)
+			return nil, bizerrors.Pass(ctx, "alert.inhibition", "getActiveSources", err)
 		}
 		for _, key := range keys {
 			// key格式: alert:inhibition:source:{ruleID}:{fingerprint}
@@ -416,12 +400,12 @@ func (s *AlertInhibitionService) getSourceLabels(ctx context.Context, ruleID uin
 	key := inhibitionSourceKey(ruleID, fingerprint)
 	data, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "getSourceLabels", err)
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "getSourceLabels", err)
 	}
 
 	var labels map[string]string
 	if err := json.Unmarshal([]byte(data), &labels); err != nil {
-		return nil, svcerr.Pass(ctx, "alert.inhibition", "getSourceLabels", err)
+		return nil, bizerrors.Pass(ctx, "alert.inhibition", "getSourceLabels", err)
 	}
 	return labels, nil
 }
@@ -561,5 +545,5 @@ func validateInhibitionRule(req AlertInhibitionRuleUpsertRequest) error {
 
 // RecordInhibitionEvent 记录抑制事件到数据库（可选，用于审计）
 func (s *AlertInhibitionService) RecordInhibitionEvent(ctx context.Context, event *model.AlertInhibitionEvent) error {
-	return s.db.WithContext(ctx).Create(event).Error
+	return s.ruleRepo.CreateEvent(ctx, event)
 }

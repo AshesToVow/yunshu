@@ -14,7 +14,7 @@ type MysqlBackupRepository struct {
 	db *gorm.DB
 }
 
-func NewMysqlBackupRepository(db *gorm.DB) *MysqlBackupRepository {
+func NewMysqlBackupRepository(db *gorm.DB) MysqlBackupRepo {
 	return &MysqlBackupRepository{db: db}
 }
 

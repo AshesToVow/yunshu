@@ -1,12 +1,12 @@
-﻿package service
+package service
 
 import (
-	"yunshu/internal/service/svcerr"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+	bizerrors "yunshu/internal/pkg/errors"
 
 	"yunshu/internal/model"
 )
@@ -30,7 +30,7 @@ type MigrateFromPoliciesOptions struct {
 func (s *AlertSubscriptionService) MigrateFromPolicies(ctx context.Context, opts MigrateFromPoliciesOptions) (*SubscriptionMigrationReport, error) {
 	disableOld := opts.DisableOld
 	rep := &SubscriptionMigrationReport{}
-	if s == nil || s.db == nil {
+	if s == nil || s.txDB == nil {
 		return rep, nil
 	}
 
@@ -57,8 +57,8 @@ func (s *AlertSubscriptionService) MigrateFromPolicies(ctx context.Context, opts
 		CreatedAt       time.Time `gorm:"column:created_at"`
 	}
 	var policies []legacyPolicy
-	if err := s.db.WithContext(ctx).Table("alert_policies").Find(&policies).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
+	if err := s.txDB.WithContext(ctx).Table("alert_policies").Find(&policies).Error; err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
 	}
 	rep.PoliciesTotal = len(policies)
 
@@ -68,7 +68,7 @@ func (s *AlertSubscriptionService) MigrateFromPolicies(ctx context.Context, opts
 			return n, nil
 		}
 		var root model.AlertSubscriptionNode
-		err := s.db.WithContext(ctx).
+		err := s.txDB.WithContext(ctx).
 			Where("project_id = ? AND parent_id IS NULL", projectID).
 			Order("id ASC").
 			First(&root).Error
@@ -92,7 +92,7 @@ func (s *AlertSubscriptionService) MigrateFromPolicies(ctx context.Context, opts
 			SilenceSeconds:       0,
 			NotifyResolved:       true,
 		}
-		if err2 := s.db.WithContext(ctx).Create(&root).Error; err2 != nil {
+		if err2 := s.txDB.WithContext(ctx).Create(&root).Error; err2 != nil {
 			return nil, err2
 		}
 		rootByProject[projectID] = &root
@@ -110,7 +110,7 @@ func (s *AlertSubscriptionService) MigrateFromPolicies(ctx context.Context, opts
 		}
 		policyCode := fmt.Sprintf("policy_%d", p.ID)
 		var already model.AlertSubscriptionNode
-		if err := s.db.WithContext(ctx).
+		if err := s.txDB.WithContext(ctx).
 			Where("project_id = ? AND code = ?", projectID, policyCode).
 			First(&already).Error; err == nil {
 			// 已迁移过（重复执行迁移时避免再建接收组/节点）
@@ -119,7 +119,7 @@ func (s *AlertSubscriptionService) MigrateFromPolicies(ctx context.Context, opts
 
 		root, err := getOrCreateRoot(projectID)
 		if err != nil {
-			return nil, svcerr.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
+			return nil, bizerrors.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
 		}
 
 		rg := &model.AlertReceiverGroup{
@@ -134,8 +134,8 @@ func (s *AlertSubscriptionService) MigrateFromPolicies(ctx context.Context, opts
 		if strings.TrimSpace(rg.ChannelIDsJSON) == "" {
 			rg.ChannelIDsJSON = "[]"
 		}
-		if err := s.db.WithContext(ctx).Create(rg).Error; err != nil {
-			return nil, svcerr.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
+		if err := s.txDB.WithContext(ctx).Create(rg).Error; err != nil {
+			return nil, bizerrors.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
 		}
 		rep.ReceiverGroupsCreated++
 
@@ -155,14 +155,14 @@ func (s *AlertSubscriptionService) MigrateFromPolicies(ctx context.Context, opts
 			SilenceSeconds:       p.SilenceSeconds,
 			NotifyResolved:       p.NotifyResolved,
 		}
-		if err := s.db.WithContext(ctx).Create(node).Error; err != nil {
-			return nil, svcerr.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
+		if err := s.txDB.WithContext(ctx).Create(node).Error; err != nil {
+			return nil, bizerrors.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
 		}
 		rep.NodesCreated++
 		rep.PoliciesMigrated++
 
 		if disableOld && p.Enabled {
-			_ = s.db.WithContext(ctx).Table("alert_policies").Where("id = ?", p.ID).Update("enabled", false).Error
+			_ = s.txDB.WithContext(ctx).Table("alert_policies").Where("id = ?", p.ID).Update("enabled", false).Error
 			rep.PoliciesDisabled++
 		}
 	}
@@ -216,9 +216,9 @@ func extractProjectIDFromPolicyMatchLabels(raw string) uint {
 
 func (s *AlertSubscriptionService) firstEnabledProjectID(ctx context.Context) (uint, error) {
 	var p model.Project
-	err := s.db.WithContext(ctx).Where("status = ?", 1).Order("id ASC").First(&p).Error
+	err := s.txDB.WithContext(ctx).Where("status = ?", 1).Order("id ASC").First(&p).Error
 	if err != nil {
-		return 0, svcerr.Pass(ctx, "alert.subscription", "firstEnabledProjectID", err)
+		return 0, bizerrors.Pass(ctx, "alert.subscription", "firstEnabledProjectID", err)
 	}
 	if p.ID == 0 {
 		return 0, fmt.Errorf("no project")

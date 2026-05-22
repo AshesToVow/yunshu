@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -9,20 +9,20 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
-	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
 
 type DepartmentService struct {
-	repo          *repository.DepartmentRepository
-	userRepo      *repository.UserRepository
-	assigneeSvc   *AlertRuleAssigneeService
+	repo        interfaces.DepartmentRepository
+	userRepo    interfaces.UserRepository
+	assigneeSvc *AlertRuleAssigneeService
 }
 
-func NewDepartmentService(repo *repository.DepartmentRepository, userRepo *repository.UserRepository, assigneeSvc *AlertRuleAssigneeService) *DepartmentService {
+func NewDepartmentService(repo interfaces.DepartmentRepository, userRepo interfaces.UserRepository, assigneeSvc *AlertRuleAssigneeService) *DepartmentService {
 	return &DepartmentService{repo: repo, userRepo: userRepo, assigneeSvc: assigneeSvc}
 }
 

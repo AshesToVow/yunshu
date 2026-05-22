@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"yunshu/internal/service/svcerr"
 
 	"yunshu/internal/config"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/password"
@@ -19,8 +20,8 @@ import (
 )
 
 type RegistrationService struct {
-	regRepo  *repository.RegistrationRequestRepository
-	userRepo *repository.UserRepository
+	regRepo  interfaces.RegistrationRequestRepository
+	userRepo interfaces.UserRepository
 	redis    *redis.Client
 	authCfg  config.AuthConfig
 	mailer   mailer.Sender
@@ -29,8 +30,8 @@ type RegistrationService struct {
 
 // NewRegistrationService 创建相关逻辑。
 func NewRegistrationService(
-	regRepo *repository.RegistrationRequestRepository,
-	userRepo *repository.UserRepository,
+	regRepo interfaces.RegistrationRequestRepository,
+	userRepo interfaces.UserRepository,
 	redis *redis.Client,
 	authCfg config.AuthConfig,
 	mailer mailer.Sender,

@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 	"yunshu/internal/pkg/k8sutil"
+	"yunshu/internal/service/svcerr"
 
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

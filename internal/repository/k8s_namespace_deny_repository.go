@@ -14,7 +14,7 @@ type K8sNamespaceDenyRepository struct {
 	db *gorm.DB
 }
 
-func NewK8sNamespaceDenyRepository(db *gorm.DB) *K8sNamespaceDenyRepository {
+func NewK8sNamespaceDenyRepository(db *gorm.DB) K8sNamespaceDenyRepo {
 	return &K8sNamespaceDenyRepository{db: db}
 }
 

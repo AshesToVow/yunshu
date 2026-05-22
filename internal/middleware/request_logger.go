@@ -13,7 +13,7 @@ import (
 
 	"yunshu/internal/pkg/auth"
 	logx "yunshu/internal/pkg/logger"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/pkg/logutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -35,7 +35,7 @@ func RequestLogger(logger *logx.Logger) gin.HandlerFunc {
 		}
 		c.Set("request_id", requestID)
 		c.Writer.Header().Set("X-Request-ID", requestID)
-		c.Request = c.Request.WithContext(logx.WithRequestID(c.Request.Context(), requestID))
+		c.Request = c.Request.WithContext(logutil.WithRequestID(c.Request.Context(), requestID))
 
 		reqBody := ""
 		if shouldCaptureRequestLogBody(c) && c.Request != nil && c.Request.Body != nil {
@@ -77,7 +77,7 @@ func RequestLogger(logger *logx.Logger) gin.HandlerFunc {
 			attrs = append(attrs, "errors", c.Errors.String())
 		}
 
-		access := svclog.HTTP("http.access").W(c.Request.Context())
+		access := logutil.HTTP("http.access").W(c.Request.Context())
 		if c.Writer.Status() >= 500 {
 			access.Errorw(errors.New("server error"), "HTTP request completed", attrs...)
 			return

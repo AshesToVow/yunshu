@@ -16,7 +16,7 @@ import (
 	"yunshu/internal/pkg/alertnotify"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/parseutil"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
 )
 
 func (s *AlertService) notifyGenericWebhook(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}, settings map[string]interface{}) (int, string, error) {
@@ -44,7 +44,7 @@ func (s *AlertService) postWebhookWithPayloadMulti(ctx context.Context, channel 
 		code, resp, err := s.postWebhookWithPayload(ctx, channel, source, title, severity, status, b, settings, alertPayload)
 		lastCode, lastResp = code, resp
 		if err != nil {
-			return code, resp, svcerr.Pass(ctx, "alert.delivery", "postWebhookWithPayloadMulti", err)
+			return code, resp, bizerrors.Pass(ctx, "alert.delivery", "postWebhookWithPayloadMulti", err)
 		}
 	}
 	return lastCode, lastResp, nil
@@ -122,7 +122,7 @@ func (s *AlertService) notifyWeComApp(ctx context.Context, channel *model.AlertC
 	}
 	token, err := s.getWeComAccessToken(ctx, corpID, corpSecret)
 	if err != nil {
-		return 0, "", svcerr.Pass(ctx, "alert.delivery", "notifyWeComApp", err)
+		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "notifyWeComApp", err)
 	}
 	body := map[string]interface{}{
 		"touser":  strings.Join(atUsers, "|"),
@@ -146,7 +146,7 @@ func (s *AlertService) notifyDingTalkAppChat(ctx context.Context, channel *model
 	}
 	token, err := s.getDingTalkAccessToken(ctx, appKey, appSecret)
 	if err != nil {
-		return 0, "", svcerr.Pass(ctx, "alert.delivery", "notifyDingTalkAppChat", err)
+		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "notifyDingTalkAppChat", err)
 	}
 	atMobiles := parseutil.ParseStringList(settings["atMobiles"])
 	atMobiles = appendAssigneePhonesToAtMobiles(atMobiles, payload)
@@ -182,7 +182,7 @@ func (s *AlertService) postWebhookWithPayload(ctx context.Context, channel *mode
 	url := buildWebhookURL(channel, settings, reqBytes)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBytes))
 	if err != nil {
-		return 0, "", svcerr.Pass(ctx, "alert.delivery", "postWebhookWithPayload", err)
+		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "postWebhookWithPayload", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	for k, v := range headers {
@@ -199,7 +199,7 @@ func (s *AlertService) postDirect(ctx context.Context, source, title, severity, 
 	reqBytes, _ := json.Marshal(body)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBytes))
 	if err != nil {
-		return 0, "", svcerr.Pass(ctx, "alert.delivery", "postDirect", err)
+		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "postDirect", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	for k, v := range headers {
@@ -274,15 +274,16 @@ func (s *AlertService) executeAndLogHTTP(ctx context.Context, source, title, sev
 	} else if apiChecked && apiErr != "" {
 		event.ErrorMessage = truncateText(apiErr, 1000)
 	}
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 	if reqErr != nil {
 		return code, respBody, reqErr
 	}
 	if code < 200 || code >= 300 {
-		return code, respBody, svcerr.InternalFmt(ctx, "alert.delivery", "api", constants.ErrFmtd0ae16233479, code)
+		msg := fmt.Sprintf(constants.ErrFmtd0ae16233479, code)
+		return code, respBody, bizerrors.InternalCtx(ctx, fmt.Errorf("%s", msg), "api: "+msg)
 	}
 	if apiChecked && apiErr != "" {
-		return code, respBody, svcerr.InternalMsg(ctx, "alert.delivery", "api", apiErr)
+		return code, respBody, bizerrors.InternalCtx(ctx, fmt.Errorf("%s", apiErr), "api: "+apiErr)
 	}
 	return code, respBody, nil
 }

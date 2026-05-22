@@ -1,9 +1,10 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"io"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
@@ -21,11 +22,11 @@ type OperationLogListQuery struct {
 }
 
 type OperationLogService struct {
-	repo *repository.OperationLogRepository
+	repo interfaces.OperationLogRepository
 }
 
 // NewOperationLogService 创建相关逻辑。
-func NewOperationLogService(repo *repository.OperationLogRepository) *OperationLogService {
+func NewOperationLogService(repo interfaces.OperationLogRepository) *OperationLogService {
 	return &OperationLogService{repo: repo}
 }
 

@@ -12,7 +12,7 @@ type ServerGroupRepository struct {
 	db *gorm.DB
 }
 
-func NewServerGroupRepository(db *gorm.DB) *ServerGroupRepository {
+func NewServerGroupRepository(db *gorm.DB) ServerGroupRepo {
 	return &ServerGroupRepository{db: db}
 }
 

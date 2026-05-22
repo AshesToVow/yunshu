@@ -12,7 +12,7 @@ import (
 	"yunshu/internal/alertdispatch"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/alertnotify"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
 )
 
 func (s *AlertService) sendToChannel(ctx context.Context, channel *model.AlertChannel, env *alertdispatch.Envelope) (int, string, error) {
@@ -29,7 +29,7 @@ func (s *AlertService) sendToChannel(ctx context.Context, channel *model.AlertCh
 	payload["title"] = title
 	settings, err := parseChannelSettings(channel.HeadersJSON)
 	if err != nil {
-		return 0, "", svcerr.Pass(ctx, "alert.delivery", "sendToChannel", err)
+		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "sendToChannel", err)
 	}
 	if strings.EqualFold(strings.TrimSpace(channel.Type), alertdispatch.ChannelTypeEmail) {
 		return s.sendEmailChannel(ctx, channel, source, title, severity, status, payload)
@@ -202,11 +202,11 @@ func projectIDFromPayload(payload map[string]interface{}) uint {
 }
 
 func (s *AlertService) lookupProjectNameByID(ctx context.Context, id uint) string {
-	if id == 0 || s.db == nil {
+	if id == 0 {
 		return ""
 	}
-	var p model.Project
-	if err := s.db.WithContext(ctx).Select("id", "name").First(&p, id).Error; err != nil {
+	p, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(p.Name)

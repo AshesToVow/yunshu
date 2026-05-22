@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -7,17 +7,18 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"yunshu/internal/interfaces"
+	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 	"yunshu/internal/pkg/k8sauth"
-	"yunshu/internal/pkg/projectaccess"
-	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/pkg/projectaccess"
 	"yunshu/internal/repository"
+	"yunshu/internal/service/svcerr"
 
-	corev1 "k8s.io/api/core/v1"
 	"gorm.io/gorm"
+	corev1 "k8s.io/api/core/v1"
 )
 
 type K8sClusterListQuery struct {
@@ -27,11 +28,11 @@ type K8sClusterListQuery struct {
 }
 
 type K8sClusterCreateRequest struct {
-	Name              string        `json:"name" binding:"required,max=128"`
-	ConnectionMode    string        `json:"connection_mode,omitempty" binding:"omitempty,oneof=kubeconfig direct"`
-	Kubeconfig        string        `json:"kubeconfig,omitempty"`
-	DirectConfig      *DirectConfig `json:"direct_config,omitempty"`
-	OwningProjectID   *uint         `json:"owning_project_id"`
+	Name            string        `json:"name" binding:"required,max=128"`
+	ConnectionMode  string        `json:"connection_mode,omitempty" binding:"omitempty,oneof=kubeconfig direct"`
+	Kubeconfig      string        `json:"kubeconfig,omitempty"`
+	DirectConfig    *DirectConfig `json:"direct_config,omitempty"`
+	OwningProjectID *uint         `json:"owning_project_id"`
 }
 
 type DirectConfig struct {
@@ -48,11 +49,11 @@ type DirectConfig struct {
 }
 
 type K8sClusterUpdateRequest struct {
-	Name              *string       `json:"name,omitempty" binding:"omitempty,max=128"`
-	ConnectionMode    *string       `json:"connection_mode,omitempty" binding:"omitempty,oneof=kubeconfig direct"`
-	Kubeconfig        *string       `json:"kubeconfig,omitempty"`
-	DirectConfig      *DirectConfig `json:"direct_config,omitempty"`
-	OwningProjectID   *uint         `json:"owning_project_id"`
+	Name            *string       `json:"name,omitempty" binding:"omitempty,max=128"`
+	ConnectionMode  *string       `json:"connection_mode,omitempty" binding:"omitempty,oneof=kubeconfig direct"`
+	Kubeconfig      *string       `json:"kubeconfig,omitempty"`
+	DirectConfig    *DirectConfig `json:"direct_config,omitempty"`
+	OwningProjectID *uint         `json:"owning_project_id"`
 }
 
 type K8sClusterSetStatusRequest struct {
@@ -103,22 +104,22 @@ type ComponentStatusItem struct {
 }
 
 type K8sClusterService struct {
-	repo         *repository.K8sClusterRepository
-	dictRepo     *repository.DictEntryRepository
-	runtime      *K8sRuntimeService
-	nsDenyRepo   *repository.K8sNamespaceDenyRepository
-	nsAllowRepo  *repository.K8sNamespaceAllowRepository
-	memberRepo   *repository.ProjectMemberRepository
+	repo        interfaces.K8sClusterRepository
+	dictRepo    interfaces.DictEntryRepository
+	runtime     *K8sRuntimeService
+	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo interfaces.K8sNamespaceAllowRepository
+	memberRepo  interfaces.ProjectMemberRepository
 }
 
 // NewK8sClusterService 创建相关逻辑。
 func NewK8sClusterService(
-	repo *repository.K8sClusterRepository,
-	dictRepo *repository.DictEntryRepository,
+	repo interfaces.K8sClusterRepository,
+	dictRepo interfaces.DictEntryRepository,
 	runtime *K8sRuntimeService,
-	nsDeny *repository.K8sNamespaceDenyRepository,
-	nsAllow *repository.K8sNamespaceAllowRepository,
-	memberRepo *repository.ProjectMemberRepository,
+	nsDeny interfaces.K8sNamespaceDenyRepository,
+	nsAllow interfaces.K8sNamespaceAllowRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 ) *K8sClusterService {
 	return &K8sClusterService{
 		repo:        repo,
@@ -126,7 +127,7 @@ func NewK8sClusterService(
 		runtime:     runtime,
 		nsDenyRepo:  nsDeny,
 		nsAllowRepo: nsAllow,
-		memberRepo:   memberRepo,
+		memberRepo:  memberRepo,
 	}
 }
 
@@ -274,13 +275,13 @@ func (s *K8sClusterService) Create(ctx context.Context, req K8sClusterCreateRequ
 		return nil, err
 	}
 	return &K8sClusterItem{
-		ID:                c.ID,
-		Name:              c.Name,
-		OwningProjectID:   c.OwningProjectID,
-		ConnectionMode:    c.ConnectionMode,
-		Status:            c.Status,
-		CreatedAt:         c.CreatedAt,
-		UpdatedAt:         c.UpdatedAt,
+		ID:              c.ID,
+		Name:            c.Name,
+		OwningProjectID: c.OwningProjectID,
+		ConnectionMode:  c.ConnectionMode,
+		Status:          c.Status,
+		CreatedAt:       c.CreatedAt,
+		UpdatedAt:       c.UpdatedAt,
 	}, nil
 }
 

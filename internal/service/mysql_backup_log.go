@@ -1,10 +1,7 @@
 package service
 
-import (
-	logx "yunshu/internal/pkg/logger"
-	"yunshu/internal/service/svclog"
-)
+import "yunshu/internal/pkg/logutil"
 
-func mysqlBackupLog() *logx.Component {
-	return svclog.Worker("mysql.backup")
+func mysqlBackupLog() *logutil.Component {
+	return logutil.Worker("mysql.backup")
 }

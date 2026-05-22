@@ -1,10 +1,7 @@
 package k8seventforward
 
-import (
-	logx "yunshu/internal/pkg/logger"
-	"yunshu/internal/service/svclog"
-)
+import "yunshu/internal/pkg/logutil"
 
-func forwardLog() *logx.Component {
-	return svclog.Worker("k8s.event_forward")
+func forwardLog() *logutil.Component {
+	return logutil.Worker("k8s.event_forward")
 }

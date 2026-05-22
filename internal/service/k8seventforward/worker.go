@@ -12,15 +12,15 @@ import (
 )
 
 type Worker struct {
-	store    *Store
-	client   *WebhookClient
-	cfg      RuntimeConfig
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	interval time.Duration
-	batch    int
-	maxRetry int
+	store         *Store
+	client        *WebhookClient
+	cfg           RuntimeConfig
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	interval      time.Duration
+	batch         int
+	maxRetry      int
 	onBeforeBatch func()
 	isEnabled     func() bool
 }

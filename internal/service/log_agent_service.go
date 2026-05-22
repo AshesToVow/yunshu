@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	agentpkg "yunshu/internal/agent"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/repository"
@@ -41,18 +42,18 @@ func effectiveLogAgentHealth(online bool, reported string) string {
 const DiscoveryRootLogType = "_discovery_root"
 
 type LogAgentService struct {
-	repo           *repository.LogAgentRepository
-	serverRepo     *repository.ServerRepository
-	logRepo        *repository.LogSourceRepository
+	repo           interfaces.LogAgentRepository
+	serverRepo     interfaces.ServerRepository
+	logRepo        interfaces.LogSourceRepository
 	registerSecret string
 	discoveryRoots []string
 }
 
 // NewLogAgentService 创建相关逻辑。
 func NewLogAgentService(
-	repo *repository.LogAgentRepository,
-	serverRepo *repository.ServerRepository,
-	logRepo *repository.LogSourceRepository,
+	repo interfaces.LogAgentRepository,
+	serverRepo interfaces.ServerRepository,
+	logRepo interfaces.LogSourceRepository,
 	registerSecret string,
 	discoveryRoots []string,
 ) *LogAgentService {

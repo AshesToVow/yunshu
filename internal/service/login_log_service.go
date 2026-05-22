@@ -1,9 +1,10 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"io"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
@@ -21,11 +22,11 @@ type LoginLogListQuery struct {
 }
 
 type LoginLogService struct {
-	repo *repository.LoginLogRepository
+	repo interfaces.LoginLogRepository
 }
 
 // NewLoginLogService 创建相关逻辑。
-func NewLoginLogService(repo *repository.LoginLogRepository) *LoginLogService {
+func NewLoginLogService(repo interfaces.LoginLogRepository) *LoginLogService {
 	return &LoginLogService{repo: repo}
 }
 

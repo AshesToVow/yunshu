@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
@@ -15,12 +16,12 @@ import (
 )
 
 type PermissionService struct {
-	permissionRepo *repository.PermissionRepository
+	permissionRepo interfaces.PermissionRepository
 	enforcer       *casbin.SyncedEnforcer
 }
 
 // NewPermissionService 创建相关逻辑。
-func NewPermissionService(permissionRepo *repository.PermissionRepository, enforcer *casbin.SyncedEnforcer) *PermissionService {
+func NewPermissionService(permissionRepo interfaces.PermissionRepository, enforcer *casbin.SyncedEnforcer) *PermissionService {
 	return &PermissionService{
 		permissionRepo: permissionRepo,
 		enforcer:       enforcer,

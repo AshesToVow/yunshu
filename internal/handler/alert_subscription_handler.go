@@ -59,7 +59,7 @@ func (h *AlertSubscriptionHandler) ListNodes(c *gin.Context) {
 
 	list, total, page, pageSize, err := h.svc.ListNodes(c.Request.Context(), query)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 
@@ -159,7 +159,7 @@ func (h *AlertSubscriptionHandler) MoveNode(c *gin.Context) {
 	// 通过更新父节点实现移动
 	node, err := h.svc.GetNodeByID(c.Request.Context(), uint(id))
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 
@@ -179,7 +179,7 @@ func (h *AlertSubscriptionHandler) MoveNode(c *gin.Context) {
 
 	updated, err := h.svc.UpdateNode(c.Request.Context(), uint(id), updateReq)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 

@@ -1,13 +1,13 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"strings"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
-	"yunshu/internal/repository"
 )
 
 type K8sNamespaceAllowCreateRequest struct {
@@ -18,10 +18,10 @@ type K8sNamespaceAllowCreateRequest struct {
 }
 
 type K8sNamespaceAllowService struct {
-	repo *repository.K8sNamespaceAllowRepository
+	repo interfaces.K8sNamespaceAllowRepository
 }
 
-func NewK8sNamespaceAllowService(repo *repository.K8sNamespaceAllowRepository) *K8sNamespaceAllowService {
+func NewK8sNamespaceAllowService(repo interfaces.K8sNamespaceAllowRepository) *K8sNamespaceAllowService {
 	return &K8sNamespaceAllowService{repo: repo}
 }
 

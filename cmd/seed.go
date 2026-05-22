@@ -1,4 +1,4 @@
-package cmd
+﻿package cmd
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/password"
 	"yunshu/internal/service"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/pkg/logutil"
 
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
@@ -23,13 +23,7 @@ var seedCmd = &cobra.Command{
 	Use:   "seed",
 	Short: "Seed default admin user, roles and permissions",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		app, err := bootstrap.NewBuilder().
-			WithConfig(configPath).
-			WithLogger().
-			WithMySQL().
-			WithDictOverrides().
-			WithCasbin().
-			Build()
+		app, err := bootstrap.BuildCoreApp(configPath)
 		if err != nil {
 			return err
 		}
@@ -114,7 +108,7 @@ var seedCmd = &cobra.Command{
 			return err
 		}
 
-		svclog.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email, "password", "Admin@123")
+		logutil.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email, "password", "Admin@123")
 		fmt.Println("seed completed: admin / Admin@123 / admin@example.com")
 		return nil
 	},

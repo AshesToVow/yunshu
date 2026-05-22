@@ -20,7 +20,7 @@ import (
 	"yunshu/internal/repository"
 	"yunshu/internal/router"
 	"yunshu/internal/service"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/pkg/logutil"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/spf13/cobra"
@@ -35,16 +35,7 @@ var serverCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Start permission system server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		app, err := bootstrap.NewBuilder().
-			WithConfig(configPath).
-			WithLogger().
-			WithMySQL().
-			WithDictOverrides().
-			WithRedis().
-			WithMailer().
-			WithCasbin().
-			WithGin().
-			Build()
+		app, err := bootstrap.BuildServerApp(configPath)
 		if err != nil {
 			return err
 		}
@@ -56,7 +47,7 @@ var serverCmd = &cobra.Command{
 		if err := bootstrap.AutoMigrateModels(app.DB); err != nil {
 			return fmt.Errorf("auto migrate: %w", err)
 		}
-		bootLog := svclog.Worker("bootstrap")
+		bootLog := logutil.Worker("bootstrap")
 		bootLog.Infow("Database schema migrated")
 		if err := app.Enforcer.LoadPolicy(); err != nil {
 			return fmt.Errorf("reload casbin policy: %w", err)
@@ -118,7 +109,10 @@ var serverCmd = &cobra.Command{
 		bgWorkersCtx, bgWorkersCancel := context.WithCancel(context.Background())
 		defer bgWorkersCancel()
 
-		k8sEventForwardMgr := router.Register(app, runtimeClient, bgWorkersCtx)
+		k8sEventForwardMgr, err := router.Register(app, runtimeClient, bgWorkersCtx)
+		if err != nil {
+			return fmt.Errorf("register http routes: %w", err)
+		}
 		if k8sEventForwardMgr != nil {
 			defer k8sEventForwardMgr.Stop()
 		}
@@ -137,7 +131,7 @@ var serverCmd = &cobra.Command{
 					err := agentSvc.RecordOfflineEpisodes(ctx)
 					cancel()
 					if err != nil {
-						svclog.Worker("agent").Warnw("Failed to record agent offline episodes", "error", err)
+						logutil.Worker("agent").Warnw("Failed to record agent offline episodes", "error", err)
 					}
 				}
 			}
@@ -154,7 +148,7 @@ var serverCmd = &cobra.Command{
 
 		errCh := make(chan error, 1)
 		go func() {
-			svclog.Worker("server").Infow("HTTP server started", "addr", server.Addr)
+			logutil.Worker("server").Infow("HTTP server started", "addr", server.Addr)
 			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- err
 			}
@@ -165,7 +159,7 @@ var serverCmd = &cobra.Command{
 
 		select {
 		case sig := <-stop:
-			svclog.Worker("server").Infow("Received shutdown signal", "signal", sig.String())
+			logutil.Worker("server").Infow("Received shutdown signal", "signal", sig.String())
 		case err := <-errCh:
 			return err
 		}
@@ -192,7 +186,7 @@ var serverCmd = &cobra.Command{
 
 // initReadonlyDemoUser 初始化只读演示用户
 // 用户名: viewer, 密码: viewer123, 角色: viewer (仅查看权限)
-func initReadonlyDemoUser(ctx context.Context, db *gorm.DB, enforcer *casbin.SyncedEnforcer, logger *logx.Component) error {
+func initReadonlyDemoUser(ctx context.Context, db *gorm.DB, enforcer *casbin.SyncedEnforcer, logger *logutil.Component) error {
 	userRepo := repository.NewUserRepository(db)
 	roleRepo := repository.NewRoleRepository(db)
 	permRepo := repository.NewPermissionRepository(db)

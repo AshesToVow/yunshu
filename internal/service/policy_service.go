@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -6,20 +6,20 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
-	"yunshu/internal/repository"
+	"yunshu/internal/interfaces"
 
 	"github.com/casbin/casbin/v2"
 	"gorm.io/gorm"
 )
 
 type PolicyService struct {
-	roleRepo       *repository.RoleRepository
-	permissionRepo *repository.PermissionRepository
+	roleRepo       interfaces.RoleRepository
+	permissionRepo interfaces.PermissionRepository
 	enforcer       *casbin.SyncedEnforcer
 }
 
 // NewPolicyService 创建相关逻辑。
-func NewPolicyService(roleRepo *repository.RoleRepository, permissionRepo *repository.PermissionRepository, enforcer *casbin.SyncedEnforcer) *PolicyService {
+func NewPolicyService(roleRepo interfaces.RoleRepository, permissionRepo interfaces.PermissionRepository, enforcer *casbin.SyncedEnforcer) *PolicyService {
 	return &PolicyService{
 		roleRepo:       roleRepo,
 		permissionRepo: permissionRepo,

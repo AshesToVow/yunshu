@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"yunshu/internal/alertdispatch"
-	"yunshu/internal/model"
 )
 
 func monitorRuleIDFromPayload(payload map[string]interface{}) (uint, bool) {
@@ -40,12 +39,12 @@ func channelKindFromType(t string) string {
 
 func (s *AlertService) channelKindFlagsForSet(ctx context.Context, channelSet map[uint]struct{}) channelKindFlags {
 	var f channelKindFlags
-	if s == nil || s.db == nil || len(channelSet) == 0 {
+	if s == nil || s.channelRepo == nil || len(channelSet) == 0 {
 		return f
 	}
 	for cid := range channelSet {
-		var ch model.AlertChannel
-		if err := s.db.WithContext(ctx).Select("type").First(&ch, cid).Error; err != nil {
+		ch, err := s.channelRepo.GetByID(ctx, cid)
+		if err != nil {
 			continue
 		}
 		switch channelKindFromType(ch.Type) {
@@ -80,12 +79,12 @@ func collectAssigneePhonesFromPayload(payload map[string]interface{}) []string {
 // assigneePhoneResolvableOnDingWecom 手机号能否在钉钉/企微企业通讯录解析到（无法解析则通常无法 @，需邮件兜底）。
 func (s *AlertService) assigneePhoneResolvableOnDingWecom(ctx context.Context, channelSet map[uint]struct{}, phone string) bool {
 	phone = strings.TrimSpace(phone)
-	if phone == "" || s == nil || s.db == nil {
+	if phone == "" || s == nil || s.channelRepo == nil {
 		return false
 	}
 	for cid := range channelSet {
-		var ch model.AlertChannel
-		if err := s.db.WithContext(ctx).First(&ch, cid).Error; err != nil {
+		ch, err := s.channelRepo.GetByID(ctx, cid)
+		if err != nil {
 			continue
 		}
 		settings, err := parseChannelSettings(ch.HeadersJSON)
@@ -228,25 +227,25 @@ func (s *AlertService) isEmailChannelID(ctx context.Context, id uint) bool {
 	if id == 0 || s == nil {
 		return false
 	}
-	var ch model.AlertChannel
-	if err := s.db.WithContext(ctx).Select("type").First(&ch, id).Error; err != nil {
+	ch, err := s.channelRepo.GetByID(ctx, id)
+	if err != nil {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(ch.Type), alertdispatch.ChannelTypeEmail)
 }
 
 func (s *AlertService) firstEnabledEmailChannelID(ctx context.Context) uint {
-	if s == nil || s.db == nil {
+	if s == nil || s.channelRepo == nil {
 		return 0
 	}
-	var ch model.AlertChannel
-	err := s.db.WithContext(ctx).
-		Where("enabled = ?", true).
-		Where("LOWER(TRIM(type)) = ?", alertdispatch.ChannelTypeEmail).
-		Order("id ASC").
-		First(&ch).Error
+	channels, err := s.channelRepo.ListEnabled(ctx)
 	if err != nil {
 		return 0
 	}
-	return ch.ID
+	for _, ch := range channels {
+		if ch != nil && ch.Enabled && strings.EqualFold(strings.TrimSpace(ch.Type), alertdispatch.ChannelTypeEmail) {
+			return ch.ID
+		}
+	}
+	return 0
 }

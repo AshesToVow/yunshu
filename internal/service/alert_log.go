@@ -1,10 +1,7 @@
 package service
 
-import (
-	logx "yunshu/internal/pkg/logger"
-	"yunshu/internal/service/svclog"
-)
+import "yunshu/internal/pkg/logutil"
 
-func alertLog() *logx.Component {
-	return svclog.Worker("alert")
+func alertLog() *logutil.Component {
+	return logutil.Worker("alert")
 }

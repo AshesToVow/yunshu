@@ -1,4 +1,4 @@
-package bootstrap
+﻿package bootstrap
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"yunshu/internal/dictconfig"
 	"yunshu/internal/model"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/pkg/logutil"
 
 	"gorm.io/gorm"
 )
@@ -121,7 +121,7 @@ func (b *Builder) applyDictConfigOverrides(ctx context.Context, ov dictConfigOve
 	}
 
 	logf := func(msg string, kv ...any) {
-		svclog.Worker("config").Infow(msg, kv...)
+		logutil.Worker("config").Infow(msg, kv...)
 	}
 
 	// Alert: webhook_token

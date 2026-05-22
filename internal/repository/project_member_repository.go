@@ -24,7 +24,7 @@ type ProjectMemberRepository struct {
 	db *gorm.DB
 }
 
-func NewProjectMemberRepository(db *gorm.DB) *ProjectMemberRepository {
+func NewProjectMemberRepository(db *gorm.DB) ProjectMemberRepo {
 	return &ProjectMemberRepository{db: db}
 }
 

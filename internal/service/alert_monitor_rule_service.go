@@ -1,15 +1,17 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"fmt"
 	"strings"
 	"time"
-	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -39,8 +41,9 @@ type AlertMonitorRuleUpsertRequest struct {
 }
 
 type AlertMonitorRuleService struct {
-	db    *gorm.DB
-	redis *redis.Client
+	ruleRepo interfaces.AlertMonitorRuleRepository
+	dsRepo   interfaces.AlertDatasourceRepository
+	redis    *redis.Client
 }
 
 type AlertMonitorRuleListItem struct {
@@ -49,39 +52,24 @@ type AlertMonitorRuleListItem struct {
 	PolicySilenceRemainingSeconds int64 `json:"policy_silence_remaining_seconds"`
 }
 
-func NewAlertMonitorRuleService(db *gorm.DB, redisClient *redis.Client) *AlertMonitorRuleService {
-	return &AlertMonitorRuleService{db: db, redis: redisClient}
+func NewAlertMonitorRuleService(
+	ruleRepo interfaces.AlertMonitorRuleRepository,
+	dsRepo interfaces.AlertDatasourceRepository,
+	redisClient *redis.Client,
+) *AlertMonitorRuleService {
+	return &AlertMonitorRuleService{ruleRepo: ruleRepo, dsRepo: dsRepo, redis: redisClient}
 }
 
 func (s *AlertMonitorRuleService) List(ctx context.Context, q AlertMonitorRuleListQuery) ([]AlertMonitorRuleListItem, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	tx := s.db.WithContext(ctx).Model(&model.AlertMonitorRule{})
-	if q.DatasourceID != nil && *q.DatasourceID > 0 {
-		tx = tx.Where("datasource_id = ?", *q.DatasourceID)
-	}
-	if q.ProjectID != nil && *q.ProjectID > 0 {
-		// alert_monitor_rules 表无 project_id 字段，按 datasource 归属项目过滤
-		tx = tx.Where("datasource_id IN (?)",
-			s.db.WithContext(ctx).
-				Model(&model.AlertDatasource{}).
-				Select("id").
-				Where("project_id = ?", *q.ProjectID),
-		)
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("name LIKE ? OR expr LIKE ?", like, like)
-	}
-	if q.Enabled != nil {
-		tx = tx.Where("enabled = ?", *q.Enabled)
-	}
-	var total int64
-	if err := tx.Count(&total).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert.rule", "List", err)
-	}
-	var list []model.AlertMonitorRule
-	if err := tx.Order("id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert.rule", "List", err)
+	list, total, err := s.ruleRepo.List(ctx, repository.AlertMonitorRuleListFilter{
+		DatasourceID: q.DatasourceID,
+		ProjectID:    q.ProjectID,
+		Keyword:      q.Keyword,
+		Enabled:      q.Enabled,
+	}, (page-1)*pageSize, pageSize)
+	if err != nil {
+		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.rule", "List", err)
 	}
 	out := make([]AlertMonitorRuleListItem, 0, len(list))
 	for _, row := range list {
@@ -99,29 +87,27 @@ func (s *AlertMonitorRuleService) List(ctx context.Context, q AlertMonitorRuleLi
 }
 
 func (s *AlertMonitorRuleService) ListEnabled(ctx context.Context) ([]model.AlertMonitorRule, error) {
-	var list []model.AlertMonitorRule
-	err := s.db.WithContext(ctx).Where("enabled = ?", true).Order("id ASC").Find(&list).Error
-	return list, svcerr.Pass(ctx, "alert.rule", "ListEnabled", err)
+	list, err := s.ruleRepo.ListEnabled(ctx)
+	return list, bizerrors.Pass(ctx, "alert.rule", "ListEnabled", err)
 }
 
 func (s *AlertMonitorRuleService) Get(ctx context.Context, id uint) (*model.AlertMonitorRule, error) {
-	var row model.AlertMonitorRule
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.ruleRepo.GetByID(ctx, id)
+	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsgdfcd891c9a94)
 		}
-		return nil, svcerr.Pass(ctx, "alert.rule", "Get", err)
+		return nil, bizerrors.Pass(ctx, "alert.rule", "Get", err)
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *AlertMonitorRuleService) Create(ctx context.Context, req AlertMonitorRuleUpsertRequest) (*model.AlertMonitorRule, error) {
-	var ds model.AlertDatasource
-	if err := s.db.WithContext(ctx).First(&ds, req.DatasourceID).Error; err != nil {
+	if _, err := s.dsRepo.GetByID(ctx, req.DatasourceID); err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgaf3782e3e26f)
 		}
-		return nil, svcerr.Pass(ctx, "alert.rule", "Create", err)
+		return nil, bizerrors.Pass(ctx, "alert.rule", "Create", err)
 	}
 	ev := req.EvalIntervalSeconds
 	if ev <= 0 {
@@ -150,8 +136,8 @@ func (s *AlertMonitorRuleService) Create(ctx context.Context, req AlertMonitorRu
 		AnnotationsJSON:     strings.TrimSpace(req.AnnotationsJSON),
 		Enabled:             req.Enabled == nil || *req.Enabled,
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.rule", "Create", err)
+	if err := s.ruleRepo.Create(ctx, &row); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.rule", "Create", err)
 	}
 	return &row, nil
 }
@@ -159,15 +145,14 @@ func (s *AlertMonitorRuleService) Create(ctx context.Context, req AlertMonitorRu
 func (s *AlertMonitorRuleService) Update(ctx context.Context, id uint, req AlertMonitorRuleUpsertRequest) (*model.AlertMonitorRule, error) {
 	row, err := s.Get(ctx, id)
 	if err != nil {
-		return nil, svcerr.Pass(ctx, "alert.rule", "Update", err)
+		return nil, bizerrors.Pass(ctx, "alert.rule", "Update", err)
 	}
 	if req.DatasourceID > 0 && req.DatasourceID != row.DatasourceID {
-		var ds model.AlertDatasource
-		if err := s.db.WithContext(ctx).First(&ds, req.DatasourceID).Error; err != nil {
+		if _, err := s.dsRepo.GetByID(ctx, req.DatasourceID); err != nil {
 			if err == gorm.ErrRecordNotFound {
 				return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgaf3782e3e26f)
 			}
-			return nil, svcerr.Pass(ctx, "alert.rule", "Update", err)
+			return nil, bizerrors.Pass(ctx, "alert.rule", "Update", err)
 		}
 		row.DatasourceID = req.DatasourceID
 	}
@@ -195,28 +180,16 @@ func (s *AlertMonitorRuleService) Update(ctx context.Context, id uint, req Alert
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Save(row).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.rule", "Update", err)
+	if err := s.ruleRepo.Save(ctx, row); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.rule", "Update", err)
 	}
 	return row, nil
 }
 
 func (s *AlertMonitorRuleService) Delete(ctx context.Context, id uint) error {
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("monitor_rule_id = ?", id).Delete(&model.AlertRuleAssignee{}).Error; err != nil {
-			return svcerr.Pass(ctx, "alert.rule", "Delete", err)
-		}
-		res := tx.Delete(&model.AlertMonitorRule{}, id)
-		if res.Error != nil {
-			return svcerr.Pass(ctx, "alert.rule", "Delete", res.Error)
-		}
-		if res.RowsAffected == 0 {
-			return constants.ErrNotFoundWithMsg(constants.ErrMsgdfcd891c9a94)
-		}
-		return nil
-	})
-	if err != nil {
-		return err
+	err := s.ruleRepo.DeleteCascade(ctx, id)
+	if err == gorm.ErrRecordNotFound {
+		return constants.ErrNotFoundWithMsg(constants.ErrMsgdfcd891c9a94)
 	}
-	return nil
+	return bizerrors.Pass(ctx, "alert.rule", "Delete", err)
 }

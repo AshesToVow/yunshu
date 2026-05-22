@@ -12,10 +12,10 @@ func TestCanonicalAlertsFromAlertmanagerPayload(t *testing.T) {
 		Status:   "firing",
 		Alerts: []AlertManagerAlert{
 			{
-				Status:       "firing",
-				Labels:       map[string]string{"alertname": "A"},
-				Fingerprint:  "fp1",
-				StartsAt:     time.Now(),
+				Status:      "firing",
+				Labels:      map[string]string{"alertname": "A"},
+				Fingerprint: "fp1",
+				StartsAt:    time.Now(),
 			},
 			{
 				Status:      "firing",

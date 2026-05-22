@@ -18,7 +18,7 @@ type RoleListParams struct {
 	PageSize int
 }
 
-func NewRoleRepository(db *gorm.DB) *RoleRepository {
+func NewRoleRepository(db *gorm.DB) RoleRepo {
 	return &RoleRepository{db: db}
 }
 

@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/repository"
 	"yunshu/internal/pkg/alertnotify"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
 
-	"gorm.io/gorm"
 )
 
 func (s *AlertService) logSilenceSuppressed(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, silenceID uint, payload map[string]interface{}) {
@@ -34,7 +34,7 @@ func (s *AlertService) logSilenceSuppressed(ctx context.Context, title, severity
 		ResponsePayload: truncateText(fmt.Sprintf("suppressed by platform silence_id=%d", silenceID), s.cfg.MaxPayloadChars),
 	}
 	fillAlertEventDatasourceFromPayload(&event, payload)
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 }
 
 func (s *AlertService) logNoMatchedChannel(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, payload map[string]interface{}, reason string) {
@@ -59,7 +59,7 @@ func (s *AlertService) logNoMatchedChannel(ctx context.Context, title, severity,
 		ResponsePayload:    "",
 	}
 	fillAlertEventDatasourceFromPayload(&event, payload)
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 }
 
 func (s *AlertService) logAllChannelsDeliveryFailed(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, payload map[string]interface{}) {
@@ -84,7 +84,7 @@ func (s *AlertService) logAllChannelsDeliveryFailed(ctx context.Context, title, 
 		ResponsePayload:    "",
 	}
 	fillAlertEventDatasourceFromPayload(&event, payload)
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 }
 
 // ReceiveAlertmanager 执行对应的业务逻辑。
@@ -141,15 +141,13 @@ func (s *AlertService) resolveAlertDatasourceMeta(ctx context.Context, labels ma
 	}
 	if dsID == 0 && s.isPlatformMonitor(labels, receiver) {
 		if rid, ok := parseLabelUint(labels["monitor_rule_id"]); ok && rid > 0 {
-			var rule model.AlertMonitorRule
-			if err := s.db.WithContext(ctx).First(&rule, rid).Error; err == nil && rule.DatasourceID > 0 {
+			if rule, err := s.monitorRuleRepo.GetByID(ctx, rid); err == nil && rule.DatasourceID > 0 {
 				dsID = rule.DatasourceID
 			}
 		}
 	}
 	if dsID > 0 {
-		var ds model.AlertDatasource
-		if err := s.db.WithContext(ctx).First(&ds, dsID).Error; err == nil {
+		if ds, err := s.datasourceRepo.GetByID(ctx, dsID); err == nil {
 			dsName = strings.TrimSpace(ds.Name)
 			dsType = strings.TrimSpace(ds.Type)
 		}
@@ -281,10 +279,7 @@ func mergeStringMap(base, override map[string]string) map[string]string {
 }
 
 // AlertDatasourceFilterOption 历史告警筛选：已出现过的数据源（按事件表聚合）。
-type AlertDatasourceFilterOption struct {
-	ID   uint   `json:"id" gorm:"column:id"`
-	Name string `json:"name" gorm:"column:name"`
-}
+type AlertDatasourceFilterOption = repository.AlertDatasourceFilterOption
 
 type AlertHistoryStats struct {
 	Total                   int64                         `json:"total"`
@@ -299,82 +294,16 @@ type AlertHistoryStats struct {
 }
 
 func (s *AlertService) HistoryStats(ctx context.Context) (*AlertHistoryStats, error) {
-	stats := &AlertHistoryStats{}
 	now := time.Now()
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	dayEnd := dayStart.Add(24 * time.Hour)
-	var agg struct {
-		Total        int64
-		Firing       int64
-		Resolved     int64
-		Success      int64
-		Failed       int64
-		TodayCreated int64
+	row, err := s.eventRepo.HistoryStats(ctx, dayStart, dayEnd)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert", "HistoryStats", err)
 	}
-	// 单次聚合扫描，避免对 alert_events 连续 6 次 COUNT。
-	if err := s.db.WithContext(ctx).Raw(`
-SELECT
-  COUNT(*) AS total,
-  COALESCE(SUM(CASE WHEN status = 'firing' THEN 1 ELSE 0 END), 0) AS firing,
-  COALESCE(SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END), 0) AS resolved,
-  COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0) AS success,
-  COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0) AS failed,
-  COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS today_created
-FROM alert_events
-WHERE deleted_at IS NULL`, dayStart, dayEnd).Scan(&agg).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "HistoryStats", err)
-	}
-	stats.Total = agg.Total
-	stats.Firing = agg.Firing
-	stats.Resolved = agg.Resolved
-	stats.Success = agg.Success
-	stats.Failed = agg.Failed
-	stats.TodayCreated = agg.TodayCreated
-	var clusters []string
-	if err := s.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Where("TRIM(COALESCE(cluster, '')) != ''").
-		Group("cluster").
-		Order("cluster ASC").
-		Limit(500).
-		Pluck("cluster", &clusters).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "HistoryStats", err)
-	}
-	stats.ClusterValues = clusters
-	var pipes []string
-	if err := s.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Where("TRIM(COALESCE(monitor_pipeline, '')) != ''").
-		Group("monitor_pipeline").
-		Order("monitor_pipeline ASC").
-		Limit(32).
-		Pluck("monitor_pipeline", &pipes).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "HistoryStats", err)
-	}
-	stats.MonitorPipelineValues = pipes
-	var dsRows []AlertDatasourceFilterOption
-	if err := s.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Select("datasource_id AS id, MAX(datasource_name) AS name").
-		Where("datasource_id > ?", 0).
-		Group("datasource_id").
-		Order("id DESC").
-		Limit(200).
-		Scan(&dsRows).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "HistoryStats", err)
-	}
-	stats.DatasourceFilterOptions = dsRows
-	return stats, nil
-}
-
-// applyAlertEventProjectFilter 按项目收窄历史告警：数据源归属或 request_payload 中的 project_id。
-func applyAlertEventProjectFilter(tx *gorm.DB, db *gorm.DB, projectID uint) *gorm.DB {
-	if projectID == 0 || tx == nil || db == nil {
-		return tx
-	}
-	dsSub := db.Model(&model.AlertDatasource{}).Select("id").Where("project_id = ?", projectID)
-	pid := fmt.Sprintf("%d", projectID)
-	return tx.Where(
-		"datasource_id IN (?) OR request_payload LIKE ? OR request_payload LIKE ?",
-		dsSub,
-		`%"project_id":"`+pid+`"%`,
-		`%"project_id":`+pid+`,%`,
-	)
+	return &AlertHistoryStats{
+		Total: row.Total, Firing: row.Firing, Resolved: row.Resolved, Success: row.Success, Failed: row.Failed,
+		TodayCreated: row.TodayCreated, ClusterValues: row.ClusterValues, MonitorPipelineValues: row.MonitorPipelineValues,
+		DatasourceFilterOptions: row.DatasourceFilterOptions,
+	}, nil
 }

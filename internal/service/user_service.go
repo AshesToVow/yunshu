@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
@@ -21,21 +22,21 @@ import (
 )
 
 type UserService struct {
-	userRepo         *repository.UserRepository
-	roleRepo         *repository.RoleRepository
-	departmentRepo   *repository.DepartmentRepository
-	projectMemberRepo *repository.ProjectMemberRepository
-	assigneeSvc      *AlertRuleAssigneeService
-	enforcer         *casbin.SyncedEnforcer
+	userRepo          interfaces.UserRepository
+	roleRepo          interfaces.RoleRepository
+	departmentRepo    interfaces.DepartmentRepository
+	projectMemberRepo interfaces.ProjectMemberRepository
+	assigneeSvc       *AlertRuleAssigneeService
+	enforcer          *casbin.SyncedEnforcer
 }
 
 // NewUserService 创建相关逻辑。
 func NewUserService(
-	userRepo *repository.UserRepository,
-	roleRepo *repository.RoleRepository,
-	departmentRepo *repository.DepartmentRepository,
+	userRepo interfaces.UserRepository,
+	roleRepo interfaces.RoleRepository,
+	departmentRepo interfaces.DepartmentRepository,
 	enforcer *casbin.SyncedEnforcer,
-	projectMemberRepo *repository.ProjectMemberRepository,
+	projectMemberRepo interfaces.ProjectMemberRepository,
 	assigneeSvc *AlertRuleAssigneeService,
 ) *UserService {
 	return &UserService{

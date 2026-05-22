@@ -1,21 +1,19 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"encoding/json"
-	"yunshu/internal/service/svcerr"
 	"strings"
 	"sync"
 	"time"
 
-	"yunshu/internal/model"
-
-	"gorm.io/gorm"
+	"yunshu/internal/interfaces"
+	bizerrors "yunshu/internal/pkg/errors"
 )
 
 // ReceiverGroupCache 接收组缓存
 type ReceiverGroupCache struct {
-	db       *gorm.DB
+	repo     interfaces.AlertReceiverGroupRepository
 	mu       sync.RWMutex
 	groups   map[uint]*CachedReceiverGroup
 	lastLoad time.Time
@@ -37,7 +35,6 @@ type CachedReceiverGroup struct {
 func (g *CachedReceiverGroup) IsActiveNow() bool {
 	now := time.Now()
 
-	// 检查星期
 	if len(g.Weekdays) > 0 {
 		weekday := int(now.Weekday())
 		found := false
@@ -52,7 +49,6 @@ func (g *CachedReceiverGroup) IsActiveNow() bool {
 		}
 	}
 
-	// 检查时间范围
 	if g.ActiveTimeStart != nil && g.ActiveTimeEnd != nil {
 		currentTime := now.Format("15:04")
 		if currentTime < *g.ActiveTimeStart || currentTime > *g.ActiveTimeEnd {
@@ -64,12 +60,11 @@ func (g *CachedReceiverGroup) IsActiveNow() bool {
 }
 
 // NewReceiverGroupCache 创建接收组缓存
-func NewReceiverGroupCache(db *gorm.DB) *ReceiverGroupCache {
+func NewReceiverGroupCache(repo interfaces.AlertReceiverGroupRepository) *ReceiverGroupCache {
 	cache := &ReceiverGroupCache{
-		db:     db,
+		repo:   repo,
 		groups: make(map[uint]*CachedReceiverGroup),
 	}
-	// 启动时预热
 	_ = cache.Refresh()
 	return cache
 }
@@ -83,9 +78,8 @@ func (c *ReceiverGroupCache) Get(id uint) (*CachedReceiverGroup, error) {
 	}
 	c.mu.RUnlock()
 
-	// 未命中，刷新缓存
 	if err := c.Refresh(); err != nil {
-		return nil, svcerr.Pass(context.Background(), "alert.receiver", "Get", err)
+		return nil, bizerrors.Pass(context.Background(), "alert.receiver", "Get", err)
 	}
 
 	c.mu.RLock()
@@ -101,14 +95,13 @@ func (c *ReceiverGroupCache) Refresh() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// 每30秒刷新一次
 	if time.Since(c.lastLoad) < 30*time.Second && len(c.groups) > 0 {
 		return nil
 	}
 
-	var groups []model.AlertReceiverGroup
-	if err := c.db.Where("enabled = ?", true).Find(&groups).Error; err != nil {
-		return svcerr.Pass(context.Background(), "alert.receiver", "Refresh", err)
+	groups, err := c.repo.ListEnabled(context.Background())
+	if err != nil {
+		return bizerrors.Pass(context.Background(), "alert.receiver", "Refresh", err)
 	}
 
 	newGroups := make(map[uint]*CachedReceiverGroup, len(groups))
@@ -139,7 +132,6 @@ func (c *ReceiverGroupCache) Invalidate() {
 	c.lastLoad = time.Time{}
 }
 
-// 辅助函数
 func parseStringSliceJSON(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "[]" {

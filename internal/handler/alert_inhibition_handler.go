@@ -65,7 +65,7 @@ func (h *AlertInhibitionHandler) Create(c *gin.Context) {
 func (h *AlertInhibitionHandler) Update(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertInhibitionRuleUpsertRequest) (any, error) {
@@ -82,11 +82,11 @@ func (h *AlertInhibitionHandler) Update(c *gin.Context) {
 func (h *AlertInhibitionHandler) Delete(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"deleted": true})
@@ -98,7 +98,7 @@ func (h *AlertInhibitionHandler) Delete(c *gin.Context) {
 // @Router /api/v1/alerts/inhibition-rules/refresh-cache [post]
 func (h *AlertInhibitionHandler) RefreshCache(c *gin.Context) {
 	if err := h.svc.RefreshCache(c.Request.Context()); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"refreshed": true})

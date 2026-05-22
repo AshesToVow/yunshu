@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8sutil"
-	"yunshu/internal/repository"
+	"yunshu/internal/service/svcerr"
 
 	kom "github.com/weibaohui/kom/kom"
 	corev1 "k8s.io/api/core/v1"
@@ -90,15 +90,15 @@ type NamespaceEventItem struct {
 type K8sNamespaceService struct {
 	runtime     *K8sRuntimeService
 	dyn         *DynamicResourceService
-	nsDenyRepo  *repository.K8sNamespaceDenyRepository
-	nsAllowRepo *repository.K8sNamespaceAllowRepository
+	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 }
 
 // NewK8sNamespaceService 创建相关逻辑。
 func NewK8sNamespaceService(
 	runtime *K8sRuntimeService,
-	nsDeny *repository.K8sNamespaceDenyRepository,
-	nsAllow *repository.K8sNamespaceAllowRepository,
+	nsDeny interfaces.K8sNamespaceDenyRepository,
+	nsAllow interfaces.K8sNamespaceAllowRepository,
 ) *K8sNamespaceService {
 	return &K8sNamespaceService{
 		runtime:     runtime,
@@ -175,24 +175,24 @@ func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery
 		}
 		quotaSum := summarizeResourceQuotasForList(rqByNS[ns.Name])
 		out = append(out, NamespaceListItem{
-			Name:         ns.Name,
-			Status:       string(ns.Status.Phase),
-			CreationTime: ns.CreationTimestamp.Time.Format("2006-01-02 15:04:05"),
-			Labels:       ns.Labels,
-			Annotations:  ns.Annotations,
-			PodCount:     sum.PodCount,
-			CPURequests:  quantityOrDash(sum.CPURequests),
-			CPULimits:    quantityOrDash(sum.CPULimits),
-			MemRequests:  quantityOrDash(sum.MemRequests),
-			MemLimits:    quantityOrDash(sum.MemLimits),
-			CPUUsage:     cpuUse,
-			MemUsage:     memUse,
-			CPUCoresRequest: quantityToCoresApprox(sum.CPURequests),
-			CPUCoresLimit:   quantityToCoresApprox(sum.CPULimits),
-			CPUCoresUsage:   quantityToCoresApprox(u.CPU),
-			MemGiRequest:    quantityToGiApprox(sum.MemRequests),
-			MemGiLimit:      quantityToGiApprox(sum.MemLimits),
-			MemGiUsage:      quantityToGiApprox(u.Mem),
+			Name:                 ns.Name,
+			Status:               string(ns.Status.Phase),
+			CreationTime:         ns.CreationTimestamp.Time.Format("2006-01-02 15:04:05"),
+			Labels:               ns.Labels,
+			Annotations:          ns.Annotations,
+			PodCount:             sum.PodCount,
+			CPURequests:          quantityOrDash(sum.CPURequests),
+			CPULimits:            quantityOrDash(sum.CPULimits),
+			MemRequests:          quantityOrDash(sum.MemRequests),
+			MemLimits:            quantityOrDash(sum.MemLimits),
+			CPUUsage:             cpuUse,
+			MemUsage:             memUse,
+			CPUCoresRequest:      quantityToCoresApprox(sum.CPURequests),
+			CPUCoresLimit:        quantityToCoresApprox(sum.CPULimits),
+			CPUCoresUsage:        quantityToCoresApprox(u.CPU),
+			MemGiRequest:         quantityToGiApprox(sum.MemRequests),
+			MemGiLimit:           quantityToGiApprox(sum.MemLimits),
+			MemGiUsage:           quantityToGiApprox(u.Mem),
 			ResourceQuotaSummary: quotaSum,
 		})
 	}

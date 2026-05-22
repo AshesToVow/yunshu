@@ -14,13 +14,7 @@ var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Run database migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		app, err := bootstrap.NewBuilder().
-			WithConfig(configPath).
-			WithLogger().
-			WithMySQL().
-			WithDictOverrides().
-			WithCasbin().
-			Build()
+		app, err := bootstrap.BuildCoreApp(configPath)
 		if err != nil {
 			return err
 		}

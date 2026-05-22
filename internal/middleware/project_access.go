@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"net/http"
@@ -9,9 +9,9 @@ import (
 	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/projectaccess"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/repository"
+	"yunshu/internal/interfaces"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -19,7 +19,7 @@ import (
 
 // RequireProjectMemberAccess 校验当前用户是否为 URL 中 :id 对应项目的成员；超级管理员跳过。
 // 规则：GET/HEAD 任意成员均可；非 GET 只读成员禁止；项目元数据（PUT/DELETE /projects/:id）与成员管理（/members 且非 GET）需 admin 或 owner。
-func RequireProjectMemberAccess(memberRepo *repository.ProjectMemberRepository, logger *logx.Logger) gin.HandlerFunc {
+func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, logger *logx.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if memberRepo == nil {
 			c.Next()
@@ -54,7 +54,7 @@ func RequireProjectMemberAccess(memberRepo *repository.ProjectMemberRepository, 
 				c.Abort()
 				return
 			}
-			svclog.HTTP("http.project_access").Error("project member lookup failed", "error", err)
+			logutil.HTTP("http.project_access").Error("project member lookup failed", "error", err)
 			response.Error(c, constants.ErrInternal)
 			c.Abort()
 			return

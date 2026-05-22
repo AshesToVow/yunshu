@@ -13,7 +13,7 @@ type DictEntryRepository struct {
 	db *gorm.DB
 }
 
-func NewDictEntryRepository(db *gorm.DB) *DictEntryRepository {
+func NewDictEntryRepository(db *gorm.DB) DictEntryRepo {
 	return &DictEntryRepository{db: db}
 }
 

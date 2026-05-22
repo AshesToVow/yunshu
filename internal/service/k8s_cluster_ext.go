@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"context"
@@ -9,16 +9,16 @@ import (
 	"net/url"
 	"strings"
 
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
-	"yunshu/internal/repository"
+	"yunshu/internal/pkg/logutil"
 
 	"gorm.io/gorm"
 	"k8s.io/client-go/rest"
 )
 
 // getDirectConfigFromDict 从数据字典读取直连配置
-func getDirectConfigFromDict(ctx context.Context, dictRepo *repository.DictEntryRepository, configKey string) (*DirectConfig, error) {
+func getDirectConfigFromDict(ctx context.Context, dictRepo interfaces.DictEntryRepository, configKey string) (*DirectConfig, error) {
 	// 优先按 label（配置键）查；兼容历史“按 value 作为键”查法。
 	entry, err := dictRepo.GetByDictTypeAndLabel(ctx, "k8s_direct_config", configKey)
 	if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
@@ -185,7 +185,7 @@ func buildKubeconfigFromDirectConfig(config *DirectConfig) (string, error) {
 
 	// 设置认证方式
 	if token != "" {
-		svclog.Service("k8s.cluster").Infow("Configured direct auth token",
+		logutil.Service("k8s.cluster").Infow("Configured direct auth token",
 			"token_len", len(token),
 			"token_masked", maskSecretEdge(token, 8),
 			"server", serverRaw,

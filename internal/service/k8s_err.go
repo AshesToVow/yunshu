@@ -1,11 +1,11 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"errors"
 	"strings"
 
-	"yunshu/internal/pkg/apperror"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
@@ -18,11 +18,11 @@ func k8sFail(ctx context.Context, component, operation string, err error, attrs 
 	if err == nil {
 		return nil
 	}
-	if _, ok := apperror.IsAppError(err); ok {
+	if _, ok := bizerrors.As(err); ok {
 		return err
 	}
 	if mapped := k8sMapAPIError(err); mapped != err {
-		if _, ok := apperror.IsAppError(mapped); ok {
+		if _, ok := bizerrors.As(mapped); ok {
 			return mapped
 		}
 	}
@@ -44,7 +44,7 @@ func isK8sUnauthorizedErr(err error) bool {
 	if err == nil {
 		return false
 	}
-	if ae, ok := apperror.IsAppError(err); ok && ae.ErrorCode == "26002" {
+	if biz, ok := bizerrors.As(err); ok && biz.ErrorCode == "26002" {
 		return true
 	}
 	if apierrors.IsUnauthorized(err) {
@@ -88,7 +88,7 @@ func k8sFailOrInternal(ctx context.Context, component, operation string, err err
 		return nil
 	}
 	if mapped := k8sMapAPIError(err); mapped != err {
-		if _, ok := apperror.IsAppError(mapped); ok {
+		if _, ok := bizerrors.As(mapped); ok {
 			return mapped
 		}
 	}

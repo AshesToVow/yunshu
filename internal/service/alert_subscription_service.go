@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -9,18 +9,20 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
-
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
 
 // AlertSubscriptionService 订阅树服务
 type AlertSubscriptionService struct {
-	db           *gorm.DB
+	repo         interfaces.AlertSubscriptionRepository
+	txDB         *gorm.DB // clone/migration 等跨表事务路径（主 CRUD 走 repo）
 	cacheMu      sync.RWMutex
 	rootNodes    map[uint][]*CachedSubscriptionNode // projectID -> root nodes
 	allNodes     map[uint]*CachedSubscriptionNode   // nodeID -> node
@@ -48,10 +50,11 @@ type CachedSubscriptionNode struct {
 	Children         []*CachedSubscriptionNode
 }
 
-// NewAlertSubscriptionService 创建订阅服务
-func NewAlertSubscriptionService(db *gorm.DB) *AlertSubscriptionService {
+// NewAlertSubscriptionService 创建订阅服务（txDB 可为 nil，仅 clone/migrate 需要）。
+func NewAlertSubscriptionService(repo interfaces.AlertSubscriptionRepository, txDB *gorm.DB) *AlertSubscriptionService {
 	svc := &AlertSubscriptionService{
-		db:        db,
+		repo:      repo,
+		txDB:      txDB,
 		rootNodes: make(map[uint][]*CachedSubscriptionNode),
 		allNodes:  make(map[uint]*CachedSubscriptionNode),
 	}
@@ -89,34 +92,14 @@ type AlertSubscriptionNodeListQuery struct {
 // ListNodes 查询订阅树节点列表
 func (s *AlertSubscriptionService) ListNodes(ctx context.Context, q AlertSubscriptionNodeListQuery) ([]model.AlertSubscriptionNode, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	tx := s.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{})
-
-	if q.ProjectID > 0 {
-		tx = tx.Where("project_id = ?", q.ProjectID)
-	}
-	if q.ParentID != nil {
-		if *q.ParentID == 0 {
-			tx = tx.Where("parent_id IS NULL")
-		} else {
-			tx = tx.Where("parent_id = ?", *q.ParentID)
-		}
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("name LIKE ? OR code LIKE ?", like, like)
-	}
-	if q.Enabled != nil {
-		tx = tx.Where("enabled = ?", *q.Enabled)
-	}
-
-	var total int64
-	if err := tx.Count(&total).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert.subscription", "ListNodes", err)
-	}
-
-	var list []model.AlertSubscriptionNode
-	if err := tx.Order("level ASC, id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert.subscription", "ListNodes", err)
+	list, total, err := s.repo.ListFiltered(ctx, repository.AlertSubscriptionListFilter{
+		ProjectID: q.ProjectID,
+		ParentID:  q.ParentID,
+		Keyword:   q.Keyword,
+		Enabled:   q.Enabled,
+	}, (page-1)*pageSize, pageSize)
+	if err != nil {
+		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.subscription", "ListNodes", err)
 	}
 
 	for i := range list {
@@ -128,23 +111,20 @@ func (s *AlertSubscriptionService) ListNodes(ctx context.Context, q AlertSubscri
 
 // GetNodeByID 获取单个节点（用于节点移动等场景）。
 func (s *AlertSubscriptionService) GetNodeByID(ctx context.Context, id uint) (*model.AlertSubscriptionNode, error) {
-	var node model.AlertSubscriptionNode
-	if err := s.db.WithContext(ctx).First(&node, id).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "GetNodeByID", err)
+	node, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "GetNodeByID", err)
 	}
-	hydrateSubscriptionNode(&node)
-	return &node, nil
+	hydrateSubscriptionNode(node)
+	return node, nil
 }
 
 // GetNodeTree 获取完整订阅树（按项目）
 // 管理界面需展示启用与停用节点，故不按 enabled 过滤（路由匹配缓存仍只加载 enabled=true）。
 func (s *AlertSubscriptionService) GetNodeTree(ctx context.Context, projectID uint) ([]model.AlertSubscriptionNode, error) {
-	var nodes []model.AlertSubscriptionNode
-	if err := s.db.WithContext(ctx).
-		Where("project_id = ?", projectID).
-		Order("path ASC, id ASC").
-		Find(&nodes).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "GetNodeTree", err)
+	nodes, err := s.repo.ListByProject(ctx, projectID)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "GetNodeTree", err)
 	}
 
 	for i := range nodes {
@@ -197,7 +177,7 @@ func buildNodeTree(nodes []model.AlertSubscriptionNode) []model.AlertSubscriptio
 // CreateNode 创建订阅节点
 func (s *AlertSubscriptionService) CreateNode(ctx context.Context, req AlertSubscriptionNodeUpsertRequest) (*model.AlertSubscriptionNode, error) {
 	if err := validateSubscriptionNode(req); err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "CreateNode", err)
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "CreateNode", err)
 	}
 
 	// 计算层级和路径
@@ -206,8 +186,9 @@ func (s *AlertSubscriptionService) CreateNode(ctx context.Context, req AlertSubs
 	var path string
 
 	if req.ParentID != nil && *req.ParentID > 0 {
-		parent = &model.AlertSubscriptionNode{}
-		if err := s.db.WithContext(ctx).First(parent, *req.ParentID).Error; err != nil {
+		var err error
+		parent, err = s.repo.GetByID(ctx, *req.ParentID)
+		if err != nil {
 			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgbe7758c9a279)
 		}
 		if parent.ProjectID != req.ProjectID {
@@ -245,8 +226,8 @@ func (s *AlertSubscriptionService) CreateNode(ctx context.Context, req AlertSubs
 		NotifyResolved:       notifyResolved,
 	}
 
-	if err := s.db.WithContext(ctx).Create(node).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "CreateNode", err)
+	if err := s.repo.Create(ctx, node); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "CreateNode", err)
 	}
 
 	s.InvalidateCache()
@@ -256,9 +237,12 @@ func (s *AlertSubscriptionService) CreateNode(ctx context.Context, req AlertSubs
 
 // UpdateNode 更新订阅节点
 func (s *AlertSubscriptionService) UpdateNode(ctx context.Context, id uint, req AlertSubscriptionNodeUpsertRequest) (*model.AlertSubscriptionNode, error) {
-	var node model.AlertSubscriptionNode
-	if err := s.db.WithContext(ctx).First(&node, id).Error; err != nil {
-		return nil, constants.ErrNotFoundWithMsg(constants.ErrMsgb196d0c97d2f)
+	node, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsgb196d0c97d2f)
+		}
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "UpdateNode", err)
 	}
 
 	// 不允许修改所属项目
@@ -278,7 +262,7 @@ func (s *AlertSubscriptionService) UpdateNode(ctx context.Context, id uint, req 
 	}
 
 	if err := validateSubscriptionNode(req); err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "UpdateNode", err)
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "UpdateNode", err)
 	}
 
 	// 重新计算层级和路径
@@ -286,8 +270,8 @@ func (s *AlertSubscriptionService) UpdateNode(ctx context.Context, id uint, req 
 		level := 0
 		var path string
 		if req.ParentID != nil && *req.ParentID > 0 {
-			parent := &model.AlertSubscriptionNode{}
-			if err := s.db.WithContext(ctx).First(parent, *req.ParentID).Error; err != nil {
+			parent, err := s.repo.GetByID(ctx, *req.ParentID)
+			if err != nil {
 				return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgbe7758c9a279)
 			}
 			level = parent.Level + 1
@@ -318,39 +302,38 @@ func (s *AlertSubscriptionService) UpdateNode(ctx context.Context, id uint, req 
 		node.NotifyResolved = *req.NotifyResolved
 	}
 
-	if err := s.db.WithContext(ctx).Save(&node).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "UpdateNode", err)
+	if err := s.repo.Save(ctx, node); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "UpdateNode", err)
 	}
 
 	s.InvalidateCache()
-	hydrateSubscriptionNode(&node)
-	return &node, nil
+	hydrateSubscriptionNode(node)
+	return node, nil
 }
 
 // DeleteNode 删除订阅节点
 func (s *AlertSubscriptionService) DeleteNode(ctx context.Context, id uint) error {
 	// 检查是否有子节点
-	var childCount int64
-	if err := s.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).
-		Where("parent_id = ?", id).
-		Count(&childCount).Error; err != nil {
-		return svcerr.Pass(ctx, "alert.subscription", "DeleteNode", err)
+	childCount, err := s.repo.CountChildren(ctx, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.subscription", "DeleteNode", err)
 	}
 	if childCount > 0 {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsgbc5e76aacb41)
 	}
 
-	res := s.db.WithContext(ctx).Delete(&model.AlertSubscriptionNode{}, id)
-	if res.Error != nil {
-		return svcerr.Pass(ctx, "alert.subscription", "DeleteNode", res.Error)
+	n, err := s.repo.Delete(ctx, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.subscription", "DeleteNode", err)
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFoundWithMsg(constants.ErrMsgb196d0c97d2f)
 	}
 
 	s.InvalidateCache()
 	return nil
 }
+
 // 返回匹配到的接收组ID列表，以及是否继续匹配的标志
 func (s *AlertSubscriptionService) MatchRoute(projectID uint, labels map[string]string, severity string) ([]uint, bool) {
 	// 兼容旧调用：默认仅用于 firing
@@ -429,12 +412,9 @@ func (s *AlertSubscriptionService) refreshCache(ctx context.Context) error {
 		return nil
 	}
 
-	var nodes []model.AlertSubscriptionNode
-	if err := s.db.WithContext(ctx).
-		Where("enabled = ?", true).
-		Order("path ASC, level ASC, id ASC").
-		Find(&nodes).Error; err != nil {
-		return svcerr.Pass(ctx, "alert.subscription", "refreshCache", err)
+	nodes, err := s.repo.ListEnabled(ctx)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.subscription", "refreshCache", err)
 	}
 
 	// 构建缓存节点
@@ -498,8 +478,8 @@ func (s *AlertSubscriptionService) refreshCache(ctx context.Context) error {
 
 // isDescendant 检查target是否是node的后代
 func (s *AlertSubscriptionService) isDescendant(ctx context.Context, nodeID, targetID uint) bool {
-	var children []model.AlertSubscriptionNode
-	if err := s.db.WithContext(ctx).Where("parent_id = ?", nodeID).Find(&children).Error; err != nil {
+	children, err := s.repo.ListChildren(ctx, nodeID)
+	if err != nil {
 		return false
 	}
 
@@ -516,8 +496,8 @@ func (s *AlertSubscriptionService) isDescendant(ctx context.Context, nodeID, tar
 
 // updateDescendantsPath 更新所有后代节点的路径
 func (s *AlertSubscriptionService) updateDescendantsPath(ctx context.Context, parentID uint, parentPath string) {
-	var children []model.AlertSubscriptionNode
-	if err := s.db.WithContext(ctx).Where("parent_id = ?", parentID).Find(&children).Error; err != nil {
+	children, err := s.repo.ListChildren(ctx, parentID)
+	if err != nil {
 		return
 	}
 
@@ -527,7 +507,7 @@ func (s *AlertSubscriptionService) updateDescendantsPath(ctx context.Context, pa
 			"path":  newPath,
 			"level": len(strings.Split(newPath, "/")) - 1,
 		}
-		_ = s.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).Where("id = ?", child.ID).Updates(updates)
+		_ = s.repo.UpdateFields(ctx, child.ID, updates)
 		s.updateDescendantsPath(ctx, child.ID, newPath)
 	}
 }
@@ -659,7 +639,7 @@ func (s *AlertSubscriptionService) matchNodeRecursiveDetailed(node *CachedSubscr
 	}
 	res := AlertRouteResult{
 		MatchedPath:      node.Path,
-		MatchedNodeIDs: []uint{node.ID},
+		MatchedNodeIDs:   []uint{node.ID},
 		MatchedNodeNames: []string{node.Name},
 		SilenceSeconds:   node.SilenceSeconds,
 	}

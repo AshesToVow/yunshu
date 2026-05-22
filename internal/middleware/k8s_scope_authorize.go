@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"bytes"
@@ -16,15 +16,15 @@ import (
 	"yunshu/internal/pkg/k8sauth"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/repository"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/service"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/pkg/logutil"
 
 	"github.com/gin-gonic/gin"
 )
 
 type k8sScopeCatalogCache struct {
-	repo        *repository.PermissionRepository
+	repo        interfaces.PermissionRepository
 	ttl         time.Duration
 	mu          sync.RWMutex
 	loadedAt    time.Time
@@ -33,7 +33,7 @@ type k8sScopeCatalogCache struct {
 	perms       []model.Permission
 }
 
-func newK8sScopeCatalogCache(repo *repository.PermissionRepository) *k8sScopeCatalogCache {
+func newK8sScopeCatalogCache(repo interfaces.PermissionRepository) *k8sScopeCatalogCache {
 	return &k8sScopeCatalogCache{
 		repo: repo,
 		ttl:  60 * time.Second,
@@ -105,10 +105,10 @@ func (c *k8sScopeCatalogCache) refresh() {
 // 3) 命名空间黑名单优先；白名单（若该集群对任一主体有允许规则）在黑名单之后判定；含 super-admin 仍受黑名单/白名单约束
 func K8sScopeAuthorize(
 	logger *logx.Logger,
-	permRepo *repository.PermissionRepository,
-	accessRepo *repository.K8sClusterAccessRepository,
-	nsDenyRepo *repository.K8sNamespaceDenyRepository,
-	nsAllowRepo *repository.K8sNamespaceAllowRepository,
+	permRepo interfaces.PermissionRepository,
+	accessRepo interfaces.K8sClusterAccessRepository,
+	nsDenyRepo interfaces.K8sNamespaceDenyRepository,
+	nsAllowRepo interfaces.K8sNamespaceAllowRepository,
 ) gin.HandlerFunc {
 	catalog := newK8sScopeCatalogCache(permRepo)
 	return func(c *gin.Context) {
@@ -154,7 +154,7 @@ func K8sScopeAuthorize(
 		if nsDenyRepo != nil && namespace != "" && namespace != "_cluster" {
 			denied, err := nsDenyRepo.IsDenied(c.Request.Context(), pack, clusterID, namespace)
 			if err != nil {
-				svclog.HTTP("http.k8s_scope").Error("namespace deny check failed", "error", err)
+				logutil.HTTP("http.k8s_scope").Error("namespace deny check failed", "error", err)
 				response.Error(c, constants.ErrInternal)
 				c.Abort()
 				return
@@ -169,7 +169,7 @@ func K8sScopeAuthorize(
 		if nsAllowRepo != nil && clusterID > 0 && namespace != "" && namespace != "_cluster" {
 			active, err := nsAllowRepo.WhitelistActiveForCluster(c.Request.Context(), pack, clusterID)
 			if err != nil {
-				svclog.HTTP("http.k8s_scope").Error("namespace allow check failed", "error", err)
+				logutil.HTTP("http.k8s_scope").Error("namespace allow check failed", "error", err)
 				response.Error(c, constants.ErrInternal)
 				c.Abort()
 				return
@@ -177,7 +177,7 @@ func K8sScopeAuthorize(
 			if active {
 				ok, err := nsAllowRepo.NamespaceAllowed(c.Request.Context(), pack, clusterID, namespace)
 				if err != nil {
-					svclog.HTTP("http.k8s_scope").Error("namespace allow match failed", "error", err)
+					logutil.HTTP("http.k8s_scope").Error("namespace allow match failed", "error", err)
 					response.Error(c, constants.ErrInternal)
 					c.Abort()
 					return

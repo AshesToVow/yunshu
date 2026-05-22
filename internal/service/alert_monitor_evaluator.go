@@ -1,7 +1,8 @@
 ﻿package service
 
 import (
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/repository"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -49,18 +50,9 @@ func (s *AlertService) tickMonitorRules(ctx context.Context) error {
 			return nil
 		}
 	}
-	type evalRule struct {
-		model.AlertMonitorRule
-		ProjectID uint `gorm:"column:project_id"`
-	}
-	var rules []evalRule
-	if err := s.db.WithContext(ctx).
-		Table("alert_monitor_rules amr").
-		Select("amr.*, ad.project_id AS project_id").
-		Joins("JOIN alert_datasources ad ON ad.id = amr.datasource_id AND ad.deleted_at IS NULL").
-		Where("amr.enabled = ?", true).
-		Find(&rules).Error; err != nil {
-		return svcerr.Pass(ctx, "alert.evaluator", "tickMonitorRules", err)
+	rules, err := s.monitorRuleRepo.ListEnabledWithProject(ctx)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.evaluator", "tickMonitorRules", err)
 	}
 	now := time.Now()
 	for i := range rules {
@@ -79,7 +71,7 @@ func (s *AlertService) tickMonitorRules(ctx context.Context) error {
 			if !s.monitorEvalLockAcquire(ctx, rule.ID, lockSec) {
 				continue
 			}
-			func(r *evalRule) {
+			func(r *repository.EvalMonitorRule) {
 				defer s.monitorEvalLockRelease(ctx, r.ID)
 				s.evaluateOneMonitorRule(ctx, &r.AlertMonitorRule, r.ProjectID)
 			}(rule)
@@ -204,8 +196,8 @@ func parsePromFirstSample(body []byte) (map[string]string, string) {
 }
 
 func (s *AlertService) evaluateOneMonitorRule(ctx context.Context, rule *model.AlertMonitorRule, projectID uint) {
-	var ds model.AlertDatasource
-	if err := s.db.WithContext(ctx).First(&ds, rule.DatasourceID).Error; err != nil {
+	ds, err := s.datasourceRepo.GetByID(ctx, rule.DatasourceID)
+	if err != nil {
 		return
 	}
 	if !ds.Enabled || ds.Type != "prometheus" {
@@ -231,7 +223,7 @@ func (s *AlertService) evaluateOneMonitorRule(ctx context.Context, rule *model.A
 	if projectID == 0 {
 		projectID = ds.ProjectID
 	}
-	labels := buildMonitorRuleLabels(rule, projectID, &ds)
+	labels := buildMonitorRuleLabels(rule, projectID, ds)
 	sampleLabels, sampleValue := parsePromFirstSample(body)
 	for k, v := range sampleLabels {
 		k = strings.TrimSpace(k)

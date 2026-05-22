@@ -12,7 +12,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
 	cryptox "yunshu/internal/pkg/crypto"
 )
 
@@ -54,9 +54,9 @@ func (s *AlertService) tickCloudExpiryRules(ctx context.Context) error {
 }
 
 func (s *AlertService) tickCloudExpiryRulesWithMode(ctx context.Context, force bool) error {
-	var rules []model.CloudExpiryRule
-	if err := s.db.WithContext(ctx).Where("enabled = ?", true).Find(&rules).Error; err != nil {
-		return svcerr.Pass(ctx, "alert.cloud-expiry", "tickCloudExpiryRulesWithMode", err)
+	rules, err := s.cloudExpiryRepo.ListEnabled(ctx)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.cloud-expiry", "tickCloudExpiryRulesWithMode", err)
 	}
 	if !force && s.aead == nil {
 		if len(rules) > 0 {
@@ -125,12 +125,8 @@ func (s *AlertService) evaluateOneCloudExpiryRule(ctx context.Context, rule *mod
 	instScanned := 0
 	providerFilter := strings.TrimSpace(rule.Provider)
 	regionFilter := parseRegionSet(rule.RegionScope)
-	var accounts []model.CloudAccount
-	tx := s.db.WithContext(ctx).Where("project_id = ? AND status = ?", rule.ProjectID, model.StatusEnabled)
-	if providerFilter != "" {
-		tx = tx.Where("provider = ?", providerFilter)
-	}
-	if err := tx.Find(&accounts).Error; err != nil {
+	accounts, err := s.cloudAccountRepo.ListEnabledByProject(ctx, rule.ProjectID, providerFilter)
+	if err != nil {
 		return
 	}
 	for i := range accounts {

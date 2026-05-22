@@ -71,11 +71,11 @@ func (s *AlertService) channelIDSetForAlert(ctx context.Context, status string, 
 
 // ChannelRouteForAlert 订阅匹配后的通道与接收组信息。
 type ChannelRouteForAlert struct {
-	ChannelIDs       map[uint]struct{}
-	MatchedPolicyIDs string
+	ChannelIDs         map[uint]struct{}
+	MatchedPolicyIDs   string
 	MatchedPolicyNames string
-	SilenceSeconds   int
-	ReceiverGroupIDs []uint
+	SilenceSeconds     int
+	ReceiverGroupIDs   []uint
 }
 
 func (s *AlertService) channelRouteForAlert(ctx context.Context, status string, labels map[string]string) ChannelRouteForAlert {
@@ -98,8 +98,7 @@ func (s *AlertService) resolveProjectIDForAlertRouting(ctx context.Context, labe
 	}
 	for _, key := range []string{"datasource_id", "yunshu_datasource_id"} {
 		if dsID, ok := parseLabelUint(labels[key]); ok && dsID > 0 {
-			var ds model.AlertDatasource
-			if err := s.db.WithContext(ctx).Select("project_id").First(&ds, dsID).Error; err == nil && ds.ProjectID > 0 {
+			if ds, err := s.datasourceRepo.GetByID(ctx, dsID); err == nil && ds.ProjectID > 0 {
 				return ds.ProjectID
 			}
 		}
@@ -157,7 +156,7 @@ func (s *AlertService) logSuppressedRouteSilence(ctx context.Context, title, sev
 		ResponsePayload: truncateText(fmt.Sprintf("suppressed by subscription silence_seconds=%d", silenceSeconds), s.cfg.MaxPayloadChars),
 	}
 	fillAlertEventDatasourceFromPayload(&event, payload)
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 }
 
 func (s *AlertService) computeGroupKey(receiver, status, severity, alertname string, labels map[string]string, dims alertnotify.Dims) string {
@@ -307,4 +306,3 @@ func (s *AlertService) enrichAssigneeAndDutyEmails(ctx context.Context, outgoing
 		outgoing["assignee_phones"] = phones
 	}
 }
-

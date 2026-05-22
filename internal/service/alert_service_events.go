@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -10,60 +10,22 @@ import (
 	"yunshu/internal/alertdispatch"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/repository"
 )
 
 func (s *AlertService) ListEvents(ctx context.Context, q AlertEventListQuery) (list []model.AlertEvent, total int64, page int, pageSize int, err error) {
 	page, pageSize = pagination.Normalize(q.Page, q.PageSize)
-	tx := s.db.WithContext(ctx).Model(&model.AlertEvent{})
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("title LIKE ? OR error_message LIKE ? OR channel_name LIKE ?", like, like, like)
+	f := repository.AlertEventListFilter{
+		Keyword: q.Keyword, Cluster: q.Cluster, AlertIP: q.AlertIP, Status: q.Status,
+		MonitorPipeline: q.MonitorPipeline, DatasourceID: q.DatasourceID, ProjectID: q.ProjectID, GroupKey: q.GroupKey,
 	}
-	if v := strings.TrimSpace(q.Cluster); v != "" {
-		tx = tx.Where("cluster = ?", v)
+	if v := strings.TrimSpace(q.Category); v != "" && ValidAlertEventCategory(v) {
+		f.Category = v
 	}
-	if v := strings.TrimSpace(q.AlertIP); v != "" {
-		like := "%" + v + "%"
-		tx = tx.Where(
-			"cluster = ? OR request_payload LIKE ? OR request_payload LIKE ? OR request_payload LIKE ? OR request_payload LIKE ? OR request_payload LIKE ?",
-			v,
-			"%\"instance\":\""+v+"\"%",
-			"%\"pod_ip\":\""+v+"\"%",
-			"%\"node\":\""+v+"\"%",
-			"%\"ip\":\""+v+"\"%",
-			like,
-		)
-	}
-	if v := strings.ToLower(strings.TrimSpace(q.Status)); v != "" {
-		tx = tx.Where("status = ?", v)
-	}
-	if v := strings.TrimSpace(q.MonitorPipeline); v != "" {
-		tx = tx.Where("monitor_pipeline = ?", v)
-	}
-	if q.DatasourceID > 0 {
-		tx = tx.Where("datasource_id = ?", q.DatasourceID)
-	}
-	if q.ProjectID > 0 {
-		tx = applyAlertEventProjectFilter(tx, s.db, q.ProjectID)
-	}
-	if v := strings.TrimSpace(q.GroupKey); v != "" {
-		tx = tx.Where("group_key = ?", v)
-	}
-	if v := strings.TrimSpace(q.Category); v != "" {
-		if ValidAlertEventCategory(v) {
-			tx = applyAlertEventCategoryFilter(tx, v)
-		}
-	}
-	if err = tx.Count(&total).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert", "ListEvents", err)
-	}
-	if err = tx.
-		Order("id DESC").
-		Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Find(&list).Error; err != nil {
-		return nil, 0, page, pageSize, svcerr.Pass(ctx, "alert", "ListEvents", err)
+	list, total, err = s.eventRepo.List(ctx, f, (page-1)*pageSize, pageSize)
+	if err != nil {
+		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert", "ListEvents", err)
 	}
 	for i := range list {
 		hydrateAlertEvent(&list[i])
@@ -98,11 +60,8 @@ func (s *AlertService) backfillResolvedAlertIP(ctx context.Context, list []model
 	for k := range missing {
 		groupKeys = append(groupKeys, k)
 	}
-	var firingRows []model.AlertEvent
-	if err := s.db.WithContext(ctx).
-		Where("group_key IN ? AND status = ?", groupKeys, "firing").
-		Order("id DESC").
-		Find(&firingRows).Error; err != nil {
+	firingRows, err := s.eventRepo.ListFiringByGroupKeys(ctx, groupKeys)
+	if err != nil {
 		return
 	}
 	ipByGroup := map[string]string{}
@@ -398,4 +357,3 @@ func appendDingTalkMarkdownText(body map[string]interface{}, extra string) {
 		body["markdown"] = nm
 	}
 }
-

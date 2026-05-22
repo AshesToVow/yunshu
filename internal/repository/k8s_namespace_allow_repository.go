@@ -14,7 +14,7 @@ type K8sNamespaceAllowRepository struct {
 	db *gorm.DB
 }
 
-func NewK8sNamespaceAllowRepository(db *gorm.DB) *K8sNamespaceAllowRepository {
+func NewK8sNamespaceAllowRepository(db *gorm.DB) K8sNamespaceAllowRepo {
 	return &K8sNamespaceAllowRepository{db: db}
 }
 

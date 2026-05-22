@@ -13,12 +13,12 @@ var defaultTimingDigestBy = []string{
 
 // 平台注入或易变元数据，不参与「通知内容是否变化」判定。
 var timingDigestExcludedKeys = map[string]struct{}{
-	"fingerprint":       {},
-	"datasource_id":     {},
-	"datasource_name":   {},
-	"datasource_type":   {},
-	"monitor_pipeline":  {},
-	"__name__":          {},
+	"fingerprint":      {},
+	"datasource_id":    {},
+	"datasource_name":  {},
+	"datasource_type":  {},
+	"monitor_pipeline": {},
+	"__name__":         {},
 }
 
 func isTimingDigestExcludedKey(k string) bool {

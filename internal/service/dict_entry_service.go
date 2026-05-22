@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -8,10 +8,10 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/dictmask"
 	"yunshu/internal/pkg/pagination"
-	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -73,7 +73,7 @@ type DictEntryOption struct {
 }
 
 type DictEntryService struct {
-	repo     *repository.DictEntryRepository
+	repo     interfaces.DictEntryRepository
 	initOnce sync.Once
 }
 
@@ -90,7 +90,7 @@ func canonicalDictType(dictType string) string {
 	return t
 }
 
-func NewDictEntryService(repo *repository.DictEntryRepository) *DictEntryService {
+func NewDictEntryService(repo interfaces.DictEntryRepository) *DictEntryService {
 	return &DictEntryService{repo: repo}
 }
 
@@ -191,28 +191,28 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "server_port", Label: "RDP 默认端口 3389", Value: "3389", Sort: intRef(2), Status: 1, Remark: "服务器连接端口模板"},
 		}
 		singletonTypes := map[string]struct{}{
-			"mail_host":                     {},
-			"mail_port":                     {},
-			"mail_use_tls":                  {},
-			"mail_username":                 {},
-			"mail_password":                 {},
-			"mail_from_email":               {},
-			"mail_from_name":                {},
-			"alert_webhook_token":           {},
-			"alert_enrich_prometheus_url":   {},
-			"alert_enrich_prometheus_token":           {},
-			"k8s_event_forward_enabled":               {},
+			"mail_host":                                 {},
+			"mail_port":                                 {},
+			"mail_use_tls":                              {},
+			"mail_username":                             {},
+			"mail_password":                             {},
+			"mail_from_email":                           {},
+			"mail_from_name":                            {},
+			"alert_webhook_token":                       {},
+			"alert_enrich_prometheus_url":               {},
+			"alert_enrich_prometheus_token":             {},
+			"k8s_event_forward_enabled":                 {},
 			"k8s_event_forward_watcher_buffer_size":     {},
 			"k8s_event_forward_worker_interval_seconds": {},
-			"k8s_event_forward_worker_batch_size":         {},
-			"k8s_event_forward_worker_max_retries":        {},
-			"minio_endpoint":                                {},
-			"minio_access_key":                              {},
-			"minio_secret_key":                              {},
-			"minio_bucket":                                  {},
-			"minio_use_ssl":                                 {},
-			"minio_region":                                  {},
-			"minio_backup_prefix":                           {},
+			"k8s_event_forward_worker_batch_size":       {},
+			"k8s_event_forward_worker_max_retries":      {},
+			"minio_endpoint":                            {},
+			"minio_access_key":                          {},
+			"minio_secret_key":                          {},
+			"minio_bucket":                              {},
+			"minio_use_ssl":                             {},
+			"minio_region":                              {},
+			"minio_backup_prefix":                       {},
 		}
 		for _, item := range seed {
 			var (

@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -10,14 +10,14 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
-	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
 
 type MenuService struct {
-	menuRepo          *repository.MenuRepository
+	menuRepo          interfaces.MenuRepository
 	mu                sync.RWMutex
 	treeCache         []model.Menu
 	treeCacheExpireAt time.Time
@@ -25,7 +25,7 @@ type MenuService struct {
 }
 
 // NewMenuService 创建相关逻辑。
-func NewMenuService(menuRepo *repository.MenuRepository) *MenuService {
+func NewMenuService(menuRepo interfaces.MenuRepository) *MenuService {
 	return &MenuService{menuRepo: menuRepo}
 }
 

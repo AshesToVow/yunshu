@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
@@ -20,15 +21,15 @@ import (
 )
 
 type ProjectMgmtService struct {
-	projectRepo      *repository.ProjectRepository
-	serverRepo       *repository.ServerRepository
-	serverGroupRepo  *repository.ServerGroupRepository
-	cloudAccountRepo *repository.CloudAccountRepository
-	serviceRepo      *repository.ServiceRepository
-	logRepo          *repository.LogSourceRepository
-	memberRepo       *repository.ProjectMemberRepository
-	userRepo         *repository.UserRepository
-	departmentRepo   *repository.DepartmentRepository
+	projectRepo      interfaces.ProjectRepository
+	serverRepo       interfaces.ServerRepository
+	serverGroupRepo  interfaces.ServerGroupRepository
+	cloudAccountRepo interfaces.CloudAccountRepository
+	serviceRepo      interfaces.ServiceRepository
+	logRepo          interfaces.LogSourceRepository
+	memberRepo       interfaces.ProjectMemberRepository
+	userRepo         interfaces.UserRepository
+	departmentRepo   interfaces.DepartmentRepository
 	aead             cipher.AEAD
 	ensureMu         sync.Mutex
 	ensuredProjectAt map[uint]time.Time
@@ -36,15 +37,15 @@ type ProjectMgmtService struct {
 
 // NewProjectMgmtService 创建相关逻辑。
 func NewProjectMgmtService(
-	projectRepo *repository.ProjectRepository,
-	serverRepo *repository.ServerRepository,
-	serverGroupRepo *repository.ServerGroupRepository,
-	cloudAccountRepo *repository.CloudAccountRepository,
-	serviceRepo *repository.ServiceRepository,
-	logRepo *repository.LogSourceRepository,
-	memberRepo *repository.ProjectMemberRepository,
-	userRepo *repository.UserRepository,
-	departmentRepo *repository.DepartmentRepository,
+	projectRepo interfaces.ProjectRepository,
+	serverRepo interfaces.ServerRepository,
+	serverGroupRepo interfaces.ServerGroupRepository,
+	cloudAccountRepo interfaces.CloudAccountRepository,
+	serviceRepo interfaces.ServiceRepository,
+	logRepo interfaces.LogSourceRepository,
+	memberRepo interfaces.ProjectMemberRepository,
+	userRepo interfaces.UserRepository,
+	departmentRepo interfaces.DepartmentRepository,
 	encryptionKey string,
 ) (*ProjectMgmtService, error) {
 	aead, err := cryptox.NewAESGCMFromKeyString(encryptionKey)
@@ -67,15 +68,15 @@ func NewProjectMgmtService(
 }
 
 type ProjectItem struct {
-	ID                  uint    `json:"id"`
-	Name                string  `json:"name"`
-	Code                string  `json:"code"`
-	Description         *string `json:"description"`
-	Status              int     `json:"status"`
-	OwnerDepartmentID   *uint   `json:"owner_department_id,omitempty"`
+	ID                uint    `json:"id"`
+	Name              string  `json:"name"`
+	Code              string  `json:"code"`
+	Description       *string `json:"description"`
+	Status            int     `json:"status"`
+	OwnerDepartmentID *uint   `json:"owner_department_id,omitempty"`
 	// MyProjectRole 当前登录用户在该项目中的成员角色（owner/admin/member/readonly）；列表与更新接口在非超管时填充；超管可省略。
-	MyProjectRole       string  `json:"my_project_role,omitempty"`
-	CreatedAt           string  `json:"created_at"`
+	MyProjectRole string `json:"my_project_role,omitempty"`
+	CreatedAt     string `json:"created_at"`
 }
 
 func toProjectItem(p model.Project) ProjectItem {
@@ -155,11 +156,11 @@ func (s *ProjectMgmtService) ListProjects(ctx context.Context, q ProjectListQuer
 }
 
 type ProjectCreateRequest struct {
-	Name                string  `json:"name" binding:"required,max=128"`
-	Code                string  `json:"code" binding:"required,max=64"`
-	Description         *string `json:"description"`
-	Status              int     `json:"status"`
-	OwnerDepartmentID   *uint   `json:"owner_department_id"`
+	Name              string  `json:"name" binding:"required,max=128"`
+	Code              string  `json:"code" binding:"required,max=64"`
+	Description       *string `json:"description"`
+	Status            int     `json:"status"`
+	OwnerDepartmentID *uint   `json:"owner_department_id"`
 }
 
 // CreateProject 创建项目；creatorUserID>0 时自动将创建人写入 project_members 为 owner。
@@ -200,11 +201,11 @@ func (s *ProjectMgmtService) CreateProject(ctx context.Context, creatorUserID ui
 }
 
 type ProjectUpdateRequest struct {
-	Name                *string `json:"name"`
-	Code                *string `json:"code"`
-	Description         *string `json:"description"`
-	Status              *int    `json:"status"`
-	OwnerDepartmentID   *uint   `json:"owner_department_id"`
+	Name              *string `json:"name"`
+	Code              *string `json:"code"`
+	Description       *string `json:"description"`
+	Status            *int    `json:"status"`
+	OwnerDepartmentID *uint   `json:"owner_department_id"`
 }
 
 // UpdateProject 更新相关的业务逻辑。
@@ -431,4 +432,3 @@ func (s *ProjectMgmtService) RemoveProjectMember(ctx context.Context, projectID,
 	}
 	return s.memberRepo.DeleteByID(ctx, memberID)
 }
-

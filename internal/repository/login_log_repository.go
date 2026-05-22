@@ -20,7 +20,7 @@ type LoginLogRepository struct {
 	db *gorm.DB
 }
 
-func NewLoginLogRepository(db *gorm.DB) *LoginLogRepository {
+func NewLoginLogRepository(db *gorm.DB) LoginLogRepo {
 	return &LoginLogRepository{db: db}
 }
 

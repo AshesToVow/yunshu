@@ -53,7 +53,7 @@ func (h *AlertPlatformHandler) CreateDatasource(c *gin.Context) {
 func (h *AlertPlatformHandler) UpdateDatasource(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertDatasourceUpsertRequest) (any, error) {
@@ -64,11 +64,11 @@ func (h *AlertPlatformHandler) UpdateDatasource(c *gin.Context) {
 func (h *AlertPlatformHandler) DeleteDatasource(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	if err := h.ds.Delete(c.Request.Context(), id); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "deleted"})
@@ -78,12 +78,12 @@ func (h *AlertPlatformHandler) DeleteDatasource(c *gin.Context) {
 func (h *AlertPlatformHandler) PingDatasource(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	res, err := h.ds.PingDatasource(c.Request.Context(), id)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, res)
@@ -92,7 +92,7 @@ func (h *AlertPlatformHandler) PingDatasource(c *gin.Context) {
 func (h *AlertPlatformHandler) PromQuery(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.PromQueryRequest) (any, error) {
@@ -107,7 +107,7 @@ func (h *AlertPlatformHandler) PromQuery(c *gin.Context) {
 func (h *AlertPlatformHandler) PromQueryRange(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.PromQueryRangeRequest) (any, error) {
@@ -122,12 +122,12 @@ func (h *AlertPlatformHandler) PromQueryRange(c *gin.Context) {
 func (h *AlertPlatformHandler) PromActiveAlerts(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	raw, err := h.ds.PrometheusActiveAlerts(c.Request.Context(), id)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"data": raw})
@@ -162,7 +162,7 @@ func (h *AlertPlatformHandler) CreateSilenceBatch(c *gin.Context) {
 func (h *AlertPlatformHandler) UpdateSilence(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertSilenceUpsertRequest) (any, error) {
@@ -173,11 +173,11 @@ func (h *AlertPlatformHandler) UpdateSilence(c *gin.Context) {
 func (h *AlertPlatformHandler) DeleteSilence(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	if err := h.silence.Delete(c.Request.Context(), id); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "deleted"})
@@ -200,7 +200,7 @@ func (h *AlertPlatformHandler) CreateMonitorRule(c *gin.Context) {
 func (h *AlertPlatformHandler) UpdateMonitorRule(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertMonitorRuleUpsertRequest) (any, error) {
@@ -211,11 +211,11 @@ func (h *AlertPlatformHandler) UpdateMonitorRule(c *gin.Context) {
 func (h *AlertPlatformHandler) DeleteMonitorRule(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	if err := h.rules.Delete(c.Request.Context(), id); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "deleted"})
@@ -224,12 +224,12 @@ func (h *AlertPlatformHandler) DeleteMonitorRule(c *gin.Context) {
 func (h *AlertPlatformHandler) GetMonitorRuleAssignees(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	list, err := h.assign.ListByRule(c.Request.Context(), id)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"list": list})
@@ -238,7 +238,7 @@ func (h *AlertPlatformHandler) GetMonitorRuleAssignees(c *gin.Context) {
 func (h *AlertPlatformHandler) UpsertMonitorRuleAssignees(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertRuleAssigneeUpsertRequest) (any, error) {
@@ -263,7 +263,7 @@ func (h *AlertPlatformHandler) CreateDutyBlock(c *gin.Context) {
 func (h *AlertPlatformHandler) UpdateDutyBlock(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertDutyBlockUpsertRequest) (any, error) {
@@ -274,11 +274,11 @@ func (h *AlertPlatformHandler) UpdateDutyBlock(c *gin.Context) {
 func (h *AlertPlatformHandler) DeleteDutyBlock(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	if err := h.duty.DeleteBlock(c.Request.Context(), id); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "deleted"})

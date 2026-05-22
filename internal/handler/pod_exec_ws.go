@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/pkg/logutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -83,7 +83,7 @@ func (h *PodHandler) ExecWS(c *gin.Context) {
 	}
 	defer conn.Close()
 
-	sess := newWSSession(c.Request.Context(), svclog.HTTP("http.ws.pod_exec"))
+	sess := newWSSession(c.Request.Context(), logutil.HTTP("http.ws.pod_exec"))
 	defer sess.Cancel()
 	defer sess.Wait()
 

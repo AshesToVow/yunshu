@@ -10,13 +10,13 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/alertnotify"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
 )
 
 func mergeAssigneeEmails(recipients []string, payload map[string]interface{}) []string {
-	// 严格处理人优先：
-	// - assignee_emails 非空：仅发 assignee_emails（忽略通道固定收件人）
-	// - assignee_emails 为空：使用通道固定收件人兜底
+	// 严格处睆人优先：
+	// - assignee_emails 非空：仅坑 assignee_emails（忽略通靓固定收件人）
+	// - assignee_emails 为空：使用通靓固定收件人兜底
 	var assignee []string
 	if payload != nil {
 		if raw, ok := payload["assignee_emails"]; ok {
@@ -76,7 +76,7 @@ func payloadHasAssigneeEmails(payload map[string]interface{}) bool {
 	return false
 }
 
-// mergeAssigneeEmailsWithReceiverGroup 合并接收组静态抄送；已有规则处理人邮箱时不合并（避免多人收件）。
+// mergeAssigneeEmailsWithReceiverGroup 坈并接收组静思抄逝；已有规则处睆人邮箱时丝坈并（靿兝多人收件）。
 func mergeAssigneeEmailsWithReceiverGroup(recipients []string, payload map[string]interface{}) []string {
 	if payload == nil || payloadHasAssigneeEmails(payload) {
 		return recipients
@@ -116,7 +116,7 @@ func mergeAssigneeEmailsWithReceiverGroup(recipients []string, payload map[strin
 func (s *AlertService) sendEmailChannel(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}) (int, string, error) {
 	recipients, err := parseEmailRecipients(channel.HeadersJSON)
 	if err != nil {
-		return 0, "", svcerr.Pass(ctx, "alert.delivery", "sendEmailChannel", err)
+		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "sendEmailChannel", err)
 	}
 	recipients = mergeAssigneeEmails(recipients, payload)
 	recipients = mergeAssigneeEmailsWithReceiverGroup(recipients, payload)
@@ -124,11 +124,12 @@ func (s *AlertService) sendEmailChannel(ctx context.Context, channel *model.Aler
 		return 0, "", constants.ErrBadRequestWithMsg(constants.ErrMsgc47e8ed41463)
 	}
 	if s.mailer == nil || !s.mailer.Enabled() {
-		return 0, "", svcerr.InternalMsg(ctx, "alert.delivery", "api", constants.ErrMsg71c5fe1e9994)
+		msg := constants.ErrMsg71c5fe1e9994
+		return 0, "", bizerrors.InternalCtx(ctx, fmt.Errorf("%s", msg), "api: "+msg)
 	}
 	settings, err := parseChannelSettings(channel.HeadersJSON)
 	if err != nil {
-		return 0, "", svcerr.Pass(ctx, "alert.delivery", "sendEmailChannel", err)
+		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "sendEmailChannel", err)
 	}
 	subject := strings.TrimSpace(title)
 	mdBody := s.renderChannelMessage(ctx, title, severity, status, payload, settings)
@@ -184,7 +185,7 @@ func (s *AlertService) sendEmailChannel(ctx context.Context, channel *model.Aler
 		event.ErrorMessage = truncateText(sendErr.Error(), 1000)
 		event.ResponsePayload = ""
 	}
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 	if okCount == 0 && sendErr != nil {
 		return 500, "", sendErr
 	}

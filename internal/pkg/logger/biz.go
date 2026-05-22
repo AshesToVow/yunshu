@@ -2,10 +2,9 @@ package logger
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
-	"yunshu/internal/pkg/apperror"
+	bizerrors "yunshu/internal/pkg/errors"
 )
 
 var defaultLogger *Logger
@@ -111,14 +110,13 @@ func (b *Component) Op(operation string, err error, attrs ...any) {
 		return
 	}
 	attrs = append(attrs, "operation", operation, "error", err)
-	var appErr *apperror.AppError
-	if errors.As(err, &appErr) {
-		attrs = append(attrs, "error_code", appErr.ErrorCode, "reason", appErr.Reason, "http_status", appErr.StatusCode)
-		if appErr.StatusCode >= http.StatusInternalServerError {
+	if biz, ok := bizerrors.As(err); ok {
+		attrs = append(attrs, "error_code", biz.ErrorCode, "reason", biz.Reason, "http_status", biz.HTTPStatus())
+		if biz.HTTPStatus() >= http.StatusInternalServerError {
 			b.Error("Operation failed", attrs...)
 			return
 		}
-		if appErr.StatusCode >= http.StatusBadRequest {
+		if biz.HTTPStatus() >= http.StatusBadRequest {
 			b.Warnw("Operation rejected", attrs...)
 			return
 		}

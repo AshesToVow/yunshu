@@ -1,13 +1,13 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"strings"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/svcerr"
-	"yunshu/internal/repository"
 )
 
 type K8sNamespaceDenyCreateRequest struct {
@@ -18,10 +18,10 @@ type K8sNamespaceDenyCreateRequest struct {
 }
 
 type K8sNamespaceDenyService struct {
-	repo *repository.K8sNamespaceDenyRepository
+	repo interfaces.K8sNamespaceDenyRepository
 }
 
-func NewK8sNamespaceDenyService(repo *repository.K8sNamespaceDenyRepository) *K8sNamespaceDenyService {
+func NewK8sNamespaceDenyService(repo interfaces.K8sNamespaceDenyRepository) *K8sNamespaceDenyService {
 	return &K8sNamespaceDenyService{repo: repo}
 }
 

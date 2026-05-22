@@ -22,7 +22,7 @@ type K8sClusterListParams struct {
 	ProjectMemberIDs    []uint
 }
 
-func NewK8sClusterRepository(db *gorm.DB) *K8sClusterRepository {
+func NewK8sClusterRepository(db *gorm.DB) K8sClusterRepo {
 	return &K8sClusterRepository{db: db}
 }
 

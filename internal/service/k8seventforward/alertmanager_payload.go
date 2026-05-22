@@ -18,11 +18,11 @@ type alertManagerPayload struct {
 }
 
 type alertManagerAlert struct {
-	Status       string            `json:"status"`
-	Labels       map[string]string `json:"labels"`
-	Annotations  map[string]string `json:"annotations"`
-	StartsAt     time.Time         `json:"startsAt"`
-	Fingerprint  string            `json:"fingerprint"`
+	Status      string            `json:"status"`
+	Labels      map[string]string `json:"labels"`
+	Annotations map[string]string `json:"annotations"`
+	StartsAt    time.Time         `json:"startsAt"`
+	Fingerprint string            `json:"fingerprint"`
 }
 
 func buildAlertManagerPayload(ruleName, clusterID, clusterName string, projectID uint, events []model.K8sForwardedEvent) alertManagerPayload {
@@ -41,15 +41,15 @@ func buildAlertManagerPayload(ruleName, clusterID, clusterName string, projectID
 			starts = time.Now()
 		}
 		labels := map[string]string{
-			"alertname":   alertname,
-			"severity":    severity,
-			"event_type":  strings.TrimSpace(ev.Type),
-			"cluster":     clusterLabel,
-			"cluster_id":  clusterID,
-			"namespace":   ev.Namespace,
-			"resource":    ev.Name,
-			"reason":      ev.Reason,
-			"source":      "k8s_event",
+			"alertname":  alertname,
+			"severity":   severity,
+			"event_type": strings.TrimSpace(ev.Type),
+			"cluster":    clusterLabel,
+			"cluster_id": clusterID,
+			"namespace":  ev.Namespace,
+			"resource":   ev.Name,
+			"reason":     ev.Reason,
+			"source":     "k8s_event",
 		}
 		if projectID > 0 {
 			labels["project_id"] = fmt.Sprintf("%d", projectID)

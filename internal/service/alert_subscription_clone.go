@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
 
 	"gorm.io/gorm"
 )
@@ -29,9 +29,9 @@ type CloneProjectRoutingRequest struct {
 
 // CloneProjectRoutingReport 复制结果统计。
 type CloneProjectRoutingReport struct {
-	ReceiverGroupsCreated int  `json:"receiver_groups_created"`
-	NodesCreated          int  `json:"nodes_created"`
-	Skipped               bool `json:"skipped"`
+	ReceiverGroupsCreated int    `json:"receiver_groups_created"`
+	NodesCreated          int    `json:"nodes_created"`
+	Skipped               bool   `json:"skipped"`
 	Message               string `json:"message,omitempty"`
 }
 
@@ -65,8 +65,8 @@ func replaceLabelsJSON(raw string, replaceCluster, replaceRoute string, targetPr
 
 // CloneProjectRouting 复制订阅路由模板（接收组 + 订阅树节点）。
 func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req CloneProjectRoutingRequest) (*CloneProjectRoutingReport, error) {
-	if s == nil || s.db == nil {
-		return nil, svcerr.InternalMsg(ctx, "alert.subscription", "api", "subscription service unavailable")
+	if s == nil || s.txDB == nil {
+		return nil, bizerrors.InternalCtx(ctx, fmt.Errorf("subscription service unavailable"), "alert.subscription.CloneProjectRouting")
 	}
 	if req.SourceProjectID == 0 || req.TargetProjectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("source_project_id 与 target_project_id 不能为空")
@@ -78,10 +78,10 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 	rep := &CloneProjectRoutingReport{}
 
 	var targetCount int64
-	if err := s.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).
+	if err := s.txDB.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).
 		Where("project_id = ?", req.TargetProjectID).
 		Count(&targetCount).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 	}
 	if targetCount > 0 && req.SkipIfTargetHasNodes {
 		rep.Skipped = true
@@ -89,13 +89,13 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 		return rep, nil
 	}
 
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.txDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if targetCount > 0 && !req.SkipIfTargetHasNodes {
 			if err := tx.Where("project_id = ?", req.TargetProjectID).Delete(&model.AlertSubscriptionNode{}).Error; err != nil {
-				return svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+				return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 			}
 			if err := tx.Where("project_id = ?", req.TargetProjectID).Delete(&model.AlertReceiverGroup{}).Error; err != nil {
-				return svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+				return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 			}
 		}
 
@@ -105,7 +105,7 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 		}
 		var srcGroups []model.AlertReceiverGroup
 		if err := rgTx.Order("id ASC").Find(&srcGroups).Error; err != nil {
-			return svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+			return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 		}
 		rgMap := make(map[uint]uint, len(srcGroups))
 		for i := range srcGroups {
@@ -129,7 +129,7 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 				row.EmailRecipientsJSON = "[]"
 			}
 			if err := tx.Create(&row).Error; err != nil {
-				return svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+				return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 			}
 			rgMap[g.ID] = row.ID
 			rep.ReceiverGroupsCreated++
@@ -141,7 +141,7 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 		}
 		var srcNodes []model.AlertSubscriptionNode
 		if err := nodeTx.Order("level ASC, id ASC").Find(&srcNodes).Error; err != nil {
-			return svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+			return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 		}
 		if len(srcNodes) == 0 {
 			return nil
@@ -176,7 +176,7 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 			if newParentID != nil {
 				var parent model.AlertSubscriptionNode
 				if err := tx.First(&parent, *newParentID).Error; err != nil {
-					return svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+					return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 				}
 				level = parent.Level + 1
 				path = fmt.Sprintf("%s/%d", parent.Path, *newParentID)
@@ -202,7 +202,7 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 				row.MatchLabelsJSON = "{}"
 			}
 			if err := tx.Create(&row).Error; err != nil {
-				return svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+				return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 			}
 			nodeMap[sn.ID] = row.ID
 			rep.NodesCreated++
@@ -210,7 +210,7 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 		return nil
 	})
 	if err != nil {
-		return nil, svcerr.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+		return nil, bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
 	}
 
 	s.InvalidateCache()

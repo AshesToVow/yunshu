@@ -23,7 +23,7 @@ type UserListParams struct {
 	PageSize      int
 }
 
-func NewUserRepository(db *gorm.DB) *UserRepository {
+func NewUserRepository(db *gorm.DB) UserRepo {
 	return &UserRepository{db: db}
 }
 

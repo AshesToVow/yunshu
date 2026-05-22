@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"bufio"
@@ -44,10 +44,10 @@ type PodLogsQuery struct {
 type PodDiagnoseQuery = PodDetailQuery
 
 type PodDiagnoseHint struct {
-	Level   string `json:"level"`
-	Title   string `json:"title"`
-	Detail  string `json:"detail"`
-	Action  string `json:"action,omitempty"`
+	Level  string `json:"level"`
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
+	Action string `json:"action,omitempty"`
 }
 
 type PodDiagnoseContainerIssue struct {

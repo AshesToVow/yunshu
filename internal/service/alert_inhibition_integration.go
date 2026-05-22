@@ -1,83 +1,67 @@
-﻿package service
+package service
 
 import (
-	"yunshu/internal/service/svcerr"
 	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
+	bizerrors "yunshu/internal/pkg/errors"
+
 	"yunshu/internal/model"
 )
 
-// RecordSourceInhibition 记录源告警并检查是否需要抑制
 func (s *AlertService) RecordSourceInhibition(ctx context.Context, labels map[string]string) error {
 	if s.inhibitionSvc == nil {
 		return nil
 	}
-
-	// 检查是否匹配任何源告警规则
 	ruleIDs, err := s.inhibitionSvc.CheckSourceMatch(ctx, labels)
 	if err != nil || len(ruleIDs) == 0 {
-		return svcerr.Pass(ctx, "alert.inhibition", "RecordSourceInhibition", err)
+		return bizerrors.Pass(ctx, "alert.inhibition", "RecordSourceInhibition", err)
 	}
-
-	// 提取指纹
 	fp := stableLabelsFingerprint(labels)
 	if fp != "" && labels["fingerprint"] == "" {
 		labels["fingerprint"] = fp
 	}
-
-	// 记录每个匹配的源规则
 	for _, ruleID := range ruleIDs {
 		if err := s.inhibitionSvc.RecordSourceAlert(ctx, ruleID, fp, labels); err != nil {
 			continue
 		}
 	}
-
 	return nil
 }
 
-// CheckInhibition 检查告警是否被抑制
 func (s *AlertService) CheckInhibition(ctx context.Context, labels map[string]string) (bool, *model.AlertInhibitionEvent) {
 	if s.inhibitionSvc == nil {
 		return false, nil
 	}
-
 	inhibited, event, err := s.inhibitionSvc.CheckInhibition(ctx, labels)
 	if err != nil {
 		return false, nil
 	}
-
 	return inhibited, event
 }
 
-// ClearSourceInhibition 当告警恢复时清除源告警记录
 func (s *AlertService) ClearSourceInhibition(ctx context.Context, labels map[string]string) error {
 	if s.inhibitionSvc == nil {
 		return nil
 	}
-
 	ruleIDs, err := s.inhibitionSvc.CheckSourceMatch(ctx, labels)
 	if err != nil {
-		return svcerr.Pass(ctx, "alert.inhibition", "ClearSourceInhibition", err)
+		return bizerrors.Pass(ctx, "alert.inhibition", "ClearSourceInhibition", err)
 	}
-
 	fp := stableLabelsFingerprint(labels)
 	if fp != "" && labels["fingerprint"] == "" {
 		labels["fingerprint"] = fp
 	}
-
 	for _, ruleID := range ruleIDs {
 		if err := s.inhibitionSvc.ClearSourceAlert(ctx, ruleID, fp); err != nil {
 			continue
 		}
 	}
-
 	return nil
 }
 
-// logInhibitionEvent 记录抑制事件到告警历史
 func (s *AlertService) logInhibitionEvent(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, event *model.AlertInhibitionEvent, payload map[string]interface{}) {
 	reqBytes, _ := json.Marshal(payload)
 	e := model.AlertEvent{
@@ -90,7 +74,7 @@ func (s *AlertService) logInhibitionEvent(ctx context.Context, title, severity, 
 		GroupKey:        groupKey,
 		LabelsDigest:    labelsDigest,
 		ChannelID:       0,
-		ChannelName:     fmt.Sprintf("（被抑制·源告警=%s）", event.SourceAlertName),
+		ChannelName:     fmt.Sprintf("(inhibition source=%s)", event.SourceAlertName),
 		Success:         true,
 		HTTPStatusCode:  200,
 		ErrorMessage:    fmt.Sprintf("inhibition_suppressed: rule=%s source=%s", event.RuleName, event.SourceFingerprint),
@@ -98,15 +82,13 @@ func (s *AlertService) logInhibitionEvent(ctx context.Context, title, severity, 
 		ResponsePayload: truncateText(fmt.Sprintf("suppressed by source fingerprint: %s", event.SourceFingerprint), s.cfg.MaxPayloadChars),
 	}
 	fillAlertEventDatasourceFromPayload(&e, payload)
-	_ = s.db.WithContext(ctx).Create(&e).Error
+	_ = s.persistAlertEvent(ctx, &e)
 }
 
-// startInhibitionPruner 启动抑制记录清理任务
 func (s *AlertService) startInhibitionPruner(ctx context.Context) {
 	if s.inhibitionSvc == nil {
 		return
 	}
-
 	ticker := time.NewTicker(5 * time.Minute)
 	go func() {
 		defer ticker.Stop()
@@ -115,7 +97,6 @@ func (s *AlertService) startInhibitionPruner(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				// 刷新缓存以保持最新规则
 				_ = s.inhibitionSvc.RefreshCache(ctx)
 			}
 		}

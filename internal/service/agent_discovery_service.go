@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -6,28 +6,29 @@ import (
 	"strings"
 	"time"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/logpath"
-	"yunshu/internal/service/svcerr"
 	"yunshu/internal/repository"
+	"yunshu/internal/service/svcerr"
 )
 
 const discoveryStaleRetention = 7 * 24 * time.Hour
 
 type AgentDiscoveryService struct {
-	repo       *repository.AgentDiscoveryRepository
-	agentRepo  *repository.LogAgentRepository
-	serverRepo *repository.ServerRepository
-	logRepo    *repository.LogSourceRepository
+	repo       interfaces.AgentDiscoveryRepository
+	agentRepo  interfaces.LogAgentRepository
+	serverRepo interfaces.ServerRepository
+	logRepo    interfaces.LogSourceRepository
 }
 
 // NewAgentDiscoveryService 创建相关逻辑。
 func NewAgentDiscoveryService(
-	repo *repository.AgentDiscoveryRepository,
-	agentRepo *repository.LogAgentRepository,
-	serverRepo *repository.ServerRepository,
-	logRepo *repository.LogSourceRepository,
+	repo interfaces.AgentDiscoveryRepository,
+	agentRepo interfaces.LogAgentRepository,
+	serverRepo interfaces.ServerRepository,
+	logRepo interfaces.LogSourceRepository,
 ) *AgentDiscoveryService {
 	return &AgentDiscoveryService{repo: repo, agentRepo: agentRepo, serverRepo: serverRepo, logRepo: logRepo}
 }
@@ -95,14 +96,14 @@ func (s *AgentDiscoveryService) Report(ctx context.Context, req AgentDiscoveryRe
 }
 
 type AgentDiscoveryListQuery struct {
-	ProjectID     uint   `form:"project_id"`
-	ServerID      uint   `form:"server_id" binding:"required"`
+	ProjectID     uint    `form:"project_id"`
+	ServerID      uint    `form:"server_id" binding:"required"`
 	Kind          *string `form:"kind"`
-	Limit         int    `form:"limit"`
-	LogSourceID   uint   `form:"log_source_id"`
-	UnmatchedOnly bool   `form:"unmatched_only"`
-	Prefix        string `form:"prefix"`
-	FreshHours    int    `form:"fresh_hours"`
+	Limit         int     `form:"limit"`
+	LogSourceID   uint    `form:"log_source_id"`
+	UnmatchedOnly bool    `form:"unmatched_only"`
+	Prefix        string  `form:"prefix"`
+	FreshHours    int     `form:"fresh_hours"`
 }
 
 type AgentDiscoveryListItem struct {

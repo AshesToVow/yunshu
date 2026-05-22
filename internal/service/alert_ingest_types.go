@@ -73,4 +73,3 @@ func (s *AlertService) enrichCanonicalIngressLabels(ctx context.Context, labels 
 	}
 	return out
 }
-

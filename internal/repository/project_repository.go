@@ -18,7 +18,7 @@ type ProjectListParams struct {
 	PageSize int
 }
 
-func NewProjectRepository(db *gorm.DB) *ProjectRepository { return &ProjectRepository{db: db} }
+func NewProjectRepository(db *gorm.DB) ProjectRepo { return &ProjectRepository{db: db} }
 
 func (r *ProjectRepository) Create(ctx context.Context, p *model.Project) error {
 	return r.db.WithContext(ctx).Create(p).Error

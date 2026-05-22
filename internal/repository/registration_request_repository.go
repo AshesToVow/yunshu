@@ -23,7 +23,7 @@ type RegistrationRequestListParams struct {
 	PageSize int
 }
 
-func NewRegistrationRequestRepository(db *gorm.DB) *RegistrationRequestRepository {
+func NewRegistrationRequestRepository(db *gorm.DB) RegistrationRequestRepo {
 	return &RegistrationRequestRepository{db: db}
 }
 

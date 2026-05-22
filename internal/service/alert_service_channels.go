@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -11,7 +11,8 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/alertnotify"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/repository"
 )
 
 func (s *AlertService) startPrometheusEnrichWorkers() {
@@ -163,16 +164,8 @@ func (s *AlertService) setCachedCurrentValue(ctx context.Context, fingerprint, v
 
 // ListChannels 查询列表相关的业务逻辑。
 func (s *AlertService) ListChannels(ctx context.Context, q AlertChannelListQuery) ([]model.AlertChannel, error) {
-	var list []model.AlertChannel
-	tx := s.db.WithContext(ctx).Model(&model.AlertChannel{}).Order("id DESC")
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("name LIKE ? OR url LIKE ?", like, like)
-	}
-	if err := tx.Find(&list).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "ListChannels", err)
-	}
-	return list, nil
+	list, err := s.channelRepo.List(ctx, repository.AlertChannelListFilter{Keyword: q.Keyword})
+	return list, bizerrors.Pass(ctx, "alert", "ListChannels", err)
 }
 
 // CreateChannel 创建相关的业务逻辑。
@@ -200,22 +193,22 @@ func (s *AlertService) CreateChannel(ctx context.Context, req AlertChannelUpsert
 		ch.Enabled = *req.Enabled
 	}
 	if err := validateHeadersJSON(ch.HeadersJSON); err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "CreateChannel", err)
+		return nil, bizerrors.Pass(ctx, "alert", "CreateChannel", err)
 	}
 	if err := validateEmailChannelRecipients(ch.Enabled, ch.Type, ch.HeadersJSON); err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "CreateChannel", err)
+		return nil, bizerrors.Pass(ctx, "alert", "CreateChannel", err)
 	}
-	if err := s.db.WithContext(ctx).Create(ch).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "CreateChannel", err)
+	if err := s.channelRepo.Create(ctx, ch); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert", "CreateChannel", err)
 	}
 	return ch, nil
 }
 
 // UpdateChannel 更新相关的业务逻辑。
 func (s *AlertService) UpdateChannel(ctx context.Context, id uint, req AlertChannelUpsertRequest) (*model.AlertChannel, error) {
-	var ch model.AlertChannel
-	if err := s.db.WithContext(ctx).First(&ch, id).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "UpdateChannel", err)
+	ch, err := s.channelRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert", "UpdateChannel", err)
 	}
 	ch.Name = strings.TrimSpace(req.Name)
 	ch.Type = strings.TrimSpace(req.Type)
@@ -238,30 +231,30 @@ func (s *AlertService) UpdateChannel(ctx context.Context, id uint, req AlertChan
 		ch.Enabled = *req.Enabled
 	}
 	if err := validateHeadersJSON(ch.HeadersJSON); err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "UpdateChannel", err)
+		return nil, bizerrors.Pass(ctx, "alert", "UpdateChannel", err)
 	}
 	if err := validateEmailChannelRecipients(ch.Enabled, ch.Type, ch.HeadersJSON); err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "UpdateChannel", err)
+		return nil, bizerrors.Pass(ctx, "alert", "UpdateChannel", err)
 	}
-	if err := s.db.WithContext(ctx).Save(&ch).Error; err != nil {
-		return nil, svcerr.Pass(ctx, "alert", "UpdateChannel", err)
+	if err := s.channelRepo.Save(ctx, ch); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert", "UpdateChannel", err)
 	}
-	return &ch, nil
+	return ch, nil
 }
 
 // DeleteChannel 删除相关的业务逻辑。
 func (s *AlertService) DeleteChannel(ctx context.Context, id uint) error {
-	if err := s.db.WithContext(ctx).Delete(&model.AlertChannel{}, id).Error; err != nil {
-		return svcerr.Pass(ctx, "alert", "DeleteChannel", err)
+	if err := s.channelRepo.Delete(ctx, id); err != nil {
+		return bizerrors.Pass(ctx, "alert", "DeleteChannel", err)
 	}
 	return nil
 }
 
 // TestChannel 测试相关的业务逻辑。
 func (s *AlertService) TestChannel(ctx context.Context, id uint, req AlertTestRequest) error {
-	var ch model.AlertChannel
-	if err := s.db.WithContext(ctx).First(&ch, id).Error; err != nil {
-		return svcerr.Pass(ctx, "alert", "TestChannel", err)
+	ch, err := s.channelRepo.GetByID(ctx, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert", "TestChannel", err)
 	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
@@ -285,8 +278,8 @@ func (s *AlertService) TestChannel(ctx context.Context, id uint, req AlertTestRe
 		"occurredAt": time.Now().Format(time.RFC3339),
 		"cluster":    "manual-test",
 	}
-	_, _, err := s.sendToChannel(ctx, &ch, alertdispatch.NewEnvelope("manual-test", title, severity, "firing", payload))
-	return svcerr.Pass(ctx, "alert", "TestChannel", err)
+	_, _, sendErr := s.sendToChannel(ctx, ch, alertdispatch.NewEnvelope("manual-test", title, severity, "firing", payload))
+	return bizerrors.Pass(ctx, "alert", "TestChannel", sendErr)
 }
 
 // ListEvents 查询列表相关的业务逻辑。

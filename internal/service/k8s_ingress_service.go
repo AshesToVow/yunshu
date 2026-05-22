@@ -1,16 +1,16 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"fmt"
 	"sort"
 	"strings"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8sutil"
-	"yunshu/internal/repository"
+	"yunshu/internal/service/svcerr"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -80,11 +80,11 @@ type IngressDetail struct {
 type K8sIngressService struct {
 	runtime    *K8sRuntimeService
 	dyn        *DynamicResourceService
-	accessRepo *repository.K8sClusterAccessRepository
+	accessRepo interfaces.K8sClusterAccessRepository
 }
 
 // NewK8sIngressService 创建相关逻辑。
-func NewK8sIngressService(runtime *K8sRuntimeService, accessRepo *repository.K8sClusterAccessRepository) *K8sIngressService {
+func NewK8sIngressService(runtime *K8sRuntimeService, accessRepo interfaces.K8sClusterAccessRepository) *K8sIngressService {
 	return &K8sIngressService{runtime: runtime, dyn: NewDynamicResourceService(runtime), accessRepo: accessRepo}
 }
 

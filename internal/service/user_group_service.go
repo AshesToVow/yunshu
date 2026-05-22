@@ -1,31 +1,32 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"errors"
 	"strings"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/projectaccess"
 	"yunshu/internal/repository"
+	"yunshu/internal/service/svcerr"
 
 	"gorm.io/gorm"
 )
 
 type UserGroupItem struct {
-	ID               uint   `json:"id"`
-	Name             string `json:"name"`
-	Code             string `json:"code"`
-	Description      string `json:"description"`
-	Status           int    `json:"status"`
-	ScopeProjectID   *uint  `json:"scope_project_id,omitempty"`
-	MemberCount      int64  `json:"member_count"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
+	ID             uint   `json:"id"`
+	Name           string `json:"name"`
+	Code           string `json:"code"`
+	Description    string `json:"description"`
+	Status         int    `json:"status"`
+	ScopeProjectID *uint  `json:"scope_project_id,omitempty"`
+	MemberCount    int64  `json:"member_count"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 type UserGroupMemberRow struct {
@@ -54,13 +55,13 @@ func NewUserGroupItem(g model.UserGroup, memberCount int64) UserGroupItem {
 }
 
 type UserGroupService struct {
-	repo         *repository.UserGroupRepository
-	userRepo     *repository.UserRepository
-	memberRepo   *repository.ProjectMemberRepository
-	projectRepo  *repository.ProjectRepository
+	repo        interfaces.UserGroupRepository
+	userRepo    interfaces.UserRepository
+	memberRepo  interfaces.ProjectMemberRepository
+	projectRepo interfaces.ProjectRepository
 }
 
-func NewUserGroupService(repo *repository.UserGroupRepository, userRepo *repository.UserRepository, memberRepo *repository.ProjectMemberRepository, projectRepo *repository.ProjectRepository) *UserGroupService {
+func NewUserGroupService(repo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, projectRepo interfaces.ProjectRepository) *UserGroupService {
 	return &UserGroupService{repo: repo, userRepo: userRepo, memberRepo: memberRepo, projectRepo: projectRepo}
 }
 
@@ -224,11 +225,11 @@ func (s *UserGroupService) Create(ctx context.Context, req UserGroupCreateReques
 		scope = &v
 	}
 	g := &model.UserGroup{
-		Name:            name,
-		Code:            code,
-		Description:     strings.TrimSpace(req.Description),
-		Status:          st,
-		ScopeProjectID:  scope,
+		Name:           name,
+		Code:           code,
+		Description:    strings.TrimSpace(req.Description),
+		Status:         st,
+		ScopeProjectID: scope,
 	}
 	if err := s.repo.Create(ctx, g); err != nil {
 		return nil, svcerr.Pass(ctx, "user-group", "Create", err)

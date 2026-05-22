@@ -193,4 +193,3 @@ func maskWebhookURL(raw string) string {
 	parsed.RawQuery = q.Encode()
 	return parsed.String()
 }
-

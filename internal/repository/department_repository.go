@@ -14,7 +14,7 @@ type DepartmentRepository struct {
 	db *gorm.DB
 }
 
-func NewDepartmentRepository(db *gorm.DB) *DepartmentRepository {
+func NewDepartmentRepository(db *gorm.DB) DepartmentRepo {
 	return &DepartmentRepository{db: db}
 }
 

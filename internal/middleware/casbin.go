@@ -1,4 +1,4 @@
-package middleware
+﻿package middleware
 
 import (
 	"strings"
@@ -7,15 +7,15 @@ import (
 	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/svclog"
-	"yunshu/internal/repository"
+	"yunshu/internal/pkg/logutil"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/service"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 )
 
-func Authorize(enforcer *casbin.SyncedEnforcer, logger *logx.Logger, k8sAccessRepo *repository.K8sClusterAccessRepository) gin.HandlerFunc {
+func Authorize(enforcer *casbin.SyncedEnforcer, logger *logx.Logger, k8sAccessRepo interfaces.K8sClusterAccessRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, ok := auth.CurrentUserFromContext(c)
 		if !ok {
@@ -37,7 +37,7 @@ func Authorize(enforcer *casbin.SyncedEnforcer, logger *logx.Logger, k8sAccessRe
 
 		allowed, err := enforcer.Enforce(service.UserSubject(user.ID), path, c.Request.Method)
 		if err != nil {
-			svclog.HTTP("http.authorize").Error("casbin authorize failed", "error", err, "path", path, "method", c.Request.Method)
+			logutil.HTTP("http.authorize").Error("casbin authorize failed", "error", err, "path", path, "method", c.Request.Method)
 			response.Error(c, constants.ErrInternal)
 			c.Abort()
 			return
@@ -57,7 +57,7 @@ func Authorize(enforcer *casbin.SyncedEnforcer, logger *logx.Logger, k8sAccessRe
 }
 
 // allowReadByK8sClusterGrant：未配置 API 级 GET 时，若角色在 DB 中有 K8s 集群档位且满足只读场景则放行（与旧版 Casbin 三元兜底等价）。
-func allowReadByK8sClusterGrant(c *gin.Context, accessRepo *repository.K8sClusterAccessRepository, user *auth.CurrentUser, path, method string) bool {
+func allowReadByK8sClusterGrant(c *gin.Context, accessRepo interfaces.K8sClusterAccessRepository, user *auth.CurrentUser, path, method string) bool {
 	if accessRepo == nil || user == nil {
 		return false
 	}

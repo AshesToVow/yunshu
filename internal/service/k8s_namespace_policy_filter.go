@@ -3,15 +3,15 @@ package service
 import (
 	"context"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/k8sauth"
-	"yunshu/internal/repository"
 )
 
 // FilterNamespaceNamesByPolicy 按命名空间黑名单（优先）与白名单（若对该集群生效）过滤名称列表，与 K8sScopeAuthorize 语义对齐。
 func FilterNamespaceNamesByPolicy(
 	ctx context.Context,
-	deny *repository.K8sNamespaceDenyRepository,
-	allow *repository.K8sNamespaceAllowRepository,
+	deny interfaces.K8sNamespaceDenyRepository,
+	allow interfaces.K8sNamespaceAllowRepository,
 	pack k8sauth.PrincipalPack,
 	clusterID uint,
 	names []string,

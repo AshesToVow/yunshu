@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"yunshu/internal/config"
+	"yunshu/internal/interfaces"
 	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/pkg/mailer"
+	"yunshu/internal/repository"
+	alertsvc "yunshu/internal/service/alert"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -78,7 +81,6 @@ type AlertManagerAlert struct {
 }
 
 type AlertService struct {
-	db          *gorm.DB
 	redis       *redis.Client
 	mailer      mailer.Sender
 	cfg         config.AlertConfig
@@ -105,6 +107,17 @@ type AlertService struct {
 
 	metrics        *AlertMetrics // Prometheus自监控指标
 	metricsUpdater *AlertMetricsUpdater
+
+	eventRepo          interfaces.AlertEventRepository
+	channelRepo        interfaces.AlertChannelRepository
+	monitorRuleRepo    interfaces.AlertMonitorRuleRepository
+	datasourceRepo     interfaces.AlertDatasourceRepository
+	projectRepo        interfaces.ProjectRepository
+	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository
+	cloudExpiryRepo    interfaces.CloudExpiryRuleRepository
+	cloudAccountRepo   interfaces.CloudAccountRepository
+
+	alertStateSvc alertsvc.AlertStateService
 }
 
 // AlertServiceOptions 可选依赖：静默、处理人、内置规则评估。
@@ -116,6 +129,17 @@ type AlertServiceOptions struct {
 	ReceiverGroupCache *ReceiverGroupCache
 	// EncryptionKey 与项目/云账号凭据加密一致；非空时用于云到期规则解密云账号 AK/SK。
 	EncryptionKey string
+	EventRepo          interfaces.AlertEventRepository
+	ChannelRepo        interfaces.AlertChannelRepository
+	MonitorRuleRepo    interfaces.AlertMonitorRuleRepository
+	DatasourceRepo     interfaces.AlertDatasourceRepository
+	ProjectRepo        interfaces.ProjectRepository
+	FiringDeliveryRepo interfaces.AlertFiringDeliveryRepository
+	CloudExpiryRepo    interfaces.CloudExpiryRuleRepository
+	CloudAccountRepo   interfaces.CloudAccountRepository
+	StateSvc           alertsvc.AlertStateService
+	SubscriptionRepo   interfaces.AlertSubscriptionRepository
+	InhibitionRuleRepo interfaces.AlertInhibitionRuleRepository
 }
 
 type promEnrichTask struct {
@@ -175,16 +199,25 @@ func NewAlertService(db *gorm.DB, redisClient *redis.Client, sender mailer.Sende
 		receiverCache = opts.ReceiverGroupCache
 	}
 	if receiverCache == nil {
-		receiverCache = NewReceiverGroupCache(db)
+		receiverCache = NewReceiverGroupCache(repository.NewAlertReceiverGroupRepository(db))
+	}
+	subRepo := interfaces.AlertSubscriptionRepository(repository.NewAlertSubscriptionRepository(db))
+	inhibRepo := interfaces.AlertInhibitionRuleRepository(repository.NewAlertInhibitionRuleRepository(db))
+	if opts != nil {
+		if opts.SubscriptionRepo != nil {
+			subRepo = opts.SubscriptionRepo
+		}
+		if opts.InhibitionRuleRepo != nil {
+			inhibRepo = opts.InhibitionRuleRepo
+		}
 	}
 	svc := &AlertService{
-		db:                 db,
 		redis:              redisClient,
 		mailer:             sender,
 		cfg:                cfg,
 		cloudExpiryState:   make(map[string]bool),
-		inhibitionSvc:      NewAlertInhibitionService(db, redisClient),
-		subscriptionSvc:    NewAlertSubscriptionService(db),
+		inhibitionSvc:      NewAlertInhibitionServiceWithRepo(inhibRepo, redisClient),
+		subscriptionSvc:    NewAlertSubscriptionService(subRepo, db),
 		receiverGroupCache: receiverCache,
 		metrics:            NewAlertMetrics(),
 	}
@@ -193,10 +226,43 @@ func NewAlertService(db *gorm.DB, redisClient *redis.Client, sender mailer.Sende
 	svc.metricsUpdater = NewAlertMetricsUpdater(svc.metrics, svc.inhibitionSvc)
 	svc.metricsUpdater.Start()
 
+	svc.eventRepo = interfaces.AlertEventRepository(repository.NewAlertEventRepository(db))
+	svc.channelRepo = interfaces.AlertChannelRepository(repository.NewAlertChannelRepository(db))
+	svc.monitorRuleRepo = interfaces.AlertMonitorRuleRepository(repository.NewAlertMonitorRuleRepository(db))
+	svc.datasourceRepo = interfaces.AlertDatasourceRepository(repository.NewAlertDatasourceRepository(db))
+	svc.projectRepo = interfaces.ProjectRepository(repository.NewProjectRepository(db))
+	svc.firingDeliveryRepo = interfaces.AlertFiringDeliveryRepository(repository.NewAlertFiringDeliveryRepository(db))
+	svc.cloudExpiryRepo = interfaces.CloudExpiryRuleRepository(repository.NewCloudExpiryRuleRepository(db))
+	svc.cloudAccountRepo = interfaces.CloudAccountRepository(repository.NewCloudAccountRepository(db))
 	if opts != nil {
 		svc.silenceSvc = opts.SilenceSvc
 		svc.assigneeSvc = opts.AssigneeSvc
 		svc.dutySvc = opts.DutySvc
+		if opts.EventRepo != nil {
+			svc.eventRepo = opts.EventRepo
+		}
+		if opts.ChannelRepo != nil {
+			svc.channelRepo = opts.ChannelRepo
+		}
+		if opts.MonitorRuleRepo != nil {
+			svc.monitorRuleRepo = opts.MonitorRuleRepo
+		}
+		if opts.DatasourceRepo != nil {
+			svc.datasourceRepo = opts.DatasourceRepo
+		}
+		if opts.ProjectRepo != nil {
+			svc.projectRepo = opts.ProjectRepo
+		}
+		if opts.FiringDeliveryRepo != nil {
+			svc.firingDeliveryRepo = opts.FiringDeliveryRepo
+		}
+		if opts.CloudExpiryRepo != nil {
+			svc.cloudExpiryRepo = opts.CloudExpiryRepo
+		}
+		if opts.CloudAccountRepo != nil {
+			svc.cloudAccountRepo = opts.CloudAccountRepo
+		}
+		svc.alertStateSvc = opts.StateSvc
 		if key := strings.TrimSpace(opts.EncryptionKey); key != "" {
 			if aead, err := cryptox.NewAESGCMFromKeyString(key); err == nil {
 				svc.aead = aead
@@ -220,4 +286,3 @@ func (s *AlertService) GetSubscriptionService() *AlertSubscriptionService {
 func (s *AlertService) GetInhibitionService() *AlertInhibitionService {
 	return s.inhibitionSvc
 }
-

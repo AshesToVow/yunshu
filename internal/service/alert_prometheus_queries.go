@@ -7,9 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"yunshu/internal/model"
-	"yunshu/internal/pkg/promapi"
 	"yunshu/internal/pkg/platformhttp"
+	"yunshu/internal/pkg/promapi"
 )
 
 func metricValueFromAnnotations(annotations map[string]string) string {
@@ -30,12 +29,12 @@ func (s *AlertService) queryCurrentValueByMonitorRule(ctx context.Context, label
 	if !ok || rid == 0 {
 		return "", nil
 	}
-	var rule model.AlertMonitorRule
-	if err := s.db.WithContext(ctx).First(&rule, rid).Error; err != nil {
+	rule, err := s.monitorRuleRepo.GetByID(ctx, rid)
+	if err != nil {
 		return "", err
 	}
-	var ds model.AlertDatasource
-	if err := s.db.WithContext(ctx).First(&ds, rule.DatasourceID).Error; err != nil {
+	ds, err := s.datasourceRepo.GetByID(ctx, rule.DatasourceID)
+	if err != nil {
 		return "", err
 	}
 	if !ds.Enabled || strings.TrimSpace(ds.Type) != "prometheus" {

@@ -5,7 +5,7 @@ import (
 	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/apperror"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
@@ -24,8 +24,8 @@ func NewAuthHandler(service *service.AuthService, loginLogs *service.LoginLogSer
 }
 
 func loginErrMessage(err error) string {
-	if appErr, ok := apperror.IsAppError(err); ok {
-		return appErr.Message
+	if biz, ok := bizerrors.As(err); ok {
+		return biz.Message
 	}
 	return "登录失败"
 }

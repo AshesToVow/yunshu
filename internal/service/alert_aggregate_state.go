@@ -1,7 +1,6 @@
 ﻿package service
 
 import (
-	"yunshu/internal/service/svcerr"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,8 +10,7 @@ import (
 
 	"yunshu/internal/config"
 	"yunshu/internal/model"
-
-	"gorm.io/gorm/clause"
+	bizerrors "yunshu/internal/pkg/errors"
 )
 
 type groupAggregateSpec struct {
@@ -49,7 +47,7 @@ func (s *AlertService) logSuppressedGroupAggregateBySpec(ctx context.Context, sp
 		ResponsePayload: truncateText(spec.responsePrefix+groupKey, s.cfg.MaxPayloadChars),
 	}
 	fillAlertEventDatasourceFromPayload(&event, payload)
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 }
 
 func (s *AlertService) resolvedGroupAggregateSpec() groupAggregateSpec {
@@ -92,7 +90,7 @@ func (s *AlertService) updateFingerprintState(ctx context.Context, fingerprint, 
 	if strings.EqualFold(status, "firing") {
 		count, err = s.redis.HIncrBy(ctx, key, "count", 1).Result()
 		if err != nil {
-			return 1, false, svcerr.Pass(ctx, "alert.aggregate", "updateFingerprintState", err)
+			return 1, false, bizerrors.Pass(ctx, "alert.aggregate", "updateFingerprintState", err)
 		}
 		_, _ = s.redis.HSet(ctx, key, "last_status", "firing").Result()
 		_, _ = s.redis.Expire(ctx, key, time.Duration(s.cfg.DedupTTLSeconds)*time.Second).Result()
@@ -125,7 +123,7 @@ func (s *AlertService) markResolvedNotificationSent(ctx context.Context, fingerp
 	key := "alert:resolved:sent:" + strings.TrimSpace(fingerprint)
 	ok, err := s.redis.SetNX(ctx, key, "1", time.Duration(s.cfg.DedupTTLSeconds)*time.Second).Result()
 	if err != nil {
-		return true, svcerr.Pass(ctx, "alert.aggregate", "markResolvedNotificationSent", err)
+		return true, bizerrors.Pass(ctx, "alert.aggregate", "markResolvedNotificationSent", err)
 	}
 	return ok, nil
 }
@@ -228,11 +226,6 @@ func (s *AlertService) commitFiringGroupTimingSend(ctx context.Context, groupKey
 	_ = s.redis.Expire(ctx, key, time.Duration(s.cfg.AggregateTTLSeconds)*time.Second).Err()
 }
 
-// decideFiringGroupTiming 兼容旧调用：等价于 peek（不再预写 last_sent）。
-func (s *AlertService) decideFiringGroupTiming(ctx context.Context, groupKey, labelsDigest string) (shouldSend bool, reason string, count int64, firstSeen string, lastSeen string) {
-	return s.peekFiringGroupTiming(ctx, groupKey, labelsDigest)
-}
-
 func firingDeliveredRedisKey(fingerprint string) string {
 	return "alert:firing_delivered:" + strings.TrimSpace(fingerprint)
 }
@@ -244,12 +237,7 @@ func (s *AlertService) markAlertFiringDelivered(ctx context.Context, fingerprint
 	if fp == "" {
 		return
 	}
-	now := time.Now().UTC()
-	row := model.AlertFiringDelivery{Fingerprint: fp, UpdatedAt: now}
-	_ = s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "fingerprint"}},
-		DoUpdates: clause.AssignmentColumns([]string{"updated_at"}),
-	}).Create(&row).Error
+	_ = s.firingDeliveryRepo.Mark(ctx, fp)
 	if s.redis != nil {
 		ttlSec := maxInt(s.cfg.AggregateTTLSeconds, 7*24*3600)
 		_ = s.redis.Set(ctx, firingDeliveredRedisKey(fp), "1", time.Duration(ttlSec)*time.Second).Err()
@@ -267,9 +255,8 @@ func (s *AlertService) alertFiringWasDelivered(ctx context.Context, fingerprint 
 			return true
 		}
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AlertFiringDelivery{}).Where("fingerprint = ?", fp).Count(&n).Error
-	return n > 0
+	ok, _ := s.firingDeliveryRepo.Exists(ctx, fp)
+	return ok
 }
 
 func (s *AlertService) clearAlertFiringDelivered(ctx context.Context, fingerprint string) {
@@ -280,7 +267,7 @@ func (s *AlertService) clearAlertFiringDelivered(ctx context.Context, fingerprin
 	if s.redis != nil {
 		_ = s.redis.Del(ctx, firingDeliveredRedisKey(fp)).Err()
 	}
-	_ = s.db.WithContext(ctx).Where("fingerprint = ?", fp).Delete(&model.AlertFiringDelivery{}).Error
+	_ = s.firingDeliveryRepo.Delete(ctx, fp)
 }
 
 func (s *AlertService) logResolvedSuppressedNoPriorFiringDelivery(ctx context.Context, title, severity, status, groupKey, labelsDigest string, payload map[string]interface{}) {
@@ -305,7 +292,7 @@ func (s *AlertService) logResolvedSuppressedNoPriorFiringDelivery(ctx context.Co
 		ResponsePayload:    "firing 未成功投递到任何通道（可能为分组节流抑制或通道失败），已抑制恢复外发",
 	}
 	fillAlertEventDatasourceFromPayload(&event, payload)
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 }
 
 func humanReadableGroupTimingSuppression(reason string, cfg config.AlertConfig) string {
@@ -352,5 +339,5 @@ func (s *AlertService) logSuppressedFiringTiming(ctx context.Context, title, sev
 		ResponsePayload: truncateText(humanReadableGroupTimingSuppression(reason, s.cfg), s.cfg.MaxPayloadChars),
 	}
 	fillAlertEventDatasourceFromPayload(&event, payload)
-	_ = s.db.WithContext(ctx).Create(&event).Error
+	_ = s.persistAlertEvent(ctx, &event)
 }

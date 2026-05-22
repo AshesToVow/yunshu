@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 	"yunshu/internal/pkg/k8sauth"
-	"yunshu/internal/repository"
+	"yunshu/internal/service/svcerr"
 
 	"gorm.io/gorm"
 )
@@ -69,14 +69,14 @@ type K8sScopedPolicyGrantPresetResponse struct {
 }
 
 type K8sScopedPolicyService struct {
-	roleRepo      *repository.RoleRepository
-	permRepo      *repository.PermissionRepository
-	accessRepo    *repository.K8sClusterAccessRepository
-	nsDenyRepo    *repository.K8sNamespaceDenyRepository
-	nsAllowRepo   *repository.K8sNamespaceAllowRepository
-	userGroupRepo *repository.UserGroupRepository
-	userRepo      *repository.UserRepository
-	clusterRepo   *repository.K8sClusterRepository
+	roleRepo      interfaces.RoleRepository
+	permRepo      interfaces.PermissionRepository
+	accessRepo    interfaces.K8sClusterAccessRepository
+	nsDenyRepo    interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo   interfaces.K8sNamespaceAllowRepository
+	userGroupRepo interfaces.UserGroupRepository
+	userRepo      interfaces.UserRepository
+	clusterRepo   interfaces.K8sClusterRepository
 }
 
 // K8sAuthMatrixRow 集群管理「已授权」矩阵行（对齐 k8m：按用户展开角色/组授权）。
@@ -113,14 +113,14 @@ type K8sUserClusterAuthRow struct {
 
 // NewK8sScopedPolicyService 创建 K8s 集群档位服务（不写 Casbin k8s: 策略）。
 func NewK8sScopedPolicyService(
-	roleRepo *repository.RoleRepository,
-	permRepo *repository.PermissionRepository,
-	accessRepo *repository.K8sClusterAccessRepository,
-	nsDenyRepo *repository.K8sNamespaceDenyRepository,
-	nsAllowRepo *repository.K8sNamespaceAllowRepository,
-	userGroupRepo *repository.UserGroupRepository,
-	userRepo *repository.UserRepository,
-	clusterRepo *repository.K8sClusterRepository,
+	roleRepo interfaces.RoleRepository,
+	permRepo interfaces.PermissionRepository,
+	accessRepo interfaces.K8sClusterAccessRepository,
+	nsDenyRepo interfaces.K8sNamespaceDenyRepository,
+	nsAllowRepo interfaces.K8sNamespaceAllowRepository,
+	userGroupRepo interfaces.UserGroupRepository,
+	userRepo interfaces.UserRepository,
+	clusterRepo interfaces.K8sClusterRepository,
 ) *K8sScopedPolicyService {
 	return &K8sScopedPolicyService{
 		roleRepo:      roleRepo,
@@ -285,7 +285,7 @@ func (s *K8sScopedPolicyService) GrantPreset(ctx context.Context, req K8sScopedP
 	}, nil
 }
 
-func syncDenyNamespaces(ctx context.Context, nsDenyRepo *repository.K8sNamespaceDenyRepository, principalKind, principalRef string, clusterIDs []uint, denyNS []string) (added, skipped int, err error) {
+func syncDenyNamespaces(ctx context.Context, nsDenyRepo interfaces.K8sNamespaceDenyRepository, principalKind, principalRef string, clusterIDs []uint, denyNS []string) (added, skipped int, err error) {
 	k := strings.TrimSpace(strings.ToLower(principalKind))
 	ref := strings.TrimSpace(principalRef)
 	if k == "" || ref == "" {
@@ -330,7 +330,7 @@ func syncDenyNamespaces(ctx context.Context, nsDenyRepo *repository.K8sNamespace
 	return added, skipped, nil
 }
 
-func syncAllowNamespaces(ctx context.Context, nsAllowRepo *repository.K8sNamespaceAllowRepository, principalKind, principalRef string, clusterIDs []uint, allowNS []string) (added, skipped int, err error) {
+func syncAllowNamespaces(ctx context.Context, nsAllowRepo interfaces.K8sNamespaceAllowRepository, principalKind, principalRef string, clusterIDs []uint, allowNS []string) (added, skipped int, err error) {
 	k := strings.TrimSpace(strings.ToLower(principalKind))
 	ref := strings.TrimSpace(principalRef)
 	if k == "" || ref == "" {

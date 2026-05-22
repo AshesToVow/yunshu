@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -9,11 +9,11 @@ import (
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/svcerr"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/service/svcerr"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
-	"yunshu/internal/repository"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -61,8 +61,8 @@ type OverviewService struct {
 	db         *gorm.DB
 	runtime    *K8sRuntimeService
 	redis      *redis.Client
-	memberRepo *repository.ProjectMemberRepository
-	accessRepo *repository.K8sClusterAccessRepository
+	memberRepo interfaces.ProjectMemberRepository
+	accessRepo interfaces.K8sClusterAccessRepository
 }
 
 // NewOverviewService 创建相关逻辑。
@@ -70,8 +70,8 @@ func NewOverviewService(
 	db *gorm.DB,
 	runtime *K8sRuntimeService,
 	redisClient *redis.Client,
-	memberRepo *repository.ProjectMemberRepository,
-	accessRepo *repository.K8sClusterAccessRepository,
+	memberRepo interfaces.ProjectMemberRepository,
+	accessRepo interfaces.K8sClusterAccessRepository,
 ) *OverviewService {
 	return &OverviewService{db: db, runtime: runtime, redis: redisClient, memberRepo: memberRepo, accessRepo: accessRepo}
 }

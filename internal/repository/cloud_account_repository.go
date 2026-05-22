@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	"yunshu/internal/model"
 
@@ -12,7 +13,7 @@ type CloudAccountRepository struct {
 	db *gorm.DB
 }
 
-func NewCloudAccountRepository(db *gorm.DB) *CloudAccountRepository {
+func NewCloudAccountRepository(db *gorm.DB) CloudAccountRepo {
 	return &CloudAccountRepository{db: db}
 }
 
@@ -40,6 +41,15 @@ func (r *CloudAccountRepository) ListByProjectAndGroup(ctx context.Context, proj
 	var list []model.CloudAccount
 	err := q.Order("id DESC").Find(&list).Error
 	return list, err
+}
+
+func (r *CloudAccountRepository) ListEnabledByProject(ctx context.Context, projectID uint, provider string) ([]model.CloudAccount, error) {
+	tx := r.db.WithContext(ctx).Where("project_id = ? AND status = ?", projectID, model.StatusEnabled)
+	if p := strings.TrimSpace(provider); p != "" {
+		tx = tx.Where("provider = ?", p)
+	}
+	var list []model.CloudAccount
+	return list, tx.Find(&list).Error
 }
 
 func (r *CloudAccountRepository) DeleteByID(ctx context.Context, id uint) error {

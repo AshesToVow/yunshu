@@ -1,11 +1,11 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"yunshu/internal/pkg/apperror"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/constants"
 
 	"gorm.io/gorm"
@@ -46,8 +46,8 @@ func TestK8sMapAPIError(t *testing.T) {
 				}
 				return
 			}
-			ae, ok := apperror.IsAppError(got)
-			if !ok || ae.ErrorCode != tc.want {
+			biz, ok := bizerrors.As(got)
+			if !ok || biz.ErrorCode != tc.want {
 				t.Fatalf("expected code %s, got %v", tc.want, got)
 			}
 		})
@@ -58,8 +58,8 @@ func TestK8sFailPreservesAppError(t *testing.T) {
 	t.Parallel()
 	orig := constants.ErrForbidden
 	got := k8sFail(context.Background(), "k8s.test", "op", orig)
-	ae, ok := apperror.IsAppError(got)
-	if !ok || ae.ErrorCode != "10003" {
+	biz, ok := bizerrors.As(got)
+	if !ok || biz.ErrorCode != "10003" {
 		t.Fatalf("expected forbidden preserved, got %v", got)
 	}
 }
@@ -67,8 +67,8 @@ func TestK8sFailPreservesAppError(t *testing.T) {
 func TestK8sRepoErrNotFound(t *testing.T) {
 	t.Parallel()
 	got := k8sRepoErr(context.Background(), "k8s.test", "get", gorm.ErrRecordNotFound)
-	ae, ok := apperror.IsAppError(got)
-	if !ok || ae.ErrorCode != "10004" {
+	biz, ok := bizerrors.As(got)
+	if !ok || biz.ErrorCode != "10004" {
 		t.Fatalf("expected not found, got %v", got)
 	}
 }
@@ -76,8 +76,8 @@ func TestK8sRepoErrNotFound(t *testing.T) {
 func TestK8sMapAPIErrorUnauthorizedString(t *testing.T) {
 	t.Parallel()
 	got := k8sMapAPIError(errors.New("Unauthorized"))
-	ae, ok := apperror.IsAppError(got)
-	if !ok || ae.ErrorCode != "26002" {
+	biz, ok := bizerrors.As(got)
+	if !ok || biz.ErrorCode != "26002" {
 		t.Fatalf("expected 26002, got %v", got)
 	}
 }
@@ -86,8 +86,8 @@ func TestK8sFailMapsNotFound(t *testing.T) {
 	t.Parallel()
 	err := apierrors.NewNotFound(schema.GroupResource{Resource: "pods"}, "n1")
 	got := k8sFail(context.Background(), "k8s.workload", "get", err)
-	ae, ok := apperror.IsAppError(got)
-	if !ok || ae.ErrorCode != "10004" {
+	biz, ok := bizerrors.As(got)
+	if !ok || biz.ErrorCode != "10004" {
 		t.Fatalf("expected 10004, got %v", got)
 	}
 }
