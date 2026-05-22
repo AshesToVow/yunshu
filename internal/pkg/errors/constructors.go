@@ -69,7 +69,8 @@ func InferHTTPStatus(code int) int {
 	}
 }
 
-func Pass(ctx context.Context, component, operation string, err error) error {
+func Pass(ctx context.Context, component, operation string, err error, attrs ...any) error {
+	_ = attrs
 	if err == nil {
 		return nil
 	}
@@ -91,7 +92,8 @@ func Pass(ctx context.Context, component, operation string, err error) error {
 	return MarkLogged(biz)
 }
 
-func Reject(ctx context.Context, component, operation string, err error) error {
+func Reject(ctx context.Context, component, operation string, err error, attrs ...any) error {
+	_ = attrs
 	if err == nil {
 		return nil
 	}
@@ -113,6 +115,37 @@ func Reject(ctx context.Context, component, operation string, err error) error {
 	return MarkLogged(biz)
 }
 
-func Warn(ctx context.Context, component, operation, msg string) {
+func Warn(ctx context.Context, component, operation, msg string, attrs ...any) {
+	_ = attrs
 	slog.Default().Warn(msg, "component", component, "operation", operation)
+}
+
+// InternalMsg logs and returns a 500 BizError (component + operation for structured logs).
+func InternalMsg(ctx context.Context, component, operation, msg string, attrs ...any) error {
+	_ = attrs
+	return internalCtx(ctx, component, operation, fmt.Errorf("%s", msg))
+}
+
+// InternalFmt is InternalMsg with a formatted message.
+func InternalFmt(ctx context.Context, component, operation, msgFmt string, args ...any) error {
+	return InternalMsg(ctx, component, operation, fmt.Sprintf(msgFmt, args...))
+}
+
+// Internalf logs a wrapped error with component/operation (msgFmt should include %w or %v for err).
+func Internalf(ctx context.Context, component, operation string, err error, msgFmt string, args ...any) error {
+	if err == nil {
+		return nil
+	}
+	msg := fmt.Sprintf(msgFmt, append(args, err)...)
+	return internalCtx(ctx, component, operation, fmt.Errorf("%s: %w", msg, err))
+}
+
+func internalCtx(ctx context.Context, component, operation string, cause error) error {
+	b := &BizError{
+		Code: 50001, Message: "internal server error", Reason: "InternalError",
+		ErrorCode: "50001", Cause: cause, StatusCode: http.StatusInternalServerError,
+		Operation: operation, Component: component,
+	}
+	b.logBiz(ctx, "error")
+	return MarkLogged(b)
 }

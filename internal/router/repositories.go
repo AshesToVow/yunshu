@@ -44,6 +44,8 @@ type routeRepositories struct {
 	AlertRuleAssignee   interfaces.AlertRuleAssigneeRepository
 	AlertFiringDelivery interfaces.AlertFiringDeliveryRepository
 	CloudExpiryRule     interfaces.CloudExpiryRuleRepository
+	Overview            interfaces.OverviewRepository
+	K8sEventForward     interfaces.K8sEventForwardRepository
 }
 
 func newRouteRepositories(db *gorm.DB) *routeRepositories {
@@ -84,5 +86,7 @@ func newRouteRepositories(db *gorm.DB) *routeRepositories {
 		AlertRuleAssignee:   repository.NewAlertRuleAssigneeRepository(db),
 		AlertFiringDelivery: repository.NewAlertFiringDeliveryRepository(db),
 		CloudExpiryRule:     repository.NewCloudExpiryRuleRepository(db),
+		Overview:            repository.NewOverviewRepository(db),
+		K8sEventForward:     repository.NewK8sEventForwardRepository(db),
 	}
 }

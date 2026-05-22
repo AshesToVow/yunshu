@@ -1,0 +1,13 @@
+﻿go : # yunshu/internal/service
+所在位置 C:\Users\王\AppData\Local\Temp\ps-script-5155015d-3495-4286-823d-f2e20f6eadea.ps1:104 字符: 32
++ Set-Location d:\gocode\yunshu; go build ./... 2>&1 | Out-File -Encodi ...
++                                ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (# yunshu/internal/service:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+internal\service\exports.go:147:37: undefined: project.LogAgentRegisterRequest
+internal\service\exports.go:148:42: undefined: project.LogAgentPublicRegisterRequest
+internal\service\exports.go:263:2: LogAgentRegisterRequest redeclared in this block
+	internal\service\exports.go:147:2: other declaration of LogAgentRegisterRequest
+internal\service\exports.go:264:2: LogAgentPublicRegisterRequest redeclared in this block
+	internal\service\exports.go:148:2: other declaration of LogAgentPublicRegisterRequest

@@ -94,4 +94,14 @@ func (r *AlertSubscriptionRepository) UpdateFields(ctx context.Context, id uint,
 	return r.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).Where("id = ?", id).Updates(updates).Error
 }
 
+func (r *AlertSubscriptionRepository) Transaction(ctx context.Context, fn func(AlertSubscriptionRepo) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(&AlertSubscriptionRepository{db: tx})
+	})
+}
+
+func (r *AlertSubscriptionRepository) WithTx(ctx context.Context, fn func(tx *gorm.DB) error) error {
+	return r.db.WithContext(ctx).Transaction(fn)
+}
+
 var _ AlertSubscriptionRepo = (*AlertSubscriptionRepository)(nil)

@@ -28,4 +28,6 @@ type (
 	K8sClusterAccessRepository    = repository.K8sClusterAccessRepo
 	K8sNamespaceDenyRepository    = repository.K8sNamespaceDenyRepo
 	K8sNamespaceAllowRepository   = repository.K8sNamespaceAllowRepo
+	OverviewRepository            = repository.OverviewRepo
+	K8sEventForwardRepository     = repository.K8sEventForwardRepo
 )

@@ -8,12 +8,12 @@ import (
 	grpcclient "yunshu/internal/grpc/client"
 	"yunshu/internal/handler"
 	"yunshu/internal/pkg/logutil"
-	"yunshu/internal/service/k8seventforward"
+	"yunshu/internal/service/k8s/eventforward"
 )
 
 // Register wires dependencies via Wire and registers all HTTP routes.
 // Returns the K8s event forward manager (may be nil). bgCtx is used for background workers.
-func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx context.Context) (*k8seventforward.Manager, error) {
+func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx context.Context) (*eventforward.Manager, error) {
 	handler.SetLogger(app.Logger)
 	registerSwagger(app)
 
@@ -31,12 +31,13 @@ func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx
 		go d.mysqlBackupSvc.RunMysqlBackupScheduler(bgCtx)
 	}
 
-	mgr, err := k8seventforward.NewManager(
-		app.DB,
+	mgr, err := eventforward.NewManager(
+		nil,
 		d.k8sRuntimeService,
 		app.YamlK8sEventForwardBase,
 		app.Config.Alert,
 		app.Config.App.Port,
+		app.DB,
 	)
 	if err != nil {
 		logutil.Worker("k8s.event_forward").Errorw(err, "Failed to init K8s event forward manager")

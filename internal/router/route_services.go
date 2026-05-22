@@ -147,7 +147,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 	crService := service.NewK8sCRService(k8sRuntimeService)
 	rbacService := service.NewK8sRBACService(k8sRuntimeService)
 	serviceAccountService := service.NewK8sServiceAccountService(k8sRuntimeService)
-	overviewService := service.NewOverviewService(app.DB, k8sRuntimeService, app.Redis, projectMemberRepo, k8sClusterAccessRepo)
+	overviewService := service.NewOverviewService(repos.Overview, k8sRuntimeService, app.Redis, projectMemberRepo, k8sClusterAccessRepo)
 
 	projectMgmtService, err := service.NewProjectMgmtService(
 		projectRepo, repos.Server, repos.ServerGroup, repos.CloudAccount, repos.Service,
@@ -163,7 +163,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 	logAgentService := service.NewLogAgentService(repos.LogAgent, repos.Server, repos.LogSource, app.Config.Agent.RegisterSecret, app.Config.Agent.DiscoveryRoots)
 	agentDiscoveryService := service.NewAgentDiscoveryService(repos.AgentDiscovery, repos.LogAgent, repos.Server, repos.LogSource)
 	alertReceiverGroupSvc := service.NewAlertReceiverGroupService(repos.AlertReceiverGroup, alertReceiverGroupCache)
-	k8sEventForwardAdminSvc := service.NewK8sEventForwardAdminService(app.DB)
+	k8sEventForwardAdminSvc := service.NewK8sEventForwardAdminService(repos.K8sEventForward)
 
 	return &routeServices{
 		LoginLog:             loginLogSvc,
