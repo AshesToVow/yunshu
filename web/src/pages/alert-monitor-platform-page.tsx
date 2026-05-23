@@ -41,7 +41,7 @@ import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { DepartmentItem } from "../types/api";
 import { getDepartmentTree } from "../services/departments";
@@ -87,9 +87,13 @@ import { useDictOptions } from "../hooks/use-dict-options";
 import type { UserUpdatePayload } from "../types/api";
 import { getUser, updateUser } from "../services/users";
 import { formatDateTime } from "../utils/format";
-import { AlertConfigCenterPanel, type AlertConfigTab } from "./alert-config-center-panel";
 import { AlertInhibitionPanel } from "./alert-inhibition-panel";
 import type { AlertEventCategory } from "../utils/alert-event-reasons";
+
+const AlertConfigCenterPanel = lazy(async () => {
+  const mod = await import("./alert-config-center-panel");
+  return { default: mod.AlertConfigCenterPanel };
+});
 
 dayjs.locale("zh-cn");
 
@@ -2271,13 +2275,15 @@ export function AlertMonitorPlatformPage() {
                     },
                   ]}
                 />
-                <AlertConfigCenterPanel
-                  embedded
-                  hideTabs
-                  activeTab="subscriptions"
-                  onTabChange={() => undefined}
-                  projectContextId={projectContextId}
-                />
+                <Suspense fallback={<Card loading />}>
+                  <AlertConfigCenterPanel
+                    embedded
+                    hideTabs
+                    activeTab="subscriptions"
+                    onTabChange={() => undefined}
+                    projectContextId={projectContextId}
+                  />
+                </Suspense>
               </Space>
             ),
           },
@@ -2292,14 +2298,16 @@ export function AlertMonitorPlatformPage() {
                   message="历史记录是统一观测出口"
                   description="无论告警来自 Prometheus + Alertmanager，还是来自平台监控规则，最终都会在这里查看命中订阅、抑制原因码（error_message）、通道结果与错误信息。success=留痕 表示策略拦截未外发。"
                 />
-                <AlertConfigCenterPanel
-                  embedded
-                  hideTabs
-                  activeTab="history"
-                  onTabChange={() => undefined}
-                  initialEventCategory={historyEventCategory}
-                  projectContextId={projectContextId}
-                />
+                <Suspense fallback={<Card loading />}>
+                  <AlertConfigCenterPanel
+                    embedded
+                    hideTabs
+                    activeTab="history"
+                    onTabChange={() => undefined}
+                    initialEventCategory={historyEventCategory}
+                    projectContextId={projectContextId}
+                  />
+                </Suspense>
               </Space>
             ),
           },

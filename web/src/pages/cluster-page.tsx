@@ -10,7 +10,7 @@ import {
 } from "@ant-design/icons";
 import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DictLabelFillSelect } from "../components/dict-fill-select";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { formatDateTime } from "../utils/format";
@@ -94,9 +94,41 @@ export function ClusterPage() {
     return map;
   }, [directCfgDict]);
 
+  const loadClusters = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getClusters(query);
+      setList(result.list);
+      setTotal(result.total);
+    } catch {
+      setList([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [query]);
+
   useEffect(() => {
-    void loadClusters();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      try {
+        const result = await getClusters(query);
+        if (cancelled) return;
+        setList(result.list);
+        setTotal(result.total);
+      } catch {
+        if (!cancelled) {
+          setList([]);
+          setTotal(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [query]);
 
   useEffect(() => {
@@ -109,17 +141,6 @@ export function ClusterPage() {
       }
     })();
   }, []);
-
-  async function loadClusters() {
-    setLoading(true);
-    try {
-      const result = await getClusters(query);
-      setList(result.list);
-      setTotal(result.total);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const enabledClusters = useMemo(() => list.filter((c) => c.status === 1), [list]);
 

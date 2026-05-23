@@ -278,3 +278,26 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return h.service.ChangePassword(ctx, user.ID, req)
 	})
 }
+
+// CreateWSTicket godoc
+// @Summary Issue one-time WebSocket handshake ticket
+// @Description Exchange current Bearer session for a short-lived, single-use ticket used in WebSocket query (avoids JWT in URL).
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body service.CreateWSTicketRequest false "optional scope for audit"
+// @Success 200 {object} response.Body{data=service.WSTicketResponse} "success"
+// @Failure 401 {object} response.Body "未登录或登录已失效"
+// @Failure 500 {object} response.Body "服务器内部错误"
+// @Router /api/v1/auth/ws-ticket [post]
+func (h *AuthHandler) CreateWSTicket(c *gin.Context) {
+	claims, ok := auth.ClaimsFromContext(c)
+	if !ok {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.CreateWSTicketRequest) (*service.WSTicketResponse, error) {
+		return h.service.CreateWSTicket(ctx, claims.UserID, claims.TokenID, req.Scope)
+	})
+}

@@ -70,6 +70,7 @@ export function AlertChannelsPage() {
   const [templateForm] = Form.useForm();
   const firingTemplateRef = useRef<any>(null);
   const resolvedTemplateRef = useRef<any>(null);
+  const previewSeqRef = useRef(0);
   const channelType = Form.useWatch("type", form);
   const wecomMode = Form.useWatch("wecom_mode", form);
   const dingMode = Form.useWatch("ding_mode", form);
@@ -124,14 +125,20 @@ export function AlertChannelsPage() {
     try {
       const res = await listAlertChannels();
       setList(res.list ?? []);
+    } catch {
+      // http 拦截器已 toast
     } finally {
       setLoading(false);
     }
   }
 
   async function loadProjects() {
-    const res = await getProjects({ page: 1, page_size: 500 });
-    setProjects(res.list ?? []);
+    try {
+      const res = await getProjects({ page: 1, page_size: 500 });
+      setProjects(res.list ?? []);
+    } catch {
+      setProjects([]);
+    }
   }
 
   useEffect(() => {
@@ -141,24 +148,29 @@ export function AlertChannelsPage() {
 
   useEffect(() => {
     if (!templateOpen) return;
-    const timer = window.setTimeout(async () => {
+    const timer = window.setTimeout(() => {
+      const seq = ++previewSeqRef.current;
       setPreviewLoading(true);
       setPreviewError("");
-      try {
-        const res = await previewAlertChannelTemplate({
-          template_firing: String(templateFiring || ""),
-          template_resolved: String(templateResolved || ""),
-          status: previewStatus,
-          project_id: previewProjectID,
-          raw_payload_json: String(previewRawPayloadJSON || ""),
+      void previewAlertChannelTemplate({
+        template_firing: String(templateFiring || ""),
+        template_resolved: String(templateResolved || ""),
+        status: previewStatus,
+        project_id: previewProjectID,
+        raw_payload_json: String(previewRawPayloadJSON || ""),
+      })
+        .then((res) => {
+          if (seq !== previewSeqRef.current) return;
+          setPreviewResult(res);
+        })
+        .catch((err: unknown) => {
+          if (seq !== previewSeqRef.current) return;
+          setPreviewResult(null);
+          setPreviewError(err instanceof Error ? err.message : "模板预览失败");
+        })
+        .finally(() => {
+          if (seq === previewSeqRef.current) setPreviewLoading(false);
         });
-        setPreviewResult(res);
-      } catch (err: any) {
-        setPreviewResult(null);
-        setPreviewError(String(err?.message || "模板预览失败"));
-      } finally {
-        setPreviewLoading(false);
-      }
     }, 300);
     return () => window.clearTimeout(timer);
   }, [templateOpen, templateFiring, templateResolved, previewStatus, previewProjectID, previewRawPayloadJSON]);

@@ -34,7 +34,7 @@
 
 中间件：`internal/middleware/casbin.go` → `Authorize`
 
-- **Subject**：`UserSubject(user.ID)`，形如 `user:{id}`（见 `internal/service/casbin_sync.go`）。
+- **Subject**：`UserSubject(user.ID)`，形如 `user:{id}`（见 `internal/service/system/casbin_sync.go`）。
 - **Object**：`c.FullPath()`，例如 `/api/v1/projects/:id/members`。
 - **Action**：HTTP Method，如 `GET`、`POST`。
 

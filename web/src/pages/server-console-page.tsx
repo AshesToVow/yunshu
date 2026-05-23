@@ -3,7 +3,7 @@ import { Alert, Button, Card, Form, Input, Space, Tabs, Tag, Typography, message
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { execProjectServerCommand, getProjectServerDetail, type ServerDetailItem } from "../services/projects";
-import { useAuth } from "../contexts/auth-context";
+import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
@@ -27,7 +27,6 @@ type TerminalFrame = {
 };
 
 export function ServerConsolePage() {
-  const { token } = useAuth();
   const [searchParams] = useSearchParams();
   const projectId = Number(searchParams.get("project_id") || 0);
   const serverId = Number(searchParams.get("server_id") || 0);
@@ -89,21 +88,8 @@ export function ServerConsolePage() {
     xtermRef.current.write(text);
   }
 
-  function buildTerminalWSURL() {
-    const url = new URL(`/api/v1/projects/${projectId}/servers/${serverId}/terminal/ws`, window.location.origin);
-    url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    if (token) {
-      url.searchParams.set("token", token);
-    }
-    return url.toString();
-  }
-
-  function openTerminal() {
+  async function openTerminal() {
     if (!validParams) return;
-    if (!token) {
-      message.error("未获取到登录 token，无法建立终端连接");
-      return;
-    }
     if (!xtermRef.current) {
       message.warning("终端正在初始化，请稍后再试");
       return;
@@ -117,7 +103,11 @@ export function ServerConsolePage() {
 
     let ws: WebSocket;
     try {
-      ws = new WebSocket(buildTerminalWSURL());
+      ws = await openAuthenticatedWebSocket(
+        `/api/v1/projects/${projectId}/servers/${serverId}/terminal/ws`,
+        {},
+        "server-terminal",
+      );
     } catch (error) {
       setTerminalConnecting(false);
       const reason = error instanceof Error ? error.message : "unknown error";

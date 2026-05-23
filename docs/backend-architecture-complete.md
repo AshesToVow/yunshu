@@ -5,6 +5,7 @@
 - [1. 项目概述](#1-项目概述)
 - [2. 技术栈与依赖](#2-技术栈与依赖)
 - [3. 系统架构设计](#3-系统架构设计)
+  - [3.3 代码目录结构（2026-05 重构后）](#33-代码目录结构2026-05-重构后)
 - [4. 核心模块详解](#4-核心模块详解)
   - [4.1 入口与启动流程](#41-入口与启动流程)
   - [4.2 配置管理](#42-配置管理)
@@ -140,9 +141,46 @@ github.com/swaggo/gin-swagger        // API 文档
 | 层级 | 职责 | 关键组件 |
 |------|------|----------|
 | **Handler 层** | HTTP 请求解析、参数校验、响应格式化 | `internal/handler/*.go` |
-| **Service 层** | 业务逻辑编排、事务管理、跨模块协调 | `internal/service/*.go` |
+| **Service 层** | 业务逻辑编排、事务管理、跨模块协调 | `internal/service/<域>/` + 门面 `exports.go` |
 | **Repository 层** | 数据库 CRUD 操作、查询构建 | `internal/repository/*.go` |
 | **Model 层** | 数据结构定义、GORM 标签、表关系 | `internal/model/*.go` |
+
+### 3.3 代码目录结构（2026-05 重构后）
+
+> 详细阅读路线见 [CODEBASE-MAP.md](CODEBASE-MAP.md)。
+
+```text
+internal/
+├── bootstrap/          # App 构建：DB、Redis、Casbin、Gin
+├── providers/          # Wire：Config / Logger / DB / Redis
+├── router/             # 路由注册、Wire 装配、repositories + route_services
+├── handler/            # HTTP 处理器（薄层）
+├── middleware/         # Auth、Casbin、K8sScope、ErrorHandler、审计
+├── interfaces/         # Repository 接口定义
+├── repository/         # GORM 仓储实现
+├── model/              # 数据模型
+├── grpc/               # gRPC 服务与 proto
+├── pkg/
+│   ├── errors/         # BizError（bizerrors），HTTP/gRPC 统一
+│   ├── logutil/        # 组件化日志（HTTP/Service/Worker）
+│   └── logger/         # 底层 Logger 与 GORM 日志
+└── service/
+    ├── exports.go      # 门面：handler 仍 import service，别名到子包
+    ├── alert/          # 告警域
+    ├── k8s/            # K8s 域
+    │   └── eventforward/
+    ├── project/        # 项目 / 云账号 / 日志源
+    ├── system/         # 用户 / RBAC / 认证 / 字典
+    ├── logplatform/    # Agent / 发现 / 日志 Broker
+    ├── mysqlbackup/
+    └── overview/
+```
+
+**设计要点**：
+
+- **按域分包**（Package by Feature）+ **经典分层**（Handler → Service → Repository → Model）。
+- `exports.go` 为过渡门面：新代码可优先 `import "yunshu/internal/service/alert"` 等子包；Handler 批量改 import 前保持 `service.Xxx`。
+- **Wire**：基础设施与 `routeRepositories` 已接入；`buildRouteServices`（`route_services.go`）仍为手工 `NewXxx` 装配。
 
 ---
 
@@ -292,49 +330,49 @@ func ServePatch[Req any, Resp any](c *gin.Context, fn func(context.Context, uint
 
 #### Service 层 (业务逻辑)
 
-**位置**: [internal/service/](internal/service/)
+**位置**: [internal/service/](internal/service/) — **按域子目录**；Handler 通过 [exports.go](internal/service/exports.go) 访问。域划分见 [CODEBASE-MAP.md](CODEBASE-MAP.md) §2。
 
 **核心服务分类**:
 
 ##### 4.3.1 认证与授权服务
 
-**AuthService** ([auth_service.go](internal/service/auth_service.go)):
+**AuthService** ([system/auth_service.go](internal/service/system/auth_service.go)):
 - 邮箱验证码发送/验证 (Redis 存储 + 冷却机制)
 - JWT Token 生成/刷新 (golang-jwt/v5)
 - 密码哈希 (bcrypt)
 - 登录状态管理 (Redis Session 白名单)
 
-**Casbin 同步** ([casbin_sync.go](internal/service/casbin_sync.go)):
+**Casbin 同步** ([system/casbin_sync.go](internal/service/system/casbin_sync.go)):
 - 用户角色变更同步到 Casbin 策略表
 - 批量策略更新优化
 
 ##### 4.3.2 项目管理服务
 
-**ProjectMgmtService** ([project_mgmt_core.go](internal/service/project_mgmt_core.go)):
+**ProjectMgmtService** ([project/project_mgmt_core.go](internal/service/project/project_mgmt_core.go)):
 - 项目 CRUD + 成员管理 (RBAC 隔离)
 - 服务器/服务/日志源 CRUD
-- 云账号管理 (阿里云/腾讯云/京东云 SDK)
+- 云账号管理 (阿里云/腾讯云/京东云 SDK，见 `project/cloud_provider_*.go`)
 
-**LogAgentService** ([log_agent_service.go](internal/service/log_agent_service.go)):
+**LogAgentService** ([logplatform/log_agent_service.go](internal/service/logplatform/log_agent_service.go)):
 - Agent 注册/认证 (register_secret 校验)
 - 心跳超时检测 (离线记录)
 - Token 轮换机制
 
 ##### 4.3.3 Kubernetes 服务集群
 
-**K8sClusterService** ([k8s_cluster_service.go](internal/service/k8s_cluster_service.go)):
+**K8sClusterService** ([k8s/k8s_cluster_service.go](internal/service/k8s/k8s_cluster_service.go)):
 - 多集群管理 (kubeconfig / direct 直连模式)
 - Kom SDK 集成 (weibaohui/kom)
 - 集群健康检查 / 组件状态查询
 
-**工作负载服务**:
-- [k8s_workload_deployment.go](internal/service/k8s_workload_deployment.go): Deployment 扩缩容/重启/滚动更新
-- [k8s_workload_statefulset.go](internal/service/k8s_workload_statefulset.go): StatefulSet 管理
-- [k8s_workload_daemonset.go](internal/service/k8s_workload_daemonset.go): DaemonSet 管理
-- [k8s_workload_cronjob.go](internal/service/k8s_workload_cronjob.go): CronJob 定时任务
-- [k8s_workload_job.go](internal/service/k8s_workload_job.go): Job 任务管理
+**工作负载服务**（均在 `internal/service/k8s/`）:
+- [k8s_workload_deployment.go](internal/service/k8s/k8s_workload_deployment.go): Deployment 扩缩容/重启/滚动更新
+- [k8s_workload_statefulset.go](internal/service/k8s/k8s_workload_statefulset.go): StatefulSet 管理
+- [k8s_workload_daemonset.go](internal/service/k8s/k8s_workload_daemonset.go): DaemonSet 管理
+- [k8s_workload_cronjob.go](internal/service/k8s/k8s_workload_cronjob.go): CronJob 定时任务
+- [k8s_workload_job.go](internal/service/k8s/k8s_workload_job.go): Job 任务管理
 
-**Pod 高级操作** ([k8s_pod_service.go](internal/service/k8s_pod_service.go)):
+**Pod 高级操作** ([k8s/k8s_pod_service.go](internal/service/k8s/k8s_pod_service.go)):
 - 日志流 (SSE / 下载)
 - 文件浏览/上传/下载 (exec into container)
 - 容器执行命令 (WebSocket 交互式终端)
@@ -365,16 +403,17 @@ flowchart LR
 
 | 服务 | 文件 | 功能 |
 |------|------|------|
-| 告警摄入 | [alert_ingest_pipeline.go](internal/service/alert_ingest_pipeline.go) | Webhook 解析/标准化 |
-| 指纹去重 | [alert_fingerprint.go](internal/service/alert_fingerprint.go) | Labels Hash 计算 |
-| 聚合引擎 | [alert_aggregate_state.go](internal/service/alert_aggregate_state.go) | GroupKey 状态机 |
-| 投递核心 | [alert_delivery_core.go](internal/service/alert_delivery_core.go) | 通道选择/模板渲染 |
-| 邮件通知 | [alert_delivery_email.go](internal/service/alert_delivery_email.go) | SMTP 发送/HTML 模板 |
-| 规则评估 | [alert_monitor_evaluator.go](internal/service/alert_monitor_evaluator.go) | PromQL 定时查询 |
-| 值班服务 | [alert_duty_service.go](internal/service/alert_duty_service.go) | 值班排班/轮换 |
-| 静默管理 | [alert_silence_service.go](internal/service/alert_silence_service.go) | 维护窗口抑制 |
-| 订阅路由 | [alert_subscription_service.go](internal/service/alert_subscription_service.go) | 树形路由匹配 |
-| 抑制规则 | [alert_inhibition_service.go](internal/service/alert_inhibition_service.go) | 告警依赖抑制 |
+| 告警摄入 | [alert/alert_ingest_pipeline.go](internal/service/alert/alert_ingest_pipeline.go) | Webhook 解析/标准化 |
+| 指纹去重 | [alert/alert_fingerprint.go](internal/service/alert/alert_fingerprint.go) | Labels Hash 计算 |
+| 聚合引擎 | [alert/alert_aggregate_state.go](internal/service/alert/alert_aggregate_state.go) | GroupKey 状态机 |
+| 投递核心 | [alert/alert_delivery_core.go](internal/service/alert/alert_delivery_core.go) | 通道选择/模板渲染 |
+| 邮件通知 | [alert/alert_delivery_email.go](internal/service/alert/alert_delivery_email.go) | SMTP 发送/HTML 模板 |
+| 规则评估 | [alert/alert_monitor_evaluator.go](internal/service/alert/alert_monitor_evaluator.go) | PromQL 定时查询 |
+| 值班服务 | [alert/alert_duty_service.go](internal/service/alert/alert_duty_service.go) | 值班排班/轮换 |
+| 静默管理 | [alert/alert_silence_service.go](internal/service/alert/alert_silence_service.go) | 维护窗口抑制 |
+| 订阅路由 | [alert/alert_subscription_service.go](internal/service/alert/alert_subscription_service.go) | 树形路由匹配 |
+| 抑制规则 | [alert/alert_inhibition_service.go](internal/service/alert/alert_inhibition_service.go) | 告警依赖抑制 |
+| Redis 状态 | [alert/state_redis.go](internal/service/alert/state_redis.go) | 去重/聚合 Redis 实现 |
 
 ##### 4.3.5 日志平台服务
 
@@ -391,18 +430,18 @@ Browser (React Frontend)
 ```
 
 **关键服务**:
-- [project_mgmt_logs.go](internal/service/project_mgmt_logs.go): 日志查询/SSE 流/导出
-- [agent_discovery_service.go](internal/service/agent_discovery_service.go): 日志文件发现
+- [project/project_mgmt_logs.go](internal/service/project/project_mgmt_logs.go): 日志查询/SSE 流/导出
+- [logplatform/agent_discovery_service.go](internal/service/logplatform/agent_discovery_service.go): 日志文件发现
 
 ##### 4.3.6 MySQL 备份服务
 
-**备份流程** ([mysql_backup_service.go](internal/service/mysql_backup_backup_service.go)):
+**备份流程** ([mysqlbackup/mysql_backup_service.go](internal/service/mysqlbackup/mysql_backup_service.go)):
 
 ```bash
 mysqldump → gzip 压缩 → 上传 MinIO → 记录元数据到 DB
 ```
 
-**调度器** ([mysql_backup_scheduler.go](internal/service/mysql_backup_scheduler.go)):
+**调度器** ([mysqlbackup/mysql_backup_scheduler.go](internal/service/mysqlbackup/mysql_backup_scheduler.go)):
 - Cron 表达式解析 (robfig/cron)
 - 分布式锁防重复执行 (Redis SETNX)
 - 备份保留策略
@@ -574,8 +613,8 @@ m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act
 
 ##### 4.4.9 WebSocket Auth 中间件 ([ws_auth.go](internal/middleware/ws_auth.go))
 - **WebSocket 特殊认证**
-- 从 URL Query 提取 Token (浏览器无法设置 Header)
-- 复用 HTTP Auth 逻辑
+- 浏览器无法设置 Authorization Header；客户端先 `POST /api/v1/auth/ws-ticket` 换取短效一次性 ticket
+- 握手 URL 仅接受 `?ticket=<uuid>`，消费后校验 Redis 会话并注入用户上下文
 
 ### 4.5 权限系统（三层鉴权）
 
@@ -973,25 +1012,25 @@ sequenceDiagram
 8. Record History (DB)
 ```
 
-#### 告警域数据访问策略（Repository vs 直连 DB）
+#### 告警域数据访问策略（Repository）
 
-告警模块体量大、表多、查询形态复杂（订阅树、抑制规则、值班块、监控规则、云到期等），**未一次性拆成完整 Repository 层**。当前分层约定如下：
+告警模块已 **全面仓储化**（2026-05 重构）。Service 通过 `interfaces.*Repository` 访问数据；`AlertService` 构造时注入各 Repo，**不再持有 `*gorm.DB` 字段**。
 
 | 数据类型 | 访问方式 | 说明 |
 |----------|----------|------|
-| **告警事件** `alert_events` | `interfaces.AlertEventRepository` → `persistAlertEvent()` | 投递/路由/聚合/Webhook 等写历史统一经 `AlertService.persistAlertEvent`，可注入仓储或回退 `*gorm.DB` |
-| **通知渠道** `alert_channels` | `interfaces.AlertChannelRepository` → `loadEnabledChannels()` | Webhook 摄入与投递选渠道 |
-| **静默** `alert_silences` | `AlertSilenceService` 内 `*gorm.DB` | 匹配器解析、批量创建、过期禁用等逻辑与表强耦合，暂不抽 Repo |
-| **抑制** `alert_inhibition_rules` 等 | `AlertInhibitionService` 内 `*gorm.DB` | 含 Redis 缓存与规则评估，保留直连 |
-| **订阅/值班/数据源/监控规则** | 各 `*Service` 内 `*gorm.DB` | 后续若需单测可再按表拆 `XxxRepo` |
+| 告警事件 | `interfaces.AlertEventRepository` | `persistAlertEvent` 统一写历史 |
+| 通知渠道 | `interfaces.AlertChannelRepository` | 渠道 CRUD 与投递加载 |
+| 静默 / 抑制 / 订阅 / 值班 / 处理人 / 接收组 / 监控规则 / 数据源 | 对应 `interfaces.*Repository` | 各 `alert/*_service.go` |
+| 云到期规则 | `interfaces.CloudExpiryRuleRepository` | 含定时评估 |
+| Redis 聚合状态 | `alert.NewRedisAlertStateService` | 去重/聚合 TTL |
 
-**原则**：新代码写 `alert_events` 必须走 `persistAlertEvent`；其余告警表在重构完成前允许 Service 持有 `db`，避免为抽象而抽象。
+**原则**：新告警相关表访问必须新增或扩展 `interfaces` + `repository`；禁止在 `alert` 包内新增裸 `gorm.DB` 查询。
 
-`internal/service/alert/` 子包提供 ingest/state/delivery 等接口与实现骨架；**HTTP Webhook 生产路径仍由 `AlertService` 承担**，子包尚未替换主链路。
+`internal/service/alert/` 为告警**完整实现包**（非骨架）；Webhook 主路径：`AlertService` → `RunIngressPipeline` / `persistAlertEvent` → 投递子模块。
 
 #### K8s 运行时与 Event 转发
 
-`K8sRuntimeService` 在 `router` 装配时创建**唯一实例**，存入 `routeDeps.k8sRuntimeService`，供 K8s API Handler 与 `k8seventforward.Manager` 共用，保证 kom 集群注册与连接状态一致。
+`K8sRuntimeService` 在 `router/route_services.go` 装配时创建**唯一实例**，供 K8s API Handler 与 [k8s/eventforward.Manager](internal/service/k8s/eventforward/manager.go) 共用，保证 kom 集群注册与连接状态一致。
 
 ### 7.3 日志采集链路
 
@@ -1112,25 +1151,21 @@ func (b *Bus) Subscribe(event string, handler EventHandler)
 
 ### 8.5 日志系统
 
-**结构化日志** ([internal/pkg/logger/](internal/pkg/logger/)):
+**结构化日志** ([internal/pkg/logger/](internal/pkg/logger/) + [logutil](internal/pkg/logutil/logutil.go)):
 
 ```go
-// 分级日志
+// 底层 Logger（bootstrap 初始化）
 logger.Infow("user login", "username", "admin", "ip", "192.168.1.1")
-logger.Errorw("database query failed", "error", err, "query", sql)
 
-// 组件隔离
-svclog.Worker("agent").Infow("heartbeat received", "server_id", 1)
-svclog.HTTP("http.auth").Warn("token expired", "token_id", "abc")
+// 组件化日志（推荐：HTTP / Service / Worker）
+logutil.HTTP("http.auth").Warn("token expired", "token_id", "abc")
+logutil.Worker("alert").Infow("Scheduled cloud expiry rule evaluation", "rule_id", id)
 
 // GORM SQL 日志 (单独 Level 控制)
 logger.SQL.Info("SELECT * FROM users...")
 ```
 
-**日志输出**:
-- Console: 开发环境彩色输出
-- File: 生产环境 JSON 格式, 按日期轮转
-- Both: 同时输出双端
+**已移除**：`internal/service/svclog`（逻辑并入 `logutil`）。
 
 ### 8.6 错误处理
 
@@ -1141,29 +1176,25 @@ const (
     ErrSuccess               = 0
     ErrInvalidParams         = 40001
     ErrUnauthorized          = 40101
-    ErrAccessTokenInvalid    = 40102
-    ErrLoginSessionExpired   = 40103
-    ErrForbidden             = 40301
-    ErrAccountDisabled       = 40302
-    ErrNotFound              = 40401
-    ErrInternal              = 50001
-    // ... 更多业务错误码
+    // ...
 )
 ```
 
-**业务错误包装** ([internal/pkg/apperror/biz.go](internal/pkg/apperror/biz.go)):
+**业务错误** ([internal/pkg/errors/](internal/pkg/errors/)) — 包别名 `bizerrors`:
 
 ```go
-type BizError struct {
-    Code    int
-    Message string
-    Cause   error
-}
+// Service 层
+return bizerrors.Pass(ctx, "user", "GetByID", err)
+return bizerrors.Internalf(ctx, "k8s.dynamic", "list_crd", err, msgFmt, args...)
 
-func NewBizError(code int, message string, cause error) *BizError
-func (e *BizError) Error() string
-func (e *BizError) Unwrap() error
+// HTTP：middleware.ErrorHandler + handler.abortService
+response.Abort(c, bizerrors.Ensure(err))
+
+// gRPC
+return nil, bizerrors.ToGRPCStatus(err)
 ```
+
+**已移除**：`internal/pkg/apperror`、`internal/service/svcerr`。
 
 ### 8.7 分页实现
 
@@ -1277,11 +1308,11 @@ volumes:
 
 | 扩展方向 | 实现方式 | 位置 |
 |----------|----------|------|
-| 新增告警渠道 | 实现 `AlertChannel` 接口 | [alert_channel_registry.go](internal/service/alert_channel_registry.go) |
-| 新增云厂商 | 实现 `CloudProvider` 接口 | [cloud_provider_*.go](internal/service/cloud_provider_alibaba.go) |
-| 新增 K8s 资源 | 注册 CRD/CR Handler | [k8s_crd_service.go](internal/service/k8s_crd_service.go) |
+| 新增告警渠道 | 实现 `AlertChannel` 接口 | [alert/alert_channel_registry.go](internal/service/alert/alert_channel_registry.go) |
+| 新增云厂商 | 实现 `CloudProvider` 接口 | [project/cloud_provider_alibaba.go](internal/service/project/cloud_provider_alibaba.go) 等 |
+| 新增 K8s 资源 | 注册 CRD/CR Handler | [k8s/k8s_crd_service.go](internal/service/k8s/k8s_crd_service.go) |
 | 自定义中间件 | 注入到 Gin Engine | [bootstrap/app.go](internal/bootstrap/app.go) |
-| 字典配置扩展 | 新增 DictType | [dict_entry_service.go](internal/service/dict_entry_service.go) |
+| 字典配置扩展 | 新增 DictType | [system/dict_entry_service.go](internal/service/system/dict_entry_service.go) |
 
 ### 10.2 性能优化建议
 
@@ -1336,18 +1367,20 @@ volumes:
 - [internal/middleware/operation_audit.go](internal/middleware/operation_audit.go) - 审计日志
 
 ### 业务服务 (精选)
-- [internal/service/auth_service.go](internal/service/auth_service.go) - 认证服务
-- [internal/service/alert_delivery_core.go](internal/service/alert_delivery_core.go) - 告警投递核心
-- [internal/service/k8s_pod_service.go](internal/service/k8s_pod_service.go) - Pod 管理
-- [internal/service/project_mgmt_core.go](internal/service/project_mgmt_core.go) - 项目管理
-- [internal/service/log_agent_service.go](internal/service/log_agent_service.go) - Agent 服务
+- [internal/service/system/auth_service.go](internal/service/system/auth_service.go) - 认证服务
+- [internal/service/alert/alert_delivery_core.go](internal/service/alert/alert_delivery_core.go) - 告警投递核心
+- [internal/service/k8s/k8s_pod_service.go](internal/service/k8s/k8s_pod_service.go) - Pod 管理
+- [internal/service/project/project_mgmt_core.go](internal/service/project/project_mgmt_core.go) - 项目管理
+- [internal/service/logplatform/log_agent_service.go](internal/service/logplatform/log_agent_service.go) - Agent 服务
+- [internal/service/exports.go](internal/service/exports.go) - Service 门面（type alias）
 
 ### 工具包
 - [internal/pkg/response/response.go](internal/pkg/response/response.go) - 统一响应格式
-- [internal/pkg/apperror/error.go](internal/pkg/apperror/error.go) - 错误处理
+- [internal/pkg/errors/](internal/pkg/errors/) - BizError（bizerrors）
 - [internal/pkg/pagination/pagination.go](internal/pkg/pagination/pagination.go) - 分页组件
 - [internal/pkg/crypto/aesgcm.go](internal/pkg/crypto/aesgcm.go) - 加密工具
-- [internal/pkg/logger/](internal/pkg/logger/) - 日志系统
+- [internal/pkg/logutil/](internal/pkg/logutil/) - 组件化日志
+- [internal/pkg/logger/](internal/pkg/logger/) - 底层 Logger
 
 ---
 
@@ -1362,7 +1395,8 @@ go run . log-agent --help # 查看 Agent 参数
 
 # 测试
 go test ./...             # 运行全部测试
-go test -v ./internal/service/alert_delivery_core_test.go  # 单个测试文件
+go test ./internal/service/alert/... -short   # 告警域单测
+go test ./internal/service/k8s/... -short     # K8s 域单测
 
 # 构建
 go build -o yunshu-server ./main.go
@@ -1399,7 +1433,8 @@ docker compose down -v
 
 ---
 
-**文档版本**: v1.0
-**最后更新**: 2026-05-21
-**适用版本**: Yunshu Backend (Go 1.25.0)
-**维护者**: Yunshu Team
+**文档版本**: v1.1  
+**最后更新**: 2026-05-22  
+**适用版本**: Yunshu Backend（Service 按域分包 + 仓储化 + bizerrors）  
+**维护者**: Yunshu Team  
+**代码地图**: [CODEBASE-MAP.md](CODEBASE-MAP.md)

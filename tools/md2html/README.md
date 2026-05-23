@@ -21,6 +21,8 @@ go run ./cmd/md2html --bundle
 
 输出目录：`docs/html/`，打开 `docs/html/index.html` 即可浏览全部入口。
 
+打包内容包含：后端代码地图、完整架构、重构报告、架构图集、告警/日志文档及产品手册精选等（见 `cmd/md2html/main.go` 中 `bundleDocs`）。
+
 ## 单文件转换
 
 ```bash

@@ -36,6 +36,8 @@ type (
 	RegisterRequest              = system.RegisterRequest
 	RegisterResponse             = system.RegisterResponse
 	LoginResponse                = system.LoginResponse
+	CreateWSTicketRequest        = system.CreateWSTicketRequest
+	WSTicketResponse             = system.WSTicketResponse
 	UpdateProfileRequest         = system.UpdateProfileRequest
 	ChangePasswordRequest        = system.ChangePasswordRequest
 )

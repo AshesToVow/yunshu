@@ -162,7 +162,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	agentDiscoveryHandler := handler.NewAgentDiscoveryHandler(svcs.AgentDiscovery, runtimeClient.AgentSrv)
 
 	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, userRepo, app.Logger)
-	wsAuthMiddleware := middleware.WSAuth(app.Config.Auth.JWTSecret, app.Redis, userRepo, app.Logger)
+	wsAuthMiddleware := middleware.WSAuth(app.Redis, userRepo, app.Logger)
 	authorize := middleware.Authorize(app.Enforcer, app.Logger, k8sClusterAccessRepo)
 	k8sScopeAuthorize := middleware.K8sScopeAuthorize(app.Logger, permissionRepo, k8sClusterAccessRepo, k8sNsDenyRepo, k8sNsAllowRepo)
 	opAudit := middleware.OperationAudit(svcs.OperationLog, app.Logger)

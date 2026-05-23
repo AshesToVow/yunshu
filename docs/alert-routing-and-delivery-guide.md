@@ -259,11 +259,11 @@ sequenceDiagram
 
 | 能力 | 文件与要点 |
 |------|------------|
-| 订阅树匹配 | `internal/service/alert_subscription_service.go`：`nodeMatches`、`MatchRouteDetailed` |
-| 接收组 → 通道 | `internal/service/alert_service.go`：`channelIDSetForAlert` |
-| firing 分组节流 | `internal/service/alert_aggregate_state.go`：`decideFiringGroupTiming` |
-| firing 成功投递标记 / resolved 拦截 | 同上：`markAlertFiringDelivered`、`alertFiringWasDelivered`、`logResolvedSuppressedNoPriorFiringDelivery`；`ReceiveAlertmanager` 内发送循环 |
-| 平台规则 for | `internal/service/alert_monitor_redis.go`：`evaluateMonitorRuleWithRedis` |
-| 处理人/值班邮箱与 IM 补邮件 | `alert_service.go`：`enrichAssigneeAndDutyEmails`；`alert_rule_assignee_service.go`：`ResolveNotifyEmailsDirectUsers`；`alert_delivery_assignee_expand.go` |
-| 值班标题前缀 | `alert_delivery.go`：`buildUnifiedNotifyTitle`、`shouldPrefixDutyOnNotifyTitle`；`alert_duty_service.go`：`HasActiveBlockAtRule` |
-| 邮件收件人合并 | `alert_delivery.go`：`mergeAssigneeEmails`（有 `assignee_emails` 时不合并接收组静态邮箱） |
+| 订阅树匹配 | `internal/service/alert/alert_subscription_service.go`：`nodeMatches`、`MatchRouteDetailed` |
+| 接收组 → 通道 | `internal/service/alert/alert_service_routing.go`：`channelIDSetForAlert` |
+| Webhook 主入口 | `internal/service/alert/alert_service_webhook.go`：`ReceiveAlertmanager` |
+| firing 分组节流 | `internal/service/alert/alert_aggregate_state.go`：`decideFiringGroupTiming` |
+| firing 成功投递标记 / resolved 拦截 | 同上 + Webhook 发送循环 |
+| 平台规则 for | `internal/service/alert/alert_monitor_redis.go`：`evaluateMonitorRuleWithRedis` |
+| 处理人/值班邮箱 | `internal/service/alert/alert_rule_assignee_service.go`、`alert_duty_service.go` |
+| 渠道投递 | `internal/service/alert/alert_delivery_core.go`、`alert_delivery_email.go` |

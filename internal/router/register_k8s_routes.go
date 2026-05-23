@@ -44,7 +44,7 @@ func registerK8sRoutes(api *gin.RouterGroup, d *routeDeps) {
 	pods.POST("/file/upload", d.podHandler.UploadFile)
 	pods.POST("/file/delete", d.podHandler.DeleteFile)
 	pods.POST("/exec", d.podHandler.Exec)
-	// Interactive exec via WebSocket (browser can't set Authorization header)
+	// Interactive exec via WebSocket (ticket from POST /auth/ws-ticket)
 	podsWS := api.Group("/pods")
 	podsWS.Use(d.wsAuthMiddleware, d.authorize, d.k8sScopeAuthorize)
 	podsWS.GET("/exec/ws", d.podHandler.ExecWS)

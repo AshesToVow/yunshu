@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh" data-theme="light" style="--rec-label: '★ 推荐'">
+<html lang="en" data-theme="light" style="--rec-label: '★ Recommended'">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <title>告警平台需求与设计说明（与实现对齐）</title>
+  <title>Yunshu 文档索引</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -901,7 +901,7 @@
 </head>
 <body>
   <!-- Skip link for keyboard users -->
-  <a href="#main" class="skip-link">跳到正文</a>
+  <a href="#main" class="skip-link">Skip to content</a>
 
   <!-- Scroll progress -->
   <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
@@ -932,17 +932,17 @@
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <button class="icon-btn toc-mobile-trigger" id="toc-toggle" onclick="openToc()" aria-label="目录" title="目录">
+        <button class="icon-btn toc-mobile-trigger" id="toc-toggle" onclick="openToc()" aria-label="Contents" title="Contents">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-menu"/></svg>
         </button>
         <span class="brand-dot" aria-hidden="true"></span>
-        <span>文档</span>
+        <span>Document</span>
       </div>
       <div class="topbar-actions">
-        <button class="icon-btn" onclick="window.print()" title="打印 / 保存 PDF" aria-label="打印 / 保存 PDF">
+        <button class="icon-btn" onclick="window.print()" title="Print / Save PDF" aria-label="Print / Save PDF">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-printer"/></svg>
         </button>
-        <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换主题">
+        <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use id="theme-icon-use" href="#i-moon"/></svg>
         </button>
       </div>
@@ -953,27 +953,27 @@
   <div class="toc-backdrop" onclick="closeToc()" aria-hidden="true"></div>
 
   <div class="layout">
-    <aside class="toc" id="toc" aria-label="目录">
+    <aside class="toc" id="toc" aria-label="Contents">
       <div class="toc-head">
-        <p class="toc-title">目录</p>
-        <button class="toc-close" onclick="closeToc()" aria-label="关闭">
+        <p class="toc-title">Contents</p>
+        <button class="toc-close" onclick="closeToc()" aria-label="Close">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"/></svg>
         </button>
       </div>
       <nav class="toc-nav" id="toc-nav">
-        <a href="#1-" class="lvl-2">1. 目标与范围</a><a href="#2-" class="lvl-2">2. 架构与两条告警入口</a><a href="#3-" class="lvl-2">3. 核心代码索引</a><a href="#4-gorm" class="lvl-2">4. 数据模型（GORM）</a><a href="#5-http-api-apiv1-" class="lvl-2">5. HTTP API 清单（/api/v1 前缀）</a><a href="#6-receivealertmanager-" class="lvl-2">6. ReceiveAlertmanager 处理流水线（逻辑顺序）</a><a href="#7-" class="lvl-2">7. 订阅树匹配规则（实现）</a><a href="#8-configsconfigyaml--alertconfig" class="lvl-2">8. 配置项映射（configs/config.yaml → AlertConfig）</a><a href="#9-redis-key-" class="lvl-2">9. Redis Key 约定（节选）</a><a href="#10-" class="lvl-2">10. 处理人、值班与通知标题</a><a href="#11-" class="lvl-2">11. 非功能需求（来自实现）</a><a href="#12-" class="lvl-2">12. 数据源连通性检测</a><a href="#13-" class="lvl-2">13. 已知架构风险与改进方向（按评审结论对齐）</a><a href="#14-" class="lvl-2">14. 变更记录（文档维护）</a><a href="#21--aprometheus--alertmanager--" class="lvl-3">2.1 入口 A：Prometheus → Alertmanager → 云枢</a><a href="#22--b" class="lvl-3">2.2 入口 B：平台监控规则（内置）</a><a href="#23--c" class="lvl-3">2.3 入口 C（扩展）：云资源到期等</a><a href="#131-" class="lvl-3">13.1 架构层面</a><a href="#132-" class="lvl-3">13.2 可靠性与可用性层面</a><a href="#133-" class="lvl-3">13.3 其它补充观察（次要，待后续评审是否纳入正式改进项）</a>
+        <a href="#heading" class="lvl-2">开发者必读（后端）</a><a href="#heading-1" class="lvl-2">产品手册</a><a href="#heading-2" class="lvl-2">告警与日志</a><a href="#api-" class="lvl-2">API 与部署</a><a href="#heading-3" class="lvl-2">维护约定</a>
       </nav>
     </aside>
 
     <main class="content" id="main">
       <header class="doc-header">
-        <span class="doc-eyebrow">SYSTEM DESIGN</span>
-        <h1 class="doc-title">告警平台需求与设计说明（与实现对齐）</h1>
+        <span class="doc-eyebrow">SPEC</span>
+        <h1 class="doc-title">Yunshu 文档索引</h1>
         <p class="doc-subtitle"></p>
         <div class="doc-meta">
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-file"/></svg>
-            R-alert-platform-detailed-design.md
+            README.md
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
@@ -981,541 +981,146 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
-            ~9 分钟阅读
+            ~2 min read
           </span>
         </div>
       </header>
 
       <!-- CONTENT_START -->
-<h1 id="heading">告警平台需求与设计说明（与实现对齐）</h1>
-<p>本文描述 <strong>yunshu</strong> 当前告警与监控平台的后端行为、数据模型、HTTP API、关键算法与配置映射，<strong>与仓库代码一致</strong>，便于评审与二次开发。配套的运维与标签约定见：</p>
-<ul>
-<li><a href="../alert-routing-and-delivery-guide.md">告警路由与投递指南</a></li>
-<li><a href="../alert-subscription-labels-chain.md">告警订阅标签链路约定</a></li>
-<li><a href="../alert-notify-guide.md">告警通知与恢复通知使用说明</a></li>
-</ul>
+<h1 id="yunshu-">Yunshu 文档索引</h1>
+<p><strong>最后更新</strong>: 2026-05-22</p>
 <hr />
-<h2 id="1-">1. 目标与范围</h2>
+<h2 id="heading">开发者必读（后端）</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>能力</th>
+<th>文档</th>
 <th>说明</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Webhook 接入</td>
-<td>Alertmanager <code>POST /api/v1/alerts/webhook/alertmanager</code>，载荷形态兼容 Alertmanager</td>
+<td><a href="CODEBASE-MAP.md">CODEBASE-MAP.md</a></td>
+<td><strong>代码地图</strong>：目录结构、阅读顺序、Wire/错误规范</td>
 </tr>
 <tr>
-<td>内置监控规则</td>
-<td>平台配置 PromQL + <code>for</code>，后端定时查询 Prometheus，<strong>不经过 Alertmanager</strong></td>
+<td><a href="backend-architecture-complete.md">backend-architecture-complete.md</a></td>
+<td>后端完整技术文档（架构、模块、部署）</td>
 </tr>
 <tr>
-<td>订阅树路由</td>
-<td>弃用旧策略表路径，<strong>仅</strong>订阅树 → 接收组 → 通道</td>
+<td><a href="refactoring-report.md">refactoring-report.md</a></td>
+<td>架构重构实施状态（与代码同步）</td>
 </tr>
 <tr>
-<td>静默 / 抑制</td>
-<td>平台静默表；告警抑制服务（可选）</td>
+<td><a href="architecture-diagrams.md">architecture-diagrams.md</a></td>
+<td>架构图集</td>
 </tr>
 <tr>
-<td>渠道投递</td>
-<td>钉钉、企业微信、邮件、通用 Webhook 等</td>
-</tr>
-<tr>
-<td>审计</td>
-<td><code>alert_events</code> 记录抑制原因、通道结果</td>
-</tr>
-<tr>
-<td>值班 / 处理人</td>
-<td>监控规则维度：<code>alert_rule_assignees</code>、<code>alert_duty_blocks</code></td>
+<td><a href="code-review-report.md">code-review-report.md</a></td>
+<td>2026-05-21 审查快照（文首标注已解决项）</td>
 </tr>
 </tbody>
 </table></div>
 <hr />
-<h2 id="2-">2. 架构与两条告警入口</h2>
-<h3 id="21--aprometheus--alertmanager--">2.1 入口 A：Prometheus → Alertmanager → 云枢</h3>
-<ol>
-<li>Prometheus 规则评估，<code>for</code> 满足后进入 firing，推送 Alertmanager。</li>
-<li>Alertmanager 路由到 webhook，<code>POST</code> 云枢（鉴权见 <code>alert.webhook_token</code>）。</li>
-<li><code>AlertHandler.ReceiveAlertmanager</code> → <code>AlertService.ReceiveAlertmanager</code>。</li>
-</ol>
-<p><strong>路由注册</strong>：<code>internal/router/router.go</code> — <code>alertWebhook.POST(&quot;/webhook/alertmanager&quot;, ...)</code>（无通用 auth，token 校验在 handler）。</p>
-<h3 id="22--b">2.2 入口 B：平台监控规则（内置）</h3>
-<ol>
-<li><code>AlertService.runMonitorRuleEvaluator</code>：约 <strong>5s</strong> tick → <code>tickMonitorRules</code>。</li>
-<li><code>evaluateOneMonitorRule</code>：<code>promapi.Client.QueryInstant</code> 调数据源 Prometheus。</li>
-<li><code>evaluateMonitorRuleWithRedis</code>：pending/<code>for_seconds</code> 状态在 Redis；触发后 <strong><code>ReceiveAlertmanager</code></strong>，<code>Receiver</code> 固定为 <strong><code>platform-monitor</code></strong>。</li>
-</ol>
-<p><strong>约束</strong>：<code>tickMonitorRules</code> 仅在 <strong><code>s.redis != nil</code></strong> 时执行单条规则评估（见 <code>alert_monitor_evaluator.go</code>）。无 Redis 时启用规则不会运行。</p>
-<h3 id="23--c">2.3 入口 C（扩展）：云资源到期等</h3>
-<p><code>alert_cloud_expiry_evaluator.go</code> 等评估路径同样汇聚到 <code>ReceiveAlertmanager</code>，<code>receiver</code> 特定字符串（如 <code>cloud-expiry</code>），<code>resolveAlertDatasourceMeta</code> 映射流水线名称。</p>
-<hr />
-<h2 id="3-">3. 核心代码索引</h2>
+<h2 id="heading-1">产品手册</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>模块</th>
-<th>路径</th>
-<th>职责</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>HTTP Webhook / 通道 CRUD / 事件列表</td>
-<td><code>internal/handler/alert_*.go</code></td>
-<td>入参绑定、调用 <code>service.Alert*</code></td>
-</tr>
-<tr>
-<td>统一投递</td>
-<td><code>internal/service/alert/alert_service_webhook.go</code></td>
-<td><code>ReceiveAlertmanager</code></td>
-</tr>
-<tr>
-<td>路由与通道选择</td>
-<td><code>internal/service/alert/alert_service_routing.go</code></td>
-<td><code>channelIDSetForAlert</code> 等</td>
-</tr>
-<tr>
-<td>分组节流</td>
-<td><code>internal/service/alert/alert_aggregate_state.go</code></td>
-<td><code>decideFiringGroupTiming</code>、<code>markAlertFiringDelivered</code></td>
-</tr>
-<tr>
-<td>订阅树</td>
-<td><code>internal/service/alert/alert_subscription_service.go</code></td>
-<td><code>MatchRouteDetailed</code>、<code>nodeMatches</code></td>
-</tr>
-<tr>
-<td>平台规则评估</td>
-<td><code>internal/service/alert/alert_monitor_evaluator.go</code>、<code>alert_monitor_redis.go</code></td>
-<td>PromQL、Redis for</td>
-</tr>
-<tr>
-<td>渠道渲染与发送</td>
-<td><code>internal/service/alert/alert_delivery_core.go</code>、<code>alert_delivery_email.go</code></td>
-<td>投递与邮件合并</td>
-</tr>
-<tr>
-<td>配置</td>
-<td><code>internal/config/config.go</code> → <code>AlertConfig</code></td>
-<td>Webhook token、group_*、Prometheus 增强</td>
-</tr>
-</tbody>
-</table></div>
-<aside class="callout callout-info"><svg class="callout-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info"/></svg><div class="callout-body"><p class="callout-title">说明</p><p>Handler 通过 <code>internal/service/exports.go</code> 引用上述类型；源码包名为 <code>alert</code>。</p></div></aside>
-<hr />
-<h2 id="4-gorm">4. 数据模型（GORM）</h2>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>表 / 模型文件</th>
-<th>用途</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>alert_channels</code></td>
-<td><code>alert_channel.go</code> — 通道类型、URL、Headers JSON（含模板与匹配）</td>
-</tr>
-<tr>
-<td><code>alert_events</code></td>
-<td><code>alert_event.go</code> — 历史记录、抑制原因、<code>matched_policy_*</code></td>
-</tr>
-<tr>
-<td><code>alert_datasources</code></td>
-<td><code>alert_datasource.go</code> — Prometheus 等数据源，绑定项目</td>
-</tr>
-<tr>
-<td><code>alert_monitor_rules</code></td>
-<td><code>alert_monitor_rule.go</code> — PromQL、for、labels JSON</td>
-</tr>
-<tr>
-<td><code>alert_silences</code></td>
-<td><code>alert_silence.go</code> — 平台静默</td>
-</tr>
-<tr>
-<td><code>alert_subscription_nodes</code></td>
-<td><code>alert_subscription.go</code> — 订阅树节点</td>
-</tr>
-<tr>
-<td><code>alert_receiver_groups</code></td>
-<td><code>alert_subscription.go</code> — 接收组 → <code>channel_ids_json</code></td>
-</tr>
-<tr>
-<td><code>alert_rule_assignees</code></td>
-<td><code>alert_rule_assignee.go</code> — 规则处理人</td>
-</tr>
-<tr>
-<td><code>alert_duty_blocks</code></td>
-<td><code>alert_duty_block.go</code> — 值班班次，挂 <code>monitor_rule_id</code></td>
-</tr>
-<tr>
-<td><code>alert_inhibition_*</code></td>
-<td><code>alert_inhibition.go</code> — 抑制规则（若启用）</td>
-</tr>
-</tbody>
-</table></div>
-<hr />
-<h2 id="5-http-api-apiv1-">5. HTTP API 清单（<code>/api/v1</code> 前缀）</h2>
-<p>摘自 <code>internal/router/router.go</code>：</p>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>方法与路径</th>
+<th>文档</th>
 <th>说明</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>POST /alerts/webhook/alertmanager</code></td>
-<td>Alertmanager Webhook（token）</td>
+<td><a href="handbook/README.md">handbook/README.md</a></td>
+<td>需求、数据库、API、权限手册入口</td>
 </tr>
 <tr>
-<td><code>GET/POST/PUT/DELETE .../alerts/channels*</code></td>
-<td>告警通道</td>
+<td><a href="handbook/00-architecture-analysis-and-optimization.md">handbook/00-architecture-analysis-and-optimization.md</a></td>
+<td>功能域与 SQL 优化</td>
 </tr>
 <tr>
-<td><code>GET /alerts/events</code>、<code>GET /alerts/history/stats</code></td>
-<td>事件与统计</td>
+<td><a href="handbook/requirements/">handbook/requirements/</a></td>
+<td>按业务域拆分的需求</td>
 </tr>
 <tr>
-<td><code>GET/POST/PUT/DELETE .../alerts/datasources*</code></td>
-<td>数据源；<code>GET .../:id/ping</code> 连通性（PromQL <code>vector(1)</code>）；<code>GET .../prometheus-alerts</code> 活跃告警；<code>POST .../query</code> PromQL</td>
+<td><a href="handbook/database/schema-and-relationships.md">handbook/database/schema-and-relationships.md</a></td>
+<td>表结构与 ER</td>
 </tr>
 <tr>
-<td><code>GET/POST/PUT/DELETE .../alerts/silences*</code></td>
-<td>静默</td>
-</tr>
-<tr>
-<td><code>GET/POST/PUT/DELETE .../alerts/monitor-rules*</code></td>
-<td>监控规则；<code>.../assignees</code></td>
-</tr>
-<tr>
-<td><code>GET/POST/PUT/DELETE .../alerts/duty-blocks</code></td>
-<td>值班</td>
-</tr>
-<tr>
-<td><code>GET/POST/PUT/DELETE .../alerts/subscriptions*</code></td>
-<td>订阅树</td>
-</tr>
-<tr>
-<td><code>GET/POST/PUT/DELETE .../alerts/receiver-groups</code></td>
-<td>接收组</td>
-</tr>
-<tr>
-<td><code>GET/POST/PUT/DELETE .../alerts/cloud-expiry-rules*</code></td>
-<td>云到期规则</td>
+<td><a href="handbook/permissions/casbin-and-k8s-triple-policy.md">handbook/permissions/casbin-and-k8s-triple-policy.md</a></td>
+<td>Casbin + K8s 三元策略</td>
 </tr>
 </tbody>
 </table></div>
 <hr />
-<h2 id="6-receivealertmanager-">6. <code>ReceiveAlertmanager</code> 处理流水线（逻辑顺序）</h2>
-<p>实现位置：<code>internal/service/alert/alert_service_webhook.go</code> — <code>ReceiveAlertmanager</code>。</p>
-<p>对 <code>payload.Alerts</code> 中每一条：</p>
-<ol>
-<li><strong>合并标签</strong>：<code>mergeStringMap(CommonLabels, alert.Labels)</code>；<code>resolveAlertDatasourceMeta</code> 写入 <code>datasource_*</code>、<code>monitor_pipeline</code>。</li>
-<li><strong>规范化</strong>：<code>eventName</code>、<code>severity</code>（缺省 <code>warning</code>）、<code>status</code>（缺省 <code>firing</code>）。</li>
-<li><strong>维度</strong>：<code>alertnotify.ExtractDims</code>、<code>computeGroupKey</code>、<code>DigestLabels</code>、<code>resolveAlertEnvironmentLabel</code>。</li>
-<li><strong>平台静默</strong>：命中则 <code>logSilenceSuppressed</code>，<code>continue</code>。</li>
-<li><strong>指纹计数</strong>：<code>updateFingerprintState</code>。</li>
-<li><strong>抑制</strong>：firing 时 <code>CheckInhibition</code>，可能 <code>continue</code>。</li>
-<li><strong>组装 outgoing</strong>：摘要、<code>current</code>（缓存/Prometheus）、<code>enrichOutgoingProjectName</code>、<code>enrichAssigneeAndDutyEmails</code>（基于 <code>monitor_rule_id</code>）。</li>
-<li><strong>firing 分组节流</strong>：<code>decideFiringGroupTiming</code>；不通过则 <code>logSuppressedFiringTiming</code>，<code>continue</code>。</li>
-<li><strong>resolved 去重占位</strong>：在通过订阅匹配等检查之后、<code>markResolvedNotificationSent</code>（避免过早占位）。</li>
-<li><strong>订阅路由</strong>：<code>channelIDSetForAlert</code> → <code>MatchRouteDetailed(project_id, labels, severity, status)</code>；无通道则 <code>logNoMatchedChannel</code>。</li>
-<li><strong>订阅静默</strong>：<code>shouldSuppressByRouteSilence</code>。</li>
-<li><strong>resolved 无 prior firing</strong>：若 Redis 记录从未成功 firing 投递，则 <code>logResolvedSuppressedNoPriorFiringDelivery</code> 并跳过外发。</li>
-<li><strong>通道循环</strong>：<code>sendToChannel</code>；firing 至少一个 HTTP 2xx → <code>markAlertFiringDelivered</code>。</li>
-<li><strong>失败审计</strong>：<code>sentCount&gt;0</code> 且全部非 2xx → <code>logAllChannelsDeliveryFailed</code>；resolved 外发失败可 <code>clearResolvedNotificationSent</code>。</li>
-<li><strong>resolved 收尾</strong>：清理 fingerprint、group timing、<code>clearAlertFiringDelivered</code>。</li>
-</ol>
-<hr />
-<h2 id="7-">7. 订阅树匹配规则（实现）</h2>
-<p><code>internal/service/alert/alert_subscription_service.go</code>：</p>
-<ul>
-<li>按 <strong><code>labels[&quot;project_id&quot;]</code></strong> 选根节点集合。</li>
-<li><strong>匹配级别</strong>（<code>match_severity</code>）：与 <strong><code>labels[&quot;severity&quot;]</code></strong> 比较（配置为空则不过滤）。</li>
-<li><strong><code>match_labels_json</code></strong>：逐项精确相等。</li>
-<li><strong><code>match_regex_json</code></strong>：正则匹配。</li>
-<li><strong>接收组</strong>：命中节点合并 <code>ReceiverGroupIDs</code>，去重；接收组需在生效时间内且 <code>channel_ids_json</code> 解析出通道 ID。</li>
-</ul>
-<p>路由入口：<code>channelIDSetForAlert</code> <strong>仅</strong>使用订阅树（注释载明弃用旧策略）。</p>
-<hr />
-<h2 id="8-configsconfigyaml--alertconfig">8. 配置项映射（<code>configs/config.yaml</code> → <code>AlertConfig</code>）</h2>
+<h2 id="heading-2">告警与日志</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>配置键</th>
-<th>用途</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>webhook_token</code></td>
-<td>Alertmanager Webhook 校验</td>
-</tr>
-<tr>
-<td><code>group_wait_seconds</code> / <code>group_interval_seconds</code> / <code>repeat_interval_seconds</code></td>
-<td><code>decideFiringGroupTiming</code>（Redis）</td>
-</tr>
-<tr>
-<td><code>dedup_ttl_seconds</code></td>
-<td>指纹与 resolved 标记 TTL</td>
-</tr>
-<tr>
-<td><code>aggregate_ttl_seconds</code></td>
-<td>分组 timing Redis key TTL</td>
-</tr>
-<tr>
-<td><code>prometheus_url</code> + enrich 相关</td>
-<td>异步查询当前值</td>
-</tr>
-<tr>
-<td><code>platform_limits.*</code></td>
-<td>钉钉/企微/通用 Webhook 正文长度</td>
-</tr>
-</tbody>
-</table></div>
-<hr />
-<h2 id="9-redis-key-">9. Redis Key 约定（节选）</h2>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Key 模式</th>
-<th>含义</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>alert:group:timing:{groupKey}</code></td>
-<td>firing 分组节流状态</td>
-</tr>
-<tr>
-<td><code>alert:firing_delivered:{fingerprint}</code></td>
-<td>已成功 firing 通道投递（HTTP 2xx）</td>
-</tr>
-<tr>
-<td><code>alert:resolved:sent:{fingerprint}</code></td>
-<td>resolved 已尝试发送占位（失败可清除）</td>
-</tr>
-<tr>
-<td><code>alert:mon:state:{ruleID}</code></td>
-<td>平台监控规则评估状态</td>
-</tr>
-<tr>
-<td><code>alert:subscription:silence:*</code></td>
-<td>订阅节点静默窗口</td>
-</tr>
-</tbody>
-</table></div>
-<hr />
-<h2 id="10-">10. 处理人、值班与通知标题</h2>
-<ul>
-<li><strong>处理人邮件</strong>：<code>ResolveNotifyEmailsDirectUsers</code> — 仅显式用户 + <code>extra_emails</code>；部门子树不参与邮件。</li>
-<li><strong>处理人 IM</strong>：<code>ResolveNotifyPhones</code> — 用户 + 部门（项目成员 ∩ 子树 + 负责人）；部门需 UI 手动配置，保存后按库加载。</li>
-<li><code>enrichAssigneeAndDutyEmails</code>：合并处理人直发邮箱与<strong>当前时刻</strong>值班班次邮箱/手机 → <code>assignee_emails</code> / <code>assignee_phones</code>。</li>
-<li><code>mergeAssigneeEmails</code>：<strong>邮件通道</strong>若 <code>assignee_emails</code> 非空，仅发往这些地址；且不合并接收组静态抄送。</li>
-<li><strong>值班标题</strong>：<code>HasActiveBlockAtRule</code> 为真时，<code>buildUnifiedNotifyTitle</code> 前缀 <code>值班</code>。</li>
-<li>钉钉/企微：手机号解析失败等场景可补邮件（<code>alert_delivery_assignee_expand.go</code>）。</li>
-<li><strong>规则列表</strong>：<code>GET /alerts/monitor-rules?enabled=true|false</code>；<code>enabled=false</code> 不参与 <code>tickMonitorRules</code>。</li>
-</ul>
-<hr />
-<h2 id="11-">11. 非功能需求（来自实现）</h2>
-<ul>
-<li>Webhook 与部分告警路径依赖 <strong>Redis</strong>；平台监控规则强依赖 Redis。</li>
-<li>单进程内 Kom/K8s 与本告警模块独立，无耦合。</li>
-<li>操作审计：告警 API 路由组使用 <code>opAudit</code> 中间件（见 router）。</li>
-</ul>
-<hr />
-<h2 id="12-">12. 数据源连通性检测</h2>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>项</th>
+<th>文档</th>
 <th>说明</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>API</td>
-<td><code>GET /api/v1/alerts/datasources/:id/ping</code></td>
+<td><a href="alert-routing-and-delivery-guide.md">alert-routing-and-delivery-guide.md</a></td>
+<td>路由、投递、值班（运维推荐）</td>
 </tr>
 <tr>
-<td>实现</td>
-<td><code>AlertDatasourceService.PingDatasource</code>：复用 <code>promapi.Client.QueryInstant(ctx, &quot;vector(1)&quot;, &quot;&quot;)</code>，与 <code>PromQuery</code> 同源 TLS/鉴权；使用 <code>getRaw</code> <strong>不</strong>要求数据源处于启用状态，便于停用期间排查</td>
+<td><a href="alert-notify-guide.md">alert-notify-guide.md</a></td>
+<td>通知配置与聚合</td>
 </tr>
 <tr>
-<td>响应</td>
-<td><code>DatasourcePingResult</code>：<code>ok</code>、<code>message</code>、<code>latency_ms</code>（失败时仍返回 JSON，<code>ok=false</code>）</td>
+<td><a href="alert-subscription-labels-chain.md">alert-subscription-labels-chain.md</a></td>
+<td>订阅标签约定</td>
 </tr>
 <tr>
-<td>PromQL</td>
-<td><code>internal/pkg/promapi.QueryResponseStatusSuccess</code> 校验返回 JSON 的 <code>status == success</code></td>
-</tr>
-</tbody>
-</table></div>
-<hr />
-<h2 id="13-">13. 已知架构风险与改进方向（按评审结论对齐）</h2>
-<p>以下条目与产品/架构评审描述 <strong>一一对应</strong>：先写 <strong>风险点（当前实现的问题）</strong>，再写 <strong>改进点（目标方向）</strong>。<br />
-<strong>说明</strong>：本节为需求与设计层面的整改清单；<strong>不代表当前代码已全部实现</strong>，落地需在迭代中单独立项开发与验收。</p>
-<h3 id="131-">13.1 架构层面</h3>
-<h4 id="1-alertmanager-payload-">（1）强行复用 Alertmanager Payload 作为内部统一模型</h4>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>维度</th>
-<th>内容</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>风险点</strong></td>
-<td>所有告警入口（Alertmanager Webhook、平台内置规则、<code>cloud-expiry</code> 等）均将自身数据适配为 Alertmanager Webhook 形态后汇入 <code>ReceiveAlertmanager</code>。由此带来：<strong>侵入式适配</strong>——新增告警源须迁就 AM 字段集；<strong>难以原生扩展</strong>云资源类字段（到期时间、资源 ID 等）；<strong>语义被掩盖</strong>——内置规则的 <code>for</code> 状态、云告警到期逻辑等与 AM 告警生命周期混在同一结构中，维护成本高。</td>
+<td><a href="requirements/R-alert-platform-detailed-design.md">requirements/R-alert-platform-detailed-design.md</a></td>
+<td>告警平台详细设计</td>
 </tr>
 <tr>
-<td><strong>改进点</strong></td>
-<td>定义 <strong>平台内部统一的告警核心模型（canonical alert）</strong>；各告警源仅负责转换为该模型；统一处理流水线（静默、路由、投递等）只消费内部模型；对外再按需适配 Alertmanager 或其它 Northbound API。</td>
-</tr>
-</tbody>
-</table></div>
-<h4 id="2webhook-">（2）Webhook 同步处理整条流水线</h4>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>维度</th>
-<th>内容</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>风险点</strong></td>
-<td>Alertmanager Webhook 请求在当前实现中为 <strong>同步</strong>：须完成鉴权、静默、抑制、订阅匹配、通道发送等后才返回。大批量告警或单个慢通道（如邮件）会拉长响应时间，易触发 <strong>AM 客户端超时与重试</strong>，进而带来 <strong>重复处理与重复通知</strong>。</td>
-</tr>
-<tr>
-<td><strong>改进点</strong></td>
-<td>Webhook <strong>快速路径</strong>：完成鉴权与参数校验后，将告警写入 <strong>内存队列或 Redis 队列</strong>，<strong>立即返回 HTTP 200（或 202）</strong>；由后台 <strong>Worker</strong> 异步执行后续流水线，从根上规避 AM 因超时导致的重试风暴。</td>
-</tr>
-</tbody>
-</table></div>
-<h4 id="3">（3）定时评估任务缺少集群级互斥</h4>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>维度</th>
-<th>内容</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>风险点</strong></td>
-<td>平台内置规则评估（<code>tickMonitorRules</code>）本质为进程内定时任务；<strong>多实例部署</strong>时若缺乏可靠的集群级互斥，可能出现多副本 <strong>并行全量评估</strong>，导致重复查询 Prometheus、重复触发与重复通知，浪费资源且干扰运维判断。</td>
-</tr>
-<tr>
-<td><strong>改进点</strong></td>
-<td>基于 <strong>Redis（或其它分布式协调组件）实现分布式锁 / Leader 选举</strong>，保证 <strong>同一时刻仅一个实例</strong> 执行一轮全局规则调度（或明确「按 rule 分片」策略并在文档中固化语义）。</td>
-</tr>
-</tbody>
-</table></div>
-<h3 id="132-">13.2 可靠性与可用性层面</h3>
-<h4 id="4-redis-">（4）强依赖 Redis 且无明确降级</h4>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>维度</th>
-<th>内容</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>风险点</strong></td>
-<td>规则评估节拍与状态、<code>decideFiringGroupTiming</code>、<code>firing_delivered</code> 标记等多处 <strong>强依赖 Redis</strong>；文档亦写明无 Redis 时部分能力直接不可用。Redis 宕机、重启或网络抖动时，易出现 <strong>内置规则停摆、节流与状态管理失效</strong>，平台可用性过度绑定单一组件。</td>
-</tr>
-<tr>
-<td><strong>改进点</strong></td>
-<td><strong>核心状态双写或兜底</strong>：例如 Redis + 数据库，Redis 不可用时 <strong>降级读库</strong>；<strong>非核心能力可关闭</strong>：节流、订阅静默窗口等在 Redis 不可用时 <strong>自动跳过</strong>，保证 <strong>告警仍能投递</strong>；对外明确 <strong>SLA 与降级行为</strong>（监控 Redis、自动切换策略）。</td>
-</tr>
-</tbody>
-</table></div>
-<h4 id="5-firing-delivered-">（5）恢复通知与 <code>firing_delivered</code> 生命周期</h4>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>维度</th>
-<th>内容</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>风险点</strong></td>
-<td>恢复路径依赖 Redis 中的 <strong><code>firing_delivered</code></strong> 等标记；若标记 <strong>TTL（如与 <code>dedup_ttl_seconds</code> 相关）短于告警持续时长</strong>，可能出现 <strong>长时间 firing 后恢复时标记已过期</strong>，用户 <strong>收不到恢复通知</strong>，形成「只知故障不知恢复」的体验断裂。</td>
-</tr>
-<tr>
-<td><strong>改进点</strong></td>
-<td><strong>告警触发时在数据库持久化「已成功 firing 投递」事实</strong>（或等价审计记录）；Redis 标记仅作 <strong>加速缓存</strong>；恢复发送决策以 <strong>数据库记录为最终依据</strong>，避免因 Redis TTL 丢失而导致恢复被错误抑制。</td>
-</tr>
-</tbody>
-</table></div>
-<h3 id="133-">13.3 其它补充观察（次要，待后续评审是否纳入正式改进项）</h3>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>观察</th>
-<th>代码/行为线索</th>
-<th>备注</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>groupKey</code> 为空时节流旁路</td>
-<td><code>decideFiringGroupTiming</code></td>
-<td>部分告警可能完全不经过分组节流</td>
-</tr>
-<tr>
-<td>订阅树缓存刷新间隔</td>
-<td><code>AlertSubscriptionService</code> ~30s</td>
-<td>配置变更后短时间仍可能旧路由</td>
-</tr>
-<tr>
-<td>平台规则指纹</td>
-<td><code>monitor_rule_{id}</code></td>
-<td>与 Prometheus fingerprint 语义不同</td>
-</tr>
-<tr>
-<td>Webhook 幂等</td>
-<td>AM 重试</td>
-<td>极端场景可能多条 <code>alert_events</code></td>
+<td><a href="log-platform-api.md">log-platform-api.md</a></td>
+<td>日志平台 API</td>
 </tr>
 </tbody>
 </table></div>
 <hr />
-<h2 id="14-">14. 变更记录（文档维护）</h2>
+<h2 id="api-">API 与部署</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>日期</th>
+<th>文档</th>
 <th>说明</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>2026-05-08</td>
-<td>初版：与当前 <code>ReceiveAlertmanager</code>、订阅树、聚合、firing/resolved 语义对齐</td>
+<td><a href="apipost/README.md">apipost/README.md</a></td>
+<td>OpenAPI 集合说明</td>
 </tr>
 <tr>
-<td>2026-05-08</td>
-<td>增加数据源 <code>ping</code> API、§13 风险与改进（按评审条目对齐）</td>
+<td><a href="deployment/KYLIN_V10_X86_64.md">deployment/KYLIN_V10_X86_64.md</a></td>
+<td>麒麟部署示例</td>
+</tr>
+<tr>
+<td><a href="SRS-Yunshu-Requirements-Specification.md">SRS-Yunshu-Requirements-Specification.md</a></td>
+<td>需求规格说明</td>
 </tr>
 </tbody>
 </table></div>
+<hr />
+<h2 id="heading-3">维护约定</h2>
+<ul>
+<li>Service 源码路径以 <code>internal/service/&lt;域&gt;/</code> 为准；Handler 门面见 <code>internal/service/exports.go</code>。</li>
+<li>目录或装配变更时，同步更新 <strong>CODEBASE-MAP.md</strong>、<strong>backend-architecture-complete.md §3.3</strong>、<strong>refactoring-report.md</strong>。</li>
+</ul>
 
       <!-- CONTENT_END -->
 
       <footer class="doc-footer">
         <span>Generated by <a href="#">md2html</a></span>
-        <span>来源: R-alert-platform-detailed-design.md</span>
+        <span>Source: README.md</span>
       </footer>
     </main>
   </div>

@@ -27,6 +27,7 @@ func registerPlatformRoutes(api *gin.RouterGroup, d *routeDeps) {
 	authAuthed := authGroup.Group("")
 	authAuthed.Use(d.authMiddleware, d.opAudit)
 	authAuthed.POST("/logout", d.authHandler.Logout)
+	authAuthed.POST("/ws-ticket", d.authHandler.CreateWSTicket)
 	authAuthed.GET("/me", d.authHandler.Me)
 	authAuthed.PUT("/me", d.authHandler.UpdateProfile)
 	authAuthed.PUT("/password", d.authHandler.ChangePassword)

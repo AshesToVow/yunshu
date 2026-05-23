@@ -21,4 +21,8 @@ func TestMaskSensitiveQuery(t *testing.T) {
 	if strings.Contains(got2, "secretval") {
 		t.Fatalf("leaked access_token: %q", got2)
 	}
+	got3 := maskSensitiveQuery("ticket=one-time-uuid&cluster_id=1")
+	if strings.Contains(got3, "one-time-uuid") {
+		t.Fatalf("leaked ticket: %q", got3)
+	}
 }

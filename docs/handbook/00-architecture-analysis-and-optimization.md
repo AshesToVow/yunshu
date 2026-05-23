@@ -52,9 +52,10 @@
 
 ## 4. 代码结构优化建议
 
-1. **Swagger/OpenAPI 与实现同步**：路由变更后重新生成 Swagger，或主维护 `docs/apipost/*.yaml`。
-2. **前端**：大页（如告警监控平台）可继续按 Tab 拆子路由或 lazy chunk，控制首包体积。
-3. **权限种子**：新增 API 需在 `cmd/seed.go` 的 `defaultPermissions()` 增加条目，否则非 `super-admin` 需在「授权管理」手工勾选。
+1. **后端目录**：Service 已按域拆分至 `internal/service/{alert,k8s,project,system,...}`，阅读入口见 [CODEBASE-MAP.md](../../CODEBASE-MAP.md)。
+2. **Swagger/OpenAPI 与实现同步**：路由变更后重新生成 Swagger，或主维护 `docs/apipost/*.yaml`。
+3. **前端**：大页（如告警监控平台）可继续按 Tab 拆子路由或 lazy chunk，控制首包体积。
+4. **权限种子**：新增 API 需在 `cmd/seed.go` 的 `defaultPermissions()` 增加条目，否则非 `super-admin` 需在「授权管理」手工勾选。
 
 ## 5. 安全与合规
 

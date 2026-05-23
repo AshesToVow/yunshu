@@ -210,6 +210,7 @@ export function AlertConfigCenterPanel({
   }>();
 
   const [channels, setChannels] = useState<Array<{ id: number; name: string }>>([]);
+  const [baseLoading, setBaseLoading] = useState(false);
 
   // subscriptions (新策略)
   const [projects, setProjects] = useState<Array<{ id: number; name: string }>>([]);
@@ -256,6 +257,8 @@ export function AlertConfigCenterPanel({
   const [eventCategory, setEventCategory] = useState<AlertEventCategory | "">(initialEventCategory ?? "");
   const eventsPageSizeRef = useRef(eventsPageSize);
   eventsPageSizeRef.current = eventsPageSize;
+  const loadEventsSeqRef = useRef(0);
+  const loadSubscriptionsSeqRef = useRef(0);
   const [webhookSending, setWebhookSending] = useState(false);
   const [webhookToken, setWebhookToken] = useState("");
   const [webhookTemplate, setWebhookTemplate] = useState<"warning_prod" | "critical_prod" | "resolved_prod">("warning_prod");
@@ -334,17 +337,28 @@ export function AlertConfigCenterPanel({
   }
 
   async function loadBase() {
-    const [statsRes, channelRes] = await Promise.all([getAlertHistoryStats(), listAlertChannels()]);
-    setStats(statsRes);
-    setChannels((channelRes.list ?? []).map((c) => ({ id: c.id, name: c.name })));
+    setBaseLoading(true);
+    try {
+      const [statsRes, channelRes] = await Promise.all([getAlertHistoryStats(), listAlertChannels()]);
+      setStats(statsRes);
+      setChannels((channelRes.list ?? []).map((c) => ({ id: c.id, name: c.name })));
+    } catch {
+      // http 拦截器已 toast
+    } finally {
+      setBaseLoading(false);
+    }
   }
 
   async function loadProjects() {
-    const res = await getProjects({ page: 1, page_size: 200 });
-    const list = (res?.list ?? []) as Array<{ id: number; name: string }>;
-    const normalized = list.map((it) => ({ id: Number((it as any).id), name: String((it as any).name || "") })).filter((it) => it.id > 0);
-    setProjects(normalized);
-    if (!subProjectID && normalized.length) setSubProjectID(normalized[0].id);
+    try {
+      const res = await getProjects({ page: 1, page_size: 200 });
+      const list = (res?.list ?? []) as Array<{ id: number; name: string }>;
+      const normalized = list.map((it) => ({ id: Number((it as any).id), name: String((it as any).name || "") })).filter((it) => it.id > 0);
+      setProjects(normalized);
+      if (!subProjectID && normalized.length) setSubProjectID(normalized[0].id);
+    } catch {
+      // http 拦截器已 toast
+    }
   }
 
   /** 同名接收组只展示一条，保留 id 较大者（通常为最近迁移/创建），避免下拉重复 */
@@ -403,16 +417,20 @@ export function AlertConfigCenterPanel({
   const loadSubscriptions = useCallback(async (overrideProjectId?: number) => {
     const pid = overrideProjectId ?? (projectContextId && projectContextId > 0 ? projectContextId : subProjectID);
     if (!pid) return;
+    const seq = ++loadSubscriptionsSeqRef.current;
     setSubLoading(true);
     try {
       const [tree, groups] = await Promise.all([
         getSubscriptionTree({ project_id: pid }),
         listReceiverGroups({ project_id: pid, page: 1, page_size: 200 }),
       ]);
+      if (seq !== loadSubscriptionsSeqRef.current) return;
       setSubTree(tree ?? []);
       setReceiverGroups(groups.list ?? groups.items ?? []);
+    } catch {
+      if (seq !== loadSubscriptionsSeqRef.current) return;
     } finally {
-      setSubLoading(false);
+      if (seq === loadSubscriptionsSeqRef.current) setSubLoading(false);
     }
   }, [subProjectID, projectContextId]);
 
@@ -578,6 +596,7 @@ export function AlertConfigCenterPanel({
 
   const loadEvents = useCallback(
     async (page: number, pageSize: number) => {
+      const seq = ++loadEventsSeqRef.current;
       setEventsLoading(true);
       try {
         const src = String(eventSourceFilter || "").trim();
@@ -602,12 +621,15 @@ export function AlertConfigCenterPanel({
           category: eventCategory || undefined,
           projectId: effectiveProjectId > 0 ? effectiveProjectId : undefined,
         });
+        if (seq !== loadEventsSeqRef.current) return;
         setEvents(res.list ?? []);
         setEventsTotal(res.total ?? 0);
         setEventsPage(res.page ?? page);
         setEventsPageSize(res.page_size ?? pageSize);
+      } catch {
+        if (seq !== loadEventsSeqRef.current) return;
       } finally {
-        setEventsLoading(false);
+        if (seq === loadEventsSeqRef.current) setEventsLoading(false);
       }
     },
     [eventKeyword, eventAlertIP, eventStatus, eventSourceFilter, eventGroupKey, eventCategory, effectiveProjectId],
@@ -661,10 +683,19 @@ export function AlertConfigCenterPanel({
 
   useEffect(() => {
     if (tab !== "history") return;
+    let cancelled = false;
     const pid = effectiveProjectId > 0 ? effectiveProjectId : undefined;
-    void listAlertDatasources({ project_id: pid, page: 1, page_size: 200 }).then((r) => {
-      setProjectDatasources(r.list ?? r.items ?? []);
-    });
+    void listAlertDatasources({ project_id: pid, page: 1, page_size: 200 })
+      .then((r) => {
+        if (cancelled) return;
+        setProjectDatasources(r.list ?? r.items ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setProjectDatasources([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [tab, effectiveProjectId]);
 
   async function sendWebhookDemo() {

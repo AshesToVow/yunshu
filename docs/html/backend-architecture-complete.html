@@ -1,0 +1,2990 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light" style="--rec-label: '★ Recommended'">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Yunshu 后端代码完整技术文档</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       TOKENS
+       ============================================================ */
+    :root {
+      --bg: #FAFAF7;
+      --surface: #FFFFFF;
+      --surface-2: #F5F5F0;
+      --surface-3: #EFEEE8;
+      --text: #1A1A1A;
+      --text-muted: #4A4A45;
+      --text-subtle: #6B6B66;
+      --accent: #D97757;
+      --accent-hover: #C56843;
+      --accent-soft: #FBEEE6;
+      --accent-border: #F0D5C4;
+      --accent-strong: #A85533;
+      --border: #E5E4DC;
+      --border-strong: #CDCDC4;
+      --code-bg: #F5F2EC;
+      --code-text: #2A2A2A;
+      --info: #2563EB;
+      --info-soft: #EFF6FF;
+      --info-border: #BFDBFE;
+      --warn: #B45309;
+      --warn-soft: #FFFBEB;
+      --warn-border: #FDE68A;
+      --danger: #B91C1C;
+      --danger-soft: #FEF2F2;
+      --danger-border: #FECACA;
+      --success: #047857;
+      --success-soft: #ECFDF5;
+      --success-border: #A7F3D0;
+      --decision: #6D28D9;
+      --decision-soft: #F5F3FF;
+      --decision-border: #DDD6FE;
+      --shadow-sm: 0 1px 2px rgba(20, 14, 8, 0.04);
+      --shadow: 0 1px 2px rgba(20, 14, 8, 0.04), 0 4px 12px rgba(20, 14, 8, 0.06);
+      --shadow-lg: 0 8px 24px rgba(20, 14, 8, 0.10);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-lg: 16px;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans CJK JP', 'Noto Sans CJK KR', sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+      --z-progress: 200;
+      --z-topbar: 100;
+      --z-drawer: 300;
+      --z-backdrop: 250;
+    }
+
+    [data-theme="dark"] {
+      --bg: #1A1714;
+      --surface: #221E1A;
+      --surface-2: #2A2520;
+      --surface-3: #322C26;
+      --text: #F5F0E8;
+      --text-muted: #C8C0B6;
+      --text-subtle: #9A938A;
+      --accent: #E89572;
+      --accent-hover: #F2A87F;
+      --accent-soft: #3A2A22;
+      --accent-border: #5A3D2E;
+      --accent-strong: #F5B493;
+      --border: #2E2924;
+      --border-strong: #463F38;
+      --code-bg: #1E1B17;
+      --code-text: #E8E2D8;
+      --info: #93C5FD;
+      --info-soft: #1E2A3D;
+      --info-border: #2A4365;
+      --warn: #FBBF24;
+      --warn-soft: #332817;
+      --warn-border: #5C4520;
+      --danger: #FCA5A5;
+      --danger-soft: #3A1F1F;
+      --danger-border: #5C2A2A;
+      --success: #6EE7B7;
+      --success-soft: #1A3329;
+      --success-border: #1F5C45;
+      --decision: #C4B5FD;
+      --decision-soft: #2A1F40;
+      --decision-border: #4A3870;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.35);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    /* ============================================================
+       BASE
+       ============================================================ */
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    ::selection { background: var(--accent-soft); color: var(--accent-strong); }
+
+    /* Skip link */
+    .skip-link {
+      position: absolute;
+      top: -100px; left: 8px;
+      padding: 10px 16px;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      font-weight: 500;
+      z-index: 1000;
+      transition: top 0.15s;
+    }
+    .skip-link:focus { top: 8px; }
+
+    /* SVG sprite container (hidden) */
+    .icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .icon { display: inline-block; flex-shrink: 0; vertical-align: middle; stroke: currentColor; fill: none; }
+
+    /* Scroll progress bar */
+    .scroll-progress {
+      position: fixed;
+      top: 0; left: 0;
+      height: 2px;
+      width: 0;
+      background: var(--accent);
+      z-index: var(--z-progress);
+      transition: width 0.05s linear;
+    }
+
+    /* ============================================================
+       TOPBAR
+       ============================================================ */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: var(--z-topbar);
+      background: rgba(250, 250, 247, 0.85);
+      backdrop-filter: saturate(180%) blur(12px);
+      -webkit-backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    [data-theme="dark"] .topbar { background: rgba(26, 23, 20, 0.85); }
+    .topbar-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .brand-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+      animation: brand-pulse 2.8s ease-in-out infinite;
+    }
+    @keyframes brand-pulse {
+      0%, 100% { box-shadow: 0 0 0 4px var(--accent-soft); }
+      50%      { box-shadow: 0 0 0 7px transparent; }
+    }
+    .topbar-actions { display: flex; gap: 6px; align-items: center; }
+    .icon-btn {
+      width: 40px; height: 40px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+      padding: 0;
+    }
+    .icon-btn .icon { width: 18px; height: 18px; stroke-width: 2; }
+    .icon-btn[hidden] { display: none; }
+
+    /* ============================================================
+       LAYOUT
+       ============================================================ */
+    .layout {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 48px;
+      padding: 32px 24px 96px;
+    }
+    .content { min-width: 0; }
+
+    /* ============================================================
+       TOC (desktop + mobile drawer)
+       ============================================================ */
+    .toc {
+      position: sticky;
+      top: 80px;
+      align-self: start;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+    .toc::-webkit-scrollbar { width: 6px; }
+    .toc::-webkit-scrollbar-track { background: transparent; }
+    .toc::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+    .toc-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 12px 12px;
+    }
+    .toc-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-subtle);
+      margin: 0;
+    }
+    .toc-close { display: none; }
+    .toc-nav { display: flex; flex-direction: column; gap: 2px; }
+    .toc-nav a {
+      display: flex; align-items: center;
+      min-height: 36px;
+      padding: 8px 14px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13.5px;
+      border-left: 2px solid transparent;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+      line-height: 1.4;
+    }
+    .toc-nav a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: var(--accent-soft);
+      font-weight: 500;
+    }
+    .toc-nav a.lvl-3 { padding-left: 26px; font-size: 12.5px; }
+    .toc-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: var(--z-backdrop);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    /* ============================================================
+       DOC HEADER
+       ============================================================ */
+    .doc-header {
+      margin-bottom: 40px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .doc-eyebrow {
+      display: inline-flex; align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      border: 1px solid var(--accent-border);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      margin-bottom: 16px;
+    }
+    .doc-title {
+      font-size: clamp(28px, 3vw + 16px, 40px);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin: 0 0 12px;
+      color: var(--text);
+      text-wrap: balance;
+    }
+    .doc-subtitle {
+      font-size: clamp(15px, 0.6vw + 13px, 18px);
+      color: var(--text-muted);
+      line-height: 1.55;
+      margin: 0 0 20px;
+      max-width: 75ch;
+      text-wrap: pretty;
+    }
+    .doc-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--text-subtle);
+    }
+    .doc-meta-item { display: inline-flex; align-items: center; gap: 6px; }
+    .doc-meta .icon { width: 14px; height: 14px; stroke-width: 2; }
+
+    /* ============================================================
+       CONTENT (typography)
+       ============================================================ */
+    .content h1, .content h2, .content h3, .content h4 {
+      color: var(--text);
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+      scroll-margin-top: 80px;
+      text-wrap: balance;
+    }
+    .content h2 {
+      font-size: 26px;
+      font-weight: 600;
+      margin: 56px 0 16px;
+      padding-top: 8px;
+      position: relative;
+    }
+    .content h3 {
+      font-size: 19px;
+      font-weight: 600;
+      margin: 36px 0 12px;
+      position: relative;
+    }
+    .content h4 {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 24px 0 8px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .content > p,
+    .content > ul,
+    .content > ol,
+    .content > blockquote { max-width: 75ch; }
+    .content p { margin: 0 0 16px; text-wrap: pretty; overflow-wrap: anywhere; }
+    .content a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-border); }
+    .content ul, .content ol { padding-left: 24px; margin: 0 0 16px; }
+    .content li { margin: 4px 0; }
+    .content strong { color: var(--text); font-weight: 600; }
+    .content em { color: var(--text-muted); }
+    .content hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+    /* Anchor links injected by JS on h2/h3 with id */
+    .anchor {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px;
+      margin-left: 6px;
+      color: var(--text-subtle);
+      opacity: 0;
+      transform: translateY(-1px);
+      transition: opacity 0.15s, color 0.15s;
+      border-bottom: none !important;
+      border-radius: var(--radius-sm);
+    }
+    .anchor .icon { width: 14px; height: 14px; stroke-width: 2; }
+
+    /* Images */
+    .content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin: 20px 0;
+      display: block;
+    }
+    .content figure { margin: 20px 0; }
+    .content figure img { margin: 0; }
+    .content figcaption {
+      font-size: 13px;
+      color: var(--text-subtle);
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    /* Task lists (- [ ] / - [x]) */
+    .content .task-list-item { list-style: none; margin-left: -22px; }
+    .content .task-list-item-checkbox {
+      margin-right: 8px;
+      vertical-align: -2px;
+      accent-color: var(--accent);
+    }
+
+    /* Footnotes */
+    .content .footnote-ref a,
+    .content sup a {
+      font-size: 0.75em;
+      vertical-align: super;
+      border-bottom: none;
+      padding: 0 2px;
+    }
+    .content .footnotes {
+      margin-top: 56px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* ============================================================
+       CODE
+       ============================================================ */
+    .content code {
+      font-family: var(--font-mono);
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: var(--code-text);
+      border: 1px solid var(--border);
+      overflow-wrap: anywhere;
+    }
+    .content pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-size: 13.5px;
+      line-height: 1.6;
+      margin: 16px 0;
+      position: relative;
+    }
+    .content pre code {
+      background: none; padding: 0; border: none;
+      color: var(--code-text);
+      font-size: inherit;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 32px; height: 32px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--text-subtle);
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+      padding: 0;
+    }
+    .copy-btn .icon { width: 14px; height: 14px; stroke-width: 2; }
+    .copy-btn.copied { color: var(--success); border-color: var(--success-border); opacity: 1; }
+
+    /* ============================================================
+       TIMELINE / STEPS
+       ============================================================ */
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 24px 0;
+      position: relative;
+    }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 19px;
+      top: 20px;
+      bottom: 20px;
+      width: 2px;
+      background: linear-gradient(180deg, var(--accent-border), var(--border));
+    }
+    .step {
+      display: grid;
+      grid-template-columns: 40px 1fr;
+      gap: 16px;
+      align-items: start;
+      padding: 16px 4px;
+      position: relative;
+      border-radius: var(--radius);
+      transition: background-color 0.15s;
+    }
+    .step-num {
+      width: 40px; height: 40px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--surface);
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      border-radius: 50%;
+      font-weight: 600;
+      font-size: 14px;
+      flex-shrink: 0;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+      z-index: 1;
+      transition: background-color 0.15s, color 0.15s, transform 0.15s;
+    }
+    .step.done .step-num { background: var(--accent); color: #fff; }
+    .step-body { padding-top: 6px; min-width: 0; }
+    .step-body h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .step-body p { margin: 0 0 8px; color: var(--text-muted); font-size: 14.5px; max-width: 75ch; }
+    .step-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* ============================================================
+       CALLOUTS
+       ============================================================ */
+    .callout {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      border: 1px solid;
+      margin: 20px 0;
+      font-size: 14.5px;
+      line-height: 1.6;
+      max-width: 75ch;
+    }
+    .callout-icon { width: 20px; height: 20px; margin-top: 2px; stroke-width: 2; }
+    .callout-body { min-width: 0; }
+    .callout-title { font-weight: 600; margin: 0 0 4px; font-size: 14px; }
+    .callout-body p:last-child { margin-bottom: 0; }
+    .callout-body code { background: rgba(0,0,0,0.04); }
+    [data-theme="dark"] .callout-body code { background: rgba(255,255,255,0.06); }
+
+    .callout-info     { background: var(--info-soft);     border-color: var(--info-border);     color: var(--text); }
+    .callout-info     .callout-title, .callout-info     .callout-icon { color: var(--info); }
+    .callout-warn     { background: var(--warn-soft);     border-color: var(--warn-border);     color: var(--text); }
+    .callout-warn     .callout-title, .callout-warn     .callout-icon { color: var(--warn); }
+    .callout-danger   { background: var(--danger-soft);   border-color: var(--danger-border);   color: var(--text); }
+    .callout-danger   .callout-title, .callout-danger   .callout-icon { color: var(--danger); }
+    .callout-success  { background: var(--success-soft);  border-color: var(--success-border);  color: var(--text); }
+    .callout-success  .callout-title, .callout-success  .callout-icon { color: var(--success); }
+    .callout-decision { background: var(--decision-soft); border-color: var(--decision-border); color: var(--text); }
+    .callout-decision .callout-title, .callout-decision .callout-icon { color: var(--decision); }
+    .callout-tip      { background: var(--accent-soft);   border-color: var(--accent-border);   color: var(--text); }
+    .callout-tip      .callout-title, .callout-tip      .callout-icon { color: var(--accent-strong); }
+
+    /* ============================================================
+       KEY-POINT HIGHLIGHT
+       ============================================================ */
+    .highlight {
+      background: linear-gradient(135deg, var(--accent-soft), var(--surface-2));
+      border-left: 4px solid var(--accent);
+      padding: 18px 22px;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      margin: 24px 0;
+      font-size: 16px;
+      line-height: 1.65;
+      max-width: 75ch;
+    }
+    .highlight-label {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-strong);
+      margin-bottom: 6px;
+    }
+
+    /* ============================================================
+       MERMAID
+       ============================================================ */
+    .diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin: 24px 0;
+      box-shadow: var(--shadow-sm);
+      overflow-x: auto;
+    }
+    .diagram-caption {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+      font-size: 13px;
+      color: var(--text-subtle);
+      text-align: center;
+    }
+    .mermaid { text-align: center; min-height: 80px; }
+    .mermaid svg { max-width: 100%; height: auto; }
+    .mermaid:not([data-processed]) {
+      opacity: 0.4;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-subtle);
+      white-space: pre-wrap;
+      text-align: left;
+    }
+
+    /* ============================================================
+       PROS / CONS
+       ============================================================ */
+    .proscons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .proscons-col {
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      border: 1px solid;
+    }
+    .proscons-col h4 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .proscons-col ul { margin: 0; padding-left: 18px; }
+    .proscons-col li { margin: 6px 0; }
+    .pros { background: var(--success-soft); border-color: var(--success-border); }
+    .pros h4 { color: var(--success); }
+    .cons { background: var(--danger-soft); border-color: var(--danger-border); }
+    .cons h4 { color: var(--danger); }
+
+    /* ============================================================
+       COMPARISON CARDS
+       ============================================================ */
+    .compare {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin: 24px 0;
+    }
+    .compare-card {
+      padding: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: border-color 0.18s, box-shadow 0.18s;
+      position: relative;
+    }
+    .compare-card.recommended { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .compare-card.recommended::before {
+      content: var(--rec-label, "★ Recommended");
+      position: absolute; top: -10px; right: 14px;
+      background: var(--accent); color: #fff;
+      padding: 2px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+    }
+    .compare-card h4 { margin: 0 0 8px; font-size: 15px; color: var(--text); text-transform: none; letter-spacing: normal; }
+    .compare-card p { margin: 0; color: var(--text-muted); font-size: 14px; }
+
+    /* ============================================================
+       COLLAPSIBLE
+       ============================================================ */
+    details.collapsible {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 16px 0;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    details.collapsible[open] { box-shadow: var(--shadow-sm); }
+    details.collapsible > summary {
+      cursor: pointer;
+      padding: 14px 18px;
+      font-weight: 500;
+      color: var(--text);
+      list-style: none;
+      display: flex; align-items: center; gap: 10px;
+      user-select: none;
+      transition: background 0.15s;
+      min-height: 44px;
+    }
+    details.collapsible > summary::-webkit-details-marker { display: none; }
+    details.collapsible > summary::before {
+      content: "›";
+      display: inline-block;
+      transition: transform 0.18s;
+      color: var(--accent);
+      font-size: 18px;
+      font-weight: 700;
+    }
+    details.collapsible[open] > summary::before { transform: rotate(90deg); }
+    .collapsible-body { padding: 4px 18px 18px; border-top: 1px solid var(--border); }
+    .collapsible-body > *:first-child { margin-top: 12px; }
+
+    /* ============================================================
+       TABLES (wrapped via .table-wrap or naturally responsive)
+       ============================================================ */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 20px 0;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      max-width: 100%;
+    }
+    .content table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      background: var(--surface);
+      margin: 0;
+    }
+    /* Standalone tables (not inside .table-wrap) keep visual border */
+    .content > table {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin: 20px 0;
+      display: block;
+      overflow-x: auto;
+    }
+    .content th {
+      background: var(--surface-2);
+      color: var(--text);
+      font-weight: 600;
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .content td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      vertical-align: top;
+    }
+    .content tr:last-child td { border-bottom: none; }
+
+    /* ============================================================
+       BLOCKQUOTE
+       ============================================================ */
+    .content blockquote {
+      margin: 20px 0;
+      padding: 4px 20px;
+      border-left: 3px solid var(--accent-border);
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* ============================================================
+       FOOTER
+       ============================================================ */
+    .doc-footer {
+      margin-top: 80px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-subtle);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .doc-footer a { color: var(--accent); text-decoration: none; }
+
+    /* ============================================================
+       FOCUS-VISIBLE (a11y)
+       ============================================================ */
+    *:focus { outline: none; }
+    *:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: var(--radius-sm);
+    }
+    .toc-nav a:focus-visible { outline-offset: -2px; }
+    .icon-btn:focus-visible { outline-offset: 2px; }
+    .anchor:focus-visible { opacity: 1; outline-offset: 2px; }
+    details.collapsible > summary:focus-visible { outline-offset: -2px; }
+
+    /* ============================================================
+       HOVER (only on hover-capable devices to avoid sticky-tap on mobile)
+       ============================================================ */
+    @media (hover: hover) {
+      .icon-btn:hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-soft); }
+      .toc-nav a:hover { color: var(--accent); background: var(--accent-soft); }
+      .content a:hover { color: var(--accent-hover); border-bottom-color: var(--accent); }
+      .compare-card:hover { border-color: var(--accent-border); box-shadow: var(--shadow); }
+      .compare-card.recommended:hover { border-color: var(--accent); }
+      .content tr:hover td { background: var(--surface-2); }
+      details.collapsible > summary:hover { background: var(--surface-2); }
+      .step:hover { background: var(--surface-2); }
+      .step:hover .step-num { transform: scale(1.05); }
+      .anchor:hover { color: var(--accent); }
+      .content h2:hover .anchor,
+      .content h3:hover .anchor { opacity: 1; }
+      .copy-btn:hover { color: var(--accent); border-color: var(--accent-border); }
+      .content pre:hover .copy-btn { opacity: 1; }
+    }
+    /* On touch devices, copy-btn is always visible at low opacity */
+    @media (hover: none) {
+      .copy-btn { opacity: 0.6; }
+      .anchor { opacity: 0.4; }
+    }
+
+    /* ============================================================
+       MOBILE (≤900px) — TOC becomes off-canvas drawer
+       ============================================================ */
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 20px 16px 80px;
+      }
+      .topbar-inner { padding: 8px 12px; }
+      .doc-header { margin-bottom: 28px; padding-bottom: 20px; }
+
+      .toc-mobile-trigger { display: inline-flex !important; }
+
+      .toc {
+        position: fixed;
+        top: 0; left: 0;
+        width: min(300px, 82vw);
+        height: 100dvh;
+        max-height: 100dvh;
+        background: var(--surface);
+        z-index: var(--z-drawer);
+        padding: 16px 8px 24px 16px;
+        box-shadow: var(--shadow-lg);
+        transform: translateX(-105%);
+        transition: transform 0.25s ease;
+      }
+      .toc-head { padding: 4px 4px 12px 8px; }
+      .toc-close {
+        display: inline-flex !important;
+        width: 36px; height: 36px;
+        align-items: center; justify-content: center;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0;
+      }
+      .toc-close .icon { width: 18px; height: 18px; stroke-width: 2; }
+      body.toc-open .toc { transform: translateX(0); }
+      body.toc-open .toc-backdrop {
+        display: block;
+        opacity: 1;
+      }
+      .toc-backdrop {
+        display: block;
+        opacity: 0;
+        pointer-events: none;
+      }
+      body.toc-open .toc-backdrop { pointer-events: auto; }
+      body.toc-open { overflow: hidden; }
+    }
+    @media (min-width: 901px) {
+      .toc-mobile-trigger { display: none !important; }
+    }
+
+    /* ============================================================
+       REDUCED MOTION (a11y)
+       ============================================================ */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      html { scroll-behavior: auto; }
+      .brand-dot { animation: none; box-shadow: 0 0 0 4px var(--accent-soft); }
+    }
+
+    /* ============================================================
+       PRINT
+       ============================================================ */
+    @media print {
+      .topbar, .toc, .toc-backdrop, .icon-btn, .copy-btn, .anchor, .scroll-progress { display: none !important; }
+      .layout { grid-template-columns: 1fr; padding: 0; max-width: 100%; }
+      body { background: #fff; color: #000; }
+      a { color: #000; }
+      .content pre, .callout, .compare-card, .step, .diagram { break-inside: avoid; }
+      .doc-footer { break-before: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Skip link for keyboard users -->
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <!-- Scroll progress -->
+  <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
+
+  <!-- SVG icon sprite (Lucide-style) -->
+  <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+    <symbol id="i-danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></symbol>
+    <symbol id="i-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+    <symbol id="i-decision" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-tip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14a5 5 0 1 0-6.18 0 4 4 0 0 1 1.59 2h2.99a4 4 0 0 1 1.6-2Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-printer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  </svg>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <button class="icon-btn toc-mobile-trigger" id="toc-toggle" onclick="openToc()" aria-label="Contents" title="Contents">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-menu"/></svg>
+        </button>
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span>Document</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" onclick="window.print()" title="Print / Save PDF" aria-label="Print / Save PDF">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-printer"/></svg>
+        </button>
+        <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use id="theme-icon-use" href="#i-moon"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- TOC drawer backdrop (mobile) -->
+  <div class="toc-backdrop" onclick="closeToc()" aria-hidden="true"></div>
+
+  <div class="layout">
+    <aside class="toc" id="toc" aria-label="Contents">
+      <div class="toc-head">
+        <p class="toc-title">Contents</p>
+        <button class="toc-close" onclick="closeToc()" aria-label="Close">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <nav class="toc-nav" id="toc-nav">
+        <a href="#-" class="lvl-2">📋 目录</a><a href="#1-" class="lvl-2">1. 项目概述</a><a href="#2-" class="lvl-2">2. 技术栈与依赖</a><a href="#3-" class="lvl-2">3. 系统架构设计</a><a href="#4-" class="lvl-2">4. 核心模块详解</a><a href="#5-" class="lvl-2">5. 数据模型设计</a><a href="#6-api-" class="lvl-2">6. API 路由设计</a><a href="#7-" class="lvl-2">7. 业务服务层</a><a href="#8-" class="lvl-2">8. 关键技术实现</a><a href="#9-" class="lvl-2">9. 部署架构</a><a href="#10-" class="lvl-2">10. 扩展性与优化建议</a><a href="#-a-" class="lvl-2">附录 A: 关键文件索引</a><a href="#-b-" class="lvl-2">附录 B: 常用命令速查</a><a href="#-c-" class="lvl-2">附录 C: 环境变量清单</a><a href="#heading" class="lvl-3">核心能力</a><a href="#heading-1" class="lvl-3">项目定位</a><a href="#heading-2" class="lvl-3">后端核心技术</a><a href="#heading-3" class="lvl-3">基础设施依赖</a><a href="#31-" class="lvl-3">3.1 整体架构图</a><a href="#32-" class="lvl-3">3.2 分层职责</a><a href="#33-2026-05-" class="lvl-3">3.3 代码目录结构（2026-05 重构后）</a><a href="#41-" class="lvl-3">4.1 入口与启动流程</a><a href="#42-" class="lvl-3">4.2 配置管理</a><a href="#43-" class="lvl-3">4.3 分层架构详解</a><a href="#44-" class="lvl-3">4.4 中间件链路</a><a href="#45-" class="lvl-3">4.5 权限系统（三层鉴权）</a><a href="#51-" class="lvl-3">5.1 核心表结构</a><a href="#52-er--" class="lvl-3">5.2 ER 关系图 (简化版)</a><a href="#61-" class="lvl-3">6.1 路由分组结构</a><a href="#62-" class="lvl-3">6.2 响应格式规范</a><a href="#71-" class="lvl-3">7.1 认证服务流程</a><a href="#72-" class="lvl-3">7.2 告警处理流水线</a><a href="#73-" class="lvl-3">7.3 日志采集链路</a><a href="#74-k8s-" class="lvl-3">7.4 K8s 资源操作流程</a><a href="#81-" class="lvl-3">8.1 敏感数据加密</a><a href="#82-" class="lvl-3">8.2 会话管理</a><a href="#83-" class="lvl-3">8.3 分布式锁</a><a href="#84-" class="lvl-3">8.4 事件驱动</a><a href="#85-" class="lvl-3">8.5 日志系统</a><a href="#86-" class="lvl-3">8.6 错误处理</a><a href="#87-" class="lvl-3">8.7 分页实现</a><a href="#88-" class="lvl-3">8.8 数据字典系统</a><a href="#91-docker-compose-" class="lvl-3">9.1 Docker Compose 编排</a><a href="#92-" class="lvl-3">9.2 生产部署建议</a><a href="#101-" class="lvl-3">10.1 已有的扩展点</a><a href="#102-" class="lvl-3">10.2 性能优化建议</a><a href="#103-" class="lvl-3">10.3 代码质量提升</a><a href="#heading-13" class="lvl-3">入口与配置</a><a href="#heading-14" class="lvl-3">核心框架</a><a href="#heading-15" class="lvl-3">中间件</a><a href="#--1" class="lvl-3">业务服务 (精选)</a><a href="#heading-16" class="lvl-3">工具包</a>
+      </nav>
+    </aside>
+
+    <main class="content" id="main">
+      <header class="doc-header">
+        <span class="doc-eyebrow">SYSTEM DESIGN</span>
+        <h1 class="doc-title">Yunshu 后端代码完整技术文档</h1>
+        <p class="doc-subtitle"></p>
+        <div class="doc-meta">
+          <span class="doc-meta-item">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-file"/></svg>
+            backend-architecture-complete.md
+          </span>
+          <span class="doc-meta-item">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
+            2026-05-23
+          </span>
+          <span class="doc-meta-item">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
+            ~41 min read
+          </span>
+        </div>
+      </header>
+
+      <!-- CONTENT_START -->
+<h1 id="yunshu-">Yunshu 后端代码完整技术文档</h1>
+<h2 id="-">📋 目录</h2>
+<ul>
+<li><a href="#1-%E9%A1%B9%E7%9B%AE%E6%A6%82%E8%BF%B0">1. 项目概述</a></li>
+<li><a href="#2-%E6%8A%80%E6%9C%AF%E6%A0%88%E4%B8%8E%E4%BE%9D%E8%B5%96">2. 技术栈与依赖</a></li>
+<li><a href="#3-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1">3. 系统架构设计</a>
+<ul>
+<li><a href="#33-%E4%BB%A3%E7%A0%81%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%842026-05-%E9%87%8D%E6%9E%84%E5%90%8E">3.3 代码目录结构（2026-05 重构后）</a></li>
+</ul>
+</li>
+<li><a href="#4-%E6%A0%B8%E5%BF%83%E6%A8%A1%E5%9D%97%E8%AF%A6%E8%A7%A3">4. 核心模块详解</a>
+<ul>
+<li><a href="#41-%E5%85%A5%E5%8F%A3%E4%B8%8E%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B">4.1 入口与启动流程</a></li>
+<li><a href="#42-%E9%85%8D%E7%BD%AE%E7%AE%A1%E7%90%86">4.2 配置管理</a></li>
+<li><a href="#43-%E5%88%86%E5%B1%82%E6%9E%B6%E6%9E%84%E8%AF%A6%E8%A7%A3">4.3 分层架构详解</a></li>
+<li><a href="#44-%E4%B8%AD%E9%97%B4%E4%BB%B6%E9%93%BE%E8%B7%AF">4.4 中间件链路</a></li>
+<li><a href="#45-%E6%9D%83%E9%99%90%E7%B3%BB%E7%BB%9F%E4%B8%89%E5%B1%82%E9%89%B4%E6%9D%83">4.5 权限系统（三层鉴权）</a></li>
+</ul>
+</li>
+<li><a href="#5-%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B%E8%AE%BE%E8%AE%A1">5. 数据模型设计</a></li>
+<li><a href="#6-api-%E8%B7%AF%E7%94%B1%E8%AE%BE%E8%AE%A1">6. API 路由设计</a></li>
+<li><a href="#7-%E4%B8%9A%E5%8A%A1%E6%9C%8D%E5%8A%A1%E5%B1%82">7. 业务服务层</a></li>
+<li><a href="#8-%E5%85%B3%E9%94%AE%E6%8A%80%E6%9C%AF%E5%AE%9E%E7%8E%B0">8. 关键技术实现</a></li>
+<li><a href="#9-%E9%83%A8%E7%BD%B2%E6%9E%B6%E6%9E%84">9. 部署架构</a></li>
+<li><a href="#10-%E6%89%A9%E5%B1%95%E6%80%A7%E4%B8%8E%E4%BC%98%E5%8C%96%E5%BB%BA%E8%AE%AE">10. 扩展性与优化建议</a></li>
+</ul>
+<hr />
+<h2 id="1-">1. 项目概述</h2>
+<p><strong>Yunshu</strong> 是一个基于 Go 语言开发的云原生运维管理平台，采用前后端分离架构，提供：</p>
+<h3 id="heading">核心能力</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>模块</th>
+<th>功能描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>系统管理</strong></td>
+<td>用户、角色、权限(Casbin RBAC)、菜单、组织架构、数据字典、审计日志</td>
+</tr>
+<tr>
+<td><strong>项目管理</strong></td>
+<td>多租户项目隔离、服务器管理、服务配置、云账号管理</td>
+</tr>
+<tr>
+<td><strong>Kubernetes 管理</strong></td>
+<td>多集群纳管、工作负载/网络/存储/RBAC/CRD 全资源管理</td>
+</tr>
+<tr>
+<td><strong>告警平台</strong></td>
+<td>Prometheus 数据源、告警规则、值班排班、静默策略、多渠道通知(钉钉/邮件/Webhook)</td>
+</tr>
+<tr>
+<td><strong>日志平台</strong></td>
+<td>Agent 采集、SSE 实时日志流、文件发现、日志源配置</td>
+</tr>
+<tr>
+<td><strong>MySQL 备份</strong></td>
+<td>定时备份调度、远程归档、MinIO 对象存储</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="heading-1">项目定位</h3>
+<ul>
+<li><strong>目标用户</strong>: DevOps 工程师、运维团队、SRE</li>
+<li><strong>应用场景</strong>: Kubernetes 集群统一管控、告警集中处理、日志聚合分析</li>
+<li><strong>设计理念</strong>: 项目化隔离 + 三层权限控制 + 插件化扩展</li>
+</ul>
+<hr />
+<h2 id="2-">2. 技术栈与依赖</h2>
+<h3 id="heading-2">后端核心技术</h3>
+<pre><code class="language-go">// go.mod 核心依赖 (Go 1.25.0)
+github.com/gin-gonic/gin              // HTTP 框架 v1.12.0
+gorm.io/gorm                          // ORM v1.31.1
+gorm.io/driver/mysql                 // MySQL 驱动
+github.com/casbin/casbin/v2          // 权限框架 v2.11.0
+github.com/go-redis/redis/v9          // Redis 客户端 v9.18.0
+google.golang.org/grpc                // gRPC 框架 v1.80.0
+github.com/spf13/cobra               // CLI 框架 v1.10.2
+github.com/spf13/viper               // 配置管理 v1.21.0
+k8s.io/client-go                     // K8s 客户端 v0.35.4
+github.com/weibaohui/kom             // K8s 多集群 SDK v0.2.71
+github.com/golang-jwt/jwt/v5         // JWT 认证 v5.3.0
+github.com/prometheus/client_golang  // Prometheus 监控集成
+github.com/minio/minio-go/v7         // MinIO 对象存储
+github.com/swaggo/gin-swagger        // API 文档
+</code></pre>
+<h3 id="heading-3">基础设施依赖</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>版本</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MySQL</td>
+<td>5.7+</td>
+<td>主业务数据库</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>7.x</td>
+<td>缓存/会话/分布式锁</td>
+</tr>
+<tr>
+<td>MinIO</td>
+<td>最新</td>
+<td>备份文件对象存储</td>
+</tr>
+<tr>
+<td>Kubernetes</td>
+<td>1.25+</td>
+<td>被管集群</td>
+</tr>
+<tr>
+<td>Prometheus</td>
+<td>最新</td>
+<td>告警数据源</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="3-">3. 系统架构设计</h2>
+<h3 id="31-">3.1 整体架构图</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│                        用户界面层 (Frontend)                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
+│  │  React SPA   │  │ Swagger UI   │  │  Log-Agent CLI       │   │
+│  │  (Vite+AntD) │  │  (/swagger)  │  │  (独立二进制)         │   │
+│  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘   │
+└─────────┼──────────────────┼─────────────────────┼──────────────┘
+          │                  │                     │
+          ▼                  ▼                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        接入层 (Gateway)                           │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  Nginx (反向代理 / 静态资源 / WebSocket 代理)            │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      应用服务层 (Backend)                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌────────────────────────┐  │
+│  │ HTTP Server  │  │ gRPC Server │  │  Background Workers   │  │
+│  │ (:8080/Gin)  │  │ (:18080)    │  │  (定时任务/事件转发)   │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────────┬─────────────┘  │
+│         │                │                     │                │
+│  ┌──────▼────────────────▼─────────────────────▼─────────────┐  │
+│  │                    中间件链 (Middleware)                    │  │
+│  │  Recovery → Logger → Auth → Casbin → K8sScope → Audit     │  │
+│  └────────────────────────┬──────────────────────────────────┘  │
+└────────────────────────────┼────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       业务逻辑层 (Service)                        │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │ AuthService│ │ProjectSvc│ │ K8sSvc   │ │ AlertSvc │ ...      │
+│  └─────┬────┘ └─────┬────┘ └─────┬────┘ └─────┬────┘           │
+│        │            │            │            │                  │
+│  ┌─────▼────────────▼────────────▼────────────▼─────────────┐   │
+│  │                    数据访问层 (Repository)                   │   │
+│  │  UserRepository / ProjectRepository / K8sClusterRepo ...  │   │
+│  └────────────────────────┬──────────────────────────────────┘   │
+└────────────────────────────┼─────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       数据存储层 (Storage)                        │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
+│  │  MySQL   │  │  Redis   │  │  MinIO   │  │ K8s API  │        │
+│  │ (主数据库)│  │ (缓存/会话)│ (对象存储)│ (集群管控)│        │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘        │
+└─────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="32-">3.2 分层职责</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>层级</th>
+<th>职责</th>
+<th>关键组件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Handler 层</strong></td>
+<td>HTTP 请求解析、参数校验、响应格式化</td>
+<td><code>internal/handler/*.go</code></td>
+</tr>
+<tr>
+<td><strong>Service 层</strong></td>
+<td>业务逻辑编排、事务管理、跨模块协调</td>
+<td><code>internal/service/&lt;域&gt;/</code> + 门面 <code>exports.go</code></td>
+</tr>
+<tr>
+<td><strong>Repository 层</strong></td>
+<td>数据库 CRUD 操作、查询构建</td>
+<td><code>internal/repository/*.go</code></td>
+</tr>
+<tr>
+<td><strong>Model 层</strong></td>
+<td>数据结构定义、GORM 标签、表关系</td>
+<td><code>internal/model/*.go</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="33-2026-05-">3.3 代码目录结构（2026-05 重构后）</h3>
+<aside class="callout callout-info"><svg class="callout-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info"/></svg><div class="callout-body"><p class="callout-title">说明</p><p>详细阅读路线见 <a href="CODEBASE-MAP.md">CODEBASE-MAP.md</a>。</p></div></aside>
+<pre><code class="language-text">internal/
+├── bootstrap/          # App 构建：DB、Redis、Casbin、Gin
+├── providers/          # Wire：Config / Logger / DB / Redis
+├── router/             # 路由注册、Wire 装配、repositories + route_services
+├── handler/            # HTTP 处理器（薄层）
+├── middleware/         # Auth、Casbin、K8sScope、ErrorHandler、审计
+├── interfaces/         # Repository 接口定义
+├── repository/         # GORM 仓储实现
+├── model/              # 数据模型
+├── grpc/               # gRPC 服务与 proto
+├── pkg/
+│   ├── errors/         # BizError（bizerrors），HTTP/gRPC 统一
+│   ├── logutil/        # 组件化日志（HTTP/Service/Worker）
+│   └── logger/         # 底层 Logger 与 GORM 日志
+└── service/
+    ├── exports.go      # 门面：handler 仍 import service，别名到子包
+    ├── alert/          # 告警域
+    ├── k8s/            # K8s 域
+    │   └── eventforward/
+    ├── project/        # 项目 / 云账号 / 日志源
+    ├── system/         # 用户 / RBAC / 认证 / 字典
+    ├── logplatform/    # Agent / 发现 / 日志 Broker
+    ├── mysqlbackup/
+    └── overview/
+</code></pre>
+<p><strong>设计要点</strong>：</p>
+<ul>
+<li><strong>按域分包</strong>（Package by Feature）+ <strong>经典分层</strong>（Handler → Service → Repository → Model）。</li>
+<li><code>exports.go</code> 为过渡门面：新代码可优先 <code>import &quot;yunshu/internal/service/alert&quot;</code> 等子包；Handler 批量改 import 前保持 <code>service.Xxx</code>。</li>
+<li><strong>Wire</strong>：基础设施与 <code>routeRepositories</code> 已接入；<code>buildRouteServices</code>（<code>route_services.go</code>）仍为手工 <code>NewXxx</code> 装配。</li>
+</ul>
+<hr />
+<h2 id="4-">4. 核心模块详解</h2>
+<h3 id="41-">4.1 入口与启动流程</h3>
+<h4 id="-maingomaingo">主入口 (<a href="main.go">main.go</a>)</h4>
+<pre><code class="language-go">func main() {
+    cmd.Execute()  // Cobra CLI 入口
+}
+</code></pre>
+<h4 id="-cmdservergocmdservergo">启动命令 (<a href="cmd/server.go">cmd/server.go</a>)</h4>
+<p><strong>Builder 模式初始化依赖链</strong>:</p>
+<figure class="diagram"><pre class="mermaid">sequenceDiagram
+    participant Main as main()
+    participant Builder as bootstrap.Builder
+    participant App as App struct
+    participant Router as router.Register()
+
+    Main->>Builder: NewBuilder()
+    Builder->>Builder: WithConfig() 加载 config.yaml
+    Builder->>Builder: WithLogger() 初始化日志
+    Builder->>Builder: WithMySQL() 连接数据库
+    Builder->>Builder: WithDictOverrides() 字典覆盖配置
+    Builder->>Builder: WithRedis() 连接 Redis
+    Builder->>Builder: WithMailer() 初始化邮件发送器
+    Builder->>Builder: WithCasbin() 加载权限模型
+    Builder->>Builder: WithGin() 创建 Gin Engine
+    Builder-->>App: Build() 返回 *App
+
+    Main->>App: AutoMigrateModels() 自动迁移
+    Main->>Router: Register(app, grpcClient, bgCtx)
+    Router->>Router: InitializeRouteDeps() 装配依赖（含共享 K8sRuntimeService）
+    Router->>Router: registerPlatformRoutes()
+    Router->>Router: registerK8sRoutes()
+    Router->>Router: registerProjectRoutes()
+
+    Main->>Main: server.ListenAndServe() 启动 HTTP
+    Main->>Main: grpcRuntime.Start() 启动 gRPC</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<h4 id="heading-4">生命周期管理</h4>
+<pre><code class="language-go">// cmd/server.go 核心流程
+1. 初始化全局依赖 (Config → Logger → DB → Redis → Mailer → Casbin → Gin)
+2. 数据库自动迁移 (AutoMigrateModels)
+3. 初始化只读演示用户 (initReadonlyDemoUser)
+4. 创建 Repository 层实例
+5. 创建 Service 层实例
+6. 启动 gRPC Server (Agent 通信)
+7. 注册所有 HTTP 路由 (router.Register)
+8. 启动后台 Worker:
+   - Agent 离线记录定时扫描 (45s 间隔)
+   - MySQL 备份调度器
+   - K8s Event 转发 Manager
+9. 启动 HTTP Server (:8080)
+10. 优雅关闭信号处理 (SIGINT/SIGTERM)
+</code></pre>
+<h3 id="42-">4.2 配置管理</h3>
+<h4 id="-internalconfigconfiggointernalconfigconfiggo">配置加载机制 (<a href="internal/config/config.go">internal/config/config.go</a>)</h4>
+<p><strong>多源配置优先级</strong>:</p>
+<pre><code>环境变量 &gt; config.yaml &gt; 默认值
+</code></pre>
+<p><strong>配置结构体</strong> (<a href="internal/config/config.go#L10">Config</a>):</p>
+<pre><code class="language-go">type Config struct {
+    App      AppConfig      // 应用基础配置 (名称/环境/端口)
+    HTTP     HTTPConfig     // HTTP 超时参数
+    GRPC     GRPCConfig     // gRPC 地址/消息大小限制
+    Log      LogConfig      // 日志级别/格式/输出
+    MySQL    MySQLConfig    // 数据库连接池
+    Redis    RedisConfig    // 缓存配置
+    Mail     MailConfig     // SMTP 邮件配置
+    Auth     AuthConfig     // JWT 密钥/TTL
+    Casbin   CasbinConfig   // 权限模型路径
+    Alert    AlertConfig    // 告警平台参数 (聚合窗口/渠道限制等)
+    Security SecurityConfig // 加密密钥
+    Agent    AgentConfig    // Agent 注册密钥/发现根目录
+}
+</code></pre>
+<p><strong>运行期动态配置</strong> (数据字典覆盖):</p>
+<p>部分配置支持从数据库 <code>dict_entries</code> 表动态读取，无需重启服务：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>配置项</th>
+<th>字典类型 Key</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>邮件配置</td>
+<td><code>mail_host</code>, <code>mail_port</code>, ...</td>
+<td>SMTP 参数</td>
+</tr>
+<tr>
+<td>告警 Token</td>
+<td><code>alert_webhook_token</code></td>
+<td>Webhook 鉴权</td>
+</tr>
+<tr>
+<td>Prometheus URL</td>
+<td><code>alert_enrich_prometheus_url</code></td>
+<td>告警富化地址</td>
+</tr>
+<tr>
+<td>K8s Event 转发</td>
+<td><code>k8s_event_forward_enabled</code>, ...</td>
+<td>事件转发开关</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>关键默认值</strong> (<a href="internal/config/config.go#L183-L261">config.go:183-261</a>):</p>
+<pre><code class="language-go">JWT Token TTL:        120 分钟
+邮箱验证码 TTL:       600 秒 (10分钟)
+验证码冷却时间:       60 秒
+告警去重 TTL:         86400 秒 (24小时)
+Group Wait:           15 秒 (首次发送等待)
+Group Interval:       60 秒 (变化后重发间隔)
+Repeat Interval:      300 秒 (无变化重复提醒)
+Aggregate TTL:        86400 秒 (聚合状态过期)
+</code></pre>
+<h3 id="43-">4.3 分层架构详解</h3>
+<h4 id="handler--http-">Handler 层 (HTTP 处理器)</h4>
+<p><strong>位置</strong>: <a href="internal/handler/">internal/handler/</a></p>
+<p><strong>设计模式</strong>: 泛型封装减少样板代码 (<a href="internal/handler/serve.go">serve.go</a>)</p>
+<pre><code class="language-go">// 泛型 Handler 封装示例
+func ServeQuery[T any, R any](c *gin.Context, fn func(context.Context, T) (R, error))
+func ServeJSON[T any, R any](c *gin.Context, fn func(context.Context, T) (R, error))
+func ServeDelete(c *gin.Context, fn func(context.Context, uint) error, idParam string)
+func ServePatch[Req any, Resp any](c *gin.Context, fn func(context.Context, uint, Req) (Resp, error), idParam string)
+</code></pre>
+<p><strong>核心 Handler 分类</strong>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>文件</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>认证</td>
+<td><a href="internal/handler/auth_handler.go">auth_handler.go</a></td>
+<td>登录/注册/邮箱验证码/Token 刷新</td>
+</tr>
+<tr>
+<td>系统管理</td>
+<td><a href="internal/handler/user_handler.go">user_handler.go</a>, <a href="internal/handler/role_handler.go">role_handler.go</a>, ...</td>
+<td>用户/角色/部门/菜单/字典 CRUD</td>
+</tr>
+<tr>
+<td>项目管理</td>
+<td><a href="internal/handler/project_handler.go">project_handler.go</a></td>
+<td>项目/成员/服务器/服务/日志源</td>
+</tr>
+<tr>
+<td>K8s 资源</td>
+<td><a href="internal/handler/pod_handler.go">pod_handler.go</a>, <a href="internal/handler/workload_handler.go">workload_handler.go</a>, ...</td>
+<td>Pod/Deployment/Service/Ingress 等</td>
+</tr>
+<tr>
+<td>告警平台</td>
+<td><a href="internal/handler/alert_handler.go">alert_handler.go</a>, <a href="internal/handler/alert_platform_handler.go">alert_platform_handler.go</a></td>
+<td>渠道/规则/静默/值班</td>
+</tr>
+<tr>
+<td>日志平台</td>
+<td><a href="internal/handler/log_agent_handler.go">log_agent_handler.go</a></td>
+<td>Agent 注册/心跳/发现</td>
+</tr>
+<tr>
+<td>WebSocket</td>
+<td><a href="internal/handler/pod_exec_ws.go">pod_exec_ws.go</a>, <a href="internal/handler/project_terminal_ws.go">project_terminal_ws.go</a></td>
+<td>终端交互</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="service--">Service 层 (业务逻辑)</h4>
+<p><strong>位置</strong>: <a href="internal/service/">internal/service/</a> — <strong>按域子目录</strong>；Handler 通过 <a href="internal/service/exports.go">exports.go</a> 访问。域划分见 <a href="CODEBASE-MAP.md">CODEBASE-MAP.md</a> §2。</p>
+<p><strong>核心服务分类</strong>:</p>
+<h5 id="431-">4.3.1 认证与授权服务</h5>
+<p><strong>AuthService</strong> (<a href="internal/service/system/auth_service.go">system/auth_service.go</a>):</p>
+<ul>
+<li>邮箱验证码发送/验证 (Redis 存储 + 冷却机制)</li>
+<li>JWT Token 生成/刷新 (golang-jwt/v5)</li>
+<li>密码哈希 (bcrypt)</li>
+<li>登录状态管理 (Redis Session 白名单)</li>
+</ul>
+<p><strong>Casbin 同步</strong> (<a href="internal/service/system/casbin_sync.go">system/casbin_sync.go</a>):</p>
+<ul>
+<li>用户角色变更同步到 Casbin 策略表</li>
+<li>批量策略更新优化</li>
+</ul>
+<h5 id="432-">4.3.2 项目管理服务</h5>
+<p><strong>ProjectMgmtService</strong> (<a href="internal/service/project/project_mgmt_core.go">project/project_mgmt_core.go</a>):</p>
+<ul>
+<li>项目 CRUD + 成员管理 (RBAC 隔离)</li>
+<li>服务器/服务/日志源 CRUD</li>
+<li>云账号管理 (阿里云/腾讯云/京东云 SDK，见 <code>project/cloud_provider_*.go</code>)</li>
+</ul>
+<p><strong>LogAgentService</strong> (<a href="internal/service/logplatform/log_agent_service.go">logplatform/log_agent_service.go</a>):</p>
+<ul>
+<li>Agent 注册/认证 (register_secret 校验)</li>
+<li>心跳超时检测 (离线记录)</li>
+<li>Token 轮换机制</li>
+</ul>
+<h5 id="433-kubernetes-">4.3.3 Kubernetes 服务集群</h5>
+<p><strong>K8sClusterService</strong> (<a href="internal/service/k8s/k8s_cluster_service.go">k8s/k8s_cluster_service.go</a>):</p>
+<ul>
+<li>多集群管理 (kubeconfig / direct 直连模式)</li>
+<li>Kom SDK 集成 (weibaohui/kom)</li>
+<li>集群健康检查 / 组件状态查询</li>
+</ul>
+<p><strong>工作负载服务</strong>（均在 <code>internal/service/k8s/</code>）:</p>
+<ul>
+<li><a href="internal/service/k8s/k8s_workload_deployment.go">k8s_workload_deployment.go</a>: Deployment 扩缩容/重启/滚动更新</li>
+<li><a href="internal/service/k8s/k8s_workload_statefulset.go">k8s_workload_statefulset.go</a>: StatefulSet 管理</li>
+<li><a href="internal/service/k8s/k8s_workload_daemonset.go">k8s_workload_daemonset.go</a>: DaemonSet 管理</li>
+<li><a href="internal/service/k8s/k8s_workload_cronjob.go">k8s_workload_cronjob.go</a>: CronJob 定时任务</li>
+<li><a href="internal/service/k8s/k8s_workload_job.go">k8s_workload_job.go</a>: Job 任务管理</li>
+</ul>
+<p><strong>Pod 高级操作</strong> (<a href="internal/service/k8s/k8s_pod_service.go">k8s/k8s_pod_service.go</a>):</p>
+<ul>
+<li>日志流 (SSE / 下载)</li>
+<li>文件浏览/上传/下载 (exec into container)</li>
+<li>容器执行命令 (WebSocket 交互式终端)</li>
+<li>Pod 诊断 (Events/状态分析)</li>
+</ul>
+<h5 id="434-">4.3.4 告警平台服务</h5>
+<p><strong>Alert 核心流水线</strong>:</p>
+<figure class="diagram"><pre class="mermaid">flowchart LR
+    A[Alertmanager Webhook] --> B[Ingest Pipeline]
+    B --> C[Fingerprint 去重]
+    C --> D[Aggregate State 聚合]
+    D --> E{是否首次?}
+    E -->|是| F[Group Wait 等待]
+    F --> G[Delivery Core 发送]
+    E -->|否| H{Labels 变化?}
+    H -->|是| I[Group Interval 重发]
+    H -->|否| J[Repeat Interval 重复提醒]
+    G --> K[Channel Routing]
+    I --> K
+    J --> K
+    K --> L[钉钉/邮件/Webhook]</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<p><strong>关键服务文件</strong>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>服务</th>
+<th>文件</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>告警摄入</td>
+<td><a href="internal/service/alert/alert_ingest_pipeline.go">alert/alert_ingest_pipeline.go</a></td>
+<td>Webhook 解析/标准化</td>
+</tr>
+<tr>
+<td>指纹去重</td>
+<td><a href="internal/service/alert/alert_fingerprint.go">alert/alert_fingerprint.go</a></td>
+<td>Labels Hash 计算</td>
+</tr>
+<tr>
+<td>聚合引擎</td>
+<td><a href="internal/service/alert/alert_aggregate_state.go">alert/alert_aggregate_state.go</a></td>
+<td>GroupKey 状态机</td>
+</tr>
+<tr>
+<td>投递核心</td>
+<td><a href="internal/service/alert/alert_delivery_core.go">alert/alert_delivery_core.go</a></td>
+<td>通道选择/模板渲染</td>
+</tr>
+<tr>
+<td>邮件通知</td>
+<td><a href="internal/service/alert/alert_delivery_email.go">alert/alert_delivery_email.go</a></td>
+<td>SMTP 发送/HTML 模板</td>
+</tr>
+<tr>
+<td>规则评估</td>
+<td><a href="internal/service/alert/alert_monitor_evaluator.go">alert/alert_monitor_evaluator.go</a></td>
+<td>PromQL 定时查询</td>
+</tr>
+<tr>
+<td>值班服务</td>
+<td><a href="internal/service/alert/alert_duty_service.go">alert/alert_duty_service.go</a></td>
+<td>值班排班/轮换</td>
+</tr>
+<tr>
+<td>静默管理</td>
+<td><a href="internal/service/alert/alert_silence_service.go">alert/alert_silence_service.go</a></td>
+<td>维护窗口抑制</td>
+</tr>
+<tr>
+<td>订阅路由</td>
+<td><a href="internal/service/alert/alert_subscription_service.go">alert/alert_subscription_service.go</a></td>
+<td>树形路由匹配</td>
+</tr>
+<tr>
+<td>抑制规则</td>
+<td><a href="internal/service/alert/alert_inhibition_service.go">alert/alert_inhibition_service.go</a></td>
+<td>告警依赖抑制</td>
+</tr>
+<tr>
+<td>Redis 状态</td>
+<td><a href="internal/service/alert/state_redis.go">alert/state_redis.go</a></td>
+<td>去重/聚合 Redis 实现</td>
+</tr>
+</tbody>
+</table></div>
+<h5 id="435-">4.3.5 日志平台服务</h5>
+<p><strong>日志采集链路</strong>:</p>
+<pre><code>Log-Agent (目标机器)
+    ↓ gRPC :18080
+Platform gRPC Server
+    ↓ 写入
+MySQL (logs 表)
+    ↓ SSE 流式推送
+Browser (React Frontend)
+</code></pre>
+<p><strong>关键服务</strong>:</p>
+<ul>
+<li><a href="internal/service/project/project_mgmt_logs.go">project/project_mgmt_logs.go</a>: 日志查询/SSE 流/导出</li>
+<li><a href="internal/service/logplatform/agent_discovery_service.go">logplatform/agent_discovery_service.go</a>: 日志文件发现</li>
+</ul>
+<h5 id="436-mysql-">4.3.6 MySQL 备份服务</h5>
+<p><strong>备份流程</strong> (<a href="internal/service/mysqlbackup/mysql_backup_service.go">mysqlbackup/mysql_backup_service.go</a>):</p>
+<pre><code class="language-bash">mysqldump → gzip 压缩 → 上传 MinIO → 记录元数据到 DB
+</code></pre>
+<p><strong>调度器</strong> (<a href="internal/service/mysqlbackup/mysql_backup_scheduler.go">mysqlbackup/mysql_backup_scheduler.go</a>):</p>
+<ul>
+<li>Cron 表达式解析 (robfig/cron)</li>
+<li>分布式锁防重复执行 (Redis SETNX)</li>
+<li>备份保留策略</li>
+</ul>
+<h4 id="repository--">Repository 层 (数据访问)</h4>
+<p><strong>位置</strong>: <a href="internal/repository/">internal/repository/</a></p>
+<p><strong>设计模式</strong>: 接口抽象 + GORM 实现</p>
+<pre><code class="language-go">// 示例: UserRepository
+type UserRepository struct {
+    db *gorm.DB
+}
+
+func (r *UserRepository) GetByID(ctx context.Context, id uint) (*model.User, error) {
+    var user model.User
+    err := r.db.WithContext(ctx).
+        Preload(&quot;Roles&quot;).
+        Preload(&quot;Groups&quot;).
+        Preload(&quot;Department&quot;).
+        First(&amp;user, id).Error
+    return &amp;user, err
+}
+</code></pre>
+<p><strong>分页封装</strong> (<a href="internal/repository/pagination_helper.go">pagination_helper.go</a>):</p>
+<ul>
+<li>统一分页参数解析 (page/page_size)</li>
+<li>总数统计 + 列表查询</li>
+<li>响应格式标准化</li>
+</ul>
+<h4 id="model--">Model 层 (数据模型)</h4>
+<p><strong>位置</strong>: <a href="internal/model/">internal/model/</a></p>
+<p><strong>核心实体关系</strong>:</p>
+<pre><code>User (用户)
+ ├── UserRole (用户角色关联) ←→ Role (角色)
+ ├── UserGroupUser (用户组关联) ←→ UserGroup (用户组)
+ └── Department (部门)
+
+Project (项目)
+ ├── ProjectMember (项目成员) ←→ User
+ ├── ServerGroup (服务器组)
+ │   └── Server (服务器)
+ │       ├── ServerCredential (服务器凭据)
+ │       └── Service (服务)
+ │           └── ServiceLogSource (日志源)
+ ├── CloudAccount (云账号)
+ ├── LogAgent (日志代理)
+ └── AgentDiscovery (代理发现)
+
+K8sCluster (K8s 集群)
+ └── K8sClusterAccessGrant (集群访问授权)
+
+AlertDatasource (告警数据源)
+ ├── AlertMonitorRule (监控规则)
+ │   ├── AlertRuleAssignee (规则负责人)
+ │   └── AlertDutyBlock (值班块)
+ └── AlertEvent (告警事件)
+     └── AlertChannel (告警渠道)
+</code></pre>
+<h3 id="44-">4.4 中间件链路</h3>
+<p><strong>位置</strong>: <a href="internal/middleware/">internal/middleware/</a></p>
+<p><strong>执行顺序</strong> (从外到内):</p>
+<pre><code class="language-go">engine := gin.New()
+engine.Use(middleware.Recovery(logger))        // 1. 异常恢复
+engine.Use(middleware.RequestLogger(logger))    // 2. 请求日志
+
+// 路由组级别中间件
+api.Use(authMiddleware)        // 3. JWT 认证
+api.Use(authorize)            // 4. Casbin 权限校验
+api.Use(k8sScopeAuthorize)    // 5. K8s 集群范围鉴权 (仅 K8s 路由)
+api.Use(opAudit)              // 6. 操作审计日志
+</code></pre>
+<h4 id="heading-5">各中间件详解</h4>
+<h5 id="441-recovery--recoverygointernalmiddlewarerecoverygo">4.4.1 Recovery 中间件 (<a href="internal/middleware/recovery.go">recovery.go</a>)</h5>
+<ul>
+<li>捕获 panic，返回 500 错误</li>
+<li>记录错误堆栈到日志</li>
+<li>避免服务崩溃</li>
+</ul>
+<h5 id="442-requestlogger--request-loggergointernalmiddlewarerequest-loggergo">4.4.2 RequestLogger 中间件 (<a href="internal/middleware/request_logger.go">request_logger.go</a>)</h5>
+<ul>
+<li>记录请求方法/路径/状态码/耗时</li>
+<li>结构化日志输出 (JSON/Text 可切换)</li>
+<li>支持慢请求阈值告警</li>
+</ul>
+<h5 id="443-auth--authgointernalmiddlewareauthgo">4.4.3 Auth 中间件 (<a href="internal/middleware/auth.go">auth.go</a>)</h5>
+<ul>
+<li><strong>JWT Token 解析</strong> (Bearer Token)</li>
+<li><strong>Session 白名单校验</strong> (Redis 存储 TokenID)</li>
+<li><strong>用户状态检查</strong> (禁用用户拒绝访问)</li>
+<li><strong>上下文注入</strong> (CurrentUser → gin.Context)</li>
+</ul>
+<pre><code class="language-go">// 认证流程
+1. 提取 Authorization Header
+2. 解析 Bearer Token (JWT)
+3. 验证 Session 是否在 Redis 中存在
+4. 查询用户信息 (含角色/组/部门)
+5. 注入 CurrentUser 到 Context
+</code></pre>
+<h5 id="444-casbin--casbingointernalmiddlewarecasbingo">4.4.4 Casbin 中间件 (<a href="internal/middleware/casbin.go">casbin.go</a>)</h5>
+<ul>
+<li><strong>API 级权限校验</strong></li>
+<li>从路由提取: 方法(GET/POST...) + 路径(/api/v1/users)</li>
+<li>调用 <code>enforcer.Enforce(role, path, method)</code></li>
+<li>无权限返回 403 Forbidden</li>
+</ul>
+<p><strong>权限模型</strong> (<a href="configs/casbin_model.conf">configs/casbin_model.conf</a>):</p>
+<pre><code>[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act
+
+[role_definition]
+g = _, _
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = g(r.sub, p.sub) &amp;&amp; r.obj == p.obj &amp;&amp; r.act == p.act
+</code></pre>
+<h5 id="445-k8s-scope-authorize--k8s-scope-authorizegointernalmiddlewarek8s-scope-authorizego">4.4.5 K8s Scope Authorize 中间件 (<a href="internal/middleware/k8s_scope_authorize.go">k8s_scope_authorize.go</a>)</h5>
+<ul>
+<li><strong>集群范围鉴权</strong> (仅 K8s 相关路由生效)</li>
+<li>检查用户/角色在指定 cluster_id 上的访问档位</li>
+<li><strong>档位等级</strong>: readonly &lt; readonly_exec &lt; admin</li>
+<li><strong>命名空间过滤</strong>: 黑名单优先 + 白名单例外</li>
+</ul>
+<pre><code class="language-go">// 鉴权逻辑
+1. 从 Query/Body 提取 cluster_id
+2. 查询 K8sClusterAccessGrant (主体类型 + 主体Ref + ClusterID)
+3. 匹配请求方法与档位要求:
+   - GET → readonly 及以上
+   - POST/PUT (exec/logs) → readonly_exec 及以上
+   - DELETE/Apply → admin
+4. 检查 Namespace 黑/白名单
+5. 通过则注入 K8s Client 到 Context
+</code></pre>
+<h5 id="446-operation-audit--operation-auditgointernalmiddlewareoperation-auditgo">4.4.6 Operation Audit 中间件 (<a href="internal/middleware/operation_audit.go">operation_audit.go</a>)</h5>
+<ul>
+<li><strong>操作日志记录</strong></li>
+<li>记录: 用户/IP/方法/路径/请求体/响应状态</li>
+<li>异步写入数据库 (避免影响主流程)</li>
+<li>敏感字段脱敏 (密码/Token 等)</li>
+</ul>
+<h5 id="447-rate-limit--rate-limitgointernalmiddlewarerate-limitgo">4.4.7 Rate Limit 中间件 (<a href="internal/middleware/rate_limit.go">rate_limit.go</a>)</h5>
+<ul>
+<li><strong>接口限流</strong> (基于 Redis 令牌桶)</li>
+<li>主要用于注册接口防刷</li>
+<li>可配置窗口期/请求数</li>
+</ul>
+<h5 id="448-project-access--project-accessgointernalmiddlewareproject-accessgo">4.4.8 Project Access 中间件 (<a href="internal/middleware/project_access.go">project_access.go</a>)</h5>
+<ul>
+<li><strong>项目成员权限校验</strong></li>
+<li>检查当前用户是否为项目成员</li>
+<li>非 super-admin 必须有成员关系才能访问项目资源</li>
+</ul>
+<h5 id="449-websocket-auth--ws-authgointernalmiddlewarews-authgo">4.4.9 WebSocket Auth 中间件 (<a href="internal/middleware/ws_auth.go">ws_auth.go</a>)</h5>
+<ul>
+<li><strong>WebSocket 特殊认证</strong></li>
+<li>从 URL Query 提取 Token (浏览器无法设置 Header)</li>
+<li>复用 HTTP Auth 逻辑</li>
+</ul>
+<h3 id="45-">4.5 权限系统（三层鉴权）</h3>
+<h4 id="heading-6">三道闸门设计</h4>
+<figure class="diagram"><pre class="mermaid">flowchart TD
+    A[HTTP Request] --> B{1. Casbin API 权限}
+    B -->|Deny| C[403 Forbidden]
+    B -->|Allow| D{2. K8s 范围校验?}
+    D -->|非 K8s 路由| E[放行]
+    D -->|是 K8s 路由| F{3. 集群档位 + NS 策略}
+    F -->|Deny| C
+    F -->|Allow| E</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<h4 id="heading-7">权限配置示例</h4>
+<p><strong>场景</strong>: 让角色 <code>dev</code> 只读访问集群 1 的 <code>default</code> 命名空间</p>
+<ol>
+<li>
+<p><strong>Casbin 策略</strong> (<code>casbin_rule</code> 表):</p>
+<pre><code class="language-sql">INSERT INTO casbin_rule (ptype, v0, v1, v2) VALUES ('p', 'dev', '/api/v1/pods', 'GET');
+</code></pre>
+</li>
+<li>
+<p><strong>集群档位</strong> (<code>k8s_cluster_access_grants</code> 表):</p>
+<pre><code class="language-sql">INSERT INTO k8s_cluster_access_grants (principal_kind, principal_ref, cluster_id, preset)
+VALUES ('role', 'dev', 1, 'readonly');
+</code></pre>
+</li>
+<li>
+<p><strong>命名空间白名单</strong> (<code>k8s_namespace_allow_rules</code> 表):</p>
+<pre><code class="language-sql">INSERT INTO k8s_namespace_allow_rules (cluster_id, namespace_pattern, principal_kind, principal_ref)
+VALUES (1, 'default', 'role', 'dev');
+</code></pre>
+</li>
+</ol>
+<h4 id="heading-8">档位能力矩阵</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>操作</th>
+<th>readonly</th>
+<th>readonly_exec</th>
+<th>admin</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>列表/详情 (GET)</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Pod 日志查看</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Exec 终端</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Apply/Create</td>
+<td>❌</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Delete/Scale</td>
+<td>❌</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Ingress-Nginx 重启</td>
+<td>❌</td>
+<td>❌</td>
+<td>✅ (需 confirm:true)</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="5-">5. 数据模型设计</h2>
+<h3 id="51-">5.1 核心表结构</h3>
+<h4 id="heading-9">系统管理域</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>表名</th>
+<th>用途</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>users</code></td>
+<td>用户</td>
+<td>username/email/password/status/department_id</td>
+</tr>
+<tr>
+<td><code>roles</code></td>
+<td>角色</td>
+<td>code/name/description</td>
+</tr>
+<tr>
+<td><code>user_roles</code></td>
+<td>用户角色关联 (多对多)</td>
+<td>user_id/role_id</td>
+</tr>
+<tr>
+<td><code>user_groups</code></td>
+<td>用户组</td>
+<td>code/name</td>
+</tr>
+<tr>
+<td><code>user_group_users</code></td>
+<td>组员关联</td>
+<td>group_id/user_id</td>
+</tr>
+<tr>
+<td><code>departments</code></td>
+<td>组织架构</td>
+<td>name/parent_id (树形)</td>
+</tr>
+<tr>
+<td><code>menus</code></td>
+<td>菜单</td>
+<td>name/path/icon/parent_id/sort_order</td>
+</tr>
+<tr>
+<td><code>permissions</code></td>
+<td>API 权限点</td>
+<td>resource/action/method/path</td>
+</tr>
+<tr>
+<td><code>dict_entries</code></td>
+<td>数据字典</td>
+<td>dict_type/dict_key/dict_value (敏感值加密)</td>
+</tr>
+<tr>
+<td><code>login_log</code></td>
+<td>登录日志</td>
+<td>user_id/ip/user_agent/success</td>
+</tr>
+<tr>
+<td><code>operation_log</code></td>
+<td>操作日志</td>
+<td>user_id/method/path/request_body</td>
+</tr>
+<tr>
+<td><code>registration_requests</code></td>
+<td>注册申请</td>
+<td>username/email/status/reviewer_id</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="heading-10">项目管理域</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>表名</th>
+<th>用途</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>projects</code></td>
+<td>项目</td>
+<td>name/code/description/owner_department_id</td>
+</tr>
+<tr>
+<td><code>project_members</code></td>
+<td>项目成员</td>
+<td>project_id/user_id/role (owner/member/guest)</td>
+</tr>
+<tr>
+<td><code>server_groups</code></td>
+<td>服务器组</td>
+<td>name/project_id/parent_id (树形)</td>
+</tr>
+<tr>
+<td><code>servers</code></td>
+<td>服务器</td>
+<td>hostname/ip/port/project_id/group_id</td>
+</tr>
+<tr>
+<td><code>server_credentials</code></td>
+<td>服务器凭据 (AES加密)</td>
+<td>server_id/auth_type/username/password/key</td>
+</tr>
+<tr>
+<td><code>services</code></td>
+<td>服务</td>
+<td>name/project_id/server_id</td>
+</tr>
+<tr>
+<td><code>service_log_sources</code></td>
+<td>日志源</td>
+<td>service_id/source_type/file_path/command</td>
+</tr>
+<tr>
+<td><code>cloud_accounts</code></td>
+<td>云账号</td>
+<td>provider(alibaba/tencent/jd)/credentials(JSON)</td>
+</tr>
+<tr>
+<td><code>log_agents</code></td>
+<td>日志代理</td>
+<td>server_id/token/status/last_heartbeat</td>
+</tr>
+<tr>
+<td><code>agent_discoveries</code></td>
+<td>发现项</td>
+<td>server_id/file_path/discovered_at</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="kubernetes-">Kubernetes 域</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>表名</th>
+<th>用途</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>k8s_clusters</code></td>
+<td>K8s 集群</td>
+<td>name/kubeconfig(加密)/connection_mode/status/owning_project_id</td>
+</tr>
+<tr>
+<td><code>k8s_cluster_access_grants</code></td>
+<td>集群授权</td>
+<td>principal_kind(role/user)/principal_ref/cluster_id/preset(readonly/readonly_exec/admin)</td>
+</tr>
+<tr>
+<td><code>k8s_namespace_allow_rules</code></td>
+<td>NS 白名单</td>
+<td>cluster_id/namespace_pattern/principal_kind/principal_ref</td>
+</tr>
+<tr>
+<td><code>k8s_namespace_deny_rules</code></td>
+<td>NS 黑名单</td>
+<td>cluster_id/namespace_pattern</td>
+</tr>
+<tr>
+<td><code>k8s_event_forward_rules</code></td>
+<td>Event 转发规则</td>
+<td>event_type/namespace_filter/cluster_id</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="heading-11">告警平台域</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>表名</th>
+<th>用途</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>alert_channels</code></td>
+<td>告警渠道</td>
+<td>type(dingding/email/webhook)/config(JSON)</td>
+</tr>
+<tr>
+<td><code>alert_datasources</code></td>
+<td>数据源</td>
+<td>project_id/prometheus_url/token</td>
+</tr>
+<tr>
+<td><code>alert_monitor_rules</code></td>
+<td>监控规则</td>
+<td>datasource_id/promql_expr/severity/enabled</td>
+</tr>
+<tr>
+<td><code>alert_rule_assignees</code></td>
+<td>规则负责人</td>
+<td>monitor_rule_id/user_id/notify_channel</td>
+</tr>
+<tr>
+<td><code>alert_duty_blocks</code></td>
+<td>值班块</td>
+<td>monitor_rule_id/start_time/end_time/user_ids(JSON)</td>
+</tr>
+<tr>
+<td><code>alert_silences</code></td>
+<td>静默规则</td>
+<td>matchers(JSON)/start_time/end_time/created_by</td>
+</tr>
+<tr>
+<td><code>alert_events</code></td>
+<td>告警事件</td>
+<td>fingerprint/status(firing/resolved)/labels(JSON)/channel_id</td>
+</tr>
+<tr>
+<td><code>alert_subscriptions</code></td>
+<td>订阅路由树</td>
+<td>parent_id/matchers(JSON)/receiver_group_id/is_default</td>
+</tr>
+<tr>
+<td><code>alert_receiver_groups</code></td>
+<td>接收组</td>
+<td>name/member_user_ids(JSON)</td>
+</tr>
+<tr>
+<td><code>alert_inhibition_rules</code></td>
+<td>抑制规则</td>
+<td>source_matchers/target_matchers(JSON)</td>
+</tr>
+<tr>
+<td><code>cloud_expiry_rules</code></td>
+<td>云到期规则</td>
+<td>cloud_account_id/cron_expr/threshold_days</td>
+</tr>
+<tr>
+<td><code>alert_firing_deliveries</code></td>
+<td>发送记录 (内存/短留存)</td>
+<td>group_key/channel_id/last_sent_at</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="heading-12">运维工具域</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>表名</th>
+<th>用途</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mysql_backup_instances</code></td>
+<td>备份实例</td>
+<td>project_id/server_id/database/host/port/credential_id/cron_expr</td>
+</tr>
+<tr>
+<td><code>mysql_backup_jobs</code></td>
+<td>备份任务</td>
+<td>instance_id/status/started_at/completed_at/file_url/size_bytes</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="52-er--">5.2 ER 关系图 (简化版)</h3>
+<figure class="diagram"><pre class="mermaid">erDiagram
+    USERS ||--o{ USER_ROLES : &quot;N:N&quot;
+    ROLES ||--o{ USER_ROLES : &quot;N:N&quot;
+    DEPARTMENTS ||--o{ USERS : &quot;N:1&quot;
+
+    PROJECTS ||--o{ PROJECT_MEMBERS : &quot;1:N&quot;
+    USERS ||--o{ PROJECT_MEMBERS : &quot;N:N&quot;
+    PROJECTS ||--o{ SERVER_GROUPS : &quot;1:N&quot;
+    SERVER_GROUPS ||--o{ SERVERS : &quot;N:1&quot;
+    SERVERS ||--|| SERVER_CREDENTIALS : &quot;1:1&quot;
+    SERVERS ||--o{ SERVICES : &quot;1:N&quot;
+    SERVICES ||--o{ SERVICE_LOG_SOURCES : &quot;1:N&quot;
+    SERVERS ||--o{ LOG_AGENTS : &quot;1:1&quot;
+    SERVERS ||--o{ AGENT_DISCOVERIES : &quot;1:N&quot;
+
+    K8S_CLUSTERS ||--o{ K8S_CLUSTER_ACCESS_GRANTS : &quot;1:N&quot;
+    ALERT_DATASOURCES ||--o{ ALERT_MONITOR_RULES : &quot;1:N&quot;
+    ALERT_MONITOR_RULES ||--o{ ALERT_RULE_ASSIGNEES : &quot;1:N&quot;
+    ALERT_CHANNELS ||--o{ ALERT_EVENTS : &quot;1:N&quot;</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<hr />
+<h2 id="6-api-">6. API 路由设计</h2>
+<h3 id="61-">6.1 路由分组结构</h3>
+<p>所有 API 统一前缀 <code>/api/v1</code>，按业务域分为三大路由组：</p>
+<h4 id="-register-platform-routesgointernalrouterregister-platform-routesgo">平台管理路由 (<a href="internal/router/register_platform_routes.go">register_platform_routes.go</a>)</h4>
+<pre><code>/api/v1
+├── health                              # 健康检查
+├── auth/                               # 认证模块
+│   ├── POST   verification-code        # 发送邮箱验证码
+│   ├── POST   login-code               # 发送登录验证码
+│   ├── POST   password-login-code      # 发送密码登录验证码
+│   ├── POST   login                    # 账号密码登录
+│   ├── POST   email-login              # 邮箱验证码登录
+│   ├── POST   register                 # 注册申请 (限流)
+│   ├── POST   logout                   # 登出 (需认证)
+│   ├── GET    me                       # 当前用户信息
+│   ├── PUT    me                       # 更新个人信息
+│   └── PUT    password                 # 修改密码
+├── users/                              # 用户管理 (CRUD + 导入导出 + 角色分配)
+├── departments/                        # 部门管理 (树形 CRUD)
+├── roles/                              # 角色管理 (CRUD)
+├── user-groups/                        # 用户组管理 (CRUD + 成员分配)
+├── permissions/                        # 权限点管理 (CRUD)
+├── policies/                           # Casbin 策略管理 (授予/撤销)
+├── k8s-policies/                       # K8s 集群档位管理
+│   ├── GET    actions                  # 档位动作列表
+│   ├── GET    paths                    # 受保护路径列表
+│   ├── GET                            # 按角色查询授权
+│   ├── GET    cluster-auth-matrix      # 集群授权矩阵
+│   ├── GET    user-cluster-auth        # 用户集群权限
+│   ├── POST   grant-preset             # 授予预设档位
+│   ├── DELETE cluster-grants/:id       # 删除单条授权
+│   └── POST   cluster-grants/batch-delete  # 批量删除
+├── k8s-namespace-deny-rules/           # NS 黑名单 (CRUD)
+├── k8s-namespace-allow-rules/          # NS 白名单 (CRUD)
+├── registrations/                      # 注册审核 (列表 + 审核)
+├── security/                           # 安全管理 (super-admin)
+│   ├── GET    banned-ips               # IP 封禁列表
+│   └── POST   banned-ips/unban         # 解封 IP
+├── menus/                              # 菜单管理 (树形 CRUD + 批量状态)
+├── dict/entries/                       # 数据字典 (CRUD + 明文查看)
+├── dict/options/:dictType              # 字典选项下拉
+├── alerts/                             # 告警平台
+│   ├── POST   webhook/alertmanager     # Alertmanager Webhook 入口
+│   ├── channels/                       # 告警渠道 (CRUD + 测试 + 模板预览)
+│   ├── events/                         # 告警事件列表
+│   ├── history/stats                   # 历史统计
+│   ├── datasources/                    # 数据源 (CRUD + Ping + PromQL 查询)
+│   ├── silences/                       # 静默规则 (CRUD + 批量)
+│   ├── monitor-rules/                  # 监控规则 (CRUD + 负责人)
+│   ├── duty-blocks/                    # 值班块 (CRUD)
+│   ├── subscriptions/                  # 订阅路由树 (CRUD + 移动 + 迁移 + 克隆)
+│   ├── inhibition-rules/               # 抑制规则 (CRUD + 缓存刷新)
+│   ├── receiver-groups/                # 接收组 (CRUD)
+│   └── cloud-expiry-rules/             # 云到期规则 (CRUD + 立即评估)
+├── login-logs/                         # 登录日志 (导出 + 批删)
+└── operation-logs/                     # 操作日志 (导出 + 批删)
+</code></pre>
+<h4 id="kubernetes--register-k8s-routesgointernalrouterregister-k8s-routesgo">Kubernetes 资源路由 (<a href="internal/router/register_k8s_routes.go">register_k8s_routes.go</a>)</h4>
+<pre><code>/api/v1
+├── clusters/                           # 集群管理 (CRUD + 状态 + 命名空间 + 组件 + API Resources)
+├── k8s/event-forward/                  # K8s Event 转发规则 (CRUD + 设置)
+├── pods/                               # Pod 管理
+│   ├── GET    list/detail/diagnose/events/logs/files/file
+│   ├── POST   exec/restart/create(yaml/simple)/update-simple/delete
+│   ├── GET    logs/download             # 日志下载
+│   ├── GET    logs/stream               # SSE 日志流
+│   ├── POST   file/upload/delete        # 文件操作
+│   └── GET    exec/ws                   # WebSocket 终端
+├── namespaces/                         # 命名空间 (列表/详情/apply/delete)
+├── nodes/                              # 节点 (列表/详情/调度性/污点)
+├── deployments/                        # Deployment (列表/详情/apply/scale/重启/删除/Pods)
+├── statefulsets/                       # StatefulSet (同上)
+├── daemonsets/                         # DaemonSet (同上)
+├── cronjobs/                           # CronJob (列表/V2/详情/Pods/apply/挂起/触发/删除)
+├── jobs/                               # Job (列表/详情/Pods/重跑/apply/删除)
+├── configmaps/                         # ConfigMap (列表/详情/apply/删除)
+├── secrets/                            # Secret (同上)
+├── persistentvolumes/                  # PV (列表/详情/apply/删除)
+├── persistentvolumeclaims/             # PVC (同上)
+├── storageclasses/                     # StorageClass (同上)
+├── k8s-services/                       # Service (列表/详情/apply/删除)
+├── ingresses/                          # Ingress (列表/详情/apply/删除/Nginx重启/Classes)
+├── network-policies/                   # NetworkPolicy (列表/详情/apply/删除)
+├── horizontal-pod-autoscalers/         # HPA (列表/详情/apply/删除)
+├── k8s/resource-watch/stream           # SSE 资源变更监听
+├── events/                             # 事件列表
+├── crds/                               # CRD (列表/详情/apply/删除)
+├── crs/                                # CR (自定义资源, 列表/资源/详情/apply/删除)
+├── rbac/                               # K8s RBAC (Roles/Bindings/ClusterRoles/ClusterRoleBindings)
+└── serviceaccounts/                    # ServiceAccount (列表/详情/apply/删除)
+</code></pre>
+<h4 id="-register-project-routesgointernalrouterregister-project-routesgo">项目管理路由 (<a href="internal/router/register_project_routes.go">register_project_routes.go</a>)</h4>
+<pre><code>/api/v1
+├── projects/                           # 项目管理
+│   ├── GET    list                     # 项目列表
+│   ├── POST   create                   # 创建项目
+│   ├── PUT    :id                      # 更新项目 (需成员权限)
+│   ├── DELETE :id                      # 删除项目 (需成员权限)
+│   ├── members/                        # 成员管理 (增删改查)
+│   ├── servers/                        # 服务器管理 (CRUD + 导入/测试/批量测试/云操作/同步)
+│   ├── server-groups/                  # 服务器组 (树形 CRUD)
+│   ├── cloud-accounts/                 # 云账号 (CRUD + 更新 + 同步)
+│   ├── services/                       # 服务配置 (CRUD)
+│   ├── log-sources/                    # 日志源 (CRUD)
+│   ├── agents/list                     # Agent 列表
+│   ├── agents/:agentId                 # Agent 删除
+│   ├── agents/heartbeat-refresh        # 批量刷新心跳
+│   ├── agents/status                   # Agent 状态汇总
+│   ├── agents/bootstrap                # 引导安装
+│   ├── agents/rotate-token             # Token 轮换
+│   ├── discovery/                      # 发现列表
+│   ├── logs/stream                     # SSE 日志流
+│   ├── logs/export                     # 日志导出
+│   ├── log-files                       # 日志文件列表
+│   ├── log-units                       # 日志单元列表
+│   ├── mysql-backup/                   # MySQL 备份
+│   │   ├── mysqldump-options           # 选项列表
+│   │   ├── instances                   # 备份实例 (CRUD + Ping + 远程检查 + 执行)
+│   │   └── jobs                        # 备份任务 (列表 + 签名下载)
+│   └── servers/:serverId/terminal/ws   # WebSocket 终端
+├── agents/                             # 公开接口 (无需认证)
+│   ├── POST   register                 # Agent 注册 (需 register_secret)
+│   ├── GET    runtime-config           # 运行时配置下发
+│   ├── POST   public-register          # 公开注册
+│   ├── POST   health/report            # 心跳上报
+│   └── POST   discovery/report         # 发现结果上报
+└── overview/                           # 概览面板
+    ├── GET    &quot;&quot;                       # 总览数据
+    └── GET    trends                   # 趋势统计
+</code></pre>
+<h3 id="62-">6.2 响应格式规范</h3>
+<p><strong>成功响应</strong>:</p>
+<pre><code class="language-json">{
+  &quot;code&quot;: 0,
+  &quot;message&quot;: &quot;success&quot;,
+  &quot;data&quot;: { ... }
+}
+</code></pre>
+<p><strong>错误响应</strong>:</p>
+<pre><code class="language-json">{
+  &quot;code&quot;: 40001,
+  &quot;message&quot;: &quot;参数校验失败&quot;,
+  &quot;data&quot;: null
+}
+</code></pre>
+<p><strong>分页响应</strong>:</p>
+<pre><code class="language-json">{
+  &quot;code&quot;: 0,
+  &quot;data&quot;: {
+    &quot;list&quot;: [...],
+    &quot;total&quot;: 100,
+    &quot;page&quot;: 1,
+    &quot;page_size&quot;: 20
+  }
+}
+</code></pre>
+<hr />
+<h2 id="7-">7. 业务服务层</h2>
+<h3 id="71-">7.1 认证服务流程</h3>
+<figure class="diagram"><pre class="mermaid">sequenceDiagram
+    participant FE as Frontend
+    participant H as AuthHandler
+    participant S as AuthService
+    participant R as Redis
+    participant DB as MySQL
+    participant M as Mailer
+
+    FE->>H: POST /auth/login-code {username}
+    H->>S: SendLoginCodeByUsername(req)
+    S->>DB: GetByUsername(username)
+    S->>R: Check cooldown key
+    alt 冷却中
+        S-->>H: Error(&quot;操作过于频繁&quot;)
+    else 正常
+        S->>S: Generate 6-digit code
+        S->>R: SET code_key code TTL=600s
+        S->>R: SET cooldown_key &quot;1&quot; TTL=60s
+        S->>M: SendEmail(code, email)
+        S-->>H: Success
+    end
+
+    FE->>H: POST /auth/email-login {email, code}
+    H->>S: EmailLogin(req)
+    S->>R: GET code_key
+    alt Code 匹配
+        S->>DB: GetByEmail(email)
+        S->>S: Generate JWT (userID, tokenID)
+        S->>R: SET session:tokenID userID TTL=120m
+        S-->>H: {access_token}
+        H-->>FE: 200 OK + token
+    else 不匹配
+        S-->>H: Error(&quot;验证码错误&quot;)
+    end</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<h3 id="72-">7.2 告警处理流水线</h3>
+<p><strong>完整告警生命周期</strong>:</p>
+<pre><code>1. Alertmanager Webhook 触发
+   ↓
+2. Ingest Pipeline 解析标准化
+   ↓
+3. Fingerprint 计算 (Labels Hash)
+   ↓
+4. Redis 去重检查 (TTL 24h)
+   ↓
+5. Aggregate State Machine:
+   - Pending → Firing (Group Wait 15s)
+   - Firing → Firing (Labels 变化, Group Interval 60s)
+   - Firing → Firing (无变化, Repeat Interval 300s)
+   - Firing → Resolved (Alertmanager resolve)
+   ↓
+6. Delivery Core:
+   - 查询匹配的订阅路由树节点
+   - 解析接收组 (值班人 + 负责人)
+   - 渲染渠道模板 (HTML/Markdown/DingTalk JSON)
+   - 异步投递 (Worker Pool)
+   ↓
+7. Channel Delivery:
+   - 钉钉: Webhook + 签名
+   - 邮件: SMTP + HTML 模板
+   - Webhook: 自定义回调
+   ↓
+8. Record History (DB)
+</code></pre>
+<h4 id="repository">告警域数据访问策略（Repository）</h4>
+<p>告警模块已 <strong>全面仓储化</strong>（2026-05 重构）。Service 通过 <code>interfaces.*Repository</code> 访问数据；<code>AlertService</code> 构造时注入各 Repo，<strong>不再持有 <code>*gorm.DB</code> 字段</strong>。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>数据类型</th>
+<th>访问方式</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>告警事件</td>
+<td><code>interfaces.AlertEventRepository</code></td>
+<td><code>persistAlertEvent</code> 统一写历史</td>
+</tr>
+<tr>
+<td>通知渠道</td>
+<td><code>interfaces.AlertChannelRepository</code></td>
+<td>渠道 CRUD 与投递加载</td>
+</tr>
+<tr>
+<td>静默 / 抑制 / 订阅 / 值班 / 处理人 / 接收组 / 监控规则 / 数据源</td>
+<td>对应 <code>interfaces.*Repository</code></td>
+<td>各 <code>alert/*_service.go</code></td>
+</tr>
+<tr>
+<td>云到期规则</td>
+<td><code>interfaces.CloudExpiryRuleRepository</code></td>
+<td>含定时评估</td>
+</tr>
+<tr>
+<td>Redis 聚合状态</td>
+<td><code>alert.NewRedisAlertStateService</code></td>
+<td>去重/聚合 TTL</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>原则</strong>：新告警相关表访问必须新增或扩展 <code>interfaces</code> + <code>repository</code>；禁止在 <code>alert</code> 包内新增裸 <code>gorm.DB</code> 查询。</p>
+<p><code>internal/service/alert/</code> 为告警<strong>完整实现包</strong>（非骨架）；Webhook 主路径：<code>AlertService</code> → <code>RunIngressPipeline</code> / <code>persistAlertEvent</code> → 投递子模块。</p>
+<h4 id="k8s--event-">K8s 运行时与 Event 转发</h4>
+<p><code>K8sRuntimeService</code> 在 <code>router/route_services.go</code> 装配时创建<strong>唯一实例</strong>，供 K8s API Handler 与 <a href="internal/service/k8s/eventforward/manager.go">k8s/eventforward.Manager</a> 共用，保证 kom 集群注册与连接状态一致。</p>
+<h3 id="73-">7.3 日志采集链路</h3>
+<p><strong>Agent 侧</strong> (<a href="cmd/logagent/main.go">cmd/logagent/main.go</a>):</p>
+<pre><code class="language-go">// Agent 启动流程
+1. 连接 Platform gRPC Server (:18080)
+2. 使用 server_id + token 认证
+3. 拉取 Runtime Config (日志源配置/发现根目录)
+4. 启动 File Collector (tail -f 日志文件)
+5. 通过 gRPC Stream 上传日志行
+6. 定期上报心跳 (30s 间隔)
+7. 定期执行 Discovery (扫描新文件, 默认 30m)
+8. 上报发现结果到 Platform
+</code></pre>
+<p><strong>Platform 侧</strong> (<a href="internal/grpc/server/log_platform_server.go">grpc/server/log_platform_server.go</a>):</p>
+<pre><code class="language-go">// gRPC 服务定义
+service LogPlatform {
+    // Agent 调用
+    rpc Register(LogAgentRegisterRequest) returns (LogAgentRegisterResponse);
+    rpc Heartbeat(stream LogAgentHeartbeatRequest) returns (stream LogAgentHeartbeatResponse);
+    rpc Ingest(stream LogIngestRequest) returns (LogIngestResponse);
+    rpc ReportDiscovery(AgentDiscoveryReportRequest) returns (AgentDiscoveryReportResponse);
+
+    // Frontend 调用
+    rpc StreamLogs(LogStreamRequest) returns (stream LogStreamResponse);  // SSE
+    rpc ListLogFiles(ListLogFilesRequest) returns (ListLogFilesResponse);
+}
+</code></pre>
+<h3 id="74-k8s-">7.4 K8s 资源操作流程</h3>
+<p><strong>Pod Exec (WebSocket)</strong>:</p>
+<figure class="diagram"><pre class="mermaid">sequenceDiagram
+    participant Browser
+    participant WSHandler as PodExecWS Handler
+    participant K8sSvc as K8sPodService
+    participant K8sAPI as Kubernetes API
+
+    Browser->>WSHandler: GET /pods/exec/ws?cluster_id=X&pod=Y&container=Z&token=T
+    WSHandler->>WSHandler: WS Auth Middleware (URL Token)
+    WSHandler->>WSHandler: Casbin Check (exec 权限)
+    WSHandler->>WSHandler: K8s Scope Check (readonly_exec+)
+    WSHandler->>K8sSvc: GetExecURL(cluster, pod, container, command=[&quot;/bin/sh&quot;])
+    K8sSvc->>K8sAPI: POST /api/v1/namespaces/{ns}/pods/{pod}/exec
+    K8sAPI-->>K8sSvc: {url: &quot;wss://...&quot;}
+    K8sSvc-->>WSHandler: execURL
+    WSHandler-->>Browser: 101 Switching Protocols
+    loop 双向转发
+        Browser->>WSHandler: stdin data
+        WSHandler->>K8sAPI: forward to exec stream
+        K8sAPI->>WSHandler: stdout/stderr data
+        WSHandler->>Browser: forward to browser
+    end</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<hr />
+<h2 id="8-">8. 关键技术实现</h2>
+<h3 id="81-">8.1 敏感数据加密</h3>
+<p><strong>AES-GCM 加密</strong> (<a href="internal/pkg/crypto/aesgcm.go">internal/pkg/crypto/aesgcm.go</a>):</p>
+<pre><code class="language-go">// 用于加密: 服务器 SSH 凭据、Kubeconfig、云账号密钥等
+func Encrypt(plaintext []byte, key []byte) ([]byte, error)
+func Decrypt(ciphertext []byte, key []byte) ([]byte, error)
+
+// 密钥来源: config.yaml security.encryption_key (32 bytes base64)
+</code></pre>
+<h3 id="82-">8.2 会话管理</h3>
+<p><strong>Redis Session 白名单</strong> (<a href="internal/store/session_redis.go">internal/store/session_redis.go</a>):</p>
+<pre><code class="language-go">// 登录时写入
+func StoreAccessToken(ctx context.Context, rdb *redis.Client, tokenID string, userID uint, ttl time.Duration)
+
+// 每次请求校验
+func ValidateAccessTokenSession(ctx context.Context, rdb *redis.Client, tokenID string) error
+
+// 登出时删除
+func RevokeAccessToken(ctx context.Context, rdb *redis.Client, tokenID string)
+
+// Key 格式: session:access:{tokenID} → {userID} TTL=120m
+</code></pre>
+<h3 id="83-">8.3 分布式锁</h3>
+<p><strong>Redis SETNX 实现</strong> (用于备份调度器防重复):</p>
+<pre><code class="language-go">func AcquireLock(ctx context.Context, rdb *redis.Client, key string, ttl time.Duration) (bool, string, error)
+func ReleaseLock(ctx context.Context, rdb *redis.Client, key string, token string) error
+</code></pre>
+<h3 id="84-">8.4 事件驱动</h3>
+<p><strong>内部 EventBus</strong> (<a href="internal/pkg/eventbus/bus.go">internal/pkg/eventbus/bus.go</a>):</p>
+<pre><code class="language-go">// 用于解耦模块间通信 (如: 告警状态变更 → 通知审计)
+type Bus struct {
+    subscribers map[string][]EventHandler
+}
+
+func (b *Bus) Publish(event string, data interface{})
+func (b *Bus) Subscribe(event string, handler EventHandler)
+</code></pre>
+<h3 id="85-">8.5 日志系统</h3>
+<p><strong>结构化日志</strong> (<a href="internal/pkg/logger/">internal/pkg/logger/</a> + <a href="internal/pkg/logutil/logutil.go">logutil</a>):</p>
+<pre><code class="language-go">// 底层 Logger（bootstrap 初始化）
+logger.Infow(&quot;user login&quot;, &quot;username&quot;, &quot;admin&quot;, &quot;ip&quot;, &quot;192.168.1.1&quot;)
+
+// 组件化日志（推荐：HTTP / Service / Worker）
+logutil.HTTP(&quot;http.auth&quot;).Warn(&quot;token expired&quot;, &quot;token_id&quot;, &quot;abc&quot;)
+logutil.Worker(&quot;alert&quot;).Infow(&quot;Scheduled cloud expiry rule evaluation&quot;, &quot;rule_id&quot;, id)
+
+// GORM SQL 日志 (单独 Level 控制)
+logger.SQL.Info(&quot;SELECT * FROM users...&quot;)
+</code></pre>
+<p><strong>已移除</strong>：<code>internal/service/svclog</code>（逻辑并入 <code>logutil</code>）。</p>
+<h3 id="86-">8.6 错误处理</h3>
+<p><strong>统一错误码</strong> (<a href="internal/pkg/constants/biz_reason.go">internal/pkg/constants/biz_reason.go</a>):</p>
+<pre><code class="language-go">const (
+    ErrSuccess               = 0
+    ErrInvalidParams         = 40001
+    ErrUnauthorized          = 40101
+    // ...
+)
+</code></pre>
+<p><strong>业务错误</strong> (<a href="internal/pkg/errors/">internal/pkg/errors/</a>) — 包别名 <code>bizerrors</code>:</p>
+<pre><code class="language-go">// Service 层
+return bizerrors.Pass(ctx, &quot;user&quot;, &quot;GetByID&quot;, err)
+return bizerrors.Internalf(ctx, &quot;k8s.dynamic&quot;, &quot;list_crd&quot;, err, msgFmt, args...)
+
+// HTTP：middleware.ErrorHandler + handler.abortService
+response.Abort(c, bizerrors.Ensure(err))
+
+// gRPC
+return nil, bizerrors.ToGRPCStatus(err)
+</code></pre>
+<p><strong>已移除</strong>：<code>internal/pkg/apperror</code>、<code>internal/service/svcerr</code>。</p>
+<h3 id="87-">8.7 分页实现</h3>
+<p><strong>通用分页器</strong> (<a href="internal/pkg/pagination/pagination.go">internal/pkg/pagination/pagination.go</a>):</p>
+<pre><code class="language-go">type PaginateQuery struct {
+    Page     int `form:&quot;page&quot; binding:&quot;min=1&quot;`
+    PageSize int `form:&quot;page_size&quot; binding:&quot;min=1,max=100&quot;`
+}
+
+type PaginateResult[T any] struct {
+    List     []T   `json:&quot;list&quot;`
+    Total    int64 `json:&quot;total&quot;`
+    Page     int   `json:&quot;page&quot;`
+    PageSize int   `json:&quot;page_size&quot;`
+}
+
+func Paginate[T any](db *gorm.DB, query PaginateQuery, dest *[]T) (*PaginateResult[T], error)
+</code></pre>
+<h3 id="88-">8.8 数据字典系统</h3>
+<p><strong>运行期配置热更新</strong> (<a href="internal/dictconfig/">internal/dictconfig/</a>):</p>
+<pre><code class="language-go">// 字典类型定义
+var DefaultMailDictTypes = []string{
+    &quot;mail_host&quot;, &quot;mail_port&quot;, &quot;mail_username&quot;, &quot;mail_password&quot;,
+    &quot;mail_from_email&quot;, &quot;mail_from_name&quot;, &quot;mail_use_tls&quot;,
+}
+
+// 解析优先级: 数据库 &gt; YAML 默认值
+func ResolveMailConfig(ctx context.Context, db *gorm.DB, yamlBase config.MailConfig, dictTypes []string) config.MailConfig
+</code></pre>
+<p><strong>敏感值保护</strong>:</p>
+<ul>
+<li>密码/Token 类字典项使用 AES 加密存储</li>
+<li>API 返回时自动脱敏 (显示 <code>****</code>)</li>
+<li>仅管理员可点击&quot;明文查看&quot;临时解密</li>
+</ul>
+<hr />
+<h2 id="9-">9. 部署架构</h2>
+<h3 id="91-docker-compose-">9.1 Docker Compose 编排</h3>
+<p><strong>服务拓扑</strong> (<a href="docker-compose.yml">docker-compose.yml</a>):</p>
+<pre><code class="language-yaml">services:
+  mysql:
+    image: mysql:5.7
+    ports: [&quot;3306:3306&quot;]
+    volumes: [&quot;mysql_data:/var/lib/mysql&quot;]
+
+  redis:
+    image: redis:7-alpine
+    ports: [&quot;6379:6379&quot;]
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports: [&quot;8080:8080&quot;]
+    depends_on: [mysql, redis]
+    volumes: [&quot;./configs:/app/configs&quot;, &quot;./logs:/app/logs&quot;]
+
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.frontend
+    ports: [&quot;80:80&quot;]
+    depends_on: [backend]
+
+volumes:
+  mysql_data:
+</code></pre>
+<h3 id="92-">9.2 生产部署建议</h3>
+<p><strong>资源规划</strong>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>CPU</th>
+<th>内存</th>
+<th>磁盘</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend (Go)</td>
+<td>2-4 核</td>
+<td>2-4 GB</td>
+<td>日志 10GB+</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>4-8 核</td>
+<td>8-16 GB</td>
+<td>数据 100GB+</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>2-4 核</td>
+<td>4-8 GB</td>
+<td>-</td>
+</tr>
+<tr>
+<td>MinIO (可选)</td>
+<td>2 核</td>
+<td>4 GB</td>
+<td>备份 500GB+</td>
+</tr>
+<tr>
+<td>Frontend (Nginx)</td>
+<td>1 核</td>
+<td>512 MB</td>
+<td>-</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>高可用方案</strong>:</p>
+<ul>
+<li>Backend: 多副本 + K8s Deployment + HPA</li>
+<li>MySQL: 主从复制 / MGR 集群</li>
+<li>Redis: Sentinel / Cluster 模式</li>
+<li>MinIO: 分布式模式 (4+ 节点)</li>
+</ul>
+<p><strong>安全加固</strong>:</p>
+<ol>
+<li>修改所有默认密码 (MySQL/Redis/JWT/EncryptionKey/AgentSecret)</li>
+<li>启用 HTTPS (Nginx SSL Termination)</li>
+<li>配置防火墙规则 (仅开放 80/443)</li>
+<li>定期备份数据库 (内置 MySQL Backup 功能)</li>
+<li>启用 Casbin 最小权限原则</li>
+<li>Kubeconfig 加密存储 + API 脱敏返回</li>
+</ol>
+<hr />
+<h2 id="10-">10. 扩展性与优化建议</h2>
+<h3 id="101-">10.1 已有的扩展点</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>扩展方向</th>
+<th>实现方式</th>
+<th>位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>新增告警渠道</td>
+<td>实现 <code>AlertChannel</code> 接口</td>
+<td><a href="internal/service/alert/alert_channel_registry.go">alert/alert_channel_registry.go</a></td>
+</tr>
+<tr>
+<td>新增云厂商</td>
+<td>实现 <code>CloudProvider</code> 接口</td>
+<td><a href="internal/service/project/cloud_provider_alibaba.go">project/cloud_provider_alibaba.go</a> 等</td>
+</tr>
+<tr>
+<td>新增 K8s 资源</td>
+<td>注册 CRD/CR Handler</td>
+<td><a href="internal/service/k8s/k8s_crd_service.go">k8s/k8s_crd_service.go</a></td>
+</tr>
+<tr>
+<td>自定义中间件</td>
+<td>注入到 Gin Engine</td>
+<td><a href="internal/bootstrap/app.go">bootstrap/app.go</a></td>
+</tr>
+<tr>
+<td>字典配置扩展</td>
+<td>新增 DictType</td>
+<td><a href="internal/service/system/dict_entry_service.go">system/dict_entry_service.go</a></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="102-">10.2 性能优化建议</h3>
+<p><strong>短期优化</strong>:</p>
+<ol>
+<li><strong>数据库索引优化</strong>: 为高频查询字段添加复合索引</li>
+<li><strong>Redis 缓存热点</strong>: 菜单树/字典选项/用户权限缓存</li>
+<li><strong>连接池调优</strong>: 根据 QPS 调整 MySQL/Redis 连接数</li>
+<li><strong>日志异步</strong>: Operation Audit 改为 Channel + 批量写入</li>
+<li><strong>Gin 模式</strong>: 生产环境启用 <code>gin.ReleaseMode</code></li>
+</ol>
+<p><strong>中期优化</strong>:</p>
+<ol>
+<li><strong>读写分离</strong>: MySQL 主从, 读走从库</li>
+<li><strong>API 网关</strong>: 统一限流/熔断/鉴权 ( Kong / APISIX )</li>
+<li><strong>CDN 加速</strong>: 静态资源/Swagger 文档</li>
+<li><strong>Prometheus 监控</strong>: 内置 Metrics 暴露 (/metrics)</li>
+<li><strong>链路追踪</strong>: OpenTelemetry 集成</li>
+</ol>
+<p><strong>长期优化</strong>:</p>
+<ol>
+<li><strong>微服务拆分</strong>: 告警平台/K8s 控制台/日志平台独立部署</li>
+<li><strong>事件驱动架构</strong>: Kafka/RabbitMQ 解耦告警流水线</li>
+<li><strong>多租户增强</strong>: 数据库 Schema 隔离 / Row-Level Security</li>
+<li><strong>GraphQL API</strong>: 前端灵活查询, 减少 N+1 问题</li>
+<li><strong>Serverless Agent</strong>: Agent 改为轻量级 eBPF/Wasm 方案</li>
+</ol>
+<h3 id="103-">10.3 代码质量提升</h3>
+<ol>
+<li><strong>测试覆盖率</strong>: 目标 80%+ (当前已有部分单元测试)</li>
+<li><strong>API Contract Testing</strong>: Pact / OpenAPI Validation</li>
+<li><strong>Lint 规范</strong>: golangci-lint + 自定义规则</li>
+<li><strong>CI/CD Pipeline</strong>: GitHub Actions (Lint/Test/Build/Deploy)</li>
+<li><strong>文档自动化</strong>: Swaggo 注释 → Swagger UI 同步</li>
+</ol>
+<hr />
+<h2 id="-a-">附录 A: 关键文件索引</h2>
+<h3 id="heading-13">入口与配置</h3>
+<ul>
+<li><a href="main.go">main.go</a> - 程序入口</li>
+<li><a href="cmd/root.go">cmd/root.go</a> - CLI 根命令</li>
+<li><a href="cmd/server.go">cmd/server.go</a> - HTTP/gRPC 服务启动</li>
+<li><a href="configs/config.yaml">configs/config.yaml</a> - 主配置文件</li>
+</ul>
+<h3 id="heading-14">核心框架</h3>
+<ul>
+<li><a href="internal/bootstrap/app.go">internal/bootstrap/app.go</a> - 依赖注入 Builder</li>
+<li><a href="internal/router/router.go">internal/router/router.go</a> - 路由注册入口</li>
+<li><a href="internal/router/router_deps.go">internal/router/router_deps.go</a> - 依赖装配</li>
+</ul>
+<h3 id="heading-15">中间件</h3>
+<ul>
+<li><a href="internal/middleware/auth.go">internal/middleware/auth.go</a> - JWT 认证</li>
+<li><a href="internal/middleware/casbin.go">internal/middleware/casbin.go</a> - Casbin 权限</li>
+<li><a href="internal/middleware/k8s_scope_authorize.go">internal/middleware/k8s_scope_authorize.go</a> - K8s 范围鉴权</li>
+<li><a href="internal/middleware/operation_audit.go">internal/middleware/operation_audit.go</a> - 审计日志</li>
+</ul>
+<h3 id="--1">业务服务 (精选)</h3>
+<ul>
+<li><a href="internal/service/system/auth_service.go">internal/service/system/auth_service.go</a> - 认证服务</li>
+<li><a href="internal/service/alert/alert_delivery_core.go">internal/service/alert/alert_delivery_core.go</a> - 告警投递核心</li>
+<li><a href="internal/service/k8s/k8s_pod_service.go">internal/service/k8s/k8s_pod_service.go</a> - Pod 管理</li>
+<li><a href="internal/service/project/project_mgmt_core.go">internal/service/project/project_mgmt_core.go</a> - 项目管理</li>
+<li><a href="internal/service/logplatform/log_agent_service.go">internal/service/logplatform/log_agent_service.go</a> - Agent 服务</li>
+<li><a href="internal/service/exports.go">internal/service/exports.go</a> - Service 门面（type alias）</li>
+</ul>
+<h3 id="heading-16">工具包</h3>
+<ul>
+<li><a href="internal/pkg/response/response.go">internal/pkg/response/response.go</a> - 统一响应格式</li>
+<li><a href="internal/pkg/errors/">internal/pkg/errors/</a> - BizError（bizerrors）</li>
+<li><a href="internal/pkg/pagination/pagination.go">internal/pkg/pagination/pagination.go</a> - 分页组件</li>
+<li><a href="internal/pkg/crypto/aesgcm.go">internal/pkg/crypto/aesgcm.go</a> - 加密工具</li>
+<li><a href="internal/pkg/logutil/">internal/pkg/logutil/</a> - 组件化日志</li>
+<li><a href="internal/pkg/logger/">internal/pkg/logger/</a> - 底层 Logger</li>
+</ul>
+<hr />
+<h2 id="-b-">附录 B: 常用命令速查</h2>
+<pre><code class="language-bash"># 开发环境
+go run . migrate          # 数据库迁移
+go run . seed             # 种子数据
+go run . server           # 启动服务 (HTTP:8080 + gRPC:18080)
+go run . log-agent --help # 查看 Agent 参数
+
+# 测试
+go test ./...             # 运行全部测试
+go test ./internal/service/alert/... -short   # 告警域单测
+go test ./internal/service/k8s/... -short     # K8s 域单测
+
+# 构建
+go build -o yunshu-server ./main.go
+go build -o log-agent ./cmd/logagent
+
+# 代码质量
+gofmt -w ./.
+golint ./...
+golangci-lint run
+
+# Docker
+docker compose up -d --build
+docker compose logs -f backend
+docker compose down -v
+</code></pre>
+<hr />
+<h2 id="-c-">附录 C: 环境变量清单</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>变量名</th>
+<th>说明</th>
+<th>默认值</th>
+<th>必须</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MYSQL_HOST</code></td>
+<td>MySQL 地址</td>
+<td>yunshu-mysql</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>MYSQL_PORT</code></td>
+<td>MySQL 端口</td>
+<td>3306</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>MYSQL_USER</code></td>
+<td>MySQL 用户</td>
+<td>root</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>MYSQL_PASSWORD</code></td>
+<td>MySQL 密码</td>
+<td>-</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>REDIS_ADDR</code></td>
+<td>Redis 地址</td>
+<td>yunshu-redis:6379</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>REDIS_PASSWORD</code></td>
+<td>Redis 密码</td>
+<td>-</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><code>JWT_SECRET</code></td>
+<td>JWT 签名密钥</td>
+<td>-</td>
+<td>✅ (生产)</td>
+</tr>
+<tr>
+<td><code>ENCRYPTION_KEY</code></td>
+<td>AES 加密密钥</td>
+<td>-</td>
+<td>✅ (生产)</td>
+</tr>
+<tr>
+<td><code>APP_PORT</code></td>
+<td>HTTP 端口</td>
+<td>8080</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>APP_ENV</code></td>
+<td>运行环境</td>
+<td>prod</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>LOG_LEVEL</code></td>
+<td>日志级别</td>
+<td>debug</td>
+<td>❌</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<p><strong>文档版本</strong>: v1.1<br />
+<strong>最后更新</strong>: 2026-05-22<br />
+<strong>适用版本</strong>: Yunshu Backend（Service 按域分包 + 仓储化 + bizerrors）<br />
+<strong>维护者</strong>: Yunshu Team<br />
+<strong>代码地图</strong>: <a href="CODEBASE-MAP.md">CODEBASE-MAP.md</a></p>
+
+      <!-- CONTENT_END -->
+
+      <footer class="doc-footer">
+        <span>Generated by <a href="#">md2html</a></span>
+        <span>Source: backend-architecture-complete.md</span>
+      </footer>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    // ---------- Theme ----------
+    const STORAGE_KEY = "md2html-theme";
+    function currentTheme() { return document.documentElement.dataset.theme || "light"; }
+    function applyThemeIcon() {
+      const use = document.getElementById("theme-icon-use");
+      if (use) use.setAttribute("href", currentTheme() === "dark" ? "#i-sun" : "#i-moon");
+    }
+    (function restoreTheme() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) document.documentElement.dataset.theme = saved;
+    })();
+
+    // ---------- Mermaid ----------
+    const diagramSources = new Map();
+    function initMermaid() {
+      const isDark = currentTheme() === "dark";
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: isDark ? "dark" : "default",
+        themeVariables: {
+          primaryColor: isDark ? "#3A2A22" : "#FBEEE6",
+          primaryTextColor: isDark ? "#F5F0E8" : "#1A1A1A",
+          primaryBorderColor: isDark ? "#E89572" : "#D97757",
+          lineColor: isDark ? "#9A938A" : "#6B6B66",
+          secondaryColor: isDark ? "#2A2520" : "#F5F5F0",
+          tertiaryColor: isDark ? "#221E1A" : "#FFFFFF",
+          fontFamily: "Inter, system-ui, sans-serif",
+        },
+      });
+    }
+    async function renderMermaid() {
+      initMermaid();
+      const els = document.querySelectorAll(".mermaid");
+      els.forEach(el => {
+        if (!diagramSources.has(el)) diagramSources.set(el, el.textContent.trim());
+        el.textContent = diagramSources.get(el);
+        el.removeAttribute("data-processed");
+      });
+      try { await mermaid.run({ nodes: els }); } catch (e) { console.error(e); }
+    }
+    function toggleTheme() {
+      const next = currentTheme() === "light" ? "dark" : "light";
+      document.documentElement.dataset.theme = next;
+      localStorage.setItem(STORAGE_KEY, next);
+      applyThemeIcon();
+      renderMermaid();
+    }
+
+    // ---------- TOC drawer (mobile) ----------
+    function openToc()  { document.body.classList.add("toc-open"); }
+    function closeToc() { document.body.classList.remove("toc-open"); }
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && document.body.classList.contains("toc-open")) closeToc();
+    });
+
+    // ---------- TOC scrollspy ----------
+    function setupTocSpy() {
+      const links = document.querySelectorAll("#toc-nav a[href^='#']");
+      if (!links.length) {
+        const toc = document.getElementById("toc");
+        if (toc) toc.style.display = "none";
+        return;
+      }
+      const map = new Map();
+      links.forEach(a => {
+        const id = a.getAttribute("href").slice(1);
+        const el = document.getElementById(id);
+        if (el) map.set(el, a);
+        a.addEventListener("click", () => {
+          if (window.matchMedia("(max-width: 900px)").matches) closeToc();
+        });
+      });
+      const obs = new IntersectionObserver((entries) => {
+        entries.forEach(en => {
+          const link = map.get(en.target);
+          if (!link) return;
+          if (en.isIntersecting) {
+            links.forEach(l => l.classList.remove("active"));
+            link.classList.add("active");
+          }
+        });
+      }, { rootMargin: "-80px 0px -70% 0px", threshold: 0 });
+      map.forEach((_, el) => obs.observe(el));
+    }
+
+    // ---------- Anchor links on h2/h3 ----------
+    function injectAnchors() {
+      document.querySelectorAll(".content h2[id], .content h3[id]").forEach(h => {
+        if (h.querySelector(".anchor")) return;
+        const a = document.createElement("a");
+        a.className = "anchor";
+        a.href = "#" + h.id;
+        a.setAttribute("aria-label", "Permalink");
+        a.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-link"/></svg>';
+        h.appendChild(a);
+      });
+    }
+
+    // ---------- Copy-to-clipboard on <pre> ----------
+    function injectCopyButtons() {
+      document.querySelectorAll(".content pre").forEach(pre => {
+        if (pre.classList.contains("mermaid")) return;
+        if (pre.querySelector(".copy-btn")) return;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "copy-btn";
+        btn.setAttribute("aria-label", "Copy code");
+        btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copy"/></svg>';
+        btn.addEventListener("click", async () => {
+          const code = pre.querySelector("code")?.textContent ?? pre.textContent;
+          try {
+            await navigator.clipboard.writeText(code);
+            btn.classList.add("copied");
+            btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check"/></svg>';
+            setTimeout(() => {
+              btn.classList.remove("copied");
+              btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-copy"/></svg>';
+            }, 1500);
+          } catch (e) { console.error(e); }
+        });
+        pre.appendChild(btn);
+      });
+    }
+
+    // ---------- Scroll progress ----------
+    function setupScrollProgress() {
+      const bar = document.getElementById("scroll-progress");
+      if (!bar) return;
+      const onScroll = () => {
+        const h = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+        const p = h > 0 ? (document.documentElement.scrollTop / h * 100) : 0;
+        bar.style.width = p + "%";
+      };
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    }
+
+    // ---------- Boot ----------
+    document.addEventListener("DOMContentLoaded", () => {
+      applyThemeIcon();
+      injectAnchors();
+      injectCopyButtons();
+      renderMermaid();
+      setupTocSpy();
+      setupScrollProgress();
+    });
+  </script>
+</body>
+</html>

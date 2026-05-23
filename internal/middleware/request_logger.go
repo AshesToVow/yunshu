@@ -23,7 +23,7 @@ var requestSensitiveJSONKeyPattern = regexp.MustCompile(`"(?i)(password|code|tok
 
 // queryKeysToMask 访问日志 query 中可能携带 JWT 或密钥，避免落盘明文。
 var queryKeysToMask = []string{
-	"token", "access_token", "refresh_token", "password", "secret", "authorization",
+	"ticket", "token", "access_token", "refresh_token", "password", "secret", "authorization",
 }
 
 func RequestLogger(logger *logx.Logger) gin.HandlerFunc {

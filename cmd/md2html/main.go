@@ -101,6 +101,11 @@ type bundleDoc struct {
 
 func bundleDocs() []bundleDoc {
 	return []bundleDoc{
+		{"docs/CODEBASE-MAP.md", "CODEBASE-MAP.html", "后端代码地图", "目录结构、阅读顺序、Wire 与错误规范"},
+		{"docs/backend-architecture-complete.md", "backend-architecture-complete.html", "后端完整架构", "分层、模块、部署与扩展点"},
+		{"docs/refactoring-report.md", "refactoring-report.html", "架构重构报告", "重构实施状态与待办"},
+		{"docs/architecture-diagrams.md", "architecture-diagrams.html", "架构图集", "分层与模块关系图"},
+		{"docs/README.md", "docs-readme.html", "文档索引", "docs 目录导航"},
 		{"docs/alert-notify-guide.md", "alert-notify-guide.html", "告警通知与恢复", "配置、聚合、通道与 Alertmanager 对接"},
 		{"docs/alert-routing-and-delivery-guide.md", "alert-routing-and-delivery-guide.html", "告警路由与投递", "订阅树、处理人、值班、端到端链路"},
 		{"docs/alert-subscription-labels-chain.md", "alert-subscription-labels-chain.html", "订阅标签链路", "match_labels 与 Prometheus/平台规则对齐"},

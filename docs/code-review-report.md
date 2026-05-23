@@ -1,5 +1,9 @@
 # Yunshu 后端代码架构深度审查报告
 
+> **文档状态（2026-05-22）**：本文为 **2026-05-21 审查快照**。下列多项已在后续重构中处理，**请勿将「待修复」条目全部视为当前问题**。  
+> **已解决摘要**：Service 按域分包、`svcerr`/`svclog`/`apperror` 删除、`bizerrors` 统一、告警仓储化、K8s Event 转发迁至 `k8s/eventforward/`、Wire 基础设施与路由 Repo。  
+> **当前状态请以** [refactoring-report.md](refactoring-report.md) **与** [CODEBASE-MAP.md](CODEBASE-MAP.md) **为准**；下文保留作历史决策参考。
+
 **审查日期**: 2026-05-21  
 **审查范围**: `internal/` 目录全部 Go 代码  
 **审查维度**: 架构设计 / 重复造轮子 / 日志系统 / 性能隐患  
@@ -30,10 +34,10 @@
 
 ### 1.1 🔴 God Object 反模式 - 服务类职责过重
 
-#### 问题位置
-- [alert_service_core.go](internal/service/alert_service_core.go) - 预估 1500+ 行
-- [k8s_cluster_service.go](internal/service/k8s_cluster_service.go) - 预估 1200+ 行
-- [project_mgmt_core.go](internal/service/project_mgmt_core.go) - 预估 800+ 行
+#### 问题位置（2026-05-22 注：路径已迁移至子包，Alert 已拆多文件）
+- [alert/alert_service_core.go](internal/service/alert/alert_service_core.go) — 告警核心入口（与 delivery/routing 等协作）
+- [k8s/k8s_cluster_service.go](internal/service/k8s/k8s_cluster_service.go) - 预估 1200+ 行
+- [project/project_mgmt_core.go](internal/service/project/project_mgmt_core.go) - 预估 800+ 行
 
 #### 具体表现
 
@@ -1304,7 +1308,7 @@ func TracingMiddleware() gin.HandlerFunc {
 ### 4.1 🔴 N+1 查询问题
 
 #### 问题位置
-- [project_mgmt_core.go:108-126](internal/service/project_mgmt_core.go#L108-L126) - enrichMyProjectRolesBatch
+- [project/project_mgmt_core.go](internal/service/project/project_mgmt_core.go) — enrichMyProjectRolesBatch
 - 多处 Preload 使用不当
 
 #### 具体表现

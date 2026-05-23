@@ -7,6 +7,9 @@
 | 文档 | 说明 |
 |------|------|
 | [00-architecture-analysis-and-optimization.md](./00-architecture-analysis-and-optimization.md) | 功能域梳理、调用链、SQL/性能与可维护性优化建议 |
+| [../CODEBASE-MAP.md](../CODEBASE-MAP.md) | **后端代码地图**（目录、阅读顺序、Wire/错误规范） |
+| [../backend-architecture-complete.md](../backend-architecture-complete.md) | 后端完整技术文档 |
+| [../refactoring-report.md](../refactoring-report.md) | 架构重构实施状态 |
 | [requirements/](./requirements/) | 按业务域拆分的需求说明（功能、子功能、注意事项） |
 | [requirements/menus/_INDEX.md](./requirements/menus/_INDEX.md) | **按菜单（路由）一页一文**的详细需求，含 API/表/注意事项 |
 | [requirements/menus/menu-k8s-resource-pattern.md](./requirements/menus/menu-k8s-resource-pattern.md) | K8s 控制台列表类页面通用模式（集群/三元策略/典型能力） |

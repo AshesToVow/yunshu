@@ -760,23 +760,27 @@ erDiagram
 
 ```text
 yunshu/
-├── cmd/                    # Cobra：server / migrate / seed / log-agent / log-agent-doctor
+├── cmd/                    # Cobra：server / migrate / seed / log-agent
 ├── cmd/logagent/           # 独立 log-agent 二进制入口
 ├── configs/                # config.yaml、casbin_model.conf
-├── docs/                   # 产品手册、API、部署、告警说明
-├── images/                 # README 截图
+├── docs/                   # 产品手册、API、架构文档（见 docs/CODEBASE-MAP.md）
 ├── internal/
 │   ├── agent/              # 日志 Agent 运行时
 │   ├── bootstrap/          # 应用启动、迁移
 │   ├── grpc/               # gRPC 服务（日志 Ingest 等）
 │   ├── handler/            # HTTP 处理器
-│   ├── middleware/         # Auth、Casbin、K8sScope、审计
-│   ├── model/ / repository/ / service/
-│   └── router/
+│   ├── middleware/         # Auth、Casbin、K8sScope、ErrorHandler、审计
+│   ├── interfaces/         # Repository 接口
+│   ├── repository/         # GORM 仓储实现
+│   ├── model/              # 数据模型
+│   ├── providers/          # Wire：Config / DB / Redis
+│   ├── router/             # 路由 + 依赖装配（Wire + route_services）
+│   └── service/            # 业务逻辑（按域子包 + exports.go 门面）
+│       ├── alert/ k8s/ project/ system/ logplatform/ ...
+│       └── exports.go
 ├── web/                    # React + Vite 前端
 ├── docker-compose.yml
-├── Dockerfile.backend / Dockerfile.frontend
-└── README.md               # 本文档
+└── README.md
 ```
 
 ---
@@ -785,6 +789,9 @@ yunshu/
 
 | 文档 | 路径 |
 |------|------|
+| **后端代码地图（推荐开发者首读）** | [docs/CODEBASE-MAP.md](docs/CODEBASE-MAP.md) |
+| 后端完整架构 | [docs/backend-architecture-complete.md](docs/backend-architecture-complete.md) |
+| 重构实施状态 | [docs/refactoring-report.md](docs/refactoring-report.md) |
 | 产品手册总览 | [docs/handbook/README.md](docs/handbook/README.md) |
 | 权限设计（必读） | [docs/handbook/permissions/casbin-and-k8s-triple-policy.md](docs/handbook/permissions/casbin-and-k8s-triple-policy.md) |
 | 日志平台 API | [docs/log-platform-api.md](docs/log-platform-api.md) |
@@ -794,6 +801,7 @@ yunshu/
 | 告警路由投递 | [docs/alert-routing-and-delivery-guide.md](docs/alert-routing-and-delivery-guide.md) |
 | 数据库 ER（细分） | [docs/handbook/database/er-diagrams.md](docs/handbook/database/er-diagrams.md) |
 | 麒麟部署示例 | [docs/deployment/KYLIN_V10_X86_64.md](docs/deployment/KYLIN_V10_X86_64.md) |
+| 文档索引（全部） | [docs/README.md](docs/README.md) |
 | OpenAPI 集合 | [docs/apipost/README.md](docs/apipost/README.md) |
 
 ---

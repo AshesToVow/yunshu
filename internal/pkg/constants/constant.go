@@ -67,7 +67,8 @@ var (
 	ErrLoginSessionExpired      = BizError(http.StatusUnauthorized, 10010, "登录会话已过期，请重新登录")
 	ErrAccountPrincipalNotFound = BizError(http.StatusUnauthorized, 10011, "账号不存在或已删除，请检查登录信息")
 	ErrAccountDisabled          = BizError(http.StatusForbidden, 10012, "账号已被禁用，如需协助请联系管理员")
-	ErrWSMissingTokenParam      = BizError(http.StatusUnauthorized, 10013, "缺少连接令牌参数，请在请求中携带 token")
+	ErrWSMissingTicketParam     = BizError(http.StatusUnauthorized, 10013, "缺少 WebSocket 握手票据，请先调用 POST /api/v1/auth/ws-ticket 获取 ticket 并在连接 URL 中携带")
+	ErrWSTicketInvalid          = BizError(http.StatusUnauthorized, 10015, "WebSocket 握手票据无效或已过期，请重新获取 ticket 后再连接")
 	ErrNotLoggedIn              = BizError(http.StatusUnauthorized, 10014, "未完成登录，请先登录后再访问该资源")
 )
 

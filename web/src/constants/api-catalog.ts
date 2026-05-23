@@ -41,6 +41,7 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       { method: "POST", path: "/api/v1/auth/email-login", summary: "邮箱验证码登录", ui: "登录页 · 邮箱验证码", auth: false },
       { method: "POST", path: "/api/v1/auth/register", summary: "提交注册申请", ui: "登录页 · 注册账号", auth: false },
       { method: "POST", path: "/api/v1/auth/logout", summary: "注销当前 Token", ui: "顶栏用户菜单 · 退出登录", auth: true },
+      { method: "POST", path: "/api/v1/auth/ws-ticket", summary: "申请 WebSocket 一次性握手 ticket", ui: "Pod Exec / 服务器终端", auth: true },
       { method: "GET", path: "/api/v1/auth/me", summary: "当前用户与角色", ui: "全局（进入控制台时拉取）", auth: true },
       { method: "PUT", path: "/api/v1/auth/me", summary: "更新个人资料", ui: "个人设置", auth: true },
       { method: "PUT", path: "/api/v1/auth/password", summary: "修改个人密码", ui: "个人设置", auth: true },

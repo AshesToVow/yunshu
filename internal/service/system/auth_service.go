@@ -374,6 +374,23 @@ func (s *AuthService) issueLoginResponse(ctx context.Context, user *model.User) 
 	}, nil
 }
 
+const wsTicketTTLSeconds = 30
+
+// CreateWSTicket 为已登录用户签发短效、一次性 WebSocket 握手票据。
+func (s *AuthService) CreateWSTicket(ctx context.Context, userID uint, tokenID, scope string) (*WSTicketResponse, error) {
+	if s.redis == nil {
+		return nil, bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
+	}
+	if userID == 0 || strings.TrimSpace(tokenID) == "" {
+		return nil, constants.ErrUnauthorized
+	}
+	ticket := uuid.NewString()
+	if err := store.SaveWSTicket(ctx, s.redis, ticket, userID, tokenID, scope, wsTicketTTLSeconds); err != nil {
+		return nil, bizerrors.Pass(ctx, "auth", "CreateWSTicket", err)
+	}
+	return &WSTicketResponse{Ticket: ticket, ExpiresIn: wsTicketTTLSeconds}, nil
+}
+
 // SendPasswordLoginCode generates captcha image using base64Captcha.
 func (s *AuthService) SendPasswordLoginCode(ctx context.Context, username string) (*SendPasswordLoginCodeResponse, error) {
 	username = strings.TrimSpace(username)

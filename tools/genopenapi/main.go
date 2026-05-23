@@ -213,7 +213,7 @@ paths:
 			}
 			desc := ""
 			if strings.Contains(p, "terminal") || strings.Contains(p, "ws") {
-				desc = "      description: WebSocket 或需通过查询参数传递 Token，详见 WS 认证中间件。\n"
+				desc = "      description: WebSocket 需先 POST /api/v1/auth/ws-ticket 获取一次性 ticket，再在连接 URL 查询参数中携带 ticket=。\n"
 			}
 			fmt.Fprintf(&sb, "    %s:\n", strings.ToLower(r.method))
 			fmt.Fprintf(&sb, "      tags: [%q]\n", tag)

@@ -69,6 +69,16 @@ type LoginResponse struct {
 	User      UserDetailResponse `json:"user"`
 }
 
+// CreateWSTicketRequest 申请 WebSocket 一次性握手票据（避免在 URL 中携带 JWT）。
+type CreateWSTicketRequest struct {
+	Scope string `json:"scope" binding:"omitempty,max=32"`
+}
+
+type WSTicketResponse struct {
+	Ticket    string `json:"ticket"`
+	ExpiresIn int    `json:"expires_in"`
+}
+
 type UpdateProfileRequest struct {
 	Nickname string `json:"nickname" binding:"required,max=128"`
 	Email    string `json:"email" binding:"omitempty,email,max=128"`
