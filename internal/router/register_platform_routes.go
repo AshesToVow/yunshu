@@ -150,7 +150,9 @@ func registerPlatformRoutes(api *gin.RouterGroup, d *routeDeps) {
 	alerts.DELETE("/channels/:id", d.alertHandler.DeleteChannel)
 	alerts.POST("/channels/:id/test", d.alertHandler.TestChannel)
 	alerts.POST("/channels/preview-template", d.alertHandler.PreviewChannelTemplate)
+	alerts.POST("/routing/debug", d.alertHandler.DebugRouting)
 	alerts.GET("/events", d.alertHandler.ListEvents)
+	alerts.GET("/events/grouped", d.alertHandler.ListEventsGrouped)
 	alerts.GET("/history/stats", d.alertHandler.HistoryStats)
 
 	alerts.GET("/datasources", d.alertPlatformHandler.ListDatasources)
@@ -168,6 +170,11 @@ func registerPlatformRoutes(api *gin.RouterGroup, d *routeDeps) {
 	alerts.PUT("/silences/:id", d.alertPlatformHandler.UpdateSilence)
 	alerts.DELETE("/silences/:id", d.alertPlatformHandler.DeleteSilence)
 
+	alerts.GET("/maintenance-windows", d.alertPlatformHandler.ListMaintenanceWindows)
+	alerts.POST("/maintenance-windows", d.alertPlatformHandler.CreateMaintenanceWindow)
+	alerts.PUT("/maintenance-windows/:id", d.alertPlatformHandler.UpdateMaintenanceWindow)
+	alerts.DELETE("/maintenance-windows/:id", d.alertPlatformHandler.DeleteMaintenanceWindow)
+
 	alerts.GET("/monitor-rules", d.alertPlatformHandler.ListMonitorRules)
 	alerts.POST("/monitor-rules", d.alertPlatformHandler.CreateMonitorRule)
 	alerts.PUT("/monitor-rules/:id", d.alertPlatformHandler.UpdateMonitorRule)
@@ -178,6 +185,9 @@ func registerPlatformRoutes(api *gin.RouterGroup, d *routeDeps) {
 	alerts.POST("/duty-blocks", d.alertPlatformHandler.CreateDutyBlock)
 	alerts.PUT("/duty-blocks/:id", d.alertPlatformHandler.UpdateDutyBlock)
 	alerts.DELETE("/duty-blocks/:id", d.alertPlatformHandler.DeleteDutyBlock)
+	alerts.GET("/duty-blocks/calendar", d.alertPlatformHandler.ListDutyCalendar)
+	alerts.POST("/duty-blocks/validate", d.alertPlatformHandler.ValidateDutyBlocks)
+	alerts.POST("/duty-blocks/:id/handoff", d.alertPlatformHandler.HandoffDutyBlock)
 
 	// 订阅树（路由树）：用于更接近夜莺的“订阅/路由”配置方式
 	alerts.GET("/subscriptions", d.alertSubscriptionHandler.ListNodes)

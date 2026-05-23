@@ -43,6 +43,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/alert-config-center": "alert-config-center-page",
   "/alert-monitor-platform": "alert-monitor-platform-page",
   "/alert-duty": "alert-duty-page",
+  "/alert-maintenance": "alert-maintenance-page",
   "/agent-list": "agent-list-page",
   "/dict-entries": "dict-entries-page",
   "/k8s/event-forward": "k8s-event-forward-page",

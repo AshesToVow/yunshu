@@ -250,11 +250,11 @@ func (s *AlertService) DeleteChannel(ctx context.Context, id uint) error {
 	return nil
 }
 
-// TestChannel 测试相关的业务逻辑。
-func (s *AlertService) TestChannel(ctx context.Context, id uint, req AlertTestRequest) error {
+// TestChannel 测试通道投递并返回 HTTP 回执。
+func (s *AlertService) TestChannel(ctx context.Context, id uint, req AlertTestRequest) (*AlertChannelTestResult, error) {
 	ch, err := s.channelRepo.GetByID(ctx, id)
 	if err != nil {
-		return bizerrors.Pass(ctx, "alert", "TestChannel", err)
+		return nil, bizerrors.Pass(ctx, "alert", "TestChannel", err)
 	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
@@ -278,8 +278,17 @@ func (s *AlertService) TestChannel(ctx context.Context, id uint, req AlertTestRe
 		"occurredAt": time.Now().Format(time.RFC3339),
 		"cluster":    "manual-test",
 	}
-	_, _, sendErr := s.sendToChannel(ctx, ch, alertdispatch.NewEnvelope("manual-test", title, severity, "firing", payload))
-	return bizerrors.Pass(ctx, "alert", "TestChannel", sendErr)
+	code, resp, sendErr := s.sendToChannel(ctx, ch, alertdispatch.NewEnvelope("manual-test", title, severity, "firing", payload))
+	out := &AlertChannelTestResult{
+		Success:        sendErr == nil && code >= 200 && code < 300,
+		HTTPStatusCode: code,
+		ResponseBody:   resp,
+	}
+	if sendErr != nil {
+		out.ErrorMessage = sendErr.Error()
+		return out, nil
+	}
+	return out, nil
 }
 
 // ListEvents 查询列表相关的业务逻辑。

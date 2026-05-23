@@ -12,6 +12,7 @@ import { createPodByYAML, createPodSimple, deletePod, deletePodFile, downloadPod
 import { getToken } from "../services/storage";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
+import { streamK8sResourceWatch } from "../services/k8s-watch";
 
 function phaseColor(phase: string): string {
   const p = (phase || "").toLowerCase();
@@ -67,6 +68,8 @@ export function PodPage() {
   const execCommandRef = useRef(execCommand);
   execCommandRef.current = execCommand;
   const filterRef = useRef({ clusterId, namespace, keyword });
+  const [watchLive, setWatchLive] = useState(false);
+  const watchAbortRef = useRef<AbortController | null>(null);
   filterRef.current = { clusterId, namespace, keyword };
   const execTermHostRef = useRef<HTMLDivElement | null>(null);
   const execTermRef = useRef<Terminal | null>(null);
@@ -206,12 +209,32 @@ export function PodPage() {
   }, [clusterId, namespace, loadPods]);
 
   useEffect(() => {
-    if (!clusterId) return;
+    if (!clusterId || watchLive) return;
     const timer = window.setInterval(() => {
       void loadPods();
     }, 10000);
     return () => window.clearInterval(timer);
-  }, [clusterId, namespace, loadPods]);
+  }, [clusterId, namespace, loadPods, watchLive]);
+
+  useEffect(() => {
+    watchAbortRef.current?.abort();
+    watchAbortRef.current = null;
+    if (!watchLive || !clusterId || !namespace) return;
+    const ac = new AbortController();
+    watchAbortRef.current = ac;
+    void streamK8sResourceWatch(
+      { cluster_id: clusterId, namespace, resource: "pods", timeout_seconds: 3600 },
+      () => {
+        void loadPods();
+      },
+      ac.signal,
+    ).catch((err: unknown) => {
+      if (ac.signal.aborted) return;
+      message.warning(extractApiErrorMessage(err, "Pod Watch 已断开"));
+      setWatchLive(false);
+    });
+    return () => ac.abort();
+  }, [watchLive, clusterId, namespace, loadPods]);
 
   const namespaceOptions = useMemo(() => namespaces.map((n) => ({ label: n.name, value: n.name })), [namespaces]);
   const clusterOptions = useMemo(
@@ -853,6 +876,10 @@ export function PodPage() {
         <Button icon={<ReloadOutlined />} onClick={() => void loadPods()}>
           刷新
         </Button>
+        <Space size={4}>
+          <span>实时 Watch</span>
+          <Switch checked={watchLive} onChange={setWatchLive} />
+        </Space>
       </Space>
       </div>
       <Table

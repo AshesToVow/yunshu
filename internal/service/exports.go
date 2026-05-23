@@ -191,6 +191,13 @@ type (
 	K8sNamespaceAllowService  = k8s.K8sNamespaceAllowService
 	K8sResourceWatchQuery     = k8s.K8sResourceWatchQuery
 	K8sEventForwardAdminService = eventforward.K8sEventForwardAdminService
+	K8sSearchService            = k8s.K8sSearchService
+	K8sSearchQuery              = k8s.K8sSearchQuery
+	K8sSearchItem               = k8s.K8sSearchItem
+	TopologyQuery               = k8s.TopologyQuery
+	TopologyGraph               = k8s.TopologyGraph
+	IngressDiagnoseQuery        = k8s.IngressDiagnoseQuery
+	IngressDiagnoseResult       = k8s.IngressDiagnoseResult
 )
 
 var (
@@ -216,6 +223,7 @@ var (
 	NewK8sNamespaceDenyService   = k8s.NewK8sNamespaceDenyService
 	NewK8sNamespaceAllowService  = k8s.NewK8sNamespaceAllowService
 	NewK8sEventForwardAdminService = eventforward.NewK8sEventForwardAdminService
+	NewK8sSearchService            = k8s.NewK8sSearchService
 	ResolveWatchTarget           = k8s.ResolveWatchTarget
 	WatchResourceLabel           = k8s.WatchResourceLabel
 	IsK8sReadAPIPath             = k8s.IsK8sReadAPIPath
@@ -301,6 +309,7 @@ type (
 	AlertService              = alert.AlertService
 	AlertServiceOptions       = alert.AlertServiceOptions
 	AlertSilenceService       = alert.AlertSilenceService
+	AlertMaintenanceService   = alert.AlertMaintenanceService
 	AlertDutyService          = alert.AlertDutyService
 	AlertRuleAssigneeService  = alert.AlertRuleAssigneeService
 	ReceiverGroupCache        = alert.ReceiverGroupCache
@@ -315,6 +324,17 @@ type (
 	AlertEventListQuery       = alert.AlertEventListQuery
 	AlertChannelUpsertRequest = alert.AlertChannelUpsertRequest
 	AlertTestRequest          = alert.AlertTestRequest
+	AlertChannelTestResult    = alert.AlertChannelTestResult
+	AlertRoutingDebugRequest  = alert.AlertRoutingDebugRequest
+	AlertRoutingDebugResult   = alert.AlertRoutingDebugResult
+	AlertEventGroupItem       = alert.AlertEventGroupItem
+	AlertMaintenanceListQuery = alert.AlertMaintenanceListQuery
+	AlertMaintenanceUpsertRequest = alert.AlertMaintenanceUpsertRequest
+	AlertDutyCalendarQuery    = alert.AlertDutyCalendarQuery
+	AlertDutyCalendarItem     = alert.AlertDutyCalendarItem
+	AlertDutyValidateRequest  = alert.AlertDutyValidateRequest
+	AlertDutyValidateResult   = alert.AlertDutyValidateResult
+	AlertDutyHandoffRequest   = alert.AlertDutyHandoffRequest
 	CanonicalIngressAlert     = alert.CanonicalIngressAlert
 	AlertInhibitionRuleListQuery   = alert.AlertInhibitionRuleListQuery
 	AlertInhibitionRuleUpsertRequest = alert.AlertInhibitionRuleUpsertRequest
@@ -340,6 +360,7 @@ type (
 var (
 	NewAlertService              = alert.NewAlertService
 	NewAlertSilenceService       = alert.NewAlertSilenceService
+	NewAlertMaintenanceService   = alert.NewAlertMaintenanceService
 	NewAlertDutyService          = alert.NewAlertDutyService
 	NewAlertRuleAssigneeService  = alert.NewAlertRuleAssigneeService
 	NewReceiverGroupCache        = alert.NewReceiverGroupCache

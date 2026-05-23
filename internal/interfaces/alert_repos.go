@@ -5,7 +5,8 @@ import "yunshu/internal/repository"
 type (
 	AlertEventRepository          = repository.AlertEventRepo
 	AlertChannelRepository        = repository.AlertChannelRepo
-	AlertSilenceRepository        = repository.AlertSilenceRepo
+	AlertSilenceRepository             = repository.AlertSilenceRepo
+	AlertMaintenanceWindowRepository = repository.AlertMaintenanceWindowRepo
 	AlertInhibitionRuleRepository = repository.AlertInhibitionRuleRepo
 	AlertSubscriptionRepository   = repository.AlertSubscriptionRepo
 	AlertDatasourceRepository     = repository.AlertDatasourceRepo

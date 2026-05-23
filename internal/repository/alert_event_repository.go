@@ -89,6 +89,26 @@ func (r *AlertEventRepository) listQuery(ctx context.Context, f AlertEventListFi
 	return tx
 }
 
+func (r *AlertEventRepository) ListGroupedByGroupKey(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]AlertEventGroupRow, int64, error) {
+	sub := r.listQuery(ctx, f).
+		Select(`group_key,
+			MAX(title) AS title,
+			COUNT(*) AS cnt,
+			MAX(created_at) AS last_at,
+			MAX(status) AS status,
+			MAX(severity) AS severity,
+			MAX(cluster) AS cluster`).
+		Where("group_key <> ''").
+		Group("group_key")
+	var total int64
+	if err := r.db.WithContext(ctx).Table("(?) AS g", sub).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var list []AlertEventGroupRow
+	err := sub.Order("last_at DESC").Offset(offset).Limit(limit).Scan(&list).Error
+	return list, total, err
+}
+
 func (r *AlertEventRepository) List(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]model.AlertEvent, int64, error) {
 	tx := r.listQuery(ctx, f)
 	var total int64

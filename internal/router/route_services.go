@@ -60,6 +60,8 @@ type routeServices struct {
 	AgentDiscovery      *service.AgentDiscoveryService
 	AlertReceiverGroup  *service.AlertReceiverGroupService
 	K8sEventForwardAdmin *service.K8sEventForwardAdminService
+	K8sSearch            *service.K8sSearchService
+	AlertMaintenance     *service.AlertMaintenanceService
 }
 
 func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeServices, error) {
@@ -98,6 +100,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 	dictEntryService := service.NewDictEntryService(repos.DictEntry)
 
 	alertSilenceSvc := service.NewAlertSilenceService(repos.AlertSilence)
+	alertMaintenanceSvc := service.NewAlertMaintenanceService(repos.AlertMaintenance)
 	alertDutySvc := service.NewAlertDutyService(repos.AlertDuty, repos.AlertMonitorRule, userRepo)
 	alertReceiverGroupCache := service.NewReceiverGroupCache(repos.AlertReceiverGroup)
 
@@ -105,6 +108,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 
 	alertService := service.NewAlertService(app.DB, app.Redis, app.Mailer, app.Config.Alert, &service.AlertServiceOptions{
 		SilenceSvc:         alertSilenceSvc,
+		MaintenanceSvc:     alertMaintenanceSvc,
 		AssigneeSvc:        alertAssigneeSvc,
 		DutySvc:            alertDutySvc,
 		ReceiverGroupCache: alertReceiverGroupCache,
@@ -164,6 +168,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 	agentDiscoveryService := service.NewAgentDiscoveryService(repos.AgentDiscovery, repos.LogAgent, repos.Server, repos.LogSource)
 	alertReceiverGroupSvc := service.NewAlertReceiverGroupService(repos.AlertReceiverGroup, alertReceiverGroupCache)
 	k8sEventForwardAdminSvc := service.NewK8sEventForwardAdminService(repos.K8sEventForward)
+	k8sSearchSvc := service.NewK8sSearchService(k8sRuntimeService, clusterRepo, projectMemberRepo, k8sClusterAccessRepo)
 
 	return &routeServices{
 		LoginLog:             loginLogSvc,
@@ -214,6 +219,8 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 		AgentDiscovery:       agentDiscoveryService,
 		AlertReceiverGroup:   alertReceiverGroupSvc,
 		K8sEventForwardAdmin: k8sEventForwardAdminSvc,
+		K8sSearch:            k8sSearchSvc,
+		AlertMaintenance:     alertMaintenanceSvc,
 	}, nil
 }
 

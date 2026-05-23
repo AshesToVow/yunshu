@@ -64,6 +64,7 @@ type routeDeps struct {
 	k8sDiscoveryHandler      *handler.K8sDiscoveryHandler
 	k8sHPAHandler            *handler.K8sHPAHandler
 	k8sResourceWatchHandler  *handler.K8sResourceWatchHandler
+	k8sSearchHandler         *handler.K8sSearchHandler
 	k8sEventForwardHandler   *handler.K8sEventForwardHandler
 	eventHandler             *handler.EventHandler
 	crdHandler               *handler.CRDHandler
@@ -128,7 +129,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	dictEntryHandler := handler.NewDictEntryHandler(svcs.DictEntry)
 	alertHandler := handler.NewAlertHandler(svcs.Alert)
 	cloudExpiryRuleHandler := handler.NewCloudExpiryRuleHandler(svcs.CloudExpiryRule, svcs.Alert)
-	alertPlatformHandler := handler.NewAlertPlatformHandler(svcs.AlertDatasource, svcs.AlertSilence, svcs.AlertMonitorRule, svcs.AlertAssignee, svcs.AlertDuty)
+	alertPlatformHandler := handler.NewAlertPlatformHandler(svcs.AlertDatasource, svcs.AlertSilence, svcs.AlertMaintenance, svcs.AlertMonitorRule, svcs.AlertAssignee, svcs.AlertDuty)
 	alertSubscriptionSvc := svcs.Alert.GetSubscriptionService()
 	alertSubscriptionHandler := handler.NewAlertSubscriptionHandler(alertSubscriptionSvc)
 	var alertInhibitionHandler *handler.AlertInhibitionHandler
@@ -150,6 +151,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	k8sDiscoveryHandler := handler.NewK8sDiscoveryHandler(svcs.K8sDiscovery)
 	k8sHPAHandler := handler.NewK8sHPAHandler(svcs.K8sHPA)
 	k8sResourceWatchHandler := handler.NewK8sResourceWatchHandler(svcs.K8sRuntime)
+	k8sSearchHandler := handler.NewK8sSearchHandler(svcs.K8sSearch)
 	k8sEventForwardHandler := handler.NewK8sEventForwardHandler(svcs.K8sEventForwardAdmin)
 	eventHandler := handler.NewEventHandler(svcs.K8sEvent)
 	crdHandler := handler.NewCRDHandler(svcs.K8sCRD)
@@ -219,6 +221,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		k8sDiscoveryHandler:     k8sDiscoveryHandler,
 		k8sHPAHandler:           k8sHPAHandler,
 		k8sResourceWatchHandler: k8sResourceWatchHandler,
+		k8sSearchHandler:        k8sSearchHandler,
 		k8sEventForwardHandler:  k8sEventForwardHandler,
 		eventHandler:            eventHandler,
 		crdHandler:              crdHandler,

@@ -1,12 +1,16 @@
 import { CopyOutlined, DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, AutoComplete, Button, Card, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Popover, Select, Space, Statistic, Switch, Table, Tabs, Tag, Tree, Typography, message } from "antd";
+import { Alert, AutoComplete, Button, Card, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Popover, Radio, Select, Space, Statistic, Switch, Table, Tabs, Tag, Tree, Typography, message } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getAlertHistoryStats,
   listAlertChannels,
   listAlertEvents,
+  listAlertEventsGrouped,
   sendAlertmanagerWebhook,
+  type AlertEventGroupItem,
   type AlertEventItem,
+  debugAlertRouting,
+  type AlertRoutingDebugResult,
 } from "../services/alerts";
 import { stringifyPrettyJSON } from "../services/alert-mappers";
 import { useDictOptions } from "../hooks/use-dict-options";
@@ -245,6 +249,8 @@ export function AlertConfigCenterPanel({
 
   const [eventsLoading, setEventsLoading] = useState(false);
   const [events, setEvents] = useState<AlertEventItem[]>([]);
+  const [groupedEvents, setGroupedEvents] = useState<AlertEventGroupItem[]>([]);
+  const [eventHistoryMode, setEventHistoryMode] = useState<"list" | "grouped">("list");
   const [eventsPage, setEventsPage] = useState(1);
   const [eventsPageSize, setEventsPageSize] = useState(10);
   const [eventsTotal, setEventsTotal] = useState(0);
@@ -260,6 +266,10 @@ export function AlertConfigCenterPanel({
   const loadEventsSeqRef = useRef(0);
   const loadSubscriptionsSeqRef = useRef(0);
   const [webhookSending, setWebhookSending] = useState(false);
+  const [routingDebugLoading, setRoutingDebugLoading] = useState(false);
+  const [routingDebugResult, setRoutingDebugResult] = useState<AlertRoutingDebugResult | null>(null);
+  const [routingLabelsJSON, setRoutingLabelsJSON] = useState('{"alertname":"DemoAlert","severity":"warning","cluster":"demo"}');
+  const [routingSeverity, setRoutingSeverity] = useState("warning");
   const [webhookToken, setWebhookToken] = useState("");
   const [webhookTemplate, setWebhookTemplate] = useState<"warning_prod" | "critical_prod" | "resolved_prod">("warning_prod");
   const [webhookPayload, setWebhookPayload] = useState(
@@ -635,6 +645,39 @@ export function AlertConfigCenterPanel({
     [eventKeyword, eventAlertIP, eventStatus, eventSourceFilter, eventGroupKey, eventCategory, effectiveProjectId],
   );
 
+  const loadEventsGrouped = useCallback(
+    async (page: number, pageSize: number) => {
+      const seq = ++loadEventsSeqRef.current;
+      setEventsLoading(true);
+      try {
+        const res = await listAlertEventsGrouped({
+          page,
+          page_size: pageSize,
+          keyword: eventKeyword.trim() || undefined,
+          projectId: effectiveProjectId > 0 ? effectiveProjectId : undefined,
+        });
+        if (seq !== loadEventsSeqRef.current) return;
+        setGroupedEvents(res.list ?? []);
+        setEventsTotal(res.total ?? 0);
+        setEventsPage(res.page ?? page);
+        setEventsPageSize(res.page_size ?? pageSize);
+      } catch {
+        if (seq !== loadEventsSeqRef.current) return;
+      } finally {
+        if (seq === loadEventsSeqRef.current) setEventsLoading(false);
+      }
+    },
+    [eventKeyword, effectiveProjectId],
+  );
+
+  const reloadEvents = useCallback(
+    (page: number, pageSize: number) => {
+      if (eventHistoryMode === "grouped") return loadEventsGrouped(page, pageSize);
+      return loadEvents(page, pageSize);
+    },
+    [eventHistoryMode, loadEvents, loadEventsGrouped],
+  );
+
   useEffect(() => {
     if (initialEventCategory) {
       setEventCategory(initialEventCategory);
@@ -659,7 +702,7 @@ export function AlertConfigCenterPanel({
     const delay =
       eventKeyword || eventAlertIP || eventStatus || eventSourceFilter || eventGroupKey || eventCategory ? 300 : 0;
     const timer = window.setTimeout(() => {
-      void loadEvents(1, eventsPageSizeRef.current);
+      void reloadEvents(1, eventsPageSizeRef.current);
     }, delay);
     return () => window.clearTimeout(timer);
   }, [
@@ -670,8 +713,9 @@ export function AlertConfigCenterPanel({
     eventSourceFilter,
     eventGroupKey,
     eventCategory,
+    eventHistoryMode,
     effectiveProjectId,
-    loadEvents,
+    reloadEvents,
   ]);
 
   useEffect(() => {
@@ -714,7 +758,7 @@ export function AlertConfigCenterPanel({
     try {
       await sendAlertmanagerWebhook(payloadObj, webhookToken);
       message.success("Webhook 已发送，告警链路已触发");
-      await loadEvents(1, eventsPageSize);
+      await reloadEvents(1, eventsPageSize);
       await loadBase();
     } finally {
       setWebhookSending(false);
@@ -918,6 +962,16 @@ export function AlertConfigCenterPanel({
             />
           ) : null}
           <Space style={{ width: "100%", marginBottom: 12 }} wrap>
+            <Radio.Group
+              value={eventHistoryMode}
+              onChange={(e) => setEventHistoryMode(e.target.value as "list" | "grouped")}
+              optionType="button"
+              buttonStyle="solid"
+              options={[
+                { label: "明细列表", value: "list" },
+                { label: "按 GroupKey 聚合", value: "grouped" },
+              ]}
+            />
             <Input
               style={{ width: 260 }}
               placeholder="关键词（标题/错误/通道）"
@@ -972,10 +1026,60 @@ export function AlertConfigCenterPanel({
               onChange={(e) => setEventGroupKey(e.target.value)}
               allowClear
             />
-            <Button icon={<ReloadOutlined />} onClick={() => void loadEvents(eventsPage, eventsPageSize)}>
+            <Button icon={<ReloadOutlined />} onClick={() => void reloadEvents(eventsPage, eventsPageSize)}>
               刷新
             </Button>
           </Space>
+          {eventHistoryMode === "grouped" ? (
+            <Table
+              rowKey="group_key"
+              loading={eventsLoading}
+              dataSource={groupedEvents}
+              scroll={{ x: 1100 }}
+              pagination={{
+                current: eventsPage,
+                pageSize: eventsPageSize,
+                total: eventsTotal,
+                showSizeChanger: true,
+                pageSizeOptions: [10, 20, 50, 100],
+                showQuickJumper: true,
+                onChange: (p, ps) => void reloadEvents(p, ps),
+              }}
+              columns={[
+                {
+                  title: "GroupKey",
+                  dataIndex: "group_key",
+                  width: 200,
+                  ellipsis: true,
+                  render: (v: string) => (
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => {
+                        setEventGroupKey(v);
+                        setEventHistoryMode("list");
+                      }}
+                    >
+                      {v || "-"}
+                    </Button>
+                  ),
+                },
+                { title: "标题", dataIndex: "title", width: 320, ellipsis: true },
+                { title: "次数", dataIndex: "count", width: 80 },
+                { title: "最近时间", dataIndex: "last_at", width: 170, render: (v: string) => formatDateTime(v) },
+                {
+                  title: "级别",
+                  dataIndex: "severity",
+                  width: 100,
+                  render: (v: string) => (
+                    <Tag color={v === "critical" ? "red" : v === "warning" ? "orange" : "blue"}>{v || "-"}</Tag>
+                  ),
+                },
+                { title: "状态", dataIndex: "status", width: 90, render: (v: string) => <Tag>{v || "-"}</Tag> },
+                { title: "集群", dataIndex: "cluster", width: 140, ellipsis: true, render: (v: string) => v || "-" },
+              ]}
+            />
+          ) : (
           <Table
             rowKey="id"
             loading={eventsLoading}
@@ -988,7 +1092,7 @@ export function AlertConfigCenterPanel({
               showSizeChanger: true,
               pageSizeOptions: [10, 20, 50, 100],
               showQuickJumper: true,
-              onChange: (p, ps) => void loadEvents(p, ps),
+              onChange: (p, ps) => void reloadEvents(p, ps),
             }}
             columns={[
               { title: "ID", dataIndex: "id", width: 80 },
@@ -1200,6 +1304,7 @@ export function AlertConfigCenterPanel({
               { title: "发送/记录时间", dataIndex: "createdAt", width: 170, render: (v: string) => formatDateTime(v) },
             ]}
           />
+          )}
         </>
       ),
     },
@@ -1240,6 +1345,46 @@ export function AlertConfigCenterPanel({
               <Statistic title="今日新增" value={stats?.today_created ?? 0} />
             </Card>
           </div>
+          <Card size="small" title="路由调试器" style={{ marginBottom: 12 }}>
+            <Space direction="vertical" style={{ width: "100%" }} size={8}>
+              <Typography.Text type="secondary">
+                模拟标签命中订阅树，查看接收组、通道与静默/维护窗口抑制（项目 ID：{effectiveProjectId || "未选择"}）。
+              </Typography.Text>
+              <Input value={routingSeverity} onChange={(e) => setRoutingSeverity(e.target.value)} placeholder="severity" style={{ width: 160 }} addonBefore="级别" />
+              <Input.TextArea rows={4} value={routingLabelsJSON} onChange={(e) => setRoutingLabelsJSON(e.target.value)} placeholder='{"alertname":"..."}' />
+              <Button
+                type="primary"
+                loading={routingDebugLoading}
+                disabled={!effectiveProjectId}
+                onClick={() => {
+                  if (!effectiveProjectId) return;
+                  let labels: Record<string, string> = {};
+                  try {
+                    labels = JSON.parse(routingLabelsJSON) as Record<string, string>;
+                  } catch {
+                    message.error("labels JSON 无效");
+                    return;
+                  }
+                  setRoutingDebugLoading(true);
+                  void debugAlertRouting({ project_id: effectiveProjectId, labels, severity: routingSeverity, status: "firing" })
+                    .then(setRoutingDebugResult)
+                    .finally(() => setRoutingDebugLoading(false));
+                }}
+              >
+                运行路由调试
+              </Button>
+              {routingDebugResult ? (
+                <Typography.Paragraph>
+                  命中：{routingDebugResult.matched ? "是" : "否"}
+                  {routingDebugResult.matched_path ? ` · 路径 ${routingDebugResult.matched_path}` : ""}
+                  {routingDebugResult.silenced ? " · 已抑制" : ""}
+                  {routingDebugResult.channels?.length
+                    ? ` · 通道 ${routingDebugResult.channels.map((c) => c.name).join("、")}`
+                    : ""}
+                </Typography.Paragraph>
+              ) : null}
+            </Space>
+          </Card>
           <Card size="small" title="Webhook 联调（Alertmanager -> 平台）" style={{ marginBottom: 12 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={12}>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>

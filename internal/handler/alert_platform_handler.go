@@ -12,21 +12,23 @@ import (
 
 // AlertPlatformHandler 告警平台：数据源、静默、监控规则、处理人、值班、PromQL。
 type AlertPlatformHandler struct {
-	ds      *service.AlertDatasourceService
-	silence *service.AlertSilenceService
-	rules   *service.AlertMonitorRuleService
-	assign  *service.AlertRuleAssigneeService
-	duty    *service.AlertDutyService
+	ds          *service.AlertDatasourceService
+	silence     *service.AlertSilenceService
+	maintenance *service.AlertMaintenanceService
+	rules       *service.AlertMonitorRuleService
+	assign      *service.AlertRuleAssigneeService
+	duty        *service.AlertDutyService
 }
 
 func NewAlertPlatformHandler(
 	ds *service.AlertDatasourceService,
 	silence *service.AlertSilenceService,
+	maintenance *service.AlertMaintenanceService,
 	rules *service.AlertMonitorRuleService,
 	assign *service.AlertRuleAssigneeService,
 	duty *service.AlertDutyService,
 ) *AlertPlatformHandler {
-	return &AlertPlatformHandler{ds: ds, silence: silence, rules: rules, assign: assign, duty: duty}
+	return &AlertPlatformHandler{ds: ds, silence: silence, maintenance: maintenance, rules: rules, assign: assign, duty: duty}
 }
 
 func alertPlatformUserID(c *gin.Context) uint {
@@ -278,6 +280,71 @@ func (h *AlertPlatformHandler) DeleteDutyBlock(c *gin.Context) {
 		return
 	}
 	if err := h.duty.DeleteBlock(c.Request.Context(), id); err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted"})
+}
+
+func (h *AlertPlatformHandler) ListDutyCalendar(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q service.AlertDutyCalendarQuery) (gin.H, error) {
+		list, err := h.duty.ListCalendar(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"list": list, "items": list}, nil
+	})
+}
+
+func (h *AlertPlatformHandler) ValidateDutyBlocks(c *gin.Context) {
+	ServeJSON(c, h.duty.ValidateBlocks)
+}
+
+func (h *AlertPlatformHandler) HandoffDutyBlock(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.AlertDutyHandoffRequest) (any, error) {
+		return h.duty.HandoffBlock(ctx, id, req)
+	})
+}
+
+func (h *AlertPlatformHandler) ListMaintenanceWindows(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q service.AlertMaintenanceListQuery) (gin.H, error) {
+		list, total, page, pageSize, err := h.maintenance.List(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"items": list, "list": list, "total": total, "page": page, "page_size": pageSize}, nil
+	})
+}
+
+func (h *AlertPlatformHandler) CreateMaintenanceWindow(c *gin.Context) {
+	ServeJSON(c, func(ctx context.Context, req service.AlertMaintenanceUpsertRequest) (any, error) {
+		return h.maintenance.Create(ctx, alertPlatformUserID(c), req)
+	})
+}
+
+func (h *AlertPlatformHandler) UpdateMaintenanceWindow(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.AlertMaintenanceUpsertRequest) (any, error) {
+		return h.maintenance.Update(ctx, id, req)
+	})
+}
+
+func (h *AlertPlatformHandler) DeleteMaintenanceWindow(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	if err := h.maintenance.Delete(c.Request.Context(), id); err != nil {
 		abortService(c, err)
 		return
 	}

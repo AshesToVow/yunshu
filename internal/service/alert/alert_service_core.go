@@ -55,6 +55,13 @@ type AlertTestRequest struct {
 	Severity string `json:"severity"`
 }
 
+type AlertChannelTestResult struct {
+	Success        bool   `json:"success"`
+	HTTPStatusCode int    `json:"http_status_code,omitempty"`
+	ResponseBody   string `json:"response_body,omitempty"`
+	ErrorMessage   string `json:"error_message,omitempty"`
+}
+
 type AlertManagerPayload struct {
 	Status            string              `json:"status"`
 	Version           string              `json:"version"`
@@ -85,9 +92,10 @@ type AlertService struct {
 	cfg         config.AlertConfig
 	enrichQueue chan promEnrichTask
 
-	silenceSvc  *AlertSilenceService
-	assigneeSvc *AlertRuleAssigneeService
-	dutySvc     *AlertDutyService
+	silenceSvc     *AlertSilenceService
+	maintenanceSvc *AlertMaintenanceService
+	assigneeSvc    *AlertRuleAssigneeService
+	dutySvc        *AlertDutyService
 
 	monitorEvalCancel context.CancelFunc
 	monitorEvalMu     sync.Mutex
@@ -121,9 +129,10 @@ type AlertService struct {
 
 // AlertServiceOptions 可选依赖：静默、处理人、内置规则评估。
 type AlertServiceOptions struct {
-	SilenceSvc  *AlertSilenceService
-	AssigneeSvc *AlertRuleAssigneeService
-	DutySvc     *AlertDutyService
+	SilenceSvc     *AlertSilenceService
+	MaintenanceSvc *AlertMaintenanceService
+	AssigneeSvc    *AlertRuleAssigneeService
+	DutySvc        *AlertDutyService
 	// ReceiverGroupCache 与 AlertReceiverGroupService 共用，避免 CRUD 失效与投递缓存不一致。
 	ReceiverGroupCache *ReceiverGroupCache
 	// EncryptionKey 与项目/云账号凭据加密一致；非空时用于云到期规则解密云账号 AK/SK。
@@ -235,6 +244,7 @@ func NewAlertService(db *gorm.DB, redisClient *redis.Client, sender mailer.Sende
 	svc.cloudAccountRepo = interfaces.CloudAccountRepository(repository.NewCloudAccountRepository(db))
 	if opts != nil {
 		svc.silenceSvc = opts.SilenceSvc
+		svc.maintenanceSvc = opts.MaintenanceSvc
 		svc.assigneeSvc = opts.AssigneeSvc
 		svc.dutySvc = opts.DutySvc
 		if opts.EventRepo != nil {

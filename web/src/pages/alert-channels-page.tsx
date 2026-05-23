@@ -53,6 +53,7 @@ export function AlertChannelsPage() {
   const [open, setOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testSending, setTestSending] = useState(false);
+  const [testReceipt, setTestReceipt] = useState<import("../services/alerts").AlertChannelTestResult | null>(null);
   const [testRow, setTestRow] = useState<AlertChannelItem | null>(null);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateSaving, setTemplateSaving] = useState(false);
@@ -405,15 +406,17 @@ export function AlertChannelsPage() {
     if (!testRow) return;
     const values = await testForm.validateFields();
     setTestSending(true);
+    setTestReceipt(null);
     try {
-      await testAlertChannel(testRow.id, {
+      const receipt = await testAlertChannel(testRow.id, {
         status: values.status,
         severity: values.severity,
         title: values.title,
         content: values.content,
       });
-      message.success("测试发送成功");
-      setTestOpen(false);
+      setTestReceipt(receipt);
+      if (receipt.success) message.success("测试发送成功");
+      else message.warning(receipt.error_message || "测试发送未成功");
     } finally {
       setTestSending(false);
     }
@@ -884,6 +887,19 @@ export function AlertChannelsPage() {
           <Form.Item name="content" label="内容（可选）">
             <Input.TextArea rows={3} placeholder="留空则自动生成测试内容" />
           </Form.Item>
+          {testReceipt ? (
+            <Form.Item label="投递回执">
+              <Typography.Paragraph type={testReceipt.success ? undefined : "danger"}>
+                HTTP {testReceipt.http_status_code ?? "-"} · {testReceipt.success ? "成功" : "失败"}
+              </Typography.Paragraph>
+              {testReceipt.error_message ? (
+                <Typography.Text type="danger">{testReceipt.error_message}</Typography.Text>
+              ) : null}
+              {testReceipt.response_body ? (
+                <Input.TextArea rows={4} readOnly value={testReceipt.response_body} />
+              ) : null}
+            </Form.Item>
+          ) : null}
         </Form>
       </Modal>
     </Card>

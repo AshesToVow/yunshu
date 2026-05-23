@@ -77,4 +77,21 @@ func (r *AlertDutyRepository) ListActiveAtRule(ctx context.Context, monitorRuleI
 	return list, err
 }
 
+func (r *AlertDutyRepository) ListBetween(ctx context.Context, f AlertDutyListFilter, from, to time.Time) ([]model.AlertDutyBlock, error) {
+	tx := r.db.WithContext(ctx).Model(&model.AlertDutyBlock{}).
+		Where("starts_at < ? AND ends_at > ?", to, from)
+	if f.MonitorRuleID != nil && *f.MonitorRuleID > 0 {
+		tx = tx.Where("monitor_rule_id = ?", *f.MonitorRuleID)
+	}
+	if f.ProjectID != nil {
+		tx = tx.
+			Joins("JOIN alert_monitor_rules amr ON amr.id = alert_duty_blocks.monitor_rule_id AND amr.deleted_at IS NULL").
+			Joins("JOIN alert_datasources ad ON ad.id = amr.datasource_id AND ad.deleted_at IS NULL").
+			Where("ad.project_id = ?", *f.ProjectID)
+	}
+	var list []model.AlertDutyBlock
+	err := tx.Order("starts_at ASC").Find(&list).Error
+	return list, err
+}
+
 var _ AlertDutyRepo = (*AlertDutyRepository)(nil)

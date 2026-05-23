@@ -22,4 +22,5 @@ type AlertDutyRepo interface {
 	Delete(ctx context.Context, id uint) (int64, error)
 	HasActiveAtRule(ctx context.Context, monitorRuleID uint, t time.Time) (bool, error)
 	ListActiveAtRule(ctx context.Context, monitorRuleID uint, t time.Time) ([]model.AlertDutyBlock, error)
+	ListBetween(ctx context.Context, f AlertDutyListFilter, from, to time.Time) ([]model.AlertDutyBlock, error)
 }

@@ -27,6 +27,11 @@ func (h *WorkloadHandler) DeploymentDetail(c *gin.Context) {
 	ServeQuery(c, h.svc.DeploymentDetail)
 }
 
+// Topology 返回 Deployment 关联 Pod/Service 拓扑。
+func (h *WorkloadHandler) Topology(c *gin.Context) {
+	ServeQuery(c, h.svc.Topology)
+}
+
 // DeploymentRolloutStatus 查询 Deployment 滚动发布进度。
 func (h *WorkloadHandler) DeploymentRolloutStatus(c *gin.Context) {
 	ServeQuery(c, h.svc.DeploymentRolloutStatus)

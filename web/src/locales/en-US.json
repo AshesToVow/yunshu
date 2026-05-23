@@ -1,0 +1,12 @@
+{
+  "app": {
+    "name": "Yunshu",
+    "search": "Global search",
+    "logout": "Sign out",
+    "settings": "Preferences"
+  },
+  "login": {
+    "title": "Sign in",
+    "submit": "Sign in"
+  }
+}

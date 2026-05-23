@@ -38,6 +38,17 @@ type AlertHistoryStatsRow struct {
 	DatasourceFilterOptions []AlertDatasourceFilterOption
 }
 
+// AlertEventGroupRow 按 group_key 聚合的查询行。
+type AlertEventGroupRow struct {
+	GroupKey   string    `gorm:"column:group_key"`
+	Title      string    `gorm:"column:title"`
+	Count      int64     `gorm:"column:cnt"`
+	LastAt     time.Time `gorm:"column:last_at"`
+	Status     string    `gorm:"column:status"`
+	Severity   string    `gorm:"column:severity"`
+	Cluster    string    `gorm:"column:cluster"`
+}
+
 // AlertDatasourceFilterOption is a datasource option for history filters.
 type AlertDatasourceFilterOption struct {
 	ID   uint   `gorm:"column:id"`
@@ -50,6 +61,7 @@ type AlertEventRepo interface {
 	GetByFingerprint(ctx context.Context, fingerprint string) (*model.AlertEvent, error)
 	UpdateStatus(ctx context.Context, fingerprint, status string) error
 	List(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]model.AlertEvent, int64, error)
+	ListGroupedByGroupKey(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]AlertEventGroupRow, int64, error)
 	ListFiringByGroupKeys(ctx context.Context, groupKeys []string) ([]model.AlertEvent, error)
 	HistoryStats(ctx context.Context, dayStart, dayEnd time.Time) (*AlertHistoryStatsRow, error)
 }

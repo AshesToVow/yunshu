@@ -16,6 +16,7 @@ import {
   LoginOutlined,
   MenuOutlined,
   ReloadOutlined,
+  SearchOutlined,
   SettingOutlined,
   TeamOutlined,
   UserOutlined,
@@ -23,11 +24,13 @@ import {
   DownOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
-import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Space, Spin, Switch, Tabs, Tag, Typography } from "antd";
+import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Select, Space, Spin, Switch, Tabs, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SUBTITLE } from "../constants/brand";
 import { LogStreamDockBar } from "../components/log-stream-dock-bar";
+import { GlobalSearchModal } from "../components/global-search-modal";
 import { useAuth } from "../contexts/auth-context";
 import { LogStreamProvider } from "../contexts/log-stream-context";
 import { getMenuTree } from "../services/menus";
@@ -105,12 +108,14 @@ function defaultOpenKeysFor(items: AntdMenuItem[]): string[] {
 }
 
 export function AdminLayout() {
+  const { t, i18n } = useTranslation();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, loading, logoutAction } = useAuth();
   const [siderItems, setSiderItems] = useState<MenuProps["items"]>(FALLBACK_MENU_ITEMS);
   const [menuEpoch, setMenuEpoch] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("appearance");
   const [uiPreferences, setUIPreferences] = useState<UIPreferences>(() => loadUIPreferences());
   const [themeMode, setThemeMode] = useState<"dark" | "light">(() => {
@@ -249,6 +254,17 @@ export function AdminLayout() {
     document.documentElement.style.setProperty("--admin-accent", accent);
   }, [accent]);
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setGlobalSearchOpen(true);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const userMenuItems: MenuProps["items"] = [
     {
       key: "personal-settings",
@@ -259,7 +275,7 @@ export function AdminLayout() {
     {
       key: "logout",
       icon: <LogoutOutlined />,
-      label: "退出登录",
+      label: t("app.logout"),
       onClick: handleLogout,
     },
   ];
@@ -313,7 +329,23 @@ export function AdminLayout() {
                 {themeMode === "dark" ? <BulbOutlined /> : <BulbFilled />}
               </Button>
             ) : null}
-            <Button type="text" className="admin-icon-btn" onClick={() => setSettingsOpen(true)} title="偏好设置">
+            <Button type="text" className="admin-icon-btn" onClick={() => setGlobalSearchOpen(true)} title={`${t("app.search")} (Ctrl+K)`}>
+              <SearchOutlined />
+            </Button>
+            <Select
+              size="small"
+              style={{ width: 96 }}
+              value={i18n.language}
+              options={[
+                { label: "中文", value: "zh-CN" },
+                { label: "EN", value: "en-US" },
+              ]}
+              onChange={(v: string) => {
+                void i18n.changeLanguage(v);
+                window.localStorage.setItem("app-locale", v);
+              }}
+            />
+            <Button type="text" className="admin-icon-btn" onClick={() => setSettingsOpen(true)} title={t("app.settings")}>
               <SettingOutlined />
             </Button>
           </div>
@@ -515,6 +547,7 @@ export function AdminLayout() {
             <span>设置会自动保存，下次打开自动恢复。</span>
           </div>
         </Drawer>
+        <GlobalSearchModal open={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />
       </Layout>
     </Layout>
     </LogStreamProvider>

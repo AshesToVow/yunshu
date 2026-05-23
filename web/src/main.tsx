@@ -1,5 +1,6 @@
-﻿import React from "react";
+import React from "react";
 import ReactDOM from "react-dom/client";
+import "./i18n";
 import { App } from "./app/app";
 import "./styles/global.css";
 import "antd/dist/reset.css";

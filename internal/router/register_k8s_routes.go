@@ -172,6 +172,7 @@ func registerK8sRoutes(api *gin.RouterGroup, d *routeDeps) {
 	ingresses.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	ingresses.GET("", d.ingressHandler.List)
 	ingresses.GET("/detail", d.ingressHandler.Detail)
+	ingresses.GET("/diagnose", d.ingressHandler.Diagnose)
 	ingresses.POST("/apply", d.ingressHandler.Apply)
 	ingresses.POST("/nginx/restart", d.ingressHandler.RestartNginxPods)
 	ingresses.DELETE("", d.ingressHandler.Delete)
@@ -194,6 +195,11 @@ func registerK8sRoutes(api *gin.RouterGroup, d *routeDeps) {
 	horizontalPodAutoscalers.POST("/apply", d.k8sHPAHandler.Apply)
 	horizontalPodAutoscalers.DELETE("", d.k8sHPAHandler.Delete)
 
+	k8sTools := api.Group("/k8s")
+	k8sTools.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
+	k8sTools.GET("/search", d.k8sSearchHandler.Search)
+	k8sTools.GET("/topology", d.workloadHandler.Topology)
+
 	k8sResourceWatch := api.Group("/k8s/resource-watch")
 	k8sResourceWatch.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	k8sResourceWatch.GET("/stream", d.k8sResourceWatchHandler.Stream)
@@ -201,6 +207,7 @@ func registerK8sRoutes(api *gin.RouterGroup, d *routeDeps) {
 	events := api.Group("/events")
 	events.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	events.GET("", d.eventHandler.List)
+	events.GET("/grouped", d.eventHandler.ListGrouped)
 
 	crds := api.Group("/crds")
 	crds.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)

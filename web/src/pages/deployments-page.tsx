@@ -17,6 +17,7 @@ import { useWorkloadFormActions } from "../components/k8s/workload-form-actions"
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { InputNumber as AntdInputNumber } from "antd";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
+import { getWorkloadTopology, type TopologyGraph } from "../services/k8s-topology";
 import {
   applyDeployment,
   buildCpuMemoryResourceMaps,
@@ -164,6 +165,22 @@ export function DeploymentsPage() {
     limits_memory?: string;
   }>();
   const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(async ({ clusterId, namespace, name }) => await listDeploymentPods(clusterId, namespace, name));
+  const [topoOpen, setTopoOpen] = useState(false);
+  const [topoLoading, setTopoLoading] = useState(false);
+  const [topoGraph, setTopoGraph] = useState<TopologyGraph | null>(null);
+
+  async function openTopology(clusterId: number, namespace: string, name: string) {
+    setTopoOpen(true);
+    setTopoLoading(true);
+    setTopoGraph(null);
+    try {
+      setTopoGraph(await getWorkloadTopology({ cluster_id: clusterId, namespace, kind: "deployment", name }));
+    } catch {
+      setTopoOpen(false);
+    } finally {
+      setTopoLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!rolloutOpen || !rolloutTarget) return;
@@ -365,6 +382,11 @@ spec:
                     label: "关联 Pods",
                     icon: <EyeOutlined />,
                     onClick: () => openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
+                  },
+                  {
+                    key: "topology",
+                    label: "资源拓扑",
+                    onClick: () => void openTopology(ctx.clusterId, ctx.namespace ?? "default", record.name),
                   },
                   {
                     key: "scale",
@@ -576,6 +598,24 @@ spec:
           }}
         </Form.Item>
       </WorkloadFormModal>
+      <Modal title="Deployment 拓扑" open={topoOpen} onCancel={() => setTopoOpen(false)} footer={null} width={640}>
+        {topoLoading ? (
+          <Typography.Text>加载中…</Typography.Text>
+        ) : (
+          <Space direction="vertical" style={{ width: "100%" }}>
+            {(topoGraph?.nodes ?? []).map((n) => (
+              <Typography.Text key={n.id}>
+                <Tag>{n.kind}</Tag> {n.label} {n.state ? `(${n.state})` : ""}
+              </Typography.Text>
+            ))}
+            {(topoGraph?.edges ?? []).map((e, i) => (
+              <Typography.Text key={i} type="secondary">
+                {e.from} → {e.to} {e.kind ? `[${e.kind}]` : ""}
+              </Typography.Text>
+            ))}
+          </Space>
+        )}
+      </Modal>
       {viewer}
     </>
   );

@@ -228,6 +228,7 @@ func AutoMigrateModels(db *gorm.DB) error {
 		&model.AlertEvent{},
 		&model.AlertDatasource{},
 		&model.AlertSilence{},
+		&model.AlertMaintenanceWindow{},
 		&model.AlertMonitorRule{},
 		&model.AlertRuleAssignee{},
 		&model.AlertDutyBlock{},

@@ -84,11 +84,64 @@ export function deleteAlertChannel(id: number) {
   return getData<void>(http.delete(`/alerts/channels/${id}`));
 }
 
+export interface AlertChannelTestResult {
+  success: boolean;
+  http_status_code?: number;
+  response_body?: string;
+  error_message?: string;
+}
+
 export function testAlertChannel(
   id: number,
   payload?: { title?: string; content?: string; severity?: string; status?: "firing" | "resolved" },
 ) {
-  return getData<void>(http.post(`/alerts/channels/${id}/test`, payload ?? {}));
+  return getData<AlertChannelTestResult>(http.post(`/alerts/channels/${id}/test`, payload ?? {}));
+}
+
+export interface AlertRoutingDebugRequest {
+  project_id: number;
+  labels: Record<string, string>;
+  severity?: string;
+  status?: string;
+}
+
+export interface AlertRoutingDebugResult {
+  matched: boolean;
+  matched_path?: string;
+  matched_node_names?: string[];
+  receiver_group_ids?: number[];
+  silence_seconds?: number;
+  channels?: Array<{ id: number; name: string; type: string }>;
+  silenced?: boolean;
+  silence_id?: number;
+  maintenance_suppressed?: boolean;
+  maintenance_id?: number;
+}
+
+export function debugAlertRouting(payload: AlertRoutingDebugRequest) {
+  return getData<AlertRoutingDebugResult>(http.post("/alerts/routing/debug", payload));
+}
+
+export interface AlertEventGroupItem {
+  group_key: string;
+  title: string;
+  count: number;
+  last_at: string;
+  status: string;
+  severity: string;
+  cluster: string;
+}
+
+export function listAlertEventsGrouped(params: {
+  page: number;
+  page_size: number;
+  keyword?: string;
+  cluster?: string;
+  projectId?: number;
+}) {
+  return getData<{ list?: AlertEventGroupItem[]; items?: AlertEventGroupItem[]; total: number; page: number; page_size: number }>(
+    http.get("/alerts/events/grouped", { params }),
+  ).then((payload) => normalizePagedPayload(payload));
 }
 
 /** 与后端 alertdispatch 模板变量说明一致（通道 Go template {{.Name}}） */

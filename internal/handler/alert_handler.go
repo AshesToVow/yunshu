@@ -69,8 +69,28 @@ func (h *AlertHandler) TestChannel(c *gin.Context) {
 		abortService(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"message": "test sent"}, func(ctx context.Context, req service.AlertTestRequest) error {
+	ServeJSON(c, func(ctx context.Context, req service.AlertTestRequest) (*service.AlertChannelTestResult, error) {
 		return h.svc.TestChannel(ctx, id, req)
+	})
+}
+
+func (h *AlertHandler) DebugRouting(c *gin.Context) {
+	ServeJSON(c, h.svc.DebugRouting)
+}
+
+func (h *AlertHandler) ListEventsGrouped(c *gin.Context) {
+	var q service.AlertEventListQuery
+	if err := c.ShouldBindQuery(&q); err != nil {
+		response.Error(c, constants.ErrBadRequestWithMsg(err.Error()))
+		return
+	}
+	list, total, page, pageSize, err := h.svc.ListEventsGrouped(c.Request.Context(), q)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{
+		"items": list, "list": list, "total": total, "page": page, "page_size": pageSize,
 	})
 }
 

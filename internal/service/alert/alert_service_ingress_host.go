@@ -36,6 +36,13 @@ func (h alertIngressHost) ResolveEnvironmentLabel(labels map[string]string, payl
 }
 
 func (h alertIngressHost) FirstMatchingSilenceID(ctx context.Context, labels map[string]string, now time.Time) (uint, bool, error) {
+	if h.s.maintenanceSvc != nil {
+		if id, ok, err := h.s.maintenanceSvc.FirstMatchingID(ctx, labels, now); err != nil {
+			return 0, false, err
+		} else if ok {
+			return id, true, nil
+		}
+	}
 	if h.s.silenceSvc == nil {
 		return 0, false, nil
 	}

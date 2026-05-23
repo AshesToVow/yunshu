@@ -1,0 +1,12 @@
+{
+  "app": {
+    "name": "云枢",
+    "search": "多集群搜索",
+    "logout": "退出登录",
+    "settings": "偏好设置"
+  },
+  "login": {
+    "title": "登录",
+    "submit": "登录"
+  }
+}

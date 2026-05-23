@@ -33,6 +33,21 @@ type EventItem struct {
 	InvolvedName string `json:"involved_name,omitempty"`
 }
 
+// EventGroupItem 按 involvedObject + reason 聚合后的 Event 摘要。
+type EventGroupItem struct {
+	Namespace    string      `json:"namespace"`
+	InvolvedKind string      `json:"involved_kind"`
+	InvolvedName string      `json:"involved_name"`
+	Reason       string      `json:"reason"`
+	Type         string      `json:"type"`
+	TotalCount   int32       `json:"total_count"`
+	EventCount   int         `json:"event_count"`
+	LastTime     string      `json:"last_time"`
+	FirstTime    string      `json:"first_time,omitempty"`
+	Message      string      `json:"message"`
+	Events       []EventItem `json:"events,omitempty"`
+}
+
 type K8sEventService struct {
 	runtime *K8sRuntimeService
 }
@@ -111,5 +126,65 @@ func (s *K8sEventService) List(ctx context.Context, q EventListQuery) ([]EventIt
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].LastTime > out[j].LastTime
 	})
+	return out, nil
+}
+
+// ListGrouped 按 involved_kind + involved_name + reason + namespace 聚合 Event。
+func (s *K8sEventService) ListGrouped(ctx context.Context, q EventListQuery) ([]EventGroupItem, error) {
+	items, err := s.List(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	type groupKey struct {
+		ns, kind, name, reason string
+	}
+	groups := map[groupKey]*EventGroupItem{}
+	order := make([]groupKey, 0)
+	for _, e := range items {
+		k := groupKey{
+			ns:     e.Namespace,
+			kind:   e.InvolvedKind,
+			name:   e.InvolvedName,
+			reason: e.Reason,
+		}
+		g, ok := groups[k]
+		if !ok {
+			g = &EventGroupItem{
+				Namespace:    e.Namespace,
+				InvolvedKind: e.InvolvedKind,
+				InvolvedName: e.InvolvedName,
+				Reason:       e.Reason,
+				Type:         e.Type,
+				FirstTime:    e.FirstTime,
+				LastTime:     e.LastTime,
+				Message:      e.Message,
+			}
+			groups[k] = g
+			order = append(order, k)
+		}
+		g.TotalCount += e.Count
+		if g.TotalCount == 0 {
+			g.TotalCount = 1
+		}
+		g.EventCount++
+		if e.LastTime > g.LastTime {
+			g.LastTime = e.LastTime
+			g.Message = e.Message
+			g.Type = e.Type
+		}
+		if g.FirstTime == "" || (e.FirstTime != "" && e.FirstTime < g.FirstTime) {
+			g.FirstTime = e.FirstTime
+		}
+		if len(g.Events) < 20 {
+			g.Events = append(g.Events, e)
+		}
+	}
+	out := make([]EventGroupItem, 0, len(order))
+	for _, k := range order {
+		if g := groups[k]; g != nil {
+			out = append(out, *g)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].LastTime > out[j].LastTime })
 	return out, nil
 }
