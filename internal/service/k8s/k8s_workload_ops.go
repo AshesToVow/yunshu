@@ -143,7 +143,7 @@ func (s *K8sWorkloadService) deleteWorkloadByKind(ctx context.Context, req Names
 	if !ok {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsgd5692b195622)
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, gvk, req.Namespace, req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, gvk, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

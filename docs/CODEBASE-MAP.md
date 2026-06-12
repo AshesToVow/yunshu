@@ -1,8 +1,8 @@
 # Yunshu 后端代码地图（与源码同步）
 
-**文档版本**: v1.1  
-**最后更新**: 2026-05-22  
-**适用分支**: 目录拆分 + 仓储化 + `bizerrors` 统一之后  
+**文档版本**: v1.2  
+**最后更新**: 2026-06-11  
+**适用分支**: 插件化 + 目录拆分 + 仓储化 + `bizerrors` 统一之后  
 
 本文是阅读后端源码的**入口索引**。若与代码冲突，以 `internal/` 源码为准。
 
@@ -24,8 +24,10 @@ HTTP/gRPC 请求
 
 | 步骤 | 文件 | 说明 |
 |------|------|------|
-| 进程启动 | `cmd/server.go` | migrate、Worker、gRPC、HTTP |
+| 进程启动 | `cmd/server.go` | migrate、插件 Worker、gRPC、HTTP |
 | 基础设施 | `internal/bootstrap/app.go` | DB / Redis / Casbin / Gin |
+| 插件 | `internal/plugin/` + `internal/plugins/all/` | 编译期注册；`config.plugins.enabled` 启停 |
+| 路由绑定 | `internal/router/plugin_bind.go` | `RegisterCoreRoutes` / `RegisterK8sRoutes` / … |
 | Wire（部分） | `internal/providers/wire.go` | Config / Logger / DB / Redis |
 | 路由依赖 | `internal/router/wire.go` | `InitializeRouteDeps` |
 | 仓储 | `internal/router/repositories.go` | `newRouteRepositories(db)` |
@@ -42,13 +44,16 @@ Handler 普遍 `import "yunshu/internal/service"`，通过 **`internal/service/e
 internal/service/
 ├── exports.go                 # 门面：type alias + 构造函数 re-export（给 handler/router）
 ├── alert/                     # 告警：摄入、聚合、投递、监控规则、订阅、静默…
+├── cmdb/                      # 服务器资产、云同步、SSH/Web 终端（原 project 子域）
 ├── k8s/                       # K8s 资源与运行时
 │   └── eventforward/          # 集群 Event → Webhook 转发 Worker/Admin
-├── project/                   # 项目、服务器、云账号、日志源、云到期 Cron
+├── project/                   # 项目、成员、服务、日志源、Agent
 ├── system/                    # 用户、角色、权限、认证、菜单、字典…
 ├── logplatform/               # Log Agent、发现、内存日志 Broker
 ├── mysqlbackup/               # MySQL 备份调度与执行
 └── overview/                  # 首页总览指标
+
+internal/menu/                 # 内置菜单 catalog（DefaultCatalog）+ seed 同步（Sync）
 ```
 
 ### 域 → 典型入口文件
@@ -58,6 +63,7 @@ internal/service/
 | 认证 | `service` / `system` | `AuthService` | `system/auth_service.go` |
 | 用户权限 | `system` | `UserService`, `RoleService` | `system/user_service.go` |
 | 项目 | `project` | `ProjectMgmtService` | `project/project_mgmt_core.go` |
+| CMDB | `cmdb` | `CMDBService` | `cmdb/servers.go` |
 | 告警 | `alert` | `AlertService` | `alert/alert_service_core.go` → `alert_ingest_pipeline.go` |
 | K8s | `k8s` | `K8sRuntimeService`, `K8sPodService` | `k8s/k8s_runtime_service.go` |
 | 日志 Agent | `logplatform` | `LogAgentService` | `logplatform/log_agent_service.go` |
@@ -75,8 +81,9 @@ internal/service/
 ## 3. 初学者阅读顺序（约 2～4 小时）
 
 1. `cmd/server.go` — 启动流程  
-2. `internal/router/router.go` — 路由如何注册  
-3. 选一个简单 API：**字典条目**  
+2. `internal/router/router.go` + `plugin_bind.go` — 插件路由如何注册  
+3. `internal/menu/catalog.go` + `cmd/seed.go` — 菜单与权限种子数据  
+4. 选一个简单 API：**字典条目**  
    `handler` → `service.DictEntryService` → `repository` → `model`  
 4. 打开 `internal/service/exports.go`，理解 `service.Xxx` 与真实子包的对应关系  
 5. 再读 **告警 Webhook**（复杂）：`handler/alert_handler.go` → `alert/alert_service_webhook.go` → `alert_ingest_pipeline.go`  
@@ -123,10 +130,22 @@ internal/service/
 
 ---
 
-## 7. 相关文档
+## 7. 种子数据与菜单（2026-06）
+
+| 项 | 位置 | 说明 |
+|----|------|------|
+| 内置菜单定义 | `internal/menu/catalog.go` | `DefaultCatalog()`，支持任意层级 `Children` |
+| 菜单 DB 同步 | `internal/menu/sync.go` | `menu.Sync`：按 `(parent_id, path)` upsert + 历史补丁 |
+| seed 入口 | `cmd/seed.go` | 事务：Permission 批量 OnConflict、Casbin `AddPolicies`；admin 密码**仅首次创建** |
+| 菜单树 API | `internal/repository/menu_repository.go` | 单次 `ListAll` + O(n) 建树；Service 侧 60s 缓存 |
+
+---
+
+## 8. 相关文档
 
 | 文档 | 说明 |
 |------|------|
+| [plugins.md](./plugins.md) | 业务插件启停与 CMDB 拆分 |
 | [backend-architecture-complete.md](./backend-architecture-complete.md) | 完整技术说明（架构、模块、部署） |
 | [refactoring-report.md](./refactoring-report.md) | 重构实施状态与后续项 |
 | [architecture-diagrams.md](./architecture-diagrams.md) | 架构图集 |
@@ -134,4 +153,4 @@ internal/service/
 
 ---
 
-*维护：目录或装配方式变更时，请同步更新本文与 `backend-architecture-complete.md` §3.3。*
+*维护：插件、菜单 catalog 或 seed 行为变更时，请同步更新本文、`plugins.md` 与 `backend-architecture-complete.md` §3.3。*

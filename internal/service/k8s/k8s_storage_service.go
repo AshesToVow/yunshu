@@ -32,6 +32,7 @@ type StorageDeleteRequest struct {
 	ClusterID uint   `form:"cluster_id" binding:"required"`
 	Namespace string `form:"namespace"`
 	Name      string `form:"name" binding:"required"`
+	K8sDeleteOptions
 }
 
 type PersistentVolumeItem struct {
@@ -264,7 +265,7 @@ func (s *K8sStorageService) Delete(ctx context.Context, kind string, req Storage
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, gvk, ns, strings.TrimSpace(req.Name)); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, gvk, ns, strings.TrimSpace(req.Name), req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

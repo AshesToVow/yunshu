@@ -2,69 +2,53 @@ package project
 
 import (
 	"context"
-	"crypto/cipher"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/repository"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/pkg/pagination"
-	"yunshu/internal/repository"
 	bizerrors "yunshu/internal/pkg/errors"
 
 	"gorm.io/gorm"
 )
 
 type ProjectMgmtService struct {
-	projectRepo      interfaces.ProjectRepository
-	serverRepo       interfaces.ServerRepository
-	serverGroupRepo  interfaces.ServerGroupRepository
-	cloudAccountRepo interfaces.CloudAccountRepository
-	serviceRepo      interfaces.ServiceRepository
-	logRepo          interfaces.LogSourceRepository
-	memberRepo       interfaces.ProjectMemberRepository
-	userRepo         interfaces.UserRepository
-	departmentRepo   interfaces.DepartmentRepository
-	aead             cipher.AEAD
-	ensureMu         sync.Mutex
-	ensuredProjectAt map[uint]time.Time
+	projectRepo     interfaces.ProjectRepository
+	serverRepo      interfaces.ServerRepository
+	serverGroupRepo interfaces.ServerGroupRepository
+	serviceRepo     interfaces.ServiceRepository
+	logRepo         interfaces.LogSourceRepository
+	memberRepo      interfaces.ProjectMemberRepository
+	userRepo        interfaces.UserRepository
+	departmentRepo  interfaces.DepartmentRepository
 }
 
-// NewProjectMgmtService 创建相关逻辑。
+// NewProjectMgmtService 创建项目管理服务（项目/成员/服务配置/日志；服务器资产见 cmdb 包）。
 func NewProjectMgmtService(
 	projectRepo interfaces.ProjectRepository,
 	serverRepo interfaces.ServerRepository,
 	serverGroupRepo interfaces.ServerGroupRepository,
-	cloudAccountRepo interfaces.CloudAccountRepository,
 	serviceRepo interfaces.ServiceRepository,
 	logRepo interfaces.LogSourceRepository,
 	memberRepo interfaces.ProjectMemberRepository,
 	userRepo interfaces.UserRepository,
 	departmentRepo interfaces.DepartmentRepository,
-	encryptionKey string,
-) (*ProjectMgmtService, error) {
-	aead, err := cryptox.NewAESGCMFromKeyString(encryptionKey)
-	if err != nil {
-		return nil, bizerrors.Pass(context.Background(), "project", "NewProjectMgmtService", err)
-	}
+) *ProjectMgmtService {
 	return &ProjectMgmtService{
-		projectRepo:      projectRepo,
-		serverRepo:       serverRepo,
-		serverGroupRepo:  serverGroupRepo,
-		cloudAccountRepo: cloudAccountRepo,
-		serviceRepo:      serviceRepo,
-		logRepo:          logRepo,
-		memberRepo:       memberRepo,
-		userRepo:         userRepo,
-		departmentRepo:   departmentRepo,
-		aead:             aead,
-		ensuredProjectAt: make(map[uint]time.Time),
-	}, nil
+		projectRepo:     projectRepo,
+		serverRepo:      serverRepo,
+		serverGroupRepo: serverGroupRepo,
+		serviceRepo:     serviceRepo,
+		logRepo:         logRepo,
+		memberRepo:      memberRepo,
+		userRepo:        userRepo,
+		departmentRepo:  departmentRepo,
+	}
 }
 
 type ProjectItem struct {
@@ -73,6 +57,8 @@ type ProjectItem struct {
 	Code              string  `json:"code"`
 	Description       *string `json:"description"`
 	Status            int     `json:"status"`
+	ProjectType       string  `json:"project_type"`
+	LifecycleStatus   string  `json:"lifecycle_status"`
 	OwnerDepartmentID *uint   `json:"owner_department_id,omitempty"`
 	// MyProjectRole 当前登录用户在该项目中的成员角色（owner/admin/member/readonly）；列表与更新接口在非超管时填充；超管可省略。
 	MyProjectRole string `json:"my_project_role,omitempty"`
@@ -86,9 +72,37 @@ func toProjectItem(p model.Project) ProjectItem {
 		Code:              p.Code,
 		Description:       p.Description,
 		Status:            p.Status,
+		ProjectType:       p.ProjectType,
+		LifecycleStatus:   p.LifecycleStatus,
 		OwnerDepartmentID: p.OwnerDepartmentID,
 		CreatedAt:         p.CreatedAt.Format(time.RFC3339),
 	}
+}
+
+func normalizeProjectType(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	for _, t := range model.ValidProjectTypes() {
+		if v == t {
+			return v
+		}
+	}
+	if v == "" {
+		return model.ProjectTypeBusiness
+	}
+	return ""
+}
+
+func normalizeLifecycleStatus(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	for _, s := range model.ValidProjectLifecycles() {
+		if v == s {
+			return v
+		}
+	}
+	if v == "" {
+		return model.ProjectLifecycleActive
+	}
+	return ""
 }
 
 func (s *ProjectMgmtService) enrichMyProjectRole(ctx context.Context, item *ProjectItem) {
@@ -127,15 +141,23 @@ func (s *ProjectMgmtService) enrichMyProjectRolesBatch(ctx context.Context, item
 }
 
 type ProjectListQuery struct {
-	Keyword  string `form:"keyword"`
-	Page     int    `form:"page"`
-	PageSize int    `form:"page_size"`
+	Keyword         string `form:"keyword"`
+	ProjectType     string `form:"project_type"`
+	LifecycleStatus string `form:"lifecycle_status"`
+	Page            int    `form:"page"`
+	PageSize        int    `form:"page_size"`
 }
 
 // ListProjects 查询列表相关的业务逻辑。非超级管理员仅能看到自己作为成员的项目。
 func (s *ProjectMgmtService) ListProjects(ctx context.Context, q ProjectListQuery) (*pagination.Result[ProjectItem], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	params := repository.ProjectListParams{Keyword: strings.TrimSpace(q.Keyword), Page: page, PageSize: pageSize}
+	params := repository.ProjectListParams{
+		Keyword:         strings.TrimSpace(q.Keyword),
+		ProjectType:     strings.TrimSpace(q.ProjectType),
+		LifecycleStatus: strings.TrimSpace(q.LifecycleStatus),
+		Page:            page,
+		PageSize:        pageSize,
+	}
 	var list []model.Project
 	var total int64
 	var err error
@@ -160,6 +182,8 @@ type ProjectCreateRequest struct {
 	Code              string  `json:"code" binding:"required,max=64"`
 	Description       *string `json:"description"`
 	Status            int     `json:"status"`
+	ProjectType       string  `json:"project_type"`
+	LifecycleStatus   string  `json:"lifecycle_status"`
 	OwnerDepartmentID *uint   `json:"owner_department_id"`
 }
 
@@ -182,7 +206,18 @@ func (s *ProjectMgmtService) CreateProject(ctx context.Context, creatorUserID ui
 		v := *req.OwnerDepartmentID
 		ownerDept = &v
 	}
-	p := model.Project{Name: strings.TrimSpace(req.Name), Code: strings.TrimSpace(req.Code), Description: req.Description, Status: status, OwnerDepartmentID: ownerDept}
+	pt := normalizeProjectType(req.ProjectType)
+	if pt == "" {
+		return nil, constants.ErrBadRequestWithMsg("project_type 取值不合法")
+	}
+	ls := normalizeLifecycleStatus(req.LifecycleStatus)
+	if ls == "" {
+		return nil, constants.ErrBadRequestWithMsg("lifecycle_status 取值不合法")
+	}
+	p := model.Project{
+		Name: strings.TrimSpace(req.Name), Code: strings.TrimSpace(req.Code), Description: req.Description,
+		Status: status, ProjectType: pt, LifecycleStatus: ls, OwnerDepartmentID: ownerDept,
+	}
 	if err := s.projectRepo.Create(ctx, &p); err != nil {
 		return nil, bizerrors.Pass(ctx, "project", "CreateProject", err)
 	}
@@ -205,6 +240,8 @@ type ProjectUpdateRequest struct {
 	Code              *string `json:"code"`
 	Description       *string `json:"description"`
 	Status            *int    `json:"status"`
+	ProjectType       *string `json:"project_type"`
+	LifecycleStatus   *string `json:"lifecycle_status"`
 	OwnerDepartmentID *uint   `json:"owner_department_id"`
 }
 
@@ -228,6 +265,20 @@ func (s *ProjectMgmtService) UpdateProject(ctx context.Context, id uint, req Pro
 	}
 	if req.Status != nil {
 		p.Status = *req.Status
+	}
+	if req.ProjectType != nil {
+		pt := normalizeProjectType(*req.ProjectType)
+		if pt == "" {
+			return nil, constants.ErrBadRequestWithMsg("project_type 取值不合法")
+		}
+		p.ProjectType = pt
+	}
+	if req.LifecycleStatus != nil {
+		ls := normalizeLifecycleStatus(*req.LifecycleStatus)
+		if ls == "" {
+			return nil, constants.ErrBadRequestWithMsg("lifecycle_status 取值不合法")
+		}
+		p.LifecycleStatus = ls
 	}
 	if req.OwnerDepartmentID != nil {
 		if *req.OwnerDepartmentID == 0 {
@@ -256,7 +307,9 @@ func (s *ProjectMgmtService) UpdateProject(ctx context.Context, id uint, req Pro
 // DeleteProject 删除相关的业务逻辑。
 func (s *ProjectMgmtService) DeleteProject(ctx context.Context, id uint) error {
 	if s.memberRepo != nil {
-		_ = s.memberRepo.DeleteByProject(ctx, id)
+		if err := s.memberRepo.DeleteByProject(ctx, id); err != nil {
+			return bizerrors.Pass(ctx, "project", "DeleteProject.members", err)
+		}
 	}
 	if err := s.projectRepo.DeleteByID(ctx, id); err != nil {
 		return bizerrors.Pass(ctx, "project", "DeleteProject", err)

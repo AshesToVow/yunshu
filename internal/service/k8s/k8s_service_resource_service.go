@@ -169,7 +169,7 @@ func (s *K8sServiceResourceService) Delete(ctx context.Context, req K8sServiceDe
 	if ns == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsgc67b07d6cf4d)
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, k8sServiceGVK, ns, strings.TrimSpace(req.Name)); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, k8sServiceGVK, ns, strings.TrimSpace(req.Name), req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

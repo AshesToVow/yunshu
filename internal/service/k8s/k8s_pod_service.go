@@ -10,7 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"yunshu/internal/interfaces"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/k8sauth"
 	bizerrors "yunshu/internal/pkg/errors"
 
 	"yunshu/internal/pkg/k8sutil"
@@ -19,6 +22,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 )
@@ -202,13 +206,22 @@ type PodEventItem struct {
 }
 
 type K8sPodService struct {
-	runtime *K8sRuntimeService
-	dyn     *DynamicResourceService
+	runtime     *K8sRuntimeService
+	dyn         *DynamicResourceService
+	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 }
 
 // NewK8sPodService 创建相关逻辑。
-func NewK8sPodService(runtime *K8sRuntimeService) *K8sPodService {
-	return &K8sPodService{runtime: runtime, dyn: NewDynamicResourceService(runtime)}
+func NewK8sPodService(
+	runtime *K8sRuntimeService,
+	nsDeny interfaces.K8sNamespaceDenyRepository,
+	nsAllow interfaces.K8sNamespaceAllowRepository,
+) *K8sPodService {
+	return &K8sPodService{
+		runtime: runtime, dyn: NewDynamicResourceService(runtime),
+		nsDenyRepo: nsDeny, nsAllowRepo: nsAllow,
+	}
 }
 
 // List 查询列表相关的业务逻辑。
@@ -218,14 +231,24 @@ func (s *K8sPodService) List(ctx context.Context, query PodListQuery) ([]PodItem
 		return nil, err
 	}
 	ns := strings.TrimSpace(query.Namespace)
-	if ns == "" {
-		ns = "default"
-	}
+	clusterWide := ns == ""
 	var pods []corev1.Pod
-	if err := k.Resource(&corev1.Pod{}).Namespace(ns).List(&pods).Error; err != nil {
+	listQuery := k.WithContext(ctx).Resource(&corev1.Pod{})
+	if clusterWide {
+		listQuery = listQuery.AllNamespace()
+	} else {
+		listQuery = listQuery.Namespace(ns)
+	}
+	if err := listQuery.List(&pods).Error; err != nil {
 		return nil, err
 	}
-	usageByName := listPodCPUMemUsageByNamespace(ctx, s.dyn, k, ns)
+
+	var usageByKey map[string]podCPUMemUsage
+	if clusterWide {
+		usageByKey = listAllPodCPUMemUsage(ctx, s.dyn, k)
+	} else {
+		usageByKey = listPodCPUMemUsageByNamespace(ctx, s.dyn, k, ns)
+	}
 	nodeAlloc := map[string]nodeAllocResources{}
 	{
 		var nodes []corev1.Node
@@ -241,7 +264,14 @@ func (s *K8sPodService) List(ctx context.Context, query PodListQuery) ([]PodItem
 	kw := strings.ToLower(strings.TrimSpace(query.Keyword))
 	out := make([]PodItem, 0, len(pods))
 	for _, p := range pods {
-		item := mapPodItem(p, usageByName[p.Name], nodeAlloc[p.Spec.NodeName])
+		if clusterWide && !s.namespaceAllowed(ctx, query.ClusterID, p.Namespace) {
+			continue
+		}
+		usageKey := p.Name
+		if clusterWide {
+			usageKey = podMetricKey(p.Namespace, p.Name)
+		}
+		item := mapPodItem(p, usageByKey[usageKey], nodeAlloc[p.Spec.NodeName])
 		if kw != "" {
 			if !strings.Contains(strings.ToLower(item.Name), kw) && !strings.Contains(strings.ToLower(item.NodeName), kw) {
 				continue
@@ -250,6 +280,23 @@ func (s *K8sPodService) List(ctx context.Context, query PodListQuery) ([]PodItem
 		out = append(out, item)
 	}
 	return out, nil
+}
+
+func (s *K8sPodService) namespaceAllowed(ctx context.Context, clusterID uint, namespace string) bool {
+	ns := strings.TrimSpace(namespace)
+	if ns == "" {
+		return true
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil || auth.IsSuperAdminRole(u.RoleCodes) {
+		return true
+	}
+	if s.nsDenyRepo == nil && s.nsAllowRepo == nil {
+		return true
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	allowed, err := NamespaceAllowedByPolicy(ctx, s.nsDenyRepo, s.nsAllowRepo, pack, clusterID, ns)
+	return err == nil && allowed
 }
 
 func mapPodItem(p corev1.Pod, usage podCPUMemUsage, alloc nodeAllocResources) PodItem {
@@ -401,7 +448,8 @@ func (s *K8sPodService) Delete(ctx context.Context, req PodDeleteRequest) error 
 	if err != nil {
 		return err
 	}
-	if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(req.Namespace).Name(req.Name).Delete().Error; err != nil {
+	podGVK := schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}
+	if err := s.dyn.DeleteByGVK(ctx, k, podGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		return k8sFail(ctx, "k8s.pod", "api", err)
 	}
 	return nil
@@ -413,13 +461,9 @@ func (s *K8sPodService) Exec(ctx context.Context, req PodExecRequest) (string, e
 	if err != nil {
 		return "", err
 	}
-	container := strings.TrimSpace(req.Container)
-	if container == "" {
-		var pod corev1.Pod
-		e := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(req.Namespace).Name(req.Name).Get(&pod).Error
-		if e == nil && len(pod.Spec.Containers) > 0 {
-			container = pod.Spec.Containers[0].Name
-		}
+	container, err := s.resolveExecContainer(ctx, k, req.Namespace, req.Name, req.Container)
+	if err != nil {
+		return "", err
 	}
 	cmd := strings.Fields(strings.TrimSpace(req.Command))
 	if len(cmd) == 0 {
@@ -427,11 +471,30 @@ func (s *K8sPodService) Exec(ctx context.Context, req PodExecRequest) (string, e
 	}
 
 	var out []byte
-	err = k.Namespace(req.Namespace).Name(req.Name).Ctl().Pod().ContainerName(container).Command(cmd[0], cmd[1:]...).Execute(&out).Error
+	err = k.WithContext(ctx).Namespace(req.Namespace).Name(req.Name).Ctl().Pod().ContainerName(container).Command(cmd[0], cmd[1:]...).Execute(&out).Error
 	if err != nil {
 		return "", bizerrors.Internalf(ctx, "k8s.pod", "api", err, constants.ErrFmt1493bc1ea07a)
 	}
 	return string(out), nil
+}
+
+func (s *K8sPodService) resolveExecContainer(ctx context.Context, k *kom.Kubectl, namespace, podName, container string) (string, error) {
+	if c := strings.TrimSpace(container); c != "" {
+		return c, nil
+	}
+	ns := strings.TrimSpace(namespace)
+	name := strings.TrimSpace(podName)
+	if ns == "" || name == "" {
+		return "", constants.ErrBadRequestWithMsg(constants.ErrMsge278df185255)
+	}
+	var pod corev1.Pod
+	if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(ns).Name(name).Get(&pod).Error; err != nil {
+		return "", bizerrors.Internalf(ctx, "k8s.pod", "api", err, constants.ErrFmtc52b9130d74c)
+	}
+	if len(pod.Spec.Containers) == 0 {
+		return "", constants.ErrBadRequestWithMsg("Pod 无可用容器")
+	}
+	return pod.Spec.Containers[0].Name, nil
 }
 
 type ExecTerminalSize struct {
@@ -466,6 +529,11 @@ func (s *K8sPodService) ExecTTYStream(
 		return constants.ErrBadRequestWithMsg(constants.ErrMsge278df185255)
 	}
 
+	resolvedContainer, err := s.resolveExecContainer(ctx, k, namespace, podName, container)
+	if err != nil {
+		return err
+	}
+
 	req := k.Client().CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -475,7 +543,7 @@ func (s *K8sPodService) ExecTTYStream(
 
 	cmd := []string{"sh", "-l"}
 	execOpts := &corev1.PodExecOptions{
-		Container: strings.TrimSpace(container),
+		Container: resolvedContainer,
 		Command:   cmd,
 		Stdin:     true,
 		Stdout:    true,
@@ -570,8 +638,7 @@ func (s *K8sPodService) StreamLogs(ctx context.Context, query PodLogsQuery, onLi
 			}
 			if e != nil {
 				if e == io.EOF {
-					time.Sleep(200 * time.Millisecond)
-					continue
+					return nil
 				}
 				return e
 			}
@@ -796,7 +863,9 @@ func (s *K8sPodService) UpdateSimple(ctx context.Context, req PodCreateSimpleReq
 	}
 
 	// 其他字段多为不可变：按同名删除后重建，并等待删除完成避免 Terminating 占用导致创建失败
-	_ = k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(req.Namespace).Name(req.Name).Delete().Error
+	if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(req.Namespace).Name(req.Name).Delete().Error; err != nil && !apierrors.IsNotFound(err) {
+		return k8sFail(ctx, "k8s.pod", "api", err)
+	}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		var current corev1.Pod

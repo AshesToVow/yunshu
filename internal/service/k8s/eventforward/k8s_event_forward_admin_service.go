@@ -69,6 +69,7 @@ func (s *K8sEventForwardAdminService) CreateRule(ctx context.Context, req K8sEve
 	if err := s.repo.CreateRule(ctx, rule); err != nil {
 		return nil, bizerrors.Pass(ctx, "k8s.event-forward", "CreateRule", err)
 	}
+	notifyEventForwardRulesChanged()
 	return rule, nil
 }
 
@@ -89,6 +90,7 @@ func (s *K8sEventForwardAdminService) UpdateRule(ctx context.Context, id uint, r
 	if err := s.repo.SaveRule(ctx, rule); err != nil {
 		return nil, bizerrors.Pass(ctx, "k8s.event-forward", "UpdateRule", err)
 	}
+	notifyEventForwardRulesChanged()
 	return s.repo.GetRule(ctx, id)
 }
 
@@ -100,6 +102,7 @@ func (s *K8sEventForwardAdminService) DeleteRule(ctx context.Context, id uint) e
 	if n == 0 {
 		return constants.ErrNotFound
 	}
+	notifyEventForwardRulesChanged()
 	return nil
 }
 
@@ -118,7 +121,14 @@ func (s *K8sEventForwardAdminService) UpdateSettings(ctx context.Context, st *mo
 	if err := s.repo.SaveSettings(ctx, st); err != nil {
 		return bizerrors.Pass(ctx, "k8s.event-forward", "UpdateSettings", err)
 	}
+	notifyEventForwardRulesChanged()
 	return nil
+}
+
+func notifyEventForwardRulesChanged() {
+	if m := Active(); m != nil {
+		m.EnsureRunning()
+	}
 }
 
 func normalizeK8sEventForwardRule(req K8sEventForwardRuleUpsertRequest) (*model.K8sEventForwardRule, error) {

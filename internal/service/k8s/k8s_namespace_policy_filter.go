@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"strings"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/k8sauth"
@@ -70,4 +71,24 @@ func FilterNamespaceNamesByPolicy(
 	}
 
 	return out, nil
+}
+
+// NamespaceAllowedByPolicy 判断当前主体能否访问某集群下的命名空间，与 K8sScopeAuthorize 语义对齐。
+func NamespaceAllowedByPolicy(
+	ctx context.Context,
+	deny interfaces.K8sNamespaceDenyRepository,
+	allow interfaces.K8sNamespaceAllowRepository,
+	pack k8sauth.PrincipalPack,
+	clusterID uint,
+	namespace string,
+) (bool, error) {
+	ns := strings.TrimSpace(namespace)
+	if clusterID == 0 || ns == "" {
+		return true, nil
+	}
+	filtered, err := FilterNamespaceNamesByPolicy(ctx, deny, allow, pack, clusterID, []string{ns})
+	if err != nil {
+		return false, err
+	}
+	return len(filtered) > 0, nil
 }

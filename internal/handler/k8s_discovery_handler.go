@@ -18,7 +18,18 @@ func NewK8sDiscoveryHandler(svc *service.K8sDiscoveryService) *K8sDiscoveryHandl
 	return &K8sDiscoveryHandler{svc: svc}
 }
 
-// ListAPIResources GET /clusters/:id/api-resources ?namespaced=true|false
+// ListAPIResources godoc
+// @Summary List cluster API resources
+// @Description Discovery API resource list; optional query namespaced=true|false filters namespaced resources.
+// @Tags Clusters
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Cluster ID"
+// @Param namespaced query string false "Filter: true | false"
+// @Success 200 {object} response.Body "success"
+// @Failure 401 {object} response.Body "未登录或登录已失效"
+// @Failure 403 {object} response.Body "无访问权限"
+// @Router /api/v1/clusters/{id}/api-resources [get]
 func (h *K8sDiscoveryHandler) ListAPIResources(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {

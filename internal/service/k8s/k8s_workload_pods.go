@@ -41,22 +41,30 @@ func (s *K8sWorkloadService) StatefulSetPods(ctx context.Context, q RelatedPodsQ
 	return listPodsBySelector(ctx, k, q.Namespace, selector)
 }
 
+func listCorePodsBySelector(ctx context.Context, k *kom.Kubectl, namespace, selector string) ([]corev1.Pod, error) {
+	if k == nil {
+		return nil, constants.ErrInternalWithMsg(constants.ErrMsgc674e8a0802b)
+	}
+	var list []corev1.Pod
+	query := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(namespace)
+	if strings.TrimSpace(selector) != "" {
+		query = query.WithLabelSelector(strings.TrimSpace(selector))
+	}
+	if err := query.List(&list).Error; err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.workload", "api", err, constants.ErrFmt3ab38ee441a3)
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
+	return list, nil
+}
+
 // DaemonSetPods 执行对应的业务逻辑。
 func listPodsBySelector(ctx context.Context, k *kom.Kubectl, namespace, selector string) ([]RelatedPodItem, error) {
 	if k == nil {
 		return nil, constants.ErrInternalWithMsg(constants.ErrMsgc674e8a0802b)
 	}
-	opts := metav1.ListOptions{}
-	if strings.TrimSpace(selector) != "" {
-		opts.LabelSelector = strings.TrimSpace(selector)
-	}
-	var list []corev1.Pod
-	query := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(namespace)
-	if strings.TrimSpace(opts.LabelSelector) != "" {
-		query = query.WithLabelSelector(strings.TrimSpace(opts.LabelSelector))
-	}
-	if err := query.List(&list).Error; err != nil {
-		return nil, bizerrors.Internalf(ctx, "k8s.workload", "api", err, constants.ErrFmt3ab38ee441a3)
+	list, err := listCorePodsBySelector(ctx, k, namespace, selector)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]RelatedPodItem, 0, len(list))
 	for _, p := range list {

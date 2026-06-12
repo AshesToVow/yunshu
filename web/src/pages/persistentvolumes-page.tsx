@@ -43,7 +43,7 @@ export function PersistentVolumesPage() {
         list: async ({ clusterId, keyword }) => await listPersistentVolumes(clusterId, keyword),
         detail: async ({ clusterId, name }) => await getPersistentVolumeDetail(clusterId, name),
         apply: async ({ clusterId, manifest }) => await applyPersistentVolume(clusterId, manifest),
-        remove: async ({ clusterId, name }) => await deletePersistentVolume(clusterId, name),
+        remove: async (args) => await deletePersistentVolume(args.clusterId, args.name, args),
       }}
       createTemplate={() => `apiVersion: v1
 kind: PersistentVolume

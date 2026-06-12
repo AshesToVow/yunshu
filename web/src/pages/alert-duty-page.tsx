@@ -16,6 +16,7 @@ import {
 import { handoffDutyBlock, listDutyCalendar, validateDutyBlocks, type AlertDutyCalendarItem } from "../services/alert-duty";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { getUsers } from "../services/users";
+import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { formatDateTime } from "../utils/format";
 
 export function AlertDutyPage() {
@@ -291,32 +292,39 @@ export function AlertDutyPage() {
   }
 
   return (
-    <Card
-      className="table-card"
-      title="值班总览"
-      extra={
-        <Space>
-          <Select allowClear style={{ width: 240 }} options={projectOptions} value={projectId} onChange={setProjectId} placeholder="项目维度（可选）" />
-          <Select allowClear style={{ width: 320 }} options={ruleOptions} value={ruleId} onChange={setRuleId} placeholder="规则维度（可选）" />
-          <Segmented
-            value={viewMode}
-            options={[
-              { label: "按天", value: "day" },
-              { label: "按周", value: "week" },
-            ]}
-            onChange={(v) => setViewMode(v as "day" | "week")}
-          />
-          <DatePicker value={anchorDate} onChange={(v) => setAnchorDate(v || dayjs())} />
-          <Button icon={<ReloadOutlined />} onClick={() => { void loadBlocks(); void loadCalendar(); }}>
-            刷新
-          </Button>
-          <Button onClick={() => (window.location.href = "/alert-monitor-platform?tab=rules")}>去配置规则</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新增值班
-          </Button>
-        </Space>
-      }
-    >
+    <div className="page-stack">
+      <PageTelemetryHeader
+        label="[ ALERT / DUTY ]"
+        title="值班总览"
+        subtitle="班次甘特、日历排班与告警规则维度筛选"
+        meta={[
+          `MODE / ${viewMode === "day" ? "DAY" : "WEEK"}`,
+          `ANCHOR / ${anchorDate.format("YYYY-MM-DD")}`,
+        ]}
+        extra={
+          <Space wrap>
+            <Select allowClear style={{ width: 240 }} options={projectOptions} value={projectId} onChange={setProjectId} placeholder="项目维度（可选）" />
+            <Select allowClear style={{ width: 320 }} options={ruleOptions} value={ruleId} onChange={setRuleId} placeholder="规则维度（可选）" />
+            <Segmented
+              value={viewMode}
+              options={[
+                { label: "按天", value: "day" },
+                { label: "按周", value: "week" },
+              ]}
+              onChange={(v) => setViewMode(v as "day" | "week")}
+            />
+            <DatePicker value={anchorDate} onChange={(v) => setAnchorDate(v || dayjs())} />
+            <Button icon={<ReloadOutlined />} onClick={() => { void loadBlocks(); void loadCalendar(); }}>
+              刷新
+            </Button>
+            <Button onClick={() => (window.location.href = "/alert-monitor-platform?tab=rules")}>去配置规则</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              新增值班
+            </Button>
+          </Space>
+        }
+      />
+    <Card className="table-card">
       <div style={{ width: "100%", overflow: "hidden" }}>
       <Card
         size="small"
@@ -553,6 +561,7 @@ export function AlertDutyPage() {
         </Form>
       </Modal>
     </Card>
+    </div>
   );
 }
 

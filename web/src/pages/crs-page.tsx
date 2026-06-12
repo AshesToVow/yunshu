@@ -2,7 +2,9 @@ import { DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutli
 import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
+import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { getClusters, listNamespaces as listClusterNamespaces, type ClusterItem } from "../services/clusters";
+import type { K8sDeleteOptions } from "../services/service-factory";
 import { applyCr, deleteCr, getCrDetail, listCrResources, listCrs, type CrDetail, type CrItem, type CrResourceItem } from "../services/crs";
 
 export function CrsPage() {
@@ -26,6 +28,9 @@ export function CrsPage() {
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
   const [manifest, setManifest] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTargetName, setDeleteTargetName] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const selectedResource = useMemo(
     () => resources.find((r) => r.name === selectedResourceName),
@@ -68,11 +73,17 @@ export function CrsPage() {
           <Button type="link" icon={<EditOutlined />} onClick={() => void openEdit(record.name)}>
             编辑
           </Button>
-          <Popconfirm title={`确认删除 ${record.name} 吗？`} onConfirm={() => void doDelete(record.name)}>
-            <Button danger type="link" icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
+          <Button
+            danger
+            type="link"
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              setDeleteTargetName(record.name);
+              setDeleteDialogOpen(true);
+            }}
+          >
+            删除
+          </Button>
         </Space>
       ),
     },
@@ -165,7 +176,7 @@ export function CrsPage() {
     }
   }
 
-  async function doDelete(name: string) {
+  async function doDelete(name: string, deleteOpts?: K8sDeleteOptions) {
     if (!clusterId || !selectedResource) return;
     await deleteCr({
       clusterId,
@@ -174,6 +185,7 @@ export function CrsPage() {
       resource: selectedResource.resource,
       namespace: selectedResource.namespaced ? namespace : undefined,
       name,
+      ...deleteOpts,
     });
     message.success("删除成功");
     await reload();
@@ -398,6 +410,27 @@ ${defaultNs}spec: {}
       >
         <Input.TextArea value={manifest} onChange={(e) => setManifest(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
       </Modal>
+
+      <K8sDeleteDialog
+        open={deleteDialogOpen}
+        resourceName={deleteTargetName}
+        loading={deleteLoading}
+        onCancel={() => {
+          setDeleteDialogOpen(false);
+          setDeleteTargetName("");
+        }}
+        onConfirm={async (deleteOpts) => {
+          if (!deleteTargetName) return;
+          setDeleteLoading(true);
+          try {
+            await doDelete(deleteTargetName, deleteOpts);
+            setDeleteDialogOpen(false);
+            setDeleteTargetName("");
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
+      />
     </Card>
   );
 }

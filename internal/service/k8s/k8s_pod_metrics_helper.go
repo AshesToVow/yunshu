@@ -82,6 +82,45 @@ func listPodCPUMemUsageByNamespace(ctx context.Context, dyn *DynamicResourceServ
 	return out
 }
 
+// listAllPodCPUMemUsage 返回全集群 Pod（namespace/name）-> 实时用量。
+func listAllPodCPUMemUsage(ctx context.Context, dyn *DynamicResourceService, k *kom.Kubectl) map[string]podCPUMemUsage {
+	out := make(map[string]podCPUMemUsage)
+	if dyn == nil || k == nil {
+		return out
+	}
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(podMetricsGVK)
+	var list []unstructured.Unstructured
+	if err := k.WithContext(ctx).Resource(u).AllNamespace().List(&list).Error; err != nil {
+		return out
+	}
+	for i := range list {
+		ns, podName, cpu, mem, ok := parseUnstructuredPodMetrics(&list[i])
+		if !ok || ns == "" || podName == "" {
+			continue
+		}
+		out[podMetricKey(ns, podName)] = podCPUMemUsage{CPU: cpu, Mem: mem}
+	}
+	return out
+}
+
+func podMetricKey(namespace, name string) string {
+	return strings.TrimSpace(namespace) + "/" + strings.TrimSpace(name)
+}
+
+// isPodCountedOnNode 与 kubectl describe node 中 Non-terminated Pods 语义对齐。
+func isPodCountedOnNode(p corev1.Pod) bool {
+	if p.DeletionTimestamp != nil {
+		return false
+	}
+	switch p.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed:
+		return false
+	default:
+		return true
+	}
+}
+
 // aggregatePodMetricsUsageByNamespace 全集群 PodMetrics，按命名空间汇总 CPU/Mem usage（一次 AllNamespace 列表）。
 func aggregatePodMetricsUsageByNamespace(ctx context.Context, k *kom.Kubectl) map[string]podCPUMemUsage {
 	out := make(map[string]podCPUMemUsage)

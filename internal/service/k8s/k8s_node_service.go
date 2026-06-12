@@ -7,6 +7,7 @@ import (
 	"strings"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/logutil"
 
 	"yunshu/internal/pkg/k8sutil"
 
@@ -178,31 +179,31 @@ func (s *K8sNodeService) List(ctx context.Context, query NodeListQuery) ([]NodeL
 	podLimMemByNode := map[string]resource.Quantity{}
 	{
 		var pods []corev1.Pod
-		if e := k.WithContext(ctx).Resource(&corev1.Pod{}).List(&pods).Error; e == nil {
+		if e := k.WithContext(ctx).Resource(&corev1.Pod{}).AllNamespace().List(&pods).Error; e != nil {
+			logutil.Service("k8s.node").Warnw("list pods for node stats failed", "error", e, "cluster_id", query.ClusterID)
+		} else {
 			for _, p := range pods {
+				if !isPodCountedOnNode(p) {
+					continue
+				}
 				nn := strings.TrimSpace(p.Spec.NodeName)
 				if nn == "" {
 					continue
 				}
 				podCountByNode[nn]++
-				reqCPU := podReqCPUByNode[nn]
-				reqMem := podReqMemByNode[nn]
-				limCPU := podLimCPUByNode[nn]
-				limMem := podLimMemByNode[nn]
-				for _, c := range p.Spec.Containers {
-					if rq := c.Resources.Requests; rq != nil {
-						reqCPU.Add(rq[corev1.ResourceCPU])
-						reqMem.Add(rq[corev1.ResourceMemory])
-					}
-					if lm := c.Resources.Limits; lm != nil {
-						limCPU.Add(lm[corev1.ResourceCPU])
-						limMem.Add(lm[corev1.ResourceMemory])
-					}
-				}
-				podReqCPUByNode[nn] = reqCPU
-				podReqMemByNode[nn] = reqMem
-				podLimCPUByNode[nn] = limCPU
-				podLimMemByNode[nn] = limMem
+				reqCPU, reqMem, limCPU, limMem := podSpecResourceTotals(p.Spec)
+				rCPU := podReqCPUByNode[nn]
+				rCPU.Add(reqCPU)
+				podReqCPUByNode[nn] = rCPU
+				rMem := podReqMemByNode[nn]
+				rMem.Add(reqMem)
+				podReqMemByNode[nn] = rMem
+				lCPU := podLimCPUByNode[nn]
+				lCPU.Add(limCPU)
+				podLimCPUByNode[nn] = lCPU
+				lMem := podLimMemByNode[nn]
+				lMem.Add(limMem)
+				podLimMemByNode[nn] = lMem
 			}
 		}
 	}

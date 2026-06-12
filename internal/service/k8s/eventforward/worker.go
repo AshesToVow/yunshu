@@ -24,6 +24,7 @@ type Worker struct {
 	maxRetry      int
 	onBeforeBatch func()
 	isEnabled     func() bool
+	startOnce     sync.Once
 }
 
 func NewWorker(repo interfaces.K8sEventForwardRepository, client *WebhookClient, cfg RuntimeConfig) *Worker {
@@ -41,8 +42,10 @@ func NewWorker(repo interfaces.K8sEventForwardRepository, client *WebhookClient,
 }
 
 func (w *Worker) Start() {
-	w.wg.Add(1)
-	go w.loop()
+	w.startOnce.Do(func() {
+		w.wg.Add(1)
+		go w.loop()
+	})
 }
 
 func (w *Worker) Stop() {
@@ -119,6 +122,8 @@ func (w *Worker) processBatch() error {
 				continue
 			}
 			if ev.Attempts >= w.maxRetry {
+				forwardLog().Warnw("K8s forwarded event exceeded max retries, marking processed",
+					"event_id", ev.ID, "cluster_id", ev.ClusterID, "attempts", ev.Attempts)
 				_ = w.repo.MarkEventProcessed(ctx, ev.ID, true)
 				processedIDs[ev.ID] = true
 				continue
@@ -152,9 +157,11 @@ func (w *Worker) processBatch() error {
 	}
 
 	for _, ev := range events {
-		if !processedIDs[ev.ID] && !matchedIDs[ev.ID] {
-			_ = w.repo.MarkEventProcessed(ctx, ev.ID, true)
+		if processedIDs[ev.ID] || matchedIDs[ev.ID] {
+			continue
 		}
+		forwardLog().Debugw("K8s forwarded event matched no rule, leaving unprocessed",
+			"event_id", ev.ID, "cluster_id", ev.ClusterID, "namespace", ev.Namespace)
 	}
 	return nil
 }

@@ -116,7 +116,7 @@ func (s *K8sNetworkPolicyService) Delete(ctx context.Context, req NetworkPolicyD
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, networkPolicyGVK, req.Namespace, req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, networkPolicyGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

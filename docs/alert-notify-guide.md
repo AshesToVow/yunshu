@@ -45,7 +45,7 @@ alert:
 
 ### 2.1 参数说明
 
-- `webhook_token`：Alertmanager webhook 鉴权 token（请求头 `X-Alert-Token` 或 query `token`）
+- `webhook_token`：Alertmanager webhook 鉴权 token（请求头 **`X-Alert-Token`**、`X-Webhook-Token` 或 `Authorization: Bearer <token>`；**不支持** URL query `?token=`）
 - `group_by`：服务端 `group_key` 的计算维度
 - `group_wait_seconds`：首次见到某个 `group_key` 后的等待窗口（收集同组告警），到达后才允许“首次发送”
 - `group_interval_seconds`：已发送后，若组内容发生变化（平台用 `labels_digest` 近似）再次发送的最小间隔
@@ -76,7 +76,10 @@ route:
 receivers:
 - name: "yunshu-webhook"
   webhook_configs:
-  - url: "http://<host>:8080/api/v1/alerts/webhook/alertmanager?token=change-me-alert-token"
+  - url: "http://<host>:8080/api/v1/alerts/webhook/alertmanager"
+    http_config:
+      headers:
+        X-Alert-Token: "change-me-alert-token"
     send_resolved: true
 ```
 
@@ -245,7 +248,7 @@ groups:
 ### 9.1 为什么没收到恢复通知？
 
 - Alertmanager 是否设置了 `send_resolved: true`
-- webhook token 是否匹配
+- webhook token 是否匹配（请求头 `X-Alert-Token`，勿使用 URL `?token=`）
 - 是否被路由匹配规则过滤
 - 是否在恢复去抖窗口内被合并（查看 `alert_events` 中 `resolved_aggregate_suppressed`）
 

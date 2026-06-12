@@ -12,6 +12,7 @@ import {
   type AlertTemplatePreviewResult,
 } from "../services/alerts";
 import { useDictOptions } from "../hooks/use-dict-options";
+import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { formatDateTime } from "../utils/format";
 import { DictFillSelect } from "../components/dict-fill-select";
 import { getProjects, type ProjectItem } from "../services/projects";
@@ -429,7 +430,17 @@ export function AlertChannelsPage() {
   const suggestedLabelKeys = previewResult?.suggested_label_keys ?? [];
 
   return (
-    <Card className="table-card" title="Webhook 告警通道">
+    <div className="page-stack">
+      <PageTelemetryHeader
+        label="[ ALERT / CHANNEL ]"
+        title="Webhook 告警通道"
+        subtitle="配置 Webhook 投递端点、超时策略与告警模板绑定"
+        meta={[
+          `COUNT / ${list.length}`,
+          loading ? "SYNC / PENDING" : "SYNC / OK",
+        ]}
+      />
+    <Card className="table-card">
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
         <Space>
           <Select
@@ -903,6 +914,7 @@ export function AlertChannelsPage() {
         </Form>
       </Modal>
     </Card>
+    </div>
   );
 }
 

@@ -5,6 +5,8 @@ import { getMenuTree } from "../services/menus";
 import type { MenuItem } from "../services/menus";
 import { createLazyMenuPage } from "../utils/menu-page-loader";
 import { findMenuByPath, normalizeMenuPath } from "../utils/menu-path";
+import { usePlugins } from "../contexts/plugin-context";
+import { isPathAllowedByPlugins } from "../modules/plugin-path";
 
 const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/clusters": "cluster-page",
@@ -15,6 +17,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/component-status": "component-status-page",
   "/cluster-api-resources": "cluster-api-resources-page",
   "/horizontal-pod-autoscalers": "horizontal-pod-autoscalers-page",
+  "/k8s-resource-topology": "k8s-resource-topology-page",
   "/deployments": "deployments-page",
   "/statefulsets": "statefulsets-page",
   "/daemonsets": "daemonsets-page",
@@ -50,6 +53,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/mysql-backup": "mysql-backup-page",
   "/dashboard": "dashboard-page",
   "/projects": "projects-page",
+  "/application-topology": "application-topology-page",
   "/project-servers": "project-servers-page",
   "/project-services": "project-services-page",
   "/project-members": "project-members-page",
@@ -79,6 +83,7 @@ function RouteFallback() {
 
 export function DynamicMenuPage() {
   const location = useLocation();
+  const { isPluginEnabled, loading: pluginsLoading } = usePlugins();
   const [menus, setMenus] = useState<MenuItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -113,6 +118,16 @@ export function DynamicMenuPage() {
 
   const normalizedPath = useMemo(() => normalizeMenuPath(location.pathname), [location.pathname]);
   const hasPathFallback = Boolean(PATH_COMPONENT_FALLBACK[normalizedPath]);
+
+  if (!pluginsLoading && !isPathAllowedByPlugins(location.pathname, isPluginEnabled)) {
+    return (
+      <Result
+        status="403"
+        title="业务模块未启用"
+        subTitle="该页面所属插件未在服务端 config.yaml 的 plugins.enabled 中启用。"
+      />
+    );
+  }
 
   if (loadError) {
     return <Result status="error" title="菜单加载失败" subTitle={loadError} />;

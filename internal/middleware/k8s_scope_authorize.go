@@ -28,6 +28,7 @@ type k8sScopeCatalogCache struct {
 	ttl         time.Duration
 	mu          sync.RWMutex
 	loadedAt    time.Time
+	loadErr     error
 	actionByKey map[string]string
 	scopedKeys  map[string]bool
 	perms       []model.Permission
@@ -75,6 +76,15 @@ func (c *k8sScopeCatalogCache) permissions() []model.Permission {
 	return out
 }
 
+func (c *k8sScopeCatalogCache) unavailable() bool {
+	if c == nil || c.repo == nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.loadedAt.IsZero() && c.loadErr != nil
+}
+
 func (c *k8sScopeCatalogCache) refresh() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -88,10 +98,11 @@ func (c *k8sScopeCatalogCache) refresh() {
 	}
 	perms, err := c.repo.ListAll(context.Background())
 	if err != nil {
-		// 失败也标记已刷新，避免每个请求都打 DB。
-		c.loadedAt = time.Now()
+		c.loadErr = err
+		logutil.HTTP("http.k8s_scope").Errorw(err, "permission catalog refresh failed")
 		return
 	}
+	c.loadErr = nil
 	actionByKey, scopedKeys := service.BuildK8sScopeMappings(perms)
 	c.actionByKey = actionByKey
 	c.scopedKeys = scopedKeys
@@ -122,6 +133,11 @@ func K8sScopeAuthorize(
 			c.Next()
 			return
 		}
+		if catalog.unavailable() {
+			response.Error(c, constants.ErrInternal)
+			c.Abort()
+			return
+		}
 		user, ok := auth.CurrentUserFromContext(c)
 		if !ok {
 			response.Error(c, constants.ErrNotLoggedIn)
@@ -146,6 +162,11 @@ func K8sScopeAuthorize(
 			return
 		}
 		if strings.TrimSpace(namespace) == "" {
+			if forceTier && strings.Contains(strings.TrimSpace(routePath), "exec") {
+				response.Error(c, constants.ErrBadRequestWithMsg("Pod Exec 须指定 namespace"))
+				c.Abort()
+				return
+			}
 			namespace = "_cluster"
 		}
 

@@ -22,6 +22,7 @@ type Config struct {
 	K8sEventForward K8sEventForwardConfig `mapstructure:"k8s_event_forward"`
 	Security        SecurityConfig        `mapstructure:"security"`
 	Agent           AgentConfig           `mapstructure:"agent"`
+	Plugins         PluginsConfig         `mapstructure:"plugins"`
 }
 
 type GRPCConfig struct {

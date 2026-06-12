@@ -977,7 +977,7 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-05-23
+            2026-06-12
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
@@ -988,7 +988,7 @@
 
       <!-- CONTENT_START -->
 <h1 id="yunshu-">Yunshu 文档索引</h1>
-<p><strong>最后更新</strong>: 2026-05-22</p>
+<p><strong>最后更新</strong>: 2026-06-11</p>
 <hr />
 <h2 id="heading">开发者必读（后端）</h2>
 <div class="table-wrap"><table>
@@ -1002,6 +1002,10 @@
 <tr>
 <td><a href="CODEBASE-MAP.md">CODEBASE-MAP.md</a></td>
 <td><strong>代码地图</strong>：目录结构、阅读顺序、Wire/错误规范</td>
+</tr>
+<tr>
+<td><a href="plugins.md">plugins.md</a></td>
+<td><strong>业务插件</strong>：<code>plugins.enabled</code>、路由绑定、CMDB 拆分</td>
 </tr>
 <tr>
 <td><a href="backend-architecture-complete.md">backend-architecture-complete.md</a></td>
@@ -1113,7 +1117,9 @@
 <h2 id="heading-3">维护约定</h2>
 <ul>
 <li>Service 源码路径以 <code>internal/service/&lt;域&gt;/</code> 为准；Handler 门面见 <code>internal/service/exports.go</code>。</li>
-<li>目录或装配变更时，同步更新 <strong>CODEBASE-MAP.md</strong>、<strong>backend-architecture-complete.md §3.3</strong>、<strong>refactoring-report.md</strong>。</li>
+<li>内置菜单单一数据源：<code>internal/menu/catalog.go</code>；同步逻辑 <code>internal/menu/sync.go</code>；<code>seed</code> 调用 <code>menu.Sync</code>。</li>
+<li>路由按插件注册：<code>internal/router/plugin_bind.go</code> + <code>register_&lt;plugin&gt;_routes.go</code>。</li>
+<li>目录或装配变更时，同步更新 <strong>CODEBASE-MAP.md</strong>、<strong>plugins.md</strong>、<strong>backend-architecture-complete.md §3.3</strong>、<strong>refactoring-report.md</strong>。</li>
 </ul>
 
       <!-- CONTENT_END -->

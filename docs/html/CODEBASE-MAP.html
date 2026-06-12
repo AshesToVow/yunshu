@@ -961,7 +961,7 @@
         </button>
       </div>
       <nav class="toc-nav" id="toc-nav">
-        <a href="#1-" class="lvl-2">1. 分层与请求路径</a><a href="#2-service-" class="lvl-2">2. Service 层目录（按业务域）</a><a href="#3--24-" class="lvl-2">3. 初学者阅读顺序（约 2～4 小时）</a><a href="#4-" class="lvl-2">4. 错误与日志（当前标准）</a><a href="#5-wire" class="lvl-2">5. 依赖注入（Wire）现状</a><a href="#6-" class="lvl-2">6. 仓储化现状（摘要）</a><a href="#7-" class="lvl-2">7. 相关文档</a><a href="#--" class="lvl-3">域 → 典型入口文件</a><a href="#heading" class="lvl-3">跨域依赖（读代码时注意）</a>
+        <a href="#1-" class="lvl-2">1. 分层与请求路径</a><a href="#2-service-" class="lvl-2">2. Service 层目录（按业务域）</a><a href="#3--24-" class="lvl-2">3. 初学者阅读顺序（约 2～4 小时）</a><a href="#4-" class="lvl-2">4. 错误与日志（当前标准）</a><a href="#5-wire" class="lvl-2">5. 依赖注入（Wire）现状</a><a href="#6-" class="lvl-2">6. 仓储化现状（摘要）</a><a href="#7-2026-06" class="lvl-2">7. 种子数据与菜单（2026-06）</a><a href="#8-" class="lvl-2">8. 相关文档</a><a href="#--" class="lvl-3">域 → 典型入口文件</a><a href="#heading" class="lvl-3">跨域依赖（读代码时注意）</a>
       </nav>
     </aside>
 
@@ -977,20 +977,20 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-05-23
+            2026-06-12
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
-            ~5 min read
+            ~6 min read
           </span>
         </div>
       </header>
 
       <!-- CONTENT_START -->
 <h1 id="yunshu-">Yunshu 后端代码地图（与源码同步）</h1>
-<p><strong>文档版本</strong>: v1.1<br />
-<strong>最后更新</strong>: 2026-05-22<br />
-<strong>适用分支</strong>: 目录拆分 + 仓储化 + <code>bizerrors</code> 统一之后</p>
+<p><strong>文档版本</strong>: v1.2<br />
+<strong>最后更新</strong>: 2026-06-11<br />
+<strong>适用分支</strong>: 插件化 + 目录拆分 + 仓储化 + <code>bizerrors</code> 统一之后</p>
 <p>本文是阅读后端源码的<strong>入口索引</strong>。若与代码冲突，以 <code>internal/</code> 源码为准。</p>
 <hr />
 <h2 id="1-">1. 分层与请求路径</h2>
@@ -1015,12 +1015,22 @@
 <tr>
 <td>进程启动</td>
 <td><code>cmd/server.go</code></td>
-<td>migrate、Worker、gRPC、HTTP</td>
+<td>migrate、插件 Worker、gRPC、HTTP</td>
 </tr>
 <tr>
 <td>基础设施</td>
 <td><code>internal/bootstrap/app.go</code></td>
 <td>DB / Redis / Casbin / Gin</td>
+</tr>
+<tr>
+<td>插件</td>
+<td><code>internal/plugin/</code> + <code>internal/plugins/all/</code></td>
+<td>编译期注册；<code>config.plugins.enabled</code> 启停</td>
+</tr>
+<tr>
+<td>路由绑定</td>
+<td><code>internal/router/plugin_bind.go</code></td>
+<td><code>RegisterCoreRoutes</code> / <code>RegisterK8sRoutes</code> / …</td>
 </tr>
 <tr>
 <td>Wire（部分）</td>
@@ -1055,13 +1065,16 @@
 <pre><code class="language-text">internal/service/
 ├── exports.go                 # 门面：type alias + 构造函数 re-export（给 handler/router）
 ├── alert/                     # 告警：摄入、聚合、投递、监控规则、订阅、静默…
+├── cmdb/                      # 服务器资产、云同步、SSH/Web 终端（原 project 子域）
 ├── k8s/                       # K8s 资源与运行时
 │   └── eventforward/          # 集群 Event → Webhook 转发 Worker/Admin
-├── project/                   # 项目、服务器、云账号、日志源、云到期 Cron
+├── project/                   # 项目、成员、服务、日志源、Agent
 ├── system/                    # 用户、角色、权限、认证、菜单、字典…
 ├── logplatform/               # Log Agent、发现、内存日志 Broker
 ├── mysqlbackup/               # MySQL 备份调度与执行
 └── overview/                  # 首页总览指标
+
+internal/menu/                 # 内置菜单 catalog（DefaultCatalog）+ seed 同步（Sync）
 </code></pre>
 <h3 id="--">域 → 典型入口文件</h3>
 <div class="table-wrap"><table>
@@ -1091,6 +1104,12 @@
 <td><code>project</code></td>
 <td><code>ProjectMgmtService</code></td>
 <td><code>project/project_mgmt_core.go</code></td>
+</tr>
+<tr>
+<td>CMDB</td>
+<td><code>cmdb</code></td>
+<td><code>CMDBService</code></td>
+<td><code>cmdb/servers.go</code></td>
 </tr>
 <tr>
 <td>告警</td>
@@ -1127,9 +1146,9 @@
 </ul>
 <hr />
 <h2 id="3--24-">3. 初学者阅读顺序（约 2～4 小时）</h2>
-<div class="timeline"><article class="step"><div class="step-num">1</div><div class="step-body"><h3>cmd/server.go — 启动流程</h3><p></p></div></article><article class="step"><div class="step-num">2</div><div class="step-body"><h3>internal/router/router.go — 路由如何注册</h3><p></p></div></article><article class="step"><div class="step-num">3</div><div class="step-body"><h3>选一个简单 API：字典条目
+<div class="timeline"><article class="step"><div class="step-num">1</div><div class="step-body"><h3>cmd/server.go — 启动流程</h3><p></p></div></article><article class="step"><div class="step-num">2</div><div class="step-body"><h3>internal/router/router.go + plugin_bind.go — 插件路由如何注册</h3><p></p></div></article><article class="step"><div class="step-num">3</div><div class="step-body"><h3>internal/menu/catalog.go + cmd/seed.go — 菜单与权限种子数据</h3><p></p></div></article><article class="step"><div class="step-num">4</div><div class="step-body"><h3>选一个简单 API：字典条目
 handler → service.DictEntryService → repo…</h3><p>选一个简单 API：字典条目
-handler → service.DictEntryService → repository → model</p></div></article><article class="step"><div class="step-num">4</div><div class="step-body"><h3>打开 internal/service/exports.go，理解 service.Xxx 与真实子包的对应…</h3><p>打开 internal/service/exports.go，理解 service.Xxx 与真实子包的对应关系</p></div></article><article class="step"><div class="step-num">5</div><div class="step-body"><h3>再读 告警 Webhook（复杂）：handler/alert_handler.go → alert/alert_ser…</h3><p>再读 告警 Webhook（复杂）：handler/alert_handler.go → alert/alert_service_webhook.go → alert_ingest_pipeline.go</p></div></article><article class="step"><div class="step-num">6</div><div class="step-body"><h3>中间件链：middleware/auth.go → casbin.go → error_handler.go</h3><p></p></div></article></div>
+handler → service.DictEntryService → repository → model</p></div></article><article class="step"><div class="step-num">5</div><div class="step-body"><h3>打开 internal/service/exports.go，理解 service.Xxx 与真实子包的对应…</h3><p>打开 internal/service/exports.go，理解 service.Xxx 与真实子包的对应关系</p></div></article><article class="step"><div class="step-num">6</div><div class="step-body"><h3>再读 告警 Webhook（复杂）：handler/alert_handler.go → alert/alert_ser…</h3><p>再读 告警 Webhook（复杂）：handler/alert_handler.go → alert/alert_service_webhook.go → alert_ingest_pipeline.go</p></div></article><article class="step"><div class="step-num">7</div><div class="step-body"><h3>中间件链：middleware/auth.go → casbin.go → error_handler.go</h3><p></p></div></article></div>
 <hr />
 <h2 id="4-">4. 错误与日志（当前标准）</h2>
 <div class="table-wrap"><table>
@@ -1213,7 +1232,40 @@ handler → service.DictEntryService → repository → model</p></div></article
 </ul>
 <p>新功能：<strong>禁止在 Service 中新增裸 SQL</strong>；通过 Repository 或现有 <code>interfaces</code> 扩展。</p>
 <hr />
-<h2 id="7-">7. 相关文档</h2>
+<h2 id="7-2026-06">7. 种子数据与菜单（2026-06）</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>位置</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>内置菜单定义</td>
+<td><code>internal/menu/catalog.go</code></td>
+<td><code>DefaultCatalog()</code>，支持任意层级 <code>Children</code></td>
+</tr>
+<tr>
+<td>菜单 DB 同步</td>
+<td><code>internal/menu/sync.go</code></td>
+<td><code>menu.Sync</code>：按 <code>(parent_id, path)</code> upsert + 历史补丁</td>
+</tr>
+<tr>
+<td>seed 入口</td>
+<td><code>cmd/seed.go</code></td>
+<td>事务：Permission 批量 OnConflict、Casbin <code>AddPolicies</code>；admin 密码<strong>仅首次创建</strong></td>
+</tr>
+<tr>
+<td>菜单树 API</td>
+<td><code>internal/repository/menu_repository.go</code></td>
+<td>单次 <code>ListAll</code> + O(n) 建树；Service 侧 60s 缓存</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="8-">8. 相关文档</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1222,6 +1274,10 @@ handler → service.DictEntryService → repository → model</p></div></article
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a href="./plugins.md">plugins.md</a></td>
+<td>业务插件启停与 CMDB 拆分</td>
+</tr>
 <tr>
 <td><a href="./backend-architecture-complete.md">backend-architecture-complete.md</a></td>
 <td>完整技术说明（架构、模块、部署）</td>
@@ -1241,7 +1297,7 @@ handler → service.DictEntryService → repository → model</p></div></article
 </tbody>
 </table></div>
 <hr />
-<p><em>维护：目录或装配方式变更时，请同步更新本文与 <code>backend-architecture-complete.md</code> §3.3。</em></p>
+<p><em>维护：插件、菜单 catalog 或 seed 行为变更时，请同步更新本文、<code>plugins.md</code> 与 <code>backend-architecture-complete.md</code> §3.3。</em></p>
 
       <!-- CONTENT_END -->
 

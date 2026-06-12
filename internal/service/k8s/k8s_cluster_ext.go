@@ -15,6 +15,7 @@ import (
 
 	"gorm.io/gorm"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // getDirectConfigFromDict 从数据字典读取直连配置
@@ -70,6 +71,7 @@ func preserveDirectAuthFromStored(storedJSON string, next *DirectConfig) {
 	}
 	var prev DirectConfig
 	if err := json.Unmarshal([]byte(storedJSON), &prev); err != nil {
+		logutil.Service("k8s.cluster").Warnw("preserve direct auth: stored config unmarshal failed", "error", err)
 		return
 	}
 	if shouldPreserveSecret(next.Token, prev.Token) {
@@ -118,7 +120,40 @@ func resolveClusterKubeconfig(cluster *model.K8sCluster) (string, error) {
 	if kc == "" {
 		return "", fmt.Errorf("集群 kubeconfig 为空")
 	}
-	return kc, nil
+	return normalizeKubeconfigForClientGo(kc)
+}
+
+// normalizeKubeconfigForClientGo 修正 kubeconfig 中与 client-go 冲突的组合。
+// 常见场景：同时存在 certificate-authority-data 与 insecure-skip-tls-verify，
+// client-go 会报错 "specifying a root certificates file with the insecure flag is not allowed"。
+func normalizeKubeconfigForClientGo(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("kubeconfig 为空")
+	}
+	cfg, err := clientcmd.Load([]byte(raw))
+	if err != nil {
+		return raw, err
+	}
+	changed := false
+	for _, cluster := range cfg.Clusters {
+		if cluster == nil || !cluster.InsecureSkipTLSVerify {
+			continue
+		}
+		if len(cluster.CertificateAuthorityData) > 0 || strings.TrimSpace(cluster.CertificateAuthority) != "" {
+			cluster.CertificateAuthorityData = nil
+			cluster.CertificateAuthority = ""
+			changed = true
+		}
+	}
+	if !changed {
+		return raw, nil
+	}
+	out, err := clientcmd.Write(*cfg)
+	if err != nil {
+		return raw, err
+	}
+	return string(out), nil
 }
 
 func maskDirectConfigForAPI(dc *DirectConfig) *DirectConfig {
@@ -185,11 +220,6 @@ func buildKubeconfigFromDirectConfig(config *DirectConfig) (string, error) {
 
 	// 设置认证方式
 	if token != "" {
-		logutil.Service("k8s.cluster").Infow("Configured direct auth token",
-			"token_len", len(token),
-			"token_masked", maskSecretEdge(token, 8),
-			"server", serverRaw,
-		)
 		restConfig.BearerToken = token
 	} else if username != "" && password != "" {
 		restConfig.Username = username
@@ -256,7 +286,7 @@ clusters:
     server: %s
 `, config.Host)
 
-	if caData != "" {
+	if caData != "" && !config.TLSClientConfig.Insecure {
 		yaml += fmt.Sprintf("    certificate-authority-data: %s\n", caData)
 	}
 	if config.TLSClientConfig.Insecure {

@@ -32,6 +32,7 @@ type CRListQuery struct {
 type CRDetailQuery struct {
 	CRResourceBaseQuery
 	Name string `form:"name" binding:"required"`
+	K8sDeleteOptions
 }
 
 type CRDeleteRequest = CRDetailQuery
@@ -202,7 +203,7 @@ func (s *K8sCRService) Delete(ctx context.Context, req CRDeleteRequest) error {
 	if err != nil {
 		return err
 	}
-	err = s.dyn.DeleteCR(ctx, k, req.Group, req.Version, req.Resource, req.Namespace, req.Name)
+	err = s.dyn.DeleteCR(ctx, k, req.Group, req.Version, req.Resource, req.Namespace, req.Name, req.K8sDeleteOptions)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil

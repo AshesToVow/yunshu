@@ -12,7 +12,17 @@ void i18n.use(initReactI18next).init({
   },
   lng: saved === "en-US" ? "en-US" : "zh-CN",
   fallbackLng: "zh-CN",
+  supportedLngs: ["zh-CN", "en-US"],
   interpolation: { escapeValue: false },
+  react: { useSuspense: false },
 });
+
+if (typeof document !== "undefined") {
+  document.documentElement.lang = saved === "en-US" ? "en" : "zh-CN";
+}
+
+export function resolveAppLocale(language?: string): "zh-CN" | "en-US" {
+  return language?.startsWith("en") ? "en-US" : "zh-CN";
+}
 
 export default i18n;

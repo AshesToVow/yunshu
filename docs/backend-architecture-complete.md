@@ -326,7 +326,7 @@ func ServePatch[Req any, Resp any](c *gin.Context, fn func(context.Context, uint
 | K8s 资源 | [pod_handler.go](internal/handler/pod_handler.go), [workload_handler.go](internal/handler/workload_handler.go), ... | Pod/Deployment/Service/Ingress 等 |
 | 告警平台 | [alert_handler.go](internal/handler/alert_handler.go), [alert_platform_handler.go](internal/handler/alert_platform_handler.go) | 渠道/规则/静默/值班 |
 | 日志平台 | [log_agent_handler.go](internal/handler/log_agent_handler.go) | Agent 注册/心跳/发现 |
-| WebSocket | [pod_exec_ws.go](internal/handler/pod_exec_ws.go), [project_terminal_ws.go](internal/handler/project_terminal_ws.go) | 终端交互 |
+| WebSocket | [pod_exec_ws.go](internal/handler/pod_exec_ws.go), [cmdb_handler.go](internal/handler/cmdb_handler.go) | Pod Exec / 服务器 SSH 终端 |
 
 #### Service 层 (业务逻辑)
 
@@ -765,9 +765,9 @@ erDiagram
 
 ### 6.1 路由分组结构
 
-所有 API 统一前缀 `/api/v1`，按业务域分为三大路由组：
+> **2026-06 插件化**：HTTP 路由不再由单一 `register_platform_routes.go` 注册，而由 `internal/router/plugin_bind.go` 按 `plugins.enabled` 调用 `RegisterCoreRoutes`、`RegisterK8sRoutes`、`RegisterAlertRoutes`、`RegisterProjectRoutes`、`RegisterCMDBRoutes`、`RegisterBackupRoutes`。下文树形结构为**逻辑分组**摘要。
 
-#### 平台管理路由 ([register_platform_routes.go](internal/router/register_platform_routes.go))
+所有 API 统一前缀 `/api/v1`，按业务域分为以下模块：
 
 ```
 /api/v1

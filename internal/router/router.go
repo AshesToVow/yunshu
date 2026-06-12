@@ -7,12 +7,14 @@ import (
 	"yunshu/internal/bootstrap"
 	grpcclient "yunshu/internal/grpc/client"
 	"yunshu/internal/handler"
-	"yunshu/internal/pkg/logutil"
+	"yunshu/internal/plugin"
 	"yunshu/internal/service/k8s/eventforward"
+
+	_ "yunshu/internal/plugins/all" // 注册内置业务插件
 )
 
-// Register wires dependencies via Wire and registers all HTTP routes.
-// Returns the K8s event forward manager (may be nil). bgCtx is used for background workers.
+// Register 装配依赖并按配置加载各业务插件的路由与后台任务。
+// 返回 K8s 事件转发管理器（k8s 插件未启用或未初始化时为 nil）。
 func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx context.Context) (*eventforward.Manager, error) {
 	handler.SetLogger(app.Logger)
 	registerSwagger(app)
@@ -22,27 +24,23 @@ func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx
 		return nil, fmt.Errorf("initialize route deps: %w", err)
 	}
 
+	rt := &plugin.Runtime{
+		DB:                      app.DB,
+		Config:                  app.Config,
+		YamlK8sEventForwardBase: app.YamlK8sEventForwardBase,
+		GRPCClient:              runtimeClient,
+		Deps:                    d,
+		Enabled:                 plugin.ResolveEnabled(&app.Config.Plugins),
+		K8sRuntime:              d.K8sRuntimeService(),
+		MysqlBackup:             d.MysqlBackupService(),
+	}
+
 	api := app.Engine.Group("/api/v1")
-	registerPlatformRoutes(api, d)
-	registerK8sRoutes(api, d)
-	registerProjectRoutes(api, d)
-
-	if d.mysqlBackupSvc != nil && bgCtx != nil {
-		go d.mysqlBackupSvc.RunMysqlBackupScheduler(bgCtx)
+	if err := plugin.RegisterRoutes(api, rt, &app.Config.Plugins); err != nil {
+		return nil, fmt.Errorf("register plugin routes: %w", err)
 	}
-
-	mgr, err := eventforward.NewManager(
-		nil,
-		d.k8sRuntimeService,
-		app.YamlK8sEventForwardBase,
-		app.Config.Alert,
-		app.Config.App.Port,
-		app.DB,
-	)
-	if err != nil {
-		logutil.Worker("k8s.event_forward").Errorw(err, "Failed to init K8s event forward manager")
-		return nil, nil
+	if err := plugin.StartWorkers(bgCtx, rt, &app.Config.Plugins); err != nil {
+		return nil, fmt.Errorf("start plugin workers: %w", err)
 	}
-	mgr.Start()
-	return mgr, nil
+	return eventforward.Active(), nil
 }

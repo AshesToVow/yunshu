@@ -1,8 +1,10 @@
 # 菜单需求：账号管理（`/users`）
 
+> **Catalog**：`internal/menu/catalog.go` · Component: `users-page` · Plugin: `core`
+
 ## 1. 定位
 
-- **路由**：`/users`，`UsersPage`，顶栏「系统管理」或种子菜单「账号管理」。  
+- **路由**：`/users`，`users-page`，系统管理 → 用户管理。  
 - **目标**：维护平台登录账号生命周期，与部门、全局角色绑定；支持 Excel 导入导出。
 
 ## 2. 功能清单
@@ -24,7 +26,7 @@
 
 ## 4. 权限
 
-- 各接口需在 Casbin 中授权；种子见 `defaultPermissions` 中 `/api/v1/users` 系列。
+- 各接口需在 Casbin 中授权；种子见 `cmd/seed.go` → `defaultPermissions()`（批量 upsert）。
 
 ## 5. 注意事项
 

@@ -46,7 +46,7 @@ export function StorageClassesPage() {
         list: async ({ clusterId, keyword }) => await listStorageClasses(clusterId, keyword),
         detail: async ({ clusterId, name }) => await getStorageClassDetail(clusterId, name),
         apply: async ({ clusterId, manifest }) => await applyStorageClass(clusterId, manifest),
-        remove: async ({ clusterId, name }) => await deleteStorageClass(clusterId, name),
+        remove: async (args) => await deleteStorageClass(args.clusterId, args.name, args),
       }}
       createTemplate={() => `apiVersion: storage.k8s.io/v1
 kind: StorageClass

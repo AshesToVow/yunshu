@@ -40,6 +40,7 @@ type IngressNginxRestartRequest struct {
 type IngressNginxRestartResult struct {
 	DeletedCount int      `json:"deleted_count"`
 	DeletedNames []string `json:"deleted_names"`
+	FailedNames  []string `json:"failed_names,omitempty"`
 }
 
 type IngressItem struct {
@@ -184,7 +185,7 @@ func (s *K8sIngressService) Delete(ctx context.Context, req IngressDeleteRequest
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, ingressGVK, req.Namespace, req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, ingressGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -297,7 +298,7 @@ func (s *K8sIngressService) DeleteClass(ctx context.Context, req IngressClassDel
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, ingressClassGVK, "", req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, ingressClassGVK, "", req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -337,26 +338,33 @@ func (s *K8sIngressService) RestartIngressNginxPods(ctx context.Context, req Ing
 	// 兜底：如果 selector 太严格导致空，再尝试兼容历史 label
 	if len(pods) == 0 && strings.TrimSpace(req.Selector) == "" {
 		fallback := "app=ingress-nginx"
-		_ = k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(ns).WithLabelSelector(fallback).List(&pods).Error
+		if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(ns).WithLabelSelector(fallback).List(&pods).Error; err != nil {
+			return nil, bizerrors.Internalf(ctx, "k8s.ingress", "api", err, constants.ErrFmt0cbe9766f7af)
+		}
 	}
 	if len(pods) == 0 {
-		return &IngressNginxRestartResult{DeletedCount: 0, DeletedNames: []string{}}, nil
+		return nil, constants.ErrBadRequestWithMsg("未找到匹配的 Ingress-Nginx 控制器 Pod，请检查 namespace 与 selector")
 	}
 
 	deleted := make([]string, 0, len(pods))
+	failed := make([]string, 0)
 	for _, p := range pods {
 		name := strings.TrimSpace(p.Name)
 		if name == "" {
 			continue
 		}
 		if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(ns).Name(name).Delete().Error; err != nil {
-			// 删除部分失败也尽量继续，避免“一颗老鼠屎坏一锅汤”
+			failed = append(failed, name)
 			continue
 		}
 		deleted = append(deleted, name)
 	}
 	sort.Strings(deleted)
-	return &IngressNginxRestartResult{DeletedCount: len(deleted), DeletedNames: deleted}, nil
+	sort.Strings(failed)
+	if len(deleted) == 0 {
+		return nil, constants.ErrBadRequestWithMsg("未能删除任何 Ingress-Nginx Pod")
+	}
+	return &IngressNginxRestartResult{DeletedCount: len(deleted), DeletedNames: deleted, FailedNames: failed}, nil
 }
 
 func (s *K8sIngressService) ensureIngressNginxRestartAccess(ctx context.Context, clusterID uint) error {

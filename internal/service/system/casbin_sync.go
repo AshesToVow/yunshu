@@ -92,3 +92,16 @@ func RemovePermissionPolicies(enforcer *casbin.SyncedEnforcer, resource, action 
 	_, err := enforcer.RemoveFilteredPolicy(1, resource, action)
 	return err
 }
+
+// AddRolePolicies 批量写入角色 API 授权（已存在的策略会被 Casbin 跳过）。
+func AddRolePolicies(enforcer *casbin.SyncedEnforcer, roleCode string, perms []model.Permission) error {
+	if len(perms) == 0 {
+		return nil
+	}
+	rules := make([][]string, len(perms))
+	for i, p := range perms {
+		rules[i] = []string{roleCode, p.Resource, p.Action}
+	}
+	_, err := enforcer.AddPolicies(rules)
+	return err
+}

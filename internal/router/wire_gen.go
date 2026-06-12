@@ -15,7 +15,7 @@ import (
 // Injectors from wire.go:
 
 // InitializeRouteDeps is the Wire entry for HTTP route dependencies.
-func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient) (*routeDeps, error) {
+func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient) (*RouteDeps, error) {
 	db := provideDB(app)
 	routerRouteRepositories := provideRouteRepositories(db)
 	routerRouteServices, err := provideRouteServices(app, routerRouteRepositories)
@@ -39,6 +39,6 @@ func provideRouteRepositories(db *gorm.DB) *routeRepositories {
 	return newRouteRepositories(db)
 }
 
-func provideRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*routeDeps, error) {
+func provideRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	return assembleRouteDeps(app, runtimeClient, repos, svcs)
 }

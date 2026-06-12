@@ -21,12 +21,12 @@ func provideRouteRepositories(db *gorm.DB) *routeRepositories {
 	return newRouteRepositories(db)
 }
 
-func provideRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*routeDeps, error) {
+func provideRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	return assembleRouteDeps(app, runtimeClient, repos, svcs)
 }
 
 // InitializeRouteDeps is the Wire entry for HTTP route dependencies.
-func InitializeRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient) (*routeDeps, error) {
+func InitializeRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient) (*RouteDeps, error) {
 	wire.Build(
 		provideDB,
 		provideRouteRepositories,

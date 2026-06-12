@@ -40,6 +40,7 @@ type RbacDeleteRequest struct {
 	ClusterID uint   `form:"cluster_id" binding:"required"`
 	Namespace string `form:"namespace"`
 	Name      string `form:"name" binding:"required"`
+	K8sDeleteOptions
 }
 
 type RoleListItem struct {
@@ -345,7 +346,7 @@ func (s *K8sRBACService) Delete(ctx context.Context, kind string, req RbacDelete
 	if !clusterScoped && ns == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsgc67b07d6cf4d)
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, gvk, ns, name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, gvk, ns, name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

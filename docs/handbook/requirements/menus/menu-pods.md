@@ -1,8 +1,10 @@
 # 菜单需求：Pod 管理（`/pods`）
 
+> **Catalog**：`internal/menu/catalog.go` · Component: `pod-page` · Plugin: `k8s`
+
 ## 1. 定位
 
-- **路由**：`/pods`，`PodPage`。  
+- **路由**：`/pods`，`pod-page`。  
 - **目标**：在选定集群/命名空间下 **列出 Pod、查看详情、事件、日志、文件、Exec、终端 WebSocket、重启、YAML 创建/编辑**。
 
 ## 2. 主要 API（`/api/v1/pods`）
@@ -12,7 +14,7 @@
 | 列表/详情/事件 | `GET ""`、`/detail`、`/events` |
 | 日志与下载 | `GET /logs`、`/logs/download`、`/logs/stream` |
 | 文件 | `GET /files`、`/file`、`/file/download`，`POST /file/upload`、`/file/delete` |
-| Exec | `POST /exec`，`GET /exec/ws`（WS 鉴权见中间件） |
+| Exec | `POST /exec`，`GET /exec/ws`（WS：先取 ticket；连接前拉 Pod 详情解析 **container** 名） |
 | 生命周期 | `POST /restart`、`/create/yaml`、`/create/simple`、`/update/simple`，`DELETE` |
 
 ## 3. 权限

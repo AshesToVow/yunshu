@@ -11,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// routeDeps 聚合路由注册所需的 handler、中间件与共享仓储。
-type routeDeps struct {
+// RouteDeps 聚合路由注册所需的 handler、中间件与共享仓储（插件路由注册入参）。
+type RouteDeps struct {
 	app *bootstrap.App
 
 	authMiddleware    gin.HandlerFunc
@@ -26,6 +26,7 @@ type routeDeps struct {
 	k8sRuntimeService *service.K8sRuntimeService
 
 	systemHandler *handler.SystemHandler
+	pluginHandler *handler.PluginHandler
 
 	authHandler              *handler.AuthHandler
 	loginLogHandler          *handler.LoginLogHandler
@@ -74,24 +75,41 @@ type routeDeps struct {
 	overviewHandler          *handler.OverviewHandler
 
 	projectHandler         *handler.ProjectHandler
+	cmdbHandler            *handler.CMDBHandler
 	mysqlBackupSvc         *service.MysqlBackupService
 	mysqlBackupHandler     *handler.MysqlBackupHandler
 	logAgentHandler        *handler.LogAgentHandler
 	agentDiscoveryHandler  *handler.AgentDiscoveryHandler
 }
 
-func assembleRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*routeDeps, error) {
+// K8sRuntimeService 供 k8s 插件后台任务使用。
+func (d *RouteDeps) K8sRuntimeService() *service.K8sRuntimeService {
+	if d == nil {
+		return nil
+	}
+	return d.k8sRuntimeService
+}
+
+// MysqlBackupService 供 backup 插件调度器使用。
+func (d *RouteDeps) MysqlBackupService() *service.MysqlBackupService {
+	if d == nil {
+		return nil
+	}
+	return d.mysqlBackupSvc
+}
+
+func assembleRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	if repos == nil {
 		repos = newRouteRepositories(app.DB)
 	}
 	return wireRouteDepsWithRepos(app, runtimeClient, repos, svcs)
 }
 
-func wireRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient) (*routeDeps, error) {
+func wireRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient) (*RouteDeps, error) {
 	return assembleRouteDeps(app, runtimeClient, newRouteRepositories(app.DB), nil)
 }
 
-func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*routeDeps, error) {
+func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	if svcs == nil {
 		var err error
 		svcs, err = buildRouteServices(app, repos)
@@ -101,6 +119,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	}
 
 	systemHandler := handler.NewSystemHandler(app.Config.App.Name, app.Config.App.Env)
+	pluginHandler := handler.NewPluginHandler(&app.Config.Plugins)
 	userRepo := repos.User
 	permissionRepo := repos.Permission
 	projectMemberRepo := repos.ProjectMember
@@ -160,6 +179,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	serviceAccountHandler := handler.NewServiceAccountHandler(svcs.K8sServiceAccount)
 	overviewHandler := handler.NewOverviewHandler(svcs.Overview)
 	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt, runtimeClient.ProjectSrv, runtimeClient.LogSourceSrv)
+	cmdbHandler := handler.NewCMDBHandler(svcs.CMDB)
 	logAgentHandler := handler.NewLogAgentHandler(svcs.LogAgent, runtimeClient.AgentSrv)
 	agentDiscoveryHandler := handler.NewAgentDiscoveryHandler(svcs.AgentDiscovery, runtimeClient.AgentSrv)
 
@@ -169,7 +189,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	k8sScopeAuthorize := middleware.K8sScopeAuthorize(app.Logger, permissionRepo, k8sClusterAccessRepo, k8sNsDenyRepo, k8sNsAllowRepo)
 	opAudit := middleware.OperationAudit(svcs.OperationLog, app.Logger)
 
-	return &routeDeps{
+	return &RouteDeps{
 		app: app,
 
 		authMiddleware:    authMiddleware,
@@ -183,6 +203,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		k8sRuntimeService: svcs.K8sRuntime,
 
 		systemHandler: systemHandler,
+		pluginHandler: pluginHandler,
 
 		authHandler:              authHandler,
 		loginLogHandler:          loginLogHandler,
@@ -231,6 +252,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		overviewHandler:         overviewHandler,
 
 		projectHandler:        projectHandler,
+		cmdbHandler:           cmdbHandler,
 		mysqlBackupSvc:        svcs.MysqlBackup,
 		mysqlBackupHandler:    mysqlBackupHandler,
 		logAgentHandler:       logAgentHandler,

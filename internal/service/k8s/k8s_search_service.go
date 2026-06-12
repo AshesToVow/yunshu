@@ -36,10 +36,12 @@ type K8sSearchItem struct {
 }
 
 type K8sSearchService struct {
-	runtime    *K8sRuntimeService
+	runtime     *K8sRuntimeService
 	clusterRepo interfaces.K8sClusterRepository
 	memberRepo  interfaces.ProjectMemberRepository
 	accessRepo  interfaces.K8sClusterAccessRepository
+	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 }
 
 func NewK8sSearchService(
@@ -47,8 +49,13 @@ func NewK8sSearchService(
 	clusterRepo interfaces.K8sClusterRepository,
 	memberRepo interfaces.ProjectMemberRepository,
 	accessRepo interfaces.K8sClusterAccessRepository,
+	nsDeny interfaces.K8sNamespaceDenyRepository,
+	nsAllow interfaces.K8sNamespaceAllowRepository,
 ) *K8sSearchService {
-	return &K8sSearchService{runtime: runtime, clusterRepo: clusterRepo, memberRepo: memberRepo, accessRepo: accessRepo}
+	return &K8sSearchService{
+		runtime: runtime, clusterRepo: clusterRepo, memberRepo: memberRepo, accessRepo: accessRepo,
+		nsDenyRepo: nsDeny, nsAllowRepo: nsAllow,
+	}
 }
 
 func (s *K8sSearchService) Search(ctx context.Context, q K8sSearchQuery) ([]K8sSearchItem, error) {
@@ -157,6 +164,9 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 		if len(items) >= limit {
 			return
 		}
+		if !s.namespaceAllowed(ctx, cl.ID, ns) {
+			return
+		}
 		if !strings.Contains(strings.ToLower(name), kw) && !strings.Contains(strings.ToLower(extra), kw) {
 			return
 		}
@@ -207,6 +217,23 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 		}
 	}
 	return items
+}
+
+func (s *K8sSearchService) namespaceAllowed(ctx context.Context, clusterID uint, namespace string) bool {
+	ns := strings.TrimSpace(namespace)
+	if ns == "" {
+		return true
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil || auth.IsSuperAdminRole(u.RoleCodes) {
+		return true
+	}
+	if s.nsDenyRepo == nil && s.nsAllowRepo == nil {
+		return true
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	allowed, err := NamespaceAllowedByPolicy(ctx, s.nsDenyRepo, s.nsAllowRepo, pack, clusterID, ns)
+	return err == nil && allowed
 }
 
 func ingressHosts(ing *networkingv1.Ingress) string {

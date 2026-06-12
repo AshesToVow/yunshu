@@ -1380,7 +1380,7 @@ func AutoMigrateModels(db *gorm.DB) error {
 }
 ```
 
-**Seed 数据**: `cmd/seed.go` 命令插入初始数据 (内置角色/菜单/字典/管理员账号)
+**Seed 数据**: `cmd/seed.go` → 事务内 Permission 批量 upsert、Casbin `AddPolicies`、`menu.Sync`（catalog 见 `internal/menu/catalog.go`）；admin 密码**仅首次创建**时写入。
 
 **注意事项**:
 - ⚠️ 生产环境禁止使用 DropColumn (可能导致数据丢失)

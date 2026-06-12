@@ -118,7 +118,7 @@ export function CronjobsPage() {
       schedule: record?.schedule,
       suspend: record?.suspend,
       restart_policy: "Never",
-      container_name: recordName,
+      container_name: "",
       image: "",
       env_pairs: [{ key: "", value: "" }],
     }),
@@ -276,7 +276,7 @@ export function CronjobsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listCronJobsV2(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getCronJobDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyCronJob(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteCronJob(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteCronJob(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: batch/v1
 kind: CronJob

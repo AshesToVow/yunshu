@@ -1,4 +1,4 @@
-import { createK8sResourceService, k8sParams } from "./service-factory";
+import { createK8sResourceService, k8sParams, pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export interface CrdItem {
   name: string;
@@ -29,6 +29,6 @@ export function applyCrd(clusterId: number, manifest: string) {
   return crdsSvc.apply({ cluster_id: clusterId, manifest });
 }
 
-export function deleteCrd(clusterId: number, name: string) {
-  return crdsSvc.remove(k8sParams(clusterId, { name }));
+export function deleteCrd(clusterId: number, name: string, deleteOpts?: K8sDeleteOptions) {
+  return crdsSvc.remove(k8sParams(clusterId, { name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }

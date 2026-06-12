@@ -3,6 +3,7 @@ package service
 
 import (
 	"yunshu/internal/service/alert"
+	"yunshu/internal/service/cmdb"
 	"yunshu/internal/service/k8s"
 	"yunshu/internal/service/k8s/eventforward"
 	"yunshu/internal/service/logplatform"
@@ -61,6 +62,7 @@ var (
 	RemoveRolePolicies     = system.RemoveRolePolicies
 	ReplacePermissionResource = system.ReplacePermissionResource
 	RemovePermissionPolicies  = system.RemovePermissionPolicies
+	AddRolePolicies           = system.AddRolePolicies
 	NewRoleItem            = system.NewRoleItem
 	NewPermissionItem      = system.NewPermissionItem
 	NewUserDetailResponse  = system.NewUserDetailResponse
@@ -122,33 +124,39 @@ var (
 	ValidateCloudExpiryCronSpec = project.ValidateCloudExpiryCronSpec
 )
 
+// --- cmdb ---
+type CMDBService = cmdb.Service
+
+var NewCMDBService = cmdb.NewService
+
 type (
 	ProjectItem              = project.ProjectItem
 	ProjectListQuery         = project.ProjectListQuery
 	ProjectCreateRequest     = project.ProjectCreateRequest
 	ProjectUpdateRequest     = project.ProjectUpdateRequest
-	ServerItem               = project.ServerItem
-	ServerListQuery          = project.ServerListQuery
-	ServerUpsertRequest      = project.ServerUpsertRequest
-	ServerDetailItem         = project.ServerDetailItem
-	ServerExecRequest        = project.ServerExecRequest
-	ServerExecResult         = project.ServerExecResult
-	ServerGroupItem          = project.ServerGroupItem
-	ServerGroupUpsertRequest = project.ServerGroupUpsertRequest
-	ServerGroupTreeQuery     = project.ServerGroupTreeQuery
-	CloudAccountItem         = project.CloudAccountItem
-	CloudAccountListQuery    = project.CloudAccountListQuery
-	CloudAccountUpsertRequest = project.CloudAccountUpsertRequest
-	CloudSyncRequest         = project.CloudSyncRequest
-	CloudSyncResult          = project.CloudSyncResult
-	CloudServerActionRequest = project.CloudServerActionRequest
-	CloudServerActionResult  = project.CloudServerActionResult
-	BatchServerTestRequest   = project.BatchServerTestRequest
-	BatchServerTestResult    = project.BatchServerTestResult
-	ServerSyncRequest        = project.ServerSyncRequest
-	ServerSyncResult         = project.ServerSyncResult
-	ServerTestRequest        = project.ServerTestRequest
-	ServerTestResult         = project.ServerTestResult
+	ApplicationTopologyGraph = project.ApplicationTopologyGraph
+	ServerItem               = cmdb.ServerItem
+	ServerListQuery          = cmdb.ServerListQuery
+	ServerUpsertRequest      = cmdb.ServerUpsertRequest
+	ServerDetailItem         = cmdb.ServerDetailItem
+	ServerExecRequest        = cmdb.ServerExecRequest
+	ServerExecResult         = cmdb.ServerExecResult
+	ServerGroupItem          = cmdb.ServerGroupItem
+	ServerGroupUpsertRequest = cmdb.ServerGroupUpsertRequest
+	ServerGroupTreeQuery     = cmdb.ServerGroupTreeQuery
+	CloudAccountItem         = cmdb.CloudAccountItem
+	CloudAccountListQuery    = cmdb.CloudAccountListQuery
+	CloudAccountUpsertRequest = cmdb.CloudAccountUpsertRequest
+	CloudSyncRequest         = cmdb.CloudSyncRequest
+	CloudSyncResult          = cmdb.CloudSyncResult
+	CloudServerActionRequest = cmdb.CloudServerActionRequest
+	CloudServerActionResult  = cmdb.CloudServerActionResult
+	BatchServerTestRequest   = cmdb.BatchServerTestRequest
+	BatchServerTestResult    = cmdb.BatchServerTestResult
+	ServerSyncRequest        = cmdb.ServerSyncRequest
+	ServerSyncResult         = cmdb.ServerSyncResult
+	ServerTestRequest        = cmdb.ServerTestRequest
+	ServerTestResult         = cmdb.ServerTestResult
 	LogSourceItem            = project.LogSourceItem
 	LogSourceListQuery       = project.LogSourceListQuery
 	LogSourceUpsertRequest   = project.LogSourceUpsertRequest

@@ -125,7 +125,7 @@ func (s *K8sConfigService) DeleteConfigMap(ctx context.Context, req ConfigDelete
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, configMapGVK, req.Namespace, req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, configMapGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -219,7 +219,7 @@ func (s *K8sConfigService) DeleteSecret(ctx context.Context, req ConfigDeleteReq
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, secretGVK, req.Namespace, req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, secretGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

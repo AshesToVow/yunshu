@@ -139,7 +139,7 @@ func (s *K8sCRDService) Delete(ctx context.Context, req CRDDeleteRequest) error 
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, crdGVK, "", req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, crdGVK, "", req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

@@ -5,6 +5,7 @@ export interface TopologyNode {
   label: string;
   kind: string;
   state?: string;
+  state_level?: "normal" | "progressing" | "abnormal" | string;
 }
 
 export interface TopologyEdge {

@@ -1,6 +1,6 @@
 # Yunshu 文档索引
 
-**最后更新**: 2026-05-22
+**最后更新**: 2026-06-11
 
 ---
 
@@ -9,6 +9,7 @@
 | 文档 | 说明 |
 |------|------|
 | [CODEBASE-MAP.md](CODEBASE-MAP.md) | **代码地图**：目录结构、阅读顺序、Wire/错误规范 |
+| [plugins.md](plugins.md) | **业务插件**：`plugins.enabled`、路由绑定、CMDB 拆分 |
 | [backend-architecture-complete.md](backend-architecture-complete.md) | 后端完整技术文档（架构、模块、部署） |
 | [refactoring-report.md](refactoring-report.md) | 架构重构实施状态（与代码同步） |
 | [architecture-diagrams.md](architecture-diagrams.md) | 架构图集 |
@@ -53,4 +54,6 @@
 ## 维护约定
 
 - Service 源码路径以 `internal/service/<域>/` 为准；Handler 门面见 `internal/service/exports.go`。
-- 目录或装配变更时，同步更新 **CODEBASE-MAP.md**、**backend-architecture-complete.md §3.3**、**refactoring-report.md**。
+- 内置菜单单一数据源：`internal/menu/catalog.go`；同步逻辑 `internal/menu/sync.go`；`seed` 调用 `menu.Sync`。
+- 路由按插件注册：`internal/router/plugin_bind.go` + `register_<plugin>_routes.go`。
+- 目录或装配变更时，同步更新 **CODEBASE-MAP.md**、**plugins.md**、**backend-architecture-complete.md §3.3**、**refactoring-report.md**。

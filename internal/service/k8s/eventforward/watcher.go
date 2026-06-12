@@ -18,14 +18,15 @@ import (
 )
 
 type Watcher struct {
-	repo     interfaces.K8sEventForwardRepository
-	runtime  *k8s.K8sRuntimeService
-	cfg      RuntimeConfig
-	eventCh  chan *model.K8sForwardedEvent
-	ctx      context.Context
-	cancel   context.CancelFunc
-	activeMu sync.Mutex
-	active   map[string]bool // clusterID -> watching
+	repo       interfaces.K8sEventForwardRepository
+	runtime    *k8s.K8sRuntimeService
+	cfg        RuntimeConfig
+	eventCh    chan *model.K8sForwardedEvent
+	ctx        context.Context
+	cancel     context.CancelFunc
+	activeMu   sync.Mutex
+	active     map[string]bool // clusterID -> watching
+	startOnce  sync.Once
 }
 
 func NewWatcher(repo interfaces.K8sEventForwardRepository, runtime *k8s.K8sRuntimeService, cfg RuntimeConfig) *Watcher {
@@ -46,8 +47,14 @@ func NewWatcher(repo interfaces.K8sEventForwardRepository, runtime *k8s.K8sRunti
 }
 
 func (w *Watcher) Start() {
-	go w.persistLoop()
-	go w.scheduleLoop()
+	w.startOnce.Do(func() {
+		go w.persistLoop()
+		go w.scheduleLoop()
+	})
+}
+
+func (w *Watcher) TriggerEnsure() {
+	go w.ensureWatches()
 }
 
 func (w *Watcher) Stop() {
@@ -95,6 +102,26 @@ func (w *Watcher) watchCluster(clusterID string, id uint) {
 		w.activeMu.Unlock()
 	}()
 
+	backoff := time.Second
+	for {
+		if w.ctx.Err() != nil {
+			return
+		}
+		w.runClusterWatch(clusterID, id)
+		select {
+		case <-w.ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		if backoff < 30*time.Second {
+			backoff *= 2
+		} else {
+			backoff = 30 * time.Second
+		}
+	}
+}
+
+func (w *Watcher) runClusterWatch(clusterID string, id uint) {
 	ctx := w.ctx
 	if err := w.runtime.EnsureClusterRegistered(ctx, id); err != nil {
 		forwardLog().Warnw("Failed to register cluster for event watch", "cluster_id", clusterID, "error", err)
@@ -116,6 +143,7 @@ func (w *Watcher) watchCluster(clusterID string, id uint) {
 			return
 		case e, ok := <-watcher.ResultChan():
 			if !ok {
+				forwardLog().Infow("K8s event watch channel closed", "cluster_id", clusterID)
 				return
 			}
 			var typed eventsv1.Event

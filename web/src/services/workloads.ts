@@ -1,4 +1,4 @@
-import { createK8sResourceService, k8sParams } from "./service-factory";
+import { createK8sResourceService, k8sParams, pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export interface WorkloadItem {
   name: string;
@@ -98,8 +98,8 @@ export function getDeploymentDetail(clusterId: number, namespace: string, name: 
 export function applyDeployment(clusterId: number, manifest: string) {
   return deploymentsSvc.apply({ cluster_id: clusterId, manifest });
 }
-export function deleteDeployment(clusterId: number, namespace: string, name: string) {
-  return deploymentsSvc.remove(k8sParams(clusterId, { namespace, name }));
+export function deleteDeployment(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return deploymentsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
 export function scaleDeployment(clusterId: number, namespace: string, name: string, replicas: number) {
   return deploymentsSvc.post<boolean>("/scale", { cluster_id: clusterId, namespace, name, replicas });
@@ -160,8 +160,8 @@ export function getStatefulSetDetail(clusterId: number, namespace: string, name:
 export function applyStatefulSet(clusterId: number, manifest: string) {
   return statefulsetsSvc.apply({ cluster_id: clusterId, manifest });
 }
-export function deleteStatefulSet(clusterId: number, namespace: string, name: string) {
-  return statefulsetsSvc.remove(k8sParams(clusterId, { namespace, name }));
+export function deleteStatefulSet(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return statefulsetsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
 export function scaleStatefulSet(clusterId: number, namespace: string, name: string, replicas: number) {
   return statefulsetsSvc.post<boolean>("/scale", { cluster_id: clusterId, namespace, name, replicas });
@@ -198,8 +198,8 @@ export function getDaemonSetDetail(clusterId: number, namespace: string, name: s
 export function applyDaemonSet(clusterId: number, manifest: string) {
   return daemonsetsSvc.apply({ cluster_id: clusterId, manifest });
 }
-export function deleteDaemonSet(clusterId: number, namespace: string, name: string) {
-  return daemonsetsSvc.remove(k8sParams(clusterId, { namespace, name }));
+export function deleteDaemonSet(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return daemonsetsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
 export function restartDaemonSet(clusterId: number, namespace: string, name: string) {
   return daemonsetsSvc.post<boolean>("/restart", { cluster_id: clusterId, namespace, name });
@@ -235,8 +235,8 @@ export function getJobDetail(clusterId: number, namespace: string, name: string)
 export function applyJob(clusterId: number, manifest: string) {
   return jobsSvc.apply({ cluster_id: clusterId, manifest });
 }
-export function deleteJob(clusterId: number, namespace: string, name: string) {
-  return jobsSvc.remove(k8sParams(clusterId, { namespace, name }));
+export function deleteJob(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return jobsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
 export function rerunJob(clusterId: number, namespace: string, name: string) {
   return jobsSvc.post<{ job_name: string }>("/rerun", { cluster_id: clusterId, namespace, name });
@@ -275,8 +275,8 @@ export function getCronJobDetail(clusterId: number, namespace: string, name: str
 export function applyCronJob(clusterId: number, manifest: string) {
   return cronjobsSvc.apply({ cluster_id: clusterId, manifest });
 }
-export function deleteCronJob(clusterId: number, namespace: string, name: string) {
-  return cronjobsSvc.remove(k8sParams(clusterId, { namespace, name }));
+export function deleteCronJob(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return cronjobsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
 export function suspendCronJob(clusterId: number, namespace: string, name: string, suspend: boolean) {
   return cronjobsSvc.post<boolean>("/suspend", { cluster_id: clusterId, namespace, name, suspend });

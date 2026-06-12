@@ -54,7 +54,7 @@ export function PersistentVolumeClaimsPage() {
         list: async ({ clusterId, namespace, keyword }) => await listPersistentVolumeClaims(clusterId, namespace ?? "default", keyword),
         detail: async ({ clusterId, namespace, name }) => await getPersistentVolumeClaimDetail(clusterId, namespace ?? "default", name),
         apply: async ({ clusterId, manifest }) => await applyPersistentVolumeClaim(clusterId, manifest),
-        remove: async ({ clusterId, namespace, name }) => await deletePersistentVolumeClaim(clusterId, namespace ?? "default", name),
+        remove: async (args) => await deletePersistentVolumeClaim(args.clusterId, args.namespace ?? "default", args.name, args),
       }}
       createTemplate={({ namespace }) => `apiVersion: v1
 kind: PersistentVolumeClaim

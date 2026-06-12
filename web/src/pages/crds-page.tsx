@@ -28,7 +28,7 @@ export function CrdsPage() {
         list: async ({ clusterId, keyword }) => await listCrds(clusterId, keyword),
         detail: async ({ clusterId, name }) => await getCrdDetail(clusterId, name),
         apply: async ({ clusterId, manifest }) => await applyCrd(clusterId, manifest),
-        remove: async ({ clusterId, name }) => await deleteCrd(clusterId, name),
+        remove: async (args) => await deleteCrd(args.clusterId, args.name, args),
       }}
       createTemplate={() => `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition

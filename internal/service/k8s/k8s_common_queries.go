@@ -10,6 +10,7 @@ type ClusterKeywordQuery struct {
 type ClusterNameQuery struct {
 	ClusterID uint   `form:"cluster_id" binding:"required"`
 	Name      string `form:"name" binding:"required"`
+	K8sDeleteOptions
 }
 
 type ClusterNamespaceKeywordQuery struct {
@@ -28,6 +29,7 @@ type ClusterNamespaceNameQuery struct {
 	ClusterID uint   `form:"cluster_id" binding:"required"`
 	Namespace string `form:"namespace" binding:"required"`
 	Name      string `form:"name" binding:"required"`
+	K8sDeleteOptions
 }
 
 type ClusterManifestApplyRequest struct {
@@ -43,6 +45,7 @@ type ClusterNamespaceNameRequest struct {
 	ClusterID uint   `json:"cluster_id" binding:"required"`
 	Namespace string `json:"namespace" binding:"required"`
 	Name      string `json:"name" binding:"required"`
+	K8sDeleteOptions
 }
 
 type ClusterNamespaceNameScaleRequest struct {

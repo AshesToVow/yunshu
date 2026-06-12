@@ -1,5 +1,5 @@
-// genopenapi 从 internal/router/router.go 解析 Gin 路由，生成 OpenAPI 3.0.3 文档。
-// 用法：go run ./tools/genopenapi -router internal/router/router.go -out docs/apipost/permission-system.openapi.yaml
+// genopenapi 从 internal/router/register_*.go 解析 Gin 路由，生成 OpenAPI 3.0.3 文档。
+// 用法：go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml
 package main
 
 import (
@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -41,17 +42,17 @@ func isPublic(method, path string) bool {
 		return true
 	}
 	public := map[string]bool{
-		"POST /api/v1/auth/verification-code":     true,
-		"POST /api/v1/auth/login-code":             true,
-		"POST /api/v1/auth/password-login-code":    true,
-		"POST /api/v1/auth/login":                  true,
-		"POST /api/v1/auth/email-login":            true,
-		"POST /api/v1/auth/register":               true,
-		"POST /api/v1/alerts/webhook/alertmanager": true,
-		"POST /api/v1/agents/public-register":     true,
-		"POST /api/v1/agents/health/report":        true,
-		"POST /api/v1/agents/discovery/report":     true,
-		"GET /api/v1/agents/runtime-config":       true,
+		"POST /api/v1/auth/verification-code":      true,
+		"POST /api/v1/auth/login-code":              true,
+		"POST /api/v1/auth/password-login-code":     true,
+		"POST /api/v1/auth/login":                   true,
+		"POST /api/v1/auth/email-login":             true,
+		"POST /api/v1/auth/register":                true,
+		"POST /api/v1/alerts/webhook/alertmanager":  true,
+		"POST /api/v1/agents/public-register":       true,
+		"POST /api/v1/agents/health/report":         true,
+		"POST /api/v1/agents/discovery/report":       true,
+		"GET /api/v1/agents/runtime-config":          true,
 	}
 	return public[method+" "+path]
 }
@@ -68,6 +69,8 @@ func tagForPath(path string) string {
 		return "Auth"
 	case "health":
 		return "System"
+	case "plugins":
+		return "Plugins"
 	case "alerts":
 		if len(parts) > 1 && parts[1] == "webhook" {
 			return "AlertsWebhook"
@@ -79,6 +82,11 @@ func tagForPath(path string) string {
 		return "Dict"
 	case "k8s-policies":
 		return "K8sScopedPolicy"
+	case "k8s":
+		if len(parts) > 1 && parts[1] == "event-forward" {
+			return "K8sEventForward"
+		}
+		return "K8s"
 	default:
 		return upperFirst(seg)
 	}
@@ -93,27 +101,27 @@ func upperFirst(s string) string {
 	return string(r)
 }
 
-func main() {
-	routerPath := flag.String("router", "internal/router/router.go", "path to router.go")
-	outPath := flag.String("out", "docs/apipost/permission-system.openapi.yaml", "output openapi yaml")
-	flag.Parse()
+var (
+	reEngine = regexp.MustCompile(`^\s*(\w+)\s*:=\s*app\.Engine\.Group\("([^"]*)"\)`)
+	// Allow trailing middleware args: Group("/:id", middleware.Foo(...))
+	reGroup  = regexp.MustCompile(`^\s*(\w+)\s*:=\s*(\w+)\.Group\("([^"]*)"`)
+	reRoute  = regexp.MustCompile(`^\s*(\w+)\.(GET|POST|PUT|DELETE|PATCH)\("([^"]*)"`)
+)
 
-	f, err := os.Open(*routerPath)
+func parseRouterFile(path string, groups map[string]string, routes *[]route, seedAPI bool) error {
+	f, err := os.Open(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "open router: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	defer f.Close()
 
-	reEngine := regexp.MustCompile(`^\s*(\w+)\s*:=\s*app\.Engine\.Group\("([^"]*)"\)`)
-	reGroup := regexp.MustCompile(`^\s*(\w+)\s*:=\s*(\w+)\.Group\("([^"]*)"\)`)
-	reRoute := regexp.MustCompile(`^\s*(\w+)\.(GET|POST|PUT|DELETE|PATCH)\("([^"]*)"`)
+	if seedAPI {
+		groups["api"] = "/api/v1"
+	}
 
-	groups := map[string]string{}
-	var routes []route
-	sc2 := bufio.NewScanner(f)
-	for sc2.Scan() {
-		line := strings.Split(sc2.Text(), "//")[0]
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.Split(sc.Text(), "//")[0]
 		if m := reEngine.FindStringSubmatch(line); m != nil {
 			groups[m[1]] = m[2]
 			continue
@@ -132,15 +140,55 @@ func main() {
 				continue
 			}
 			full := joinURLPath(base, suffix)
-			routes = append(routes, route{method: method, path: full})
+			*routes = append(*routes, route{method: method, path: full})
 		}
 	}
-	if err := sc2.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "scan: %v\n", err)
+	return sc.Err()
+}
+
+func collectRouterFiles(routerDir string) ([]string, error) {
+	pattern := filepath.Join(routerDir, "register_*.go")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(matches)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no register_*.go under %s", routerDir)
+	}
+	return matches, nil
+}
+
+func operationDescription(openAPIPath, method, fullPath string) string {
+	if strings.Contains(openAPIPath, "terminal") || strings.Contains(openAPIPath, "exec/ws") {
+		return "WebSocket 需先 POST /api/v1/auth/ws-ticket 获取一次性 ticket，再在连接 URL 查询参数中携带 ticket=。\n"
+	}
+	if method == "POST" && fullPath == "/api/v1/alerts/webhook/alertmanager" {
+		return "Alertmanager Webhook。鉴权：请求头 X-Alert-Token 或 Authorization: Bearer <webhook_token>（不支持 URL ?token=）。\n"
+	}
+	return ""
+}
+
+func main() {
+	routerDir := flag.String("router-dir", "internal/router", "directory containing register_*.go")
+	outPath := flag.String("out", "docs/apipost/permission-system.openapi.yaml", "output openapi yaml")
+	flag.Parse()
+
+	files, err := collectRouterFiles(*routerDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "collect router files: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Dedupe by method+path (last wins - should be unique)
+	groups := map[string]string{}
+	var routes []route
+	for _, f := range files {
+		if err := parseRouterFile(f, groups, &routes, true); err != nil {
+			fmt.Fprintf(os.Stderr, "parse %s: %v\n", f, err)
+			os.Exit(1)
+		}
+	}
+
 	keySeen := map[string]bool{}
 	var uniq []route
 	for _, r := range routes {
@@ -164,7 +212,7 @@ info:
   title: YunShu CMDB / Permission System API
   version: "1.0.0"
   description: |
-    由 tools/genopenapi 从 internal/router/router.go 自动生成，请勿手工编辑本文件。
+    由 tools/genopenapi 从 internal/router/register_*.go 自动生成，请勿手工编辑本文件。
     重新生成：go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml
 servers:
   - url: http://127.0.0.1:8080
@@ -211,16 +259,13 @@ paths:
         - bearerAuth: []
 `
 			}
-			desc := ""
-			if strings.Contains(p, "terminal") || strings.Contains(p, "ws") {
-				desc = "      description: WebSocket 需先 POST /api/v1/auth/ws-ticket 获取一次性 ticket，再在连接 URL 查询参数中携带 ticket=。\n"
-			}
+			desc := operationDescription(p, r.method, r.path)
 			fmt.Fprintf(&sb, "    %s:\n", strings.ToLower(r.method))
 			fmt.Fprintf(&sb, "      tags: [%q]\n", tag)
 			fmt.Fprintf(&sb, "      summary: Auto-generated from router\n")
 			fmt.Fprintf(&sb, "      operationId: %s\n", opID)
 			if desc != "" {
-				fmt.Fprintf(&sb, "%s", desc)
+				fmt.Fprintf(&sb, "      description: |\n        %s", desc)
 			}
 			if sec != "" {
 				fmt.Fprintf(&sb, "%s", sec)
@@ -251,6 +296,11 @@ paths:
       scheme: bearer
       bearerFormat: JWT
       description: Authorization Bearer <access_token>
+    alertWebhookToken:
+      type: apiKey
+      in: header
+      name: X-Alert-Token
+      description: Alertmanager Webhook 鉴权（与 config alert.webhook_token 一致）
   schemas:
     StandardResponse:
       type: object
@@ -273,5 +323,5 @@ paths:
 		fmt.Fprintf(os.Stderr, "write %s: %v\n", *outPath, err)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "wrote %d paths (%d operations) to %s\n", len(paths), len(uniq), *outPath)
+	fmt.Fprintf(os.Stderr, "parsed %d files, wrote %d paths (%d operations) to %s\n", len(files), len(paths), len(uniq), *outPath)
 }

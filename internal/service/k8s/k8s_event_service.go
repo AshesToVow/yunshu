@@ -4,7 +4,10 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"yunshu/internal/interfaces"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/k8sauth"
 	bizerrors "yunshu/internal/pkg/errors"
 
 	corev1 "k8s.io/api/core/v1"
@@ -49,12 +52,18 @@ type EventGroupItem struct {
 }
 
 type K8sEventService struct {
-	runtime *K8sRuntimeService
+	runtime     *K8sRuntimeService
+	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 }
 
 // NewK8sEventService 创建相关逻辑。
-func NewK8sEventService(runtime *K8sRuntimeService) *K8sEventService {
-	return &K8sEventService{runtime: runtime}
+func NewK8sEventService(
+	runtime *K8sRuntimeService,
+	nsDeny interfaces.K8sNamespaceDenyRepository,
+	nsAllow interfaces.K8sNamespaceAllowRepository,
+) *K8sEventService {
+	return &K8sEventService{runtime: runtime, nsDenyRepo: nsDeny, nsAllowRepo: nsAllow}
 }
 
 // List 查询列表相关的业务逻辑。
@@ -84,8 +93,12 @@ func (s *K8sEventService) List(ctx context.Context, q EventListQuery) ([]EventIt
 	kw := strings.ToLower(strings.TrimSpace(q.Keyword))
 	kind := strings.TrimSpace(q.Kind)
 	name := strings.TrimSpace(q.Name)
+	clusterWide := ns == metav1.NamespaceAll
 	out := make([]EventItem, 0, len(list))
 	for _, e := range list {
+		if clusterWide && !s.namespaceAllowed(ctx, q.ClusterID, e.Namespace) {
+			continue
+		}
 		if kind != "" && e.InvolvedObject.Kind != kind {
 			continue
 		}
@@ -127,6 +140,23 @@ func (s *K8sEventService) List(ctx context.Context, q EventListQuery) ([]EventIt
 		return out[i].LastTime > out[j].LastTime
 	})
 	return out, nil
+}
+
+func (s *K8sEventService) namespaceAllowed(ctx context.Context, clusterID uint, namespace string) bool {
+	ns := strings.TrimSpace(namespace)
+	if ns == "" {
+		return true
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil || auth.IsSuperAdminRole(u.RoleCodes) {
+		return true
+	}
+	if s.nsDenyRepo == nil && s.nsAllowRepo == nil {
+		return true
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	allowed, err := NamespaceAllowedByPolicy(ctx, s.nsDenyRepo, s.nsAllowRepo, pack, clusterID, ns)
+	return err == nil && allowed
 }
 
 // ListGrouped 按 involved_kind + involved_name + reason + namespace 聚合 Event。

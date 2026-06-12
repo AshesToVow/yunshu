@@ -30,7 +30,7 @@ func NewLoginLogHandler(svc *service.LoginLogService) *LoginLogHandler {
 // @Param source query string false "password or email"
 // @Param page query int false "Page"
 // @Param page_size query int false "Page size"
-// @Success 200 {object} response.Body{data=pagination.Result[model.LoginLog]}
+// @Success 200 {object} response.Body "success"
 // @Router /api/v1/login-logs [get]
 func (h *LoginLogHandler) List(c *gin.Context) {
 	ServeQuery(c, h.svc.List)

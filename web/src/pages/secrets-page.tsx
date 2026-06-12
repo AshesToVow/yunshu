@@ -46,7 +46,7 @@ export function SecretsPage() {
         list: async ({ clusterId, namespace, keyword }) => await listSecrets(clusterId, namespace ?? "default", keyword),
         detail: async ({ clusterId, namespace, name }) => await getSecretDetail(clusterId, namespace ?? "default", name),
         apply: async ({ clusterId, manifest }) => await applySecret(clusterId, manifest),
-        remove: async ({ clusterId, namespace, name }) => await deleteSecret(clusterId, namespace ?? "default", name),
+        remove: async (args) => await deleteSecret(args.clusterId, args.namespace ?? "default", args.name, args),
       }}
       createTemplate={({ namespace }) => `apiVersion: v1
 kind: Secret

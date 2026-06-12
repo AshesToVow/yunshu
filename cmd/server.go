@@ -44,7 +44,7 @@ var serverCmd = &cobra.Command{
 		logx.Init(app.Logger)
 		handler.SetLogger(app.Logger)
 
-		if err := bootstrap.AutoMigrateModels(app.DB); err != nil {
+		if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
 			return fmt.Errorf("auto migrate: %w", err)
 		}
 		bootLog := logutil.Worker("bootstrap")
@@ -72,14 +72,15 @@ var serverCmd = &cobra.Command{
 		userRepo := repository.NewUserRepository(app.DB)
 		departmentRepo := repository.NewDepartmentRepository(app.DB)
 		projectMemberRepo := repository.NewProjectMemberRepository(app.DB)
-		projectSvc, err := service.NewProjectMgmtService(projectRepo, serverRepo, serverGroupRepo, cloudAccountRepo, serviceRepo, logRepo, projectMemberRepo, userRepo, departmentRepo, app.Config.Security.EncryptionKey)
+		cmdbSvc, err := service.NewCMDBService(serverRepo, serverGroupRepo, cloudAccountRepo, app.Config.Security.EncryptionKey)
 		if err != nil {
 			return err
 		}
+		projectSvc := service.NewProjectMgmtService(projectRepo, serverRepo, serverGroupRepo, serviceRepo, logRepo, projectMemberRepo, userRepo, departmentRepo)
 		agentSvc := service.NewLogAgentService(logAgentRepo, serverRepo, logRepo, app.Config.Agent.RegisterSecret, app.Config.Agent.DiscoveryRoots)
 		discoverySvc := service.NewAgentDiscoveryService(agentDiscoveryRepo, logAgentRepo, serverRepo, logRepo)
 
-		grpcImpl := grpcserver.NewLogPlatformServer(projectSvc, agentSvc, discoverySvc)
+		grpcImpl := grpcserver.NewLogPlatformServer(projectSvc, cmdbSvc, agentSvc, discoverySvc)
 		grpcRuntime, err := grpcserver.Start(
 			app.Config.GRPC.ListenAddr,
 			grpcImpl,

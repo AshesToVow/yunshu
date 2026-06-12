@@ -38,7 +38,7 @@ var grantViewDemoCmd = &cobra.Command{
 		}
 		defer app.Close()
 
-		if err := bootstrap.AutoMigrateModels(app.DB); err != nil {
+		if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
 			return err
 		}
 

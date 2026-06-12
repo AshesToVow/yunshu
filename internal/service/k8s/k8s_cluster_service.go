@@ -510,42 +510,25 @@ func (s *K8sClusterService) ListComponentStatuses(ctx context.Context, id uint) 
 		return nil, err
 	}
 	probedAt := time.Now().Format(time.RFC3339)
-	var list []corev1.ComponentStatus
-	if err := k.Resource(&corev1.ComponentStatus{}).List(&list).Error; err != nil {
+	out := make([]ComponentStatusItem, 0)
+
+	var nodes []corev1.Node
+	if err := k.WithContext(ctx).Resource(&corev1.Node{}).List(&nodes).Error; err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.cluster", "api", err, constants.ErrFmt559cb56d5b9d)
 	}
-	out := make([]ComponentStatusItem, 0, len(list))
-	for _, item := range list {
-		state := "Unknown"
-		healthy := false
-		message := ""
-		reason := ""
-		for _, cond := range item.Conditions {
-			if cond.Type != corev1.ComponentHealthy {
-				continue
-			}
-			switch cond.Status {
-			case corev1.ConditionTrue:
-				state = "Healthy"
-				healthy = true
-			case corev1.ConditionFalse:
-				state = "Unhealthy"
-			default:
-				state = "Unknown"
-			}
-			message = strings.TrimSpace(cond.Message)
-			reason = strings.TrimSpace(cond.Error)
-			break
-		}
-		out = append(out, ComponentStatusItem{
-			Name:        item.Name,
-			Status:      state,
-			Healthy:     healthy,
-			Message:     message,
-			Error:       reason,
-			LastProbeAt: probedAt,
-		})
+	for _, n := range nodes {
+		out = append(out, nodeToComponentStatusItem(n, probedAt))
 	}
+
+	var pods []corev1.Pod
+	if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace("kube-system").List(&pods).Error; err == nil {
+		for _, p := range pods {
+			if isKubeControlPlanePod(p) {
+				out = append(out, podToComponentStatusItem(p, probedAt))
+			}
+		}
+	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }

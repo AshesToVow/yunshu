@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	cryptox "yunshu/internal/pkg/crypto"
+	"yunshu/internal/service/cmdb"
 	"yunshu/internal/service/project"
 )
 
@@ -108,7 +109,7 @@ func (s *AlertService) evaluateOneCloudExpiryRule(ctx context.Context, rule *mod
 		if err != nil {
 			continue
 		}
-		provider, err := project.CloudProviderByName(strings.TrimSpace(acc.Provider))
+		provider, err := cmdb.CloudProviderByName(strings.TrimSpace(acc.Provider))
 		if err != nil {
 			continue
 		}
@@ -128,7 +129,7 @@ func (s *AlertService) evaluateOneCloudExpiryRule(ctx context.Context, rule *mod
 			region := strings.TrimSpace(ins.Region)
 			if len(regionFilter) > 0 {
 				if strings.EqualFold(strings.TrimSpace(acc.Provider), "tencent") {
-					if !project.InstanceMatchesTencentRegionFilter(region, regionFilter) {
+					if !cmdb.InstanceMatchesTencentRegionFilter(region, regionFilter) {
 						continue
 					}
 				} else if _, ok := regionFilter[region]; !ok {

@@ -1,4 +1,5 @@
 import { getData, http } from "./http";
+import type { K8sDeleteOptions } from "./service-factory";
 
 export interface PodItem {
   name: string;
@@ -75,11 +76,11 @@ export interface PodDiagnoseResult {
   containers: PodDiagnoseContainerIssue[];
 }
 
-export interface PodDeletePayload {
+export type PodDeletePayload = {
   cluster_id: number;
   namespace: string;
   name: string;
-}
+} & K8sDeleteOptions;
 
 export interface PodExecPayload {
   cluster_id: number;

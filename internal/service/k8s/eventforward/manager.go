@@ -3,6 +3,7 @@ package eventforward
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
@@ -34,6 +35,8 @@ type Manager struct {
 	enabled  bool
 	yamlBase config.K8sEventForwardConfig
 	appPort  int
+	runMu    sync.Mutex
+	running  bool
 }
 
 func NewManager(
@@ -94,6 +97,7 @@ func (m *Manager) reloadRuntimeConfig() {
 		return
 	}
 	m.worker.RefreshSettings(rt)
+	m.EnsureRunning()
 }
 
 func loadRuntimeConfig(store interfaces.K8sEventForwardRepository, appCfg config.K8sEventForwardConfig, port int) (RuntimeConfig, error) {
@@ -123,8 +127,19 @@ func firstPositive(a, b int) int {
 }
 
 func (m *Manager) Start() {
-	if !m.enabled {
-		forwardLog().Infow("K8s event forward disabled in config")
+	m.ensureRunning(false)
+}
+
+// EnsureRunning 在规则启用/变更后热启动 watcher 与 worker（进程内幂等）。
+func (m *Manager) EnsureRunning() {
+	m.ensureRunning(true)
+}
+
+func (m *Manager) ensureRunning(triggerWatch bool) {
+	if m == nil || !m.enabled {
+		if m != nil && !m.enabled {
+			forwardLog().Infow("K8s event forward disabled in config")
+		}
 		return
 	}
 	ctx := context.Background()
@@ -137,9 +152,17 @@ func (m *Manager) Start() {
 		forwardLog().Infow("No enabled K8s event forward rules, watcher and worker not started")
 		return
 	}
-	forwardLog().Infow("Starting K8s event forward watcher and worker")
-	m.watcher.Start()
-	m.worker.Start()
+	m.runMu.Lock()
+	if !m.running {
+		forwardLog().Infow("Starting K8s event forward watcher and worker")
+		m.watcher.Start()
+		m.worker.Start()
+		m.running = true
+	}
+	m.runMu.Unlock()
+	if triggerWatch && m.watcher != nil {
+		m.watcher.TriggerEnsure()
+	}
 }
 
 func (m *Manager) Stop() {

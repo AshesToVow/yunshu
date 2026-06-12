@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/model"
@@ -130,17 +131,30 @@ func (h *AlertHandler) HistoryStats(c *gin.Context) {
 	response.Success(c, stats)
 }
 
-// ReceiveAlertmanager 处理对应的 HTTP 请求并返回统一响应。
+// ReceiveAlertmanager godoc
+// @Summary Receive Alertmanager webhook
+// @Description Ingest Alertmanager notifications. Auth via header X-Alert-Token or Authorization Bearer (not query token).
+// @Tags AlertsWebhook
+// @Accept json
+// @Produce json
+// @Param X-Alert-Token header string false "Webhook token (preferred)"
+// @Param payload body service.AlertManagerPayload true "Alertmanager payload"
+// @Success 200 {object} response.Body "success"
+// @Failure 401 {object} response.Body "invalid webhook token"
+// @Failure 400 {object} response.Body "bad request"
+// @Router /api/v1/alerts/webhook/alertmanager [post]
 func (h *AlertHandler) ReceiveAlertmanager(c *gin.Context) {
 	token := c.GetHeader("X-Alert-Token")
 	if token == "" {
 		token = c.GetHeader("X-Webhook-Token")
 	}
 	if token == "" {
-		token = c.GetHeader("Authorization")
-	}
-	if token == "" {
-		token = c.Query("token")
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token = strings.TrimSpace(authHeader[7:])
+		} else {
+			token = authHeader
+		}
 	}
 	if !h.svc.ValidateWebhookToken(token) {
 		response.Error(c, constants.ErrAlertWebhookTokenInvalid)

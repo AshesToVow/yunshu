@@ -10,6 +10,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8sutil"
+	"yunshu/internal/pkg/logutil"
 	bizerrors "yunshu/internal/pkg/errors"
 
 	kom "github.com/weibaohui/kom/kom"
@@ -121,7 +122,9 @@ func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery
 	{
 		var pods []corev1.Pod
 		// 全量拉取一次，按 namespace 聚合（比对每个 namespace 分别 List 更省请求数）
-		if e := k.WithContext(ctx).Resource(&corev1.Pod{}).List(&pods).Error; e == nil {
+		if e := k.WithContext(ctx).Resource(&corev1.Pod{}).AllNamespace().List(&pods).Error; e != nil {
+			logutil.Service("k8s.namespace").Warnw("list pods for namespace stats failed", "error", e, "cluster_id", query.ClusterID)
+		} else {
 			for _, p := range pods {
 				ns := strings.TrimSpace(p.Namespace)
 				if ns == "" {
@@ -144,7 +147,9 @@ func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery
 	rqByNS := map[string][]corev1.ResourceQuota{}
 	{
 		var rqs []corev1.ResourceQuota
-		if e := k.WithContext(ctx).Resource(&corev1.ResourceQuota{}).AllNamespace().List(&rqs).Error; e == nil {
+		if e := k.WithContext(ctx).Resource(&corev1.ResourceQuota{}).AllNamespace().List(&rqs).Error; e != nil {
+			logutil.Service("k8s.namespace").Warnw("list resource quotas failed", "error", e, "cluster_id", query.ClusterID)
+		} else {
 			for i := range rqs {
 				q := strings.TrimSpace(rqs[i].Namespace)
 				if q == "" {
@@ -377,15 +382,29 @@ func (s *K8sNamespaceService) Detail(ctx context.Context, query NamespaceDetailQ
 		return nil, bizerrors.Internalf(ctx, "k8s.namespace", "api", err, constants.ErrFmt059d07c698fe)
 	}
 	var ns corev1.Namespace
-	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &ns)
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &ns); err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.namespace", "convert", err, constants.ErrFmt059d07c698fe)
+	}
 	copyObj := ns.DeepCopy()
 	copyObj.APIVersion = "v1"
 	copyObj.Kind = "Namespace"
 	copyObj.ManagedFields = nil
-	y, _ := yaml.Marshal(copyObj)
-	quotaItems, _ := s.listNamespaceQuotas(ctx, k, query.Name)
-	limitItems, _ := s.listNamespaceLimitRanges(ctx, k, query.Name)
-	eventItems, _ := s.listNamespaceEvents(ctx, k, query.Name)
+	y, err := yaml.Marshal(copyObj)
+	if err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.namespace", "yaml", err, constants.ErrFmt059d07c698fe)
+	}
+	quotaItems, qErr := s.listNamespaceQuotas(ctx, k, query.Name)
+	if qErr != nil {
+		logutil.Service("k8s.namespace").Warnw("list namespace quotas failed", "error", qErr, "namespace", query.Name)
+	}
+	limitItems, lErr := s.listNamespaceLimitRanges(ctx, k, query.Name)
+	if lErr != nil {
+		logutil.Service("k8s.namespace").Warnw("list namespace limit ranges failed", "error", lErr, "namespace", query.Name)
+	}
+	eventItems, eErr := s.listNamespaceEvents(ctx, k, query.Name)
+	if eErr != nil {
+		logutil.Service("k8s.namespace").Warnw("list namespace events failed", "error", eErr, "namespace", query.Name)
+	}
 	finalizers := make([]string, 0, len(copyObj.Spec.Finalizers))
 	for _, f := range copyObj.Spec.Finalizers {
 		finalizers = append(finalizers, string(f))
@@ -557,7 +576,7 @@ func (s *K8sNamespaceService) Delete(ctx context.Context, req NamespaceDeleteReq
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, namespaceGVK, "", req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, namespaceGVK, "", req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

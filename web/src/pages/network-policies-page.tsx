@@ -323,7 +323,7 @@ export function NetworkPoliciesPage() {
           list: async ({ clusterId, namespace, keyword }) => await listNetworkPolicies(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getNetworkPolicyDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyNetworkPolicy(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteNetworkPolicy(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteNetworkPolicy(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;

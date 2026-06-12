@@ -20,6 +20,6 @@ var migrateCmd = &cobra.Command{
 		}
 		defer app.Close()
 
-		return bootstrap.AutoMigrateModels(app.DB)
+		return bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins)
 	},
 }

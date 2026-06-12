@@ -67,15 +67,31 @@ var wsUpgrader = websocket.Upgrader{
 	},
 }
 
+// ExecWS godoc
+// @Summary Interactive pod exec (WebSocket)
+// @Description WebSocket shell into a pod. Requires cluster_id, namespace, name query params. Obtain ticket via POST /api/v1/auth/ws-ticket first.
+// @Tags Pods
+// @Produce json
+// @Security BearerAuth
+// @Param cluster_id query int true "Cluster ID"
+// @Param namespace query string true "Pod namespace"
+// @Param name query string true "Pod name"
+// @Param container query string false "Container name"
+// @Param ticket query string true "One-time WebSocket ticket"
+// @Router /api/v1/pods/exec/ws [get]
 func (h *PodHandler) ExecWS(c *gin.Context) {
 	clusterID64, err := strconv.ParseUint(c.Query("cluster_id"), 10, 64)
 	if err != nil || clusterID64 == 0 {
 		response.Error(c, constants.ErrBadRequestWithMsg(constants.ErrMsgba2a155d1253))
 		return
 	}
-	namespace := c.Query("namespace")
-	name := c.Query("name")
-	container := c.Query("container")
+	namespace := strings.TrimSpace(c.Query("namespace"))
+	name := strings.TrimSpace(c.Query("name"))
+	container := strings.TrimSpace(c.Query("container"))
+	if namespace == "" || name == "" {
+		response.Error(c, constants.ErrBadRequestWithMsg(constants.ErrMsge278df185255))
+		return
+	}
 
 	conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {

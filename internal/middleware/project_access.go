@@ -75,8 +75,13 @@ func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, l
 			c.Next()
 			return
 		}
-		if method != http.MethodGet && method != http.MethodHead {
-			if projectaccess.IsReadonly(role) {
+		if projectaccess.IsReadonly(role) {
+			if method != http.MethodGet && method != http.MethodHead {
+				response.Error(c, constants.ErrProjectReadonlyMember)
+				c.Abort()
+				return
+			}
+			if isProjectReadonlyBlockedGetRoute(fullPath) {
 				response.Error(c, constants.ErrProjectReadonlyMember)
 				c.Abort()
 				return
@@ -84,6 +89,11 @@ func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, l
 		}
 		c.Next()
 	}
+}
+
+func isProjectReadonlyBlockedGetRoute(ginFullPath string) bool {
+	p := strings.TrimSpace(ginFullPath)
+	return strings.Contains(p, "/terminal/ws")
 }
 
 func isProjectAdminOnlyRoute(method, ginFullPath string) bool {

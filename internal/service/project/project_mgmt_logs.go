@@ -18,6 +18,38 @@ import (
 	"gorm.io/gorm"
 )
 
+type ServiceItem struct {
+	ID        uint    `json:"id"`
+	ServerID  uint    `json:"server_id"`
+	Name      string  `json:"name"`
+	Env       *string `json:"env"`
+	Labels    *string `json:"labels"`
+	Remark    *string `json:"remark"`
+	Status    int     `json:"status"`
+	CreatedAt string  `json:"created_at"`
+}
+
+func toServiceItem(it model.Service) ServiceItem {
+	return ServiceItem{
+		ID:        it.ID,
+		ServerID:  it.ServerID,
+		Name:      it.Name,
+		Env:       it.Env,
+		Labels:    it.Labels,
+		Remark:    it.Remark,
+		Status:    it.Status,
+		CreatedAt: it.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+type ServiceListQuery struct {
+	ProjectID uint   `form:"project_id" binding:"required"`
+	ServerID  *uint  `form:"server_id"`
+	Keyword   string `form:"keyword"`
+	Page      int    `form:"page"`
+	PageSize  int    `form:"page_size"`
+}
+
 func (s *ProjectMgmtService) ListServices(ctx context.Context, q ServiceListQuery) (*pagination.Result[ServiceItem], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	list, total, err := s.serviceRepo.List(ctx, repository.ServiceListParams{

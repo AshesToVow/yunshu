@@ -977,7 +977,7 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-05-23
+            2026-06-12
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
@@ -988,7 +988,7 @@
 
       <!-- CONTENT_START -->
 <h1 id="yunshu-">Yunshu 后端架构重构实施报告</h1>
-<p><strong>最后更新</strong>: 2026-05-22<br />
+<p><strong>最后更新</strong>: 2026-06-11<br />
 <strong>状态</strong>: ✅ 主干已落地（<code>go build ./...</code> / <code>go test ./internal/... -short</code> 通过）<br />
 <strong>代码地图</strong>: <a href="CODEBASE-MAP.md">CODEBASE-MAP.md</a></p>
 <hr />
@@ -1057,6 +1057,30 @@
 <td>✅</td>
 <td>删除根目录 <code>alert_service_core.go</code> 等迁移残留</td>
 </tr>
+<tr>
+<td>10</td>
+<td>业务插件化</td>
+<td>✅</td>
+<td><code>internal/plugin</code> + <code>plugins.enabled</code>；<code>core/k8s/alert/project/cmdb/backup</code></td>
+</tr>
+<tr>
+<td>11</td>
+<td>CMDB 拆分</td>
+<td>✅</td>
+<td>服务器/云账号/终端 → <code>service/cmdb</code> + <code>register_cmdb_routes.go</code></td>
+</tr>
+<tr>
+<td>12</td>
+<td>菜单 catalog</td>
+<td>✅</td>
+<td><code>internal/menu/catalog.go</code> + <code>Sync</code>；<code>Tree()</code> 不再热路径维护</td>
+</tr>
+<tr>
+<td>13</td>
+<td>seed 优化</td>
+<td>✅</td>
+<td>事务、Permission 批量 upsert、Casbin <code>AddPolicies</code>、admin 密码不重复重置</td>
+</tr>
 </tbody>
 </table></div>
 <hr />
@@ -1064,12 +1088,17 @@
 <pre><code class="language-text">internal/service/
 ├── exports.go          # handler 用 service.Xxx 别名
 ├── alert/
+├── cmdb/               # 服务器资产（从 project 拆出）
 ├── k8s/eventforward/
 ├── project/
 ├── system/
 ├── logplatform/
 ├── mysqlbackup/
 └── overview/
+
+internal/menu/          # 内置菜单 catalog + seed 同步
+internal/plugin/        # 插件注册表
+internal/plugins/       # 各业务插件 init 注册
 </code></pre>
 <p>详见 <a href="backend-architecture-complete.md">backend-architecture-complete.md §3.3</a> 与 <a href="CODEBASE-MAP.md">CODEBASE-MAP.md</a>。</p>
 <hr />
@@ -1095,8 +1124,12 @@
 <td>MinIO / dictconfig 仍直用 <code>*gorm.DB</code></td>
 </tr>
 <tr>
-<td>部门事务</td>
-<td><code>DepartmentService</code> 部分经 <code>repo.DB()</code></td>
+<td>插件菜单与 Casbin 联动</td>
+<td>按 <code>plugins.enabled</code> 过滤侧栏；角色菜单授权待完善</td>
+</tr>
+<tr>
+<td>前端菜单 Context</td>
+<td>减少多处重复 <code>getMenuTree()</code></td>
 </tr>
 </tbody>
 </table></div>

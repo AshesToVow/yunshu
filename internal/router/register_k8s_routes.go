@@ -4,7 +4,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func registerK8sRoutes(api *gin.RouterGroup, d *routeDeps) {
+// RegisterK8sRoutes Kubernetes 集群与资源管理、K8s 权限策略、总览面板。
+func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
+	k8sPolicies := api.Group("/k8s-policies")
+	k8sPolicies.Use(d.authMiddleware, d.authorize, d.opAudit)
+	k8sPolicies.GET("/actions", d.k8sScopedPolicyHandler.Actions)
+	k8sPolicies.GET("/paths", d.k8sScopedPolicyHandler.Paths)
+	k8sPolicies.GET("", d.k8sScopedPolicyHandler.ListByRole)
+	k8sPolicies.GET("/cluster-auth-matrix", d.k8sScopedPolicyHandler.ClusterAuthMatrix)
+	k8sPolicies.GET("/user-cluster-auth", d.k8sScopedPolicyHandler.UserClusterAuth)
+	k8sPolicies.POST("/grant-preset", d.k8sScopedPolicyHandler.GrantPreset)
+	k8sPolicies.DELETE("/cluster-grants/:id", d.k8sScopedPolicyHandler.DeleteClusterGrant)
+	k8sPolicies.POST("/cluster-grants/batch-delete", d.k8sScopedPolicyHandler.DeleteClusterGrantsBatch)
+
+	k8sNsDeny := api.Group("/k8s-namespace-deny-rules")
+	k8sNsDeny.Use(d.authMiddleware, d.authorize, d.opAudit)
+	k8sNsDeny.GET("", d.k8sNamespaceDenyHandler.List)
+	k8sNsDeny.POST("", d.k8sNamespaceDenyHandler.Create)
+	k8sNsDeny.DELETE("/:id", d.k8sNamespaceDenyHandler.Delete)
+
+	k8sNsAllow := api.Group("/k8s-namespace-allow-rules")
+	k8sNsAllow.Use(d.authMiddleware, d.authorize, d.opAudit)
+	k8sNsAllow.GET("", d.k8sNamespaceAllowHandler.List)
+	k8sNsAllow.POST("", d.k8sNamespaceAllowHandler.Create)
+	k8sNsAllow.DELETE("/:id", d.k8sNamespaceAllowHandler.Delete)
+
 	// Kubernetes cluster management (Kom SDK)
 	clusters := api.Group("/clusters")
 	clusters.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
@@ -241,4 +265,8 @@ func registerK8sRoutes(api *gin.RouterGroup, d *routeDeps) {
 	serviceAccounts.POST("/apply", d.serviceAccountHandler.Apply)
 	serviceAccounts.DELETE("", d.serviceAccountHandler.Delete)
 
+	overview := api.Group("/overview")
+	overview.Use(d.authMiddleware, d.authorize, d.opAudit)
+	overview.GET("", d.overviewHandler.Get)
+	overview.GET("/trends", d.overviewHandler.Trends)
 }

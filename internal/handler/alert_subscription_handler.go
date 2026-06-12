@@ -34,7 +34,7 @@ func NewAlertSubscriptionHandler(svc *service.AlertSubscriptionService) *AlertSu
 // @Param enabled query bool false "是否启用"
 // @Param page query int false "页码，默认1"
 // @Param page_size query int false "每页数量，默认20"
-// @Success 200 {object} service.AlertSubscriptionListResponse
+// @Success 200 {object} response.Body "success"
 // @Router /api/v1/alerts/subscriptions [get]
 func (h *AlertSubscriptionHandler) ListNodes(c *gin.Context) {
 	var query service.AlertSubscriptionNodeListQuery
@@ -122,7 +122,7 @@ func (h *AlertSubscriptionHandler) UpdateNode(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "节点ID"
-// @Success 200 {object} gin.H
+// @Success 200 {object} response.Body "success"
 // @Router /api/v1/alerts/subscriptions/{id} [delete]
 func (h *AlertSubscriptionHandler) DeleteNode(c *gin.Context) {
 	ServeDelete(c, h.svc.DeleteNode, "")

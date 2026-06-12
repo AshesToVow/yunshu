@@ -114,7 +114,7 @@ export function JobsPage() {
       name: recordName,
       namespace,
       restart_policy: "Never",
-      container_name: recordName,
+      container_name: "",
       image: "",
       env_pairs: [{ key: "", value: "" }],
     }),
@@ -192,7 +192,7 @@ export function JobsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listJobs(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getJobDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyJob(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteJob(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteJob(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;

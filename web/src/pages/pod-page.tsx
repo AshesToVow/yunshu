@@ -5,9 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
+import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { formatDateTime } from "../utils/format";
 import { getClusters, listNamespaces, type ClusterItem, type NamespaceItem } from "../services/clusters";
+import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { PodCpuUsageBars, PodMemUsageBars, RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
+import type { K8sDeleteOptions } from "../services/service-factory";
 import { createPodByYAML, createPodSimple, deletePod, deletePodFile, downloadPodFile, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, readPodFile, restartPod, updatePodSimple, uploadPodFile, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
 import { getToken } from "../services/storage";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
@@ -33,6 +36,9 @@ export function PodPage() {
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [pods, setPods] = useState<PodItem[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PodItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [selected, setSelected] = useState<PodItem | null>(null);
   const [detail, setDetail] = useState<PodDetail | null>(null);
@@ -220,20 +226,36 @@ export function PodPage() {
     watchAbortRef.current?.abort();
     watchAbortRef.current = null;
     if (!watchLive || !clusterId || !namespace) return;
+    let cancelled = false;
     const ac = new AbortController();
     watchAbortRef.current = ac;
-    void streamK8sResourceWatch(
-      { cluster_id: clusterId, namespace, resource: "pods", timeout_seconds: 3600 },
-      () => {
-        void loadPods();
-      },
-      ac.signal,
-    ).catch((err: unknown) => {
-      if (ac.signal.aborted) return;
-      message.warning(extractApiErrorMessage(err, "Pod Watch 已断开"));
-      setWatchLive(false);
-    });
-    return () => ac.abort();
+
+    const runWatch = async () => {
+      while (!cancelled && !ac.signal.aborted) {
+        try {
+          await streamK8sResourceWatch(
+            { cluster_id: clusterId, namespace, resource: "pods", timeout_seconds: 3600 },
+            () => {
+              void loadPods();
+            },
+            ac.signal,
+          );
+        } catch (err: unknown) {
+          if (ac.signal.aborted || cancelled) return;
+          message.warning(extractApiErrorMessage(err, "Pod Watch 已断开"));
+          setWatchLive(false);
+          return;
+        }
+        if (ac.signal.aborted || cancelled) return;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    };
+
+    void runWatch();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
   }, [watchLive, clusterId, namespace, loadPods]);
 
   const namespaceOptions = useMemo(() => namespaces.map((n) => ({ label: n.name, value: n.name })), [namespaces]);
@@ -242,9 +264,14 @@ export function PodPage() {
     [clusters],
   );
 
-  async function handleDeletePod(record: PodItem) {
+  async function handleDeletePod(record: PodItem, deleteOpts?: K8sDeleteOptions) {
     if (!clusterId) return;
-    await deletePod({ cluster_id: clusterId, namespace: record.namespace, name: record.name });
+    await deletePod({
+      cluster_id: clusterId,
+      namespace: record.namespace,
+      name: record.name,
+      ...deleteOpts,
+    });
     message.success("Pod 已删除");
     await loadPods();
   }
@@ -436,6 +463,22 @@ export function PodPage() {
     execFitRef.current = fit;
 
     void (async () => {
+      let container: string | undefined;
+      if (detail?.namespace === selected.namespace && detail.name === selected.name) {
+        container = detail.containers?.[0]?.name;
+      } else {
+        try {
+          const d = await getPodDetail({
+            cluster_id: clusterId,
+            namespace: selected.namespace,
+            name: selected.name,
+          });
+          container = d.containers?.[0]?.name;
+        } catch {
+          // 后端会解析默认容器；此处失败时不阻塞 Exec 连接
+        }
+      }
+
       let ws: WebSocket;
       try {
         ws = await openAuthenticatedWebSocket(
@@ -444,6 +487,7 @@ export function PodPage() {
             cluster_id: clusterId,
             namespace: selected.namespace,
             name: selected.name,
+            ...(container ? { container } : {}),
           },
           "pod-exec",
         );
@@ -534,7 +578,7 @@ export function PodPage() {
       execTermRef.current = null;
       execFitRef.current = null;
     };
-  }, [execOpen, clusterId, selected?.namespace, selected?.name]);
+  }, [execOpen, clusterId, selected?.namespace, selected?.name, detail?.namespace, detail?.name, detail?.containers]);
 
   async function handleRestartPod(record: PodItem) {
     if (!clusterId) return;
@@ -740,7 +784,7 @@ export function PodPage() {
     setCreateOpen(true);
     simpleForm.setFieldsValue({
       name: d.name,
-      container_name: d.containers?.[0]?.name || d.name,
+      container_name: d.containers?.[0]?.name || "",
       image: d.containers?.[0]?.image || "",
       command: "",
       image_pull_policy: "IfNotPresent",
@@ -832,8 +876,18 @@ export function PodPage() {
   }
 
   return (
-    <div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+    <div className="page-stack">
+      <PageTelemetryHeader
+        label="[ K8S / PODS ]"
+        title="Pod 管理"
+        subtitle="跨集群 Pod 生命周期、诊断、日志与终端会话"
+        meta={[
+          `CLUSTER / ${clusterId || "NONE"}`,
+          `NS / ${namespace || "ALL"}`,
+          loading ? "SYNC / PENDING" : `ROWS / ${pods.length}`,
+        ]}
+      />
+      <div className="toolbar" style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
         <Space wrap>
         <Select
           placeholder="选择集群"
@@ -987,11 +1041,8 @@ export function PodPage() {
                       icon: <DeleteOutlined />,
                       label: "删除",
                       onClick: () => {
-                        Modal.confirm({
-                          title: "确认删除该 Pod 吗？",
-                          okType: "danger",
-                          onOk: () => handleDeletePod(record),
-                        });
+                        setDeleteTarget(record);
+                        setDeleteDialogOpen(true);
                       },
                     },
                   ];
@@ -2187,6 +2238,27 @@ export function PodPage() {
           ]}
         />
       </Drawer>
+
+      <K8sDeleteDialog
+        open={deleteDialogOpen}
+        resourceName={deleteTarget?.name ?? ""}
+        loading={deleteLoading}
+        onCancel={() => {
+          setDeleteDialogOpen(false);
+          setDeleteTarget(null);
+        }}
+        onConfirm={async (deleteOpts) => {
+          if (!deleteTarget) return;
+          setDeleteLoading(true);
+          try {
+            await handleDeletePod(deleteTarget, deleteOpts);
+            setDeleteDialogOpen(false);
+            setDeleteTarget(null);
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
+      />
     </div>
   );
 }

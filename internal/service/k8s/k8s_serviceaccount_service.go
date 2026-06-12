@@ -170,7 +170,7 @@ func (s *K8sServiceAccountService) Delete(ctx context.Context, req ServiceAccoun
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, serviceAccountGVK, req.Namespace, req.Name); err != nil {
+	if err := s.dyn.DeleteByGVK(ctx, k, serviceAccountGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

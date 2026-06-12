@@ -51,7 +51,7 @@ export function ServiceaccountsPage() {
         list: async ({ clusterId, namespace, keyword }) => await listServiceAccounts(clusterId, namespace ?? "default", keyword),
         detail: async ({ clusterId, namespace, name }) => await getServiceAccountDetail(clusterId, namespace ?? "default", name),
         apply: async ({ clusterId, manifest }) => await applyServiceAccount(clusterId, manifest),
-        remove: async ({ clusterId, namespace, name }) => await deleteServiceAccount(clusterId, namespace ?? "default", name),
+        remove: async (args) => await deleteServiceAccount(args.clusterId, args.namespace ?? "default", args.name, args),
       }}
       detailExtra={(detail) => (
         <Space direction="vertical" style={{ width: "100%" }} size={10}>

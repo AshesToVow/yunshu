@@ -54,7 +54,7 @@ export function HorizontalPodAutoscalersPage() {
           list: async ({ clusterId, namespace, keyword }) => await listHPA(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getHPADetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyHPA(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteHPA(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteHPA(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

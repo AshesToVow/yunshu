@@ -977,7 +977,7 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-05-23
+            2026-06-12
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
@@ -1401,8 +1401,8 @@ func ServePatch[Req any, Resp any](c *gin.Context, fn func(context.Context, uint
 </tr>
 <tr>
 <td>WebSocket</td>
-<td><a href="internal/handler/pod_exec_ws.go">pod_exec_ws.go</a>, <a href="internal/handler/project_terminal_ws.go">project_terminal_ws.go</a></td>
-<td>终端交互</td>
+<td><a href="internal/handler/pod_exec_ws.go">pod_exec_ws.go</a>, <a href="internal/handler/cmdb_handler.go">cmdb_handler.go</a></td>
+<td>Pod Exec / 服务器 SSH 终端</td>
 </tr>
 </tbody>
 </table></div>
@@ -1720,8 +1720,8 @@ m = g(r.sub, p.sub) &amp;&amp; r.obj == p.obj &amp;&amp; r.act == p.act
 <h5 id="449-websocket-auth--ws-authgointernalmiddlewarews-authgo">4.4.9 WebSocket Auth 中间件 (<a href="internal/middleware/ws_auth.go">ws_auth.go</a>)</h5>
 <ul>
 <li><strong>WebSocket 特殊认证</strong></li>
-<li>从 URL Query 提取 Token (浏览器无法设置 Header)</li>
-<li>复用 HTTP Auth 逻辑</li>
+<li>浏览器无法设置 Authorization Header；客户端先 <code>POST /api/v1/auth/ws-ticket</code> 换取短效一次性 ticket</li>
+<li>握手 URL 仅接受 <code>?ticket=&lt;uuid&gt;</code>，消费后校验 Redis 会话并注入用户上下文</li>
 </ul>
 <h3 id="45-">4.5 权限系统（三层鉴权）</h3>
 <h4 id="heading-6">三道闸门设计</h4>
@@ -2094,8 +2094,8 @@ VALUES (1, 'default', 'role', 'dev');
 <hr />
 <h2 id="6-api-">6. API 路由设计</h2>
 <h3 id="61-">6.1 路由分组结构</h3>
-<p>所有 API 统一前缀 <code>/api/v1</code>，按业务域分为三大路由组：</p>
-<h4 id="-register-platform-routesgointernalrouterregister-platform-routesgo">平台管理路由 (<a href="internal/router/register_platform_routes.go">register_platform_routes.go</a>)</h4>
+<aside class="callout callout-info"><svg class="callout-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info"/></svg><div class="callout-body"><p class="callout-title">说明</p><p><strong>2026-06 插件化</strong>：HTTP 路由不再由单一 <code>register_platform_routes.go</code> 注册，而由 <code>internal/router/plugin_bind.go</code> 按 <code>plugins.enabled</code> 调用 <code>RegisterCoreRoutes</code>、<code>RegisterK8sRoutes</code>、<code>RegisterAlertRoutes</code>、<code>RegisterProjectRoutes</code>、<code>RegisterCMDBRoutes</code>、<code>RegisterBackupRoutes</code>。下文树形结构为<strong>逻辑分组</strong>摘要。</p></div></aside>
+<p>所有 API 统一前缀 <code>/api/v1</code>，按业务域分为以下模块：</p>
 <pre><code>/api/v1
 ├── health                              # 健康检查
 ├── auth/                               # 认证模块

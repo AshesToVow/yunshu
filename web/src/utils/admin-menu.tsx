@@ -1,5 +1,6 @@
 import * as IconComponents from "@ant-design/icons";
 import type { MenuProps } from "antd";
+import type { TFunction } from "i18next";
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 import type { MenuItem } from "../services/menus";
@@ -13,6 +14,18 @@ function menuIconByName(name?: string): ReactNode {
   return <Cmp />;
 }
 
+function resolveMenuLabel(path: string | undefined, fallback: string, t?: TFunction): string {
+  if (!t) return fallback;
+  const p = path?.trim();
+  if (!p) return fallback;
+  return t(`menu.routes.${p}`, { defaultValue: fallback });
+}
+
+function resolveGroupLabel(key: string, fallback: string, t?: TFunction): string {
+  if (!t) return fallback;
+  return t(`menu.groups.${key}`, { defaultValue: fallback });
+}
+
 function filterVisible(menus: MenuItem[]): MenuItem[] {
   return menus
     .filter((m) => m.status === 1 && !m.hidden)
@@ -24,29 +37,30 @@ function filterVisible(menus: MenuItem[]): MenuItem[] {
 }
 
 /** 将后端菜单树转为 Ant Design Menu items（与 React Router 联动） */
-export function buildSiderMenuItems(menus: MenuItem[]): AntdMenuItem[] {
+export function buildSiderMenuItems(menus: MenuItem[], t?: TFunction): AntdMenuItem[] {
   const nodes = filterVisible(menus);
-  const items = nodes.map((m) => toAntdItem(m));
-  // 菜单以数据库为准，不在前端侧做“兜底注入”。
+  const items = nodes.map((m) => toAntdItem(m, t));
   return dedupeMenuByKey(items);
 }
 
-function toAntdItem(m: MenuItem): AntdMenuItem {
+function toAntdItem(m: MenuItem, t?: TFunction): AntdMenuItem {
   const icon = menuIconByName(m.icon);
-  const children = m.children?.length ? buildSiderMenuItems(m.children) : undefined;
+  const children = m.children?.length ? buildSiderMenuItems(m.children, t) : undefined;
   if (children?.length) {
+    const key = m.path?.trim() ? m.path : `menu-${m.id}`;
     return {
-      key: m.path?.trim() ? m.path : `menu-${m.id}`,
+      key,
       icon,
-      label: m.name,
+      label: resolveGroupLabel(key, m.name, t),
       children,
     };
   }
   const to = m.path?.trim() ?? "/";
+  const label = resolveMenuLabel(to, m.name, t);
   return {
     key: to,
     icon,
-    label: <Link to={to}>{m.name}</Link>,
+    label: <Link to={to}>{label}</Link>,
   };
 }
 

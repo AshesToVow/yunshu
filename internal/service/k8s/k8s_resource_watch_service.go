@@ -201,6 +201,11 @@ func (s *K8sRuntimeService) StreamResourceWatch(ctx context.Context, cfg *rest.C
 			}
 		case ev, ok := <-watcher.ResultChan():
 			if !ok {
+				_ = writeFrame("error", map[string]any{
+					"cluster_id": q.ClusterID,
+					"reason":     "watch_closed",
+					"terminal":   true,
+				})
 				return nil
 			}
 			if ev.Type == watch.Error {
@@ -209,8 +214,9 @@ func (s *K8sRuntimeService) StreamResourceWatch(ctx context.Context, cfg *rest.C
 					"cluster_id": q.ClusterID,
 					"reason":     "watch_error",
 					"status":     st,
+					"terminal":   true,
 				})
-				continue
+				return nil
 			}
 			u, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(ev.Object)
 			if convErr != nil {

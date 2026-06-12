@@ -55,6 +55,7 @@ type routeServices struct {
 	K8sServiceAccount   *service.K8sServiceAccountService
 	Overview            *service.OverviewService
 	ProjectMgmt         *service.ProjectMgmtService
+	CMDB                *service.CMDBService
 	MysqlBackup         *service.MysqlBackupService
 	LogAgent            *service.LogAgentService
 	AgentDiscovery      *service.AgentDiscoveryService
@@ -135,7 +136,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 
 	k8sRuntimeService := service.NewK8sRuntimeService(clusterRepo)
 	clusterService := service.NewK8sClusterService(clusterRepo, dictEntryRepo, k8sRuntimeService, k8sNsDenyRepo, k8sNsAllowRepo, projectMemberRepo)
-	podService := service.NewK8sPodService(k8sRuntimeService)
+	podService := service.NewK8sPodService(k8sRuntimeService, k8sNsDenyRepo, k8sNsAllowRepo)
 	namespaceService := service.NewK8sNamespaceService(k8sRuntimeService, k8sNsDenyRepo, k8sNsAllowRepo)
 	nodeService := service.NewK8sNodeService(k8sRuntimeService)
 	workloadService := service.NewK8sWorkloadService(k8sRuntimeService)
@@ -146,20 +147,22 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 	networkPolicyService := service.NewK8sNetworkPolicyService(k8sRuntimeService)
 	k8sDiscoveryService := service.NewK8sDiscoveryService(k8sRuntimeService)
 	k8sHPAService := service.NewK8sHPAService(k8sRuntimeService)
-	eventService := service.NewK8sEventService(k8sRuntimeService)
+	eventService := service.NewK8sEventService(k8sRuntimeService, k8sNsDenyRepo, k8sNsAllowRepo)
 	crdService := service.NewK8sCRDService(k8sRuntimeService)
 	crService := service.NewK8sCRService(k8sRuntimeService)
 	rbacService := service.NewK8sRBACService(k8sRuntimeService)
 	serviceAccountService := service.NewK8sServiceAccountService(k8sRuntimeService)
 	overviewService := service.NewOverviewService(repos.Overview, k8sRuntimeService, app.Redis, projectMemberRepo, k8sClusterAccessRepo)
 
-	projectMgmtService, err := service.NewProjectMgmtService(
-		projectRepo, repos.Server, repos.ServerGroup, repos.CloudAccount, repos.Service,
-		repos.LogSource, projectMemberRepo, userRepo, departmentRepo, app.Config.Security.EncryptionKey,
+	cmdbService, err := service.NewCMDBService(
+		repos.Server, repos.ServerGroup, repos.CloudAccount, app.Config.Security.EncryptionKey,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("project mgmt service: %w", err)
+		return nil, fmt.Errorf("cmdb service: %w", err)
 	}
+	projectMgmtService := service.NewProjectMgmtService(
+		projectRepo, repos.Server, repos.ServerGroup, repos.Service, repos.LogSource, projectMemberRepo, userRepo, departmentRepo,
+	)
 	mysqlBackupSvc, err := service.NewMysqlBackupService(repos.MysqlBackup, repos.Server, projectRepo, app.DB, app.Config.Security.EncryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("mysql backup service: %w", err)
@@ -168,7 +171,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 	agentDiscoveryService := service.NewAgentDiscoveryService(repos.AgentDiscovery, repos.LogAgent, repos.Server, repos.LogSource)
 	alertReceiverGroupSvc := service.NewAlertReceiverGroupService(repos.AlertReceiverGroup, alertReceiverGroupCache)
 	k8sEventForwardAdminSvc := service.NewK8sEventForwardAdminService(repos.K8sEventForward)
-	k8sSearchSvc := service.NewK8sSearchService(k8sRuntimeService, clusterRepo, projectMemberRepo, k8sClusterAccessRepo)
+	k8sSearchSvc := service.NewK8sSearchService(k8sRuntimeService, clusterRepo, projectMemberRepo, k8sClusterAccessRepo, k8sNsDenyRepo, k8sNsAllowRepo)
 
 	return &routeServices{
 		LoginLog:             loginLogSvc,
@@ -214,6 +217,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 		K8sServiceAccount:    serviceAccountService,
 		Overview:             overviewService,
 		ProjectMgmt:          projectMgmtService,
+		CMDB:                 cmdbService,
 		MysqlBackup:          mysqlBackupSvc,
 		LogAgent:             logAgentService,
 		AgentDiscovery:       agentDiscoveryService,

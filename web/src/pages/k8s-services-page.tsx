@@ -120,7 +120,7 @@ export function K8sServicesPage() {
         list: async ({ clusterId, namespace, keyword }) => await listK8sServices(clusterId, namespace ?? "default", keyword),
         detail: async ({ clusterId, namespace, name }) => await getK8sServiceDetail(clusterId, namespace ?? "default", name),
         apply: async ({ clusterId, manifest }) => await applyK8sService(clusterId, manifest),
-        remove: async ({ clusterId, namespace, name }) => await deleteK8sService(clusterId, namespace ?? "default", name),
+        remove: async (args) => await deleteK8sService(args.clusterId, args.namespace ?? "default", args.name, args),
       }}
       createTemplate={({ namespace }) => `apiVersion: v1
 kind: Service

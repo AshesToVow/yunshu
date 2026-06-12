@@ -1,5 +1,7 @@
 # 菜单需求：服务器管理（`/project-servers`）
 
+> **Catalog**：`internal/menu/catalog.go` · Component: `project-servers-page` · Plugin: `project` + **`cmdb`**（API 由 CMDB 插件注册）
+
 ## 1. 定位
 
 - **路由**：`/project-servers`，`project-servers-page`。  
@@ -22,4 +24,4 @@
 ## 4. 注意事项
 
 - 凭据使用 `security.encryption_key` 加密存储。  
-- **服务器终端**见 `server-console` 与 WebSocket 文档。
+- **服务器 Web 终端**：`GET /api/v1/projects/:id/servers/:serverId/terminal/ws`（`cmdb_handler`，需 WS ticket；CMDB 只读成员禁止）。

@@ -87,6 +87,7 @@ import { useDictOptions } from "../hooks/use-dict-options";
 import type { UserUpdatePayload } from "../types/api";
 import { getUser, updateUser } from "../services/users";
 import { formatDateTime } from "../utils/format";
+import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { AlertInhibitionPanel } from "./alert-inhibition-panel";
 import type { AlertEventCategory } from "../utils/alert-event-reasons";
 
@@ -2182,16 +2183,18 @@ export function AlertMonitorPlatformPage() {
   }
 
   return (
-    <Card
-      className="table-card"
-      title={
-        <Space size={8}>
-          <span>告警监控平台</span>
-          {projectContextId ? <Tag color="default">当前项目：{activeProjectName}</Tag> : null}
-        </Space>
-      }
-      loading={loading}
-    >
+    <div className="page-stack">
+      <PageTelemetryHeader
+        label="[ ALERT / MONITOR ]"
+        title="告警监控平台"
+        subtitle="数据源、规则、事件、抑制与 PromQL 查询统一管理"
+        meta={[
+          projectContextId ? `PROJECT / ${activeProjectName}` : "PROJECT / ALL",
+          `TAB / ${tab.toUpperCase()}`,
+          loading ? "SYNC / PENDING" : "SYNC / OK",
+        ]}
+      />
+    <Card className="table-card" loading={loading}>
       <Space style={{ marginBottom: 12 }} wrap>
         <Typography.Text type="secondary">全局项目上下文</Typography.Text>
         <Select
@@ -3403,5 +3406,6 @@ export function AlertMonitorPlatformPage() {
         </Form>
       </Drawer>
     </Card>
+    </div>
   );
 }

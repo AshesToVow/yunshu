@@ -16,16 +16,435 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/v1/auth/captcha": {
+        "/api/v1/alerts/inhibition-rules": {
+            "get": {
+                "description": "分页查询抑制规则。规则在入站 firing 时生效：源告警匹配后写入 Redis，目标告警匹配且 equal 标签一致则被抑制。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-inhibition"
+                ],
+                "summary": "查询告警抑制规则列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "名称/描述关键词",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否启用",
+                        "name": "enabled",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
             "post": {
-                "description": "Generate a 6-digit login captcha, store it in Redis and return it for the current login flow.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-inhibition"
+                ],
+                "summary": "创建告警抑制规则",
+                "parameters": [
+                    {
+                        "description": "规则",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.AlertInhibitionRuleUpsertRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/alerts/inhibition-rules/refresh-cache": {
+            "post": {
+                "tags": [
+                    "alert-inhibition"
+                ],
+                "summary": "刷新抑制规则内存缓存",
+                "responses": {}
+            }
+        },
+        "/api/v1/alerts/inhibition-rules/{id}": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-inhibition"
+                ],
+                "summary": "更新告警抑制规则",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "规则 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "规则",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.AlertInhibitionRuleUpsertRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "alert-inhibition"
+                ],
+                "summary": "删除告警抑制规则",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "规则 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/alerts/subscriptions": {
+            "get": {
+                "description": "分页查询订阅树节点，支持按项目、父节点、关键词过滤",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-subscription"
+                ],
+                "summary": "查询订阅树节点列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "项目ID",
+                        "name": "project_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "父节点ID，0表示根节点",
+                        "name": "parent_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否启用",
+                        "name": "enabled",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，默认1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认20",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建新的订阅树节点",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-subscription"
+                ],
+                "summary": "创建订阅树节点",
+                "parameters": [
+                    {
+                        "description": "节点信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.AlertSubscriptionNodeUpsertRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.AlertSubscriptionNode"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/alerts/subscriptions/tree": {
+            "get": {
+                "description": "获取指定项目的完整订阅树结构（包含所有层级）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-subscription"
+                ],
+                "summary": "获取完整订阅树",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "项目ID",
+                        "name": "project_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.AlertSubscriptionNode"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/alerts/subscriptions/{id}": {
+            "put": {
+                "description": "更新指定订阅树节点",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-subscription"
+                ],
+                "summary": "更新订阅树节点",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "节点ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "节点信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.AlertSubscriptionNodeUpsertRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.AlertSubscriptionNode"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "删除指定订阅树节点（有子节点时无法删除）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-subscription"
+                ],
+                "summary": "删除订阅树节点",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "节点ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/alerts/webhook/alertmanager": {
+            "post": {
+                "description": "Ingest Alertmanager notifications. Auth via header X-Alert-Token or Authorization Bearer (not query token).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AlertsWebhook"
+                ],
+                "summary": "Receive Alertmanager webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Webhook token (preferred)",
+                        "name": "X-Alert-Token",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Alertmanager payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.AlertManagerPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid webhook token",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/email-login": {
+            "post": {
+                "description": "Login with email and a 6-digit verification code delivered through SMTP and cached in Redis.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Generate login captcha",
+                "summary": "Login with email verification code",
+                "parameters": [
+                    {
+                        "description": "Email verification login request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.EmailLoginRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "success",
@@ -38,15 +457,33 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/service.LoginCaptchaResponse"
+                                            "$ref": "#/definitions/service.LoginResponse"
                                         }
                                     }
                                 }
                             ]
                         }
                     },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "无访问权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -56,7 +493,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/login": {
             "post": {
-                "description": "Login with username, password and a Redis-backed 6-digit captcha, then return a JWT access token.",
+                "description": "Login with username, password and verification code. This is kept as a fallback entry for administrators.",
                 "consumes": [
                     "application/json"
                 ],
@@ -66,10 +503,10 @@ const docTemplate = `{
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Login",
+                "summary": "Login with password",
                 "parameters": [
                     {
-                        "description": "Login request",
+                        "description": "Password login request",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -104,19 +541,83 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/login-code": {
+            "post": {
+                "description": "Send an email verification code to the user's registered email address for login.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Send login verification code by username",
+                "parameters": [
+                    {
+                        "description": "Send login code by username request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.SendLoginCodeByUsernameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.SendEmailCodeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -159,13 +660,13 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -208,36 +709,53 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "user not found",
+                        "description": "用户不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     }
                 }
-            }
-        },
-        "/api/v1/health": {
-            "get": {
-                "description": "Return service name and current environment.",
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "更新当前登录用户的昵称和邮箱。",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "System"
+                    "Auth"
                 ],
-                "summary": "Health check",
+                "summary": "更新当前用户资料",
+                "parameters": [
+                    {
+                        "description": "更新资料请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.UpdateProfileRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "success",
@@ -250,7 +768,846 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/handler.HealthData"
+                                            "$ref": "#/definitions/service.UserDetailResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已失效",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "邮箱已存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/password": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "使用旧密码校验后修改当前登录用户密码。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "修改当前用户密码",
+                "parameters": [
+                    {
+                        "description": "修改密码请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.ChangePasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.MessageData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已失效",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "无访问权限（仅管理员角色可在个人中心修改自己的密码）",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/password-login-code": {
+            "post": {
+                "description": "Generate a 6-digit verification code for password login and cache it in Redis. The code is returned in the response for demonstration purposes in development. In production, it would be sent via email or SMS.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Send password login verification code",
+                "parameters": [
+                    {
+                        "description": "Send password login code request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.SendPasswordLoginCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.SendPasswordLoginCodeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "cooldown in effect",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/register": {
+            "post": {
+                "description": "Register a new user by submitting username, email, password and the verification code sent by email.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Register with email verification code",
+                "parameters": [
+                    {
+                        "description": "Email registration request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RegisterResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/verification-code": {
+            "post": {
+                "description": "Send an email verification code for login or registration and cache it in Redis.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Send verification code",
+                "parameters": [
+                    {
+                        "description": "Send email code request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.SendEmailCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.SendEmailCodeResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "409": {
+                        "description": "email already registered",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/ws-ticket": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Exchange current Bearer session for a short-lived, single-use ticket used in WebSocket query (avoids JWT in URL).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Issue one-time WebSocket handshake ticket",
+                "parameters": [
+                    {
+                        "description": "optional scope for audit",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/service.CreateWSTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.WSTicketResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已失效",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/clusters/{id}/api-resources": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Discovery API resource list; optional query namespaced=true|false filters namespaced resources.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Clusters"
+                ],
+                "summary": "List cluster API resources",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Cluster ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter: true | false",
+                        "name": "namespaced",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已失效",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "无访问权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/clusters/{id}/component-statuses": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns Kubernetes component health (etcd, scheduler, controller-manager, etc.).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Clusters"
+                ],
+                "summary": "List cluster component statuses",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Cluster ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已失效",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "无访问权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/login-logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "LoginLog"
+                ],
+                "summary": "List login logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username filter",
+                        "name": "username",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "1 success 0 fail",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "password or email",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/login-logs/delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "LoginLog"
+                ],
+                "summary": "Batch delete login logs",
+                "parameters": [
+                    {
+                        "description": "IDs",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.idsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.MessageData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/login-logs/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "LoginLog"
+                ],
+                "summary": "Export login logs to Excel",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username filter",
+                        "name": "username",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "1 success 0 fail",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "password or email",
+                        "name": "source",
+                        "in": "query"
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/api/v1/login-logs/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "LoginLog"
+                ],
+                "summary": "Delete login log",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Log ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.MessageData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/operation-logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OperationLog"
+                ],
+                "summary": "List operation logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "HTTP method",
+                        "name": "method",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Path contains",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "HTTP status",
+                        "name": "status_code",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/operation-logs/delete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OperationLog"
+                ],
+                "summary": "Batch delete operation logs",
+                "parameters": [
+                    {
+                        "description": "IDs",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.idsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.MessageData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/operation-logs/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "OperationLog"
+                ],
+                "summary": "Export operation logs to Excel",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "HTTP method",
+                        "name": "method",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Path contains",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "HTTP status",
+                        "name": "status_code",
+                        "in": "query"
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/api/v1/operation-logs/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OperationLog"
+                ],
+                "summary": "Delete operation log",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Log ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Body"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/handler.MessageData"
                                         }
                                     }
                                 }
@@ -293,6 +1650,18 @@ const docTemplate = `{
                         "description": "Page size",
                         "name": "page_size",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "K8s scope filter: empty=all, on=enabled only, off=disabled only",
+                        "name": "k8s_scope",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Cluster API filter: empty=all, on=routes under K8sScopeAuthorize path prefixes only",
+                        "name": "k8s_related",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -321,19 +1690,19 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -394,19 +1763,19 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -464,25 +1833,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "permission not found",
+                        "description": "权限不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -550,25 +1919,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "permission not found",
+                        "description": "权限不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -624,30 +1993,121 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "permission not found",
+                        "description": "权限不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     }
                 }
+            }
+        },
+        "/api/v1/plugins": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns registered plugins and enabled names from config.plugins.enabled.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Plugins"
+                ],
+                "summary": "List business plugins",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或登录已失效",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    },
+                    "403": {
+                        "description": "无访问权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Body"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/pods/exec/ws": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "WebSocket shell into a pod. Requires cluster_id, namespace, name query params. Obtain ticket via POST /api/v1/auth/ws-ticket first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Pods"
+                ],
+                "summary": "Interactive pod exec (WebSocket)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Cluster ID",
+                        "name": "cluster_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pod namespace",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pod name",
+                        "name": "name",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Container name",
+                        "name": "container",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "One-time WebSocket ticket",
+                        "name": "ticket",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {}
             }
         },
         "/api/v1/policies": {
@@ -688,19 +2148,19 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -761,13 +2221,13 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -779,7 +2239,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -840,13 +2300,13 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -858,12 +2318,53 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     }
                 }
+            }
+        },
+        "/api/v1/projects/{id}/servers/{serverId}/terminal/ws": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "WebSocket upgrade for project server SSH. Obtain ticket via POST /api/v1/auth/ws-ticket first, then pass ticket= in query string.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CMDB"
+                ],
+                "summary": "Interactive SSH terminal (WebSocket)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Project ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Server ID",
+                        "name": "serverId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "One-time WebSocket ticket",
+                        "name": "ticket",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {}
             }
         },
         "/api/v1/roles": {
@@ -927,19 +2428,19 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1000,19 +2501,19 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1070,25 +2571,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "role not found",
+                        "description": "角色不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1156,25 +2657,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "role not found",
+                        "description": "角色不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1230,25 +2731,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "role not found",
+                        "description": "角色不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1317,19 +2818,19 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1390,24 +2891,87 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     }
                 }
+            }
+        },
+        "/api/v1/users/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Export users to Excel",
+                "responses": {}
+            }
+        },
+        "/api/v1/users/import": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Import users from Excel",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Excel file",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/api/v1/users/import-template": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Download user import template",
+                "responses": {}
             }
         },
         "/api/v1/users/{id}": {
@@ -1460,25 +3024,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "user not found",
+                        "description": "用户不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1546,25 +3110,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "user not found",
+                        "description": "用户不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1620,25 +3184,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "user not found",
+                        "description": "用户不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1708,25 +3272,25 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "unauthorized",
+                        "description": "未登录或登录已失效",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "403": {
-                        "description": "forbidden",
+                        "description": "无访问权限",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "404": {
-                        "description": "user not found",
+                        "description": "用户不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
                     },
                     "500": {
-                        "description": "internal server error",
+                        "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Body"
                         }
@@ -1736,16 +3300,35 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "handler.HealthData": {
+        "alert.AlertManagerAlert": {
             "type": "object",
             "properties": {
-                "env": {
-                    "type": "string",
-                    "example": "dev"
+                "annotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
-                "name": {
-                    "type": "string",
-                    "example": "yunshu-cmdb"
+                "endsAt": {
+                    "type": "string"
+                },
+                "fingerprint": {
+                    "type": "string"
+                },
+                "generatorURL": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "startsAt": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
                 }
             }
         },
@@ -1827,6 +3410,110 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.idsRequest": {
+            "type": "object",
+            "required": [
+                "ids"
+            ],
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "model.AlertSubscriptionNode": {
+            "type": "object",
+            "properties": {
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.AlertSubscriptionNode"
+                    }
+                },
+                "code": {
+                    "type": "string"
+                },
+                "continue": {
+                    "description": "路由行为",
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "level": {
+                    "type": "integer"
+                },
+                "match_labels": {
+                    "description": "非数据库字段",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "match_labels_json": {
+                    "description": "匹配条件（与父节点条件AND组合）",
+                    "type": "string"
+                },
+                "match_regex": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "match_regex_json": {
+                    "type": "string"
+                },
+                "match_severity": {
+                    "type": "string"
+                },
+                "name": {
+                    "description": "节点名称与标识",
+                    "type": "string"
+                },
+                "notify_resolved": {
+                    "type": "boolean"
+                },
+                "parent": {
+                    "$ref": "#/definitions/model.AlertSubscriptionNode"
+                },
+                "parent_id": {
+                    "description": "树形结构",
+                    "type": "integer"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "integer"
+                },
+                "receiver_group_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "receiver_group_ids_json": {
+                    "description": "通知配置",
+                    "type": "string"
+                },
+                "silence_seconds": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "response.Body": {
             "type": "object",
             "properties": {
@@ -1839,33 +3526,197 @@ const docTemplate = `{
                 }
             }
         },
-        "service.LoginCaptchaResponse": {
+        "service.AlertInhibitionRuleUpsertRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "duration_seconds": {
+                    "type": "integer"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "equal_labels_json": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "integer"
+                },
+                "source_match_labels_json": {
+                    "type": "string"
+                },
+                "source_match_regex_json": {
+                    "type": "string"
+                },
+                "target_match_labels_json": {
+                    "type": "string"
+                },
+                "target_match_regex_json": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.AlertManagerPayload": {
             "type": "object",
             "properties": {
-                "captcha_code": {
+                "alerts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/alert.AlertManagerAlert"
+                    }
+                },
+                "commonAnnotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "commonLabels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "externalURL": {
                     "type": "string"
                 },
-                "captcha_id": {
+                "groupLabels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "receiver": {
                     "type": "string"
                 },
-                "expires_in": {
+                "status": {
+                    "type": "string"
+                },
+                "truncatedAlerts": {
                     "type": "integer"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.AlertSubscriptionNodeUpsertRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "project_id"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "continue": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "match_labels_json": {
+                    "type": "string"
+                },
+                "match_regex_json": {
+                    "type": "string"
+                },
+                "match_severity": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "notify_resolved": {
+                    "type": "boolean"
+                },
+                "parent_id": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "integer"
+                },
+                "receiver_group_ids_json": {
+                    "type": "string"
+                },
+                "silence_seconds": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.ChangePasswordRequest": {
+            "type": "object",
+            "required": [
+                "new_password",
+                "old_password"
+            ],
+            "properties": {
+                "new_password": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 6
+                },
+                "old_password": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 6
+                }
+            }
+        },
+        "service.CreateWSTicketRequest": {
+            "type": "object",
+            "properties": {
+                "scope": {
+                    "type": "string",
+                    "maxLength": 32
+                }
+            }
+        },
+        "service.EmailLoginRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "email"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 128
                 }
             }
         },
         "service.LoginRequest": {
             "type": "object",
             "required": [
-                "captcha_code",
-                "captcha_id",
+                "captcha_key",
+                "code",
                 "password",
                 "username"
             ],
             "properties": {
-                "captcha_code": {
+                "captcha_key": {
                     "type": "string"
                 },
-                "captcha_id": {
+                "code": {
                     "type": "string"
                 },
                 "password": {
@@ -1886,7 +3737,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user": {
-                    "$ref": "#/definitions/service.UserDetailResponse"
+                    "$ref": "#/definitions/system.UserDetailResponse"
                 }
             }
         },
@@ -1905,6 +3756,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string",
                     "maxLength": 255
+                },
+                "k8s_scope_enabled": {
+                    "type": "boolean"
                 },
                 "name": {
                     "type": "string",
@@ -1928,6 +3782,9 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "k8s_scope_enabled": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -1946,6 +3803,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string",
                     "maxLength": 255
+                },
+                "k8s_scope_enabled": {
+                    "type": "boolean"
                 },
                 "name": {
                     "type": "string",
@@ -1998,6 +3858,50 @@ const docTemplate = `{
                 }
             }
         },
+        "service.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "email",
+                "nickname",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "nickname": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 6
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 3
+                }
+            }
+        },
+        "service.RegisterResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/system.UserDetailResponse"
+                }
+            }
+        },
         "service.RoleCreateRequest": {
             "type": "object",
             "required": [
@@ -2028,6 +3932,9 @@ const docTemplate = `{
                 "code": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
                 "description": {
                     "type": "string"
                 },
@@ -2039,6 +3946,9 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -2062,6 +3972,102 @@ const docTemplate = `{
                 }
             }
         },
+        "service.SendEmailCodeRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "scene"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "scene": {
+                    "type": "string",
+                    "enum": [
+                        "login",
+                        "register"
+                    ]
+                }
+            }
+        },
+        "service.SendEmailCodeResponse": {
+            "type": "object",
+            "properties": {
+                "cooldown_in": {
+                    "type": "integer"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "scene": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.SendLoginCodeByUsernameRequest": {
+            "type": "object",
+            "required": [
+                "username"
+            ],
+            "properties": {
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.SendPasswordLoginCodeRequest": {
+            "type": "object",
+            "required": [
+                "username"
+            ],
+            "properties": {
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.SendPasswordLoginCodeResponse": {
+            "type": "object",
+            "properties": {
+                "captcha_key": {
+                    "type": "string"
+                },
+                "cooldown_in": {
+                    "type": "integer"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.UpdateProfileRequest": {
+            "type": "object",
+            "required": [
+                "nickname"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "nickname": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 20
+                }
+            }
+        },
         "service.UserAssignRolesRequest": {
             "type": "object",
             "properties": {
@@ -2076,11 +4082,19 @@ const docTemplate = `{
         "service.UserCreateRequest": {
             "type": "object",
             "required": [
+                "email",
                 "nickname",
                 "password",
                 "username"
             ],
             "properties": {
+                "department_id": {
+                    "type": "integer"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 128
+                },
                 "nickname": {
                     "type": "string",
                     "maxLength": 128
@@ -2089,6 +4103,10 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 64,
                     "minLength": 6
+                },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 20
                 },
                 "role_ids": {
                     "type": "array",
@@ -2112,16 +4130,34 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "department_id": {
+                    "type": "integer"
+                },
+                "department_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/system.UserGroupBrief"
+                    }
+                },
                 "id": {
                     "type": "integer"
                 },
                 "nickname": {
                     "type": "string"
                 },
+                "phone": {
+                    "type": "string"
+                },
                 "roles": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/service.RoleItem"
+                        "$ref": "#/definitions/system.RoleItem"
                     }
                 },
                 "status": {
@@ -2138,6 +4174,13 @@ const docTemplate = `{
         "service.UserUpdateRequest": {
             "type": "object",
             "properties": {
+                "department_id": {
+                    "type": "integer"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 128
+                },
                 "nickname": {
                     "type": "string",
                     "maxLength": 128
@@ -2147,8 +4190,110 @@ const docTemplate = `{
                     "maxLength": 64,
                     "minLength": 6
                 },
+                "phone": {
+                    "type": "string",
+                    "maxLength": 20
+                },
                 "status": {
                     "type": "integer"
+                }
+            }
+        },
+        "service.WSTicketResponse": {
+            "type": "object",
+            "properties": {
+                "expires_in": {
+                    "type": "integer"
+                },
+                "ticket": {
+                    "type": "string"
+                }
+            }
+        },
+        "system.RoleItem": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "system.UserDetailResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "type": "integer"
+                },
+                "department_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/system.UserGroupBrief"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/system.RoleItem"
+                    }
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "system.UserGroupBrief": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         }
@@ -2170,7 +4315,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
 	Title:            "YunShu CMDB API",
-	Description:      "YunShu CMDB is an operations CMDB console built with Gin, MySQL, Redis, Casbin, Cobra and slog.\nCall the captcha endpoint first, then login with username, password and the 6-digit captcha. Put `Bearer <token>` into the Authorization header afterwards.",
+	Description:      "YunShu CMDB is an operations CMDB console built with Gin, MySQL, Redis, SMTP mail delivery, Casbin, Cobra and slog.\nRequest an email verification code first, then login with email code or register a new account by email. Username/password login remains available as an admin fallback.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 }

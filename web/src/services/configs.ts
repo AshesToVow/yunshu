@@ -1,4 +1,5 @@
 import { getData, http } from "./http";
+import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export interface ConfigMapItem {
   name: string;
@@ -30,8 +31,10 @@ export function getConfigMapDetail(clusterId: number, namespace: string, name: s
 export function applyConfigMap(clusterId: number, manifest: string) {
   return getData<boolean>(http.post("/configmaps/apply", { cluster_id: clusterId, manifest }));
 }
-export function deleteConfigMap(clusterId: number, namespace: string, name: string) {
-  return getData<boolean>(http.delete("/configmaps", { params: { cluster_id: clusterId, namespace, name } }));
+export function deleteConfigMap(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return getData<boolean>(
+    http.delete("/configmaps", { params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) } }),
+  );
 }
 
 export function listSecrets(clusterId: number, namespace: string, keyword?: string) {
@@ -43,7 +46,9 @@ export function getSecretDetail(clusterId: number, namespace: string, name: stri
 export function applySecret(clusterId: number, manifest: string) {
   return getData<boolean>(http.post("/secrets/apply", { cluster_id: clusterId, manifest }));
 }
-export function deleteSecret(clusterId: number, namespace: string, name: string) {
-  return getData<boolean>(http.delete("/secrets", { params: { cluster_id: clusterId, namespace, name } }));
+export function deleteSecret(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return getData<boolean>(
+    http.delete("/secrets", { params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) } }),
+  );
 }
 

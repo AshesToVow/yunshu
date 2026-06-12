@@ -11,7 +11,7 @@ import (
 
 	kom "github.com/weibaohui/kom/kom"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -26,16 +26,38 @@ func NewDynamicResourceService(runtime *K8sRuntimeService) *DynamicResourceServi
 	return &DynamicResourceService{runtime: runtime}
 }
 
+// gvkClusterScoped 常见集群级 GVK；空 namespace 时不应调用 AllNamespace。
+func gvkClusterScoped(gvk schema.GroupVersionKind) bool {
+	switch strings.TrimSpace(gvk.Kind) {
+	case "Namespace", "Node", "PersistentVolume", "StorageClass",
+		"ClusterRole", "ClusterRoleBinding", "CustomResourceDefinition",
+		"IngressClass", "NodeMetrics", "ComponentStatus", "PriorityClass",
+		"RuntimeClass", "CSIDriver", "CSINode", "VolumeAttachment",
+		"MutatingWebhookConfiguration", "ValidatingWebhookConfiguration",
+		"APIService", "PodSecurityPolicy":
+		return true
+	default:
+		return false
+	}
+}
+
+func applyListNamespaceScope(q *kom.Kubectl, gvk schema.GroupVersionKind, namespace string) *kom.Kubectl {
+	ns := strings.TrimSpace(namespace)
+	if ns != "" {
+		return q.Namespace(ns)
+	}
+	if !gvkClusterScoped(gvk) {
+		return q.AllNamespace()
+	}
+	return q
+}
+
 // ListByGVK 查询列表相关的业务逻辑。
 func (s *DynamicResourceService) ListByGVK(ctx context.Context, k *kom.Kubectl, gvk schema.GroupVersionKind, namespace string) ([]unstructured.Unstructured, error) {
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(gvk)
 	var list []unstructured.Unstructured
-	q := k.WithContext(ctx).Resource(u)
-	ns := strings.TrimSpace(namespace)
-	if ns != "" {
-		q = q.Namespace(ns)
-	}
+	q := applyListNamespaceScope(k.WithContext(ctx).Resource(u), gvk, namespace)
 	if err := q.List(&list).Error; err != nil {
 		return nil, err
 	}
@@ -47,11 +69,7 @@ func (s *DynamicResourceService) ListByGVKWithSelector(ctx context.Context, k *k
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(gvk)
 	var list []unstructured.Unstructured
-	q := k.WithContext(ctx).Resource(u)
-	ns := strings.TrimSpace(namespace)
-	if ns != "" {
-		q = q.Namespace(ns)
-	}
+	q := applyListNamespaceScope(k.WithContext(ctx).Resource(u), gvk, namespace)
 	if ls := strings.TrimSpace(labelSelector); ls != "" {
 		q = q.WithLabelSelector(ls)
 	}
@@ -77,24 +95,45 @@ func (s *DynamicResourceService) GetByGVK(ctx context.Context, k *kom.Kubectl, g
 }
 
 // DeleteByGVK 删除相关的业务逻辑。
-func (s *DynamicResourceService) DeleteByGVK(ctx context.Context, k *kom.Kubectl, gvk schema.GroupVersionKind, namespace, name string) error {
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(gvk)
-	q := k.WithContext(ctx).Resource(u).Name(strings.TrimSpace(name))
-	ns := strings.TrimSpace(namespace)
-	if ns != "" {
-		q = q.Namespace(ns)
+func (s *DynamicResourceService) DeleteByGVK(ctx context.Context, k *kom.Kubectl, gvk schema.GroupVersionKind, namespace, name string, opts K8sDeleteOptions) error {
+	deleteOptions, err := opts.ToMetav1()
+	if err != nil {
+		return err
 	}
-	return q.Delete().Error
+	gvr, namespaced, ok := k.Tools().GetGVRByGVK(gvk)
+	if !ok || gvr.Empty() {
+		gvr, namespaced = k.Tools().GetGVRByKind(gvk.Kind)
+	}
+	if gvr.Empty() {
+		return fmt.Errorf("unknown GVK: %v", gvk)
+	}
+	ns := strings.TrimSpace(namespace)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return constants.ErrBadRequestWithMsg(constants.ErrMsge278df185255)
+	}
+	dc := k.DynamicClient()
+	if namespaced {
+		if ns == "" {
+			ns = metav1.NamespaceDefault
+		}
+		return dc.Resource(gvr).Namespace(ns).Delete(ctx, name, deleteOptions)
+	}
+	return dc.Resource(gvr).Delete(ctx, name, deleteOptions)
 }
 
 // ResolveCRKindFromCRD 执行对应的业务逻辑。
 func (s *DynamicResourceService) ResolveCRKindFromCRD(ctx context.Context, k *kom.Kubectl, group, version, resource string) (string, error) {
+	kind, _, err := s.resolveCRDMeta(ctx, k, group, version, resource)
+	return kind, err
+}
+
+func (s *DynamicResourceService) resolveCRDMeta(ctx context.Context, k *kom.Kubectl, group, version, resource string) (kind string, namespaced bool, err error) {
 	group = strings.TrimSpace(group)
 	version = strings.TrimSpace(version)
 	resource = strings.TrimSpace(resource)
 	if group == "" || version == "" || resource == "" {
-		return "", constants.ErrBadRequestWithMsg(constants.ErrMsgf757c3be22a2)
+		return "", false, constants.ErrBadRequestWithMsg(constants.ErrMsgf757c3be22a2)
 	}
 	list, err := s.ListByGVK(ctx, k, schema.GroupVersionKind{
 		Group:   "apiextensions.k8s.io",
@@ -102,7 +141,7 @@ func (s *DynamicResourceService) ResolveCRKindFromCRD(ctx context.Context, k *ko
 		Kind:    "CustomResourceDefinition",
 	}, "")
 	if err != nil {
-		return "", bizerrors.Internalf(ctx, "k8s.dynamic", "list_crd", err, constants.ErrFmt2b30d4949c98)
+		return "", false, bizerrors.Internalf(ctx, "k8s.dynamic", "list_crd", err, constants.ErrFmt2b30d4949c98)
 	}
 	for _, item := range list {
 		var crd apiextv1.CustomResourceDefinition
@@ -117,16 +156,17 @@ func (s *DynamicResourceService) ResolveCRKindFromCRD(ctx context.Context, k *ko
 		}
 		for _, v := range crd.Spec.Versions {
 			if strings.TrimSpace(v.Name) == version && v.Served {
-				return strings.TrimSpace(crd.Spec.Names.Kind), nil
+				ns := crd.Spec.Scope != apiextv1.ClusterScoped
+				return strings.TrimSpace(crd.Spec.Names.Kind), ns, nil
 			}
 		}
 	}
-	return "", constants.ErrBadRequestWithMsg(constants.ErrMsg1a5f8ce82917)
+	return "", false, constants.ErrBadRequestWithMsg(constants.ErrMsg1a5f8ce82917)
 }
 
 // ListCR 查询列表相关的业务逻辑。
 func (s *DynamicResourceService) ListCR(ctx context.Context, k *kom.Kubectl, group, version, resource, namespace string) ([]unstructured.Unstructured, error) {
-	kind, err := s.ResolveCRKindFromCRD(ctx, k, group, version, resource)
+	kind, namespaced, err := s.resolveCRDMeta(ctx, k, group, version, resource)
 	if err != nil {
 		return nil, err
 	}
@@ -135,6 +175,8 @@ func (s *DynamicResourceService) ListCR(ctx context.Context, k *kom.Kubectl, gro
 	ns := strings.TrimSpace(namespace)
 	if ns != "" {
 		q = q.Namespace(ns)
+	} else if namespaced {
+		q = q.AllNamespace()
 	}
 	if err := q.List(&list).Error; err != nil {
 		return nil, err
@@ -161,17 +203,13 @@ func (s *DynamicResourceService) GetCR(ctx context.Context, k *kom.Kubectl, grou
 }
 
 // DeleteCR 删除相关的业务逻辑。
-func (s *DynamicResourceService) DeleteCR(ctx context.Context, k *kom.Kubectl, group, version, resource, namespace, name string) error {
+func (s *DynamicResourceService) DeleteCR(ctx context.Context, k *kom.Kubectl, group, version, resource, namespace, name string, opts K8sDeleteOptions) error {
 	kind, err := s.ResolveCRKindFromCRD(ctx, k, group, version, resource)
 	if err != nil {
 		return err
 	}
-	q := k.WithContext(ctx).CRD(group, version, kind).Name(strings.TrimSpace(name))
-	ns := strings.TrimSpace(namespace)
-	if ns != "" {
-		q = q.Namespace(ns)
-	}
-	return q.Delete().Error
+	gvk := schema.GroupVersionKind{Group: strings.TrimSpace(group), Version: strings.TrimSpace(version), Kind: kind}
+	return s.DeleteByGVK(ctx, k, gvk, namespace, name, opts)
 }
 
 // ApplyManifest 提交申请相关的业务逻辑。
@@ -223,5 +261,5 @@ func (s *DynamicResourceService) ExistsByKind(ctx context.Context, k *kom.Kubect
 		return false
 	}
 	_, err := s.GetByGVK(ctx, k, gvk, strings.TrimSpace(namespace), strings.TrimSpace(name))
-	return err == nil || apierrors.IsAlreadyExists(err)
+	return err == nil
 }

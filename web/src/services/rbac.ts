@@ -1,4 +1,5 @@
 import { getData, http } from "./http";
+import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export type RbacRoleItem = {
   name: string;
@@ -59,7 +60,20 @@ export function applyRbac(clusterId: number, manifest: string) {
   return getData<boolean>(http.post("/rbac/apply", { cluster_id: clusterId, manifest }));
 }
 
-export function deleteRbac(params: { cluster_id: number; kind: string; name: string; namespace?: string }) {
-  return getData<boolean>(http.delete("/rbac", { params }));
+export function deleteRbac(
+  params: { cluster_id: number; kind: string; name: string; namespace?: string } & K8sDeleteOptions,
+) {
+  const { cluster_id, kind, name, namespace, grace_period_seconds, propagation_policy } = params;
+  return getData<boolean>(
+    http.delete("/rbac", {
+      params: {
+        cluster_id,
+        kind,
+        name,
+        namespace,
+        ...pickK8sDeleteOpts({ grace_period_seconds, propagation_policy }),
+      },
+    }),
+  );
 }
 
