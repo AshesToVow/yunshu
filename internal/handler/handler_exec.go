@@ -97,7 +97,7 @@ func handleQuery[T any, R any](c *gin.Context, call func(context.Context, T) (R,
 	}
 	data, err := call(auth.RequestContext(c), req)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, data)
@@ -120,7 +120,7 @@ func handleJSON[T any, R any](c *gin.Context, call func(context.Context, T) (R, 
 	}
 	data, err := call(auth.RequestContext(c), req)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, data)
@@ -134,7 +134,7 @@ func handleJSONCreated[T any, R any](c *gin.Context, call func(context.Context, 
 	}
 	data, err := call(auth.RequestContext(c), req)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Created(c, data)
@@ -147,7 +147,7 @@ func handleQueryOK[T any](c *gin.Context, okData any, call func(context.Context,
 		return
 	}
 	if err := call(auth.RequestContext(c), req); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, okData)
@@ -160,7 +160,7 @@ func handleJSONOK[T any](c *gin.Context, okData any, call func(context.Context, 
 		return
 	}
 	if err := call(auth.RequestContext(c), req); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, okData)
@@ -175,7 +175,7 @@ func handleQueryWithKind[T any, R any](c *gin.Context, call func(context.Context
 	}
 	data, err := call(auth.RequestContext(c), kind, req)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, data)
@@ -189,7 +189,7 @@ func handleQueryWithKindOK[T any](c *gin.Context, okData any, call func(context.
 		return
 	}
 	if err := call(auth.RequestContext(c), kind, req); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, okData)

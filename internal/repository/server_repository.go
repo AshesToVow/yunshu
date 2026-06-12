@@ -23,7 +23,7 @@ type ServerListParams struct {
 	PageSize   int
 }
 
-func NewServerRepository(db *gorm.DB) *ServerRepository { return &ServerRepository{db: db} }
+func NewServerRepository(db *gorm.DB) ServerRepo { return &ServerRepository{db: db} }
 
 func (r *ServerRepository) Create(ctx context.Context, s *model.Server) error {
 	return r.db.WithContext(ctx).Create(s).Error

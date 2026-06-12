@@ -1,16 +1,21 @@
 import { CodeOutlined, DeleteOutlined, DownOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, FolderOpenOutlined, MedicineBoxOutlined, PlusOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Alert, Button, Card, Checkbox, Divider, Drawer, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Tooltip, Typography, message } from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
+import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { formatDateTime } from "../utils/format";
 import { getClusters, listNamespaces, type ClusterItem, type NamespaceItem } from "../services/clusters";
+import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { PodCpuUsageBars, PodMemUsageBars, RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
+import type { K8sDeleteOptions } from "../services/service-factory";
 import { createPodByYAML, createPodSimple, deletePod, deletePodFile, downloadPodFile, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, readPodFile, restartPod, updatePodSimple, uploadPodFile, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
 import { getToken } from "../services/storage";
+import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
+import { streamK8sResourceWatch } from "../services/k8s-watch";
 
 function phaseColor(phase: string): string {
   const p = (phase || "").toLowerCase();
@@ -31,6 +36,9 @@ export function PodPage() {
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [pods, setPods] = useState<PodItem[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PodItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [selected, setSelected] = useState<PodItem | null>(null);
   const [detail, setDetail] = useState<PodDetail | null>(null);
@@ -63,6 +71,12 @@ export function PodPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [execCommand, setExecCommand] = useState("sh");
+  const execCommandRef = useRef(execCommand);
+  execCommandRef.current = execCommand;
+  const filterRef = useRef({ clusterId, namespace, keyword });
+  const [watchLive, setWatchLive] = useState(false);
+  const watchAbortRef = useRef<AbortController | null>(null);
+  filterRef.current = { clusterId, namespace, keyword };
   const execTermHostRef = useRef<HTMLDivElement | null>(null);
   const execTermRef = useRef<Terminal | null>(null);
   const execFitRef = useRef<FitAddon | null>(null);
@@ -148,20 +162,23 @@ export function PodPage() {
     }
   }
 
-  async function loadPods(overrideKeyword?: string) {
-    if (!clusterId) {
+  const loadPods = useCallback(async (overrideKeyword?: string) => {
+    const { clusterId: cid, namespace: ns, keyword: kw } = filterRef.current;
+    if (!cid) {
       setPods([]);
       return;
     }
     setLoading(true);
     try {
-      const effectiveKeyword = (overrideKeyword ?? keyword).trim();
-      const res = await getPods({ cluster_id: clusterId, namespace, keyword: effectiveKeyword || undefined });
+      const effectiveKeyword = (overrideKeyword ?? kw).trim();
+      const res = await getPods({ cluster_id: cid, namespace: ns, keyword: effectiveKeyword || undefined });
       setPods(res.list || []);
+    } catch {
+      // http 拦截器已 toast
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   async function loadClusters() {
     const res = await getClusters({ page: 1, page_size: 200 });
@@ -173,23 +190,73 @@ export function PodPage() {
 
   useEffect(() => {
     if (!clusterId) return;
-    void loadNamespaces(clusterId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await listNamespaces(clusterId);
+        if (cancelled) return;
+        const ns = res.list || [];
+        setNamespaces(ns);
+        const hasCurrent = ns.some((item) => item.name === filterRef.current.namespace);
+        if (!hasCurrent) {
+          setNamespace(ns[0]?.name || "default");
+        }
+      } catch {
+        // http 拦截器已 toast
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [clusterId]);
 
   useEffect(() => {
     void loadPods();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterId, namespace]);
+  }, [clusterId, namespace, loadPods]);
 
   useEffect(() => {
-    if (!clusterId) return;
+    if (!clusterId || watchLive) return;
     const timer = window.setInterval(() => {
       void loadPods();
     }, 10000);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterId, namespace]);
+  }, [clusterId, namespace, loadPods, watchLive]);
+
+  useEffect(() => {
+    watchAbortRef.current?.abort();
+    watchAbortRef.current = null;
+    if (!watchLive || !clusterId || !namespace) return;
+    let cancelled = false;
+    const ac = new AbortController();
+    watchAbortRef.current = ac;
+
+    const runWatch = async () => {
+      while (!cancelled && !ac.signal.aborted) {
+        try {
+          await streamK8sResourceWatch(
+            { cluster_id: clusterId, namespace, resource: "pods", timeout_seconds: 3600 },
+            () => {
+              void loadPods();
+            },
+            ac.signal,
+          );
+        } catch (err: unknown) {
+          if (ac.signal.aborted || cancelled) return;
+          message.warning(extractApiErrorMessage(err, "Pod Watch 已断开"));
+          setWatchLive(false);
+          return;
+        }
+        if (ac.signal.aborted || cancelled) return;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    };
+
+    void runWatch();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [watchLive, clusterId, namespace, loadPods]);
 
   const namespaceOptions = useMemo(() => namespaces.map((n) => ({ label: n.name, value: n.name })), [namespaces]);
   const clusterOptions = useMemo(
@@ -197,9 +264,14 @@ export function PodPage() {
     [clusters],
   );
 
-  async function handleDeletePod(record: PodItem) {
+  async function handleDeletePod(record: PodItem, deleteOpts?: K8sDeleteOptions) {
     if (!clusterId) return;
-    await deletePod({ cluster_id: clusterId, namespace: record.namespace, name: record.name });
+    await deletePod({
+      cluster_id: clusterId,
+      namespace: record.namespace,
+      name: record.name,
+      ...deleteOpts,
+    });
     message.success("Pod 已删除");
     await loadPods();
   }
@@ -366,7 +438,11 @@ export function PodPage() {
     const host = execTermHostRef.current;
     if (!host) return;
 
-    // reset container
+    let disposed = false;
+    let removeWindowResize: (() => void) | undefined;
+    let onDataDispose: { dispose: () => void } | undefined;
+    let onResizeDispose: { dispose: () => void } | undefined;
+
     host.innerHTML = "";
 
     const term = new Terminal({
@@ -386,80 +462,110 @@ export function PodPage() {
     execTermRef.current = term;
     execFitRef.current = fit;
 
-    const token = getToken();
-    const qs = new URLSearchParams({
-      cluster_id: String(clusterId),
-        namespace: selected.namespace,
-        name: selected.name,
-      token: token || "",
-    });
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${window.location.host}/api/v1/pods/exec/ws?${qs.toString()}`);
-    execWsRef.current = ws;
-
-    const sendResize = () => {
-      try {
-        const cols = term.cols;
-        const rows = term.rows;
-        ws.readyState === WebSocket.OPEN &&
-          ws.send(JSON.stringify({ type: "resize", cols, rows }));
-      } catch {
-        // ignore
-      }
-    };
-
-    const onDataDispose = term.onData((data) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-      ws.send(JSON.stringify({ type: "input", data }));
-    });
-    const onResizeDispose = term.onResize(({ cols, rows }) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-      ws.send(JSON.stringify({ type: "resize", cols, rows }));
-    });
-
-    ws.onopen = () => {
-      term.writeln(`Connected: ${selected.namespace}/${selected.name}`);
-      sendResize();
-      // start shell
-      ws.send(JSON.stringify({ type: "input", data: `${execCommand}\n` }));
-    };
-    ws.onmessage = (ev) => {
-      // server sends JSON frames: stdout/error/exit/ready
-      try {
-        const msg = JSON.parse(String(ev.data));
-        if (msg.type === "stdout" && typeof msg.data === "string") {
-          term.write(msg.data);
-        } else if (msg.type === "error") {
-          term.writeln(`\r\n[error] ${msg.data || "unknown"}`);
-        } else if (msg.type === "exit") {
-          term.writeln("\r\n[disconnected]");
+    void (async () => {
+      let container: string | undefined;
+      if (detail?.namespace === selected.namespace && detail.name === selected.name) {
+        container = detail.containers?.[0]?.name;
+      } else {
+        try {
+          const d = await getPodDetail({
+            cluster_id: clusterId,
+            namespace: selected.namespace,
+            name: selected.name,
+          });
+          container = d.containers?.[0]?.name;
+        } catch {
+          // 后端会解析默认容器；此处失败时不阻塞 Exec 连接
         }
-      } catch {
-        term.write(String(ev.data));
       }
-    };
-    ws.onclose = () => {
-      term.writeln("\r\n[connection closed]");
-    };
-    ws.onerror = () => {
-      term.writeln("\r\n[connection error]");
-    };
 
-    const onWindowResize = () => {
+      let ws: WebSocket;
       try {
-        fit.fit();
-        sendResize();
+        ws = await openAuthenticatedWebSocket(
+          "/api/v1/pods/exec/ws",
+          {
+            cluster_id: clusterId,
+            namespace: selected.namespace,
+            name: selected.name,
+            ...(container ? { container } : {}),
+          },
+          "pod-exec",
+        );
       } catch {
-        // ignore
+        if (!disposed) term.writeln("\r\n[connection error: ticket failed]\r\n");
+        return;
       }
-    };
-    window.addEventListener("resize", onWindowResize);
+      if (disposed) {
+        ws.close();
+        return;
+      }
+      execWsRef.current = ws;
+
+      const sendResize = () => {
+        try {
+          const cols = term.cols;
+          const rows = term.rows;
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "resize", cols, rows }));
+          }
+        } catch {
+          // ignore
+        }
+      };
+
+      onDataDispose = term.onData((data) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({ type: "input", data }));
+      });
+      onResizeDispose = term.onResize(({ cols, rows }) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({ type: "resize", cols, rows }));
+      });
+
+      ws.onopen = () => {
+        term.writeln(`Connected: ${selected.namespace}/${selected.name}`);
+        sendResize();
+        ws.send(JSON.stringify({ type: "input", data: `${execCommandRef.current}\n` }));
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(String(ev.data));
+          if (msg.type === "stdout" && typeof msg.data === "string") {
+            term.write(msg.data);
+          } else if (msg.type === "error") {
+            term.writeln(`\r\n[error] ${msg.data || "unknown"}`);
+          } else if (msg.type === "exit") {
+            term.writeln("\r\n[disconnected]");
+          }
+        } catch {
+          term.write(String(ev.data));
+        }
+      };
+      ws.onclose = () => {
+        term.writeln("\r\n[connection closed]");
+      };
+      ws.onerror = () => {
+        term.writeln("\r\n[connection error]");
+      };
+
+      const onWindowResize = () => {
+        try {
+          fit.fit();
+          sendResize();
+        } catch {
+          // ignore
+        }
+      };
+      window.addEventListener("resize", onWindowResize);
+      removeWindowResize = () => window.removeEventListener("resize", onWindowResize);
+    })();
 
     return () => {
-      window.removeEventListener("resize", onWindowResize);
+      disposed = true;
+      removeWindowResize?.();
       try {
-        onDataDispose.dispose();
-        onResizeDispose.dispose();
+        onDataDispose?.dispose();
+        onResizeDispose?.dispose();
       } catch {
         // ignore
       }
@@ -472,8 +578,7 @@ export function PodPage() {
       execTermRef.current = null;
       execFitRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [execOpen, clusterId, selected?.namespace, selected?.name]);
+  }, [execOpen, clusterId, selected?.namespace, selected?.name, detail?.namespace, detail?.name, detail?.containers]);
 
   async function handleRestartPod(record: PodItem) {
     if (!clusterId) return;
@@ -679,7 +784,7 @@ export function PodPage() {
     setCreateOpen(true);
     simpleForm.setFieldsValue({
       name: d.name,
-      container_name: d.containers?.[0]?.name || d.name,
+      container_name: d.containers?.[0]?.name || "",
       image: d.containers?.[0]?.image || "",
       command: "",
       image_pull_policy: "IfNotPresent",
@@ -771,8 +876,18 @@ export function PodPage() {
   }
 
   return (
-    <div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+    <div className="page-stack">
+      <PageTelemetryHeader
+        label="[ K8S / PODS ]"
+        title="Pod 管理"
+        subtitle="跨集群 Pod 生命周期、诊断、日志与终端会话"
+        meta={[
+          `CLUSTER / ${clusterId || "NONE"}`,
+          `NS / ${namespace || "ALL"}`,
+          loading ? "SYNC / PENDING" : `ROWS / ${pods.length}`,
+        ]}
+      />
+      <div className="toolbar" style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
         <Space wrap>
         <Select
           placeholder="选择集群"
@@ -815,6 +930,10 @@ export function PodPage() {
         <Button icon={<ReloadOutlined />} onClick={() => void loadPods()}>
           刷新
         </Button>
+        <Space size={4}>
+          <span>实时 Watch</span>
+          <Switch checked={watchLive} onChange={setWatchLive} />
+        </Space>
       </Space>
       </div>
       <Table
@@ -922,11 +1041,8 @@ export function PodPage() {
                       icon: <DeleteOutlined />,
                       label: "删除",
                       onClick: () => {
-                        Modal.confirm({
-                          title: "确认删除该 Pod 吗？",
-                          okType: "danger",
-                          onOk: () => handleDeletePod(record),
-                        });
+                        setDeleteTarget(record);
+                        setDeleteDialogOpen(true);
                       },
                     },
                   ];
@@ -2122,6 +2238,27 @@ export function PodPage() {
           ]}
         />
       </Drawer>
+
+      <K8sDeleteDialog
+        open={deleteDialogOpen}
+        resourceName={deleteTarget?.name ?? ""}
+        loading={deleteLoading}
+        onCancel={() => {
+          setDeleteDialogOpen(false);
+          setDeleteTarget(null);
+        }}
+        onConfirm={async (deleteOpts) => {
+          if (!deleteTarget) return;
+          setDeleteLoading(true);
+          try {
+            await handleDeletePod(deleteTarget, deleteOpts);
+            setDeleteDialogOpen(false);
+            setDeleteTarget(null);
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -1,10 +1,12 @@
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Collapse, Drawer, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Typography, message } from "antd";
+import { Button, Card, Collapse, Drawer, Input, Modal, Select, Space, Table, Tabs, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import YAML from "yaml";
 import { getClusters } from "../../services/clusters";
 import type { ClusterItem } from "../../services/clusters";
+import type { K8sDeleteOptions } from "../../services/service-factory";
+import { K8sDeleteDialog } from "./k8s-delete-dialog";
 
 export type ClusterOption = { label: string; value: number; disabled?: boolean };
 export type NamespaceOption = { label: string; value: string };
@@ -30,7 +32,7 @@ export type YamlCrudDeleteArgs = {
   clusterId: number;
   namespace?: string;
   name: string;
-};
+} & K8sDeleteOptions;
 
 export interface YamlCrudApi<TItem, TDetail> {
   list: (args: YamlCrudListArgs) => Promise<TItem[]>;
@@ -113,6 +115,9 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
   const [manifest, setManifest] = useState<string>("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const closeCreateDrawer = useCallback(() => setCreateDrawerOpen(false), []);
   const clusterOptions: ClusterOption[] = useMemo(
@@ -261,21 +266,17 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
         ) : null}
         {extraRowActions?.(record, { clusterId: clusterId ?? 0, namespace, reload })}
         {!disableMutations && api.remove ? (
-          <Popconfirm
-            title={`确认删除 ${record.name} 吗？`}
-            onConfirm={() => {
-              if (!clusterId) return;
-              void (async () => {
-                await api.remove?.({ clusterId, namespace, name: record.name });
-                message.success("删除成功");
-                await reload();
-              })();
+          <Button
+            danger
+            type="link"
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              setDeleteTarget(record);
+              setDeleteDialogOpen(true);
             }}
           >
-            <Button danger type="link" icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
+            删除
+          </Button>
         ) : null}
       </Space>
     ),
@@ -551,6 +552,34 @@ metadata:
           <Typography.Text type="secondary">暂无数据</Typography.Text>
         )}
       </Drawer>
+
+      <K8sDeleteDialog
+        open={deleteDialogOpen}
+        resourceName={deleteTarget?.name ?? ""}
+        loading={deleteLoading}
+        onCancel={() => {
+          setDeleteDialogOpen(false);
+          setDeleteTarget(null);
+        }}
+        onConfirm={async (deleteOpts) => {
+          if (!clusterId || !deleteTarget) return;
+          setDeleteLoading(true);
+          try {
+            await api.remove?.({
+              clusterId,
+              namespace,
+              name: deleteTarget.name,
+              ...deleteOpts,
+            });
+            message.success("删除成功");
+            setDeleteDialogOpen(false);
+            setDeleteTarget(null);
+            await reload();
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
+      />
 
     </Card>
   );

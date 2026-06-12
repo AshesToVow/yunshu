@@ -15,11 +15,11 @@ func TestValidateAccessTokenSession_NilClient(t *testing.T) {
 	}
 }
 
-func TestValidateAccessTokenSession_NotFound(t *testing.T) {
-	// miniredis would be ideal; without it only test nil client / empty token
+func TestValidateAccessTokenSession_EmptyTokenRequiresRedis(t *testing.T) {
+	// Without a Redis client, validation fails before session lookup.
 	err := ValidateAccessTokenSession(context.Background(), nil, "")
-	if !errors.Is(err, ErrSessionNotFound) {
-		t.Fatalf("want ErrSessionNotFound for empty token, got %v", err)
+	if !errors.Is(err, ErrRedisRequired) {
+		t.Fatalf("want ErrRedisRequired when client is nil, got %v", err)
 	}
 	_ = redis.Nil
 }

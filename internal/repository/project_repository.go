@@ -13,12 +13,14 @@ type ProjectRepository struct {
 }
 
 type ProjectListParams struct {
-	Keyword  string
-	Page     int
-	PageSize int
+	Keyword         string
+	ProjectType     string
+	LifecycleStatus string
+	Page            int
+	PageSize        int
 }
 
-func NewProjectRepository(db *gorm.DB) *ProjectRepository { return &ProjectRepository{db: db} }
+func NewProjectRepository(db *gorm.DB) ProjectRepo { return &ProjectRepository{db: db} }
 
 func (r *ProjectRepository) Create(ctx context.Context, p *model.Project) error {
 	return r.db.WithContext(ctx).Create(p).Error
@@ -46,6 +48,12 @@ func (r *ProjectRepository) List(ctx context.Context, params ProjectListParams) 
 		kw := "%" + params.Keyword + "%"
 		q = q.Where("name LIKE ? OR code LIKE ?", kw, kw)
 	}
+	if params.ProjectType != "" {
+		q = q.Where("project_type = ?", params.ProjectType)
+	}
+	if params.LifecycleStatus != "" {
+		q = q.Where("lifecycle_status = ?", params.LifecycleStatus)
+	}
 	var list []model.Project
 	total, err := listWithPagination(q, params.Page, params.PageSize, "id DESC", &list)
 	if err != nil {
@@ -64,6 +72,12 @@ func (r *ProjectRepository) ListVisibleToUser(ctx context.Context, userID uint, 
 	if params.Keyword != "" {
 		kw := "%" + params.Keyword + "%"
 		q = q.Where("name LIKE ? OR code LIKE ?", kw, kw)
+	}
+	if params.ProjectType != "" {
+		q = q.Where("project_type = ?", params.ProjectType)
+	}
+	if params.LifecycleStatus != "" {
+		q = q.Where("lifecycle_status = ?", params.LifecycleStatus)
 	}
 	var list []model.Project
 	total, err := listWithPagination(q, params.Page, params.PageSize, "id DESC", &list)

@@ -51,7 +51,7 @@ go run . seed
 ```
 
 - `migrate`：执行 GORM `AutoMigrate` 及附带清理逻辑。  
-- `seed`：默认管理员、权限元数据、Casbin 策略、菜单等（详见 `cmd/seed.go`）。
+- `seed`：默认管理员（**密码仅首次创建时写入**）、Permission 批量 upsert、Casbin `AddPolicies`、内置菜单 `menu.Sync` 等（详见 `cmd/seed.go`、`internal/menu/`）。
 
 ## 5. 后端构建与启动
 

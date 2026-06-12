@@ -1,37 +1,30 @@
-﻿import { Breadcrumb, Col, Row, Space, Typography } from "antd";
-import type { BreadcrumbProps } from "antd";
+﻿import type { BreadcrumbProps } from "antd";
 import type { ReactNode } from "react";
+import { PageTelemetryHeader } from "./page-telemetry-header";
 
 interface PageHeroProps {
   title: string;
   subtitle?: string;
+  label?: string;
   breadcrumbItems?: BreadcrumbProps["items"];
+  meta?: string[];
   extra?: ReactNode;
 }
 
-export function PageHero({ title, subtitle, breadcrumbItems, extra }: PageHeroProps) {
+export function PageHero({ title, subtitle, label, breadcrumbItems, meta, extra }: PageHeroProps) {
+  const crumb =
+    breadcrumbItems?.length
+      ? breadcrumbItems.map((item) => String(item?.title ?? "")).filter(Boolean).join(" / ")
+      : "";
+  const mergedMeta = [...(crumb ? [`PATH / ${crumb}`] : []), ...(meta ?? [])];
+
   return (
-    <div className="page-hero">
-      <Row align="middle" gutter={16} style={{ width: "100%" }}>
-        <Col flex="auto">
-          {breadcrumbItems && breadcrumbItems.length > 0 ? (
-            <Breadcrumb className="page-hero__breadcrumb" items={breadcrumbItems} />
-          ) : null}
-          <Typography.Title level={2} className="page-hero__title">
-            {title}
-          </Typography.Title>
-          {subtitle ? (
-            <Typography.Paragraph className="page-hero__subtitle" type="secondary">
-              {subtitle}
-            </Typography.Paragraph>
-          ) : null}
-        </Col>
-        {extra ? (
-          <Col>
-            <Space wrap>{extra}</Space>
-          </Col>
-        ) : null}
-      </Row>
-    </div>
+    <PageTelemetryHeader
+      label={label ?? "[ MODULE ]"}
+      title={title}
+      subtitle={subtitle}
+      meta={mergedMeta.length ? mergedMeta : undefined}
+      extra={extra}
+    />
   );
 }

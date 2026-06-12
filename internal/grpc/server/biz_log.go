@@ -2,27 +2,29 @@ package server
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
-	"yunshu/internal/pkg/apperror"
-	"yunshu/internal/service/svclog"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/logutil"
 )
 
 func logGRPCError(ctx context.Context, method string, err error) {
-	if err == nil || apperror.AlreadyLogged(err) {
+	if err == nil || bizerrors.IsAlreadyLogged(err) {
 		return
 	}
-	b := svclog.GRPC("grpc.server").W(ctx)
-	var appErr *apperror.AppError
-	if errors.As(err, &appErr) {
-		attrs := []any{"method", method, "error_code", appErr.ErrorCode, "reason", appErr.Reason, "http_status", appErr.StatusCode, "error", err}
-		if appErr.StatusCode >= http.StatusInternalServerError {
-			b.Errorw(err, "gRPC request failed", attrs...)
-			return
-		}
-		b.Warnw("gRPC request rejected", append(attrs, "error", err.Error())...)
+	log := logutil.GRPCCtx(ctx, "grpc.server")
+	biz, ok := bizerrors.As(bizerrors.Ensure(err))
+	if !ok {
+		log.Error("gRPC request failed", "method", method, "error", err)
 		return
 	}
-	b.Errorw(err, "gRPC request failed", "method", method)
+	attrs := []any{"method", method, "error_code", biz.ErrorCode, "reason", biz.Reason, "http_status", biz.HTTPStatus()}
+	if biz.Cause != nil {
+		attrs = append(attrs, "error", biz.Cause)
+	}
+	if biz.HTTPStatus() >= http.StatusInternalServerError {
+		log.Error("gRPC request failed", attrs...)
+		return
+	}
+	log.Warn("gRPC request rejected", attrs...)
 }

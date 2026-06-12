@@ -34,7 +34,7 @@ func NewAlertSubscriptionHandler(svc *service.AlertSubscriptionService) *AlertSu
 // @Param enabled query bool false "是否启用"
 // @Param page query int false "页码，默认1"
 // @Param page_size query int false "每页数量，默认20"
-// @Success 200 {object} service.AlertSubscriptionListResponse
+// @Success 200 {object} response.Body "success"
 // @Router /api/v1/alerts/subscriptions [get]
 func (h *AlertSubscriptionHandler) ListNodes(c *gin.Context) {
 	var query service.AlertSubscriptionNodeListQuery
@@ -59,7 +59,7 @@ func (h *AlertSubscriptionHandler) ListNodes(c *gin.Context) {
 
 	list, total, page, pageSize, err := h.svc.ListNodes(c.Request.Context(), query)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *AlertSubscriptionHandler) UpdateNode(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "节点ID"
-// @Success 200 {object} gin.H
+// @Success 200 {object} response.Body "success"
 // @Router /api/v1/alerts/subscriptions/{id} [delete]
 func (h *AlertSubscriptionHandler) DeleteNode(c *gin.Context) {
 	ServeDelete(c, h.svc.DeleteNode, "")
@@ -159,7 +159,7 @@ func (h *AlertSubscriptionHandler) MoveNode(c *gin.Context) {
 	// 通过更新父节点实现移动
 	node, err := h.svc.GetNodeByID(c.Request.Context(), uint(id))
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 
@@ -179,7 +179,7 @@ func (h *AlertSubscriptionHandler) MoveNode(c *gin.Context) {
 
 	updated, err := h.svc.UpdateNode(c.Request.Context(), uint(id), updateReq)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 

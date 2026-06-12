@@ -1,4 +1,5 @@
 import { getData, http } from "./http";
+import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 import type { UserItem } from "../types/api";
 
 export type PersistentVolumeItem = {
@@ -44,9 +45,11 @@ export function getPersistentVolumeDetail(clusterId: number, name: string) {
   );
 }
 
-export function deletePersistentVolume(clusterId: number, name: string) {
+export function deletePersistentVolume(clusterId: number, name: string, deleteOpts?: K8sDeleteOptions) {
   return getData<boolean>(
-    http.delete("/persistentvolumes", { params: { kind: "PersistentVolume", cluster_id: clusterId, name } }),
+    http.delete("/persistentvolumes", {
+      params: { kind: "PersistentVolume", cluster_id: clusterId, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) },
+    }),
   );
 }
 
@@ -64,10 +67,16 @@ export function getPersistentVolumeClaimDetail(clusterId: number, namespace: str
   );
 }
 
-export function deletePersistentVolumeClaim(clusterId: number, namespace: string, name: string) {
+export function deletePersistentVolumeClaim(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return getData<boolean>(
     http.delete("/persistentvolumeclaims", {
-      params: { kind: "PersistentVolumeClaim", cluster_id: clusterId, namespace, name },
+      params: {
+        kind: "PersistentVolumeClaim",
+        cluster_id: clusterId,
+        namespace,
+        name,
+        ...pickK8sDeleteOpts(deleteOpts ?? {}),
+      },
     }),
   );
 }
@@ -82,9 +91,11 @@ export function getStorageClassDetail(clusterId: number, name: string) {
   );
 }
 
-export function deleteStorageClass(clusterId: number, name: string) {
+export function deleteStorageClass(clusterId: number, name: string, deleteOpts?: K8sDeleteOptions) {
   return getData<boolean>(
-    http.delete("/storageclasses", { params: { kind: "StorageClass", cluster_id: clusterId, name } }),
+    http.delete("/storageclasses", {
+      params: { kind: "StorageClass", cluster_id: clusterId, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) },
+    }),
   );
 }
 

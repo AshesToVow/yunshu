@@ -140,7 +140,7 @@ export function NamespacesPage() {
         list: async ({ clusterId, keyword }) => await listNamespaces(clusterId, keyword),
         detail: async ({ clusterId, name }) => await getNamespaceDetail(clusterId, name),
         apply: async ({ clusterId, manifest }) => await applyNamespace(clusterId, manifest),
-        remove: async ({ clusterId, name }) => await deleteNamespace(clusterId, name),
+        remove: async (args) => await deleteNamespace(args.clusterId, args.name, args),
       }}
       onToolbarReady={(ctx) => {
         listReloadRef.current = ctx.reload;

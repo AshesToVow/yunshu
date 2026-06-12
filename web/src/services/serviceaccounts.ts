@@ -1,4 +1,5 @@
 import { getData, http } from "./http";
+import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export type ServiceAccountItem = {
   name: string;
@@ -34,6 +35,8 @@ export function applyServiceAccount(clusterId: number, manifest: string) {
   return getData<boolean>(http.post("/serviceaccounts/apply", { cluster_id: clusterId, manifest }));
 }
 
-export function deleteServiceAccount(clusterId: number, namespace: string, name: string) {
-  return getData<boolean>(http.delete("/serviceaccounts", { params: { cluster_id: clusterId, namespace, name } }));
+export function deleteServiceAccount(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return getData<boolean>(
+    http.delete("/serviceaccounts", { params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) } }),
+  );
 }

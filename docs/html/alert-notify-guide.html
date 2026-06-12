@@ -977,11 +977,11 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-05-17
+            2026-06-12
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
-            ~5 分钟阅读
+            ~6 分钟阅读
           </span>
         </div>
       </header>
@@ -1020,7 +1020,7 @@
 </code></pre>
 <h3 id="21-">2.1 参数说明</h3>
 <ul>
-<li><code>webhook_token</code>：Alertmanager webhook 鉴权 token（请求头 <code>X-Alert-Token</code> 或 query <code>token</code>）</li>
+<li><code>webhook_token</code>：Alertmanager webhook 鉴权 token（请求头 <strong><code>X-Alert-Token</code></strong>、<code>X-Webhook-Token</code> 或 <code>Authorization: Bearer &lt;token&gt;</code>；<strong>不支持</strong> URL query <code>?token=</code>）</li>
 <li><code>group_by</code>：服务端 <code>group_key</code> 的计算维度</li>
 <li><code>group_wait_seconds</code>：首次见到某个 <code>group_key</code> 后的等待窗口（收集同组告警），到达后才允许“首次发送”</li>
 <li><code>group_interval_seconds</code>：已发送后，若组内容发生变化（平台用 <code>labels_digest</code> 近似）再次发送的最小间隔</li>
@@ -1046,7 +1046,10 @@
 receivers:
 - name: &quot;yunshu-webhook&quot;
   webhook_configs:
-  - url: &quot;http://&lt;host&gt;:8080/api/v1/alerts/webhook/alertmanager?token=change-me-alert-token&quot;
+  - url: &quot;http://&lt;host&gt;:8080/api/v1/alerts/webhook/alertmanager&quot;
+    http_config:
+      headers:
+        X-Alert-Token: &quot;change-me-alert-token&quot;
     send_resolved: true
 </code></pre>
 <p>建议在 Prometheus 或 Alertmanager 中统一提供 <code>cluster</code> 标签（例如 external_labels）：</p>
@@ -1193,7 +1196,7 @@ receivers:
 <h3 id="91-">9.1 为什么没收到恢复通知？</h3>
 <ul>
 <li>Alertmanager 是否设置了 <code>send_resolved: true</code></li>
-<li>webhook token 是否匹配</li>
+<li>webhook token 是否匹配（请求头 <code>X-Alert-Token</code>，勿使用 URL <code>?token=</code>）</li>
 <li>是否被路由匹配规则过滤</li>
 <li>是否在恢复去抖窗口内被合并（查看 <code>alert_events</code> 中 <code>resolved_aggregate_suppressed</code>）</li>
 </ul>

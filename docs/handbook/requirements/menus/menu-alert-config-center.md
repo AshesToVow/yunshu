@@ -1,8 +1,10 @@
 # 菜单需求：告警配置中心（`/alert-config-center`）
 
+> **已废弃侧栏入口**（2026-06）：seed 隐藏并重定向至 `/alert-monitor-platform?tab=config&cfg=policies`。请使用 **告警监控平台 → 策略与联调**。
+
 ## 1. 定位
 
-- **路由**：`/alert-config-center`，`alert-config-center-page`（可由动态菜单或书签进入）。  
+- **路由**：`/alert-config-center`（历史书签可能仍存在）。  
 - **目标**：**订阅树/接收组**的配置管理与 **历史告警事件**检索；顶部常含 Webhook 模拟发送工具块。
 
 ## 2. 功能清单

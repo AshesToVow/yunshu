@@ -1,9 +1,11 @@
 # 菜单需求：资产总览（`/`）
 
+> **Catalog**：`internal/menu/catalog.go` · 名称「总览页面」· Component: `dashboard-page` · Plugin: `k8s`（overview API）
+
 ## 1. 定位与入口
 
 - **路由**：`/`（React `Route index` → `DashboardPage`）。  
-- **种子菜单**：名称为「资产总览」，无 `component` 字段，与固定首页一致。  
+- **种子菜单**：名称为「总览页面」，`component`: `dashboard-page`。  
 - **目标用户**：已登录管理员/运维，用于一眼查看平台规模与健康趋势。
 
 ## 2. 页面功能

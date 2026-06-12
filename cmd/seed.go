@@ -2,17 +2,18 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"yunshu/internal/bootstrap"
+	"yunshu/internal/menu"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/password"
 	"yunshu/internal/service"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/pkg/logutil"
 
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func init() {
@@ -23,13 +24,7 @@ var seedCmd = &cobra.Command{
 	Use:   "seed",
 	Short: "Seed default admin user, roles and permissions",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		app, err := bootstrap.NewBuilder().
-			WithConfig(configPath).
-			WithLogger().
-			WithMySQL().
-			WithDictOverrides().
-			WithCasbin().
-			Build()
+		app, err := bootstrap.BuildCoreApp(configPath)
 		if err != nil {
 			return err
 		}
@@ -37,7 +32,7 @@ var seedCmd = &cobra.Command{
 
 		ctx := context.Background()
 		// 确保新增字段（如 permissions.k8s_scope_enabled）在 seed 前已完成迁移
-		if err := bootstrap.AutoMigrateModels(app.DB); err != nil {
+		if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
 			return err
 		}
 
@@ -45,120 +40,95 @@ var seedCmd = &cobra.Command{
 		if err := service.RemovePermissionPolicies(app.Enforcer, "/api/v1/policies/:id", "DELETE"); err != nil {
 			return err
 		}
-		if err := app.DB.WithContext(ctx).Where("resource = ? AND action = ?", "/api/v1/policies/:id", "DELETE").Delete(&model.Permission{}).Error; err != nil {
-			return err
-		}
 
 		permissions := defaultPermissions()
-		for _, item := range permissions {
-			var permission model.Permission
-			err := app.DB.WithContext(ctx).
-				Where("resource = ? AND action = ?", item.Resource, item.Action).
-				First(&permission).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				if err = app.DB.WithContext(ctx).Create(&item).Error; err != nil {
-					return err
-				}
-				permission = item
-			} else if err != nil {
-				return err
-			} else {
-				permission.Name = item.Name
-				permission.Description = item.Description
-				permission.K8sScopeEnabled = item.K8sScopeEnabled
-				if err = app.DB.WithContext(ctx).Save(&permission).Error; err != nil {
-					return err
-				}
-			}
-
-			if _, err = app.Enforcer.AddPolicy("super-admin", permission.Resource, permission.Action); err != nil {
-				return err
-			}
-		}
-
 		adminRole := model.Role{
 			Name:        "Super Admin",
 			Code:        "super-admin",
 			Description: "Built-in administrator role with full access.",
 			Status:      model.StatusEnabled,
 		}
-		if err := upsertRole(ctx, app.DB, &adminRole); err != nil {
-			return err
-		}
-
-		hashedPassword, err := password.Hash("Admin@123")
-		if err != nil {
-			return err
-		}
-
 		adminEmail := "rootwxd@163.com"
 		adminUser := model.User{
 			Username: "admin",
 			Email:    &adminEmail,
-			Password: hashedPassword,
 			Nickname: "System Admin",
 			Status:   model.StatusEnabled,
 		}
-		if err := upsertUser(ctx, app.DB, &adminUser); err != nil {
+		var adminCreated bool
+
+		err = app.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("resource = ? AND action = ?", "/api/v1/policies/:id", "DELETE").
+				Delete(&model.Permission{}).Error; err != nil {
+				return err
+			}
+			if err := seedPermissions(ctx, tx, permissions); err != nil {
+				return err
+			}
+			if err := upsertByKey(ctx, tx, &adminRole,
+				func(db *gorm.DB) *gorm.DB { return db.Where("code = ?", adminRole.Code) },
+				func(existing, incoming *model.Role) {
+					existing.Name = incoming.Name
+					existing.Description = incoming.Description
+					existing.Status = incoming.Status
+				},
+				nil,
+			); err != nil {
+				return err
+			}
+			if err := upsertByKey(ctx, tx, &adminUser,
+				func(db *gorm.DB) *gorm.DB { return db.Where("username = ?", adminUser.Username) },
+				func(existing, incoming *model.User) {
+					existing.Email = incoming.Email
+					existing.Nickname = incoming.Nickname
+					existing.Status = incoming.Status
+				},
+				func(incoming *model.User) error {
+					adminCreated = true
+					hashed, err := password.Hash("Admin@123")
+					if err != nil {
+						return err
+					}
+					incoming.Password = hashed
+					return nil
+				},
+			); err != nil {
+				return err
+			}
+			if err := tx.Model(&adminUser).Association("Roles").Replace([]model.Role{adminRole}); err != nil {
+				return err
+			}
+			return seedMenus(ctx, tx)
+		})
+		if err != nil {
 			return err
 		}
 
-		if err := app.DB.WithContext(ctx).Model(&adminUser).Association("Roles").Replace([]model.Role{adminRole}); err != nil {
+		if err := service.AddRolePolicies(app.Enforcer, adminRole.Code, permissions); err != nil {
 			return err
 		}
 		if err := service.SyncUserRoles(app.Enforcer, adminUser.ID, []model.Role{adminRole}); err != nil {
 			return err
 		}
 
-		if err := seedMenus(ctx, app.DB); err != nil {
-			return err
+		if adminCreated {
+			logutil.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email, "password", "Admin@123")
+			fmt.Println("seed completed: created admin user admin / Admin@123")
+		} else {
+			logutil.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email)
+			fmt.Println("seed completed")
 		}
-
-		svclog.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email, "password", "Admin@123")
-		fmt.Println("seed completed: admin / Admin@123 / admin@example.com")
 		return nil
 	},
 }
 
-func upsertRole(ctx context.Context, db *gorm.DB, role *model.Role) error {
-	var existing model.Role
-	err := db.WithContext(ctx).Where("code = ?", role.Code).First(&existing).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.WithContext(ctx).Create(role).Error
-	}
-	if err != nil {
-		return err
-	}
-
-	existing.Name = role.Name
-	existing.Description = role.Description
-	existing.Status = role.Status
-	if err := db.WithContext(ctx).Save(&existing).Error; err != nil {
-		return err
-	}
-	*role = existing
-	return nil
-}
-
-func upsertUser(ctx context.Context, db *gorm.DB, user *model.User) error {
-	var existing model.User
-	err := db.WithContext(ctx).Where("username = ?", user.Username).First(&existing).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.WithContext(ctx).Create(user).Error
-	}
-	if err != nil {
-		return err
-	}
-
-	existing.Email = user.Email
-	existing.Password = user.Password
-	existing.Nickname = user.Nickname
-	existing.Status = user.Status
-	if err := db.WithContext(ctx).Save(&existing).Error; err != nil {
-		return err
-	}
-	*user = existing
-	return nil
+func seedPermissions(ctx context.Context, db *gorm.DB, permissions []model.Permission) error {
+	return db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "resource"}, {Name: "action"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"name", "description", "k8s_scope_enabled", "updated_at",
+		}),
+	}).CreateInBatches(permissions, 200).Error
 }
 
 func defaultPermissions() []model.Permission {
@@ -236,6 +206,10 @@ func defaultPermissions() []model.Permission {
 		{Name: "批量创建告警静默", Resource: "/api/v1/alerts/silences/batch", Action: "POST", Description: "Batch create alert silences"},
 		{Name: "更新告警静默", Resource: "/api/v1/alerts/silences/:id", Action: "PUT", Description: "Update alert silence"},
 		{Name: "删除告警静默", Resource: "/api/v1/alerts/silences/:id", Action: "DELETE", Description: "Delete alert silence"},
+		{Name: "维护窗口列表", Resource: "/api/v1/alerts/maintenance-windows", Action: "GET", Description: "List alert maintenance windows"},
+		{Name: "创建维护窗口", Resource: "/api/v1/alerts/maintenance-windows", Action: "POST", Description: "Create alert maintenance window"},
+		{Name: "更新维护窗口", Resource: "/api/v1/alerts/maintenance-windows/:id", Action: "PUT", Description: "Update alert maintenance window"},
+		{Name: "删除维护窗口", Resource: "/api/v1/alerts/maintenance-windows/:id", Action: "DELETE", Description: "Delete alert maintenance window"},
 		{Name: "告警抑制规则列表", Resource: "/api/v1/alerts/inhibition-rules", Action: "GET", Description: "List alert inhibition rules"},
 		{Name: "创建告警抑制规则", Resource: "/api/v1/alerts/inhibition-rules", Action: "POST", Description: "Create alert inhibition rule"},
 		{Name: "更新告警抑制规则", Resource: "/api/v1/alerts/inhibition-rules/:id", Action: "PUT", Description: "Update alert inhibition rule"},
@@ -486,250 +460,5 @@ func defaultPermissions() []model.Permission {
 }
 
 func seedMenus(ctx context.Context, db *gorm.DB) error {
-	if err := cleanupDuplicateKubernetesMenu(ctx, db); err != nil {
-		return err
-	}
-
-	menus := defaultMenus()
-	for i := range menus {
-		if err := upsertMenu(ctx, db, &menus[i], 0); err != nil {
-			return err
-		}
-		for j := range menus[i].Children {
-			if err := upsertMenu(ctx, db, &menus[i].Children[j], menus[i].ID); err != nil {
-				return err
-			}
-		}
-	}
-	// 再清理一次：防止历史脏数据与 upsert 互相叠加导致仍有重复目录
-	return cleanupDuplicateKubernetesMenu(ctx, db)
-}
-
-func cleanupDuplicateKubernetesMenu(ctx context.Context, db *gorm.DB) error {
-	var roots []model.Menu
-	if err := db.WithContext(ctx).
-		Where("TRIM(path) IN ?", []string{"/kubernetes", "/kubernetes/"}).
-		Find(&roots).Error; err != nil {
-		return err
-	}
-	if len(roots) <= 1 {
-		return nil
-	}
-
-	keepID := roots[0].ID
-	keepScore := -1
-	for _, r := range roots {
-		var children []model.Menu
-		if err := db.WithContext(ctx).
-			Where("parent_id = ?", r.ID).
-			Find(&children).Error; err != nil {
-			return err
-		}
-		score := 0
-		for _, c := range children {
-			switch c.Path {
-			case "/pods", "/clusters", "/cronjobs", "/jobs", "/events":
-				score++
-			case "/pod", "/cluster":
-				score--
-			}
-		}
-		if score > keepScore {
-			keepScore = score
-			keepID = r.ID
-		}
-	}
-
-	for _, r := range roots {
-		if r.ID == keepID {
-			continue
-		}
-		ids, err := collectMenuSubtreeIDs(ctx, db, r.ID)
-		if err != nil {
-			return err
-		}
-		if len(ids) == 0 {
-			continue
-		}
-		if err := db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.Menu{}).Error; err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func collectMenuSubtreeIDs(ctx context.Context, db *gorm.DB, rootID uint) ([]uint, error) {
-	var out []uint
-	queue := []uint{rootID}
-	seen := map[uint]bool{}
-
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		out = append(out, id)
-
-		var children []model.Menu
-		if err := db.WithContext(ctx).
-			Where("parent_id = ?", id).
-			Find(&children).Error; err != nil {
-			return nil, err
-		}
-		for _, c := range children {
-			queue = append(queue, c.ID)
-		}
-	}
-	return out, nil
-}
-
-func upsertMenu(ctx context.Context, db *gorm.DB, menu *model.Menu, parentID uint) error {
-	var existing model.Menu
-	query := db.WithContext(ctx).Where("name = ?", menu.Name)
-	if parentID == 0 {
-		query = query.Where("parent_id IS NULL")
-	} else {
-		query = query.Where("parent_id = ?", parentID)
-	}
-	err := query.First(&existing).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		menu.ParentID = nil
-		if parentID > 0 {
-			p := parentID
-			menu.ParentID = &p
-		}
-		return db.WithContext(ctx).Create(menu).Error
-	}
-	if err != nil {
-		return err
-	}
-
-	existing.Path = menu.Path
-	existing.Icon = menu.Icon
-	existing.Sort = menu.Sort
-	existing.Hidden = menu.Hidden
-	existing.AdminOnly = menu.AdminOnly
-	existing.Component = menu.Component
-	existing.Redirect = menu.Redirect
-	existing.Status = menu.Status
-	// 以前如果已有同名菜单但 parent_id 写错，重新 seed 时旧逻辑不会修正 parent_id。
-	// 这里显式把 parent_id 修正到目标结构，保证菜单树能正确挂到“系统管理”下面。
-	existing.ParentID = nil
-	if parentID > 0 {
-		p := parentID
-		existing.ParentID = &p
-	}
-	if err := db.WithContext(ctx).Save(&existing).Error; err != nil {
-		return err
-	}
-	*menu = existing
-	return nil
-}
-
-func defaultMenus() []model.Menu {
-	return []model.Menu{
-		{
-			Name:      "总览页面",
-			Path:      "/",
-			Icon:      "PieChartOutlined",
-			Sort:      1,
-			Component: "",
-			Status:    1,
-		},
-		{
-			Name:   "告警通知",
-			Path:   "/alert-notify",
-			Icon:   "BellOutlined",
-			Sort:   2,
-			Status: 1,
-			Children: []model.Menu{
-				{Name: "Webhook 告警通道", Path: "/alert-channels", Icon: "NotificationOutlined", Sort: 1, Component: "alert-channels-page", Status: 1},
-				{Name: "告警监控平台", Path: "/alert-monitor-platform", Icon: "MonitorOutlined", Sort: 2, Component: "alert-monitor-platform-page", Status: 1},
-			},
-		},
-		{
-			Name:   "项目管理",
-			Path:   "/project-management",
-			Icon:   "ProjectOutlined",
-			Sort:   4,
-			Status: 1,
-			Children: []model.Menu{
-				{Name: "项目列表", Path: "/projects", Icon: "AppstoreOutlined", Sort: 1, Component: "projects-page", Status: 1},
-				{Name: "项目成员", Path: "/project-members", Icon: "TeamOutlined", Sort: 2, Component: "project-members-page", Status: 1},
-				{Name: "服务器管理", Path: "/project-servers", Icon: "HddOutlined", Sort: 3, Component: "project-servers-page", Status: 1},
-				{Name: "服务配置", Path: "/project-services", Icon: "SettingOutlined", Sort: 4, Component: "project-services-page", Status: 1},
-				{Name: "日志源配置", Path: "/project-log-sources", Icon: "FileSearchOutlined", Sort: 5, Component: "project-log-sources-page", Status: 1},
-				{Name: "日志平台", Path: "/project-logs", Icon: "FileTextOutlined", Sort: 6, Component: "project-logs-page", Status: 1},
-				{Name: "Agent 列表", Path: "/agent-list", Icon: "RobotOutlined", Sort: 7, Component: "agent-list-page", Status: 1},
-				{Name: "MySQL 备份", Path: "/mysql-backup", Icon: "DatabaseOutlined", Sort: 8, Component: "mysql-backup-page", Status: 1},
-			},
-		},
-		{
-			Name:   "系统管理",
-			Path:   "/system",
-			Icon:   "SettingOutlined",
-			Sort:   4,
-			Status: 1,
-			Children: []model.Menu{
-				{Name: "用户管理", Path: "/users", Icon: "TeamOutlined", Sort: 1, Component: "", Status: 1},
-				{Name: "用户组管理", Path: "/user-groups", Icon: "UserOutlined", Sort: 2, Component: "user-groups-page", Status: 1},
-				{Name: "角色模板", Path: "/roles", Icon: "ApartmentOutlined", Sort: 3, Component: "", Status: 1},
-				{Name: "API管理", Path: "/permissions", Icon: "ApiOutlined", Sort: 4, Component: "", Status: 1},
-				{Name: "授权管理", Path: "/policies", Icon: "AuditOutlined", Sort: 5, Component: "", Status: 1},
-				{Name: "K8s 集群访问档位", Path: "/k8s-scoped-policies", Icon: "AuditOutlined", Sort: 6, Component: "k8s-scoped-policies-page", Status: 1},
-				{Name: "注册审核", Path: "/registrations", Icon: "CheckCircleOutlined", Sort: 7, Component: "", Status: 1},
-				{Name: "菜单管理", Path: "/menus", Icon: "MenuOutlined", Sort: 8, Component: "", Status: 1},
-				{Name: "登录日志", Path: "/login-logs", Icon: "LoginOutlined", Sort: 9, Component: "", Status: 1},
-				{Name: "操作历史", Path: "/operation-logs", Icon: "HistoryOutlined", Sort: 10, Component: "", Status: 1},
-				{Name: "封禁 IP 管理", Path: "/banned-ips", Icon: "ApiOutlined", Sort: 11, Component: "", Status: 1, AdminOnly: false},
-			},
-		},
-		{
-			Name:   "Kubernetes 容器管理",
-			Path:   "/kubernetes",
-			Icon:   "KubernetesOutlined",
-			Sort:   5,
-			Status: 1,
-			Children: []model.Menu{
-				{Name: "集群管理", Path: "/clusters", Icon: "KubernetesOutlined", Sort: 1, Component: "", Status: 1},
-				{Name: "命名空间管理", Path: "/namespaces", Icon: "AppstoreOutlined", Sort: 2, Component: "namespaces-page", Status: 1},
-				{Name: "Node 管理", Path: "/nodes", Icon: "HddOutlined", Sort: 3, Component: "nodes-page", Status: 1},
-				{Name: "组件状态", Path: "/component-status", Icon: "HeartOutlined", Sort: 4, Component: "component-status-page", Status: 1},
-				{Name: "Pod 管理", Path: "/pods", Icon: "KubernetesOutlined", Sort: 5, Component: "", Status: 1},
-				{Name: "Deployment 管理", Path: "/deployments", Icon: "DeploymentUnitOutlined", Sort: 6, Component: "deployments-page", Status: 1},
-				{Name: "StatefulSet 管理", Path: "/statefulsets", Icon: "ClusterOutlined", Sort: 7, Component: "statefulsets-page", Status: 1},
-				{Name: "DaemonSet 管理", Path: "/daemonsets", Icon: "ApiOutlined", Sort: 8, Component: "daemonsets-page", Status: 1},
-				{Name: "CronJob 管理", Path: "/cronjobs", Icon: "ClockCircleOutlined", Sort: 9, Component: "cronjobs-page", Status: 1},
-				{Name: "Job 管理", Path: "/jobs", Icon: "ThunderboltOutlined", Sort: 10, Component: "jobs-page", Status: 1},
-				{Name: "ConfigMap 管理", Path: "/configmaps", Icon: "FileTextOutlined", Sort: 11, Component: "configmaps-page", Status: 1},
-				{Name: "Secret 管理", Path: "/secrets", Icon: "SafetyOutlined", Sort: 12, Component: "secrets-page", Status: 1},
-				{Name: "Service 管理", Path: "/k8s-services", Icon: "ApartmentOutlined", Sort: 13, Component: "k8s-services-page", Status: 1},
-				{Name: "PersistentVolume", Path: "/persistentvolumes", Icon: "DatabaseOutlined", Sort: 14, Component: "persistentvolumes-page", Status: 1},
-				{Name: "PersistentVolumeClaim", Path: "/persistentvolumeclaims", Icon: "HddOutlined", Sort: 15, Component: "persistentvolumeclaims-page", Status: 1},
-				{Name: "StorageClass", Path: "/storageclasses", Icon: "FolderOpenOutlined", Sort: 16, Component: "storageclasses-page", Status: 1},
-				{Name: "Ingress 管理", Path: "/ingresses", Icon: "GatewayOutlined", Sort: 17, Component: "ingresses-page", Status: 1},
-				{Name: "IngressClass 入口类", Path: "/ingress-classes", Icon: "GatewayOutlined", Sort: 18, Component: "ingress-classes-page", Status: 1},
-				{Name: "网络策略管理", Path: "/network-policies", Icon: "DeploymentUnitOutlined", Sort: 19, Component: "network-policies-page", Status: 1},
-				{Name: "Event 事件", Path: "/events", Icon: "FileSearchOutlined", Sort: 20, Component: "events-page", Status: 1},
-				{Name: "K8s Event 转发", Path: "/k8s/event-forward", Icon: "ShareAltOutlined", Sort: 21, Component: "k8s-event-forward-page", Status: 1},
-				{Name: "ServiceAccount 管理", Path: "/serviceaccounts", Icon: "SafetyCertificateOutlined", Sort: 22, Component: "serviceaccounts-page", Status: 1},
-				{Name: "API 资源发现", Path: "/cluster-api-resources", Icon: "UnorderedListOutlined", Sort: 23, Component: "cluster-api-resources-page", Status: 1},
-				{Name: "HPA 弹性伸缩", Path: "/horizontal-pod-autoscalers", Icon: "LineChartOutlined", Sort: 24, Component: "horizontal-pod-autoscalers-page", Status: 1},
-			},
-		},
-		{
-			Name:   "Kubernetes CRD 管理",
-			Path:   "/kubernetes-crd",
-			Icon:   "BranchesOutlined",
-			Sort:   5,
-			Status: 1,
-			Children: []model.Menu{
-				{Name: "CRD 管理", Path: "/crds", Icon: "BranchesOutlined", Sort: 1, Component: "crds-page", Status: 1},
-				{Name: "CR 实例管理", Path: "/crs", Icon: "DatabaseOutlined", Sort: 2, Component: "crs-page", Status: 1},
-			},
-		},
-	}
+	return menu.Sync(ctx, db)
 }

@@ -2,44 +2,45 @@ package router
 
 import (
 	"context"
+	"fmt"
+
 	"yunshu/internal/bootstrap"
-	"yunshu/internal/service/svclog"
 	grpcclient "yunshu/internal/grpc/client"
 	"yunshu/internal/handler"
-	"yunshu/internal/repository"
-	"yunshu/internal/service"
-	"yunshu/internal/service/k8seventforward"
+	"yunshu/internal/plugin"
+	"yunshu/internal/service/k8s/eventforward"
+
+	_ "yunshu/internal/plugins/all" // 注册内置业务插件
 )
 
-// Register 装配依赖并注册全部 HTTP 路由；返回 K8s Event 转发管理器（可能为 nil）。
-// bgCtx 用于 MySQL 定时备份等后台 Worker，进程退出时应 cancel。
-func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx context.Context) *k8seventforward.Manager {
+// Register 装配依赖并按配置加载各业务插件的路由与后台任务。
+// 返回 K8s 事件转发管理器（k8s 插件未启用或未初始化时为 nil）。
+func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx context.Context) (*eventforward.Manager, error) {
 	handler.SetLogger(app.Logger)
 	registerSwagger(app)
 
-	d := wireRouteDeps(app, runtimeClient)
-	api := app.Engine.Group("/api/v1")
-	registerPlatformRoutes(api, d)
-	registerK8sRoutes(api, d)
-	registerProjectRoutes(api, d)
-
-	if d.mysqlBackupSvc != nil && bgCtx != nil {
-		go d.mysqlBackupSvc.RunMysqlBackupScheduler(bgCtx)
-	}
-
-	clusterRepo := repository.NewK8sClusterRepository(app.DB)
-	runtimeSvc := service.NewK8sRuntimeService(clusterRepo)
-	mgr, err := k8seventforward.NewManager(
-		app.DB,
-		runtimeSvc,
-		app.YamlK8sEventForwardBase,
-		app.Config.Alert,
-		app.Config.App.Port,
-	)
+	d, err := InitializeRouteDeps(app, runtimeClient)
 	if err != nil {
-		svclog.Worker("k8s.event_forward").Errorw(err, "Failed to init K8s event forward manager")
-		return nil
+		return nil, fmt.Errorf("initialize route deps: %w", err)
 	}
-	mgr.Start()
-	return mgr
+
+	rt := &plugin.Runtime{
+		DB:                      app.DB,
+		Config:                  app.Config,
+		YamlK8sEventForwardBase: app.YamlK8sEventForwardBase,
+		GRPCClient:              runtimeClient,
+		Deps:                    d,
+		Enabled:                 plugin.ResolveEnabled(&app.Config.Plugins),
+		K8sRuntime:              d.K8sRuntimeService(),
+		MysqlBackup:             d.MysqlBackupService(),
+	}
+
+	api := app.Engine.Group("/api/v1")
+	if err := plugin.RegisterRoutes(api, rt, &app.Config.Plugins); err != nil {
+		return nil, fmt.Errorf("register plugin routes: %w", err)
+	}
+	if err := plugin.StartWorkers(bgCtx, rt, &app.Config.Plugins); err != nil {
+		return nil, fmt.Errorf("start plugin workers: %w", err)
+	}
+	return eventforward.Active(), nil
 }

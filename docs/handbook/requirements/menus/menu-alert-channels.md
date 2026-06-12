@@ -23,7 +23,7 @@
 ## 4. 权限
 
 - 需登录 + Casbin 中 `alerts/channels` 对应 `GET/POST/PUT/DELETE`。  
-- 种子见 `cmd/seed.go` → `defaultPermissions`。
+- 种子见 `cmd/seed.go` → `defaultPermissions()`。
 
 ## 5. 注意事项
 

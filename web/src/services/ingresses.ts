@@ -1,4 +1,4 @@
-import { createK8sResourceService, k8sParams } from "./service-factory";
+import { createK8sResourceService, k8sParams, pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export interface IngressItem {
   name: string;
@@ -62,8 +62,8 @@ export function restartIngressNginxPods(clusterId: number, namespace?: string, s
   });
 }
 
-export function deleteIngress(clusterId: number, namespace: string, name: string) {
-  return ingressesSvc.remove(k8sParams(clusterId, { namespace, name }));
+export function deleteIngress(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return ingressesSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
 
 export function listIngressClasses(clusterId: number, keyword?: string) {
@@ -78,6 +78,6 @@ export function applyIngressClass(clusterId: number, manifest: string) {
   return ingressClassesSvc.apply({ cluster_id: clusterId, manifest });
 }
 
-export function deleteIngressClass(clusterId: number, name: string) {
-  return ingressClassesSvc.remove(k8sParams(clusterId, { name }));
+export function deleteIngressClass(clusterId: number, name: string, deleteOpts?: K8sDeleteOptions) {
+  return ingressClassesSvc.remove(k8sParams(clusterId, { name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }

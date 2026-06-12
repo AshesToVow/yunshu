@@ -10,11 +10,11 @@ These files are generated from handler annotations by swaggo:
 
 ## Router-derived OpenAPI (recommended for complete paths)
 
-The repository maintains a **full REST map** generated from `internal/router/router.go`:
+The repository maintains a **full REST map** generated from router registration（`internal/router/` + 插件绑定）:
 
 - `docs/apipost/permission-system.openapi.yaml`
 
-Regenerate after route changes:
+Regenerate after route changes (scans all `internal/router/register_*.go`):
 
 ```bash
 go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml
@@ -56,4 +56,5 @@ Set `enabled: false` to disable the Swagger routes.
 ## Default Account
 
 - username: `admin`
-- password: `Admin@123`
+- password: `Admin@123`（**仅首次** `seed` 创建 admin 时写入；重复 seed 不重置密码）
+- email: `rootwxd@163.com`（seed 默认值，可在用户管理中修改）

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -80,13 +81,17 @@ func (h *PodHandler) LogsStream(c *gin.Context) {
 	c.Status(200)
 	c.Writer.Flush()
 
-	_ = h.svc.StreamLogs(c.Request.Context(), query, func(line string) error {
+	if err := h.svc.StreamLogs(c.Request.Context(), query, func(line string) error {
 		if _, err := c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", strings.TrimRight(line, "\r\n"))); err != nil {
 			return err
 		}
 		c.Writer.Flush()
 		return nil
-	})
+	}); err != nil {
+		payload, _ := json.Marshal(map[string]string{"message": err.Error()})
+		_, _ = fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", payload)
+		c.Writer.Flush()
+	}
 }
 
 // Delete 删除对应的 HTTP 接口处理逻辑。

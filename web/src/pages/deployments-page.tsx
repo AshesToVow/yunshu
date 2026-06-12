@@ -1,4 +1,5 @@
 import {
+  ApartmentOutlined,
   ColumnHeightOutlined,
   DownOutlined,
   EyeOutlined,
@@ -17,6 +18,8 @@ import { useWorkloadFormActions } from "../components/k8s/workload-form-actions"
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { InputNumber as AntdInputNumber } from "antd";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
+import { TopologyGraphView } from "../components/k8s/topology-graph-view";
+import { getWorkloadTopology, type TopologyGraph } from "../services/k8s-topology";
 import {
   applyDeployment,
   buildCpuMemoryResourceMaps,
@@ -142,7 +145,7 @@ export function DeploymentsPage() {
       name: recordName,
       namespace,
       replicas: Number(record?.replicas ?? 1) || 1,
-      container_name: recordName,
+      container_name: "",
       image: "",
       env_pairs: [{ key: "", value: "" }],
     }),
@@ -164,6 +167,22 @@ export function DeploymentsPage() {
     limits_memory?: string;
   }>();
   const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(async ({ clusterId, namespace, name }) => await listDeploymentPods(clusterId, namespace, name));
+  const [topoOpen, setTopoOpen] = useState(false);
+  const [topoLoading, setTopoLoading] = useState(false);
+  const [topoGraph, setTopoGraph] = useState<TopologyGraph | null>(null);
+
+  async function openTopology(clusterId: number, namespace: string, name: string) {
+    setTopoOpen(true);
+    setTopoLoading(true);
+    setTopoGraph(null);
+    try {
+      setTopoGraph(await getWorkloadTopology({ cluster_id: clusterId, namespace, kind: "deployment", name }));
+    } catch {
+      setTopoOpen(false);
+    } finally {
+      setTopoLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!rolloutOpen || !rolloutTarget) return;
@@ -255,7 +274,7 @@ export function DeploymentsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listDeployments(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getDeploymentDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyDeployment(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteDeployment(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteDeployment(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onEdit={(record, ctx) => formActions.openEdit({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }, record)}
         onToolbarReady={(ctx) => {
@@ -365,6 +384,12 @@ spec:
                     label: "关联 Pods",
                     icon: <EyeOutlined />,
                     onClick: () => openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
+                  },
+                  {
+                    key: "topology",
+                    label: "资源拓扑",
+                    icon: <ApartmentOutlined />,
+                    onClick: () => void openTopology(ctx.clusterId, ctx.namespace ?? "default", record.name),
                   },
                   {
                     key: "scale",
@@ -576,6 +601,9 @@ spec:
           }}
         </Form.Item>
       </WorkloadFormModal>
+      <Modal title="Deployment 资源拓扑（Ingress → Service → Workload → Pod）" open={topoOpen} onCancel={() => setTopoOpen(false)} footer={null} width={900}>
+        {topoLoading ? <Typography.Text>加载中…</Typography.Text> : <TopologyGraphView graph={topoGraph} />}
+      </Modal>
       {viewer}
     </>
   );

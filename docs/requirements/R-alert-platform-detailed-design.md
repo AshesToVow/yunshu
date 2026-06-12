@@ -50,13 +50,16 @@
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| HTTP Webhook / 通道 CRUD / 事件列表 | `internal/handler/alert_handler.go`、`alert_platform_handler.go`、`alert_subscription_handler.go`、`alert_receiver_group_handler.go` | 入参绑定、调用 Service |
-| 统一投递 | `internal/service/alert_service.go` | `ReceiveAlertmanager`、`channelIDSetForAlert`、`sendToChannel` |
-| 分组节流 | `internal/service/alert_aggregate_state.go` | `decideFiringGroupTiming`、`markResolvedNotificationSent`、`markAlertFiringDelivered` |
-| 订阅树 | `internal/service/alert_subscription_service.go` | `MatchRouteDetailed`、`nodeMatches` |
-| 平台规则评估 | `internal/service/alert_monitor_evaluator.go`、`alert_monitor_redis.go` | PromQL、Redis for |
-| 渠道渲染与发送 | `internal/service/alert_delivery.go` | `sendToChannel`、`mergeAssigneeEmails`（邮件处理人优先） |
+| HTTP Webhook / 通道 CRUD / 事件列表 | `internal/handler/alert_*.go` | 入参绑定、调用 `service.Alert*` |
+| 统一投递 | `internal/service/alert/alert_service_webhook.go` | `ReceiveAlertmanager` |
+| 路由与通道选择 | `internal/service/alert/alert_service_routing.go` | `channelIDSetForAlert` 等 |
+| 分组节流 | `internal/service/alert/alert_aggregate_state.go` | `decideFiringGroupTiming`、`markAlertFiringDelivered` |
+| 订阅树 | `internal/service/alert/alert_subscription_service.go` | `MatchRouteDetailed`、`nodeMatches` |
+| 平台规则评估 | `internal/service/alert/alert_monitor_evaluator.go`、`alert_monitor_redis.go` | PromQL、Redis for |
+| 渠道渲染与发送 | `internal/service/alert/alert_delivery_core.go`、`alert_delivery_email.go` | 投递与邮件合并 |
 | 配置 | `internal/config/config.go` → `AlertConfig` | Webhook token、group_*、Prometheus 增强 |
+
+> Handler 通过 `internal/service/exports.go` 引用上述类型；源码包名为 `alert`。
 
 ---
 
@@ -98,7 +101,7 @@
 
 ## 6. `ReceiveAlertmanager` 处理流水线（逻辑顺序）
 
-实现位置：`internal/service/alert_service.go` — `ReceiveAlertmanager`。
+实现位置：`internal/service/alert/alert_service_webhook.go` — `ReceiveAlertmanager`。
 
 对 `payload.Alerts` 中每一条：
 
@@ -122,7 +125,7 @@
 
 ## 7. 订阅树匹配规则（实现）
 
-`internal/service/alert_subscription_service.go`：
+`internal/service/alert/alert_subscription_service.go`：
 
 - 按 **`labels["project_id"]`** 选根节点集合。  
 - **匹配级别**（`match_severity`）：与 **`labels["severity"]`** 比较（配置为空则不过滤）。  

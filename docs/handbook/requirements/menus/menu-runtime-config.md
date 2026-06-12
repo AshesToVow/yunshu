@@ -1,8 +1,10 @@
 # 菜单需求：运行时配置（`/runtime-config`）
 
+> **已废弃侧栏入口**（2026-06）：运行期配置中心已合并至 **数据字典**（`/dict-entries`）；seed 隐藏 `/runtime-config` 并重定向。
+
 ## 1. 定位
 
-- **路由**：`/runtime-config`，`runtime-config-page`（动态菜单或运维入口）。  
+- **路由**：`/runtime-config`（历史书签可能仍存在）。  
 - **目标**：查看/调整与 **Agent、gRPC、平台运行时** 相关的可读配置（具体字段以前端页与后端 `runtime-config` 接口为准）。
 
 ## 2. API

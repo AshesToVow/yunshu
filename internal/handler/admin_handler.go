@@ -7,7 +7,7 @@ import (
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/svcerr"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/store"
 
 	"github.com/gin-gonic/gin"
@@ -45,7 +45,7 @@ func (h *AdminHandler) ListBannedIPs(c *gin.Context) {
 	ctx := c.Request.Context()
 	keys, err := h.rdb.Keys(ctx, "ban:ip:*").Result()
 	if err != nil {
-		response.Error(c, svcerr.Pass(ctx, "admin", "ListBannedIPs", err))
+		response.Error(c, bizerrors.Pass(ctx, "admin", "ListBannedIPs", err))
 		return
 	}
 	result := make([]gin.H, 0, len(keys))
@@ -71,7 +71,7 @@ func (h *AdminHandler) UnbanIP(c *gin.Context) {
 	ServeJSONOK(c, gin.H{"message": "unbanned"}, func(ctx context.Context, req unbanRequest) error {
 		key := store.BanIPKey(req.IP)
 		if err := h.rdb.Del(ctx, key).Err(); err != nil {
-			return svcerr.Pass(ctx, "admin", "UnbanIP", err)
+			return bizerrors.Pass(ctx, "admin", "UnbanIP", err)
 		}
 		return nil
 	})

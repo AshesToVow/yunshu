@@ -13,8 +13,9 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/casbinadapter"
 	logx "yunshu/internal/pkg/logger"
+	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/pkg/mailer"
-	"yunshu/internal/service/svclog"
+	"yunshu/internal/providers"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,29 @@ func NewBuilder() *Builder {
 	return &Builder{app: &App{}}
 }
 
+func (b *Builder) WithInfra(infra *providers.Infra) *Builder {
+	if b.err != nil {
+		return b
+	}
+	if infra == nil {
+		b.err = errors.New("infra is required")
+		return b
+	}
+	b.app.Config = infra.Config
+	b.app.Logger = infra.Logger
+	b.app.DB = infra.DB
+	b.app.Redis = infra.Redis
+	if infra.Config != nil {
+		b.yamlMailBase = infra.Config.Mail
+		b.yamlK8sEventForwardBase = infra.Config.K8sEventForward
+		b.app.YamlK8sEventForwardBase = infra.Config.K8sEventForward
+	}
+	if infra.Logger != nil {
+		logutil.SetDefaultLogger(infra.Logger.Info)
+	}
+	return b
+}
+
 func (b *Builder) WithConfig(path string) *Builder {
 	if b.err != nil {
 		return b
@@ -74,6 +98,7 @@ func (b *Builder) WithLogger() *Builder {
 	}
 
 	b.app.Logger = logx.New(b.app.Config.Log)
+	logutil.SetDefaultLogger(b.app.Logger.Info)
 	return b
 }
 
@@ -202,9 +227,9 @@ func (b *Builder) WithCasbin() *Builder {
 	policyCount := len(enforcer.GetPolicy())
 	groupingCount := len(enforcer.GetGroupingPolicy())
 	if policyCount == 0 && groupingCount == 0 {
-		svclog.Worker("casbin").Warnw("Loaded zero Casbin rules; authorize may deny all until policies are seeded")
+		logutil.Worker("casbin").Warn("Loaded zero Casbin rules; authorize may deny all until policies are seeded")
 	} else {
-		svclog.Worker("casbin").Infow("Loaded Casbin policy", "p_rules", policyCount, "g_rules", groupingCount)
+		logutil.Worker("casbin").Info("Loaded Casbin policy", "p_rules", policyCount, "g_rules", groupingCount)
 	}
 	// 冒烟：确认 model 可执行 Enforce（adapter/模型损坏时此处会报错）
 	if _, err = enforcer.Enforce("__casbin_smoke__", "/__smoke__", "GET"); err != nil {
@@ -234,7 +259,7 @@ func (b *Builder) WithMailer() *Builder {
 			YAMLBase: b.yamlMailBase,
 		})
 		enabled := b.app.Mailer.Enabled()
-		svclog.Worker("mail").Infow("Initialized mail sender (dict-first, reload on send)",
+		logutil.Worker("mail").Info("Initialized mail sender (dict-first, reload on send)",
 			"enabled", enabled,
 			"host", resolved.Host,
 			"port", resolved.Port,
@@ -262,6 +287,7 @@ func (b *Builder) WithGin() *Builder {
 	engine := gin.New()
 	engine.Use(middleware.Recovery(b.app.Logger))
 	engine.Use(middleware.RequestLogger(b.app.Logger))
+	engine.Use(middleware.ErrorHandler())
 	b.app.Engine = engine
 	return b
 }

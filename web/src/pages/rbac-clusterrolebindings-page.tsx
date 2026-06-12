@@ -57,8 +57,14 @@ export function RbacClusterRoleBindingsPage() {
         list: async ({ clusterId, keyword }) => (await listClusterRoleBindings(clusterId, keyword)).list,
         detail: async ({ clusterId, name }) => await getRbacDetail({ cluster_id: clusterId, kind: "ClusterRoleBinding", name }),
         apply: async ({ clusterId, manifest }) => await applyRbac(clusterId, manifest),
-        remove: async ({ clusterId, name }) =>
-          await deleteRbac({ cluster_id: clusterId, kind: "ClusterRoleBinding", name }),
+        remove: async (args) =>
+          await deleteRbac({
+            cluster_id: args.clusterId,
+            kind: "ClusterRoleBinding",
+            name: args.name,
+            grace_period_seconds: args.grace_period_seconds,
+            propagation_policy: args.propagation_policy,
+          }),
       }}
       createTemplate={() => `apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

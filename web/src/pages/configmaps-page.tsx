@@ -44,7 +44,7 @@ export function ConfigmapsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listConfigMaps(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getConfigMapDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyConfigMap(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteConfigMap(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteConfigMap(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: v1
 kind: ConfigMap

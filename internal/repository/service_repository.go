@@ -10,7 +10,7 @@ import (
 
 type ServiceRepository struct{ db *gorm.DB }
 
-func NewServiceRepository(db *gorm.DB) *ServiceRepository { return &ServiceRepository{db: db} }
+func NewServiceRepository(db *gorm.DB) ServiceRepo { return &ServiceRepository{db: db} }
 
 type ServiceListParams struct {
 	ProjectID uint

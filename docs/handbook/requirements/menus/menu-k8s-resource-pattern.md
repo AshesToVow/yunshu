@@ -1,6 +1,30 @@
 # 通用说明：Kubernetes 列表/详情类菜单页
 
-以下路由共用的交互与权限模式（`/namespaces`、`/deployments`、`/pods` 等均类似，差异主要在 **API 路径** 与 **资源类型**）。
+以下路由共用的交互与权限模式。**完整 catalog 与 component 名见 `internal/menu/catalog.go`**。
+
+| 路由 | Component |
+|------|-----------|
+| `/namespaces` | `namespaces-page` |
+| `/nodes` | `nodes-page` |
+| `/deployments` | `deployments-page` |
+| `/statefulsets` | `statefulsets-page` |
+| `/daemonsets` | `daemonsets-page` |
+| `/cronjobs` | `cronjobs-page` |
+| `/jobs` | `jobs-page` |
+| `/configmaps` | `configmaps-page` |
+| `/secrets` | `secrets-page` |
+| `/k8s-services` | `k8s-services-page` |
+| `/persistentvolumes` | `persistentvolumes-page` |
+| `/persistentvolumeclaims` | `persistentvolumeclaims-page` |
+| `/storageclasses` | `storageclasses-page` |
+| `/ingresses` | `ingresses-page` |
+| `/ingress-classes` | `ingress-classes-page` |
+| `/network-policies` | `network-policies-page` |
+| `/serviceaccounts` | `serviceaccounts-page` |
+| `/horizontal-pod-autoscalers` | `horizontal-pod-autoscalers-page` |
+| `/events` | `events-page` |
+
+专用说明见各菜单文档；`/pods`、`/clusters`、`/component-status`、`/k8s/event-forward`、`/cluster-api-resources`、RBAC 路由有独立文档。
 
 ## 1. 共同前提
 

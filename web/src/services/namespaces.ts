@@ -1,4 +1,5 @@
 import { getData, http } from "./http";
+import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export interface NamespaceItem {
   name: string;
@@ -85,7 +86,9 @@ export function applyNamespace(clusterId: number, manifest: string, opts?: Apply
   );
 }
 
-export function deleteNamespace(clusterId: number, name: string) {
-  return getData<boolean>(http.delete("/namespaces", { params: { cluster_id: clusterId, name } }));
+export function deleteNamespace(clusterId: number, name: string, deleteOpts?: K8sDeleteOptions) {
+  return getData<boolean>(
+    http.delete("/namespaces", { params: { cluster_id: clusterId, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) } }),
+  );
 }
 

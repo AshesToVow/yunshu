@@ -10,7 +10,7 @@ import (
 
 type LogSourceRepository struct{ db *gorm.DB }
 
-func NewLogSourceRepository(db *gorm.DB) *LogSourceRepository { return &LogSourceRepository{db: db} }
+func NewLogSourceRepository(db *gorm.DB) LogSourceRepo { return &LogSourceRepository{db: db} }
 
 type LogSourceListParams struct {
 	ProjectID uint

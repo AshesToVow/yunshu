@@ -53,13 +53,15 @@ Yunshu 主要能力：
 - 告警数据源、规则、值班、静默、策略、多渠道通知（钉钉/邮件等）
 - Kubernetes 资源可视化管理（工作负载、网络、存储、RBAC、CRD、Ingress-Nginx 运维）
 
-默认管理员（`go run . seed` 后）：
+默认管理员（**首次** `go run . seed` 创建；重复 seed **不会重置**已有 admin 密码）：
 
 | 项 | 值 |
 |----|-----|
 | 用户名 | `admin` |
-| 密码 | `Admin@123` |
-| 邮箱 | `admin@example.com` |
+| 密码 | `Admin@123`（仅首次创建时写入） |
+| 邮箱 | `rootwxd@163.com` |
+
+业务功能以**编译期插件**组织，由 `configs/config.yaml` 的 `plugins.enabled` 控制启停，详见 [docs/plugins.md](docs/plugins.md)。
 
 ---
 
@@ -232,8 +234,8 @@ git checkout main
 ### 首次登录与初始化
 
 1. 执行 `go run . migrate` 与 `go run . seed`（Docker 镜像内通常在启动脚本中已包含，以实际 Dockerfile 为准）。
-2. 使用 `admin` / `Admin@123` 登录控制台。
-3. **系统管理 → 菜单管理**：确认菜单树完整；若缺失可再次执行 `seed`。
+2. 使用 `admin` / `Admin@123` 登录控制台（若 admin 已存在且改过密码，seed 不会覆盖）。
+3. **系统管理 → 菜单管理**：内置菜单由 `internal/menu/catalog.go` 定义，经 `seed` 按 `(parent_id, path)` 同步；缺失或升级后请再次执行 `seed`。
 4. **系统管理 → 授权管理**：为业务角色勾选所需 API（或复制 `super-admin` 策略模板）。
 
 ### 权限配置（Casbin + 集群档位）
@@ -319,7 +321,7 @@ API 细节见：[docs/log-platform-api.md](docs/log-platform-api.md)
 2. **告警规则 / 值班**：规则归属由数据源推导；配置值班块与通知对象。
 3. **告警策略**：匹配标签、路由到渠道（钉钉/邮件/Webhook）。
 4. **告警静默**：维护窗口内抑制通知。
-5. **Alertmanager Webhook**：配置 `alert.webhook_token`（或数据字典），指向 `POST /api/v1/alerts/webhook`。
+5. **Alertmanager Webhook**：配置 `alert.webhook_token`（或数据字典），指向 `POST /api/v1/alerts/webhook/alertmanager`；鉴权使用请求头 **`X-Alert-Token`**（或 `Authorization: Bearer <token>`），**不支持** URL query `?token=`。
 
 说明见：[docs/alert-notify-guide.md](docs/alert-notify-guide.md)、[docs/alert-routing-and-delivery-guide.md](docs/alert-routing-and-delivery-guide.md)
 
@@ -330,20 +332,23 @@ API 细节见：[docs/log-platform-api.md](docs/log-platform-api.md)
 | 模块 | 路径示例 |
 |------|----------|
 | 总览 | `/` |
+| 插件管理 | `/plugins` |
 | 用户/角色/授权/API/菜单 | `/users`、`/roles`、`/policies`、`/permissions`、`/menus` |
 | K8s 档位/NS 策略 | `/k8s-scoped-policies` |
-| 项目与日志 | `/projects`、`/project-logs`、`/project-log-sources` |
-| 集群与资源 | `/clusters`、`/pods`、`/deployments`、… |
-| 告警 | `/alert-config-center`、`/alert-events` 等 |
+| 项目与日志 | `/projects`、`/project-members`、`/project-logs`、`/project-log-sources` |
+| 集群与资源 | `/clusters`、`/pods`、`/deployments`、`/k8s/event-forward`、… |
+| 告警 | `/alert-channels`、`/alert-monitor-platform`、`/alert-duty` |
 
-完整菜单由 `seed` 写入 `menus` 表，前端按权限动态加载。
+> 已废弃侧栏入口（seed 会隐藏并重定向）：`/alert-config-center` → 监控平台「策略与联调」；`/alert-events` → 监控平台「历史」；`/runtime-config` → `/dict-entries`。
+
+完整菜单由 `internal/menu/catalog.go` + `seed` 写入 `menus` 表；前端按插件启用状态与权限动态加载（`web/src/modules/`）。
 
 ---
 
 ## 常用 CLI 命令
 
 ```bash
-# 数据库迁移与种子数据
+# 数据库迁移与种子数据（seed：事务 + Permission 批量 upsert + Casbin AddPolicies；admin 密码仅首次创建）
 go run . migrate
 go run . seed
 
@@ -650,7 +655,8 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ![k8s-Pod管理页面](./images/k8s-Pod管理页面.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
-- [x] 集群、组件状态、命名空间、节点、Pod 基础管理
+- [x] 集群、命名空间、节点、Pod 基础管理
+- [x] 组件状态：Node Ready + kube-system 控制平面 Pod（替代已废弃 ComponentStatus API）
 - [x] Pod 详情改为只读，编辑收口到表单
 - [x] 集群凭证 API 脱敏；kubeconfig 不回显
 - [x] Node / Ingress-Nginx 重启纳入集群档位校验
@@ -760,23 +766,30 @@ erDiagram
 
 ```text
 yunshu/
-├── cmd/                    # Cobra：server / migrate / seed / log-agent / log-agent-doctor
+├── cmd/                    # Cobra：server / migrate / seed / log-agent
 ├── cmd/logagent/           # 独立 log-agent 二进制入口
-├── configs/                # config.yaml、casbin_model.conf
-├── docs/                   # 产品手册、API、部署、告警说明
-├── images/                 # README 截图
+├── configs/                # config.yaml、casbin_model.conf、plugins.enabled
+├── docs/                   # 产品手册、API、架构文档（见 docs/CODEBASE-MAP.md）
 ├── internal/
 │   ├── agent/              # 日志 Agent 运行时
 │   ├── bootstrap/          # 应用启动、迁移
 │   ├── grpc/               # gRPC 服务（日志 Ingest 等）
 │   ├── handler/            # HTTP 处理器
-│   ├── middleware/         # Auth、Casbin、K8sScope、审计
-│   ├── model/ / repository/ / service/
-│   └── router/
-├── web/                    # React + Vite 前端
+│   ├── menu/               # 内置菜单 catalog + seed 同步（internal/menu/catalog.go）
+│   ├── middleware/         # Auth、Casbin、K8sScope、ErrorHandler、审计
+│   ├── plugin/             # 插件注册表与 Runtime
+│   ├── plugins/            # 编译期业务插件：core/k8s/alert/project/cmdb/backup
+│   ├── interfaces/         # Repository 接口
+│   ├── repository/         # GORM 仓储实现
+│   ├── model/              # 数据模型
+│   ├── providers/          # Wire：Config / DB / Redis
+│   ├── router/             # 路由 + plugin_bind + Wire 装配
+│   └── service/            # 业务逻辑（按域子包 + exports.go 门面）
+│       ├── alert/ cmdb/ k8s/ project/ system/ logplatform/ ...
+│       └── exports.go
+├── web/                    # React + Vite 前端（web/src/modules 按插件懒加载）
 ├── docker-compose.yml
-├── Dockerfile.backend / Dockerfile.frontend
-└── README.md               # 本文档
+└── README.md
 ```
 
 ---
@@ -785,6 +798,10 @@ yunshu/
 
 | 文档 | 路径 |
 |------|------|
+| **后端代码地图（推荐开发者首读）** | [docs/CODEBASE-MAP.md](docs/CODEBASE-MAP.md) |
+| **业务插件（GVA 风格）** | [docs/plugins.md](docs/plugins.md) |
+| 后端完整架构 | [docs/backend-architecture-complete.md](docs/backend-architecture-complete.md) |
+| 重构实施状态 | [docs/refactoring-report.md](docs/refactoring-report.md) |
 | 产品手册总览 | [docs/handbook/README.md](docs/handbook/README.md) |
 | 权限设计（必读） | [docs/handbook/permissions/casbin-and-k8s-triple-policy.md](docs/handbook/permissions/casbin-and-k8s-triple-policy.md) |
 | 日志平台 API | [docs/log-platform-api.md](docs/log-platform-api.md) |
@@ -794,6 +811,7 @@ yunshu/
 | 告警路由投递 | [docs/alert-routing-and-delivery-guide.md](docs/alert-routing-and-delivery-guide.md) |
 | 数据库 ER（细分） | [docs/handbook/database/er-diagrams.md](docs/handbook/database/er-diagrams.md) |
 | 麒麟部署示例 | [docs/deployment/KYLIN_V10_X86_64.md](docs/deployment/KYLIN_V10_X86_64.md) |
+| 文档索引（全部） | [docs/README.md](docs/README.md) |
 | OpenAPI 集合 | [docs/apipost/README.md](docs/apipost/README.md) |
 
 ---

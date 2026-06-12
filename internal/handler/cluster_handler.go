@@ -94,7 +94,17 @@ func (h *ClusterHandler) Namespaces(c *gin.Context) {
 	response.Success(c, gin.H{"list": list})
 }
 
-// ComponentStatuses 处理对应的 HTTP 请求并返回统一响应。
+// ComponentStatuses godoc
+// @Summary List cluster component statuses
+// @Description Returns Kubernetes component health (etcd, scheduler, controller-manager, etc.).
+// @Tags Clusters
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Cluster ID"
+// @Success 200 {object} response.Body "success"
+// @Failure 401 {object} response.Body "未登录或登录已失效"
+// @Failure 403 {object} response.Body "无访问权限"
+// @Router /api/v1/clusters/{id}/component-statuses [get]
 func (h *ClusterHandler) ComponentStatuses(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {

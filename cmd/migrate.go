@@ -14,18 +14,12 @@ var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Run database migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		app, err := bootstrap.NewBuilder().
-			WithConfig(configPath).
-			WithLogger().
-			WithMySQL().
-			WithDictOverrides().
-			WithCasbin().
-			Build()
+		app, err := bootstrap.BuildCoreApp(configPath)
 		if err != nil {
 			return err
 		}
 		defer app.Close()
 
-		return bootstrap.AutoMigrateModels(app.DB)
+		return bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins)
 	},
 }

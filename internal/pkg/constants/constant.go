@@ -9,13 +9,13 @@ import (
 	"net/http"
 	"strings"
 
-	"yunshu/internal/pkg/apperror"
+	bizerrors "yunshu/internal/pkg/errors"
 )
 
 // BizError 构造业务错误：HTTP 状态、数字业务码、reason（OneX）、产品话术（message）。
-// JSON 响应含 code/reason/message/error_code（兼容）/metadata，见 internal/pkg/response。
+// JSON 响应含 code/reason/message/error_code（兼容）/metadata，见 ErrorHandler 中间件。
 func BizError(httpStatus, bizCode int, message string) error {
-	return apperror.NewBiz(httpStatus, bizCode, ReasonForBizCode(bizCode), message)
+	return bizerrors.NewBiz(httpStatus, bizCode, ReasonForBizCode(bizCode), message)
 }
 
 // ErrBadRequestWithMsg 固定业务码 11020，文案由调用方传入（绑定失败、fmt 拼接等）。
@@ -67,7 +67,8 @@ var (
 	ErrLoginSessionExpired      = BizError(http.StatusUnauthorized, 10010, "登录会话已过期，请重新登录")
 	ErrAccountPrincipalNotFound = BizError(http.StatusUnauthorized, 10011, "账号不存在或已删除，请检查登录信息")
 	ErrAccountDisabled          = BizError(http.StatusForbidden, 10012, "账号已被禁用，如需协助请联系管理员")
-	ErrWSMissingTokenParam      = BizError(http.StatusUnauthorized, 10013, "缺少连接令牌参数，请在请求中携带 token")
+	ErrWSMissingTicketParam     = BizError(http.StatusUnauthorized, 10013, "缺少 WebSocket 握手票据，请先调用 POST /api/v1/auth/ws-ticket 获取 ticket 并在连接 URL 中携带")
+	ErrWSTicketInvalid          = BizError(http.StatusUnauthorized, 10015, "WebSocket 握手票据无效或已过期，请重新获取 ticket 后再连接")
 	ErrNotLoggedIn              = BizError(http.StatusUnauthorized, 10014, "未完成登录，请先登录后再访问该资源")
 )
 

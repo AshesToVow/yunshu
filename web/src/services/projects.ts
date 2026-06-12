@@ -1,12 +1,28 @@
 import type { ApiResponse, PageData } from "../types/api";
 import { getData, http } from "./http";
 
+export const PROJECT_TYPE_OPTIONS = [
+  { label: "业务项目", value: "business" },
+  { label: "平台项目", value: "platform" },
+  { label: "基础设施", value: "infra" },
+  { label: "研发试验", value: "research" },
+] as const;
+
+export const PROJECT_LIFECYCLE_OPTIONS = [
+  { label: "规划中", value: "planning" },
+  { label: "进行中", value: "active" },
+  { label: "已暂停", value: "suspended" },
+  { label: "已归档", value: "archived" },
+] as const;
+
 export interface ProjectItem {
   id: number;
   name: string;
   code: string;
   description?: string | null;
   status: number;
+  project_type: string;
+  lifecycle_status: string;
   /** 可选归属部门 */
   owner_department_id?: number | null;
   /** 当前登录用户在该项目中的成员角色（owner/admin/member/readonly）；超管列表可能为空 */
@@ -19,6 +35,8 @@ export interface ProjectCreatePayload {
   code: string;
   description?: string;
   status: number;
+  project_type?: string;
+  lifecycle_status?: string;
   owner_department_id?: number;
 }
 
@@ -27,11 +45,28 @@ export interface ProjectUpdatePayload {
   code?: string;
   description?: string | null;
   status?: number;
+  project_type?: string;
+  lifecycle_status?: string;
   /** 传 0 表示清空归属部门 */
   owner_department_id?: number;
 }
 
-export async function getProjects(params: { keyword?: string; page?: number; page_size?: number }) {
+export type ApplicationTopologyGraph = {
+  nodes: Array<{ id: string; label: string; kind: string; state?: string; state_level?: string }>;
+  edges: Array<{ from: string; to: string; kind?: string }>;
+};
+
+export async function getApplicationTopology(projectId: number) {
+  return getData<ApplicationTopologyGraph>(http.get(`/projects/${projectId}/application-topology`));
+}
+
+export async function getProjects(params: {
+  keyword?: string;
+  project_type?: string;
+  lifecycle_status?: string;
+  page?: number;
+  page_size?: number;
+}) {
   return await getData(http.get<any, ApiResponse<PageData<ProjectItem>>>("/projects", { params }));
 }
 

@@ -57,11 +57,11 @@ func ServeDelete(c *gin.Context, fn func(context.Context, uint) error, idParam s
 	}
 	id, err := parseUintParam(c, idParam)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	if err := fn(auth.RequestContext(c), id); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "deleted"})
@@ -74,7 +74,7 @@ func ServePatch[Req any, Resp any](c *gin.Context, fn func(context.Context, uint
 	}
 	id, err := parseUintParam(c, idParam)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	handleJSON(c, func(ctx context.Context, body Req) (Resp, error) {

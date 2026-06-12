@@ -977,7 +977,7 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-05-17
+            2026-06-12
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
@@ -1287,35 +1287,35 @@
 <tbody>
 <tr>
 <td>订阅树匹配</td>
-<td><code>internal/service/alert_subscription_service.go</code>：<code>nodeMatches</code>、<code>MatchRouteDetailed</code></td>
+<td><code>internal/service/alert/alert_subscription_service.go</code>：<code>nodeMatches</code>、<code>MatchRouteDetailed</code></td>
 </tr>
 <tr>
 <td>接收组 → 通道</td>
-<td><code>internal/service/alert_service.go</code>：<code>channelIDSetForAlert</code></td>
+<td><code>internal/service/alert/alert_service_routing.go</code>：<code>channelIDSetForAlert</code></td>
+</tr>
+<tr>
+<td>Webhook 主入口</td>
+<td><code>internal/service/alert/alert_service_webhook.go</code>：<code>ReceiveAlertmanager</code></td>
 </tr>
 <tr>
 <td>firing 分组节流</td>
-<td><code>internal/service/alert_aggregate_state.go</code>：<code>decideFiringGroupTiming</code></td>
+<td><code>internal/service/alert/alert_aggregate_state.go</code>：<code>decideFiringGroupTiming</code></td>
 </tr>
 <tr>
 <td>firing 成功投递标记 / resolved 拦截</td>
-<td>同上：<code>markAlertFiringDelivered</code>、<code>alertFiringWasDelivered</code>、<code>logResolvedSuppressedNoPriorFiringDelivery</code>；<code>ReceiveAlertmanager</code> 内发送循环</td>
+<td>同上 + Webhook 发送循环</td>
 </tr>
 <tr>
 <td>平台规则 for</td>
-<td><code>internal/service/alert_monitor_redis.go</code>：<code>evaluateMonitorRuleWithRedis</code></td>
+<td><code>internal/service/alert/alert_monitor_redis.go</code>：<code>evaluateMonitorRuleWithRedis</code></td>
 </tr>
 <tr>
-<td>处理人/值班邮箱与 IM 补邮件</td>
-<td><code>alert_service.go</code>：<code>enrichAssigneeAndDutyEmails</code>；<code>alert_rule_assignee_service.go</code>：<code>ResolveNotifyEmailsDirectUsers</code>；<code>alert_delivery_assignee_expand.go</code></td>
+<td>处理人/值班邮箱</td>
+<td><code>internal/service/alert/alert_rule_assignee_service.go</code>、<code>alert_duty_service.go</code></td>
 </tr>
 <tr>
-<td>值班标题前缀</td>
-<td><code>alert_delivery.go</code>：<code>buildUnifiedNotifyTitle</code>、<code>shouldPrefixDutyOnNotifyTitle</code>；<code>alert_duty_service.go</code>：<code>HasActiveBlockAtRule</code></td>
-</tr>
-<tr>
-<td>邮件收件人合并</td>
-<td><code>alert_delivery.go</code>：<code>mergeAssigneeEmails</code>（有 <code>assignee_emails</code> 时不合并接收组静态邮箱）</td>
+<td>渠道投递</td>
+<td><code>internal/service/alert/alert_delivery_core.go</code>、<code>alert_delivery_email.go</code></td>
 </tr>
 </tbody>
 </table></div>

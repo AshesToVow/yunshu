@@ -1,12 +1,24 @@
 basePath: /
 definitions:
-  handler.HealthData:
+  alert.AlertManagerAlert:
     properties:
-      env:
-        example: dev
+      annotations:
+        additionalProperties:
+          type: string
+        type: object
+      endsAt:
         type: string
-      name:
-        example: yunshu-cmdb
+      fingerprint:
+        type: string
+      generatorURL:
+        type: string
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      startsAt:
+        type: string
+      status:
         type: string
     type: object
   handler.MessageData:
@@ -63,6 +75,77 @@ definitions:
         example: 1
         type: integer
     type: object
+  handler.idsRequest:
+    properties:
+      ids:
+        items:
+          type: integer
+        minItems: 1
+        type: array
+    required:
+    - ids
+    type: object
+  model.AlertSubscriptionNode:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/model.AlertSubscriptionNode'
+        type: array
+      code:
+        type: string
+      continue:
+        description: 路由行为
+        type: boolean
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      level:
+        type: integer
+      match_labels:
+        additionalProperties:
+          type: string
+        description: 非数据库字段
+        type: object
+      match_labels_json:
+        description: 匹配条件（与父节点条件AND组合）
+        type: string
+      match_regex:
+        additionalProperties:
+          type: string
+        type: object
+      match_regex_json:
+        type: string
+      match_severity:
+        type: string
+      name:
+        description: 节点名称与标识
+        type: string
+      notify_resolved:
+        type: boolean
+      parent:
+        $ref: '#/definitions/model.AlertSubscriptionNode'
+      parent_id:
+        description: 树形结构
+        type: integer
+      path:
+        type: string
+      project_id:
+        type: integer
+      receiver_group_ids:
+        items:
+          type: integer
+        type: array
+      receiver_group_ids_json:
+        description: 通知配置
+        type: string
+      silence_seconds:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   response.Body:
     properties:
       code:
@@ -71,28 +154,140 @@ definitions:
       message:
         type: string
     type: object
-  service.LoginCaptchaResponse:
+  service.AlertInhibitionRuleUpsertRequest:
     properties:
-      captcha_code:
+      description:
         type: string
-      captcha_id:
-        type: string
-      expires_in:
+      duration_seconds:
         type: integer
+      enabled:
+        type: boolean
+      equal_labels_json:
+        type: string
+      name:
+        maxLength: 128
+        type: string
+      priority:
+        type: integer
+      project_id:
+        type: integer
+      source_match_labels_json:
+        type: string
+      source_match_regex_json:
+        type: string
+      target_match_labels_json:
+        type: string
+      target_match_regex_json:
+        type: string
+    required:
+    - name
+    type: object
+  service.AlertManagerPayload:
+    properties:
+      alerts:
+        items:
+          $ref: '#/definitions/alert.AlertManagerAlert'
+        type: array
+      commonAnnotations:
+        additionalProperties:
+          type: string
+        type: object
+      commonLabels:
+        additionalProperties:
+          type: string
+        type: object
+      externalURL:
+        type: string
+      groupLabels:
+        additionalProperties:
+          type: string
+        type: object
+      receiver:
+        type: string
+      status:
+        type: string
+      truncatedAlerts:
+        type: integer
+      version:
+        type: string
+    type: object
+  service.AlertSubscriptionNodeUpsertRequest:
+    properties:
+      code:
+        maxLength: 64
+        type: string
+      continue:
+        type: boolean
+      enabled:
+        type: boolean
+      match_labels_json:
+        type: string
+      match_regex_json:
+        type: string
+      match_severity:
+        maxLength: 128
+        type: string
+      name:
+        maxLength: 128
+        type: string
+      notify_resolved:
+        type: boolean
+      parent_id:
+        type: integer
+      project_id:
+        type: integer
+      receiver_group_ids_json:
+        type: string
+      silence_seconds:
+        type: integer
+    required:
+    - name
+    - project_id
+    type: object
+  service.ChangePasswordRequest:
+    properties:
+      new_password:
+        maxLength: 64
+        minLength: 6
+        type: string
+      old_password:
+        maxLength: 64
+        minLength: 6
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  service.CreateWSTicketRequest:
+    properties:
+      scope:
+        maxLength: 32
+        type: string
+    type: object
+  service.EmailLoginRequest:
+    properties:
+      code:
+        type: string
+      email:
+        maxLength: 128
+        type: string
+    required:
+    - code
+    - email
     type: object
   service.LoginRequest:
     properties:
-      captcha_code:
+      captcha_key:
         type: string
-      captcha_id:
+      code:
         type: string
       password:
         type: string
       username:
         type: string
     required:
-    - captcha_code
-    - captcha_id
+    - captcha_key
+    - code
     - password
     - username
     type: object
@@ -103,7 +298,7 @@ definitions:
       token:
         type: string
       user:
-        $ref: '#/definitions/service.UserDetailResponse'
+        $ref: '#/definitions/system.UserDetailResponse'
     type: object
   service.PermissionCreateRequest:
     properties:
@@ -113,6 +308,8 @@ definitions:
       description:
         maxLength: 255
         type: string
+      k8s_scope_enabled:
+        type: boolean
       name:
         maxLength: 64
         type: string
@@ -132,6 +329,8 @@ definitions:
         type: string
       id:
         type: integer
+      k8s_scope_enabled:
+        type: boolean
       name:
         type: string
       resource:
@@ -145,6 +344,8 @@ definitions:
       description:
         maxLength: 255
         type: string
+      k8s_scope_enabled:
+        type: boolean
       name:
         maxLength: 64
         type: string
@@ -179,6 +380,38 @@ definitions:
       role_name:
         type: string
     type: object
+  service.RegisterRequest:
+    properties:
+      code:
+        type: string
+      email:
+        maxLength: 128
+        type: string
+      nickname:
+        maxLength: 128
+        type: string
+      password:
+        maxLength: 64
+        minLength: 6
+        type: string
+      username:
+        maxLength: 64
+        minLength: 3
+        type: string
+    required:
+    - code
+    - email
+    - nickname
+    - password
+    - username
+    type: object
+  service.RegisterResponse:
+    properties:
+      message:
+        type: string
+      user:
+        $ref: '#/definitions/system.UserDetailResponse'
+    type: object
   service.RoleCreateRequest:
     properties:
       code:
@@ -200,6 +433,8 @@ definitions:
     properties:
       code:
         type: string
+      created_at:
+        type: string
       description:
         type: string
       id:
@@ -208,6 +443,8 @@ definitions:
         type: string
       status:
         type: integer
+      updated_at:
+        type: string
     type: object
   service.RoleUpdateRequest:
     properties:
@@ -223,6 +460,70 @@ definitions:
       status:
         type: integer
     type: object
+  service.SendEmailCodeRequest:
+    properties:
+      email:
+        maxLength: 128
+        type: string
+      scene:
+        enum:
+        - login
+        - register
+        type: string
+    required:
+    - email
+    - scene
+    type: object
+  service.SendEmailCodeResponse:
+    properties:
+      cooldown_in:
+        type: integer
+      email:
+        type: string
+      expires_in:
+        type: integer
+      scene:
+        type: string
+    type: object
+  service.SendLoginCodeByUsernameRequest:
+    properties:
+      username:
+        type: string
+    required:
+    - username
+    type: object
+  service.SendPasswordLoginCodeRequest:
+    properties:
+      username:
+        type: string
+    required:
+    - username
+    type: object
+  service.SendPasswordLoginCodeResponse:
+    properties:
+      captcha_key:
+        type: string
+      cooldown_in:
+        type: integer
+      expires_in:
+        type: integer
+      image:
+        type: string
+    type: object
+  service.UpdateProfileRequest:
+    properties:
+      email:
+        maxLength: 128
+        type: string
+      nickname:
+        maxLength: 128
+        type: string
+      phone:
+        maxLength: 20
+        type: string
+    required:
+    - nickname
+    type: object
   service.UserAssignRolesRequest:
     properties:
       role_ids:
@@ -232,12 +533,20 @@ definitions:
     type: object
   service.UserCreateRequest:
     properties:
+      department_id:
+        type: integer
+      email:
+        maxLength: 128
+        type: string
       nickname:
         maxLength: 128
         type: string
       password:
         maxLength: 64
         minLength: 6
+        type: string
+      phone:
+        maxLength: 20
         type: string
       role_ids:
         items:
@@ -250,6 +559,7 @@ definitions:
         minLength: 3
         type: string
     required:
+    - email
     - nickname
     - password
     - username
@@ -258,13 +568,25 @@ definitions:
     properties:
       created_at:
         type: string
+      department_id:
+        type: integer
+      department_name:
+        type: string
+      email:
+        type: string
+      groups:
+        items:
+          $ref: '#/definitions/system.UserGroupBrief'
+        type: array
       id:
         type: integer
       nickname:
         type: string
+      phone:
+        type: string
       roles:
         items:
-          $ref: '#/definitions/service.RoleItem'
+          $ref: '#/definitions/system.RoleItem'
         type: array
       status:
         type: integer
@@ -275,6 +597,11 @@ definitions:
     type: object
   service.UserUpdateRequest:
     properties:
+      department_id:
+        type: integer
+      email:
+        maxLength: 128
+        type: string
       nickname:
         maxLength: 128
         type: string
@@ -282,21 +609,365 @@ definitions:
         maxLength: 64
         minLength: 6
         type: string
+      phone:
+        maxLength: 20
+        type: string
       status:
         type: integer
+    type: object
+  service.WSTicketResponse:
+    properties:
+      expires_in:
+        type: integer
+      ticket:
+        type: string
+    type: object
+  system.RoleItem:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      status:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  system.UserDetailResponse:
+    properties:
+      created_at:
+        type: string
+      department_id:
+        type: integer
+      department_name:
+        type: string
+      email:
+        type: string
+      groups:
+        items:
+          $ref: '#/definitions/system.UserGroupBrief'
+        type: array
+      id:
+        type: integer
+      nickname:
+        type: string
+      phone:
+        type: string
+      roles:
+        items:
+          $ref: '#/definitions/system.RoleItem'
+        type: array
+      status:
+        type: integer
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  system.UserGroupBrief:
+    properties:
+      code:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
     type: object
 info:
   contact: {}
   description: |-
-    YunShu CMDB is an operations CMDB console built with Gin, MySQL, Redis, Casbin, Cobra and slog.
-    Call the captcha endpoint first, then login with username, password and the 6-digit captcha. Put `Bearer <token>` into the Authorization header afterwards.
+    YunShu CMDB is an operations CMDB console built with Gin, MySQL, Redis, SMTP mail delivery, Casbin, Cobra and slog.
+    Request an email verification code first, then login with email code or register a new account by email. Username/password login remains available as an admin fallback.
   title: YunShu CMDB API
   version: "1.0"
 paths:
-  /api/v1/auth/captcha:
+  /api/v1/alerts/inhibition-rules:
+    get:
+      description: 分页查询抑制规则。规则在入站 firing 时生效：源告警匹配后写入 Redis，目标告警匹配且 equal 标签一致则被抑制。
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 名称/描述关键词
+        in: query
+        name: keyword
+        type: string
+      - description: 是否启用
+        in: query
+        name: enabled
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 查询告警抑制规则列表
+      tags:
+      - alert-inhibition
     post:
-      description: Generate a 6-digit login captcha, store it in Redis and return
-        it for the current login flow.
+      consumes:
+      - application/json
+      parameters:
+      - description: 规则
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.AlertInhibitionRuleUpsertRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 创建告警抑制规则
+      tags:
+      - alert-inhibition
+  /api/v1/alerts/inhibition-rules/{id}:
+    delete:
+      parameters:
+      - description: 规则 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 删除告警抑制规则
+      tags:
+      - alert-inhibition
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 规则 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 规则
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.AlertInhibitionRuleUpsertRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 更新告警抑制规则
+      tags:
+      - alert-inhibition
+  /api/v1/alerts/inhibition-rules/refresh-cache:
+    post:
+      responses: {}
+      summary: 刷新抑制规则内存缓存
+      tags:
+      - alert-inhibition
+  /api/v1/alerts/subscriptions:
+    get:
+      consumes:
+      - application/json
+      description: 分页查询订阅树节点，支持按项目、父节点、关键词过滤
+      parameters:
+      - description: 项目ID
+        in: query
+        name: project_id
+        required: true
+        type: integer
+      - description: 父节点ID，0表示根节点
+        in: query
+        name: parent_id
+        type: integer
+      - description: 关键词
+        in: query
+        name: keyword
+        type: string
+      - description: 是否启用
+        in: query
+        name: enabled
+        type: boolean
+      - description: 页码，默认1
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认20
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: 查询订阅树节点列表
+      tags:
+      - alert-subscription
+    post:
+      consumes:
+      - application/json
+      description: 创建新的订阅树节点
+      parameters:
+      - description: 节点信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.AlertSubscriptionNodeUpsertRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.AlertSubscriptionNode'
+      summary: 创建订阅树节点
+      tags:
+      - alert-subscription
+  /api/v1/alerts/subscriptions/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定订阅树节点（有子节点时无法删除）
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: 删除订阅树节点
+      tags:
+      - alert-subscription
+    put:
+      consumes:
+      - application/json
+      description: 更新指定订阅树节点
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 节点信息
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.AlertSubscriptionNodeUpsertRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.AlertSubscriptionNode'
+      summary: 更新订阅树节点
+      tags:
+      - alert-subscription
+  /api/v1/alerts/subscriptions/tree:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定项目的完整订阅树结构（包含所有层级）
+      parameters:
+      - description: 项目ID
+        in: query
+        name: project_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.AlertSubscriptionNode'
+            type: array
+      summary: 获取完整订阅树
+      tags:
+      - alert-subscription
+  /api/v1/alerts/webhook/alertmanager:
+    post:
+      consumes:
+      - application/json
+      description: Ingest Alertmanager notifications. Auth via header X-Alert-Token
+        or Authorization Bearer (not query token).
+      parameters:
+      - description: Webhook token (preferred)
+        in: header
+        name: X-Alert-Token
+        type: string
+      - description: Alertmanager payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/service.AlertManagerPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.Body'
+        "400":
+          description: bad request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: invalid webhook token
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Receive Alertmanager webhook
+      tags:
+      - AlertsWebhook
+  /api/v1/auth/email-login:
+    post:
+      consumes:
+      - application/json
+      description: Login with email and a 6-digit verification code delivered through
+        SMTP and cached in Redis.
+      parameters:
+      - description: Email verification login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.EmailLoginRequest'
       produces:
       - application/json
       responses:
@@ -307,23 +978,35 @@ paths:
             - $ref: '#/definitions/response.Body'
             - properties:
                 data:
-                  $ref: '#/definitions/service.LoginCaptchaResponse'
+                  $ref: '#/definitions/service.LoginResponse'
               type: object
-        "500":
-          description: internal server error
+        "400":
+          description: bad request
           schema:
             $ref: '#/definitions/response.Body'
-      summary: Generate login captcha
+        "403":
+          description: 无访问权限
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Login with email verification code
       tags:
       - Auth
   /api/v1/auth/login:
     post:
       consumes:
       - application/json
-      description: Login with username, password and a Redis-backed 6-digit captcha,
-        then return a JWT access token.
+      description: Login with username, password and verification code. This is kept
+        as a fallback entry for administrators.
       parameters:
-      - description: Login request
+      - description: Password login request
         in: body
         name: request
         required: true
@@ -346,18 +1029,58 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
-      summary: Login
+      summary: Login with password
+      tags:
+      - Auth
+  /api/v1/auth/login-code:
+    post:
+      consumes:
+      - application/json
+      description: Send an email verification code to the user's registered email
+        address for login.
+      parameters:
+      - description: Send login code by username request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.SendLoginCodeByUsernameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.SendEmailCodeResponse'
+              type: object
+        "400":
+          description: bad request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Send login verification code by username
       tags:
       - Auth
   /api/v1/auth/logout:
@@ -376,11 +1099,11 @@ paths:
                   $ref: '#/definitions/handler.MessageData'
               type: object
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -404,15 +1127,15 @@ paths:
                   $ref: '#/definitions/service.UserDetailResponse'
               type: object
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: user not found
+          description: 用户不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -420,9 +1143,17 @@ paths:
       summary: Get current user
       tags:
       - Auth
-  /api/v1/health:
-    get:
-      description: Return service name and current environment.
+    put:
+      consumes:
+      - application/json
+      description: 更新当前登录用户的昵称和邮箱。
+      parameters:
+      - description: 更新资料请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.UpdateProfileRequest'
       produces:
       - application/json
       responses:
@@ -433,11 +1164,526 @@ paths:
             - $ref: '#/definitions/response.Body'
             - properties:
                 data:
-                  $ref: '#/definitions/handler.HealthData'
+                  $ref: '#/definitions/service.UserDetailResponse'
               type: object
-      summary: Health check
+        "400":
+          description: bad request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: 未登录或登录已失效
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: 邮箱已存在
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: 更新当前用户资料
       tags:
-      - System
+      - Auth
+  /api/v1/auth/password:
+    put:
+      consumes:
+      - application/json
+      description: 使用旧密码校验后修改当前登录用户密码。
+      parameters:
+      - description: 修改密码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.MessageData'
+              type: object
+        "400":
+          description: bad request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: 未登录或登录已失效
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: 无访问权限（仅管理员角色可在个人中心修改自己的密码）
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: 修改当前用户密码
+      tags:
+      - Auth
+  /api/v1/auth/password-login-code:
+    post:
+      consumes:
+      - application/json
+      description: Generate a 6-digit verification code for password login and cache
+        it in Redis. The code is returned in the response for demonstration purposes
+        in development. In production, it would be sent via email or SMS.
+      parameters:
+      - description: Send password login code request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.SendPasswordLoginCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.SendPasswordLoginCodeResponse'
+              type: object
+        "400":
+          description: bad request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: cooldown in effect
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Send password login verification code
+      tags:
+      - Auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user by submitting username, email, password and
+        the verification code sent by email.
+      parameters:
+      - description: Email registration request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.RegisterResponse'
+              type: object
+        "400":
+          description: bad request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: conflict
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Register with email verification code
+      tags:
+      - Auth
+  /api/v1/auth/verification-code:
+    post:
+      consumes:
+      - application/json
+      description: Send an email verification code for login or registration and cache
+        it in Redis.
+      parameters:
+      - description: Send email code request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.SendEmailCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.SendEmailCodeResponse'
+              type: object
+        "400":
+          description: bad request
+          schema:
+            $ref: '#/definitions/response.Body'
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/response.Body'
+        "409":
+          description: email already registered
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Body'
+      summary: Send verification code
+      tags:
+      - Auth
+  /api/v1/auth/ws-ticket:
+    post:
+      consumes:
+      - application/json
+      description: Exchange current Bearer session for a short-lived, single-use ticket
+        used in WebSocket query (avoids JWT in URL).
+      parameters:
+      - description: optional scope for audit
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/service.CreateWSTicketRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.WSTicketResponse'
+              type: object
+        "401":
+          description: 未登录或登录已失效
+          schema:
+            $ref: '#/definitions/response.Body'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: Issue one-time WebSocket handshake ticket
+      tags:
+      - Auth
+  /api/v1/clusters/{id}/api-resources:
+    get:
+      description: Discovery API resource list; optional query namespaced=true|false
+        filters namespaced resources.
+      parameters:
+      - description: Cluster ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 'Filter: true | false'
+        in: query
+        name: namespaced
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: 未登录或登录已失效
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: 无访问权限
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List cluster API resources
+      tags:
+      - Clusters
+  /api/v1/clusters/{id}/component-statuses:
+    get:
+      description: Returns Kubernetes component health (etcd, scheduler, controller-manager,
+        etc.).
+      parameters:
+      - description: Cluster ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: 未登录或登录已失效
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: 无访问权限
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List cluster component statuses
+      tags:
+      - Clusters
+  /api/v1/login-logs:
+    get:
+      parameters:
+      - description: Username filter
+        in: query
+        name: username
+        type: string
+      - description: 1 success 0 fail
+        in: query
+        name: status
+        type: integer
+      - description: password or email
+        in: query
+        name: source
+        type: string
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List login logs
+      tags:
+      - LoginLog
+  /api/v1/login-logs/{id}:
+    delete:
+      parameters:
+      - description: Log ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.MessageData'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Delete login log
+      tags:
+      - LoginLog
+  /api/v1/login-logs/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: IDs
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.idsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.MessageData'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Batch delete login logs
+      tags:
+      - LoginLog
+  /api/v1/login-logs/export:
+    get:
+      parameters:
+      - description: Username filter
+        in: query
+        name: username
+        type: string
+      - description: 1 success 0 fail
+        in: query
+        name: status
+        type: integer
+      - description: password or email
+        in: query
+        name: source
+        type: string
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Export login logs to Excel
+      tags:
+      - LoginLog
+  /api/v1/operation-logs:
+    get:
+      parameters:
+      - description: HTTP method
+        in: query
+        name: method
+        type: string
+      - description: Path contains
+        in: query
+        name: path
+        type: string
+      - description: HTTP status
+        in: query
+        name: status_code
+        type: integer
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List operation logs
+      tags:
+      - OperationLog
+  /api/v1/operation-logs/{id}:
+    delete:
+      parameters:
+      - description: Log ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.MessageData'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Delete operation log
+      tags:
+      - OperationLog
+  /api/v1/operation-logs/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: IDs
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.idsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Body'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.MessageData'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Batch delete operation logs
+      tags:
+      - OperationLog
+  /api/v1/operation-logs/export:
+    get:
+      parameters:
+      - description: HTTP method
+        in: query
+        name: method
+        type: string
+      - description: Path contains
+        in: query
+        name: path
+        type: string
+      - description: HTTP status
+        in: query
+        name: status_code
+        type: integer
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Export operation logs to Excel
+      tags:
+      - OperationLog
   /api/v1/permissions:
     get:
       description: List permissions with optional keyword and pagination filters.
@@ -454,6 +1700,15 @@ paths:
         in: query
         name: page_size
         type: integer
+      - description: 'K8s scope filter: empty=all, on=enabled only, off=disabled only'
+        in: query
+        name: k8s_scope
+        type: string
+      - description: 'Cluster API filter: empty=all, on=routes under K8sScopeAuthorize
+          path prefixes only'
+        in: query
+        name: k8s_related
+        type: string
       produces:
       - application/json
       responses:
@@ -471,15 +1726,15 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -515,15 +1770,15 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -557,19 +1812,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: permission not found
+          description: 权限不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -602,19 +1857,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: permission not found
+          description: 权限不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -655,19 +1910,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: permission not found
+          description: 权限不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -675,6 +1930,66 @@ paths:
       summary: Update permission
       tags:
       - Permission
+  /api/v1/plugins:
+    get:
+      description: Returns registered plugins and enabled names from config.plugins.enabled.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.Body'
+        "401":
+          description: 未登录或登录已失效
+          schema:
+            $ref: '#/definitions/response.Body'
+        "403":
+          description: 无访问权限
+          schema:
+            $ref: '#/definitions/response.Body'
+      security:
+      - BearerAuth: []
+      summary: List business plugins
+      tags:
+      - Plugins
+  /api/v1/pods/exec/ws:
+    get:
+      description: WebSocket shell into a pod. Requires cluster_id, namespace, name
+        query params. Obtain ticket via POST /api/v1/auth/ws-ticket first.
+      parameters:
+      - description: Cluster ID
+        in: query
+        name: cluster_id
+        required: true
+        type: integer
+      - description: Pod namespace
+        in: query
+        name: namespace
+        required: true
+        type: string
+      - description: Pod name
+        in: query
+        name: name
+        required: true
+        type: string
+      - description: Container name
+        in: query
+        name: container
+        type: string
+      - description: One-time WebSocket ticket
+        in: query
+        name: ticket
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Interactive pod exec (WebSocket)
+      tags:
+      - Pods
   /api/v1/policies:
     delete:
       consumes:
@@ -704,11 +2019,11 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
@@ -716,7 +2031,7 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -741,15 +2056,15 @@ paths:
                   type: array
               type: object
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -785,11 +2100,11 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
@@ -797,7 +2112,7 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -805,6 +2120,34 @@ paths:
       summary: Grant policy
       tags:
       - Policy
+  /api/v1/projects/{id}/servers/{serverId}/terminal/ws:
+    get:
+      description: WebSocket upgrade for project server SSH. Obtain ticket via POST
+        /api/v1/auth/ws-ticket first, then pass ticket= in query string.
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Server ID
+        in: path
+        name: serverId
+        required: true
+        type: integer
+      - description: One-time WebSocket ticket
+        in: query
+        name: ticket
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Interactive SSH terminal (WebSocket)
+      tags:
+      - CMDB
   /api/v1/roles:
     get:
       description: List roles with optional keyword and pagination filters.
@@ -838,15 +2181,15 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -882,15 +2225,15 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -924,19 +2267,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: role not found
+          description: 角色不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -969,19 +2312,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: role not found
+          description: 角色不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -1022,19 +2365,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: role not found
+          description: 角色不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -1075,15 +2418,15 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -1119,15 +2462,15 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -1161,19 +2504,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: user not found
+          description: 用户不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -1206,19 +2549,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: user not found
+          description: 用户不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -1259,19 +2602,19 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: user not found
+          description: 用户不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
@@ -1313,24 +2656,62 @@ paths:
           schema:
             $ref: '#/definitions/response.Body'
         "401":
-          description: unauthorized
+          description: 未登录或登录已失效
           schema:
             $ref: '#/definitions/response.Body'
         "403":
-          description: forbidden
+          description: 无访问权限
           schema:
             $ref: '#/definitions/response.Body'
         "404":
-          description: user not found
+          description: 用户不存在
           schema:
             $ref: '#/definitions/response.Body'
         "500":
-          description: internal server error
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Body'
       security:
       - BearerAuth: []
       summary: Assign roles to user
+      tags:
+      - User
+  /api/v1/users/export:
+    get:
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Export users to Excel
+      tags:
+      - User
+  /api/v1/users/import:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Excel file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Import users from Excel
+      tags:
+      - User
+  /api/v1/users/import-template:
+    get:
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Download user import template
       tags:
       - User
 schemes:

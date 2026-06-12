@@ -977,11 +977,11 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-05-17
+            2026-06-12
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
-            ~8 分钟阅读
+            ~9 分钟阅读
           </span>
         </div>
       </header>
@@ -1065,33 +1065,38 @@
 <tbody>
 <tr>
 <td>HTTP Webhook / 通道 CRUD / 事件列表</td>
-<td><code>internal/handler/alert_handler.go</code>、<code>alert_platform_handler.go</code>、<code>alert_subscription_handler.go</code>、<code>alert_receiver_group_handler.go</code></td>
-<td>入参绑定、调用 Service</td>
+<td><code>internal/handler/alert_*.go</code></td>
+<td>入参绑定、调用 <code>service.Alert*</code></td>
 </tr>
 <tr>
 <td>统一投递</td>
-<td><code>internal/service/alert_service.go</code></td>
-<td><code>ReceiveAlertmanager</code>、<code>channelIDSetForAlert</code>、<code>sendToChannel</code></td>
+<td><code>internal/service/alert/alert_service_webhook.go</code></td>
+<td><code>ReceiveAlertmanager</code></td>
+</tr>
+<tr>
+<td>路由与通道选择</td>
+<td><code>internal/service/alert/alert_service_routing.go</code></td>
+<td><code>channelIDSetForAlert</code> 等</td>
 </tr>
 <tr>
 <td>分组节流</td>
-<td><code>internal/service/alert_aggregate_state.go</code></td>
-<td><code>decideFiringGroupTiming</code>、<code>markResolvedNotificationSent</code>、<code>markAlertFiringDelivered</code></td>
+<td><code>internal/service/alert/alert_aggregate_state.go</code></td>
+<td><code>decideFiringGroupTiming</code>、<code>markAlertFiringDelivered</code></td>
 </tr>
 <tr>
 <td>订阅树</td>
-<td><code>internal/service/alert_subscription_service.go</code></td>
+<td><code>internal/service/alert/alert_subscription_service.go</code></td>
 <td><code>MatchRouteDetailed</code>、<code>nodeMatches</code></td>
 </tr>
 <tr>
 <td>平台规则评估</td>
-<td><code>internal/service/alert_monitor_evaluator.go</code>、<code>alert_monitor_redis.go</code></td>
+<td><code>internal/service/alert/alert_monitor_evaluator.go</code>、<code>alert_monitor_redis.go</code></td>
 <td>PromQL、Redis for</td>
 </tr>
 <tr>
 <td>渠道渲染与发送</td>
-<td><code>internal/service/alert_delivery.go</code></td>
-<td><code>sendToChannel</code>、<code>mergeAssigneeEmails</code>（邮件处理人优先）</td>
+<td><code>internal/service/alert/alert_delivery_core.go</code>、<code>alert_delivery_email.go</code></td>
+<td>投递与邮件合并</td>
 </tr>
 <tr>
 <td>配置</td>
@@ -1100,6 +1105,7 @@
 </tr>
 </tbody>
 </table></div>
+<aside class="callout callout-info"><svg class="callout-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-info"/></svg><div class="callout-body"><p class="callout-title">说明</p><p>Handler 通过 <code>internal/service/exports.go</code> 引用上述类型；源码包名为 <code>alert</code>。</p></div></aside>
 <hr />
 <h2 id="4-gorm">4. 数据模型（GORM）</h2>
 <div class="table-wrap"><table>
@@ -1207,7 +1213,7 @@
 </table></div>
 <hr />
 <h2 id="6-receivealertmanager-">6. <code>ReceiveAlertmanager</code> 处理流水线（逻辑顺序）</h2>
-<p>实现位置：<code>internal/service/alert_service.go</code> — <code>ReceiveAlertmanager</code>。</p>
+<p>实现位置：<code>internal/service/alert/alert_service_webhook.go</code> — <code>ReceiveAlertmanager</code>。</p>
 <p>对 <code>payload.Alerts</code> 中每一条：</p>
 <ol>
 <li><strong>合并标签</strong>：<code>mergeStringMap(CommonLabels, alert.Labels)</code>；<code>resolveAlertDatasourceMeta</code> 写入 <code>datasource_*</code>、<code>monitor_pipeline</code>。</li>
@@ -1228,7 +1234,7 @@
 </ol>
 <hr />
 <h2 id="7-">7. 订阅树匹配规则（实现）</h2>
-<p><code>internal/service/alert_subscription_service.go</code>：</p>
+<p><code>internal/service/alert/alert_subscription_service.go</code>：</p>
 <ul>
 <li>按 <strong><code>labels[&quot;project_id&quot;]</code></strong> 选根节点集合。</li>
 <li><strong>匹配级别</strong>（<code>match_severity</code>）：与 <strong><code>labels[&quot;severity&quot;]</code></strong> 比较（配置为空则不过滤）。</li>

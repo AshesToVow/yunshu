@@ -1,71 +1,11 @@
-import { App as AntdApp, ConfigProvider, Spin, theme } from "antd";
+import { App as AntdApp, ConfigProvider, theme } from "antd";
 import zhCN from "antd/locale/zh_CN";
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { AuthProvider, useAuth } from "../contexts/auth-context";
+import { useEffect, useMemo, useState } from "react";
+import { BrowserRouter } from "react-router-dom";
+import { AppRoutes } from "./app-routes";
 import { ErrorBoundary } from "../components/error-boundary";
-
-const AdminLayout = lazy(() => import("../layouts/admin-layout").then((module) => ({ default: module.AdminLayout })));
-const DashboardPage = lazy(() => import("../pages/dashboard-page").then((module) => ({ default: module.DashboardPage })));
-const LoginPage = lazy(() => import("../pages/login-page").then((module) => ({ default: module.LoginPage })));
-const PermissionsPage = lazy(() =>
-  import("../pages/permissions-page").then((module) => ({ default: module.PermissionsPage })),
-);
-const PoliciesPage = lazy(() => import("../pages/policies-page").then((module) => ({ default: module.PoliciesPage })));
-const RolesPage = lazy(() => import("../pages/roles-page").then((module) => ({ default: module.RolesPage })));
-const UsersPage = lazy(() => import("../pages/users-page").then((module) => ({ default: module.UsersPage })));
-const DepartmentsPage = lazy(() => import("../pages/departments-page").then((module) => ({ default: module.DepartmentsPage })));
-const RegistrationsPage = lazy(() => import("../pages/registrations-page").then((module) => ({ default: module.RegistrationsPage })));
-const MenusPage = lazy(() => import("../pages/menus-page").then((module) => ({ default: module.MenusPage })));
-const LoginLogsPage = lazy(() => import("../pages/login-logs-page").then((module) => ({ default: module.LoginLogsPage })));
-const OperationLogsPage = lazy(() =>
-  import("../pages/operation-logs-page").then((module) => ({ default: module.OperationLogsPage })),
-);
-const BannedIPsPage = lazy(() => import("../pages/banned-ips-page").then((module) => ({ default: module.BannedIPsPage })));
-const DynamicMenuPage = lazy(() => import("../pages/dynamic-menu-page").then((module) => ({ default: module.DynamicMenuPage })));
-const ClusterPage = lazy(() => import("../pages/cluster-page").then((module) => ({ default: module.ClusterPage })));
-const PodPage = lazy(() => import("../pages/pod-page").then((module) => ({ default: module.PodPage })));
-const ServerConsolePage = lazy(() => import("../pages/server-console-page").then((module) => ({ default: module.ServerConsolePage })));
-const PersonalSettingsPage = lazy(() =>
-  import("../pages/personal-settings-page").then((module) => ({ default: module.PersonalSettingsPage })),
-);
-
-function RouteFallback() {
-  return (
-    <div className="full-screen-loading">
-      <Spin size="large" />
-    </div>
-  );
-}
-
-function ProtectedRoutes() {
-  const { isAuthenticated, loading } = useAuth();
-  const location = useLocation();
-
-  if (loading) {
-    return <RouteFallback />;
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  }
-
-  return <AdminLayout />;
-}
-
-function AuthRoutes() {
-  const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return <RouteFallback />;
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
-
-  return <LoginPage />;
-}
+import { AuthProvider } from "../contexts/auth-context";
+import { PluginProvider } from "../contexts/plugin-context";
 
 export function App() {
   const [mode, setMode] = useState<"dark" | "light">(() => {
@@ -73,7 +13,7 @@ export function App() {
     return saved === "light" ? "light" : "dark";
   });
   const [accent, setAccent] = useState<string>(() => {
-    return window.localStorage.getItem("admin-theme-accent") ?? "#3f6dff";
+    return window.localStorage.getItem("admin-theme-accent") ?? "#e61919";
   });
 
   useEffect(() => {
@@ -115,66 +55,53 @@ export function App() {
         algorithm,
         token: {
           colorPrimary: accent,
-          colorSuccess: "#22c55e",
+          colorSuccess: "#4af626",
           colorWarning: "#f59e0b",
-          colorError: "#ef4444",
-          borderRadius: 10,
+          colorError: accent,
+          borderRadius: 0,
           fontFamily:
-            '"Inter", "Avenir Next", "SF Pro Text", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
-          colorBgLayout: isDark ? "#02071a" : "#eff4ff",
+            '"IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+          fontFamilyCode: '"JetBrains Mono", "IBM Plex Mono", "Consolas", monospace',
+          colorBgLayout: isDark ? "#0a0a0a" : "#f4f4f0",
+          colorText: isDark ? "#eaeaea" : "#050505",
+          colorTextSecondary: isDark ? "rgba(234,234,234,0.58)" : "rgba(5,5,5,0.56)",
+          colorBorder: isDark ? "rgba(234,234,234,0.14)" : "rgba(5,5,5,0.14)",
         },
         components: {
           Layout: {
             headerBg: "transparent",
-            siderBg: isDark ? "#050b20" : "#f7f9ff",
-            bodyBg: isDark ? "#02071a" : "#eff4ff",
+            siderBg: isDark ? "#121212" : "#ffffff",
+            bodyBg: isDark ? "#0a0a0a" : "#f4f4f0",
           },
           Menu: {
-            darkItemBg: "#050b20",
-            darkSubMenuItemBg: "#050b20",
-            darkItemSelectedBg: "rgba(79, 107, 255, 0.24)",
-            darkItemHoverBg: "rgba(79, 107, 255, 0.12)",
+            darkItemBg: "#121212",
+            darkSubMenuItemBg: "#121212",
+            darkItemSelectedBg: "rgba(230, 25, 25, 0.18)",
+            darkItemHoverBg: "rgba(230, 25, 25, 0.08)",
+            itemSelectedColor: accent,
           },
           Card: {
-            boxShadow: isDark ? "0 14px 32px rgba(0, 0, 0, 0.36)" : "0 10px 24px rgba(15, 23, 42, 0.08)",
+            boxShadow: "none",
           },
           Button: {
-            controlHeightLG: 46,
+            controlHeightLG: 44,
+          },
+          Table: {
+            headerBg: isDark ? "#1a1a1a" : "#eae8e3",
+            rowHoverBg: isDark ? "rgba(230, 25, 25, 0.08)" : "rgba(230, 25, 25, 0.06)",
           },
         },
       }}
     >
       <AntdApp>
         <AuthProvider>
-          <BrowserRouter>
-            <ErrorBoundary>
-            <Suspense fallback={<RouteFallback />}>
-              <Routes>
-                <Route path="/login" element={<AuthRoutes />} />
-                <Route path="/" element={<ProtectedRoutes />}>
-                  <Route index element={<DashboardPage />} />
-                  <Route path="users" element={<UsersPage />} />
-                  <Route path="departments" element={<DepartmentsPage />} />
-                  <Route path="roles" element={<RolesPage />} />
-                  <Route path="permissions" element={<PermissionsPage />} />
-                  <Route path="policies" element={<PoliciesPage />} />
-                  <Route path="registrations" element={<RegistrationsPage />} />
-                  <Route path="menus" element={<MenusPage />} />
-                  <Route path="login-logs" element={<LoginLogsPage />} />
-                  <Route path="operation-logs" element={<OperationLogsPage />} />
-                  <Route path="banned-ips" element={<BannedIPsPage />} />
-                  <Route path="cluster" element={<Navigate to="/clusters" replace />} />
-                  <Route path="clusters" element={<ClusterPage />} />
-                  <Route path="pods" element={<PodPage />} />
-                  <Route path="server-console" element={<ServerConsolePage />} />
-                  <Route path="personal-settings" element={<PersonalSettingsPage />} />
-                  <Route path="runtime-config" element={<Navigate to="/dict-entries" replace />} />
-                  <Route path="*" element={<DynamicMenuPage />} />
-                </Route>
-              </Routes>
-            </Suspense>
-            </ErrorBoundary>
-          </BrowserRouter>
+          <PluginProvider>
+            <BrowserRouter>
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
+            </BrowserRouter>
+          </PluginProvider>
         </AuthProvider>
       </AntdApp>
     </ConfigProvider>

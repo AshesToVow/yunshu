@@ -32,19 +32,13 @@ var grantViewDemoCmd = &cobra.Command{
 			return fmt.Errorf("username and role are required")
 		}
 
-		app, err := bootstrap.NewBuilder().
-			WithConfig(configPath).
-			WithLogger().
-			WithMySQL().
-			WithDictOverrides().
-			WithCasbin().
-			Build()
+		app, err := bootstrap.BuildCoreApp(configPath)
 		if err != nil {
 			return err
 		}
 		defer app.Close()
 
-		if err := bootstrap.AutoMigrateModels(app.DB); err != nil {
+		if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
 			return err
 		}
 
@@ -117,7 +111,7 @@ var grantViewDemoCmd = &cobra.Command{
 	},
 }
 
-func findRoleByCode(ctx context.Context, repo *repository.RoleRepository, code string) (*model.Role, error) {
+func findRoleByCode(ctx context.Context, repo repository.RoleRepo, code string) (*model.Role, error) {
 	all, err := repo.ListAll(ctx)
 	if err != nil {
 		return nil, err

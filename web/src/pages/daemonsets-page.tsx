@@ -116,7 +116,7 @@ export function DaemonsetsPage() {
     buildFallbackValues: ({ recordName, namespace }) => ({
       name: recordName,
       namespace,
-      container_name: recordName,
+      container_name: "",
       image: "",
       env_pairs: [{ key: "", value: "" }],
     }),
@@ -239,7 +239,7 @@ export function DaemonsetsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listDaemonSets(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getDaemonSetDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyDaemonSet(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteDaemonSet(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteDaemonSet(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: apps/v1
 kind: DaemonSet

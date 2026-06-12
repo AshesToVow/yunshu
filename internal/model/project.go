@@ -14,6 +14,9 @@ type Project struct {
 	Code        string  `json:"code" gorm:"size:64;not null;uniqueIndex;comment:项目编码"`
 	Description *string `json:"description" gorm:"type:text;comment:项目描述"`
 	Status      int     `json:"status" gorm:"not null;default:1;comment:状态 1启用 0禁用"`
+	ProjectType string  `json:"project_type" gorm:"size:32;not null;default:'business';index;comment:项目类型 business/platform/infra/research"`
+	// LifecycleStatus 项目生命周期状态，与 Status（启用/停用）独立。
+	LifecycleStatus string `json:"lifecycle_status" gorm:"size:32;not null;default:'active';index;comment:项目生命周期 planning/active/suspended/archived"`
 
 	// OwnerDepartmentID 可选归属部门，用于组织维度筛选与报表（不自动决定成员权限）。
 	OwnerDepartmentID *uint       `json:"owner_department_id,omitempty" gorm:"index;comment:可选归属部门ID"`

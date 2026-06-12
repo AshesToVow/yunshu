@@ -64,8 +64,15 @@ export function RbacRoleBindingsPage() {
         detail: async ({ clusterId, namespace, name }) =>
           await getRbacDetail({ cluster_id: clusterId, kind: "RoleBinding", namespace: namespace ?? "default", name }),
         apply: async ({ clusterId, manifest }) => await applyRbac(clusterId, manifest),
-        remove: async ({ clusterId, namespace, name }) =>
-          await deleteRbac({ cluster_id: clusterId, kind: "RoleBinding", namespace: namespace ?? "default", name }),
+        remove: async (args) =>
+          await deleteRbac({
+            cluster_id: args.clusterId,
+            kind: "RoleBinding",
+            namespace: args.namespace ?? "default",
+            name: args.name,
+            grace_period_seconds: args.grace_period_seconds,
+            propagation_policy: args.propagation_policy,
+          }),
       }}
       createTemplate={({ namespace }) => `apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

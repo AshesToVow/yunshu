@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/model"
@@ -40,7 +41,7 @@ func (h *AlertHandler) CreateChannel(c *gin.Context) {
 func (h *AlertHandler) UpdateChannel(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertChannelUpsertRequest) (*model.AlertChannel, error) {
@@ -52,11 +53,11 @@ func (h *AlertHandler) UpdateChannel(c *gin.Context) {
 func (h *AlertHandler) DeleteChannel(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	if err := h.svc.DeleteChannel(c.Request.Context(), id); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "deleted"})
@@ -66,11 +67,31 @@ func (h *AlertHandler) DeleteChannel(c *gin.Context) {
 func (h *AlertHandler) TestChannel(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"message": "test sent"}, func(ctx context.Context, req service.AlertTestRequest) error {
+	ServeJSON(c, func(ctx context.Context, req service.AlertTestRequest) (*service.AlertChannelTestResult, error) {
 		return h.svc.TestChannel(ctx, id, req)
+	})
+}
+
+func (h *AlertHandler) DebugRouting(c *gin.Context) {
+	ServeJSON(c, h.svc.DebugRouting)
+}
+
+func (h *AlertHandler) ListEventsGrouped(c *gin.Context) {
+	var q service.AlertEventListQuery
+	if err := c.ShouldBindQuery(&q); err != nil {
+		response.Error(c, constants.ErrBadRequestWithMsg(err.Error()))
+		return
+	}
+	list, total, page, pageSize, err := h.svc.ListEventsGrouped(c.Request.Context(), q)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{
+		"items": list, "list": list, "total": total, "page": page, "page_size": pageSize,
 	})
 }
 
@@ -88,7 +109,7 @@ func (h *AlertHandler) ListEvents(c *gin.Context) {
 	}
 	list, total, page, pageSize, err := h.svc.ListEvents(c.Request.Context(), q)
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, gin.H{
@@ -104,23 +125,36 @@ func (h *AlertHandler) ListEvents(c *gin.Context) {
 func (h *AlertHandler) HistoryStats(c *gin.Context) {
 	stats, err := h.svc.HistoryStats(c.Request.Context())
 	if err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 	response.Success(c, stats)
 }
 
-// ReceiveAlertmanager 处理对应的 HTTP 请求并返回统一响应。
+// ReceiveAlertmanager godoc
+// @Summary Receive Alertmanager webhook
+// @Description Ingest Alertmanager notifications. Auth via header X-Alert-Token or Authorization Bearer (not query token).
+// @Tags AlertsWebhook
+// @Accept json
+// @Produce json
+// @Param X-Alert-Token header string false "Webhook token (preferred)"
+// @Param payload body service.AlertManagerPayload true "Alertmanager payload"
+// @Success 200 {object} response.Body "success"
+// @Failure 401 {object} response.Body "invalid webhook token"
+// @Failure 400 {object} response.Body "bad request"
+// @Router /api/v1/alerts/webhook/alertmanager [post]
 func (h *AlertHandler) ReceiveAlertmanager(c *gin.Context) {
 	token := c.GetHeader("X-Alert-Token")
 	if token == "" {
 		token = c.GetHeader("X-Webhook-Token")
 	}
 	if token == "" {
-		token = c.GetHeader("Authorization")
-	}
-	if token == "" {
-		token = c.Query("token")
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token = strings.TrimSpace(authHeader[7:])
+		} else {
+			token = authHeader
+		}
 	}
 	if !h.svc.ValidateWebhookToken(token) {
 		response.Error(c, constants.ErrAlertWebhookTokenInvalid)
@@ -135,7 +169,7 @@ func (h *AlertHandler) ReceiveAlertmanager(c *gin.Context) {
 
 	// Service 内 Redis 入队成功即返回；失败时同步降级处理，避免 handler 再套无界 goroutine。
 	if err := h.svc.ReceiveAlertmanager(c.Request.Context(), payload); err != nil {
-		response.Error(c, err)
+		abortService(c, err)
 		return
 	}
 

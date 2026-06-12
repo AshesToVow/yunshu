@@ -16,7 +16,7 @@ type K8sClusterAccessRepository struct {
 	db *gorm.DB
 }
 
-func NewK8sClusterAccessRepository(db *gorm.DB) *K8sClusterAccessRepository {
+func NewK8sClusterAccessRepository(db *gorm.DB) K8sClusterAccessRepo {
 	return &K8sClusterAccessRepository{db: db}
 }
 

@@ -5,7 +5,7 @@ import (
 	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/apperror"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
@@ -24,8 +24,8 @@ func NewAuthHandler(service *service.AuthService, loginLogs *service.LoginLogSer
 }
 
 func loginErrMessage(err error) string {
-	if appErr, ok := apperror.IsAppError(err); ok {
-		return appErr.Message
+	if biz, ok := bizerrors.As(err); ok {
+		return biz.Message
 	}
 	return "登录失败"
 }
@@ -276,5 +276,28 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 	ServeJSONOK(c, gin.H{"message": "密码修改成功"}, func(ctx context.Context, req service.ChangePasswordRequest) error {
 		return h.service.ChangePassword(ctx, user.ID, req)
+	})
+}
+
+// CreateWSTicket godoc
+// @Summary Issue one-time WebSocket handshake ticket
+// @Description Exchange current Bearer session for a short-lived, single-use ticket used in WebSocket query (avoids JWT in URL).
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body service.CreateWSTicketRequest false "optional scope for audit"
+// @Success 200 {object} response.Body{data=service.WSTicketResponse} "success"
+// @Failure 401 {object} response.Body "未登录或登录已失效"
+// @Failure 500 {object} response.Body "服务器内部错误"
+// @Router /api/v1/auth/ws-ticket [post]
+func (h *AuthHandler) CreateWSTicket(c *gin.Context) {
+	claims, ok := auth.ClaimsFromContext(c)
+	if !ok {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.CreateWSTicketRequest) (*service.WSTicketResponse, error) {
+		return h.service.CreateWSTicket(ctx, claims.UserID, claims.TokenID, req.Scope)
 	})
 }

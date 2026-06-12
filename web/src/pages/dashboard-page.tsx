@@ -19,12 +19,15 @@ import {
 } from "@ant-design/icons";
 import { Card, Col, Divider, Progress, Row, Space, Statistic, Table, Tag, Typography } from "antd";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getHealth } from "../services/auth";
 import { getOverview, getOverviewTrends } from "../services/overview";
 import type { OverviewTrendsResponse } from "../services/overview";
 import { LineChart } from "../components/line-chart";
+import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { getOperationLogs, type OperationLogItem } from "../services/operation-logs";
 import { getLoginLogs, type LoginLogItem } from "../services/login-logs";
+import { useAdminThemeMode } from "../hooks/use-admin-theme-mode";
 import { formatDateTime } from "../utils/format";
 
 interface DashboardMetrics {
@@ -69,107 +72,38 @@ const defaultMetrics: DashboardMetrics = {
 };
 
 const assetStats = [
-  {
-    key: "users",
-    title: "账号主体",
-    hint: "系统内已激活账号数量",
-    icon: <TeamOutlined />,
-    accent: "#22d3ee",
-  },
-  {
-    key: "clusters",
-    title: "K8s 集群",
-    hint: "已注册且启用的集群",
-    icon: <ClusterOutlined />,
-    accent: "#38bdf8",
-  },
-  {
-    key: "servers",
-    title: "服务器",
-    hint: "纳管日志源服务器",
-    icon: <DesktopOutlined />,
-    accent: "#a78bfa",
-  },
-  {
-    key: "pendingRegistrations",
-    title: "待审核注册",
-    hint: "待审批的注册申请",
-    icon: <SafetyCertificateOutlined />,
-    accent: "#fbbf24",
-  },
+  { key: "users", icon: <TeamOutlined />, accent: "#22d3ee" },
+  { key: "clusters", icon: <ClusterOutlined />, accent: "#38bdf8" },
+  { key: "servers", icon: <DesktopOutlined />, accent: "#a78bfa" },
+  { key: "pendingRegistrations", icon: <SafetyCertificateOutlined />, accent: "#fbbf24" },
 ] as const;
 
 const k8sStats = [
-  {
-    key: "podNormal",
-    title: "正常 Pod",
-    hint: "Running 且容器就绪",
-    icon: <CheckCircleOutlined />,
-    accent: "#34d399",
-  },
-  {
-    key: "podAbnormal",
-    title: "异常 Pod",
-    hint: "非 Running 或未就绪",
-    icon: <WarningOutlined />,
-    accent: "#fb7185",
-  },
-  {
-    key: "eventTotal",
-    title: "Events 采样",
-    hint: "各集群最近 500 条合计",
-    icon: <CloudOutlined />,
-    accent: "#818cf8",
-  },
-  {
-    key: "eventWarning",
-    title: "Warning",
-    hint: "采样中的 Warning 类型",
-    icon: <ThunderboltOutlined />,
-    accent: "#f97316",
-  },
+  { key: "podNormal", icon: <CheckCircleOutlined />, accent: "#34d399" },
+  { key: "podAbnormal", icon: <WarningOutlined />, accent: "#fb7185" },
+  { key: "eventTotal", icon: <CloudOutlined />, accent: "#818cf8" },
+  { key: "eventWarning", icon: <ThunderboltOutlined />, accent: "#f97316" },
 ] as const;
 
 const alertAndAgentStats = [
-  {
-    key: "alertFiring",
-    title: "告警 Firing",
-    hint: "当前仍未恢复的告警事件",
-    icon: <AlertOutlined />,
-    accent: "#f87171",
-  },
-  {
-    key: "alertEventsToday",
-    title: "今日告警事件",
-    hint: "本自然日新建事件条数",
-    icon: <CalendarOutlined />,
-    accent: "#fbbf24",
-  },
-  {
-    key: "logAgentsOnline",
-    title: "日志 Agent 在线",
-    hint: "最近 90s 内有心跳",
-    icon: <ApiOutlined />,
-    accent: "#4ade80",
-  },
-  {
-    key: "logAgentsOffline",
-    title: "日志 Agent 离线",
-    hint: "已启用但未满足在线条件",
-    icon: <DisconnectOutlined />,
-    accent: "#94a3b8",
-  },
+  { key: "alertFiring", icon: <AlertOutlined />, accent: "#f87171" },
+  { key: "alertEventsToday", icon: <CalendarOutlined />, accent: "#fbbf24" },
+  { key: "logAgentsOnline", icon: <ApiOutlined />, accent: "#4ade80" },
+  { key: "logAgentsOffline", icon: <DisconnectOutlined />, accent: "#94a3b8" },
 ] as const;
 
-function formatUptime(seconds: number): string {
+function formatUptime(seconds: number, t: (key: string, options?: Record<string, unknown>) => string): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours}小时 ${minutes}分钟`;
+  return t("dashboard.uptimeFormat", { hours, minutes });
 }
 
 const OVERVIEW_LOG_PAGE_SIZE = 14;
 
 export function DashboardPage() {
+  const { t } = useTranslation();
+  const themeMode = useAdminThemeMode();
+  const isLight = themeMode === "light";
   const [metrics, setMetrics] = useState<DashboardMetrics>(defaultMetrics);
   const [health, setHealth] = useState<SystemHealth>({ status: "", version: "", uptime: 0, loading: true });
   const [loading, setLoading] = useState(true);
@@ -303,35 +237,73 @@ export function DashboardPage() {
     };
   }, [trends]);
 
-  const cellTextStyle = { color: "rgba(248, 250, 252, 0.96)" };
+  const ui = useMemo(
+    () =>
+      isLight
+        ? {
+            text: "#050505",
+            muted: "rgba(5, 5, 5, 0.56)",
+            subtle: "rgba(5, 5, 5, 0.42)",
+            faint: "rgba(5, 5, 5, 0.32)",
+            divider: "rgba(5, 5, 5, 0.14)",
+            trail: "rgba(5, 5, 5, 0.1)",
+            zero: "rgba(5, 5, 5, 0.28)",
+            chartDark: false,
+          }
+        : {
+            text: "rgba(248, 250, 252, 0.96)",
+            muted: "rgba(186, 214, 238, 0.85)",
+            subtle: "rgba(186, 214, 238, 0.72)",
+            faint: "rgba(186, 214, 238, 0.55)",
+            divider: "rgba(56, 189, 248, 0.15)",
+            trail: "rgba(148, 163, 184, 0.15)",
+            zero: "rgba(248, 250, 252, 0.5)",
+            chartDark: true,
+          },
+    [isLight],
+  );
+
+  const cellTextStyle = { color: ui.text };
+
+  const healthLine =
+    health.status === "ok" || health.status === "healthy"
+      ? "HEALTH / OK"
+      : health.status
+        ? `HEALTH / ${health.status.toUpperCase()}`
+        : "HEALTH / UNKNOWN";
 
   return (
-    <div className="overview-big-screen">
+    <div className="overview-big-screen overview-cockpit">
       <div className="overview-big-screen__top">
-        <div className="overview-big-screen__hero">
-          <div>
-            <Typography.Title level={3} className="overview-big-screen__title">
-              <DashboardOutlined /> 运维运行总览
-            </Typography.Title>
-            <Typography.Text className="overview-big-screen__subtitle">
-              资产底座 · Kubernetes · 告警与日志采集 · 活跃趋势 · 健康状态
-            </Typography.Text>
-          </div>
-        </div>
+        <PageTelemetryHeader
+          className="overview-cockpit__header"
+          label={t("dashboard.label")}
+          title={t("dashboard.title")}
+          subtitle={t("dashboard.subtitle")}
+          meta={[
+            healthLine,
+            `VERSION / ${health.version || "-"}`,
+            `UPTIME / ${formatUptime(health.uptime, t)}`,
+            loading ? t("dashboard.syncPending") : t("dashboard.syncLive"),
+          ]}
+        />
 
         <Typography.Text className="overview-big-screen__section-label">
-          <TeamOutlined /> 资产底座
+          <TeamOutlined /> {t("dashboard.sectionAssets")}
         </Typography.Text>
         <Row gutter={[16, 16]} className="overview-big-screen__metrics">
         {assetStats.map((item) => (
           <Col xs={24} sm={12} xl={6} key={item.key}>
             <Card className="overview-big-screen__stat-card" loading={loading} bordered={false}>
               <div className="overview-big-screen__stat-head">
-                <span className="overview-big-screen__stat-icon" style={{ boxShadow: `0 0 24px ${item.accent}44` }}>
+                <span
+                  className="overview-big-screen__stat-icon"
+                  style={isLight ? undefined : { boxShadow: `0 0 24px ${item.accent}44` }}
+                >
                   {item.icon}
                 </span>
                 <Statistic
-                  title={<span className="overview-big-screen__stat-title">{item.title}</span>}
+                  title={<span className="overview-big-screen__stat-title">{t(`dashboard.stats.${item.key}.title`)}</span>}
                   value={metrics[item.key as keyof DashboardMetrics] as number}
                   valueStyle={{
                     color: item.accent,
@@ -341,25 +313,28 @@ export function DashboardPage() {
                   }}
                 />
               </div>
-              <Typography.Paragraph className="overview-big-screen__stat-hint">{item.hint}</Typography.Paragraph>
+              <Typography.Paragraph className="overview-big-screen__stat-hint">{t(`dashboard.stats.${item.key}.hint`)}</Typography.Paragraph>
             </Card>
           </Col>
         ))}
         </Row>
 
         <Typography.Text className="overview-big-screen__section-label">
-          <ClusterOutlined /> Kubernetes 运行态势
+          <ClusterOutlined /> {t("dashboard.sectionK8s")}
         </Typography.Text>
         <Row gutter={[16, 16]} className="overview-big-screen__metrics">
         {k8sStats.map((item) => (
           <Col xs={24} sm={12} xl={6} key={item.key}>
             <Card className="overview-big-screen__stat-card overview-big-screen__stat-card--k8s" loading={loading} bordered={false}>
               <div className="overview-big-screen__stat-head">
-                <span className="overview-big-screen__stat-icon" style={{ boxShadow: `0 0 28px ${item.accent}55` }}>
+                <span
+                  className="overview-big-screen__stat-icon"
+                  style={isLight ? undefined : { boxShadow: `0 0 28px ${item.accent}55` }}
+                >
                   {item.icon}
                 </span>
                 <Statistic
-                  title={<span className="overview-big-screen__stat-title">{item.title}</span>}
+                  title={<span className="overview-big-screen__stat-title">{t(`dashboard.stats.${item.key}.title`)}</span>}
                   value={metrics[item.key as keyof DashboardMetrics] as number}
                   valueStyle={{
                     color: item.accent,
@@ -369,25 +344,28 @@ export function DashboardPage() {
                   }}
                 />
               </div>
-              <Typography.Paragraph className="overview-big-screen__stat-hint">{item.hint}</Typography.Paragraph>
+              <Typography.Paragraph className="overview-big-screen__stat-hint">{t(`dashboard.stats.${item.key}.hint`)}</Typography.Paragraph>
             </Card>
           </Col>
         ))}
         </Row>
 
         <Typography.Text className="overview-big-screen__section-label">
-          <AlertOutlined /> 告警与日志采集
+          <AlertOutlined /> {t("dashboard.sectionAlert")}
         </Typography.Text>
         <Row gutter={[16, 16]} className="overview-big-screen__metrics">
         {alertAndAgentStats.map((item) => (
           <Col xs={24} sm={12} xl={6} key={item.key}>
             <Card className="overview-big-screen__stat-card overview-big-screen__stat-card--alert" loading={loading} bordered={false}>
               <div className="overview-big-screen__stat-head">
-                <span className="overview-big-screen__stat-icon" style={{ boxShadow: `0 0 28px ${item.accent}55` }}>
+                <span
+                  className="overview-big-screen__stat-icon"
+                  style={isLight ? undefined : { boxShadow: `0 0 28px ${item.accent}55` }}
+                >
                   {item.icon}
                 </span>
                 <Statistic
-                  title={<span className="overview-big-screen__stat-title">{item.title}</span>}
+                  title={<span className="overview-big-screen__stat-title">{t(`dashboard.stats.${item.key}.title`)}</span>}
                   value={metrics[item.key as keyof DashboardMetrics] as number}
                   valueStyle={{
                     color: item.accent,
@@ -397,7 +375,7 @@ export function DashboardPage() {
                   }}
                 />
               </div>
-              <Typography.Paragraph className="overview-big-screen__stat-hint">{item.hint}</Typography.Paragraph>
+              <Typography.Paragraph className="overview-big-screen__stat-hint">{t(`dashboard.stats.${item.key}.hint`)}</Typography.Paragraph>
             </Card>
           </Col>
         ))}
@@ -410,7 +388,7 @@ export function DashboardPage() {
               title={
                 <Space>
                   <InfoOutlined style={{ color: "#38bdf8" }} />
-                  <span>平台活跃趋势（近 7 天）</span>
+                  <span>{t("dashboard.trendTitle")}</span>
                 </Space>
               }
               loading={loading && !trends}
@@ -420,40 +398,34 @@ export function DashboardPage() {
               {trends ? (
                 <>
                   <LineChart
-                    darkMode
+                    darkMode={ui.chartDark}
                     labels={trends.days}
                     series={[
-                      { name: "登录成功", data: trends.login_success, color: "#38bdf8" },
-                      { name: "操作量", data: trends.operation_total, color: "#34d399" },
-                      { name: "登录失败", data: trends.login_fail, color: "#f87171" },
+                      { name: t("dashboard.seriesLoginSuccess"), data: trends.login_success, color: "#38bdf8" },
+                      { name: t("dashboard.seriesOperationTotal"), data: trends.operation_total, color: "#34d399" },
+                      { name: t("dashboard.seriesLoginFail"), data: trends.login_fail, color: "#f87171" },
                     ]}
                     height={300}
                   />
-                  <Divider style={{ borderColor: "rgba(56, 189, 248, 0.15)", margin: "12px 0 8px" }} />
+                  <Divider style={{ borderColor: ui.divider, margin: "12px 0 8px" }} />
                   {trendTotals ? (
-                    <Typography.Paragraph style={{ marginBottom: 0, color: "rgba(186, 214, 238, 0.82)", fontSize: 12 }}>
-                      近 <strong style={{ color: "#e2e8f0" }}>{trendTotals.days}</strong> 日合计：登录成功{" "}
-                      <Typography.Text style={{ color: "#38bdf8" }}>{trendTotals.login_success}</Typography.Text>
-                      {" · "}
-                      接口操作{" "}
-                      <Typography.Text style={{ color: "#34d399" }}>{trendTotals.operation_total}</Typography.Text>
-                      {" · "}
-                      登录失败{" "}
-                      <Typography.Text style={{ color: "#f87171" }}>{trendTotals.login_fail}</Typography.Text>
-                      <span style={{ color: "rgba(148, 163, 184, 0.9)" }}>
-                        {" "}
-                        （日均{" "}
-                        {Math.round(trendTotals.login_success / trendTotals.days)} /{" "}
-                        {Math.round(trendTotals.operation_total / trendTotals.days)} /{" "}
-                        {Math.round(trendTotals.login_fail / trendTotals.days)}）
-                      </span>
+                    <Typography.Paragraph style={{ marginBottom: 0, color: ui.subtle, fontSize: 12 }}>
+                      {t("dashboard.trendSummary", {
+                        days: trendTotals.days,
+                        loginSuccess: trendTotals.login_success,
+                        operationTotal: trendTotals.operation_total,
+                        loginFail: trendTotals.login_fail,
+                        avgLogin: Math.round(trendTotals.login_success / trendTotals.days),
+                        avgOps: Math.round(trendTotals.operation_total / trendTotals.days),
+                        avgFail: Math.round(trendTotals.login_fail / trendTotals.days),
+                      })}
                     </Typography.Paragraph>
                   ) : null}
                   <div style={{ flex: 1, minHeight: 0 }} aria-hidden />
                 </>
               ) : (
-                <Typography.Text type="secondary" style={{ color: "rgba(186, 214, 238, 0.65)" }}>
-                  暂无趋势数据（未产生登录/操作日志或服务未启用统计）。
+                <Typography.Text type="secondary" style={{ color: ui.faint }}>
+                  {t("dashboard.trendEmpty")}
                 </Typography.Text>
               )}
             </Card>
@@ -464,7 +436,7 @@ export function DashboardPage() {
                 className="overview-big-screen__panel overview-big-screen__trend-rail-card"
                 title={
                   <Space>
-                    <CheckCircleOutlined /> 系统状态
+                    <CheckCircleOutlined /> {t("dashboard.systemStatus")}
                   </Space>
                 }
                 loading={health.loading}
@@ -474,11 +446,11 @@ export function DashboardPage() {
                 <Row gutter={[12, 12]} style={{ flex: 1 }}>
                   <Col span={24}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                      <Typography.Text style={{ color: "rgba(186, 214, 238, 0.85)" }}>服务</Typography.Text>
+                      <Typography.Text style={{ color: ui.muted }}>{t("dashboard.service")}</Typography.Text>
                       {health.status === "ok" || health.status === "healthy" ? (
-                        <Tag color="success">运行正常</Tag>
+                        <Tag color="success">{t("dashboard.statusOk")}</Tag>
                       ) : health.status === "error" ? (
-                        <Tag color="error">连接异常</Tag>
+                        <Tag color="error">{t("dashboard.statusError")}</Tag>
                       ) : (
                         <Tag color="warning">{health.status}</Tag>
                       )}
@@ -486,20 +458,20 @@ export function DashboardPage() {
                   </Col>
                   <Col span={24}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                      <Typography.Text style={{ color: "rgba(186, 214, 238, 0.85)" }}>版本</Typography.Text>
+                      <Typography.Text style={{ color: ui.muted }}>{t("dashboard.version")}</Typography.Text>
                       <Tag style={{ marginInlineEnd: 0 }}>
                         <InfoOutlined /> {health.version}
                       </Tag>
                     </div>
                   </Col>
                   <Col span={24} style={{ marginTop: "auto" }}>
-                    <Typography.Text style={{ color: "rgba(186, 214, 238, 0.85)", display: "block", marginBottom: 8 }}>
-                      运行时间 · {formatUptime(health.uptime)}
+                    <Typography.Text style={{ color: ui.muted, display: "block", marginBottom: 8 }}>
+                      {t("dashboard.uptime")} · {formatUptime(health.uptime, t)}
                     </Typography.Text>
                     <Progress
                       percent={uptimePct}
                       strokeColor={{ "0%": "#38bdf8", "100%": "#34d399" }}
-                      trailColor="rgba(148, 163, 184, 0.15)"
+                      trailColor={ui.trail}
                       format={(p) => `${Math.floor(((p ?? 0) / 100) * 24)}h / 24h`}
                     />
                   </Col>
@@ -510,7 +482,7 @@ export function DashboardPage() {
                 className="overview-big-screen__panel overview-big-screen__trend-rail-card"
                 title={
                   <Space>
-                    <ThunderboltOutlined /> Pod / Event 摘要
+                    <ThunderboltOutlined /> {t("dashboard.podEventSummary")}
                   </Space>
                 }
                 loading={loading}
@@ -519,45 +491,45 @@ export function DashboardPage() {
               >
                 <div className="overview-big-screen__trend-rail-pod-body">
                   <div>
-                    <Typography.Text style={{ color: "rgba(186, 214, 238, 0.85)" }}>Pod 健康占比</Typography.Text>
+                    <Typography.Text style={{ color: ui.muted }}>{t("dashboard.podHealthRatio")}</Typography.Text>
                     <Progress
                       percent={metrics.clusters === 0 ? 0 : podHealthyPct}
                       strokeColor="#34d399"
                       trailColor="rgba(251, 113, 133, 0.35)"
-                      format={() => (metrics.clusters === 0 ? "未接入集群" : `${podHealthyPct}%`)}
+                      format={() => (metrics.clusters === 0 ? t("dashboard.noCluster") : `${podHealthyPct}%`)}
                     />
                   </div>
                   <div>
-                    <Typography.Text style={{ color: "rgba(186, 214, 238, 0.85)" }}>Warning 占采样 Events</Typography.Text>
+                    <Typography.Text style={{ color: ui.muted }}>{t("dashboard.warningEventRatio")}</Typography.Text>
                     <Progress
                       percent={metrics.eventTotal === 0 ? 0 : warnRatio}
                       strokeColor="#f97316"
-                      trailColor="rgba(148, 163, 184, 0.2)"
-                      format={() => (metrics.eventTotal === 0 ? "无采样" : `${warnRatio}%`)}
+                      trailColor={ui.trail}
+                      format={() => (metrics.eventTotal === 0 ? t("dashboard.noSample") : `${warnRatio}%`)}
                     />
                   </div>
                   <div>
-                    <Typography.Text style={{ color: "rgba(186, 214, 238, 0.85)" }}>日志 Agent 在线占比</Typography.Text>
+                    <Typography.Text style={{ color: ui.muted }}>{t("dashboard.agentOnlineRatio")}</Typography.Text>
                     <Progress
                       percent={metrics.logAgentsOnline + metrics.logAgentsOffline === 0 ? 0 : agentOnlinePct}
                       strokeColor="#4ade80"
-                      trailColor="rgba(148, 163, 184, 0.2)"
+                      trailColor={ui.trail}
                       format={() =>
-                        metrics.logAgentsOnline + metrics.logAgentsOffline === 0 ? "无启用 Agent" : `${agentOnlinePct}%`
+                        metrics.logAgentsOnline + metrics.logAgentsOffline === 0 ? t("dashboard.noAgent") : `${agentOnlinePct}%`
                       }
                     />
                   </div>
-                  <Divider style={{ borderColor: "rgba(56, 189, 248, 0.15)", margin: "8px 0" }} />
+                  <Divider style={{ borderColor: ui.divider, margin: "8px 0" }} />
                   {metrics.clusters > 0 && (metrics.podClusterErrors > 0 || metrics.eventClusterErrors > 0) ? (
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
-                      <Typography.Text style={{ color: "rgba(248, 250, 252, 0.75)" }}>采集失败集群（Pod / Event）</Typography.Text>
+                      <Typography.Text style={{ color: ui.subtle }}>{t("dashboard.clusterErrors")}</Typography.Text>
                       <Tag color="warning">
                         {metrics.podClusterErrors} / {metrics.eventClusterErrors}
                       </Tag>
                     </div>
                   ) : (
-                    <Typography.Text style={{ color: "rgba(186, 214, 238, 0.55)", fontSize: 12, marginTop: "auto" }}>
-                      Events 为每集群最近 500 条采样；未接入集群时上方 K8s 指标可能为 0。
+                    <Typography.Text style={{ color: ui.faint, fontSize: 12, marginTop: "auto" }}>
+                      {t("dashboard.eventHint")}
                     </Typography.Text>
                   )}
                 </div>
@@ -574,7 +546,7 @@ export function DashboardPage() {
                 title={
                   <Space>
                     <CalendarOutlined style={{ color: "#34d399" }} />
-                    <span>近 7 天分日明细</span>
+                    <span>{t("dashboard.dailyTitle")}</span>
                   </Space>
                 }
                 loading={false}
@@ -586,35 +558,35 @@ export function DashboardPage() {
                   pagination={false}
                   dataSource={trendDailyRows}
                   tableLayout="fixed"
-                  locale={{ emptyText: "无分日数据" }}
+                  locale={{ emptyText: t("dashboard.dailyEmpty") }}
                   columns={[
                     {
-                      title: "日期",
+                      title: t("dashboard.colDate"),
                       dataIndex: "day",
                       width: 108,
                       render: (v: string) => <span style={cellTextStyle}>{v || "-"}</span>,
                     },
                     {
-                      title: "登录成功",
+                      title: t("dashboard.colLoginSuccess"),
                       dataIndex: "login_success",
                       width: 96,
                       align: "right" as const,
                       render: (v: number) => <span style={{ ...cellTextStyle, color: "#38bdf8" }}>{v}</span>,
                     },
                     {
-                      title: "操作量",
+                      title: t("dashboard.colOperationTotal"),
                       dataIndex: "operation_total",
                       width: 96,
                       align: "right" as const,
                       render: (v: number) => <span style={{ ...cellTextStyle, color: "#34d399" }}>{v}</span>,
                     },
                     {
-                      title: "登录失败",
+                      title: t("dashboard.colLoginFail"),
                       dataIndex: "login_fail",
                       width: 96,
                       align: "right" as const,
                       render: (v: number) => (
-                        <span style={{ ...cellTextStyle, color: v > 0 ? "#f87171" : "rgba(248, 250, 252, 0.5)" }}>{v}</span>
+                        <span style={{ ...cellTextStyle, color: v > 0 ? "#f87171" : ui.zero }}>{v}</span>
                       ),
                     },
                   ]}
@@ -633,9 +605,9 @@ export function DashboardPage() {
               title={
                 <Space>
                   <ProfileOutlined style={{ color: "#34d399" }} />
-                  最近操作
-                  <Typography.Text type="secondary" style={{ fontSize: 12, color: "rgba(186, 214, 238, 0.55)" }}>
-                    最近 {OVERVIEW_LOG_PAGE_SIZE} 条
+                  {t("dashboard.recentOps")}
+                  <Typography.Text type="secondary" style={{ fontSize: 12, color: ui.faint }}>
+                    {t("dashboard.recentCount", { count: OVERVIEW_LOG_PAGE_SIZE })}
                   </Typography.Text>
                 </Space>
               }
@@ -652,13 +624,13 @@ export function DashboardPage() {
                   scroll={{ y: tableScrollY }}
                   columns={[
                     {
-                      title: "用户",
+                      title: t("dashboard.colUser"),
                       dataIndex: "username",
                       width: 88,
                       render: (v: string) => <span style={cellTextStyle}>{v || "-"}</span>,
                     },
                     {
-                      title: "方法",
+                      title: t("dashboard.colMethod"),
                       dataIndex: "method",
                       width: 72,
                       render: (v: string) => (
@@ -668,7 +640,7 @@ export function DashboardPage() {
                       ),
                     },
                     {
-                      title: "路径",
+                      title: t("dashboard.colPath"),
                       dataIndex: "path",
                       ellipsis: true,
                       render: (v: string) => (
@@ -678,7 +650,7 @@ export function DashboardPage() {
                       ),
                     },
                     {
-                      title: "时间",
+                      title: t("dashboard.colTime"),
                       dataIndex: "created_at",
                       width: 156,
                       render: (v: string) => <span style={cellTextStyle}>{formatDateTime(v)}</span>,
@@ -694,9 +666,9 @@ export function DashboardPage() {
               title={
                 <Space>
                   <LoginOutlined style={{ color: "#38bdf8" }} />
-                  最近登录
-                  <Typography.Text type="secondary" style={{ fontSize: 12, color: "rgba(186, 214, 238, 0.55)" }}>
-                    最近 {OVERVIEW_LOG_PAGE_SIZE} 条
+                  {t("dashboard.recentLogins")}
+                  <Typography.Text type="secondary" style={{ fontSize: 12, color: ui.faint }}>
+                    {t("dashboard.recentCount", { count: OVERVIEW_LOG_PAGE_SIZE })}
                   </Typography.Text>
                 </Space>
               }
@@ -713,19 +685,20 @@ export function DashboardPage() {
                   scroll={{ y: tableScrollY }}
                   columns={[
                     {
-                      title: "用户",
+                      title: t("dashboard.colUser"),
                       dataIndex: "username",
                       width: 120,
                       render: (v: string) => <span style={cellTextStyle}>{v || "-"}</span>,
                     },
                     {
-                      title: "状态",
+                      title: t("dashboard.colStatus"),
                       dataIndex: "status",
                       width: 72,
-                      render: (v: number) => (v === 1 ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>),
+                      render: (v: number) =>
+                        v === 1 ? <Tag color="success">{t("dashboard.statusSuccess")}</Tag> : <Tag color="error">{t("dashboard.statusFail")}</Tag>,
                     },
                     {
-                      title: "来源",
+                      title: t("dashboard.colSource"),
                       dataIndex: "source",
                       width: 96,
                       render: (v: string) => (
@@ -735,7 +708,7 @@ export function DashboardPage() {
                       ),
                     },
                     {
-                      title: "时间",
+                      title: t("dashboard.colTime"),
                       dataIndex: "created_at",
                       width: 156,
                       render: (v: string) => <span style={cellTextStyle}>{formatDateTime(v)}</span>,

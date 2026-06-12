@@ -1,4 +1,4 @@
-import { createK8sResourceService, k8sParams } from "./service-factory";
+import { createK8sResourceService, k8sParams, pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export type K8sServiceItem = {
   name: string;
@@ -35,7 +35,7 @@ export function applyK8sService(clusterId: number, manifest: string) {
   return svc.apply({ cluster_id: clusterId, manifest });
 }
 
-export function deleteK8sService(clusterId: number, namespace: string, name: string) {
-  return svc.remove(k8sParams(clusterId, { namespace, name }));
+export function deleteK8sService(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+  return svc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
 

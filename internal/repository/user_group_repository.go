@@ -20,7 +20,7 @@ type UserGroupListParams struct {
 	ScopeProjectID  *uint // 非空时仅返回全局组或该项目的组
 }
 
-func NewUserGroupRepository(db *gorm.DB) *UserGroupRepository {
+func NewUserGroupRepository(db *gorm.DB) UserGroupRepo {
 	return &UserGroupRepository{db: db}
 }
 

@@ -8,6 +8,8 @@ import {
   createProject,
   deleteProject,
   getProjects,
+  PROJECT_LIFECYCLE_OPTIONS,
+  PROJECT_TYPE_OPTIONS,
   updateProject,
   type ProjectCreatePayload,
   type ProjectItem,
@@ -16,7 +18,10 @@ import {
 import type { DepartmentItem, UserItem } from "../types/api";
 import { formatDateTime } from "../utils/format";
 
-const defaultQuery = { keyword: "", page: 1, page_size: 10 };
+const defaultQuery = { keyword: "", project_type: undefined as string | undefined, lifecycle_status: undefined as string | undefined, page: 1, page_size: 10 };
+
+const PROJECT_TYPE_LABEL = Object.fromEntries(PROJECT_TYPE_OPTIONS.map((o) => [o.value, o.label]));
+const PROJECT_LIFECYCLE_LABEL = Object.fromEntries(PROJECT_LIFECYCLE_OPTIONS.map((o) => [o.value, o.label]));
 
 function flattenDepartments(items: DepartmentItem[], prefix = ""): { value: number; label: string }[] {
   const out: { value: number; label: string }[] = [];
@@ -93,7 +98,7 @@ export function ProjectsPage() {
   function openCreate() {
     setCurrent(null);
     form.resetFields();
-    form.setFieldsValue({ status: 1 });
+    form.setFieldsValue({ status: 1, project_type: "business", lifecycle_status: "active" });
     setEditorOpen(true);
   }
 
@@ -105,6 +110,8 @@ export function ProjectsPage() {
       code: record.code,
       description: record.description ?? undefined,
       status: record.status,
+      project_type: record.project_type || "business",
+      lifecycle_status: record.lifecycle_status || "active",
       owner_department_id: record.owner_department_id && record.owner_department_id > 0 ? record.owner_department_id : undefined,
     });
     setEditorOpen(true);
@@ -120,6 +127,8 @@ export function ProjectsPage() {
           code: values.code,
           description: values.description,
           status: values.status,
+          project_type: values.project_type,
+          lifecycle_status: values.lifecycle_status,
         };
         const od = values.owner_department_id;
         if (od !== undefined && od !== null && Number(od) > 0) {
@@ -133,6 +142,8 @@ export function ProjectsPage() {
           code: values.code,
           description: values.description,
           status: values.status,
+          project_type: values.project_type,
+          lifecycle_status: values.lifecycle_status,
         };
         const od = values.owner_department_id;
         if (od !== undefined && od !== null && Number(od) > 0) {
@@ -165,7 +176,21 @@ export function ProjectsPage() {
             placeholder="搜索 name/code"
             allowClear
             onSearch={(keyword) => setQuery((q) => ({ ...q, keyword, page: 1 }))}
-            style={{ width: 240 }}
+            style={{ width: 220 }}
+          />
+          <Select
+            allowClear
+            placeholder="项目类型"
+            style={{ width: 140 }}
+            options={[...PROJECT_TYPE_OPTIONS]}
+            onChange={(project_type) => setQuery((q) => ({ ...q, project_type, page: 1 }))}
+          />
+          <Select
+            allowClear
+            placeholder="项目状态"
+            style={{ width: 140 }}
+            options={[...PROJECT_LIFECYCLE_OPTIONS]}
+            onChange={(lifecycle_status) => setQuery((q) => ({ ...q, lifecycle_status, page: 1 }))}
           />
           <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
             刷新
@@ -206,9 +231,24 @@ export function ProjectsPage() {
             },
           },
           {
-            title: "状态",
+            title: "类型",
+            dataIndex: "project_type",
+            width: 110,
+            render: (v: string) => <Tag>{PROJECT_TYPE_LABEL[v] ?? v ?? "—"}</Tag>,
+          },
+          {
+            title: "项目状态",
+            dataIndex: "lifecycle_status",
+            width: 100,
+            render: (v: string) => {
+              const color = v === "active" ? "green" : v === "planning" ? "gold" : v === "suspended" ? "orange" : "default";
+              return <Tag color={color}>{PROJECT_LIFECYCLE_LABEL[v] ?? v ?? "—"}</Tag>;
+            },
+          },
+          {
+            title: "启用",
             dataIndex: "status",
-            width: 120,
+            width: 80,
             render: (v: number) => (v === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
           },
           {
@@ -286,7 +326,13 @@ export function ProjectsPage() {
           <Form.Item label="描述" name="description">
             <Input.TextArea rows={3} placeholder="可选" />
           </Form.Item>
-          <Form.Item label="状态" name="status" rules={[{ required: true }]}>
+          <Form.Item label="项目类型" name="project_type" rules={[{ required: true, message: "请选择项目类型" }]}>
+            <Select options={[...PROJECT_TYPE_OPTIONS]} />
+          </Form.Item>
+          <Form.Item label="项目状态" name="lifecycle_status" rules={[{ required: true, message: "请选择项目状态" }]}>
+            <Select options={[...PROJECT_LIFECYCLE_OPTIONS]} />
+          </Form.Item>
+          <Form.Item label="启用状态" name="status" rules={[{ required: true }]}>
             <Select
               options={[
                 { value: 1, label: "启用" },

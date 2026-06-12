@@ -1,0 +1,127 @@
+package router
+
+import (
+	"yunshu/internal/middleware"
+
+	"github.com/gin-gonic/gin"
+)
+
+// RegisterCoreRoutes 平台内核：认证、RBAC、菜单、字典、审计日志等。
+func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
+	api.GET("/health", d.systemHandler.Health)
+
+	authGroup := api.Group("/auth")
+	authGroup.POST("/verification-code", d.authHandler.SendEmailCode)
+	authGroup.POST("/login-code", d.authHandler.SendLoginCodeByUsername)
+	authGroup.POST("/password-login-code", d.authHandler.SendPasswordLoginCode)
+	authGroup.POST("/login", d.authHandler.Login)
+	authGroup.POST("/email-login", d.authHandler.EmailLogin)
+	authGroup.POST("/register", middleware.RegistrationRateLimit(d.app.Redis), d.regHandler.Apply)
+
+	authAuthed := authGroup.Group("")
+	authAuthed.Use(d.authMiddleware, d.opAudit)
+	authAuthed.POST("/logout", d.authHandler.Logout)
+	authAuthed.POST("/ws-ticket", d.authHandler.CreateWSTicket)
+	authAuthed.GET("/me", d.authHandler.Me)
+	authAuthed.PUT("/me", d.authHandler.UpdateProfile)
+	authAuthed.PUT("/password", d.authHandler.ChangePassword)
+
+	users := api.Group("/users")
+	users.Use(d.authMiddleware, d.authorize, d.opAudit)
+	users.GET("", d.userHandler.List)
+	users.GET("/export", d.userHandler.Export)
+	users.GET("/import-template", d.userHandler.ImportTemplate)
+	users.POST("/import", d.userHandler.Import)
+	users.POST("", d.userHandler.Create)
+	users.GET("/:id", d.userHandler.Detail)
+	users.PUT("/:id", d.userHandler.Update)
+	users.DELETE("/:id", d.userHandler.Delete)
+	users.PUT("/:id/roles", d.userHandler.AssignRoles)
+
+	departments := api.Group("/departments")
+	departments.Use(d.authMiddleware, d.authorize, d.opAudit)
+	departments.GET("/tree", d.departmentHandler.Tree)
+	departments.GET("/:id", d.departmentHandler.Detail)
+	departments.POST("", d.departmentHandler.Create)
+	departments.PUT("/:id", d.departmentHandler.Update)
+	departments.DELETE("/:id", d.departmentHandler.Delete)
+
+	roles := api.Group("/roles")
+	roles.Use(d.authMiddleware, d.authorize, d.opAudit)
+	roles.GET("", d.roleHandler.List)
+	roles.POST("", d.roleHandler.Create)
+	roles.GET("/:id", d.roleHandler.Detail)
+	roles.PUT("/:id", d.roleHandler.Update)
+	roles.DELETE("/:id", d.roleHandler.Delete)
+
+	userGroups := api.Group("/user-groups")
+	userGroups.Use(d.authMiddleware, d.authorize, d.opAudit)
+	userGroups.GET("", d.userGroupHandler.List)
+	userGroups.POST("", d.userGroupHandler.Create)
+	userGroups.GET("/:id", d.userGroupHandler.Detail)
+	userGroups.PUT("/:id", d.userGroupHandler.Update)
+	userGroups.DELETE("/:id", d.userGroupHandler.Delete)
+	userGroups.PUT("/:id/users", d.userGroupHandler.AssignUsers)
+
+	permissions := api.Group("/permissions")
+	permissions.Use(d.authMiddleware, d.authorize, d.opAudit)
+	permissions.GET("", d.permissionHandler.List)
+	permissions.POST("", d.permissionHandler.Create)
+	permissions.GET("/:id", d.permissionHandler.Detail)
+	permissions.PUT("/:id", d.permissionHandler.Update)
+	permissions.DELETE("/:id", d.permissionHandler.Delete)
+
+	policies := api.Group("/policies")
+	policies.Use(d.authMiddleware, d.authorize, d.opAudit)
+	policies.GET("", d.policyHandler.List)
+	policies.POST("", d.policyHandler.Grant)
+	policies.DELETE("", d.policyHandler.Revoke)
+
+	registrations := api.Group("/registrations")
+	registrations.Use(d.authMiddleware, d.authorize, d.opAudit)
+	registrations.GET("", d.regHandler.List)
+	registrations.POST("/:id/review", d.regHandler.Review)
+
+	admin := api.Group("/security")
+	admin.Use(d.authMiddleware)
+	admin.GET("/banned-ips", d.adminHandler.ListBannedIPs)
+	admin.POST("/banned-ips/unban", d.adminHandler.UnbanIP)
+
+	menus := api.Group("/menus")
+	menus.Use(d.authMiddleware, d.authorize, d.opAudit)
+	menus.GET("/tree", d.menuHandler.Tree)
+	menus.POST("", d.menuHandler.Create)
+	menus.PUT("/status", d.menuHandler.BatchStatus)
+	menus.PUT("/:id", d.menuHandler.Update)
+	menus.DELETE("/:id", d.menuHandler.Delete)
+
+	dictEntries := api.Group("/dict/entries")
+	dictEntries.Use(d.authMiddleware, d.authorize, d.opAudit)
+	dictEntries.GET("", d.dictEntryHandler.List)
+	dictEntries.POST("", d.dictEntryHandler.Create)
+	dictEntries.POST("/:id/reveal-value", d.dictEntryHandler.RevealValue)
+	dictEntries.PUT("/:id", d.dictEntryHandler.Update)
+	dictEntries.DELETE("/:id", d.dictEntryHandler.Delete)
+
+	dictOptions := api.Group("/dict/options")
+	dictOptions.Use(d.authMiddleware, d.authorize, d.opAudit)
+	dictOptions.GET("/:dictType", d.dictEntryHandler.Options)
+
+	loginLogs := api.Group("/login-logs")
+	loginLogs.Use(d.authMiddleware, d.authorize, d.opAudit)
+	loginLogs.GET("/export", d.loginLogHandler.Export)
+	loginLogs.GET("", d.loginLogHandler.List)
+	loginLogs.POST("/delete", d.loginLogHandler.BatchDelete)
+	loginLogs.DELETE("/:id", d.loginLogHandler.Delete)
+
+	operationLogs := api.Group("/operation-logs")
+	operationLogs.Use(d.authMiddleware, d.authorize, d.opAudit)
+	operationLogs.GET("/export", d.opLogHandler.Export)
+	operationLogs.GET("", d.opLogHandler.List)
+	operationLogs.POST("/delete", d.opLogHandler.BatchDelete)
+	operationLogs.DELETE("/:id", d.opLogHandler.Delete)
+
+	plugins := api.Group("/plugins")
+	plugins.Use(d.authMiddleware, d.authorize, d.opAudit)
+	plugins.GET("", d.pluginHandler.List)
+}

@@ -140,4 +140,4 @@
 
 ## 7. WebSocket
 
-- 例如 `GET /api/v1/projects/:id/servers/:serverId/terminal/ws`：使用 **查询参数或子协议** 传递 Token（见 `middleware/ws_auth` 实现）。
+- 例如 `GET /api/v1/projects/:id/servers/:serverId/terminal/ws`：先 `POST /api/v1/auth/ws-ticket`（Bearer 鉴权）获取 30 秒有效的一次性 `ticket`，再在 WebSocket URL 查询参数中携带 `?ticket=<uuid>`（见 `middleware/ws_auth`）。

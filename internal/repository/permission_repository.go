@@ -23,7 +23,7 @@ type PermissionListParams struct {
 	K8sRelated string // 空=全部；on=仅集群资源接口路径
 }
 
-func NewPermissionRepository(db *gorm.DB) *PermissionRepository {
+func NewPermissionRepository(db *gorm.DB) PermissionRepo {
 	return &PermissionRepository{db: db}
 }
 

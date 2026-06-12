@@ -20,20 +20,22 @@ type LogPlatformServer struct {
 	pb.UnimplementedAgentRuntimeServiceServer
 
 	projectSvc   *service.ProjectMgmtService
+	cmdbSvc      *service.CMDBService
 	agentSvc     *service.LogAgentService
 	discoverySvc *service.AgentDiscoveryService
 }
 
-func NewLogPlatformServer(projectSvc *service.ProjectMgmtService, agentSvc *service.LogAgentService, discoverySvc *service.AgentDiscoveryService) *LogPlatformServer {
+func NewLogPlatformServer(projectSvc *service.ProjectMgmtService, cmdbSvc *service.CMDBService, agentSvc *service.LogAgentService, discoverySvc *service.AgentDiscoveryService) *LogPlatformServer {
 	return &LogPlatformServer{
 		projectSvc:   projectSvc,
+		cmdbSvc:      cmdbSvc,
 		agentSvc:     agentSvc,
 		discoverySvc: discoverySvc,
 	}
 }
 
 func (s *LogPlatformServer) ListServers(ctx context.Context, req *pb.ListServersRequest) (*pb.ListServersResponse, error) {
-	out, err := s.projectSvc.ListServers(ctx, service.ServerListQuery{
+	out, err := s.cmdbSvc.ListServers(ctx, service.ServerListQuery{
 		ProjectID: uint(req.GetProjectId()),
 		Keyword:   req.GetKeyword(),
 		Page:      int(req.GetPage().GetPage()),
@@ -67,7 +69,7 @@ func (s *LogPlatformServer) ListServers(ctx context.Context, req *pb.ListServers
 }
 
 func (s *LogPlatformServer) GetServer(ctx context.Context, req *pb.GetServerRequest) (*pb.ServerItem, error) {
-	out, err := s.projectSvc.GetServer(ctx, uint(req.GetId()))
+	out, err := s.cmdbSvc.GetServer(ctx, uint(req.GetId()))
 	if err != nil {
 		return nil, toStatusErr(err)
 	}
@@ -107,7 +109,7 @@ func (s *LogPlatformServer) UpsertServer(ctx context.Context, req *pb.UpsertServ
 		v := req.GetPassphrase()
 		passphrase = &v
 	}
-	item, err := s.projectSvc.UpsertServer(ctx, service.ServerUpsertRequest{
+	item, err := s.cmdbSvc.UpsertServer(ctx, service.ServerUpsertRequest{
 		ID:         id,
 		ProjectID:  uint(req.GetProjectId()),
 		Name:       req.GetName(),
@@ -143,7 +145,7 @@ func (s *LogPlatformServer) UpsertServer(ctx context.Context, req *pb.UpsertServ
 }
 
 func (s *LogPlatformServer) DeleteServer(ctx context.Context, req *pb.DeleteServerRequest) (*pb.DeleteServerResponse, error) {
-	if err := s.projectSvc.DeleteServer(ctx, uint(req.GetId())); err != nil {
+	if err := s.cmdbSvc.DeleteServer(ctx, uint(req.GetId())); err != nil {
 		return nil, toStatusErr(err)
 	}
 	return &pb.DeleteServerResponse{Deleted: true}, nil

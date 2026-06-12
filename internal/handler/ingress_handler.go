@@ -59,3 +59,8 @@ func (h *IngressHandler) ApplyClass(c *gin.Context) {
 func (h *IngressHandler) DeleteClass(c *gin.Context) {
 	ServeQueryOK(c, true, h.svc.DeleteClass)
 }
+
+// Diagnose Ingress 联调诊断。
+func (h *IngressHandler) Diagnose(c *gin.Context) {
+	ServeQuery(c, h.svc.Diagnose)
+}

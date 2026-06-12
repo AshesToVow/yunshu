@@ -13,7 +13,7 @@ type LogAgentRepository struct {
 	db *gorm.DB
 }
 
-func NewLogAgentRepository(db *gorm.DB) *LogAgentRepository { return &LogAgentRepository{db: db} }
+func NewLogAgentRepository(db *gorm.DB) LogAgentRepo { return &LogAgentRepository{db: db} }
 
 func (r *LogAgentRepository) GetByServerID(ctx context.Context, serverID uint) (*model.LogAgent, error) {
 	var it model.LogAgent

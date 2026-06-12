@@ -20,7 +20,7 @@ type OperationLogRepository struct {
 	db *gorm.DB
 }
 
-func NewOperationLogRepository(db *gorm.DB) *OperationLogRepository {
+func NewOperationLogRepository(db *gorm.DB) OperationLogRepo {
 	return &OperationLogRepository{db: db}
 }
 

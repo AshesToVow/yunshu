@@ -1,97 +1,108 @@
 # 菜单级需求文档索引
 
-以下文档与 **数据库种子菜单**（`cmd/seed.go` → `defaultMenus`）、**前端路由**（`web/src/app/app.tsx`、`dynamic-menu-page` 兜底、`admin-layout` 固定项）对齐。  
-OpenAPI 全量路由见 **`docs/apipost/permission-system.openapi.yaml`**（由 `go run ./tools/genopenapi` 从 `internal/router/router.go` 生成）。
+以下文档与 **内置菜单 catalog**（`internal/menu/catalog.go`）、**seed 同步**（`menu.Sync` → `cmd/seed.go`）、**前端路由**（`web/src/modules/*/routes.tsx`、`plugin-path.ts`、`dynamic-menu-page` 兜底）对齐。  
+OpenAPI 全量路由见 **`docs/apipost/permission-system.openapi.yaml`**（由 `go run ./tools/genopenapi` 从 `internal/router/register_*.go` 生成）。
 
 ## 一级入口与固定路由
 
-| 路由 | 文档 |
-|------|------|
-| `/` 资产总览 | [menu-root-dashboard.md](./menu-root-dashboard.md) |
-| `/login` 登录页 | [menu-login.md](./menu-login.md) |
-| `/users` 账号管理 | [menu-users.md](./menu-users.md) |
-| `/departments` 组织架构 | [menu-departments.md](./menu-departments.md) |
-| `/roles` | [menu-roles.md](./menu-roles.md) |
-| `/permissions` | [menu-permissions.md](./menu-permissions.md) |
-| `/policies` | [menu-policies.md](./menu-policies.md) |
-| `/registrations` | [menu-registrations.md](./menu-registrations.md) |
-| `/menus` | [menu-menus.md](./menu-menus.md) |
-| `/login-logs` | [menu-login-logs.md](./menu-login-logs.md) |
-| `/operation-logs` | [menu-operation-logs.md](./menu-operation-logs.md) |
-| `/banned-ips` | [menu-banned-ips.md](./menu-banned-ips.md) |
-| `/clusters` | [menu-clusters.md](./menu-clusters.md) |
-| `/pods` | [menu-pods.md](./menu-pods.md) |
-| `/server-console` | [menu-server-console.md](./menu-server-console.md) |
-| `/personal-settings` | [menu-personal-settings.md](./menu-personal-settings.md) |
-| `/dict-entries`（顶栏） | [menu-dict-entries.md](./menu-dict-entries.md) |
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/` 总览页面 | `dashboard-page` | [menu-root-dashboard.md](./menu-root-dashboard.md) |
+| `/login` 登录页 | — | [menu-login.md](./menu-login.md) |
+| `/plugins` 插件管理 | `plugins-page` | [menu-plugins.md](./menu-plugins.md) |
+| `/personal-settings` | — | [menu-personal-settings.md](./menu-personal-settings.md) |
+| `/server-console` | — | [menu-server-console.md](./menu-server-console.md) |
 
-## 告警通知
+## 告警通知（`/alert-notify`）
 
-| 路由 | 文档 |
-|------|------|
-| `/alert-channels` | [menu-alert-channels.md](./menu-alert-channels.md) |
-| `/alert-monitor-platform` | [menu-alert-monitor-platform.md](./menu-alert-monitor-platform.md) |
-| `/alert-config-center` | [menu-alert-config-center.md](./menu-alert-config-center.md) |
-| `/alert-events` | [menu-alert-events.md](./menu-alert-events.md) |
-| `/alert-duty` | [menu-alert-duty.md](./menu-alert-duty.md) |
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/alert-channels` | `alert-channels-page` | [menu-alert-channels.md](./menu-alert-channels.md) |
+| `/alert-monitor-platform` | `alert-monitor-platform-page` | [menu-alert-monitor-platform.md](./menu-alert-monitor-platform.md) |
+| `/alert-duty` | `alert-duty-page` | [menu-alert-duty.md](./menu-alert-duty.md) |
 
-## 项目管理
+### 已隐藏 / 重定向
 
-| 路由 | 文档 |
-|------|------|
-| `/projects` | [menu-projects.md](./menu-projects.md) |
-| `/project-members` | [menu-project-members.md](./menu-project-members.md) |
-| `/project-servers` | [menu-project-servers.md](./menu-project-servers.md) |
-| `/project-services` | [menu-project-services.md](./menu-project-services.md) |
-| `/project-log-sources` | [menu-project-log-sources.md](./menu-project-log-sources.md) |
-| `/project-logs` | [menu-project-logs.md](./menu-project-logs.md) |
-| `/agent-list` | [menu-agent-list.md](./menu-agent-list.md) |
+| 路由 | 重定向 | 文档 |
+|------|--------|------|
+| `/alert-config-center` | 监控平台「策略与联调」 | [menu-alert-config-center.md](./menu-alert-config-center.md) |
+| `/alert-events` | 监控平台「历史」 | [menu-alert-events.md](./menu-alert-events.md) |
 
-## 系统管理（种子菜单）
+## 项目管理（`/project-management`）
 
-与上表 `/users`…`/banned-ips` 一致；另含：
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/projects` | `projects-page` | [menu-projects.md](./menu-projects.md) |
+| `/project-members` | `project-members-page` | [menu-project-members.md](./menu-project-members.md) |
+| `/project-servers` | `project-servers-page` | [menu-project-servers.md](./menu-project-servers.md) |
+| `/project-services` | `project-services-page` | [menu-project-services.md](./menu-project-services.md) |
+| `/project-log-sources` | `project-log-sources-page` | [menu-project-log-sources.md](./menu-project-log-sources.md) |
+| `/project-logs` | `project-logs-page` | [menu-project-logs.md](./menu-project-logs.md) |
+| `/agent-list` | `agent-list-page` | [menu-agent-list.md](./menu-agent-list.md) |
+| `/mysql-backup` | `mysql-backup-page` | [menu-mysql-backup.md](./menu-mysql-backup.md) |
 
-| 路由 | 文档 |
-|------|------|
-| `/k8s-scoped-policies` | [menu-k8s-scoped-policies.md](./menu-k8s-scoped-policies.md) |
+## 系统管理（`/system`）
 
-## Kubernetes 容器管理
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/users` | `users-page` | [menu-users.md](./menu-users.md) |
+| `/user-groups` | `user-groups-page` | [menu-user-groups.md](./menu-user-groups.md) |
+| `/departments` | `departments-page` | [menu-departments.md](./menu-departments.md) |
+| `/roles` | `roles-page` | [menu-roles.md](./menu-roles.md) |
+| `/permissions` | `permissions-page` | [menu-permissions.md](./menu-permissions.md) |
+| `/policies` | `policies-page` | [menu-policies.md](./menu-policies.md) |
+| `/k8s-scoped-policies` | `k8s-scoped-policies-page` | [menu-k8s-scoped-policies.md](./menu-k8s-scoped-policies.md) |
+| `/registrations` | `registrations-page` | [menu-registrations.md](./menu-registrations.md) |
+| `/menus` | `menus-page` | [menu-menus.md](./menu-menus.md) |
+| `/dict-entries` | `dict-entries-page` | [menu-dict-entries.md](./menu-dict-entries.md) |
+| `/login-logs` | `login-logs-page` | [menu-login-logs.md](./menu-login-logs.md) |
+| `/operation-logs` | `operation-logs-page` | [menu-operation-logs.md](./menu-operation-logs.md) |
+| `/banned-ips` | `banned-ips-page` | [menu-banned-ips.md](./menu-banned-ips.md) |
 
-列表/详情/YAML 等共性交互与权限模式见 **[menu-k8s-resource-pattern.md](./menu-k8s-resource-pattern.md)**；下表为各路由专用说明。
+## Kubernetes 容器管理（`/kubernetes`）
 
-| 路由 | 文档 |
-|------|------|
-| `/namespaces` | [menu-namespaces.md](./menu-namespaces.md) |
-| `/nodes` | [menu-nodes.md](./menu-nodes.md) |
-| `/component-status` | [menu-component-status.md](./menu-component-status.md) |
-| `/deployments` | [menu-deployments.md](./menu-deployments.md) |
-| `/statefulsets` | [menu-statefulsets.md](./menu-statefulsets.md) |
-| `/daemonsets` | [menu-daemonsets.md](./menu-daemonsets.md) |
-| `/cronjobs` | [menu-cronjobs.md](./menu-cronjobs.md) |
-| `/jobs` | [menu-jobs.md](./menu-jobs.md) |
-| `/configmaps` | [menu-configmaps.md](./menu-configmaps.md) |
-| `/secrets` | [menu-secrets.md](./menu-secrets.md) |
-| `/k8s-services` | [menu-k8s-services.md](./menu-k8s-services.md) |
-| `/persistentvolumes` | [menu-persistentvolumes.md](./menu-persistentvolumes.md) |
-| `/persistentvolumeclaims` | [menu-persistentvolumeclaims.md](./menu-persistentvolumeclaims.md) |
-| `/storageclasses` | [menu-storageclasses.md](./menu-storageclasses.md) |
-| `/ingresses` | [menu-ingresses.md](./menu-ingresses.md) |
-| `/ingress-classes` | [menu-ingress-classes.md](./menu-ingress-classes.md) |
-| `/events` | [menu-events.md](./menu-events.md) |
-| `/rbac/roles` | [menu-rbac-roles.md](./menu-rbac-roles.md) |
-| `/rbac/rolebindings` | [menu-rbac-rolebindings.md](./menu-rbac-rolebindings.md) |
-| `/rbac/clusterroles` | [menu-rbac-clusterroles.md](./menu-rbac-clusterroles.md) |
-| `/rbac/clusterrolebindings` | [menu-rbac-clusterrolebindings.md](./menu-rbac-clusterrolebindings.md) |
+共性模式：[menu-k8s-resource-pattern.md](./menu-k8s-resource-pattern.md)
 
-## Kubernetes CRD 管理
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/clusters` | `cluster-page` | [menu-clusters.md](./menu-clusters.md) |
+| `/namespaces` | `namespaces-page` | [menu-namespaces.md](./menu-namespaces.md) |
+| `/nodes` | `nodes-page` | [menu-nodes.md](./menu-nodes.md) |
+| `/component-status` | `component-status-page` | [menu-component-status.md](./menu-component-status.md) |
+| `/pods` | `pod-page` | [menu-pods.md](./menu-pods.md) |
+| `/deployments` | `deployments-page` | [menu-deployments.md](./menu-deployments.md) |
+| `/statefulsets` | `statefulsets-page` | [menu-statefulsets.md](./menu-statefulsets.md) |
+| `/daemonsets` | `daemonsets-page` | [menu-daemonsets.md](./menu-daemonsets.md) |
+| `/cronjobs` | `cronjobs-page` | [menu-cronjobs.md](./menu-cronjobs.md) |
+| `/jobs` | `jobs-page` | [menu-jobs.md](./menu-jobs.md) |
+| `/configmaps` | `configmaps-page` | [menu-configmaps.md](./menu-configmaps.md) |
+| `/secrets` | `secrets-page` | [menu-secrets.md](./menu-secrets.md) |
+| `/k8s-services` | `k8s-services-page` | [menu-k8s-services.md](./menu-k8s-services.md) |
+| `/persistentvolumes` | `persistentvolumes-page` | [menu-persistentvolumes.md](./menu-persistentvolumes.md) |
+| `/persistentvolumeclaims` | `persistentvolumeclaims-page` | [menu-persistentvolumeclaims.md](./menu-persistentvolumeclaims.md) |
+| `/storageclasses` | `storageclasses-page` | [menu-storageclasses.md](./menu-storageclasses.md) |
+| `/ingresses` | `ingresses-page` | [menu-ingresses.md](./menu-ingresses.md) |
+| `/ingress-classes` | `ingress-classes-page` | [menu-ingress-classes.md](./menu-ingress-classes.md) |
+| `/network-policies` | `network-policies-page` | [menu-network-policies.md](./menu-network-policies.md) |
+| `/rbac/roles` | `rbac-roles-page` | [menu-rbac-roles.md](./menu-rbac-roles.md) |
+| `/rbac/rolebindings` | `rbac-rolebindings-page` | [menu-rbac-rolebindings.md](./menu-rbac-rolebindings.md) |
+| `/rbac/clusterroles` | `rbac-clusterroles-page` | [menu-rbac-clusterroles.md](./menu-rbac-clusterroles.md) |
+| `/rbac/clusterrolebindings` | `rbac-clusterrolebindings-page` | [menu-rbac-clusterrolebindings.md](./menu-rbac-clusterrolebindings.md) |
+| `/events` | `events-page` | [menu-events.md](./menu-events.md) |
+| `/k8s/event-forward` | `k8s-event-forward-page` | [menu-k8s-event-forward.md](./menu-k8s-event-forward.md) |
+| `/serviceaccounts` | `serviceaccounts-page` | [menu-serviceaccounts.md](./menu-serviceaccounts.md) |
+| `/cluster-api-resources` | `cluster-api-resources-page` | [menu-cluster-api-resources.md](./menu-cluster-api-resources.md) |
+| `/horizontal-pod-autoscalers` | `horizontal-pod-autoscalers-page` | [menu-horizontal-pod-autoscalers.md](./menu-horizontal-pod-autoscalers.md) |
 
-| 路由 | 文档 |
-|------|------|
-| `/crds` | [menu-crds.md](./menu-crds.md) |
-| `/crs` | [menu-crs.md](./menu-crs.md) |
+## Kubernetes CRD 管理（`/kubernetes-crd`）
 
-## 其它
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/crds` | `crds-page` | [menu-crds.md](./menu-crds.md) |
+| `/crs` | `crs-page` | [menu-crs.md](./menu-crs.md) |
 
-| 路由 | 文档 |
-|------|------|
-| `/runtime-config` | [menu-runtime-config.md](./menu-runtime-config.md) |
+## 其它（已废弃侧栏）
+
+| 路由 | 重定向 | 文档 |
+|------|--------|------|
+| `/runtime-config` | `/dict-entries` | [menu-runtime-config.md](./menu-runtime-config.md) |

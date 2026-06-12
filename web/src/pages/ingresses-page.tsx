@@ -1,16 +1,56 @@
-import { FileTextOutlined, TagsOutlined } from "@ant-design/icons";
-import { Button, Modal, Typography, message } from "antd";
+import { ApartmentOutlined, FileTextOutlined, TagsOutlined } from "@ant-design/icons";
+import { MedicineBoxOutlined } from "@ant-design/icons";
+import { Button, Drawer, List, Modal, Space, Tag, Typography, message } from "antd";
+import { useState } from "react";
 import type { ColumnsType } from "antd/es/table";
 import { useRef } from "react";
 import { IngressFormCreateDrawer } from "../components/k8s/k8s-resource-form-drawers";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
+import { TopologyGraphView } from "../components/k8s/topology-graph-view";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
+import { diagnoseIngress, type IngressDiagnoseResult } from "../services/ingress-diagnose";
+import { getWorkloadTopology, type TopologyGraph } from "../services/k8s-topology";
 import { applyIngress, deleteIngress, getIngressDetail, listIngresses, restartIngressNginxPods, type IngressDetail, type IngressItem } from "../services/ingresses";
 
 export function IngressesPage() {
   const listReloadRef = useRef<() => void>(() => {});
   const { renderKVIcon, viewer } = useKeyValueViewer();
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<IngressDiagnoseResult | null>(null);
+  const [diagTarget, setDiagTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [activeClusterId, setActiveClusterId] = useState<number>();
+  const [topoOpen, setTopoOpen] = useState(false);
+  const [topoLoading, setTopoLoading] = useState(false);
+  const [topoGraph, setTopoGraph] = useState<TopologyGraph | null>(null);
+
+  async function openTopology(clusterId: number, namespace: string, name: string) {
+    setTopoOpen(true);
+    setTopoLoading(true);
+    setTopoGraph(null);
+    try {
+      setTopoGraph(await getWorkloadTopology({ cluster_id: clusterId, namespace, kind: "ingress", name }));
+    } catch {
+      setTopoOpen(false);
+    } finally {
+      setTopoLoading(false);
+    }
+  }
+
+  async function runDiagnose(clusterId: number, namespace: string, name: string) {
+    setDiagTarget({ clusterId, namespace, name });
+    setDiagOpen(true);
+    setDiagLoading(true);
+    setDiagResult(null);
+    try {
+      setDiagResult(await diagnoseIngress({ cluster_id: clusterId, namespace, name }));
+    } catch {
+      setDiagOpen(false);
+    } finally {
+      setDiagLoading(false);
+    }
+  }
 
   const columns: ColumnsType<IngressItem> = [
     { title: "命名空间", dataIndex: "namespace", width: 120 },
@@ -27,6 +67,42 @@ export function IngressesPage() {
     { title: "LB地址", dataIndex: "load_balancer", width: 180, render: (v?: string) => v || "-" },
     { title: "存在时长", dataIndex: "age", width: 90, fixed: "right", render: (v?: string) => v || "-" },
     { title: "创建时间", dataIndex: "creation_time", width: 180, fixed: "right" },
+    {
+      title: "诊断",
+      key: "diagnose",
+      width: 160,
+      fixed: "right",
+      render: (_: unknown, r: IngressItem) => (
+        <Space size={4}>
+          <Button
+            type="link"
+            size="small"
+            icon={<ApartmentOutlined />}
+            disabled={!activeClusterId}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!activeClusterId) return;
+              void openTopology(activeClusterId, r.namespace, r.name);
+            }}
+          >
+            拓扑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<MedicineBoxOutlined />}
+            disabled={!activeClusterId}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!activeClusterId) return;
+              void runDiagnose(activeClusterId, r.namespace, r.name);
+            }}
+          >
+            联调
+          </Button>
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -43,10 +119,11 @@ export function IngressesPage() {
           list: async ({ clusterId, namespace, keyword }) => await listIngresses(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getIngressDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyIngress(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteIngress(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteIngress(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;
+          setActiveClusterId(ctx.clusterId);
         }}
         renderCreateFormTab={(ctx) => (
           <IngressFormCreateDrawer
@@ -108,6 +185,28 @@ spec:
                   name: http
 `}
       />
+
+      <Drawer
+        title={diagTarget ? `Ingress 诊断：${diagTarget.namespace}/${diagTarget.name}` : "Ingress 诊断"}
+        open={diagOpen}
+        onClose={() => setDiagOpen(false)}
+        width={520}
+      >
+        <List
+          loading={diagLoading}
+          dataSource={diagResult?.checks ?? []}
+          renderItem={(c) => (
+            <List.Item>
+              <Tag color={c.level === "error" ? "red" : c.level === "warn" ? "orange" : "blue"}>{c.level}</Tag>
+              <Typography.Text>{c.message}</Typography.Text>
+            </List.Item>
+          )}
+        />
+      </Drawer>
+
+      <Modal title="Ingress 资源拓扑（Ingress → Service → Workload → Pod）" open={topoOpen} onCancel={() => setTopoOpen(false)} footer={null} width={900}>
+        {topoLoading ? <Typography.Text>加载中…</Typography.Text> : <TopologyGraphView graph={topoGraph} />}
+      </Modal>
 
       {viewer}
     </>

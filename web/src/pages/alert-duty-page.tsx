@@ -1,4 +1,4 @@
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SwapOutlined } from "@ant-design/icons";
 import type { TreeSelectProps } from "antd";
 import { Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Segmented, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
 import dayjs from "dayjs";
@@ -13,8 +13,10 @@ import {
   type AlertMonitorRuleItem,
   updateDutyBlock,
 } from "../services/alert-platform";
+import { handoffDutyBlock, listDutyCalendar, validateDutyBlocks, type AlertDutyCalendarItem } from "../services/alert-duty";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { getUsers } from "../services/users";
+import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { formatDateTime } from "../utils/format";
 
 export function AlertDutyPage() {
@@ -23,6 +25,11 @@ export function AlertDutyPage() {
   const [rules, setRules] = useState<AlertMonitorRuleItem[]>([]);
   const [ruleId, setRuleId] = useState<number>();
   const [list, setList] = useState<AlertDutyBlockItem[]>([]);
+  const [calendarList, setCalendarList] = useState<AlertDutyCalendarItem[]>([]);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const [handoffSaving, setHandoffSaving] = useState(false);
+  const [handoffTarget, setHandoffTarget] = useState<AlertDutyBlockItem | null>(null);
+  const [handoffForm] = Form.useForm();
   const [viewMode, setViewMode] = useState<"day" | "week">("week");
   const [anchorDate, setAnchorDate] = useState(dayjs());
   const [users, setUsers] = useState<Array<{ label: string; value: number }>>([]);
@@ -77,16 +84,16 @@ export function AlertDutyPage() {
   })();
 
   const groupedBars = useMemo(() => {
-    const m = new Map<number, AlertDutyBlockItem[]>();
-    for (const item of list) {
-      const s = dayjs(item.starts_at).valueOf();
-      const e = dayjs(item.ends_at).valueOf();
-      if (e <= rangeStart.valueOf() || s >= rangeEnd.valueOf()) continue;
+    const m = new Map<number, AlertDutyCalendarItem[]>();
+    for (const item of calendarList) {
       if (!m.has(item.monitor_rule_id)) m.set(item.monitor_rule_id, []);
       m.get(item.monitor_rule_id)!.push(item);
     }
-    return Array.from(m.entries()).map(([rid, blocks]) => ({ rid, blocks: blocks.sort((a, b) => dayjs(a.starts_at).valueOf() - dayjs(b.starts_at).valueOf()) }));
-  }, [list, rangeEnd, rangeStart]);
+    return Array.from(m.entries()).map(([rid, blocks]) => ({
+      rid,
+      blocks: blocks.sort((a, b) => dayjs(a.starts_at).valueOf() - dayjs(b.starts_at).valueOf()),
+    }));
+  }, [calendarList]);
 
   async function loadProjects() {
     const res = await getProjects({ page: 1, page_size: 500 });
@@ -119,6 +126,20 @@ export function AlertDutyPage() {
     }
   }
 
+  async function loadCalendar() {
+    try {
+      const res = await listDutyCalendar({
+        monitor_rule_id: ruleId,
+        project_id: projectId,
+        from: rangeStart.toISOString(),
+        to: rangeEnd.toISOString(),
+      });
+      setCalendarList(res.list ?? []);
+    } catch {
+      setCalendarList([]);
+    }
+  }
+
   async function loadBlocks(nextRuleID?: number, nextProjectID?: number) {
     setLoading(true);
     try {
@@ -145,6 +166,43 @@ export function AlertDutyPage() {
   useEffect(() => {
     void loadBlocks(ruleId, projectId);
   }, [ruleId]);
+
+  useEffect(() => {
+    void loadCalendar();
+  }, [ruleId, projectId, viewMode, anchorDate.format("YYYY-MM-DD")]);
+
+  function openHandoff(row: AlertDutyBlockItem) {
+    setHandoffTarget(row);
+    handoffForm.setFieldsValue({
+      user_ids: parseUintArrayJSON(row.user_ids_json),
+      department_ids: parseUintArrayJSON(row.department_ids_json),
+      extra_emails: parseStringArrayJSON(row.extra_emails_json),
+      remark: row.remark || "",
+    });
+    setHandoffOpen(true);
+  }
+
+  async function submitHandoff() {
+    if (!handoffTarget) return;
+    const v = await handoffForm.validateFields();
+    setHandoffSaving(true);
+    try {
+      await handoffDutyBlock(handoffTarget.id, {
+        user_ids_json: JSON.stringify(Array.isArray(v.user_ids) ? v.user_ids.map(Number).filter((n: number) => n > 0) : []),
+        department_ids_json: JSON.stringify(Array.isArray(v.department_ids) ? v.department_ids.map(Number).filter((n: number) => n > 0) : []),
+        extra_emails_json: JSON.stringify(
+          Array.isArray(v.extra_emails) ? v.extra_emails.map(String).map((s: string) => s.trim()).filter(Boolean) : [],
+        ),
+        remark: String(v.remark || "").trim(),
+      });
+      message.success("交接完成");
+      setHandoffOpen(false);
+      await loadBlocks(ruleId, projectId);
+      await loadCalendar();
+    } finally {
+      setHandoffSaving(false);
+    }
+  }
 
   function openCreate() {
     setCurrent(null);
@@ -206,6 +264,18 @@ export function AlertDutyPage() {
     };
     setSaving(true);
     try {
+      if (!current) {
+        for (const rid of ruleIDs) {
+          const vRes = await validateDutyBlocks({
+            monitor_rule_id: rid,
+            blocks: [{ ...payloadBase, monitor_rule_id: rid }],
+          });
+          if (!vRes.ok) {
+            message.error(vRes.conflicts?.join("；") || "班次时间冲突");
+            return;
+          }
+        }
+      }
       if (current) {
         await updateDutyBlock(current.id, { ...payloadBase, monitor_rule_id: ruleIDs[0] });
         message.success("值班班次已更新");
@@ -215,38 +285,46 @@ export function AlertDutyPage() {
       }
       setOpen(false);
       await loadBlocks(ruleId, projectId);
+      await loadCalendar();
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Card
-      className="table-card"
-      title="值班总览"
-      extra={
-        <Space>
-          <Select allowClear style={{ width: 240 }} options={projectOptions} value={projectId} onChange={setProjectId} placeholder="项目维度（可选）" />
-          <Select allowClear style={{ width: 320 }} options={ruleOptions} value={ruleId} onChange={setRuleId} placeholder="规则维度（可选）" />
-          <Segmented
-            value={viewMode}
-            options={[
-              { label: "按天", value: "day" },
-              { label: "按周", value: "week" },
-            ]}
-            onChange={(v) => setViewMode(v as "day" | "week")}
-          />
-          <DatePicker value={anchorDate} onChange={(v) => setAnchorDate(v || dayjs())} />
-          <Button icon={<ReloadOutlined />} onClick={() => void loadBlocks()}>
-            刷新
-          </Button>
-          <Button onClick={() => (window.location.href = "/alert-monitor-platform?tab=rules")}>去配置规则</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新增值班
-          </Button>
-        </Space>
-      }
-    >
+    <div className="page-stack">
+      <PageTelemetryHeader
+        label="[ ALERT / DUTY ]"
+        title="值班总览"
+        subtitle="班次甘特、日历排班与告警规则维度筛选"
+        meta={[
+          `MODE / ${viewMode === "day" ? "DAY" : "WEEK"}`,
+          `ANCHOR / ${anchorDate.format("YYYY-MM-DD")}`,
+        ]}
+        extra={
+          <Space wrap>
+            <Select allowClear style={{ width: 240 }} options={projectOptions} value={projectId} onChange={setProjectId} placeholder="项目维度（可选）" />
+            <Select allowClear style={{ width: 320 }} options={ruleOptions} value={ruleId} onChange={setRuleId} placeholder="规则维度（可选）" />
+            <Segmented
+              value={viewMode}
+              options={[
+                { label: "按天", value: "day" },
+                { label: "按周", value: "week" },
+              ]}
+              onChange={(v) => setViewMode(v as "day" | "week")}
+            />
+            <DatePicker value={anchorDate} onChange={(v) => setAnchorDate(v || dayjs())} />
+            <Button icon={<ReloadOutlined />} onClick={() => { void loadBlocks(); void loadCalendar(); }}>
+              刷新
+            </Button>
+            <Button onClick={() => (window.location.href = "/alert-monitor-platform?tab=rules")}>去配置规则</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              新增值班
+            </Button>
+          </Space>
+        }
+      />
+    <Card className="table-card">
       <div style={{ width: "100%", overflow: "hidden" }}>
       <Card
         size="small"
@@ -297,7 +375,7 @@ export function AlertDutyPage() {
                     return (
                       <div
                         key={b.id}
-                        title={`${b.title || "班次"} (${formatDateTime(b.starts_at)} ~ ${formatDateTime(b.ends_at)})`}
+                        title={`${b.title || "班次"}${b.overlap ? "（时间重叠）" : ""} (${formatDateTime(b.starts_at)} ~ ${formatDateTime(b.ends_at)})`}
                         style={{
                           position: "absolute",
                           left: `${left}%`,
@@ -305,9 +383,11 @@ export function AlertDutyPage() {
                           top: 3,
                           bottom: 3,
                           borderRadius: 4,
-                          background: dayjs(b.ends_at).isBefore(dayjs())
-                            ? "linear-gradient(90deg, rgba(120,120,120,0.68), rgba(90,90,90,0.75))"
-                            : "linear-gradient(90deg, rgba(22,119,255,0.9), rgba(64,169,255,0.9))",
+                          background: b.overlap
+                            ? "linear-gradient(90deg, rgba(250,140,22,0.95), rgba(255,77,79,0.9))"
+                            : dayjs(b.ends_at).isBefore(dayjs())
+                              ? "linear-gradient(90deg, rgba(120,120,120,0.68), rgba(90,90,90,0.75))"
+                              : "linear-gradient(90deg, rgba(22,119,255,0.9), rgba(64,169,255,0.9))",
                           color: "#fff",
                           fontSize: 12,
                           lineHeight: "22px",
@@ -318,6 +398,7 @@ export function AlertDutyPage() {
                         }}
                       >
                         {b.title || "未命名班次"}
+                        {b.overlap ? " ⚠" : ""}
                       </div>
                     );
                   })}
@@ -387,12 +468,23 @@ export function AlertDutyPage() {
             render: (_, row) => (dayjs(row.ends_at).isBefore(dayjs()) ? <Tag color="default">已结束</Tag> : <Tag color="green">进行中/待生效</Tag>),
           },
           {
+            title: "重叠",
+            width: 80,
+            render: (_, row) => {
+              const cal = calendarList.find((c) => c.id === row.id);
+              return cal?.overlap ? <Tag color="orange">重叠</Tag> : <Tag>—</Tag>;
+            },
+          },
+          {
             title: "操作",
             key: "actions",
-            width: 150,
+            width: 220,
             fixed: "right",
             render: (_, row) => (
               <Space>
+                <Button type="link" icon={<SwapOutlined />} onClick={() => openHandoff(row)}>
+                  交接
+                </Button>
                 <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>
                   编辑
                 </Button>
@@ -451,7 +543,25 @@ export function AlertDutyPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <Modal title={handoffTarget ? `值班交接 #${handoffTarget.id}` : "值班交接"} open={handoffOpen} onCancel={() => setHandoffOpen(false)} onOk={() => void submitHandoff()} confirmLoading={handoffSaving}>
+        <Form form={handoffForm} layout="vertical">
+          <Form.Item name="user_ids" label="值班人" rules={[{ required: true, message: "请选择交接值班人" }]}>
+            <Select mode="multiple" options={users} optionFilterProp="label" />
+          </Form.Item>
+          <Form.Item name="department_ids" label="值班部门">
+            <TreeSelect treeCheckable showCheckedStrategy={TreeSelect.SHOW_PARENT} treeData={deptTree} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="extra_emails" label="额外邮箱">
+            <Select mode="tags" tokenSeparators={[",", " ", ";"]} />
+          </Form.Item>
+          <Form.Item name="remark" label="交接说明">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Card>
+    </div>
   );
 }
 

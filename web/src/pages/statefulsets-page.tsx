@@ -113,7 +113,7 @@ export function StatefulsetsPage() {
       namespace,
       service_name: `${recordName}-headless`,
       replicas: Number(record?.replicas ?? 1) || 1,
-      container_name: recordName,
+      container_name: "",
       image: "",
       env_pairs: [{ key: "", value: "" }],
     }),
@@ -199,7 +199,7 @@ export function StatefulsetsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listStatefulSets(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getStatefulSetDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyStatefulSet(clusterId, manifest),
-          remove: async ({ clusterId, namespace, name }) => await deleteStatefulSet(clusterId, namespace ?? "default", name),
+          remove: async (args) => await deleteStatefulSet(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;

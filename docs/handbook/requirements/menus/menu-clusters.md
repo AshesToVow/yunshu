@@ -1,8 +1,10 @@
 # 菜单需求：集群管理（`/clusters`）
 
+> **Catalog**：`internal/menu/catalog.go` · Component: `cluster-page` · Plugin: `k8s`
+
 ## 1. 定位
 
-- **路由**：`/clusters`，`ClusterPage`。  
+- **路由**：`/clusters`，`cluster-page`。  
 - **目标**：维护平台纳管的 **Kubernetes 集群**连接信息（kubeconfig/地址等），为所有 K8s 资源页提供集群上下文。
 
 ## 2. 功能清单
@@ -16,7 +18,8 @@
 | 启停 | `PUT /api/v1/clusters/:id/status`。 |
 | 连接探测 | `GET /api/v1/clusters/:id/status`。 |
 | 命名空间列表 | `GET /api/v1/clusters/:id/namespaces`。 |
-| 控制面组件状态 | `GET /api/v1/clusters/:id/component-statuses`。 |
+| 控制面健康 | `GET /api/v1/clusters/:id/component-statuses`（Node Ready + kube-system 控制平面 Pod，见 [menu-component-status.md](./menu-component-status.md)） |
+| API 资源发现 | `GET /api/v1/clusters/:id/api-resources`（见 [menu-cluster-api-resources.md](./menu-cluster-api-resources.md)） |
 
 ## 3. 数据表
 

@@ -12,7 +12,7 @@ type MenuRepository struct {
 	db *gorm.DB
 }
 
-func NewMenuRepository(db *gorm.DB) *MenuRepository {
+func NewMenuRepository(db *gorm.DB) MenuRepo {
 	return &MenuRepository{db: db}
 }
 
@@ -51,29 +51,44 @@ func (r *MenuRepository) Tree(ctx context.Context) ([]model.Menu, error) {
 	if err != nil {
 		return nil, err
 	}
-	return buildMenuTree(list, 0), nil
+	return buildMenuTree(list), nil
 }
 
-func buildMenuTree(menus []model.Menu, parentID uint) []model.Menu {
-	var tree []model.Menu
+// buildMenuTree 单次遍历构建菜单树，避免递归扫描全表导致的 O(n²)。
+func buildMenuTree(menus []model.Menu) []model.Menu {
+	if len(menus) == 0 {
+		return nil
+	}
+
+	childrenByParent := make(map[uint][]model.Menu, len(menus))
+	roots := make([]model.Menu, 0, 16)
 	for _, m := range menus {
-		if m.ParentID != nil && *m.ParentID == parentID || m.ParentID == nil && parentID == 0 && hasChildren(menus, m.ID) {
-			m.Children = buildMenuTree(menus, m.ID)
-			tree = append(tree, m)
-		} else if m.ParentID == nil && parentID == 0 && !hasChildren(menus, m.ID) {
-			tree = append(tree, m)
+		if m.ParentID == nil {
+			roots = append(roots, m)
+			continue
 		}
+		pid := *m.ParentID
+		childrenByParent[pid] = append(childrenByParent[pid], m)
+	}
+
+	var attach func(m model.Menu) model.Menu
+	attach = func(m model.Menu) model.Menu {
+		kids := childrenByParent[m.ID]
+		if len(kids) == 0 {
+			return m
+		}
+		m.Children = make([]model.Menu, len(kids))
+		for i, child := range kids {
+			m.Children[i] = attach(child)
+		}
+		return m
+	}
+
+	tree := make([]model.Menu, len(roots))
+	for i, root := range roots {
+		tree[i] = attach(root)
 	}
 	return tree
-}
-
-func hasChildren(menus []model.Menu, id uint) bool {
-	for _, m := range menus {
-		if m.ParentID != nil && *m.ParentID == id {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *MenuRepository) CountChildren(ctx context.Context, parentID uint) (int64, error) {

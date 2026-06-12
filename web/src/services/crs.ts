@@ -1,4 +1,5 @@
 import { getData, http } from "./http";
+import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export interface CrResourceItem {
   name: string;
@@ -74,23 +75,27 @@ export function applyCr(clusterId: number, manifest: string) {
   return getData<boolean>(http.post("/crs/apply", { cluster_id: clusterId, manifest }));
 }
 
-export function deleteCr(args: {
-  clusterId: number;
-  group: string;
-  version: string;
-  resource: string;
-  namespace?: string;
-  name: string;
-}) {
+export function deleteCr(
+  args: {
+    clusterId: number;
+    group: string;
+    version: string;
+    resource: string;
+    namespace?: string;
+    name: string;
+  } & K8sDeleteOptions,
+) {
+  const { clusterId, group, version, resource, namespace, name, grace_period_seconds, propagation_policy } = args;
   return getData<boolean>(
     http.delete("/crs", {
       params: {
-        cluster_id: args.clusterId,
-        group: args.group,
-        version: args.version,
-        resource: args.resource,
-        namespace: args.namespace,
-        name: args.name,
+        cluster_id: clusterId,
+        group,
+        version,
+        resource,
+        namespace,
+        name,
+        ...pickK8sDeleteOpts({ grace_period_seconds, propagation_policy }),
       },
     }),
   );

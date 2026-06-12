@@ -33,7 +33,7 @@ export function IngressClassesPage() {
           list: async ({ clusterId, keyword }) => await listIngressClasses(clusterId, keyword),
           detail: async ({ clusterId, name }) => await getIngressClassDetail(clusterId, name),
           apply: async ({ clusterId, manifest }) => await applyIngressClass(clusterId, manifest),
-          remove: async ({ clusterId, name }) => await deleteIngressClass(clusterId, name),
+          remove: async (args) => await deleteIngressClass(args.clusterId, args.name, args),
         }}
         createTemplate={() => `apiVersion: networking.k8s.io/v1
 kind: IngressClass

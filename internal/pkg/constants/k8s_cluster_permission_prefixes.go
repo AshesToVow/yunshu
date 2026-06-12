@@ -23,6 +23,8 @@ var K8sClusterPermissionPathPrefixes = []string{
 	"/api/v1/network-policies",
 	"/api/v1/horizontal-pod-autoscalers",
 	"/api/v1/k8s/resource-watch",
+	"/api/v1/k8s/search",
+	"/api/v1/k8s/topology",
 	"/api/v1/events",
 	"/api/v1/crds",
 	"/api/v1/crs",

@@ -19,3 +19,8 @@ func NewEventHandler(svc *service.K8sEventService) *EventHandler {
 func (h *EventHandler) List(c *gin.Context) {
 	ServeQuery(c, h.svc.List)
 }
+
+// ListGrouped 按 involvedObject 聚合 Event。
+func (h *EventHandler) ListGrouped(c *gin.Context) {
+	ServeQuery(c, h.svc.ListGrouped)
+}

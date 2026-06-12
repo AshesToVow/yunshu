@@ -1,0 +1,554 @@
+/**
+ * Yunshu Ops — Tactical Telemetry design system
+ * Industrial Brutalist substrate (dark) + Swiss Industrial Print (light)
+ */
+
+@import url("https://fonts.bunny.net/css?family=ibm-plex-sans:400,500,600,700|jetbrains-mono:400,500,600,700");
+
+:root {
+  --ys-font-sans: "IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ys-font-mono: "JetBrains Mono", "IBM Plex Mono", "Consolas", monospace;
+
+  --ys-accent: #e61919;
+  --ys-accent-muted: color-mix(in srgb, var(--ys-accent) 72%, #121212 28%);
+  --ys-radius: 0px;
+  --ys-grid-line: 1px;
+
+  --admin-accent: var(--ys-accent);
+}
+
+/* CRT scanlines + grain on admin shell */
+.admin-shell {
+  position: relative;
+  isolation: isolate;
+  font-family: var(--ys-font-sans);
+}
+
+.admin-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  opacity: 0.045;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.55) 2px,
+    rgba(0, 0, 0, 0.55) 4px
+  );
+}
+
+.admin-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9997;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.admin-shell.theme-dark {
+  --admin-bg: #0a0a0a;
+  --admin-surface: #121212;
+  --admin-surface-elevated: #1a1a1a;
+  --admin-border: rgba(234, 234, 234, 0.14);
+  --admin-text-main: #eaeaea;
+  --admin-text-muted: rgba(234, 234, 234, 0.58);
+  --admin-grid-gap: 1px;
+
+  background: var(--admin-bg) !important;
+}
+
+.admin-shell.theme-light {
+  --admin-bg: #f4f4f0;
+  --admin-surface: #eae8e3;
+  --admin-surface-elevated: #ffffff;
+  --admin-border: rgba(5, 5, 5, 0.18);
+  --admin-text-main: #050505;
+  --admin-text-muted: rgba(5, 5, 5, 0.56);
+  --admin-grid-gap: 1px;
+
+  background: var(--admin-bg) !important;
+}
+
+.admin-shell.theme-light::before {
+  opacity: 0.018;
+}
+
+.admin-shell.theme-light::after {
+  opacity: 0.02;
+}
+
+.admin-shell.theme-dark .admin-sider.ant-layout-sider {
+  border-right: var(--ys-grid-line) solid var(--admin-border) !important;
+  background: var(--admin-surface) !important;
+}
+
+.admin-shell.theme-light .admin-sider.ant-layout-sider {
+  border-right: 2px solid #050505 !important;
+  background: var(--admin-surface-elevated) !important;
+}
+
+/* Brand block — structural macro + micro typography */
+.brand-block {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  padding: 20px 16px 14px !important;
+  border-bottom: var(--ys-grid-line) solid var(--admin-border);
+}
+
+.brand-block__mark {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: var(--ys-radius) !important;
+  background: var(--admin-text-main) !important;
+  color: var(--admin-bg) !important;
+  box-shadow: none !important;
+  font-family: var(--ys-font-mono);
+  font-size: 13px !important;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.brand-block__eyebrow.ant-typography {
+  font-family: var(--ys-font-mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  color: var(--admin-text-muted) !important;
+}
+
+.brand-block__title.ant-typography {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  line-height: 1.05 !important;
+}
+
+.brand-block__subtitle.ant-typography {
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+  color: var(--admin-text-muted) !important;
+}
+
+.brand-block__frame {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--ys-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ys-accent);
+}
+
+.admin-sider__telemetry {
+  margin: 0 12px 16px;
+  padding: 10px 12px;
+  border: var(--ys-grid-line) solid var(--admin-border);
+  font-family: var(--ys-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--admin-text-muted);
+  line-height: 1.6;
+}
+
+.admin-sider__telemetry strong {
+  display: block;
+  color: var(--admin-text-main);
+  font-weight: 600;
+}
+
+/* Menu — grid compartments, zero radius */
+.admin-menu .ant-menu-item,
+.admin-menu .ant-menu-submenu-title {
+  border-radius: var(--ys-radius) !important;
+  font-family: var(--ys-font-mono);
+  font-size: 11px !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-menu .ant-menu-item-selected,
+.admin-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  border-left: 2px solid var(--ys-accent) !important;
+}
+
+/* Header telemetry strip */
+.admin-header.ant-layout-header {
+  border-bottom: var(--ys-grid-line) solid var(--admin-border);
+  min-height: 52px !important;
+  padding: 8px 16px 0 !important;
+}
+
+.admin-header__title {
+  font-family: var(--ys-font-mono) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  color: var(--admin-text-main) !important;
+}
+
+.admin-header__route-id {
+  font-family: var(--ys-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--admin-text-muted);
+  margin-top: 2px;
+}
+
+.admin-icon-btn.ant-btn {
+  border-radius: var(--ys-radius) !important;
+}
+
+.admin-content {
+  padding: 12px 14px 16px !important;
+}
+
+/* Cards, tables, toolbars — flat compartments */
+.table-card.ant-card,
+.form-card.ant-card,
+.glass-card.ant-card,
+.stats-card.ant-card,
+.page-stack > .ant-card {
+  border-radius: var(--ys-radius) !important;
+  border: var(--ys-grid-line) solid var(--admin-border) !important;
+  box-shadow: none !important;
+}
+
+.admin-shell.theme-dark .table-card.ant-card,
+.admin-shell.theme-dark .form-card.ant-card,
+.admin-shell.theme-dark .glass-card.ant-card,
+.admin-shell.theme-dark .stats-card.ant-card,
+.admin-shell.theme-dark .page-stack > .ant-card {
+  background: var(--admin-surface-elevated) !important;
+  backdrop-filter: none !important;
+}
+
+.admin-shell.theme-light .table-card.ant-card,
+.admin-shell.theme-light .form-card.ant-card,
+.admin-shell.theme-light .glass-card.ant-card,
+.admin-shell.theme-light .stats-card.ant-card,
+.admin-shell.theme-light .page-stack > .ant-card {
+  background: var(--admin-surface-elevated) !important;
+}
+
+.toolbar {
+  border-radius: var(--ys-radius) !important;
+}
+
+.ant-table-wrapper .ant-table {
+  border-radius: var(--ys-radius) !important;
+}
+
+.ant-tag {
+  border-radius: var(--ys-radius) !important;
+  font-family: var(--ys-font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Page telemetry header pattern */
+.page-telemetry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--admin-border);
+}
+
+.page-telemetry__label {
+  font-family: var(--ys-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ys-accent);
+  margin-bottom: 6px;
+}
+
+.page-telemetry__title {
+  margin: 0 !important;
+  font-size: clamp(1.25rem, 2vw, 1.6rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  text-transform: uppercase;
+  line-height: 0.95 !important;
+  color: var(--admin-text-main) !important;
+}
+
+.page-telemetry__subtitle.ant-typography {
+  margin: 6px 0 0 !important;
+  max-width: 65ch;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  color: var(--admin-text-muted) !important;
+}
+
+.page-telemetry__aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.page-telemetry__meta {
+  font-family: var(--ys-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--admin-text-muted);
+  text-align: right;
+  line-height: 1.7;
+}
+
+.page-telemetry__extra {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.page-stack {
+  display: grid;
+  gap: 12px;
+}
+
+/* Dashboard cockpit — high-density single-screen telemetry */
+.overview-big-screen.overview-cockpit {
+  --cockpit-bg: #0a0a0a;
+  --cockpit-surface: #121212;
+  --cockpit-border: rgba(234, 234, 234, 0.14);
+  --cockpit-text: #eaeaea;
+  --cockpit-muted: rgba(234, 234, 234, 0.58);
+  --cockpit-accent: var(--ys-accent);
+
+  margin: -12px -14px -16px;
+  padding: 10px 12px 14px;
+  background: var(--cockpit-bg) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  min-height: calc(100dvh - 52px);
+}
+
+.admin-shell.theme-light .overview-cockpit {
+  --cockpit-bg: #f4f4f0;
+  --cockpit-surface: #ffffff;
+  --cockpit-border: rgba(5, 5, 5, 0.2);
+  --cockpit-text: #050505;
+  --cockpit-muted: rgba(5, 5, 5, 0.56);
+}
+
+/* Dashboard light mode — override legacy overview-big-screen dark styles in global.css */
+.admin-shell.theme-light .overview-big-screen.overview-cockpit {
+  background: var(--cockpit-bg) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__section-label {
+  color: var(--cockpit-accent) !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-card.ant-card,
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-card--k8s.ant-card,
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-card--alert.ant-card {
+  background: var(--cockpit-surface) !important;
+  border: 2px solid var(--cockpit-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-icon {
+  color: var(--cockpit-text) !important;
+  background: #f4f4f0 !important;
+  border: 1px solid var(--cockpit-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-title,
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-hint {
+  color: var(--cockpit-muted) !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__panel.ant-card,
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__trend-main-card.ant-card,
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__trend-rail-card.ant-card,
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__table-panel.ant-card {
+  background: var(--cockpit-surface) !important;
+  border: 2px solid var(--cockpit-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__panel .ant-card-head {
+  border-bottom: 1px solid var(--cockpit-border) !important;
+  background: #f4f4f0 !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__panel .ant-card-head-title {
+  color: var(--cockpit-text) !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .overview-big-screen__trend-wrap {
+  background: var(--cockpit-surface) !important;
+  border: 1px solid var(--cockpit-border) !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .ant-table {
+  color: var(--cockpit-text) !important;
+  background: var(--cockpit-surface) !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .ant-table-thead > tr > th {
+  background: #f4f4f0 !important;
+  color: var(--cockpit-text) !important;
+  border-bottom: 2px solid var(--cockpit-border) !important;
+  font-family: var(--ys-font-mono);
+  font-size: 10px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-shell.theme-light .overview-cockpit .ant-table-tbody > tr > td {
+  color: var(--cockpit-text) !important;
+  border-bottom: 1px solid var(--cockpit-border) !important;
+  background: var(--cockpit-surface) !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .ant-table-tbody > tr:nth-child(odd) > td,
+.admin-shell.theme-light .overview-cockpit .ant-table-tbody > tr:nth-child(even) > td {
+  background: var(--cockpit-surface) !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .ant-table-tbody > tr:hover > td {
+  background: color-mix(in srgb, var(--ys-accent) 5%, var(--cockpit-surface) 95%) !important;
+}
+
+.admin-shell.theme-light .overview-cockpit .ant-progress-text {
+  color: var(--cockpit-muted) !important;
+}
+
+.overview-cockpit .overview-cockpit__header {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--cockpit-border);
+}
+
+.overview-cockpit .overview-cockpit__header .page-telemetry__title {
+  color: var(--cockpit-text) !important;
+}
+
+.overview-cockpit .overview-big-screen__top {
+  display: grid;
+  gap: 8px;
+}
+
+.overview-cockpit .overview-big-screen__section-label {
+  font-family: var(--ys-font-mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: var(--cockpit-accent) !important;
+  margin: 4px 0 0 !important;
+}
+
+.overview-cockpit .overview-big-screen__metrics {
+  margin-bottom: 0 !important;
+}
+
+.overview-cockpit .overview-big-screen__stat-card.ant-card,
+.overview-cockpit .overview-big-screen__panel.ant-card {
+  border-radius: 0 !important;
+  border: 1px solid var(--cockpit-border) !important;
+  background: var(--cockpit-surface) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.overview-cockpit .overview-big-screen__stat-card .ant-card-body,
+.overview-cockpit .overview-big-screen__panel .ant-card-body {
+  padding: 10px 12px !important;
+}
+
+.overview-cockpit .overview-big-screen__stat-icon {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 1px solid var(--cockpit-border) !important;
+}
+
+.overview-cockpit .overview-big-screen__stat-value,
+.overview-cockpit .overview-big-screen__stat-value .ant-statistic-content-value {
+  font-family: var(--ys-font-mono) !important;
+  font-size: 1.35rem !important;
+  letter-spacing: -0.02em;
+  color: var(--cockpit-text) !important;
+}
+
+.overview-cockpit .overview-big-screen__stat-label {
+  font-family: var(--ys-font-mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cockpit-muted) !important;
+}
+
+.overview-cockpit .overview-big-screen__panel-title {
+  font-family: var(--ys-font-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cockpit-text) !important;
+}
+
+.overview-cockpit .overview-big-screen__bottom {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 1200px) {
+  .overview-cockpit .overview-big-screen__bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+.overview-cockpit .overview-big-screen__trend-wrap {
+  border-radius: 0 !important;
+  border: 1px solid var(--cockpit-border) !important;
+  background: var(--cockpit-surface) !important;
+  padding: 8px 10px !important;
+}
+
+.overview-cockpit .overview-big-screen__trend-kpi {
+  font-family: var(--ys-font-mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.overview-cockpit .ant-table,
+.overview-cockpit .ant-table-container {
+  border-radius: 0 !important;
+}
+
+.overview-cockpit .ant-tag {
+  border-radius: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell::before,
+  .admin-shell::after {
+    display: none;
+  }
+}
