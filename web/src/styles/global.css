@@ -2919,8 +2919,8 @@ body {
 
 .login-light-card .login-captchaWave,
 .login-light-card .login-captchaEmpty--inline {
-  background: rgba(15, 23, 42, 0.82);
-  border-color: rgba(71, 85, 105, 0.72);
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.45);
 }
 
 .login-light-card .login-submitBtn {
@@ -2929,15 +2929,17 @@ body {
 }
 
 .login-light-secondaryBtn.ant-btn,
-.login-light-registerLink {
+.gw-auth-shell.is-dark .login-light-registerLink,
+.login-light-shell:not(.login-light-shell--light) .login-light-registerLink {
   background: rgba(15, 23, 42, 0.78);
   border-color: rgba(71, 85, 105, 0.66);
-  color: #cbd5e1;
+  color: #e2e8f0;
 }
 
-.login-light-registerLink:hover {
+.gw-auth-shell.is-dark .login-light-registerLink:hover,
+.login-light-shell:not(.login-light-shell--light) .login-light-registerLink:hover {
   background: rgba(30, 41, 59, 0.9);
-  color: #dbeafe;
+  color: #f8fafc;
 }
 
 @media (max-width: 992px) {
@@ -4745,7 +4747,24 @@ body {
 .gw-auth-shell.is-light .login-light-card__hint,
 .gw-auth-shell.is-light .login-light-registerLink,
 .gw-auth-shell.is-light .login-light-secondaryBtn.ant-btn {
-  color: #475569 !important;
+  color: #1d4ed8 !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+}
+
+.gw-auth-shell.is-light .login-light-registerLink:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
+  color: #1e40af !important;
+}
+
+.gw-auth-shell.is-light .login-captchaWave,
+.gw-auth-shell.is-dark .login-captchaWave {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+.gw-auth-shell .login-captchaWave__placeholder {
+  color: #64748b;
 }
 
 .gw-auth-shell.is-light .gw-auth-card .ant-input-affix-wrapper,

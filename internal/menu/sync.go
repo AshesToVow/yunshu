@@ -53,16 +53,11 @@ func upsertByPath(ctx context.Context, db *gorm.DB, spec Spec, parentID *uint) (
 	}
 	err := q.First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		if err := db.WithContext(ctx).Where("path = ?", path).First(&existing).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				m := specToModel(spec, parentID)
-				if err := db.WithContext(ctx).Create(&m).Error; err != nil {
-					return nil, err
-				}
-				return &m, nil
-			}
+		m := specToModel(spec, parentID)
+		if err := db.WithContext(ctx).Create(&m).Error; err != nil {
 			return nil, err
 		}
+		return &m, nil
 	} else if err != nil {
 		return nil, err
 	}

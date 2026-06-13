@@ -2,12 +2,14 @@ package client
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	pb "yunshu/internal/grpc/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 type RuntimeClient struct {
@@ -18,7 +20,7 @@ type RuntimeClient struct {
 	callTimeout  time.Duration
 }
 
-func Dial(addr string, dialTimeout time.Duration, maxRecvBytes, maxSendBytes int, callTimeout time.Duration) (*RuntimeClient, error) {
+func Dial(addr string, internalToken string, dialTimeout time.Duration, maxRecvBytes, maxSendBytes int, callTimeout time.Duration) (*RuntimeClient, error) {
 	if dialTimeout <= 0 {
 		dialTimeout = 5 * time.Second
 	}
@@ -29,7 +31,10 @@ func Dial(addr string, dialTimeout time.Duration, maxRecvBytes, maxSendBytes int
 	defer cancel()
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(unaryTimeoutInterceptor(callTimeout)),
+		grpc.WithChainUnaryInterceptor(
+			internalTokenUnaryClientInterceptor(internalToken),
+			unaryTimeoutInterceptor(callTimeout),
+		),
 	}
 	if maxRecvBytes > 0 {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxRecvBytes)))
@@ -48,6 +53,23 @@ func Dial(addr string, dialTimeout time.Duration, maxRecvBytes, maxSendBytes int
 		AgentSrv:     pb.NewAgentRuntimeServiceClient(conn),
 		callTimeout:  callTimeout,
 	}, nil
+}
+
+func internalTokenUnaryClientInterceptor(internalToken string) grpc.UnaryClientInterceptor {
+	token := strings.TrimSpace(internalToken)
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply interface{},
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
+		if token != "" && !strings.HasPrefix(method, "/logplatform.v1.AgentRuntimeService/") {
+			ctx = metadata.AppendToOutgoingContext(ctx, "x-internal-grpc-token", token)
+		}
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
 }
 
 func unaryTimeoutInterceptor(timeout time.Duration) grpc.UnaryClientInterceptor {

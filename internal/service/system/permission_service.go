@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"errors"
+	"strings"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -136,4 +137,20 @@ func (s *PermissionService) List(ctx context.Context, query PermissionListQuery)
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+// BatchSetK8sScope 批量更新 K8s 范围校验开关（默认仅集群资源接口路径）。
+func (s *PermissionService) BatchSetK8sScope(ctx context.Context, req PermissionBatchK8sScopeRequest) (*PermissionBatchK8sScopeResponse, error) {
+	k8sRelated := strings.TrimSpace(req.K8sRelated)
+	if k8sRelated == "" {
+		k8sRelated = "on"
+	}
+	affected, err := s.permissionRepo.BatchSetK8sScopeEnabled(ctx, repository.PermissionListParams{
+		Keyword:    strings.TrimSpace(req.Keyword),
+		K8sRelated: k8sRelated,
+	}, req.Enabled)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "permission", "BatchSetK8sScope", err)
+	}
+	return &PermissionBatchK8sScopeResponse{Affected: affected}, nil
 }

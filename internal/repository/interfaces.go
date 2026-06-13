@@ -220,6 +220,7 @@ type PermissionRepo interface {
 	GetByID(ctx context.Context, id uint) (*model.Permission, error)
 	List(ctx context.Context, params PermissionListParams) ([]model.Permission, int64, error)
 	ListAll(ctx context.Context) ([]model.Permission, error)
+	BatchSetK8sScopeEnabled(ctx context.Context, params PermissionListParams, enabled bool) (int64, error)
 }
 
 var _ PermissionRepo = (*PermissionRepository)(nil)

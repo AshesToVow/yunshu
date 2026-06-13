@@ -191,6 +191,17 @@ type PermissionListQuery struct {
 	K8sRelated string `form:"k8s_related"` // 空=全部；on=仅挂载 K8sScopeAuthorize 的集群资源路径前缀（见 constants.K8sClusterPermissionPathPrefixes）
 }
 
+// PermissionBatchK8sScopeRequest 批量纳入/关闭 K8s 范围校验目录。
+type PermissionBatchK8sScopeRequest struct {
+	Enabled    bool   `json:"enabled"`
+	Keyword    string `json:"keyword"`
+	K8sRelated string `json:"k8s_related"` // 默认 on：仅集群资源接口
+}
+
+type PermissionBatchK8sScopeResponse struct {
+	Affected int64 `json:"affected"`
+}
+
 type PolicyGrantRequest struct {
 	RoleID       uint `json:"role_id" binding:"required"`
 	PermissionID uint `json:"permission_id" binding:"required"`

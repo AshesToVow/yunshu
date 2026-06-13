@@ -23,6 +23,7 @@ http:
 grpc:
   listen_addr: 0.0.0.0:18080
   target_addr: 0.0.0.0:18080
+  internal_token: "YunshuAgentRegisterSecret2026Secure!!"
   max_recv_msg_bytes: 8388608
   max_send_msg_bytes: 8388608
 

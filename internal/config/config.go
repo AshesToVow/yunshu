@@ -30,6 +30,8 @@ type GRPCConfig struct {
 	TargetAddr      string `mapstructure:"target_addr"`
 	MaxRecvMsgBytes int    `mapstructure:"max_recv_msg_bytes"`
 	MaxSendMsgBytes int    `mapstructure:"max_send_msg_bytes"`
+	// InternalToken 供本机 HTTP→gRPC 调用 Project/LogSource 服务；AgentRuntime 仍用 agent token。
+	InternalToken string `mapstructure:"internal_token"`
 	// CallTimeoutSeconds 单次 unary RPC 默认超时（客户端）。
 	CallTimeoutSeconds int `mapstructure:"call_timeout_seconds"`
 	// ShutdownTimeoutSeconds 优雅关闭 gRPC Server 的最长等待。
@@ -251,6 +253,9 @@ func Load(path string) (*Config, error) {
 	if strings.TrimSpace(cfg.GRPC.TargetAddr) == "" {
 		cfg.GRPC.TargetAddr = cfg.GRPC.ListenAddr
 	}
+	if strings.TrimSpace(cfg.GRPC.InternalToken) == "" && strings.TrimSpace(cfg.Auth.JWTSecret) != "" {
+		cfg.GRPC.InternalToken = cfg.Auth.JWTSecret
+	}
 	if cfg.GRPC.MaxRecvMsgBytes <= 0 {
 		cfg.GRPC.MaxRecvMsgBytes = 8 * 1024 * 1024
 	}
@@ -272,6 +277,7 @@ func bindEnv(v *viper.Viper) error {
 		"http.idle_timeout_seconds":                nil,
 		"grpc.listen_addr":                         nil,
 		"grpc.target_addr":                         nil,
+		"grpc.internal_token":                      nil,
 		"grpc.max_recv_msg_bytes":                  nil,
 		"grpc.max_send_msg_bytes":                  nil,
 		"log.level":                                nil,

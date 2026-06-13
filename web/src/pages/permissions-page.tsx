@@ -3,11 +3,12 @@ import { Alert, Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Sp
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatusTag } from "../components/status-tag";
-import { createPermission, deletePermission, getPermissions, getPermission, updatePermission } from "../services/permissions";
+import { createPermission, deletePermission, getPermissions, getPermission, updatePermission, batchSetPermissionK8sScope } from "../services/permissions";
 import { getRoleOptions } from "../services/roles";
 import { grantPolicy } from "../services/policies";
-import { API_CATALOG_GROUPS } from "../constants/api-catalog";
+import { API_CATALOG_GROUPS, type ApiCatalogRow } from "../constants/api-catalog";
 import type { PermissionItem, PermissionPayload, PermissionQuery, RoleItem } from "../types/api";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
 const defaultQuery: PermissionQuery = {
@@ -19,6 +20,55 @@ const defaultQuery: PermissionQuery = {
 };
 
 const HTTP_METHOD_OPTIONS = ["GET", "POST", "PUT", "DELETE", "PATCH"].map((m) => ({ label: m, value: m }));
+
+/** 平台侧 K8s 配置 API：只走 Casbin，不参与 K8sScopeAuthorize 目录。 */
+function isK8sScopeNotApplicable(resource: string) {
+  const p = resource.trim().toLowerCase();
+  return (
+    p.startsWith("/api/v1/k8s-policies") ||
+    p.startsWith("/api/v1/k8s-namespace-deny-rules") ||
+    p.startsWith("/api/v1/k8s-namespace-allow-rules")
+  );
+}
+
+function k8sScopeSwitchTooltip(resource: string) {
+  if (isK8sScopeNotApplicable(resource)) {
+    return "此为 K8s 平台配置接口（档位/命名空间规则），路由未挂 K8sScopeAuthorize，无需纳入三元校验目录；权限由「授权管理」控制即可。";
+  }
+  return "打开后：该接口在请求带 cluster_id 时将进入 K8s 范围校验中间件。集群侧能力由「K8s 集群访问档位」配置，API 能否调用仍由「授权管理」决定。";
+}
+
+/** 无 Casbin authorize 的路由，不应写入 permissions 表（与 cmd/seed_permissions_cleanup.go 对齐）。 */
+const PERMISSION_SYNC_SKIP = new Set([
+  "GET /api/v1/health",
+  "POST /api/v1/auth/verification-code",
+  "POST /api/v1/auth/login-code",
+  "POST /api/v1/auth/password-login-code",
+  "POST /api/v1/auth/login",
+  "POST /api/v1/auth/email-login",
+  "POST /api/v1/auth/register",
+  "POST /api/v1/auth/logout",
+  "POST /api/v1/auth/ws-ticket",
+  "GET /api/v1/auth/me",
+  "PUT /api/v1/auth/me",
+  "PUT /api/v1/auth/password",
+  "POST /api/v1/agents/health/report",
+  "POST /api/v1/alerts/webhook/alertmanager",
+]);
+
+function catalogRouteKey(route: ApiCatalogRow) {
+  return `${route.method.toUpperCase()} ${route.path.trim()}`;
+}
+
+function shouldSyncCatalogRoute(route: ApiCatalogRow) {
+  if (!route.auth) return false;
+  return !PERMISSION_SYNC_SKIP.has(catalogRouteKey(route));
+}
+
+function truncateText(value: string, max: number) {
+  const s = value.trim();
+  return s.length <= max ? s : s.slice(0, max);
+}
 
 export function PermissionsPage() {
   const [list, setList] = useState<PermissionItem[]>([]);
@@ -37,6 +87,7 @@ export function PermissionsPage() {
   const [detailSubmitting, setDetailSubmitting] = useState(false);
   const [detailForm] = Form.useForm<PermissionPayload>();
   const [syncingCatalog, setSyncingCatalog] = useState(false);
+  const [batchK8sScopeLoading, setBatchK8sScopeLoading] = useState(false);
 
   useEffect(() => {
     void loadPermissions(query);
@@ -152,12 +203,14 @@ export function PermissionsPage() {
       const existing = new Set<string>();
       let page = 1;
       const pageSize = 100;
+      let total = 0;
       while (true) {
         const res = await getPermissions({ page, page_size: pageSize });
+        total = Number(res.total) || 0;
         for (const it of res.list) {
           existing.add(`${it.action.toUpperCase()} ${it.resource}`);
         }
-        if (!res.list.length || page * res.page_size >= res.total) {
+        if (!res.list.length || page * pageSize >= total) {
           break;
         }
         page++;
@@ -165,15 +218,16 @@ export function PermissionsPage() {
       const missing: { name: string; resource: string; action: string; description: string }[] = [];
       for (const group of API_CATALOG_GROUPS) {
         for (const route of group.routes) {
+          if (!shouldSyncCatalogRoute(route)) continue;
           const action = route.method.toUpperCase();
           const resource = route.path.trim();
           const key = `${action} ${resource}`;
           if (existing.has(key)) continue;
           missing.push({
-            name: route.summary,
+            name: truncateText(route.summary, 64),
             resource,
             action,
-            description: `${group.title} · ${route.ui}`,
+            description: truncateText(`${group.title} · ${route.ui}`, 255),
           });
         }
       }
@@ -181,19 +235,58 @@ export function PermissionsPage() {
         message.info("接口能力记录已是最新，无需补全");
         return;
       }
+      let created = 0;
+      const failed: string[] = [];
       for (const it of missing) {
-        await createPermission({
-          name: it.name,
-          resource: it.resource,
-          action: it.action,
-          description: it.description,
-          k8s_scope_enabled: false,
-        });
+        try {
+          await createPermission(
+            {
+              name: it.name,
+              resource: it.resource,
+              action: it.action,
+              description: it.description,
+              k8s_scope_enabled: false,
+            },
+            { silentErrorToast: true },
+          );
+          created += 1;
+        } catch (e) {
+          failed.push(`${it.action} ${it.resource}: ${extractApiErrorMessage(e, "创建失败")}`);
+        }
       }
-      message.success(`已补全 ${missing.length} 条接口能力记录`);
-      await loadPermissions();
+      if (created > 0) {
+        message.success(`已补全 ${created} 条接口能力记录`);
+        await loadPermissions();
+      }
+      if (failed.length > 0) {
+        message.warning(`有 ${failed.length} 条补全失败：${failed[0]}${failed.length > 1 ? " 等" : ""}`);
+      }
+      if (created === 0 && failed.length > 0) {
+        message.error(`补全失败：${failed[0]}`);
+      }
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "补全接口失败"));
     } finally {
       setSyncingCatalog(false);
+    }
+  }
+
+  async function handleBatchK8sScope(enabled: boolean) {
+    setBatchK8sScopeLoading(true);
+    try {
+      const result = await batchSetPermissionK8sScope({
+        enabled,
+        k8s_related: "on",
+        keyword: query.keyword?.trim() || undefined,
+      });
+      message.success(
+        enabled
+          ? `已为 ${result.affected} 条 K8s 集群资源接口纳入范围校验`
+          : `已关闭 ${result.affected} 条 K8s 集群资源接口的范围校验`
+      );
+      await loadPermissions();
+    } finally {
+      setBatchK8sScopeLoading(false);
     }
   }
 
@@ -245,6 +338,32 @@ export function PermissionsPage() {
             />
           </Space>
           <div className="toolbar__actions">
+            <Popconfirm
+              title="确认一键纳入？"
+              description={
+                <span>
+                  仅作用于已挂载 <Typography.Text code>K8sScopeAuthorize</Typography.Text> 的集群资源接口（pods、deployments、clusters 等，与「仅 K8s 集群资源」筛选一致）。
+                  <br />
+                  <Typography.Text type="secondary">
+                    不包含：k8s-policies（档位配置）、k8s-namespace-*（命名空间黑/白名单）等平台管理接口——它们只走 Casbin，打开开关无实际效果。
+                  </Typography.Text>
+                </span>
+              }
+              onConfirm={() => void handleBatchK8sScope(true)}
+              okText="确认纳入"
+              cancelText="取消"
+            >
+              <Button loading={batchK8sScopeLoading}>一键纳入 K8s 校验</Button>
+            </Popconfirm>
+            <Popconfirm
+              title="确认一键关闭？"
+              description="仅关闭「仅 K8s 集群资源」筛选范围内的接口开关；k8s-policies / k8s-namespace-* 等不在范围内。"
+              onConfirm={() => void handleBatchK8sScope(false)}
+              okText="确认关闭"
+              cancelText="取消"
+            >
+              <Button loading={batchK8sScopeLoading}>一键关闭 K8s 校验</Button>
+            </Popconfirm>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               新建能力项
             </Button>
@@ -271,8 +390,11 @@ export function PermissionsPage() {
               （<Link to="/alert-monitor-platform?tab=config">策略与联调</Link>）。
               <br />
               <Typography.Text type="secondary">
-                列表中的「K8s 范围校验」开关用于把该接口纳入 K8s 三元中间件的<strong>校验目录</strong>（见权限设计文档 §0）；不等于给角色授权，角色授权在「授权管理」中配置。
-                筛选「仅 K8s 集群资源」对应后端路由已挂 K8sScopeAuthorize 的路径前缀，便于批量打开开关；与 router.go 前缀表同步维护。
+                「K8s 范围校验」开关：标记该接口是否进入 <Typography.Text code>K8sScopeAuthorize</Typography.Text> 三元中间件目录（见权限设计文档 §0）；不等于角色授权。
+                「一键纳入/关闭」与筛选「仅 K8s 集群资源」范围一致（pods、deployments、clusters…共约 150 条）。
+                <strong>不在范围内</strong>：<Typography.Text code>/api/v1/k8s-policies/*</Typography.Text>（档位/矩阵配置）、
+                <Typography.Text code>/api/v1/k8s-namespace-deny-rules</Typography.Text>、
+                <Typography.Text code>/api/v1/k8s-namespace-allow-rules</Typography.Text>——仅 Casbin 鉴权，请求通常不带 cluster_id，保持「未纳入」即可。
               </Typography.Text>
             </span>
           }
@@ -310,13 +432,19 @@ export function PermissionsPage() {
               title: "K8s 范围校验",
               dataIndex: "k8s_scope_enabled",
               width: 120,
-              render: (v?: boolean) => <Tag color={v ? "purple" : "default"}>{v ? "已纳入目录" : "未纳入"}</Tag>,
+              render: (v?: boolean, record?: PermissionItem) => {
+                const na = record ? isK8sScopeNotApplicable(record.resource) : false;
+                if (v) return <Tag color="purple">已纳入目录</Tag>;
+                if (na) return <Tag>不适用</Tag>;
+                return <Tag>未纳入</Tag>;
+              },
             },
             { title: "说明", dataIndex: "description", render: (value?: string) => value || "-" },
             {
               title: "操作",
               key: "action",
-              render: (_: unknown, record: PermissionItem) => (
+              render: (_: unknown, record?: PermissionItem) =>
+                record ? (
                 <Space>
                   <Button type="link" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
                     详情
@@ -324,13 +452,10 @@ export function PermissionsPage() {
                   <Button type="link" icon={<SafetyCertificateOutlined />} onClick={() => openAssignRoles(record)}>
                     分配角色
                   </Button>
-                  <Tooltip
-                    title={
-                      "打开后：该接口在请求带集群上下文时将进入 K8s 范围校验中间件。仅标记「是否参与校验」；集群侧能力由「K8s 集群访问档位」页配置，API 能否调用仍由「授权管理」决定。"
-                    }
-                  >
+                  <Tooltip title={k8sScopeSwitchTooltip(record.resource)}>
                     <Switch
                       size="small"
+                      disabled={isK8sScopeNotApplicable(record.resource)}
                       checked={Boolean(record.k8s_scope_enabled)}
                       checkedChildren="开"
                       unCheckedChildren="关"
@@ -345,7 +470,7 @@ export function PermissionsPage() {
                     </Button>
                   </Popconfirm>
                 </Space>
-              ),
+              ) : null,
             },
           ]}
         />

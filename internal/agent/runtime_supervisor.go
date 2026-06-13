@@ -25,6 +25,7 @@ func runAgentSupervisor(ctx context.Context, client pb.AgentRuntimeServiceClient
 			return nil
 		}
 		sessionCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
 		errCh := make(chan error, 1)
 		go func() {
 			errCh <- runIngestSession(sessionCtx, client, cfg, projectID, token, sources)

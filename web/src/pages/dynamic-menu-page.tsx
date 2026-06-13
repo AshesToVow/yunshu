@@ -170,7 +170,7 @@ export function DynamicMenuPage() {
     );
   }
 
-  if (menuItem && !menuItem.component?.trim()) {
+  if (menuItem && !menuItem.component?.trim() && !hasPathFallback) {
     return (
       <Card className="table-card">
         <Result

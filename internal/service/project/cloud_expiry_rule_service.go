@@ -44,9 +44,6 @@ func NewCloudExpiryRuleService(repo interfaces.CloudExpiryRuleRepository) *Cloud
 func (s *CloudExpiryRuleService) List(ctx context.Context, q CloudExpiryRuleListQuery) ([]model.CloudExpiryRule, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	kw := strings.TrimSpace(q.Keyword)
-	if q.ProjectID != nil && *q.ProjectID > 0 {
-		kw = kw // project filter kept in service layer via future repo extension
-	}
 	list, total, err := s.repo.List(ctx, kw, (page-1)*pageSize, pageSize)
 	if err != nil {
 		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.cloud-expiry", "List", err)
