@@ -32,12 +32,11 @@ import { LogStreamDockBar } from "../components/log-stream-dock-bar";
 import { GlobalSearchModal } from "../components/global-search-modal";
 import { useAuth } from "../contexts/auth-context";
 import { LogStreamProvider } from "../contexts/log-stream-context";
-import { getMenuTree } from "../services/menus";
-import type { MenuItem } from "../services/menus";
+import { useMenuTree } from "../hooks/use-menu-tree";
 import { resolveAppLocale } from "../i18n";
 import { buildSiderMenuItems, matchMenuSelectedKey, type AntdMenuItem } from "../utils/admin-menu";
 import { usePlugins } from "../contexts/plugin-context";
-import { filterAntdMenuItems, filterMenuTreeByPlugins } from "../modules/filter-menu";
+import { filterAntdMenuItems } from "../modules/filter-menu";
 
 const { Content, Header, Sider } = Layout;
 const UI_PREFS_KEY = "admin-ui-preferences";
@@ -120,7 +119,7 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const { user, loading, logoutAction } = useAuth();
   const { isPluginEnabled } = usePlugins();
-  const [menuTree, setMenuTree] = useState<MenuItem[] | null>(null);
+  const { menus: menuTree } = useMenuTree();
   const [menuEpoch, setMenuEpoch] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
@@ -134,28 +133,11 @@ export function AdminLayout() {
     return window.localStorage.getItem("admin-theme-accent") ?? "#e61919";
   });
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const tree: MenuItem[] = await getMenuTree();
-        if (cancelled || !tree?.length) return;
-        setMenuTree(tree);
-      } catch {
-        if (!cancelled) setMenuTree(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isPluginEnabled]);
-
   const activeLocale = resolveAppLocale(i18n.language);
 
   const siderItems = useMemo(() => {
     if (menuTree?.length) {
-      const filtered = filterMenuTreeByPlugins(menuTree, isPluginEnabled);
-      const items = buildSiderMenuItems(filtered, t);
+      const items = buildSiderMenuItems(menuTree, t);
       if (items.length) return items;
     }
     return filterAntdMenuItems(buildFallbackMenuItems(t) as AntdMenuItem[], isPluginEnabled);

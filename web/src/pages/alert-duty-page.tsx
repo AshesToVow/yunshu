@@ -317,7 +317,7 @@ export function AlertDutyPage() {
             <Button icon={<ReloadOutlined />} onClick={() => { void loadBlocks(); void loadCalendar(); }}>
               刷新
             </Button>
-            <Button onClick={() => (window.location.href = "/alert-monitor-platform?tab=rules")}>去配置规则</Button>
+            <Button onClick={() => (window.location.href = "/alert-monitor-platform/rules")}>去配置规则</Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               新增值班
             </Button>

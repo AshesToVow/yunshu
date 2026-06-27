@@ -34,10 +34,10 @@ log:
   file_path: ./logs  # log file directory path
 
 mysql:
-  host: 127.0.0.1         # Docker 服务名，容器内部通信
+  host: 10.10.10.103         # Docker 服务名，容器内部通信
   port: 3306
   user: root
-  password: "123456"  # 生产环境务必修改
+  password: "123"  # 生产环境务必修改
   db_name: yunshu
   charset: utf8mb4
   loc: Asia%2FShanghai
@@ -46,7 +46,7 @@ mysql:
   conn_max_lifetime_seconds: 3600
 
 redis:
-  addr: 127.0.0.1:6379    # Docker 服务名，容器内部通信
+  addr: 10.10.10.103:6379    # Docker 服务名，容器内部通信
   password: "1234"  # 生产环境务必修改
   db: 0
   pool_size: 10              # 降低以节省内存
@@ -112,6 +112,9 @@ alert:
   group_interval_seconds: 60
   # group 持续 firing 且无新变化时的重复提醒间隔（秒）（对齐 repeat_interval）
   repeat_interval_seconds: 300
+  # 外部 Alertmanager Webhook（入口 A）是否跳过 Yunshu 第二层 group timing（默认 true，信任 AM 原生聚合）
+  # 平台监控规则（入口 B / receiver=platform-monitor）始终使用上述 group_* 配置，不受此项影响
+  webhook_skip_group_timing: true
   # group_key 状态在 Redis 中过期时间（秒）
   aggregate_ttl_seconds: 86400
   # 平台消息长度限制（字符数，按 rune 计算；默认值偏保守，避免钉钉/企微超限）
@@ -132,7 +135,7 @@ alert:
   # Prometheus异步增强worker数量
   prometheus_enrich_workers: 4
   # Alertmanager Webhook：Redis 存在且未关闭异步时，鉴权通过后先入队由后台 worker 消费（HTTP 快速返回）。
-  webhook_async_disabled: true
+  webhook_async_disabled: false
   webhook_queue_max_len: 10000
   # 多副本时仅一个实例跑内置 PromQL 监控规则 tick 的全局锁 TTL（秒）。应大于单轮评估最坏耗时。
   monitor_eval_leader_lock_seconds: 30

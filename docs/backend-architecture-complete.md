@@ -981,36 +981,33 @@ sequenceDiagram
 
 ### 7.2 告警处理流水线
 
-**完整告警生命周期**:
+**完整告警生命周期**（双入口，统一投递链 `RunIngressPipeline`）：
+
+```mermaid
+flowchart TB
+  subgraph A [入口 A]
+    AM[Alertmanager Webhook] --> SKIP[SkipGroupTiming 默认 true]
+  end
+  subgraph B [入口 B]
+    MR[平台 PromQL + Redis for] --> TM[group_wait/interval/repeat]
+  end
+  SKIP --> ING[Ingest: 静默 / 抑制 / 订阅 / 通道]
+  TM --> ING
+  ING --> DB[(alert_events)]
+```
+
+文本步骤：
 
 ```
-1. Alertmanager Webhook 触发
-   ↓
-2. Ingest Pipeline 解析标准化
-   ↓
-3. Fingerprint 计算 (Labels Hash)
-   ↓
-4. Redis 去重检查 (TTL 24h)
-   ↓
-5. Aggregate State Machine:
-   - Pending → Firing (Group Wait 15s)
-   - Firing → Firing (Labels 变化, Group Interval 60s)
-   - Firing → Firing (无变化, Repeat Interval 300s)
-   - Firing → Resolved (Alertmanager resolve)
-   ↓
-6. Delivery Core:
-   - 查询匹配的订阅路由树节点
-   - 解析接收组 (值班人 + 负责人)
-   - 渲染渠道模板 (HTML/Markdown/DingTalk JSON)
-   - 异步投递 (Worker Pool)
-   ↓
-7. Channel Delivery:
-   - 钉钉: Webhook + 签名
-   - 邮件: SMTP + HTML 模板
-   - Webhook: 自定义回调
-   ↓
-8. Record History (DB)
+[入口 A] Alertmanager Webhook → applyIngressGroupTimingPolicy(SkipGroupTiming)
+[入口 B] tickMonitorRules → Redis pending/for → platform-monitor → decideFiringGroupTiming
+         ↓
+Ingest Pipeline：合并 labels → 静默 → 抑制 → 订阅树 → sendToChannel
+         ↓
+alert_events 落库；firing 2xx 写 firing_delivered；resolved 须 prior firing
 ```
+
+时序图详见 [alert-routing-and-delivery-guide.md §0](alert-routing-and-delivery-guide.md)。
 
 #### 告警域数据访问策略（Repository）
 

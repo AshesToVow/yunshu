@@ -253,7 +253,7 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
         <Button icon={<ReloadOutlined />} onClick={() => void load()}>
           刷新
         </Button>
-        <Link to="/alert-monitor-platform?tab=history&event_category=inhibition">
+        <Link to="/alert-monitor-platform/history?event_category=inhibition">
           <Button>查看抑制留痕历史</Button>
         </Link>
       </Space>

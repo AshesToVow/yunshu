@@ -4,12 +4,16 @@
 
 ## 1. 总体流程
 
-1. Alertmanager 将告警发送到后端接口：`POST /api/v1/alerts/webhook/alertmanager`
-2. 后端解析 `labels/annotations`，提取维度（如 `cluster/namespace/workload`）
-3. 生成统一消息模板（钉钉/企业微信/通用 webhook）
-4. 按规则进行聚合收敛（firing 与 resolved 分开）
-5. 按渠道发送，并按平台限制进行分段/裁剪
-6. 发送结果落库到 `alert_events`，用于审计与查询
+两条入口最终汇入 `ReceiveAlertmanager` → `RunIngressPipeline`：
+
+| 入口 | 触发源 | 聚合 / 节流 |
+|------|--------|-------------|
+| **A** | Prometheus → Alertmanager → `POST /api/v1/alerts/webhook/alertmanager` | **AM 原生** `group_wait` / `group_interval` / `repeat_interval`；Yunshu 默认不再二次节流 |
+| **B** | 平台 PromQL 规则 → Redis pending/for → 内部 `ReceiveAlertmanager`（`receiver=platform-monitor`） | **Yunshu** `group_wait_seconds` / `group_interval_seconds` / `repeat_interval_seconds` |
+
+统一后续步骤：解析 labels → 静默/抑制 → 订阅树匹配 → 通道发送 → `alert_events` 落库。
+
+端到端时序图见 [告警路由与投递指南 §0.2](./alert-routing-and-delivery-guide.md#02-双入口时序入口-a-信任-am--入口-b-保留-yunshu-分组节流)。
 
 ---
 
@@ -25,9 +29,12 @@ alert:
   dedup_ttl_seconds: 86400
 
   group_by: ["alertname", "cluster", "namespace", "severity", "receiver"]
-  group_wait_seconds: 0
+  digest_by: ["instance", "pod", "node", "host", "device", "job"]
+  # 入口 B（platform-monitor）使用下列 group_*；入口 A 默认跳过第二层
+  group_wait_seconds: 15
   group_interval_seconds: 60
   repeat_interval_seconds: 300
+  webhook_skip_group_timing: true
   aggregate_ttl_seconds: 86400
 
   platform_limits:
@@ -46,10 +53,9 @@ alert:
 ### 2.1 参数说明
 
 - `webhook_token`：Alertmanager webhook 鉴权 token（请求头 **`X-Alert-Token`**、`X-Webhook-Token` 或 `Authorization: Bearer <token>`；**不支持** URL query `?token=`）
-- `group_by`：服务端 `group_key` 的计算维度
-- `group_wait_seconds`：首次见到某个 `group_key` 后的等待窗口（收集同组告警），到达后才允许“首次发送”
-- `group_interval_seconds`：已发送后，若组内容发生变化（平台用 `labels_digest` 近似）再次发送的最小间隔
-- `repeat_interval_seconds`：持续 firing 且无新变化时的重复提醒间隔
+- `webhook_skip_group_timing`：外部 AM Webhook（入口 A）是否跳过 Yunshu 第二层 group timing，默认 **`true`**（信任 AM）；**平台监控规则（入口 B）不受影响**
+- `group_by` / `digest_by`：服务端 `group_key` 与 `labels_digest` 的计算维度（**主要用于入口 B**）
+- `group_wait_seconds` / `group_interval_seconds` / `repeat_interval_seconds`：**入口 B**（`platform-monitor`）firing 分组节流；入口 A 由 Alertmanager route 控制
 - `aggregate_ttl_seconds`：聚合状态在 Redis 的保留时间
 - `platform_limits.*`：平台消息预算（当前按请求体 JSON 大小限制进行控制）
 - `prometheus_url`：用于从 `generatorURL` 解析表达式并查询当前值
@@ -61,7 +67,7 @@ alert:
 
 ## 3. Alertmanager 对接配置
 
-推荐将 Alertmanager 作为第一层聚合，当前服务作为第二层防抖与多渠道分发。
+**推荐**：Alertmanager 作为**第一层**聚合与节流；Yunshu 负责订阅路由与多渠道分发。默认 `webhook_skip_group_timing: true`，不再对 AM 已聚合的 Webhook 做第二层 `group_wait`。
 
 示例：
 
@@ -154,14 +160,18 @@ groups:
 
 ---
 
-## 5. 告警与恢复的聚合收敛规则（对齐夜莺/Alertmanager）
+## 5. 告警与恢复的聚合收敛规则
 
-## 5.1 firing（告警触发）
+### 5.1 firing（告警触发）
 
-- 以 `group_key` 为维度执行 group 时序语义：
-  - `group_wait_seconds`：首次见到 group 后先等待（收集同组告警），窗口内写抑制事件（`group_wait_suppressed`）
-  - `group_interval_seconds`：已发送后若组内发生“新变化”（平台用 `labels_digest` 近似），在窗口内写抑制事件（`group_interval_suppressed`）
-  - `repeat_interval_seconds`：持续 firing 且无变化时，在窗口内写抑制事件（`repeat_suppressed`）
+按入口区分：
+
+| 入口 | 谁负责 group 时序 | Yunshu 行为 |
+|------|------------------|-------------|
+| **A** 外部 AM Webhook | Alertmanager `group_wait` / `group_interval` / `repeat_interval` | `webhook_skip_group_timing=true`（默认）→ 收到即走订阅/通道，不写 `group_*_suppressed` |
+| **B** 平台监控规则 | `config.yaml` 的 `group_*` + Redis | `decideFiringGroupTiming`；可能写 `group_wait_suppressed` / `group_interval_suppressed` / `repeat_suppressed` |
+
+入口 B 的 `group_key` 维度由 `group_by` + `digest_by` 决定；`labels_digest` 变化触发 `group_interval` 语义。
 
 ## 5.2 resolved（告警恢复）
 
@@ -289,8 +299,8 @@ curl -s "http://127.0.0.1:9091/api/v1/alerts"
 
 ## 10. 生产建议（规范实践）
 
-- 第一层聚合收敛尽量在 Alertmanager 做（`group_by/group_interval/repeat_interval/inhibit_rules/silence`）
-- 本服务的聚合用于“第二层保护”，防止告警风暴刷屏
+- **入口 A**：聚合与节流尽量在 Alertmanager 完成（`group_by` / `group_wait` / `group_interval` / `repeat_interval` / `inhibit_rules` / silence）；保持 `webhook_skip_group_timing: true`
+- **入口 B**：在 `config.yaml`  tuning `group_*`；平台规则 `for_seconds` 由 Redis 状态机实现
 - 固定使用 `cluster` 作为多集群主维度，并统一标签命名
 - 定期清理无效告警规则，避免“长期噪音告警”
 

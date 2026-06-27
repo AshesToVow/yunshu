@@ -961,7 +961,7 @@
         </button>
       </div>
       <nav class="toc-nav" id="toc-nav">
-        <a href="#1-" class="lvl-2">1. 目标与范围</a><a href="#2-" class="lvl-2">2. 架构与两条告警入口</a><a href="#3-" class="lvl-2">3. 核心代码索引</a><a href="#4-gorm" class="lvl-2">4. 数据模型（GORM）</a><a href="#5-http-api-apiv1-" class="lvl-2">5. HTTP API 清单（/api/v1 前缀）</a><a href="#6-receivealertmanager-" class="lvl-2">6. ReceiveAlertmanager 处理流水线（逻辑顺序）</a><a href="#7-" class="lvl-2">7. 订阅树匹配规则（实现）</a><a href="#8-configsconfigyaml--alertconfig" class="lvl-2">8. 配置项映射（configs/config.yaml → AlertConfig）</a><a href="#9-redis-key-" class="lvl-2">9. Redis Key 约定（节选）</a><a href="#10-" class="lvl-2">10. 处理人、值班与通知标题</a><a href="#11-" class="lvl-2">11. 非功能需求（来自实现）</a><a href="#12-" class="lvl-2">12. 数据源连通性检测</a><a href="#13-" class="lvl-2">13. 已知架构风险与改进方向（按评审结论对齐）</a><a href="#14-" class="lvl-2">14. 变更记录（文档维护）</a><a href="#21--aprometheus--alertmanager--" class="lvl-3">2.1 入口 A：Prometheus → Alertmanager → 云枢</a><a href="#22--b" class="lvl-3">2.2 入口 B：平台监控规则（内置）</a><a href="#23--c" class="lvl-3">2.3 入口 C（扩展）：云资源到期等</a><a href="#131-" class="lvl-3">13.1 架构层面</a><a href="#132-" class="lvl-3">13.2 可靠性与可用性层面</a><a href="#133-" class="lvl-3">13.3 其它补充观察（次要，待后续评审是否纳入正式改进项）</a>
+        <a href="#1-" class="lvl-2">1. 目标与范围</a><a href="#2-" class="lvl-2">2. 架构与两条告警入口</a><a href="#3-" class="lvl-2">3. 核心代码索引</a><a href="#4-gorm" class="lvl-2">4. 数据模型（GORM）</a><a href="#5-http-api-apiv1-" class="lvl-2">5. HTTP API 清单（/api/v1 前缀）</a><a href="#6-receivealertmanager-" class="lvl-2">6. ReceiveAlertmanager 处理流水线（逻辑顺序）</a><a href="#7-" class="lvl-2">7. 订阅树匹配规则（实现）</a><a href="#8-configsconfigyaml--alertconfig" class="lvl-2">8. 配置项映射（configs/config.yaml → AlertConfig）</a><a href="#9-redis-key-" class="lvl-2">9. Redis Key 约定（节选）</a><a href="#10-" class="lvl-2">10. 处理人、值班与通知标题</a><a href="#11-" class="lvl-2">11. 非功能需求（来自实现）</a><a href="#12-" class="lvl-2">12. 数据源连通性检测</a><a href="#13-" class="lvl-2">13. 已知架构风险与改进方向（按评审结论对齐）</a><a href="#14-" class="lvl-2">14. 变更记录（文档维护）</a><a href="#21--aprometheus--alertmanager--" class="lvl-3">2.1 入口 A：Prometheus → Alertmanager → 云枢</a><a href="#22--b" class="lvl-3">2.2 入口 B：平台监控规则（内置）</a><a href="#23--c" class="lvl-3">2.3 入口 C（扩展）：云资源到期等</a><a href="#24-" class="lvl-3">2.4 双入口时序（与实现对齐）</a><a href="#131-" class="lvl-3">13.1 架构层面</a><a href="#132-" class="lvl-3">13.2 可靠性与可用性层面</a><a href="#133-" class="lvl-3">13.3 其它补充观察（次要，待后续评审是否纳入正式改进项）</a>
       </nav>
     </aside>
 
@@ -977,11 +977,11 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-06-12
+            2026-06-26
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
-            ~9 分钟阅读
+            ~10 分钟阅读
           </span>
         </div>
       </header>
@@ -1051,7 +1051,54 @@
 </ol>
 <p><strong>约束</strong>：<code>tickMonitorRules</code> 仅在 <strong><code>s.redis != nil</code></strong> 时执行单条规则评估（见 <code>alert_monitor_evaluator.go</code>）。无 Redis 时启用规则不会运行。</p>
 <h3 id="23--c">2.3 入口 C（扩展）：云资源到期等</h3>
-<p><code>alert_cloud_expiry_evaluator.go</code> 等评估路径同样汇聚到 <code>ReceiveAlertmanager</code>，<code>receiver</code> 特定字符串（如 <code>cloud-expiry</code>），<code>resolveAlertDatasourceMeta</code> 映射流水线名称。</p>
+<p><code>alert_cloud_expiry_evaluator.go</code> 等评估路径同样汇聚到 <code>ReceiveAlertmanager</code>，<code>receiver</code> 特定字符串（如 <code>cloud-expiry</code>），<code>resolveAlertDatasourceMeta</code> 映射流水线名称。云到期 firing 在 alert 上设置 <code>SkipGroupTiming: true</code>，尽快投递。</p>
+<h3 id="24-">2.4 双入口时序（与实现对齐）</h3>
+<p>详细 flowchart / sequence 见 <a href="../alert-routing-and-delivery-guide.md#0-%E5%AE%8C%E6%95%B4%E5%91%8A%E8%AD%A6%E9%93%BE%E8%B7%AF%E5%9B%BE%E9%85%8D%E7%BD%AE--firing-%E5%A4%96%E5%8F%91--%E6%81%A2%E5%A4%8D%E5%A4%96%E5%8F%91">告警路由与投递指南 §0</a>。</p>
+<figure class="diagram"><pre class="mermaid">flowchart TB
+  subgraph pathA [入口 A：可走 AM 原生]
+    P1[Prometheus 规则] --> AM[Alertmanager]
+    AM -->|group_wait / group_interval / repeat| WH[POST Webhook]
+    WH --> SKIP[SkipGroupTiming = true]
+  end
+
+  subgraph pathB [入口 B：Yunshu 自研]
+    P2[平台监控规则] --> Redis[Redis pending/for]
+    Redis --> PM[receiver=platform-monitor]
+    PM --> TM[decideFiringGroupTiming]
+  end
+
+  SKIP --> PIPE[RunIngressPipeline 统一投递链]
+  TM --> PIPE
+  PIPE --> SUB[订阅树 / 接收组 / 通道 / alert_events]</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<figure class="diagram"><pre class="mermaid">sequenceDiagram
+  autonumber
+  participant AM as Alertmanager
+  participant WH as Yunshu Webhook
+  participant Rcv as ReceiveAlertmanager
+  participant Tm as Redis group timing
+  participant Sub as 订阅树 + 通道
+
+  rect rgb(240, 248, 255)
+    Note over AM,Sub: 入口 A — webhook_skip_group_timing 默认 true
+    AM->>AM: group_wait / group_interval / repeat_interval
+    AM->>WH: POST firing
+    WH->>Rcv: applyIngressGroupTimingPolicy → SkipGroupTiming
+    Rcv->>Sub: 静默 / 抑制 / 订阅 / 投递
+  end
+
+  rect rgb(255, 248, 240)
+    Note over AM,Sub: 入口 B — platform-monitor
+    participant Tick as tickMonitorRules
+    participant St as Redis pending/for
+    Tick->>St: PromQL + for_seconds
+    St->>Rcv: 内部 ReceiveAlertmanager
+    Rcv->>Tm: peekFiringGroupTiming
+    alt 允许外发
+      Rcv->>Sub: 订阅 / 投递
+      Rcv->>Tm: commitFiringGroupTimingSend
+    end
+  end</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<p><strong>代码入口</strong>：<code>applyIngressGroupTimingPolicy</code>（<code>alert_ingest_types.go</code>）在 <code>receiveAlertmanagerPayloadSync</code> 中调用；仅 <code>receiver=platform-monitor</code>（或 labels <code>source=prometheus_monitor</code>）保留第二层 group timing。</p>
 <hr />
 <h2 id="3-">3. 核心代码索引</h2>
 <div class="table-wrap"><table>
@@ -1080,8 +1127,8 @@
 </tr>
 <tr>
 <td>分组节流</td>
-<td><code>internal/service/alert/alert_aggregate_state.go</code></td>
-<td><code>decideFiringGroupTiming</code>、<code>markAlertFiringDelivered</code></td>
+<td><code>internal/service/alert/alert_aggregate_state.go</code>、<code>alert_ingest_types.go</code></td>
+<td><code>decideFiringGroupTiming</code>、<code>applyIngressGroupTimingPolicy</code></td>
 </tr>
 <tr>
 <td>订阅树</td>
@@ -1223,7 +1270,7 @@
 <li><strong>指纹计数</strong>：<code>updateFingerprintState</code>。</li>
 <li><strong>抑制</strong>：firing 时 <code>CheckInhibition</code>，可能 <code>continue</code>。</li>
 <li><strong>组装 outgoing</strong>：摘要、<code>current</code>（缓存/Prometheus）、<code>enrichOutgoingProjectName</code>、<code>enrichAssigneeAndDutyEmails</code>（基于 <code>monitor_rule_id</code>）。</li>
-<li><strong>firing 分组节流</strong>：<code>decideFiringGroupTiming</code>；不通过则 <code>logSuppressedFiringTiming</code>，<code>continue</code>。</li>
+<li><strong>firing 分组节流</strong>：<code>applyIngressGroupTimingPolicy</code> 按入口分流——外部 AM Webhook 默认 <code>SkipGroupTiming</code>（<code>webhook_skip_group_timing: true</code>）；<code>platform-monitor</code> 走 <code>peekFiringGroupTiming</code> / <code>decideFiringGroupTiming</code>；不通过则 <code>logSuppressedFiringTiming</code>，<code>continue</code>。</li>
 <li><strong>resolved 去重占位</strong>：在通过订阅匹配等检查之后、<code>markResolvedNotificationSent</code>（避免过早占位）。</li>
 <li><strong>订阅路由</strong>：<code>channelIDSetForAlert</code> → <code>MatchRouteDetailed(project_id, labels, severity, status)</code>；无通道则 <code>logNoMatchedChannel</code>。</li>
 <li><strong>订阅静默</strong>：<code>shouldSuppressByRouteSilence</code>。</li>
@@ -1258,8 +1305,12 @@
 <td>Alertmanager Webhook 校验</td>
 </tr>
 <tr>
+<td><code>webhook_skip_group_timing</code></td>
+<td>入口 A 是否跳过 Yunshu 第二层 group timing（默认 <code>true</code>）；<strong>不影响</strong> <code>platform-monitor</code></td>
+</tr>
+<tr>
 <td><code>group_wait_seconds</code> / <code>group_interval_seconds</code> / <code>repeat_interval_seconds</code></td>
-<td><code>decideFiringGroupTiming</code>（Redis）</td>
+<td>入口 B：<code>decideFiringGroupTiming</code>（Redis）</td>
 </tr>
 <tr>
 <td><code>dedup_ttl_seconds</code></td>

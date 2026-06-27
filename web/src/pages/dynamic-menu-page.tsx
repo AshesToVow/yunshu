@@ -1,8 +1,7 @@
 import { Alert, Card, Result, Spin, Typography } from "antd";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { getMenuTree } from "../services/menus";
-import type { MenuItem } from "../services/menus";
+import { useMenuTree } from "../hooks/use-menu-tree";
 import { createLazyMenuPage } from "../utils/menu-page-loader";
 import { findMenuByPath, normalizeMenuPath } from "../utils/menu-path";
 import { usePlugins } from "../contexts/plugin-context";
@@ -84,28 +83,13 @@ function RouteFallback() {
 export function DynamicMenuPage() {
   const location = useLocation();
   const { isPluginEnabled, loading: pluginsLoading } = usePlugins();
-  const [menus, setMenus] = useState<MenuItem[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const tree = await getMenuTree();
-        if (!cancelled) setMenus(tree ?? []);
-      } catch (e) {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : "加载菜单失败");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { menus, loading: menuLoading, error: menuError } = useMenuTree();
 
   const menuItem = useMemo(() => {
     if (!menus?.length) return undefined;
     return findMenuByPath(menus, location.pathname);
   }, [menus, location.pathname]);
+  const loadError = menuError instanceof Error ? menuError.message : menuError ? "加载菜单失败" : null;
 
   const LazyComp = useMemo(() => {
     const normalizedPath = normalizeMenuPath(location.pathname);
@@ -133,8 +117,12 @@ export function DynamicMenuPage() {
     return <Result status="error" title="菜单加载失败" subTitle={loadError} />;
   }
 
-  if (menus === null) {
-    return <RouteFallback />;
+  if (menuLoading && !menus.length) {
+    return (
+      <div style={{ padding: 48, textAlign: "center" }}>
+        <Spin tip="加载菜单..." />
+      </div>
+    );
   }
 
   if (!menuItem && !hasPathFallback) {

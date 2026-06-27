@@ -961,7 +961,7 @@
         </button>
       </div>
       <nav class="toc-nav" id="toc-nav">
-        <a href="#0---firing---" class="lvl-2">0. 完整告警链路图（配置 → firing 外发 → 恢复外发）</a><a href="#1-" class="lvl-2">1. 订阅树路由（节点）怎么配置</a><a href="#2-match-labels-json-" class="lvl-2">2. match_labels_json 怎么配置</a><a href="#3-prometheus-rules--labels-" class="lvl-2">3. Prometheus rules 与平台监控规则的 labels 怎么配置</a><a href="#4---" class="lvl-2">4. 端到端：如何形成「匹配 → 发送」链路</a><a href="#5-" class="lvl-2">5. 平台规则：处理人、值班与通知标题</a><a href="#6-" class="lvl-2">6. 只启用一个订阅树节点时，告警如何发送</a><a href="#7-" class="lvl-2">7. 「没有触发通知，却先收到恢复」——这对吗？</a><a href="#8-" class="lvl-2">8. 其它实现要点（排障）</a><a href="#heading-1" class="lvl-2">相关代码入口（便于二次开发）</a><a href="#01---" class="lvl-3">0.1 总览（配置面 + 运行面）</a><a href="#02-firing--resolved-" class="lvl-3">0.2 firing 与 resolved 在云枢内的顺序（同一指纹）</a><a href="#03-" class="lvl-3">0.3 配置与运行时对应表</a><a href="#04--alertmanager-" class="lvl-3">0.4 与 Alertmanager 的职责分界</a><a href="#31-prometheus--alertmanager--webhook" class="lvl-3">3.1 Prometheus 规则（经 Alertmanager → Webhook）</a><a href="#32--labels-json" class="lvl-3">3.2 平台监控规则（「附加 Labels JSON」）</a><a href="#51-alert-rule-assignees" class="lvl-3">5.1 处理人（alert_rule_assignees）</a><a href="#52-alert-duty-blocks" class="lvl-3">5.2 值班班次（alert_duty_blocks）</a><a href="#53-" class="lvl-3">5.3 监控规则启用与列表筛选</a><a href="#81-markresolvednotificationsent" class="lvl-3">8.1 恢复通知去重（markResolvedNotificationSent）占位时机</a><a href="#82-firing--resolved" class="lvl-3">8.2 全部通道外发失败（firing / resolved）</a><a href="#83--redis" class="lvl-3">8.3 平台监控规则与 Redis</a>
+        <a href="#0---firing---" class="lvl-2">0. 完整告警链路图（配置 → firing 外发 → 恢复外发）</a><a href="#1-" class="lvl-2">1. 订阅树路由（节点）怎么配置</a><a href="#2-match-labels-json-" class="lvl-2">2. match_labels_json 怎么配置</a><a href="#3-prometheus-rules--labels-" class="lvl-2">3. Prometheus rules 与平台监控规则的 labels 怎么配置</a><a href="#4---" class="lvl-2">4. 端到端：如何形成「匹配 → 发送」链路</a><a href="#5-" class="lvl-2">5. 平台规则：处理人、值班与通知标题</a><a href="#6-" class="lvl-2">6. 只启用一个订阅树节点时，告警如何发送</a><a href="#7-" class="lvl-2">7. 「没有触发通知，却先收到恢复」——这对吗？</a><a href="#8-" class="lvl-2">8. 其它实现要点（排障）</a><a href="#heading-1" class="lvl-2">相关代码入口（便于二次开发）</a><a href="#01---" class="lvl-3">0.1 总览（配置面 + 运行面）</a><a href="#02--a--am---b--yunshu-" class="lvl-3">0.2 双入口时序（入口 A 信任 AM / 入口 B 保留 Yunshu 分组节流）</a><a href="#03-firing--resolved-" class="lvl-3">0.3 firing 与 resolved 在云枢内的顺序（同一指纹）</a><a href="#04-" class="lvl-3">0.4 配置与运行时对应表</a><a href="#05--alertmanager-" class="lvl-3">0.5 与 Alertmanager 的职责分界</a><a href="#31-prometheus--alertmanager--webhook" class="lvl-3">3.1 Prometheus 规则（经 Alertmanager → Webhook）</a><a href="#32--labels-json" class="lvl-3">3.2 平台监控规则（「附加 Labels JSON」）</a><a href="#51-alert-rule-assignees" class="lvl-3">5.1 处理人（alert_rule_assignees）</a><a href="#52-alert-duty-blocks" class="lvl-3">5.2 值班班次（alert_duty_blocks）</a><a href="#53-" class="lvl-3">5.3 监控规则启用与列表筛选</a><a href="#81-markresolvednotificationsent" class="lvl-3">8.1 恢复通知去重（markResolvedNotificationSent）占位时机</a><a href="#82-firing--resolved" class="lvl-3">8.2 全部通道外发失败（firing / resolved）</a><a href="#83--redis" class="lvl-3">8.3 平台监控规则与 Redis</a>
       </nav>
     </aside>
 
@@ -977,11 +977,11 @@
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-calendar"/></svg>
-            2026-06-12
+            2026-06-26
           </span>
           <span class="doc-meta-item">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
-            ~8 分钟阅读
+            ~10 分钟阅读
           </span>
         </div>
       </header>
@@ -1025,33 +1025,85 @@
   subgraph C[&quot;三、云枢统一投递链 ReceiveAlertmanager&quot;]
     C1[&quot;合并 labels/annotations\n解析 datasource、monitor_pipeline&quot;]
     C2[&quot;平台静默 → 指纹计数\n抑制 firing&quot;]
-    C3[&quot;firing：decideFiringGroupTiming\n(group_wait/interval/repeat)&quot;]
+    C3A[&quot;入口 A：SkipGroupTiming\n信任 AM group_wait/interval/repeat&quot;]
+    C3B[&quot;入口 B：decideFiringGroupTiming\n(group_wait/interval/repeat)&quot;]
     C4[&quot;订阅树匹配 → 接收组 → 通道集合&quot;]
     C5[&quot;订阅节点 silence\n通道 headers 匹配&quot;]
     C6[&quot;sendToChannel\n钉钉/邮件/…&quot;]
     C7[&quot;alert_events 落库&quot;]
-    C1 --> C2 --> C3 --> C4 --> C5 --> C6 --> C7
+    C1 --> C2
+    C2 --> C3A --> C4
+    C2 --> C3B --> C4
+    C4 --> C5 --> C6 --> C7
   end
 
   P4 --> C1
   B4 --> C1
   CFG -.->|决定| C4
-  CFG -.->|决定| C3</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
-<h3 id="02-firing--resolved-">0.2 <code>firing</code> 与 <code>resolved</code> 在云枢内的顺序（同一指纹）</h3>
+  CFG -.->|入口 B group_*| C3B
+  CFG -.->|webhook_skip_group_timing| C3A</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<h3 id="02--a--am---b--yunshu-">0.2 双入口时序（入口 A 信任 AM / 入口 B 保留 Yunshu 分组节流）</h3>
+<figure class="diagram"><pre class="mermaid">sequenceDiagram
+  autonumber
+  participant AM as Alertmanager
+  participant WH as Yunshu Webhook
+  participant Rcv as ReceiveAlertmanager
+  participant Tm as Redis group timing\n(仅入口 B)
+  participant Sub as 订阅树 + 接收组
+  participant Ch as 各通道
+  participant DB as alert_events
+
+  rect rgb(240, 248, 255)
+    Note over AM,DB: 入口 A：Prometheus 规则 → AM 原生 group_wait/interval/repeat
+    AM->>AM: group_wait / group_interval / repeat_interval
+    AM->>WH: POST firing（已聚合）
+    WH->>Rcv: receiver ≠ platform-monitor
+    Rcv->>Rcv: SkipGroupTiming = true\n(webhook_skip_group_timing)
+    Rcv->>Rcv: 静默 / 抑制
+    Rcv->>Sub: 订阅匹配
+    Rcv->>Ch: 立即投递（不经第二层 Tm）
+    Ch-->>Rcv: HTTP 2xx
+    Rcv->>Rcv: SET firing_delivered
+    Rcv->>DB: firing 事件
+  end
+
+  rect rgb(255, 248, 240)
+    Note over AM,DB: 入口 B：平台 PromQL 规则（无 AM）
+    participant Tick as tickMonitorRules
+    participant Redis as Redis pending/for
+    Tick->>Redis: PromQL 评估 + for_seconds
+    Redis->>Rcv: 内部 payload\nreceiver=platform-monitor
+    Rcv->>Rcv: SkipGroupTiming = false
+    Rcv->>Tm: decideFiringGroupTiming
+    alt group_wait / group_interval / repeat 抑制
+      Rcv->>DB: group timing suppressed
+    else 允许外发
+      Rcv->>Sub: 订阅匹配
+      Rcv->>Ch: 投递
+      Rcv->>Tm: commit last_sent / digest
+      Rcv->>DB: firing 事件
+    end
+  end</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
+<h3 id="03-firing--resolved-">0.3 <code>firing</code> 与 <code>resolved</code> 在云枢内的顺序（同一指纹）</h3>
 <figure class="diagram"><pre class="mermaid">sequenceDiagram
   participant Src as 入口\n(AM Webhook / platform-monitor)
   participant Rcv as ReceiveAlertmanager
-  participant Tm as 分组节流\nRedis group timing
+  participant Tm as 分组节流\n(仅 platform-monitor)
   participant Sub as 订阅树 + 接收组
   participant Ch as 各通道 send
   participant DB as alert_events
 
   Src->>Rcv: alerts[].status=firing
   Rcv->>Rcv: 静默 / 抑制
-  Rcv->>Tm: firing 是否允许本次外发
-  alt 节流抑制
-    Rcv->>DB: group timing suppressed\n(不写 firing_delivered)
-  else 允许外发
+  alt 入口 A（外部 AM Webhook）
+    Rcv->>Rcv: SkipGroupTiming，跳过 Tm
+  else 入口 B（platform-monitor）
+    Rcv->>Tm: firing 是否允许本次外发
+    alt 节流抑制
+      Rcv->>DB: group timing suppressed\n(不写 firing_delivered)
+    end
+  end
+  opt 允许外发（或未走 Tm）
     Rcv->>Sub: 匹配 project_id + 节点
     Rcv->>Ch: 投递
     alt 至少一通道 HTTP 2xx
@@ -1072,7 +1124,7 @@
   end
   Rcv->>Rcv: DEL firing_delivered\n清理 group timing
   Rcv->>DB: 恢复相关事件</pre><figcaption class="diagram-caption">架构 / 流程图</figcaption></figure>
-<h3 id="03-">0.3 配置与运行时对应表</h3>
+<h3 id="04-">0.4 配置与运行时对应表</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1094,8 +1146,8 @@
 </tr>
 <tr>
 <td>谁决定「第一次/重复发」间隔</td>
-<td><code>configs/config.yaml</code> → <code>alert.group_*</code></td>
-<td><code>decideFiringGroupTiming</code>（<strong>仅 firing</strong>，需 Redis）</td>
+<td>入口 A：<code>alertmanager.yml</code> 的 <code>group_*</code>；入口 B：<code>configs/config.yaml</code> → <code>alert.group_*</code></td>
+<td>入口 A 默认 <code>webhook_skip_group_timing: true</code> 跳过 Yunshu 第二层；入口 B 走 <code>decideFiringGroupTiming</code>（Redis）</td>
 </tr>
 <tr>
 <td>走哪个钉钉/邮件</td>
@@ -1119,7 +1171,7 @@
 </tr>
 </tbody>
 </table></div>
-<h3 id="04--alertmanager-">0.4 与 Alertmanager 的职责分界</h3>
+<h3 id="05--alertmanager-">0.5 与 Alertmanager 的职责分界</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1136,8 +1188,8 @@
 </tr>
 <tr>
 <td>firing 聚合间隔</td>
-<td><code>route</code> 上 <code>group_wait</code> 等</td>
-<td><code>config.yaml</code> 第二层 + Redis</td>
+<td><code>route</code> 上 <code>group_wait</code> / <code>group_interval</code> / <code>repeat_interval</code></td>
+<td>入口 A 默认信任 AM（<code>webhook_skip_group_timing: true</code>）；入口 B（<code>platform-monitor</code>）仍用 <code>config.yaml</code> 第二层 + Redis</td>
 </tr>
 <tr>
 <td>路由到钉钉</td>
@@ -1191,8 +1243,10 @@
   ReceiveAlertmanager：合并 labels、静默、抑制、组装 outgoing
 
 [firing 时序收敛]
-  config.yaml 中 alert.group_wait_seconds / group_interval_seconds / repeat_interval_seconds
-  （需 Redis；见 decideFiringGroupTiming）
+  入口 A：Alertmanager route 上 group_wait / group_interval / repeat_interval
+         Yunshu webhook_skip_group_timing=true（默认）不再二次节流
+  入口 B：config.yaml alert.group_* + Redis decideFiringGroupTiming
+         平台规则 pending/for 在 evaluateMonitorRuleWithRedis
 
 [订阅路由]
   project_id → 选根 → 各节点：匹配级别 AND match_labels AND match_regex
@@ -1264,7 +1318,12 @@
 <hr />
 <h2 id="7-">7. 「没有触发通知，却先收到恢复」——这对吗？</h2>
 <p><strong>从产品语义上不对</strong>：用户应至少收到一次 <strong>firing</strong>（或明确写库的「抑制/无通道」说明），再收到 <strong>resolved</strong>。</p>
-<p><strong>原因（实现层面，已修复）</strong>：<code>firing</code> 在出站前会经过 <strong><code>decideFiringGroupTiming</code></strong>（<code>config.yaml</code> 的 group_wait / group_interval / repeat_interval），可能被标记为「分组节流抑制」而 <strong>不实际发通道</strong>；<strong><code>resolved</code> 原先不经过同一套节流</strong>，仍可能走通道外发，从而出现「只有恢复」的错觉。</p>
+<p><strong>原因（实现层面，已修复）</strong>：</p>
+<ul>
+<li><strong>入口 A</strong>：原先 AM 已做 group_wait 后，Yunshu 又套一层 <code>group_wait_seconds</code>，导致 firing 被 <code>group_wait_suppressed</code> 而通道未发；<code>resolved</code> 不经过 firing 节流仍可能外发 → 「只有恢复」。</li>
+<li><strong>修复</strong>：<code>webhook_skip_group_timing: true</code>（默认）时外部 AM Webhook 跳过 Yunshu 第二层；<strong>入口 B</strong>（<code>platform-monitor</code>）仍保留 Redis group timing。</li>
+<li><strong>入口 B</strong>：若 firing 被平台 group timing 抑制，同样可能延迟外发；恢复逻辑与入口 A 一致（须曾 <code>firing_delivered</code>）。</li>
+</ul>
 <p><strong>修复策略</strong>（当前代码）：在 Redis 可用时，若某 <code>fingerprint</code> <strong>从未成功向任一通道投递过 firing</strong>（HTTP 2xx），则 <strong>抑制 resolved 的外发</strong>，并写入一条审计事件，<code>error_message</code> 为 <strong><code>resolved_no_prior_firing_delivery</code></strong>。无 Redis 时保持旧行为（不拦截），避免破坏无 Redis 部署。</p>
 <p>若仍只看到恢复、没有该抑制事件，请核对：<strong>历史里是否有一条 firing 被标为「分组节流抑制」</strong>（<code>group timing suppressed</code>），或 firing 是否落在其它筛选条件之外。</p>
 <hr />

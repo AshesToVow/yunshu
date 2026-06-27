@@ -119,3 +119,70 @@ export function isPathAllowedByPlugins(path: string, isPluginEnabled: (name: str
 export function isCmdbPageAllowed(isPluginEnabled: (name: string) => boolean): boolean {
   return isPluginEnabled("cmdb") && isPluginEnabled("project");
 }
+
+const API_RESOURCE_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
+  {
+    plugin: "core",
+    prefixes: [
+      "/api/v1/users",
+      "/api/v1/departments",
+      "/api/v1/roles",
+      "/api/v1/permissions",
+      "/api/v1/policies",
+      "/api/v1/registrations",
+      "/api/v1/menus",
+      "/api/v1/login-logs",
+      "/api/v1/operation-logs",
+      "/api/v1/security",
+      "/api/v1/dict-entries",
+      "/api/v1/user-groups",
+      "/api/v1/plugins",
+      "/api/v1/overview",
+    ],
+  },
+  {
+    plugin: "k8s",
+    prefixes: [
+      "/api/v1/clusters",
+      "/api/v1/pods",
+      "/api/v1/namespaces",
+      "/api/v1/nodes",
+      "/api/v1/k8s-policies",
+      "/api/v1/k8s-namespace-deny-rules",
+      "/api/v1/k8s-namespace-allow-rules",
+      "/api/v1/k8s/",
+    ],
+  },
+  { plugin: "alert", prefixes: ["/api/v1/alerts"] },
+  { plugin: "project", prefixes: ["/api/v1/projects"] },
+  { plugin: "cmdb", prefixes: ["/api/v1/servers", "/api/v1/cloud-accounts", "/api/v1/server-groups"] },
+  { plugin: "backup", prefixes: ["/api/v1/mysql-backup"] },
+];
+
+export function resolveAPIResourcePlugin(resource: string): PluginName | null {
+  const r = resource.trim().toLowerCase();
+  if (!r) return null;
+  for (const rule of API_RESOURCE_PLUGIN_RULES) {
+    if (rule.prefixes.some((p) => r === p || r.startsWith(`${p}/`) || r.startsWith(p))) {
+      return rule.plugin;
+    }
+  }
+  return null;
+}
+
+export function isAPIResourceAllowedByPlugins(
+  resource: string,
+  isPluginEnabled: (name: string) => boolean,
+): boolean {
+  const plugin = resolveAPIResourcePlugin(resource);
+  if (!plugin) return true;
+  if (plugin === "cmdb") return isCmdbPageAllowed(isPluginEnabled);
+  return isPluginEnabled(plugin);
+}
+
+export function filterPermissionsByPlugins<T extends { resource: string }>(
+  items: T[],
+  isPluginEnabled: (name: string) => boolean,
+): T[] {
+  return items.filter((it) => isAPIResourceAllowedByPlugins(it.resource, isPluginEnabled));
+}

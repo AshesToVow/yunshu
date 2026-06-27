@@ -42,7 +42,63 @@
 
 ### 2.3 入口 C（扩展）：云资源到期等
 
-`alert_cloud_expiry_evaluator.go` 等评估路径同样汇聚到 `ReceiveAlertmanager`，`receiver` 特定字符串（如 `cloud-expiry`），`resolveAlertDatasourceMeta` 映射流水线名称。
+`alert_cloud_expiry_evaluator.go` 等评估路径同样汇聚到 `ReceiveAlertmanager`，`receiver` 特定字符串（如 `cloud-expiry`），`resolveAlertDatasourceMeta` 映射流水线名称。云到期 firing 在 alert 上设置 `SkipGroupTiming: true`，尽快投递。
+
+### 2.4 双入口时序（与实现对齐）
+
+详细 flowchart / sequence 见 [告警路由与投递指南 §0](../alert-routing-and-delivery-guide.md#0-完整告警链路图配置--firing-外发--恢复外发)。
+
+```mermaid
+flowchart TB
+  subgraph pathA [入口 A：可走 AM 原生]
+    P1[Prometheus 规则] --> AM[Alertmanager]
+    AM -->|group_wait / group_interval / repeat| WH[POST Webhook]
+    WH --> SKIP[SkipGroupTiming = true]
+  end
+
+  subgraph pathB [入口 B：Yunshu 自研]
+    P2[平台监控规则] --> Redis[Redis pending/for]
+    Redis --> PM[receiver=platform-monitor]
+    PM --> TM[decideFiringGroupTiming]
+  end
+
+  SKIP --> PIPE[RunIngressPipeline 统一投递链]
+  TM --> PIPE
+  PIPE --> SUB[订阅树 / 接收组 / 通道 / alert_events]
+```
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant AM as Alertmanager
+  participant WH as Yunshu Webhook
+  participant Rcv as ReceiveAlertmanager
+  participant Tm as Redis group timing
+  participant Sub as 订阅树 + 通道
+
+  rect rgb(240, 248, 255)
+    Note over AM,Sub: 入口 A — webhook_skip_group_timing 默认 true
+    AM->>AM: group_wait / group_interval / repeat_interval
+    AM->>WH: POST firing
+    WH->>Rcv: applyIngressGroupTimingPolicy → SkipGroupTiming
+    Rcv->>Sub: 静默 / 抑制 / 订阅 / 投递
+  end
+
+  rect rgb(255, 248, 240)
+    Note over AM,Sub: 入口 B — platform-monitor
+    participant Tick as tickMonitorRules
+    participant St as Redis pending/for
+    Tick->>St: PromQL + for_seconds
+    St->>Rcv: 内部 ReceiveAlertmanager
+    Rcv->>Tm: peekFiringGroupTiming
+    alt 允许外发
+      Rcv->>Sub: 订阅 / 投递
+      Rcv->>Tm: commitFiringGroupTimingSend
+    end
+  end
+```
+
+**代码入口**：`applyIngressGroupTimingPolicy`（`alert_ingest_types.go`）在 `receiveAlertmanagerPayloadSync` 中调用；仅 `receiver=platform-monitor`（或 labels `source=prometheus_monitor`）保留第二层 group timing。
 
 ---
 
@@ -53,7 +109,7 @@
 | HTTP Webhook / 通道 CRUD / 事件列表 | `internal/handler/alert_*.go` | 入参绑定、调用 `service.Alert*` |
 | 统一投递 | `internal/service/alert/alert_service_webhook.go` | `ReceiveAlertmanager` |
 | 路由与通道选择 | `internal/service/alert/alert_service_routing.go` | `channelIDSetForAlert` 等 |
-| 分组节流 | `internal/service/alert/alert_aggregate_state.go` | `decideFiringGroupTiming`、`markAlertFiringDelivered` |
+| 分组节流 | `internal/service/alert/alert_aggregate_state.go`、`alert_ingest_types.go` | `decideFiringGroupTiming`、`applyIngressGroupTimingPolicy` |
 | 订阅树 | `internal/service/alert/alert_subscription_service.go` | `MatchRouteDetailed`、`nodeMatches` |
 | 平台规则评估 | `internal/service/alert/alert_monitor_evaluator.go`、`alert_monitor_redis.go` | PromQL、Redis for |
 | 渠道渲染与发送 | `internal/service/alert/alert_delivery_core.go`、`alert_delivery_email.go` | 投递与邮件合并 |
@@ -112,7 +168,7 @@
 5. **指纹计数**：`updateFingerprintState`。  
 6. **抑制**：firing 时 `CheckInhibition`，可能 `continue`。  
 7. **组装 outgoing**：摘要、`current`（缓存/Prometheus）、`enrichOutgoingProjectName`、`enrichAssigneeAndDutyEmails`（基于 `monitor_rule_id`）。  
-8. **firing 分组节流**：`decideFiringGroupTiming`；不通过则 `logSuppressedFiringTiming`，`continue`。  
+8. **firing 分组节流**：`applyIngressGroupTimingPolicy` 按入口分流——外部 AM Webhook 默认 `SkipGroupTiming`（`webhook_skip_group_timing: true`）；`platform-monitor` 走 `peekFiringGroupTiming` / `decideFiringGroupTiming`；不通过则 `logSuppressedFiringTiming`，`continue`。  
 9. **resolved 去重占位**：在通过订阅匹配等检查之后、`markResolvedNotificationSent`（避免过早占位）。  
 10. **订阅路由**：`channelIDSetForAlert` → `MatchRouteDetailed(project_id, labels, severity, status)`；无通道则 `logNoMatchedChannel`。  
 11. **订阅静默**：`shouldSuppressByRouteSilence`。  
@@ -142,7 +198,8 @@
 | 配置键 | 用途 |
 |--------|------|
 | `webhook_token` | Alertmanager Webhook 校验 |
-| `group_wait_seconds` / `group_interval_seconds` / `repeat_interval_seconds` | `decideFiringGroupTiming`（Redis） |
+| `webhook_skip_group_timing` | 入口 A 是否跳过 Yunshu 第二层 group timing（默认 `true`）；**不影响** `platform-monitor` |
+| `group_wait_seconds` / `group_interval_seconds` / `repeat_interval_seconds` | 入口 B：`decideFiringGroupTiming`（Redis） |
 | `dedup_ttl_seconds` | 指纹与 resolved 标记 TTL |
 | `aggregate_ttl_seconds` | 分组 timing Redis key TTL |
 | `prometheus_url` + enrich 相关 | 异步查询当前值 |

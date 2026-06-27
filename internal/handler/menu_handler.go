@@ -4,8 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"yunshu/internal/config"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/plugin"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -15,11 +17,12 @@ import (
 // MenuHandler 菜单管理：树查询、增删改；非 super-admin 会过滤 AdminOnly 菜单。
 type MenuHandler struct {
 	service *service.MenuService
+	plugins *config.PluginsConfig
 }
 
 // NewMenuHandler 构造菜单处理器。
-func NewMenuHandler(svc *service.MenuService) *MenuHandler {
-	return &MenuHandler{service: svc}
+func NewMenuHandler(svc *service.MenuService, plugins *config.PluginsConfig) *MenuHandler {
+	return &MenuHandler{service: svc, plugins: plugins}
 }
 
 // Tree 返回菜单树；非 super-admin 时移除仅管理员可见项。
@@ -32,7 +35,8 @@ func (h *MenuHandler) Tree(c *gin.Context) {
 	// 如果不是 super-admin，需要从菜单树中移除仅管理员可见项
 	user, ok := auth.CurrentUserFromContext(c)
 	if !ok {
-		response.Success(c, list)
+		filtered := plugin.FilterMenusByPlugins(list, h.plugins)
+		response.Success(c, filtered)
 		return
 	}
 
@@ -66,6 +70,7 @@ func (h *MenuHandler) Tree(c *gin.Context) {
 	}
 
 	filtered := filter(list)
+	filtered = plugin.FilterMenusByPlugins(filtered, h.plugins)
 	response.Success(c, filtered)
 }
 

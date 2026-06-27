@@ -44,37 +44,93 @@ flowchart TB
   subgraph C["三、云枢统一投递链 ReceiveAlertmanager"]
     C1["合并 labels/annotations\n解析 datasource、monitor_pipeline"]
     C2["平台静默 → 指纹计数\n抑制 firing"]
-    C3["firing：decideFiringGroupTiming\n(group_wait/interval/repeat)"]
+    C3A["入口 A：SkipGroupTiming\n信任 AM group_wait/interval/repeat"]
+    C3B["入口 B：decideFiringGroupTiming\n(group_wait/interval/repeat)"]
     C4["订阅树匹配 → 接收组 → 通道集合"]
     C5["订阅节点 silence\n通道 headers 匹配"]
     C6["sendToChannel\n钉钉/邮件/…"]
     C7["alert_events 落库"]
-    C1 --> C2 --> C3 --> C4 --> C5 --> C6 --> C7
+    C1 --> C2
+    C2 --> C3A --> C4
+    C2 --> C3B --> C4
+    C4 --> C5 --> C6 --> C7
   end
 
   P4 --> C1
   B4 --> C1
   CFG -.->|决定| C4
-  CFG -.->|决定| C3
+  CFG -.->|入口 B group_*| C3B
+  CFG -.->|webhook_skip_group_timing| C3A
 ```
 
-### 0.2 `firing` 与 `resolved` 在云枢内的顺序（同一指纹）
+### 0.2 双入口时序（入口 A 信任 AM / 入口 B 保留 Yunshu 分组节流）
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant AM as Alertmanager
+  participant WH as Yunshu Webhook
+  participant Rcv as ReceiveAlertmanager
+  participant Tm as Redis group timing\n(仅入口 B)
+  participant Sub as 订阅树 + 接收组
+  participant Ch as 各通道
+  participant DB as alert_events
+
+  rect rgb(240, 248, 255)
+    Note over AM,DB: 入口 A：Prometheus 规则 → AM 原生 group_wait/interval/repeat
+    AM->>AM: group_wait / group_interval / repeat_interval
+    AM->>WH: POST firing（已聚合）
+    WH->>Rcv: receiver ≠ platform-monitor
+    Rcv->>Rcv: SkipGroupTiming = true\n(webhook_skip_group_timing)
+    Rcv->>Rcv: 静默 / 抑制
+    Rcv->>Sub: 订阅匹配
+    Rcv->>Ch: 立即投递（不经第二层 Tm）
+    Ch-->>Rcv: HTTP 2xx
+    Rcv->>Rcv: SET firing_delivered
+    Rcv->>DB: firing 事件
+  end
+
+  rect rgb(255, 248, 240)
+    Note over AM,DB: 入口 B：平台 PromQL 规则（无 AM）
+    participant Tick as tickMonitorRules
+    participant Redis as Redis pending/for
+    Tick->>Redis: PromQL 评估 + for_seconds
+    Redis->>Rcv: 内部 payload\nreceiver=platform-monitor
+    Rcv->>Rcv: SkipGroupTiming = false
+    Rcv->>Tm: decideFiringGroupTiming
+    alt group_wait / group_interval / repeat 抑制
+      Rcv->>DB: group timing suppressed
+    else 允许外发
+      Rcv->>Sub: 订阅匹配
+      Rcv->>Ch: 投递
+      Rcv->>Tm: commit last_sent / digest
+      Rcv->>DB: firing 事件
+    end
+  end
+```
+
+### 0.3 `firing` 与 `resolved` 在云枢内的顺序（同一指纹）
 
 ```mermaid
 sequenceDiagram
   participant Src as 入口\n(AM Webhook / platform-monitor)
   participant Rcv as ReceiveAlertmanager
-  participant Tm as 分组节流\nRedis group timing
+  participant Tm as 分组节流\n(仅 platform-monitor)
   participant Sub as 订阅树 + 接收组
   participant Ch as 各通道 send
   participant DB as alert_events
 
   Src->>Rcv: alerts[].status=firing
   Rcv->>Rcv: 静默 / 抑制
-  Rcv->>Tm: firing 是否允许本次外发
-  alt 节流抑制
-    Rcv->>DB: group timing suppressed\n(不写 firing_delivered)
-  else 允许外发
+  alt 入口 A（外部 AM Webhook）
+    Rcv->>Rcv: SkipGroupTiming，跳过 Tm
+  else 入口 B（platform-monitor）
+    Rcv->>Tm: firing 是否允许本次外发
+    alt 节流抑制
+      Rcv->>DB: group timing suppressed\n(不写 firing_delivered)
+    end
+  end
+  opt 允许外发（或未走 Tm）
     Rcv->>Sub: 匹配 project_id + 节点
     Rcv->>Ch: 投递
     alt 至少一通道 HTTP 2xx
@@ -97,24 +153,24 @@ sequenceDiagram
   Rcv->>DB: 恢复相关事件
 ```
 
-### 0.3 配置与运行时对应表
+### 0.4 配置与运行时对应表
 
 | 阶段 | 配置落点 | 运行时行为 |
 |------|-----------|------------|
 | 指标从哪来 | 数据源 `BaseURL` | PromQL 查询或 Prometheus 自告警 |
 | 何时算「触发」 | 规则 `for` / 平台 `for_seconds` | Prometheus 或 Redis 状态机 |
-| 谁决定「第一次/重复发」间隔 | `configs/config.yaml` → `alert.group_*` | `decideFiringGroupTiming`（**仅 firing**，需 Redis） |
+| 谁决定「第一次/重复发」间隔 | 入口 A：`alertmanager.yml` 的 `group_*`；入口 B：`configs/config.yaml` → `alert.group_*` | 入口 A 默认 `webhook_skip_group_timing: true` 跳过 Yunshu 第二层；入口 B 走 `decideFiringGroupTiming`（Redis） |
 | 走哪个钉钉/邮件 | 订阅树 + 接收组 + 通道 | `channelIDSetForAlert` → `sendToChannel` |
 | 邮件收件人 | 规则处理人、值班、`assignee_emails` | 邮件通道 `mergeAssigneeEmails` |
 | 恢复只发一次 | DedupTTL 内 `alert:resolved:sent:*` | `markResolvedNotificationSent`（**占位在订阅等检查通过之后**） |
 | 恢复是否允许外发 | 无额外配置 | 须曾 **`firing_delivered`**（成功 2xx），否则审计抑制 |
 
-### 0.4 与 Alertmanager 的职责分界
+### 0.5 与 Alertmanager 的职责分界
 
 | 能力 | Alertmanager（外置） | 云枢 `ReceiveAlertmanager` |
 |------|----------------------|---------------------------|
 | 静默 | AM 侧 matcher | 平台「告警静默」表 |
-| firing 聚合间隔 | `route` 上 `group_wait` 等 | `config.yaml` 第二层 + Redis |
+| firing 聚合间隔 | `route` 上 `group_wait` / `group_interval` / `repeat_interval` | 入口 A 默认信任 AM（`webhook_skip_group_timing: true`）；入口 B（`platform-monitor`）仍用 `config.yaml` 第二层 + Redis |
 | 路由到钉钉 | AM `receiver` → Webhook | 订阅树 → 接收组 → 多通道 |
 | 平台 PromQL 规则 | **不参与** | 直连 Prometheus API + 内部 payload |
 
@@ -175,8 +231,10 @@ sequenceDiagram
   ReceiveAlertmanager：合并 labels、静默、抑制、组装 outgoing
 
 [firing 时序收敛]
-  config.yaml 中 alert.group_wait_seconds / group_interval_seconds / repeat_interval_seconds
-  （需 Redis；见 decideFiringGroupTiming）
+  入口 A：Alertmanager route 上 group_wait / group_interval / repeat_interval
+         Yunshu webhook_skip_group_timing=true（默认）不再二次节流
+  入口 B：config.yaml alert.group_* + Redis decideFiringGroupTiming
+         平台规则 pending/for 在 evaluateMonitorRuleWithRedis
 
 [订阅路由]
   project_id → 选根 → 各节点：匹配级别 AND match_labels AND match_regex
@@ -231,7 +289,11 @@ sequenceDiagram
 
 **从产品语义上不对**：用户应至少收到一次 **firing**（或明确写库的「抑制/无通道」说明），再收到 **resolved**。
 
-**原因（实现层面，已修复）**：`firing` 在出站前会经过 **`decideFiringGroupTiming`**（`config.yaml` 的 group_wait / group_interval / repeat_interval），可能被标记为「分组节流抑制」而 **不实际发通道**；**`resolved` 原先不经过同一套节流**，仍可能走通道外发，从而出现「只有恢复」的错觉。
+**原因（实现层面，已修复）**：
+
+- **入口 A**：原先 AM 已做 group_wait 后，Yunshu 又套一层 `group_wait_seconds`，导致 firing 被 `group_wait_suppressed` 而通道未发；`resolved` 不经过 firing 节流仍可能外发 → 「只有恢复」。
+- **修复**：`webhook_skip_group_timing: true`（默认）时外部 AM Webhook 跳过 Yunshu 第二层；**入口 B**（`platform-monitor`）仍保留 Redis group timing。
+- **入口 B**：若 firing 被平台 group timing 抑制，同样可能延迟外发；恢复逻辑与入口 A 一致（须曾 `firing_delivered`）。
 
 **修复策略**（当前代码）：在 Redis 可用时，若某 `fingerprint` **从未成功向任一通道投递过 firing**（HTTP 2xx），则 **抑制 resolved 的外发**，并写入一条审计事件，`error_message` 为 **`resolved_no_prior_firing_delivery`**。无 Redis 时保持旧行为（不拦截），避免破坏无 Redis 部署。
 

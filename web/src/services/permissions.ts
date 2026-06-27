@@ -5,7 +5,12 @@ import type {
   PermissionPayload,
   PermissionQuery,
 } from "../types/api";
+import { DEFAULT_ENABLED_PLUGINS, filterPermissionsByPlugins } from "../modules/plugin-path";
 import { getData, http } from "./http";
+
+function defaultPluginEnabled(name: string) {
+  return DEFAULT_ENABLED_PLUGINS.includes(name.toLowerCase() as (typeof DEFAULT_ENABLED_PLUGINS)[number]);
+}
 
 export function getPermissions(params: PermissionQuery) {
   return getData<PageData<PermissionItem>>(http.get("/permissions", { params }));
@@ -43,7 +48,8 @@ export function batchSetPermissionK8sScope(payload: PermissionBatchK8sScopePaylo
   return getData<PermissionBatchK8sScopeResult>(http.post("/permissions/k8s-scope/batch", payload));
 }
 
-export function getPermissionOptions() {
+export function getPermissionOptions(opts?: { isPluginEnabled?: (name: string) => boolean }) {
+  const isEnabled = opts?.isPluginEnabled ?? defaultPluginEnabled;
   return (async () => {
     const pageSize = 200;
     let page = 1;
@@ -60,11 +66,12 @@ export function getPermissionOptions() {
       page += 1;
     }
 
+    const filtered = filterPermissionsByPlugins(list, isEnabled);
     return {
-      list,
-      total: list.length,
+      list: filtered,
+      total: filtered.length,
       page: 1,
-      page_size: list.length || pageSize,
+      page_size: filtered.length || pageSize,
     } satisfies PageData<PermissionItem>;
   })();
 }

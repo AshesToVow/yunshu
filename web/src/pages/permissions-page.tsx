@@ -386,8 +386,8 @@ export function PermissionsPage() {
               「一键补全接口」按 <Typography.Text code>constants/api-catalog.ts</Typography.Text> 中「告警中心」等分组补全缺失的权限记录（能力名称取各行的{" "}
               <Typography.Text code>summary</Typography.Text>，须与 <Typography.Text code>cmd/seed.go</Typography.Text> 中 Casbin 的{" "}
               <Typography.Text code>Name</Typography.Text> 一致）。数据源、静默、监控规则、处理人、值班、PromQL 与「策略与联调」（Webhook、策略、历史、模板）均在{" "}
-              <Link to="/alert-monitor-platform">告警监控平台</Link>
-              （<Link to="/alert-monitor-platform?tab=config">策略与联调</Link>）。
+              <Link to="/alert-monitor-platform/datasources">告警监控平台</Link>
+              （<Link to="/alert-monitor-platform/policies">告警路由</Link>）。
               <br />
               <Typography.Text type="secondary">
                 「K8s 范围校验」开关：标记该接口是否进入 <Typography.Text code>K8sScopeAuthorize</Typography.Text> 三元中间件目录（见权限设计文档 §0）；不等于角色授权。

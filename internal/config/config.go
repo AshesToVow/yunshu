@@ -147,6 +147,9 @@ type AlertConfig struct {
 	// AggregateTTLSeconds: group_key 状态在 Redis 中的过期时间（秒）。
 	AggregateTTLSeconds int `mapstructure:"aggregate_ttl_seconds"`
 
+	// WebhookSkipGroupTiming: 为 true 时，外部 Alertmanager Webhook（入口 A）跳过 Yunshu 第二层
+	// group_wait/group_interval/repeat，信任 AM 原生聚合；平台监控规则（入口 B）不受影响。
+	WebhookSkipGroupTiming bool `mapstructure:"webhook_skip_group_timing"`
 	// WebhookAsyncDisabled: 为 true 时 Alertmanager Webhook 同步处理（不入队）；无 Redis 时恒为同步。
 	WebhookAsyncDisabled bool `mapstructure:"webhook_async_disabled"`
 	// WebhookQueueMaxLen: 异步 webhook 队列最大长度（Redis List）。
@@ -221,6 +224,10 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Alert.AggregateTTLSeconds <= 0 {
 		cfg.Alert.AggregateTTLSeconds = 86400
+	}
+	// 未显式配置时默认 true：外部 AM 已做 group_wait/interval/repeat，避免 Yunshu 二次节流。
+	if !v.IsSet("alert.webhook_skip_group_timing") {
+		cfg.Alert.WebhookSkipGroupTiming = true
 	}
 	if cfg.Alert.WebhookQueueMaxLen <= 0 {
 		cfg.Alert.WebhookQueueMaxLen = 10000
