@@ -25,40 +25,68 @@ func (r *OverviewRepository) DialectName() string {
 	return r.db.Dialector.Name()
 }
 
-func dayExpr(dialect string) string {
+func dayExprForColumn(dialect, column string) string {
 	switch dialect {
 	case "postgres":
-		return "to_char(created_at, 'YYYY-MM-DD')"
+		return fmt.Sprintf("to_char(%s, 'YYYY-MM-DD')", column)
 	case "sqlite":
-		return "strftime('%Y-%m-%d', created_at)"
+		return fmt.Sprintf("strftime('%%Y-%%m-%%d', %s)", column)
 	default:
-		return "DATE_FORMAT(created_at, '%Y-%m-%d')"
+		return fmt.Sprintf("DATE_FORMAT(%s, '%%Y-%%m-%%d')", column)
 	}
 }
 
-func (r *OverviewRepository) countByDay(ctx context.Context, table, daySQL, where string, start, end time.Time, args ...any) (map[string]int64, error) {
-	query := fmt.Sprintf(
-		"SELECT %s AS day, COUNT(*) AS cnt FROM %s WHERE created_at >= ? AND created_at < ? %s GROUP BY %s",
-		daySQL, table, where, daySQL,
-	)
-	allArgs := append([]any{start, end}, args...)
-	var rows []OverviewDayCount
-	if err := r.db.WithContext(ctx).Raw(query, allArgs...).Scan(&rows).Error; err != nil {
+func (r *OverviewRepository) applyProjectScope(q *gorm.DB, projectIDs []uint, unrestricted bool, column string) *gorm.DB {
+	if unrestricted {
+		return q
+	}
+	if len(projectIDs) == 0 {
+		return q.Where("1 = 0")
+	}
+	return q.Where(column+" IN ?", projectIDs)
+}
+
+func (r *OverviewRepository) CountReleaseLaunchesByProjectDay(ctx context.Context, start, end time.Time, projectIDs []uint, unrestricted bool) ([]OverviewProjectDayCount, error) {
+	daySQL := dayExprForColumn(r.DialectName(), "r.finished_at")
+	query := fmt.Sprintf(`
+		SELECT r.project_id, p.name AS project_name, %s AS day, COUNT(*) AS cnt
+		FROM cicd_release_runs r
+		INNER JOIN projects p ON p.id = r.project_id AND p.deleted_at IS NULL
+		WHERE r.deleted_at IS NULL
+		  AND r.status = ?
+		  AND r.finished_at IS NOT NULL
+		  AND r.finished_at >= ?
+		  AND r.finished_at < ?
+	`, daySQL)
+	args := []any{model.CicdRunStatusSuccess, start, end}
+	if !unrestricted {
+		if len(projectIDs) == 0 {
+			return nil, nil
+		}
+		query += " AND r.project_id IN ?"
+		args = append(args, projectIDs)
+	}
+	query += fmt.Sprintf(" GROUP BY r.project_id, p.name, %s ORDER BY day ASC", daySQL)
+	var rows []OverviewProjectDayCount
+	if err := r.db.WithContext(ctx).Raw(query, args...).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	m := make(map[string]int64, len(rows))
-	for _, row := range rows {
-		m[row.Day] = row.Cnt
+	return rows, nil
+}
+
+func (r *OverviewRepository) CountReleaseRunsByPerson(ctx context.Context, start, end time.Time, projectIDs []uint, unrestricted bool) ([]OverviewPersonCount, error) {
+	if !unrestricted && len(projectIDs) == 0 {
+		return nil, nil
 	}
-	return m, nil
-}
-
-func (r *OverviewRepository) CountLoginLogsByDay(ctx context.Context, start, end time.Time, status int) (map[string]int64, error) {
-	return r.countByDay(ctx, "login_logs", dayExpr(r.DialectName()), "AND status = ?", start, end, status)
-}
-
-func (r *OverviewRepository) CountOperationLogsByDay(ctx context.Context, start, end time.Time) (map[string]int64, error) {
-	return r.countByDay(ctx, "operation_logs", dayExpr(r.DialectName()), "", start, end)
+	q := r.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+		Select("COALESCE(NULLIF(TRIM(submitter_name), ''), '未知') AS person, COUNT(*) AS cnt").
+		Where("created_at >= ? AND created_at < ?", start, end)
+	q = r.applyProjectScope(q, projectIDs, unrestricted, "project_id")
+	var rows []OverviewPersonCount
+	if err := q.Group("person").Order("cnt DESC").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func (r *OverviewRepository) LoadMetrics(ctx context.Context, regPendingStatus int) (*OverviewMetricsRow, error) {

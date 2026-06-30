@@ -51,7 +51,30 @@ func CanonicalAlertsFromAlertmanagerPayload(p AlertManagerPayload) []CanonicalIn
 }
 
 func (s *AlertService) receiveAlertmanagerPayloadSync(ctx context.Context, payload AlertManagerPayload) error {
-	return s.ingestCanonicalAlerts(ctx, CanonicalAlertsFromAlertmanagerPayload(payload))
+	items := CanonicalAlertsFromAlertmanagerPayload(payload)
+	s.applyIngressGroupTimingPolicy(items)
+	return s.ingestCanonicalAlerts(ctx, items)
+}
+
+// applyIngressGroupTimingPolicy 按告警入口决定是否走 Yunshu 第二层 group timing：
+// - 入口 A（外部 Alertmanager Webhook）：默认 SkipGroupTiming，信任 AM group_wait/interval/repeat
+// - 入口 B（platform-monitor 等平台自研路径）：保留 Redis group_wait/interval/repeat
+func (s *AlertService) applyIngressGroupTimingPolicy(items []CanonicalIngressAlert) {
+	for i := range items {
+		if items[i].Alert.SkipGroupTiming {
+			continue
+		}
+		if s.ingressUsesGroupTiming(items[i]) {
+			continue
+		}
+		if s.cfg.WebhookSkipGroupTiming {
+			items[i].Alert.SkipGroupTiming = true
+		}
+	}
+}
+
+func (s *AlertService) ingressUsesGroupTiming(ca CanonicalIngressAlert) bool {
+	return s.isPlatformMonitor(ca.CommonLabels, ca.PayloadReceiver)
 }
 
 // enrichCanonicalIngressLabels 与入站 ingest 使用同一套标签补全，保证 groupKey / labelsDigest 与分组节流 Redis 状态一致。

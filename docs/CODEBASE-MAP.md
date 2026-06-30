@@ -1,7 +1,7 @@
 # Yunshu 后端代码地图（与源码同步）
 
-**文档版本**: v1.2  
-**最后更新**: 2026-06-11  
+**文档版本**: v1.4  
+**最后更新**: 2026-06-30  
 **适用分支**: 插件化 + 目录拆分 + 仓储化 + `bizerrors` 统一之后  
 
 本文是阅读后端源码的**入口索引**。若与代码冲突，以 `internal/` 源码为准。
@@ -51,9 +51,11 @@ internal/service/
 ├── system/                    # 用户、角色、权限、认证、菜单、字典…
 ├── logplatform/               # Log Agent、发现、内存日志 Broker
 ├── mysqlbackup/               # MySQL 备份调度与执行
-└── overview/                  # 首页总览指标
-
+├── overview/                  # 首页总览指标（CI 图表依赖 cicd 插件）
+├── cicd/                      # Jenkins CI/CD、发布审批、制品
+│
 internal/menu/                 # 内置菜单 catalog（DefaultCatalog）+ seed 同步（Sync）
+internal/plugin/               # 插件注册、path_filter（与 web/plugin-path.ts 同步）
 ```
 
 ### 域 → 典型入口文件
@@ -64,17 +66,24 @@ internal/menu/                 # 内置菜单 catalog（DefaultCatalog）+ seed 
 | 用户权限 | `system` | `UserService`, `RoleService` | `system/user_service.go` |
 | 项目 | `project` | `ProjectMgmtService` | `project/project_mgmt_core.go` |
 | CMDB | `cmdb` | `CMDBService` | `cmdb/servers.go` |
-| 告警 | `alert` | `AlertService` | `alert/alert_service_core.go` → `alert_ingest_pipeline.go` |
+| 告警 | `alert` | `AlertService`, `CloudExpiryRuleService` | `alert/alert_service_core.go` → `alert_ingest_pipeline.go` |
 | K8s | `k8s` | `K8sRuntimeService`, `K8sPodService` | `k8s/k8s_runtime_service.go` |
 | 日志 Agent | `logplatform` | `LogAgentService` | `logplatform/log_agent_service.go` |
 | 备份 | `mysqlbackup` | `MysqlBackupService` | `mysqlbackup/mysql_backup_service.go` |
+| CI/CD | `cicd` | `cicd.Service` | `cicd/service.go` |
+| 总览 | `overview` | `OverviewService` | `overview/overview_service.go` |
 
 ### 跨域依赖（读代码时注意）
 
-- `alert` → `project`：云到期评估使用 `CloudProviderByName`、`ValidateCloudExpiryCronSpec`
-- `project` → `logplatform`：日志 SSE 使用 `BuildLogStreamKey`、`AgentLogBroker`
+- `alert` → `cmdb`：云到期评估拉云实例（`cmdb.CloudProviderByName`、云账号解密）
+- `alert` → `alert`：`CloudExpiryRuleService`、`ShouldEvalCloudExpiryByCron`（`internal/pkg/cronutil`）
+- `alert` 后台任务：`plugins/alert/workers.go` → `AlertService.RunBackgroundWorkers`（Prometheus enrich、抑制 pruning、**云到期调度**）
+- `project` → `logplatform`：日志 SSE/导出使用 `AgentLogBroker`（LogSource CRUD **直调 Service**，不经 gRPC 回环）
+- `cicd` → `dictconfig` + `UserRepository`：Jenkins/MinIO 字典配置；发布通知邮件查用户
+- `mysqlbackup` / `cmdb` → `sshserver`：SSH 凭据解密与 Dial
 - `system` → `alert`：`DepartmentService` / `UserService` 依赖 `AlertRuleAssigneeService`
 - `overview` → `k8s`：总览 Pod 聚合使用 `K8sRuntimeService`
+- `overview` → `cicd`：项目上线/工单图表读 `cicd_release_runs`（cicd 插件未启用时返回空数据）
 
 ---
 
@@ -85,9 +94,14 @@ internal/menu/                 # 内置菜单 catalog（DefaultCatalog）+ seed 
 3. `internal/menu/catalog.go` + `cmd/seed.go` — 菜单与权限种子数据  
 4. 选一个简单 API：**字典条目**  
    `handler` → `service.DictEntryService` → `repository` → `model`  
-4. 打开 `internal/service/exports.go`，理解 `service.Xxx` 与真实子包的对应关系  
-5. 再读 **告警 Webhook**（复杂）：`handler/alert_handler.go` → `alert/alert_service_webhook.go` → `alert_ingest_pipeline.go`  
-6. 中间件链：`middleware/auth.go` → `casbin.go` → `error_handler.go`  
+5. 打开 `internal/service/exports.go`，理解 `service.Xxx` 与真实子包的对应关系  
+6. 再读 **告警 Webhook**（复杂）：`handler/alert_handler.go` → `alert/alert_service_webhook.go` → `alert_ingest_pipeline.go`  
+7. 中间件链：`middleware/auth.go` → `casbin.go` → `error_handler.go`  
+
+### 3.1 二次开发入口
+
+外部贡献者请先读 **[CONTRIBUTING.md](../CONTRIBUTING.md)**。  
+插件菜单/API 路径规则须同时维护 `internal/plugin/path_filter.go` 与 `web/src/modules/plugin-path.ts`。
 
 ---
 
@@ -102,7 +116,26 @@ internal/menu/                 # 内置菜单 catalog（DefaultCatalog）+ seed 
 | 结构化日志 | `internal/pkg/logutil` | `logutil.HTTP("http.auth").Warn(...)` |
 | 底层 Logger | `internal/pkg/logger` | bootstrap 初始化 |
 
-**已删除（勿再引用）**：`internal/service/svcerr`、`svclog`、`internal/pkg/apperror`。
+**已删除（勿再引用）**：`internal/service/svcerr`、`svclog`、`internal/pkg/apperror`。  
+**已移除 API**：`GET .../projects/:id/log-files`、`GET .../log-units`（日志文件浏览改走 Agent **discovery**）。
+
+---
+
+## 4.1 共享工具包（`internal/pkg/`）
+
+| 包 | 用途 | 典型调用方 |
+|----|------|------------|
+| `cronutil` | Cron 校验、`ShouldRunAfterLast` / `ShouldRunWithDayAnchor`、`RunWorker` | 云到期调度、MySQL 备份定时 |
+| `sshserver` | 凭据解密 → `ssh.ClientConfig`、Dial | CMDB 终端、MySQL 备份远程执行 |
+| `dictconfig` | 字典覆盖 YAML（mail、cicd、minio、parse 工具） | mail、cicd、mysqlbackup、bootstrap |
+| `mysqlbackup` | mysqldump/xtrabackup/innobackupex 命令构建 | `service/mysqlbackup` |
+| `logutil` | HTTP/Worker 组件化日志 | 全模块 |
+| `errors` (`bizerrors`) | 业务错误 Pass/Ensure、gRPC 映射 | Service / Handler |
+
+云到期调度要点（`alert/alert_cloud_expiry_scheduler.go`）：
+
+- **规则 Cron**（控制台 `eval_cron_spec`，如 `0 */2 * * *`）决定**何时拉云评估**
+- **内置轮询** `0 * * * * *`（每分钟）仅检查是否到点，与 `alert.monitor_eval_cron_spec`（PromQL 内置规则）无关
 
 ---
 
@@ -146,6 +179,7 @@ internal/menu/                 # 内置菜单 catalog（DefaultCatalog）+ seed 
 | 文档 | 说明 |
 |------|------|
 | [plugins.md](./plugins.md) | 业务插件启停与 CMDB 拆分 |
+| [cicd.md](./cicd.md) | CI/CD 插件：Jenkins、审批、字典配置 |
 | [backend-architecture-complete.md](./backend-architecture-complete.md) | 完整技术说明（架构、模块、部署） |
 | [refactoring-report.md](./refactoring-report.md) | 重构实施状态与后续项 |
 | [architecture-diagrams.md](./architecture-diagrams.md) | 架构图集 |

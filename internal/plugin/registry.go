@@ -44,7 +44,7 @@ func All() []Module {
 
 // DefaultEnabled 未配置 plugins.enabled 时的默认启用列表。
 func DefaultEnabled() []string {
-	return []string{"core", "k8s", "alert", "project", "cmdb", "backup"}
+	return []string{"core", "k8s", "alert", "project", "cmdb", "backup", "cicd"}
 }
 
 // ResolveEnabled 根据配置解析启用的插件名集合。

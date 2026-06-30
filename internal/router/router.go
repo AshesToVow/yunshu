@@ -33,6 +33,8 @@ func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx
 		Enabled:                 plugin.ResolveEnabled(&app.Config.Plugins),
 		K8sRuntime:              d.K8sRuntimeService(),
 		MysqlBackup:             d.MysqlBackupService(),
+		Cicd:                    d.CicdService(),
+		Alert:                   d.AlertService(),
 	}
 
 	api := app.Engine.Group("/api/v1")

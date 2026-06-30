@@ -89,7 +89,7 @@ Yunshu 是一个面向 **DevOps 团队、SRE工程师、运维人员** 的云原
 - ❌ 移动端 APP (iOS / Android)
 - ❌ 国际化多语言支持 (i18n)
 - ❌ Grafana / Kibana 深度集成
-- ❌ CI/CD 流水线管理 (Jenkins / GitLab CI)
+- ❌ GitLab CI 集成（当前交付 **Jenkins + 自研审批** 见 `cicd` 插件与 [cicd.md](cicd.md)）
 - ❌ 成本管理与资源计费
 - ❌ AI 智能运维 (异常检测/根因分析)
 

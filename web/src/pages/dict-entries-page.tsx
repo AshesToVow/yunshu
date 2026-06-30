@@ -1,23 +1,38 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { PROJECT_DICT_TYPE_OPTIONS } from "../constants/dict-types";
+import {
+  DICT_CATEGORY_META,
+  DICT_CATEGORY_TABS,
+  buildGroupedDictTypeSelectOptions,
+  getDictCategoryLabel,
+  matchesDictCategory,
+  resolveDictCategory,
+  type DictCategoryId,
+} from "../constants/dict-types";
 import { createDictEntry, deleteDictEntry, getDictEntries, updateDictEntry, type DictEntryItem, type DictPayload } from "../services/dict";
 import { formatDateTime } from "../utils/format";
 
-const defaultQuery = { keyword: "", dict_type: "", page: 1, page_size: 10 };
+const defaultQuery = { keyword: "", dict_type: "", category: "all" as DictCategoryId, page: 1, page_size: 10 };
+
+function parseCategory(raw: string | null): DictCategoryId {
+  const value = String(raw || "").trim() as DictCategoryId;
+  return DICT_CATEGORY_TABS.some((tab) => tab.id === value) ? value : "all";
+}
 
 export function DictEntriesPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const initialDictType = String(searchParams.get("dict_type") || "").trim();
   const initialKeyword = String(searchParams.get("keyword") || "").trim();
+  const initialCategory = parseCategory(searchParams.get("category"));
   const [list, setList] = useState<DictEntryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState(() => ({
     ...defaultQuery,
     dict_type: initialDictType,
     keyword: initialKeyword,
+    category: initialCategory,
   }));
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -27,20 +42,24 @@ export function DictEntriesPage() {
   const formDictType = Form.useWatch("dict_type", form) as string | undefined;
   const autoSortLocked = !current && String(formDictType || "") === "alert_promql_label_key";
   const isAlertLabelGovernedDictType = String(formDictType || "").trim() === "alert_promql_label_key";
-  const dictTypeOptions = useMemo(() => {
-    const fromList = Array.from(new Set(list.map((item) => String(item.dict_type || "").trim()).filter(Boolean))).map((v) => ({
-      label: `${v}（现有）`,
-      value: v,
-    }));
-    const merged = [...PROJECT_DICT_TYPE_OPTIONS];
-    for (const it of fromList) {
-      if (!merged.some((m) => m.value === it.value)) merged.push(it);
+
+  const extraDictTypes = useMemo(() => {
+    const values = new Set<string>();
+    for (const item of list) {
+      const v = String(item.dict_type || "").trim();
+      if (v) values.add(v);
     }
-    if (current?.dict_type && !merged.some((m) => m.value === current.dict_type)) {
-      merged.push({ label: `${current.dict_type}（当前）`, value: current.dict_type });
-    }
-    return merged.sort((a, b) => String(a.value).localeCompare(String(b.value)));
-  }, [list, current?.dict_type]);
+    if (current?.dict_type) values.add(current.dict_type);
+    if (formDictType) values.add(String(formDictType).trim());
+    return Array.from(values);
+  }, [list, current?.dict_type, formDictType]);
+
+  const groupedDictTypeOptions = useMemo(
+    () => buildGroupedDictTypeSelectOptions(query.category, extraDictTypes),
+    [query.category, extraDictTypes],
+  );
+
+  const activeCategoryMeta = query.category !== "all" ? DICT_CATEGORY_META[query.category] : null;
 
   useEffect(() => {
     void loadData(query);
@@ -49,9 +68,10 @@ export function DictEntriesPage() {
   useEffect(() => {
     const dt = String(searchParams.get("dict_type") || "").trim();
     const kw = String(searchParams.get("keyword") || "").trim();
+    const cat = parseCategory(searchParams.get("category"));
     setQuery((prev) => {
-      if (prev.dict_type === dt && prev.keyword === kw) return prev;
-      return { ...prev, dict_type: dt, keyword: kw, page: 1 };
+      if (prev.dict_type === dt && prev.keyword === kw && prev.category === cat) return prev;
+      return { ...prev, dict_type: dt, keyword: kw, category: cat, page: 1 };
     });
   }, [searchParams]);
 
@@ -78,15 +98,36 @@ export function DictEntriesPage() {
     };
   }, [open, current, formDictType, form, autoSortLocked]);
 
+  function syncSearchParams(next: typeof query) {
+    const params = new URLSearchParams();
+    if (next.category && next.category !== "all") params.set("category", next.category);
+    if (next.dict_type) params.set("dict_type", next.dict_type);
+    if (next.keyword) params.set("keyword", next.keyword);
+    setSearchParams(params, { replace: true });
+  }
+
   async function loadData(next = query) {
     setLoading(true);
     try {
-      const result = await getDictEntries(next);
-      setList(result.list);
+      const result = await getDictEntries({
+        ...next,
+        category: next.category !== "all" ? next.category : undefined,
+      });
+      setList(result.list ?? []);
       setTotal(result.total);
     } finally {
       setLoading(false);
     }
+  }
+
+  function changeCategory(category: DictCategoryId) {
+    setQuery((prev) => {
+      const nextDictType =
+        prev.dict_type && !matchesDictCategory(prev.dict_type, category) ? "" : prev.dict_type;
+      const next = { ...prev, category, dict_type: nextDictType, page: 1 };
+      syncSearchParams(next);
+      return next;
+    });
   }
 
   function openCreate() {
@@ -135,23 +176,47 @@ export function DictEntriesPage() {
 
   return (
     <Card className="table-card">
+      <Space direction="vertical" size="middle" style={{ width: "100%", marginBottom: 16 }}>
+        <Segmented
+          value={query.category}
+          options={DICT_CATEGORY_TABS.map((tab) => ({ label: tab.label, value: tab.id }))}
+          onChange={(value) => changeCategory(value as DictCategoryId)}
+        />
+        {activeCategoryMeta ? (
+          <Typography.Text type="secondary">{activeCategoryMeta.description}</Typography.Text>
+        ) : null}
+      </Space>
+
       <div className="toolbar">
         <Space wrap>
           <Input.Search
             allowClear
+            defaultValue={query.keyword}
             placeholder="搜索标签/值/备注"
             style={{ width: 260 }}
-            onSearch={(keyword) => setQuery((prev) => ({ ...prev, keyword, page: 1 }))}
+            onSearch={(keyword) => {
+              setQuery((prev) => {
+                const next = { ...prev, keyword, page: 1 };
+                syncSearchParams(next);
+                return next;
+              });
+            }}
           />
           <Select
             allowClear
             showSearch
             placeholder="按字典类型筛选"
-            style={{ width: 220 }}
-            value={query.dict_type}
-            options={dictTypeOptions}
+            style={{ width: 280 }}
+            value={query.dict_type || undefined}
+            options={groupedDictTypeOptions}
             filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
-            onChange={(v) => setQuery((prev) => ({ ...prev, dict_type: String(v || ""), page: 1 }))}
+            onChange={(v) => {
+              setQuery((prev) => {
+                const next = { ...prev, dict_type: String(v || ""), page: 1 };
+                syncSearchParams(next);
+                return next;
+              });
+            }}
           />
         </Space>
         <div className="toolbar__actions">
@@ -177,10 +242,20 @@ export function DictEntriesPage() {
           showQuickJumper: true,
           onChange: (page, pageSize) => setQuery((prev) => ({ ...prev, page, page_size: pageSize })),
         }}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1200 }}
         columns={[
           { title: "ID", dataIndex: "id", width: 80 },
-          { title: "字典类型", dataIndex: "dict_type", width: 200, render: (v: string) => <Tag color="geekblue">{v}</Tag> },
+          {
+            title: "分类",
+            key: "category",
+            width: 120,
+            render: (_: unknown, record: DictEntryItem) => {
+              const category = resolveDictCategory(record.dict_type);
+              const meta = DICT_CATEGORY_META[category];
+              return <Tag color={meta.color}>{meta.label}</Tag>;
+            },
+          },
+          { title: "字典类型", dataIndex: "dict_type", width: 220, render: (v: string) => <Tag color="geekblue">{v}</Tag> },
           { title: "标签", dataIndex: "label", width: 200, ellipsis: true },
           {
             title: "值",
@@ -234,8 +309,13 @@ export function DictEntriesPage() {
             extra={
               <>
                 <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 12 }}>
-                  字典类型按项目规范统一管理；新增配置时请优先从下拉选择，避免同义多名导致代码读取不到。
+                  字典类型按分类统一管理；新增配置时请优先从分组下拉选择，避免同义多名导致代码读取不到。
                 </Typography.Paragraph>
+                {formDictType ? (
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 12 }}>
+                    当前分类：{getDictCategoryLabel(resolveDictCategory(formDictType))}
+                  </Typography.Paragraph>
+                ) : null}
                 {isAlertLabelGovernedDictType ? (
                   <Typography.Paragraph type="warning" style={{ marginBottom: 0, fontSize: 12 }}>
                     告警标签键已统一以 `alert_promql_label_key` 为唯一来源，策略匹配与静默匹配都读取该类型。
@@ -247,7 +327,7 @@ export function DictEntriesPage() {
             <Select
               showSearch
               placeholder="请选择字典类型"
-              options={dictTypeOptions}
+              options={buildGroupedDictTypeSelectOptions("all", extraDictTypes)}
               filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
             />
           </Form.Item>

@@ -21,6 +21,7 @@ export interface DictOptionItem {
 
 export interface DictQuery {
   dict_type?: string;
+  category?: string;
   keyword?: string;
   status?: number;
   page?: number;

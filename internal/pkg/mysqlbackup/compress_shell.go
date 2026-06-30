@@ -36,12 +36,67 @@ if [ ! -s "$ARCHIVE" ]; then
 fi
 `
 
-// shellMysqldumpToGz 将 mysqldump 输出用 gzip 压缩为 .sql.gz。
-const shellMysqldumpToGz = shellResolveGzip + `
+// shellResolveMysqldump 解析 mysqldump 可执行文件（非交互 SSH 下 PATH 常不含自定义安装目录）。
+const shellResolveMysqldump = `
+resolve_mysqldump() {
+  if [ -n "${MYSQLDUMP_BIN_PRESET:-}" ] && [ -x "$MYSQLDUMP_BIN_PRESET" ]; then
+    echo "$MYSQLDUMP_BIN_PRESET"
+    return 0
+  fi
+  if command -v mysqldump >/dev/null 2>&1; then
+    command -v mysqldump
+    return 0
+  fi
+  for p in /usr/bin/mysqldump /usr/local/bin/mysqldump /usr/local/mysql/bin/mysqldump; do
+    if [ -x "$p" ]; then echo "$p"; return 0; fi
+  done
+  for p in /export/servers/app/*/bin/mysqldump /opt/mysql/*/bin/mysqldump /export/servers/*/bin/mysqldump; do
+    if [ -x "$p" ]; then echo "$p"; return 0; fi
+  done
+  return 1
+}
+`
+
+// shellMysqldumpToGz 将 mysqldump 输出压缩为 .sql.gz（优先 pigz，管道用 stdbuf 降低首包等待）。
+const shellMysqldumpToGz = shellResolveGzip + shellResolveMysqldump + `
+resolve_pigz() {
+  if command -v pigz >/dev/null 2>&1; then command -v pigz; return 0; fi
+  if [ -x /usr/bin/pigz ]; then echo /usr/bin/pigz; return 0; fi
+  return 1
+}
 export PATH="/usr/bin:/bin:${PATH:-}"
 GZIP_BIN=$(resolve_gzip) || {
   echo "ERROR: 未找到 gzip，无法生成 .sql.gz。请执行: yum install -y gzip" >>"$LOG"
   exit 127
 }
-mysqldump -h%s -P%d -u%s %s %s 2>>"$LOG" | "$GZIP_BIN" -1 -c > "$SQL"
+if PIGZ_BIN=$(resolve_pigz); then
+  COMPRESS_BIN="$PIGZ_BIN"
+  COMPRESS_ARGS="-1 -c"
+  echo "[$(date '+%%F %%T')] compress with pigz ($PIGZ_BIN)" >>"$LOG"
+else
+  COMPRESS_BIN="$GZIP_BIN"
+  COMPRESS_ARGS="-1 -c"
+  echo "[$(date '+%%F %%T')] compress with gzip ($GZIP_BIN)" >>"$LOG"
+fi
+MYSQLDUMP_BIN=$(resolve_mysqldump) || {
+  echo "ERROR: 未找到 mysqldump。请在实例中配置 mysqldump_bin（如 /export/servers/app/mysql-5.7.22/bin/mysqldump）" >>"$LOG"
+  exit 127
+}
+echo "[$(date '+%%F %%T')] mysqldump bin=$MYSQLDUMP_BIN" >>"$LOG"
+DUMP_CMD=("$MYSQLDUMP_BIN" %s %s %s)
+echo "[$(date '+%%F %%T')] connect=%s target=%s flags=%s" >>"$LOG"
+_dump_ec=0
+if command -v stdbuf >/dev/null 2>&1; then
+  stdbuf -oL "${DUMP_CMD[@]}" 2>>"$LOG" | "$COMPRESS_BIN" $COMPRESS_ARGS > "$SQL" || _dump_ec=$?
+else
+  "${DUMP_CMD[@]}" 2>>"$LOG" | "$COMPRESS_BIN" $COMPRESS_ARGS > "$SQL" || _dump_ec=$?
+fi
+EC=$_dump_ec
+if [ "$EC" -ne 0 ]; then
+  echo "ERROR: mysqldump pipeline failed exit=$EC" >>"$LOG"
+  kill "$MON" 2>/dev/null || true
+  wait "$MON" 2>/dev/null || true
+  tail -n 120 "$LOG" 2>/dev/null || true
+  exit "$EC"
+fi
 `

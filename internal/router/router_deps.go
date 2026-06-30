@@ -7,6 +7,7 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/middleware"
 	"yunshu/internal/service"
+	cicdsvc "yunshu/internal/service/cicd"
 
 	"github.com/gin-gonic/gin"
 )
@@ -45,41 +46,44 @@ type RouteDeps struct {
 	dictEntryHandler         *handler.DictEntryHandler
 	adminHandler             *handler.AdminHandler
 
-	alertHandler             *handler.AlertHandler
-	alertPlatformHandler     *handler.AlertPlatformHandler
-	alertSubscriptionHandler *handler.AlertSubscriptionHandler
-	alertInhibitionHandler   *handler.AlertInhibitionHandler
+	alertHandler              *handler.AlertHandler
+	alertPlatformHandler      *handler.AlertPlatformHandler
+	alertSubscriptionHandler  *handler.AlertSubscriptionHandler
+	alertInhibitionHandler    *handler.AlertInhibitionHandler
 	alertReceiverGroupHandler *handler.AlertReceiverGroupHandler
-	cloudExpiryRuleHandler   *handler.CloudExpiryRuleHandler
+	cloudExpiryRuleHandler    *handler.CloudExpiryRuleHandler
 
-	clusterHandler           *handler.ClusterHandler
-	podHandler               *handler.PodHandler
-	namespaceHandler         *handler.NamespaceHandler
-	nodeHandler              *handler.NodeHandler
-	workloadHandler          *handler.WorkloadHandler
-	configHandler            *handler.ConfigHandler
-	storageHandler           *handler.StorageHandler
-	serviceResourceHandler   *handler.ServiceResourceHandler
-	ingressHandler           *handler.IngressHandler
-	networkPolicyHandler     *handler.NetworkPolicyHandler
-	k8sDiscoveryHandler      *handler.K8sDiscoveryHandler
-	k8sHPAHandler            *handler.K8sHPAHandler
-	k8sResourceWatchHandler  *handler.K8sResourceWatchHandler
-	k8sSearchHandler         *handler.K8sSearchHandler
-	k8sEventForwardHandler   *handler.K8sEventForwardHandler
-	eventHandler             *handler.EventHandler
-	crdHandler               *handler.CRDHandler
-	crHandler                *handler.CRHandler
-	rbacHandler              *handler.RBACHandler
-	serviceAccountHandler    *handler.ServiceAccountHandler
-	overviewHandler          *handler.OverviewHandler
+	clusterHandler          *handler.ClusterHandler
+	podHandler              *handler.PodHandler
+	namespaceHandler        *handler.NamespaceHandler
+	nodeHandler             *handler.NodeHandler
+	workloadHandler         *handler.WorkloadHandler
+	configHandler           *handler.ConfigHandler
+	storageHandler          *handler.StorageHandler
+	serviceResourceHandler  *handler.ServiceResourceHandler
+	ingressHandler          *handler.IngressHandler
+	networkPolicyHandler    *handler.NetworkPolicyHandler
+	k8sDiscoveryHandler     *handler.K8sDiscoveryHandler
+	k8sHPAHandler           *handler.K8sHPAHandler
+	k8sResourceWatchHandler *handler.K8sResourceWatchHandler
+	k8sSearchHandler        *handler.K8sSearchHandler
+	k8sEventForwardHandler  *handler.K8sEventForwardHandler
+	eventHandler            *handler.EventHandler
+	crdHandler              *handler.CRDHandler
+	crHandler               *handler.CRHandler
+	rbacHandler             *handler.RBACHandler
+	serviceAccountHandler   *handler.ServiceAccountHandler
+	overviewHandler         *handler.OverviewHandler
 
-	projectHandler         *handler.ProjectHandler
-	cmdbHandler            *handler.CMDBHandler
-	mysqlBackupSvc         *service.MysqlBackupService
-	mysqlBackupHandler     *handler.MysqlBackupHandler
-	logAgentHandler        *handler.LogAgentHandler
-	agentDiscoveryHandler  *handler.AgentDiscoveryHandler
+	projectHandler        *handler.ProjectHandler
+	cmdbHandler           *handler.CMDBHandler
+	mysqlBackupSvc        *service.MysqlBackupService
+	mysqlBackupHandler    *handler.MysqlBackupHandler
+	alertSvc              *service.AlertService
+	cicdSvc               *cicdsvc.Service
+	cicdHandler           *handler.CicdHandler
+	logAgentHandler       *handler.LogAgentHandler
+	agentDiscoveryHandler *handler.AgentDiscoveryHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -96,6 +100,22 @@ func (d *RouteDeps) MysqlBackupService() *service.MysqlBackupService {
 		return nil
 	}
 	return d.mysqlBackupSvc
+}
+
+// CicdService 供 cicd 插件后台任务使用。
+func (d *RouteDeps) CicdService() *cicdsvc.Service {
+	if d == nil {
+		return nil
+	}
+	return d.cicdSvc
+}
+
+// AlertService 供 alert 插件后台任务使用。
+func (d *RouteDeps) AlertService() *service.AlertService {
+	if d == nil {
+		return nil
+	}
+	return d.alertSvc
 }
 
 func assembleRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
@@ -133,6 +153,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	userGroupHandler := handler.NewUserGroupHandler(svcs.UserGroup)
 
 	mysqlBackupHandler := handler.NewMysqlBackupHandler(svcs.MysqlBackup)
+	cicdHandler := handler.NewCicdHandler(svcs.Cicd)
 
 	authHandler := handler.NewAuthHandler(svcs.Auth, svcs.LoginLog)
 	loginLogHandler := handler.NewLoginLogHandler(svcs.LoginLog)
@@ -141,10 +162,10 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	departmentHandler := handler.NewDepartmentHandler(svcs.Department)
 	roleHandler := handler.NewRoleHandler(svcs.Role)
 	permissionHandler := handler.NewPermissionHandler(svcs.Permission)
-	policyHandler := handler.NewPolicyHandler(svcs.Policy)
+	policyHandler := handler.NewPolicyHandler(svcs.Policy, &app.Config.Plugins)
 	k8sScopedPolicyHandler := handler.NewK8sScopedPolicyHandler(svcs.K8sScopedPolicy)
 	regHandler := handler.NewRegistrationHandler(svcs.Registration)
-	menuHandler := handler.NewMenuHandler(svcs.Menu)
+	menuHandler := handler.NewMenuHandler(svcs.Menu, &app.Config.Plugins)
 	dictEntryHandler := handler.NewDictEntryHandler(svcs.DictEntry)
 	alertHandler := handler.NewAlertHandler(svcs.Alert)
 	cloudExpiryRuleHandler := handler.NewCloudExpiryRuleHandler(svcs.CloudExpiryRule, svcs.Alert)
@@ -178,7 +199,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	rbacHandler := handler.NewRBACHandler(svcs.K8sRBAC)
 	serviceAccountHandler := handler.NewServiceAccountHandler(svcs.K8sServiceAccount)
 	overviewHandler := handler.NewOverviewHandler(svcs.Overview)
-	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt, runtimeClient.ProjectSrv, runtimeClient.LogSourceSrv)
+	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt)
 	cmdbHandler := handler.NewCMDBHandler(svcs.CMDB)
 	logAgentHandler := handler.NewLogAgentHandler(svcs.LogAgent, runtimeClient.AgentSrv)
 	agentDiscoveryHandler := handler.NewAgentDiscoveryHandler(svcs.AgentDiscovery, runtimeClient.AgentSrv)
@@ -255,6 +276,9 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		cmdbHandler:           cmdbHandler,
 		mysqlBackupSvc:        svcs.MysqlBackup,
 		mysqlBackupHandler:    mysqlBackupHandler,
+		alertSvc:              svcs.Alert,
+		cicdSvc:               svcs.Cicd,
+		cicdHandler:           cicdHandler,
 		logAgentHandler:       logAgentHandler,
 		agentDiscoveryHandler: agentDiscoveryHandler,
 	}, nil

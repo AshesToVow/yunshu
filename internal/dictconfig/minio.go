@@ -91,3 +91,22 @@ func NormalizeMinioEndpoint(endpoint string) string {
 	}
 	return ep
 }
+
+// FormatMinioEndpointURL 为 Jenkins mc / S3 客户端补全 scheme（共享库 MINIO_ENDPOINT 需带 http(s)://）。
+func FormatMinioEndpointURL(endpoint string, useSSL bool) string {
+	ep := strings.TrimSpace(endpoint)
+	if ep == "" {
+		return ""
+	}
+	if strings.HasPrefix(ep, "http://") || strings.HasPrefix(ep, "https://") {
+		return ep
+	}
+	host := NormalizeMinioEndpoint(ep)
+	if host == "" {
+		return ""
+	}
+	if useSSL {
+		return "https://" + host
+	}
+	return "http://" + host
+}

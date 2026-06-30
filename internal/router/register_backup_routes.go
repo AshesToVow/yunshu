@@ -22,5 +22,7 @@ func RegisterBackupRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	mysqlBackup.POST("/instances/:instanceId/check-remote", d.mysqlBackupHandler.CheckRemote)
 	mysqlBackup.POST("/instances/:instanceId/run", d.mysqlBackupHandler.RunBackup)
 	mysqlBackup.GET("/jobs", d.mysqlBackupHandler.ListJobs)
+	mysqlBackup.POST("/jobs/:jobId/stop", d.mysqlBackupHandler.StopJob)
+	mysqlBackup.DELETE("/jobs/:jobId", d.mysqlBackupHandler.DeleteJob)
 	mysqlBackup.GET("/jobs/:jobId/presign", d.mysqlBackupHandler.PresignJob)
 }

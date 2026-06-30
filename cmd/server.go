@@ -84,6 +84,7 @@ var serverCmd = &cobra.Command{
 		grpcRuntime, err := grpcserver.Start(
 			app.Config.GRPC.ListenAddr,
 			grpcImpl,
+			app.Config.GRPC.InternalToken,
 			app.Config.GRPC.MaxRecvMsgBytes,
 			app.Config.GRPC.MaxSendMsgBytes,
 		)
@@ -97,6 +98,7 @@ var serverCmd = &cobra.Command{
 		}
 		runtimeClient, err := grpcclient.Dial(
 			app.Config.GRPC.TargetAddr,
+			app.Config.GRPC.InternalToken,
 			5*time.Second,
 			app.Config.GRPC.MaxRecvMsgBytes,
 			app.Config.GRPC.MaxSendMsgBytes,

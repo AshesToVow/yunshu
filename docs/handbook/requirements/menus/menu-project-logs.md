@@ -7,9 +7,11 @@
 
 ## 2. 主要 API（前缀 `/api/v1/projects/:id`）
 
-- `GET .../logs/stream`：流式。  
-- `GET .../logs/export`：导出。  
-- `GET .../log-files`、`GET .../log-units`：文件级/单元级浏览。
+- `GET .../logs/stream`：SSE 流式日志。  
+- `GET .../logs/export`：导出内存 Broker 中已缓冲的日志行。  
+- `GET .../agents/discovery`：Agent 上报的文件路径 / systemd 单元发现（控制台选具体日志文件时使用）。
+
+> **已移除**（2026-06）：`GET .../log-files`、`GET .../log-units` — 请使用 discovery + 日志源配置。
 
 ## 3. 注意事项
 

@@ -28,6 +28,13 @@ func IsK8sReadAPIPath(path string) bool {
 		"/api/v1/crds",
 		"/api/v1/crs",
 		"/api/v1/rbac",
+		"/api/v1/serviceaccounts",
+		"/api/v1/horizontal-pod-autoscalers",
+		"/api/v1/network-policies",
+		"/api/v1/k8s/search",
+		"/api/v1/k8s/topology",
+		"/api/v1/pods/diagnose",
+		"/api/v1/ingresses/diagnose",
 	}
 	for _, prefix := range k8sPrefixes {
 		if strings.HasPrefix(p, prefix) {

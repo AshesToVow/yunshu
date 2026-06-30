@@ -7,8 +7,10 @@ import { getPolicies, grantPolicy, revokePolicy } from "../services/policies";
 import { getRoleOptions } from "../services/roles";
 import type { PermissionItem, PolicyItem, RoleItem } from "../types/api";
 import { buildPermissionTreeData, normalizeCheckedKeys } from "../utils/tree";
+import { usePlugins } from "../contexts/plugin-context";
 
 export function PoliciesPage() {
+  const { isPluginEnabled } = usePlugins();
   const [list, setList] = useState<PolicyItem[]>([]);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [permissions, setPermissions] = useState<PermissionItem[]>([]);
@@ -70,10 +72,11 @@ export function PoliciesPage() {
       const [policyList, roleData, permissionData] = await Promise.all([
         getPolicies(),
         getRoleOptions(),
-        getPermissionOptions(),
+        getPermissionOptions({ isPluginEnabled }),
       ]);
 
-      setList(policyList);
+      const allowedResources = new Set(permissionData.list.map((p) => `${p.resource}::${p.action}`));
+      setList(policyList.filter((p) => allowedResources.has(`${p.resource}::${p.action}`)));
       setRoles(roleData.list);
       setPermissions(permissionData.list);
 

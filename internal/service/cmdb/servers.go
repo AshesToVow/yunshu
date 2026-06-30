@@ -17,6 +17,7 @@ import (
 	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/sshclient"
+	"yunshu/internal/pkg/sshserver"
 	"yunshu/internal/repository"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -416,7 +417,7 @@ func (s *Service) ExecServerCommand(ctx context.Context, req ServerExecRequest) 
 		return nil, bizerrors.Pass(ctx, "cmdb", "ExecServerCommand", err)
 	}
 
-	sshCfg, err := s.decryptCredentialToSSHConfig(ctx, *sv, *cred)
+	sshCfg, err := sshserver.DecryptCredentialToSSHConfig(ctx, s.aead, "cmdb", *sv, *cred)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "cmdb", "ExecServerCommand", err)
 	}
@@ -472,7 +473,7 @@ func (s *Service) StreamServerTerminal(ctx context.Context, projectID, serverID 
 		}
 		return bizerrors.Pass(ctx, "cmdb", "StreamServerTerminal", err)
 	}
-	sshCfg, err := s.decryptCredentialToSSHConfig(ctx, *sv, *cred)
+	sshCfg, err := sshserver.DecryptCredentialToSSHConfig(ctx, s.aead, "cmdb", *sv, *cred)
 	if err != nil {
 		return bizerrors.Pass(ctx, "cmdb", "StreamServerTerminal", err)
 	}
@@ -946,8 +947,72 @@ func (s *Service) DeleteCloudAccount(ctx context.Context, projectID, accountID u
 	return s.cloudAccountRepo.DeleteByID(ctx, accountID)
 }
 
+const (
+	defaultSelfHostedGroupName = "自建服务器"
+	defaultCloudRootGroupName  = "云服务器"
+	defaultAlibabaGroupName    = "阿里云"
+	defaultTencentGroupName    = "腾讯云"
+	defaultJDGroupName         = "京东云"
+)
+
+func defaultServerGroupName(g model.ServerGroup) string {
+	switch {
+	case g.Category == model.ServerGroupCategorySelfHosted && g.ParentID == nil:
+		return defaultSelfHostedGroupName
+	case g.Category == model.ServerGroupCategoryCloud && g.ParentID == nil:
+		return defaultCloudRootGroupName
+	case g.Category == model.ServerGroupCategoryCloud && g.Provider == "alibaba":
+		return defaultAlibabaGroupName
+	case g.Category == model.ServerGroupCategoryCloud && g.Provider == "tencent":
+		return defaultTencentGroupName
+	case g.Category == model.ServerGroupCategoryCloud && g.Provider == "jd":
+		return defaultJDGroupName
+	default:
+		return ""
+	}
+}
+
+func isCorruptedGroupName(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return true
+	}
+	for _, r := range name {
+		if r != '?' && r != '？' {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) repairCorruptedDefaultServerGroups(ctx context.Context, list []model.ServerGroup) error {
+	for i := range list {
+		g := list[i]
+		if !isCorruptedGroupName(g.Name) {
+			continue
+		}
+		want := defaultServerGroupName(g)
+		if want == "" || want == g.Name {
+			continue
+		}
+		g.Name = want
+		if err := s.serverGroupRepo.Save(ctx, &g); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) ensureDefaultServerGroups(ctx context.Context, projectID uint) error {
-	// Avoid repeated maintenance scans on hot list endpoints.
+	list, err := s.serverGroupRepo.ListByProject(ctx, projectID)
+	if err != nil {
+		return bizerrors.Pass(ctx, "cmdb", "ensureDefaultServerGroups", err)
+	}
+	if err := s.repairCorruptedDefaultServerGroups(ctx, list); err != nil {
+		return bizerrors.Pass(ctx, "cmdb", "ensureDefaultServerGroups", err)
+	}
+
+	// Avoid repeated backfill scans on hot list endpoints (repair above always runs).
 	s.ensureMu.Lock()
 	if ts, ok := s.ensuredProjectAt[projectID]; ok && time.Since(ts) < 30*time.Second {
 		s.ensureMu.Unlock()
@@ -955,14 +1020,10 @@ func (s *Service) ensureDefaultServerGroups(ctx context.Context, projectID uint)
 	}
 	s.ensureMu.Unlock()
 
-	list, err := s.serverGroupRepo.ListByProject(ctx, projectID)
-	if err != nil {
-		return bizerrors.Pass(ctx, "cmdb", "ensureDefaultServerGroups", err)
-	}
 	if len(list) == 0 {
 		selfHosted := model.ServerGroup{
 			ProjectID: projectID,
-			Name:      "?????",
+			Name:      defaultSelfHostedGroupName,
 			Category:  model.ServerGroupCategorySelfHosted,
 			Provider:  "custom",
 			Sort:      1,
@@ -970,7 +1031,7 @@ func (s *Service) ensureDefaultServerGroups(ctx context.Context, projectID uint)
 		}
 		cloudRoot := model.ServerGroup{
 			ProjectID: projectID,
-			Name:      "????",
+			Name:      defaultCloudRootGroupName,
 			Category:  model.ServerGroupCategoryCloud,
 			Provider:  "custom",
 			Sort:      2,
@@ -985,7 +1046,7 @@ func (s *Service) ensureDefaultServerGroups(ctx context.Context, projectID uint)
 		alibaba := model.ServerGroup{
 			ProjectID: projectID,
 			ParentID:  &cloudRoot.ID,
-			Name:      "???",
+			Name:      defaultAlibabaGroupName,
 			Category:  model.ServerGroupCategoryCloud,
 			Provider:  "alibaba",
 			Sort:      10,
@@ -994,7 +1055,7 @@ func (s *Service) ensureDefaultServerGroups(ctx context.Context, projectID uint)
 		tencent := model.ServerGroup{
 			ProjectID: projectID,
 			ParentID:  &cloudRoot.ID,
-			Name:      "???",
+			Name:      defaultTencentGroupName,
 			Category:  model.ServerGroupCategoryCloud,
 			Provider:  "tencent",
 			Sort:      11,
@@ -1003,7 +1064,7 @@ func (s *Service) ensureDefaultServerGroups(ctx context.Context, projectID uint)
 		jd := model.ServerGroup{
 			ProjectID: projectID,
 			ParentID:  &cloudRoot.ID,
-			Name:      "???",
+			Name:      defaultJDGroupName,
 			Category:  model.ServerGroupCategoryCloud,
 			Provider:  "jd",
 			Sort:      12,
@@ -1037,7 +1098,7 @@ func (s *Service) ensureDefaultServerGroups(ctx context.Context, projectID uint)
 		// Fallback: create one self-hosted root if missing unexpectedly.
 		selfHosted := model.ServerGroup{
 			ProjectID: projectID,
-			Name:      "?????",
+			Name:      defaultSelfHostedGroupName,
 			Category:  model.ServerGroupCategorySelfHosted,
 			Provider:  "custom",
 			Sort:      1,
@@ -1559,46 +1620,6 @@ func (s *Service) detectRemoteOSAndArch(ctx context.Context, cli *sshclient.Clie
 	}
 
 	return "", "", "connected"
-}
-
-func (s *Service) decryptCredentialToSSHConfig(ctx context.Context, sv model.Server, cred model.ServerCredential) (sshclient.Config, error) {
-	cfg := sshclient.Config{
-		Host:     sv.Host,
-		Port:     sv.Port,
-		Username: cred.Username,
-	}
-	switch strings.ToLower(strings.TrimSpace(cred.AuthType)) {
-	case "password":
-		if cred.EncPassword == nil {
-			return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsg666b6d7186e5)
-		}
-		pw, err := cryptox.DecryptString(s.aead, *cred.EncPassword)
-		if err != nil {
-			return sshclient.Config{}, bizerrors.Pass(ctx, "cmdb", "decryptCredentialToSSHConfig", err)
-		}
-		cfg.AuthType = sshclient.AuthPassword
-		cfg.Password = pw
-	case "key":
-		if cred.EncPrivateKey == nil {
-			return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsg298c7d5f0d54)
-		}
-		pk, err := cryptox.DecryptString(s.aead, *cred.EncPrivateKey)
-		if err != nil {
-			return sshclient.Config{}, bizerrors.Pass(ctx, "cmdb", "decryptCredentialToSSHConfig", err)
-		}
-		cfg.AuthType = sshclient.AuthKey
-		cfg.PrivateKey = pk
-		if cred.EncPassphrase != nil {
-			pp, err := cryptox.DecryptString(s.aead, *cred.EncPassphrase)
-			if err != nil {
-				return sshclient.Config{}, bizerrors.Pass(ctx, "cmdb", "decryptCredentialToSSHConfig", err)
-			}
-			cfg.Passphrase = pp
-		}
-	default:
-		return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsge9e731f82ff9)
-	}
-	return cfg, nil
 }
 
 // ImportServersFromExcel expects first row header with:

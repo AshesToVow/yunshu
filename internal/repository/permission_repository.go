@@ -48,8 +48,7 @@ func (r *PermissionRepository) GetByID(ctx context.Context, id uint) (*model.Per
 	return &permission, nil
 }
 
-func (r *PermissionRepository) List(ctx context.Context, params PermissionListParams) ([]model.Permission, int64, error) {
-	query := r.db.WithContext(ctx).Model(&model.Permission{})
+func applyPermissionListFilters(query *gorm.DB, params PermissionListParams) *gorm.DB {
 	if params.Keyword != "" {
 		keyword := "%" + params.Keyword + "%"
 		query = query.Where("name LIKE ? OR resource LIKE ? OR action LIKE ?", keyword, keyword, keyword)
@@ -73,6 +72,11 @@ func (r *PermissionRepository) List(ctx context.Context, params PermissionListPa
 			query = query.Where(strings.Join(parts, " OR "), args...)
 		}
 	}
+	return query
+}
+
+func (r *PermissionRepository) List(ctx context.Context, params PermissionListParams) ([]model.Permission, int64, error) {
+	query := applyPermissionListFilters(r.db.WithContext(ctx).Model(&model.Permission{}), params)
 	var permissions []model.Permission
 	page, pageSize := pagination.Normalize(params.Page, params.PageSize)
 	total, err := listWithPagination(query, page, pageSize, "id DESC", &permissions)
@@ -80,6 +84,13 @@ func (r *PermissionRepository) List(ctx context.Context, params PermissionListPa
 		return nil, 0, err
 	}
 	return permissions, total, nil
+}
+
+// BatchSetK8sScopeEnabled 按列表筛选条件批量更新 k8s_scope_enabled。
+func (r *PermissionRepository) BatchSetK8sScopeEnabled(ctx context.Context, params PermissionListParams, enabled bool) (int64, error) {
+	query := applyPermissionListFilters(r.db.WithContext(ctx).Model(&model.Permission{}), params)
+	result := query.Update("k8s_scope_enabled", enabled)
+	return result.RowsAffected, result.Error
 }
 
 func (r *PermissionRepository) ListAll(ctx context.Context) ([]model.Permission, error) {

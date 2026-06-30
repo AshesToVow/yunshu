@@ -6,10 +6,12 @@ import {
   LinkOutlined,
   PlusOutlined,
   ReloadOutlined,
+  StopOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
 import {
   Alert,
+  AutoComplete,
   Button,
   Card,
   Checkbox,
@@ -36,6 +38,7 @@ import {
   checkMysqlRemoteBackup,
   createMysqlBackupInstance,
   deleteMysqlBackupInstance,
+  deleteMysqlBackupJob,
   listMysqlBackupInstances,
   listMysqlBackupJobs,
   listMysqldumpOptions,
@@ -43,6 +46,7 @@ import {
   type MysqldumpOptionItem,
   presignMysqlBackupJob,
   runMysqlBackup,
+  stopMysqlBackupJob,
   updateMysqlBackupInstance,
   type MysqlBackupInstance,
   type MysqlBackupInstancePayload,
@@ -54,6 +58,16 @@ import { formatDateTime } from "../utils/format";
 function isXtrabackupMode(mode?: string) {
   return mode === "xtrabackup" || mode === "remote_check";
 }
+
+const MYSQL_BACKUP_CRON_PRESETS = [
+  { label: "每天 02:00", value: "0 0 2 * * *" },
+  { label: "每天 03:00", value: "0 0 3 * * *" },
+  { label: "每 6 小时", value: "0 0 */6 * * *" },
+  { label: "每周日 03:00", value: "0 0 3 * * 0" },
+  { label: "每月 1 日 02:00", value: "0 0 2 1 * *" },
+];
+
+const DEFAULT_MYSQL_BACKUP_CRON = "0 0 2 * * *";
 
 function MysqldumpOptionsField({ catalog }: { catalog: MysqldumpOptionItem[] }) {
   const grouped = useMemo(() => {
@@ -190,6 +204,7 @@ export function MysqlBackupPage() {
       name: "",
       mysql_host: "127.0.0.1",
       mysql_port: 3306,
+      mysql_socket: "",
       mysql_user: "root",
       mysql_password: "",
       backup_mode: "xtrabackup",
@@ -205,6 +220,10 @@ export function MysqlBackupPage() {
       remote_data_dir: "/export/servers/data/mybackup/my3306/xtrabackup/data",
       remote_log_dir: "/export/servers/data/mybackup/my3306/xtrabackup/log",
       mysqldump_work_dir: "/export/servers/data/mybackup/my3306/mysqldump",
+      mysqldump_bin: "/export/servers/app/mysql-5.7.22/bin/mysqldump",
+      xtrabackup_tool: "auto",
+      xtrabackup_bin: "",
+      innobackupex_bin: "/usr/bin/innobackupex",
       mysqldump_options: ["single_transaction", "quick", "routines", "triggers"],
       mysqldump_extra_args: "",
     });
@@ -218,6 +237,7 @@ export function MysqlBackupPage() {
       server_id: row.server_id,
       mysql_host: row.mysql_host,
       mysql_port: row.mysql_port,
+      mysql_socket: row.mysql_socket || "",
       mysql_user: row.mysql_user,
       backup_mode: row.backup_mode,
       backup_scope: row.backup_scope || "all",
@@ -232,6 +252,10 @@ export function MysqlBackupPage() {
       remote_data_dir: row.remote_data_dir,
       remote_log_dir: row.remote_log_dir,
       mysqldump_work_dir: row.mysqldump_work_dir || "/export/backup/yunshu",
+      mysqldump_bin: row.mysqldump_bin || "",
+      xtrabackup_tool: row.xtrabackup_tool || "auto",
+      xtrabackup_bin: row.xtrabackup_bin || "",
+      innobackupex_bin: row.innobackupex_bin || "",
       mysqldump_options: row.mysqldump_options?.length
         ? row.mysqldump_options
         : ["single_transaction", "quick", "routines", "triggers"],
@@ -265,7 +289,10 @@ export function MysqlBackupPage() {
       render: (_, r) => r.server_name || `#${r.server_id}`,
       width: 160,
     },
-    { title: "MySQL", render: (_, r) => `${r.mysql_user}@${r.mysql_host}:${r.mysql_port}`, ellipsis: true },
+    { title: "MySQL", render: (_, r) => {
+      if (r.mysql_socket) return `${r.mysql_user}@socket:${r.mysql_socket}`;
+      return `${r.mysql_user}@${r.mysql_host}:${r.mysql_port}`;
+    }, ellipsis: true },
     {
       title: "范围",
       width: 120,
@@ -281,7 +308,13 @@ export function MysqlBackupPage() {
       title: "模式",
       dataIndex: "backup_mode",
       width: 110,
-      render: (m: string) => (isXtrabackupMode(m) ? <Tag color="purple">xtrabackup</Tag> : <Tag color="blue">mysqldump</Tag>),
+      render: (m: string) => {
+        if (m === "innobackupex") return <Tag color="purple">innobackupex</Tag>;
+        if (m === "xtrabackup") return <Tag color="purple">xtrabackup</Tag>;
+        if (m === "mysqldump") return <Tag color="blue">mysqldump</Tag>;
+        if (isXtrabackupMode(m)) return <Tag color="purple">物理备份</Tag>;
+        return <Tag>{m || "-"}</Tag>;
+      },
     },
     {
       title: "定时",
@@ -374,19 +407,25 @@ export function MysqlBackupPage() {
       dataIndex: "backup_mode",
       width: 100,
       render: (m?: string) => {
+        if (m === "innobackupex") return <Tag color="purple">innobackupex</Tag>;
         if (m === "xtrabackup") return <Tag color="purple">xtrabackup</Tag>;
-        if (m === "mysqldump") return <Tag color="blue">mysqldump</Tag>;
-        if (isXtrabackupMode(m)) return <Tag color="purple">xtrabackup</Tag>;
+        if (isXtrabackupMode(m)) return <Tag color="purple">物理备份</Tag>;
         return <Tag>{m || "-"}</Tag>;
       },
     },
     {
       title: "状态",
       dataIndex: "status",
-      width: 90,
+      width: 100,
       render: (s: string) => {
-        const color = s === "success" ? "success" : s === "failed" ? "error" : "processing";
-        return <Tag color={color}>{s}</Tag>;
+        const labels: Record<string, string> = {
+          success: "成功",
+          failed: "失败",
+          running: "进行中",
+          cancelled: "已取消",
+        };
+        const color = s === "success" ? "success" : s === "failed" ? "error" : s === "cancelled" ? "warning" : "processing";
+        return <Tag color={color}>{labels[s] || s}</Tag>;
       },
     },
     {
@@ -400,13 +439,31 @@ export function MysqlBackupPage() {
     { title: "完成时间", dataIndex: "finished_at", width: 168, render: (v?: string) => formatDateTime(v) },
     {
       title: "操作",
-      width: 160,
+      width: 240,
       fixed: "right",
       render: (_, row) => (
-        <Space>
+        <Space wrap size="small">
           <Button size="small" icon={<FileTextOutlined />} onClick={() => setLogJob(row)}>
             日志
           </Button>
+          {row.status === "running" ? (
+            <Popconfirm
+              title="停止该备份任务？"
+              description="将标记为已取消并释放实例，可重新执行备份。"
+              onConfirm={() =>
+                void stopMysqlBackupJob(projectId!, row.id)
+                  .then(() => {
+                    message.success("已停止");
+                    void load();
+                  })
+                  .catch(() => undefined)
+              }
+            >
+              <Button size="small" danger icon={<StopOutlined />}>
+                停止
+              </Button>
+            </Popconfirm>
+          ) : null}
           {row.status === "success" && row.minio_object ? (
             <Button
               size="small"
@@ -419,6 +476,24 @@ export function MysqlBackupPage() {
             >
               下载
             </Button>
+          ) : null}
+          {row.status !== "running" ? (
+            <Popconfirm
+              title="删除该备份记录？"
+              description="仅删除任务记录，不删除远端或 MinIO 上的备份文件。"
+              onConfirm={() =>
+                void deleteMysqlBackupJob(projectId!, row.id)
+                  .then(() => {
+                    message.success("已删除");
+                    void load();
+                  })
+                  .catch(() => undefined)
+              }
+            >
+              <Button size="small" danger icon={<DeleteOutlined />}>
+                删除
+              </Button>
+            </Popconfirm>
           ) : null}
         </Space>
       ),
@@ -454,10 +529,13 @@ export function MysqlBackupPage() {
         message={
           <span>
             复用项目内服务器 SSH 凭据；归档至 MinIO 请在{" "}
-            <Link to="/dict-entries?keyword=minio_">数据字典</Link> 维护 <Typography.Text code>minio_*</Typography.Text>、
-            <Typography.Text code>mysql_backup_scheduler_*</Typography.Text> 等项。
-            <strong>mysqldump</strong>：逻辑备份；<strong>xtrabackup</strong>：经 SSH 执行物理热备（须目标机已安装 xtrabackup）。
-            文件命名统一为 <Typography.Text code>项目名_IP_端口_年月日_时分秒</Typography.Text>（.sql.gz / .tar.gz）。
+            <Link to="/dict-entries?keyword=minio_">数据字典</Link> 维护 <Typography.Text code>minio_*</Typography.Text>（连接与桶名）、
+            <Typography.Text code>mysql_backup_scheduler_enabled</Typography.Text>（定时 Worker 总开关）等项。
+            各实例的「备份 Cron」在下方表单填写（如每天 2 点）；字典中的{" "}
+            <Typography.Text code>mysql_backup_scheduler_tick_spec</Typography.Text> 仅为后台轮询间隔（默认每 30 秒检查是否到点），不是备份时间。
+            MinIO 对象路径为 <Typography.Text code>前缀/项目名_IP_端口_时间.sql.gz</Typography.Text>（无 project_id 子目录）。
+            <strong>mysqldump</strong>：逻辑备份；<strong>xtrabackup / innobackupex</strong>：经 SSH 执行物理热备（MySQL 5.7 常用 innobackupex）。
+            文件命名统一为 <Typography.Text code>项目名_IP_端口_年月日_时分秒</Typography.Text>（CST，.sql.gz / .tar.gz）。
             「检查备份」按该前缀匹配最新有效包。上传 MinIO 可关；上传后<strong>不删除</strong>远端文件。
           </span>
         }
@@ -517,7 +595,7 @@ export function MysqlBackupPage() {
             <Select
               options={[
                 { label: "mysqldump（逻辑备份）", value: "mysqldump" },
-                { label: "xtrabackup（物理备份）", value: "xtrabackup" },
+                { label: "xtrabackup / innobackupex（物理备份）", value: "xtrabackup" },
               ]}
             />
           </Form.Item>
@@ -537,6 +615,21 @@ export function MysqlBackupPage() {
           </Form.Item>
           <Form.Item name="mysql_port" label="MySQL 端口">
             <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="mysql_socket"
+            label="MySQL Socket（可选）"
+            extra="配置后 mysqldump / xtrabackup / 连通测试优先走 Unix Socket，可避免 TCP 连接报 1130 Host not allowed。例：/export/servers/data/my3306/run/mysqld.sock"
+            rules={[
+              {
+                validator: async (_, v) => {
+                  const s = String(v ?? "").trim();
+                  if (s && !s.startsWith("/")) throw new Error("须以 / 开头的绝对路径");
+                },
+              },
+            ]}
+          >
+            <Input placeholder="/export/servers/data/my3306/run/mysqld.sock" />
           </Form.Item>
           <Form.Item name="mysql_user" label="MySQL 用户" rules={[{ required: true }]}>
             <Input />
@@ -583,14 +676,41 @@ export function MysqlBackupPage() {
               ) : null
             }
           </Form.Item>
-          <Form.Item name="schedule_enabled" label="定时备份" valuePropName="checked" extra="Cron 五段或六段（可选秒），如 0 0 2 * * * 表示每天 2 点">
-            <Switch />
+          <Form.Item
+            name="schedule_enabled"
+            label="定时备份"
+            valuePropName="checked"
+            extra="开启后须填写下方「备份 Cron」；后台 Worker 是否运行由数据字典 mysql_backup_scheduler_enabled 控制"
+          >
+            <Switch
+              onChange={(checked) => {
+                if (checked && !String(form.getFieldValue("cron_spec") ?? "").trim()) {
+                  form.setFieldValue("cron_spec", DEFAULT_MYSQL_BACKUP_CRON);
+                }
+              }}
+            />
           </Form.Item>
           <Form.Item noStyle shouldUpdate>
             {({ getFieldValue }) =>
               getFieldValue("schedule_enabled") ? (
-                <Form.Item name="cron_spec" label="Cron 表达式" rules={[{ required: true, message: "请填写 Cron" }]}>
-                  <Input placeholder="0 0 2 * * *" />
+                <Form.Item
+                  name="cron_spec"
+                  label="备份 Cron 表达式"
+                  extra="该实例何时执行备份，如 0 0 2 * * * = 每天凌晨 2 点（六段式，首段为秒）。可从常用预设选择或自行输入。"
+                  rules={[{ required: true, message: "请填写 Cron" }]}
+                >
+                  <AutoComplete
+                    options={MYSQL_BACKUP_CRON_PRESETS}
+                    placeholder={DEFAULT_MYSQL_BACKUP_CRON}
+                    filterOption={(input, option) =>
+                      String(option?.label ?? "")
+                        .toLowerCase()
+                        .includes(input.toLowerCase()) ||
+                      String(option?.value ?? "")
+                        .toLowerCase()
+                        .includes(input.toLowerCase())
+                    }
+                  />
                 </Form.Item>
               ) : null
             }
@@ -612,11 +732,26 @@ export function MysqlBackupPage() {
                     >
                       <Input placeholder="/export/backup/yunshu" />
                     </Form.Item>
+                    <Form.Item
+                      name="mysqldump_bin"
+                      label="mysqldump 路径"
+                      extra="远端可执行文件绝对路径。非交互 SSH 下 PATH 常不含 mysqldump；留空则自动搜索 /export/servers/app/*/bin 等常见目录"
+                      rules={[
+                        {
+                          validator: async (_, v) => {
+                            const s = String(v ?? "").trim();
+                            if (s && !s.startsWith("/")) throw new Error("须以 / 开头的绝对路径");
+                          },
+                        },
+                      ]}
+                    >
+                      <Input placeholder="/export/servers/app/mysql-5.7.22/bin/mysqldump" />
+                    </Form.Item>
                     <MysqldumpOptionsField catalog={mysqldumpOptions} />
                     <Form.Item
                       name="mysqldump_extra_args"
                       label="额外参数"
-                      extra="空格分隔，如 --where=id>1000 --max-allowed-packet=1G（须以 - 开头）"
+                      extra="空格分隔；与勾选项重复的参数会自动去重。勿重复 --single-transaction / --opt。无 BLOB 大字段时不要加 --hex-blob"
                     >
                       <Input.TextArea rows={2} placeholder="--where=status=1" />
                     </Form.Item>
@@ -627,8 +762,50 @@ export function MysqlBackupPage() {
                 return (
                   <>
                     <Divider orientation="left" plain>
-                      xtrabackup
+                      物理备份 (xtrabackup / innobackupex)
                     </Divider>
+                    <Form.Item
+                      name="xtrabackup_tool"
+                      label="备份工具"
+                      extra="auto：优先 xtrabackup 二进制（无 Perl 依赖），否则 innobackupex。MySQL 5.7 若仅有 innobackupex 请选 innobackupex"
+                    >
+                      <Select
+                        options={[
+                          { label: "自动选择 (auto)", value: "auto" },
+                          { label: "xtrabackup", value: "xtrabackup" },
+                          { label: "innobackupex (MySQL 5.7)", value: "innobackupex" },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="xtrabackup_bin"
+                      label="xtrabackup 路径（可选）"
+                      rules={[
+                        {
+                          validator: async (_, v) => {
+                            const s = String(v ?? "").trim();
+                            if (s && !s.startsWith("/")) throw new Error("须以 / 开头的绝对路径");
+                          },
+                        },
+                      ]}
+                    >
+                      <Input placeholder="/usr/bin/xtrabackup" />
+                    </Form.Item>
+                    <Form.Item
+                      name="innobackupex_bin"
+                      label="innobackupex 路径（可选）"
+                      extra="MySQL 5.7 + Percona XtraBackup 2.4 常见入口；非交互 SSH 下建议填绝对路径"
+                      rules={[
+                        {
+                          validator: async (_, v) => {
+                            const s = String(v ?? "").trim();
+                            if (s && !s.startsWith("/")) throw new Error("须以 / 开头的绝对路径");
+                          },
+                        },
+                      ]}
+                    >
+                      <Input placeholder="/usr/bin/innobackupex" />
+                    </Form.Item>
                     <Form.Item
                       name="mysql_datadir"
                       label="MySQL 数据目录（datadir）"

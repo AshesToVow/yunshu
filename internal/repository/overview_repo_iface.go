@@ -7,11 +7,6 @@ import (
 	"yunshu/internal/model"
 )
 
-type OverviewDayCount struct {
-	Day string
-	Cnt int64
-}
-
 type OverviewMetricsRow struct {
 	UsersCount                int64
 	ClustersCount             int64
@@ -26,11 +21,23 @@ type OverviewStats struct {
 	LogAgentsOfflineCount int64
 }
 
+type OverviewPersonCount struct {
+	Person string
+	Cnt    int64
+}
+
+type OverviewProjectDayCount struct {
+	ProjectID   uint
+	ProjectName string
+	Day         string
+	Cnt         int64
+}
+
 type OverviewRepo interface {
 	DialectName() string
-	CountLoginLogsByDay(ctx context.Context, start, end time.Time, status int) (map[string]int64, error)
-	CountOperationLogsByDay(ctx context.Context, start, end time.Time) (map[string]int64, error)
 	LoadMetrics(ctx context.Context, regPendingStatus int) (*OverviewMetricsRow, error)
 	ListEnabledClusters(ctx context.Context, projectIDs []uint, unrestricted bool) ([]model.K8sCluster, error)
 	FillAlertAndAgentStats(ctx context.Context, dayStart, dayEnd, agentCutoff time.Time) (*OverviewStats, error)
+	CountReleaseLaunchesByProjectDay(ctx context.Context, start, end time.Time, projectIDs []uint, unrestricted bool) ([]OverviewProjectDayCount, error)
+	CountReleaseRunsByPerson(ctx context.Context, start, end time.Time, projectIDs []uint, unrestricted bool) ([]OverviewPersonCount, error)
 }

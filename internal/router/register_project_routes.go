@@ -35,8 +35,6 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.GET("/agents/discovery", d.agentDiscoveryHandler.List)
 	projectScoped.GET("/logs/stream", d.projectHandler.StreamLogs)
 	projectScoped.GET("/logs/export", d.projectHandler.ExportLogs)
-	projectScoped.GET("/log-files", d.projectHandler.ListLogFiles)
-	projectScoped.GET("/log-units", d.projectHandler.ListLogUnits)
 
 	agents := api.Group("/agents")
 	agents.Use(d.authMiddleware, d.authorize, d.opAudit)

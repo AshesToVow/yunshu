@@ -18,6 +18,9 @@ func Sync(ctx context.Context, db *gorm.DB) error {
 	if err := syncSpecSubtree(ctx, db, DefaultCatalog(), nil); err != nil {
 		return err
 	}
+	if err := reparentExtractedMenus(ctx, db); err != nil {
+		return err
+	}
 	if err := applyLegacyPatches(ctx, db); err != nil {
 		return err
 	}
@@ -53,16 +56,11 @@ func upsertByPath(ctx context.Context, db *gorm.DB, spec Spec, parentID *uint) (
 	}
 	err := q.First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		if err := db.WithContext(ctx).Where("path = ?", path).First(&existing).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				m := specToModel(spec, parentID)
-				if err := db.WithContext(ctx).Create(&m).Error; err != nil {
-					return nil, err
-				}
-				return &m, nil
-			}
+		m := specToModel(spec, parentID)
+		if err := db.WithContext(ctx).Create(&m).Error; err != nil {
 			return nil, err
 		}
+		return &m, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -197,7 +195,7 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		paths:              []string{"/kubernetes", "/kubernetes/"},
 		keepName:           "Kubernetes 容器管理",
 		keepIcon:           "KubernetesOutlined",
-		keepSort:           5,
+		keepSort:           7,
 		preferNameContains: "容器",
 		knownChildPaths:    []string{"/pods", "/clusters", "/cronjobs", "/jobs", "/events", "/k8s-resource-topology"},
 		penaltyChildPaths:  []string{"/pod", "/cluster"},
@@ -216,8 +214,95 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepIcon:           "ProjectOutlined",
 		keepSort:           3,
 		preferNameContains: "项目",
-		knownChildPaths:    []string{"/projects", "/application-topology", "/project-logs", "/project-log-sources", "/project-servers"},
+		knownChildPaths:    []string{"/projects", "/application-topology", "/project-members", "/project-servers"},
 	},
+	{
+		paths:              []string{"/log-platform", "/log-platform/"},
+		keepName:           "日志平台",
+		keepIcon:           "FileTextOutlined",
+		keepSort:           4,
+		preferNameContains: "日志",
+		knownChildPaths:    []string{"/project-services", "/project-log-sources", "/project-logs", "/agent-list"},
+	},
+	{
+		paths:              []string{"/mysql-backup", "/mysql-backup/"},
+		keepName:           "MySQL 备份",
+		keepIcon:           "DatabaseOutlined",
+		keepSort:           5,
+		preferNameContains: "MySQL",
+	},
+}
+
+// reparentExtractedMenus 将原「项目管理」下的日志/MySQL 菜单迁移至独立一级目录。
+func reparentExtractedMenus(ctx context.Context, db *gorm.DB) error {
+	var logRoot model.Menu
+	if err := db.WithContext(ctx).
+		Where("path = ? AND (parent_id IS NULL OR parent_id = 0)", "/log-platform").
+		First(&logRoot).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	logParentID := logRoot.ID
+	for _, path := range []string{
+		"/project-services",
+		"/project-log-sources",
+		"/project-logs",
+		"/agent-list",
+	} {
+		pid := logParentID
+		if err := reparentMenuByPath(ctx, db, path, &pid); err != nil {
+			return err
+		}
+	}
+	return reparentMenuByPath(ctx, db, "/mysql-backup", nil)
+}
+
+func reparentMenuByPath(ctx context.Context, db *gorm.DB, menuPath string, parentID *uint) error {
+	var all []model.Menu
+	if err := db.WithContext(ctx).Where("path = ?", menuPath).Find(&all).Error; err != nil {
+		return err
+	}
+	if len(all) == 0 {
+		return nil
+	}
+	var keep *model.Menu
+	for i := range all {
+		m := &all[i]
+		if parentID == nil {
+			if m.ParentID == nil || (m.ParentID != nil && *m.ParentID == 0) {
+				keep = m
+				break
+			}
+		} else if m.ParentID != nil && *m.ParentID == *parentID {
+			keep = m
+			break
+		}
+	}
+	if keep == nil {
+		keep = &all[0]
+	}
+	keep.ParentID = parentID
+	if err := db.WithContext(ctx).Save(keep).Error; err != nil {
+		return err
+	}
+	for i := range all {
+		if all[i].ID == keep.ID {
+			continue
+		}
+		ids, err := collectMenuSubtreeIDs(ctx, db, all[i].ID)
+		if err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		if err := db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.Menu{}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CleanupDuplicateRootMenus 合并重复的一级目录（/kubernetes、/alert-notify、/project-management 等）。

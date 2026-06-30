@@ -14,8 +14,10 @@ type RuntimeServer struct {
 	listener   net.Listener
 }
 
-func Start(addr string, impl *LogPlatformServer, maxRecvBytes, maxSendBytes int) (*RuntimeServer, error) {
-	opts := []grpc.ServerOption{grpc.UnaryInterceptor(unaryLogInterceptor)}
+func Start(addr string, impl *LogPlatformServer, internalToken string, maxRecvBytes, maxSendBytes int) (*RuntimeServer, error) {
+	opts := []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(internalAuthUnaryInterceptor(internalToken), unaryLogInterceptor),
+	}
 	if maxRecvBytes > 0 {
 		opts = append(opts, grpc.MaxRecvMsgSize(maxRecvBytes))
 	}

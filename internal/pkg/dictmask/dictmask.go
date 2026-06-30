@@ -15,7 +15,7 @@ func SensitiveDictType(dictType string) bool {
 	// 显名单类
 	switch t {
 	case "alert_webhook_token", "alert_enrich_prometheus_token",
-		"minio_secret_key", "mail_password",
+		"minio_secret_key", "mail_password", "cicd_jenkins_api_token",
 		"k8s_kubeconfig_template", "k8s_direct_config":
 		return true
 	}

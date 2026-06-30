@@ -458,14 +458,6 @@ export async function exportProjectLogs(
   return resp.data;
 }
 
-export async function listProjectLogFiles(projectId: number, params: { server_id: number; dir: string }) {
-  return await getData(http.get<any, ApiResponse<{ list: string[] }>>(`/projects/${projectId}/log-files`, { params }));
-}
-
-export async function listProjectLogUnits(projectId: number, params: { server_id: number }) {
-  return await getData(http.get<any, ApiResponse<{ list: string[] }>>(`/projects/${projectId}/log-units`, { params }));
-}
-
 export interface AgentDiscoveryItem {
   kind: "file" | "dir" | "unit" | string;
   value: string;

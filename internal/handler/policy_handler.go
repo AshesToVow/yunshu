@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"yunshu/internal/config"
 	"yunshu/internal/pkg/response"
+	"yunshu/internal/plugin"
 	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -9,11 +11,12 @@ import (
 
 type PolicyHandler struct {
 	service *service.PolicyService
+	plugins *config.PluginsConfig
 }
 
 // NewPolicyHandler 创建相关逻辑。
-func NewPolicyHandler(service *service.PolicyService) *PolicyHandler {
-	return &PolicyHandler{service: service}
+func NewPolicyHandler(svc *service.PolicyService, plugins *config.PluginsConfig) *PolicyHandler {
+	return &PolicyHandler{service: svc, plugins: plugins}
 }
 
 // List godoc
@@ -33,7 +36,13 @@ func (h *PolicyHandler) List(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, data)
+	out := make([]service.PolicyItemResponse, 0, len(data))
+	for _, item := range data {
+		if plugin.IsAPIResourceAllowed(item.Resource, h.plugins) {
+			out = append(out, item)
+		}
+	}
+	response.Success(c, out)
 }
 
 // Grant godoc

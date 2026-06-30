@@ -278,14 +278,21 @@ func NewAlertService(db *gorm.DB, redisClient *redis.Client, sender mailer.Sende
 			}
 		}
 	}
-	svc.startPrometheusEnrichWorkers()
-	svc.startInhibitionPruner(context.Background())
-	evalCtx, cancel := context.WithCancel(context.Background())
-	svc.monitorEvalCancel = cancel
-	go svc.runMonitorRuleEvaluator(evalCtx)
-	go svc.runCloudExpiryEvaluator(evalCtx)
-	svc.runAlertWebhookIngestWorker(evalCtx)
 	return svc
+}
+
+// RunBackgroundWorkers 启动告警后台任务（由 alert 插件 StartWorkers 调用）。
+func (s *AlertService) RunBackgroundWorkers(ctx context.Context) {
+	if s == nil {
+		return
+	}
+	s.startPrometheusEnrichWorkers()
+	s.startInhibitionPruner(context.Background())
+	evalCtx, cancel := context.WithCancel(ctx)
+	s.monitorEvalCancel = cancel
+	go s.runMonitorRuleEvaluator(evalCtx)
+	go s.runCloudExpiryEvaluator(evalCtx)
+	s.runAlertWebhookIngestWorker(evalCtx)
 }
 
 func (s *AlertService) GetSubscriptionService() *AlertSubscriptionService {

@@ -87,6 +87,7 @@ export interface AlertDutyBlockItem {
 export interface CloudExpiryRuleItem {
   id: number;
   project_id: number;
+  project_name?: string;
   name: string;
   provider: string;
   region_scope: string;

@@ -41,6 +41,16 @@ OpenAPI 全量路由见 **`docs/apipost/permission-system.openapi.yaml`**（由 
 | `/agent-list` | `agent-list-page` | [menu-agent-list.md](./menu-agent-list.md) |
 | `/mysql-backup` | `mysql-backup-page` | [menu-mysql-backup.md](./menu-mysql-backup.md) |
 
+## CI/CD（`/cicd`，插件 `cicd` + `project`）
+
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/cicd/services` | `cicd-services-page` | [menu-cicd.md](./menu-cicd.md) |
+| `/cicd/todo` | `cicd-todo-page` | 同上 |
+| `/cicd/approval-flow` | `cicd-approval-flow-page` | 同上 |
+| `/cicd/build-records` | `cicd-build-records-page` | 同上 |
+| `/cicd/release-records` | `cicd-release-records-page` | 同上 |
+
 ## 系统管理（`/system`）
 
 | 路由 | Component | 文档 |

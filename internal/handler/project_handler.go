@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	pb "yunshu/internal/grpc/proto"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
@@ -18,14 +17,12 @@ import (
 )
 
 type ProjectHandler struct {
-	svc             *service.ProjectMgmtService
-	projectClient   pb.ProjectServerServiceClient
-	logSourceClient pb.LogSourceServiceClient
+	svc *service.ProjectMgmtService
 }
 
 // NewProjectHandler 创建相关逻辑。
-func NewProjectHandler(svc *service.ProjectMgmtService, projectClient pb.ProjectServerServiceClient, logSourceClient pb.LogSourceServiceClient) *ProjectHandler {
-	return &ProjectHandler{svc: svc, projectClient: projectClient, logSourceClient: logSourceClient}
+func NewProjectHandler(svc *service.ProjectMgmtService) *ProjectHandler {
+	return &ProjectHandler{svc: svc}
 }
 
 // List 查询列表对应的 HTTP 接口处理逻辑。
@@ -110,39 +107,15 @@ func (h *ProjectHandler) DeleteService(c *gin.Context) {
 // ListLogSources 查询列表对应的 HTTP 接口处理逻辑。
 func (h *ProjectHandler) ListLogSources(c *gin.Context) {
 	ServeQuery(c, func(ctx context.Context, q service.LogSourceListQuery) (gin.H, error) {
-		req := &pb.ListLogSourcesRequest{
-			ProjectId: uint64(q.ProjectID),
-			Page:      &pb.PageRequest{Page: int32(q.Page), PageSize: int32(q.PageSize)},
-		}
-		if q.ServiceID != nil {
-			req.HasServiceId = true
-			req.ServiceId = uint64(*q.ServiceID)
-		}
-		resp, err := h.logSourceClient.ListLogSources(ctx, req)
+		res, err := h.svc.ListLogSources(ctx, q)
 		if err != nil {
-			return nil, grpcToAppError(err)
-		}
-		out := make([]service.LogSourceItem, 0, len(resp.GetList()))
-		for _, it := range resp.GetList() {
-			out = append(out, service.LogSourceItem{
-				ID:            uint(it.GetId()),
-				ServiceID:     uint(it.GetServiceId()),
-				LogType:       it.GetLogType(),
-				Path:          it.GetPath(),
-				Encoding:      stringPtr(it.GetEncoding()),
-				Timezone:      stringPtr(it.GetTimezone()),
-				MultilineRule: stringPtr(it.GetMultilineRule()),
-				IncludeRegex:  stringPtr(it.GetIncludeRegex()),
-				ExcludeRegex:  stringPtr(it.GetExcludeRegex()),
-				Status:        int(it.GetStatus()),
-				CreatedAt:     it.GetCreatedAt(),
-			})
+			return nil, err
 		}
 		return gin.H{
-			"list":      out,
-			"total":     resp.GetPage().GetTotal(),
-			"page":      resp.GetPage().GetPage(),
-			"page_size": resp.GetPage().GetPageSize(),
+			"list":      res.List,
+			"total":     res.Total,
+			"page":      res.Page,
+			"page_size": res.PageSize,
 		}, nil
 	})
 }
@@ -150,47 +123,11 @@ func (h *ProjectHandler) ListLogSources(c *gin.Context) {
 // UpsertLogSource 处理对应的 HTTP 请求并返回统一响应。
 func (h *ProjectHandler) UpsertLogSource(c *gin.Context) {
 	ServeJSON(c, func(ctx context.Context, req service.LogSourceUpsertRequest) (service.LogSourceItem, error) {
-		r := &pb.UpsertLogSourceRequest{
-			ServiceId: uint64(req.ServiceID),
-			LogType:   req.LogType,
-			Path:      req.Path,
-			Status:    int32(req.Status),
-		}
-		if req.ID != nil {
-			r.Id = uint64(*req.ID)
-		}
-		if req.Encoding != nil {
-			r.Encoding = *req.Encoding
-		}
-		if req.Timezone != nil {
-			r.Timezone = *req.Timezone
-		}
-		if req.MultilineRule != nil {
-			r.MultilineRule = *req.MultilineRule
-		}
-		if req.IncludeRegex != nil {
-			r.IncludeRegex = *req.IncludeRegex
-		}
-		if req.ExcludeRegex != nil {
-			r.ExcludeRegex = *req.ExcludeRegex
-		}
-		it, err := h.logSourceClient.UpsertLogSource(ctx, r)
+		it, err := h.svc.UpsertLogSource(ctx, req)
 		if err != nil {
-			return service.LogSourceItem{}, grpcToAppError(err)
+			return service.LogSourceItem{}, err
 		}
-		return service.LogSourceItem{
-			ID:            uint(it.GetId()),
-			ServiceID:     uint(it.GetServiceId()),
-			LogType:       it.GetLogType(),
-			Path:          it.GetPath(),
-			Encoding:      stringPtr(it.GetEncoding()),
-			Timezone:      stringPtr(it.GetTimezone()),
-			MultilineRule: stringPtr(it.GetMultilineRule()),
-			IncludeRegex:  stringPtr(it.GetIncludeRegex()),
-			ExcludeRegex:  stringPtr(it.GetExcludeRegex()),
-			Status:        int(it.GetStatus()),
-			CreatedAt:     it.GetCreatedAt(),
-		}, nil
+		return *it, nil
 	})
 }
 
@@ -201,8 +138,8 @@ func (h *ProjectHandler) DeleteLogSource(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if _, err := h.logSourceClient.DeleteLogSource(c.Request.Context(), &pb.DeleteLogSourceRequest{Id: uint64(id)}); err != nil {
-		response.Error(c, grpcToAppError(err))
+	if err := h.svc.DeleteLogSource(c.Request.Context(), id); err != nil {
+		response.Error(c, err)
 		return
 	}
 	response.Success(c, gin.H{"message": "deleted"})
@@ -323,40 +260,6 @@ func (h *ProjectHandler) ExportLogs(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", data)
-}
-
-// ListLogFiles 查询列表对应的 HTTP 接口处理逻辑。
-func (h *ProjectHandler) ListLogFiles(c *gin.Context) {
-	projectID, err := parseUintParam(c, "id")
-	if err != nil {
-		response.Error(c, err)
-		return
-	}
-	ServeQuery(c, func(ctx context.Context, q service.RemoteLogFileQuery) (gin.H, error) {
-		q.ProjectID = projectID
-		files, err := h.svc.ListRemoteLogFiles(ctx, q)
-		if err != nil {
-			return nil, err
-		}
-		return gin.H{"list": files}, nil
-	})
-}
-
-// ListLogUnits 查询列表对应的 HTTP 接口处理逻辑。
-func (h *ProjectHandler) ListLogUnits(c *gin.Context) {
-	projectID, err := parseUintParam(c, "id")
-	if err != nil {
-		response.Error(c, err)
-		return
-	}
-	ServeQuery(c, func(ctx context.Context, q service.RemoteLogUnitQuery) (gin.H, error) {
-		q.ProjectID = projectID
-		list, err := h.svc.ListRemoteLogUnits(ctx, q)
-		if err != nil {
-			return nil, err
-		}
-		return gin.H{"list": list}, nil
-	})
 }
 
 // ListProjectMembers 项目成员列表。

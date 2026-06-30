@@ -23,6 +23,7 @@ type Config struct {
 	Security        SecurityConfig        `mapstructure:"security"`
 	Agent           AgentConfig           `mapstructure:"agent"`
 	Plugins         PluginsConfig         `mapstructure:"plugins"`
+	Cicd            CicdConfig            `mapstructure:"cicd"`
 }
 
 type GRPCConfig struct {
@@ -30,6 +31,8 @@ type GRPCConfig struct {
 	TargetAddr      string `mapstructure:"target_addr"`
 	MaxRecvMsgBytes int    `mapstructure:"max_recv_msg_bytes"`
 	MaxSendMsgBytes int    `mapstructure:"max_send_msg_bytes"`
+	// InternalToken 供本机 HTTP→gRPC 调用 Project/LogSource 服务；AgentRuntime 仍用 agent token。
+	InternalToken string `mapstructure:"internal_token"`
 	// CallTimeoutSeconds 单次 unary RPC 默认超时（客户端）。
 	CallTimeoutSeconds int `mapstructure:"call_timeout_seconds"`
 	// ShutdownTimeoutSeconds 优雅关闭 gRPC Server 的最长等待。
@@ -145,6 +148,9 @@ type AlertConfig struct {
 	// AggregateTTLSeconds: group_key 状态在 Redis 中的过期时间（秒）。
 	AggregateTTLSeconds int `mapstructure:"aggregate_ttl_seconds"`
 
+	// WebhookSkipGroupTiming: 为 true 时，外部 Alertmanager Webhook（入口 A）跳过 Yunshu 第二层
+	// group_wait/group_interval/repeat，信任 AM 原生聚合；平台监控规则（入口 B）不受影响。
+	WebhookSkipGroupTiming bool `mapstructure:"webhook_skip_group_timing"`
 	// WebhookAsyncDisabled: 为 true 时 Alertmanager Webhook 同步处理（不入队）；无 Redis 时恒为同步。
 	WebhookAsyncDisabled bool `mapstructure:"webhook_async_disabled"`
 	// WebhookQueueMaxLen: 异步 webhook 队列最大长度（Redis List）。
@@ -220,6 +226,10 @@ func Load(path string) (*Config, error) {
 	if cfg.Alert.AggregateTTLSeconds <= 0 {
 		cfg.Alert.AggregateTTLSeconds = 86400
 	}
+	// 未显式配置时默认 true：外部 AM 已做 group_wait/interval/repeat，避免 Yunshu 二次节流。
+	if !v.IsSet("alert.webhook_skip_group_timing") {
+		cfg.Alert.WebhookSkipGroupTiming = true
+	}
 	if cfg.Alert.WebhookQueueMaxLen <= 0 {
 		cfg.Alert.WebhookQueueMaxLen = 10000
 	}
@@ -251,6 +261,9 @@ func Load(path string) (*Config, error) {
 	if strings.TrimSpace(cfg.GRPC.TargetAddr) == "" {
 		cfg.GRPC.TargetAddr = cfg.GRPC.ListenAddr
 	}
+	if strings.TrimSpace(cfg.GRPC.InternalToken) == "" && strings.TrimSpace(cfg.Auth.JWTSecret) != "" {
+		cfg.GRPC.InternalToken = cfg.Auth.JWTSecret
+	}
 	if cfg.GRPC.MaxRecvMsgBytes <= 0 {
 		cfg.GRPC.MaxRecvMsgBytes = 8 * 1024 * 1024
 	}
@@ -258,6 +271,31 @@ func Load(path string) (*Config, error) {
 		cfg.GRPC.MaxSendMsgBytes = 8 * 1024 * 1024
 	}
 	cfg.K8sEventForward.ApplyDefaults()
+	defCicd := DefaultCicdConfig()
+	if !cfg.Cicd.Enabled && !v.IsSet("cicd.enabled") {
+		cfg.Cicd.Enabled = defCicd.Enabled
+	}
+	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Repo) == "" {
+		cfg.Cicd.Jenkinsfile.Repo = defCicd.Jenkinsfile.Repo
+	}
+	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Branch) == "" {
+		cfg.Cicd.Jenkinsfile.Branch = defCicd.Jenkinsfile.Branch
+	}
+	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Front) == "" {
+		cfg.Cicd.Jenkinsfile.Front = defCicd.Jenkinsfile.Front
+	}
+	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Backend) == "" {
+		cfg.Cicd.Jenkinsfile.Backend = defCicd.Jenkinsfile.Backend
+	}
+	if cfg.Cicd.RunSyncIntervalSeconds <= 0 {
+		cfg.Cicd.RunSyncIntervalSeconds = defCicd.RunSyncIntervalSeconds
+	}
+	if cfg.Cicd.DefaultWaitMins <= 0 {
+		cfg.Cicd.DefaultWaitMins = defCicd.DefaultWaitMins
+	}
+	if cfg.Cicd.DefaultArtifactRetain <= 0 {
+		cfg.Cicd.DefaultArtifactRetain = defCicd.DefaultArtifactRetain
+	}
 	return &cfg, nil
 }
 
@@ -272,6 +310,7 @@ func bindEnv(v *viper.Viper) error {
 		"http.idle_timeout_seconds":                nil,
 		"grpc.listen_addr":                         nil,
 		"grpc.target_addr":                         nil,
+		"grpc.internal_token":                      nil,
 		"grpc.max_recv_msg_bytes":                  nil,
 		"grpc.max_send_msg_bytes":                  nil,
 		"log.level":                                nil,

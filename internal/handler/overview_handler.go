@@ -26,9 +26,19 @@ func (h *OverviewHandler) Get(c *gin.Context) {
 	response.Success(c, data)
 }
 
-// Trends 处理对应的 HTTP 请求并返回统一响应。
-func (h *OverviewHandler) Trends(c *gin.Context) {
-	data, err := h.svc.Trends(c.Request.Context(), 7)
+// ProjectLaunches 近一个月项目上线数量统计。
+func (h *OverviewHandler) ProjectLaunches(c *gin.Context) {
+	data, err := h.svc.ProjectLaunches(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, data)
+}
+
+// ReleaseByPerson 近一个月工单按人统计。
+func (h *OverviewHandler) ReleaseByPerson(c *gin.Context) {
+	data, err := h.svc.ReleaseByPerson(c.Request.Context())
 	if err != nil {
 		response.Error(c, err)
 		return

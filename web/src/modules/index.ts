@@ -1,4 +1,6 @@
 import type { RouteObject } from "react-router-dom";
+import { alertRoutes, ALERT_PLUGIN } from "./alert/routes";
+import { cicdRoutes, CICD_PLUGIN } from "./cicd/routes";
 import { cmdbRoutes, CMDB_PLUGIN } from "./cmdb/routes";
 import { coreRoutes, CORE_PLUGIN } from "./core/routes";
 import { k8sRoutes, K8S_PLUGIN } from "./k8s/routes";
@@ -9,6 +11,8 @@ const MODULE_ROUTES: Record<string, RouteObject[]> = {
   [CORE_PLUGIN]: coreRoutes,
   [K8S_PLUGIN]: k8sRoutes,
   [CMDB_PLUGIN]: cmdbRoutes,
+  [ALERT_PLUGIN]: alertRoutes,
+  [CICD_PLUGIN]: cicdRoutes,
 };
 
 export function collectModuleRoutes(isPluginEnabled: (name: string) => boolean): RouteObject[] {

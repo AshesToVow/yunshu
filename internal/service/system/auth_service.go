@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 	"yunshu/internal/pkg/constants"
@@ -248,6 +249,16 @@ func (s *AuthService) Logout(ctx context.Context, tokenID string) error {
 	if s.redis == nil {
 		return bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
 	}
+	tokenID = strings.TrimSpace(tokenID)
+	if tokenID == "" {
+		return nil
+	}
+	userIDStr, err := s.redis.Get(ctx, store.AccessTokenKey(tokenID)).Result()
+	if err == nil {
+		if uid, parseErr := parseUintUserID(userIDStr); parseErr == nil {
+			_ = store.UnregisterUserAccessToken(ctx, s.redis, uid, tokenID)
+		}
+	}
 	return s.redis.Del(ctx, store.AccessTokenKey(tokenID)).Err()
 }
 
@@ -329,11 +340,8 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uint, req Chang
 
 	// 使该用户的所有 token 失效（强制重新登录）
 	if s.redis != nil {
-		// 删除该用户的所有 token key
-		pattern := store.UserAccessTokenPattern(userID)
-		keys, _ := s.redis.Keys(ctx, pattern).Result()
-		if len(keys) > 0 {
-			_ = s.redis.Del(ctx, keys...).Err()
+		if err := store.InvalidateAllUserAccessTokens(ctx, s.redis, userID); err != nil {
+			return bizerrors.Pass(ctx, "auth", "ChangePassword", err)
 		}
 	}
 
@@ -364,6 +372,9 @@ func (s *AuthService) issueLoginResponse(ctx context.Context, user *model.User) 
 		return nil, bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
 	}
 	if err = s.redis.Set(ctx, store.AccessTokenKey(tokenID), user.ID, time.Until(expiresAt)).Err(); err != nil {
+		return nil, bizerrors.Pass(ctx, "auth", "issueLoginResponse", err)
+	}
+	if err = store.RegisterUserAccessToken(ctx, s.redis, user.ID, tokenID, time.Until(expiresAt)); err != nil {
 		return nil, bizerrors.Pass(ctx, "auth", "issueLoginResponse", err)
 	}
 
@@ -430,8 +441,8 @@ func (s *AuthService) SendPasswordLoginCode(ctx context.Context, username string
 		80,  // height
 		240, // width
 		4,   // length
-		0.7, // maxSkew
-		80,  // dotCount
+		0.35, // maxSkew — lower skew for readability
+		24,  // dotCount — fewer noise dots
 	)
 	memStore := base64Captcha.DefaultMemStore
 	captcha := base64Captcha.NewCaptcha(driver, memStore)
@@ -780,3 +791,11 @@ func generateNumericCode(length int) (string, error) {
 // 	}
 // 	return x
 // }
+
+func parseUintUserID(raw string) (uint, error) {
+	n, err := strconv.ParseUint(strings.TrimSpace(raw), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint(n), nil
+}

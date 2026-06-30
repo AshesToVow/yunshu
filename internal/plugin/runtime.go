@@ -19,6 +19,8 @@ type Runtime struct {
 	// 下列字段由 router 填充，供插件后台任务使用。
 	K8sRuntime  any // *service.K8sRuntimeService
 	MysqlBackup any // *service.MysqlBackupService
+	Cicd        any // *cicd.Service
+	Alert       any // *service.AlertService
 }
 
 // IsEnabled 判断某插件是否在当前配置下启用。

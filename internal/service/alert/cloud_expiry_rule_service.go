@@ -1,11 +1,14 @@
-package project
+package alert
 
 import (
 	"context"
 	"strings"
-	"yunshu/internal/pkg/constants"
+	"time"
+
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/cronutil"
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -41,12 +44,19 @@ func NewCloudExpiryRuleService(repo interfaces.CloudExpiryRuleRepository) *Cloud
 	return &CloudExpiryRuleService{repo: repo}
 }
 
+// ValidateCloudExpiryCronSpec 校验云到期规则的 Cron 表达式语法；空串合法。
+func ValidateCloudExpiryCronSpec(spec string) error {
+	return cronutil.ValidateSpec(spec, "eval_cron_spec")
+}
+
+// ShouldEvalCloudExpiryByCron 判断距上次评估是否已到 cron 下次触发时刻。
+func ShouldEvalCloudExpiryByCron(spec string, last time.Time, hasLast bool, now time.Time) bool {
+	return cronutil.ShouldRunAfterLast(spec, last, hasLast, now)
+}
+
 func (s *CloudExpiryRuleService) List(ctx context.Context, q CloudExpiryRuleListQuery) ([]model.CloudExpiryRule, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	kw := strings.TrimSpace(q.Keyword)
-	if q.ProjectID != nil && *q.ProjectID > 0 {
-		kw = kw // project filter kept in service layer via future repo extension
-	}
 	list, total, err := s.repo.List(ctx, kw, (page-1)*pageSize, pageSize)
 	if err != nil {
 		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.cloud-expiry", "List", err)

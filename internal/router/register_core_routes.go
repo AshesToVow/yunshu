@@ -66,6 +66,7 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	permissions := api.Group("/permissions")
 	permissions.Use(d.authMiddleware, d.authorize, d.opAudit)
 	permissions.GET("", d.permissionHandler.List)
+	permissions.POST("/k8s-scope/batch", d.permissionHandler.BatchSetK8sScope)
 	permissions.POST("", d.permissionHandler.Create)
 	permissions.GET("/:id", d.permissionHandler.Detail)
 	permissions.PUT("/:id", d.permissionHandler.Update)
@@ -83,7 +84,7 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	registrations.POST("/:id/review", d.regHandler.Review)
 
 	admin := api.Group("/security")
-	admin.Use(d.authMiddleware)
+	admin.Use(d.authMiddleware, d.authorize, d.opAudit)
 	admin.GET("/banned-ips", d.adminHandler.ListBannedIPs)
 	admin.POST("/banned-ips/unban", d.adminHandler.UnbanIP)
 

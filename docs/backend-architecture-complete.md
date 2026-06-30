@@ -350,8 +350,11 @@ func ServePatch[Req any, Resp any](c *gin.Context, fn func(context.Context, uint
 
 **ProjectMgmtService** ([project/project_mgmt_core.go](internal/service/project/project_mgmt_core.go)):
 - 项目 CRUD + 成员管理 (RBAC 隔离)
-- 服务器/服务/日志源 CRUD
-- 云账号管理 (阿里云/腾讯云/京东云 SDK，见 `project/cloud_provider_*.go`)
+- 服务/日志源 CRUD（日志 SSE/导出经 `logplatform.AgentLogBroker`）
+
+**CMDBService** ([cmdb/servers.go](internal/service/cmdb/servers.go)):
+- 服务器/分组 CRUD、云账号同步（阿里云/腾讯云/京东云 SDK，见 `cmdb/cloud_provider_*.go`）
+- SSH/Web 终端（`sshserver` 解密凭据）
 
 **LogAgentService** ([logplatform/log_agent_service.go](internal/service/logplatform/log_agent_service.go)):
 - Agent 注册/认证 (register_secret 校验)
@@ -725,7 +728,7 @@ flowchart TD
 | `alert_subscriptions` | 订阅路由树 | parent_id/matchers(JSON)/receiver_group_id/is_default |
 | `alert_receiver_groups` | 接收组 | name/member_user_ids(JSON) |
 | `alert_inhibition_rules` | 抑制规则 | source_matchers/target_matchers(JSON) |
-| `cloud_expiry_rules` | 云到期规则 | cloud_account_id/cron_expr/threshold_days |
+| `cloud_expiry_rules` | 云到期规则 | project_id、eval_cron_spec、schedule_enabled、advance_days |
 | `alert_firing_deliveries` | 发送记录 (内存/短留存) | group_key/channel_id/last_sent_at |
 
 #### 运维工具域
@@ -765,7 +768,7 @@ erDiagram
 
 ### 6.1 路由分组结构
 
-> **2026-06 插件化**：HTTP 路由不再由单一 `register_platform_routes.go` 注册，而由 `internal/router/plugin_bind.go` 按 `plugins.enabled` 调用 `RegisterCoreRoutes`、`RegisterK8sRoutes`、`RegisterAlertRoutes`、`RegisterProjectRoutes`、`RegisterCMDBRoutes`、`RegisterBackupRoutes`。下文树形结构为**逻辑分组**摘要。
+> **2026-06 插件化**：HTTP 路由由 `internal/router/plugin_bind.go` 按 `plugins.enabled` 调用 `RegisterCoreRoutes`、`RegisterK8sRoutes`、`RegisterAlertRoutes`、`RegisterProjectRoutes`、`RegisterCMDBRoutes`、`RegisterBackupRoutes`、`RegisterCicdRoutes`。下文树形结构为**逻辑分组**摘要。
 
 所有 API 统一前缀 `/api/v1`，按业务域分为以下模块：
 
@@ -885,8 +888,7 @@ erDiagram
 │   ├── discovery/                      # 发现列表
 │   ├── logs/stream                     # SSE 日志流
 │   ├── logs/export                     # 日志导出
-│   ├── log-files                       # 日志文件列表
-│   ├── log-units                       # 日志单元列表
+│   ├── agents/discovery                # Agent 自动发现（日志路径/单元）
 │   ├── mysql-backup/                   # MySQL 备份
 │   │   ├── mysqldump-options           # 选项列表
 │   │   ├── instances                   # 备份实例 (CRUD + Ping + 远程检查 + 执行)
@@ -902,6 +904,23 @@ erDiagram
     ├── GET    ""                       # 总览数据
     └── GET    trends                   # 趋势统计
 ```
+
+#### CI/CD 路由 ([register_cicd_routes.go](internal/router/register_cicd_routes.go))
+
+需启用 **`cicd` + `project`** 插件；前缀 `/api/v1/projects/:id/cicd`：
+
+```
+├── services/                           # 应用服务 CRUD
+├── services/:serviceId/ci-config       # CI 配置
+├── services/:serviceId/deploy-configs  # 发布配置
+├── services/:serviceId/builds          # 触发 Jenkins 打包
+├── services/:serviceId/releases        # 触发发布工单
+├── build-runs/                         # CI 记录与日志
+├── release-runs/                       # CD 工单、审批、执行、批量操作
+└── approval-flow                       # 项目级审批阶段
+```
+
+详见 [cicd.md](cicd.md)。
 
 ### 6.2 响应格式规范
 
@@ -981,36 +1000,33 @@ sequenceDiagram
 
 ### 7.2 告警处理流水线
 
-**完整告警生命周期**:
+**完整告警生命周期**（双入口，统一投递链 `RunIngressPipeline`）：
+
+```mermaid
+flowchart TB
+  subgraph A [入口 A]
+    AM[Alertmanager Webhook] --> SKIP[SkipGroupTiming 默认 true]
+  end
+  subgraph B [入口 B]
+    MR[平台 PromQL + Redis for] --> TM[group_wait/interval/repeat]
+  end
+  SKIP --> ING[Ingest: 静默 / 抑制 / 订阅 / 通道]
+  TM --> ING
+  ING --> DB[(alert_events)]
+```
+
+文本步骤：
 
 ```
-1. Alertmanager Webhook 触发
-   ↓
-2. Ingest Pipeline 解析标准化
-   ↓
-3. Fingerprint 计算 (Labels Hash)
-   ↓
-4. Redis 去重检查 (TTL 24h)
-   ↓
-5. Aggregate State Machine:
-   - Pending → Firing (Group Wait 15s)
-   - Firing → Firing (Labels 变化, Group Interval 60s)
-   - Firing → Firing (无变化, Repeat Interval 300s)
-   - Firing → Resolved (Alertmanager resolve)
-   ↓
-6. Delivery Core:
-   - 查询匹配的订阅路由树节点
-   - 解析接收组 (值班人 + 负责人)
-   - 渲染渠道模板 (HTML/Markdown/DingTalk JSON)
-   - 异步投递 (Worker Pool)
-   ↓
-7. Channel Delivery:
-   - 钉钉: Webhook + 签名
-   - 邮件: SMTP + HTML 模板
-   - Webhook: 自定义回调
-   ↓
-8. Record History (DB)
+[入口 A] Alertmanager Webhook → applyIngressGroupTimingPolicy(SkipGroupTiming)
+[入口 B] tickMonitorRules → Redis pending/for → platform-monitor → decideFiringGroupTiming
+         ↓
+Ingest Pipeline：合并 labels → 静默 → 抑制 → 订阅树 → sendToChannel
+         ↓
+alert_events 落库；firing 2xx 写 firing_delivered；resolved 须 prior firing
 ```
+
+时序图详见 [alert-routing-and-delivery-guide.md §0](alert-routing-and-delivery-guide.md)。
 
 #### 告警域数据访问策略（Repository）
 
@@ -1021,7 +1037,7 @@ sequenceDiagram
 | 告警事件 | `interfaces.AlertEventRepository` | `persistAlertEvent` 统一写历史 |
 | 通知渠道 | `interfaces.AlertChannelRepository` | 渠道 CRUD 与投递加载 |
 | 静默 / 抑制 / 订阅 / 值班 / 处理人 / 接收组 / 监控规则 / 数据源 | 对应 `interfaces.*Repository` | 各 `alert/*_service.go` |
-| 云到期规则 | `interfaces.CloudExpiryRuleRepository` | 含定时评估 |
+| 云到期规则 | `interfaces.CloudExpiryRuleRepository` + `alert.CloudExpiryRuleService` | Cron 定时评估（`cronutil`）；Worker 在 `plugins/alert` |
 | Redis 聚合状态 | `alert.NewRedisAlertStateService` | 去重/聚合 TTL |
 
 **原则**：新告警相关表访问必须新增或扩展 `interfaces` + `repository`；禁止在 `alert` 包内新增裸 `gorm.DB` 查询。
@@ -1220,6 +1236,9 @@ func Paginate[T any](db *gorm.DB, query PaginateQuery, dest *[]T) (*PaginateResu
 
 **运行期配置热更新** ([internal/dictconfig/](internal/dictconfig/)):
 
+- 解析工具：`ParseBoolLoose`、`ParseIntLoose`（mail/bootstrap 等共用）
+- 域配置：`ResolveMailConfig`、`ResolveCicdConfig`、MySQL 备份 MinIO 等
+
 ```go
 // 字典类型定义
 var DefaultMailDictTypes = []string{
@@ -1309,7 +1328,7 @@ volumes:
 | 扩展方向 | 实现方式 | 位置 |
 |----------|----------|------|
 | 新增告警渠道 | 实现 `AlertChannel` 接口 | [alert/alert_channel_registry.go](internal/service/alert/alert_channel_registry.go) |
-| 新增云厂商 | 实现 `CloudProvider` 接口 | [project/cloud_provider_alibaba.go](internal/service/project/cloud_provider_alibaba.go) 等 |
+| 新增云厂商 | 实现 `CloudProvider` 接口 | [cmdb/cloud_provider_alibaba.go](internal/service/cmdb/cloud_provider_alibaba.go) 等 |
 | 新增 K8s 资源 | 注册 CRD/CR Handler | [k8s/k8s_crd_service.go](internal/service/k8s/k8s_crd_service.go) |
 | 自定义中间件 | 注入到 Gin Engine | [bootstrap/app.go](internal/bootstrap/app.go) |
 | 字典配置扩展 | 新增 DictType | [system/dict_entry_service.go](internal/service/system/dict_entry_service.go) |

@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"context"
@@ -43,10 +43,19 @@ func (h *AdminHandler) ListBannedIPs(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	keys, err := h.rdb.Keys(ctx, "ban:ip:*").Result()
-	if err != nil {
-		response.Error(c, bizerrors.Pass(ctx, "admin", "ListBannedIPs", err))
-		return
+	var keys []string
+	var cursor uint64
+	for {
+		batch, next, err := h.rdb.Scan(ctx, cursor, "ban:ip:*", 100).Result()
+		if err != nil {
+			response.Error(c, bizerrors.Pass(ctx, "admin", "ListBannedIPs", err))
+			return
+		}
+		keys = append(keys, batch...)
+		cursor = next
+		if cursor == 0 {
+			break
+		}
 	}
 	result := make([]gin.H, 0, len(keys))
 	for _, k := range keys {

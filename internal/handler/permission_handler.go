@@ -120,3 +120,21 @@ func (h *PermissionHandler) Detail(c *gin.Context) {
 func (h *PermissionHandler) List(c *gin.Context) {
 	ServeQuery(c, h.service.List)
 }
+
+// BatchSetK8sScope godoc
+// @Summary Batch set K8s scope enabled flag
+// @Description Batch enable or disable k8s_scope_enabled for cluster-resource API permissions.
+// @Tags Permission
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body service.PermissionBatchK8sScopeRequest true "Batch K8s scope request"
+// @Success 200 {object} response.Body{data=service.PermissionBatchK8sScopeResponse} "success"
+// @Failure 400 {object} response.Body "bad request"
+// @Failure 401 {object} response.Body "未登录或登录已失效"
+// @Failure 403 {object} response.Body "无访问权限"
+// @Failure 500 {object} response.Body "服务器内部错误"
+// @Router /api/v1/permissions/k8s-scope/batch [post]
+func (h *PermissionHandler) BatchSetK8sScope(c *gin.Context) {
+	ServeJSON(c, h.service.BatchSetK8sScope)
+}

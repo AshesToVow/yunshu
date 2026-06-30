@@ -268,5 +268,6 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	overview := api.Group("/overview")
 	overview.Use(d.authMiddleware, d.authorize, d.opAudit)
 	overview.GET("", d.overviewHandler.Get)
-	overview.GET("/trends", d.overviewHandler.Trends)
+	overview.GET("/project-launches", d.overviewHandler.ProjectLaunches)
+	overview.GET("/release-by-person", d.overviewHandler.ReleaseByPerson)
 }

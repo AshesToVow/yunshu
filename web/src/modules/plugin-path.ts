@@ -1,5 +1,5 @@
 /** 与后端 plugins.enabled 默认全集一致 */
-export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup"] as const;
+export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd"] as const;
 
 export type PluginName = (typeof DEFAULT_ENABLED_PLUGINS)[number];
 
@@ -35,6 +35,7 @@ const PATH_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
       "/component-status",
       "/cluster-api-resources",
       "/horizontal-pod-autoscalers",
+      "/k8s-resource-topology",
       "/deployments",
       "/statefulsets",
       "/daemonsets",
@@ -82,6 +83,10 @@ const PATH_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
     plugin: "backup",
     prefixes: ["/mysql-backup"],
   },
+  {
+    plugin: "cicd",
+    prefixes: ["/cicd"],
+  },
 ];
 
 function normalizePath(path: string): string {
@@ -109,6 +114,10 @@ export function isPathAllowedByPlugins(path: string, isPluginEnabled: (name: str
   if (cmdbPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
     return isCmdbPageAllowed(isPluginEnabled);
   }
+  const cicdPaths = ["/cicd"];
+  if (cicdPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
+    return isCicdAllowed(isPluginEnabled);
+  }
   const plugin = resolvePathPlugin(path);
   if (!plugin) return true;
   return isPluginEnabled(plugin);
@@ -117,4 +126,84 @@ export function isPathAllowedByPlugins(path: string, isPluginEnabled: (name: str
 /** CMDB 页面通常依赖 project 上下文；两者应同时启用 */
 export function isCmdbPageAllowed(isPluginEnabled: (name: string) => boolean): boolean {
   return isPluginEnabled("cmdb") && isPluginEnabled("project");
+}
+
+const API_RESOURCE_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
+  {
+    plugin: "core",
+    prefixes: [
+      "/api/v1/users",
+      "/api/v1/departments",
+      "/api/v1/roles",
+      "/api/v1/permissions",
+      "/api/v1/policies",
+      "/api/v1/registrations",
+      "/api/v1/menus",
+      "/api/v1/login-logs",
+      "/api/v1/operation-logs",
+      "/api/v1/security",
+      "/api/v1/dict-entries",
+      "/api/v1/user-groups",
+      "/api/v1/plugins",
+      "/api/v1/overview",
+    ],
+  },
+  {
+    plugin: "k8s",
+    prefixes: [
+      "/api/v1/clusters",
+      "/api/v1/pods",
+      "/api/v1/namespaces",
+      "/api/v1/nodes",
+      "/api/v1/k8s-policies",
+      "/api/v1/k8s-namespace-deny-rules",
+      "/api/v1/k8s-namespace-allow-rules",
+      "/api/v1/k8s/",
+    ],
+  },
+  { plugin: "alert", prefixes: ["/api/v1/alerts"] },
+  { plugin: "project", prefixes: ["/api/v1/projects"] },
+  { plugin: "cmdb", prefixes: ["/api/v1/servers", "/api/v1/cloud-accounts", "/api/v1/server-groups"] },
+  { plugin: "backup", prefixes: ["/api/v1/mysql-backup"] },
+];
+
+export function resolveAPIResourcePlugin(resource: string): PluginName | null {
+  const r = resource.trim().toLowerCase();
+  if (!r) return null;
+  const cicdOverview = ["/api/v1/overview/project-launches", "/api/v1/overview/release-by-person"];
+  if (cicdOverview.some((p) => r === p || r.startsWith(`${p}/`))) {
+    return "cicd";
+  }
+  if (r.includes("/projects/") && r.includes("/cicd")) {
+    return "cicd";
+  }
+  for (const rule of API_RESOURCE_PLUGIN_RULES) {
+    if (rule.prefixes.some((p) => r === p || r.startsWith(`${p}/`) || r.startsWith(p))) {
+      return rule.plugin;
+    }
+  }
+  return null;
+}
+
+/** CI/CD 依赖 project 上下文；两者应同时启用 */
+export function isCicdAllowed(isPluginEnabled: (name: string) => boolean): boolean {
+  return isPluginEnabled("cicd") && isPluginEnabled("project");
+}
+
+export function isAPIResourceAllowedByPlugins(
+  resource: string,
+  isPluginEnabled: (name: string) => boolean,
+): boolean {
+  const plugin = resolveAPIResourcePlugin(resource);
+  if (!plugin) return true;
+  if (plugin === "cmdb") return isCmdbPageAllowed(isPluginEnabled);
+  if (plugin === "cicd") return isCicdAllowed(isPluginEnabled);
+  return isPluginEnabled(plugin);
+}
+
+export function filterPermissionsByPlugins<T extends { resource: string }>(
+  items: T[],
+  isPluginEnabled: (name: string) => boolean,
+): T[] {
+  return items.filter((it) => isAPIResourceAllowedByPlugins(it.resource, isPluginEnabled));
 }
