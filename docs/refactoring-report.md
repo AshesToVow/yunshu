@@ -1,6 +1,6 @@
 # Yunshu 后端架构重构实施报告
 
-**最后更新**: 2026-06-11  
+**最后更新**: 2026-06-30  
 **状态**: ✅ 主干已落地（`go build ./...` / `go test ./internal/... -short` 通过）  
 **代码地图**: [CODEBASE-MAP.md](CODEBASE-MAP.md)
 
@@ -15,14 +15,17 @@
 | 3 | Wire 基础设施 | ✅ | `providers.InitializeInfra/Core` |
 | 4 | 路由 Wire | 🟡 | `InitializeRouteDeps`：Repo ✅；Service 仍 `buildRouteServices` 手工装配 |
 | 5 | Repository | ✅ | 告警 / 系统 / 项目 / K8s 策略 / 总览 / 事件转发等主路径 |
-| 6 | Service 目录拆分 | ✅ | `alert/` `k8s/` `project/` `system/` `logplatform/` `mysqlbackup/` `overview/` + `exports.go` 门面 |
-| 7 | Alert 域 | ✅ | 主链路在 `alert` 包；Redis 状态 `NewRedisAlertStateService`；无根目录重复实现 |
+| 6 | Service 目录拆分 | ✅ | `alert/` `k8s/` `project/` `system/` `logplatform/` `mysqlbackup/` `overview/` `cicd/` `cmdb/` + `exports.go` |
+| 7 | Alert 域 | ✅ | 主链路在 `alert` 包；Redis 状态 `NewRedisAlertStateService` |
 | 8 | K8s Event 转发 | ✅ | `k8s/eventforward/`；仓储 `K8sEventForwardRepository` |
-| 9 | 死代码清理 | ✅ | 删除根目录 `alert_service_core.go` 等迁移残留 |
-| 10 | 业务插件化 | ✅ | `internal/plugin` + `plugins.enabled`；`core/k8s/alert/project/cmdb/backup` |
-| 11 | CMDB 拆分 | ✅ | 服务器/云账号/终端 → `service/cmdb` + `register_cmdb_routes.go` |
-| 12 | 菜单 catalog | ✅ | `internal/menu/catalog.go` + `Sync`；`Tree()` 不再热路径维护 |
-| 13 | seed 优化 | ✅ | 事务、Permission 批量 upsert、Casbin `AddPolicies`、admin 密码不重复重置 |
+| 9 | 死代码清理 | ✅ | 删除根目录迁移残留；移除 `log-files` / `log-units` stub API |
+| 10 | 业务插件化 | ✅ | `core/k8s/alert/project/cmdb/backup/cicd` |
+| 11 | CMDB 拆分 | ✅ | 服务器/云账号/终端/云 SDK → `service/cmdb` |
+| 12 | 菜单 catalog | ✅ | `internal/menu/catalog.go` + `Sync` |
+| 13 | seed 优化 | ✅ | 事务、Permission 批量 upsert、Casbin `AddPolicies` |
+| 14 | P1 共享包 | ✅ | `cronutil`、`sshserver`；LogSource CRUD 去 gRPC 回环 |
+| 15 | P2 域整理 | ✅ | `CloudExpiryRuleService` → `alert/`；告警 Worker → `plugins/alert/workers.go`；`dictconfig.Parse*` 去重 |
+| 16 | P3 清理 | ✅ | 日志 stub 路由删除；CICD `notify_email` 改 `UserRepository` |
 
 ---
 
@@ -31,8 +34,9 @@
 ```text
 internal/service/
 ├── exports.go          # handler 用 service.Xxx 别名
-├── alert/
-├── cmdb/               # 服务器资产（从 project 拆出）
+├── alert/              # 含 CloudExpiryRuleService、云到期评估 Worker
+├── cmdb/               # 服务器资产 + 云 Provider SDK
+├── cicd/               # Jenkins CI/CD
 ├── k8s/eventforward/
 ├── project/
 ├── system/
@@ -40,9 +44,14 @@ internal/service/
 ├── mysqlbackup/
 └── overview/
 
+internal/pkg/
+├── cronutil/           # Cron 校验与调度 Worker
+├── sshserver/          # SSH 凭据解密与连接
+└── ...
+
 internal/menu/          # 内置菜单 catalog + seed 同步
-internal/plugin/        # 插件注册表
-internal/plugins/       # 各业务插件 init 注册
+internal/plugin/        # 插件注册表 + Runtime（AlertSvc/CicdSvc 等）
+internal/plugins/       # 各业务插件 init 注册 + StartWorkers
 ```
 
 详见 [backend-architecture-complete.md §3.3](backend-architecture-complete.md) 与 [CODEBASE-MAP.md](CODEBASE-MAP.md)。
@@ -57,7 +66,7 @@ internal/plugins/       # 各业务插件 init 注册
 | Handler 直引子包 | 弱化 `exports.go`，新代码优先 `import alert` 等 |
 | `mysqlbackup.db` | MinIO / dictconfig 仍直用 `*gorm.DB` |
 | 插件菜单与 Casbin 联动 | 按 `plugins.enabled` 过滤侧栏；角色菜单授权待完善 |
-| 前端菜单 Context | 减少多处重复 `getMenuTree()` |
+| 告警 ingest 统一模型 | 云到期等仍适配 Alertmanager Webhook 形态（见 R-alert 设计文档） |
 
 ---
 
@@ -75,6 +84,7 @@ cd internal/router && go generate
 ## 相关文档
 
 - [backend-architecture-complete.md](backend-architecture-complete.md) — 完整技术文档  
+- [cicd.md](cicd.md) — CI/CD 插件说明  
 - [code-review-report.md](code-review-report.md) — 历史审查记录（部分条目已解决，见文首说明）  
 - [architecture-diagrams.md](architecture-diagrams.md) — 架构图
 

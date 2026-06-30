@@ -4692,11 +4692,33 @@ paths:
           description: 禁止访问
         "500":
           description: 服务器错误
-  /api/v1/overview/trends:
+  /api/v1/overview/project-launches:
     get:
       tags: ["Overview"]
       summary: Auto-generated from router
-      operationId: get_api_v1_overview_trends
+      operationId: get_api_v1_overview_project-launches
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/overview/release-by-person:
+    get:
+      tags: ["Overview"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_overview_release-by-person
       security:
         - bearerAuth: []
       responses:
@@ -4740,6 +4762,28 @@ paths:
       tags: ["Permissions"]
       summary: Auto-generated from router
       operationId: post_api_v1_permissions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/permissions/k8s-scope/batch:
+    post:
+      tags: ["Permissions"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_permissions_k8s-scope_batch
       security:
         - bearerAuth: []
       responses:
@@ -5740,6 +5784,745 @@ paths:
           description: 禁止访问
         "500":
           description: 服务器错误
+  /api/v1/projects/{id}/application-topology:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__application-topology
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/approval-flow:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_approval-flow
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    put:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: put_api_v1_projects_id__cicd_approval-flow
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/build-runs:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_build-runs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/build-runs/{runId}:
+    delete:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: delete_api_v1_projects_id__cicd_build-runs_runId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_build-runs_runId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/build-runs/{runId}/log:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_build-runs_runId__log
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_release-runs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/batch-approve:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_release-runs_batch-approve
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/batch-execute:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_release-runs_batch-execute
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/batch-reject:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_release-runs_batch-reject
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/batch-terminate:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_release-runs_batch-terminate
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/{runId}:
+    delete:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: delete_api_v1_projects_id__cicd_release-runs_runId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_release-runs_runId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/{runId}/approval-steps:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_release-runs_runId__approval-steps
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/{runId}/approve:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_release-runs_runId__approve
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/{runId}/execute:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_release-runs_runId__execute
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/{runId}/log:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_release-runs_runId__log
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/{runId}/reject:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_release-runs_runId__reject
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/release-runs/{runId}/terminate:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_release-runs_runId__terminate
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/services:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_services
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_services
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/services/{serviceId}:
+    delete:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: delete_api_v1_projects_id__cicd_services_serviceId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_services_serviceId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    put:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: put_api_v1_projects_id__cicd_services_serviceId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/services/{serviceId}/artifacts:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_services_serviceId__artifacts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/services/{serviceId}/builds:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_services_serviceId__builds
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/services/{serviceId}/ci-config:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_services_serviceId__ci-config
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    put:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: put_api_v1_projects_id__cicd_services_serviceId__ci-config
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/services/{serviceId}/deploy-configs:
+    get:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: get_api_v1_projects_id__cicd_services_serviceId__deploy-configs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_services_serviceId__deploy-configs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/services/{serviceId}/deploy-configs/{configId}:
+    delete:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: delete_api_v1_projects_id__cicd_services_serviceId__deploy-configs_configId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+    put:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: put_api_v1_projects_id__cicd_services_serviceId__deploy-configs_configId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/cicd/services/{serviceId}/releases:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__cicd_services_serviceId__releases
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
   /api/v1/projects/{id}/cloud-accounts:
     get:
       tags: ["Projects"]
@@ -5848,28 +6631,6 @@ paths:
           description: 禁止访问
         "500":
           description: 服务器错误
-  /api/v1/projects/{id}/log-files:
-    get:
-      tags: ["Projects"]
-      summary: Auto-generated from router
-      operationId: get_api_v1_projects_id__log-files
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: OK（统一 JSON，见 StandardResponse.data）
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardResponse"
-        "400":
-          description: 参数错误
-        "401":
-          description: 未授权
-        "403":
-          description: 禁止访问
-        "500":
-          description: 服务器错误
   /api/v1/projects/{id}/log-sources:
     get:
       tags: ["Projects"]
@@ -5918,28 +6679,6 @@ paths:
       tags: ["Projects"]
       summary: Auto-generated from router
       operationId: delete_api_v1_projects_id__log-sources_logSourceId_
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: OK（统一 JSON，见 StandardResponse.data）
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardResponse"
-        "400":
-          description: 参数错误
-        "401":
-          description: 未授权
-        "403":
-          description: 禁止访问
-        "500":
-          description: 服务器错误
-  /api/v1/projects/{id}/log-units:
-    get:
-      tags: ["Projects"]
-      summary: Auto-generated from router
-      operationId: get_api_v1_projects_id__log-units
       security:
         - bearerAuth: []
       responses:
@@ -6261,11 +7000,55 @@ paths:
           description: 禁止访问
         "500":
           description: 服务器错误
+  /api/v1/projects/{id}/mysql-backup/jobs/{jobId}:
+    delete:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: delete_api_v1_projects_id__mysql-backup_jobs_jobId_
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
   /api/v1/projects/{id}/mysql-backup/jobs/{jobId}/presign:
     get:
       tags: ["Projects"]
       summary: Auto-generated from router
       operationId: get_api_v1_projects_id__mysql-backup_jobs_jobId__presign
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK（统一 JSON，见 StandardResponse.data）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardResponse"
+        "400":
+          description: 参数错误
+        "401":
+          description: 未授权
+        "403":
+          description: 禁止访问
+        "500":
+          description: 服务器错误
+  /api/v1/projects/{id}/mysql-backup/jobs/{jobId}/stop:
+    post:
+      tags: ["Projects"]
+      summary: Auto-generated from router
+      operationId: post_api_v1_projects_id__mysql-backup_jobs_jobId__stop
       security:
         - bearerAuth: []
       responses:

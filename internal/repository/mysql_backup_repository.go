@@ -75,6 +75,23 @@ func (r *MysqlBackupRepository) PatchJob(ctx context.Context, jobID uint, fields
 	return r.db.WithContext(ctx).Model(&model.MysqlBackupJob{}).Where("id = ?", jobID).Updates(fields).Error
 }
 
+func (r *MysqlBackupRepository) GetJobInProject(ctx context.Context, projectID, jobID uint) (*model.MysqlBackupJob, error) {
+	var job model.MysqlBackupJob
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).First(&job, jobID).Error
+	return &job, err
+}
+
+func (r *MysqlBackupRepository) DeleteJob(ctx context.Context, projectID, jobID uint) error {
+	res := r.db.WithContext(ctx).Where("project_id = ?", projectID).Delete(&model.MysqlBackupJob{}, jobID)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 func (r *MysqlBackupRepository) GetJob(ctx context.Context, id uint) (*model.MysqlBackupJob, error) {
 	var job model.MysqlBackupJob
 	err := r.db.WithContext(ctx).First(&job, id).Error

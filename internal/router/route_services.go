@@ -5,9 +5,11 @@ import (
 	"strings"
 
 	"yunshu/internal/bootstrap"
+	"yunshu/internal/plugin"
 	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/service"
 	"yunshu/internal/service/alert"
+	cicdsvc "yunshu/internal/service/cicd"
 )
 
 // routeServices aggregates HTTP-layer domain services built from routeRepositories.
@@ -56,6 +58,7 @@ type routeServices struct {
 	Overview            *service.OverviewService
 	ProjectMgmt         *service.ProjectMgmtService
 	CMDB                *service.CMDBService
+	Cicd                *cicdsvc.Service
 	MysqlBackup         *service.MysqlBackupService
 	LogAgent            *service.LogAgentService
 	AgentDiscovery      *service.AgentDiscoveryService
@@ -152,7 +155,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 	crService := service.NewK8sCRService(k8sRuntimeService)
 	rbacService := service.NewK8sRBACService(k8sRuntimeService)
 	serviceAccountService := service.NewK8sServiceAccountService(k8sRuntimeService)
-	overviewService := service.NewOverviewService(repos.Overview, k8sRuntimeService, app.Redis, projectMemberRepo, k8sClusterAccessRepo)
+	overviewService := service.NewOverviewService(repos.Overview, k8sRuntimeService, app.Redis, projectMemberRepo, k8sClusterAccessRepo, plugin.ResolveEnabled(&app.Config.Plugins))
 
 	cmdbService, err := service.NewCMDBService(
 		repos.Server, repos.ServerGroup, repos.CloudAccount, app.Config.Security.EncryptionKey,
@@ -167,6 +170,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 	if err != nil {
 		return nil, fmt.Errorf("mysql backup service: %w", err)
 	}
+	cicdSvc := cicdsvc.NewService(app.DB, repos.Server, projectRepo, repos.UserGroup, userRepo, app.Config.Cicd)
 	logAgentService := service.NewLogAgentService(repos.LogAgent, repos.Server, repos.LogSource, app.Config.Agent.RegisterSecret, app.Config.Agent.DiscoveryRoots)
 	agentDiscoveryService := service.NewAgentDiscoveryService(repos.AgentDiscovery, repos.LogAgent, repos.Server, repos.LogSource)
 	alertReceiverGroupSvc := service.NewAlertReceiverGroupService(repos.AlertReceiverGroup, alertReceiverGroupCache)
@@ -218,6 +222,7 @@ func buildRouteServices(app *bootstrap.App, repos *routeRepositories) (*routeSer
 		Overview:             overviewService,
 		ProjectMgmt:          projectMgmtService,
 		CMDB:                 cmdbService,
+		Cicd:                 cicdSvc,
 		MysqlBackup:          mysqlBackupSvc,
 		LogAgent:             logAgentService,
 		AgentDiscovery:       agentDiscoveryService,

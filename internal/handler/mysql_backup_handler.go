@@ -177,3 +177,40 @@ func (h *MysqlBackupHandler) PresignJob(c *gin.Context) {
 	}
 	response.Success(c, gin.H{"url": url})
 }
+
+func (h *MysqlBackupHandler) StopJob(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	jobID, err := parseUintParam(c, "jobId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	job, err := h.svc.StopJob(c.Request.Context(), projectID, jobID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, job)
+}
+
+func (h *MysqlBackupHandler) DeleteJob(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	jobID, err := parseUintParam(c, "jobId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteJob(c.Request.Context(), projectID, jobID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"deleted": true})
+}

@@ -18,6 +18,7 @@ import (
 	"yunshu/internal/pkg/mysqlbackup"
 	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/pkg/sshserver"
 	"yunshu/internal/pkg/sshclient"
 	"yunshu/internal/repository"
 	bizerrors "yunshu/internal/pkg/errors"
@@ -35,6 +36,7 @@ type MysqlBackupService struct {
 	aead         cipher.AEAD
 	schedMu      sync.Mutex
 	schedRunning map[uint]bool
+	jobCancels   sync.Map // jobID -> context.CancelFunc
 }
 
 func NewMysqlBackupService(
@@ -67,6 +69,7 @@ type MysqlBackupInstanceItem struct {
 	Enabled            bool     `json:"enabled"`
 	MysqlHost          string   `json:"mysql_host"`
 	MysqlPort          int      `json:"mysql_port"`
+	MysqlSocket        string   `json:"mysql_socket"`
 	MysqlUser          string   `json:"mysql_user"`
 	BackupMode         string   `json:"backup_mode"`
 	BackupScope        string   `json:"backup_scope"`
@@ -80,6 +83,10 @@ type MysqlBackupInstanceItem struct {
 	MysqldumpWorkDir   string   `json:"mysqldump_work_dir"`
 	MysqldumpOptions   []string `json:"mysqldump_options"`
 	MysqldumpExtraArgs string   `json:"mysqldump_extra_args"`
+	MysqldumpBin       string   `json:"mysqldump_bin"`
+	XtrabackupTool     string   `json:"xtrabackup_tool"`
+	XtrabackupBin      string   `json:"xtrabackup_bin"`
+	InnobackupexBin    string   `json:"innobackupex_bin"`
 	ScheduleEnabled    bool     `json:"schedule_enabled"`
 	CronSpec           string   `json:"cron_spec"`
 	LastScheduledAt    string   `json:"last_scheduled_at,omitempty"`
@@ -94,6 +101,7 @@ type MysqlBackupInstanceUpsertRequest struct {
 	Enabled            *bool    `json:"enabled"`
 	MysqlHost          string   `json:"mysql_host"`
 	MysqlPort          int      `json:"mysql_port"`
+	MysqlSocket        string   `json:"mysql_socket"`
 	MysqlUser          string   `json:"mysql_user" binding:"required"`
 	MysqlPassword      string   `json:"mysql_password"`
 	BackupMode         string   `json:"backup_mode"`
@@ -108,6 +116,10 @@ type MysqlBackupInstanceUpsertRequest struct {
 	MysqldumpWorkDir   string   `json:"mysqldump_work_dir"`
 	MysqldumpOptions   []string `json:"mysqldump_options"`
 	MysqldumpExtraArgs string   `json:"mysqldump_extra_args"`
+	MysqldumpBin       string   `json:"mysqldump_bin"`
+	XtrabackupTool     string   `json:"xtrabackup_tool"`
+	XtrabackupBin      string   `json:"xtrabackup_bin"`
+	InnobackupexBin    string   `json:"innobackupex_bin"`
 	ScheduleEnabled    *bool    `json:"schedule_enabled"`
 	CronSpec           string   `json:"cron_spec"`
 }
@@ -186,6 +198,11 @@ func (s *MysqlBackupService) UpsertInstance(ctx context.Context, id uint, req My
 		inst.MysqlPort = 3306
 	}
 	inst.MysqlUser = strings.TrimSpace(req.MysqlUser)
+	socket, err := mysqlbackup.NormalizeMysqlSocket(req.MysqlSocket)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	inst.MysqlSocket = socket
 	inst.BackupMode = mode
 	scope := strings.TrimSpace(req.BackupScope)
 	if scope == "" {
@@ -235,6 +252,26 @@ func (s *MysqlBackupService) UpsertInstance(ctx context.Context, id uint, req My
 	}
 	inst.MysqldumpOptions = optionsJSON
 	inst.MysqldumpExtraArgs = strings.TrimSpace(req.MysqldumpExtraArgs)
+	dumpBin, err := mysqlbackup.NormalizeMysqldumpBin(req.MysqldumpBin)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	inst.MysqldumpBin = dumpBin
+	tool, err := mysqlbackup.NormalizeXtrabackupTool(req.XtrabackupTool)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	inst.XtrabackupTool = tool
+	xbBin, err := mysqlbackup.NormalizeXtrabackupBin(req.XtrabackupBin)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	inst.XtrabackupBin = xbBin
+	ibBin, err := mysqlbackup.NormalizeInnobackupexBin(req.InnobackupexBin)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	inst.InnobackupexBin = ibBin
 
 	if req.ScheduleEnabled != nil {
 		inst.ScheduleEnabled = *req.ScheduleEnabled
@@ -290,8 +327,14 @@ func (s *MysqlBackupService) PingInstance(ctx context.Context, projectID, instan
 	if err != nil {
 		return false, "", err
 	}
-	if err := mysqlbackup.Ping(ctx, inst.MysqlHost, inst.MysqlPort, inst.MysqlUser, pw); err != nil {
+	if err := mysqlbackup.Ping(ctx, inst.MysqlHost, inst.MysqlPort, inst.MysqlUser, pw, inst.MysqlSocket); err != nil {
+		if strings.TrimSpace(inst.MysqlSocket) != "" {
+			return false, fmt.Sprintf("mysqlping,socket=%s status=0i", inst.MysqlSocket), nil
+		}
 		return false, fmt.Sprintf("mysqlping,host=%s,port=%d status=0i", inst.MysqlHost, inst.MysqlPort), nil
+	}
+	if strings.TrimSpace(inst.MysqlSocket) != "" {
+		return true, fmt.Sprintf("mysqlping,socket=%s status=1i", inst.MysqlSocket), nil
 	}
 	return true, fmt.Sprintf("mysqlping,host=%s,port=%d status=1i", inst.MysqlHost, inst.MysqlPort), nil
 }
@@ -392,13 +435,16 @@ const mysqlBackupJobTimeout = 35 * time.Minute
 const mysqlXtrabackupJobTimeout = 2 * time.Hour
 
 func (s *MysqlBackupService) runBackupJobAsync(jobID, projectID, instanceID uint, trigger string) {
+	defer s.jobCancels.Delete(jobID)
+
 	timeout := mysqlBackupJobTimeout
 	if inst, err := s.backupRepo.GetInstanceInProject(context.Background(), projectID, instanceID); err == nil && model.IsXtrabackupBackupMode(inst.BackupMode) {
 		timeout = mysqlXtrabackupJobTimeout
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	jobCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	s.jobCancels.Store(jobID, cancel)
 	defer cancel()
-	s.finishBackupJob(ctx, jobID, projectID, instanceID, trigger)
+	s.finishBackupJob(jobCtx, jobID, projectID, instanceID, trigger)
 }
 
 func (s *MysqlBackupService) finishBackupJob(ctx context.Context, jobID, projectID, instanceID uint, trigger string) {
@@ -430,9 +476,20 @@ func (s *MysqlBackupService) finishBackupJob(ctx context.Context, jobID, project
 
 	fin := time.Now()
 	job.FinishedAt = &fin
+	if s.jobWasCancelled(ctx, jobID) {
+		s.logBackupJobDone(jobID, inst.ID, inst.Name, trigger, "cancelled", time.Since(started), nil)
+		return
+	}
 	if runErr != nil {
-		job.Status = "failed"
-		job.ErrorMessage = runErr.Error()
+		if errors.Is(runErr, context.Canceled) {
+			job.Status = "cancelled"
+			if strings.TrimSpace(job.ErrorMessage) == "" {
+				job.ErrorMessage = "任务已取消"
+			}
+		} else {
+			job.Status = "failed"
+			job.ErrorMessage = runErr.Error()
+		}
 	} else {
 		job.Status = "success"
 	}
@@ -523,7 +580,7 @@ func (s *MysqlBackupService) runMysqldumpUpload(ctx context.Context, inst *model
 		return err
 	}
 
-	startedAt := time.Now().UTC()
+	startedAt := time.Now().In(mysqlbackup.BackupNameLocation())
 	basename, err := s.backupArtifactBasename(ctx, inst, startedAt)
 	if err != nil {
 		return err
@@ -532,13 +589,19 @@ func (s *MysqlBackupService) runMysqldumpUpload(ctx context.Context, inst *model
 	logPath := filepath.ToSlash(filepath.Join(workDir, basename+".log"))
 	job.RemotePath = remotePath
 	job.BackupMode = model.MysqlBackupModeMysqldump
+	_ = s.backupRepo.PatchJob(ctx, job.ID, map[string]any{
+		"remote_path": remotePath,
+		"backup_mode": model.MysqlBackupModeMysqldump,
+	})
 
 	dumpTarget := mysqlbackup.FormatDumpArgsShell(target, shellQuote)
+	connectArgs, connectLog := mysqlbackup.FormatMysqldumpConnectArgs(inst.MysqlSocket, inst.MysqlHost, inst.MysqlPort, inst.MysqlUser, shellQuote)
 
 	dumpCmd := mysqlbackup.BuildMysqldumpRemoteScript(mysqlbackup.MysqldumpRemoteScriptParams{
 		WorkDir: workDir, Basename: basename,
-		MySQLHost: inst.MysqlHost, MySQLPort: inst.MysqlPort, MySQLUser: inst.MysqlUser,
-		MySQLPass: shellQuote(pw), DumpFlags: dumpFlags, DumpTarget: dumpTarget, ShellQuote: shellQuote,
+		MySQLPass: shellQuote(pw), DumpFlags: dumpFlags, DumpTarget: dumpTarget,
+		DumpTargetLabel: target.ObjectLabel, MysqldumpBin: inst.MysqldumpBin,
+		ConnectArgs: connectArgs, ConnectLog: connectLog, ShellQuote: shellQuote,
 	})
 	stopPoll := s.startPollBackupJobLog(ctx, job.ID, sshCli, logPath, logPrefix)
 	defer stopPoll()
@@ -588,7 +651,7 @@ func (s *MysqlBackupService) runMysqldumpUpload(ctx context.Context, inst *model
 	}
 	s.logBackupPhase(job.ID, "local_dump_ready", "local_path", localPath)
 
-	objectKey := fmt.Sprintf("project_%d/instance_%d/%s.sql.gz", inst.ProjectID, inst.ID, basename)
+	objectKey := mysqlbackup.BuildMinioObjectKey(basename, "sql.gz")
 	s.logBackupPhase(job.ID, "minio_upload_start", "object_key", objectKey)
 	size, err := minioCli.UploadFile(ctx, objectKey, localPath, "application/gzip")
 	if err != nil {
@@ -617,7 +680,7 @@ func (s *MysqlBackupService) runXtrabackupUpload(ctx context.Context, inst *mode
 		return constants.ErrBadRequestWithMsg("xtrabackup 须配置 remote_data_dir 与 remote_log_dir")
 	}
 
-	startedAt := time.Now().UTC()
+	startedAt := time.Now().In(mysqlbackup.BackupNameLocation())
 	basename, err := s.backupArtifactBasename(ctx, inst, startedAt)
 	if err != nil {
 		return err
@@ -627,10 +690,13 @@ func (s *MysqlBackupService) runXtrabackupUpload(ctx context.Context, inst *mode
 	job.RemotePath = remoteArchive
 	job.BackupMode = model.MysqlBackupExecXtrabackup
 
+	cliConnect, xbConnect, connectLog := mysqlbackup.FormatMysqlConnectShell(inst.MysqlSocket, inst.MysqlHost, inst.MysqlPort, inst.MysqlUser, shellQuote)
+
 	script := mysqlbackup.BuildXtrabackupRemoteScript(mysqlbackup.XtrabackupRemoteScriptParams{
 		DataDir: dataDir, LogDir: logDir, Basename: basename,
-		MySQLHost: inst.MysqlHost, MySQLPort: inst.MysqlPort, MySQLUser: inst.MysqlUser,
-		MySQLPass: shellQuote(pw), MySQLDir: inst.MysqlDataDir, Parallel: 4, ShellQuote: shellQuote,
+		MySQLPass: shellQuote(pw), MySQLDir: inst.MysqlDataDir, Parallel: 4,
+		ToolPref: inst.XtrabackupTool, XtrabackupBin: inst.XtrabackupBin, InnobackupexBin: inst.InnobackupexBin,
+		ConnectLog: connectLog, CLIConnect: cliConnect, XBConnect: xbConnect, ShellQuote: shellQuote,
 	})
 	stopPoll := s.startPollBackupJobLog(ctx, job.ID, sshCli, logPath, "")
 	defer stopPoll()
@@ -647,11 +713,17 @@ func (s *MysqlBackupService) runXtrabackupUpload(ctx context.Context, inst *mode
 	}
 	tail, _ := s.tailRemoteFile(ctx, sshCli, logPath, 120)
 	job.LogExcerpt = mysqlbackup.TruncateLog(strings.TrimSpace(tail))
+	execTool := mysqlbackup.DetectPhysicalBackupExecTool(tail)
+	if execTool == mysqlbackup.XtrabackupToolInnobackupex {
+		job.BackupMode = model.MysqlBackupExecInnobackupex
+	} else {
+		job.BackupMode = model.MysqlBackupExecXtrabackup
+	}
 	if res.ExitCode != 0 {
-		return fmt.Errorf("xtrabackup failed (exit=%d): %s", res.ExitCode, job.LogExcerpt)
+		return fmt.Errorf("%s failed (exit=%d): %s", execTool, res.ExitCode, job.LogExcerpt)
 	}
 	if !strings.Contains(tail, mysqlbackup.BackupCompletedMarker) {
-		return fmt.Errorf("xtrabackup finished without completion marker in log: %s", mysqlbackup.TruncateLog(tail))
+		return fmt.Errorf("%s finished without completion marker in log: %s", execTool, mysqlbackup.TruncateLog(tail))
 	}
 	archSize, sizeErr := sshCli.RemoteFileSize(remoteArchive)
 	if sizeErr != nil {
@@ -680,7 +752,7 @@ func (s *MysqlBackupService) runXtrabackupUpload(ctx context.Context, inst *mode
 	if err := sshCli.DownloadFile(dlCtx, remoteArchive, localPath); err != nil {
 		return err
 	}
-	objectKey := fmt.Sprintf("project_%d/instance_%d/%s.tar.gz", inst.ProjectID, inst.ID, basename)
+	objectKey := mysqlbackup.BuildMinioObjectKey(basename, "tar.gz")
 	s.logBackupPhase(job.ID, "minio_upload_start", "object_key", objectKey)
 	size, err := minioCli.UploadFile(ctx, objectKey, localPath, "application/gzip")
 	if err != nil {
@@ -713,6 +785,87 @@ func (s *MysqlBackupService) ListJobs(ctx context.Context, q MysqlBackupJobListQ
 	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	return &pagination.Result[model.MysqlBackupJob]{List: list, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+// StopJob 停止进行中的备份任务（释放实例锁，best-effort 终止远端进程）。
+func (s *MysqlBackupService) StopJob(ctx context.Context, projectID, jobID uint) (*model.MysqlBackupJob, error) {
+	job, err := s.backupRepo.GetJobInProject(ctx, projectID, jobID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrNotFound
+		}
+		return nil, bizerrors.Pass(ctx, "mysql.backup", "StopJob", err)
+	}
+	if job.Status != "running" {
+		return nil, constants.ErrBadRequestWithMsg("仅进行中的任务可停止")
+	}
+	if v, ok := s.jobCancels.Load(jobID); ok {
+		if cancel, ok := v.(context.CancelFunc); ok {
+			cancel()
+		}
+	}
+	if inst, err := s.backupRepo.GetInstanceInProject(ctx, projectID, job.InstanceID); err == nil && inst != nil {
+		s.killRemoteBackupBestEffort(ctx, inst, job)
+	}
+	now := time.Now()
+	msg := "用户手动停止"
+	if err := s.backupRepo.PatchJob(ctx, jobID, map[string]any{
+		"status":        "cancelled",
+		"error_message": msg,
+		"finished_at":   now,
+	}); err != nil {
+		return nil, bizerrors.Pass(ctx, "mysql.backup", "StopJob", err)
+	}
+	job.Status = "cancelled"
+	job.ErrorMessage = msg
+	job.FinishedAt = &now
+	mysqlBackupLog().Infow("MySQL backup job stopped by user", "job_id", jobID, "instance_id", job.InstanceID)
+	return job, nil
+}
+
+// DeleteJob 删除备份记录（进行中的任务须先停止）。
+func (s *MysqlBackupService) DeleteJob(ctx context.Context, projectID, jobID uint) error {
+	job, err := s.backupRepo.GetJobInProject(ctx, projectID, jobID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return constants.ErrNotFound
+		}
+		return bizerrors.Pass(ctx, "mysql.backup", "DeleteJob", err)
+	}
+	if job.Status == "running" {
+		return constants.ErrBadRequestWithMsg("进行中的任务请先停止后再删除")
+	}
+	if err := s.backupRepo.DeleteJob(ctx, projectID, jobID); err != nil {
+		return bizerrors.Pass(ctx, "mysql.backup", "DeleteJob", err)
+	}
+	return nil
+}
+
+func (s *MysqlBackupService) jobWasCancelled(ctx context.Context, jobID uint) bool {
+	job, err := s.backupRepo.GetJob(ctx, jobID)
+	return err == nil && job != nil && job.Status == "cancelled"
+}
+
+func (s *MysqlBackupService) killRemoteBackupBestEffort(ctx context.Context, inst *model.MysqlBackupInstance, job *model.MysqlBackupJob) {
+	if inst == nil || job == nil {
+		return
+	}
+	remotePath := strings.TrimSpace(job.RemotePath)
+	if remotePath == "" {
+		return
+	}
+	script := mysqlbackup.BuildKillBackupByArtifactScript(remotePath)
+	if script == "" {
+		return
+	}
+	sshCli, _, err := s.dialServer(ctx, inst.ServerID)
+	if err != nil {
+		return
+	}
+	defer sshCli.Close()
+	killCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	_, _ = sshCli.Exec(killCtx, script, 4096)
 }
 
 func (s *MysqlBackupService) PresignDownload(ctx context.Context, projectID, jobID uint) (string, error) {
@@ -794,62 +947,7 @@ func (s *MysqlBackupService) loadInstanceSecrets(ctx context.Context, projectID,
 }
 
 func (s *MysqlBackupService) dialServer(ctx context.Context, serverID uint) (*sshclient.Client, *model.Server, error) {
-	sv, err := s.serverRepo.GetByID(ctx, serverID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, constants.ErrLogSourceServerNotFound
-		}
-		return nil, nil, bizerrors.Pass(ctx, "mysql.backup", "dialServer", err)
-	}
-	cred, err := s.serverRepo.GetCredentialByServerID(ctx, serverID)
-	if err != nil {
-		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsgfeb33ee7c48c)
-	}
-	cfg, err := s.decryptCredentialToSSHConfig(ctx, *sv, *cred)
-	if err != nil {
-		return nil, nil, err
-	}
-	cli, err := sshclient.Dial(ctx, cfg)
-	if err != nil {
-		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsgSSHConnectFailedPrefix + err.Error())
-	}
-	return cli, sv, nil
-}
-
-func (s *MysqlBackupService) decryptCredentialToSSHConfig(ctx context.Context, sv model.Server, cred model.ServerCredential) (sshclient.Config, error) {
-	cfg := sshclient.Config{Host: sv.Host, Port: sv.Port, Username: cred.Username}
-	switch strings.ToLower(strings.TrimSpace(cred.AuthType)) {
-	case "password":
-		if cred.EncPassword == nil {
-			return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsg666b6d7186e5)
-		}
-		pw, err := cryptox.DecryptString(s.aead, *cred.EncPassword)
-		if err != nil {
-			return sshclient.Config{}, bizerrors.Pass(ctx, "mysql.backup", "decryptCredentialToSSHConfig", err)
-		}
-		cfg.AuthType = sshclient.AuthPassword
-		cfg.Password = pw
-	case "key":
-		if cred.EncPrivateKey == nil {
-			return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsg298c7d5f0d54)
-		}
-		pk, err := cryptox.DecryptString(s.aead, *cred.EncPrivateKey)
-		if err != nil {
-			return sshclient.Config{}, bizerrors.Pass(ctx, "mysql.backup", "decryptCredentialToSSHConfig", err)
-		}
-		cfg.AuthType = sshclient.AuthKey
-		cfg.PrivateKey = pk
-		if cred.EncPassphrase != nil {
-			pp, err := cryptox.DecryptString(s.aead, *cred.EncPassphrase)
-			if err != nil {
-				return sshclient.Config{}, bizerrors.Pass(ctx, "mysql.backup", "decryptCredentialToSSHConfig", err)
-			}
-			cfg.Passphrase = pp
-		}
-	default:
-		return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsge9e731f82ff9)
-	}
-	return cfg, nil
+	return sshserver.DialServer(ctx, s.aead, "mysql.backup", s.serverRepo, serverID)
 }
 
 func (s *MysqlBackupService) ensureServerInProject(ctx context.Context, projectID, serverID uint) error {
@@ -870,11 +968,13 @@ func (s *MysqlBackupService) toInstanceItem(ctx context.Context, inst model.Mysq
 	item := MysqlBackupInstanceItem{
 		ID: inst.ID, ProjectID: inst.ProjectID, ServerID: inst.ServerID,
 		Name: inst.Name, Enabled: inst.Enabled, MysqlHost: inst.MysqlHost, MysqlPort: inst.MysqlPort,
-		MysqlUser: inst.MysqlUser, BackupMode: inst.BackupMode,
+		MysqlSocket: inst.MysqlSocket, MysqlUser: inst.MysqlUser, BackupMode: inst.BackupMode,
 		BackupScope: inst.BackupScope, DatabaseName: inst.DatabaseName, TableName: inst.BackupTable,
 		DatabaseNames: inst.DatabaseNames, RemoteDataDir: inst.RemoteDataDir, RemoteLogDir: inst.RemoteLogDir,
 		MysqlDataDir:  inst.MysqlDataDir,
-		UploadToMinio: inst.UploadToMinio, MysqldumpWorkDir: inst.MysqldumpWorkDir, MysqldumpExtraArgs: inst.MysqldumpExtraArgs,
+		UploadToMinio: inst.UploadToMinio, MysqldumpWorkDir: inst.MysqldumpWorkDir,
+		MysqldumpExtraArgs: inst.MysqldumpExtraArgs, MysqldumpBin: inst.MysqldumpBin,
+		XtrabackupTool: inst.XtrabackupTool, XtrabackupBin: inst.XtrabackupBin, InnobackupexBin: inst.InnobackupexBin,
 		ScheduleEnabled: inst.ScheduleEnabled, CronSpec: inst.CronSpec,
 	}
 	item.MysqldumpOptions = parseMysqldumpOptionsForAPI(inst.MysqldumpOptions)

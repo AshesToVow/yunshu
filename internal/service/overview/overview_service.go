@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -50,19 +51,34 @@ type OverviewResponse struct {
 	LogAgentsOfflineCount int64 `json:"log_agents_offline_count"`
 }
 
-type OverviewTrendsResponse struct {
-	Days           []string `json:"days"`
-	LoginSuccess   []int64  `json:"login_success"`
-	LoginFail      []int64  `json:"login_fail"`
-	OperationTotal []int64  `json:"operation_total"`
+type OverviewProjectLaunchSeries struct {
+	ProjectID   uint     `json:"project_id"`
+	ProjectName string   `json:"project_name"`
+	Data        []int64  `json:"data"`
+	Color       string   `json:"color,omitempty"`
+}
+
+type OverviewProjectLaunchesResponse struct {
+	Days   []string                      `json:"days"`
+	Series []OverviewProjectLaunchSeries `json:"series"`
+}
+
+type OverviewReleaseByPersonItem struct {
+	Person string `json:"person"`
+	Count  int64  `json:"count"`
+}
+
+type OverviewReleaseByPersonResponse struct {
+	Items []OverviewReleaseByPersonItem `json:"items"`
 }
 
 type OverviewService struct {
-	repo       interfaces.OverviewRepository
-	runtime    *k8s.K8sRuntimeService
-	redis      *redis.Client
-	memberRepo interfaces.ProjectMemberRepository
-	accessRepo interfaces.K8sClusterAccessRepository
+	repo            interfaces.OverviewRepository
+	runtime         *k8s.K8sRuntimeService
+	redis           *redis.Client
+	memberRepo      interfaces.ProjectMemberRepository
+	accessRepo      interfaces.K8sClusterAccessRepository
+	pluginsEnabled  map[string]bool
 }
 
 // NewOverviewService 创建相关逻辑。
@@ -72,78 +88,138 @@ func NewOverviewService(
 	redisClient *redis.Client,
 	memberRepo interfaces.ProjectMemberRepository,
 	accessRepo interfaces.K8sClusterAccessRepository,
+	pluginsEnabled map[string]bool,
 ) *OverviewService {
-	return &OverviewService{repo: repo, runtime: runtime, redis: redisClient, memberRepo: memberRepo, accessRepo: accessRepo}
+	return &OverviewService{
+		repo: repo, runtime: runtime, redis: redisClient,
+		memberRepo: memberRepo, accessRepo: accessRepo, pluginsEnabled: pluginsEnabled,
+	}
 }
 
-// Trends 执行对应的业务逻辑。
-func (s *OverviewService) Trends(ctx context.Context, days int) (*OverviewTrendsResponse, error) {
+func (s *OverviewService) cicdChartsEnabled() bool {
+	if s == nil || s.pluginsEnabled == nil {
+		return true
+	}
+	return s.pluginsEnabled["cicd"]
+}
+
+func emptyProjectLaunches(now time.Time) *OverviewProjectLaunchesResponse {
+	_, _, dayLabels, _ := overviewMonthRange(now)
+	return &OverviewProjectLaunchesResponse{Days: dayLabels, Series: []OverviewProjectLaunchSeries{}}
+}
+
+const overviewChartDays = 30
+
+var overviewSeriesColors = []string{
+	"#14b8a6", "#8b5cf6", "#3b82f6", "#f97316", "#ef4444",
+	"#64748b", "#eab308", "#22c55e", "#ec4899", "#06b6d4",
+}
+
+func (s *OverviewService) resolveProjectScope(ctx context.Context) (projectIDs []uint, unrestricted bool) {
+	unrestricted = true
+	u, ok := auth.RequestUserFromContext(ctx)
+	if ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes) && s.memberRepo != nil {
+		unrestricted = false
+		projectIDs, _ = s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+	}
+	return projectIDs, unrestricted
+}
+
+func overviewMonthRange(now time.Time) (start, end time.Time, dayLabels []string, dayIndex map[string]int) {
+	loc := now.Location()
+	end = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
+	start = end.AddDate(0, 0, -overviewChartDays)
+	dayLabels = make([]string, 0, overviewChartDays)
+	dayIndex = make(map[string]int, overviewChartDays)
+	for i := 0; i < overviewChartDays; i++ {
+		d := start.AddDate(0, 0, i)
+		key := d.Format("2006-01-02")
+		dayLabels = append(dayLabels, d.Format("01-02"))
+		dayIndex[key] = i
+	}
+	return start, end, dayLabels, dayIndex
+}
+
+// ProjectLaunches 近一个月各项目上线（成功发布）数量趋势。
+func (s *OverviewService) ProjectLaunches(ctx context.Context) (*OverviewProjectLaunchesResponse, error) {
+	if !s.cicdChartsEnabled() {
+		return emptyProjectLaunches(time.Now()), nil
+	}
 	if s.repo == nil {
 		return nil, constants.ErrInternal
 	}
-	if days <= 0 || days > 31 {
-		days = 7
+	projectIDs, unrestricted := s.resolveProjectScope(ctx)
+	start, end, dayLabels, dayIndex := overviewMonthRange(time.Now())
+	rows, err := s.repo.CountReleaseLaunchesByProjectDay(ctx, start, end, projectIDs, unrestricted)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "overview", "ProjectLaunches", err)
 	}
-
-	cacheKey := fmt.Sprintf("overview:trends:v1:days:%d", days)
-	if s.redis != nil {
-		if raw, err := s.redis.Get(ctx, cacheKey).Result(); err == nil && raw != "" {
-			var cached OverviewTrendsResponse
-			if json.Unmarshal([]byte(raw), &cached) == nil {
-				return &cached, nil
+	totals := map[uint]int64{}
+	meta := map[uint]string{}
+	for _, row := range rows {
+		totals[row.ProjectID] += row.Cnt
+		meta[row.ProjectID] = row.ProjectName
+	}
+	type ranked struct {
+		id    uint
+		total int64
+	}
+	rankedList := make([]ranked, 0, len(totals))
+	for id, total := range totals {
+		rankedList = append(rankedList, ranked{id: id, total: total})
+	}
+	sort.Slice(rankedList, func(i, j int) bool {
+		return rankedList[i].total > rankedList[j].total
+	})
+	limit := 10
+	if len(rankedList) < limit {
+		limit = len(rankedList)
+	}
+	out := &OverviewProjectLaunchesResponse{
+		Days:   dayLabels,
+		Series: make([]OverviewProjectLaunchSeries, 0, limit),
+	}
+	for i := 0; i < limit; i++ {
+		pid := rankedList[i].id
+		data := make([]int64, overviewChartDays)
+		for _, row := range rows {
+			if row.ProjectID != pid {
+				continue
+			}
+			if idx, ok := dayIndex[row.Day]; ok {
+				data[idx] = row.Cnt
 			}
 		}
+		out.Series = append(out.Series, OverviewProjectLaunchSeries{
+			ProjectID:   pid,
+			ProjectName: meta[pid],
+			Data:        data,
+			Color:       overviewSeriesColors[i%len(overviewSeriesColors)],
+		})
 	}
+	return out, nil
+}
 
-	now := time.Now()
-	loc := now.Location()
-	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
-	start := end.AddDate(0, 0, -days)
-
-	out := &OverviewTrendsResponse{
-		Days:           make([]string, 0, days),
-		LoginSuccess:   make([]int64, days),
-		LoginFail:      make([]int64, days),
-		OperationTotal: make([]int64, days),
+// ReleaseByPerson 近一个月 CD 工单按提交人统计。
+func (s *OverviewService) ReleaseByPerson(ctx context.Context) (*OverviewReleaseByPersonResponse, error) {
+	if !s.cicdChartsEnabled() {
+		return &OverviewReleaseByPersonResponse{Items: []OverviewReleaseByPersonItem{}}, nil
 	}
-
-	index := make(map[string]int, days)
-	for i := 0; i < days; i++ {
-		d := start.AddDate(0, 0, i)
-		key := d.Format("2006-01-02")
-		out.Days = append(out.Days, d.Format("01-02"))
-		index[key] = i
+	if s.repo == nil {
+		return nil, constants.ErrInternal
 	}
-
-	successCounts, err := s.repo.CountLoginLogsByDay(ctx, start, end, model.LoginLogStatusSuccess)
+	projectIDs, unrestricted := s.resolveProjectScope(ctx)
+	start, end, _, _ := overviewMonthRange(time.Now())
+	rows, err := s.repo.CountReleaseRunsByPerson(ctx, start, end, projectIDs, unrestricted)
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "overview", "Trends", err)
+		return nil, bizerrors.Pass(ctx, "overview", "ReleaseByPerson", err)
 	}
-	failCounts, err := s.repo.CountLoginLogsByDay(ctx, start, end, model.LoginLogStatusFail)
-	if err != nil {
-		return nil, bizerrors.Pass(ctx, "overview", "Trends", err)
-	}
-	opCounts, err := s.repo.CountOperationLogsByDay(ctx, start, end)
-	if err != nil {
-		return nil, bizerrors.Pass(ctx, "overview", "Trends", err)
-	}
-
-	for day, i := range index {
-		if v, ok := successCounts[day]; ok {
-			out.LoginSuccess[i] = v
-		}
-		if v, ok := failCounts[day]; ok {
-			out.LoginFail[i] = v
-		}
-		if v, ok := opCounts[day]; ok {
-			out.OperationTotal[i] = v
-		}
-	}
-
-	if s.redis != nil {
-		if b, err := json.Marshal(out); err == nil {
-			_ = s.redis.Set(ctx, cacheKey, string(b), 60*time.Second).Err()
-		}
+	out := &OverviewReleaseByPersonResponse{Items: make([]OverviewReleaseByPersonItem, 0, len(rows))}
+	for _, row := range rows {
+		out.Items = append(out.Items, OverviewReleaseByPersonItem{
+			Person: row.Person,
+			Count:  row.Cnt,
+		})
 	}
 	return out, nil
 }

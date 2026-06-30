@@ -113,15 +113,20 @@ type OverviewService = overview.OverviewService
 var NewOverviewService = overview.NewOverviewService
 
 // --- project ---
+type ProjectMgmtService = project.ProjectMgmtService
+
+var NewProjectMgmtService = project.NewProjectMgmtService
+
+// --- alert (cloud expiry CRUD) ---
 type (
-	ProjectMgmtService    = project.ProjectMgmtService
-	CloudExpiryRuleService = project.CloudExpiryRuleService
+	CloudExpiryRuleService       = alert.CloudExpiryRuleService
+	CloudExpiryRuleListQuery     = alert.CloudExpiryRuleListQuery
+	CloudExpiryRuleUpsertRequest = alert.CloudExpiryRuleUpsertRequest
 )
 
 var (
-	NewProjectMgmtService    = project.NewProjectMgmtService
-	NewCloudExpiryRuleService = project.NewCloudExpiryRuleService
-	ValidateCloudExpiryCronSpec = project.ValidateCloudExpiryCronSpec
+	NewCloudExpiryRuleService   = alert.NewCloudExpiryRuleService
+	ValidateCloudExpiryCronSpec = alert.ValidateCloudExpiryCronSpec
 )
 
 // --- cmdb ---
@@ -162,13 +167,9 @@ type (
 	LogSourceUpsertRequest   = project.LogSourceUpsertRequest
 	LogStreamQuery           = project.LogStreamQuery
 	LogExportQuery           = project.LogExportQuery
-	RemoteLogFileQuery       = project.RemoteLogFileQuery
-	RemoteLogUnitQuery       = project.RemoteLogUnitQuery
 	ProjectMemberItem        = project.ProjectMemberItem
 	ProjectMemberAddRequest  = project.ProjectMemberAddRequest
 	ProjectMemberUpdateRequest = project.ProjectMemberUpdateRequest
-	CloudExpiryRuleListQuery = project.CloudExpiryRuleListQuery
-	CloudExpiryRuleUpsertRequest = project.CloudExpiryRuleUpsertRequest
 	ServiceItem              = project.ServiceItem
 	ServiceListQuery         = project.ServiceListQuery
 	ServiceUpsertRequest     = project.ServiceUpsertRequest

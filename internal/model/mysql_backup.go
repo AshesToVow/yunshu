@@ -12,7 +12,8 @@ const (
 	MysqlBackupModeXtrabackup  = "xtrabackup"
 	MysqlBackupModeRemoteCheck = "remote_check" // 兼容旧数据，等同 xtrabackup
 	// MysqlBackupExecXtrabackup 任务记录的实际执行方式
-	MysqlBackupExecXtrabackup = "xtrabackup"
+	MysqlBackupExecXtrabackup  = "xtrabackup"
+	MysqlBackupExecInnobackupex = "innobackupex"
 )
 
 // MysqlBackupScope mysqldump 备份范围。
@@ -38,6 +39,7 @@ type MysqlBackupInstance struct {
 
 	MysqlHost     string `json:"mysql_host" gorm:"size:255;not null;default:'127.0.0.1'"`
 	MysqlPort     int    `json:"mysql_port" gorm:"not null;default:3306"`
+	MysqlSocket   string `json:"mysql_socket" gorm:"size:512;comment:Unix socket 路径，配置后 mysqldump 优先走 socket"`
 	MysqlUser     string `json:"mysql_user" gorm:"size:128;not null"`
 	EncPassword   string `json:"-" gorm:"type:longtext;comment:加密后的 MySQL 密码"`
 	BackupMode    string `json:"backup_mode" gorm:"size:32;not null;default:'mysqldump'"`
@@ -62,6 +64,13 @@ type MysqlBackupInstance struct {
 	MysqldumpOptions string `json:"mysqldump_options" gorm:"type:text"`
 	// MysqldumpExtraArgs 额外 mysqldump 参数（空格分隔，须以 - 开头）
 	MysqldumpExtraArgs string `json:"mysqldump_extra_args" gorm:"size:512"`
+	// MysqldumpBin 远端 mysqldump 可执行文件绝对路径（非交互 SSH 下 PATH 可能找不到）
+	MysqldumpBin string `json:"mysqldump_bin" gorm:"size:512"`
+	// XtrabackupTool 物理备份工具偏好：auto | xtrabackup | innobackupex
+	XtrabackupTool string `json:"xtrabackup_tool" gorm:"size:32;not null;default:'auto'"`
+	// XtrabackupBin / InnobackupexBin 远端可执行文件绝对路径（可选）
+	XtrabackupBin   string `json:"xtrabackup_bin" gorm:"size:512"`
+	InnobackupexBin string `json:"innobackupex_bin" gorm:"size:512"`
 
 	ScheduleEnabled bool       `json:"schedule_enabled" gorm:"not null;default:false;index"`
 	CronSpec        string     `json:"cron_spec" gorm:"size:256;not null;default:''"`

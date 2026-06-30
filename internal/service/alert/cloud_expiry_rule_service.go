@@ -1,11 +1,14 @@
-package project
+package alert
 
 import (
 	"context"
 	"strings"
-	"yunshu/internal/pkg/constants"
+	"time"
+
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/cronutil"
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -39,6 +42,16 @@ type CloudExpiryRuleService struct {
 
 func NewCloudExpiryRuleService(repo interfaces.CloudExpiryRuleRepository) *CloudExpiryRuleService {
 	return &CloudExpiryRuleService{repo: repo}
+}
+
+// ValidateCloudExpiryCronSpec 校验云到期规则的 Cron 表达式语法；空串合法。
+func ValidateCloudExpiryCronSpec(spec string) error {
+	return cronutil.ValidateSpec(spec, "eval_cron_spec")
+}
+
+// ShouldEvalCloudExpiryByCron 判断距上次评估是否已到 cron 下次触发时刻。
+func ShouldEvalCloudExpiryByCron(spec string, last time.Time, hasLast bool, now time.Time) bool {
+	return cronutil.ShouldRunAfterLast(spec, last, hasLast, now)
 }
 
 func (s *CloudExpiryRuleService) List(ctx context.Context, q CloudExpiryRuleListQuery) ([]model.CloudExpiryRule, int64, int, int, error) {

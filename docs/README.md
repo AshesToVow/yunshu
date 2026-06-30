@@ -1,6 +1,6 @@
 # Yunshu 文档索引
 
-**最后更新**: 2026-06-11
+**最后更新**: 2026-06-30
 
 ---
 
@@ -10,6 +10,7 @@
 |------|------|
 | [CODEBASE-MAP.md](CODEBASE-MAP.md) | **代码地图**：目录结构、阅读顺序、Wire/错误规范 |
 | [plugins.md](plugins.md) | **业务插件**：`plugins.enabled`、路由绑定、CMDB 拆分 |
+| [cicd.md](cicd.md) | **CI/CD 插件**：Jenkins、审批流、字典配置 |
 | [backend-architecture-complete.md](backend-architecture-complete.md) | 后端完整技术文档（架构、模块、部署） |
 | [refactoring-report.md](refactoring-report.md) | 架构重构实施状态（与代码同步） |
 | [architecture-diagrams.md](architecture-diagrams.md) | 架构图集 |

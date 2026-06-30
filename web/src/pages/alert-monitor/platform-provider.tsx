@@ -1795,7 +1795,18 @@ function useAlertMonitorPlatformState() {
 
   const cloudExpiryColumns: ColumnsType<CloudExpiryRuleItem> = [
     { title: "ID", dataIndex: "id", width: 70 },
-    { title: "项目", dataIndex: "project_id", width: 90 },
+    {
+      title: "项目",
+      dataIndex: "project_name",
+      width: 180,
+      ellipsis: true,
+      render: (v: string, r: CloudExpiryRuleItem) => {
+        const name = String(v || "").trim();
+        if (name) return name;
+        const p = projects.find((it) => it.id === r.project_id);
+        return p ? `${p.name} (${p.code})` : String(r.project_id || "-");
+      },
+    },
     { title: "规则名", dataIndex: "name", width: 180 },
     {
       title: "厂商",

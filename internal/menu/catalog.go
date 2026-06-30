@@ -22,15 +22,22 @@ func DefaultCatalog() []Spec {
 				{Path: "/application-topology", Name: "应用拓扑图", Icon: "DeploymentUnitOutlined", Sort: 2, Component: "application-topology-page", Status: 1},
 				{Path: "/project-members", Name: "项目成员", Icon: "TeamOutlined", Sort: 3, Component: "project-members-page", Status: 1},
 				{Path: "/project-servers", Name: "服务器管理", Icon: "HddOutlined", Sort: 4, Component: "project-servers-page", Status: 1},
-				{Path: "/project-services", Name: "服务配置", Icon: "SettingOutlined", Sort: 5, Component: "project-services-page", Status: 1},
-				{Path: "/project-log-sources", Name: "日志源配置", Icon: "FileSearchOutlined", Sort: 6, Component: "project-log-sources-page", Status: 1},
-				{Path: "/project-logs", Name: "日志平台", Icon: "FileTextOutlined", Sort: 7, Component: "project-logs-page", Status: 1},
-				{Path: "/agent-list", Name: "Agent 列表", Icon: "RobotOutlined", Sort: 8, Component: "agent-list-page", Status: 1},
-				{Path: "/mysql-backup", Name: "MySQL 备份", Icon: "DatabaseOutlined", Sort: 9, Component: "mysql-backup-page", Status: 1},
 			},
 		},
 		{
-			Path: "/system", Name: "系统管理", Icon: "SettingOutlined", Sort: 4, Status: 1,
+			Path: "/log-platform", Name: "日志平台", Icon: "FileTextOutlined", Sort: 4, Status: 1,
+			Children: []Spec{
+				{Path: "/project-services", Name: "服务配置", Icon: "SettingOutlined", Sort: 1, Component: "project-services-page", Status: 1},
+				{Path: "/project-log-sources", Name: "日志源配置", Icon: "FileSearchOutlined", Sort: 2, Component: "project-log-sources-page", Status: 1},
+				{Path: "/project-logs", Name: "日志检索", Icon: "FileTextOutlined", Sort: 3, Component: "project-logs-page", Status: 1},
+				{Path: "/agent-list", Name: "Agent 列表", Icon: "RobotOutlined", Sort: 4, Component: "agent-list-page", Status: 1},
+			},
+		},
+		{
+			Path: "/mysql-backup", Name: "MySQL 备份", Icon: "DatabaseOutlined", Sort: 5, Component: "mysql-backup-page", Status: 1,
+		},
+		{
+			Path: "/system", Name: "系统管理", Icon: "SettingOutlined", Sort: 6, Status: 1,
 			Children: []Spec{
 				{Path: "/users", Name: "用户管理", Icon: "TeamOutlined", Sort: 1, Component: "users-page", Status: 1},
 				{Path: "/user-groups", Name: "用户组管理", Icon: "UserOutlined", Sort: 2, Component: "user-groups-page", Status: 1},
@@ -48,7 +55,7 @@ func DefaultCatalog() []Spec {
 			},
 		},
 		{
-			Path: "/kubernetes", Name: "Kubernetes 容器管理", Icon: "KubernetesOutlined", Sort: 5, Status: 1,
+			Path: "/kubernetes", Name: "Kubernetes 容器管理", Icon: "KubernetesOutlined", Sort: 7, Status: 1,
 			Children: []Spec{
 				{Path: "/clusters", Name: "集群管理", Icon: "KubernetesOutlined", Sort: 1, Component: "cluster-page", Status: 1},
 				{Path: "/namespaces", Name: "命名空间管理", Icon: "AppstoreOutlined", Sort: 2, Component: "namespaces-page", Status: 1},
@@ -82,7 +89,17 @@ func DefaultCatalog() []Spec {
 			},
 		},
 		{
-			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 6, Status: 1,
+			Path: "/cicd", Name: "CI/CD", Icon: "RocketOutlined", Sort: 8, Status: 1,
+			Children: []Spec{
+				{Path: "/cicd/services", Name: "应用服务", Icon: "AppstoreOutlined", Sort: 1, Component: "cicd-services-page", Status: 1},
+				{Path: "/cicd/todo", Name: "待办列表", Icon: "UnorderedListOutlined", Sort: 2, Component: "cicd-todo-page", Status: 1},
+				{Path: "/cicd/approval-flow", Name: "审批管理", Icon: "AuditOutlined", Sort: 3, Component: "cicd-approval-flow-page", Status: 1},
+				{Path: "/cicd/build-records", Name: "CI 打包记录", Icon: "CloudUploadOutlined", Sort: 4, Component: "cicd-build-records-page", Status: 1},
+				{Path: "/cicd/release-records", Name: "CD 历史工单", Icon: "DeploymentUnitOutlined", Sort: 5, Component: "cicd-release-records-page", Status: 1},
+			},
+		},
+		{
+			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 9, Status: 1,
 			Children: []Spec{
 				{Path: "/crds", Name: "CRD 管理", Icon: "BranchesOutlined", Sort: 1, Component: "crds-page", Status: 1},
 				{Path: "/crs", Name: "CR 实例管理", Icon: "DatabaseOutlined", Sort: 2, Component: "crs-page", Status: 1},

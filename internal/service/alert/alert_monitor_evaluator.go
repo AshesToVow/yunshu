@@ -1,4 +1,4 @@
-﻿package alert
+package alert
 
 import (
 	bizerrors "yunshu/internal/pkg/errors"
@@ -10,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robfig/cron/v3"
-
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/cronutil"
 	"yunshu/internal/pkg/promapi"
 )
 
@@ -21,22 +20,9 @@ func (s *AlertService) runMonitorRuleEvaluator(ctx context.Context) {
 	if spec == "" {
 		spec = "*/5 * * * * *"
 	}
-	c := cron.New(cron.WithSeconds())
-	job := func() {
-		if ctx.Err() != nil {
-			return
-		}
+	cronutil.RunWorker(ctx, spec, func() {
 		_ = s.tickMonitorRules(ctx)
-	}
-	if _, err := c.AddFunc(spec, job); err != nil {
-		if _, err2 := c.AddFunc("*/5 * * * * *", job); err2 != nil {
-			return
-		}
-	}
-	c.Start()
-	<-ctx.Done()
-	stopCtx := c.Stop()
-	<-stopCtx.Done()
+	}, "*/5 * * * * *")
 }
 
 func (s *AlertService) tickMonitorRules(ctx context.Context) error {

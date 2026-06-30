@@ -11,6 +11,7 @@ export interface MysqlBackupInstance {
   enabled: boolean;
   mysql_host: string;
   mysql_port: number;
+  mysql_socket?: string;
   mysql_user: string;
   backup_mode: "mysqldump" | "remote_check" | string;
   backup_scope?: MysqlBackupScope | string;
@@ -24,6 +25,10 @@ export interface MysqlBackupInstance {
   mysqldump_work_dir?: string;
   mysqldump_options?: string[];
   mysqldump_extra_args?: string;
+  mysqldump_bin?: string;
+  xtrabackup_tool?: string;
+  xtrabackup_bin?: string;
+  innobackupex_bin?: string;
   schedule_enabled?: boolean;
   cron_spec?: string;
   last_scheduled_at?: string;
@@ -37,6 +42,7 @@ export type MysqlBackupInstancePayload = {
   enabled?: boolean;
   mysql_host?: string;
   mysql_port?: number;
+  mysql_socket?: string;
   mysql_user: string;
   mysql_password?: string;
   backup_mode?: string;
@@ -51,6 +57,10 @@ export type MysqlBackupInstancePayload = {
   mysqldump_work_dir?: string;
   mysqldump_options?: string[];
   mysqldump_extra_args?: string;
+  mysqldump_bin?: string;
+  xtrabackup_tool?: string;
+  xtrabackup_bin?: string;
+  innobackupex_bin?: string;
   schedule_enabled?: boolean;
   cron_spec?: string;
 };
@@ -123,4 +133,12 @@ export function listMysqlBackupJobs(projectId: number, params?: { instance_id?: 
 
 export function presignMysqlBackupJob(projectId: number, jobId: number) {
   return getData<{ url: string }>(http.get(`/projects/${projectId}/mysql-backup/jobs/${jobId}/presign`));
+}
+
+export function stopMysqlBackupJob(projectId: number, jobId: number) {
+  return getData<MysqlBackupJob>(http.post(`/projects/${projectId}/mysql-backup/jobs/${jobId}/stop`));
+}
+
+export function deleteMysqlBackupJob(projectId: number, jobId: number) {
+  return getData<{ deleted: boolean }>(http.delete(`/projects/${projectId}/mysql-backup/jobs/${jobId}`));
 }

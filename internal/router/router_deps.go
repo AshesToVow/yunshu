@@ -7,6 +7,7 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/middleware"
 	"yunshu/internal/service"
+	cicdsvc "yunshu/internal/service/cicd"
 
 	"github.com/gin-gonic/gin"
 )
@@ -78,6 +79,9 @@ type RouteDeps struct {
 	cmdbHandler            *handler.CMDBHandler
 	mysqlBackupSvc         *service.MysqlBackupService
 	mysqlBackupHandler     *handler.MysqlBackupHandler
+	alertSvc               *service.AlertService
+	cicdSvc                *cicdsvc.Service
+	cicdHandler            *handler.CicdHandler
 	logAgentHandler        *handler.LogAgentHandler
 	agentDiscoveryHandler  *handler.AgentDiscoveryHandler
 }
@@ -96,6 +100,22 @@ func (d *RouteDeps) MysqlBackupService() *service.MysqlBackupService {
 		return nil
 	}
 	return d.mysqlBackupSvc
+}
+
+// CicdService 供 cicd 插件后台任务使用。
+func (d *RouteDeps) CicdService() *cicdsvc.Service {
+	if d == nil {
+		return nil
+	}
+	return d.cicdSvc
+}
+
+// AlertService 供 alert 插件后台任务使用。
+func (d *RouteDeps) AlertService() *service.AlertService {
+	if d == nil {
+		return nil
+	}
+	return d.alertSvc
 }
 
 func assembleRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
@@ -133,6 +153,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	userGroupHandler := handler.NewUserGroupHandler(svcs.UserGroup)
 
 	mysqlBackupHandler := handler.NewMysqlBackupHandler(svcs.MysqlBackup)
+	cicdHandler := handler.NewCicdHandler(svcs.Cicd)
 
 	authHandler := handler.NewAuthHandler(svcs.Auth, svcs.LoginLog)
 	loginLogHandler := handler.NewLoginLogHandler(svcs.LoginLog)
@@ -178,7 +199,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	rbacHandler := handler.NewRBACHandler(svcs.K8sRBAC)
 	serviceAccountHandler := handler.NewServiceAccountHandler(svcs.K8sServiceAccount)
 	overviewHandler := handler.NewOverviewHandler(svcs.Overview)
-	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt, runtimeClient.ProjectSrv, runtimeClient.LogSourceSrv)
+	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt)
 	cmdbHandler := handler.NewCMDBHandler(svcs.CMDB)
 	logAgentHandler := handler.NewLogAgentHandler(svcs.LogAgent, runtimeClient.AgentSrv)
 	agentDiscoveryHandler := handler.NewAgentDiscoveryHandler(svcs.AgentDiscovery, runtimeClient.AgentSrv)
@@ -255,6 +276,9 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		cmdbHandler:           cmdbHandler,
 		mysqlBackupSvc:        svcs.MysqlBackup,
 		mysqlBackupHandler:    mysqlBackupHandler,
+		alertSvc:              svcs.Alert,
+		cicdSvc:               svcs.Cicd,
+		cicdHandler:           cicdHandler,
 		logAgentHandler:       logAgentHandler,
 		agentDiscoveryHandler: agentDiscoveryHandler,
 	}, nil

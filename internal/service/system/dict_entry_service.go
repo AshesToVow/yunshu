@@ -9,6 +9,7 @@ import (
 	bizerrors "yunshu/internal/pkg/errors"
 
 	"yunshu/internal/interfaces"
+	"yunshu/internal/dictcategory"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/dictmask"
 	"yunshu/internal/pkg/pagination"
@@ -41,6 +42,7 @@ func dictEntrySort(p *int) int {
 
 type DictEntryListQuery struct {
 	DictType string `form:"dict_type"`
+	Category string `form:"category"`
 	Keyword  string `form:"keyword"`
 	Status   *int   `form:"status"`
 	Page     int    `form:"page"`
@@ -83,7 +85,7 @@ const (
 )
 
 func canonicalDictType(dictType string) string {
-	t := strings.TrimSpace(dictType)
+	t := strings.ToLower(strings.TrimSpace(dictType))
 	if t == dictTypeAlertSilenceMatcherName {
 		return dictTypeAlertPromQLLabelKey
 	}
@@ -101,6 +103,9 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 	_ = s.repo.CleanupDuplicateTypeValue(ctx)
 
 	s.initOnce.Do(func() {
+		// 历史收敛：dict_type 统一小写，与代码侧 cicd_* / alert_* 读取一致。
+		_ = s.repo.NormalizeDictTypeCase(ctx)
+
 		// 历史收敛：静默 matcher key 已统一到 alert_promql_label_key，先迁移再删除旧类型。
 		s.migrateAlertSilenceMatcherKeys(ctx)
 
@@ -189,6 +194,67 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "server_ssh_password", Label: "默认密码模板（示例）", Value: "change-me-password", Sort: intRef(1), Status: 1, Remark: "服务器 SSH 密码模板，生产建议改为真实值"},
 			{DictType: "server_port", Label: "SSH 默认端口 22", Value: "22", Sort: intRef(1), Status: 1, Remark: "服务器连接端口模板"},
 			{DictType: "server_port", Label: "RDP 默认端口 3389", Value: "3389", Sort: intRef(2), Status: 1, Remark: "服务器连接端口模板"},
+			// CI/CD 平台配置（字典优先，config.yaml 兜底）
+			{DictType: "cicd_enabled", Label: "启用 CI/CD", Value: "true", Sort: intRef(1), Status: 1, Remark: "CI/CD 插件总开关"},
+			{DictType: "cicd_jenkins_base_url", Label: "Jenkins 地址", Value: "http://127.0.0.1:8080", Sort: intRef(1), Status: 0, Remark: "Jenkins 根 URL"},
+			{DictType: "cicd_jenkins_username", Label: "Jenkins 用户", Value: "admin", Sort: intRef(1), Status: 0, Remark: "Basic Auth 用户名"},
+			{DictType: "cicd_jenkins_api_token", Label: "Jenkins API Token", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：Jenkins API Token"},
+			{DictType: "cicd_jenkinsfile_repo", Label: "Jenkinsfile 仓库", Value: "git@gitee.com:wxd_ops/jenkinsfile-new.git", Sort: intRef(1), Status: 1, Remark: "Pipeline SCM 仓库"},
+			{DictType: "cicd_jenkinsfile_branch", Label: "Jenkinsfile 分支", Value: "main", Sort: intRef(1), Status: 1, Remark: "Pipeline SCM 分支"},
+			{DictType: "cicd_jenkinsfile_front", Label: "前端 Jenkinsfile", Value: "front.jenkinsfile", Sort: intRef(1), Status: 1, Remark: "前端流水线 Script Path"},
+			{DictType: "cicd_jenkinsfile_backend", Label: "后端 Jenkinsfile", Value: "backend.jenkinsfile", Sort: intRef(1), Status: 1, Remark: "后端流水线 Script Path"},
+			{DictType: "cicd_git_credential_id", Label: "Git 凭据 ID", Value: "gitee_registry_ssh", Sort: intRef(1), Status: 1, Remark: "Jenkins 拉代码 SSH 凭据"},
+			{DictType: "cicd_ssh_deploy_credential_id", Label: "SSH 部署凭据 ID", Value: "target-server-credential", Sort: intRef(1), Status: 1, Remark: "SSH_KEY_CREDENTIAL_ID"},
+			{DictType: "cicd_minio_credential_id", Label: "MinIO 凭据 ID", Value: "minio-credentials", Sort: intRef(1), Status: 1, Remark: "Jenkins 流水线 withCredentials 使用；Yunshu 无法读取 Jenkins 凭据库"},
+			{DictType: "cicd_minio_access_key", Label: "MinIO AccessKey（Yunshu）", Value: "", Sort: intRef(1), Status: 0, Remark: "与 Jenkins minio-credentials Username 一致；空则回退 minio_access_key"},
+			{DictType: "cicd_minio_secret_key", Label: "MinIO SecretKey（Yunshu）", Value: "", Sort: intRef(1), Status: 0, Remark: "与 Jenkins minio-credentials Password 一致；空则回退 minio_secret_key"},
+			{DictType: "cicd_minio_endpoint", Label: "MinIO S3 地址", Value: "", Sort: intRef(1), Status: 0, Remark: "Jenkins MINIO_ENDPOINT；空则回退 minio_endpoint 字典"},
+			{DictType: "cicd_minio_bucket_frontend", Label: "前端制品桶", Value: "frontend-artifacts", Sort: intRef(1), Status: 1, Remark: "MINIO_BUCKET 前端"},
+			{DictType: "cicd_minio_bucket_backend", Label: "后端制品桶", Value: "backend-artifacts", Sort: intRef(1), Status: 1, Remark: "MINIO_BUCKET 后端"},
+			{DictType: "cicd_jenkinsfile_k8s", Label: "容器化 Jenkinsfile", Value: "cigroovy.jenkinsfile", Sort: intRef(1), Status: 1, Remark: "K8s/Harbor 流水线 Script Path"},
+			{DictType: "cicd_harbor_url", Label: "Harbor 地址", Value: "harbor.jdicity.local", Sort: intRef(1), Status: 1, Remark: "Jenkins HARBOR_URL（不含协议）"},
+			{DictType: "cicd_harbor_credential_id", Label: "Harbor 凭据 ID", Value: "HARBOR_ID", Sort: intRef(1), Status: 1, Remark: "Jenkins Username/Password 凭据 ID，用于 docker login"},
+			{DictType: "cicd_harbor_project_group", Label: "Harbor 项目", Value: "registry", Sort: intRef(1), Status: 1, Remark: "Jenkins PROJECT_GROUP（镜像仓库项目名）"},
+			{DictType: "cicd_default_wait_mins", Label: "手动发布超时(分钟)", Value: "60", Sort: intRef(1), Status: 1, Remark: "waitMins 默认值"},
+			{DictType: "cicd_default_artifact_retain_count", Label: "制品保留数", Value: "10", Sort: intRef(1), Status: 1, Remark: "artifactRetainCount 默认"},
+			{DictType: "cicd_run_sync_interval_seconds", Label: "Run 同步间隔(秒)", Value: "15", Sort: intRef(1), Status: 1, Remark: "后台轮询 Jenkins 状态"},
+			// CI/CD 枚举
+			{DictType: "cicd_pipeline_type", Label: "前端服务", Value: "frontend", Sort: intRef(1), Status: 1, Remark: "应用类型"},
+			{DictType: "cicd_pipeline_type", Label: "后端服务", Value: "backend", Sort: intRef(2), Status: 1, Remark: "应用类型"},
+			{DictType: "cicd_pipeline_type", Label: "容器化服务", Value: "microservice", Sort: intRef(3), Status: 1, Remark: "应用类型（Harbor+K8s 流水线）"},
+			{DictType: "cicd_publish_mode", Label: "自动发布", Value: "自动发布", Sort: intRef(1), Status: 1, Remark: "publishMode"},
+			{DictType: "cicd_publish_mode", Label: "手动发布", Value: "手动发布", Sort: intRef(2), Status: 1, Remark: "publishMode"},
+			{DictType: "cicd_publish_mode", Label: "仅构建", Value: "仅构建", Sort: intRef(3), Status: 1, Remark: "publishMode"},
+			{DictType: "cicd_publish_mode", Label: "制品发布", Value: "制品发布", Sort: intRef(4), Status: 1, Remark: "Yunshu CD 发布已选 MinIO 制品，跳过编译与 Jenkins input"},
+			{DictType: "cicd_publish_mode", Label: "回滚", Value: "回滚", Sort: intRef(5), Status: 1, Remark: "publishMode：Jenkins UI 选手动回滚历史版本"},
+			{DictType: "cicd_release_op_frontend", Label: "服务上线", Value: "frontend_online", Sort: intRef(1), Status: 1, Remark: "前端 CD 操作类型"},
+			{DictType: "cicd_release_op_frontend", Label: "服务回滚", Value: "frontend_rollback", Sort: intRef(2), Status: 1, Remark: "前端 CD 操作类型"},
+			{DictType: "cicd_release_op_backend", Label: "服务初次部署", Value: "backend_initial", Sort: intRef(1), Status: 1, Remark: "后端 CD 操作类型"},
+			{DictType: "cicd_release_op_backend", Label: "服务更新", Value: "backend_update", Sort: intRef(2), Status: 1, Remark: "后端 CD 操作类型（含选历史包回滚）"},
+			{DictType: "cicd_tenv", Label: "开发环境", Value: "dev", Sort: intRef(1), Status: 1, Remark: "Tenv"},
+			{DictType: "cicd_tenv", Label: "测试环境", Value: "test", Sort: intRef(2), Status: 1, Remark: "Tenv"},
+			{DictType: "cicd_tenv", Label: "生产环境", Value: "prod", Sort: intRef(3), Status: 1, Remark: "Tenv"},
+			{DictType: "cicd_build_type_frontend", Label: "npm", Value: "npm", Sort: intRef(1), Status: 1, Remark: "前端 buildType"},
+			{DictType: "cicd_build_type_frontend", Label: "yarn", Value: "yarn", Sort: intRef(2), Status: 1, Remark: "前端 buildType"},
+			{DictType: "cicd_build_type_backend", Label: "Maven", Value: "mvn", Sort: intRef(1), Status: 1, Remark: "后端 buildType"},
+			{DictType: "cicd_build_type_backend", Label: "Gradle", Value: "gradle", Sort: intRef(2), Status: 1, Remark: "后端 buildType"},
+			{DictType: "cicd_build_type_backend", Label: "Python", Value: "python", Sort: intRef(3), Status: 1, Remark: "后端 buildType"},
+			{DictType: "cicd_build_type_backend", Label: "Golang", Value: "golang", Sort: intRef(4), Status: 1, Remark: "后端 buildType"},
+			{DictType: "cicd_npm_install_mode", Label: "install", Value: "install", Sort: intRef(1), Status: 1, Remark: "npmInstallMode"},
+			{DictType: "cicd_npm_install_mode", Label: "ci", Value: "ci", Sort: intRef(2), Status: 1, Remark: "npmInstallMode"},
+			{DictType: "cicd_npm_install_mode", Label: "skip", Value: "skip", Sort: intRef(3), Status: 1, Remark: "npmInstallMode"},
+			{DictType: "cicd_deploy_kind", Label: "常规发布", Value: "regular", Sort: intRef(1), Status: 1, Remark: "SSH+MinIO"},
+			{DictType: "cicd_deploy_kind", Label: "容器化发布", Value: "container", Sort: intRef(2), Status: 1, Remark: "Harbor+K8s"},
+			{DictType: "cicd_deploy_action", Label: "初始化部署", Value: "初始化部署", Sort: intRef(1), Status: 1, Remark: "deployAction"},
+			{DictType: "cicd_deploy_action", Label: "服务更新", Value: "服务更新", Sort: intRef(2), Status: 1, Remark: "deployAction"},
+			{DictType: "cicd_start_script_type", Label: "脚本模板", Value: "脚本模板", Sort: intRef(1), Status: 1, Remark: "startScriptType"},
+			{DictType: "cicd_start_script_type", Label: "自定义脚本", Value: "自定义脚本", Sort: intRef(2), Status: 1, Remark: "startScriptType"},
+			{DictType: "cicd_k8s_credential", Label: "dev", Value: "k8s-dev-config", Sort: intRef(1), Status: 1, Remark: "K8S_CREDENTIAL_ID"},
+			{DictType: "cicd_k8s_credential", Label: "test", Value: "k8s-test-config", Sort: intRef(2), Status: 1, Remark: "K8S_CREDENTIAL_ID"},
+			{DictType: "cicd_k8s_credential", Label: "prod", Value: "k8s-prod-config", Sort: intRef(3), Status: 1, Remark: "K8S_CREDENTIAL_ID"},
+			{DictType: "cicd_importance_level", Label: "一般", Value: "normal", Sort: intRef(1), Status: 1, Remark: "重要级别"},
+			{DictType: "cicd_importance_level", Label: "重要", Value: "important", Sort: intRef(2), Status: 1, Remark: "重要级别"},
+			{DictType: "cicd_importance_level", Label: "核心", Value: "critical", Sort: intRef(3), Status: 1, Remark: "重要级别"},
 		}
 		singletonTypes := map[string]struct{}{
 			"mail_host":                                 {},
@@ -213,6 +279,29 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			"minio_use_ssl":                             {},
 			"minio_region":                              {},
 			"minio_backup_prefix":                       {},
+			"cicd_enabled":                              {},
+			"cicd_jenkins_base_url":                     {},
+			"cicd_jenkins_username":                     {},
+			"cicd_jenkins_api_token":                    {},
+			"cicd_jenkinsfile_repo":                     {},
+			"cicd_jenkinsfile_branch":                   {},
+			"cicd_jenkinsfile_front":                    {},
+			"cicd_jenkinsfile_backend":                  {},
+			"cicd_git_credential_id":                    {},
+			"cicd_ssh_deploy_credential_id":             {},
+			"cicd_minio_credential_id":                  {},
+			"cicd_minio_access_key":                     {},
+			"cicd_minio_secret_key":                     {},
+			"cicd_minio_endpoint":                       {},
+			"cicd_minio_bucket_frontend":                {},
+			"cicd_minio_bucket_backend":                 {},
+			"cicd_jenkinsfile_k8s":                      {},
+			"cicd_harbor_url":                             {},
+			"cicd_harbor_credential_id":                   {},
+			"cicd_harbor_project_group":                 {},
+			"cicd_default_wait_mins":                    {},
+			"cicd_default_artifact_retain_count":        {},
+			"cicd_run_sync_interval_seconds":            {},
 		}
 		for _, item := range seed {
 			var (
@@ -243,6 +332,15 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 		_ = s.repo.DeleteByTypeAndValue(ctx, "mail_username", "root@example.com")
 		_ = s.repo.DeleteByTypeAndValue(ctx, "mail_from_email", "root@example.com")
 		_ = s.repo.DeleteByTypeAndValue(ctx, "mail_from_name", "YunShu")
+		// 应用类型「微服务」已更名为「容器化服务」
+		if items, err := s.repo.ListByType(ctx, "cicd_pipeline_type"); err == nil {
+			for _, it := range items {
+				if strings.TrimSpace(it.Value) == "microservice" && strings.TrimSpace(it.Label) == "微服务" {
+					it.Label = "容器化服务"
+					_ = s.repo.Update(ctx, &it)
+				}
+			}
+		}
 		// 旧类型清理：收敛为单一 alert_promql_label_key 后，不再保留旧 dict_type。
 		_ = s.repo.DeleteByTypes(ctx, []string{dictTypeAlertSilenceMatcherName})
 	})
@@ -286,7 +384,7 @@ func (s *DictEntryService) List(ctx context.Context, query DictEntryListQuery) (
 	s.ensureBuiltins(ctx)
 	query.DictType = canonicalDictType(query.DictType)
 	page, pageSize := pagination.Normalize(query.Page, query.PageSize)
-	list, total, err := s.repo.List(ctx, query.DictType, query.Keyword, query.Status, page, pageSize)
+	list, total, err := s.repo.List(ctx, query.DictType, query.Keyword, dictcategory.NormalizeID(query.Category), query.Status, page, pageSize)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "dict", "List", err)
 	}

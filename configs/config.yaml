@@ -12,6 +12,38 @@ plugins:
     - project
     - cmdb
     - backup
+    - cicd
+
+# CI/CD（字典 cicd_* 优先覆盖下列 YAML）
+cicd:
+  enabled: true
+  jenkins:
+    base_url: ""
+    username: ""
+    api_token: ""
+    job_folder: ""
+  jenkinsfile:
+    repo: git@gitee.com:wxd_ops/jenkinsfile-new.git
+    branch: main
+    front: front.jenkinsfile
+    backend: backend.jenkinsfile
+    k8s: cigroovy.jenkinsfile
+    shared_library_name: jenkins_share_libraries
+  minio:
+    endpoint: http://10.10.10.103:9000
+    bucket_frontend: frontend-artifacts
+    bucket_backend: backend-artifacts
+  harbor:
+    url: harbor.jdicity.local
+    project_group: registry
+  credentials:
+    git: gitee_registry_ssh
+    ssh_deploy: target-server-credential
+    minio: minio-credentials
+    harbor: HARBOR_ID
+  run_sync_interval_seconds: 15
+  default_wait_mins: 60
+  default_artifact_retain_count: 10
 
 http:
   read_header_timeout_seconds: 5  #从连接建立到读完请求头的最长时间；防慢连接占满，
@@ -34,10 +66,10 @@ log:
   file_path: ./logs  # log file directory path
 
 mysql:
-  host: 10.10.10.103         # Docker 服务名，容器内部通信
+  host: 10.10.10.103        # Docker 服务名，容器内部通信
   port: 3306
   user: root
-  password: "123"  # 生产环境务必修改
+  password: "0gvzJr66iNs5"  # 生产环境务必修改
   db_name: yunshu
   charset: utf8mb4
   loc: Asia%2FShanghai

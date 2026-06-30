@@ -248,13 +248,6 @@ type LogStreamQuery struct {
 	FilePath    *string `form:"file_path"`
 }
 
-type logStreamPlan struct{}
-
-// BuildLogStreamPlan 构建相关的业务逻辑。
-func (s *ProjectMgmtService) BuildLogStreamPlan(ctx context.Context, q LogStreamQuery) (*logStreamPlan, error) {
-	return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgb399afd1b3b2)
-}
-
 type LogExportQuery struct {
 	ProjectID   uint    `form:"project_id"`
 	ServerID    uint    `form:"server_id" binding:"required"`
@@ -262,27 +255,6 @@ type LogExportQuery struct {
 	MaxLines    int     `form:"max_lines"`
 	Include     *string `form:"include"`
 	Exclude     *string `form:"exclude"`
-}
-
-type RemoteLogFileQuery struct {
-	ProjectID uint   `form:"project_id"`
-	ServerID  uint   `form:"server_id" binding:"required"`
-	Dir       string `form:"dir" binding:"required"`
-}
-
-type RemoteLogUnitQuery struct {
-	ProjectID uint `form:"project_id"`
-	ServerID  uint `form:"server_id" binding:"required"`
-}
-
-// ListRemoteLogFiles 查询列表相关的业务逻辑。
-func (s *ProjectMgmtService) ListRemoteLogFiles(ctx context.Context, q RemoteLogFileQuery) ([]string, error) {
-	return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg36453c419629)
-}
-
-// ListRemoteLogUnits 查询列表相关的业务逻辑。
-func (s *ProjectMgmtService) ListRemoteLogUnits(ctx context.Context, q RemoteLogUnitQuery) ([]string, error) {
-	return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg255ca1122356)
 }
 
 // ValidateLogSourceAccess 校验日志源属于项目下指定服务器（SSE/导出/审计共用）。

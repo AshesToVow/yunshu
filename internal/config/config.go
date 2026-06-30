@@ -23,6 +23,7 @@ type Config struct {
 	Security        SecurityConfig        `mapstructure:"security"`
 	Agent           AgentConfig           `mapstructure:"agent"`
 	Plugins         PluginsConfig         `mapstructure:"plugins"`
+	Cicd            CicdConfig            `mapstructure:"cicd"`
 }
 
 type GRPCConfig struct {
@@ -270,6 +271,31 @@ func Load(path string) (*Config, error) {
 		cfg.GRPC.MaxSendMsgBytes = 8 * 1024 * 1024
 	}
 	cfg.K8sEventForward.ApplyDefaults()
+	defCicd := DefaultCicdConfig()
+	if !cfg.Cicd.Enabled && !v.IsSet("cicd.enabled") {
+		cfg.Cicd.Enabled = defCicd.Enabled
+	}
+	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Repo) == "" {
+		cfg.Cicd.Jenkinsfile.Repo = defCicd.Jenkinsfile.Repo
+	}
+	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Branch) == "" {
+		cfg.Cicd.Jenkinsfile.Branch = defCicd.Jenkinsfile.Branch
+	}
+	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Front) == "" {
+		cfg.Cicd.Jenkinsfile.Front = defCicd.Jenkinsfile.Front
+	}
+	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Backend) == "" {
+		cfg.Cicd.Jenkinsfile.Backend = defCicd.Jenkinsfile.Backend
+	}
+	if cfg.Cicd.RunSyncIntervalSeconds <= 0 {
+		cfg.Cicd.RunSyncIntervalSeconds = defCicd.RunSyncIntervalSeconds
+	}
+	if cfg.Cicd.DefaultWaitMins <= 0 {
+		cfg.Cicd.DefaultWaitMins = defCicd.DefaultWaitMins
+	}
+	if cfg.Cicd.DefaultArtifactRetain <= 0 {
+		cfg.Cicd.DefaultArtifactRetain = defCicd.DefaultArtifactRetain
+	}
 	return &cfg, nil
 }
 

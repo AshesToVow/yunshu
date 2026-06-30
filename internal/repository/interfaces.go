@@ -112,11 +112,12 @@ type DictEntryRepo interface {
 	DeleteByTypeAndValue(ctx context.Context, dictType string, value string) (error)
 	CleanupDuplicateTypeValue(ctx context.Context) (error)
 	CleanupDuplicateTypeLabel(ctx context.Context) (error)
-	List(ctx context.Context, dictType string, keyword string, status *int, page int, pageSize int) ([]model.DictEntry, int64, error)
+	List(ctx context.Context, dictType string, keyword string, category string, status *int, page int, pageSize int) ([]model.DictEntry, int64, error)
 	ListByTypeEnabled(ctx context.Context, dictType string) ([]model.DictEntry, error)
 	ListByType(ctx context.Context, dictType string) ([]model.DictEntry, error)
 	GetByDictTypeAndValue(ctx context.Context, dictType string, value string) (*model.DictEntry, error)
 	GetByDictTypeAndLabel(ctx context.Context, dictType string, label string) (*model.DictEntry, error)
+	NormalizeDictTypeCase(ctx context.Context) error
 }
 
 var _ DictEntryRepo = (*DictEntryRepository)(nil)
@@ -203,6 +204,8 @@ type MysqlBackupRepo interface {
 	UpdateJob(ctx context.Context, job *model.MysqlBackupJob) (error)
 	PatchJob(ctx context.Context, jobID uint, fields map[string]any) (error)
 	GetJob(ctx context.Context, id uint) (*model.MysqlBackupJob, error)
+	GetJobInProject(ctx context.Context, projectID, jobID uint) (*model.MysqlBackupJob, error)
+	DeleteJob(ctx context.Context, projectID, jobID uint) error
 	ListScheduleEnabledInstances(ctx context.Context) ([]model.MysqlBackupInstance, error)
 	TouchLastScheduledAt(ctx context.Context, id uint, at time.Time) (error)
 	HasRunningJob(ctx context.Context, instanceID uint) (bool, error)

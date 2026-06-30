@@ -36,6 +36,7 @@ var MysqldumpOptionCatalog = []MysqldumpOption{
 	{ID: "add_drop_table", Group: "对象结构", Label: "含 DROP TABLE (--add-drop-table)", Flag: "--add-drop-table"},
 	{ID: "skip_add_drop_table", Group: "对象结构", Label: "不含 DROP TABLE (--skip-add-drop-table)", Flag: "--skip-add-drop-table"},
 	{ID: "add_drop_database", Group: "对象结构", Label: "含 DROP DATABASE (--add-drop-database)", Flag: "--add-drop-database"},
+	{ID: "skip_add_drop_database", Group: "对象结构", Label: "不含 DROP DATABASE (--skip-add-drop-database)", Flag: "--skip-add-drop-database"},
 	{ID: "create_options", Group: "对象结构", Label: "含建表选项 (--create-options)", Flag: "--create-options"},
 	{ID: "no_create_db", Group: "对象结构", Label: "不输出 CREATE DATABASE (--no-create-db)", Flag: "--no-create-db"},
 	// 数据格式
@@ -66,6 +67,7 @@ var MysqldumpOptionCatalog = []MysqldumpOption{
 	{ID: "skip_dump_date", Group: "网络与输出", Label: "省略 dump 时间 (--skip-dump-date)", Flag: "--skip-dump-date"},
 	{ID: "dump_date", Group: "网络与输出", Label: "输出 dump 时间 (--dump-date)", Flag: "--dump-date"},
 	{ID: "tz_utc", Group: "网络与输出", Label: "时区 UTC (--tz-utc)", Flag: "--tz-utc"},
+	{ID: "skip_tz_utc", Group: "网络与输出", Label: "跳过时区转换 (--skip-tz-utc)", Flag: "--skip-tz-utc"},
 	{ID: "verbose", Group: "网络与输出", Label: "详细日志 (--verbose)", Flag: "--verbose"},
 	// 性能与包大小
 	{ID: "max_allowed_packet_256m", Group: "性能与包大小", Label: "max_allowed_packet=256M", Flag: "--max-allowed-packet=256M"},
@@ -84,9 +86,17 @@ func init() {
 	}
 }
 
-// DefaultMysqldumpOptionIDs 与历史硬编码行为一致。
+// DefaultMysqldumpOptionIDs 默认 mysqldump 选项。
+// column-statistics=0 仅 MySQL 8 客户端需要；5.7 客户端会忽略未知项。
+// skip_tz_utc + net_buffer_length 有助于减少管道首包等待。
 func DefaultMysqldumpOptionIDs() []string {
-	return []string{"single_transaction", "quick", "routines", "triggers"}
+	return []string{
+		"single_transaction", "quick", "skip_lock_tables",
+		"routines", "triggers",
+		"skip_add_drop_table", "skip_add_drop_database",
+		"set_gtid_purged_off",
+		"column_statistics_off", "skip_tz_utc", "max_allowed_packet_512m", "net_buffer_length_1m",
+	}
 }
 
 const DefaultMysqldumpWorkDir = "/export/backup/yunshu"
@@ -125,15 +135,71 @@ func ParseMysqldumpOptionIDs(raw string) ([]string, error) {
 	if len(out) == 0 {
 		return DefaultMysqldumpOptionIDs(), nil
 	}
+	if err := ValidateMysqldumpOptionIDs(out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
+var mysqldumpExclusiveGroups = [][]string{
+	{"single_transaction", "lock_all_tables", "lock_tables"},
+	{"add_drop_table", "skip_add_drop_table"},
+	{"add_drop_database", "skip_add_drop_database"},
+	{"extended_insert", "skip_extended_insert"},
+	{"set_gtid_purged_off", "set_gtid_purged_on"},
+	{"tz_utc", "skip_tz_utc"},
+	{"add_locks", "skip_add_locks"},
+	{"disable_keys", "skip_disable_keys"},
+	{"set_charset", "skip_set_charset"},
+	{"dump_date", "skip_dump_date"},
+}
 
-// FormatMysqldumpFlags 将选项 ID 与额外参数拼为 mysqldump 命令行 flags。
+// ValidateMysqldumpOptionIDs 校验互斥选项，保存实例前调用。
+func ValidateMysqldumpOptionIDs(ids []string) error {
+	set := map[string]struct{}{}
+	for _, id := range ids {
+		set[id] = struct{}{}
+	}
+	for _, group := range mysqldumpExclusiveGroups {
+		var picked []string
+		for _, id := range group {
+			if _, ok := set[id]; ok {
+				picked = append(picked, id)
+			}
+		}
+		if len(picked) > 1 {
+			return fmt.Errorf("mysqldump 选项冲突: %s（同组只能选一个）", strings.Join(picked, " / "))
+		}
+	}
+	return nil
+}
+
+func mysqldumpFlagKey(flag string) string {
+	flag = strings.TrimSpace(flag)
+	if i := strings.IndexByte(flag, '='); i > 0 {
+		return flag[:i]
+	}
+	return flag
+}
+
+// FormatMysqldumpFlags 将选项 ID 与额外参数拼为 mysqldump 命令行 flags（同名校验去重）。
 func FormatMysqldumpFlags(optionIDs []string, extraArgs string) (string, error) {
+	seen := map[string]struct{}{}
 	var flags []string
+	addFlag := func(f string) {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			return
+		}
+		key := mysqldumpFlagKey(f)
+		if _, dup := seen[key]; dup {
+			return
+		}
+		seen[key] = struct{}{}
+		flags = append(flags, f)
+	}
 	for _, id := range optionIDs {
 		if f, ok := mysqldumpOptionByID[id]; ok {
-			flags = append(flags, f)
+			addFlag(f)
 		}
 	}
 	extra := strings.TrimSpace(extraArgs)
@@ -145,8 +211,8 @@ func FormatMysqldumpFlags(optionIDs []string, extraArgs string) (string, error) 
 			if !strings.HasPrefix(p, "-") {
 				return "", fmt.Errorf("额外参数须以 - 开头: %s", p)
 			}
+			addFlag(p)
 		}
-		flags = append(flags, extra)
 	}
 	return strings.Join(flags, " "), nil
 }
@@ -165,4 +231,16 @@ func NormalizeMysqldumpWorkDir(dir string) (string, error) {
 		return "", fmt.Errorf("mysqldump_work_dir 无效")
 	}
 	return dir, nil
+}
+
+// NormalizeMysqldumpBin 远端 mysqldump 可执行文件路径（可选）。
+func NormalizeMysqldumpBin(bin string) (string, error) {
+	bin = strings.TrimSpace(bin)
+	if bin == "" {
+		return "", nil
+	}
+	if !strings.HasPrefix(bin, "/") {
+		return "", fmt.Errorf("mysqldump_bin 须为绝对路径（以 / 开头）")
+	}
+	return bin, nil
 }

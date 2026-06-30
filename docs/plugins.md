@@ -16,6 +16,7 @@
 | `project` | `internal/plugins/project` | 多租户项目、成员、服务配置、日志 Agent 与日志流 |
 | `cmdb` | `internal/plugins/cmdb` | CMDB 服务器资产：主机、分组、云账号、SSH/Web 终端 |
 | `backup` | `internal/plugins/backup` | MySQL 备份调度与任务 |
+| `cicd` | `internal/plugins/cicd` | CI/CD：Jenkins 打包、MinIO/SSH 发布、执行记录 |
 
 ## 配置
 
@@ -28,6 +29,7 @@ plugins:
     - project
     - cmdb
     - backup
+    - cicd
 ```
 
 - 省略 `plugins` 或 `enabled` 为空：启用上述默认全集。
@@ -36,10 +38,24 @@ plugins:
 ## 新增插件步骤
 
 1. 新建 `internal/plugins/<name>/plugin.go`，`init()` 中 `plugin.Register(&module{})`。
-2. 实现 `plugin.Module`：`Models`、`PostMigrate`、`StartWorkers`（可选）等。
+2. 实现 `plugin.Module`：`Models`、`PostMigrate`、`StartWorkers`（可选，如 alert 云到期 / cicd Jenkins 同步 / backup 调度）等。
 3. 在 `internal/plugins/all/all.go` 增加 `_ "yunshu/internal/plugins/<name>"`。
 4. 路由实现放在 `internal/router/register_<name>_routes.go`，并在 `router/plugin_bind.go` 注册。
 5. 将插件名加入 `config.yaml` 的 `plugins.enabled`（及 `plugin.DefaultEnabled()`）。
+
+### 完整清单（含前端）
+
+| 步骤 | 位置 |
+|------|------|
+| 后端插件注册 | `internal/plugins/<name>/plugin.go` + `all/all.go` |
+| 路由 | `register_<name>_routes.go` + `plugin_bind.go`（含 `RegisterCicdRoutes`） |
+| 权限种子 | `cmd/seed.go` |
+| 菜单 | `internal/menu/catalog.go` → `go run . seed` |
+| 前端路由 | `web/src/modules/<name>/routes.tsx` 或动态菜单 |
+| **插件路径规则** | `internal/plugin/path_filter.go` **与** `web/src/modules/plugin-path.ts`（必须同步） |
+| OpenAPI | `go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml` |
+
+详见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
 ## CMDB 模块结构
 

@@ -4,6 +4,7 @@ package all
 import (
 	_ "yunshu/internal/plugins/alert"
 	_ "yunshu/internal/plugins/backup"
+	_ "yunshu/internal/plugins/cicd"
 	_ "yunshu/internal/plugins/cmdb"
 	_ "yunshu/internal/plugins/core"
 	_ "yunshu/internal/plugins/k8s"

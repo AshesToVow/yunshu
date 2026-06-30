@@ -33,6 +33,8 @@ func bindPluginRoutes(name string, api *gin.RouterGroup, rt *plugin.Runtime) err
 		RegisterCMDBRoutes(api, d)
 	case "backup":
 		RegisterBackupRoutes(api, d)
+	case "cicd":
+		RegisterCicdRoutes(api, d)
 	default:
 		return fmt.Errorf("unknown plugin %q", name)
 	}

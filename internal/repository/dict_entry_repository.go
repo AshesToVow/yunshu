@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"yunshu/internal/dictcategory"
 	"yunshu/internal/model"
 
 	"gorm.io/gorm"
@@ -139,14 +140,17 @@ WHERE d1.deleted_at IS NULL
 	return r.db.WithContext(ctx).Exec(sql).Error
 }
 
-func (r *DictEntryRepository) List(ctx context.Context, dictType, keyword string, status *int, page, pageSize int) ([]model.DictEntry, int64, error) {
+func (r *DictEntryRepository) List(ctx context.Context, dictType, keyword, category string, status *int, page, pageSize int) ([]model.DictEntry, int64, error) {
 	query := r.db.WithContext(ctx).Model(&model.DictEntry{})
 	if strings.TrimSpace(dictType) != "" {
-		query = query.Where("dict_type = ?", strings.TrimSpace(dictType))
+		query = query.Where("LOWER(dict_type) = ?", strings.ToLower(strings.TrimSpace(dictType)))
+	}
+	if clause, args, ok := dictcategory.ApplyFilter(category); ok {
+		query = query.Where(clause, args...)
 	}
 	if strings.TrimSpace(keyword) != "" {
 		like := "%" + strings.TrimSpace(keyword) + "%"
-		query = query.Where("label LIKE ? OR value LIKE ? OR remark LIKE ?", like, like, like)
+		query = query.Where("label LIKE ? OR value LIKE ? OR remark LIKE ? OR dict_type LIKE ?", like, like, like, like)
 	}
 	if status != nil {
 		query = query.Where("status = ?", *status)
@@ -209,4 +213,13 @@ func (r *DictEntryRepository) GetByDictTypeAndLabel(ctx context.Context, dictTyp
 		return nil, err
 	}
 	return &item, nil
+}
+
+// NormalizeDictTypeCase 将 dict_type 统一为小写，避免 CICD_* 与 cicd_* 重复且代码读不到。
+func (r *DictEntryRepository) NormalizeDictTypeCase(ctx context.Context) error {
+	return r.db.WithContext(ctx).Exec(`
+UPDATE dict_entries
+SET dict_type = LOWER(dict_type), updated_at = updated_at
+WHERE dict_type <> LOWER(dict_type) AND deleted_at IS NULL
+`).Error
 }

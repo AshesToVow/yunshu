@@ -11,6 +11,7 @@
 | [../plugins.md](../plugins.md) | **业务插件**（`plugins.enabled`、CMDB 拆分） |
 | [../backend-architecture-complete.md](../backend-architecture-complete.md) | 后端完整技术文档 |
 | [../refactoring-report.md](../refactoring-report.md) | 架构重构实施状态 |
+| [../cicd.md](../cicd.md) | **CI/CD 插件**（Jenkins、审批、字典） |
 | [requirements/](./requirements/) | 按业务域拆分的需求说明（功能、子功能、注意事项） |
 | [requirements/menus/_INDEX.md](./requirements/menus/_INDEX.md) | **按菜单（路由）一页一文**的详细需求，含 API/表/注意事项 |
 | [requirements/menus/menu-k8s-resource-pattern.md](./requirements/menus/menu-k8s-resource-pattern.md) | K8s 控制台列表类页面通用模式（集群/三元策略/典型能力） |

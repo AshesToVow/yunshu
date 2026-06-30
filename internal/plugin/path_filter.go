@@ -29,6 +29,9 @@ func ResolveAPIResourcePlugin(resource string) string {
 	if r == "" {
 		return ""
 	}
+	if plugin := resolveCicdAPIResource(r); plugin != "" {
+		return plugin
+	}
 	for _, rule := range apiResourceRules {
 		for _, prefix := range rule.prefixes {
 			if strings.HasPrefix(r, prefix) {
@@ -48,6 +51,9 @@ func IsMenuPathAllowed(path string, cfg *config.PluginsConfig) bool {
 	if pluginName == "cmdb" {
 		return isPluginEnabled(cfg, "cmdb") && isPluginEnabled(cfg, "project")
 	}
+	if pluginName == "cicd" {
+		return isPluginEnabled(cfg, "cicd") && isPluginEnabled(cfg, "project")
+	}
 	return isPluginEnabled(cfg, pluginName)
 }
 
@@ -59,6 +65,9 @@ func IsAPIResourceAllowed(resource string, cfg *config.PluginsConfig) bool {
 	}
 	if pluginName == "cmdb" {
 		return isPluginEnabled(cfg, "cmdb") && isPluginEnabled(cfg, "project")
+	}
+	if pluginName == "cicd" {
+		return isPluginEnabled(cfg, "cicd") && isPluginEnabled(cfg, "project")
 	}
 	return isPluginEnabled(cfg, pluginName)
 }
@@ -129,6 +138,7 @@ var uiPathRules = []pathRule{
 	},
 	{plugin: "cmdb", prefixes: []string{"/project-servers", "/server-console"}},
 	{plugin: "backup", prefixes: []string{"/mysql-backup"}},
+	{plugin: "cicd", prefixes: []string{"/cicd"}},
 }
 
 var apiResourceRules = []pathRule{
@@ -160,6 +170,23 @@ var apiResourceRules = []pathRule{
 	{plugin: "project", prefixes: []string{"/api/v1/projects"}},
 	{plugin: "cmdb", prefixes: []string{"/api/v1/servers", "/api/v1/cloud-accounts", "/api/v1/server-groups"}},
 	{plugin: "backup", prefixes: []string{"/api/v1/mysql-backup"}},
+}
+
+// resolveCicdAPIResource 识别 CI/CD 相关 API（须在 project 前缀规则之前匹配）。
+func resolveCicdAPIResource(resource string) string {
+	cicdOverview := []string{
+		"/api/v1/overview/project-launches",
+		"/api/v1/overview/release-by-person",
+	}
+	for _, p := range cicdOverview {
+		if resource == p || strings.HasPrefix(resource, p+"/") {
+			return "cicd"
+		}
+	}
+	if strings.Contains(resource, "/projects/") && strings.Contains(resource, "/cicd") {
+		return "cicd"
+	}
+	return ""
 }
 
 func normalizeUIPath(path string) string {

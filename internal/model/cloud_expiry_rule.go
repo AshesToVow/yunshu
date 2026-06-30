@@ -11,6 +11,7 @@ type CloudExpiryRule struct {
 	ID uint `json:"id" gorm:"primaryKey;comment:主键ID"`
 
 	ProjectID   uint   `json:"project_id" gorm:"not null;index;comment:所属项目ID"`
+	ProjectName string `json:"project_name,omitempty" gorm:"->;column:project_name;-:migration"`
 	Name        string `json:"name" gorm:"size:128;not null;index;comment:规则名称"`
 	Provider    string `json:"provider" gorm:"size:32;not null;default:'';index;comment:云厂商标识，空表示全部"`
 	RegionScope string `json:"region_scope" gorm:"size:256;not null;default:'';comment:地域范围，逗号分隔，空表示全部"`

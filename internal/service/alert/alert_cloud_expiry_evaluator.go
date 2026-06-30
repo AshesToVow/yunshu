@@ -1,4 +1,4 @@
-﻿package alert
+package alert
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	bizerrors "yunshu/internal/pkg/errors"
 	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/service/cmdb"
-	"yunshu/internal/service/project"
 )
 
 func (s *AlertService) tickCloudExpiryRules(ctx context.Context) error {
@@ -53,7 +52,7 @@ func (s *AlertService) tickCloudExpiryRulesWithMode(ctx context.Context, force b
 			} else {
 				last, hasLast = s.cloudExpiryLocalLastEval(syntheticID)
 			}
-			if !project.ShouldEvalCloudExpiryByCron(cronSpec, last, hasLast, now) {
+			if !ShouldEvalCloudExpiryByCron(cronSpec, last, hasLast, now) {
 				continue
 			}
 		}

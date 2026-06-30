@@ -1,12 +1,14 @@
-package project
+package alert
 
 import (
 	"testing"
 	"time"
+
+	"yunshu/internal/pkg/cronutil"
 )
 
 func TestParseCloudExpiryCronSchedule_everyMinute5Field(t *testing.T) {
-	sched, err := parseCloudExpiryCronSchedule("*/1 * * * *")
+	sched, err := cronutil.ParseSchedule("*/1 * * * *")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

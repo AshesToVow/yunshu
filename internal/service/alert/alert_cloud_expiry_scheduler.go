@@ -3,29 +3,16 @@ package alert
 import (
 	"context"
 
-	"github.com/robfig/cron/v3"
+	"yunshu/internal/pkg/cronutil"
 )
 
 // cloudExpirySchedulerSpec 云到期内置轮询节拍（六段式，含秒），仅用于判断是否到达各规则在控制台配置的 Cron；
-// 与 alert.monitor_eval_cron_spec（内置 PromQL 监控规则）解耦。
-const cloudExpirySchedulerSpec = "*/5 * * * * *"
+// 与 alert.monitor_eval_cron_spec（内置 PromQL 监控规则）解耦。每分钟检查一次即可满足小时级 Cron 精度。
+const cloudExpirySchedulerSpec = "0 * * * * *"
 
 func (s *AlertService) runCloudExpiryEvaluator(ctx context.Context) {
-	spec := cloudExpirySchedulerSpec
-	c := cron.New(cron.WithSeconds())
-	job := func() {
-		if ctx.Err() != nil {
-			return
-		}
-		alertLog().Infow("Cloud expiry scheduler wake", "inner_cron", spec)
+	alertLog().Infow("Started cloud expiry scheduler", "poll_cron", cloudExpirySchedulerSpec)
+	cronutil.RunWorker(ctx, cloudExpirySchedulerSpec, func() {
 		_ = s.tickCloudExpiryRules(ctx)
-	}
-	if _, err := c.AddFunc(spec, job); err != nil {
-		alertLog().Errorw(err, "Failed to init cloud expiry scheduler", "spec", spec)
-		return
-	}
-	c.Start()
-	<-ctx.Done()
-	stopCtx := c.Stop()
-	<-stopCtx.Done()
+	}, "")
 }

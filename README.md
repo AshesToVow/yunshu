@@ -13,6 +13,8 @@
 
 - [项目简介](#项目简介)
 - [架构与权限模型](#架构与权限模型)
+  - [系统全景图](#系统全景图)
+  - [分层架构](#分层架构)
 - [快速开始](#快速开始)
   - [环境要求](#环境要求)
   - [本地源码启动](#本地源码启动)
@@ -49,8 +51,10 @@ Yunshu 主要能力：
 
 - 多模块后台管理（用户、角色、菜单、组织、字典、审计）
 - **双层 K8s 鉴权**：Casbin API 权限 + 集群档位（`readonly` / `readonly_exec` / `admin`）+ 命名空间黑/白名单
-- 项目维度的服务器、服务、日志源、Agent、**SSE 实时日志**与 Agent 发现
-- 告警数据源、规则、值班、静默、策略、多渠道通知（钉钉/邮件等）
+- 项目维度的 **CMDB**（服务器、云账号、SSH/Web 终端）、服务、日志源、Agent、**SSE 实时日志**与 Agent 发现
+- **MySQL 备份**（mysqldump / xtrabackup / innobackupex，MinIO 存储，Cron 调度）
+- **CI/CD**（Jenkins 打包、多级审批发布、制品 MinIO；`cicd` 插件）
+- 告警数据源、规则、值班、静默、策略、**云到期规则**、多渠道通知（钉钉/邮件等）
 - Kubernetes 资源可视化管理（工作负载、网络、存储、RBAC、CRD、Ingress-Nginx 运维）
 
 默认管理员（**首次** `go run . seed` 创建；重复 seed **不会重置**已有 admin 密码）：
@@ -66,6 +70,92 @@ Yunshu 主要能力：
 ---
 
 ## 架构与权限模型
+
+### 系统全景图
+
+下图概括 Yunshu 的**用户入口、插件化后端、数据层与外部依赖**（以默认启用全部插件为例）：
+
+```mermaid
+flowchart TB
+  subgraph clients["用户与告警接入"]
+    USER["运维 / 开发<br/>浏览器"]
+    AM["Alertmanager<br/>Webhook"]
+  end
+
+  subgraph fe["前端 · web/"]
+    REACT["React 18 + Ant Design<br/>Vite · modules/* 按插件懒加载<br/>Casbin 菜单 · 项目上下文"]
+  end
+
+  subgraph be["Yunshu 后端 · go run . server"]
+    HTTP["Gin HTTP :8080<br/>Swagger / REST"]
+    MW["中间件链<br/>JWT · Casbin · K8sScope · 审计"]
+    GRPC["gRPC :18080<br/>日志 Agent Ingest"]
+    WORKERS["插件 StartWorkers<br/>云到期 · 备份调度 · Jenkins 同步 · K8s Event 转发"]
+
+    subgraph plugins["plugins.enabled 编译期插件"]
+      direction LR
+      CORE["core<br/>用户/角色/菜单/字典"]
+      PROJ["project<br/>项目/成员/日志 SSE"]
+      CMDB["cmdb<br/>服务器/云账号/终端"]
+      K8SPL["k8s<br/>多集群控制台"]
+      ALERT["alert<br/>规则/订阅/云到期"]
+      BACKUP["backup<br/>MySQL 备份"]
+      CICD["cicd<br/>CI 打包 / CD 发布"]
+    end
+
+    SVC["Service 域逻辑<br/>internal/service/*"]
+    REPO["Repository · GORM<br/>internal/repository"]
+  end
+
+  subgraph store["平台数据"]
+    MYSQL[("MySQL<br/>业务表 · Casbin · dict_entries")]
+    REDIS[("Redis<br/>Session · 告警状态")]
+  end
+
+  subgraph ext["外部系统"]
+    K8SAPI["Kubernetes API<br/>Kom SDK 多集群"]
+    AGENT["log-agent<br/>目标机部署"]
+    SSH["SSH 目标服务器"]
+    JENKINS["Jenkins"]
+    MINIO["MinIO<br/>备份归档 / CI 制品"]
+    CLOUD["云 API<br/>阿里 / 腾讯 / 京东"]
+    NOTIFY["钉钉 · 邮件 · Webhook"]
+    PROM["Prometheus<br/>告警数据源"]
+  end
+
+  USER --> REACT
+  REACT -->|"Bearer JWT"| HTTP
+  AM -->|"X-Alert-Token"| HTTP
+  HTTP --> MW --> SVC
+  SVC --> REPO
+  REPO --> MYSQL
+  SVC --> REDIS
+  MW -.-> plugins
+  plugins --> SVC
+  WORKERS --> SVC
+
+  AGENT -->|"上报/拉配置"| GRPC
+  GRPC --> SVC
+  PROJ --> AGENT
+  CMDB --> SSH
+  BACKUP --> SSH
+  BACKUP --> MINIO
+  CICD --> JENKINS
+  CICD --> MINIO
+  K8SPL --> K8SAPI
+  ALERT --> PROM
+  ALERT --> CLOUD
+  ALERT --> NOTIFY
+```
+
+**读图要点**：
+
+| 区域 | 说明 |
+|------|------|
+| **插件** | 同一二进制，`config.yaml` → `plugins.enabled` 控制路由、迁移、Worker；详见 [docs/plugins.md](docs/plugins.md) |
+| **项目维度** | CMDB / 日志 / 备份 / CI/CD API 多在 `/api/v1/projects/:id/...` 下，需项目成员权限 |
+| **K8s 三元策略** | Casbin API 授权 → 路由 K8s 范围校验 → 集群档位 + NS 黑/白名单（见下文） |
+| **配置优先级** | 数据字典 `dict_entries` 可覆盖 YAML（Jenkins、MinIO、邮件、备份调度等） |
 
 ### 分层架构
 
@@ -116,9 +206,9 @@ flowchart LR
 #### 启动步骤
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/AshesToVow/yunshu.git
 cd yunshu
-git checkout <branch-name>
+git checkout yunshu_prod_20260701
 go mod download
 cd web && npm install && cd ..
 
@@ -319,11 +409,20 @@ API 细节见：[docs/log-platform-api.md](docs/log-platform-api.md)
 
 1. **告警数据源**：绑定项目与 Prometheus（等）地址。
 2. **告警规则 / 值班**：规则归属由数据源推导；配置值班块与通知对象。
-3. **告警策略**：匹配标签、路由到渠道（钉钉/邮件/Webhook）。
-4. **告警静默**：维护窗口内抑制通知。
-5. **Alertmanager Webhook**：配置 `alert.webhook_token`（或数据字典），指向 `POST /api/v1/alerts/webhook/alertmanager`；鉴权使用请求头 **`X-Alert-Token`**（或 `Authorization: Bearer <token>`），**不支持** URL query `?token=`。
+3. **云到期规则**（监控平台 →「云到期规则」Tab）：按项目配置云厂商、提前天数、**Cron**（如 `0 */2 * * *` 每 2 小时）；后台每分钟检查是否到点（非每 5 秒拉云）；须配置 `security.encryption_key` 以解密云账号。
+4. **告警策略**：匹配标签、路由到渠道（钉钉/邮件/Webhook）。
+5. **告警静默**：维护窗口内抑制通知。
+6. **Alertmanager Webhook**：配置 `alert.webhook_token`（或数据字典），指向 `POST /api/v1/alerts/webhook/alertmanager`；鉴权使用请求头 **`X-Alert-Token`**（或 `Authorization: Bearer <token>`），**不支持** URL query `?token=`。
 
 说明见：[docs/alert-notify-guide.md](docs/alert-notify-guide.md)、[docs/alert-routing-and-delivery-guide.md](docs/alert-routing-and-delivery-guide.md)
+
+### CI/CD 要点（`cicd` 插件）
+
+1. 在 `plugins.enabled` 中启用 `cicd`（须与 `project` 同时启用），执行 `migrate`。
+2. **数据字典**配置 Jenkins 地址、凭据、`cicd_enabled=true`（见 [docs/cicd.md](docs/cicd.md)）。
+3. **CI/CD → 应用服务**：创建服务、CI/发布配置，触发打包或发布。
+4. **审批管理**：定义项目级审批阶段；发布工单在「待办列表」处理。
+5. 首页 CI 图表依赖 `cicd_release_runs`；禁用插件时图表为空属预期。
 
 ---
 
@@ -335,9 +434,11 @@ API 细节见：[docs/log-platform-api.md](docs/log-platform-api.md)
 | 插件管理 | `/plugins` |
 | 用户/角色/授权/API/菜单 | `/users`、`/roles`、`/policies`、`/permissions`、`/menus` |
 | K8s 档位/NS 策略 | `/k8s-scoped-policies` |
-| 项目与日志 | `/projects`、`/project-members`、`/project-logs`、`/project-log-sources` |
+| 项目与日志 | `/projects`、`/project-members`、`/project-servers`、`/project-logs`、`/project-log-sources`、`/agent-list` |
+| MySQL 备份 | `/mysql-backup` |
+| CI/CD | `/cicd/services`、`/cicd/todo`、`/cicd/build-records`、`/cicd/release-records` |
 | 集群与资源 | `/clusters`、`/pods`、`/deployments`、`/k8s/event-forward`、… |
-| 告警 | `/alert-channels`、`/alert-monitor-platform`、`/alert-duty` |
+| 告警 | `/alert-channels`、`/alert-monitor-platform`（含云到期规则 Tab）、`/alert-duty` |
 
 > 已废弃侧栏入口（seed 会隐藏并重定向）：`/alert-config-center` → 监控平台「策略与联调」；`/alert-events` → 监控平台「历史」；`/runtime-config` → `/dict-entries`。
 
@@ -778,7 +879,9 @@ yunshu/
 │   ├── menu/               # 内置菜单 catalog + seed 同步（internal/menu/catalog.go）
 │   ├── middleware/         # Auth、Casbin、K8sScope、ErrorHandler、审计
 │   ├── plugin/             # 插件注册表与 Runtime
-│   ├── plugins/            # 编译期业务插件：core/k8s/alert/project/cmdb/backup
+│   ├── plugins/            # 编译期业务插件：core/k8s/alert/project/cmdb/backup/cicd
+│   ├── dictconfig/         # 数据字典运行期配置（mail/cicd/minio/parse）
+│   ├── pkg/                # cronutil、sshserver、mysqlbackup、logutil…
 │   ├── interfaces/         # Repository 接口
 │   ├── repository/         # GORM 仓储实现
 │   ├── model/              # 数据模型
@@ -798,8 +901,10 @@ yunshu/
 
 | 文档 | 路径 |
 |------|------|
+| **二次开发 / 贡献指南** | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | **后端代码地图（推荐开发者首读）** | [docs/CODEBASE-MAP.md](docs/CODEBASE-MAP.md) |
 | **业务插件（GVA 风格）** | [docs/plugins.md](docs/plugins.md) |
+| **CI/CD 插件** | [docs/cicd.md](docs/cicd.md) |
 | 后端完整架构 | [docs/backend-architecture-complete.md](docs/backend-architecture-complete.md) |
 | 重构实施状态 | [docs/refactoring-report.md](docs/refactoring-report.md) |
 | 产品手册总览 | [docs/handbook/README.md](docs/handbook/README.md) |

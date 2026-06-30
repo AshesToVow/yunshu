@@ -1,0 +1,56 @@
+package router
+
+import (
+	"yunshu/internal/middleware"
+
+	"github.com/gin-gonic/gin"
+)
+
+// RegisterCicdRoutes CI/CD：应用服务、CI 配置、发布配置、打包/发布记录（项目作用域）。
+func RegisterCicdRoutes(api *gin.RouterGroup, d *RouteDeps) {
+	projectRoutes := api.Group("/projects")
+	projectRoutes.Use(d.authMiddleware, d.authorize, d.opAudit)
+	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
+
+	cicdGroup := projectScoped.Group("/cicd")
+	cicdGroup.GET("/services", d.cicdHandler.ListServices)
+	cicdGroup.POST("/services", d.cicdHandler.CreateService)
+	cicdGroup.GET("/services/:serviceId", d.cicdHandler.GetService)
+	cicdGroup.PUT("/services/:serviceId", d.cicdHandler.UpdateService)
+	cicdGroup.DELETE("/services/:serviceId", d.cicdHandler.DeleteService)
+
+	cicdGroup.GET("/services/:serviceId/ci-config", d.cicdHandler.GetCiConfig)
+	cicdGroup.PUT("/services/:serviceId/ci-config", d.cicdHandler.UpsertCiConfig)
+
+	cicdGroup.GET("/services/:serviceId/deploy-configs", d.cicdHandler.ListDeployConfigs)
+	cicdGroup.POST("/services/:serviceId/deploy-configs", d.cicdHandler.CreateDeployConfig)
+	cicdGroup.PUT("/services/:serviceId/deploy-configs/:configId", d.cicdHandler.UpdateDeployConfig)
+	cicdGroup.DELETE("/services/:serviceId/deploy-configs/:configId", d.cicdHandler.DeleteDeployConfig)
+
+	cicdGroup.GET("/services/:serviceId/artifacts", d.cicdHandler.ListArtifacts)
+
+	cicdGroup.POST("/services/:serviceId/builds", d.cicdHandler.TriggerBuild)
+	cicdGroup.POST("/services/:serviceId/releases", d.cicdHandler.TriggerRelease)
+
+	cicdGroup.GET("/build-runs", d.cicdHandler.ListBuildRuns)
+	cicdGroup.GET("/build-runs/:runId", d.cicdHandler.GetBuildRun)
+	cicdGroup.GET("/build-runs/:runId/log", d.cicdHandler.GetBuildRunLog)
+	cicdGroup.DELETE("/build-runs/:runId", d.cicdHandler.DeleteBuildRun)
+
+	cicdGroup.GET("/approval-flow", d.cicdHandler.GetApprovalFlow)
+	cicdGroup.PUT("/approval-flow", d.cicdHandler.UpsertApprovalFlow)
+
+	cicdGroup.GET("/release-runs", d.cicdHandler.ListReleaseRuns)
+	cicdGroup.GET("/release-runs/:runId", d.cicdHandler.GetReleaseRun)
+	cicdGroup.GET("/release-runs/:runId/approval-steps", d.cicdHandler.ListReleaseApprovalSteps)
+	cicdGroup.POST("/release-runs/:runId/approve", d.cicdHandler.ApproveReleaseRun)
+	cicdGroup.POST("/release-runs/:runId/reject", d.cicdHandler.RejectReleaseRun)
+	cicdGroup.POST("/release-runs/:runId/execute", d.cicdHandler.ExecuteReleaseRun)
+	cicdGroup.POST("/release-runs/:runId/terminate", d.cicdHandler.TerminateReleaseRun)
+	cicdGroup.POST("/release-runs/batch-approve", d.cicdHandler.BatchApproveReleaseRuns)
+	cicdGroup.POST("/release-runs/batch-reject", d.cicdHandler.BatchRejectReleaseRuns)
+	cicdGroup.POST("/release-runs/batch-execute", d.cicdHandler.BatchExecuteReleaseRuns)
+	cicdGroup.POST("/release-runs/batch-terminate", d.cicdHandler.BatchTerminateReleaseRuns)
+	cicdGroup.GET("/release-runs/:runId/log", d.cicdHandler.GetReleaseRunLog)
+	cicdGroup.DELETE("/release-runs/:runId", d.cicdHandler.DeleteReleaseRun)
+}

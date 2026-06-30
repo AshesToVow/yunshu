@@ -11,7 +11,8 @@
 |-----|----------|-----------------------------------|
 | 数据源 | CRUD、连通、即时/范围查询 | `/datasources`、`/datasources/:id/query(_range)`、`prometheus-alerts` |
 | 静默 | 单条创建/编辑、从活跃告警批量静默 | `/silences`、`/silences/batch` |
-| 监控规则 | PromQL、for、间隔、级别、绑定项目；**启用/停用筛选**（分段 + 统计） | `/monitor-rules?enabled=`、处理人 `/monitor-rules/:id/assignees`、值班 `/duty-blocks` |
+| 监控规则 | PromQL、for、间隔、级别、绑定项目；**启用/停用筛选** | `/monitor-rules?enabled=`、处理人、值班 `/duty-blocks` |
+| 云到期规则 | 云实例到期 Cron 评估、立即执行 | `/cloud-expiry-rules`、`POST .../evaluate-now` |
 | 策略与历史 | 嵌入 `AlertConfigCenterPanel` | `/policies`、`/events`、`/history/stats` |
 | PromQL 查询 | 调试 PromQL | 同数据源 query 接口 |
 
@@ -34,5 +35,6 @@
 
 ## 6. 注意事项
 
+- **云到期**：规则 `eval_cron_spec`（如 `0 */2 * * *`）决定拉云频率；后台每分钟检查是否到点（非规则 Cron 本身）。列表返回 `project_name`。须配置 `encryption_key`。  
 - PromQL 与阈值单位、条件构建器并用时，以最终写入规则的 `expr` 为准。  
 - 数据源 `base_url`、Basic 等可结合**数据字典**自动完成（见页面提示）。
