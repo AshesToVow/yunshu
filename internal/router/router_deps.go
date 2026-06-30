@@ -46,44 +46,44 @@ type RouteDeps struct {
 	dictEntryHandler         *handler.DictEntryHandler
 	adminHandler             *handler.AdminHandler
 
-	alertHandler             *handler.AlertHandler
-	alertPlatformHandler     *handler.AlertPlatformHandler
-	alertSubscriptionHandler *handler.AlertSubscriptionHandler
-	alertInhibitionHandler   *handler.AlertInhibitionHandler
+	alertHandler              *handler.AlertHandler
+	alertPlatformHandler      *handler.AlertPlatformHandler
+	alertSubscriptionHandler  *handler.AlertSubscriptionHandler
+	alertInhibitionHandler    *handler.AlertInhibitionHandler
 	alertReceiverGroupHandler *handler.AlertReceiverGroupHandler
-	cloudExpiryRuleHandler   *handler.CloudExpiryRuleHandler
+	cloudExpiryRuleHandler    *handler.CloudExpiryRuleHandler
 
-	clusterHandler           *handler.ClusterHandler
-	podHandler               *handler.PodHandler
-	namespaceHandler         *handler.NamespaceHandler
-	nodeHandler              *handler.NodeHandler
-	workloadHandler          *handler.WorkloadHandler
-	configHandler            *handler.ConfigHandler
-	storageHandler           *handler.StorageHandler
-	serviceResourceHandler   *handler.ServiceResourceHandler
-	ingressHandler           *handler.IngressHandler
-	networkPolicyHandler     *handler.NetworkPolicyHandler
-	k8sDiscoveryHandler      *handler.K8sDiscoveryHandler
-	k8sHPAHandler            *handler.K8sHPAHandler
-	k8sResourceWatchHandler  *handler.K8sResourceWatchHandler
-	k8sSearchHandler         *handler.K8sSearchHandler
-	k8sEventForwardHandler   *handler.K8sEventForwardHandler
-	eventHandler             *handler.EventHandler
-	crdHandler               *handler.CRDHandler
-	crHandler                *handler.CRHandler
-	rbacHandler              *handler.RBACHandler
-	serviceAccountHandler    *handler.ServiceAccountHandler
-	overviewHandler          *handler.OverviewHandler
+	clusterHandler          *handler.ClusterHandler
+	podHandler              *handler.PodHandler
+	namespaceHandler        *handler.NamespaceHandler
+	nodeHandler             *handler.NodeHandler
+	workloadHandler         *handler.WorkloadHandler
+	configHandler           *handler.ConfigHandler
+	storageHandler          *handler.StorageHandler
+	serviceResourceHandler  *handler.ServiceResourceHandler
+	ingressHandler          *handler.IngressHandler
+	networkPolicyHandler    *handler.NetworkPolicyHandler
+	k8sDiscoveryHandler     *handler.K8sDiscoveryHandler
+	k8sHPAHandler           *handler.K8sHPAHandler
+	k8sResourceWatchHandler *handler.K8sResourceWatchHandler
+	k8sSearchHandler        *handler.K8sSearchHandler
+	k8sEventForwardHandler  *handler.K8sEventForwardHandler
+	eventHandler            *handler.EventHandler
+	crdHandler              *handler.CRDHandler
+	crHandler               *handler.CRHandler
+	rbacHandler             *handler.RBACHandler
+	serviceAccountHandler   *handler.ServiceAccountHandler
+	overviewHandler         *handler.OverviewHandler
 
-	projectHandler         *handler.ProjectHandler
-	cmdbHandler            *handler.CMDBHandler
-	mysqlBackupSvc         *service.MysqlBackupService
-	mysqlBackupHandler     *handler.MysqlBackupHandler
-	alertSvc               *service.AlertService
-	cicdSvc                *cicdsvc.Service
-	cicdHandler            *handler.CicdHandler
-	logAgentHandler        *handler.LogAgentHandler
-	agentDiscoveryHandler  *handler.AgentDiscoveryHandler
+	projectHandler        *handler.ProjectHandler
+	cmdbHandler           *handler.CMDBHandler
+	mysqlBackupSvc        *service.MysqlBackupService
+	mysqlBackupHandler    *handler.MysqlBackupHandler
+	alertSvc              *service.AlertService
+	cicdSvc               *cicdsvc.Service
+	cicdHandler           *handler.CicdHandler
+	logAgentHandler       *handler.LogAgentHandler
+	agentDiscoveryHandler *handler.AgentDiscoveryHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
