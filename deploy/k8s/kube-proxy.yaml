@@ -1,0 +1,136 @@
+cat > /tmp/kube-proxy-all.yaml <<'EOF'
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-proxy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:node-proxier
+subjects:
+- kind: ServiceAccount
+  name: kube-proxy
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+data:
+  config.conf: |
+    apiVersion: kubeproxy.config.k8s.io/v1alpha1
+    kind: KubeProxyConfiguration
+    clientConnection:
+      kubeconfig: /var/lib/kube-proxy/kubeconfig.conf
+    mode: "iptables"
+    clusterCIDR: "10.244.0.0/16"
+    iptables:
+      masqueradeAll: false
+      masqueradeBit: 14
+      minSyncPeriod: 0s
+      syncPeriod: 30s
+    conntrack:
+      maxPerCore: 0
+      min: 131072
+    featureGates:
+      AllAlpha: false
+  kubeconfig.conf: |
+    apiVersion: v1
+    kind: Config
+    clusters:
+    - cluster:
+        certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        server: https://10.10.10.103:6443
+      name: default
+    contexts:
+    - context:
+        cluster: default
+        namespace: default
+        user: default
+      name: default
+    current-context: default
+    users:
+    - name: default
+      user:
+        tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-proxy
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-proxy
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccountName: kube-proxy
+      hostNetwork: true
+      tolerations:
+      - operator: Exists
+      nodeSelector:
+        kubernetes.io/os: linux
+      containers:
+      - name: kube-proxy
+        image: harbor.deploy.local/registry/kube-proxy@sha256:8b72ce21ab978a255e995efff3efa21685899dcbfd972a642f975e5be965ca37
+        imagePullPolicy: IfNotPresent
+        command:
+        - /usr/local/bin/kube-proxy
+        - --config=/var/lib/kube-proxy/config.conf
+        - --hostname-override=$(NODE_NAME)
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: kube-proxy
+          mountPath: /var/lib/kube-proxy
+        - name: xtables-lock
+          mountPath: /run/xtables.lock
+      volumes:
+      - name: kube-proxy
+        configMap:
+          name: kube-proxy
+      - name: xtables-lock
+        hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+EOF
+
+kubectl apply -f /tmp/kube-proxy-all.yaml
+
+#内核参数 + 验证
+cat > /etc/sysctl.d/k8s.conf <<'EOF'
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+modprobe br_netfilter
+sysctl --system
+
+kubectl delete pod -n kube-system -l k8s-app=kube-proxy --force --grace-period=0
+sleep 15
+
+kubectl get pods -n kube-system -l k8s-app=kube-proxy
+kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=20
+
+# 关键验证
+curl -k https://10.96.0.1:443/version
+iptables-save | grep "10.96.0.1" | head -5

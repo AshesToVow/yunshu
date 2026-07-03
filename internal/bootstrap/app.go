@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/casbinadapter"
 	logx "yunshu/internal/pkg/logger"
-	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/providers"
 
@@ -66,7 +66,7 @@ func (b *Builder) WithInfra(infra *providers.Infra) *Builder {
 		b.app.YamlK8sEventForwardBase = infra.Config.K8sEventForward
 	}
 	if infra.Logger != nil {
-		logutil.SetDefaultLogger(infra.Logger.Info)
+		logx.Init(infra.Logger)
 	}
 	return b
 }
@@ -98,7 +98,7 @@ func (b *Builder) WithLogger() *Builder {
 	}
 
 	b.app.Logger = logx.New(b.app.Config.Log)
-	logutil.SetDefaultLogger(b.app.Logger.Info)
+	logx.Init(b.app.Logger)
 	return b
 }
 
@@ -227,9 +227,9 @@ func (b *Builder) WithCasbin() *Builder {
 	policyCount := len(enforcer.GetPolicy())
 	groupingCount := len(enforcer.GetGroupingPolicy())
 	if policyCount == 0 && groupingCount == 0 {
-		logutil.Worker("casbin").Warn("Loaded zero Casbin rules; authorize may deny all until policies are seeded")
+		slog.Default().With("component", "casbin").Warn("Loaded zero Casbin rules; authorize may deny all until policies are seeded")
 	} else {
-		logutil.Worker("casbin").Info("Loaded Casbin policy", "p_rules", policyCount, "g_rules", groupingCount)
+		slog.Default().With("component", "casbin").Info("Loaded Casbin policy", "p_rules", policyCount, "g_rules", groupingCount)
 	}
 	// 冒烟：确认 model 可执行 Enforce（adapter/模型损坏时此处会报错）
 	if _, err = enforcer.Enforce("__casbin_smoke__", "/__smoke__", "GET"); err != nil {
@@ -259,7 +259,7 @@ func (b *Builder) WithMailer() *Builder {
 			YAMLBase: b.yamlMailBase,
 		})
 		enabled := b.app.Mailer.Enabled()
-		logutil.Worker("mail").Info("Initialized mail sender (dict-first, reload on send)",
+		slog.Default().With("component", "mail").Info("Initialized mail sender (dict-first, reload on send)",
 			"enabled", enabled,
 			"host", resolved.Host,
 			"port", resolved.Port,

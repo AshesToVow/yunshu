@@ -11,7 +11,7 @@ import (
 const cloudExpirySchedulerSpec = "0 * * * * *"
 
 func (s *AlertService) runCloudExpiryEvaluator(ctx context.Context) {
-	alertLog().Infow("Started cloud expiry scheduler", "poll_cron", cloudExpirySchedulerSpec)
+	alertLog().Info("Started cloud expiry scheduler", "poll_cron", cloudExpirySchedulerSpec)
 	cronutil.RunWorker(ctx, cloudExpirySchedulerSpec, func() {
 		_ = s.tickCloudExpiryRules(ctx)
 	}, "")

@@ -180,7 +180,7 @@ internal/
 
 - **按域分包**（Package by Feature）+ **经典分层**（Handler → Service → Repository → Model）。
 - `exports.go` 为过渡门面：新代码可优先 `import "yunshu/internal/service/alert"` 等子包；Handler 批量改 import 前保持 `service.Xxx`。
-- **Wire**：基础设施与 `routeRepositories` 已接入；`buildRouteServices`（`route_services.go`）仍为手工 `NewXxx` 装配。
+- **Wire**：基础设施、`routeRepositories` 与 **全部 `routeServices`** 均已接入；见 `internal/router/wire_providers.go` + `wire_gen.go`。
 
 ---
 

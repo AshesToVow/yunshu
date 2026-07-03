@@ -1,7 +1,12 @@
 package handler
 
 import (
+	"context"
+
+	"yunshu/internal/config"
+	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
+	"yunshu/internal/plugin"
 	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -9,11 +14,12 @@ import (
 
 type PermissionHandler struct {
 	service *service.PermissionService
+	plugins *config.PluginsConfig
 }
 
 // NewPermissionHandler 创建相关逻辑。
-func NewPermissionHandler(service *service.PermissionService) *PermissionHandler {
-	return &PermissionHandler{service: service}
+func NewPermissionHandler(service *service.PermissionService, plugins *config.PluginsConfig) *PermissionHandler {
+	return &PermissionHandler{service: service, plugins: plugins}
 }
 
 // Create godoc
@@ -118,7 +124,20 @@ func (h *PermissionHandler) Detail(c *gin.Context) {
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/permissions [get]
 func (h *PermissionHandler) List(c *gin.Context) {
-	ServeQuery(c, h.service.List)
+	ServeQuery(c, func(ctx context.Context, query service.PermissionListQuery) (*pagination.Result[service.PermissionItem], error) {
+		res, err := h.service.List(ctx, query)
+		if err != nil || res == nil || h.plugins == nil {
+			return res, err
+		}
+		filtered := make([]service.PermissionItem, 0, len(res.List))
+		for _, item := range res.List {
+			if plugin.IsAPIResourceAllowed(item.Resource, h.plugins) {
+				filtered = append(filtered, item)
+			}
+		}
+		res.List = filtered
+		return res, nil
+	})
 }
 
 // BatchSetK8sScope godoc

@@ -8,18 +8,9 @@ import (
 	grpcclient "yunshu/internal/grpc/client"
 
 	"github.com/google/wire"
-	"gorm.io/gorm"
 )
 
 //go:generate go run -mod=mod github.com/google/wire/cmd/wire
-
-func provideDB(app *bootstrap.App) *gorm.DB {
-	return app.DB
-}
-
-func provideRouteRepositories(db *gorm.DB) *routeRepositories {
-	return newRouteRepositories(db)
-}
 
 func provideRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	return assembleRouteDeps(app, runtimeClient, repos, svcs)
@@ -28,9 +19,9 @@ func provideRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClien
 // InitializeRouteDeps is the Wire entry for HTTP route dependencies.
 func InitializeRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient) (*RouteDeps, error) {
 	wire.Build(
-		provideDB,
-		provideRouteRepositories,
-		provideRouteServices,
+		AppInfraSet,
+		RepositorySet,
+		ServiceSet,
 		provideRouteDeps,
 	)
 	return nil, nil

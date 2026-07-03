@@ -30,6 +30,8 @@ func IsK8sReadAPIPath(path string) bool {
 		"/api/v1/rbac",
 		"/api/v1/serviceaccounts",
 		"/api/v1/horizontal-pod-autoscalers",
+		"/api/v1/helm/releases",
+		"/api/v1/helm/harbor",
 		"/api/v1/network-policies",
 		"/api/v1/k8s/search",
 		"/api/v1/k8s/topology",

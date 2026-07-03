@@ -93,7 +93,7 @@ func (m *Manager) reloadRuntimeConfig() {
 	m.enabled = resolved.Enabled
 	rt, err := loadRuntimeConfig(m.repo, resolved, m.appPort)
 	if err != nil {
-		forwardLog().Warnw("Failed to reload K8s event forward config", "error", err)
+		forwardLog().Warn("Failed to reload K8s event forward config", "error", err)
 		return
 	}
 	m.worker.RefreshSettings(rt)
@@ -138,23 +138,23 @@ func (m *Manager) EnsureRunning() {
 func (m *Manager) ensureRunning(triggerWatch bool) {
 	if m == nil || !m.enabled {
 		if m != nil && !m.enabled {
-			forwardLog().Infow("K8s event forward disabled in config")
+			forwardLog().Info("K8s event forward disabled in config")
 		}
 		return
 	}
 	ctx := context.Background()
 	ok, err := m.repo.HasEnabledRules(ctx)
 	if err != nil {
-		forwardLog().Warnw("Failed to check K8s event forward rules", "error", err)
+		forwardLog().Warn("Failed to check K8s event forward rules", "error", err)
 		return
 	}
 	if !ok {
-		forwardLog().Infow("No enabled K8s event forward rules, watcher and worker not started")
+		forwardLog().Info("No enabled K8s event forward rules, watcher and worker not started")
 		return
 	}
 	m.runMu.Lock()
 	if !m.running {
-		forwardLog().Infow("Starting K8s event forward watcher and worker")
+		forwardLog().Info("Starting K8s event forward watcher and worker")
 		m.watcher.Start()
 		m.worker.Start()
 		m.running = true

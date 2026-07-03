@@ -13,7 +13,7 @@
 | 1 | 日志 `logutil` | ✅ | 已删除 `svclog`；HTTP/Service/Worker 组件化 |
 | 2 | 错误 `bizerrors` | ✅ | 已删除 `svcerr`、`pkg/apperror`；HTTP + gRPC 统一 |
 | 3 | Wire 基础设施 | ✅ | `providers.InitializeInfra/Core` |
-| 4 | 路由 Wire | 🟡 | `InitializeRouteDeps`：Repo ✅；Service 仍 `buildRouteServices` 手工装配 |
+| 4 | 路由 Wire | ✅ | `InitializeRouteDeps`：Repo + **全部 Service** 由 Wire 注入 |
 | 5 | Repository | ✅ | 告警 / 系统 / 项目 / K8s 策略 / 总览 / 事件转发等主路径 |
 | 6 | Service 目录拆分 | ✅ | `alert/` `k8s/` `project/` `system/` `logplatform/` `mysqlbackup/` `overview/` `cicd/` `cmdb/` + `exports.go` |
 | 7 | Alert 域 | ✅ | 主链路在 `alert` 包；Redis 状态 `NewRedisAlertStateService` |
@@ -62,7 +62,7 @@ internal/plugins/       # 各业务插件 init 注册 + StartWorkers
 
 | 项 | 说明 |
 |----|------|
-| 全量 Wire Service | `route_services.go` ~50 个 `NewXxx` 可逐步改为 ProviderSet |
+| 全量 Wire Handler 装配 | ⬜ 可选：`assembleRouteDeps` 中 Handler 仍手工 `NewXxx` |
 | Handler 直引子包 | 弱化 `exports.go`，新代码优先 `import alert` 等 |
 | `mysqlbackup.db` | MinIO / dictconfig 仍直用 `*gorm.DB` |
 | 插件菜单与 Casbin 联动 | 按 `plugins.enabled` 过滤侧栏；角色菜单授权待完善 |

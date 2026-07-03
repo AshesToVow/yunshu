@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"yunshu/internal/model"
-	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/constants"
 )
 
@@ -53,7 +52,7 @@ func (s *Service) prepareRelease(
 	}
 	var dc model.CicdDeployConfig
 	if err := s.db.WithContext(ctx).Where("id = ? AND service_id = ?", req.DeployConfigID, serviceID).First(&dc).Error; err != nil {
-		return nil, bizerrors.NotFound("deploy config", req.DeployConfigID)
+		return nil, constants.ErrNotFound
 	}
 
 	artifactName := strings.TrimSpace(req.ArtifactName)
@@ -69,7 +68,7 @@ func (s *Service) prepareRelease(
 			if err := s.db.WithContext(ctx).
 				Where("id = ? AND service_id = ? AND project_id = ?", req.BuildRunID, serviceID, projectID).
 				First(&br).Error; err != nil {
-				return nil, bizerrors.NotFound("build run", req.BuildRunID)
+				return nil, constants.ErrNotFound
 			}
 			if strings.TrimSpace(br.ImageAddress) == "" {
 				return nil, constants.ErrBadRequestWithMsg("所选构建记录尚无镜像地址，请等待 CI 完成或手动填写")
@@ -91,8 +90,9 @@ func (s *Service) prepareRelease(
 		}
 		if releaseOp == model.CicdReleaseOpContainerRollback {
 			publishMode = "回滚"
-		} else if publishMode == "" {
-			publishMode = "自动发布"
+		} else {
+			// Yunshu CD：已选 CI 镜像，Jenkins 传 FULL_IMAGE_NAME + 制品发布，跳过重复编译/推镜像。
+			publishMode = model.CicdPublishModeArtifactDeploy
 		}
 	} else {
 		if artifactName == "" {
@@ -215,6 +215,9 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 	if _, err := s.syncJenkinsJob(ctx, p.svc, p.ci); err != nil {
 		return err
 	}
+	if err := s.ensureReleaseNamespace(ctx, p.dc); err != nil {
+		return fmt.Errorf("ensure k8s namespace: %w", err)
+	}
 	destIPs, err := s.resolveDestIPs(ctx, release.ProjectID, p.dc)
 	if err != nil {
 		return err
@@ -293,7 +296,7 @@ func (s *Service) approveLegacySingleStep(ctx context.Context, release *model.Ci
 func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, reviewerUserID *uint, reviewerName, comment string) (*model.CicdReleaseRun, error) {
 	var release model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
-		return nil, bizerrors.NotFound("release run", runID)
+		return nil, constants.ErrNotFound
 	}
 	if release.Status != model.CicdRunStatusPendingApproval {
 		return nil, constants.ErrBadRequestWithMsg("仅待审核工单可审批通过")
@@ -341,7 +344,7 @@ func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, 
 func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, reviewerUserID *uint, reviewerName, comment string) (*model.CicdReleaseRun, error) {
 	var release model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
-		return nil, bizerrors.NotFound("release run", runID)
+		return nil, constants.ErrNotFound
 	}
 	if release.Status != model.CicdRunStatusPendingApproval {
 		return nil, constants.ErrBadRequestWithMsg("仅待审核工单可驳回")
@@ -413,7 +416,7 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, r
 func (s *Service) ExecuteReleaseRun(ctx context.Context, projectID, runID uint, executorUserID *uint) (*model.CicdReleaseRun, error) {
 	var release model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
-		return nil, bizerrors.NotFound("release run", runID)
+		return nil, constants.ErrNotFound
 	}
 	if release.Status != model.CicdRunStatusPendingExecution {
 		return nil, constants.ErrBadRequestWithMsg("仅待执行工单可发布")
@@ -433,7 +436,7 @@ func (s *Service) ExecuteReleaseRun(ctx context.Context, projectID, runID uint, 
 func (s *Service) TerminateReleaseRun(ctx context.Context, projectID, runID uint, reviewerUserID *uint, reviewerName, comment string) (*model.CicdReleaseRun, error) {
 	var release model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
-		return nil, bizerrors.NotFound("release run", runID)
+		return nil, constants.ErrNotFound
 	}
 	if release.Status != model.CicdRunStatusPendingExecution {
 		return nil, constants.ErrBadRequestWithMsg("仅待执行工单可终止")

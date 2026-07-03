@@ -34,8 +34,10 @@ cicd:
     bucket_frontend: frontend-artifacts
     bucket_backend: backend-artifacts
   harbor:
-    url: harbor.jdicity.local
+    url: harbor.deploy.local
     project_group: registry
+    # username/password 也可在数据字典 cicd_harbor_username / cicd_harbor_password 配置
+  # 与Jenkins中的凭据ID一致
   credentials:
     git: gitee_registry_ssh
     ssh_deploy: target-server-credential
@@ -44,6 +46,10 @@ cicd:
   run_sync_interval_seconds: 15
   default_wait_mins: 60
   default_artifact_retain_count: 10
+  # 审批超时时间
+  approval_sla_hours: 24
+  # 审批提醒间隔时间
+  approval_reminder_interval_hours: 4
 
 http:
   read_header_timeout_seconds: 5  #从连接建立到读完请求头的最长时间；防慢连接占满，

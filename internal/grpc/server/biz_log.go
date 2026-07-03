@@ -5,14 +5,14 @@ import (
 	"net/http"
 
 	bizerrors "yunshu/internal/pkg/errors"
-	"yunshu/internal/pkg/logutil"
+	logx "yunshu/internal/pkg/logger"
 )
 
 func logGRPCError(ctx context.Context, method string, err error) {
 	if err == nil || bizerrors.IsAlreadyLogged(err) {
 		return
 	}
-	log := logutil.GRPCCtx(ctx, "grpc.server")
+	log := logx.With(ctx, "component", "grpc.server")
 	biz, ok := bizerrors.As(bizerrors.Ensure(err))
 	if !ok {
 		log.Error("gRPC request failed", "method", method, "error", err)

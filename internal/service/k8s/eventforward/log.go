@@ -1,7 +1,7 @@
 package eventforward
 
-import "yunshu/internal/pkg/logutil"
+import "log/slog"
 
-func forwardLog() *logutil.Component {
-	return logutil.Worker("k8s.event_forward")
+func forwardLog() *slog.Logger {
+	return slog.Default().With("component", "k8s.event_forward")
 }

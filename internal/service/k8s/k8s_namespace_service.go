@@ -10,7 +10,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8sutil"
-	"yunshu/internal/pkg/logutil"
+	"log/slog"
 	bizerrors "yunshu/internal/pkg/errors"
 
 	kom "github.com/weibaohui/kom/kom"
@@ -25,7 +25,7 @@ import (
 type NamespaceListQuery = ClusterKeywordQuery
 type NamespaceDetailQuery = ClusterNameQuery
 
-// NamespaceApplyRequest 命名空间 YAML 下发；FailIfExists 为 true 时若资源已存在则拒绝（表单「创建」场景），YAML 页更新标签等不传该字段。
+// NamespaceApplyRequest ???? YAML ???FailIfExists ? true ?????????????????????YAML ????????????
 type NamespaceApplyRequest struct {
 	ClusterID    uint   `json:"cluster_id" binding:"required"`
 	Manifest     string `json:"manifest" binding:"required"`
@@ -48,14 +48,14 @@ type NamespaceListItem struct {
 	MemLimits   string `json:"mem_limits,omitempty"`
 	CPUUsage    string `json:"cpu_usage,omitempty"`
 	MemUsage    string `json:"mem_usage,omitempty"`
-	// 列表展示用数值（核 / Gi），与 k8m 风格「Request / Limit / 实时」对齐
+	// ????????? / Gi??? k8m ???Request / Limit / ?????
 	CPUCoresRequest float64 `json:"cpu_cores_request"`
 	CPUCoresLimit   float64 `json:"cpu_cores_limit"`
 	CPUCoresUsage   float64 `json:"cpu_cores_usage"`
 	MemGiRequest    float64 `json:"mem_gi_request"`
 	MemGiLimit      float64 `json:"mem_gi_limit"`
 	MemGiUsage      float64 `json:"mem_gi_usage"`
-	// ResourceQuota 摘要（与「工作负载 request 汇总」不同；未创建 ResourceQuota 时为空）
+	// ResourceQuota ????????? request ????????? ResourceQuota ????
 	ResourceQuotaSummary string `json:"resource_quota_summary,omitempty"`
 }
 
@@ -95,7 +95,7 @@ type K8sNamespaceService struct {
 	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 }
 
-// NewK8sNamespaceService 创建相关逻辑。
+// NewK8sNamespaceService ???????
 func NewK8sNamespaceService(
 	runtime *K8sRuntimeService,
 	nsDeny interfaces.K8sNamespaceDenyRepository,
@@ -111,7 +111,7 @@ func NewK8sNamespaceService(
 
 var namespaceGVK = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 
-// List 查询列表相关的业务逻辑。
+// List ????????????
 func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery, pack *k8sauth.PrincipalPack) ([]NamespaceListItem, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
 	if err != nil {
@@ -121,9 +121,9 @@ func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery
 	podSummary := map[string]namespacePodSummary{}
 	{
 		var pods []corev1.Pod
-		// 全量拉取一次，按 namespace 聚合（比对每个 namespace 分别 List 更省请求数）
+		// ???????? namespace ??????? namespace ?? List ??????
 		if e := k.WithContext(ctx).Resource(&corev1.Pod{}).AllNamespace().List(&pods).Error; e != nil {
-			logutil.Service("k8s.namespace").Warnw("list pods for namespace stats failed", "error", e, "cluster_id", query.ClusterID)
+			slog.Default().With("component", "k8s.namespace").Warn("list pods for namespace stats failed", "error", e, "cluster_id", query.ClusterID)
 		} else {
 			for _, p := range pods {
 				ns := strings.TrimSpace(p.Namespace)
@@ -148,7 +148,7 @@ func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery
 	{
 		var rqs []corev1.ResourceQuota
 		if e := k.WithContext(ctx).Resource(&corev1.ResourceQuota{}).AllNamespace().List(&rqs).Error; e != nil {
-			logutil.Service("k8s.namespace").Warnw("list resource quotas failed", "error", e, "cluster_id", query.ClusterID)
+			slog.Default().With("component", "k8s.namespace").Warn("list resource quotas failed", "error", e, "cluster_id", query.ClusterID)
 		} else {
 			for i := range rqs {
 				q := strings.TrimSpace(rqs[i].Namespace)
@@ -258,7 +258,7 @@ func quantityOrDash(q resource.Quantity) string {
 	return q.String()
 }
 
-// formatQuantityCPUReadable 列表/摘要展示用（避免巨量毫核整数）。
+// formatQuantityCPUReadable ??/????????????????
 func formatQuantityCPUReadable(q resource.Quantity) string {
 	if q.IsZero() {
 		return "0"
@@ -274,7 +274,7 @@ func formatQuantityCPUReadable(q resource.Quantity) string {
 	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", c), "0"), ".")
 }
 
-// formatQuantityMemReadable 将内存用量格式化为 Ki/Mi/Gi。
+// formatQuantityMemReadable ????????? Ki/Mi/Gi?
 func formatQuantityMemReadable(q resource.Quantity) string {
 	if q.IsZero() {
 		return "0"
@@ -344,7 +344,7 @@ func formatQuotaUsedHardLine(used, hard resource.Quantity, isCPU bool) string {
 	return fmt.Sprintf("%s / %s", uStr, hStr)
 }
 
-// summarizeResourceQuotasForList 列表「配额」列：取字典序第一个 ResourceQuota 的 used/hard（多配额时提示见详情）。
+// summarizeResourceQuotasForList ??????????????? ResourceQuota ? used/hard????????????
 func summarizeResourceQuotasForList(rqs []corev1.ResourceQuota) string {
 	if len(rqs) == 0 {
 		return ""
@@ -363,12 +363,12 @@ func summarizeResourceQuotasForList(rqs []corev1.ResourceQuota) string {
 	fmt.Fprintf(&b, "CPU: %s\n", formatQuotaUsedHardLine(cpuU, cpuH, true))
 	fmt.Fprintf(&b, "MEM: %s", formatQuotaUsedHardLine(memU, memH, false))
 	if len(rr) > 1 {
-		fmt.Fprintf(&b, "\n（另有 %d 个 ResourceQuota，见详情）", len(rr)-1)
+		fmt.Fprintf(&b, "\n??? %d ? ResourceQuota?????", len(rr)-1)
 	}
 	return b.String()
 }
 
-// Detail 查询详情相关的业务逻辑。
+// Detail ????????????
 func (s *K8sNamespaceService) Detail(ctx context.Context, query NamespaceDetailQuery) (*NamespaceDetail, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
 	if err != nil {
@@ -395,15 +395,15 @@ func (s *K8sNamespaceService) Detail(ctx context.Context, query NamespaceDetailQ
 	}
 	quotaItems, qErr := s.listNamespaceQuotas(ctx, k, query.Name)
 	if qErr != nil {
-		logutil.Service("k8s.namespace").Warnw("list namespace quotas failed", "error", qErr, "namespace", query.Name)
+		slog.Default().With("component", "k8s.namespace").Warn("list namespace quotas failed", "error", qErr, "namespace", query.Name)
 	}
 	limitItems, lErr := s.listNamespaceLimitRanges(ctx, k, query.Name)
 	if lErr != nil {
-		logutil.Service("k8s.namespace").Warnw("list namespace limit ranges failed", "error", lErr, "namespace", query.Name)
+		slog.Default().With("component", "k8s.namespace").Warn("list namespace limit ranges failed", "error", lErr, "namespace", query.Name)
 	}
 	eventItems, eErr := s.listNamespaceEvents(ctx, k, query.Name)
 	if eErr != nil {
-		logutil.Service("k8s.namespace").Warnw("list namespace events failed", "error", eErr, "namespace", query.Name)
+		slog.Default().With("component", "k8s.namespace").Warn("list namespace events failed", "error", eErr, "namespace", query.Name)
 	}
 	finalizers := make([]string, 0, len(copyObj.Spec.Finalizers))
 	for _, f := range copyObj.Spec.Finalizers {
@@ -503,7 +503,7 @@ func (s *K8sNamespaceService) listNamespaceEvents(ctx context.Context, k *kom.Ku
 	return out, nil
 }
 
-// Apply 提交申请相关的业务逻辑。
+// Apply ????????????
 func (s *K8sNamespaceService) Apply(ctx context.Context, req NamespaceApplyRequest) error {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
@@ -541,6 +541,27 @@ func (s *K8sNamespaceService) Apply(ctx context.Context, req NamespaceApplyReque
 	return nil
 }
 
+// EnsureNamespaceExists 若命名空间不存在则创建（用于 CI/CD 容器发布前置）。
+func (s *K8sNamespaceService) EnsureNamespaceExists(ctx context.Context, clusterID uint, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" || clusterID == 0 {
+		return nil
+	}
+	_, k, err := s.runtime.GetClusterKubectl(ctx, clusterID)
+	if err != nil {
+		return err
+	}
+	_, ge := s.dyn.GetByGVK(ctx, k, namespaceGVK, "", name)
+	if ge == nil {
+		return nil
+	}
+	if !apierrors.IsNotFound(ge) {
+		return k8sFail(ctx, "k8s.namespace", "get", ge)
+	}
+	manifest := fmt.Sprintf("apiVersion: v1\nkind: Namespace\nmetadata:\n  name: %s\n", name)
+	return s.Apply(ctx, NamespaceApplyRequest{ClusterID: clusterID, Manifest: manifest})
+}
+
 func extractNamespaceRefs(manifest string) []string {
 	docs := k8sutil.SplitYAMLDocs(manifest)
 	out := make([]string, 0)
@@ -570,7 +591,7 @@ func extractNamespaceRefs(manifest string) []string {
 	return out
 }
 
-// Delete 删除相关的业务逻辑。
+// Delete ??????????
 func (s *K8sNamespaceService) Delete(ctx context.Context, req NamespaceDeleteRequest) error {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {

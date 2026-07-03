@@ -212,6 +212,23 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	networkPolicies.POST("/apply", d.networkPolicyHandler.Apply)
 	networkPolicies.DELETE("", d.networkPolicyHandler.Delete)
 
+	helmHarbor := api.Group("/helm/harbor")
+	helmHarbor.Use(d.authMiddleware, d.authorize, d.opAudit)
+	helmHarbor.GET("/info", d.helmHandler.HarborInfo)
+	helmHarbor.GET("/charts", d.helmHandler.ListCharts)
+	helmHarbor.GET("/charts/versions", d.helmHandler.ChartVersions)
+
+	helmReleases := api.Group("/helm/releases")
+	helmReleases.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
+	helmReleases.GET("", d.helmHandler.ListReleases)
+	helmReleases.GET("/detail", d.helmHandler.GetRelease)
+	helmReleases.GET("/history", d.helmHandler.GetReleaseHistory)
+	helmReleases.GET("/values", d.helmHandler.GetReleaseValues)
+	helmReleases.POST("/install", d.helmHandler.Install)
+	helmReleases.POST("/upgrade", d.helmHandler.Upgrade)
+	helmReleases.POST("/rollback", d.helmHandler.Rollback)
+	helmReleases.DELETE("", d.helmHandler.Uninstall)
+
 	horizontalPodAutoscalers := api.Group("/horizontal-pod-autoscalers")
 	horizontalPodAutoscalers.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	horizontalPodAutoscalers.GET("", d.k8sHPAHandler.List)

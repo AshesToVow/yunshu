@@ -12,7 +12,6 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/model"
 	logx "yunshu/internal/pkg/logger"
-	"yunshu/internal/pkg/logutil"
 )
 
 func NewConfig(configPath string) (*config.Config, error) {
@@ -24,7 +23,6 @@ func NewLogger(cfg *config.Config) (*logx.Logger, error) {
 		return nil, fmt.Errorf("config is required for logger")
 	}
 	l := logx.New(cfg.Log)
-	logutil.SetDefaultLogger(l.Info)
 	return l, nil
 }
 

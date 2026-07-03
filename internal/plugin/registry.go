@@ -6,8 +6,9 @@ import (
 	"sort"
 	"strings"
 
+	"log/slog"
+
 	"yunshu/internal/config"
-	"yunshu/internal/pkg/logutil"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -15,12 +16,12 @@ import (
 
 var registry []Module
 
-// RouteBinder 由 router 包在启动时注入，避免 plugin ↔ router 循环依赖。
+// RouteBinder ? router ?????????? plugin ? router ?????
 type RouteBinder func(name string, api *gin.RouterGroup, rt *Runtime) error
 
 var routeBinder RouteBinder
 
-// Register 在 init 中注册插件（GVA 风格 compile-time 插件表）。
+// Register ? init ??????GVA ?? compile-time ?????
 func Register(m Module) {
 	if m == nil {
 		return
@@ -28,12 +29,12 @@ func Register(m Module) {
 	registry = append(registry, m)
 }
 
-// SetRouteBinder 注册 HTTP 路由绑定函数（仅 router 包应调用）。
+// SetRouteBinder ?? HTTP ???????? router ??????
 func SetRouteBinder(fn RouteBinder) {
 	routeBinder = fn
 }
 
-// All 返回已注册插件副本（按 Name 排序）。
+// All ??????????? Name ????
 func All() []Module {
 	out := append([]Module(nil), registry...)
 	sort.Slice(out, func(i, j int) bool {
@@ -42,12 +43,12 @@ func All() []Module {
 	return out
 }
 
-// DefaultEnabled 未配置 plugins.enabled 时的默认启用列表。
+// DefaultEnabled ??? plugins.enabled ?????????
 func DefaultEnabled() []string {
 	return []string{"core", "k8s", "alert", "project", "cmdb", "backup", "cicd"}
 }
 
-// ResolveEnabled 根据配置解析启用的插件名集合。
+// ResolveEnabled ???????????????
 func ResolveEnabled(cfg *config.PluginsConfig) map[string]bool {
 	names := DefaultEnabled()
 	if cfg != nil && len(cfg.Enabled) > 0 {
@@ -64,7 +65,7 @@ func ResolveEnabled(cfg *config.PluginsConfig) map[string]bool {
 	return m
 }
 
-// FilterEnabled 返回按配置过滤后的插件列表（保持注册顺序）。
+// FilterEnabled ??????????????????????
 func FilterEnabled(cfg *config.PluginsConfig) []Module {
 	enabled := ResolveEnabled(cfg)
 	var out []Module
@@ -76,14 +77,14 @@ func FilterEnabled(cfg *config.PluginsConfig) []Module {
 	return out
 }
 
-// Migrate 对启用插件执行 PreMigrate → AutoMigrate(Models) → PostMigrate。
+// Migrate ??????? PreMigrate ? AutoMigrate(Models) ? PostMigrate?
 func Migrate(db *gorm.DB, cfg *config.PluginsConfig) error {
 	if db == nil {
 		return nil
 	}
-	log := logutil.Worker("plugin.migrate")
+	log := slog.Default().With("component", "plugin.migrate")
 	for _, m := range FilterEnabled(cfg) {
-		log.Infow("Migrating plugin", "plugin", m.Name())
+		log.Info("Migrating plugin", "plugin", m.Name())
 		if err := m.PreMigrate(db); err != nil {
 			return fmt.Errorf("plugin %s pre-migrate: %w", m.Name(), err)
 		}
@@ -100,7 +101,7 @@ func Migrate(db *gorm.DB, cfg *config.PluginsConfig) error {
 	return nil
 }
 
-// RegisterRoutes 为所有启用插件注册 HTTP 路由（经 router 注入的 RouteBinder）。
+// RegisterRoutes ????????? HTTP ???? router ??? RouteBinder??
 func RegisterRoutes(api *gin.RouterGroup, rt *Runtime, cfg *config.PluginsConfig) error {
 	if rt == nil {
 		return fmt.Errorf("plugin runtime required")
@@ -108,9 +109,9 @@ func RegisterRoutes(api *gin.RouterGroup, rt *Runtime, cfg *config.PluginsConfig
 	if routeBinder == nil {
 		return fmt.Errorf("plugin route binder not configured")
 	}
-	log := logutil.Worker("plugin.routes")
+	log := slog.Default().With("component", "plugin.routes")
 	for _, m := range FilterEnabled(cfg) {
-		log.Infow("Registering routes", "plugin", m.Name())
+		log.Info("Registering routes", "plugin", m.Name())
 		if err := routeBinder(m.Name(), api, rt); err != nil {
 			return fmt.Errorf("plugin %s routes: %w", m.Name(), err)
 		}
@@ -118,14 +119,14 @@ func RegisterRoutes(api *gin.RouterGroup, rt *Runtime, cfg *config.PluginsConfig
 	return nil
 }
 
-// StartWorkers 启动所有启用插件的后台任务。
+// StartWorkers ??????????????
 func StartWorkers(bgCtx context.Context, rt *Runtime, cfg *config.PluginsConfig) error {
 	if rt == nil {
 		return fmt.Errorf("plugin runtime required")
 	}
-	log := logutil.Worker("plugin.workers")
+	log := slog.Default().With("component", "plugin.workers")
 	for _, m := range FilterEnabled(cfg) {
-		log.Infow("Starting workers", "plugin", m.Name())
+		log.Info("Starting workers", "plugin", m.Name())
 		if err := m.StartWorkers(bgCtx, rt); err != nil {
 			return fmt.Errorf("plugin %s workers: %w", m.Name(), err)
 		}
@@ -133,7 +134,7 @@ func StartWorkers(bgCtx context.Context, rt *Runtime, cfg *config.PluginsConfig)
 	return nil
 }
 
-// RegisteredNames 返回全部已注册插件名（含未启用）。
+// RegisteredNames ?????????????????
 func RegisteredNames() []string {
 	names := make([]string, 0, len(registry))
 	for _, m := range registry {

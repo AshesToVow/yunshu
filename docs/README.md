@@ -9,6 +9,7 @@
 | 文档 | 说明 |
 |------|------|
 | [CODEBASE-MAP.md](CODEBASE-MAP.md) | **代码地图**：目录结构、阅读顺序、Wire/错误规范 |
+| [logging.md](logging.md) | **日志与错误码**：slog 三文件、前端 `error_code` 联调 |
 | [plugins.md](plugins.md) | **业务插件**：`plugins.enabled`、路由绑定、CMDB 拆分 |
 | [cicd.md](cicd.md) | **CI/CD 插件**：Jenkins、审批流、字典配置 |
 | [backend-architecture-complete.md](backend-architecture-complete.md) | 后端完整技术文档（架构、模块、部署） |

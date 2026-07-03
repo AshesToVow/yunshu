@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/logutil"
+	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/pkg/sshclient"
@@ -398,7 +398,7 @@ func (h *CMDBHandler) ServerTerminalWS(c *gin.Context) {
 	}
 	defer conn.Close()
 
-	sess := newWSSession(c.Request.Context(), logutil.HTTP("http.ws.terminal"))
+	sess := newWSSession(c.Request.Context(), logx.With(c.Request.Context(), "component", "http.ws.terminal"))
 	defer sess.Cancel()
 	defer sess.Wait()
 

@@ -161,6 +161,7 @@ func buildK8sCiParams(params map[string]string, ci *model.CicdCiConfig, in Build
 	if imageName == "" && in.Service != nil {
 		imageName = strings.TrimSpace(in.Service.Identifier)
 	}
+	imageName = strings.ToLower(imageName)
 	params["projectName"] = imageName
 	params["imageName"] = imageName
 	if ci != nil && strings.TrimSpace(ci.Version) != "" {

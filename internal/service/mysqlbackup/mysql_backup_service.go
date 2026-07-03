@@ -392,7 +392,7 @@ func (s *MysqlBackupService) RunBackup(ctx context.Context, projectID, instanceI
 func (s *MysqlBackupService) enqueueBackup(ctx context.Context, projectID, instanceID uint, trigger string) (*model.MysqlBackupJob, error) {
 	n, _ := s.backupRepo.FailStaleRunningJobs(ctx, 2*time.Hour)
 	if n > 0 {
-		mysqlBackupLog().Warnw("Marked stale MySQL backup jobs as failed", "count", n)
+		mysqlBackupLog().Warn("Marked stale MySQL backup jobs as failed", "count", n)
 	}
 	inst, _, err := s.loadInstanceSecrets(ctx, projectID, instanceID)
 	if err != nil {
@@ -505,7 +505,7 @@ func (s *MysqlBackupService) logBackupJobBegin(jobID uint, inst *model.MysqlBack
 	if inst == nil {
 		return
 	}
-	mysqlBackupLog().Infow("Started MySQL backup job",
+	mysqlBackupLog().Info("Started MySQL backup job",
 		"job_id", jobID,
 		"instance_id", inst.ID,
 		"project_id", inst.ProjectID,
@@ -529,15 +529,15 @@ func (s *MysqlBackupService) logBackupJobDone(jobID, instanceID uint, instanceNa
 	}
 	attrs = append(attrs, extra...)
 	if runErr != nil {
-		mysqlBackupLog().Errorw(runErr, "Failed to finish MySQL backup job", attrs...)
+		mysqlBackupLog().Error("Failed to finish MySQL backup job", append(attrs, "error", runErr)...)
 		return
 	}
-	mysqlBackupLog().Infow("Finished MySQL backup job", attrs...)
+	mysqlBackupLog().Info("Finished MySQL backup job", attrs...)
 }
 
 func (s *MysqlBackupService) logBackupPhase(jobID uint, phase string, attrs ...any) {
 	base := []any{"job_id", jobID, "phase", phase}
-	mysqlBackupLog().Infow("MySQL backup job phase", append(base, attrs...)...)
+	mysqlBackupLog().Info("MySQL backup job phase", append(base, attrs...)...)
 }
 
 func validateMysqlBackupScope(scope, dbName, tableName, databaseNames string) error {
@@ -819,7 +819,7 @@ func (s *MysqlBackupService) StopJob(ctx context.Context, projectID, jobID uint)
 	job.Status = "cancelled"
 	job.ErrorMessage = msg
 	job.FinishedAt = &now
-	mysqlBackupLog().Infow("MySQL backup job stopped by user", "job_id", jobID, "instance_id", job.InstanceID)
+	mysqlBackupLog().Info("MySQL backup job stopped by user", "job_id", jobID, "instance_id", job.InstanceID)
 	return job, nil
 }
 

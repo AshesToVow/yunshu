@@ -35,6 +35,8 @@ const PATH_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
       "/component-status",
       "/cluster-api-resources",
       "/horizontal-pod-autoscalers",
+      "/helm/releases",
+      "/helm/charts",
       "/k8s-resource-topology",
       "/deployments",
       "/statefulsets",

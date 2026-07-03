@@ -1,7 +1,7 @@
 package alert
 
-import "yunshu/internal/pkg/logutil"
+import "log/slog"
 
-func alertLog() *logutil.Component {
-	return logutil.Worker("alert")
+func alertLog() *slog.Logger {
+	return slog.Default().With("component", "alert")
 }

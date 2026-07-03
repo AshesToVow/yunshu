@@ -215,9 +215,13 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "cicd_harbor_url", Label: "Harbor 地址", Value: "harbor.jdicity.local", Sort: intRef(1), Status: 1, Remark: "Jenkins HARBOR_URL（不含协议）"},
 			{DictType: "cicd_harbor_credential_id", Label: "Harbor 凭据 ID", Value: "HARBOR_ID", Sort: intRef(1), Status: 1, Remark: "Jenkins Username/Password 凭据 ID，用于 docker login"},
 			{DictType: "cicd_harbor_project_group", Label: "Harbor 项目", Value: "registry", Sort: intRef(1), Status: 1, Remark: "Jenkins PROJECT_GROUP（镜像仓库项目名）"},
+			{DictType: "cicd_harbor_username", Label: "Harbor 用户名", Value: "admin", Sort: intRef(1), Status: 1, Remark: "Helm 拉取 Harbor OCI Chart 与 Chart API 鉴权"},
+			{DictType: "cicd_harbor_password", Label: "Harbor 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "Helm/Harbor API 密码（敏感，启用后填写）"},
 			{DictType: "cicd_default_wait_mins", Label: "手动发布超时(分钟)", Value: "60", Sort: intRef(1), Status: 1, Remark: "waitMins 默认值"},
 			{DictType: "cicd_default_artifact_retain_count", Label: "制品保留数", Value: "10", Sort: intRef(1), Status: 1, Remark: "artifactRetainCount 默认"},
 			{DictType: "cicd_run_sync_interval_seconds", Label: "Run 同步间隔(秒)", Value: "15", Sort: intRef(1), Status: 1, Remark: "后台轮询 Jenkins 状态"},
+			{DictType: "cicd_approval_sla_hours", Label: "审批超时阈值(小时)", Value: "24", Sort: intRef(1), Status: 1, Remark: "待审批超过该时长后向审批人发邮件提醒"},
+			{DictType: "cicd_approval_reminder_interval_hours", Label: "审批提醒间隔(小时)", Value: "4", Sort: intRef(1), Status: 1, Remark: "同一审批节点重复提醒的最小间隔"},
 			// CI/CD 枚举
 			{DictType: "cicd_pipeline_type", Label: "前端服务", Value: "frontend", Sort: intRef(1), Status: 1, Remark: "应用类型"},
 			{DictType: "cicd_pipeline_type", Label: "后端服务", Value: "backend", Sort: intRef(2), Status: 1, Remark: "应用类型"},
@@ -299,9 +303,13 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			"cicd_harbor_url":                             {},
 			"cicd_harbor_credential_id":                   {},
 			"cicd_harbor_project_group":                 {},
+			"cicd_harbor_username":                      {},
+			"cicd_harbor_password":                      {},
 			"cicd_default_wait_mins":                    {},
 			"cicd_default_artifact_retain_count":        {},
 			"cicd_run_sync_interval_seconds":            {},
+			"cicd_approval_sla_hours":                   {},
+			"cicd_approval_reminder_interval_hours":     {},
 		}
 		for _, item := range seed {
 			var (

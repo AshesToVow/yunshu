@@ -31,7 +31,7 @@ HTTP/gRPC 请求
 | Wire（部分） | `internal/providers/wire.go` | Config / Logger / DB / Redis |
 | 路由依赖 | `internal/router/wire.go` | `InitializeRouteDeps` |
 | 仓储 | `internal/router/repositories.go` | `newRouteRepositories(db)` |
-| 服务 | `internal/router/route_services.go` | `buildRouteServices` 手工 `NewXxx` |
+| 服务 | `internal/router/wire_providers.go` | Wire `ServiceSet` 注入全部领域 Service |
 | Handler | `internal/router/router_deps.go` | `assembleRouteDeps` |
 
 Handler 普遍 `import "yunshu/internal/service"`，通过 **`internal/service/exports.go`** 类型别名访问子包实现（如 `service.AlertService` → `alert.AlertService`）。
@@ -107,16 +107,18 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 
 ## 4. 错误与日志（当前标准）
 
+详见 **[logging.md](logging.md)**。
+
 | 用途 | 包 | 示例 |
 |------|-----|------|
 | 业务错误 | `internal/pkg/errors` (`bizerrors`) | `bizerrors.Pass(ctx, "user", "GetByID", err)` |
 | HTTP 响应 | `internal/middleware/error_handler.go` | `bizerrors.Ensure` + JSON |
 | gRPC 状态 | `internal/pkg/errors/grpc.go` | `bizerrors.ToGRPCStatus(err)` |
 | Handler 出错 | `internal/handler/alert_abort.go` | `abortService(c, err)` |
-| 结构化日志 | `internal/pkg/logutil` | `logutil.HTTP("http.auth").Warn(...)` |
-| 底层 Logger | `internal/pkg/logger` | bootstrap 初始化 |
+| 结构化日志 | `log/slog` + `internal/pkg/logger` | `slog.Info(..., "component", "alert")` |
+| HTTP context 日志 | `internal/pkg/logger` | `logger.With(ctx, "component", "http.auth")` |
 
-**已删除（勿再引用）**：`internal/service/svcerr`、`svclog`、`internal/pkg/apperror`。  
+**已删除（勿再引用）**：`internal/service/svcerr`、`svclog`、`internal/pkg/logutil`、`internal/pkg/apperror`、`logger.Biz()`。  
 **已移除 API**：`GET .../projects/:id/log-files`、`GET .../log-units`（日志文件浏览改走 Agent **discovery**）。
 
 ---
@@ -129,7 +131,7 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 | `sshserver` | 凭据解密 → `ssh.ClientConfig`、Dial | CMDB 终端、MySQL 备份远程执行 |
 | `dictconfig` | 字典覆盖 YAML（mail、cicd、minio、parse 工具） | mail、cicd、mysqlbackup、bootstrap |
 | `mysqlbackup` | mysqldump/xtrabackup/innobackupex 命令构建 | `service/mysqlbackup` |
-| `logutil` | HTTP/Worker 组件化日志 | 全模块 |
+| `logger` | slog 三文件分流、`With(ctx)` | bootstrap、middleware、service |
 | `errors` (`bizerrors`) | 业务错误 Pass/Ensure、gRPC 映射 | Service / Handler |
 
 云到期调度要点（`alert/alert_cloud_expiry_scheduler.go`）：
@@ -145,8 +147,8 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 |------|------|
 | Config / Logger / DB / Redis | ✅ `providers.InitializeInfra` |
 | `routeRepositories` | ✅ Wire 调用 `newRouteRepositories` |
-| `routeServices` | 🟡 **`buildRouteServices` 手工拼装**（约 50+ Service） |
-| 全量 Service ProviderSet | ⬜ 未做（可选优化） |
+| `routeServices` | ✅ Wire `ServiceSet` + `wire.Struct(routeServices)` |
+| 全量 Service ProviderSet | ✅ 见 `internal/router/wire_providers.go` |
 
 ---
 

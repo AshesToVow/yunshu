@@ -1,9 +1,14 @@
 import { ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Tabs, Tag, message } from "antd";
+import { Button, Card, Form, Input, Modal, Segmented, Select, Space, Table, Tabs, Tag, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CicdReleaseDetailPanel } from "../components/cicd-release-detail-panel";
-import { cicdReleaseTypeLabel, cicdReleaseTypeTagColor } from "../components/cicd-release-utils";
+import {
+  cicdReleaseTypeLabel,
+  cicdReleaseTypeTagColor,
+  cicdTodoStatusLabel,
+  cicdTodoStatusTagColor,
+} from "../components/cicd-release-utils";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import {
   approveReleaseRun,
@@ -14,7 +19,6 @@ import {
   executeReleaseRun,
   listReleaseRuns,
   rejectReleaseRun,
-  terminateReleaseRun,
   type CicdReleaseRun,
 } from "../services/cicd";
 import { getProjects, type ProjectItem } from "../services/projects";
@@ -26,11 +30,25 @@ function releaseTypeTag(releaseType: string) {
 }
 
 type TabKey = "pending_approval" | "pending_execution";
+type MineScope = "pending" | "done" | "all";
+
+function isApprovalPending(row: CicdReleaseRun) {
+  if (row.mine_status === "mine_done") return false;
+  if (row.mine_status === "mine_pending") return true;
+  return row.status === "pending_approval";
+}
+
+function isExecutionPending(row: CicdReleaseRun) {
+  if (row.mine_status === "mine_done") return false;
+  if (row.mine_status === "mine_pending") return true;
+  return row.status === "pending_execution";
+}
 
 export function CicdTodoPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [tab, setTab] = useState<TabKey>("pending_approval");
+  const [mineScope, setMineScope] = useState<MineScope>("all");
   const [releaseType, setReleaseType] = useState<string>();
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -62,13 +80,14 @@ export function CicdTodoPage() {
         release_type: releaseType,
         keyword,
         mine: true,
+        mine_scope: mineScope,
       });
       setRows(res.list ?? []);
       setTotal(res.total ?? 0);
     } finally {
       setLoading(false);
     }
-  }, [projectId, page, pageSize, tab, releaseType, keyword]);
+  }, [projectId, page, pageSize, tab, releaseType, keyword, mineScope]);
 
   useEffect(() => {
     void load();
@@ -77,13 +96,24 @@ export function CicdTodoPage() {
   useEffect(() => {
     setSelectedRowKeys([]);
     setPage(1);
-  }, [tab, projectId]);
+  }, [tab, projectId, mineScope]);
 
-  const openReview = (row: CicdReleaseRun) => {
+  const openReview = (row: CicdReleaseRun, reviewMode: boolean) => {
     setReviewTarget(row);
     reviewForm.resetFields();
     setReviewOpen(true);
+    setReviewMode(reviewMode);
   };
+  const [reviewMode, setReviewMode] = useState(true);
+
+  const scopeOptions = useMemo(
+    () => [
+      { label: "全部", value: "all" as const },
+      { label: tab === "pending_approval" ? "待我审批" : "待我执行", value: "pending" as const },
+      { label: tab === "pending_approval" ? "我已审批" : "我已执行", value: "done" as const },
+    ],
+    [tab],
+  );
 
   const columns = useMemo<ColumnsType<CicdReleaseRun>>(
     () => [
@@ -100,8 +130,15 @@ export function CicdTodoPage() {
         title: "当前环节",
         dataIndex: "current_stage_name",
         width: 140,
-        render: (v, row) =>
-          tab === "pending_approval" ? v || "—" : row.submitter_name ? "待提交人执行" : "—",
+        render: (v, row) => {
+          if (row.mine_status === "mine_done" && row.status === "pending_approval") {
+            return row.current_stage_name ? `${row.current_stage_name}（待下一环节）` : "待下一环节";
+          }
+          if (row.status === "pending_approval") return v || "—";
+          if (row.status === "pending_execution") return "待提交人执行";
+          if (row.status === "rejected") return "已驳回";
+          return v || "—";
+        },
       },
       {
         title: "申请时间",
@@ -110,55 +147,84 @@ export function CicdTodoPage() {
         render: (v) => formatDateTime(v),
       },
       {
+        title: "完成时间",
+        dataIndex: "finished_at",
+        width: 168,
+        render: (v, row) => formatDateTime(v || row.reviewed_at) || "—",
+      },
+      {
         title: "状态",
-        width: 90,
-        render: () => (
-          <Tag color={tab === "pending_approval" ? "orange" : "processing"}>
-            {tab === "pending_approval" ? "待审核" : "待执行"}
-          </Tag>
+        dataIndex: "status",
+        width: 100,
+        render: (_, row) => (
+          <Tag color={cicdTodoStatusTagColor(row)}>{cicdTodoStatusLabel(row, tab)}</Tag>
         ),
       },
       {
         title: "操作",
         width: 100,
         fixed: "right",
-        render: (_, row) =>
-          tab === "pending_approval" ? (
-            <Button type="link" size="small" onClick={() => openReview(row)}>
-              审核
+        render: (_, row) => {
+          if (tab === "pending_approval") {
+            if (isApprovalPending(row)) {
+              return (
+                <Button type="link" size="small" onClick={() => openReview(row, true)}>
+                  审核
+                </Button>
+              );
+            }
+            return (
+              <Button type="link" size="small" onClick={() => openReview(row, false)}>
+                查看
+              </Button>
+            );
+          }
+          if (isExecutionPending(row)) {
+            return (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  if (!projectId) return;
+                  void executeReleaseRun(projectId, row.id).then(() => {
+                    message.success("已触发发布执行");
+                    void load();
+                  });
+                }}
+              >
+                执行
+              </Button>
+            );
+          }
+          return (
+            <Button type="link" size="small" onClick={() => openReview(row, false)}>
+              查看
             </Button>
-          ) : (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => {
-                if (!projectId) return;
-                void executeReleaseRun(projectId, row.id).then(() => {
-                  message.success("已触发发布执行");
-                  void load();
-                });
-              }}
-            >
-              执行
-            </Button>
-          ),
+          );
+        },
       },
     ],
     [tab, projectId, load],
   );
 
   const selectedIds = selectedRowKeys;
+  const showBatchActions = mineScope === "pending" || mineScope === "all";
 
   return (
     <div className="page-stack">
-      <PageTelemetryHeader label="[ CD ]" title="待办列表" subtitle="我的审批与待执行任务（执行仅限提交人）" meta={[`TOTAL / ${total}`]} />
+      <PageTelemetryHeader
+        label="[ CD ]"
+        title="待办列表"
+        subtitle="我的审批与发布执行记录（含待处理与已完成）"
+        meta={[`TOTAL / ${total}`]}
+      />
       <Card bordered={false}>
         <Tabs
           activeKey={tab}
           onChange={(k) => setTab(k as TabKey)}
           items={[
-            { key: "pending_approval", label: "待我审批" },
-            { key: "pending_execution", label: "待我执行" },
+            { key: "pending_approval", label: "审批" },
+            { key: "pending_execution", label: "执行" },
           ]}
         />
         <Space wrap style={{ marginBottom: 16 }}>
@@ -169,6 +235,7 @@ export function CicdTodoPage() {
             options={projects.map((p) => ({ label: p.name, value: p.id }))}
             onChange={(v) => setProjectId(v)}
           />
+          <Segmented options={scopeOptions} value={mineScope} onChange={(v) => setMineScope(v as MineScope)} />
           <Select
             allowClear
             style={{ width: 160 }}
@@ -200,18 +267,32 @@ export function CicdTodoPage() {
         <Table
           rowKey="id"
           loading={loading}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: (keys) => setSelectedRowKeys(keys.map(Number)),
-          }}
+          rowSelection={
+            showBatchActions
+              ? {
+                  selectedRowKeys,
+                  onChange: (keys) => setSelectedRowKeys(keys.map(Number)),
+                  getCheckboxProps: (row) => ({
+                    disabled:
+                      tab === "pending_approval" ? !isApprovalPending(row) : !isExecutionPending(row),
+                  }),
+                }
+              : undefined
+          }
           columns={columns}
           dataSource={rows}
-          scroll={{ x: 1000 }}
+          scroll={{ x: 1100 }}
           locale={{
             emptyText:
-              tab === "pending_approval"
-                ? "暂无待您审批的工单（仅显示当前轮到您所在用户组处理的环节）"
-                : "暂无待您执行的工单（仅提交人可执行）",
+              mineScope === "pending"
+                ? tab === "pending_approval"
+                  ? "暂无待您审批的工单"
+                  : "暂无待您执行的工单"
+                : mineScope === "done"
+                  ? tab === "pending_approval"
+                    ? "暂无您已处理的审批记录"
+                    : "暂无您已执行的发布记录"
+                  : "暂无相关工单记录",
           }}
           pagination={{
             current: page,
@@ -226,82 +307,84 @@ export function CicdTodoPage() {
           }}
         />
 
-        <Space style={{ marginTop: 12 }}>
-          {tab === "pending_approval" ? (
-            <>
-              <Button
-                type="primary"
-                disabled={!selectedIds.length || !projectId}
-                onClick={() => {
-                  if (!projectId) return;
-                  void batchApproveReleaseRuns(projectId, selectedIds).then((r) => {
-                    message.success(`已批量审批 ${r.count} 条`);
-                    setSelectedRowKeys([]);
-                    void load();
-                  });
-                }}
-              >
-                批量审批
-              </Button>
-              <Button
-                danger
-                disabled={!selectedIds.length || !projectId}
-                onClick={() => {
-                  if (!projectId) return;
-                  void batchRejectReleaseRuns(projectId, selectedIds).then((r) => {
-                    message.success(`已批量驳回 ${r.count} 条`);
-                    setSelectedRowKeys([]);
-                    void load();
-                  });
-                }}
-              >
-                批量驳回
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                type="primary"
-                disabled={!selectedIds.length || !projectId}
-                onClick={() => {
-                  if (!projectId) return;
-                  void batchExecuteReleaseRuns(projectId, selectedIds).then((r) => {
-                    message.success(`已批量执行 ${r.count} 条`);
-                    setSelectedRowKeys([]);
-                    void load();
-                  });
-                }}
-              >
-                批量执行
-              </Button>
-              <Button
-                danger
-                disabled={!selectedIds.length || !projectId}
-                onClick={() => {
-                  if (!projectId) return;
-                  void batchTerminateReleaseRuns(projectId, selectedIds).then((r) => {
-                    message.success(`已批量终止 ${r.count} 条`);
-                    setSelectedRowKeys([]);
-                    void load();
-                  });
-                }}
-              >
-                批量终止
-              </Button>
-            </>
-          )}
-        </Space>
+        {showBatchActions ? (
+          <Space style={{ marginTop: 12 }}>
+            {tab === "pending_approval" ? (
+              <>
+                <Button
+                  type="primary"
+                  disabled={!selectedIds.length || !projectId}
+                  onClick={() => {
+                    if (!projectId) return;
+                    void batchApproveReleaseRuns(projectId, selectedIds).then((r) => {
+                      message.success(`已批量审批 ${r.count} 条`);
+                      setSelectedRowKeys([]);
+                      void load();
+                    });
+                  }}
+                >
+                  批量审批
+                </Button>
+                <Button
+                  danger
+                  disabled={!selectedIds.length || !projectId}
+                  onClick={() => {
+                    if (!projectId) return;
+                    void batchRejectReleaseRuns(projectId, selectedIds).then((r) => {
+                      message.success(`已批量驳回 ${r.count} 条`);
+                      setSelectedRowKeys([]);
+                      void load();
+                    });
+                  }}
+                >
+                  批量驳回
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="primary"
+                  disabled={!selectedIds.length || !projectId}
+                  onClick={() => {
+                    if (!projectId) return;
+                    void batchExecuteReleaseRuns(projectId, selectedIds).then((r) => {
+                      message.success(`已批量执行 ${r.count} 条`);
+                      setSelectedRowKeys([]);
+                      void load();
+                    });
+                  }}
+                >
+                  批量执行
+                </Button>
+                <Button
+                  danger
+                  disabled={!selectedIds.length || !projectId}
+                  onClick={() => {
+                    if (!projectId) return;
+                    void batchTerminateReleaseRuns(projectId, selectedIds).then((r) => {
+                      message.success(`已批量终止 ${r.count} 条`);
+                      setSelectedRowKeys([]);
+                      void load();
+                    });
+                  }}
+                >
+                  批量终止
+                </Button>
+              </>
+            )}
+          </Space>
+        ) : null}
       </Card>
 
       <Modal
-        title={`审核 — ${reviewTarget?.title ?? ""}`}
+        title={`${reviewMode ? "审核" : "详情"} — ${reviewTarget?.title ?? ""}`}
         open={reviewOpen}
         width={920}
         style={{ top: 24 }}
         destroyOnClose
         onCancel={() => setReviewOpen(false)}
         footer={
-          tab === "pending_approval" ? (
+          reviewMode && reviewTarget && isApprovalPending(reviewTarget) ? (
             <Space>
               <Button onClick={() => setReviewOpen(false)}>取消</Button>
               <Button
@@ -342,7 +425,7 @@ export function CicdTodoPage() {
           <CicdReleaseDetailPanel
             projectId={projectId}
             runId={reviewTarget.id}
-            reviewMode={tab === "pending_approval"}
+            reviewMode={reviewMode && isApprovalPending(reviewTarget)}
             reviewForm={reviewForm}
           />
         ) : null}

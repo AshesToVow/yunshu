@@ -392,12 +392,38 @@ func (h *CicdHandler) ListReleaseRuns(c *gin.Context) {
 		q.ProjectID = projectID
 		if q.Mine {
 			if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
-				switch strings.TrimSpace(q.Status) {
-				case model.CicdRunStatusPendingApproval:
-					q.ApproverUserID = &u.ID
-				case model.CicdRunStatusPendingExecution:
-					q.ExecutorUserID = &u.ID
+				scope := strings.TrimSpace(q.MineScope)
+				if scope == "" {
+					scope = "all"
 				}
+				tabStatus := strings.TrimSpace(q.Status)
+				switch tabStatus {
+				case model.CicdRunStatusPendingApproval:
+					q.MineTab = "approval"
+					switch scope {
+					case "pending":
+						q.ApproverUserID = &u.ID
+					case "done":
+						q.Status = ""
+						q.ApprovalDoneUserID = &u.ID
+					default:
+						q.Status = ""
+						q.ApprovalMineUserID = &u.ID
+					}
+				case model.CicdRunStatusPendingExecution:
+					q.MineTab = "execution"
+					switch scope {
+					case "pending":
+						q.ExecutorUserID = &u.ID
+					case "done":
+						q.Status = ""
+						q.ExecutionDoneUserID = &u.ID
+					default:
+						q.Status = ""
+						q.ExecutionMineUserID = &u.ID
+					}
+				}
+				q.MineViewerUserID = &u.ID
 			}
 		}
 		return h.svc.ListReleaseRuns(ctx, q)

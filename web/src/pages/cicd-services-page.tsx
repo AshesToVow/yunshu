@@ -446,14 +446,20 @@ export function CicdServicesPage() {
       artifact_name: undefined,
       build_run_id: undefined,
       image_address: undefined,
-      publish_mode: "自动发布",
+      publish_mode: "制品发布",
     });
     setReleaseModalOpen(true);
     if (isContainer) {
       setReleaseBuildRunsLoading(true);
       try {
         const res = await listBuildRuns(projectId, { service_id: svc.id, page: 1, page_size: 50 });
-        const runs = (res.list ?? []).filter((r) => r.build_result === "success" && r.image_address);
+        const runs = (res.list ?? []).filter(
+          (r) =>
+            r.build_result === "success" &&
+            r.image_address &&
+            !r.image_address.includes("/inbound-agent") &&
+            !r.image_address.includes("/jenkins/inbound-agent"),
+        );
         setReleaseBuildRuns(runs);
         if (runs.length === 1) {
           releaseForm.setFieldsValue({ build_run_id: runs[0].id, image_address: runs[0].image_address });
@@ -1085,15 +1091,15 @@ export function CicdServicesPage() {
                           const name = releaseService?.name ?? "应用";
                           setFieldsValue({
                             title: `${name}-${releaseOpLabel(String(v))}`,
-                            publish_mode: v === "container_rollback" ? "回滚" : "自动发布",
+                            publish_mode: v === "container_rollback" ? "回滚" : "制品发布",
                           });
                         }}
                       />
                     </Form.Item>
                     {!isRollback ? (
                       <>
-                        <Form.Item name="publish_mode" label="发布模式">
-                          <Select options={publishModes.filter((o) => o.value === "自动发布" || o.value === "手动发布").map((o) => ({ label: o.label, value: o.value }))} />
+                        <Form.Item name="publish_mode" hidden initialValue="制品发布">
+                          <Input />
                         </Form.Item>
                         <Form.Item
                           name="build_run_id"

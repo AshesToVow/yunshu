@@ -2,10 +2,10 @@ package bootstrap
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 
 	"yunshu/internal/dictconfig"
-	"yunshu/internal/pkg/logutil"
 )
 
 type dictConfigOverrides struct {
@@ -61,7 +61,7 @@ func (b *Builder) applyDictConfigOverrides(ctx context.Context, ov dictConfigOve
 	}
 
 	logf := func(msg string, kv ...any) {
-		logutil.Worker("config").Infow(msg, kv...)
+		slog.Default().With("component", "config").Info(msg, kv...)
 	}
 
 	// Alert: webhook_token

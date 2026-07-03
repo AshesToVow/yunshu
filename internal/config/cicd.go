@@ -14,9 +14,11 @@ type CicdConfig struct {
 
 	Credentials CicdCredentialsConfig `mapstructure:"credentials"`
 
-	RunSyncIntervalSeconds int `mapstructure:"run_sync_interval_seconds"`
-	DefaultWaitMins        int `mapstructure:"default_wait_mins"`
-	DefaultArtifactRetain  int `mapstructure:"default_artifact_retain_count"`
+	RunSyncIntervalSeconds        int `mapstructure:"run_sync_interval_seconds"`
+	DefaultWaitMins               int `mapstructure:"default_wait_mins"`
+	DefaultArtifactRetain         int `mapstructure:"default_artifact_retain_count"`
+	ApprovalSlaHours              int `mapstructure:"approval_sla_hours"`
+	ApprovalReminderIntervalHours int `mapstructure:"approval_reminder_interval_hours"`
 }
 
 type JenkinsConfig struct {
@@ -46,6 +48,8 @@ type CicdMinIOConfig struct {
 type HarborConfig struct {
 	URL          string `mapstructure:"url"`
 	ProjectGroup string `mapstructure:"project_group"`
+	Username     string `mapstructure:"username"`
+	Password     string `mapstructure:"password"`
 }
 
 type CicdCredentialsConfig struct {
@@ -83,8 +87,10 @@ func DefaultCicdConfig() CicdConfig {
 			MinIO:     "minio-credentials",
 			Harbor:    "HARBOR_ID",
 		},
-		RunSyncIntervalSeconds: 15,
-		DefaultWaitMins:        60,
-		DefaultArtifactRetain:  10,
+		RunSyncIntervalSeconds:        15,
+		DefaultWaitMins:               60,
+		DefaultArtifactRetain:         10,
+		ApprovalSlaHours:              24,
+		ApprovalReminderIntervalHours: 4,
 	}
 }

@@ -49,7 +49,8 @@ func (h *MenuHandler) Tree(c *gin.Context) {
 	}
 
 	if isSuper {
-		response.Success(c, list)
+		filtered := plugin.FilterMenusByPlugins(list, h.plugins)
+		response.Success(c, filtered)
 		return
 	}
 

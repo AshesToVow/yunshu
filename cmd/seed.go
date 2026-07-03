@@ -3,13 +3,16 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"yunshu/internal/bootstrap"
+	"yunshu/internal/config"
 	"yunshu/internal/menu"
 	"yunshu/internal/model"
+	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/password"
+	"yunshu/internal/plugin"
 	"yunshu/internal/service"
-	"yunshu/internal/pkg/logutil"
 
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
@@ -30,6 +33,8 @@ var seedCmd = &cobra.Command{
 		}
 		defer app.Close()
 
+		logx.Init(app.Logger)
+
 		ctx := context.Background()
 		// 确保新增字段（如 permissions.k8s_scope_enabled）在 seed 前已完成迁移
 		if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
@@ -45,7 +50,7 @@ var seedCmd = &cobra.Command{
 			return fmt.Errorf("remove stale permissions: %w", err)
 		}
 		if removedStale > 0 {
-			logutil.Worker("seed").Infow("removed stale permissions", "count", removedStale)
+			slog.Default().With("component", "seed").Info("removed stale permissions", "count", removedStale)
 			fmt.Printf("removed %d stale permission records\n", removedStale)
 		}
 
@@ -106,7 +111,7 @@ var seedCmd = &cobra.Command{
 			if err := tx.Model(&adminUser).Association("Roles").Replace([]model.Role{adminRole}); err != nil {
 				return err
 			}
-			return seedMenus(ctx, tx)
+			return seedMenus(ctx, tx, &app.Config.Plugins)
 		})
 		if err != nil {
 			return err
@@ -120,10 +125,10 @@ var seedCmd = &cobra.Command{
 		}
 
 		if adminCreated {
-			logutil.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email, "password", "Admin@123")
+			slog.Default().With("component", "seed").Info("Seed completed", "username", adminUser.Username, "email", adminUser.Email, "password", "Admin@123")
 			fmt.Println("seed completed: created admin user admin / Admin@123")
 		} else {
-			logutil.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email)
+			slog.Default().With("component", "seed").Info("Seed completed", "username", adminUser.Username, "email", adminUser.Email)
 			fmt.Println("seed completed")
 		}
 		return nil
@@ -428,6 +433,18 @@ func defaultPermissions() []model.Permission {
 		{Name: "HPA 详情", Resource: "/api/v1/horizontal-pod-autoscalers/detail", Action: "GET", Description: "Get HPA YAML"},
 		{Name: "HPA 应用 YAML", Resource: "/api/v1/horizontal-pod-autoscalers/apply", Action: "POST", Description: "Apply HPA yaml"},
 		{Name: "删除 HPA", Resource: "/api/v1/horizontal-pod-autoscalers", Action: "DELETE", Description: "Delete HPA"},
+
+		{Name: "Harbor 信息", Resource: "/api/v1/helm/harbor/info", Action: "GET", Description: "Get Harbor helm repo info"},
+		{Name: "Harbor Chart 列表", Resource: "/api/v1/helm/harbor/charts", Action: "GET", Description: "List Harbor helm charts"},
+		{Name: "Harbor Chart 版本", Resource: "/api/v1/helm/harbor/charts/versions", Action: "GET", Description: "List Harbor chart versions"},
+		{Name: "Helm Release 列表", Resource: "/api/v1/helm/releases", Action: "GET", Description: "List helm releases"},
+		{Name: "Helm Release 详情", Resource: "/api/v1/helm/releases/detail", Action: "GET", Description: "Get helm release detail"},
+		{Name: "Helm Release 历史", Resource: "/api/v1/helm/releases/history", Action: "GET", Description: "Get helm release history"},
+		{Name: "Helm Release Values", Resource: "/api/v1/helm/releases/values", Action: "GET", Description: "Get helm release values"},
+		{Name: "Helm 安装", Resource: "/api/v1/helm/releases/install", Action: "POST", Description: "Install helm release from Harbor"},
+		{Name: "Helm 升级", Resource: "/api/v1/helm/releases/upgrade", Action: "POST", Description: "Upgrade helm release"},
+		{Name: "Helm 回滚", Resource: "/api/v1/helm/releases/rollback", Action: "POST", Description: "Rollback helm release"},
+		{Name: "Helm 卸载", Resource: "/api/v1/helm/releases", Action: "DELETE", Description: "Uninstall helm release"},
 		{Name: "网络策略列表", Resource: "/api/v1/network-policies", Action: "GET", Description: "List network policies"},
 		{Name: "网络策略详情", Resource: "/api/v1/network-policies/detail", Action: "GET", Description: "Get network policy detail"},
 		{Name: "网络策略应用 YAML", Resource: "/api/v1/network-policies/apply", Action: "POST", Description: "Apply network policy yaml"},
@@ -540,6 +557,9 @@ func defaultPermissions() []model.Permission {
 	}
 }
 
-func seedMenus(ctx context.Context, db *gorm.DB) error {
-	return menu.Sync(ctx, db)
+func seedMenus(ctx context.Context, db *gorm.DB, cfg *config.PluginsConfig) error {
+	if err := menu.Sync(ctx, db); err != nil {
+		return err
+	}
+	return plugin.SyncMenuVisibility(ctx, db, cfg)
 }

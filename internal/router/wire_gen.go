@@ -7,9 +7,19 @@
 package router
 
 import (
-	"gorm.io/gorm"
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/grpc/client"
+	"yunshu/internal/service/alert"
+	"yunshu/internal/service/k8s"
+	"yunshu/internal/service/k8s/eventforward"
+	"yunshu/internal/service/logplatform"
+	"yunshu/internal/service/overview"
+	"yunshu/internal/service/project"
+	"yunshu/internal/service/system"
+)
+
+import (
+	_ "yunshu/internal/plugins/all"
 )
 
 // Injectors from wire.go:
@@ -17,27 +27,182 @@ import (
 // InitializeRouteDeps is the Wire entry for HTTP route dependencies.
 func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient) (*RouteDeps, error) {
 	db := provideDB(app)
-	routerRouteRepositories := provideRouteRepositories(db)
-	routerRouteServices, err := provideRouteServices(app, routerRouteRepositories)
+	routerRouteRepositories := newRouteRepositories(db)
+	loginLogRepo := routerRouteRepositories.LoginLog
+	loginLogService := system.NewLoginLogService(loginLogRepo)
+	operationLogRepo := routerRouteRepositories.OperationLog
+	operationLogService := system.NewOperationLogService(operationLogRepo)
+	userRepo := routerRouteRepositories.User
+	redisClient := provideRedis(app)
+	authConfig := provideAuthConfig(app)
+	sender := provideMailer(app)
+	routerAppRouteConfig := provideAppRouteConfig(app)
+	appDisplayName := routerAppRouteConfig.AppName
+	authService := provideAuthService(userRepo, redisClient, authConfig, sender, appDisplayName)
+	roleRepo := routerRouteRepositories.Role
+	departmentRepo := routerRouteRepositories.Department
+	syncedEnforcer := provideEnforcer(app)
+	projectMemberRepo := routerRouteRepositories.ProjectMember
+	alertRuleAssigneeRepo := routerRouteRepositories.AlertRuleAssignee
+	alertMonitorRuleRepo := routerRouteRepositories.AlertMonitorRule
+	alertDatasourceRepo := routerRouteRepositories.AlertDatasource
+	alertRuleAssigneeService := alert.NewAlertRuleAssigneeService(alertRuleAssigneeRepo, alertMonitorRuleRepo, alertDatasourceRepo, userRepo, projectMemberRepo, departmentRepo)
+	userService := system.NewUserService(userRepo, roleRepo, departmentRepo, syncedEnforcer, projectMemberRepo, alertRuleAssigneeService)
+	departmentService := system.NewDepartmentService(departmentRepo, userRepo, alertRuleAssigneeService)
+	roleService := system.NewRoleService(roleRepo, syncedEnforcer)
+	permissionRepo := routerRouteRepositories.Permission
+	permissionService := system.NewPermissionService(permissionRepo, syncedEnforcer)
+	policyService := system.NewPolicyService(roleRepo, permissionRepo, syncedEnforcer)
+	k8sClusterAccessRepo := routerRouteRepositories.K8sClusterAccess
+	k8sNamespaceDenyRepo := routerRouteRepositories.K8sNsDeny
+	k8sNamespaceAllowRepo := routerRouteRepositories.K8sNsAllow
+	userGroupRepo := routerRouteRepositories.UserGroup
+	k8sClusterRepo := routerRouteRepositories.Cluster
+	k8sScopedPolicyService := k8s.NewK8sScopedPolicyService(roleRepo, permissionRepo, k8sClusterAccessRepo, k8sNamespaceDenyRepo, k8sNamespaceAllowRepo, userGroupRepo, userRepo, k8sClusterRepo)
+	k8sNamespaceDenyService := k8s.NewK8sNamespaceDenyService(k8sNamespaceDenyRepo)
+	k8sNamespaceAllowService := k8s.NewK8sNamespaceAllowService(k8sNamespaceAllowRepo)
+	projectRepo := routerRouteRepositories.Project
+	userGroupService := system.NewUserGroupService(userGroupRepo, userRepo, projectMemberRepo, projectRepo)
+	registrationRequestRepo := routerRouteRepositories.RegRequest
+	registrationService := provideRegistrationService(registrationRequestRepo, userRepo, redisClient, authConfig, sender, appDisplayName)
+	menuRepo := routerRouteRepositories.Menu
+	menuService := system.NewMenuService(menuRepo)
+	dictEntryRepo := routerRouteRepositories.DictEntry
+	dictEntryService := system.NewDictEntryService(dictEntryRepo)
+	alertSilenceRepo := routerRouteRepositories.AlertSilence
+	alertSilenceService := alert.NewAlertSilenceService(alertSilenceRepo)
+	alertDutyRepo := routerRouteRepositories.AlertDuty
+	alertDutyService := alert.NewAlertDutyService(alertDutyRepo, alertMonitorRuleRepo, userRepo)
+	alertReceiverGroupRepo := routerRouteRepositories.AlertReceiverGroup
+	receiverGroupCache := alert.NewReceiverGroupCache(alertReceiverGroupRepo)
+	alertConfig := provideAlertConfig(app)
+	alertMaintenanceWindowRepo := routerRouteRepositories.AlertMaintenance
+	alertMaintenanceService := alert.NewAlertMaintenanceService(alertMaintenanceWindowRepo)
+	securityEncryptionKey := routerAppRouteConfig.EncryptionKey
+	alertEventRepo := routerRouteRepositories.AlertEvent
+	alertChannelRepo := routerRouteRepositories.AlertChannel
+	alertFiringDeliveryRepo := routerRouteRepositories.AlertFiringDelivery
+	cloudExpiryRuleRepo := routerRouteRepositories.CloudExpiryRule
+	cloudAccountRepo := routerRouteRepositories.CloudAccount
+	alertStateService := provideAlertStateService(redisClient, alertEventRepo, alertConfig)
+	alertSubscriptionRepo := routerRouteRepositories.AlertSubscription
+	alertInhibitionRuleRepo := routerRouteRepositories.AlertInhibitionRule
+	alertServiceOptions := provideAlertServiceOptions(alertSilenceService, alertMaintenanceService, alertRuleAssigneeService, alertDutyService, receiverGroupCache, securityEncryptionKey, alertEventRepo, alertChannelRepo, alertMonitorRuleRepo, alertDatasourceRepo, projectRepo, alertFiringDeliveryRepo, cloudExpiryRuleRepo, cloudAccountRepo, alertStateService, alertSubscriptionRepo, alertInhibitionRuleRepo)
+	alertService := provideAlertService(db, redisClient, sender, alertConfig, alertServiceOptions)
+	cloudExpiryRuleService := alert.NewCloudExpiryRuleService(cloudExpiryRuleRepo)
+	alertDatasourceService := alert.NewAlertDatasourceService(alertDatasourceRepo)
+	alertMonitorRuleService := alert.NewAlertMonitorRuleService(alertMonitorRuleRepo, alertDatasourceRepo, redisClient)
+	k8sRuntimeService := k8s.NewK8sRuntimeService(k8sClusterRepo)
+	k8sClusterService := k8s.NewK8sClusterService(k8sClusterRepo, dictEntryRepo, k8sRuntimeService, k8sNamespaceDenyRepo, k8sNamespaceAllowRepo, projectMemberRepo)
+	k8sPodService := k8s.NewK8sPodService(k8sRuntimeService, k8sNamespaceDenyRepo, k8sNamespaceAllowRepo)
+	k8sNamespaceService := k8s.NewK8sNamespaceService(k8sRuntimeService, k8sNamespaceDenyRepo, k8sNamespaceAllowRepo)
+	k8sNodeService := k8s.NewK8sNodeService(k8sRuntimeService)
+	k8sWorkloadService := k8s.NewK8sWorkloadService(k8sRuntimeService)
+	k8sConfigService := k8s.NewK8sConfigService(k8sRuntimeService)
+	k8sStorageService := k8s.NewK8sStorageService(k8sRuntimeService)
+	k8sServiceResourceService := k8s.NewK8sServiceResourceService(k8sRuntimeService)
+	k8sIngressService := k8s.NewK8sIngressService(k8sRuntimeService, k8sClusterAccessRepo)
+	k8sNetworkPolicyService := k8s.NewK8sNetworkPolicyService(k8sRuntimeService)
+	k8sDiscoveryService := k8s.NewK8sDiscoveryService(k8sRuntimeService)
+	k8sHPAService := k8s.NewK8sHPAService(k8sRuntimeService)
+	cicdConfig := provideCicdConfig(app)
+	k8sHelmService := provideK8sHelmService(k8sRuntimeService, db, cicdConfig)
+	k8sEventService := k8s.NewK8sEventService(k8sRuntimeService, k8sNamespaceDenyRepo, k8sNamespaceAllowRepo)
+	k8sCRDService := k8s.NewK8sCRDService(k8sRuntimeService)
+	k8sCRService := k8s.NewK8sCRService(k8sRuntimeService)
+	k8sRBACService := k8s.NewK8sRBACService(k8sRuntimeService)
+	k8sServiceAccountService := k8s.NewK8sServiceAccountService(k8sRuntimeService)
+	overviewRepo := routerRouteRepositories.Overview
+	v := providePluginsEnabled(app)
+	overviewService := overview.NewOverviewService(overviewRepo, k8sRuntimeService, redisClient, projectMemberRepo, k8sClusterAccessRepo, v)
+	serverRepo := routerRouteRepositories.Server
+	serverGroupRepo := routerRouteRepositories.ServerGroup
+	serviceRepo := routerRouteRepositories.Service
+	logSourceRepo := routerRouteRepositories.LogSource
+	projectMgmtService := project.NewProjectMgmtService(projectRepo, serverRepo, serverGroupRepo, serviceRepo, logSourceRepo, projectMemberRepo, userRepo, departmentRepo)
+	service, err := provideCMDBService(serverRepo, serverGroupRepo, cloudAccountRepo, securityEncryptionKey)
 	if err != nil {
 		return nil, err
 	}
-	routerRouteDeps, err := provideRouteDeps(app, runtimeClient, routerRouteRepositories, routerRouteServices)
+	cicdService := provideCicdService(db, serverRepo, projectRepo, userGroupRepo, userRepo, cicdConfig, sender, appDisplayName, k8sNamespaceService)
+	mysqlBackupRepo := routerRouteRepositories.MysqlBackup
+	mysqlBackupService, err := provideMysqlBackupService(mysqlBackupRepo, serverRepo, projectRepo, db, securityEncryptionKey)
 	if err != nil {
 		return nil, err
 	}
-	return routerRouteDeps, nil
+	logAgentRepo := routerRouteRepositories.LogAgent
+	agentRegisterSecret := routerAppRouteConfig.AgentRegisterSecret
+	v2 := routerAppRouteConfig.AgentDiscoveryRoots
+	logAgentService := provideLogAgentService(logAgentRepo, serverRepo, logSourceRepo, agentRegisterSecret, v2)
+	agentDiscoveryRepo := routerRouteRepositories.AgentDiscovery
+	agentDiscoveryService := logplatform.NewAgentDiscoveryService(agentDiscoveryRepo, logAgentRepo, serverRepo, logSourceRepo)
+	alertReceiverGroupService := alert.NewAlertReceiverGroupService(alertReceiverGroupRepo, receiverGroupCache)
+	k8sEventForwardRepo := routerRouteRepositories.K8sEventForward
+	k8sEventForwardAdminService := eventforward.NewK8sEventForwardAdminService(k8sEventForwardRepo)
+	k8sSearchService := k8s.NewK8sSearchService(k8sRuntimeService, k8sClusterRepo, projectMemberRepo, k8sClusterAccessRepo, k8sNamespaceDenyRepo, k8sNamespaceAllowRepo)
+	routerRouteServices := &routeServices{
+		LoginLog:             loginLogService,
+		OperationLog:         operationLogService,
+		Auth:                 authService,
+		User:                 userService,
+		Department:           departmentService,
+		Role:                 roleService,
+		Permission:           permissionService,
+		Policy:               policyService,
+		K8sScopedPolicy:      k8sScopedPolicyService,
+		K8sNamespaceDeny:     k8sNamespaceDenyService,
+		K8sNamespaceAllow:    k8sNamespaceAllowService,
+		UserGroup:            userGroupService,
+		Registration:         registrationService,
+		Menu:                 menuService,
+		DictEntry:            dictEntryService,
+		AlertSilence:         alertSilenceService,
+		AlertDuty:            alertDutyService,
+		AlertAssignee:        alertRuleAssigneeService,
+		AlertReceiverCache:   receiverGroupCache,
+		Alert:                alertService,
+		CloudExpiryRule:      cloudExpiryRuleService,
+		AlertDatasource:      alertDatasourceService,
+		AlertMonitorRule:     alertMonitorRuleService,
+		K8sRuntime:           k8sRuntimeService,
+		K8sCluster:           k8sClusterService,
+		K8sPod:               k8sPodService,
+		K8sNamespace:         k8sNamespaceService,
+		K8sNode:              k8sNodeService,
+		K8sWorkload:          k8sWorkloadService,
+		K8sConfig:            k8sConfigService,
+		K8sStorage:           k8sStorageService,
+		K8sServiceResource:   k8sServiceResourceService,
+		K8sIngress:           k8sIngressService,
+		K8sNetworkPolicy:     k8sNetworkPolicyService,
+		K8sDiscovery:         k8sDiscoveryService,
+		K8sHPA:               k8sHPAService,
+		K8sHelm:              k8sHelmService,
+		K8sEvent:             k8sEventService,
+		K8sCRD:               k8sCRDService,
+		K8sCR:                k8sCRService,
+		K8sRBAC:              k8sRBACService,
+		K8sServiceAccount:    k8sServiceAccountService,
+		Overview:             overviewService,
+		ProjectMgmt:          projectMgmtService,
+		CMDB:                 service,
+		Cicd:                 cicdService,
+		MysqlBackup:          mysqlBackupService,
+		LogAgent:             logAgentService,
+		AgentDiscovery:       agentDiscoveryService,
+		AlertReceiverGroup:   alertReceiverGroupService,
+		K8sEventForwardAdmin: k8sEventForwardAdminService,
+		K8sSearch:            k8sSearchService,
+		AlertMaintenance:     alertMaintenanceService,
+	}
+	routeDeps, err := provideRouteDeps(app, runtimeClient, routerRouteRepositories, routerRouteServices)
+	if err != nil {
+		return nil, err
+	}
+	return routeDeps, nil
 }
 
 // wire.go:
-
-func provideDB(app *bootstrap.App) *gorm.DB {
-	return app.DB
-}
-
-func provideRouteRepositories(db *gorm.DB) *routeRepositories {
-	return newRouteRepositories(db)
-}
 
 func provideRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	return assembleRouteDeps(app, runtimeClient, repos, svcs)

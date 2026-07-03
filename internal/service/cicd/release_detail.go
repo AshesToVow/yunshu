@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
-	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/constants"
 )
 
 type ReleaseHandlerItem struct {
@@ -37,7 +37,7 @@ type ReleaseRunDetailResponse struct {
 func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint) (*ReleaseRunDetailResponse, error) {
 	var row model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
-		return nil, bizerrors.NotFound("release run", runID)
+		return nil, constants.ErrNotFound
 	}
 	item := ReleaseRunItem{CicdReleaseRun: row}
 	var svc model.CicdService

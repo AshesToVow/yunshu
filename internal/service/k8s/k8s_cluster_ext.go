@@ -1,4 +1,4 @@
-﻿package k8s
+package k8s
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/logutil"
+	"log/slog"
 
 	"gorm.io/gorm"
 	"k8s.io/client-go/rest"
@@ -71,7 +71,7 @@ func preserveDirectAuthFromStored(storedJSON string, next *DirectConfig) {
 	}
 	var prev DirectConfig
 	if err := json.Unmarshal([]byte(storedJSON), &prev); err != nil {
-		logutil.Service("k8s.cluster").Warnw("preserve direct auth: stored config unmarshal failed", "error", err)
+		slog.Default().With("component", "k8s.cluster").Warn("preserve direct auth: stored config unmarshal failed", "error", err)
 		return
 	}
 	if shouldPreserveSecret(next.Token, prev.Token) {

@@ -42,6 +42,8 @@ type CicdReleaseApprovalStep struct {
 	ReviewerName   string     `json:"reviewer_name" gorm:"size:64"`
 	ReviewComment  string     `json:"review_comment" gorm:"size:512"`
 	ReviewedAt     *time.Time `json:"reviewed_at,omitempty"`
+	ActivatedAt    *time.Time `json:"activated_at,omitempty" gorm:"comment:当前节点开始等待审批的时间"`
+	LastRemindedAt *time.Time `json:"last_reminded_at,omitempty" gorm:"comment:上次 SLA 提醒邮件时间"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }

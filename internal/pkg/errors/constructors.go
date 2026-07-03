@@ -6,15 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"log/slog"
+	logx "yunshu/internal/pkg/logger"
 )
-
-func NotFound(resource string, id any) *BizError {
-	return &BizError{
-		Code: 40401, Message: fmt.Sprintf("%s [%v] not found", resource, id),
-		Reason: "NotFound", ErrorCode: "40401", StatusCode: http.StatusNotFound,
-	}
-}
 
 func Internal(err error, operation string) *BizError {
 	b := &BizError{
@@ -69,6 +62,7 @@ func InferHTTPStatus(code int) int {
 	}
 }
 
+// Pass 包装下层错误并附加 component/operation，不在 Service 层打日志（由 HTTP LogAPI 统一记录）。
 func Pass(ctx context.Context, component, operation string, err error, attrs ...any) error {
 	_ = attrs
 	if err == nil {
@@ -76,22 +70,22 @@ func Pass(ctx context.Context, component, operation string, err error, attrs ...
 	}
 	var biz *BizError
 	if stderrors.As(err, &biz) {
-		if biz.logged || IsAlreadyLogged(err) {
-			return err
-		}
 		cp := *biz
-		cp.Component, cp.Operation = component, operation
-		cp.logBiz(ctx, "error")
-		return MarkLogged(&cp)
+		if component != "" {
+			cp.Component = component
+		}
+		if operation != "" {
+			cp.Operation = operation
+		}
+		return &cp
 	}
-	biz = &BizError{
+	return &BizError{
 		Code: 50001, Message: "operation failed", Reason: "InternalError", ErrorCode: "50001",
 		Cause: err, StatusCode: http.StatusInternalServerError, Operation: operation, Component: component,
 	}
-	biz.logBiz(ctx, "error")
-	return MarkLogged(biz)
 }
 
+// Reject 包装客户端错误，不在 Service 层打日志。
 func Reject(ctx context.Context, component, operation string, err error, attrs ...any) error {
 	_ = attrs
 	if err == nil {
@@ -99,36 +93,29 @@ func Reject(ctx context.Context, component, operation string, err error, attrs .
 	}
 	var biz *BizError
 	if stderrors.As(err, &biz) {
-		if !biz.logged {
-			cp := *biz
-			cp.Component, cp.Operation = component, operation
-			cp.logBiz(ctx, "warn")
-			return MarkLogged(&cp)
+		cp := *biz
+		if component != "" {
+			cp.Component = component
 		}
-		return err
+		if operation != "" {
+			cp.Operation = operation
+		}
+		return &cp
 	}
-	biz = &BizError{
+	return &BizError{
 		Code: 40001, Message: err.Error(), Reason: "BadRequest", ErrorCode: "40001",
 		Cause: err, StatusCode: http.StatusBadRequest, Operation: operation, Component: component,
 	}
-	biz.logBiz(ctx, "warn")
-	return MarkLogged(biz)
 }
 
 func Warn(ctx context.Context, component, operation, msg string, attrs ...any) {
-	_ = attrs
-	slog.Default().Warn(msg, "component", component, "operation", operation)
+	logx.With(ctx, "component", component, "operation", operation).Warn(msg, attrs...)
 }
 
 // InternalMsg logs and returns a 500 BizError (component + operation for structured logs).
 func InternalMsg(ctx context.Context, component, operation, msg string, attrs ...any) error {
 	_ = attrs
 	return internalCtx(ctx, component, operation, fmt.Errorf("%s", msg))
-}
-
-// InternalFmt is InternalMsg with a formatted message.
-func InternalFmt(ctx context.Context, component, operation, msgFmt string, args ...any) error {
-	return InternalMsg(ctx, component, operation, fmt.Sprintf(msgFmt, args...))
 }
 
 // Internalf logs a wrapped error with component/operation (msgFmt should include %w or %v for err).

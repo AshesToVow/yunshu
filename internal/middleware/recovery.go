@@ -1,13 +1,11 @@
-﻿package middleware
+package middleware
 
 import (
-	"errors"
 	"runtime/debug"
 	"yunshu/internal/pkg/constants"
 
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/pkg/logutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,7 +14,7 @@ func Recovery(logger *logx.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logutil.HTTP("http.recovery").Errorw(errors.New("panic"), "Recovered HTTP panic",
+				logx.With(c.Request.Context(), "component", "http.recovery").Error("Recovered HTTP panic",
 					"panic", rec,
 					"path", c.Request.URL.Path,
 					"stack", string(debug.Stack()),

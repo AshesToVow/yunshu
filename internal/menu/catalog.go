@@ -85,7 +85,9 @@ func DefaultCatalog() []Spec {
 				{Path: "/serviceaccounts", Name: "ServiceAccount 管理", Icon: "SafetyCertificateOutlined", Sort: 26, Component: "serviceaccounts-page", Status: 1},
 				{Path: "/cluster-api-resources", Name: "API 资源发现", Icon: "UnorderedListOutlined", Sort: 27, Component: "cluster-api-resources-page", Status: 1},
 				{Path: "/horizontal-pod-autoscalers", Name: "HPA 弹性伸缩", Icon: "LineChartOutlined", Sort: 28, Component: "horizontal-pod-autoscalers-page", Status: 1},
-				{Path: "/k8s-resource-topology", Name: "资源拓扑图", Icon: "DeploymentUnitOutlined", Sort: 29, Component: "k8s-resource-topology-page", Status: 1},
+				{Path: "/helm/releases", Name: "Helm Release", Icon: "RocketOutlined", Sort: 29, Component: "helm-releases-page", Status: 1},
+				{Path: "/helm/charts", Name: "Harbor Chart", Icon: "CloudServerOutlined", Sort: 30, Component: "helm-charts-page", Status: 1},
+				{Path: "/k8s-resource-topology", Name: "资源拓扑图", Icon: "DeploymentUnitOutlined", Sort: 31, Component: "k8s-resource-topology-page", Status: 1},
 			},
 		},
 		{

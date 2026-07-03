@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"net/http"
@@ -9,7 +9,6 @@ import (
 	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/projectaccess"
-	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/interfaces"
 
@@ -54,7 +53,7 @@ func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, l
 				c.Abort()
 				return
 			}
-			logutil.HTTP("http.project_access").Error("project member lookup failed", "error", err)
+			logx.With(c.Request.Context(), "component", "http.project_access").Error("project member lookup failed", "error", err)
 			response.Error(c, constants.ErrInternal)
 			c.Abort()
 			return

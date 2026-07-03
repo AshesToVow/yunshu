@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"yunshu/internal/pkg/auth"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/service"
-	"yunshu/internal/pkg/logutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -109,7 +108,7 @@ func OperationAudit(opSvc *service.OperationLogService, logger *logx.Logger) gin
 		}
 
 		if err := opSvc.Record(c.Request.Context(), entry); err != nil {
-			logutil.HTTP("http.audit").Error("operation audit persist failed", "error", err, "path", path)
+			logx.With(c.Request.Context(), "component", "http.audit").Error("operation audit persist failed", "error", err, "path", path)
 		}
 	}
 }

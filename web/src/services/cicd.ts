@@ -122,6 +122,7 @@ export interface CicdReleaseRun {
   service_name?: string;
   service_identifier?: string;
   project_name?: string;
+  mine_status?: "mine_pending" | "mine_done";
 }
 
 function projectPath(projectId: number, suffix: string) {
