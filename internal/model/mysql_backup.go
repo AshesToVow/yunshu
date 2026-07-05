@@ -76,6 +76,11 @@ type MysqlBackupInstance struct {
 	CronSpec        string     `json:"cron_spec" gorm:"size:256;not null;default:''"`
 	LastScheduledAt *time.Time `json:"last_scheduled_at,omitempty"`
 
+	// NotifyEnabled 任务结束（成功/失败/取消）是否发邮件；收件人见 NotifyUserIDs。
+	NotifyEnabled bool   `json:"notify_enabled" gorm:"not null;default:false"`
+	// NotifyUserIDs JSON 数组，如 [1,5]；首项通常为创建/主接收人，其余为额外通知用户。
+	NotifyUserIDs string `json:"-" gorm:"type:text;comment:JSON array of user ids for backup email notify"`
+
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`

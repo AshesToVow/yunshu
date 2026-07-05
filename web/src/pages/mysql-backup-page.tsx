@@ -54,6 +54,9 @@ import {
 } from "../services/mysql-backup";
 import { getProjectServers, getProjects, type ProjectItem, type ServerItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
+import { useAuth } from "../contexts/auth-context";
+import { getUsers } from "../services/users";
+import type { UserItem } from "../types/api";
 
 function isXtrabackupMode(mode?: string) {
   return mode === "xtrabackup" || mode === "remote_check";
@@ -108,6 +111,7 @@ function MysqldumpOptionsField({ catalog }: { catalog: MysqldumpOptionItem[] }) 
 }
 
 export function MysqlBackupPage() {
+  const { user: currentUser } = useAuth();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [servers, setServers] = useState<ServerItem[]>([]);
@@ -121,10 +125,16 @@ export function MysqlBackupPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [logJob, setLogJob] = useState<MysqlBackupJob | null>(null);
   const [editing, setEditing] = useState<MysqlBackupInstance | null>(null);
-  const [form] = Form.useForm<MysqlBackupInstancePayload & { mysql_password?: string }>();
+  const [form] = Form.useForm<
+    MysqlBackupInstancePayload & { mysql_password?: string; notify_extra_user_ids?: number[] }
+  >();
+  const [notifyUserOptions, setNotifyUserOptions] = useState<UserItem[]>([]);
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((r) => setProjects(r.list || []));
+    void getUsers({ page: 1, page_size: 500 }).then((r) => {
+      setNotifyUserOptions((r.list ?? []).filter((u) => u.email && String(u.email).includes("@")));
+    });
   }, []);
 
   const loadServers = useCallback(async () => {
@@ -198,6 +208,29 @@ export function MysqlBackupPage() {
     }
   }, [jobs, logJob?.id]);
 
+  const notifyExtraOptions = useMemo(() => {
+    const selfId = currentUser?.id;
+    return notifyUserOptions
+      .filter((u) => u.id !== selfId)
+      .map((u) => ({
+        value: u.id,
+        label: `${u.nickname || u.username} (${u.username}${u.email ? ` · ${u.email}` : ""})`,
+      }));
+  }, [notifyUserOptions, currentUser?.id]);
+
+  function buildNotifyUserIds(primaryId: number | undefined, extraIds: number[] | undefined): number[] {
+    const seen = new Set<number>();
+    const out: number[] = [];
+    const push = (id?: number) => {
+      if (id == null || id <= 0 || seen.has(id)) return;
+      seen.add(id);
+      out.push(id);
+    };
+    push(primaryId);
+    for (const id of extraIds ?? []) push(id);
+    return out;
+  }
+
   const openCreate = () => {
     setEditing(null);
     form.setFieldsValue({
@@ -226,12 +259,16 @@ export function MysqlBackupPage() {
       innobackupex_bin: "/usr/bin/innobackupex",
       mysqldump_options: ["single_transaction", "quick", "routines", "triggers"],
       mysqldump_extra_args: "",
+      notify_enabled: true,
+      notify_extra_user_ids: [],
     });
     setDrawerOpen(true);
   };
 
   const openEdit = (row: MysqlBackupInstance) => {
     setEditing(row);
+    const primaryId = row.notify_user_ids?.[0];
+    const extraIds = (row.notify_user_ids ?? []).filter((id) => id !== primaryId);
     form.setFieldsValue({
       name: row.name,
       server_id: row.server_id,
@@ -260,6 +297,8 @@ export function MysqlBackupPage() {
         ? row.mysqldump_options
         : ["single_transaction", "quick", "routines", "triggers"],
       mysqldump_extra_args: row.mysqldump_extra_args || "",
+      notify_enabled: row.notify_enabled ?? false,
+      notify_extra_user_ids: extraIds,
     });
     setDrawerOpen(true);
   };
@@ -267,12 +306,21 @@ export function MysqlBackupPage() {
   const onSave = async () => {
     if (!projectId) return;
     const v = await form.validateFields();
+    const primaryId = editing?.notify_user_ids?.[0] ?? currentUser?.id;
+    const payload: MysqlBackupInstancePayload = {
+      ...v,
+      notify_enabled: v.notify_enabled,
+      notify_user_ids: v.notify_enabled
+        ? buildNotifyUserIds(primaryId, v.notify_extra_user_ids)
+        : [],
+    };
+    delete (payload as { notify_extra_user_ids?: number[] }).notify_extra_user_ids;
     try {
       if (editing) {
-        await updateMysqlBackupInstance(projectId, editing.id, v);
+        await updateMysqlBackupInstance(projectId, editing.id, payload);
         message.success("已更新");
       } else {
-        await createMysqlBackupInstance(projectId, v);
+        await createMysqlBackupInstance(projectId, payload);
         message.success("已创建");
       }
       setDrawerOpen(false);
@@ -286,7 +334,7 @@ export function MysqlBackupPage() {
     { title: "名称", dataIndex: "name", width: 140 },
     {
       title: "服务器",
-      render: (_, r) => r.server_name || `#${r.server_id}`,
+      render: (_, r) => r.server_name || `服务器 ID ${r.server_id}`,
       width: 160,
     },
     { title: "MySQL", render: (_, r) => {
@@ -341,7 +389,18 @@ export function MysqlBackupPage() {
       width: 320,
       render: (_, row) => (
         <Space wrap>
-          <Button size="small" onClick={() => void pingMysqlBackupInstance(projectId!, row.id).then((r) => message.info(r.message))}>
+          <Button
+            size="small"
+            onClick={() =>
+              void pingMysqlBackupInstance(projectId!, row.id).then((r) => {
+                if (r.ok) {
+                  message.success(r.message || "MySQL 连通正常");
+                } else {
+                  message.error(r.message || "MySQL 连通失败");
+                }
+              })
+            }
+          >
             Ping
           </Button>
           {isXtrabackupMode(row.backup_mode) ? (
@@ -533,10 +592,12 @@ export function MysqlBackupPage() {
             <Typography.Text code>mysql_backup_scheduler_enabled</Typography.Text>（定时 Worker 总开关）等项。
             各实例的「备份 Cron」在下方表单填写（如每天 2 点）；字典中的{" "}
             <Typography.Text code>mysql_backup_scheduler_tick_spec</Typography.Text> 仅为后台轮询间隔（默认每 30 秒检查是否到点），不是备份时间。
+            备份任务结束（成功/失败/取消）可在<strong>各备份实例</strong>中开启邮件通知：默认通知创建/主接收人（当前登录用户），并可下拉添加其他平台用户；须确保 <Typography.Text code>mail_*</Typography.Text> SMTP 可用。
             MinIO 对象路径为 <Typography.Text code>前缀/项目名_IP_端口_时间.sql.gz</Typography.Text>（无 project_id 子目录）。
             <strong>mysqldump</strong>：逻辑备份；<strong>xtrabackup / innobackupex</strong>：经 SSH 执行物理热备（MySQL 5.7 常用 innobackupex）。
             文件命名统一为 <Typography.Text code>项目名_IP_端口_年月日_时分秒</Typography.Text>（CST，.sql.gz / .tar.gz）。
-            「检查备份」按该前缀匹配最新有效包。上传 MinIO 可关；上传后<strong>不删除</strong>远端文件。
+            「检查备份」<strong>仅 xtrabackup 物理备份</strong>：按前缀匹配最新 <Typography.Text code>*.tar.gz</Typography.Text> 及同名日志（末行含 completed 标记）；mysqldump 逻辑备份无此按钮，请在「备份记录」查看任务结果。
+            上传 MinIO 可关；上传后<strong>不删除</strong>远端文件。
           </span>
         }
       />
@@ -675,6 +736,62 @@ export function MysqlBackupPage() {
                 </>
               ) : null
             }
+          </Form.Item>
+          <Divider orientation="left" plain>
+            邮件通知
+          </Divider>
+          <Form.Item
+            name="notify_enabled"
+            label="备份结束邮件通知"
+            valuePropName="checked"
+            extra="任务成功、失败或取消时向下方接收人发送邮件（须配置 mail_* SMTP）。"
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(p, c) => p.notify_enabled !== c.notify_enabled}>
+            {({ getFieldValue }) => {
+              if (!getFieldValue("notify_enabled")) return null;
+              const primaryId = editing?.notify_user_ids?.[0] ?? currentUser?.id;
+              const primaryUser =
+                editing?.notify_users?.find((u) => u.id === primaryId) ??
+                notifyUserOptions.find((u) => u.id === primaryId) ??
+                (currentUser
+                  ? {
+                      id: currentUser.id,
+                      username: currentUser.username,
+                      nickname: currentUser.nickname,
+                      email: currentUser.email,
+                    }
+                  : null);
+              return (
+                <>
+                  <Form.Item label="默认接收人">
+                    {primaryUser ? (
+                      <Typography.Text>
+                        {primaryUser.nickname || primaryUser.username}（{primaryUser.username}
+                        {primaryUser.email ? ` · ${primaryUser.email}` : ""}）
+                      </Typography.Text>
+                    ) : (
+                      <Typography.Text type="secondary">未识别主接收人</Typography.Text>
+                    )}
+                  </Form.Item>
+                  <Form.Item
+                    name="notify_extra_user_ids"
+                    label="额外接收人"
+                    extra="除默认接收人外，可添加其他已配置邮箱的平台用户。"
+                  >
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder="选择其他用户（可多选）"
+                      options={notifyExtraOptions}
+                    />
+                  </Form.Item>
+                </>
+              );
+            }}
           </Form.Item>
           <Form.Item
             name="schedule_enabled"
@@ -865,8 +982,8 @@ export function MysqlBackupPage() {
                   wordBreak: "break-all",
                 }}
               >
-                {logJob.status === "running"
-                  ? "备份进行中，请稍候刷新…（mysqldump 全库可能需数分钟）"
+                {logJob.status === "running" && !logJob.log_excerpt?.trim()
+                  ? "备份进行中，日志将自动刷新…（mysqldump 全库可能需数分钟）"
                   : logJob.log_excerpt?.trim() || "（无日志内容，请确认备份已执行完成）"}
               </pre>
             </div>

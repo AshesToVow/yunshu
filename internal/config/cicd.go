@@ -47,6 +47,7 @@ type CicdMinIOConfig struct {
 
 type HarborConfig struct {
 	URL          string `mapstructure:"url"`
+	HostIP       string `mapstructure:"host_ip"`
 	ProjectGroup string `mapstructure:"project_group"`
 	Username     string `mapstructure:"username"`
 	Password     string `mapstructure:"password"`
@@ -78,7 +79,8 @@ func DefaultCicdConfig() CicdConfig {
 			MCAlias:        "myminio",
 		},
 		Harbor: HarborConfig{
-			URL:          "harbor.jdicity.local",
+			URL:          "harbor.deploy.local",
+			HostIP:       "10.10.10.103",
 			ProjectGroup: "registry",
 		},
 		Credentials: CicdCredentialsConfig{

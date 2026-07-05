@@ -132,7 +132,7 @@ func applyCredentialParams(params map[string]string, cfg config.CicdConfig, svc 
 func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
 	harborURL := strings.TrimSpace(cfg.Harbor.URL)
 	if harborURL == "" {
-		harborURL = "harbor.jdicity.local"
+		harborURL = "harbor.deploy.local"
 	}
 	harborCred := strings.TrimSpace(cfg.Credentials.Harbor)
 	if harborCred == "" {
@@ -142,7 +142,12 @@ func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
 	if harborProject == "" {
 		harborProject = "registry"
 	}
+	harborHostIP := strings.TrimSpace(cfg.Harbor.HostIP)
+	if harborHostIP == "" {
+		harborHostIP = "10.10.10.103"
+	}
 	params["HARBOR_URL"] = harborURL
+	params["HARBOR_HOST_IP"] = harborHostIP
 	params["HARBOR_CREDENTIAL_ID"] = harborCred
 	params["PROJECT_GROUP"] = harborProject
 }

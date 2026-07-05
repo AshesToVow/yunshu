@@ -35,6 +35,7 @@ cicd:
     bucket_backend: backend-artifacts
   harbor:
     url: harbor.deploy.local
+    host_ip: 10.10.10.103
     project_group: registry
     # username/password 也可在数据字典 cicd_harbor_username / cicd_harbor_password 配置
   # 与Jenkins中的凭据ID一致

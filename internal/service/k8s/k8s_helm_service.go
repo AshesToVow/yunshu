@@ -351,11 +351,13 @@ func (s *K8sHelmService) Upgrade(ctx context.Context, req HelmUpgradeRequest) (*
 	upgrade.Namespace = ns
 	upgrade.Wait = true
 	upgrade.Timeout = 5 * time.Minute
+	// 未传 values 时保留 Release 现有配置，避免升级 Chart 版本时清空业务 values。
+	upgrade.ReuseValues = true
 
 	var chartRequested *chart.Chart
 	vals := req.Values
-	if vals == nil {
-		vals = map[string]interface{}{}
+	if len(vals) == 0 {
+		vals = nil
 	}
 	chartName := strings.TrimSpace(req.ChartName)
 	releaseName := strings.TrimSpace(req.ReleaseName)

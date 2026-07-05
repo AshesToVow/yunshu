@@ -138,7 +138,7 @@ func BuildPipelineJobConfigXML(in JobTemplateInput) string {
 
 	harborURL := strings.TrimSpace(cfg.Harbor.URL)
 	if harborURL == "" {
-		harborURL = "harbor.jdicity.local"
+		harborURL = "harbor.deploy.local"
 	}
 	harborCred := strings.TrimSpace(cfg.Credentials.Harbor)
 	if harborCred == "" {
@@ -147,6 +147,10 @@ func BuildPipelineJobConfigXML(in JobTemplateInput) string {
 	harborProject := strings.TrimSpace(cfg.Harbor.ProjectGroup)
 	if harborProject == "" {
 		harborProject = "registry"
+	}
+	harborHostIP := strings.TrimSpace(cfg.Harbor.HostIP)
+	if harborHostIP == "" {
+		harborHostIP = "10.10.10.103"
 	}
 
 	var params strings.Builder
@@ -215,10 +219,12 @@ func BuildPipelineJobConfigXML(in JobTemplateInput) string {
 		params.WriteString(stringParam("FULL_IMAGE_NAME", "", "CD 发布时指定完整镜像地址（跳过构建）"))
 		params.WriteString(stringParam("deployAction", deployAction, "部署动作"))
 		params.WriteString(stringParam("HARBOR_URL", harborURL, "Harbor 地址（不含协议）"))
+		params.WriteString(stringParam("HARBOR_HOST_IP", harborHostIP, "Harbor 解析 IP（Jenkins Pod hostAliases）"))
 		params.WriteString(stringParam("HARBOR_CREDENTIAL_ID", harborCred, "Harbor 凭据 ID（Jenkins Username/Password）"))
 		params.WriteString(stringParam("PROJECT_GROUP", harborProject, "Harbor 镜像项目名"))
 		envLines = append(envLines,
 			"HARBOR_URL="+harborURL,
+			"HARBOR_HOST_IP="+harborHostIP,
 			"HARBOR_CREDENTIAL_ID="+harborCred,
 			"PROJECT_GROUP="+harborProject,
 		)

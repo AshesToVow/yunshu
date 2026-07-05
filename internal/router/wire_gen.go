@@ -126,7 +126,7 @@ func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient
 	}
 	cicdService := provideCicdService(db, serverRepo, projectRepo, userGroupRepo, userRepo, cicdConfig, sender, appDisplayName, k8sNamespaceService)
 	mysqlBackupRepo := routerRouteRepositories.MysqlBackup
-	mysqlBackupService, err := provideMysqlBackupService(mysqlBackupRepo, serverRepo, projectRepo, db, securityEncryptionKey)
+	mysqlBackupService, err := provideMysqlBackupService(mysqlBackupRepo, serverRepo, projectRepo, userRepo, db, securityEncryptionKey, sender, appDisplayName)
 	if err != nil {
 		return nil, err
 	}

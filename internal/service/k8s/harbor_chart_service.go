@@ -2,11 +2,13 @@ package k8s
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,14 +40,16 @@ type HarborConfigInfo struct {
 	AuthConfigured bool `json:"auth_configured"`
 }
 
-type harborChartListItem struct {
+type harborChartSummaryItem struct {
 	Name          string `json:"name"`
 	LatestVersion string `json:"latest_version"`
 	TotalVersions int    `json:"total_versions"`
 	Deprecated    bool   `json:"deprecated"`
+	Created       string `json:"created"`
 }
 
 type harborChartVersionItem struct {
+	Name       string `json:"name"`
 	Version    string `json:"version"`
 	AppVersion string `json:"app_version"`
 	Created    string `json:"created"`
@@ -73,8 +77,17 @@ func harborBaseURL(raw string) string {
 	return strings.TrimRight(u, "/")
 }
 
-func (s *K8sHelmService) harborHTTPClient() *http.Client {
-	return &http.Client{Timeout: 30 * time.Second}
+func (s *K8sHelmService) harborHTTPClient(serverName string) *http.Client {
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} // #nosec G402 — 内网 Harbor 自签证书
+	if serverName = strings.TrimSpace(serverName); serverName != "" {
+		tlsCfg.ServerName = serverName
+	}
+	return &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsCfg,
+		},
+	}
 }
 
 func (s *K8sHelmService) harborAuthHeader(cfg config.HarborConfig) string {
@@ -87,17 +100,26 @@ func (s *K8sHelmService) harborAuthHeader(cfg config.HarborConfig) string {
 	return "Basic " + token
 }
 
+func harborConnectHost(cfg config.HarborConfig) string {
+	if ip := strings.TrimSpace(cfg.HostIP); ip != "" {
+		return ip
+	}
+	return harborBaseURL(cfg.URL)
+}
+
 func (s *K8sHelmService) harborRequest(ctx context.Context, cfg config.HarborConfig, method, path string) ([]byte, int, error) {
-	url := fmt.Sprintf("https://%s%s", harborBaseURL(cfg.URL), path)
+	host := harborBaseURL(cfg.URL)
+	url := fmt.Sprintf("https://%s%s", harborConnectHost(cfg), path)
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return nil, 0, err
 	}
+	req.Host = host
 	if auth := s.harborAuthHeader(cfg); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := s.harborHTTPClient().Do(req)
+	resp, err := s.harborHTTPClient(host).Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -136,7 +158,7 @@ func (s *K8sHelmService) ListHarborCharts(ctx context.Context, keyword string) (
 	path := fmt.Sprintf("/api/chartrepo/%s/charts", project)
 	body, status, err := s.harborRequest(ctx, cfg, http.MethodGet, path)
 	if err != nil {
-		return nil, bizerrors.Internalf(ctx, "helm.harbor", "list_charts", err, "拉取 Harbor Chart 列表失败")
+		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("无法连接 Harbor（%s）: %v", harborConnectHost(cfg), err))
 	}
 	if status == http.StatusUnauthorized || status == http.StatusForbidden {
 		return nil, constants.ErrBadRequestWithMsg("Harbor 鉴权失败，请配置 cicd_harbor_username / cicd_harbor_password")
@@ -144,24 +166,94 @@ func (s *K8sHelmService) ListHarborCharts(ctx context.Context, keyword string) (
 	if status >= 400 {
 		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("Harbor 返回 HTTP %d: %s", status, truncateBody(body, 200)))
 	}
-	var raw map[string]harborChartListItem
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, bizerrors.Internalf(ctx, "helm.harbor", "parse_charts", err, "解析 Harbor Chart 列表失败")
+	out, err := parseHarborChartListBody(body)
+	if err != nil {
+		return nil, bizerrors.Internalf(ctx, "helm.harbor", "parse_charts", err, "解析 Harbor Chart 列表失败: %s", truncateBody(body, 200))
 	}
 	kw := strings.ToLower(strings.TrimSpace(keyword))
-	out := make([]HarborChartSummary, 0, len(raw))
-	for name, item := range raw {
-		if kw != "" && !strings.Contains(strings.ToLower(name), kw) {
-			continue
+	if kw != "" {
+		filtered := out[:0]
+		for _, item := range out {
+			if strings.Contains(strings.ToLower(item.Name), kw) {
+				filtered = append(filtered, item)
+			}
 		}
-		out = append(out, HarborChartSummary{
-			Name:          name,
-			LatestVersion: item.LatestVersion,
-			TotalVersions: item.TotalVersions,
-			Deprecated:    item.Deprecated,
-		})
+		out = filtered
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func parseHarborChartListBody(body []byte) ([]HarborChartSummary, error) {
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" || trimmed == "null" {
+		return []HarborChartSummary{}, nil
+	}
+	// Harbor 2.x Chart Museum：顶层 JSON 数组
+	if strings.HasPrefix(trimmed, "[") {
+		var items []harborChartSummaryItem
+		if err := json.Unmarshal(body, &items); err != nil {
+			return nil, err
+		}
+		out := make([]HarborChartSummary, 0, len(items))
+		for _, item := range items {
+			name := strings.TrimSpace(item.Name)
+			if name == "" {
+				continue
+			}
+			out = append(out, HarborChartSummary{
+				Name:          name,
+				LatestVersion: item.LatestVersion,
+				TotalVersions: item.TotalVersions,
+				Deprecated:    item.Deprecated,
+			})
+		}
+		return out, nil
+	}
+	// 经典 ChartMuseum：map[chartName][]versions
+	var raw map[string][]harborChartVersionItem
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, err
+	}
+	out := make([]HarborChartSummary, 0, len(raw))
+	for name, versions := range raw {
+		out = append(out, summarizeHarborChart(name, versions))
 	}
 	return out, nil
+}
+
+func summarizeHarborChart(name string, versions []harborChartVersionItem) HarborChartSummary {
+	if len(versions) == 0 {
+		return HarborChartSummary{Name: name}
+	}
+	latest := versions[0]
+	latestAt := parseHarborChartTime(latest.Created)
+	for _, v := range versions[1:] {
+		if t := parseHarborChartTime(v.Created); t.After(latestAt) {
+			latest = v
+			latestAt = t
+		}
+	}
+	return HarborChartSummary{
+		Name:          name,
+		LatestVersion: latest.Version,
+		TotalVersions: len(versions),
+		Deprecated:    latest.Deprecated,
+	}
+}
+
+func parseHarborChartTime(raw string) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t
+	}
+	return time.Time{}
 }
 
 // ListHarborChartVersions 列出指定 Chart 的版本。
@@ -178,7 +270,7 @@ func (s *K8sHelmService) ListHarborChartVersions(ctx context.Context, chartName 
 	path := fmt.Sprintf("/api/chartrepo/%s/charts/%s", project, chartName)
 	body, status, err := s.harborRequest(ctx, cfg, http.MethodGet, path)
 	if err != nil {
-		return nil, bizerrors.Internalf(ctx, "helm.harbor", "list_versions", err, "拉取 Chart 版本失败")
+		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("无法连接 Harbor（%s）: %v", harborConnectHost(cfg), err))
 	}
 	if status == http.StatusNotFound {
 		return []HarborChartVersion{}, nil

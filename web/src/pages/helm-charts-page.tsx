@@ -1,5 +1,5 @@
 import { CloudDownloadOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Input, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Input, message, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
@@ -12,11 +12,14 @@ import {
   type HarborConfigInfo,
 } from "../services/helm";
 
+const SEARCH_DEBOUNCE_MS = 400;
+
 export function HelmChartsPage() {
   const [info, setInfo] = useState<HarborConfigInfo | null>(null);
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [charts, setCharts] = useState<HarborChartSummary[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [expandedVersions, setExpandedVersions] = useState<Record<string, HarborChartVersion[]>>({});
   const [versionsLoading, setVersionsLoading] = useState<Record<string, boolean>>({});
 
@@ -28,21 +31,30 @@ export function HelmChartsPage() {
     }
   }, []);
 
-  const loadCharts = useCallback(async () => {
+  const fetchCharts = useCallback(async (kw: string) => {
     setLoading(true);
     try {
-      setCharts(await listHarborCharts(keyword.trim() || undefined));
-    } catch {
+      setCharts(await listHarborCharts(kw || undefined));
+      setFetchError(null);
+    } catch (err) {
       setCharts([]);
+      const msg = err instanceof Error ? err.message : "拉取 Harbor Chart 列表失败";
+      setFetchError(msg);
+      message.error(msg);
     } finally {
       setLoading(false);
     }
-  }, [keyword]);
+  }, []);
 
   useEffect(() => {
     void loadInfo();
-    void loadCharts();
-  }, [loadInfo, loadCharts]);
+  }, [loadInfo]);
+
+  useEffect(() => {
+    const delay = keyword === "" ? 0 : SEARCH_DEBOUNCE_MS;
+    const id = window.setTimeout(() => void fetchCharts(keyword.trim()), delay);
+    return () => window.clearTimeout(id);
+  }, [keyword, fetchCharts]);
 
   const loadVersions = async (chartName: string) => {
     if (expandedVersions[chartName]) return;
@@ -95,10 +107,14 @@ export function HelmChartsPage() {
                 <span>Harbor: {info.url}</span>
                 <span>项目: {info.project}</span>
                 <span>OCI: {info.oci_prefix}</span>
+                <span>Chart API: {info.chart_repo_url}</span>
                 {!info.auth_configured && <span>请在数据字典配置 cicd_harbor_username / cicd_harbor_password</span>}
               </Space>
             }
           />
+        )}
+        {fetchError && (
+          <Alert type="error" showIcon style={{ marginBottom: 16 }} message={fetchError} />
         )}
         <Space wrap style={{ marginBottom: 16 }}>
           <Input.Search
@@ -107,9 +123,12 @@ export function HelmChartsPage() {
             style={{ width: 240 }}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            onSearch={() => void loadCharts()}
+            onSearch={(v) => {
+              setKeyword(v);
+              void fetchCharts(v.trim());
+            }}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void loadCharts()}>
+          <Button icon={<ReloadOutlined />} onClick={() => void fetchCharts(keyword.trim())}>
             刷新
           </Button>
         </Space>

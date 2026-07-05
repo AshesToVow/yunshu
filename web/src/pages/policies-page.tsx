@@ -1,6 +1,6 @@
 import { LinkOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
-import { Button, Card, Empty, Input, Select, Space, Table, Tabs, Tag, Tree, Typography, message } from "antd";
-import { Link } from "react-router-dom";
+import { Alert, Button, Card, Empty, Input, Select, Space, Table, Tabs, Tag, Tree, Typography, message } from "antd";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { getPermissionOptions } from "../services/permissions";
 import { getPolicies, grantPolicy, revokePolicy } from "../services/policies";
@@ -11,6 +11,8 @@ import { usePlugins } from "../contexts/plugin-context";
 
 export function PoliciesPage() {
   const { isPluginEnabled } = usePlugins();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [list, setList] = useState<PolicyItem[]>([]);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [permissions, setPermissions] = useState<PermissionItem[]>([]);
@@ -58,8 +60,16 @@ export function PoliciesPage() {
     return walk(permissionTreeData as any[]);
   }, [permissionTreeData, permissionKeyword]);
 
+  const linkFromUser = searchParams.get("from") === "user";
+  const linkUsername = searchParams.get("username") ?? "";
+  const linkUserId = Number(searchParams.get("user_id"));
+  const linkNext = searchParams.get("next");
+  const linkRoleId = Number(searchParams.get("role_id"));
+
   useEffect(() => {
-    void bootstrap();
+    const preferredRoleId = linkRoleId > 0 ? linkRoleId : undefined;
+    void bootstrap(preferredRoleId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -107,6 +117,17 @@ export function PoliciesPage() {
     const toRevoke = currentIds.filter((id) => !desiredIdSet.has(id));
 
     if (toGrant.length === 0 && toRevoke.length === 0) {
+      if (linkNext === "k8s" && selectedRoleId) {
+        const qs = new URLSearchParams({
+          subject: "role",
+          role_id: String(selectedRoleId),
+          from: "policies",
+        });
+        if (linkUserId > 0) qs.set("user_id", String(linkUserId));
+        if (linkUsername) qs.set("username", linkUsername);
+        navigate(`/k8s-scoped-policies?${qs.toString()}`);
+        return;
+      }
       message.info("授权编排没有变化");
       return;
     }
@@ -119,6 +140,16 @@ export function PoliciesPage() {
       ]);
       message.success("授权编排已同步");
       await bootstrap(selectedRoleId);
+      if (linkNext === "k8s" && selectedRoleId) {
+        const qs = new URLSearchParams({
+          subject: "role",
+          role_id: String(selectedRoleId),
+          from: "policies",
+        });
+        if (linkUserId > 0) qs.set("user_id", String(linkUserId));
+        if (linkUsername) qs.set("username", linkUsername);
+        navigate(`/k8s-scoped-policies?${qs.toString()}`);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -128,6 +159,44 @@ export function PoliciesPage() {
 
   return (
     <div className="policies-auth-page">
+      {linkFromUser && linkUsername ? (
+        <Alert
+          type="info"
+          showIcon
+          closable
+          style={{ marginBottom: 12 }}
+          message={`用户「${linkUsername}」已绑定角色，请为角色模板勾选 API 权限`}
+          description={
+            linkNext === "k8s"
+              ? "勾选完成后点击「同步权限」，将自动进入 K8s 集群档位配置。"
+              : "勾选完成后点击「同步权限」保存。"
+          }
+          action={
+            linkNext === "k8s" && selectedRoleId ? (
+              <Button
+                size="small"
+                onClick={() => {
+                  const qs = new URLSearchParams({
+                    subject: "role",
+                    role_id: String(selectedRoleId),
+                    from: "policies",
+                  });
+                  if (linkUserId > 0) qs.set("user_id", String(linkUserId));
+                  if (linkUsername) qs.set("username", linkUsername);
+                  navigate(`/k8s-scoped-policies?${qs.toString()}`);
+                }}
+              >
+                跳过，直接配置 K8s
+              </Button>
+            ) : (
+              <Button size="small" onClick={() => setSearchParams({})}>
+                关闭提示
+              </Button>
+            )
+          }
+          onClose={() => setSearchParams({})}
+        />
+      ) : null}
       <Card className="table-card policies-auth-page__card" loading={loading}>
         <div className="toolbar auth-toolbar">
           <Space>

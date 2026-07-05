@@ -1,0 +1,44 @@
+# Jenkins Helm 部署会通过 --set 覆盖以下字段：
+#   image.repository / image.tag / replicaCount / containerPort
+# 镜像示例：harbor.deploy.local/registry/springbootdemo:latest_prod_20260705_002619
+
+replicaCount: 1
+
+image:
+  repository: harbor.deploy.local/registry/springbootdemo
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# 私有 Harbor 且 namespace 已配置 registry-secret 时再启用
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+containerPort: 8080
+
+resources:
+  limits:
+    cpu: "1"
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 512Mi
+
+# 应用未接入 Actuator 时保持 false；接入后可改为 true 并配置路径
+probes:
+  enabled: false
+  livenessPath: /actuator/health/liveness
+  readinessPath: /actuator/health/readiness
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

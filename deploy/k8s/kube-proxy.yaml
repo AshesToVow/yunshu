@@ -1,4 +1,18 @@
-cat > /tmp/kube-proxy-all.yaml <<'EOF'
+# kube-proxy 清单（结构对齐 kubeadm 官方模板）
+# 参考: kubernetes/cmd/kubeadm/app/phases/addons/proxy/manifests.go
+#
+# 使用前请修改:
+#   1. image 版本与 kubectl version --short 中 Server 版本一致
+#   2. ConfigMap 中 clusterCIDR 与 Pod 网段一致（flannel 默认 10.244.0.0/16）
+#   3. kubeconfig.conf 中 apiserver 地址改为控制面 IP:6443
+#   4. 渡渡鸟/Harbor 多层镜像在 containerd 中可能缺 /usr/sbin/iptables（manifest 8b72ce21 错包）
+#      修复: bash deploy/k8s/scripts/fix-kube-proxy-image.sh 生成 flat 镜像后再 apply
+#      flat 镜像: localhost/kube-proxy:flat-v1.28.15  imagePullPolicy: Never
+#
+# 应用:
+#   kubectl apply -f deploy/k8s/kube-proxy.yaml
+#   kubectl -n kube-system rollout status ds/kube-proxy --timeout=120s
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -14,9 +28,9 @@ roleRef:
   kind: ClusterRole
   name: system:node-proxier
 subjects:
-- kind: ServiceAccount
-  name: kube-proxy
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: kube-proxy
+    namespace: kube-system
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -27,51 +41,87 @@ data:
   config.conf: |
     apiVersion: kubeproxy.config.k8s.io/v1alpha1
     kind: KubeProxyConfiguration
+    bindAddress: 0.0.0.0
+    bindAddressHardFail: false
     clientConnection:
+      acceptContentTypes: ""
+      burst: 0
+      contentType: ""
       kubeconfig: /var/lib/kube-proxy/kubeconfig.conf
-    mode: "iptables"
+      qps: 0
     clusterCIDR: "10.244.0.0/16"
+    configSyncPeriod: 0s
+    conntrack:
+      maxPerCore: null
+      min: null
+      tcpCloseWaitTimeout: null
+      tcpEstablishedTimeout: null
+    detectLocalMode: ""
+    enableProfiling: false
+    healthzBindAddress: ""
+    hostnameOverride: ""
     iptables:
       masqueradeAll: false
       masqueradeBit: 14
       minSyncPeriod: 0s
-      syncPeriod: 30s
-    conntrack:
-      maxPerCore: 0
-      min: 131072
+      syncPeriod: 0s
+    ipvs:
+      excludeCIDRs: null
+      minSyncPeriod: 0s
+      scheduler: ""
+      syncPeriod: 0s
+      strictARP: false
+      tcpFinTimeout: 0s
+      tcpTimeout: 0s
+      udpTimeout: 0s
+    metricsBindAddress: ""
+    mode: ""
+    nodePortAddresses: null
+    oomScoreAdj: null
+    portRange: ""
+    showHiddenMetricsForVersion: ""
+    winkernel:
+      enableDSR: false
+      networkName: ""
+      sourceVip: ""
     featureGates:
       AllAlpha: false
   kubeconfig.conf: |
     apiVersion: v1
     kind: Config
     clusters:
-    - cluster:
-        certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-        server: https://10.10.10.103:6443
-      name: default
+      - cluster:
+          certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          server: https://10.10.10.103:6443
+        name: default
     contexts:
-    - context:
-        cluster: default
-        namespace: default
-        user: default
-      name: default
+      - context:
+          cluster: default
+          namespace: default
+          user: default
+        name: default
     current-context: default
     users:
-    - name: default
-      user:
-        tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      - name: default
+        user:
+          tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: kube-proxy
-  namespace: kube-system
   labels:
     k8s-app: kube-proxy
+  name: kube-proxy
+  namespace: kube-system
 spec:
   selector:
     matchLabels:
       k8s-app: kube-proxy
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     metadata:
       labels:
@@ -80,57 +130,44 @@ spec:
       priorityClassName: system-node-critical
       serviceAccountName: kube-proxy
       hostNetwork: true
-      tolerations:
-      - operator: Exists
+      dnsPolicy: ClusterFirst
       nodeSelector:
         kubernetes.io/os: linux
+      tolerations:
+        - operator: Exists
       containers:
-      - name: kube-proxy
-        image: harbor.deploy.local/registry/kube-proxy@sha256:8b72ce21ab978a255e995efff3efa21685899dcbfd972a642f975e5be965ca37
-        imagePullPolicy: IfNotPresent
-        command:
-        - /usr/local/bin/kube-proxy
-        - --config=/var/lib/kube-proxy/config.conf
-        - --hostname-override=$(NODE_NAME)
-        env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        securityContext:
-          privileged: true
-        volumeMounts:
         - name: kube-proxy
-          mountPath: /var/lib/kube-proxy
-        - name: xtables-lock
-          mountPath: /run/xtables.lock
+          # flat 镜像由 fix-kube-proxy-image.sh 生成；多节点需在各节点执行该脚本或 push 到 Harbor
+          image: localhost/kube-proxy:flat-v1.28.15
+          imagePullPolicy: Never
+          command:
+            - /usr/local/bin/kube-proxy
+            - --config=/var/lib/kube-proxy/config.conf
+            - --hostname-override=$(NODE_NAME)
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /var/lib/kube-proxy
+              name: kube-proxy
+            - mountPath: /run/xtables.lock
+              name: xtables-lock
+            - mountPath: /lib/modules
+              name: lib-modules
+              readOnly: true
       volumes:
-      - name: kube-proxy
-        configMap:
-          name: kube-proxy
-      - name: xtables-lock
-        hostPath:
-          path: /run/xtables.lock
-          type: FileOrCreate
-EOF
-
-kubectl apply -f /tmp/kube-proxy-all.yaml
-
-#内核参数 + 验证
-cat > /etc/sysctl.d/k8s.conf <<'EOF'
-net.ipv4.ip_forward = 1
-net.bridge.bridge-nf-call-iptables = 1
-net.bridge.bridge-nf-call-ip6tables = 1
-EOF
-modprobe br_netfilter
-sysctl --system
-
-kubectl delete pod -n kube-system -l k8s-app=kube-proxy --force --grace-period=0
-sleep 15
-
-kubectl get pods -n kube-system -l k8s-app=kube-proxy
-kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=20
-
-# 关键验证
-curl -k https://10.96.0.1:443/version
-iptables-save | grep "10.96.0.1" | head -5
+        - name: kube-proxy
+          configMap:
+            name: kube-proxy
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+            type: Directory

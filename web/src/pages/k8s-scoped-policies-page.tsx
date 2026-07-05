@@ -16,6 +16,7 @@ import {
   message,
 } from "antd";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getClusters, listNamespaces } from "../services/clusters";
 import {
   createK8sNamespaceDenyRule,
@@ -31,18 +32,42 @@ import {
   type K8sClusterAccessItem,
 } from "../services/k8s-policies";
 import { getRoleOptions } from "../services/roles";
+import { getUsers } from "../services/users";
 import { listUserGroups } from "../services/user-groups";
-import type { RoleItem } from "../types/api";
+import type { RoleItem, UserItem } from "../types/api";
 import type { UserGroupItem } from "../services/user-groups";
 
+type SubjectKind = "role" | "group" | "user";
+
+type BootstrapPref = {
+  kind?: SubjectKind;
+  roleId?: number;
+  groupId?: number;
+  userId?: number;
+};
+
+function subjectPrincipalRef(
+  kind: SubjectKind,
+  role: RoleItem | null,
+  group: UserGroupItem | null,
+  userId?: number,
+): string {
+  if (kind === "role") return role?.code ?? "";
+  if (kind === "group") return group?.code ?? "";
+  return userId != null && userId > 0 ? String(userId) : "";
+}
+
 export function K8sScopedPoliciesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [presetSubmitting, setPresetSubmitting] = useState(false);
-  const [subjectKind, setSubjectKind] = useState<"role" | "group">("role");
+  const [subjectKind, setSubjectKind] = useState<SubjectKind>("role");
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [groups, setGroups] = useState<UserGroupItem[]>([]);
+  const [users, setUsers] = useState<UserItem[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number>();
   const [selectedGroupId, setSelectedGroupId] = useState<number>();
+  const [selectedUserId, setSelectedUserId] = useState<number>();
   const [clusterOptions, setClusterOptions] = useState<{ id: number; name: string }[]>([]);
   const [accessGrants, setAccessGrants] = useState<K8sClusterAccessItem[]>([]);
   const [denyRules, setDenyRules] = useState<K8sNamespaceDenyRule[]>([]);
@@ -65,8 +90,13 @@ export function K8sScopedPoliciesPage() {
 
   const selectedRole = useMemo(() => roles.find((r) => r.id === selectedRoleId) ?? null, [roles, selectedRoleId]);
   const selectedGroup = useMemo(() => groups.find((g) => g.id === selectedGroupId) ?? null, [groups, selectedGroupId]);
+  const selectedUser = useMemo(() => users.find((u) => u.id === selectedUserId) ?? null, [users, selectedUserId]);
+  const linkFromPolicies = searchParams.get("from") === "policies";
+  const linkUsername = searchParams.get("username") ?? "";
   const activeSubjectReady =
-    (subjectKind === "role" && selectedRole != null) || (subjectKind === "group" && selectedGroup != null);
+    (subjectKind === "role" && selectedRole != null) ||
+    (subjectKind === "group" && selectedGroup != null) ||
+    (subjectKind === "user" && selectedUser != null);
 
   const clusterNameById = useMemo(() => new Map(clusterOptions.map((c) => [c.id, c.name])), [clusterOptions]);
 
@@ -139,35 +169,57 @@ export function K8sScopedPoliciesPage() {
   }, [watchedDenyClusterId]); // denyForm.setFieldsValue 稳定；仅集群变更时需重置命名空间
 
   useEffect(() => {
-    void bootstrap();
+    const subject = searchParams.get("subject");
+    const userId = Number(searchParams.get("user_id"));
+    const roleId = Number(searchParams.get("role_id"));
+    const groupId = Number(searchParams.get("group_id"));
+    if (subject === "user" && userId > 0) {
+      setSubjectKind("user");
+      void bootstrap({ kind: "user", userId });
+    } else if (subject === "group" && groupId > 0) {
+      setSubjectKind("group");
+      void bootstrap({ kind: "group", groupId });
+    } else if (subject === "role" && roleId > 0) {
+      setSubjectKind("role");
+      void bootstrap({ kind: "role", roleId });
+    } else {
+      void bootstrap();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function bootstrap(preferredRoleId?: number, preferredGroupId?: number) {
+  async function bootstrap(pref?: BootstrapPref) {
     setLoading(true);
     try {
-      const [roleData, clusterData, groupRes] = await Promise.all([
+      const [roleData, clusterData, groupRes, userRes] = await Promise.all([
         getRoleOptions(),
         getClusters({ page: 1, page_size: 200 }),
         listUserGroups({ page: 1, page_size: 500 }),
+        getUsers({ page: 1, page_size: 500 }),
       ]);
       setRoles(roleData.list);
       setGroups(groupRes.list ?? []);
+      setUsers(userRes.list ?? []);
       setClusterOptions(clusterData.list.map((c) => ({ id: c.id, name: c.name })));
 
-      const nextRoleId = preferredRoleId ?? (roleData.list[0]?.id ?? undefined);
-      setSelectedRoleId(nextRoleId);
-      const nextGroupId = preferredGroupId ?? (groupRes.list[0]?.id ?? undefined);
-      setSelectedGroupId(nextGroupId);
+      const kind = pref?.kind ?? subjectKind;
+      const nextRoleId = pref?.roleId ?? selectedRoleId ?? roleData.list[0]?.id;
+      const nextGroupId = pref?.groupId ?? selectedGroupId ?? groupRes.list[0]?.id;
+      const nextUserId = pref?.userId ?? selectedUserId ?? userRes.list[0]?.id;
 
-      if (subjectKind === "role" && nextRoleId) {
-        await refreshAccessGrants("role", nextRoleId, undefined);
-        const rc = roleData.list.find((r) => r.id === nextRoleId)?.code ?? "";
-        await refreshDenyRules("role", rc);
-      } else if (subjectKind === "group" && nextGroupId) {
-        await refreshAccessGrants("group", undefined, nextGroupId);
-        const gc = groupRes.list.find((g) => g.id === nextGroupId)?.code ?? "";
-        await refreshDenyRules("group", gc);
+      setSelectedRoleId(nextRoleId);
+      setSelectedGroupId(nextGroupId);
+      setSelectedUserId(nextUserId);
+
+      if (kind === "role" && nextRoleId) {
+        await refreshAccessGrants("role", nextRoleId, undefined, undefined);
+        await refreshDenyRules("role", roleData.list.find((r) => r.id === nextRoleId)?.code ?? "");
+      } else if (kind === "group" && nextGroupId) {
+        await refreshAccessGrants("group", undefined, nextGroupId, undefined);
+        await refreshDenyRules("group", groupRes.list.find((g) => g.id === nextGroupId)?.code ?? "");
+      } else if (kind === "user" && nextUserId) {
+        await refreshAccessGrants("user", undefined, undefined, nextUserId);
+        await refreshDenyRules("user", String(nextUserId));
       } else {
         setAccessGrants([]);
         setDenyRules([]);
@@ -177,7 +229,12 @@ export function K8sScopedPoliciesPage() {
     }
   }
 
-  async function refreshAccessGrants(kind: "role" | "group", roleId?: number, groupId?: number) {
+  async function refreshAccessGrants(
+    kind: SubjectKind,
+    roleId?: number,
+    groupId?: number,
+    userId?: number,
+  ) {
     if (kind === "role" && roleId) {
       const result = await listK8sPoliciesByRole(roleId);
       setAccessGrants(result.list);
@@ -188,10 +245,15 @@ export function K8sScopedPoliciesPage() {
       setAccessGrants(result.list);
       return;
     }
+    if (kind === "user" && userId) {
+      const result = await listK8sClusterGrants({ user_id: userId });
+      setAccessGrants(result.list);
+      return;
+    }
     setAccessGrants([]);
   }
 
-  async function refreshDenyRules(principalKind: "role" | "group", principalRef: string) {
+  async function refreshDenyRules(principalKind: SubjectKind, principalRef: string) {
     const ref = principalRef.trim();
     if (!ref) {
       setDenyRules([]);
@@ -223,13 +285,28 @@ export function K8sScopedPoliciesPage() {
 
   return (
     <div>
+      {linkFromPolicies ? (
+        <Alert
+          type="success"
+          showIcon
+          closable
+          style={{ marginBottom: 12 }}
+          message="API 权限已配置，请为角色模板下发 Kubernetes 集群档位"
+          description={
+            linkUsername
+              ? `用户「${linkUsername}」所属角色的集群访问在此配置；也可切换为「用户」主体单独直授。`
+              : "选择集群与档位后点击「按档位保存」完成授权。"
+          }
+          onClose={() => setSearchParams({})}
+        />
+      ) : null}
       <Card
         className="table-card"
         title="Kubernetes 集群访问档位（数据库维护，不经 Casbin）"
         loading={loading}
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => void bootstrap(selectedRoleId, selectedGroupId)}>
+            <Button icon={<ReloadOutlined />} onClick={() => void bootstrap({ kind: subjectKind, roleId: selectedRoleId, groupId: selectedGroupId, userId: selectedUserId })}>
               刷新
             </Button>
           </Space>
@@ -242,18 +319,29 @@ export function K8sScopedPoliciesPage() {
                 value={subjectKind}
                 options={[
                   { label: "角色模板", value: "role" },
+                  { label: "用户", value: "user" },
                   { label: "用户组", value: "group" },
                 ]}
                 onChange={(v) => {
-                  const k = v as "role" | "group";
+                  const k = v as SubjectKind;
                   setSubjectKind(k);
                   void (async () => {
                     if (k === "role") {
                       const rid = selectedRoleId ?? roles[0]?.id;
                       if (rid) {
                         setSelectedRoleId(rid);
-                        await refreshAccessGrants("role", rid, undefined);
+                        await refreshAccessGrants("role", rid, undefined, undefined);
                         await refreshDenyRules("role", roles.find((r) => r.id === rid)?.code ?? "");
+                      } else {
+                        setAccessGrants([]);
+                        setDenyRules([]);
+                      }
+                    } else if (k === "user") {
+                      const uid = selectedUserId ?? users[0]?.id;
+                      if (uid) {
+                        setSelectedUserId(uid);
+                        await refreshAccessGrants("user", undefined, undefined, uid);
+                        await refreshDenyRules("user", String(uid));
                       } else {
                         setAccessGrants([]);
                         setDenyRules([]);
@@ -262,7 +350,7 @@ export function K8sScopedPoliciesPage() {
                       const gid = selectedGroupId ?? groups[0]?.id;
                       if (gid) {
                         setSelectedGroupId(gid);
-                        await refreshAccessGrants("group", undefined, gid);
+                        await refreshAccessGrants("group", undefined, gid, undefined);
                         await refreshDenyRules("group", groups.find((g) => g.id === gid)?.code ?? "");
                       } else {
                         setAccessGrants([]);
@@ -279,11 +367,28 @@ export function K8sScopedPoliciesPage() {
                   value={selectedRoleId}
                   onChange={(v) => {
                     setSelectedRoleId(v);
-                    void refreshAccessGrants("role", v, undefined);
+                    void refreshAccessGrants("role", v, undefined, undefined);
                     const rc = roles.find((r) => r.id === v)?.code ?? "";
                     void refreshDenyRules("role", rc);
                   }}
                   options={roles.map((role) => ({ label: `${role.name} (${role.code})`, value: role.id }))}
+                />
+              ) : subjectKind === "user" ? (
+                <Select
+                  placeholder="请选择用户"
+                  style={{ minWidth: 300 }}
+                  showSearch
+                  optionFilterProp="label"
+                  value={selectedUserId}
+                  onChange={(v) => {
+                    setSelectedUserId(v);
+                    void refreshAccessGrants("user", undefined, undefined, v);
+                    void refreshDenyRules("user", String(v));
+                  }}
+                  options={users.map((u) => ({
+                    label: `${u.nickname || u.username} (${u.username})`,
+                    value: u.id,
+                  }))}
                 />
               ) : (
                 <Select
@@ -292,7 +397,7 @@ export function K8sScopedPoliciesPage() {
                   value={selectedGroupId}
                   onChange={(v) => {
                     setSelectedGroupId(v);
-                    void refreshAccessGrants("group", undefined, v);
+                    void refreshAccessGrants("group", undefined, v, undefined);
                     const gc = groups.find((g) => g.id === v)?.code ?? "";
                     void refreshDenyRules("group", gc);
                   }}
@@ -311,7 +416,7 @@ export function K8sScopedPoliciesPage() {
                 message="与 API / Casbin 的关系"
                 description={
                   <span>
-                    此处为<strong>主体</strong>（上方可切换<strong>角色模板</strong>或<strong>用户组</strong>；用户维度可通过 API 下发）配置<strong>集群维度档位</strong>（只读 / 只读+Exec / 管理），数据在表{" "}
+                    此处为<strong>主体</strong>（上方可切换<strong>角色模板</strong>、<strong>用户</strong>或<strong>用户组</strong>）配置<strong>集群维度档位</strong>（只读 / 只读+Exec / 管理），数据在表{" "}
                     <Typography.Text code>k8s_cluster_access_grants</Typography.Text>。HTTP 接口能否调用仍由<strong>授权管理</strong>中的 Casbin
                     API 权限决定；带 <Typography.Text code>cluster_id</Typography.Text> 的 K8s 类请求在通过 API 鉴权后，再按此处档位与<strong>命名空间黑/白名单</strong>校验。详见{" "}
                     <Typography.Text code>docs/handbook/permissions/casbin-and-k8s-triple-policy.md</Typography.Text>。
@@ -413,6 +518,7 @@ export function K8sScopedPoliciesPage() {
                       onClick={() => {
                         if (subjectKind === "role" && !selectedRoleId) return;
                         if (subjectKind === "group" && !selectedGroupId) return;
+                        if (subjectKind === "user" && !selectedUserId) return;
                         void (async () => {
                           const values = await presetForm.validateFields();
                           setPresetSubmitting(true);
@@ -431,25 +537,35 @@ export function K8sScopedPoliciesPage() {
                                     deny_namespaces: denyList.length ? denyList : undefined,
                                     allow_namespaces: allowList.length ? allowList : undefined,
                                   }
-                                : {
-                                    principal_kind: "group" as const,
-                                    group_id: selectedGroupId!,
-                                    cluster_ids: values.cluster_ids ?? [],
-                                    preset: values.preset,
-                                    deny_namespaces: denyList.length ? denyList : undefined,
-                                    allow_namespaces: allowList.length ? allowList : undefined,
-                                  };
+                                : subjectKind === "user"
+                                  ? {
+                                      principal_kind: "user" as const,
+                                      user_id: selectedUserId!,
+                                      cluster_ids: values.cluster_ids ?? [],
+                                      preset: values.preset,
+                                      deny_namespaces: denyList.length ? denyList : undefined,
+                                      allow_namespaces: allowList.length ? allowList : undefined,
+                                    }
+                                  : {
+                                      principal_kind: "group" as const,
+                                      group_id: selectedGroupId!,
+                                      cluster_ids: values.cluster_ids ?? [],
+                                      preset: values.preset,
+                                      deny_namespaces: denyList.length ? denyList : undefined,
+                                      allow_namespaces: allowList.length ? allowList : undefined,
+                                    };
                             const resp = await grantK8sScopedPoliciesPreset(payload);
                             message.success(
                               `档位已保存：新增 ${resp.added}，更新跳过 ${resp.skipped}；黑名单新增 ${resp.deny_rules_added}（跳过 ${resp.deny_rules_skipped}）；白名单新增 ${resp.allow_rules_added}（跳过 ${resp.allow_rules_skipped}）`,
                             );
-                            if (subjectKind === "role") {
-                              await refreshAccessGrants("role", selectedRoleId, undefined);
-                              await refreshDenyRules("role", selectedRole?.code ?? "");
-                            } else {
-                              await refreshAccessGrants("group", undefined, selectedGroupId);
-                              await refreshDenyRules("group", selectedGroup?.code ?? "");
-                            }
+                            const pref = subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId);
+                            await refreshAccessGrants(
+                              subjectKind,
+                              selectedRoleId,
+                              selectedGroupId,
+                              selectedUserId,
+                            );
+                            await refreshDenyRules(subjectKind, pref);
                           } finally {
                             setPresetSubmitting(false);
                           }
@@ -509,9 +625,11 @@ export function K8sScopedPoliciesPage() {
                               await deleteK8sClusterGrant(r.id);
                               message.success("已删除");
                               if (subjectKind === "role" && selectedRoleId) {
-                                await refreshAccessGrants("role", selectedRoleId, undefined);
+                                await refreshAccessGrants("role", selectedRoleId, undefined, undefined);
                               } else if (subjectKind === "group" && selectedGroupId) {
-                                await refreshAccessGrants("group", undefined, selectedGroupId);
+                                await refreshAccessGrants("group", undefined, selectedGroupId, undefined);
+                              } else if (subjectKind === "user" && selectedUserId) {
+                                await refreshAccessGrants("user", undefined, undefined, selectedUserId);
                               }
                             } catch {
                               /* http 拦截器已提示 */
@@ -531,7 +649,11 @@ export function K8sScopedPoliciesPage() {
           ) : (
             <Empty
               description={
-                subjectKind === "role" ? "暂无可配置角色模板" : "暂无可选用户组，请先在「用户组管理」创建并绑定成员"
+                subjectKind === "role"
+                  ? "暂无可配置角色模板"
+                  : subjectKind === "user"
+                    ? "暂无可选用户"
+                    : "暂无可选用户组，请先在「用户组管理」创建并绑定成员"
               }
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
@@ -561,8 +683,8 @@ export function K8sScopedPoliciesPage() {
                   message.warning("请选择集群并填写命名空间");
                   return;
                 }
-                const pk = subjectKind === "role" ? "role" : "group";
-                const pref = subjectKind === "role" ? selectedRole?.code ?? "" : selectedGroup?.code ?? "";
+                const pk = subjectKind;
+                const pref = subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId);
                 setDenySubmitting(true);
                 try {
                   await createK8sNamespaceDenyRule({
@@ -580,7 +702,13 @@ export function K8sScopedPoliciesPage() {
               }}
             >
               <Typography.Text>主体：</Typography.Text>
-              <Tag>{subjectKind === "role" ? selectedRole?.code : selectedGroup?.code}</Tag>
+              <Tag>
+                {subjectKind === "role"
+                  ? selectedRole?.code
+                  : subjectKind === "user"
+                    ? selectedUser?.username
+                    : selectedGroup?.code}
+              </Tag>
               <Form.Item name="cluster_id" rules={[{ required: true, message: "请选择集群" }]}>
                 <Select
                   style={{ minWidth: 220 }}
@@ -644,8 +772,8 @@ export function K8sScopedPoliciesPage() {
                             await deleteK8sNamespaceDenyRule(r.id);
                             message.success("已删除");
                             await refreshDenyRules(
-                              subjectKind === "role" ? "role" : "group",
-                              subjectKind === "role" ? selectedRole?.code ?? "" : selectedGroup?.code ?? "",
+                              subjectKind,
+                              subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId),
                             );
                           } catch {
                             /* http 拦截器已提示 */
@@ -663,7 +791,7 @@ export function K8sScopedPoliciesPage() {
             />
           </Space>
         ) : (
-          <Empty description="请先在上方选择角色模板或用户组" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description="请先在上方选择角色模板、用户或用户组" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         )}
       </Card>
     </div>

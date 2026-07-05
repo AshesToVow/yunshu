@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
@@ -43,7 +44,8 @@ func (h *MysqlBackupHandler) CreateInstance(c *gin.Context) {
 	}
 	ServeJSON201(c, func(ctx context.Context, req service.MysqlBackupInstanceUpsertRequest) (*service.MysqlBackupInstanceItem, error) {
 		req.ProjectID = projectID
-		return h.svc.UpsertInstance(ctx, 0, req)
+		actor, _ := auth.CurrentUserFromContext(c)
+		return h.svc.UpsertInstance(ctx, 0, req, actor)
 	})
 }
 
@@ -64,7 +66,8 @@ func (h *MysqlBackupHandler) UpdateInstance(c *gin.Context) {
 		return
 	}
 	req.ProjectID = projectID
-	item, err := h.svc.UpsertInstance(c.Request.Context(), instanceID, req)
+	actor, _ := auth.CurrentUserFromContext(c)
+	item, err := h.svc.UpsertInstance(c.Request.Context(), instanceID, req, actor)
 	if err != nil {
 		response.Error(c, err)
 		return

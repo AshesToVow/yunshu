@@ -1,5 +1,6 @@
-import { DeleteOutlined, HistoryOutlined, ReloadOutlined, RollbackOutlined, RocketOutlined } from "@ant-design/icons";
+import { ArrowUpOutlined, DeleteOutlined, HistoryOutlined, ReloadOutlined, RollbackOutlined, RocketOutlined } from "@ant-design/icons";
 import {
+  AutoComplete,
   Button,
   Card,
   Checkbox,
@@ -27,6 +28,7 @@ import {
   listHelmReleases,
   rollbackHelmRelease,
   uninstallHelmRelease,
+  upgradeHelmRelease,
   type HelmReleaseHistoryItem,
   type HelmReleaseItem,
 } from "../services/helm";
@@ -39,12 +41,36 @@ function statusColor(status: string) {
   return "default";
 }
 
+const SEARCH_DEBOUNCE_MS = 400;
+
+/** 从 Release 展示的 chart 标签（name-version）解析 Chart 名称 */
+function parseChartName(chartLabel: string): string {
+  const s = (chartLabel || "").trim();
+  if (!s) return "";
+  const m = s.match(/^(.+)-(\d+(?:\.\d+)*|v\d+(?:\.\d+)*)$/i);
+  if (m) return m[1];
+  return s;
+}
+
+function toChartNameOptions(names: string[]) {
+  const seen = new Set<string>();
+  const opts: { value: string; label: string }[] = [];
+  for (const name of names) {
+    const n = name.trim();
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    opts.push({ value: n, label: n });
+  }
+  return opts;
+}
+
 export function HelmReleasesPage() {
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
   const [clusterId, setClusterId] = useState<number>();
   const [namespace, setNamespace] = useState<string>("");
   const [namespaceOptions, setNamespaceOptions] = useState<{ label: string; value: string }[]>([]);
   const [keyword, setKeyword] = useState("");
+  const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<HelmReleaseItem[]>([]);
 
@@ -61,6 +87,11 @@ export function HelmReleasesPage() {
   const [chartOptions, setChartOptions] = useState<{ label: string; value: string }[]>([]);
   const [installForm] = Form.useForm();
 
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeSubmitting, setUpgradeSubmitting] = useState(false);
+  const [upgradeTarget, setUpgradeTarget] = useState<HelmReleaseItem | null>(null);
+  const [upgradeForm] = Form.useForm();
+
   const clusterOptions = useMemo(
     () => clusters.map((c) => ({ label: c.status === 1 ? c.name : `${c.name}（已停用）`, value: c.id, disabled: c.status !== 1 })),
     [clusters],
@@ -70,14 +101,20 @@ export function HelmReleasesPage() {
     if (!clusterId) return;
     setLoading(true);
     try {
-      const rows = await listHelmReleases(clusterId, namespace || undefined, keyword.trim() || undefined);
+      const rows = await listHelmReleases(clusterId, namespace || undefined, debouncedKeyword || undefined);
       setList(rows ?? []);
     } catch {
       setList([]);
     } finally {
       setLoading(false);
     }
-  }, [clusterId, namespace, keyword]);
+  }, [clusterId, namespace, debouncedKeyword]);
+
+  useEffect(() => {
+    const delay = keyword === "" ? 0 : SEARCH_DEBOUNCE_MS;
+    const id = window.setTimeout(() => setDebouncedKeyword(keyword.trim()), delay);
+    return () => window.clearTimeout(id);
+  }, [keyword]);
 
   useEffect(() => {
     void (async () => {
@@ -164,7 +201,7 @@ export function HelmReleasesPage() {
     installForm.setFieldsValue({ namespace: namespace || "default", create_namespace: true });
     try {
       const charts = await listHarborCharts();
-      setChartOptions((charts ?? []).map((c) => ({ label: `${c.name} (${c.latest_version})`, value: c.name })));
+      setChartOptions(toChartNameOptions((charts ?? []).map((c) => c.name)));
     } catch {
       setChartOptions([]);
     }
@@ -179,7 +216,7 @@ export function HelmReleasesPage() {
         cluster_id: clusterId,
         namespace: v.namespace,
         release_name: v.release_name,
-        chart_name: v.chart_name,
+        chart_name: v.chart_name.trim(),
         chart_version: v.chart_version || undefined,
         create_namespace: !!v.create_namespace,
       });
@@ -188,6 +225,55 @@ export function HelmReleasesPage() {
       void loadReleases();
     } finally {
       setInstallSubmitting(false);
+    }
+  };
+
+  const openUpgrade = async (row: HelmReleaseItem) => {
+    setUpgradeTarget(row);
+    setUpgradeOpen(true);
+    upgradeForm.resetFields();
+    upgradeForm.setFieldsValue({
+      release_name: row.name,
+      namespace: row.namespace,
+      chart_name: parseChartName(row.chart),
+      chart_version: "",
+      values_json: "",
+    });
+    try {
+      const charts = await listHarborCharts();
+      setChartOptions(toChartNameOptions((charts ?? []).map((c) => c.name)));
+    } catch {
+      setChartOptions([]);
+    }
+  };
+
+  const submitUpgrade = async () => {
+    if (!clusterId) return;
+    const v = await upgradeForm.validateFields();
+    let values: Record<string, unknown> | undefined;
+    if (v.values_json?.trim()) {
+      try {
+        values = JSON.parse(v.values_json) as Record<string, unknown>;
+      } catch {
+        message.error("Values 不是合法 JSON");
+        return;
+      }
+    }
+    setUpgradeSubmitting(true);
+    try {
+      await upgradeHelmRelease({
+        cluster_id: clusterId,
+        namespace: v.namespace,
+        release_name: v.release_name,
+        chart_name: v.chart_name?.trim() || undefined,
+        chart_version: v.chart_version || undefined,
+        values,
+      });
+      message.success(`已升级 ${v.release_name}`);
+      setUpgradeOpen(false);
+      void loadReleases();
+    } finally {
+      setUpgradeSubmitting(false);
     }
   };
 
@@ -206,7 +292,7 @@ export function HelmReleasesPage() {
     {
       title: "操作",
       key: "actions",
-      width: 280,
+      width: 340,
       render: (_, row) => (
         <Space size="small" wrap>
           <Button size="small" icon={<HistoryOutlined />} onClick={() => void openHistory(row)}>
@@ -214,6 +300,9 @@ export function HelmReleasesPage() {
           </Button>
           <Button size="small" onClick={() => void openValues(row)}>
             Values
+          </Button>
+          <Button size="small" icon={<ArrowUpOutlined />} onClick={() => void openUpgrade(row)}>
+            升级
           </Button>
           <Popconfirm title={`确认卸载 ${row.name}？`} onConfirm={() => void doUninstall(row)}>
             <Button size="small" danger icon={<DeleteOutlined />}>
@@ -248,7 +337,10 @@ export function HelmReleasesPage() {
             style={{ width: 220 }}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            onSearch={() => void loadReleases()}
+            onSearch={(v) => {
+              setKeyword(v);
+              setDebouncedKeyword(v.trim());
+            }}
           />
           <Button icon={<ReloadOutlined />} onClick={() => void loadReleases()}>
             刷新
@@ -258,7 +350,7 @@ export function HelmReleasesPage() {
           </Button>
         </Space>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          Chart 来自 Harbor OCI 仓库（数据字典 cicd_harbor_*）。业务应用回滚建议仍走 CI/CD 工单；此处用于运维查看与应急操作。
+          Chart 来自 Harbor OCI 仓库（数据字典 cicd_harbor_*）。安装时可直接输入 OCI Chart 名，下拉仅为 Chart Museum 可用时的提示。业务应用回滚建议仍走 CI/CD 工单。
         </Typography.Paragraph>
         <Table rowKey={(r) => `${r.namespace}/${r.name}`} loading={loading} columns={columns} dataSource={list} pagination={{ pageSize: 20 }} />
       </Card>
@@ -305,14 +397,62 @@ export function HelmReleasesPage() {
           <Form.Item name="namespace" label="命名空间" rules={[{ required: true }]}>
             <Input placeholder="cityos" />
           </Form.Item>
-          <Form.Item name="chart_name" label="Harbor Chart" rules={[{ required: true }]}>
-            <Select showSearch options={chartOptions} placeholder="选择 Chart" />
+          <Form.Item name="chart_name" label="Harbor Chart" rules={[{ required: true, message: "请输入 Chart 名称" }]}>
+            <AutoComplete
+              options={chartOptions}
+              placeholder="输入 Chart 名称，如 springbootdemo（OCI 推送名）"
+              filterOption={(input, option) =>
+                String(option?.value ?? "")
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+            />
           </Form.Item>
           <Form.Item name="chart_version" label="版本（可选，默认 latest）">
             <Input placeholder="1.0.0" />
           </Form.Item>
           <Form.Item name="create_namespace" valuePropName="checked" initialValue>
             <Checkbox>自动创建命名空间</Checkbox>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`升级 Release：${upgradeTarget?.name ?? ""}`}
+        open={upgradeOpen}
+        onCancel={() => setUpgradeOpen(false)}
+        onOk={() => void submitUpgrade()}
+        confirmLoading={upgradeSubmitting}
+        destroyOnClose
+        width={560}
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          留空 Chart 版本则沿用当前 Chart；填写新版本将从 Harbor OCI 拉取并升级。Values 留空表示保留现有配置；填写 JSON 将与现有 values 合并覆盖。
+        </Typography.Paragraph>
+        <Form form={upgradeForm} layout="vertical">
+          <Form.Item name="release_name" label="Release 名称" rules={[{ required: true }]}>
+            <Input disabled />
+          </Form.Item>
+          <Form.Item name="namespace" label="命名空间" rules={[{ required: true }]}>
+            <Input disabled />
+          </Form.Item>
+          <Form.Item name="chart_name" label="Harbor Chart（可选，默认沿用当前）">
+            <AutoComplete
+              allowClear
+              options={chartOptions}
+              placeholder="留空沿用当前 Chart，或输入新 Chart 名"
+              filterOption={(input, option) =>
+                String(option?.value ?? "")
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+            />
+          </Form.Item>
+          <Form.Item name="chart_version" label="目标版本（可选，默认 latest 或当前版本）">
+            <Input placeholder="1.0.1" />
+          </Form.Item>
+          <Form.Item name="values_json" label="Values 覆盖（可选 JSON）">
+            <Input.TextArea placeholder='{"replicaCount": 2}' autoSize={{ minRows: 4, maxRows: 12 }} style={{ fontFamily: "monospace" }} />
           </Form.Item>
         </Form>
       </Modal>

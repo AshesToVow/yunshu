@@ -32,6 +32,12 @@ func FormatMysqldumpConnectArgs(socket, host string, port int, user string, quot
 	return args, logLabel
 }
 
+// FormatMysqldumpConnectLog 生成可读连接描述（日志/Ping 回显）。
+func FormatMysqldumpConnectLog(socket, host string, port int, user string) string {
+	_, logLabel := FormatMysqldumpConnectArgs(socket, host, port, user, func(s string) string { return s })
+	return logLabel
+}
+
 // NormalizeMysqlSocket 可选 Unix Socket 路径。
 func NormalizeMysqlSocket(socket string) (string, error) {
 	socket = strings.TrimSpace(socket)

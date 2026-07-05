@@ -134,6 +134,7 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "MinIO 凭据 ID（cicd_minio_credential_id）", value: "cicd_minio_credential_id", category: "cicd" },
   { label: "Harbor 凭据 ID（cicd_harbor_credential_id）", value: "cicd_harbor_credential_id", category: "cicd" },
   { label: "Harbor 地址（cicd_harbor_url）", value: "cicd_harbor_url", category: "cicd" },
+  { label: "Harbor 解析 IP（cicd_harbor_host_ip）", value: "cicd_harbor_host_ip", category: "cicd" },
   { label: "Harbor 项目（cicd_harbor_project_group）", value: "cicd_harbor_project_group", category: "cicd" },
   { label: "Harbor 用户名（cicd_harbor_username）", value: "cicd_harbor_username", category: "cicd" },
   { label: "Harbor 密码（cicd_harbor_password）", value: "cicd_harbor_password", category: "cicd" },

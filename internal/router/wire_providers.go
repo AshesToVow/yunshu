@@ -152,10 +152,13 @@ func provideMysqlBackupService(
 	backupRepo interfaces.MysqlBackupRepository,
 	serverRepo interfaces.ServerRepository,
 	projectRepo interfaces.ProjectRepository,
+	userRepo interfaces.UserRepository,
 	db *gorm.DB,
 	encryptionKey SecurityEncryptionKey,
+	sender mailer.Sender,
+	appName AppDisplayName,
 ) (*service.MysqlBackupService, error) {
-	return service.NewMysqlBackupService(backupRepo, serverRepo, projectRepo, db, string(encryptionKey))
+	return service.NewMysqlBackupService(backupRepo, serverRepo, projectRepo, userRepo, db, string(encryptionKey), sender, string(appName))
 }
 
 func provideCicdService(

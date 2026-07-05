@@ -1,0 +1,9 @@
+Spring Boot 服务已通过 Helm 发布。
+
+  Release : {{ .Release.Name }}
+  Namespace: {{ .Release.Namespace }}
+  Image   : {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  Replicas: {{ .Values.replicaCount }}
+
+查看 Pod：
+  kubectl get pod -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}

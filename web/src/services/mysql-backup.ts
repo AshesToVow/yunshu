@@ -2,6 +2,13 @@ import { getData, http } from "./http";
 
 export type MysqlBackupScope = "all" | "database" | "table";
 
+export type MysqlBackupNotifyUser = {
+  id: number;
+  username: string;
+  nickname: string;
+  email?: string;
+};
+
 export interface MysqlBackupInstance {
   id: number;
   project_id: number;
@@ -32,6 +39,9 @@ export interface MysqlBackupInstance {
   schedule_enabled?: boolean;
   cron_spec?: string;
   last_scheduled_at?: string;
+  notify_enabled?: boolean;
+  notify_user_ids?: number[];
+  notify_users?: MysqlBackupNotifyUser[];
   created_at?: string;
   updated_at?: string;
 }
@@ -63,6 +73,8 @@ export type MysqlBackupInstancePayload = {
   innobackupex_bin?: string;
   schedule_enabled?: boolean;
   cron_spec?: string;
+  notify_enabled?: boolean;
+  notify_user_ids?: number[];
 };
 
 export type MysqldumpOptionItem = { id: string; label: string; flag: string; group?: string };

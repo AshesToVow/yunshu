@@ -647,7 +647,7 @@ export function CicdServicesPage() {
       <Alert
         type="info"
         showIcon
-        message="使用前请在「数据字典」配置 cicd_jenkins_base_url、cicd_jenkins_api_token；容器化应用另需配置 cicd_harbor_url、cicd_harbor_credential_id、cicd_harbor_project_group（Harbor 凭据须在 Jenkins 凭据库中预先创建）。保存 CI 配置后 Yunshu 会自动在 Jenkins 创建/更新 Pipeline Job。"
+        message="使用前请在「数据字典」配置 cicd_jenkins_base_url、cicd_jenkins_api_token；容器化应用另需配置 cicd_harbor_url、cicd_harbor_host_ip、cicd_harbor_credential_id、cicd_harbor_project_group（Harbor 凭据须在 Jenkins 凭据库中预先创建）。保存 CI 配置后 Yunshu 会自动在 Jenkins 创建/更新 Pipeline Job。"
         style={{ marginBottom: 12 }}
       />
 

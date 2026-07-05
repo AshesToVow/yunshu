@@ -1,0 +1,11 @@
+apiVersion: v2
+name: springbootdemo
+description: Spring Boot 微服务 Helm Chart（配合 Yunshu/Jenkins K8s 流水线）
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - springboot
+  - java
+maintainers:
+  - name: devops

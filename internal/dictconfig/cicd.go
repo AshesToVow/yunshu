@@ -29,6 +29,7 @@ type CicdDictTypes struct {
 	MinIOCredentialID      string
 	HarborCredentialID     string
 	HarborURL              string
+	HarborHostIP           string
 	HarborProjectGroup     string
 	HarborUsername         string
 	HarborPassword         string
@@ -62,6 +63,7 @@ func DefaultCicdDictTypes() CicdDictTypes {
 		MinIOCredentialID:      "cicd_minio_credential_id",
 		HarborCredentialID:     "cicd_harbor_credential_id",
 		HarborURL:              "cicd_harbor_url",
+		HarborHostIP:           "cicd_harbor_host_ip",
 		HarborProjectGroup:     "cicd_harbor_project_group",
 		HarborUsername:         "cicd_harbor_username",
 		HarborPassword:         "cicd_harbor_password",
@@ -133,6 +135,9 @@ func ResolveCicdConfig(ctx context.Context, db *gorm.DB, yamlBase config.CicdCon
 	}
 	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborURL); ok {
 		cfg.Harbor.URL = v
+	}
+	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborHostIP); ok {
+		cfg.Harbor.HostIP = v
 	}
 	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborProjectGroup); ok {
 		cfg.Harbor.ProjectGroup = v
