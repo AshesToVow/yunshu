@@ -123,12 +123,6 @@ export function EventsPage() {
     void reload();
   }, [clusterId, namespace, viewMode, reload]);
 
-  useEffect(() => {
-    if (!clusterId) return;
-    const timer = window.setInterval(() => void reload(), 10000);
-    return () => window.clearInterval(timer);
-  }, [clusterId, namespace, viewMode, reload]);
-
   const listColumns: ColumnsType<EventItem> = [
     { title: "时间", dataIndex: "last_time", width: 180, render: (v: string, r) => v || r.creation_time || "-" },
     { title: "命名空间", dataIndex: "namespace", width: 140 },

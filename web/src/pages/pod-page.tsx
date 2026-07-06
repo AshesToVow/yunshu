@@ -215,14 +215,6 @@ export function PodPage() {
   }, [clusterId, namespace, loadPods]);
 
   useEffect(() => {
-    if (!clusterId || watchLive) return;
-    const timer = window.setInterval(() => {
-      void loadPods();
-    }, 10000);
-    return () => window.clearInterval(timer);
-  }, [clusterId, namespace, loadPods, watchLive]);
-
-  useEffect(() => {
     watchAbortRef.current?.abort();
     watchAbortRef.current = null;
     if (!watchLive || !clusterId || !namespace) return;

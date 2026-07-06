@@ -200,16 +200,6 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId, namespace]);
 
-  useEffect(() => {
-    if (!clusterId) return;
-    if (needNamespace && !namespace) return;
-    const timer = window.setInterval(() => {
-      void reload();
-    }, 10000);
-    return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterId, namespace, needNamespace]);
-
   const actionCol: ColumnsType<TItem>[number] = {
     title: "操作",
     key: "action",
