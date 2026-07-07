@@ -44,6 +44,7 @@ export function PersistentVolumeClaimsPage() {
     <YamlCrudPage<PersistentVolumeClaimItem, StorageDetail>
       title="存储 - PersistentVolumeClaim"
       needNamespace
+      watchResource="persistentvolumeclaims"
       onLoadNamespaces={async (cid) => {
         const res = await listClusterNamespaces(cid);
         return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

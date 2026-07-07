@@ -1,11 +1,14 @@
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import { Button, Card, Collapse, Drawer, Input, Modal, Select, Space, Table, Tabs, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import YAML from "yaml";
-import { getClusters } from "../../services/clusters";
-import type { ClusterItem } from "../../services/clusters";
 import type { K8sDeleteOptions } from "../../services/service-factory";
+import { K8sPageToolbar } from "../ops/k8s-page-toolbar";
+import { OpsPageHeader } from "../ops/ops-page-header";
+import { useK8sContext } from "../../hooks/use-k8s-context";
+import { useK8sWatch } from "../../hooks/use-k8s-watch";
+import { useEditGuardStore } from "../../stores/edit-guard-store";
 import { K8sDeleteDialog } from "./k8s-delete-dialog";
 
 export type ClusterOption = { label: string; value: number; disabled?: boolean };
@@ -77,6 +80,16 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   disableMutations?: boolean;
   /** 操作列宽度，节点等页面操作较多时可加大 */
   actionColumnWidth?: number;
+  /** 启用 K8s SSE Watch 时传入资源短名，如 deployments、pods */
+  watchResource?: string;
+  /** 页头副标题 */
+  description?: string;
+  /** 页头右侧扩展 */
+  headerExtra?: React.ReactNode;
+  /** 表格上方摘要条（节点/命名空间统计等） */
+  renderSummary?: (items: TItem[], ctx: YamlCrudToolbarCtx) => React.ReactNode;
+  /** 表格横向滚动宽度，列多时可加大（默认 1400） */
+  tableScrollX?: number | string;
 }
 
 export function YamlCrudPage<TItem extends { name: string }, TDetail extends { yaml: string }>(props: YamlCrudPageProps<TItem, TDetail>) {
@@ -99,11 +112,24 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     confirmOverwrite = true,
     disableMutations = false,
     actionColumnWidth = 260,
+    watchResource,
+    description,
+    headerExtra,
+    renderSummary,
+    tableScrollX = 1400,
   } = props;
-  const [clusters, setClusters] = useState<ClusterItem[]>([]);
-  const [clusterId, setClusterId] = useState<number | undefined>(undefined);
-  const [namespace, setNamespace] = useState<string | undefined>(needNamespace ? "default" : undefined);
-  const [namespaceOptions, setNamespaceOptions] = useState<NamespaceOption[]>(props.namespaceOptions ?? []);
+  const {
+    clusterId,
+    namespace,
+    setClusterId,
+    setNamespace,
+    clusterOptions,
+    namespaceOptions,
+  } = useK8sContext({
+    needNamespace: Boolean(needNamespace),
+    syncUrl: true,
+    onLoadNamespaces,
+  });
   const [keyword, setKeyword] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TItem[]>([]);
@@ -118,49 +144,28 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [watchLive, setWatchLive] = useState(false);
+  const beginEdit = useEditGuardStore((s) => s.beginEdit);
+  const endEdit = useEditGuardStore((s) => s.endEdit);
 
   const closeCreateDrawer = useCallback(() => setCreateDrawerOpen(false), []);
-  const clusterOptions: ClusterOption[] = useMemo(
-    () =>
-      clusters.map((c) => ({
-        label: c.status === 1 ? c.name : `${c.name}（已停用）`,
-        value: c.id,
-        disabled: c.status !== 1,
-      })),
-    [clusters],
-  );
-
-  async function loadClusters() {
-    const res = await getClusters({ page: 1, page_size: 200 });
-    setClusters(res.list ?? []);
-    if (!clusterId) {
-      const first = (res.list ?? []).find((c) => c.status === 1);
-      if (first) setClusterId(first.id);
-    }
-  }
-
-  async function loadNamespaces(cid: number) {
-    if (!needNamespace) return;
-    const loader = onLoadNamespaces;
-    if (!loader) return;
-    const opts = await loader(cid);
-    setNamespaceOptions(opts);
-    if (!namespace || !opts.some((o) => o.value === namespace)) {
-      const first = opts[0]?.value ?? "default";
-      setNamespace(first);
-    }
-  }
+  const reloadSeqRef = useRef(0);
 
   async function reload(overrideKeyword?: string) {
     if (!clusterId) return;
     if (needNamespace && !namespace) return;
+    const seq = ++reloadSeqRef.current;
     setLoading(true);
     try {
       const effectiveKeyword = (overrideKeyword ?? keyword).trim();
       const list = await api.list({ clusterId, namespace, keyword: effectiveKeyword || undefined });
+      if (seq !== reloadSeqRef.current) return;
       setData(list ?? []);
+    } catch {
+      if (seq !== reloadSeqRef.current) return;
+      setData([]);
     } finally {
-      setLoading(false);
+      if (seq === reloadSeqRef.current) setLoading(false);
     }
   }
 
@@ -179,26 +184,24 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
   }, [clusterId, namespace, keyword]);
 
   useEffect(() => {
-    void loadClusters();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!clusterId) return;
-    void (async () => {
-      try {
-        await loadNamespaces(clusterId);
-      } catch (e) {
-        message.error(e instanceof Error ? e.message : "加载命名空间失败");
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterId]);
-
-  useEffect(() => {
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId, namespace]);
+
+  useK8sWatch({
+    enabled: Boolean(watchResource) && watchLive && Boolean(needNamespace),
+    clusterId,
+    namespace,
+    resource: watchResource,
+    onRefresh: () => void reload(),
+    onDisabled: () => setWatchLive(false),
+  });
+
+  useEffect(() => {
+    if (!detailOpen && !createDrawerOpen && !deleteDialogOpen) return;
+    beginEdit();
+    return () => endEdit();
+  }, [detailOpen, createDrawerOpen, deleteDialogOpen, beginEdit, endEdit]);
 
   const actionCol: ColumnsType<TItem>[number] = {
     title: "操作",
@@ -407,58 +410,47 @@ metadata:
   );
 
   return (
-    <Card className="table-card" title={title}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap" }}>
-        <Space wrap>
-          <Select
-            placeholder="选择集群"
-            style={{ minWidth: 240 }}
-            value={clusterId}
-            onChange={setClusterId}
-            options={clusterOptions}
-          />
-          {needNamespace ? (
-            <Select
-              placeholder="命名空间"
-              style={{ minWidth: 200 }}
-              value={namespace}
-              onChange={setNamespace}
-              options={namespaceOptions}
-              showSearch
-              optionFilterProp="label"
-            />
-          ) : null}
-          <Input.Search
-            allowClear
-            placeholder="搜索名称"
-            style={{ width: 260 }}
-            onSearch={(v) => {
-              setKeyword(v);
-              void reload(v);
-            }}
-          />
-        </Space>
-        <Space wrap>
-          {renderToolbarExtraRight ? renderToolbarExtraRight(toolbarCtx) : null}
-          {canOpenCreate ? (
+    <div className="page-stack">
+      <OpsPageHeader title={title} description={description} extra={headerExtra} />
+      <Card className="table-card yaml-crud-card" bordered={false}>
+      <K8sPageToolbar
+        clusterId={clusterId}
+        namespace={namespace}
+        clusterOptions={clusterOptions}
+        namespaceOptions={namespaceOptions}
+        needNamespace={needNamespace}
+        onClusterChange={setClusterId}
+        onNamespaceChange={setNamespace}
+        onSearch={(v) => {
+          setKeyword(v);
+          void reload(v);
+        }}
+        onRefresh={() => void reload()}
+        watchLive={watchResource ? watchLive : undefined}
+        onWatchChange={watchResource ? setWatchLive : undefined}
+        extraRight={renderToolbarExtraRight ? renderToolbarExtraRight(toolbarCtx) : undefined}
+        primaryAction={
+          canOpenCreate ? (
             <Button type="primary" icon={<PlusOutlined />} disabled={!clusterId} onClick={handleOpenCreateDrawer}>
               创建
             </Button>
-          ) : null}
-          <Button icon={<ReloadOutlined />} onClick={() => void reload()}>
-            刷新
-          </Button>
-        </Space>
-      </div>
-
-      <Table
-        rowKey={(r) => (r as any).name}
-        loading={loading}
-        dataSource={data}
-        pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
-        columns={[...columns, actionCol]}
-        scroll={{ x: "max-content" }}
+          ) : undefined
+        }
       />
+
+      {renderSummary ? <div className="k8s-summary-row-wrap">{renderSummary(data, toolbarCtx)}</div> : null}
+
+      <div className="k8s-table-scroll-host">
+        <Table
+          rowKey={(r) => (r as any).name}
+          loading={loading}
+          dataSource={data}
+          pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
+          columns={[...columns, actionCol]}
+          scroll={{ x: tableScrollX }}
+          tableLayout="fixed"
+        />
+      </div>
 
       {!disableMutations && (hasFormTab || hasYamlTab) ? (
         <Drawer
@@ -571,7 +563,8 @@ metadata:
         }}
       />
 
-    </Card>
+      </Card>
+    </div>
   );
 }
 

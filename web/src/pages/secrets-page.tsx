@@ -21,6 +21,7 @@ export function SecretsPage() {
     <YamlCrudPage<SecretItem, ConfigDetail>
       title="Secret 管理"
       needNamespace
+      watchResource="secrets"
       onLoadNamespaces={async (cid) => {
         const res = await listClusterNamespaces(cid);
         return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

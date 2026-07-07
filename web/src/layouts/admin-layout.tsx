@@ -155,6 +155,7 @@ export function AdminLayout() {
   const menuTheme = themeMode === "dark" ? "dark" : "light";
   const layoutClassName = [
     "admin-shell",
+    "ops-platform",
     themeMode === "dark" ? "theme-dark" : "theme-light",
     uiPreferences.compactContent ? "layout-compact" : "",
     uiPreferences.darkSider ? "layout-dark-sider" : "layout-soft-sider",

@@ -45,6 +45,7 @@ export function HorizontalPodAutoscalersPage() {
       <YamlCrudPage<HPAItem, HPADetail>
         title="HPA 弹性伸缩（autoscaling/v2）"
         needNamespace
+        watchResource="horizontalpodautoscalers"
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

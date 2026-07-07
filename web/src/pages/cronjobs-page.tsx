@@ -190,6 +190,7 @@ export function CronjobsPage() {
       <YamlCrudPage<CronJobItemV2, WorkloadDetail>
         title="CronJob 控制器管理"
         needNamespace
+        watchResource="cronjobs"
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

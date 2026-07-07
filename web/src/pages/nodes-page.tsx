@@ -27,6 +27,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
+import { K8sSummaryRow } from "../components/ops/k8s-summary-row";
 import { getNodeDetail, listNodes, replaceNodeTaints, setNodeSchedulability, type NodeTaintInput } from "../services/nodes";
 
 const TAINT_EFFECT_OPTIONS = [
@@ -227,10 +228,27 @@ export function NodesPage() {
     <>
       <YamlCrudPage<Item, Detail>
         title="Node 资源管理"
+        description="集群节点状态、资源用量、污点与调度策略"
         needNamespace={false}
         disableMutations
         actionColumnWidth={380}
+        tableScrollX={2400}
         columns={columns}
+        renderSummary={(items) => {
+          const ready = items.filter((n) => n.status === "Ready").length;
+          const notReady = items.length - ready;
+          const cordoned = items.filter((n) => n.unschedulable).length;
+          return (
+            <K8sSummaryRow
+              items={[
+                { label: "节点总数", value: items.length },
+                { label: "Ready", value: ready, accent: "#34d399" },
+                { label: "NotReady", value: notReady, accent: notReady > 0 ? "#fb7185" : undefined },
+                { label: "禁止调度", value: cordoned, accent: cordoned > 0 ? "#fbbf24" : undefined },
+              ]}
+            />
+          );
+        }}
         api={{
           list: async ({ clusterId, keyword }) => await listNodes(clusterId, keyword),
           detail: async ({ clusterId, name }) => await getNodeDetail(clusterId, name),

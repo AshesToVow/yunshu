@@ -58,7 +58,7 @@ export function App() {
           colorSuccess: "#4af626",
           colorWarning: "#f59e0b",
           colorError: accent,
-          borderRadius: 0,
+          borderRadius: 6,
           fontFamily:
             '"IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
           fontFamilyCode: '"JetBrains Mono", "IBM Plex Mono", "Consolas", monospace',

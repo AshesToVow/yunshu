@@ -265,6 +265,8 @@ export function DeploymentsPage() {
       <YamlCrudPage<WorkloadItem, WorkloadDetail>
         title="Deployment 控制器管理"
         needNamespace
+        watchResource="deployments"
+        tableScrollX={2100}
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

@@ -1,8 +1,10 @@
-import { CloudDownloadOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CloudDownloadOutlined, ReloadOutlined, RocketOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Input, message, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useState } from "react";
-import { PageTelemetryHeader } from "../components/page-telemetry-header";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
+import { K8sSummaryRow } from "../components/ops/k8s-summary-row";
 import {
   getHarborInfo,
   listHarborChartVersions,
@@ -56,6 +58,12 @@ export function HelmChartsPage() {
     return () => window.clearTimeout(id);
   }, [keyword, fetchCharts]);
 
+  const summary = useMemo(() => {
+    const deprecated = charts.filter((c) => c.deprecated).length;
+    const versions = charts.reduce((sum, c) => sum + (c.total_versions ?? 0), 0);
+    return { total: charts.length, deprecated, versions };
+  }, [charts]);
+
   const loadVersions = async (chartName: string) => {
     if (expandedVersions[chartName]) return;
     setVersionsLoading((p) => ({ ...p, [chartName]: true }));
@@ -90,50 +98,72 @@ export function HelmChartsPage() {
   ];
 
   return (
-    <>
-      <PageTelemetryHeader
-        label="[ K8S / HELM ]"
+    <div className="page-stack">
+      <OpsPageHeader
         title="Harbor Helm Chart"
-        subtitle="Jenkins 推送的 Chart 包列表与版本"
+        description="Jenkins 推送的 Chart 包列表与版本"
+        extra={
+          <Link to="/helm/releases">
+            <Button type="primary" icon={<RocketOutlined />}>
+              安装 Release
+            </Button>
+          </Link>
+        }
+        meta={
+          <Typography.Text type="secondary">
+            {info ? `${info.project} @ ${info.url}` : "加载 Harbor 配置…"}
+          </Typography.Text>
+        }
       />
-      <Card>
+      <Card className="table-card yaml-crud-card" bordered={false}>
         {info && (
           <Alert
             type={info.auth_configured ? "success" : "warning"}
             showIcon
-            style={{ marginBottom: 16 }}
+            style={{ marginBottom: 12 }}
             message={
-              <Space wrap>
+              <Space wrap size={[12, 4]}>
                 <span>Harbor: {info.url}</span>
                 <span>项目: {info.project}</span>
                 <span>OCI: {info.oci_prefix}</span>
-                <span>Chart API: {info.chart_repo_url}</span>
                 {!info.auth_configured && <span>请在数据字典配置 cicd_harbor_username / cicd_harbor_password</span>}
               </Space>
             }
           />
         )}
-        {fetchError && (
-          <Alert type="error" showIcon style={{ marginBottom: 16 }} message={fetchError} />
-        )}
-        <Space wrap style={{ marginBottom: 16 }}>
-          <Input.Search
-            allowClear
-            placeholder="搜索 Chart"
-            style={{ width: 240 }}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onSearch={(v) => {
-              setKeyword(v);
-              void fetchCharts(v.trim());
-            }}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => void fetchCharts(keyword.trim())}>
-            刷新
-          </Button>
-        </Space>
-        <Typography.Paragraph type="secondary">
-          列表来自 Harbor Chart Museum API。Jenkins CI 推送的 Chart（helm package + push）会出现在此处；安装请前往「Helm Release」页。
+        {fetchError ? <Alert type="error" showIcon style={{ marginBottom: 12 }} message={fetchError} /> : null}
+
+        <div className="k8s-page-toolbar" style={{ marginBottom: 12 }}>
+          <Space wrap className="k8s-page-toolbar__left">
+            <Input.Search
+              allowClear
+              placeholder="搜索 Chart"
+              className="k8s-page-toolbar__search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onSearch={(v) => {
+                setKeyword(v);
+                void fetchCharts(v.trim());
+              }}
+            />
+          </Space>
+          <Space wrap className="k8s-page-toolbar__right">
+            <Button icon={<ReloadOutlined />} onClick={() => void fetchCharts(keyword.trim())}>
+              刷新
+            </Button>
+          </Space>
+        </div>
+
+        <K8sSummaryRow
+          items={[
+            { label: "Chart 数", value: summary.total },
+            { label: "版本总数", value: summary.versions },
+            { label: "已废弃", value: summary.deprecated, accent: summary.deprecated > 0 ? "#fbbf24" : undefined },
+          ]}
+        />
+
+        <Typography.Paragraph type="secondary" style={{ margin: "12px 0" }}>
+          列表来自 Harbor Chart Museum API。安装请前往「Helm Release」页。
         </Typography.Paragraph>
         <Table
           rowKey="name"
@@ -145,7 +175,12 @@ export function HelmChartsPage() {
               const vers = expandedVersions[record.name];
               if (!vers) {
                 return (
-                  <Button size="small" loading={versionsLoading[record.name]} icon={<CloudDownloadOutlined />} onClick={() => void loadVersions(record.name)}>
+                  <Button
+                    size="small"
+                    loading={versionsLoading[record.name]}
+                    icon={<CloudDownloadOutlined />}
+                    onClick={() => void loadVersions(record.name)}
+                  >
                     加载版本列表
                   </Button>
                 );
@@ -170,9 +205,9 @@ export function HelmChartsPage() {
               );
             },
           }}
-          pagination={{ pageSize: 20 }}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
         />
       </Card>
-    </>
+    </div>
   );
 }

@@ -111,7 +111,7 @@ export function LineChart({
   return (
     <div ref={containerRef} style={{ width: "100%", overflowX: "auto", overflowY: "hidden", position: "relative" }}>
       {showLegend && normalizedSeries.length > 1 ? (
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", padding: "0 2px 10px", minWidth: contentWidth }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", padding: "0 2px 10px" }}>
           {normalizedSeries.map((s, idx) => {
             const color = s.color || ["#2563eb", "#10b981", "#f59e0b", "#ef4444"][idx % 4];
             return (

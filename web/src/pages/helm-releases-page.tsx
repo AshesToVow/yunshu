@@ -1,4 +1,4 @@
-import { ArrowUpOutlined, DeleteOutlined, HistoryOutlined, ReloadOutlined, RollbackOutlined, RocketOutlined } from "@ant-design/icons";
+import { ArrowUpOutlined, DeleteOutlined, HistoryOutlined, RocketOutlined, RollbackOutlined } from "@ant-design/icons";
 import {
   AutoComplete,
   Button,
@@ -18,8 +18,12 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PageTelemetryHeader } from "../components/page-telemetry-header";
-import { getClusters, listNamespaces as listClusterNamespaces, type ClusterItem } from "../services/clusters";
+import { Link, useSearchParams } from "react-router-dom";
+import { K8sPageToolbar } from "../components/ops/k8s-page-toolbar";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
+import { useK8sContext } from "../hooks/use-k8s-context";
+import { useEditGuardStore } from "../stores/edit-guard-store";
+import { listNamespaces as listClusterNamespaces } from "../services/clusters";
 import {
   getHelmReleaseHistory,
   getHelmReleaseValues,
@@ -65,10 +69,13 @@ function toChartNameOptions(names: string[]) {
 }
 
 export function HelmReleasesPage() {
-  const [clusters, setClusters] = useState<ClusterItem[]>([]);
-  const [clusterId, setClusterId] = useState<number>();
-  const [namespace, setNamespace] = useState<string>("");
-  const [namespaceOptions, setNamespaceOptions] = useState<{ label: string; value: string }[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { clusterId, setClusterId, clusterOptions } = useK8sContext({ needNamespace: false, syncUrl: true });
+  const beginEdit = useEditGuardStore((s) => s.beginEdit);
+  const endEdit = useEditGuardStore((s) => s.endEdit);
+
+  const [namespace, setNamespace] = useState(() => searchParams.get("ns") ?? "");
+  const [namespaceOptions, setNamespaceOptions] = useState<{ label: string; value: string }[]>([{ label: "全部命名空间", value: "" }]);
   const [keyword, setKeyword] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -92,9 +99,23 @@ export function HelmReleasesPage() {
   const [upgradeTarget, setUpgradeTarget] = useState<HelmReleaseItem | null>(null);
   const [upgradeForm] = Form.useForm();
 
-  const clusterOptions = useMemo(
-    () => clusters.map((c) => ({ label: c.status === 1 ? c.name : `${c.name}（已停用）`, value: c.id, disabled: c.status !== 1 })),
-    [clusters],
+  const anyPanelOpen = historyOpen || valuesOpen || installOpen || upgradeOpen;
+
+  useEffect(() => {
+    if (!anyPanelOpen) return;
+    beginEdit();
+    return () => endEdit();
+  }, [anyPanelOpen, beginEdit, endEdit]);
+
+  const setNamespaceFilter = useCallback(
+    (ns: string) => {
+      setNamespace(ns);
+      const next = new URLSearchParams(searchParams);
+      if (ns) next.set("ns", ns);
+      else next.delete("ns");
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
   );
 
   const loadReleases = useCallback(async () => {
@@ -117,19 +138,6 @@ export function HelmReleasesPage() {
   }, [keyword]);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const res = await getClusters({ page: 1, page_size: 200 });
-        setClusters(res.list ?? []);
-        const first = (res.list ?? []).find((c) => c.status === 1);
-        if (first) setClusterId(first.id);
-      } catch {
-        setClusters([]);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
     if (!clusterId) return;
     void (async () => {
       try {
@@ -145,6 +153,13 @@ export function HelmReleasesPage() {
   useEffect(() => {
     void loadReleases();
   }, [loadReleases]);
+
+  const statusSummary = useMemo(() => {
+    const deployed = list.filter((r) => (r.status || "").toLowerCase() === "deployed").length;
+    const failed = list.filter((r) => (r.status || "").toLowerCase() === "failed").length;
+    const pending = list.length - deployed - failed;
+    return { total: list.length, deployed, failed, pending };
+  }, [list]);
 
   const openHistory = async (row: HelmReleaseItem) => {
     if (!clusterId) return;
@@ -315,44 +330,48 @@ export function HelmReleasesPage() {
   ];
 
   return (
-    <>
-      <PageTelemetryHeader
-        label="[ K8S / HELM ]"
+    <div className="page-stack">
+      <OpsPageHeader
         title="Helm Release 管理"
-        subtitle="Harbor OCI Chart 安装、Release 查看与应急回滚"
+        description="Harbor OCI Chart 安装、Release 查看与应急回滚"
+        extra={<Link to="/helm/charts">Harbor Chart 目录</Link>}
+        meta={
+          <Space size="middle">
+            <Typography.Text type="secondary">Release {statusSummary.total}</Typography.Text>
+            <Typography.Text type="secondary">Deployed {statusSummary.deployed}</Typography.Text>
+            {statusSummary.failed > 0 ? (
+              <Typography.Text type="danger">Failed {statusSummary.failed}</Typography.Text>
+            ) : null}
+          </Space>
+        }
       />
-      <Card>
-        <Space wrap style={{ marginBottom: 16 }}>
-          <Select
-            style={{ width: 200 }}
-            placeholder="选择集群"
-            options={clusterOptions}
-            value={clusterId}
-            onChange={(v) => setClusterId(v)}
-          />
-          <Select style={{ width: 180 }} options={namespaceOptions} value={namespace} onChange={setNamespace} />
-          <Input.Search
-            allowClear
-            placeholder="搜索 Release / Chart"
-            style={{ width: 220 }}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onSearch={(v) => {
-              setKeyword(v);
-              setDebouncedKeyword(v.trim());
-            }}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => void loadReleases()}>
-            刷新
-          </Button>
-          <Button type="primary" icon={<RocketOutlined />} disabled={!clusterId} onClick={() => void openInstall()}>
-            从 Harbor 安装
-          </Button>
-        </Space>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          Chart 来自 Harbor OCI 仓库（数据字典 cicd_harbor_*）。安装时可直接输入 OCI Chart 名，下拉仅为 Chart Museum 可用时的提示。业务应用回滚建议仍走 CI/CD 工单。
+      <Card className="table-card yaml-crud-card" bordered={false}>
+        <K8sPageToolbar
+          clusterId={clusterId}
+          namespace={namespace}
+          clusterOptions={clusterOptions}
+          namespaceOptions={namespaceOptions}
+          needNamespace
+          searchPlaceholder="搜索 Release / Chart"
+          onClusterChange={setClusterId}
+          onNamespaceChange={setNamespaceFilter}
+          onSearch={(v) => {
+            setKeyword(v);
+            setDebouncedKeyword(v.trim());
+          }}
+          onRefresh={() => void loadReleases()}
+          primaryAction={
+            <Button type="primary" icon={<RocketOutlined />} disabled={!clusterId} onClick={() => void openInstall()}>
+              从 Harbor 安装
+            </Button>
+          }
+        />
+        <Typography.Paragraph type="secondary" style={{ margin: "12px 0" }}>
+          Chart 来自 Harbor OCI 仓库（数据字典 cicd_harbor_*）。业务应用回滚建议仍走 CI/CD 工单。
         </Typography.Paragraph>
-        <Table rowKey={(r) => `${r.namespace}/${r.name}`} loading={loading} columns={columns} dataSource={list} pagination={{ pageSize: 20 }} />
+        <div className="k8s-table-scroll-host">
+          <Table rowKey={(r) => `${r.namespace}/${r.name}`} loading={loading} columns={columns} dataSource={list} pagination={{ pageSize: 20, showSizeChanger: true }} scroll={{ x: 1200 }} tableLayout="fixed" />
+        </div>
       </Card>
 
       <Drawer title={`历史：${historyTarget?.name ?? ""}`} width={720} open={historyOpen} onClose={() => setHistoryOpen(false)}>
@@ -456,6 +475,6 @@ export function HelmReleasesPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   );
 }

@@ -1,38 +1,40 @@
-import { CodeOutlined, DeleteOutlined, DownOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSearchOutlined, FileTextOutlined, FolderOpenOutlined, MedicineBoxOutlined, PlusOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
+import { CodeOutlined, DeleteOutlined, DownOutlined, DownloadOutlined, EditOutlined, FileSearchOutlined, FileTextOutlined, FolderOpenOutlined, MedicineBoxOutlined, PlusOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Alert, Button, Card, Checkbox, Divider, Drawer, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Tooltip, Typography, message } from "antd";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
-import { PageTelemetryHeader } from "../components/page-telemetry-header";
+import { K8sPageToolbar } from "../components/ops/k8s-page-toolbar";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
+import { PhaseTag } from "../components/ops/phase-tag";
+import { PodDetailPanel } from "../components/pod/pod-detail-panel";
+import { PodLogsPanel } from "../components/pod/pod-logs-panel";
+import { useK8sContext } from "../hooks/use-k8s-context";
+import { useK8sWatch } from "../hooks/use-k8s-watch";
+import { useEditGuardStore } from "../stores/edit-guard-store";
 import { formatDateTime } from "../utils/format";
-import { getClusters, listNamespaces, type ClusterItem, type NamespaceItem } from "../services/clusters";
 import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
-import { PodCpuUsageBars, PodMemUsageBars, RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
+import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
 import { createPodByYAML, createPodSimple, deletePod, deletePodFile, downloadPodFile, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, readPodFile, restartPod, updatePodSimple, uploadPodFile, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
 import { getToken } from "../services/storage";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
-import { streamK8sResourceWatch } from "../services/k8s-watch";
-
-function phaseColor(phase: string): string {
-  const p = (phase || "").toLowerCase();
-  if (p === "running") return "green";
-  if (p === "pending") return "orange";
-  if (p === "failed") return "red";
-  if (p === "succeeded") return "blue";
-  return "default";
-}
 
 export function PodPage() {
   const rfc1123Subdomain = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/;
   const rfc1123Label = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
-  const [clusters, setClusters] = useState<ClusterItem[]>([]);
-  const [clusterId, setClusterId] = useState<number>();
-  const [namespaces, setNamespaces] = useState<NamespaceItem[]>([]);
-  const [namespace, setNamespace] = useState("default");
+  const {
+    clusterId,
+    namespace = "default",
+    setClusterId,
+    setNamespace,
+    clusterOptions,
+    namespaceOptions,
+  } = useK8sContext({ needNamespace: true, syncUrl: true });
+  const beginEdit = useEditGuardStore((s) => s.beginEdit);
+  const endEdit = useEditGuardStore((s) => s.endEdit);
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [pods, setPods] = useState<PodItem[]>([]);
@@ -42,7 +44,9 @@ export function PodPage() {
 
   const [selected, setSelected] = useState<PodItem | null>(null);
   const [detail, setDetail] = useState<PodDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [events, setEvents] = useState<PodEventItem[]>([]);
+  const [detailTab, setDetailTab] = useState("overview");
 
   const [logsOpen, setLogsOpen] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -61,6 +65,7 @@ export function PodPage() {
   const [diagnoseLoading, setDiagnoseLoading] = useState(false);
   const [diagnoseResult, setDiagnoseResult] = useState<PodDiagnoseResult | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
+  const prevPodKeyRef = useRef("");
   const [streaming, setStreaming] = useState(false);
   const [execOpen, setExecOpen] = useState(false);
   const [fileOpen, setFileOpen] = useState(false);
@@ -74,9 +79,8 @@ export function PodPage() {
   const execCommandRef = useRef(execCommand);
   execCommandRef.current = execCommand;
   const filterRef = useRef({ clusterId, namespace, keyword });
-  const [watchLive, setWatchLive] = useState(false);
-  const watchAbortRef = useRef<AbortController | null>(null);
   filterRef.current = { clusterId, namespace, keyword };
+  const [watchLive, setWatchLive] = useState(false);
   const execTermHostRef = useRef<HTMLDivElement | null>(null);
   const execTermRef = useRef<Terminal | null>(null);
   const execFitRef = useRef<FitAddon | null>(null);
@@ -152,16 +156,6 @@ export function PodPage() {
   }>();
   const [yamlForm] = Form.useForm<{ manifest: string }>();
 
-  async function loadNamespaces(id: number) {
-    const res = await listNamespaces(id);
-    const ns = res.list || [];
-    setNamespaces(ns);
-    const hasCurrent = ns.some((item) => item.name === namespace);
-    if (!hasCurrent) {
-      setNamespace(ns[0]?.name || "default");
-    }
-  }
-
   const loadPods = useCallback(async (overrideKeyword?: string) => {
     const { clusterId: cid, namespace: ns, keyword: kw } = filterRef.current;
     if (!cid) {
@@ -180,81 +174,28 @@ export function PodPage() {
     }
   }, []);
 
-  async function loadClusters() {
-    const res = await getClusters({ page: 1, page_size: 200 });
-    setClusters(res.list || []);
-    if (!clusterId && res.list?.length) setClusterId(res.list[0].id);
-  }
-
-  useEffect(() => { void loadClusters(); }, []);
-
-  useEffect(() => {
-    if (!clusterId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await listNamespaces(clusterId);
-        if (cancelled) return;
-        const ns = res.list || [];
-        setNamespaces(ns);
-        const hasCurrent = ns.some((item) => item.name === filterRef.current.namespace);
-        if (!hasCurrent) {
-          setNamespace(ns[0]?.name || "default");
-        }
-      } catch {
-        // http 拦截器已 toast
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [clusterId]);
-
   useEffect(() => {
     void loadPods();
   }, [clusterId, namespace, loadPods]);
 
+  useK8sWatch({
+    enabled: watchLive,
+    clusterId,
+    namespace,
+    resource: "pods",
+    onRefresh: loadPods,
+    onDisabled: () => setWatchLive(false),
+  });
+
+  const anyPanelOpen =
+    createOpen || execOpen || detailOpen || logsOpen || diagnoseOpen || fileOpen || deleteDialogOpen;
+  const pauseWatch = anyPanelOpen || (detailTab === "logs" && streaming);
+
   useEffect(() => {
-    watchAbortRef.current?.abort();
-    watchAbortRef.current = null;
-    if (!watchLive || !clusterId || !namespace) return;
-    let cancelled = false;
-    const ac = new AbortController();
-    watchAbortRef.current = ac;
-
-    const runWatch = async () => {
-      while (!cancelled && !ac.signal.aborted) {
-        try {
-          await streamK8sResourceWatch(
-            { cluster_id: clusterId, namespace, resource: "pods", timeout_seconds: 3600 },
-            () => {
-              void loadPods();
-            },
-            ac.signal,
-          );
-        } catch (err: unknown) {
-          if (ac.signal.aborted || cancelled) return;
-          message.warning(extractApiErrorMessage(err, "Pod Watch 已断开"));
-          setWatchLive(false);
-          return;
-        }
-        if (ac.signal.aborted || cancelled) return;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-    };
-
-    void runWatch();
-    return () => {
-      cancelled = true;
-      ac.abort();
-    };
-  }, [watchLive, clusterId, namespace, loadPods]);
-
-  const namespaceOptions = useMemo(() => namespaces.map((n) => ({ label: n.name, value: n.name })), [namespaces]);
-  const clusterOptions = useMemo(
-    () => clusters.map((c) => ({ label: c.name, value: c.id })),
-    [clusters],
-  );
+    if (!pauseWatch) return;
+    beginEdit();
+    return () => endEdit();
+  }, [pauseWatch, beginEdit, endEdit]);
 
   async function handleDeletePod(record: PodItem, deleteOpts?: K8sDeleteOptions) {
     if (!clusterId) return;
@@ -286,30 +227,53 @@ export function PodPage() {
     return q;
   }
 
-  async function handleViewLogs(record: PodItem) {
+  async function loadLogsForPod(record: PodItem, opts?: { resetFilters?: boolean; tailLines?: number }) {
     if (!clusterId) return;
-    setSelected(record);
-    setLogsOpen(true);
     setLogsLoading(true);
-    setLogsText("");
+    if (opts?.resetFilters) {
+      setLogsText("");
+      setLogsKeyword("");
+      setLogsStartTime("");
+      setLogsEndTime("");
+      setLogsPrevious(false);
+      setLogsTimestamps(false);
+      setLogsSinceSeconds(undefined);
+      setLogsSinceTime("");
+    }
     setLogsTitle(`${record.namespace}/${record.name}`);
-    setLogsKeyword("");
-    setLogsStartTime("");
-    setLogsEndTime("");
-    setLogsPrevious(false);
-    setLogsTimestamps(false);
-    setLogsSinceSeconds(undefined);
-    setLogsSinceTime("");
     try {
       const detailRes = await getPodDetail({ cluster_id: clusterId, namespace: record.namespace, name: record.name });
       const names = (detailRes.containers ?? []).map((c) => c.name).filter(Boolean);
       setLogContainerOptions(names);
-      setLogsContainer(names[0]);
-      const res = await getPodLogs({ ...buildPodLogsQuery(record, 500), container: names[0] });
+      const container = logsContainer && names.includes(logsContainer) ? logsContainer : names[0];
+      setLogsContainer(container);
+      const res = await getPodLogs({
+        ...buildPodLogsQuery(record, opts?.tailLines ?? 500),
+        container,
+      });
       setLogsText(res.logs || "");
     } finally {
       setLogsLoading(false);
     }
+  }
+
+  async function openPodLogsInline(record: PodItem) {
+    prevPodKeyRef.current = `${record.namespace}/${record.name}`;
+    setSelected(record);
+    setDetailTab("logs");
+    void loadDetail(record);
+    await loadLogsForPod(record, { resetFilters: true, tailLines: 500 });
+  }
+
+  async function handleViewLogs(record: PodItem, mode: "inline" | "modal" = "modal") {
+    if (!clusterId) return;
+    setSelected(record);
+    if (mode === "inline") {
+      await openPodLogsInline(record);
+      return;
+    }
+    setLogsOpen(true);
+    await loadLogsForPod(record, { resetFilters: true, tailLines: 500 });
   }
 
   async function handleDiagnose(record: PodItem) {
@@ -404,15 +368,41 @@ export function PodPage() {
     setStreaming(false);
   }
 
+  useEffect(() => {
+    stopLogStream();
+    setLogsText("");
+    setDetailTab("overview");
+    prevPodKeyRef.current = "";
+  }, [clusterId]);
+
+  useEffect(() => {
+    const key = selected ? `${selected.namespace}/${selected.name}` : "";
+    if (prevPodKeyRef.current === key) return;
+    prevPodKeyRef.current = key;
+    stopLogStream();
+    setLogsText("");
+    setDetailTab("overview");
+  }, [selected?.namespace, selected?.name]);
+
   async function loadDetail(record: PodItem) {
     if (!clusterId) return;
     setSelected(record);
-    const [d, e] = await Promise.all([
-      getPodDetail({ cluster_id: clusterId, namespace: record.namespace, name: record.name }),
-      getPodEvents({ cluster_id: clusterId, namespace: record.namespace, name: record.name }),
-    ]);
-    setDetail(d);
-    setEvents(e.list || []);
+    setDetailLoading(true);
+    setDetail(null);
+    setEvents([]);
+    try {
+      const [d, e] = await Promise.all([
+        getPodDetail({ cluster_id: clusterId, namespace: record.namespace, name: record.name }),
+        getPodEvents({ cluster_id: clusterId, namespace: record.namespace, name: record.name }),
+      ]);
+      setDetail(d);
+      setEvents(e.list || []);
+    } catch {
+      setDetail(null);
+      setEvents([]);
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
   function closeExecSocket() {
@@ -442,7 +432,7 @@ export function PodPage() {
       fontFamily:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
       fontSize: 12,
-      theme: { background: "#0f172a" },
+      theme: { background: "#141414" },
       scrollback: 5000,
     });
     const fit = new FitAddon();
@@ -869,43 +859,32 @@ export function PodPage() {
 
   return (
     <div className="page-stack">
-      <PageTelemetryHeader
-        label="[ K8S / PODS ]"
+      <OpsPageHeader
         title="Pod 管理"
-        subtitle="跨集群 Pod 生命周期、诊断、日志与终端会话"
-        meta={[
-          `CLUSTER / ${clusterId || "NONE"}`,
-          `NS / ${namespace || "ALL"}`,
-          loading ? "SYNC / PENDING" : `ROWS / ${pods.length}`,
-        ]}
+        description="跨集群 Pod 生命周期、诊断、日志与终端会话"
+        breadcrumbs={[{ title: "Kubernetes" }, { title: "Pod" }]}
+        meta={
+          <span>
+            {clusterId ? `集群 #${clusterId} · ${namespace}` : "未选择集群"} · {loading ? "加载中" : `${pods.length} 条`}
+          </span>
+        }
       />
-      <div className="toolbar" style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
-        <Space wrap>
-        <Select
-          placeholder="选择集群"
-          style={{ minWidth: 240 }}
-          value={clusterId}
-          onChange={(v) => setClusterId(v)}
-          options={clusterOptions}
-        />
-        <Select
-          placeholder="命名空间"
-          style={{ minWidth: 200 }}
-          value={namespace}
-          onChange={setNamespace}
-          options={namespaceOptions}
-        />
-        <Input.Search
-          allowClear
-          placeholder="搜索 Pod 名称/节点"
-          style={{ width: 260 }}
-          onSearch={(v) => {
-            setKeyword(v);
-            void loadPods(v);
-          }}
-        />
-        </Space>
-        <Space>
+      <K8sPageToolbar
+        clusterId={clusterId}
+        namespace={namespace}
+        clusterOptions={clusterOptions}
+        namespaceOptions={namespaceOptions}
+        searchPlaceholder="搜索 Pod 名称/节点"
+        onClusterChange={setClusterId}
+        onNamespaceChange={setNamespace}
+        onSearch={(v) => {
+          setKeyword(v);
+          void loadPods(v);
+        }}
+        onRefresh={() => void loadPods()}
+        watchLive={watchLive}
+        onWatchChange={setWatchLive}
+        primaryAction={
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -919,74 +898,53 @@ export function PodPage() {
           >
             创建 Pod
           </Button>
-        <Button icon={<ReloadOutlined />} onClick={() => void loadPods()}>
-          刷新
-        </Button>
-        <Space size={4}>
-          <span>实时 Watch</span>
-          <Switch checked={watchLive} onChange={setWatchLive} />
-        </Space>
-      </Space>
-      </div>
-      <Table
+        }
+      />
+      <div className="pod-workbench">
+        <div className="pod-workbench__list">
+          <Table
+            size="small"
             rowKey={(r) => `${r.namespace}/${r.name}`}
             loading={loading}
             dataSource={pods}
-            pagination={{ pageSize: 10 }}
-            scroll={{ x: 2200 }}
+            pagination={{ pageSize: 10, showSizeChanger: true, size: "small" }}
+            scroll={{ x: 1200 }}
             onRow={(record) => ({ onClick: () => void loadDetail(record) })}
-            rowClassName={(record) => (selected && `${record.namespace}/${record.name}` === `${selected.namespace}/${selected.name}` ? "ant-table-row-selected" : "")}
+            rowClassName={(record) =>
+              selected && `${record.namespace}/${record.name}` === `${selected.namespace}/${selected.name}`
+                ? "ant-table-row-selected"
+                : ""
+            }
             columns={[
-              { title: "Pod 名称", dataIndex: "name", width: 160, fixed: "left" },
-              { title: "命名空间", dataIndex: "namespace", width: 120 },
-              { title: "节点", dataIndex: "node_name", width: 140 },
+              { title: "Pod 名称", dataIndex: "name", width: 160, fixed: "left", ellipsis: true },
+              { title: "节点", dataIndex: "node_name", width: 120, ellipsis: true },
               {
-                title: "容器 / 镜像",
+                title: "镜像",
                 dataIndex: "containers_text",
-                width: 260,
-                render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+                width: 200,
+                ellipsis: true,
+                render: (v?: string) => v || "-",
               },
-              { title: "重启", dataIndex: "restart_count", width: 72 },
+              { title: "重启", dataIndex: "restart_count", width: 64 },
               {
-                title: "实时用量",
+                title: "用量",
                 key: "usage_rt",
-                width: 130,
+                width: 110,
                 render: (_: unknown, r: PodItem) => (
-                  <Tooltip title="CPU / 内存（需 metrics-server）">
-                    <span>
-                      <RealtimeUsageText cpu={r.cpu_usage} mem={r.mem_usage} />
-                    </span>
+                  <Tooltip title="CPU / 内存">
+                    <RealtimeUsageText cpu={r.cpu_usage} mem={r.mem_usage} />
                   </Tooltip>
                 ),
               },
-              {
-                title: "资源设定",
-                dataIndex: "resource_text",
-                width: 168,
-                render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 11 }}>{v || "-"}</Typography.Text>,
-              },
-              {
-                title: "CPU 资源",
-                key: "cpu_bars",
-                width: 172,
-                render: (_: unknown, r: PodItem) => <PodCpuUsageBars row={r} />,
-              },
-              {
-                title: "内存资源",
-                key: "mem_bars",
-                width: 172,
-                render: (_: unknown, r: PodItem) => <PodMemUsageBars row={r} />,
-              },
-              { title: "PodIP", dataIndex: "pod_ip", width: 120 },
-              { title: "QoS", dataIndex: "qos_class", width: 88 },
-              { title: "状态", dataIndex: "phase", width: 100, render: (phase: string) => <Tag color={phaseColor(phase)}>{phase || "-"}</Tag> },
-              { title: "启动时间", dataIndex: "start_time", width: 170, render: (v: string) => formatDateTime(v) },
+              { title: "状态", dataIndex: "phase", width: 96, render: (phase: string) => <PhaseTag phase={phase} /> },
+              { title: "启动时间", dataIndex: "start_time", width: 150, render: (v: string) => formatDateTime(v) },
               {
                 title: "操作",
                 key: "action",
-                width: 200,
+                width: 140,
                 fixed: "right",
                 render: (_: unknown, record: PodItem) => {
+                  const stop = (e: MouseEvent) => e.stopPropagation();
                   const moreItems: MenuProps["items"] = [
                     {
                       key: "edit",
@@ -1039,15 +997,12 @@ export function PodPage() {
                     },
                   ];
                   return (
-                    <Space size={0} wrap>
-                      <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => { void loadDetail(record); setDetailOpen(true); }}>
-                        详情
-                      </Button>
-                      <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => void handleViewLogs(record)}>
+                    <Space size={0} wrap onClick={stop}>
+                      <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => void openPodLogsInline(record)}>
                         日志
                       </Button>
                       <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
-                        <Button type="link" size="small">
+                        <Button type="link" size="small" onClick={stop}>
                           更多 <DownOutlined />
                         </Button>
                       </Dropdown>
@@ -1056,9 +1011,86 @@ export function PodPage() {
                 },
               },
             ]}
-      />
+          />
+        </div>
+        <div className="pod-workbench__detail">
+          <PodDetailPanel
+            selected={selected}
+            detail={detail}
+            events={events}
+            loading={detailLoading}
+            activeTab={detailTab}
+            onTabChange={(key) => {
+              setDetailTab(key);
+              if (key === "logs" && selected && !logsText && !logsLoading) {
+                void loadLogsForPod(selected, { tailLines: 500 });
+              }
+            }}
+            logsPanel={
+              selected ? (
+                <PodLogsPanel
+                  loading={logsLoading}
+                  streaming={streaming}
+                  logsText={logsText}
+                  containerOptions={logContainerOptions}
+                  container={logsContainer}
+                  onContainerChange={(v) => setLogsContainer(v)}
+                  onFetch={() => selected && void loadLogsForPod(selected, { tailLines: 1000 })}
+                  onDownload={() => void handleDownloadLogs()}
+                  onStartStream={() => void startLogStream()}
+                  onStopStream={stopLogStream}
+                />
+              ) : null
+            }
+            onExec={
+              selected
+                ? () => {
+                    setExecOpen(true);
+                  }
+                : undefined
+            }
+            onDiagnose={selected ? () => void handleDiagnose(selected) : undefined}
+            onFiles={
+              selected
+                ? () => {
+                    setFileOpen(true);
+                    setFileContent("");
+                    void loadFiles(selected, "/");
+                  }
+                : undefined
+            }
+            onRestart={selected ? () => void handleRestartPod(selected) : undefined}
+            onDelete={
+              selected
+                ? () => {
+                    setDeleteTarget(selected);
+                    setDeleteDialogOpen(true);
+                  }
+                : undefined
+            }
+            onEdit={selected ? () => void openEditPod(selected) : undefined}
+            onExpand={
+              selected
+                ? () => {
+                    void loadDetail(selected);
+                    setDetailOpen(true);
+                  }
+                : undefined
+            }
+          />
+        </div>
+      </div>
 
-      {/* 日志查看对话框 */}
+      {selected && detailTab === "logs" ? (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+          需要关键字、时间范围等高级筛选？
+          <Button type="link" size="small" style={{ paddingInline: 4 }} onClick={() => void handleViewLogs(selected, "modal")}>
+            打开日志对话框
+          </Button>
+        </Typography.Paragraph>
+      ) : null}
+
+      {/* 日志高级筛选对话框 */}
       <Modal
         title={`Pod 日志 - ${logsTitle}`}
         open={logsOpen}
@@ -1108,21 +1140,7 @@ export function PodPage() {
         {logsLoading ? (
           <Typography.Text>日志加载中...</Typography.Text>
         ) : (
-          <pre
-            style={{
-              maxHeight: 520,
-              overflow: "auto",
-              background: "#0f172a",
-              color: "#e2e8f0",
-              padding: 12,
-              borderRadius: 8,
-              margin: 0,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-            }}
-          >
-            {logsText || "暂无日志"}
-          </pre>
+          <pre className="code-block-panel">{logsText || "暂无日志"}</pre>
         )}
       </Modal>
       <Drawer
@@ -1171,7 +1189,7 @@ export function PodPage() {
                   dataIndex: "log_snippet",
                   render: (v: string) =>
                     v ? (
-                      <pre style={{ margin: 0, maxHeight: 120, overflow: "auto", fontSize: 11, background: "#0f172a", color: "#e2e8f0", padding: 8, borderRadius: 4 }}>
+                      <pre className="code-block-panel" style={{ maxHeight: 120, fontSize: 11, padding: 8 }}>
                         {v}
                       </pre>
                     ) : (

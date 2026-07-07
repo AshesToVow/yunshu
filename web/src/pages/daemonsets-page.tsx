@@ -180,6 +180,7 @@ export function DaemonsetsPage() {
       <YamlCrudPage<WorkloadItem, WorkloadDetail>
         title="DaemonSet 控制器管理"
         needNamespace
+        watchResource="daemonsets"
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
