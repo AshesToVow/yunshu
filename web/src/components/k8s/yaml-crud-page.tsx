@@ -1,7 +1,7 @@
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import { Button, Card, Collapse, Drawer, Input, Modal, Select, Space, Table, Tabs, Typography, message } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { ColumnType, ColumnsType } from "antd/es/table";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import YAML from "yaml";
 import type { K8sDeleteOptions } from "../../services/service-factory";
 import { K8sPageToolbar } from "../ops/k8s-page-toolbar";
@@ -10,6 +10,18 @@ import { useK8sContext } from "../../hooks/use-k8s-context";
 import { useK8sWatch } from "../../hooks/use-k8s-watch";
 import { useEditGuardStore } from "../../stores/edit-guard-store";
 import { K8sDeleteDialog } from "./k8s-delete-dialog";
+
+function sumColumnWidths(columns: ColumnType<unknown>[], fallback = 120): number {
+  return columns.reduce((sum, col) => {
+    const w = col.width;
+    if (typeof w === "number") return sum + w;
+    if (typeof w === "string") {
+      const n = Number.parseInt(w, 10);
+      if (Number.isFinite(n)) return sum + n;
+    }
+    return sum + fallback;
+  }, 0);
+}
 
 export type ClusterOption = { label: string; value: number; disabled?: boolean };
 export type NamespaceOption = { label: string; value: string };
@@ -88,7 +100,7 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   headerExtra?: React.ReactNode;
   /** 表格上方摘要条（节点/命名空间统计等） */
   renderSummary?: (items: TItem[], ctx: YamlCrudToolbarCtx) => React.ReactNode;
-  /** 表格横向滚动宽度，列多时可加大（默认 1400） */
+  /** 表格横向滚动最小宽度；未设或小于列宽总和时自动按列宽 + 操作列计算 */
   tableScrollX?: number | string;
 }
 
@@ -116,7 +128,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     description,
     headerExtra,
     renderSummary,
-    tableScrollX = 1400,
+    tableScrollX,
   } = props;
   const {
     clusterId,
@@ -274,6 +286,13 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
       </Space>
     ),
   };
+
+  const resolvedScrollX = useMemo(() => {
+    const computed = sumColumnWidths(columns as ColumnType<unknown>[]) + actionColumnWidth;
+    if (tableScrollX === "max-content") return computed;
+    if (typeof tableScrollX === "number") return Math.max(tableScrollX, computed);
+    return computed;
+  }, [columns, actionColumnWidth, tableScrollX]);
 
   const toolbarCtx: YamlCrudToolbarCtx = {
     clusterId,
@@ -447,7 +466,7 @@ metadata:
           dataSource={data}
           pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
           columns={[...columns, actionCol]}
-          scroll={{ x: tableScrollX }}
+          scroll={{ x: resolvedScrollX }}
           tableLayout="fixed"
         />
       </div>

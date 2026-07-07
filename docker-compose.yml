@@ -1,11 +1,14 @@
 version: '3.3'
 
+# 默认：MySQL 在宿主机（非容器），仅启动 redis + backend + frontend。
+# 若要用容器 MySQL：docker-compose --profile container-mysql up -d
 services:
   mysql:
+    profiles: ["container-mysql"]
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:5.7.22
     container_name: yunshu-mysql
     restart: unless-stopped
-    mem_limit: 400m
+    mem_limit: 768m
     cpus: 0.6
     environment:
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-YunshuDB@2026Secure!}"
@@ -14,30 +17,22 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - /export/mysql_data:/var/lib/mysql
+      - /export/mysql_data:/var/lib/mysql:Z
       - ./configs/yunshu_full_20260507.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-      - --default-authentication-plugin=mysql_native_password
       - --max-connections=50
-      - --innodb-buffer-pool-size=128M
-      - --innodb-log-buffer-size=8M
-      - --key-buffer-size=8M
-      - --max-heap-table-size=16M
-      - --tmp-table-size=16M
-      - --performance-schema=OFF
+      - --innodb-buffer-pool-size=64M
       - --skip-name-resolve
-      - --explicit_defaults_for_timestamp=1
-      - --default-time-zone=+08:00
     networks:
       - yunshu-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-YunshuDB@2026Secure!}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 120s
 
   redis:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.4.2-alpine
@@ -86,17 +81,20 @@ services:
     cpus: 0.6
     ports:
       - "8080:8080"
-      - "18080:18080" # gRPC：对外暴露（原 127.0.0.1 仅本机；去掉后局域网/公网可连，请配合防火墙与鉴权）
+      - "18080:18080"
+    extra_hosts:
+      # Linux 下让容器访问宿主机 MySQL（同机非容器部署）
+      - "host.docker.internal:host-gateway"
     environment:
       - GIN_MODE=release
       - APP_ENV=prod
-      # 与宿主机/业务常用时区一致；勿用 UTC，否则 slog 等本地时间日志会差 8 小时
       - TZ=Asia/Shanghai
-      - MYSQL_HOST=yunshu-mysql
-      - MYSQL_PORT=3306
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD:-YunshuDB@2026Secure!}
-      - MYSQL_DB_NAME=yunshu
+      # 宿主机 MySQL：默认 host.docker.internal；也可在 .env 设 MYSQL_HOST=10.10.10.4
+      - MYSQL_HOST=${MYSQL_HOST:-host.docker.internal}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD:-YunshuDB@2026Secure!}}
+      - MYSQL_DB_NAME=${MYSQL_DB_NAME:-yunshu}
       - REDIS_ADDR=yunshu-redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-YunshuRedis@2026Secure!}
       - JWT_SECRET=${JWT_SECRET:-YunshuJWTSecretKey2026ChangeInProduction}
@@ -105,8 +103,6 @@ services:
       - ./configs:/app/configs:ro
       - ./logs:/app/logs
     depends_on:
-      mysql:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -123,7 +119,8 @@ services:
     environment:
       - TZ=Asia/Shanghai
     ports:
-      - "80:80"
+      # 宿主机 80 已被 Harbor 占用，yunshu 前端改用 8083
+      - "8083:80"
     depends_on:
       backend:
         condition: service_started

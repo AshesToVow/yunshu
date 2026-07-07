@@ -125,19 +125,29 @@
 
 .yaml-crud-card > .ant-card-body {
   min-width: 0;
-  overflow: hidden;
 }
 
 /* 宽表格横向滚动限制在卡片内，避免撑开整页 */
 .k8s-table-scroll-host {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
 }
 
 .k8s-table-scroll-host .ant-table-wrapper {
   min-width: 0;
+}
+
+.k8s-table-scroll-host .ant-table-container {
+  overflow-x: auto !important;
+}
+
+.k8s-table-scroll-host .ant-table-pagination {
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
 .k8s-table-scroll-host .ant-table-cell {

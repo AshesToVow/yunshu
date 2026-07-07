@@ -10,8 +10,8 @@ import (
 var configPath string
 
 var rootCmd = &cobra.Command{
-	Use:   "permission-system",
-	Short: "A permission management system built with Gin, MySQL, Redis and Casbin",
+	Use:   "yunshu",
+	Short: "A cloud platform built with Gin, MySQL, Redis and Casbin",
 }
 
 func init() {

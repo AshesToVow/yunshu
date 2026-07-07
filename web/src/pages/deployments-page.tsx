@@ -255,8 +255,8 @@ export function DeploymentsPage() {
         return <Progress percent={Math.max(0, Math.min(100, p))} size="small" format={() => r.ready || `${p}%`} />;
       },
     },
+    { title: "运行时长", dataIndex: "age", width: 90, fixed: "right" },
     { title: "条件", dataIndex: "conditions_text", width: 160, fixed: "right" },
-    { title: "运行时长", dataIndex: "age", width: 90 },
     { title: "创建时间", dataIndex: "creation_time", width: 180, fixed: "right" },
   ];
 
@@ -266,7 +266,6 @@ export function DeploymentsPage() {
         title="Deployment 控制器管理"
         needNamespace
         watchResource="deployments"
-        tableScrollX={2100}
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

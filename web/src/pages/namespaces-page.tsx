@@ -5,7 +5,6 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NamespaceFormCreateDrawer } from "../components/k8s/k8s-resource-form-drawers";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
-import { K8sSummaryRow } from "../components/ops/k8s-summary-row";
 import { applyNamespace, deleteNamespace, getNamespaceDetail, listNamespaces } from "../services/namespaces";
 
 type Item = {
@@ -140,19 +139,6 @@ export function NamespacesPage() {
       description="命名空间配额、资源用量与元数据"
       needNamespace={false}
       columns={columns}
-      renderSummary={(items) => {
-        const active = items.filter((n) => n.status === "Active").length;
-        const pods = items.reduce((sum, n) => sum + (typeof n.pod_count === "number" ? n.pod_count : 0), 0);
-        return (
-          <K8sSummaryRow
-            items={[
-              { label: "命名空间", value: items.length },
-              { label: "Active", value: active, accent: "#34d399" },
-              { label: "Pod 总数", value: pods },
-            ]}
-          />
-        );
-      }}
       extraRowActions={(record, { clusterId }) => (
         <Button
           type="link"

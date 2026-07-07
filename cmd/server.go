@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"log/slog"
 	"yunshu/internal/bootstrap"
 	grpcclient "yunshu/internal/grpc/client"
 	grpcserver "yunshu/internal/grpc/server"
 	"yunshu/internal/handler"
 	"yunshu/internal/model"
-	"log/slog"
 
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/password"
@@ -34,7 +34,7 @@ func init() {
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
-	Short: "Start permission system server",
+	Short: "Start yunshu platform server",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		app, err := bootstrap.BuildServerApp(configPath)
 		if err != nil {
