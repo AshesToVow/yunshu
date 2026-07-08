@@ -247,7 +247,7 @@ cat /var/lib/jenkins/secrets/initialAdminPassword
 | -------- | ------------ | --------------------------------- |
 | `npm`    | Node 自带 npm  | `buildType=npm` 时 `tool('npm')`   |
 | `yarn`   | Yarn 可执行文件   | `buildType=yarn` 时 `tool('yarn')` |
-| `nodejs` | Node.js 安装目录 | 可与 npm 配合安装                       |
+| `nodejs` | Node.js 安装目录 | 可与 npm 配合安装；**多版本**时 Name 设为 `node18`/`node20` 等，由 Job 参数 `nodeToolName` 选择（见 [cicd-jenkins-node-tool.md](./cicd-jenkins-node-tool.md)） |
 
 
 > 工具 **名称** 必须与 Jenkinsfile / 共享库中 `tool('npm')`、`tool('yarn')` 完全一致。
@@ -731,6 +731,7 @@ Global Pipeline Libraries 名称 `**jenkins_share_libraries**` 必须与 Jenkins
 | `branchName`          | **Active Choices** / String | `main`                                  | 构建分支（**推荐非 Reactive**，见 [6.3 节](#分支选择自动从-srcurl-仓库获取)） |
 | `buildType`           | Choice                      | **npm** / **yarn**                      | 包管理器（见第九节）                                             |
 | `buildshell`          | String                      | `run build`                             | 构建命令（**不要**写 `npm run` 前缀）                             |
+| `nodeToolName`        | String                      | `node20`                                | **Node.js Global Tool 名称**（与 Jenkins 全局工具 Name 一致，如 node18/node20；Yunshu CI 配置同步） |
 | `destPath`            | String                      | `/export/frontend/k8s-demo-fe`          | 目标机站点目录                                                |
 | `destIp`              | String                      | `10.10.10.103`                          | 部署服务器，逗号分隔多机                                           |
 | `deployUser`          | String                      | `root`                                  | 部署目录**属主**，默认 `root`                                   |

@@ -198,6 +198,7 @@ func buildFrontendParams(params map[string]string, ci *model.CicdCiConfig, in Bu
 	}
 	params["cleanNpmCache"] = boolStr(ci.CleanNpmCache)
 	params["cleanNodeModules"] = boolStr(ci.CleanNodeModules)
+	params["nodeToolName"] = model.NodeToolNameFromConfig(ci)
 	retain := in.Cfg.DefaultArtifactRetain
 	if retain <= 0 {
 		retain = 10

@@ -230,6 +230,7 @@ func BuildPipelineJobConfigXML(in JobTemplateInput) string {
 		)
 	} else if serviceType == model.CicdServiceTypeFrontend {
 		params.WriteString(stringParam("destPath", buildPath, "目标机部署目录"))
+		params.WriteString(stringParam("nodeToolName", model.NodeToolNameFromConfig(ci), "Node.js Global Tool 名称（如 node18/node20，与 Jenkins 全局工具一致）"))
 		params.WriteString(choiceParam("npmInstallMode", []string{"install", "ci", "skip"}, "install"))
 		params.WriteString(choiceParam("cleanNpmCache", []string{"false", "true"}, "false"))
 		params.WriteString(choiceParam("cleanNodeModules", []string{"false", "true"}, "false"))

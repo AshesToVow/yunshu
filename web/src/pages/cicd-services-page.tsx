@@ -144,6 +144,7 @@ function defaultCiFormValues(svc: CicdServiceItem) {
     build_shell: isFront ? "run build" : "clean package -DskipTests",
     build_path: isFront ? "dist" : "target",
     npm_install_mode: "install",
+    node_version: "node20",
     java_tool_name: "jdk8",
     project_name: svc.identifier,
     description: svc.name,
@@ -834,8 +835,18 @@ export function CicdServicesPage() {
           )}
           {isFrontend && (
             <>
-              <Form.Item name="node_version" label="Node.js 版本">
-                <Input placeholder="Node.js 14.17.0" />
+              <Form.Item
+                name="node_version"
+                label="Node.js 工具"
+                extra="与 Jenkins → Global Tool Configuration 中 Node 安装名称一致（如 node18、node20）"
+              >
+                <Select
+                  options={[
+                    { label: "Node 18 LTS (node18)", value: "node18" },
+                    { label: "Node 20 LTS (node20)", value: "node20" },
+                    { label: "Node 22 (node22)", value: "node22" },
+                  ]}
+                />
               </Form.Item>
               <Form.Item name="npm_install_mode" label="依赖安装">
                 <Select options={npmInstallModes.map((o) => ({ label: o.label, value: o.value }))} />

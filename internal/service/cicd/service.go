@@ -377,6 +377,9 @@ func (s *Service) UpsertCiConfig(ctx context.Context, projectID, serviceID uint,
 	}
 	row.Version = strings.TrimSpace(req.Version)
 	row.NodeVersion = strings.TrimSpace(req.NodeVersion)
+	if row.NodeVersion == "" {
+		row.NodeVersion = model.DefaultNodeToolName
+	}
 	row.NpmInstallMode = strings.TrimSpace(req.NpmInstallMode)
 	row.CleanNpmCache = req.CleanNpmCache
 	row.CleanNodeModules = req.CleanNodeModules

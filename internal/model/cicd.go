@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -16,6 +17,9 @@ const (
 
 	CicdRefTypeBranch = "branch"
 	CicdRefTypeTag    = "tag"
+
+	// DefaultNodeToolName Jenkins Global Tool Configuration 中 Node 安装名称的默认值。
+	DefaultNodeToolName = "node20"
 
 	CicdRunStatusPending   = "pending"
 	CicdRunStatusRunning   = "running"
@@ -89,6 +93,17 @@ type CicdCiConfig struct {
 }
 
 func (CicdCiConfig) TableName() string { return "cicd_ci_configs" }
+
+// NodeToolName 返回 Jenkins Job 参数 nodeToolName（与 Global Tool 名称一致）。
+func NodeToolNameFromConfig(c *CicdCiConfig) string {
+	if c == nil {
+		return DefaultNodeToolName
+	}
+	if v := strings.TrimSpace(c.NodeVersion); v != "" {
+		return v
+	}
+	return DefaultNodeToolName
+}
 
 // CicdDeployConfig 发布配置（常规 SSH 或容器化，可多条按环境）。
 type CicdDeployConfig struct {
