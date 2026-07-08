@@ -163,7 +163,7 @@ func (c *Client) Exec(ctx context.Context, cmd string, maxBytes int) (ExecResult
 	session.Stderr = stderrW
 
 	done := make(chan error, 1)
-	go func() { done <- session.Run(cmd) }()
+	safeGo(func() { done <- session.Run(cmd) })
 
 	var runErr error
 	select {
@@ -221,20 +221,20 @@ func (c *Client) StreamLines(ctx context.Context, cmd string, onLine func(line s
 	}
 
 	errCh := make(chan error, 2)
-	go func() {
+	safeGo(func() {
 		sc := bufio.NewScanner(stdout)
 		for sc.Scan() {
 			onLine(sc.Text())
 		}
 		errCh <- sc.Err()
-	}()
-	go func() {
+	})
+	safeGo(func() {
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
 			onLine(sc.Text())
 		}
 		errCh <- sc.Err()
-	}()
+	})
 
 	select {
 	case <-ctx.Done():
@@ -278,15 +278,15 @@ func (c *Client) ShellStream(ctx context.Context, stdin io.Reader, stdout, stder
 	}
 
 	if sizes != nil {
-		go func() {
+		safeGo(func() {
 			for s := range sizes {
 				_ = session.WindowChange(int(s.Rows), int(s.Cols))
 			}
-		}()
+		})
 	}
 
 	done := make(chan error, 1)
-	go func() { done <- session.Wait() }()
+	safeGo(func() { done <- session.Wait() })
 
 	select {
 	case <-ctx.Done():

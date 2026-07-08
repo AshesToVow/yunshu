@@ -172,7 +172,7 @@ func (h *CicdHandler) CreateDeployConfig(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req cicd.DeployConfigUpsertRequest) (*model.CicdDeployConfig, error) {
+	ServeJSON201(c, func(ctx context.Context, req cicd.DeployConfigUpsertRequest) (*cicd.DeployConfigUpsertResult, error) {
 		return h.svc.UpsertDeployConfig(ctx, projectID, serviceID, 0, req)
 	})
 }
@@ -198,12 +198,12 @@ func (h *CicdHandler) UpdateDeployConfig(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	row, err := h.svc.UpsertDeployConfig(c.Request.Context(), projectID, serviceID, configID, req)
+	result, err := h.svc.UpsertDeployConfig(c.Request.Context(), projectID, serviceID, configID, req)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, row)
+	response.Success(c, result)
 }
 
 func (h *CicdHandler) DeleteDeployConfig(c *gin.Context) {

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net"
 
 	pb "yunshu/internal/grpc/proto"
@@ -33,6 +34,11 @@ func Start(addr string, impl *LogPlatformServer, internalToken string, maxRecvBy
 		return nil, err
 	}
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Default().With("component", "grpc").Error("serve panic", "recover", r)
+			}
+		}()
 		_ = s.Serve(lis)
 	}()
 	return &RuntimeServer{grpcServer: s, listener: lis}, nil
@@ -41,6 +47,11 @@ func Start(addr string, impl *LogPlatformServer, internalToken string, maxRecvBy
 func (s *RuntimeServer) Stop(ctx context.Context) {
 	done := make(chan struct{})
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Default().With("component", "grpc").Error("graceful stop panic", "recover", r)
+			}
+		}()
 		s.grpcServer.GracefulStop()
 		close(done)
 	}()

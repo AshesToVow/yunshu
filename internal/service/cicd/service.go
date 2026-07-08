@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -447,6 +448,13 @@ type DeployConfigListItem struct {
 	NodesStatus string `json:"nodes_status"`
 }
 
+// DeployConfigUpsertResult 保存发布配置结果（DB 保存与 Jenkins 同步解耦）。
+type DeployConfigUpsertResult struct {
+	Config           *model.CicdDeployConfig `json:"config"`
+	JenkinsSync      *JenkinsSyncResult      `json:"jenkins_sync,omitempty"`
+	JenkinsSyncError string                  `json:"jenkins_sync_error,omitempty"`
+}
+
 func (s *Service) ListDeployConfigs(ctx context.Context, projectID, serviceID uint) ([]DeployConfigListItem, error) {
 	if _, err := s.loadService(ctx, projectID, serviceID); err != nil {
 		return nil, err
@@ -522,7 +530,7 @@ func summarizeDeployNodes(dc model.CicdDeployConfig, servers map[uint]model.Serv
 	return len(ids), "部分异常"
 }
 
-func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, configID uint, req DeployConfigUpsertRequest) (*model.CicdDeployConfig, error) {
+func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, configID uint, req DeployConfigUpsertRequest) (*DeployConfigUpsertResult, error) {
 	if _, err := s.loadService(ctx, projectID, serviceID); err != nil {
 		return nil, err
 	}
@@ -625,14 +633,24 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 			return nil, err
 		}
 	}
+	result := &DeployConfigUpsertResult{Config: &row}
 	if strings.EqualFold(row.DeployKind, model.CicdDeployKindContainer) {
-		if svc, err := s.loadService(ctx, projectID, serviceID); err == nil {
-			if ci, err := s.requireCiConfig(ctx, projectID, serviceID); err == nil {
-				_, _ = s.syncJenkinsJob(ctx, svc, ci)
-			}
+		svc, svcErr := s.loadService(ctx, projectID, serviceID)
+		if svcErr != nil {
+			slog.Default().With("component", "cicd").Warn("skip jenkins sync after deploy config save: load service failed",
+				"service_id", serviceID, "config_id", row.ID, "error", svcErr)
+		} else if ci, ciErr := s.requireCiConfig(ctx, projectID, serviceID); ciErr != nil {
+			slog.Default().With("component", "cicd").Warn("skip jenkins sync after deploy config save: ci config missing",
+				"service_id", serviceID, "config_id", row.ID, "error", ciErr)
+		} else if syncResult, syncErr := s.syncJenkinsJob(ctx, svc, ci); syncErr != nil {
+			result.JenkinsSyncError = jenkins.HumanizeAPIError(syncErr)
+			slog.Default().With("component", "cicd").Warn("jenkins job sync failed after deploy config save",
+				"service_id", serviceID, "config_id", row.ID, "error", syncErr)
+		} else {
+			result.JenkinsSync = syncResult
 		}
 	}
-	return &row, nil
+	return result, nil
 }
 
 func (s *Service) DeleteDeployConfig(ctx context.Context, projectID, serviceID, configID uint) error {

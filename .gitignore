@@ -11,7 +11,7 @@
 *.test
 *.out
 *.tar
-
+.agent/
 # Project-specific binaries
 log-agent-linux-amd64
 

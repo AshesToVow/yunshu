@@ -115,14 +115,18 @@ var overviewSeriesColors = []string{
 	"#64748b", "#eab308", "#22c55e", "#ec4899", "#06b6d4",
 }
 
-func (s *OverviewService) resolveProjectScope(ctx context.Context) (projectIDs []uint, unrestricted bool) {
+func (s *OverviewService) resolveProjectScope(ctx context.Context) (projectIDs []uint, unrestricted bool, err error) {
 	unrestricted = true
 	u, ok := auth.RequestUserFromContext(ctx)
-	if ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes) && s.memberRepo != nil {
-		unrestricted = false
-		projectIDs, _ = s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+	if !ok || u == nil || auth.IsSuperAdminRole(u.RoleCodes) || s.memberRepo == nil {
+		return nil, unrestricted, nil
 	}
-	return projectIDs, unrestricted
+	unrestricted = false
+	projectIDs, err = s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+	if err != nil {
+		return nil, false, bizerrors.Pass(ctx, "overview", "resolveProjectScope", err)
+	}
+	return projectIDs, unrestricted, nil
 }
 
 func overviewMonthRange(now time.Time) (start, end time.Time, dayLabels []string, dayIndex map[string]int) {
@@ -148,7 +152,10 @@ func (s *OverviewService) ProjectLaunches(ctx context.Context) (*OverviewProject
 	if s.repo == nil {
 		return nil, constants.ErrInternal
 	}
-	projectIDs, unrestricted := s.resolveProjectScope(ctx)
+	projectIDs, unrestricted, err := s.resolveProjectScope(ctx)
+	if err != nil {
+		return nil, err
+	}
 	start, end, dayLabels, dayIndex := overviewMonthRange(time.Now())
 	rows, err := s.repo.CountReleaseLaunchesByProjectDay(ctx, start, end, projectIDs, unrestricted)
 	if err != nil {
@@ -208,7 +215,10 @@ func (s *OverviewService) ReleaseByPerson(ctx context.Context) (*OverviewRelease
 	if s.repo == nil {
 		return nil, constants.ErrInternal
 	}
-	projectIDs, unrestricted := s.resolveProjectScope(ctx)
+	projectIDs, unrestricted, err := s.resolveProjectScope(ctx)
+	if err != nil {
+		return nil, err
+	}
 	start, end, _, _ := overviewMonthRange(time.Now())
 	rows, err := s.repo.CountReleaseRunsByPerson(ctx, start, end, projectIDs, unrestricted)
 	if err != nil {
@@ -252,13 +262,11 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 	}
 	s.fillOverviewAlertAndAgents(ctx, out)
 
-	var clusters []model.K8sCluster
-	unrestricted := true
-	var projectIDs []uint
-	if u, ok := auth.RequestUserFromContext(ctx); ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes) && s.memberRepo != nil {
-		unrestricted = false
-		projectIDs, _ = s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+	projectIDs, unrestricted, err := s.resolveProjectScope(ctx)
+	if err != nil {
+		return nil, err
 	}
+	var clusters []model.K8sCluster
 	clusters, err = s.repo.ListEnabledClusters(ctx, projectIDs, unrestricted)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "overview", "Get", err)
