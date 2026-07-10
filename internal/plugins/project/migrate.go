@@ -1,9 +1,8 @@
 package project
 
 import (
-	"strings"
-
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/database"
 
 	"gorm.io/gorm"
 )
@@ -26,7 +25,11 @@ func migrateProjectsDefaultMeta(db *gorm.DB) error {
 }
 
 func migrateAgentDiscoveryUniqueIndex(db *gorm.DB) error {
-	if db == nil || db.Dialector.Name() != "mysql" {
+	if db == nil {
+		return nil
+	}
+	dialect := database.DialectName(db)
+	if dialect != "mysql" && dialect != "postgres" {
 		return nil
 	}
 	if !db.Migrator().HasTable("agent_discoveries") {
@@ -35,10 +38,11 @@ func migrateAgentDiscoveryUniqueIndex(db *gorm.DB) error {
 	if db.Migrator().HasIndex("agent_discoveries", "idx_agent_discovery_unique") {
 		return nil
 	}
-	err := db.Exec(
-		"CREATE UNIQUE INDEX idx_agent_discovery_unique ON agent_discoveries (project_id, server_id, kind, value(512))",
-	).Error
-	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+	sql, err := database.SQLCreateAgentDiscoveryUniqueIndex(dialect)
+	if err != nil {
+		return err
+	}
+	if err := db.Exec(sql).Error; err != nil && !database.IsDuplicateIndexError(err) {
 		return err
 	}
 	return nil

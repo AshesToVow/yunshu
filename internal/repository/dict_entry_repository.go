@@ -6,6 +6,7 @@ import (
 
 	"yunshu/internal/dictcategory"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/database"
 
 	"gorm.io/gorm"
 )
@@ -112,32 +113,12 @@ func (r *DictEntryRepository) DeleteByTypeAndValue(ctx context.Context, dictType
 
 // CleanupDuplicateTypeValue 删除重复字典项（按 dict_type + TRIM(value) 维度，仅保留最小 id）。
 func (r *DictEntryRepository) CleanupDuplicateTypeValue(ctx context.Context) error {
-	sql := `
-DELETE d1
-FROM dict_entries d1
-JOIN dict_entries d2
-  ON d1.dict_type = d2.dict_type
- AND TRIM(d1.value) = TRIM(d2.value)
- AND d1.id > d2.id
-WHERE d1.deleted_at IS NULL
-  AND d2.deleted_at IS NULL
-`
-	return r.db.WithContext(ctx).Exec(sql).Error
+	return r.db.WithContext(ctx).Exec(database.SQLDeleteDictDuplicatesByValue(database.DialectName(r.db))).Error
 }
 
 // CleanupDuplicateTypeLabel 删除重复字典项（按 dict_type + TRIM(label) 维度，仅保留最小 id）。
 func (r *DictEntryRepository) CleanupDuplicateTypeLabel(ctx context.Context) error {
-	sql := `
-DELETE d1
-FROM dict_entries d1
-JOIN dict_entries d2
-  ON d1.dict_type = d2.dict_type
- AND TRIM(d1.label) = TRIM(d2.label)
- AND d1.id > d2.id
-WHERE d1.deleted_at IS NULL
-  AND d2.deleted_at IS NULL
-`
-	return r.db.WithContext(ctx).Exec(sql).Error
+	return r.db.WithContext(ctx).Exec(database.SQLDeleteDictDuplicatesByLabel(database.DialectName(r.db))).Error
 }
 
 func (r *DictEntryRepository) List(ctx context.Context, dictType, keyword, category string, status *int, page, pageSize int) ([]model.DictEntry, int64, error) {

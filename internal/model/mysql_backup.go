@@ -41,7 +41,7 @@ type MysqlBackupInstance struct {
 	MysqlPort     int    `json:"mysql_port" gorm:"not null;default:3306"`
 	MysqlSocket   string `json:"mysql_socket" gorm:"size:512;comment:Unix socket 路径，配置后 mysqldump 优先走 socket"`
 	MysqlUser     string `json:"mysql_user" gorm:"size:128;not null"`
-	EncPassword   string `json:"-" gorm:"type:longtext;comment:加密后的 MySQL 密码"`
+	EncPassword   string `json:"-" gorm:"type:text;comment:加密后的 MySQL 密码"`
 	BackupMode    string `json:"backup_mode" gorm:"size:32;not null;default:'mysqldump'"`
 
 	// BackupScope：all | database | table（mysqldump 模式）

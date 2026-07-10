@@ -27,7 +27,7 @@ import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Select, Space, Spin, Sw
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { BRAND_EN_NAME } from "../constants/brand";
+import { BRAND_EN_NAME, BRAND_PRIMARY } from "../constants/brand";
 import { LogStreamDockBar } from "../components/log-stream-dock-bar";
 import { GlobalSearchModal } from "../components/global-search-modal";
 import { useAuth } from "../contexts/auth-context";
@@ -55,8 +55,8 @@ const defaultUIPreferences: UIPreferences = {
   showFullscreen: true,
   showThemeToggle: true,
   compactContent: false,
-  darkSider: true,
-  darkHeader: true,
+  darkSider: false,
+  darkHeader: false,
 };
 
 function loadUIPreferences(): UIPreferences {
@@ -130,7 +130,7 @@ export function AdminLayout() {
     return saved === "light" ? "light" : "dark";
   });
   const [accent, setAccent] = useState<string>(() => {
-    return window.localStorage.getItem("admin-theme-accent") ?? "#e61919";
+    return window.localStorage.getItem("admin-theme-accent") ?? BRAND_PRIMARY;
   });
 
   const activeLocale = resolveAppLocale(i18n.language);
@@ -451,7 +451,7 @@ export function AdminLayout() {
                     <div className="admin-settings-section">
                       <Typography.Text className="admin-settings-label">内置主题色</Typography.Text>
                       <div className="admin-accent-grid">
-                        {["#e61919", "#ff2a2a", "#0ea5e9", "#14b8a6", "#eab308", "#10b981", "#6366f1", "#7c3aed", "#f97316", "#dc2626", "#4b5563", "#050505"].map((item) => (
+                        {["#0d9488", "#14b8a6", "#0ea5e9", "#10b981", "#eab308", "#6366f1", "#7c3aed", "#f97316", "#dc2626", "#4b5563", "#050505"].map((item) => (
                           <button
                             key={item}
                             type="button"

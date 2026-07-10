@@ -857,6 +857,7 @@ func (s *Service) ListBuildRuns(ctx context.Context, q BuildRunListQuery) (*pagi
 	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	s.enrichBuildRunPackagePaths(ctx, rows)
 	svcNames := s.loadServiceNameMap(ctx, rows)
 	items := make([]BuildRunItem, 0, len(rows))
 	for _, row := range rows {
@@ -1118,34 +1119,70 @@ func (s *Service) syncPendingRuns(ctx context.Context) {
 	_ = s.db.WithContext(ctx).
 		Where("build_result = ? AND (package_path = '' OR package_path IS NULL)", model.CicdRunStatusSuccess).
 		Order("id DESC").
-		Limit(10).
+		Limit(30).
 		Find(&backfillBuilds).Error
 	for _, run := range backfillBuilds {
-		s.backfillBuildPackagePath(ctx, client, run)
+		s.backfillBuildArtifacts(ctx, client, run)
 	}
 	s.syncApprovalReminders(ctx)
 }
 
-func (s *Service) backfillBuildPackagePath(ctx context.Context, client *jenkins.Client, run model.CicdBuildRun) {
-	if run.BuildNumber <= 0 || strings.TrimSpace(run.PackagePath) != "" {
+func (s *Service) enrichBuildRunPackagePaths(ctx context.Context, rows []model.CicdBuildRun) {
+	client, _, err := s.jenkinsClient(ctx)
+	if err != nil {
+		return
+	}
+	for i := range rows {
+		if rows[i].BuildResult != model.CicdRunStatusSuccess {
+			continue
+		}
+		if strings.TrimSpace(rows[i].PackagePath) != "" && strings.TrimSpace(rows[i].ImageAddress) != "" {
+			continue
+		}
+		s.backfillBuildArtifacts(ctx, client, rows[i])
+		var updated model.CicdBuildRun
+		if err := s.db.WithContext(ctx).Select("package_path", "image_address").Where("id = ?", rows[i].ID).First(&updated).Error; err == nil {
+			rows[i].PackagePath = updated.PackagePath
+			rows[i].ImageAddress = updated.ImageAddress
+		}
+	}
+}
+
+func (s *Service) backfillBuildArtifacts(ctx context.Context, client *jenkins.Client, run model.CicdBuildRun) {
+	if run.BuildNumber <= 0 {
+		return
+	}
+	needPackage := strings.TrimSpace(run.PackagePath) == ""
+	needImage := strings.TrimSpace(run.ImageAddress) == ""
+	if !needPackage && !needImage {
 		return
 	}
 	var svc model.CicdService
 	if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
 		return
 	}
-	cfg := s.resolvedConfig(ctx)
-	bucket := dictconfig.MinIOBucketForService(cfg, svc.ServiceType)
-	if bucket == "" {
+	var ci model.CicdCiConfig
+	_ = s.db.WithContext(ctx).Where("service_id = ?", run.ServiceID).First(&ci).Error
+	jobName := resolveJenkinsJobName(&svc)
+	if jobName == "" {
 		return
 	}
-	logText, err := client.GetConsoleLog(ctx, svc.JenkinsJob, run.BuildNumber)
+	logText, err := client.GetConsoleLog(ctx, jobName, run.BuildNumber)
 	if err != nil {
 		return
 	}
-	if path := extractPackagePathFromConsole(logText, svc.JenkinsJob, bucket); path != "" {
-		_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Update("package_path", path).Error
+	artifacts := s.resolveBuildArtifactsFromLog(ctx, svc, ci, logText)
+	updates := map[string]any{}
+	if needPackage && strings.TrimSpace(artifacts.PackagePath) != "" {
+		updates["package_path"] = artifacts.PackagePath
 	}
+	if needImage && strings.TrimSpace(artifacts.ImageAddress) != "" {
+		updates["image_address"] = artifacts.ImageAddress
+	}
+	if len(updates) == 0 {
+		return
+	}
+	_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Updates(updates).Error
 }
 
 func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, run model.CicdBuildRun) {
@@ -1156,33 +1193,29 @@ func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, r
 	if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
 		return
 	}
-	info, err := client.GetBuild(ctx, svc.JenkinsJob, run.BuildNumber)
+	var ci model.CicdCiConfig
+	_ = s.db.WithContext(ctx).Where("service_id = ?", run.ServiceID).First(&ci).Error
+	jobName := resolveJenkinsJobName(&svc)
+	if jobName == "" {
+		return
+	}
+	info, err := client.GetBuild(ctx, jobName, run.BuildNumber)
 	if err != nil {
 		return
 	}
 	status := jenkins.MapResultToStatus(info.Result, info.Building)
-	cfg := s.resolvedConfig(ctx)
-	bucket := dictconfig.MinIOBucketForService(cfg, svc.ServiceType)
 	updates := map[string]any{
 		"jenkins_build_url": info.URL,
 		"updated_at":        time.Now(),
 	}
-	if strings.TrimSpace(run.PackagePath) == "" && bucket != "" {
-		if logText, err := client.GetConsoleLog(ctx, svc.JenkinsJob, run.BuildNumber); err == nil {
-			if path := extractPackagePathFromConsole(logText, svc.JenkinsJob, bucket); path != "" {
-				updates["package_path"] = path
+	if strings.TrimSpace(run.PackagePath) == "" || strings.TrimSpace(run.ImageAddress) == "" {
+		if logText, err := client.GetConsoleLog(ctx, jobName, run.BuildNumber); err == nil {
+			artifacts := s.resolveBuildArtifactsFromLog(ctx, svc, ci, logText)
+			if strings.TrimSpace(run.PackagePath) == "" && strings.TrimSpace(artifacts.PackagePath) != "" {
+				updates["package_path"] = artifacts.PackagePath
 			}
-			if strings.TrimSpace(run.ImageAddress) == "" {
-				hint := s.buildImageNameHint(ctx, svc)
-				if img := extractImageAddressFromConsole(logText, hint); img != "" {
-					updates["image_address"] = img
-				}
-			}
-		}
-	} else if strings.TrimSpace(run.ImageAddress) == "" {
-		if logText, err := client.GetConsoleLog(ctx, svc.JenkinsJob, run.BuildNumber); err == nil {
-			if img := extractImageAddressFromConsole(logText); img != "" {
-				updates["image_address"] = img
+			if strings.TrimSpace(run.ImageAddress) == "" && strings.TrimSpace(artifacts.ImageAddress) != "" {
+				updates["image_address"] = artifacts.ImageAddress
 			}
 		}
 	}

@@ -38,7 +38,7 @@ export function DashboardStatCard({
         <Statistic
           title={title}
           value={value}
-          valueStyle={{ color: accent, fontSize: 28, fontWeight: 600 }}
+          valueStyle={{ fontSize: 24, fontWeight: 600 }}
         />
       </div>
       {hint ? (

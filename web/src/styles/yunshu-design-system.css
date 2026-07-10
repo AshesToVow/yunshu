@@ -9,7 +9,7 @@
   --ys-font-sans: "IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --ys-font-mono: "JetBrains Mono", "IBM Plex Mono", "Consolas", monospace;
 
-  --ys-accent: #e61919;
+  --ys-accent: #0d9488;
   --ys-accent-muted: color-mix(in srgb, var(--ys-accent) 72%, #121212 28%);
   --ys-radius: 0px;
   --ys-grid-line: 1px;
@@ -18,13 +18,13 @@
 }
 
 /* CRT scanlines + grain on admin shell */
-.admin-shell {
+.admin-shell:not(.ops-platform) {
   position: relative;
   isolation: isolate;
   font-family: var(--ys-font-sans);
 }
 
-.admin-shell::before {
+.admin-shell:not(.ops-platform)::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -40,7 +40,7 @@
   );
 }
 
-.admin-shell::after {
+.admin-shell:not(.ops-platform)::after {
   content: "";
   position: fixed;
   inset: 0;
@@ -50,7 +50,7 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-.admin-shell.theme-dark {
+.admin-shell:not(.ops-platform).theme-dark {
   --admin-bg: #0a0a0a;
   --admin-surface: #121212;
   --admin-surface-elevated: #1a1a1a;
@@ -62,32 +62,32 @@
   background: var(--admin-bg) !important;
 }
 
-.admin-shell.theme-light {
-  --admin-bg: #f4f4f0;
-  --admin-surface: #eae8e3;
+.admin-shell:not(.ops-platform).theme-light {
+  --admin-bg: #f4f6f8;
+  --admin-surface: #ffffff;
   --admin-surface-elevated: #ffffff;
-  --admin-border: rgba(5, 5, 5, 0.18);
-  --admin-text-main: #050505;
-  --admin-text-muted: rgba(5, 5, 5, 0.56);
+  --admin-border: #e2e8f0;
+  --admin-text-main: #0f172a;
+  --admin-text-muted: #64748b;
   --admin-grid-gap: 1px;
 
   background: var(--admin-bg) !important;
 }
 
-.admin-shell.theme-light::before {
+.admin-shell:not(.ops-platform).theme-light::before {
   opacity: 0.018;
 }
 
-.admin-shell.theme-light::after {
+.admin-shell:not(.ops-platform).theme-light::after {
   opacity: 0.02;
 }
 
-.admin-shell.theme-dark .admin-sider.ant-layout-sider {
+.admin-shell:not(.ops-platform).theme-dark .admin-sider.ant-layout-sider {
   border-right: var(--ys-grid-line) solid var(--admin-border) !important;
   background: var(--admin-surface) !important;
 }
 
-.admin-shell.theme-light .admin-sider.ant-layout-sider {
+.admin-shell:not(.ops-platform).theme-light .admin-sider.ant-layout-sider {
   border-right: 2px solid #050505 !important;
   background: var(--admin-surface-elevated) !important;
 }
@@ -223,20 +223,20 @@
   box-shadow: none !important;
 }
 
-.admin-shell.theme-dark .table-card.ant-card,
-.admin-shell.theme-dark .form-card.ant-card,
-.admin-shell.theme-dark .glass-card.ant-card,
-.admin-shell.theme-dark .stats-card.ant-card,
-.admin-shell.theme-dark .page-stack > .ant-card {
+.admin-shell:not(.ops-platform).theme-dark .table-card.ant-card,
+.admin-shell:not(.ops-platform).theme-dark .form-card.ant-card,
+.admin-shell:not(.ops-platform).theme-dark .glass-card.ant-card,
+.admin-shell:not(.ops-platform).theme-dark .stats-card.ant-card,
+.admin-shell:not(.ops-platform).theme-dark .page-stack > .ant-card {
   background: var(--admin-surface-elevated) !important;
   backdrop-filter: none !important;
 }
 
-.admin-shell.theme-light .table-card.ant-card,
-.admin-shell.theme-light .form-card.ant-card,
-.admin-shell.theme-light .glass-card.ant-card,
-.admin-shell.theme-light .stats-card.ant-card,
-.admin-shell.theme-light .page-stack > .ant-card {
+.admin-shell:not(.ops-platform).theme-light .table-card.ant-card,
+.admin-shell:not(.ops-platform).theme-light .form-card.ant-card,
+.admin-shell:not(.ops-platform).theme-light .glass-card.ant-card,
+.admin-shell:not(.ops-platform).theme-light .stats-card.ant-card,
+.admin-shell:not(.ops-platform).theme-light .page-stack > .ant-card {
   background: var(--admin-surface-elevated) !important;
 }
 
@@ -339,8 +339,8 @@
   min-height: calc(100dvh - 52px);
 }
 
-.admin-shell.theme-light .overview-cockpit {
-  --cockpit-bg: #f4f4f0;
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit {
+  --cockpit-bg: #f4f6f8;
   --cockpit-surface: #ffffff;
   --cockpit-border: rgba(5, 5, 5, 0.2);
   --cockpit-text: #050505;
@@ -348,69 +348,69 @@
 }
 
 /* Dashboard light mode — override legacy overview-big-screen dark styles in global.css */
-.admin-shell.theme-light .overview-big-screen.overview-cockpit {
+.admin-shell:not(.ops-platform).theme-light .overview-big-screen.overview-cockpit {
   background: var(--cockpit-bg) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__section-label {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__section-label {
   color: var(--cockpit-accent) !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-card.ant-card,
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-card--k8s.ant-card,
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-card--alert.ant-card {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__stat-card.ant-card,
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__stat-card--k8s.ant-card,
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__stat-card--alert.ant-card {
   background: var(--cockpit-surface) !important;
   border: 2px solid var(--cockpit-border) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-icon {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__stat-icon {
   color: var(--cockpit-text) !important;
-  background: #f4f4f0 !important;
+  background: #f4f6f8 !important;
   border: 1px solid var(--cockpit-border) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-title,
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__stat-hint {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__stat-title,
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__stat-hint {
   color: var(--cockpit-muted) !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__panel.ant-card,
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__trend-main-card.ant-card,
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__trend-rail-card.ant-card,
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__table-panel.ant-card {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__panel.ant-card,
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__trend-main-card.ant-card,
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__trend-rail-card.ant-card,
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__table-panel.ant-card {
   background: var(--cockpit-surface) !important;
   border: 2px solid var(--cockpit-border) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__panel .ant-card-head {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__panel .ant-card-head {
   border-bottom: 1px solid var(--cockpit-border) !important;
-  background: #f4f4f0 !important;
+  background: #f4f6f8 !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__panel .ant-card-head-title {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__panel .ant-card-head-title {
   color: var(--cockpit-text) !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .overview-big-screen__trend-wrap {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .overview-big-screen__trend-wrap {
   background: var(--cockpit-surface) !important;
   border: 1px solid var(--cockpit-border) !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .ant-table {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .ant-table {
   color: var(--cockpit-text) !important;
   background: var(--cockpit-surface) !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .ant-table-thead > tr > th {
-  background: #f4f4f0 !important;
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .ant-table-thead > tr > th {
+  background: #f4f6f8 !important;
   color: var(--cockpit-text) !important;
   border-bottom: 2px solid var(--cockpit-border) !important;
   font-family: var(--ys-font-mono);
@@ -419,22 +419,22 @@
   text-transform: uppercase;
 }
 
-.admin-shell.theme-light .overview-cockpit .ant-table-tbody > tr > td {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .ant-table-tbody > tr > td {
   color: var(--cockpit-text) !important;
   border-bottom: 1px solid var(--cockpit-border) !important;
   background: var(--cockpit-surface) !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .ant-table-tbody > tr:nth-child(odd) > td,
-.admin-shell.theme-light .overview-cockpit .ant-table-tbody > tr:nth-child(even) > td {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .ant-table-tbody > tr:nth-child(odd) > td,
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .ant-table-tbody > tr:nth-child(even) > td {
   background: var(--cockpit-surface) !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .ant-table-tbody > tr:hover > td {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .ant-table-tbody > tr:hover > td {
   background: color-mix(in srgb, var(--ys-accent) 5%, var(--cockpit-surface) 95%) !important;
 }
 
-.admin-shell.theme-light .overview-cockpit .ant-progress-text {
+.admin-shell:not(.ops-platform).theme-light .overview-cockpit .ant-progress-text {
   color: var(--cockpit-muted) !important;
 }
 
@@ -547,8 +547,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .admin-shell::before,
-  .admin-shell::after {
+  .admin-shell:not(.ops-platform)::before,
+  .admin-shell:not(.ops-platform)::after {
     display: none;
   }
 }

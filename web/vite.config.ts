@@ -20,6 +20,9 @@ export default defineConfig({
             if (id.includes("xterm")) {
               return "xterm-vendor";
             }
+            if (id.includes("monaco-editor") || id.includes("@monaco-editor")) {
+              return "monaco-vendor";
+            }
             return;
           }
           if (id.includes("/components/k8s/yaml-crud-page")) {

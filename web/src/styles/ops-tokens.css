@@ -5,7 +5,11 @@
 :root,
 .admin-shell.ops-platform {
   --ops-radius: 8px;
-  --ops-font-sans: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --ys-brand: #0d9488;
+  --ys-brand-strong: #0f766e;
+  --ys-text-muted: #64748b;
+  --ys-font-sans: "IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --ops-font-sans: var(--ys-font-sans);
 
   --ops-success-bg: #f6ffed;
   --ops-success-text: #389e0d;
@@ -18,11 +22,11 @@
 }
 
 .admin-shell.ops-platform.theme-light {
-  --ops-bg-layout: #f0f2f5;
+  --ops-bg-layout: #f4f6f8;
   --ops-bg-container: #ffffff;
-  --ops-border: #e8e8e8;
-  --ops-text: rgba(0, 0, 0, 0.88);
-  --ops-text-secondary: rgba(0, 0, 0, 0.45);
+  --ops-border: #e2e8f0;
+  --ops-text: #0f172a;
+  --ops-text-secondary: #64748b;
 }
 
 .admin-shell.ops-platform.theme-dark {
@@ -118,9 +122,62 @@
   min-width: 0;
 }
 
+.admin-shell.ops-platform .table-card > .ant-card-body,
+.admin-shell.ops-platform .page-stack > .ant-card > .ant-card-body {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.admin-shell.ops-platform .table-card .ant-table-wrapper,
+.admin-shell.ops-platform .page-stack > .ant-card .ant-table-wrapper {
+  min-width: 0;
+}
+
+/* 工具栏/筛选行：允许换行，避免固定宽度撑破视口 */
+.ops-filter-bar,
+.k8s-page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ops-filter-bar .ant-select,
+.ops-filter-bar .ant-input,
+.ops-filter-bar .ant-input-affix-wrapper,
+.k8s-page-toolbar .ant-select,
+.k8s-page-toolbar .ant-input,
+.k8s-page-toolbar .ant-tree-select {
+  max-width: 100%;
+}
+
+.monaco-yaml-editor {
+  width: 100%;
+  min-width: 0;
+}
+
+.monaco-yaml-editor__surface {
+  border: 1px solid var(--admin-border, #e2e8f0);
+  border-radius: var(--ops-radius, 8px);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.admin-shell.ops-platform.theme-light .monaco-yaml-editor__surface {
+  border-color: #e2e8f0;
+}
+
+.admin-shell.ops-platform.theme-dark .monaco-yaml-editor__surface {
+  border-color: #303030;
+}
+
 .admin-shell.ops-platform .admin-content {
   min-width: 0;
   overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .yaml-crud-card > .ant-card-body {
@@ -351,7 +408,8 @@
 }
 
 .dashboard-stat-card--clickable:hover.ant-card {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: none !important;
+  border-color: color-mix(in srgb, var(--admin-accent, var(--ys-brand)) 35%, var(--admin-border)) !important;
 }
 
 .dashboard-stat-card__head {

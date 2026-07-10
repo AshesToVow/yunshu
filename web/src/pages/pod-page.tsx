@@ -15,12 +15,23 @@ import { useK8sWatch } from "../hooks/use-k8s-watch";
 import { useEditGuardStore } from "../stores/edit-guard-store";
 import { formatDateTime } from "../utils/format";
 import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
+import { MonacoYamlEditor, validateYaml } from "../components/k8s/monaco-yaml-editor";
 import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
 import { createPodByYAML, createPodSimple, deletePod, deletePodFile, downloadPodFile, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, readPodFile, restartPod, updatePodSimple, uploadPodFile, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
 import { getToken } from "../services/storage";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
+
+const POD_CREATE_YAML_TEMPLATE = `apiVersion: v1
+kind: Pod
+metadata:
+  name: demo-pod
+spec:
+  containers:
+  - name: main
+    image: nginx:latest
+`;
 
 export function PodPage() {
   const rfc1123Subdomain = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/;
@@ -846,6 +857,10 @@ export function PodPage() {
   async function submitCreateYAML() {
     if (!clusterId) return;
     const values = await yamlForm.validateFields();
+    if (validateYaml(values.manifest)) {
+      message.warning("请先修正 YAML 语法错误");
+      return;
+    }
     setCreating(true);
     try {
       await createPodByYAML({ cluster_id: clusterId, namespace, manifest: values.manifest });
@@ -2234,8 +2249,16 @@ export function PodPage() {
                     label: "YAML 创建",
                     children: (
                       <Form form={yamlForm} layout="vertical" requiredMark="optional" scrollToFirstError initialValues={{ manifest: "" }}>
+                        <Space wrap style={{ marginBottom: 8 }}>
+                          <Button size="small" type="default" onClick={() => yamlForm.setFieldsValue({ manifest: POD_CREATE_YAML_TEMPLATE })}>
+                            填入模板
+                          </Button>
+                          <Button size="small" onClick={() => yamlForm.setFieldsValue({ manifest: "" })}>
+                            清空内容
+                          </Button>
+                        </Space>
                         <Form.Item name="manifest" label="YAML 内容" rules={[{ required: true, message: "请输入 YAML" }]}>
-                          <Input.TextArea rows={12} placeholder="apiVersion: v1&#10;kind: Pod&#10;metadata:&#10;  name: demo-pod&#10;spec:&#10;  containers:&#10;  - name: main&#10;    image: nginx:latest" />
+                          <MonacoYamlEditor height={420} />
                         </Form.Item>
                         <Button type="primary" loading={creating} onClick={() => void submitCreateYAML()}>
                           创建

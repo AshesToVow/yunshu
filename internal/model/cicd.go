@@ -19,7 +19,7 @@ const (
 	CicdRefTypeTag    = "tag"
 
 	// DefaultNodeToolName Jenkins Global Tool Configuration 中 Node 安装名称的默认值。
-	DefaultNodeToolName = "node20"
+	DefaultNodeToolName = "node24"
 
 	CicdRunStatusPending   = "pending"
 	CicdRunStatusRunning   = "running"

@@ -12,7 +12,8 @@ type Config struct {
 	HTTP     HTTPConfig     `mapstructure:"http"`
 	GRPC     GRPCConfig     `mapstructure:"grpc"`
 	Log      LogConfig      `mapstructure:"log"`
-	MySQL    MySQLConfig    `mapstructure:"mysql"`
+	Database DatabaseConfig `mapstructure:"database"`
+	MySQL    DatabaseConfig `mapstructure:"mysql"` // 兼容旧配置键；与 database 二选一或 database 优先
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Mail     MailConfig     `mapstructure:"mail"`
 	Auth     AuthConfig     `mapstructure:"auth"`
@@ -61,18 +62,25 @@ type LogConfig struct {
 	FilePath string `mapstructure:"file_path"` // log file directory path
 }
 
-type MySQLConfig struct {
+// DatabaseConfig 关系型数据库连接（支持 mysql、postgres）。
+type DatabaseConfig struct {
+	Driver                 string `mapstructure:"driver"` // mysql（默认）、postgres
 	Host                   string `mapstructure:"host"`
 	Port                   int    `mapstructure:"port"`
 	User                   string `mapstructure:"user"`
 	Password               string `mapstructure:"password"`
 	DBName                 string `mapstructure:"db_name"`
-	Charset                string `mapstructure:"charset"`
-	Loc                    string `mapstructure:"loc"`
+	Charset                string `mapstructure:"charset"`  // MySQL
+	Loc                    string `mapstructure:"loc"`      // MySQL parseTime loc
+	SSLMode                string `mapstructure:"sslmode"` // PostgreSQL
+	TimeZone               string `mapstructure:"timezone"` // PostgreSQL
 	MaxIdleConns           int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns           int    `mapstructure:"max_open_conns"`
 	ConnMaxLifetimeSeconds int    `mapstructure:"conn_max_lifetime_seconds"`
 }
+
+// MySQLConfig 为向后兼容保留的类型别名。
+type MySQLConfig = DatabaseConfig
 
 type RedisConfig struct {
 	Addr     string `mapstructure:"addr"`
@@ -296,7 +304,54 @@ func Load(path string) (*Config, error) {
 	if cfg.Cicd.DefaultArtifactRetain <= 0 {
 		cfg.Cicd.DefaultArtifactRetain = defCicd.DefaultArtifactRetain
 	}
+	normalizeDatabaseConfig(&cfg)
 	return &cfg, nil
+}
+
+func normalizeDatabaseConfig(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	db := cfg.Database
+	if strings.TrimSpace(db.Host) == "" && strings.TrimSpace(db.DBName) == "" {
+		db = cfg.MySQL
+	}
+	if strings.TrimSpace(db.Driver) == "" {
+		db.Driver = "mysql"
+	}
+	if db.Port <= 0 {
+		if NormalizeDatabaseDriver(db.Driver) == "postgres" {
+			db.Port = 5432
+		} else {
+			db.Port = 3306
+		}
+	}
+	if strings.TrimSpace(db.Charset) == "" {
+		db.Charset = "utf8mb4"
+	}
+	if strings.TrimSpace(db.Loc) == "" {
+		db.Loc = "Asia%2FShanghai"
+	}
+	if strings.TrimSpace(db.SSLMode) == "" {
+		db.SSLMode = "disable"
+	}
+	if strings.TrimSpace(db.TimeZone) == "" {
+		db.TimeZone = "Asia/Shanghai"
+	}
+	cfg.Database = db
+	cfg.MySQL = db
+}
+
+// NormalizeDatabaseDriver 归一化驱动名。
+func NormalizeDatabaseDriver(driver string) string {
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "", "mysql", "mariadb":
+		return "mysql"
+	case "postgres", "postgresql", "pg":
+		return "postgres"
+	default:
+		return strings.ToLower(strings.TrimSpace(driver))
+	}
 }
 
 func bindEnv(v *viper.Viper) error {
@@ -317,6 +372,20 @@ func bindEnv(v *viper.Viper) error {
 		"log.format":                               nil,
 		"log.output":                               nil,
 		"log.file_path":                            nil,
+		"database.driver":                          nil,
+		"database.host":                            nil,
+		"database.port":                            nil,
+		"database.user":                            nil,
+		"database.password":                        nil,
+		"database.db_name":                         nil,
+		"database.charset":                       nil,
+		"database.loc":                             nil,
+		"database.sslmode":                         nil,
+		"database.timezone":                        nil,
+		"database.max_idle_conns":                  nil,
+		"database.max_open_conns":                  nil,
+		"database.conn_max_lifetime_seconds":       nil,
+		"mysql.driver":                             nil,
 		"mysql.host":                               nil,
 		"mysql.port":                               nil,
 		"mysql.user":                               nil,
@@ -324,6 +393,8 @@ func bindEnv(v *viper.Viper) error {
 		"mysql.db_name":                            nil,
 		"mysql.charset":                            nil,
 		"mysql.loc":                                nil,
+		"mysql.sslmode":                            nil,
+		"mysql.timezone":                           nil,
 		"mysql.max_idle_conns":                     nil,
 		"mysql.max_open_conns":                     nil,
 		"mysql.conn_max_lifetime_seconds":          nil,

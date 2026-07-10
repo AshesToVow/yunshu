@@ -14,6 +14,12 @@ import {
 } from "../services/alerts";
 import { stringifyPrettyJSON } from "../services/alert-mappers";
 import { useDictOptions } from "../hooks/use-dict-options";
+import { revealDictEntryValue } from "../services/dict";
+import {
+  CHART_ERROR,
+  CHART_INFO,
+  CHART_SUCCESS,
+} from "../constants/chart-colors";
 import { formatDateTime } from "../utils/format";
 import {
   ALERT_EVENT_CATEGORY_OPTIONS,
@@ -271,6 +277,7 @@ export function AlertConfigCenterPanel({
   const [routingLabelsJSON, setRoutingLabelsJSON] = useState('{"alertname":"DemoAlert","severity":"warning","cluster":"demo"}');
   const [routingSeverity, setRoutingSeverity] = useState("warning");
   const [webhookToken, setWebhookToken] = useState("");
+  const [webhookTokenSensitivePickId, setWebhookTokenSensitivePickId] = useState<number | undefined>();
   const [webhookTemplate, setWebhookTemplate] = useState<"warning_prod" | "critical_prod" | "resolved_prod">("warning_prod");
   const [webhookPayload, setWebhookPayload] = useState(
     JSON.stringify(webhookPayloadTemplates.warning_prod, null, 2),
@@ -278,10 +285,12 @@ export function AlertConfigCenterPanel({
   const webhookTokenOptions = useDictOptions("alert_webhook_token");
   const promqlLabelKeyOptions = useDictOptions("alert_promql_label_key");
   const webhookTokenPick = useMemo(() => {
+    if (webhookTokenSensitivePickId != null) return webhookTokenSensitivePickId;
     const t = String(webhookToken || "").trim();
-    const m = webhookTokenOptions.find((o) => String(o.value ?? "").trim() === t);
+    if (!t) return undefined;
+    const m = webhookTokenOptions.find((o) => !o.sensitive && String(o.value ?? "").trim() === t);
     return m?.value;
-  }, [webhookToken, webhookTokenOptions]);
+  }, [webhookToken, webhookTokenOptions, webhookTokenSensitivePickId]);
 
   const channelOptions = useMemo(() => channels.map((c) => ({ label: c.name, value: c.id })), [channels]);
   const labelKeyAutoCompleteOptions = useMemo(
@@ -771,7 +780,7 @@ export function AlertConfigCenterPanel({
       label: ALERT_ROUTING_TERMS.tabRouting,
       children: (
         <>
-          <Space style={{ width: "100%", marginBottom: 12 }} wrap>
+          <Space className="ops-filter-bar" style={{ width: "100%", marginBottom: 12 }} wrap>
             {projectContextId ? (
               <Typography.Text type="secondary">
                 当前项目：{projects.find((p) => p.id === projectContextId)?.name ?? `项目 ${projectContextId}`}（跟随顶栏「全局项目上下文」）
@@ -961,7 +970,7 @@ export function AlertConfigCenterPanel({
               message={`已按顶栏项目筛选历史记录（项目 #${projectContextId}）`}
             />
           ) : null}
-          <Space style={{ width: "100%", marginBottom: 12 }} wrap>
+          <Space className="ops-filter-bar" style={{ width: "100%", marginBottom: 12 }} wrap>
             <Radio.Group
               value={eventHistoryMode}
               onChange={(e) => setEventHistoryMode(e.target.value as "list" | "grouped")}
@@ -1031,6 +1040,7 @@ export function AlertConfigCenterPanel({
             </Button>
           </Space>
           {eventHistoryMode === "grouped" ? (
+            <div className="k8s-table-scroll-host">
             <Table
               rowKey="group_key"
               loading={eventsLoading}
@@ -1079,7 +1089,9 @@ export function AlertConfigCenterPanel({
                 { title: "集群", dataIndex: "cluster", width: 140, ellipsis: true, render: (v: string) => v || "-" },
               ]}
             />
+            </div>
           ) : (
+          <div className="k8s-table-scroll-host">
           <Table
             rowKey="id"
             loading={eventsLoading}
@@ -1304,6 +1316,7 @@ export function AlertConfigCenterPanel({
               { title: "发送/记录时间", dataIndex: "createdAt", width: 170, render: (v: string) => formatDateTime(v) },
             ]}
           />
+          </div>
           )}
         </>
       ),
@@ -1330,16 +1343,16 @@ export function AlertConfigCenterPanel({
               <Statistic title="总告警数" value={stats?.total ?? 0} />
             </Card>
             <Card size="small" styles={{ body: { padding: 12 } }}>
-              <Statistic title="Firing" value={stats?.firing ?? 0} valueStyle={{ color: "#cf1322" }} />
+              <Statistic title="Firing" value={stats?.firing ?? 0} valueStyle={{ color: CHART_ERROR }} />
             </Card>
             <Card size="small" styles={{ body: { padding: 12 } }}>
-              <Statistic title="Resolved" value={stats?.resolved ?? 0} valueStyle={{ color: "#389e0d" }} />
+              <Statistic title="Resolved" value={stats?.resolved ?? 0} valueStyle={{ color: CHART_SUCCESS }} />
             </Card>
             <Card size="small" styles={{ body: { padding: 12 } }}>
-              <Statistic title="发送成功" value={stats?.success ?? 0} valueStyle={{ color: "#1677ff" }} />
+              <Statistic title="发送成功" value={stats?.success ?? 0} valueStyle={{ color: CHART_INFO }} />
             </Card>
             <Card size="small" styles={{ body: { padding: 12 } }}>
-              <Statistic title="发送失败" value={stats?.failed ?? 0} valueStyle={{ color: "#cf1322" }} />
+              <Statistic title="发送失败" value={stats?.failed ?? 0} valueStyle={{ color: CHART_ERROR }} />
             </Card>
             <Card size="small" styles={{ body: { padding: 12 } }}>
               <Statistic title="今日新增" value={stats?.today_created ?? 0} />
@@ -1399,15 +1412,45 @@ export function AlertConfigCenterPanel({
                   style={{ width: 360 }}
                   value={webhookToken}
                   placeholder="Webhook Token（可为空）"
-                  onChange={(e) => setWebhookToken(e.target.value)}
+                  onChange={(e) => {
+                    setWebhookTokenSensitivePickId(undefined);
+                    setWebhookToken(e.target.value);
+                  }}
                 />
                 <Select
                   style={{ width: 300 }}
                   allowClear
                   value={webhookTokenPick}
-                  options={webhookTokenOptions}
+                  options={webhookTokenOptions.map((o) => ({
+                    label: o.label,
+                    value: o.sensitive && o.id != null ? o.id : o.value,
+                  }))}
                   placeholder="从字典选择 webhook token"
-                  onChange={(v) => setWebhookToken(String(v ?? ""))}
+                  onChange={(v) => {
+                    void (async () => {
+                      if (v === undefined || v === null || v === "") {
+                        setWebhookTokenSensitivePickId(undefined);
+                        setWebhookToken("");
+                        return;
+                      }
+                      const byId = webhookTokenOptions.find((o) => o.sensitive && o.id === v);
+                      if (byId?.id != null) {
+                        const hide = message.loading("正在获取字典明文…", 0);
+                        try {
+                          const { value } = await revealDictEntryValue(byId.id);
+                          setWebhookTokenSensitivePickId(byId.id);
+                          setWebhookToken(value);
+                        } catch (e) {
+                          message.error(e instanceof Error ? e.message : String(e));
+                        } finally {
+                          hide();
+                        }
+                        return;
+                      }
+                      setWebhookTokenSensitivePickId(undefined);
+                      setWebhookToken(String(v ?? ""));
+                    })();
+                  }}
                 />
                 <Button type="primary" loading={webhookSending} onClick={() => void sendWebhookDemo()}>
                   发送模拟Webhook

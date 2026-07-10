@@ -16,9 +16,9 @@ Yunshu 将前端 CI 的 `node_version` 映射为 Jenkins Job 参数 **`nodeToolN
 
 | Name（工具名） | 版本示例 |
 |----------------|----------|
-| `node18`         | 18.20.x  |
+| `node24`         | 24.x     |
 | `node20`         | 20.11.x  |
-| `node22`         | 22.x     |
+| `node18`         | 18.20.x  |
 
 名称必须与 Yunshu CI 配置下拉选项一致。保留原有 `npm`/`yarn` 工具不影响；yarn 若不在 Node 安装目录内会回退到 Global Tool `yarn`。
 

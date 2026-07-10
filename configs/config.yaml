@@ -73,6 +73,7 @@ log:
   file_path: ./logs  # log file directory path
 
 mysql:
+  driver: mysql              # mysql（默认）或 postgres
   host: 10.10.10.103        # Docker 服务名，容器内部通信
   port: 3306
   user: root
@@ -83,6 +84,20 @@ mysql:
   max_idle_conns: 5          # 降低以节省内存
   max_open_conns: 20         # 降低以节省内存
   conn_max_lifetime_seconds: 3600
+
+# PostgreSQL 示例（与 mysql 二选一；也可用 database: 键，见 .codegraph/kite-comparison.md）
+# database:
+#   driver: postgres
+#   host: 127.0.0.1
+#   port: 5432
+#   user: yunshu
+#   password: secret
+#   db_name: yunshu
+#   sslmode: disable
+#   timezone: Asia/Shanghai
+#   max_idle_conns: 5
+#   max_open_conns: 20
+#   conn_max_lifetime_seconds: 3600
 
 redis:
   addr: 10.10.10.103:6379    # Docker 服务名，容器内部通信

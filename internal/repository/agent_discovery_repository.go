@@ -32,30 +32,29 @@ func (r *AgentDiscoveryRepository) UpsertMany(ctx context.Context, projectID, se
 		items[i].LastSeenAt = now
 	}
 
-	if r.db.Dialector.Name() == "mysql" {
-		const chunk = 200
-		for i := 0; i < len(items); i += chunk {
-			end := i + chunk
-			if end > len(items) {
-				end = len(items)
-			}
-			batch := items[i:end]
-			err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-				Columns: []clause.Column{
-					{Name: "project_id"},
-					{Name: "server_id"},
-					{Name: "kind"},
-					{Name: "value"},
-				},
-				DoUpdates: clause.AssignmentColumns([]string{"last_seen_at", "extra", "updated_at"}),
-			}).Create(&batch).Error
-			if err != nil {
-				return r.upsertManyFallback(ctx, projectID, serverID, batch)
+	const chunk = 200
+	for i := 0; i < len(items); i += chunk {
+		end := i + chunk
+		if end > len(items) {
+			end = len(items)
+		}
+		batch := items[i:end]
+		err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+			Columns: []clause.Column{
+				{Name: "project_id"},
+				{Name: "server_id"},
+				{Name: "kind"},
+				{Name: "value"},
+			},
+			DoUpdates: clause.AssignmentColumns([]string{"last_seen_at", "extra", "updated_at"}),
+		}).Create(&batch).Error
+		if err != nil {
+			if err := r.upsertManyFallback(ctx, projectID, serverID, batch); err != nil {
+				return err
 			}
 		}
-		return nil
 	}
-	return r.upsertManyFallback(ctx, projectID, serverID, items)
+	return nil
 }
 
 func (r *AgentDiscoveryRepository) upsertManyFallback(ctx context.Context, projectID, serverID uint, items []model.AgentDiscovery) error {

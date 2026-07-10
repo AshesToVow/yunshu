@@ -1,0 +1,503 @@
+/**
+ * Yunshu Auth — Taste (trust-first split) + Impeccable (one glass card, no slop)
+ * Left: open brand story + hero illustration (no frame).
+ * Right: single frosted login card.
+ */
+
+body:has(.gw-auth-shell) {
+  background: #0f172a !important;
+  background-image: none !important;
+}
+
+body:has(.gw-auth-shell.is-light) {
+  background: #eef2f7 !important;
+}
+
+.gw-auth-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* ── Ambient ── */
+.gw-auth-shell__ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gw-auth-shell__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(88px);
+  animation: ys-auth-orb-drift 20s var(--ys-ease, ease) infinite;
+}
+
+.gw-auth-shell__orb--1 {
+  width: min(58vw, 560px);
+  height: min(58vw, 560px);
+  top: -14%;
+  left: -10%;
+  background: color-mix(in srgb, var(--login-accent, #0d9488) 38%, transparent);
+  opacity: 0.7;
+}
+
+.gw-auth-shell__orb--2 {
+  width: min(40vw, 400px);
+  height: min(40vw, 400px);
+  bottom: -8%;
+  right: 4%;
+  background: color-mix(in srgb, var(--login-accent, #0d9488) 22%, #64748b 78%);
+  opacity: 0.45;
+  animation-delay: -7s;
+}
+
+.gw-auth-shell__orb--3 {
+  width: min(24vw, 240px);
+  height: min(24vw, 240px);
+  top: 42%;
+  left: 38%;
+  background: color-mix(in srgb, var(--login-accent, #0d9488) 16%, transparent);
+  opacity: 0.35;
+  animation-delay: -13s;
+}
+
+.gw-auth-shell.is-dark {
+  background:
+    radial-gradient(ellipse 90% 70% at 12% 20%, color-mix(in srgb, var(--login-accent, #0d9488) 12%, #0f172a 88%), transparent 58%),
+    linear-gradient(155deg, #070b14 0%, #0f172a 45%, #111827 100%) !important;
+}
+
+.gw-auth-shell.is-light {
+  background:
+    radial-gradient(ellipse 85% 65% at 10% 18%, color-mix(in srgb, var(--login-accent, #0d9488) 10%, #f8fafc 90%), transparent 55%),
+    linear-gradient(155deg, #f8fafc 0%, #eef2f7 50%, #e8eef5 100%) !important;
+}
+
+.gw-auth-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 24% 28%, color-mix(in srgb, var(--login-accent, #0d9488) 8%, transparent), transparent 40%),
+    radial-gradient(circle at 76% 72%, color-mix(in srgb, var(--login-accent, #0d9488) 6%, transparent), transparent 44%);
+  animation: gw-auth-bg-shift 22s var(--ys-ease, ease) infinite;
+}
+
+/* ── Top chrome ── */
+.gw-auth-brand,
+.gw-auth-toolbar {
+  border: 1px solid var(--gw-glass-border, rgba(255, 255, 255, 0.12));
+  background: var(--gw-glass-bg, rgba(15, 23, 42, 0.42));
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.1);
+}
+
+.gw-auth-shell.is-light .gw-auth-brand,
+.gw-auth-shell.is-light .gw-auth-toolbar {
+  --gw-glass-bg: rgba(255, 255, 255, 0.7);
+  --gw-glass-border: rgba(226, 232, 240, 0.95);
+  color: var(--ys-text, #0f172a);
+}
+
+.gw-auth-brand {
+  position: absolute;
+  left: max(20px, 2.5vw);
+  top: max(16px, 2vh);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.gw-auth-brand__logoDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--login-accent, #0d9488) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--login-accent, #0d9488) 28%, transparent) !important;
+}
+
+.gw-auth-toolbar {
+  position: absolute;
+  right: max(16px, 2vw);
+  top: max(16px, 2vh);
+  z-index: 20;
+  padding: 6px 8px !important;
+  border-radius: 999px !important;
+}
+
+.gw-auth-toolbar__btn {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+}
+
+.gw-auth-shell.is-dark .gw-auth-toolbar__btn { color: #cbd5e1 !important; }
+.gw-auth-shell.is-light .gw-auth-toolbar__btn { color: #64748b !important; }
+
+.gw-auth-toolbar__btn:hover,
+.gw-auth-toolbar__btn.is-active {
+  background: color-mix(in srgb, var(--login-accent, #0d9488) 14%, transparent) !important;
+  color: var(--login-accent, #0d9488) !important;
+}
+
+.gw-auth-toolbar__panel {
+  border-radius: 12px !important;
+  border: 1px solid var(--gw-glass-border) !important;
+  background: var(--gw-glass-bg) !important;
+  backdrop-filter: blur(18px) !important;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.16) !important;
+}
+
+/* ── Composed layout: one centered band (story + card), not viewport split ── */
+.gw-auth-main {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  width: 100%;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 88px clamp(20px, 4vw, 40px) 48px !important;
+  box-sizing: border-box;
+}
+
+.gw-auth-main::before {
+  display: none !important;
+}
+
+.gw-auth-frame {
+  width: min(100%, 1180px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 420px);
+  align-items: center;
+  gap: clamp(36px, 5vw, 72px);
+}
+
+/* Left: brand story — larger, left-aligned within the band */
+.gw-auth-story {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.gw-auth-story__hero {
+  width: min(100%, 580px);
+  max-width: 580px;
+  height: auto;
+  margin: 0 0 24px;
+  object-fit: contain;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  filter: drop-shadow(0 22px 44px color-mix(in srgb, var(--login-accent, #0d9488) 16%, rgba(15, 23, 42, 0.12)));
+  animation: gw-auth-float 5.5s ease-in-out infinite;
+}
+
+.gw-auth-shell.is-light .gw-auth-story__hero {
+  filter: drop-shadow(0 18px 36px rgba(15, 23, 42, 0.09));
+}
+
+.gw-auth-story__title {
+  margin: 0;
+  font-size: clamp(1.875rem, 3vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.18;
+  text-wrap: balance;
+  max-width: 13ch;
+  color: inherit;
+}
+
+.gw-auth-story__desc {
+  margin: 14px 0 0;
+  font-size: clamp(15px, 1.25vw, 17px);
+  line-height: 1.7;
+  color: var(--ys-text-muted, #64748b);
+  text-wrap: pretty;
+  max-width: 46ch;
+}
+
+.gw-auth-shell.is-dark .gw-auth-story__desc {
+  color: #94a3b8;
+}
+
+.gw-auth-story__points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+  max-width: 560px;
+}
+
+.gw-auth-story__points li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: inherit;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--login-accent, #0d9488) 14%, rgba(148, 163, 184, 0.22));
+  background: color-mix(in srgb, var(--login-accent, #0d9488) 5%, transparent);
+  white-space: normal;
+}
+
+.gw-auth-shell.is-light .gw-auth-story__points li {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(226, 232, 240, 0.95);
+}
+
+.gw-auth-story__points li::before {
+  content: "";
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--login-accent, #0d9488);
+}
+
+/* Right: login card sits beside story in the same band */
+.gw-auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.gw-auth-card {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  margin: 0;
+  padding: clamp(24px, 3vw, 30px) clamp(22px, 3vw, 28px) clamp(20px, 2.5vw, 24px) !important;
+  border-radius: 18px !important;
+  border: 1px solid var(--gw-glass-border, rgba(255, 255, 255, 0.14)) !important;
+  background: var(--gw-card-bg, rgba(15, 23, 42, 0.55)) !important;
+  backdrop-filter: blur(24px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+}
+
+.gw-auth-shell.is-light .gw-auth-card {
+  --gw-card-bg: rgba(255, 255, 255, 0.82);
+  --gw-glass-border: rgba(226, 232, 240, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 16px 40px rgba(15, 23, 42, 0.06) !important;
+}
+
+.gw-auth-card__header {
+  margin-bottom: 18px;
+}
+
+.gw-auth-card__title {
+  font-size: clamp(1.25rem, 2vw, 1.5rem) !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em;
+  line-height: 1.3 !important;
+}
+
+.gw-auth-card__sub {
+  margin-top: 8px !important;
+  font-size: 14px !important;
+  line-height: 1.55;
+  color: var(--ys-text-muted, #64748b) !important;
+}
+
+.gw-auth-shell.is-dark .gw-auth-card__title { color: #f1f5f9 !important; }
+.gw-auth-shell.is-dark .gw-auth-card__sub { color: #94a3b8 !important; }
+
+/* Login tabs — inside card, left-aligned underline (not fat side-by-side pills) */
+.gw-auth-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px 22px;
+  margin: 0 0 12px;
+  padding: 0 0 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--login-accent, #0d9488) 8%, rgba(148, 163, 184, 0.22));
+}
+
+.gw-auth-shell.is-light .gw-auth-tabs {
+  border-bottom-color: rgba(226, 232, 240, 0.95);
+}
+
+.gw-auth-tabs__item {
+  border: none;
+  background: transparent;
+  padding: 10px 0 12px;
+  margin: 0 0 -1px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--ys-text-muted, #64748b);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.gw-auth-shell.is-dark .gw-auth-tabs__item {
+  color: #94a3b8;
+}
+
+.gw-auth-tabs__item:hover {
+  color: inherit;
+}
+
+.gw-auth-tabs__item.is-active {
+  color: var(--login-accent, #0d9488);
+  border-bottom-color: var(--login-accent, #0d9488);
+  font-weight: 600;
+}
+
+.gw-auth-shell .login-light-card__hint {
+  margin: 0 0 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ys-text-muted, #64748b);
+}
+
+.gw-auth-shell.is-dark .login-light-card__hint {
+  color: #94a3b8;
+}
+
+/* Form — disable global side-by-side switch inside auth shell */
+.gw-auth-shell .login-light-switch {
+  display: none !important;
+}
+
+.gw-auth-shell.is-light .ant-input-affix-wrapper,
+.gw-auth-shell.is-light .ant-input {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: #e2e8f0 !important;
+}
+
+.gw-auth-shell.is-dark .ant-input-affix-wrapper,
+.gw-auth-shell.is-dark .ant-input {
+  background: rgba(30, 41, 59, 0.55) !important;
+  border-color: rgba(51, 65, 85, 0.85) !important;
+  color: #e2e8f0 !important;
+}
+
+.gw-auth-shell .login-submitBtn.ant-btn,
+.gw-auth-shell .login-submitBtn {
+  height: 46px !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  background: var(--login-accent, #0d9488) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--login-accent, #0d9488) 30%, transparent) !important;
+}
+
+.gw-auth-shell .login-submitBtn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--login-accent, #0d9488) 88%, #000 12%) !important;
+}
+
+.gw-auth-shell .login-light-registerLink {
+  color: var(--login-accent, #0d9488) !important;
+}
+
+/* Accent tokens — fixed hex */
+.gw-auth-shell.gw-accent-blue { --login-accent: #2563eb; }
+.gw-auth-shell.gw-accent-violet { --login-accent: #7c3aed; }
+.gw-auth-shell.gw-accent-emerald { --login-accent: #0d9488; }
+.gw-auth-shell.gw-accent-amber { --login-accent: #d97706; }
+
+.gw-auth-dot {
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.gw-auth-dot.is-active {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.login-registerModal .ant-modal-content {
+  border-radius: 16px !important;
+  overflow: hidden;
+}
+
+@keyframes gw-auth-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes ys-auth-orb-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(2%, -2%) scale(1.03); }
+}
+
+@media (max-width: 992px) {
+  .gw-auth-main {
+    align-items: flex-start;
+    padding-top: 80px !important;
+  }
+
+  .gw-auth-frame {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .gw-auth-story__hero {
+    width: min(100%, 480px);
+  }
+
+  .gw-auth-panel {
+    justify-content: stretch;
+  }
+
+  .gw-auth-card {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-auth-shell__orb,
+  .gw-auth-shell::before,
+  .gw-auth-story__hero {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .gw-auth-brand,
+  .gw-auth-toolbar,
+  .gw-auth-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .gw-auth-shell.is-light .gw-auth-card { background: #fff !important; }
+  .gw-auth-shell.is-dark .gw-auth-card { background: #0f172a !important; }
+}

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/database"
 
 	"gorm.io/gorm"
 )
@@ -29,42 +30,36 @@ func bootstrapPostMigrateCore(db *gorm.DB) error {
 }
 
 func dropDictEntriesLegacyCompositeIndex(db *gorm.DB) error {
-	if db.Dialector.Name() != "mysql" {
+	dialect := database.DialectName(db)
+	if dialect != "mysql" && dialect != "postgres" {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.DictEntry{}) {
 		return nil
 	}
-	err := db.Exec("ALTER TABLE `dict_entries` DROP INDEX `idx_dict_type_value_deleted`").Error
+	err := db.Exec(database.SQLDropDictEntriesLegacyCompositeIndex(dialect)).Error
 	if err == nil {
 		return nil
 	}
 	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "1091") || strings.Contains(msg, "check that it exists") {
+	if strings.Contains(msg, "1091") || strings.Contains(msg, "check that it exists") || strings.Contains(msg, "does not exist") {
 		return nil
 	}
 	return err
 }
 
 func cleanupDictEntriesDuplicatesOnBoot(db *gorm.DB) error {
-	if db.Dialector.Name() != "mysql" {
+	dialect := database.DialectName(db)
+	if dialect != "mysql" && dialect != "postgres" {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.DictEntry{}) {
 		return nil
 	}
-	sqlByLabel := `
-DELETE d1 FROM dict_entries d1
-JOIN dict_entries d2 ON d1.dict_type = d2.dict_type AND TRIM(d1.label) = TRIM(d2.label) AND d1.id > d2.id
-WHERE d1.deleted_at IS NULL AND d2.deleted_at IS NULL`
-	if err := db.Exec(sqlByLabel).Error; err != nil {
+	if err := db.Exec(database.SQLDeleteDictDuplicatesByLabel(dialect)).Error; err != nil {
 		return err
 	}
-	sqlByValue := `
-DELETE d1 FROM dict_entries d1
-JOIN dict_entries d2 ON d1.dict_type = d2.dict_type AND TRIM(d1.value) = TRIM(d2.value) AND d1.id > d2.id
-WHERE d1.deleted_at IS NULL AND d2.deleted_at IS NULL`
-	return db.Exec(sqlByValue).Error
+	return db.Exec(database.SQLDeleteDictDuplicatesByValue(dialect)).Error
 }
 
 func migrateEnableDingTalkSignSecretDictSeed(db *gorm.DB) error {

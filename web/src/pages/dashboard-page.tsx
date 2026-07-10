@@ -15,6 +15,15 @@ import {
 } from "@ant-design/icons";
 import { Card, Col, Row, Space, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
+import {
+  CHART_BRAND,
+  CHART_ERROR,
+  CHART_INFO,
+  CHART_MUTED,
+  CHART_SECONDARY,
+  CHART_SUCCESS,
+  CHART_WARNING,
+} from "../constants/chart-colors";
 import { useTranslation } from "react-i18next";
 import { BarChart } from "../components/bar-chart";
 import { LineChart } from "../components/line-chart";
@@ -63,24 +72,24 @@ const defaultMetrics: DashboardMetrics = {
 };
 
 const assetStats = [
-  { key: "users", icon: <TeamOutlined />, accent: "#1677ff" },
-  { key: "clusters", icon: <ClusterOutlined />, accent: "#1677ff" },
-  { key: "servers", icon: <DesktopOutlined />, accent: "#722ed1" },
-  { key: "pendingRegistrations", icon: <SafetyCertificateOutlined />, accent: "#fa8c16" },
+  { key: "users", icon: <TeamOutlined />, accent: CHART_BRAND },
+  { key: "clusters", icon: <ClusterOutlined />, accent: CHART_BRAND },
+  { key: "servers", icon: <DesktopOutlined />, accent: CHART_SECONDARY },
+  { key: "pendingRegistrations", icon: <SafetyCertificateOutlined />, accent: CHART_WARNING },
 ] as const;
 
 const k8sStats = [
-  { key: "podNormal", icon: <CheckCircleOutlined />, accent: "#52c41a" },
-  { key: "podAbnormal", icon: <WarningOutlined />, accent: "#ff4d4f" },
-  { key: "eventTotal", icon: <CloudOutlined />, accent: "#1677ff" },
-  { key: "eventWarning", icon: <ThunderboltOutlined />, accent: "#fa8c16" },
+  { key: "podNormal", icon: <CheckCircleOutlined />, accent: CHART_SUCCESS },
+  { key: "podAbnormal", icon: <WarningOutlined />, accent: CHART_ERROR },
+  { key: "eventTotal", icon: <CloudOutlined />, accent: CHART_INFO },
+  { key: "eventWarning", icon: <ThunderboltOutlined />, accent: CHART_WARNING },
 ] as const;
 
 const alertAndAgentStats = [
-  { key: "alertFiring", icon: <AlertOutlined />, accent: "#ff4d4f" },
-  { key: "alertEventsToday", icon: <AlertOutlined />, accent: "#fa8c16" },
-  { key: "logAgentsOnline", icon: <ApiOutlined />, accent: "#52c41a" },
-  { key: "logAgentsOffline", icon: <DisconnectOutlined />, accent: "#8c8c8c" },
+  { key: "alertFiring", icon: <AlertOutlined />, accent: CHART_ERROR },
+  { key: "alertEventsToday", icon: <AlertOutlined />, accent: CHART_WARNING },
+  { key: "logAgentsOnline", icon: <ApiOutlined />, accent: CHART_SUCCESS },
+  { key: "logAgentsOffline", icon: <DisconnectOutlined />, accent: CHART_MUTED },
 ] as const;
 
 const dashboardDrillDown: Partial<Record<keyof DashboardMetrics, string>> = {

@@ -1,5 +1,5 @@
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Card, Collapse, Drawer, Input, Modal, Select, Space, Table, Tabs, Typography, message } from "antd";
+import { Button, Card, Collapse, Drawer, Modal, Select, Space, Table, Tabs, Typography, message } from "antd";
 import type { ColumnType, ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import YAML from "yaml";
@@ -10,6 +10,7 @@ import { useK8sContext } from "../../hooks/use-k8s-context";
 import { useK8sWatch } from "../../hooks/use-k8s-watch";
 import { useEditGuardStore } from "../../stores/edit-guard-store";
 import { K8sDeleteDialog } from "./k8s-delete-dialog";
+import { MonacoYamlEditor, validateYaml } from "./monaco-yaml-editor";
 
 function sumColumnWidths(columns: ColumnType<unknown>[], fallback = 120): number {
   return columns.reduce((sum, col) => {
@@ -152,6 +153,8 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
   const [detailName, setDetailName] = useState<string>("");
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
+  const [detailApplyLoading, setDetailApplyLoading] = useState(false);
+  const [detailYaml, setDetailYaml] = useState("");
   const [manifest, setManifest] = useState<string>("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TItem | null>(null);
@@ -214,6 +217,16 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     beginEdit();
     return () => endEdit();
   }, [detailOpen, createDrawerOpen, deleteDialogOpen, beginEdit, endEdit]);
+
+  useEffect(() => {
+    if (!detailOpen) {
+      setDetailYaml("");
+      return;
+    }
+    if (detail?.yaml != null) {
+      setDetailYaml(detail.yaml);
+    }
+  }, [detailOpen, detail?.yaml]);
 
   const actionCol: ColumnsType<TItem>[number] = {
     title: "操作",
@@ -316,19 +329,24 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     onCreateDrawerOpen?.(createCtx);
   }
 
-  async function submitCreateYaml() {
+  async function applyYamlManifest(manifestText: string, onSuccess?: () => void | Promise<void>) {
     const applyFn = api.apply;
     if (!clusterId || !applyFn) return;
+    if (validateYaml(manifestText)) {
+      message.warning("请先修正 YAML 语法错误");
+      return;
+    }
 
     const doApply = async () => {
       setApplyLoading(true);
+      setDetailApplyLoading(true);
       try {
-        await applyFn({ clusterId, manifest });
+        await applyFn({ clusterId, manifest: manifestText });
         message.success("应用成功");
-        closeCreateDrawer();
-        await reload();
+        await onSuccess?.();
       } finally {
         setApplyLoading(false);
+        setDetailApplyLoading(false);
       }
     };
 
@@ -337,13 +355,13 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
         await doApply();
         return;
       }
-      if (!manifest.trim()) {
+      if (!manifestText.trim()) {
         await doApply();
         return;
       }
 
       try {
-        const docs = YAML.parseAllDocuments(manifest);
+        const docs = YAML.parseAllDocuments(manifestText);
         let targetName: string | undefined;
         let targetNamespace: string | undefined;
 
@@ -395,6 +413,22 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     void confirmAndApply();
   }
 
+  async function submitCreateYaml() {
+    await applyYamlManifest(manifest, async () => {
+      closeCreateDrawer();
+      await reload();
+    });
+  }
+
+  async function submitDetailYaml() {
+    await applyYamlManifest(detailYaml, async () => {
+      setDetailOpen(false);
+      await reload();
+    });
+  }
+
+  const canApplyDetailYaml = Boolean(api.apply) && !disableMutations;
+
   const yamlCreatePanel = (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
@@ -410,15 +444,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
           清空内容
         </Button>
       </Space>
-      <Input.TextArea
-        value={manifest}
-        onChange={(e) => setManifest(e.target.value)}
-        autoSize={{ minRows: 14, maxRows: 26 }}
-        placeholder={`apiVersion: v1
-kind: ...
-metadata:
-  name: ...`}
-      />
+      <MonacoYamlEditor value={manifest} onChange={setManifest} height={420} />
       <Button type="primary" loading={applyLoading} onClick={() => void submitCreateYaml()}>
         创建
       </Button>
@@ -519,6 +545,13 @@ metadata:
         width={920}
         zIndex={1300}
         className="detail-edit-drawer"
+        extra={
+          canApplyDetailYaml ? (
+            <Button type="primary" loading={detailApplyLoading} onClick={() => void submitDetailYaml()}>
+              应用 YAML
+            </Button>
+          ) : null
+        }
       >
         {detailLoading ? (
           <Typography.Text type="secondary">加载中...</Typography.Text>
@@ -538,11 +571,11 @@ metadata:
                   key: "yaml",
                   label: "YAML",
                   children: (
-                    <Input.TextArea
-                      value={detail.yaml ?? ""}
-                      readOnly
-                      autoSize={{ minRows: 18, maxRows: 28 }}
-                      className="detail-edit-form"
+                    <MonacoYamlEditor
+                      value={detailYaml}
+                      onChange={canApplyDetailYaml ? setDetailYaml : undefined}
+                      readOnly={!canApplyDetailYaml}
+                      height={480}
                     />
                   ),
                 },
