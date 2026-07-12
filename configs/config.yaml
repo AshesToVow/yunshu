@@ -13,6 +13,23 @@ plugins:
     - cmdb
     - backup
     - cicd
+    - dbmgmt
+
+# 数据库管理（字典 dbmgmt_* 可覆盖）
+dbmgmt:
+  query_timeout_seconds: 30
+  max_result_rows: 1000
+  max_import_file_mb: 10
+  prod_force_approval: true
+  approval_sla_hours: 24
+  approval_reminder_interval_hours: 4
+  allowed_drivers: [mysql, postgres]
+  ping_interval_seconds: 300
+  max_concurrent_per_instance: 5
+  goinception_enabled: true
+  goinception_host: "10.10.10.103"
+  goinception_port: 4000
+  goinception_backup: true
 
 # CI/CD（字典 cicd_* 优先覆盖下列 YAML）
 cicd:

@@ -17,6 +17,7 @@
 | `cmdb` | `internal/plugins/cmdb` | CMDB 服务器资产：主机、分组、云账号、SSH/Web 终端 |
 | `backup` | `internal/plugins/backup` | MySQL 备份调度与任务 |
 | `cicd` | `internal/plugins/cicd` | CI/CD：Jenkins 打包、MinIO/SSH 发布、执行记录 |
+| `dbmgmt` | `internal/plugins/dbmgmt` | 数据库管理：实例纳管、SQL 查询/审核、授权工单、goInception |
 
 ## 配置
 
@@ -30,10 +31,12 @@ plugins:
     - cmdb
     - backup
     - cicd
+    - dbmgmt
 ```
 
 - 省略 `plugins` 或 `enabled` 为空：启用上述默认全集。
 - **CMDB 与 project**：服务器 API 仍挂在 `/api/v1/projects/:id/servers`（功能不变）；`cmdb` 负责路由与表迁移，`project` 负责项目上下文。使用服务器管理时请**同时启用** `project` + `cmdb`。
+- **dbmgmt 与 project**：数据库 API 挂在 `/api/v1/projects/:id/dbmgmt/...`；须**同时启用** `project` + `dbmgmt`。详见 [dbmgmt.md](dbmgmt.md)。
 
 ## 新增插件步骤
 
@@ -74,6 +77,22 @@ web/src/modules/plugin-path.ts            # 菜单 path → cmdb 映射
 ```
 
 API 路径与行为与拆分前一致；`project` 插件保留项目/成员/日志，`cmdb` 负责服务器资产。
+
+## dbmgmt 模块结构
+
+菜单对齐 **smartdbs** 四类：资源申请 / 资源管理 / SQL 操作 / 工单管理。
+
+```text
+internal/plugins/dbmgmt/plugin.go           # 插件注册 + db_* 表迁移
+internal/service/dbmgmt/                    # 实例、SQL、授权、工单、审计
+internal/handler/dbmgmt_handler.go          # HTTP 入口
+internal/router/register_dbmgmt_routes.go   # /projects/:id/dbmgmt/*
+internal/dictconfig/dbmgmt.go               # 数据字典覆盖
+web/src/modules/dbmgmt/routes.tsx           # 前端路由 + 旧路径重定向
+web/src/pages/dbmgmt-*.tsx                  # 各功能页
+```
+
+完整运维手册与 API 摘要见 [dbmgmt.md](dbmgmt.md)。
 
 ## API
 

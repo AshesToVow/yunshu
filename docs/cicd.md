@@ -1,6 +1,6 @@
 # CI/CD 插件说明
 
-**最后更新**: 2026-06-30  
+**最后更新**: 2026-07-12  
 **插件名**: `cicd`（须与 `project` 同时启用）
 
 ---
@@ -124,3 +124,7 @@ POST       /api/v1/projects/:id/cicd/release-runs/:runId/approve|reject|execute|
 - [plugins.md](./plugins.md) — 插件机制
 - [CONTRIBUTING.md](../CONTRIBUTING.md) §5 — 路径规则
 - [handbook/requirements/menus/menu-cicd.md](./handbook/requirements/menus/menu-cicd.md) — 菜单级需求
+- [handbook/cicd/K8S-CD-HELM-CHECKOUT.md](./handbook/cicd/K8S-CD-HELM-CHECKOUT.md) — K8s + Helm CD 实践
+- [《企业级K8s容器化部署方案：Jenkins+Harbor+Helm+Gitee+Jenkinsfile自动化实践》.md](./《企业级K8s容器化部署方案：Jenkins+Harbor+Helm+Gitee+Jenkinsfile自动化实践》.md) — Harbor + Jenkins 流水线参考
+- [《企业级前端部署方案：Jenkins+MinIO+SSH+Gitee+Jenkinsfile自动化实践》.md](./《企业级前端部署方案：Jenkins+MinIO+SSH+Gitee+Jenkinsfile自动化实践》.md) — 前端 MinIO/SSH 发布参考
+- [《企业级后端部署方案：Jenkins+MinIO+SSH+Gitee+Jenkinsfile自动化实践》.md](./《企业级后端部署方案：Jenkins+MinIO+SSH+Gitee+Jenkinsfile自动化实践》.md) — 后端 MinIO/SSH 发布参考

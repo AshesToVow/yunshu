@@ -18,6 +18,9 @@ func Sync(ctx context.Context, db *gorm.DB) error {
 	if err := syncSpecSubtree(ctx, db, DefaultCatalog(), nil); err != nil {
 		return err
 	}
+	if err := reparentDbmgmtResourceMenus(ctx, db); err != nil {
+		return err
+	}
 	if err := reparentExtractedMenus(ctx, db); err != nil {
 		return err
 	}
@@ -178,6 +181,109 @@ func patchLegacyMenu(ctx context.Context, db *gorm.DB, m *model.Menu) error {
 		return nil
 	}
 	return db.WithContext(ctx).Save(m).Error
+}
+
+// reparentDbmgmtResourceMenus 将实例管理、权限申请归位到「资源管理」目录下，并清理历史重复项。
+func reparentDbmgmtResourceMenus(ctx context.Context, db *gorm.DB) error {
+	var dbmgmt model.Menu
+	if err := db.WithContext(ctx).
+		Where("path = ? AND (parent_id IS NULL OR parent_id = 0)", "/dbmgmt").
+		First(&dbmgmt).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	var resource model.Menu
+	if err := db.WithContext(ctx).
+		Where("path = ? AND parent_id = ?", "/dbmgmt/resource", dbmgmt.ID).
+		First(&resource).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	pid := resource.ID
+	for _, path := range []string{
+		"/dbmgmt/instances",
+		"/dbmgmt/access-requests/all",
+		"/dbmgmt/access-request",
+	} {
+		if err := reparentMenuByPath(ctx, db, path, &pid); err != nil {
+			return err
+		}
+	}
+	if err := normalizeDbmgmtAccessRequestMenu(ctx, db, pid); err != nil {
+		return err
+	}
+	// 删除仍挂在「数据库管理」根下的重复实例/权限申请菜单（sync 后遗留的旧数据）
+	var stray []model.Menu
+	if err := db.WithContext(ctx).
+		Where("parent_id = ?", dbmgmt.ID).
+		Where("path IN ?", []string{
+			"/dbmgmt/instances",
+			"/dbmgmt/access-requests/all",
+			"/dbmgmt/access-request",
+			"/dbmgmt/access-requests",
+		}).
+		Find(&stray).Error; err != nil {
+		return err
+	}
+	for _, m := range stray {
+		ids, err := collectMenuSubtreeIDs(ctx, db, m.ID)
+		if err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		if err := db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.Menu{}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func normalizeDbmgmtAccessRequestMenu(ctx context.Context, db *gorm.DB, resourceParentID uint) error {
+	var canonical model.Menu
+	hasCanonical := db.WithContext(ctx).
+		Where("parent_id = ? AND path = ?", resourceParentID, "/dbmgmt/access-requests/all").
+		First(&canonical).Error == nil
+
+	var legacy []model.Menu
+	if err := db.WithContext(ctx).
+		Where("parent_id = ?", resourceParentID).
+		Where("path IN ?", []string{"/dbmgmt/access-request", "/dbmgmt/access-requests"}).
+		Find(&legacy).Error; err != nil {
+		return err
+	}
+	for i := range legacy {
+		m := &legacy[i]
+		if hasCanonical {
+			ids, err := collectMenuSubtreeIDs(ctx, db, m.ID)
+			if err != nil {
+				return err
+			}
+			if len(ids) > 0 {
+				if err := db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.Menu{}).Error; err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		m.Path = "/dbmgmt/access-requests/all"
+		if strings.TrimSpace(m.Component) == "" {
+			m.Component = "dbmgmt-access-requests-page"
+		}
+		if strings.TrimSpace(m.Name) == "" {
+			m.Name = "权限申请"
+		}
+		if err := db.WithContext(ctx).Save(m).Error; err != nil {
+			return err
+		}
+		hasCanonical = true
+	}
+	return nil
 }
 
 type rootMenuDedupSpec struct {

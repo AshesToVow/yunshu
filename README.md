@@ -5,7 +5,7 @@
 [![Ant Design](https://img.shields.io/badge/Ant%20Design-5.x-1677ff?style=flat-square&logo=antdesign)](https://ant.design/)
 [![Status](https://img.shields.io/badge/Project-Active-brightgreen?style=flat-square)](#)
 
-> 基于 Go + React 的 Kubernetes 运维与项目化告警平台，涵盖系统管理、权限管理、项目管理、K8s 资源管理、告警平台与日志平台。
+> 基于 Go + React 的 Kubernetes 运维与项目化告警平台，涵盖系统管理、权限管理、项目管理、**数据库管理（dbmgmt）**、K8s 资源管理、告警平台与日志平台。
 
 ---
 
@@ -27,6 +27,7 @@
   - [纳管 Kubernetes 集群](#纳管-kubernetes-集群)
   - [日志平台与 Agent](#日志平台与-agent)
   - [告警平台要点](#告警平台要点)
+  - [数据库管理要点（dbmgmt 插件）](#数据库管理要点dbmgmt-插件)
 - [前端路由索引](#前端路由索引)
 - [常用 CLI 命令](#常用-cli-命令)
 - [排障指南](#排障指南)
@@ -35,8 +36,9 @@
   - [1. 登录与概览](#1-登录与概览)
   - [2. 系统管理](#2-系统管理)
   - [3. 项目管理](#3-项目管理)
-  - [4. 告警平台](#4-告警平台)
-  - [5. Kubernetes 管理](#5-kubernetes-管理)
+  - [4. 数据库管理（dbmgmt）](#4-数据库管理dbmgmt)
+  - [5. 告警平台](#5-告警平台)
+  - [6. Kubernetes 管理](#6-kubernetes-管理)
 - [告警通知与恢复示例](#告警通知与恢复示例)
 - [数据库 ER 图](#数据库-er-图)
 - [项目结构](#项目结构)
@@ -53,6 +55,7 @@ Yunshu 主要能力：
 - **双层 K8s 鉴权**：Casbin API 权限 + 集群档位（`readonly` / `readonly_exec` / `admin`）+ 命名空间黑/白名单
 - 项目维度的 **CMDB**（服务器、云账号、SSH/Web 终端）、服务、日志源、Agent、**SSE 实时日志**与 Agent 发现
 - **MySQL 备份**（mysqldump / xtrabackup / innobackupex，MinIO 存储，Cron 调度）
+- **数据库管理（dbmgmt）**：MySQL/PostgreSQL 实例纳管、SQL 查询与审核（goInception）、库表级授权、应用用户 GRANT、审批工单与审计（对齐 smartdbs 菜单；`dbmgmt` 插件）
 - **CI/CD**（Jenkins 打包、多级审批发布、制品 MinIO；`cicd` 插件）
 - 告警数据源、规则、值班、静默、策略、**云到期规则**、多渠道通知（钉钉/邮件等）
 - Kubernetes 资源可视化管理（工作负载、网络、存储、RBAC、CRD、Ingress-Nginx 运维）
@@ -101,6 +104,7 @@ flowchart TB
       ALERT["alert<br/>规则/订阅/云到期"]
       BACKUP["backup<br/>MySQL 备份"]
       CICD["cicd<br/>CI 打包 / CD 发布"]
+      DBMGMT["dbmgmt<br/>SQL 查询/审核 · 授权工单"]
     end
 
     SVC["Service 域逻辑<br/>internal/service/*"]
@@ -118,6 +122,7 @@ flowchart TB
     SSH["SSH 目标服务器"]
     JENKINS["Jenkins"]
     MINIO["MinIO<br/>备份归档 / CI 制品"]
+    GOINC["goInception<br/>SQL 审核/备份/OSC"]
     CLOUD["云 API<br/>阿里 / 腾讯 / 京东"]
     NOTIFY["钉钉 · 邮件 · Webhook"]
     PROM["Prometheus<br/>告警数据源"]
@@ -142,6 +147,7 @@ flowchart TB
   BACKUP --> MINIO
   CICD --> JENKINS
   CICD --> MINIO
+  DBMGMT --> GOINC
   K8SPL --> K8SAPI
   ALERT --> PROM
   ALERT --> CLOUD
@@ -153,7 +159,7 @@ flowchart TB
 | 区域 | 说明 |
 |------|------|
 | **插件** | 同一二进制，`config.yaml` → `plugins.enabled` 控制路由、迁移、Worker；详见 [docs/plugins.md](docs/plugins.md) |
-| **项目维度** | CMDB / 日志 / 备份 / CI/CD API 多在 `/api/v1/projects/:id/...` 下，需项目成员权限 |
+| **项目维度** | CMDB / 日志 / 备份 / **dbmgmt** / CI/CD API 多在 `/api/v1/projects/:id/...` 下，需项目成员权限 |
 | **K8s 三元策略** | Casbin API 授权 → 路由 K8s 范围校验 → 集群档位 + NS 黑/白名单（见下文） |
 | **配置优先级** | 数据字典 `dict_entries` 可覆盖 YAML（Jenkins、MinIO、邮件、备份调度等） |
 
@@ -314,6 +320,7 @@ git checkout main
 | `agent` | `register_secret`（Agent 自注册）、`discovery_roots`（引导扫描目录） |
 | `security.encryption_key` | 服务器 SSH 等敏感字段加密 |
 | `alert` | Webhook、Prometheus 富化、聚合窗口等（部分项可在**数据字典**覆盖） |
+| `dbmgmt` | 查询超时、结果行数、goInception 地址、生产强制审批等（部分项可在**数据字典**覆盖，见 [docs/dbmgmt.md](docs/dbmgmt.md)） |
 
 生产环境务必修改：MySQL/Redis 密码、`auth.jwt_secret`、`security.encryption_key`、`agent.register_secret`。
 
@@ -424,6 +431,25 @@ API 细节见：[docs/log-platform-api.md](docs/log-platform-api.md)
 4. **审批管理**：定义项目级审批阶段；发布工单在「待办列表」处理。
 5. 首页 CI 图表依赖 `cicd_release_runs`；禁用插件时图表为空属预期。
 
+### 数据库管理要点（`dbmgmt` 插件）
+
+完整说明见 **[docs/dbmgmt.md](docs/dbmgmt.md)** 与 [menu-dbmgmt.md](docs/handbook/requirements/menus/menu-dbmgmt.md)。
+
+1. 在 `plugins.enabled` 中启用 **`dbmgmt` + `project`**，执行 `migrate` 与 `seed`。
+2. **数据字典**（分类「数据库管理」）或 `config.yaml` 的 `dbmgmt` 块配置 goInception、超时、行数上限等。
+3. **资源管理 → 实例管理**：纳管 MySQL/PostgreSQL，探活确认 `online`。
+4. **资源申请**：查询权限（SELECT）、新建库、应用用户（CREATE USER / GRANT / 回收）走审批后落库或执行 SQL。
+5. **SQL 操作**：只读走 **SQL 查询**；DDL/DML 走 **SQL 审核**（goInception 预检 → 工单 → 审批 → 执行）。
+6. **审计日志**（`/dbmgmt/audit`）记录查询/执行/授权/工单等；**查询历史**在 SQL 查询页（`db_sql_executions`）。
+
+**MySQL 管理员授权要点**：平台从云枢服务器 IP 连接实例时，须对 **`管理员@'<平台IP>'`** 授予 **GRANT OPTION**，不能只授 `@'%'`（更具体的 host 条目优先匹配）。
+
+```sql
+-- 示例：平台 10.10.10.1 连接 MySQL 10.10.10.103
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'10.10.10.1' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+```
+
 ---
 
 ## 前端路由索引
@@ -436,6 +462,7 @@ API 细节见：[docs/log-platform-api.md](docs/log-platform-api.md)
 | K8s 档位/NS 策略 | `/k8s-scoped-policies` |
 | 项目与日志 | `/projects`、`/project-members`、`/project-servers`、`/project-logs`、`/project-log-sources`、`/agent-list` |
 | MySQL 备份 | `/mysql-backup` |
+| 数据库管理 | `/dbmgmt/instances`、`/dbmgmt/sql/query`、`/dbmgmt/sql/audit`、`/dbmgmt/workflow/pending`、`/dbmgmt/audit`（详见 [docs/dbmgmt.md](docs/dbmgmt.md)） |
 | CI/CD | `/cicd/services`、`/cicd/todo`、`/cicd/build-records`、`/cicd/release-records` |
 | 集群与资源 | `/clusters`、`/pods`、`/deployments`、`/k8s/event-forward`、… |
 | 告警 | `/alert-channels`、`/alert-monitor-platform`（含云到期规则 Tab）、`/alert-duty` |
@@ -486,6 +513,9 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 | 集群详情无 kubeconfig | 预期行为（安全脱敏）；更新时重新粘贴 YAML |
 | 首页 Pod 统计与预期不符 | 非 super-admin 仅聚合**有项目成员关系且具备 readonly+ 档位**的集群 |
 | Docker 后端连不上库 | 检查 `MYSQL_*` / `REDIS_*` 环境变量与服务名 `yunshu-mysql` |
+| dbmgmt 应用用户审批 1044 | 实例管理员对目标库无 GRANT OPTION；检查 `root@'<平台IP>'` 而非仅 `root@'%'` |
+| SQL 审核报「禁止多语句」 | 启用 `dbmgmt_goinception_enabled` 并确认 goInception 可达 |
+| dbmgmt 菜单不可见 | 确认 `plugins.enabled` 含 `dbmgmt` + `project`；执行 `seed`；角色勾选 dbmgmt API |
 
 ---
 
@@ -672,7 +702,31 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 ---
 
-### 4. 告警平台
+### 4. 数据库管理（dbmgmt）
+
+> 需启用 `dbmgmt` + `project` 插件。完整运维手册见 [docs/dbmgmt.md](docs/dbmgmt.md)。
+
+#### 数据库管理-实例与 SQL 操作
+![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+- [x] 实例纳管（MySQL/PostgreSQL）、探活、元数据树
+- [x] 实例详情：DB 管理、MySQL 用户管理（SHOW GRANTS、托管密码查看）
+- [x] SQL 查询页：只读 SQL、查询历史（`db_sql_executions`）
+- [x] SQL 审核页：goInception 预检、多语句（启用 goInception 时）、SQL 文件导入、工单提交
+- [x] 菜单对齐 smartdbs：资源申请 / 资源管理 / SQL 操作 / 工单管理
+- [ ] 列级脱敏
+
+#### 数据库管理-授权与工单
+![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+- [x] 平台查询权限申请（SELECT + 行数上限 `query_limit_num`）
+- [x] 库表级权限申请、新建库申请
+- [x] 应用用户权限（新用户 / 加权限 / 加 IP / 回收）
+- [x] 三阶段可配置审批流；待审核 / 历史工单；SQL 回滚与 OSC
+- [x] 审计日志（查询/执行/授权/工单/应用用户）
+- [ ] 跨项目授权模板复用
+
+---
+
+### 5. 告警平台
 
 #### 告警平台-数据源配置页面
 ![告警平台-数据源配置页面](./images/告警平台-数据源配置页面.png)
@@ -745,7 +799,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 ---
 
-### 5. Kubernetes 管理
+### 6. Kubernetes 管理
 
 #### 集群与基础资源
 
@@ -859,7 +913,7 @@ erDiagram
   ALERT_CHANNELS ||--o{ ALERT_EVENTS : "channel_id"
 ```
 
-更多细分图（系统管理 / 项目管理 / 告警 / 日志 / K8s）请见：`docs/handbook/database/er-diagrams.md`。
+更多细分图（系统管理 / 项目管理 / **dbmgmt** / 告警 / 日志 / K8s）请见：`docs/handbook/database/er-diagrams.md`。
 
 ---
 
@@ -879,7 +933,7 @@ yunshu/
 │   ├── menu/               # 内置菜单 catalog + seed 同步（internal/menu/catalog.go）
 │   ├── middleware/         # Auth、Casbin、K8sScope、ErrorHandler、审计
 │   ├── plugin/             # 插件注册表与 Runtime
-│   ├── plugins/            # 编译期业务插件：core/k8s/alert/project/cmdb/backup/cicd
+│   ├── plugins/            # 编译期业务插件：core/k8s/alert/project/cmdb/backup/cicd/dbmgmt
 │   ├── dictconfig/         # 数据字典运行期配置（mail/cicd/minio/parse）
 │   ├── pkg/                # cronutil、sshserver、mysqlbackup、logutil…
 │   ├── interfaces/         # Repository 接口
@@ -888,7 +942,7 @@ yunshu/
 │   ├── providers/          # Wire：Config / DB / Redis
 │   ├── router/             # 路由 + plugin_bind + Wire 装配
 │   └── service/            # 业务逻辑（按域子包 + exports.go 门面）
-│       ├── alert/ cmdb/ k8s/ project/ system/ logplatform/ ...
+│       ├── alert/ cmdb/ k8s/ project/ system/ logplatform/ dbmgmt/ ...
 │       └── exports.go
 ├── web/                    # React + Vite 前端（web/src/modules 按插件懒加载）
 ├── docker-compose.yml
@@ -905,6 +959,7 @@ yunshu/
 | **后端代码地图（推荐开发者首读）** | [docs/CODEBASE-MAP.md](docs/CODEBASE-MAP.md) |
 | **业务插件（GVA 风格）** | [docs/plugins.md](docs/plugins.md) |
 | **CI/CD 插件** | [docs/cicd.md](docs/cicd.md) |
+| **数据库管理（dbmgmt）** | [docs/dbmgmt.md](docs/dbmgmt.md) |
 | 后端完整架构 | [docs/backend-architecture-complete.md](docs/backend-architecture-complete.md) |
 | 重构实施状态 | [docs/refactoring-report.md](docs/refactoring-report.md) |
 | 产品手册总览 | [docs/handbook/README.md](docs/handbook/README.md) |

@@ -106,6 +106,7 @@ Worker（可选）：实现 `Module.StartWorkers`，在 `plugin.Runtime` 注入�
 
 - **CMDB**：`/project-servers` 需同时启用 `cmdb` + `project`
 - **CI/CD**：`/cicd` 与 `/api/v1/projects/*/cicd/*` 需同时启用 `cicd` + `project`
+- **dbmgmt**：`/dbmgmt` 与 `/api/v1/projects/*/dbmgmt/*` 需同时启用 `dbmgmt` + `project`
 - **总览 CI 图表 API**：`/api/v1/overview/project-launches` 等归属 `cicd` 插件；未启用时返回空数据而非 SQL 错误
 
 运行测试：`go test ./internal/plugin/...`
@@ -171,5 +172,6 @@ A: 见 [docs/handbook/permissions/casbin-and-k8s-triple-policy.md](docs/handbook
 
 - [README.md](README.md) — 运维部署、功能说明
 - [docs/cicd.md](docs/cicd.md) — CI/CD 插件
+- [docs/dbmgmt.md](docs/dbmgmt.md) — 数据库管理插件
 - [docs/refactoring-report.md](docs/refactoring-report.md) — 重构进度
 - [docs/plugins.md](docs/plugins.md) — 插件详解

@@ -1,6 +1,6 @@
 export type DictTypeOption = { label: string; value: string };
 
-export type DictCategoryId = "all" | "system" | "alert" | "log" | "k8s" | "cmdb" | "backup" | "cicd" | "other";
+export type DictCategoryId = "all" | "system" | "alert" | "log" | "k8s" | "cmdb" | "backup" | "dbmgmt" | "cicd" | "other";
 
 type DictCategoryMeta = {
   id: Exclude<DictCategoryId, "all">;
@@ -17,6 +17,7 @@ export const DICT_CATEGORY_TABS: { id: DictCategoryId; label: string }[] = [
   { id: "k8s", label: "Kubernetes" },
   { id: "cmdb", label: "CMDB / 服务器" },
   { id: "backup", label: "备份 / MinIO" },
+  { id: "dbmgmt", label: "数据库管理" },
   { id: "cicd", label: "CI/CD" },
   { id: "other", label: "其他" },
 ];
@@ -28,6 +29,7 @@ export const DICT_CATEGORY_META: Record<Exclude<DictCategoryId, "all">, DictCate
   k8s: { id: "k8s", label: "Kubernetes", color: "purple", description: "集群模板、Event 转发等" },
   cmdb: { id: "cmdb", label: "CMDB / 服务器", color: "geekblue", description: "服务器分组、云厂商凭据模板" },
   backup: { id: "backup", label: "备份 / MinIO", color: "orange", description: "MySQL 备份归档与 MinIO 连接" },
+  dbmgmt: { id: "dbmgmt", label: "数据库管理", color: "gold", description: "SQL 查询、审批、goInception 等平台配置" },
   cicd: { id: "cicd", label: "CI/CD", color: "green", description: "Jenkins、流水线、发布枚举" },
   other: { id: "other", label: "其他", color: "default", description: "未归类的自定义 dict_type" },
 };
@@ -118,6 +120,19 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "MySQL 备份 Worker 开关（mysql_backup_scheduler_enabled）", value: "mysql_backup_scheduler_enabled", category: "backup" },
   { label: "MySQL 备份调度 Cron（mysql_backup_scheduler_tick_spec）", value: "mysql_backup_scheduler_tick_spec", category: "backup" },
 
+  { label: "SQL 查询超时秒（dbmgmt_query_timeout_seconds）", value: "dbmgmt_query_timeout_seconds", category: "dbmgmt" },
+  { label: "查询最大行数（dbmgmt_max_rows）", value: "dbmgmt_max_rows", category: "dbmgmt" },
+  { label: "SQL 导入上限 MB（dbmgmt_max_import_file_mb）", value: "dbmgmt_max_import_file_mb", category: "dbmgmt" },
+  { label: "生产强制审批（dbmgmt_prod_force_approval）", value: "dbmgmt_prod_force_approval", category: "dbmgmt" },
+  { label: "审批超时小时（dbmgmt_approval_sla_hours）", value: "dbmgmt_approval_sla_hours", category: "dbmgmt" },
+  { label: "审批提醒间隔小时（dbmgmt_approval_reminder_interval_hours）", value: "dbmgmt_approval_reminder_interval_hours", category: "dbmgmt" },
+  { label: "实例探活间隔秒（dbmgmt_ping_interval_seconds）", value: "dbmgmt_ping_interval_seconds", category: "dbmgmt" },
+  { label: "单实例最大并发（dbmgmt_max_concurrent_per_instance）", value: "dbmgmt_max_concurrent_per_instance", category: "dbmgmt" },
+  { label: "启用 goInception（dbmgmt_goinception_enabled）", value: "dbmgmt_goinception_enabled", category: "dbmgmt" },
+  { label: "goInception 地址（dbmgmt_goinception_host）", value: "dbmgmt_goinception_host", category: "dbmgmt" },
+  { label: "goInception 端口（dbmgmt_goinception_port）", value: "dbmgmt_goinception_port", category: "dbmgmt" },
+  { label: "goInception 备份（dbmgmt_goinception_backup）", value: "dbmgmt_goinception_backup", category: "dbmgmt" },
+
   { label: "CI/CD 启用（cicd_enabled）", value: "cicd_enabled", category: "cicd" },
   { label: "Jenkins 地址（cicd_jenkins_base_url）", value: "cicd_jenkins_base_url", category: "cicd" },
   { label: "Jenkins 用户（cicd_jenkins_username）", value: "cicd_jenkins_username", category: "cicd" },
@@ -174,6 +189,7 @@ export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "
   const registered = DICT_TYPE_CATEGORY_MAP.get(key);
   if (registered) return registered;
   if (key.startsWith("cicd_")) return "cicd";
+  if (key.startsWith("dbmgmt_")) return "dbmgmt";
   if (key.startsWith("alert_")) return "alert";
   if (key.startsWith("log_")) return "log";
   if (key.startsWith("k8s_")) return "k8s";
@@ -221,7 +237,7 @@ export function buildGroupedDictTypeSelectOptions(
     grouped.set(cat, list);
   }
 
-  const order: Exclude<DictCategoryId, "all">[] = ["system", "alert", "log", "k8s", "cmdb", "backup", "cicd", "other"];
+  const order: Exclude<DictCategoryId, "all">[] = ["system", "alert", "log", "k8s", "cmdb", "backup", "dbmgmt", "cicd", "other"];
   return order
     .filter((id) => grouped.has(id))
     .map((id) => ({

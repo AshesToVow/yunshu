@@ -10,6 +10,7 @@ import (
 	"yunshu/internal/middleware"
 	"yunshu/internal/service"
 	cicdsvc "yunshu/internal/service/cicd"
+	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -82,6 +83,8 @@ type RouteDeps struct {
 	cmdbHandler            *handler.CMDBHandler
 	mysqlBackupSvc         *service.MysqlBackupService
 	mysqlBackupHandler     *handler.MysqlBackupHandler
+	dbmgmtSvc              *dbmgmtsvc.Service
+	dbmgmtHandler          *handler.DbmgmtHandler
 	alertSvc               *service.AlertService
 	cicdSvc                *cicdsvc.Service
 	cicdHandler            *handler.CicdHandler
@@ -103,6 +106,14 @@ func (d *RouteDeps) MysqlBackupService() *service.MysqlBackupService {
 		return nil
 	}
 	return d.mysqlBackupSvc
+}
+
+// DbmgmtService 供 dbmgmt 插件后台任务使用。
+func (d *RouteDeps) DbmgmtService() *dbmgmtsvc.Service {
+	if d == nil {
+		return nil
+	}
+	return d.dbmgmtSvc
 }
 
 // CicdService 供 cicd 插件后台任务使用。
@@ -152,6 +163,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	userGroupHandler := handler.NewUserGroupHandler(svcs.UserGroup)
 
 	mysqlBackupHandler := handler.NewMysqlBackupHandler(svcs.MysqlBackup)
+	dbmgmtHandler := handler.NewDbmgmtHandler(svcs.Dbmgmt)
 	cicdHandler := handler.NewCicdHandler(svcs.Cicd)
 
 	authHandler := handler.NewAuthHandler(svcs.Auth, svcs.LoginLog)
@@ -277,6 +289,8 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		cmdbHandler:           cmdbHandler,
 		mysqlBackupSvc:        svcs.MysqlBackup,
 		mysqlBackupHandler:    mysqlBackupHandler,
+		dbmgmtSvc:             svcs.Dbmgmt,
+		dbmgmtHandler:         dbmgmtHandler,
 		alertSvc:              svcs.Alert,
 		cicdSvc:               svcs.Cicd,
 		cicdHandler:           cicdHandler,

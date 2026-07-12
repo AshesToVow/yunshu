@@ -33,6 +33,7 @@ func Register(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, bgCtx
 		Enabled:                 plugin.ResolveEnabled(&app.Config.Plugins),
 		K8sRuntime:              d.K8sRuntimeService(),
 		MysqlBackup:             d.MysqlBackupService(),
+		Dbmgmt:                  d.DbmgmtService(),
 		Cicd:                    d.CicdService(),
 		Alert:                   d.AlertService(),
 	}

@@ -10,6 +10,7 @@ import (
 	"yunshu/internal/service"
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
+	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
@@ -23,7 +24,7 @@ var repositoryFieldNames = wire.FieldsOf(
 	"ProjectMember", "K8sNsDeny", "K8sNsAllow", "UserGroup", "K8sClusterAccess",
 	"Cluster", "Project", "RegRequest", "Menu", "DictEntry",
 	"Server", "ServerGroup", "CloudAccount", "Service", "LogSource",
-	"LogAgent", "AgentDiscovery", "MysqlBackup",
+	"LogAgent", "AgentDiscovery", "MysqlBackup", "Dbmgmt",
 	"AlertEvent", "AlertChannel", "AlertSilence", "AlertMaintenance",
 	"AlertInhibitionRule", "AlertSubscription", "AlertDatasource",
 	"AlertMonitorRule", "AlertReceiverGroup", "AlertDuty", "AlertRuleAssignee",
@@ -39,6 +40,7 @@ var AppInfraSet = wire.NewSet(
 	provideAuthConfig,
 	provideAlertConfig,
 	provideCicdConfig,
+	provideDbmgmtConfig,
 	provideAppRouteConfig,
 	appRouteConfigFields,
 	providePluginsEnabled,
@@ -161,6 +163,21 @@ func provideMysqlBackupService(
 	return service.NewMysqlBackupService(backupRepo, serverRepo, projectRepo, userRepo, db, string(encryptionKey), sender, string(appName))
 }
 
+func provideDbmgmtService(
+	dbmgmtRepo interfaces.DbmgmtRepository,
+	serverRepo interfaces.ServerRepository,
+	projectRepo interfaces.ProjectRepository,
+	userGroupRepo interfaces.UserGroupRepository,
+	userRepo interfaces.UserRepository,
+	db *gorm.DB,
+	encryptionKey SecurityEncryptionKey,
+	sender mailer.Sender,
+	appName AppDisplayName,
+	cfg config.DbmgmtConfig,
+) (*dbmgmtsvc.Service, error) {
+	return dbmgmtsvc.NewService(dbmgmtRepo, serverRepo, projectRepo, userGroupRepo, userRepo, db, string(encryptionKey), sender, string(appName), cfg)
+}
+
 func provideCicdService(
 	db *gorm.DB,
 	serverRepo interfaces.ServerRepository,
@@ -251,6 +268,7 @@ var ServiceSet = wire.NewSet(
 	provideCMDBService,
 	service.NewProjectMgmtService,
 	provideMysqlBackupService,
+	provideDbmgmtService,
 	provideCicdService,
 	provideLogAgentService,
 	service.NewAgentDiscoveryService,

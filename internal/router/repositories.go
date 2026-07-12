@@ -32,6 +32,7 @@ type routeRepositories struct {
 	LogAgent          interfaces.LogAgentRepository
 	AgentDiscovery    interfaces.AgentDiscoveryRepository
 	MysqlBackup       interfaces.MysqlBackupRepository
+	Dbmgmt            interfaces.DbmgmtRepository
 	AlertEvent          interfaces.AlertEventRepository
 	AlertChannel        interfaces.AlertChannelRepository
 	AlertSilence        interfaces.AlertSilenceRepository
@@ -75,6 +76,7 @@ func newRouteRepositories(db *gorm.DB) *routeRepositories {
 		LogAgent:         repository.NewLogAgentRepository(db),
 		AgentDiscovery:   repository.NewAgentDiscoveryRepository(db),
 		MysqlBackup:      repository.NewMysqlBackupRepository(db),
+		Dbmgmt:           repository.NewDbmgmtRepository(db),
 		AlertEvent:          repository.NewAlertEventRepository(db),
 		AlertChannel:        repository.NewAlertChannelRepository(db),
 		AlertSilence:        repository.NewAlertSilenceRepository(db),

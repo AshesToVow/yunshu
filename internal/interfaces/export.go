@@ -18,6 +18,7 @@ type (
 	LogAgentRepository            = repository.LogAgentRepo
 	AgentDiscoveryRepository      = repository.AgentDiscoveryRepo
 	MysqlBackupRepository         = repository.MysqlBackupRepo
+	DbmgmtRepository              = repository.DbmgmtRepo
 	LoginLogRepository            = repository.LoginLogRepo
 	OperationLogRepository        = repository.OperationLogRepo
 	MenuRepository                = repository.MenuRepo

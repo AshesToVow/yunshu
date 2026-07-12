@@ -35,6 +35,8 @@
 | **告警平台** | Prometheus 数据源、告警规则、值班排班、静默策略、多渠道通知(钉钉/邮件/Webhook) |
 | **日志平台** | Agent 采集、SSE 实时日志流、文件发现、日志源配置 |
 | **MySQL 备份** | 定时备份调度、远程归档、MinIO 对象存储 |
+| **数据库管理（dbmgmt）** | MySQL/PostgreSQL 实例纳管、SQL 查询与审核（goInception）、库表授权、应用用户 GRANT、审批工单与审计 |
+| **CI/CD** | Jenkins 打包、多级审批发布、MinIO/SSH/K8s 发布（`cicd` 插件） |
 
 ### 项目定位
 
@@ -173,6 +175,9 @@ internal/
     ├── system/         # 用户 / RBAC / 认证 / 字典
     ├── logplatform/    # Agent / 发现 / 日志 Broker
     ├── mysqlbackup/
+    ├── dbmgmt/           # 数据库实例、SQL、授权工单
+    ├── cicd/             # Jenkins CI/CD
+    ├── cmdb/             # 服务器资产
     └── overview/
 ```
 
@@ -448,6 +453,29 @@ mysqldump → gzip 压缩 → 上传 MinIO → 记录元数据到 DB
 - Cron 表达式解析 (robfig/cron)
 - 分布式锁防重复执行 (Redis SETNX)
 - 备份保留策略
+
+##### 4.3.7 数据库管理服务（dbmgmt）
+
+**能力摘要**（详见 [dbmgmt.md](dbmgmt.md)）：
+
+- 实例纳管：MySQL / PostgreSQL 探活、元数据（库/表/列）、可选 SSH 隧道
+- SQL 查询：只读 SELECT/SHOW/DESCRIBE/EXPLAIN，查询历史（`db_sql_executions`）
+- SQL 审核：goInception 预检、工单审批、执行、回滚与 OSC 控制
+- 授权与申请：平台查询权限（`db_access_grants`）、库表级申请、应用用户 CREATE USER / GRANT / REVOKE
+- 审计：`db_audit_logs` 记录查询/执行/授权/工单等操作
+
+**关键服务文件**：
+
+| 服务 | 文件 | 功能 |
+|------|------|------|
+| 实例 | [dbmgmt/instance_service.go](internal/service/dbmgmt/instance_service.go) | CRUD、探活、元数据 |
+| SQL | [dbmgmt/sql_execute_service.go](internal/service/dbmgmt/sql_execute_service.go) | 查询/检测/执行/导入 |
+| 授权 | [dbmgmt/grant_service.go](internal/service/dbmgmt/grant_service.go) | 平台授权 CRUD |
+| 应用用户 | [dbmgmt/app_user_service.go](internal/service/dbmgmt/app_user_service.go) | 审批后逐条执行 GRANT SQL |
+| 工单 | [dbmgmt/ticket_service.go](internal/service/dbmgmt/ticket_service.go) | SQL 工单、回滚 |
+| 审计 | [dbmgmt/audit_log_service.go](internal/service/dbmgmt/audit_log_service.go) | 统一审计写入 |
+
+**外部依赖**：goInception（SQL 预检/备份/OSC）；实例管理员须对 **`用户@'<平台IP>'`** 授予 GRANT OPTION。
 
 #### Repository 层 (数据访问)
 
@@ -738,6 +766,20 @@ flowchart TD
 | `mysql_backup_instances` | 备份实例 | project_id/server_id/database/host/port/credential_id/cron_expr |
 | `mysql_backup_jobs` | 备份任务 | instance_id/status/started_at/completed_at/file_url/size_bytes |
 
+#### 数据库管理域（`dbmgmt` 插件）
+
+| 表名 | 用途 | 关键字段 |
+|------|------|----------|
+| `db_instances` | 数据库实例 | project_id/driver/host/port/admin_credential |
+| `db_access_grants` | 平台用户库表授权 | user_id/instance_id/db_name/table_name/privileges/query_limit_num |
+| `db_access_requests` / `db_access_request_steps` | 权限申请与审批 | request_type/status/stage |
+| `db_app_user_requests` / `db_app_user_request_steps` | 应用用户申请 | action(create/add_priv/revoke)/mysql_user/host |
+| `db_sql_tickets` / `db_sql_ticket_steps` | SQL 变更工单 | sql_content/status/goinception_result |
+| `db_sql_executions` | SQL 执行历史 | sql_text/execution_type/risk_level |
+| `db_audit_logs` | 操作审计 | action_type/target_summary |
+| `db_instance_accounts` | 平台托管账号 | mysql_user/host/encrypted_password |
+| `db_approval_flow_stages` | 审批流阶段 | stage_order/approver_group_id |
+
 ### 5.2 ER 关系图 (简化版)
 
 ```mermaid
@@ -768,7 +810,7 @@ erDiagram
 
 ### 6.1 路由分组结构
 
-> **2026-06 插件化**：HTTP 路由由 `internal/router/plugin_bind.go` 按 `plugins.enabled` 调用 `RegisterCoreRoutes`、`RegisterK8sRoutes`、`RegisterAlertRoutes`、`RegisterProjectRoutes`、`RegisterCMDBRoutes`、`RegisterBackupRoutes`、`RegisterCicdRoutes`。下文树形结构为**逻辑分组**摘要。
+> **2026-07 插件化**：HTTP 路由由 `internal/router/plugin_bind.go` 按 `plugins.enabled` 调用 `RegisterCoreRoutes`、`RegisterK8sRoutes`、`RegisterAlertRoutes`、`RegisterProjectRoutes`、`RegisterCMDBRoutes`、`RegisterBackupRoutes`、`RegisterCicdRoutes`、**`RegisterDbmgmtRoutes`**。下文树形结构为**逻辑分组**摘要。
 
 所有 API 统一前缀 `/api/v1`，按业务域分为以下模块：
 
@@ -921,6 +963,26 @@ erDiagram
 ```
 
 详见 [cicd.md](cicd.md)。
+
+#### 数据库管理路由 ([register_dbmgmt_routes.go](internal/router/register_dbmgmt_routes.go))
+
+需启用 **`dbmgmt` + `project`** 插件；前缀 `/api/v1/projects/:id/dbmgmt`：
+
+```
+├── instances/                          # 实例 CRUD + ping
+├── instances/:instanceId/metadata/     # databases / tables / columns
+├── instances/:instanceId/query|check|execute|import
+├── instances/:instanceId/mysql-users   # MySQL 用户与权限
+├── grants/                             # 平台授权 + effective
+├── access-requests/                    # 库表权限申请与审批
+├── app-user-requests/                  # 应用用户申请与审批
+├── tickets/                            # SQL 工单、回滚、OSC
+├── approval-flow                       # 项目级审批阶段
+├── executions/                         # SQL 执行历史
+└── audit-logs/                         # 审计日志
+```
+
+详见 [dbmgmt.md](dbmgmt.md)。
 
 ### 6.2 响应格式规范
 

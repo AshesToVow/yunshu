@@ -54,6 +54,10 @@ func provideCicdConfig(app *bootstrap.App) config.CicdConfig {
 	return app.Config.Cicd
 }
 
+func provideDbmgmtConfig(app *bootstrap.App) config.DbmgmtConfig {
+	return app.Config.Dbmgmt
+}
+
 func provideAppRouteConfig(app *bootstrap.App) *appRouteConfig {
 	return &appRouteConfig{
 		AppName:             AppDisplayName(app.Config.App.Name),

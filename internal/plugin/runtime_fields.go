@@ -3,6 +3,7 @@ package plugin
 import (
 	"yunshu/internal/service"
 	"yunshu/internal/service/cicd"
+	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 )
 
 // K8sRuntimeSvc 返回 K8s 运行时服务（由 router 注入）。
@@ -20,6 +21,15 @@ func (rt *Runtime) MysqlBackupSvc() *service.MysqlBackupService {
 		return nil
 	}
 	svc, _ := rt.MysqlBackup.(*service.MysqlBackupService)
+	return svc
+}
+
+// DbmgmtSvc 返回数据库管理服务（由 router 注入）。
+func (rt *Runtime) DbmgmtSvc() *dbmgmtsvc.Service {
+	if rt == nil {
+		return nil
+	}
+	svc, _ := rt.Dbmgmt.(*dbmgmtsvc.Service)
 	return svc
 }
 

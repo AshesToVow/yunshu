@@ -2,6 +2,7 @@ package router
 
 import (
 	cicdsvc "yunshu/internal/service/cicd"
+	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 	"yunshu/internal/service"
 )
 
@@ -54,6 +55,7 @@ type routeServices struct {
 	CMDB                 *service.CMDBService
 	Cicd                 *cicdsvc.Service
 	MysqlBackup          *service.MysqlBackupService
+	Dbmgmt               *dbmgmtsvc.Service
 	LogAgent             *service.LogAgentService
 	AgentDiscovery       *service.AgentDiscoveryService
 	AlertReceiverGroup   *service.AlertReceiverGroupService

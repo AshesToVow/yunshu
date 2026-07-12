@@ -13,6 +13,9 @@
 | K8s 运行时 | `/api/v1/clusters`、`/pods`… | `k8s_clusters` + 集群外资源 | 多集群连接；部分读接口可由 K8s 三元策略兜底 |
 | K8s 三元策略 | `/api/v1/k8s-policies/*` | Casbin 中 `k8s:cluster:*` 对象 | 集群/命名空间/资源路径维度的授权 |
 | 日志 Agent | gRPC + `/api/v1/projects/:id/agents/*` | `log_agents`、`service_log_sources` | Agent 注册、心跳、日志上报 |
+| 数据库管理 | `/api/v1/projects/:id/dbmgmt/*` | `db_*` 系列表 | 实例、SQL 查询/审核、授权工单、goInception |
+| CI/CD | `/api/v1/projects/:id/cicd/*` | `cicd_*` 系列表 | Jenkins 打包、审批发布 |
+| MySQL 备份 | `/api/v1/projects/:id/mysql-backup/*` | `mysql_backup_*` | 定时备份与 MinIO 归档 |
 | 运维审计 | `/api/v1/login-logs`、`/operation-logs` | `login_logs`、`operation_logs` | 登录与操作留痕 |
 
 ## 2. 典型调用链

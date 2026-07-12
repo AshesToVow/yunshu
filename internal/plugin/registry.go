@@ -45,7 +45,7 @@ func All() []Module {
 
 // DefaultEnabled ??? plugins.enabled ?????????
 func DefaultEnabled() []string {
-	return []string{"core", "k8s", "alert", "project", "cmdb", "backup", "cicd"}
+	return []string{"core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt"}
 }
 
 // ResolveEnabled ???????????????

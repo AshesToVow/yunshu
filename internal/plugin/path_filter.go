@@ -32,6 +32,9 @@ func ResolveAPIResourcePlugin(resource string) string {
 	if plugin := resolveCicdAPIResource(r); plugin != "" {
 		return plugin
 	}
+	if plugin := resolveDbmgmtAPIResource(r); plugin != "" {
+		return plugin
+	}
 	for _, rule := range apiResourceRules {
 		for _, prefix := range rule.prefixes {
 			if strings.HasPrefix(r, prefix) {
@@ -54,6 +57,9 @@ func IsMenuPathAllowed(path string, cfg *config.PluginsConfig) bool {
 	if pluginName == "cicd" {
 		return isPluginEnabled(cfg, "cicd") && isPluginEnabled(cfg, "project")
 	}
+	if pluginName == "dbmgmt" {
+		return isPluginEnabled(cfg, "dbmgmt") && isPluginEnabled(cfg, "project")
+	}
 	return isPluginEnabled(cfg, pluginName)
 }
 
@@ -68,6 +74,9 @@ func IsAPIResourceAllowed(resource string, cfg *config.PluginsConfig) bool {
 	}
 	if pluginName == "cicd" {
 		return isPluginEnabled(cfg, "cicd") && isPluginEnabled(cfg, "project")
+	}
+	if pluginName == "dbmgmt" {
+		return isPluginEnabled(cfg, "dbmgmt") && isPluginEnabled(cfg, "project")
 	}
 	return isPluginEnabled(cfg, pluginName)
 }
@@ -139,6 +148,7 @@ var uiPathRules = []pathRule{
 	},
 	{plugin: "cmdb", prefixes: []string{"/project-servers", "/server-console"}},
 	{plugin: "backup", prefixes: []string{"/mysql-backup"}},
+	{plugin: "dbmgmt", prefixes: []string{"/dbmgmt"}},
 	{plugin: "cicd", prefixes: []string{"/cicd"}},
 }
 
@@ -187,6 +197,14 @@ func resolveCicdAPIResource(resource string) string {
 	}
 	if strings.Contains(resource, "/projects/") && strings.Contains(resource, "/cicd") {
 		return "cicd"
+	}
+	return ""
+}
+
+// resolveDbmgmtAPIResource 识别数据库管理相关 API（须在 project 前缀规则之前匹配）。
+func resolveDbmgmtAPIResource(resource string) string {
+	if strings.Contains(resource, "/projects/") && strings.Contains(resource, "/dbmgmt") {
+		return "dbmgmt"
 	}
 	return ""
 }

@@ -260,6 +260,19 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "cicd_importance_level", Label: "一般", Value: "normal", Sort: intRef(1), Status: 1, Remark: "重要级别"},
 			{DictType: "cicd_importance_level", Label: "重要", Value: "important", Sort: intRef(2), Status: 1, Remark: "重要级别"},
 			{DictType: "cicd_importance_level", Label: "核心", Value: "critical", Sort: intRef(3), Status: 1, Remark: "重要级别"},
+			// 数据库管理平台（字典优先，config.yaml 兜底）
+			{DictType: "dbmgmt_query_timeout_seconds", Label: "SQL 查询超时(秒)", Value: "30", Sort: intRef(1), Status: 1, Remark: "dbmgmt.query_timeout_seconds"},
+			{DictType: "dbmgmt_max_rows", Label: "查询最大返回行数", Value: "1000", Sort: intRef(1), Status: 1, Remark: "dbmgmt.max_result_rows"},
+			{DictType: "dbmgmt_max_import_file_mb", Label: "SQL 文件导入上限(MB)", Value: "10", Sort: intRef(1), Status: 1, Remark: "dbmgmt.max_import_file_mb"},
+			{DictType: "dbmgmt_prod_force_approval", Label: "生产环境强制审批", Value: "true", Sort: intRef(1), Status: 1, Remark: "dbmgmt.prod_force_approval：true/false"},
+			{DictType: "dbmgmt_approval_sla_hours", Label: "审批超时阈值(小时)", Value: "24", Sort: intRef(1), Status: 1, Remark: "dbmgmt.approval_sla_hours"},
+			{DictType: "dbmgmt_approval_reminder_interval_hours", Label: "审批提醒间隔(小时)", Value: "4", Sort: intRef(1), Status: 1, Remark: "dbmgmt.approval_reminder_interval_hours"},
+			{DictType: "dbmgmt_ping_interval_seconds", Label: "实例探活间隔(秒)", Value: "300", Sort: intRef(1), Status: 1, Remark: "dbmgmt.ping_interval_seconds"},
+			{DictType: "dbmgmt_max_concurrent_per_instance", Label: "单实例最大并发", Value: "5", Sort: intRef(1), Status: 1, Remark: "dbmgmt.max_concurrent_per_instance"},
+			{DictType: "dbmgmt_goinception_enabled", Label: "启用 goInception 审核", Value: "true", Sort: intRef(1), Status: 1, Remark: "dbmgmt.goinception_enabled：true/false"},
+			{DictType: "dbmgmt_goinception_host", Label: "goInception 地址", Value: "10.10.10.103", Sort: intRef(1), Status: 1, Remark: "dbmgmt.goinception_host"},
+			{DictType: "dbmgmt_goinception_port", Label: "goInception 端口", Value: "4000", Sort: intRef(1), Status: 1, Remark: "dbmgmt.goinception_port"},
+			{DictType: "dbmgmt_goinception_backup", Label: "goInception 执行前备份", Value: "true", Sort: intRef(1), Status: 1, Remark: "dbmgmt.goinception_backup：true/false"},
 		}
 		singletonTypes := map[string]struct{}{
 			"mail_host":                                 {},
@@ -312,6 +325,18 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			"cicd_run_sync_interval_seconds":            {},
 			"cicd_approval_sla_hours":                   {},
 			"cicd_approval_reminder_interval_hours":     {},
+			"dbmgmt_query_timeout_seconds":              {},
+			"dbmgmt_max_rows":                           {},
+			"dbmgmt_max_import_file_mb":                 {},
+			"dbmgmt_prod_force_approval":                {},
+			"dbmgmt_approval_sla_hours":                 {},
+			"dbmgmt_approval_reminder_interval_hours":   {},
+			"dbmgmt_ping_interval_seconds":              {},
+			"dbmgmt_max_concurrent_per_instance":        {},
+			"dbmgmt_goinception_enabled":                {},
+			"dbmgmt_goinception_host":                   {},
+			"dbmgmt_goinception_port":                   {},
+			"dbmgmt_goinception_backup":                 {},
 		}
 		for _, item := range seed {
 			var (

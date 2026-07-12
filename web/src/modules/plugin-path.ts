@@ -1,5 +1,5 @@
 /** 与后端 plugins.enabled 默认全集一致 */
-export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd"] as const;
+export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt"] as const;
 
 export type PluginName = (typeof DEFAULT_ENABLED_PLUGINS)[number];
 
@@ -86,6 +86,10 @@ const PATH_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
     prefixes: ["/mysql-backup"],
   },
   {
+    plugin: "dbmgmt",
+    prefixes: ["/dbmgmt"],
+  },
+  {
     plugin: "cicd",
     prefixes: ["/cicd"],
   },
@@ -115,6 +119,10 @@ export function isPathAllowedByPlugins(path: string, isPluginEnabled: (name: str
   const cmdbPaths = ["/project-servers", "/server-console"];
   if (cmdbPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
     return isCmdbPageAllowed(isPluginEnabled);
+  }
+  const dbmgmtPaths = ["/dbmgmt"];
+  if (dbmgmtPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
+    return isDbmgmtAllowed(isPluginEnabled);
   }
   const cicdPaths = ["/cicd"];
   if (cicdPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
@@ -176,6 +184,9 @@ export function resolveAPIResourcePlugin(resource: string): PluginName | null {
   if (cicdOverview.some((p) => r === p || r.startsWith(`${p}/`))) {
     return "cicd";
   }
+  if (r.includes("/projects/") && r.includes("/dbmgmt")) {
+    return "dbmgmt";
+  }
   if (r.includes("/projects/") && r.includes("/cicd")) {
     return "cicd";
   }
@@ -192,6 +203,11 @@ export function isCicdAllowed(isPluginEnabled: (name: string) => boolean): boole
   return isPluginEnabled("cicd") && isPluginEnabled("project");
 }
 
+/** 数据库管理依赖 project 上下文 */
+export function isDbmgmtAllowed(isPluginEnabled: (name: string) => boolean): boolean {
+  return isPluginEnabled("dbmgmt") && isPluginEnabled("project");
+}
+
 export function isAPIResourceAllowedByPlugins(
   resource: string,
   isPluginEnabled: (name: string) => boolean,
@@ -200,6 +216,7 @@ export function isAPIResourceAllowedByPlugins(
   if (!plugin) return true;
   if (plugin === "cmdb") return isCmdbPageAllowed(isPluginEnabled);
   if (plugin === "cicd") return isCicdAllowed(isPluginEnabled);
+  if (plugin === "dbmgmt") return isDbmgmtAllowed(isPluginEnabled);
   return isPluginEnabled(plugin);
 }
 

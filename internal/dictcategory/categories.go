@@ -18,6 +18,7 @@ var rules = map[string]rule{
 	"k8s":    {prefixes: []string{"k8s_"}},
 	"cmdb":   {prefixes: []string{"server_", "cloud_"}},
 	"backup": {prefixes: []string{"minio_", "mysql_backup_"}},
+	"dbmgmt": {prefixes: []string{"dbmgmt_"}},
 	"cicd":   {prefixes: []string{"cicd_"}},
 }
 
@@ -119,6 +120,8 @@ func Label(category string) string {
 		return "CMDB / 服务器"
 	case "backup":
 		return "备份 / MinIO"
+	case "dbmgmt":
+		return "数据库管理"
 	case "cicd":
 		return "CI/CD"
 	case "other":

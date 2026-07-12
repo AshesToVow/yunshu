@@ -1,7 +1,7 @@
 # Yunshu 后端代码地图（与源码同步）
 
-**文档版本**: v1.4  
-**最后更新**: 2026-06-30  
+**文档版本**: v1.5  
+**最后更新**: 2026-07-12  
 **适用分支**: 插件化 + 目录拆分 + 仓储化 + `bizerrors` 统一之后  
 
 本文是阅读后端源码的**入口索引**。若与代码冲突，以 `internal/` 源码为准。
@@ -51,6 +51,7 @@ internal/service/
 ├── system/                    # 用户、角色、权限、认证、菜单、字典…
 ├── logplatform/               # Log Agent、发现、内存日志 Broker
 ├── mysqlbackup/               # MySQL 备份调度与执行
+├── dbmgmt/                      # 数据库实例、SQL 查询/审核、授权工单、审计
 ├── overview/                  # 首页总览指标（CI 图表依赖 cicd 插件）
 ├── cicd/                      # Jenkins CI/CD、发布审批、制品
 │
@@ -71,6 +72,7 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 | 日志 Agent | `logplatform` | `LogAgentService` | `logplatform/log_agent_service.go` |
 | 备份 | `mysqlbackup` | `MysqlBackupService` | `mysqlbackup/mysql_backup_service.go` |
 | CI/CD | `cicd` | `cicd.Service` | `cicd/service.go` |
+| 数据库管理 | `dbmgmt` | `dbmgmt.Service` | `dbmgmt/instance_service.go` → `sql_execute_service.go` |
 | 总览 | `overview` | `OverviewService` | `overview/overview_service.go` |
 
 ### 跨域依赖（读代码时注意）
@@ -84,6 +86,8 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 - `system` → `alert`：`DepartmentService` / `UserService` 依赖 `AlertRuleAssigneeService`
 - `overview` → `k8s`：总览 Pod 聚合使用 `K8sRuntimeService`
 - `overview` → `cicd`：项目上线/工单图表读 `cicd_release_runs`（cicd 插件未启用时返回空数据）
+- `dbmgmt` → `dictconfig`：goInception、超时、行数等运行期配置
+- `dbmgmt` → 外部 goInception：SQL 预检、备份、OSC、回滚
 
 ---
 
@@ -129,7 +133,7 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 |----|------|------------|
 | `cronutil` | Cron 校验、`ShouldRunAfterLast` / `ShouldRunWithDayAnchor`、`RunWorker` | 云到期调度、MySQL 备份定时 |
 | `sshserver` | 凭据解密 → `ssh.ClientConfig`、Dial | CMDB 终端、MySQL 备份远程执行 |
-| `dictconfig` | 字典覆盖 YAML（mail、cicd、minio、parse 工具） | mail、cicd、mysqlbackup、bootstrap |
+| `dictconfig` | 字典覆盖 YAML（mail、cicd、minio、**dbmgmt**、parse 工具） | mail、cicd、mysqlbackup、dbmgmt、bootstrap |
 | `mysqlbackup` | mysqldump/xtrabackup/innobackupex 命令构建 | `service/mysqlbackup` |
 | `logger` | slog 三文件分流、`With(ctx)` | bootstrap、middleware、service |
 | `errors` (`bizerrors`) | 业务错误 Pass/Ensure、gRPC 映射 | Service / Handler |

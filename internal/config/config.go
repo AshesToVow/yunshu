@@ -25,6 +25,7 @@ type Config struct {
 	Agent           AgentConfig           `mapstructure:"agent"`
 	Plugins         PluginsConfig         `mapstructure:"plugins"`
 	Cicd            CicdConfig            `mapstructure:"cicd"`
+	Dbmgmt          DbmgmtConfig          `mapstructure:"dbmgmt"`
 }
 
 type GRPCConfig struct {
@@ -303,6 +304,31 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Cicd.DefaultArtifactRetain <= 0 {
 		cfg.Cicd.DefaultArtifactRetain = defCicd.DefaultArtifactRetain
+	}
+	defDbmgmt := DefaultDbmgmtConfig()
+	if cfg.Dbmgmt.QueryTimeoutSeconds <= 0 {
+		cfg.Dbmgmt.QueryTimeoutSeconds = defDbmgmt.QueryTimeoutSeconds
+	}
+	if cfg.Dbmgmt.MaxResultRows <= 0 {
+		cfg.Dbmgmt.MaxResultRows = defDbmgmt.MaxResultRows
+	}
+	if cfg.Dbmgmt.MaxImportFileMB <= 0 {
+		cfg.Dbmgmt.MaxImportFileMB = defDbmgmt.MaxImportFileMB
+	}
+	if cfg.Dbmgmt.ApprovalSlaHours <= 0 {
+		cfg.Dbmgmt.ApprovalSlaHours = defDbmgmt.ApprovalSlaHours
+	}
+	if cfg.Dbmgmt.ApprovalReminderIntervalHours <= 0 {
+		cfg.Dbmgmt.ApprovalReminderIntervalHours = defDbmgmt.ApprovalReminderIntervalHours
+	}
+	if len(cfg.Dbmgmt.AllowedDrivers) == 0 {
+		cfg.Dbmgmt.AllowedDrivers = defDbmgmt.AllowedDrivers
+	}
+	if cfg.Dbmgmt.PingIntervalSeconds <= 0 {
+		cfg.Dbmgmt.PingIntervalSeconds = defDbmgmt.PingIntervalSeconds
+	}
+	if cfg.Dbmgmt.MaxConcurrentPerInstance <= 0 {
+		cfg.Dbmgmt.MaxConcurrentPerInstance = defDbmgmt.MaxConcurrentPerInstance
 	}
 	normalizeDatabaseConfig(&cfg)
 	return &cfg, nil
