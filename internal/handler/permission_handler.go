@@ -125,8 +125,14 @@ func (h *PermissionHandler) Detail(c *gin.Context) {
 // @Router /api/v1/permissions [get]
 func (h *PermissionHandler) List(c *gin.Context) {
 	ServeQuery(c, func(ctx context.Context, query service.PermissionListQuery) (*pagination.Result[service.PermissionItem], error) {
-		res, err := h.service.List(ctx, query)
-		if err != nil || res == nil || h.plugins == nil {
+		if h.plugins == nil {
+			return h.service.List(ctx, query)
+		}
+		queryAll := query
+		queryAll.Page = 1
+		queryAll.PageSize = 10000
+		res, err := h.service.List(ctx, queryAll)
+		if err != nil || res == nil {
 			return res, err
 		}
 		filtered := make([]service.PermissionItem, 0, len(res.List))
@@ -135,8 +141,22 @@ func (h *PermissionHandler) List(c *gin.Context) {
 				filtered = append(filtered, item)
 			}
 		}
-		res.List = filtered
-		return res, nil
+		page, pageSize := pagination.Normalize(query.Page, query.PageSize)
+		total := int64(len(filtered))
+		start := (page - 1) * pageSize
+		if start > len(filtered) {
+			start = len(filtered)
+		}
+		end := start + pageSize
+		if end > len(filtered) {
+			end = len(filtered)
+		}
+		return &pagination.Result[service.PermissionItem]{
+			List:     filtered[start:end],
+			Total:    total,
+			Page:     page,
+			PageSize: pageSize,
+		}, nil
 	})
 }
 

@@ -217,7 +217,7 @@ export function DbmgmtAppUserApplyPage() {
 
   const reset = () => {
     form.resetFields();
-    form.setFieldsValue({ project_id: projectId, apply_type: "add_ip", priv_level: "global", privileges: [] });
+    form.setFieldsValue({ project_id: projectId, apply_type: "new_user", priv_level: "global", privileges: [] });
   };
 
   return (
@@ -236,7 +236,7 @@ export function DbmgmtAppUserApplyPage() {
         layout="horizontal"
         labelCol={{ span: 4 }}
         wrapperCol={{ span: 16 }}
-        initialValues={{ apply_type: "add_ip", priv_level: "global", privileges: [] }}
+        initialValues={{ apply_type: "new_user", priv_level: "global", privileges: [] }}
         onFinish={() => void submit()}
       >
         <Form.Item name="apply_type" label="权限类型" rules={[{ required: true }]}>
@@ -260,7 +260,11 @@ export function DbmgmtAppUserApplyPage() {
           <Form.Item
             name="mysql_user"
             label="应用用户"
-            rules={[{ required: true, message: "请填写应用用户名" }]}
+            rules={[
+              { required: true, message: "请填写应用用户名" },
+              { pattern: /^[a-zA-Z0-9_]+$/, message: "用户名仅允许字母、数字和下划线" },
+              { max: 32, message: "用户名不超过 32 个字符" },
+            ]}
             extra={
               <Alert
                 type="info"

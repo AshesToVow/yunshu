@@ -85,7 +85,10 @@ func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*Approva
 	return &ApprovalFlowResponse{ProjectID: projectID, Stages: items}, nil
 }
 
-func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req ApprovalFlowUpsertRequest) (*ApprovalFlowResponse, error) {
+func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req ApprovalFlowUpsertRequest, actor *auth.CurrentUser) (*ApprovalFlowResponse, error) {
+	if err := s.requireProjectAdminOrOwner(ctx, projectID, actor); err != nil {
+		return nil, err
+	}
 	allowed := map[string]struct{}{}
 	for _, d := range defaultDbApprovalStages {
 		allowed[d.Key] = struct{}{}
@@ -197,8 +200,15 @@ func (s *Service) initAccessRequestSteps(ctx context.Context, req *model.DbAcces
 		return err
 	}
 	if len(stages) == 0 {
+		inst, instErr := s.repo.GetInstance(ctx, req.InstanceID)
+		if instErr == nil && inst.Env == model.DbEnvProd {
+			return constants.ErrBadRequestWithMsg("生产环境须启用至少一级审批流后方可提交权限申请")
+		}
 		req.Status = model.DbAccessRequestStatusApproved
-		return s.repo.UpdateAccessRequest(ctx, req)
+		if err := s.repo.UpdateAccessRequest(ctx, req); err != nil {
+			return err
+		}
+		return s.grantFromAccessRequest(ctx, req)
 	}
 	now := time.Now()
 	for i, st := range stages {
@@ -223,6 +233,10 @@ func (s *Service) initSqlTicketSteps(ctx context.Context, ticket *model.DbSqlTic
 		return err
 	}
 	if len(stages) == 0 {
+		inst, instErr := s.repo.GetInstance(ctx, ticket.InstanceID)
+		if instErr == nil && inst.Env == model.DbEnvProd {
+			return constants.ErrBadRequestWithMsg("生产环境须启用至少一级审批流后方可提交 SQL 工单")
+		}
 		ticket.Status = model.DbTicketStatusPendingExecution
 		return s.repo.UpdateSqlTicket(ctx, ticket)
 	}

@@ -1,20 +1,28 @@
-import { DownloadOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Modal, Select, Space, Table, Tabs, Tag, message } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckOutlined, CloseOutlined, DownloadOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Descriptions, Input, Modal, Select, Space, Table, Tabs, Tag, message } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { DbmgmtSectionTitle, auditModeLabel, formatInstanceLabel, ticketTypeLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 import {
+  approveDbTicket,
+  controlDbTicketOsc,
+  executeDbTicket,
   getDbTicket,
   getDbTicketRollback,
   listDbInstances,
+  listDbTicketOscJobs,
   listDbTicketSteps,
+  rejectDbTicket,
+  submitDbRollbackTicket,
   type DbInstance,
+  type DbOscJob,
   type DbRollbackItem,
   type DbTicket,
   type DbTicketStep,
 } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
+import { envLabel, ticketStatusLabel } from "../utils/dbmgmt-labels";
 
 type ReviewRow = {
   order_id?: number;
@@ -54,28 +62,21 @@ function syntaxLabel(v?: number) {
   return "其他";
 }
 
-function statusLabel(s?: string) {
-  const map: Record<string, string> = {
-    success: "执行成功",
-    executing: "执行中",
-    pending_approval: "待审批",
-    approved: "已审批",
-    failed: "执行失败",
-    rejected: "已驳回",
-    pending_execution: "待执行",
-  };
-  return map[s ?? ""] ?? s ?? "—";
-}
-
 function buildTaskLogs(ticket: DbTicket, steps: DbTicketStep[]) {
   const logs: { op: string; user: string; time: string; info: string }[] = [];
+  logs.push({
+    op: "提交",
+    user: ticket.submitter_name,
+    time: formatDateTime(ticket.created_at),
+    info: `等待审批，审批流程：${ticket.current_stage_name || "默认流程"}`,
+  });
   for (const step of steps) {
     if (step.status === "approved" && step.reviewed_at) {
       logs.push({
         op: "审批通过",
-        user: step.reviewer_name || ticket.submitter_name,
+        user: step.reviewer_name || "—",
         time: formatDateTime(step.reviewed_at),
-        info: `审批备注：${step.review_comment || ""}，审批完成，等待执行`,
+        info: `审批备注：${step.review_comment || "—"}，审批完成，等待执行`,
       });
     }
     if (step.status === "rejected" && step.reviewed_at) {
@@ -92,7 +93,7 @@ function buildTaskLogs(ticket: DbTicket, steps: DbTicketStep[]) {
       op: "执行工单",
       user: ticket.submitter_name,
       time: ticket.updated_at ? formatDateTime(ticket.updated_at) : formatDateTime(ticket.created_at),
-      info: "工单开始执行，执行备注：",
+      info: "工单开始执行",
     });
   }
   if (ticket.status === "success" || ticket.status === "failed") {
@@ -100,15 +101,9 @@ function buildTaskLogs(ticket: DbTicket, steps: DbTicketStep[]) {
       op: "执行结束",
       user: ticket.submitter_name,
       time: ticket.updated_at ? formatDateTime(ticket.updated_at) : "—",
-      info: `执行结果：${ticket.status === "success" ? "执行完成" : "执行失败"}`,
+      info: `执行结果：${ticketStatusLabel(ticket.status)}`,
     });
   }
-  logs.push({
-    op: "提交",
-    user: ticket.submitter_name,
-    time: formatDateTime(ticket.created_at),
-    info: `等待审批，审批流程：${ticket.current_stage_name || "DBA组"}`,
-  });
   return logs.sort((a, b) => (a.time < b.time ? 1 : -1));
 }
 
@@ -128,6 +123,9 @@ export function DbmgmtTicketDetailPage() {
   const [rollbackOpen, setRollbackOpen] = useState(false);
   const [rollbackLoading, setRollbackLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [oscJobs, setOscJobs] = useState<DbOscJob[]>([]);
+  const rejectCommentRef = useRef("");
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
@@ -177,6 +175,95 @@ export function DbmgmtTicketDetailPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const showOsc = ticket?.status === "executing" || ticket?.status === "success" || ticket?.status === "failed";
+    if (!projectId || !ticketId || !showOsc) {
+      setOscJobs([]);
+      return;
+    }
+    void listDbTicketOscJobs(projectId, ticketId)
+      .then((jobs) => setOscJobs(jobs ?? []))
+      .catch(() => setOscJobs([]));
+  }, [projectId, ticketId, ticket?.status]);
+
+  const handleApprove = async () => {
+    if (!projectId || !ticketId) return;
+    setActionLoading(true);
+    try {
+      await approveDbTicket(projectId, ticketId);
+      message.success("已审批通过");
+      void load();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "审批失败");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = () => {
+    if (!projectId || !ticketId) return;
+    rejectCommentRef.current = "";
+    Modal.confirm({
+      title: "驳回工单",
+      content: (
+        <Input.TextArea
+          rows={3}
+          placeholder="驳回原因（可选）"
+          onChange={(e) => {
+            rejectCommentRef.current = e.target.value;
+          }}
+        />
+      ),
+      okText: "确认驳回",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setActionLoading(true);
+        try {
+          await rejectDbTicket(projectId, ticketId, rejectCommentRef.current || undefined);
+          message.success("已驳回");
+          void load();
+        } catch (e) {
+          message.error(e instanceof Error ? e.message : "驳回失败");
+          throw e;
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleExecute = async () => {
+    if (!projectId || !ticketId) return;
+    setActionLoading(true);
+    try {
+      await executeDbTicket(projectId, ticketId);
+      message.success("已开始执行");
+      void load();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "执行失败");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSubmitRollback = async () => {
+    if (!projectId || !ticketId) return;
+    setActionLoading(true);
+    try {
+      const res = await submitDbRollbackTicket(projectId, ticketId);
+      message.success(res.message || "回滚工单已提交");
+      if (res.ticket_id) {
+        navigate(`/dbmgmt/workflow/tickets/${res.ticket_id}?project=${projectId}`);
+      } else {
+        void load();
+      }
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "提交回滚失败");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const onProjectChange = (id: number) => {
     setProjectId(id);
     const next = new URLSearchParams(searchParams);
@@ -200,7 +287,12 @@ export function DbmgmtTicketDetailPage() {
   };
 
   const executeRows = useMemo(() => parseReviewJSON(ticket?.execute_json), [ticket?.execute_json]);
+  const reviewRows = useMemo(() => parseReviewJSON(ticket?.review_json), [ticket?.review_json]);
   const taskLogs = useMemo(() => (ticket ? buildTaskLogs(ticket, steps) : []), [ticket, steps]);
+  const pendingStep = useMemo(() => steps.find((s) => s.status === "pending"), [steps]);
+  const canApprove = ticket?.mine_status === "mine_pending" && ticket?.status === "pending_approval";
+  const canExecute = ticket?.mine_status === "mine_pending" && ticket?.status === "pending_execution";
+  const canSubmitRollback = ticket?.status === "success" && ticket?.is_backup && rollbackRows.length > 0;
 
   const downloadSqlFile = () => {
     const text = ticket?.sql_text?.trim() || ticket?.sql_excerpt?.trim();
@@ -220,7 +312,7 @@ export function DbmgmtTicketDetailPage() {
       `# 工单 #${ticket.id} 执行日志`,
       `提交人: ${ticket.submitter_name}`,
       `数据库: ${ticket.database_name || "—"}`,
-      `状态: ${statusLabel(ticket.status)}`,
+      `状态: ${ticketStatusLabel(ticket.status)}`,
       "",
       "== 执行明细 ==",
     ];
@@ -273,6 +365,21 @@ export function DbmgmtTicketDetailPage() {
     message.success("回滚 SQL 已下载");
   };
 
+  const handleOscControl = async (sqlsha1: string, command: "kill" | "pause" | "resume") => {
+    if (!projectId || !ticketId) return;
+    setActionLoading(true);
+    try {
+      await controlDbTicketOsc(projectId, ticketId, sqlsha1, command);
+      message.success(command === "kill" ? "已终止 OSC" : command === "pause" ? "已暂停 OSC" : "已恢复 OSC");
+      const jobs = await listDbTicketOscJobs(projectId, ticketId);
+      setOscJobs(jobs ?? []);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "OSC 操作失败");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const instance = instances.find((i) => i.id === ticket?.instance_id);
   const projectName = projects.find((p) => p.id === (ticket?.project_id ?? projectId))?.name ?? "—";
 
@@ -287,17 +394,19 @@ export function DbmgmtTicketDetailPage() {
         </Descriptions.Item>
         <Descriptions.Item label="申请人">{ticket.submitter_name}</Descriptions.Item>
         <Descriptions.Item label="是否需要审核">
-          <Tag color="green">审核已开启</Tag>
+          <Tag color={ticket.audit_mode === "manual" ? "orange" : "green"}>{auditModeLabel(ticket.audit_mode)}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="审批流程">
-          <Tag color="blue">{ticket.current_stage_name || "DBA组"}</Tag>
+          <Tag color="blue">{ticket.current_stage_name || "默认流程"}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="提交时间">{formatDateTime(ticket.created_at)}</Descriptions.Item>
         <Descriptions.Item label="开始时间">{ticket.updated_at && ticket.status !== "pending_approval" ? formatDateTime(ticket.updated_at) : "—"}</Descriptions.Item>
         <Descriptions.Item label="完成时间">{ticket.status === "success" || ticket.status === "failed" ? formatDateTime(ticket.updated_at ?? ticket.created_at) : "—"}</Descriptions.Item>
-        <Descriptions.Item label="当前审批">无</Descriptions.Item>
+        <Descriptions.Item label="当前审批">
+          {pendingStep ? `${pendingStep.stage_name}${pendingStep.reviewer_name ? ` · ${pendingStep.reviewer_name}` : ""}` : "—"}
+        </Descriptions.Item>
         <Descriptions.Item label="当前状态">
-          <Tag color="blue">{statusLabel(ticket.status)}</Tag>
+          <Tag color="blue">{ticketStatusLabel(ticket.status)}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="资源组">{projectName}</Descriptions.Item>
       </Descriptions>
@@ -305,7 +414,7 @@ export function DbmgmtTicketDetailPage() {
       <DbmgmtSectionTitle>任务信息</DbmgmtSectionTitle>
       <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
         <Descriptions.Item label="项目名称">{projectName}</Descriptions.Item>
-        <Descriptions.Item label="环境信息">生产环境</Descriptions.Item>
+        <Descriptions.Item label="环境信息">{envLabel(instance?.env)}</Descriptions.Item>
         <Descriptions.Item label="实例别名">
           <Tag color="blue">{instance?.name || "—"}</Tag>
         </Descriptions.Item>
@@ -318,6 +427,24 @@ export function DbmgmtTicketDetailPage() {
         </Descriptions.Item>
         <Descriptions.Item label="sql格式">{ticket.sql_file_ref ? `文件（${ticket.sql_file_ref}）` : "文本"}</Descriptions.Item>
       </Descriptions>
+
+      <DbmgmtSectionTitle>审核结果</DbmgmtSectionTitle>
+      <Table
+        size="small"
+        rowKey={(_, i) => `review-${i}`}
+        dataSource={reviewRows.length ? reviewRows : []}
+        locale={{ emptyText: "暂无审核明细（可能未走 goInception 或尚未审核）" }}
+        pagination={false}
+        columns={[
+          { title: "序号", dataIndex: "order_id", width: 60, render: (v, _, i) => v ?? i + 1 },
+          { title: "阶段", dataIndex: "stage", width: 100 },
+          { title: "SQL内容", dataIndex: "sql", ellipsis: true },
+          { title: "风险级别", dataIndex: "error_level", width: 90 },
+          { title: "阶段状态", dataIndex: "stage_status", width: 100 },
+          { title: "错误信息", dataIndex: "error_message", ellipsis: true, render: (v?: string) => v || "—" },
+        ]}
+        style={{ marginBottom: 24 }}
+      />
 
       <DbmgmtSectionTitle>执行结果</DbmgmtSectionTitle>
       <Table
@@ -335,13 +462,49 @@ export function DbmgmtTicketDetailPage() {
             render: (v?: string) => <Tag color={ticket.status === "success" ? "blue" : "default"}>{v || ticket.status}</Tag>,
           },
           { title: "影响行数", dataIndex: "affected_rows", width: 90, render: (v?: number) => (v != null ? v : "—") },
-          { title: "errormessage", dataIndex: "error_message", ellipsis: true, render: (v?: string) => v || "—" },
+          { title: "错误信息", dataIndex: "error_message", ellipsis: true, render: (v?: string) => v || "—" },
           { title: "执行耗时", dataIndex: "execute_time", width: 90, render: (v?: string) => v || "—" },
           { title: "备份耗时", dataIndex: "backup_time", width: 90, render: (v?: string) => v || "—" },
-          { title: "当前阶段", width: 100, render: () => statusLabel(ticket.status) },
+          { title: "当前阶段", width: 100, render: () => ticketStatusLabel(ticket.status) },
         ]}
         style={{ marginBottom: 24 }}
       />
+
+      {oscJobs.length ? (
+        <>
+          <DbmgmtSectionTitle>在线 DDL (OSC)</DbmgmtSectionTitle>
+          <Table
+            size="small"
+            rowKey="sqlsha1"
+            dataSource={oscJobs}
+            pagination={false}
+            columns={[
+              { title: "序号", dataIndex: "order_id", width: 60 },
+              { title: "阶段", dataIndex: "stage", width: 120 },
+              { title: "状态", dataIndex: "stage_status", width: 100 },
+              { title: "SQL", dataIndex: "sql", ellipsis: true },
+              {
+                title: "操作",
+                width: 200,
+                render: (_, row) => (
+                  <Space size={4}>
+                    <Button size="small" loading={actionLoading} onClick={() => void handleOscControl(row.sqlsha1, "pause")}>
+                      暂停
+                    </Button>
+                    <Button size="small" loading={actionLoading} onClick={() => void handleOscControl(row.sqlsha1, "resume")}>
+                      恢复
+                    </Button>
+                    <Button size="small" danger loading={actionLoading} onClick={() => void handleOscControl(row.sqlsha1, "kill")}>
+                      终止
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+            style={{ marginBottom: 24 }}
+          />
+        </>
+      ) : null}
 
       {(ticket.sql_file_ref || ticket.sql_text) ? (
         <>
@@ -369,6 +532,11 @@ export function DbmgmtTicketDetailPage() {
             >
               查看回滚
             </Button>
+            {canSubmitRollback ? (
+              <Button loading={actionLoading} onClick={() => void handleSubmitRollback()}>
+                提交回滚工单
+              </Button>
+            ) : null}
             <Button type="link" icon={<DownloadOutlined />} style={{ color: "#52c41a", padding: 0 }} onClick={() => void downloadRollback()}>
               回滚信息下载
             </Button>
@@ -377,7 +545,7 @@ export function DbmgmtTicketDetailPage() {
       ) : null}
 
       <DbmgmtSectionTitle>操作信息</DbmgmtSectionTitle>
-      <Alert type="info" message={`执行结果：${ticket.status === "success" ? "执行完成" : statusLabel(ticket.status)}`} />
+      <Alert type="info" message={`执行结果：${ticketStatusLabel(ticket.status)}`} />
     </div>
   ) : null;
 
@@ -403,7 +571,22 @@ export function DbmgmtTicketDetailPage() {
       loading={loading}
       title="工单任务详情"
       extra={
-        <Space>
+        <Space wrap>
+          {canApprove ? (
+            <>
+              <Button type="primary" icon={<CheckOutlined />} loading={actionLoading} onClick={() => void handleApprove()}>
+                审批通过
+              </Button>
+              <Button danger icon={<CloseOutlined />} loading={actionLoading} onClick={handleReject}>
+                驳回
+              </Button>
+            </>
+          ) : null}
+          {canExecute ? (
+            <Button type="primary" icon={<PlayCircleOutlined />} loading={actionLoading} onClick={() => void handleExecute()}>
+              执行工单
+            </Button>
+          ) : null}
           <Select style={{ width: 180 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={onProjectChange} />
           <Button icon={<ReloadOutlined />} onClick={() => void load()} />
           <Button onClick={() => navigate(projectId ? `/dbmgmt/workflow/history?project=${projectId}` : "/dbmgmt/workflow/history")}>返回历史工单</Button>

@@ -104,13 +104,17 @@ func (s *Service) toTicketItem(ctx context.Context, t model.DbSqlTicket) TicketI
 	return item
 }
 
-func (s *Service) GetTicket(ctx context.Context, projectID, ticketID uint) (*TicketItem, error) {
+func (s *Service) GetTicket(ctx context.Context, projectID, ticketID uint, actor *auth.CurrentUser) (*TicketItem, error) {
 	t, err := s.repo.GetSqlTicketInProject(ctx, projectID, ticketID)
 	if err != nil {
 		return nil, err
 	}
 	item := s.toTicketItem(ctx, *t)
-	item.SqlText = t.SqlText
+	if s.canViewTicketSQL(ctx, projectID, t, actor) {
+		item.SqlText = t.SqlText
+	}
+	item.ReviewJSON = sanitizeReviewJSON(t.ReviewJSON)
+	item.ExecuteJSON = sanitizeReviewJSON(t.ExecuteJSON)
 	return &item, nil
 }
 
@@ -143,7 +147,10 @@ func (s *Service) executeWriteViaEngine(ctx context.Context, inst *model.DbInsta
 		if execErr != nil {
 			return executeJSON, execErr
 		}
-		if rs != nil && rs.Error != "" {
+		if rs == nil {
+			return executeJSON, constants.ErrBadRequestWithMsg("goInception 未返回执行结果")
+		}
+		if rs.Error != "" {
 			return executeJSON, constants.ErrBadRequestWithMsg(rs.Error)
 		}
 		for _, row := range rs.Rows {
@@ -251,7 +258,7 @@ func (s *Service) ExecuteSQL(ctx context.Context, projectID, instanceID uint, re
 		}
 		s.auditTicketEvent(ctx, projectID, instanceID, actor, "ticket_create", ticket, nil)
 		return &ExecuteResponse{
-			Status: model.DbTicketStatusPendingApproval, TicketID: ticket.ID, RiskLevel: assess.RiskLevel,
+			Status: ticket.Status, TicketID: ticket.ID, RiskLevel: assess.RiskLevel,
 			Message: "已创建审批工单",
 		}, nil
 	}
@@ -330,14 +337,15 @@ func (s *Service) ImportSQL(ctx context.Context, projectID, instanceID uint, req
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkWritePermission(ctx, projectID, inst, req.Database, true, actor); err != nil {
-		if err2 := s.checkWritePermission(ctx, projectID, inst, req.Database, false, actor); err2 != nil {
-			return nil, err
-		}
-	}
 	stmts := splitSQLStatements(req.Sql)
 	if len(stmts) == 0 {
 		return nil, constants.ErrBadRequestWithMsg("SQL 文件为空")
+	}
+	for _, st := range stmts {
+		needDDL := reDDL.MatchString(st)
+		if err := s.checkWritePermission(ctx, projectID, inst, req.Database, needDDL, actor); err != nil {
+			return nil, err
+		}
 	}
 	cfg := s.resolvedConfig(ctx)
 	maxBytes := cfg.MaxImportFileMB * 1024 * 1024
@@ -381,7 +389,7 @@ func (s *Service) ImportSQL(ctx context.Context, projectID, instanceID uint, req
 		}
 		s.auditTicketEvent(ctx, projectID, instanceID, actor, "ticket_create", ticket, map[string]any{"statement_count": len(stmts)})
 		return &ExecuteResponse{
-			Status: model.DbTicketStatusPendingApproval, TicketID: ticket.ID, RiskLevel: maxRisk,
+			Status: ticket.Status, TicketID: ticket.ID, RiskLevel: maxRisk,
 			Message: fmt.Sprintf("导入 %d 条语句，已创建审批工单", len(stmts)),
 		}, nil
 	}
@@ -551,6 +559,9 @@ func (s *Service) ApproveTicket(ctx context.Context, projectID, ticketID uint, c
 	if err != nil {
 		return err
 	}
+	if ticket.Status != model.DbTicketStatusPendingApproval {
+		return constants.ErrBadRequestWithMsg("工单已结束，无法审批")
+	}
 	steps, err := s.repo.ListSqlTicketSteps(ctx, ticketID)
 	if err != nil {
 		return err
@@ -591,6 +602,9 @@ func (s *Service) RejectTicket(ctx context.Context, projectID, ticketID uint, co
 	if err != nil {
 		return err
 	}
+	if ticket.Status != model.DbTicketStatusPendingApproval {
+		return constants.ErrBadRequestWithMsg("工单已结束，无法驳回")
+	}
 	steps, _ := s.repo.ListSqlTicketSteps(ctx, ticketID)
 	for i := range steps {
 		if steps[i].Status == model.DbApprovalStepPending {
@@ -625,6 +639,20 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if ticket.Status != model.DbTicketStatusPendingExecution && ticket.Status != model.DbTicketStatusApproved {
 		return constants.ErrBadRequestWithMsg("工单状态不允许执行")
 	}
+	claim := s.db.WithContext(ctx).Model(&model.DbSqlTicket{}).
+		Where("id = ? AND project_id = ? AND status IN ?", ticketID, projectID,
+			[]string{model.DbTicketStatusPendingExecution, model.DbTicketStatusApproved}).
+		Update("status", model.DbTicketStatusExecuting)
+	if claim.Error != nil {
+		return claim.Error
+	}
+	if claim.RowsAffected != 1 {
+		return constants.ErrBadRequestWithMsg("工单状态不允许执行或正在执行中")
+	}
+	ticket, err = s.repo.GetSqlTicketInProject(ctx, projectID, ticketID)
+	if err != nil {
+		return err
+	}
 	if ticket.SubmitterUserID != actorUserID(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
 		perm, _ := s.GetEffectivePermission(ctx, projectID, ticket.InstanceID, actor)
 		if perm == nil || !perm.CanManage {
@@ -635,8 +663,6 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if err != nil {
 		return err
 	}
-	ticket.Status = model.DbTicketStatusExecuting
-	_ = s.repo.UpdateSqlTicket(ctx, ticket)
 
 	tid := ticket.ID
 	cfg := s.resolvedConfig(ctx)

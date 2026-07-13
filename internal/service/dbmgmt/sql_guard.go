@@ -239,11 +239,30 @@ func enforceLimit(sqlText string, maxRows int) string {
 		maxRows = 1000
 	}
 	upper := strings.ToUpper(text)
-	if strings.Contains(upper, "LIMIT ") {
-		return text
+	if idx := strings.LastIndex(upper, "LIMIT "); idx >= 0 {
+		// 已有 LIMIT：若数值超过上限则追加子查询包装（简单场景直接截断重写）
+		return rewriteLimitClause(text, maxRows)
 	}
 	if reRead.MatchString(text) {
 		return fmt.Sprintf("%s LIMIT %d", text, maxRows)
+	}
+	return text
+}
+
+func rewriteLimitClause(text string, maxRows int) string {
+	upper := strings.ToUpper(text)
+	idx := strings.LastIndex(upper, "LIMIT ")
+	if idx < 0 {
+		return text
+	}
+	rest := strings.TrimSpace(text[idx+6:])
+	parts := strings.Fields(rest)
+	if len(parts) == 0 {
+		return text
+	}
+	var n int
+	if _, err := fmt.Sscanf(parts[0], "%d", &n); err == nil && n > maxRows {
+		return text[:idx] + fmt.Sprintf("LIMIT %d", maxRows)
 	}
 	return text
 }

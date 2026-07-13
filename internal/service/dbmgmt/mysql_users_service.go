@@ -122,7 +122,9 @@ type InstanceMySQLUserPrivilegesResponse struct {
 }
 
 func (s *Service) GetInstanceMySQLUserPrivileges(ctx context.Context, projectID, instanceID uint, mysqlUser, mysqlHost, privLevel, database string, actor *auth.CurrentUser) (*InstanceMySQLUserPrivilegesResponse, error) {
-	_ = actor
+	if err := s.requireInstanceManage(ctx, projectID, instanceID, actor); err != nil {
+		return nil, err
+	}
 	inst, err := s.repo.GetInstanceInProject(ctx, projectID, instanceID)
 	if err != nil {
 		return nil, err

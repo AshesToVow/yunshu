@@ -147,8 +147,17 @@ func shouldCaptureRequestBody(c *gin.Context) bool {
 }
 
 func shouldRedactAuditResponseBody(fullPath string) bool {
-	// 字典敏感明文：审计不落库响应体，仅保留路径/状态码/耗时等元数据。
-	return fullPath == "/api/v1/dict/entries/:id/reveal-value"
+	p := strings.ToLower(strings.TrimSpace(fullPath))
+	if p == "/api/v1/dict/entries/:id/reveal-value" {
+		return true
+	}
+	if strings.Contains(p, "/accounts/") && strings.HasSuffix(p, "/password") {
+		return true
+	}
+	if strings.Contains(p, "/auth/password") {
+		return true
+	}
+	return false
 }
 
 func maskSensitiveJSON(s string) string {

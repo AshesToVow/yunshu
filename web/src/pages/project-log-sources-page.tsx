@@ -200,6 +200,8 @@ export function ProjectLogSourcesPage() {
         token: res.token,
       });
       message.success("已生成部署命令");
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "生成部署命令失败");
     } finally {
       setBootstrapping(false);
     }
@@ -223,6 +225,8 @@ export function ProjectLogSourcesPage() {
       });
       setRotateConfirmOpen(false);
       message.success("Token已轮换，旧Token立即失效");
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "轮换 Token 失败");
     } finally {
       setBootstrapping(false);
     }

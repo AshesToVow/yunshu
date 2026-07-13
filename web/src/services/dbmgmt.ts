@@ -223,6 +223,7 @@ export type DbEffectivePermission = {
   can_export: boolean;
   can_import: boolean;
   can_manage: boolean;
+  databases?: string[];
 };
 
 export async function getDbApprovalFlow(projectId: number) {

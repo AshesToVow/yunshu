@@ -140,6 +140,9 @@ func (s *Service) ListGrants(ctx context.Context, projectID uint, instanceID uin
 }
 
 func (s *Service) CreateGrant(ctx context.Context, projectID uint, req GrantUpsertRequest, actor *auth.CurrentUser) (*GrantItem, error) {
+	if err := s.requireProjectAdminOrOwner(ctx, projectID, actor); err != nil {
+		return nil, err
+	}
 	if _, err := s.repo.GetInstanceInProject(ctx, projectID, req.InstanceID); err != nil {
 		return nil, err
 	}
@@ -188,6 +191,9 @@ func (s *Service) CreateGrant(ctx context.Context, projectID uint, req GrantUpse
 }
 
 func (s *Service) DeleteGrant(ctx context.Context, projectID, id uint, actor *auth.CurrentUser) error {
+	if err := s.requireProjectAdminOrOwner(ctx, projectID, actor); err != nil {
+		return err
+	}
 	g, err := s.repo.GetGrantInProject(ctx, projectID, id)
 	if err != nil {
 		return err
@@ -204,6 +210,9 @@ func (s *Service) DeleteGrant(ctx context.Context, projectID, id uint, actor *au
 }
 
 func (s *Service) UpdateGrant(ctx context.Context, projectID, id uint, req GrantUpdateRequest, actor *auth.CurrentUser) (*GrantItem, error) {
+	if err := s.requireProjectAdminOrOwner(ctx, projectID, actor); err != nil {
+		return nil, err
+	}
 	g, err := s.repo.GetGrantInProject(ctx, projectID, id)
 	if err != nil {
 		return nil, err
@@ -288,6 +297,9 @@ func (s *Service) GetEffectivePermission(ctx context.Context, projectID, instanc
 				continue
 			}
 			s.mergeGrant(out, g)
+			if db := strings.TrimSpace(g.DatabaseName); db != "" {
+				out.Databases = appendUniqueString(out.Databases, db)
+			}
 		}
 	}
 	if inst.ReadOnly {
@@ -296,19 +308,43 @@ func (s *Service) GetEffectivePermission(ctx context.Context, projectID, instanc
 	return out, nil
 }
 
+func appendUniqueString(list []string, v string) []string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return list
+	}
+	for _, x := range list {
+		if strings.EqualFold(x, v) {
+			return list
+		}
+	}
+	return append(list, v)
+}
+
+func (s *Service) checkMetadataPermission(ctx context.Context, projectID uint, inst *model.DbInstance, actor *auth.CurrentUser) error {
+	perm, err := s.GetEffectivePermission(ctx, projectID, inst.ID, actor)
+	if err != nil {
+		return err
+	}
+	if perm.CanManage || perm.CanQuery {
+		return nil
+	}
+	return constants.ErrForbidden
+}
+
 func (s *Service) checkQueryPermission(ctx context.Context, projectID uint, inst *model.DbInstance, database string, actor *auth.CurrentUser) error {
 	perm, err := s.GetEffectivePermission(ctx, projectID, inst.ID, actor)
 	if err != nil {
 		return err
 	}
-	if perm.CanManage || perm.CanQuery || perm.CanConnect {
+	if perm.CanManage || perm.CanQuery {
 		return nil
 	}
 	return constants.ErrForbidden
 }
 
 func (s *Service) checkWritePermission(ctx context.Context, projectID uint, inst *model.DbInstance, database string, needDDL bool, actor *auth.CurrentUser) error {
-	perm, err := s.GetEffectivePermission(ctx, projectID, inst.ID, actor)
+	perm, err := s.effectivePermissionForDatabase(ctx, projectID, inst.ID, database, actor)
 	if err != nil {
 		return err
 	}

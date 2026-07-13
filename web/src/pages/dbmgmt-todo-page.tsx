@@ -21,6 +21,9 @@ import {
 } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
+import { accessRequestStatusLabel, ticketStatusLabel } from "../utils/dbmgmt-labels";
+import { riskLevelColor, riskLevelLabel } from "../utils/dbmgmt-console";
+import { ticketTypeLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 
 type TabKey = "access" | "app_user" | "ticket";
 type MineScope = "all" | "pending" | "done";
@@ -148,6 +151,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       setAppUserTotal(appUsers.total ?? 0);
       setTicketRows(tickets.list ?? []);
       setTicketTotal(tickets.total ?? 0);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "加载待办失败");
     } finally {
       setLoading(false);
     }
@@ -271,7 +276,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       dataIndex: "status",
       render: (v, row) => {
         const color = v === "approved" ? "green" : v === "rejected" ? "red" : "orange";
-        const label = v === "pending" && row.mine_status === "mine_done" ? "待下一环节" : v;
+        let label = accessRequestStatusLabel(v);
+        if (v === "pending" && row.mine_status === "mine_done") label = "待下一环节";
         return <Tag color={color}>{label}</Tag>;
       },
     },
@@ -320,7 +326,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       dataIndex: "status",
       render: (v, row) => {
         const color = v === "success" || v === "approved" ? "green" : v === "rejected" || v === "failed" ? "red" : "orange";
-        const label = v === "pending" && row.mine_status === "mine_done" ? "待下一环节" : v;
+        let label = accessRequestStatusLabel(v);
+        if (v === "pending" && row.mine_status === "mine_done") label = "待下一环节";
         return <Tag color={color}>{label}</Tag>;
       },
     },
@@ -340,11 +347,11 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
   ];
 
   const ticketCols: ColumnsType<DbTicket> = [
-    { title: "类型", dataIndex: "ticket_type" },
+    { title: "类型", dataIndex: "ticket_type", render: (v: string) => ticketTypeLabel(v) },
     { title: "实例", dataIndex: "instance_name" },
-    { title: "风险", dataIndex: "risk_level", render: (v) => <Tag color={v === "high" ? "red" : "orange"}>{v}</Tag> },
+    { title: "风险", dataIndex: "risk_level", render: (v) => <Tag color={riskLevelColor(v ?? "")}>{riskLevelLabel(v ?? "")}</Tag> },
     { title: "提交人", dataIndex: "submitter_name" },
-    { title: "SQL", dataIndex: "sql_excerpt", ellipsis: true, render: (v?: string, r) => (
+    { title: "SQL", dataIndex: "sql_excerpt", ellipsis: true, render: (v: string | undefined, r) => (
       <Space size={4}>
         <Typography.Text ellipsis style={{ maxWidth: 180 }}>{v || "—"}</Typography.Text>
         <Button type="link" size="small" style={{ padding: 0 }} onClick={() => openSqlView(r.id)}>
@@ -367,7 +374,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       render: (v, row) => {
         const color =
           v === "success" ? "green" : v === "rejected" || v === "failed" ? "red" : v === "pending_execution" ? "blue" : "orange";
-        const label = v === "pending_approval" && row.mine_status === "mine_done" ? "待下一环节" : v;
+        let label = ticketStatusLabel(v);
+        if (v === "pending_approval" && row.mine_status === "mine_done") label = "待下一环节";
         return <Tag color={color}>{label}</Tag>;
       },
     },

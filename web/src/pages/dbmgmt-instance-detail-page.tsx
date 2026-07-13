@@ -13,12 +13,11 @@ import {
 } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
+import { envLabel as dbEnvLabel } from "../utils/dbmgmt-labels";
 
 function envLabel(env?: string) {
-  if (env === "prod") return "生产环境";
-  if (env === "test") return "测试环境";
-  if (env === "dev") return "开发环境";
-  return env || "—";
+  const label = dbEnvLabel(env);
+  return label === "—" ? "—" : `${label}环境`;
 }
 
 function statusTag(instance?: DbInstance) {
@@ -32,6 +31,7 @@ export function DbmgmtInstanceDetailPage() {
   const { instanceId: instanceIdParam } = useParams<{ instanceId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const instanceId = Number(instanceIdParam);
+  const projectFromUrl = Number(searchParams.get("project")) || undefined;
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [instance, setInstance] = useState<DbInstance>();
@@ -46,9 +46,13 @@ export function DbmgmtInstanceDetailPage() {
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
       setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
+      if (projectFromUrl) {
+        setProjectId(projectFromUrl);
+      } else if (res.list?.length) {
+        setProjectId(res.list[0].id);
+      }
     });
-  }, []);
+  }, [projectFromUrl]);
 
   const load = useCallback(async () => {
     if (!projectId || !instanceId) return;
@@ -96,7 +100,15 @@ export function DbmgmtInstanceDetailPage() {
     }
   };
 
-  const projectName = projects.find((p) => p.id === projectId)?.name ?? "—";
+  const onProjectChange = (id: number) => {
+    setProjectId(id);
+    const next = new URLSearchParams(searchParams);
+    next.set("project", String(id));
+    if (tab) next.set("tab", tab);
+    setSearchParams(next);
+  };
+
+  const projectName = projects.find((p) => p.id === (instance?.project_id ?? projectId))?.name ?? "—";
   const filteredDbs = useMemo(() => {
     const kw = dbKeyword.trim().toLowerCase();
     if (!kw) return databases;
@@ -124,57 +136,46 @@ export function DbmgmtInstanceDetailPage() {
     <div>
       <DbmgmtSectionTitle>基本信息</DbmgmtSectionTitle>
       <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
-        <Descriptions.Item label="集群名称">{instance.name}</Descriptions.Item>
-        <Descriptions.Item label="实例别名">
-          <Tag color="blue">{instance.tags || instance.name}</Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="架构类型">MHA</Descriptions.Item>
+        <Descriptions.Item label="实例名称">{instance.name}</Descriptions.Item>
+        <Descriptions.Item label="连接地址">{formatInstanceLabel(instance)}</Descriptions.Item>
+        <Descriptions.Item label="驱动">{instance.driver}</Descriptions.Item>
+        <Descriptions.Item label="连接模式">{instance.connect_mode || "—"}</Descriptions.Item>
+        <Descriptions.Item label="只读">{instance.read_only ? "是" : "否"}</Descriptions.Item>
+        <Descriptions.Item label="DML需工单">{instance.require_ticket_for_dml ? "是" : "否"}</Descriptions.Item>
+        {instance.tags ? <Descriptions.Item label="标签">{instance.tags}</Descriptions.Item> : null}
+        {instance.remark ? <Descriptions.Item label="备注" span={3}>{instance.remark}</Descriptions.Item> : null}
       </Descriptions>
 
-      <DbmgmtSectionTitle>项目环境信息</DbmgmtSectionTitle>
+      <DbmgmtSectionTitle>项目环境</DbmgmtSectionTitle>
       <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
         <Descriptions.Item label="项目名称">{projectName}</Descriptions.Item>
-        <Descriptions.Item label="环境信息">{envLabel(instance.env)}</Descriptions.Item>
-        <Descriptions.Item label="项目状态">
-          <Tag>建设期</Tag>
-        </Descriptions.Item>
+        <Descriptions.Item label="环境">{envLabel(instance.env)}</Descriptions.Item>
+        <Descriptions.Item label="运行状态">{statusTag(instance)}</Descriptions.Item>
       </Descriptions>
 
-      <DbmgmtSectionTitle>配置信息</DbmgmtSectionTitle>
+      <DbmgmtSectionTitle>连接信息</DbmgmtSectionTitle>
       <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
-        <Descriptions.Item label="CPU">—</Descriptions.Item>
-        <Descriptions.Item label="内存">—</Descriptions.Item>
-        <Descriptions.Item label="磁盘类型">SSD</Descriptions.Item>
-      </Descriptions>
-
-      <DbmgmtSectionTitle>实例信息</DbmgmtSectionTitle>
-      <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
-        <Descriptions.Item label="VIP">—</Descriptions.Item>
-        <Descriptions.Item label="主机IP">{instance.host}</Descriptions.Item>
+        <Descriptions.Item label="主机">{instance.host}</Descriptions.Item>
         <Descriptions.Item label="端口">{instance.port}</Descriptions.Item>
-        <Descriptions.Item label="数据库类型">{instance.driver}</Descriptions.Item>
-        <Descriptions.Item label="数据库版本">—</Descriptions.Item>
-        <Descriptions.Item label="负责人">{instance.remark || "—"}</Descriptions.Item>
-        <Descriptions.Item label="数据库状态">{statusTag(instance)}</Descriptions.Item>
-        <Descriptions.Item label="数据库角色">
-          <Tag color={instance.read_only ? "default" : "green"}>{instance.read_only ? "slave" : "master"}</Tag>
+        <Descriptions.Item label="默认库">{instance.database || "—"}</Descriptions.Item>
+        <Descriptions.Item label="管理用户">{instance.username}</Descriptions.Item>
+        <Descriptions.Item label="SSL">{instance.ssl_mode || "—"}</Descriptions.Item>
+        <Descriptions.Item label="角色">
+          <Tag color={instance.read_only ? "default" : "green"}>{instance.read_only ? "只读" : "可写"}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="创建日期">{instance.created_at ? formatDateTime(instance.created_at) : "—"}</Descriptions.Item>
-        <Descriptions.Item label="实例管理用户">{instance.username}</Descriptions.Item>
-        <Descriptions.Item label="实例管理密码">
-          <Button size="small" type="link">
-            查看
-          </Button>
-        </Descriptions.Item>
-        <Descriptions.Item label="更新日期">—</Descriptions.Item>
+        <Descriptions.Item label="创建时间">{instance.created_at ? formatDateTime(instance.created_at) : "—"}</Descriptions.Item>
+        <Descriptions.Item label="更新时间">{instance.updated_at ? formatDateTime(instance.updated_at) : "—"}</Descriptions.Item>
+        <Descriptions.Item label="最近探活">{instance.last_ping_at ? formatDateTime(instance.last_ping_at) : "—"}</Descriptions.Item>
       </Descriptions>
 
-      <DbmgmtSectionTitle>备份信息</DbmgmtSectionTitle>
-      <Descriptions bordered column={3} size="small">
-        <Descriptions.Item label="备份调度时间">未设置备份</Descriptions.Item>
-        <Descriptions.Item label="备份保留时间(天)">未设置备份</Descriptions.Item>
-        <Descriptions.Item label="下一次执行时间">未设置备份</Descriptions.Item>
-      </Descriptions>
+      {instance.backup_link ? (
+        <>
+          <DbmgmtSectionTitle>备份</DbmgmtSectionTitle>
+          <Descriptions bordered column={1} size="small">
+            <Descriptions.Item label="备份链接">{instance.backup_link}</Descriptions.Item>
+          </Descriptions>
+        </>
+      ) : null}
     </div>
   ) : null;
 
@@ -200,8 +201,8 @@ export function DbmgmtInstanceDetailPage() {
         columns={[
           { title: "ID", dataIndex: "id", width: 60 },
           { title: "数据库", dataIndex: "name" },
-          { title: "字符集", render: () => "utf8" },
-          { title: "校验规则", render: () => "utf8_general_ci" },
+          { title: "字符集", render: () => "—" },
+          { title: "校验规则", render: () => "—" },
           { title: "开发负责人", render: () => "—" },
           { title: "DBA", render: () => "—" },
           { title: "授权账号", render: (_, r) => grantAccountsForDb(r.name) },
@@ -294,7 +295,7 @@ export function DbmgmtInstanceDetailPage() {
       title={instance ? `实例详情 · ${formatInstanceLabel(instance)}` : "实例详情"}
       extra={
         <Space>
-          <Select style={{ width: 200 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={setProjectId} />
+          <Select style={{ width: 200 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={onProjectChange} />
           <Link to="/dbmgmt/instances">
             <Button>返回列表</Button>
           </Link>
@@ -305,7 +306,12 @@ export function DbmgmtInstanceDetailPage() {
       {instance ? (
         <Tabs
           activeKey={tab}
-          onChange={(k) => setSearchParams({ tab: k })}
+          onChange={(k) => {
+            const next = new URLSearchParams(searchParams);
+            next.set("tab", k);
+            if (projectId) next.set("project", String(projectId));
+            setSearchParams(next);
+          }}
           items={[
             { key: "info", label: "实例详情", children: infoTab },
             { key: "databases", label: "DB管理", children: dbTab },

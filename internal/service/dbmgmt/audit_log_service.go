@@ -63,9 +63,9 @@ func (s *Service) auditTicketEvent(ctx context.Context, projectID uint, instance
 	_ = s.writeAudit(ctx, projectID, &iid, actor, action, detail)
 }
 
-func (s *Service) ListAuditLogs(ctx context.Context, projectID uint, instanceID uint, page, pageSize int) (*pagination.Result[AuditLogItem], error) {
+func (s *Service) ListAuditLogs(ctx context.Context, projectID uint, instanceID uint, action string, page, pageSize int) (*pagination.Result[AuditLogItem], error) {
 	list, total, err := s.repo.ListAuditLogs(ctx, repository.DbAuditLogListParams{
-		ProjectID: projectID, InstanceID: instanceID, Page: page, PageSize: pageSize,
+		ProjectID: projectID, InstanceID: instanceID, Action: strings.TrimSpace(action), Page: page, PageSize: pageSize,
 	})
 	if err != nil {
 		return nil, err

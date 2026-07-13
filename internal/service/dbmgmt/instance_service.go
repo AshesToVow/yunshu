@@ -144,6 +144,9 @@ func (s *Service) GetInstance(ctx context.Context, projectID, id uint) (*Instanc
 }
 
 func (s *Service) UpsertInstance(ctx context.Context, id uint, req InstanceUpsertRequest, actor *auth.CurrentUser) (*InstanceItem, error) {
+	if err := s.requireProjectAdminOrOwner(ctx, req.ProjectID, actor); err != nil {
+		return nil, err
+	}
 	cfg := s.resolvedConfig(ctx)
 	driver := strings.ToLower(strings.TrimSpace(req.Driver))
 	if driver == "" {
@@ -221,6 +224,9 @@ func (s *Service) UpsertInstance(ctx context.Context, id uint, req InstanceUpser
 }
 
 func (s *Service) DeleteInstance(ctx context.Context, projectID, id uint, actor *auth.CurrentUser) error {
+	if err := s.requireProjectAdminOrOwner(ctx, projectID, actor); err != nil {
+		return err
+	}
 	inst, err := s.repo.GetInstanceInProject(ctx, projectID, id)
 	if err != nil {
 		return err

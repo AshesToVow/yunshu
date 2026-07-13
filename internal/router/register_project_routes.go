@@ -40,7 +40,7 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	agents.Use(d.authMiddleware, d.authorize, d.opAudit)
 	agents.POST("/register", d.logAgentHandler.Register)
 	api.GET("/agents/runtime-config", d.logAgentHandler.RuntimeConfig)
-	api.POST("/agents/public-register", d.logAgentHandler.PublicRegister)
+	api.POST("/agents/public-register", middleware.AgentPublicRegisterRateLimit(d.app.Redis), d.logAgentHandler.PublicRegister)
 	api.POST("/agents/health/report", d.logAgentHandler.ReportHealth)
 	api.POST("/agents/discovery/report", d.agentDiscoveryHandler.Report)
 }

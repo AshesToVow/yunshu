@@ -140,7 +140,7 @@ func (s *Service) resolveQueryAccess(ctx context.Context, projectID uint, inst *
 	}
 
 	if !hasAnyGrant {
-		if perm.CanQuery || perm.CanConnect {
+		if perm.CanQuery {
 			return cfgMaxRows, nil
 		}
 		return 0, constants.ErrForbiddenWithMsg("你无该库的查询权限，请先申请平台查询权限")

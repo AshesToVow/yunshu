@@ -107,7 +107,10 @@ export function resolvePathPlugin(path: string): PluginName | null {
   const normalized = normalizePath(path);
   if (normalized === "/") return "k8s";
   for (const rule of PATH_PLUGIN_RULES) {
-    if (rule.prefixes.some((p) => normalized === p || normalized.startsWith(`${p}/`) || normalized.startsWith(p))) {
+    if (rule.prefixes.some((p) => {
+      const prefix = normalizePath(p);
+      return normalized === prefix || normalized.startsWith(`${prefix}/`);
+    })) {
       return rule.plugin;
     }
   }
@@ -191,7 +194,10 @@ export function resolveAPIResourcePlugin(resource: string): PluginName | null {
     return "cicd";
   }
   for (const rule of API_RESOURCE_PLUGIN_RULES) {
-    if (rule.prefixes.some((p) => r === p || r.startsWith(`${p}/`) || r.startsWith(p))) {
+    if (rule.prefixes.some((p) => {
+      const prefix = p.trim().toLowerCase();
+      return r === prefix || r.startsWith(`${prefix}/`);
+    })) {
       return rule.plugin;
     }
   }

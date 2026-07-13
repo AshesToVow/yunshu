@@ -18,6 +18,7 @@ func init() {
 	logAgentCmd.Flags().UintVar(&agentLogSourceID, "log-source-id", 0, "log source id")
 	logAgentCmd.Flags().StringVar(&agentToken, "token", "", "long-lived agent ingest token")
 	logAgentCmd.Flags().StringVar(&agentRegisterSecret, "register-secret", "", "public agent register secret (agent-first mode when token is empty)")
+	logAgentCmd.Flags().StringVar(&agentTokenFile, "token-file", "", "persist/load agent token (default /var/lib/yunshu/agent.token when using register-secret)")
 	logAgentCmd.Flags().StringVar(&agentName, "name", "log-agent", "agent name")
 	logAgentCmd.Flags().StringVar(&agentVersion, "version", agent.DefaultVersion, "agent version")
 	logAgentCmd.Flags().StringVar(&agentSourceType, "source-type", "file", "log source type: file or journal")
@@ -44,6 +45,7 @@ var (
 	agentLogSourceID       uint
 	agentToken             string
 	agentRegisterSecret    string
+	agentTokenFile         string
 	agentName              string
 	agentVersion           string
 	agentSourceType        string
@@ -71,6 +73,7 @@ var logAgentDoctorCmd = &cobra.Command{
 			ServerID:          agentServerID,
 			Token:             agentToken,
 			RegisterSecret:    agentRegisterSecret,
+			TokenFile:         agentTokenFile,
 			Name:              agentName,
 			Version:           agentVersion,
 			EnableRuntimePull: true,
@@ -92,6 +95,7 @@ var logAgentCmd = &cobra.Command{
 			LogSourceID:       agentLogSourceID,
 			Token:             agentToken,
 			RegisterSecret:    agentRegisterSecret,
+			TokenFile:         agentTokenFile,
 			Name:              agentName,
 			Version:           agentVersion,
 			SourceType:        agentSourceType,

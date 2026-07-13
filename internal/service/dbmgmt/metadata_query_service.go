@@ -41,7 +41,7 @@ func (s *Service) ListDatabases(ctx context.Context, projectID, instanceID uint,
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkQueryPermission(ctx, projectID, inst, "", actor); err != nil {
+	if err := s.checkMetadataPermission(ctx, projectID, inst, actor); err != nil {
 		return nil, err
 	}
 	release := s.acquireInstance(instanceID)
@@ -75,49 +75,8 @@ func (s *Service) ListDatabases(ctx context.Context, projectID, instanceID uint,
 		}
 		out = append(out, DatabaseInfo{Name: name})
 	}
-	out, err3 := s.ensureProvisionedDatabases(ctx, projectID, instanceID, inst, actor, out)
-	if err3 != nil {
-		return nil, err3
-	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, rows.Err()
-}
-
-func (s *Service) ensureProvisionedDatabases(ctx context.Context, projectID, instanceID uint, inst *model.DbInstance, actor *auth.CurrentUser, listed []DatabaseInfo) ([]DatabaseInfo, error) {
-	grants, err := s.repo.ListGrants(ctx, projectID, instanceID)
-	if err != nil {
-		return listed, nil
-	}
-	existing := make(map[string]struct{}, len(listed))
-	for _, d := range listed {
-		existing[d.Name] = struct{}{}
-	}
-	out := listed
-	for _, g := range grants {
-		if !hasPrivilege(parsePrivilegesJSON(g.PrivilegesJSON), "create_database") {
-			continue
-		}
-		if len(parseTableNamesJSON(g.TableNamesJSON)) > 0 {
-			continue
-		}
-		dbName := strings.TrimSpace(g.DatabaseName)
-		if dbName == "" || !isValidDbIdentifier(dbName) {
-			continue
-		}
-		if _, ok := existing[dbName]; ok {
-			continue
-		}
-		req := &model.DbAccessRequest{
-			ProjectID: projectID, InstanceID: instanceID,
-			DatabaseName: dbName, PrivilegesJSON: g.PrivilegesJSON,
-		}
-		if err := s.provisionDatabaseAfterGrant(ctx, req); err != nil {
-			continue
-		}
-		out = append(out, DatabaseInfo{Name: dbName})
-		existing[dbName] = struct{}{}
-	}
-	return out, nil
 }
 
 func (s *Service) ListTables(ctx context.Context, projectID, instanceID uint, database string, actor *auth.CurrentUser) ([]TableInfo, error) {
@@ -125,7 +84,7 @@ func (s *Service) ListTables(ctx context.Context, projectID, instanceID uint, da
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkQueryPermission(ctx, projectID, inst, database, actor); err != nil {
+	if err := s.checkMetadataPermission(ctx, projectID, inst, actor); err != nil {
 		return nil, err
 	}
 	release := s.acquireInstance(instanceID)
@@ -179,7 +138,7 @@ func (s *Service) ListColumns(ctx context.Context, projectID, instanceID uint, d
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkQueryPermission(ctx, projectID, inst, database, actor); err != nil {
+	if err := s.checkMetadataPermission(ctx, projectID, inst, actor); err != nil {
 		return nil, err
 	}
 	release := s.acquireInstance(instanceID)
@@ -346,7 +305,17 @@ func truncateSQL(s string, max int) string {
 	return s[:max] + "..."
 }
 
-func (s *Service) ListExecutions(ctx context.Context, projectID uint, instanceID uint, executorUserID uint, queryOnly bool, page, pageSize int) (*pagination.Result[model.DbSqlExecution], error) {
+func (s *Service) ListExecutions(ctx context.Context, projectID uint, instanceID uint, executorUserID uint, queryOnly bool, actor *auth.CurrentUser, page, pageSize int) (*pagination.Result[model.DbSqlExecution], error) {
+	if actor != nil {
+		selfID := actorUserID(actor)
+		if executorUserID == 0 {
+			executorUserID = selfID
+		} else if executorUserID != selfID && !auth.IsSuperAdminRole(actor.RoleCodes) {
+			if ok, _ := s.isProjectAdminOrOwner(ctx, projectID, actor); !ok {
+				executorUserID = selfID
+			}
+		}
+	}
 	list, total, err := s.repo.ListSqlExecutions(ctx, repository.DbSqlExecutionListParams{
 		ProjectID: projectID, InstanceID: instanceID, ExecutorUserID: executorUserID,
 		QueryOnly: queryOnly, Page: page, PageSize: pageSize,
@@ -358,6 +327,6 @@ func (s *Service) ListExecutions(ctx context.Context, projectID uint, instanceID
 }
 
 func (s *Service) ListQueryHistory(ctx context.Context, projectID uint, instanceID uint, actor *auth.CurrentUser, page, pageSize int) (*pagination.Result[model.DbSqlExecution], error) {
-	return s.ListExecutions(ctx, projectID, instanceID, actorUserID(actor), true, page, pageSize)
+	return s.ListExecutions(ctx, projectID, instanceID, actorUserID(actor), true, actor, page, pageSize)
 }
 

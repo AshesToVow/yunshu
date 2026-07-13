@@ -5,7 +5,7 @@ import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { DB_PRIVILEGE_OPTIONS, privilegeSummary } from "../components/dbmgmt/db-privilege-form";
+import { DB_PRIVILEGE_OPTIONS, privilegeSummary } from "../components/dbmgmt/dbmgmt-ui-shared";
 import {
   createDbAccessRequest,
   listDbAccessRequests,
@@ -17,6 +17,7 @@ import {
 } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
+import { accessRequestStatusLabel } from "../utils/dbmgmt-labels";
 
 export type DbmgmtAccessRequestPreset = "all" | "query" | "database_create";
 
@@ -98,12 +99,16 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
 
   const load = useCallback(async () => {
     if (!projectId) return;
-    const [reqs, inst] = await Promise.all([
-      listDbAccessRequests(projectId, { page: 1, page_size: 100 }),
-      listDbInstances(projectId, { page: 1, page_size: 200 }),
-    ]);
-    setRows((reqs.list ?? []).filter((r) => matchesPreset(r, preset)));
-    setInstances(inst.list ?? []);
+    try {
+      const [reqs, inst] = await Promise.all([
+        listDbAccessRequests(projectId, { page: 1, page_size: 100 }),
+        listDbInstances(projectId, { page: 1, page_size: 200 }),
+      ]);
+      setRows((reqs.list ?? []).filter((r) => matchesPreset(r, preset)));
+      setInstances(inst.list ?? []);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "加载申请列表失败");
+    }
   }, [projectId, preset]);
 
   useEffect(() => {
@@ -152,7 +157,7 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
     },
     { title: "申请人", dataIndex: "requester_name" },
     { title: "理由", dataIndex: "reason", ellipsis: true },
-    { title: "状态", dataIndex: "status", render: (v) => <Tag>{v}</Tag> },
+    { title: "状态", dataIndex: "status", render: (v: string) => <Tag>{accessRequestStatusLabel(v)}</Tag> },
     {
       title: "过期时间",
       dataIndex: "expires_at",
@@ -186,6 +191,8 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
       setOpen(false);
       form.resetFields();
       void load();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "提交失败");
     } finally {
       setSubmitting(false);
     }
@@ -208,10 +215,10 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
     ];
   }, [preset]);
 
-  const privilegeOptions = useMemo(() => {
+  const privilegeOptions = useMemo((): { value: string; label: string }[] => {
     if (preset === "query") return DB_PRIVILEGE_OPTIONS.filter((o) => o.value === "select");
     if (preset === "database_create") return DB_PRIVILEGE_OPTIONS.filter((o) => o.value === "create_database");
-    return DB_PRIVILEGE_OPTIONS;
+    return [...DB_PRIVILEGE_OPTIONS];
   }, [preset]);
 
   const openCreate = () => {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -81,10 +82,11 @@ type LogAgentPublicRegisterRequest struct {
 }
 
 type LogAgentRegisterResult struct {
-	ProjectID uint   `json:"project_id"`
-	AgentID   uint   `json:"agent_id"`
-	Token     string `json:"token"`
-	WSIngest  string `json:"ws_ingest"`
+	ProjectID         uint   `json:"project_id"`
+	AgentID           uint   `json:"agent_id"`
+	Token             string `json:"token,omitempty"`
+	AlreadyRegistered bool   `json:"already_registered,omitempty"`
+	WSIngest          string `json:"ws_ingest"`
 }
 
 type LogAgentHealthReportRequest struct {
@@ -109,8 +111,12 @@ func randomToken() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-// Register 注册相关的业务逻辑。
+// Register 平台引导/轮换令牌：已登记时强制轮换 Token。
 func (s *LogAgentService) Register(ctx context.Context, req LogAgentRegisterRequest) (*LogAgentRegisterResult, error) {
+	return s.registerAgent(ctx, req, true)
+}
+
+func (s *LogAgentService) registerAgent(ctx context.Context, req LogAgentRegisterRequest, rotateToken bool) (*LogAgentRegisterResult, error) {
 	if strings.TrimSpace(req.Name) == "" {
 		return nil, constants.ErrNameRequired
 	}
@@ -128,42 +134,55 @@ func (s *LogAgentService) Register(ctx context.Context, req LogAgentRegisterRequ
 		return nil, constants.ErrServerDisabledForAgent
 	}
 	projectID := sv.ProjectID
-
-	token, err := randomToken()
-	if err != nil {
-		return nil, bizerrors.Pass(ctx, "log-agent", "Register", err)
-	}
-	tokenHash := hashToken(token)
+	wsIngest := "grpc:AgentRuntimeService/IngestLogs (metadata x-agent-token)"
 
 	existing, err := s.repo.GetByServerID(ctx, req.ServerID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, bizerrors.Pass(ctx, "log-agent", "Register", err)
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		token, err := randomToken()
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "log-agent", "Register", err)
+		}
 		it := &model.LogAgent{
 			ProjectID: projectID,
 			ServerID:  req.ServerID,
 			Name:      strings.TrimSpace(req.Name),
 			Version:   req.Version,
-			TokenHash: tokenHash,
+			TokenHash: hashToken(token),
 			Status:    model.StatusEnabled,
 		}
 		if err := s.repo.Create(ctx, it); err != nil {
 			return nil, bizerrors.Pass(ctx, "log-agent", "create", err, "server_id", req.ServerID)
 		}
-		return &LogAgentRegisterResult{ProjectID: projectID, AgentID: it.ID, Token: token, WSIngest: "grpc:AgentRuntimeService/IngestLogs (metadata x-agent-token)"}, nil
+		return &LogAgentRegisterResult{ProjectID: projectID, AgentID: it.ID, Token: token, WSIngest: wsIngest}, nil
 	}
+
 	existing.ProjectID = projectID
 	existing.Name = strings.TrimSpace(req.Name)
 	if v := strings.TrimSpace(req.Version); v != "" {
 		existing.Version = v
 	}
-	existing.TokenHash = tokenHash
 	existing.Status = model.StatusEnabled
+	if !rotateToken {
+		if err := s.repo.Save(ctx, existing); err != nil {
+			return nil, bizerrors.Pass(ctx, "log-agent", "save", err, "server_id", req.ServerID)
+		}
+		bizerrors.Warn(ctx, "log-agent", "PublicRegister", "agent already registered (token unchanged)", "server_id", req.ServerID, "agent_id", existing.ID)
+		return &LogAgentRegisterResult{
+			ProjectID: projectID, AgentID: existing.ID, AlreadyRegistered: true, WSIngest: wsIngest,
+		}, nil
+	}
+	token, err := randomToken()
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "log-agent", "Register", err)
+	}
+	existing.TokenHash = hashToken(token)
 	if err := s.repo.Save(ctx, existing); err != nil {
 		return nil, bizerrors.Pass(ctx, "log-agent", "save", err, "server_id", req.ServerID)
 	}
-	return &LogAgentRegisterResult{ProjectID: projectID, AgentID: existing.ID, Token: token, WSIngest: "grpc:AgentRuntimeService/IngestLogs (metadata x-agent-token)"}, nil
+	return &LogAgentRegisterResult{ProjectID: projectID, AgentID: existing.ID, Token: token, WSIngest: wsIngest}, nil
 }
 
 // PublicRegister 执行对应的业务逻辑。
@@ -171,16 +190,25 @@ func (s *LogAgentService) PublicRegister(ctx context.Context, req LogAgentPublic
 	if s.registerSecret == "" {
 		return nil, constants.ErrAgentRegisterClosed
 	}
-	if strings.TrimSpace(req.RegisterSecret) != s.registerSecret {
+	if !secretMatches(s.registerSecret, req.RegisterSecret) {
 		bizerrors.Warn(ctx, "log-agent", "PublicRegister", "public register rejected", "reason", "invalid_secret", "server_id", req.ServerID)
 		return nil, constants.ErrAgentRegisterSecretInvalid
 	}
-	return s.Register(ctx, LogAgentRegisterRequest{
+	return s.registerAgent(ctx, LogAgentRegisterRequest{
 		ProjectID: 0,
 		ServerID:  req.ServerID,
 		Name:      req.Name,
 		Version:   req.Version,
-	})
+	}, false)
+}
+
+func secretMatches(expected, provided string) bool {
+	a := []byte(strings.TrimSpace(expected))
+	b := []byte(strings.TrimSpace(provided))
+	if len(a) == 0 || len(a) != len(b) {
+		return false
+	}
+	return subtle.ConstantTimeCompare(a, b) == 1
 }
 
 // AuthenticateByToken 执行对应的业务逻辑。
@@ -194,6 +222,9 @@ func (s *LogAgentService) AuthenticateByToken(ctx context.Context, token string)
 			return nil, constants.ErrAgentTokenInvalid
 		}
 		return nil, bizerrors.Pass(ctx, "log-agent", "AuthenticateByToken", err)
+	}
+	if it.Status != model.StatusEnabled {
+		return nil, constants.ErrAgentTokenInvalid
 	}
 	return it, nil
 }
@@ -693,9 +724,18 @@ func (s *LogAgentService) Bootstrap(ctx context.Context, req AgentBootstrapReque
 		return nil, bizerrors.Pass(ctx, "log-agent", "Bootstrap", err)
 	}
 	grpcTarget := normalizeGrpcServerTarget(req.PlatformURL)
+	platformURL := strings.TrimRight(strings.TrimSpace(req.PlatformURL), "/")
+	if platformURL == "" {
+		host := grpcTarget
+		if idx := strings.Index(host, ":"); idx > 0 {
+			host = host[:idx]
+		}
+		platformURL = "http://" + host + ":8080"
+	}
 	run := fmt.Sprintf(
-		"./log-agent --grpc-server %s --server-id %d --token %s --version %s --enable-runtime-pull=true --enable-discovery=true --enable-health-report=true --enable-fallback=false",
+		"./log-agent --grpc-server %s --platform-url %s --server-id %d --token %s --version %s --token-file /var/lib/yunshu/agent.token --enable-runtime-pull=true --enable-discovery=true --enable-health-report=true --enable-fallback=false",
 		shellQuoteSingle(grpcTarget),
+		shellQuoteSingle(platformURL),
 		req.ServerID,
 		shellQuoteSingle(reg.Token),
 		shellQuoteSingle(ver),
@@ -708,7 +748,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/yunshu
-ExecStart=/opt/yunshu/log-agent --grpc-server %s --server-id %d --token %s --version %s --enable-runtime-pull=true --enable-discovery=true --enable-health-report=true --enable-fallback=false
+ExecStart=/opt/yunshu/log-agent --grpc-server %s --platform-url %s --server-id %d --token %s --version %s --token-file /var/lib/yunshu/agent.token --enable-runtime-pull=true --enable-discovery=true --enable-health-report=true --enable-fallback=false
 Restart=always
 RestartSec=3
 User=root
@@ -717,6 +757,7 @@ User=root
 WantedBy=multi-user.target
 `,
 		shellQuoteSingle(grpcTarget),
+		shellQuoteSingle(platformURL),
 		req.ServerID,
 		shellQuoteSingle(reg.Token),
 		shellQuoteSingle(ver),

@@ -67,9 +67,6 @@ func allowReadByK8sClusterGrant(c *gin.Context, accessRepo interfaces.K8sCluster
 	if normalizedPath == "" {
 		return false
 	}
-	if normalizedPath == "/api/v1/menus/tree" {
-		return true
-	}
 	if !service.IsK8sReadAPIPath(normalizedPath) {
 		return false
 	}

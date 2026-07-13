@@ -347,6 +347,9 @@ func (s *Service) RejectAccessRequest(ctx context.Context, projectID, id uint, c
 	if err != nil {
 		return err
 	}
+	if req.Status != model.DbAccessRequestStatusPending {
+		return constants.ErrBadRequestWithMsg("申请已结束")
+	}
 	steps, err := s.repo.ListAccessRequestSteps(ctx, id)
 	if err != nil {
 		return err

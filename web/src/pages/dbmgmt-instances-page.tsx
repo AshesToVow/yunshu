@@ -14,6 +14,7 @@ import {
 } from "../services/dbmgmt";
 import { getProjectServers, getProjects, type ProjectItem, type ServerItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
+import { envLabel } from "../utils/dbmgmt-labels";
 
 const MYSQL_SSL_OPTIONS = [
   { value: "disable", label: "disable（不加密）" },
@@ -68,14 +69,14 @@ export function DbmgmtInstancesPage() {
   }, [load, projectId]);
 
   const columns: ColumnsType<DbInstance> = [
-    { title: "名称", dataIndex: "name", render: (v, r) => <Link to={`/dbmgmt/instances/${r.id}`}>{v}</Link> },
-    { title: "环境", dataIndex: "env", render: (v) => <Tag>{v}</Tag> },
+    { title: "名称", dataIndex: "name", render: (v, r) => <Link to={`/dbmgmt/instances/${r.id}?project=${projectId ?? ""}`}>{v}</Link> },
+    { title: "环境", dataIndex: "env", render: (v) => <Tag>{envLabel(v)}</Tag> },
     { title: "驱动", dataIndex: "driver" },
     { title: "连接", render: (_, r) => `${r.host}:${r.port}${r.database ? ` / ${r.database}` : ""}` },
     {
       title: "状态",
       dataIndex: "status",
-      render: (_, r) => <Tag color={r.last_ping_ok ? "green" : "default"}>{r.status}</Tag>,
+      render: (_, r) => <Tag color={r.last_ping_ok ? "green" : "default"}>{r.last_ping_ok ? "正常" : r.status || "未知"}</Tag>,
     },
     { title: "最近探活", dataIndex: "last_ping_at", render: (v) => (v ? formatDateTime(v) : "—") },
     {

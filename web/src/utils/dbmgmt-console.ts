@@ -81,3 +81,10 @@ export function riskLevelColor(level: string) {
   if (level === "medium") return "orange";
   return "green";
 }
+
+/** 按驱动类型引用 SQL 标识符（表/列名） */
+export function quoteSqlIdent(name: string, driver?: string) {
+  const d = (driver || "mysql").toLowerCase();
+  if (d.includes("postgres")) return `"${name.replace(/"/g, '""')}"`;
+  return `\`${name.replace(/`/g, "``")}\``;
+}

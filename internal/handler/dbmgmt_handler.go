@@ -375,7 +375,8 @@ func (h *DbmgmtHandler) UpsertApprovalFlow(c *gin.Context) {
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.ApprovalFlowUpsertRequest) (*dbmgmtsvc.ApprovalFlowResponse, error) {
-		return h.svc.UpsertApprovalFlow(ctx, projectID, req)
+		actor, _ := auth.CurrentUserFromContext(c)
+		return h.svc.UpsertApprovalFlow(ctx, projectID, req, actor)
 	})
 }
 
@@ -476,7 +477,8 @@ func (h *DbmgmtHandler) GetTicket(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	item, err := h.svc.GetTicket(c.Request.Context(), projectID, ticketID)
+	actor, _ := auth.CurrentUserFromContext(c)
+	item, err := h.svc.GetTicket(c.Request.Context(), projectID, ticketID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -552,7 +554,8 @@ func (h *DbmgmtHandler) ListTicketOSCJobs(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	list, err := h.svc.ListTicketOSCJobs(c.Request.Context(), projectID, ticketID)
+	actor, _ := auth.CurrentUserFromContext(c)
+	list, err := h.svc.ListTicketOSCJobs(c.Request.Context(), projectID, ticketID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -667,15 +670,12 @@ func (h *DbmgmtHandler) ListExecutions(c *gin.Context) {
 	}
 	queryOnly := c.Query("query_only") == "1" || c.Query("query_only") == "true"
 	var executorUserID uint
-	if queryOnly {
-		if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
-			executorUserID = u.ID
-		}
-	} else if v := c.Query("executor_user_id"); v != "" {
+	if v := c.Query("executor_user_id"); v != "" {
 		n, _ := strconv.ParseUint(v, 10, 64)
 		executorUserID = uint(n)
 	}
-	res, err := h.svc.ListExecutions(c.Request.Context(), projectID, instanceID, executorUserID, queryOnly, page, pageSize)
+	actor, _ := auth.CurrentUserFromContext(c)
+	res, err := h.svc.ListExecutions(c.Request.Context(), projectID, instanceID, executorUserID, queryOnly, actor, page, pageSize)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -696,7 +696,8 @@ func (h *DbmgmtHandler) ListAuditLogs(c *gin.Context) {
 		n, _ := strconv.ParseUint(v, 10, 64)
 		instanceID = uint(n)
 	}
-	res, err := h.svc.ListAuditLogs(c.Request.Context(), projectID, instanceID, page, pageSize)
+	action := strings.TrimSpace(c.Query("action"))
+	res, err := h.svc.ListAuditLogs(c.Request.Context(), projectID, instanceID, action, page, pageSize)
 	if err != nil {
 		response.Error(c, err)
 		return

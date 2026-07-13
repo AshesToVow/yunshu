@@ -70,7 +70,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	pods.POST("/exec", d.podHandler.Exec)
 	// Interactive exec via WebSocket (ticket from POST /auth/ws-ticket)
 	podsWS := api.Group("/pods")
-	podsWS.Use(d.wsAuthMiddleware, d.authorize, d.k8sScopeAuthorize)
+	podsWS.Use(d.wsAuthMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	podsWS.GET("/exec/ws", d.podHandler.ExecWS)
 	pods.POST("/restart", d.podHandler.Restart)
 	pods.POST("/create/yaml", d.podHandler.CreateByYAML)

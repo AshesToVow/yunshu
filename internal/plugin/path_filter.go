@@ -229,7 +229,10 @@ func pathMatchesPrefix(path, prefix string) bool {
 	if path == prefix {
 		return true
 	}
-	return strings.HasPrefix(path, prefix+"/") || strings.HasPrefix(path, prefix)
+	if prefix == "/" {
+		return path == "/"
+	}
+	return strings.HasPrefix(path, prefix+"/")
 }
 
 func isPluginEnabled(cfg *config.PluginsConfig, name string) bool {

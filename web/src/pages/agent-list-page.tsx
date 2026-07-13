@@ -54,6 +54,8 @@ export function AgentListPage() {
         health_status: healthStatusFilter === "all" ? undefined : healthStatusFilter,
       });
       setList(data.list ?? []);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "加载 Agent 列表失败");
     } finally {
       setLoading(false);
     }
@@ -71,6 +73,8 @@ export function AgentListPage() {
       await deleteProjectAgent(projectId, agentId);
       message.success("已删除 Agent 登记");
       await load();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "删除失败");
     } finally {
       setDeletingAgentId(undefined);
     }
@@ -84,6 +88,8 @@ export function AgentListPage() {
       const data = await batchRefreshProjectAgentHeartbeat(projectId, { server_ids: serverIDs.length ? serverIDs : undefined });
       setList(data.list ?? []);
       message.success(`已刷新 ${data.refreshed ?? 0} 台服务器心跳`);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "刷新心跳失败");
     } finally {
       setBatchRefreshing(false);
     }

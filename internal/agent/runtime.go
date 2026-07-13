@@ -32,6 +32,7 @@ type Config struct {
 	LogSourceID       uint
 	Token             string
 	RegisterSecret    string
+	TokenFile         string
 	Name              string
 	Version           string
 	SourceType        string
@@ -135,7 +136,7 @@ func reportHealth(ctx context.Context, platformURL string, payload map[string]an
 	return nil
 }
 
-func publicRegister(ctx context.Context, cli pb.AgentRuntimeServiceClient, serverID uint, name, version, secret string) (projectID uint, token string, err error) {
+func publicRegister(ctx context.Context, cli pb.AgentRuntimeServiceClient, serverID uint, name, version, secret string) (projectID uint, token string, already bool, err error) {
 	resp, err := cli.PublicRegister(ctx, &pb.PublicRegisterRequest{
 		ServerId:       uint64(serverID),
 		Name:           strings.TrimSpace(name),
@@ -143,12 +144,15 @@ func publicRegister(ctx context.Context, cli pb.AgentRuntimeServiceClient, serve
 		RegisterSecret: strings.TrimSpace(secret),
 	})
 	if err != nil {
-		return 0, "", err
+		return 0, "", false, err
+	}
+	if resp.GetAgentId() > 0 && strings.TrimSpace(resp.GetToken()) == "" {
+		return uint(resp.GetProjectId()), "", true, nil
 	}
 	if strings.TrimSpace(resp.GetToken()) == "" {
-		return 0, "", fmt.Errorf("public-register empty token")
+		return 0, "", false, fmt.Errorf("public-register empty token")
 	}
-	return uint(resp.GetProjectId()), resp.GetToken(), nil
+	return uint(resp.GetProjectId()), resp.GetToken(), false, nil
 }
 
 type ingestMessage struct {
@@ -224,18 +228,45 @@ func Run(ctx context.Context, cfg Config) error {
 	agentClient := pb.NewAgentRuntimeServiceClient(conn)
 	token := strings.TrimSpace(cfg.Token)
 	projectID := cfg.ProjectID
+	tokenFile := effectiveTokenFile(cfg)
+	if token == "" && tokenFile != "" {
+		if saved, err := loadTokenFile(tokenFile); err == nil {
+			token = saved
+			logInfof("loaded token from %s", tokenFile)
+		}
+	}
 	if token == "" {
 		sec := strings.TrimSpace(cfg.RegisterSecret)
 		if sec == "" {
 			return errors.New("令牌不能为空 (or provide register-secret for agent-first mode)")
 		}
-		pid, tk, err := publicRegister(ctx, agentClient, cfg.ServerID, cfg.Name, cfg.Version, sec)
+		pid, tk, already, err := publicRegister(ctx, agentClient, cfg.ServerID, cfg.Name, cfg.Version, sec)
 		if err != nil {
 			return err
 		}
-		projectID = pid
-		token = tk
-		logInfof("public register succeeded project=%d server=%d", projectID, cfg.ServerID)
+		if already {
+			projectID = pid
+			if tokenFile == "" {
+				return fmt.Errorf("agent already registered for server %d; provide --token or --token-file", cfg.ServerID)
+			}
+			tk, err = loadTokenFile(tokenFile)
+			if err != nil {
+				return fmt.Errorf("agent already registered; load token file %s: %w", tokenFile, err)
+			}
+			logInfof("public register: already registered, reusing token from %s", tokenFile)
+			token = tk
+		} else {
+			projectID = pid
+			token = tk
+			if tokenFile != "" {
+				if err := saveTokenFile(tokenFile, token); err != nil {
+					logInfof("warn: save token file %s: %v", tokenFile, err)
+				} else {
+					logInfof("saved token to %s", tokenFile)
+				}
+			}
+			logInfof("public register succeeded project=%d server=%d", projectID, cfg.ServerID)
+		}
 	}
 	if strings.TrimSpace(cfg.PlatformURL) == "" {
 		cfg.PlatformURL = inferPlatformURL(cfg.GrpcServer)

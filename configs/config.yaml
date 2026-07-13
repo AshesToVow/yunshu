@@ -1,6 +1,6 @@
 app:
   name: yunshu-cmdb
-  env: prod
+  env: dev
   port: 8080
 
 # 业务插件（GVA 风格）：按需启停模块；空 enabled 表示启用默认全集。
@@ -35,8 +35,8 @@ dbmgmt:
 cicd:
   enabled: true
   jenkins:
-    base_url: ""
-    username: ""
+    base_url: "http://10.10.10.103:8080"
+    username: "admin"
     api_token: ""
     job_folder: ""
   jenkinsfile:
@@ -94,7 +94,7 @@ mysql:
   host: 10.10.10.103        # Docker 服务名，容器内部通信
   port: 3306
   user: root
-  password: "0gvzJr66iNs5"  # 生产环境务必修改
+  password: "0gvzJr66iNs5"  # 生产环境务必修改，勿提交真实密码
   db_name: yunshu
   charset: utf8mb4
   loc: Asia%2FShanghai

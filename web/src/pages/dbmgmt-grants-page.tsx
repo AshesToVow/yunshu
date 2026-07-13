@@ -17,9 +17,22 @@ function isQueryGrant(g: DbGrant) {
 }
 
 function formatExpiry(v?: string) {
-  if (!v) return "9999-01-01";
+  if (!v) return "永久";
   const d = v.slice(0, 10);
-  return d || "9999-01-01";
+  if (!d || d >= "9999") return "永久";
+  return d;
+}
+
+function privSummary(g: DbGrant) {
+  const parts: string[] = [];
+  if (g.can_query) parts.push("查询");
+  if (g.can_dml) parts.push("DML");
+  if (g.can_ddl) parts.push("DDL");
+  if (g.can_import) parts.push("导入");
+  if (g.can_export) parts.push("导出");
+  if (g.can_manage) parts.push("管理");
+  if (g.privileges?.length) return g.privileges.join(", ");
+  return parts.length ? parts.join(" / ") : "—";
 }
 
 export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" }) {
@@ -44,12 +57,16 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
 
   const load = useCallback(async () => {
     if (!projectId) return;
-    const [grants, inst] = await Promise.all([
-      listDbGrants(projectId),
-      listDbInstances(projectId, { page: 1, page_size: 200 }),
-    ]);
-    setRows((grants ?? []).filter((g) => (preset === "query" ? isQueryGrant(g) : true)));
-    setInstances(inst.list ?? []);
+    try {
+      const [grants, inst] = await Promise.all([
+        listDbGrants(projectId),
+        listDbInstances(projectId, { page: 1, page_size: 200 }),
+      ]);
+      setRows((grants ?? []).filter((g) => (preset === "query" ? isQueryGrant(g) : true)));
+      setInstances(inst.list ?? []);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "加载授权列表失败");
+    }
   }, [projectId, preset]);
 
   useEffect(() => {
@@ -208,7 +225,30 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
         </Space>
       }
     >
-      <Table rowKey="id" dataSource={rows} columns={[{ title: "ID", dataIndex: "id" }]} />
+      <Table
+        rowKey="id"
+        dataSource={rows}
+        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
+        columns={[
+          { title: "ID", dataIndex: "id", width: 70 },
+          { title: "主体", render: (_: unknown, r: DbGrant) => displayName(r) },
+          { title: "类型", dataIndex: "principal_kind", width: 80 },
+          { title: "实例", dataIndex: "instance_id", render: (v: number) => instanceIp(v) },
+          { title: "数据库", dataIndex: "database_name", render: (v?: string) => v || "—" },
+          { title: "权限", render: (_: unknown, r: DbGrant) => privSummary(r) },
+          { title: "有效期", dataIndex: "expires_at", width: 120, render: (v?: string) => formatExpiry(v) },
+          { title: "备注", dataIndex: "remark", ellipsis: true, render: (v?: string) => v || "—" },
+          {
+            title: "操作",
+            width: 80,
+            render: (_, r) => (
+              <Popconfirm title="删除该授权？" onConfirm={() => void deleteDbGrant(projectId!, r.id).then(load)}>
+                <Button size="small" danger icon={<DeleteOutlined />} />
+              </Popconfirm>
+            ),
+          },
+        ]}
+      />
     </Card>
   );
 }

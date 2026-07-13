@@ -185,9 +185,12 @@ Base: `/api/v1/projects/:id`
 {
   "project_id": 1,
   "agent_id": 12,
-  "token": "xxxx"
+  "token": "xxxx",
+  "already_registered": false
 }
 ```
+
+已登记且未轮换 Token 时（幂等自助注册），`token` 为空、`already_registered` 为 `true`；Agent 应从本地 `--token-file` 读取已保存的 Token。
 
 ### 5.2 拉取运行配置
 

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 
 	pb "yunshu/internal/grpc/proto"
 	"yunshu/internal/pkg/constants"
@@ -34,9 +35,10 @@ func (h *LogAgentHandler) Register(c *gin.Context) {
 			return nil, grpcToAppError(err)
 		}
 		return &service.LogAgentRegisterResult{
-			ProjectID: uint(out.GetProjectId()),
-			AgentID:   uint(out.GetAgentId()),
-			Token:     out.GetToken(),
+			ProjectID:         uint(out.GetProjectId()),
+			AgentID:           uint(out.GetAgentId()),
+			Token:             out.GetToken(),
+			AlreadyRegistered: out.GetAgentId() > 0 && strings.TrimSpace(out.GetToken()) == "",
 		}, nil
 	})
 }
@@ -54,9 +56,10 @@ func (h *LogAgentHandler) PublicRegister(c *gin.Context) {
 			return nil, grpcToAppError(err)
 		}
 		return &service.LogAgentRegisterResult{
-			ProjectID: uint(out.GetProjectId()),
-			AgentID:   uint(out.GetAgentId()),
-			Token:     out.GetToken(),
+			ProjectID:         uint(out.GetProjectId()),
+			AgentID:           uint(out.GetAgentId()),
+			Token:             out.GetToken(),
+			AlreadyRegistered: out.GetAgentId() > 0 && strings.TrimSpace(out.GetToken()) == "",
 		}, nil
 	})
 }

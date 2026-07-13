@@ -4,6 +4,7 @@ import type { DataNode } from "antd/es/tree";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CREATE_TABLE_SAMPLE, SQL_AUDIT_RULES, formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
+import { envLabel } from "../utils/dbmgmt-labels";
 import { MonacoSqlEditor } from "../components/dbmgmt/monaco-sql-editor";
 import {
   checkDbSql,
@@ -22,7 +23,7 @@ import {
   type DbSqlExecution,
 } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
-import { downloadQueryResultCsv, formatSqlCheckFailure, formatSqlCheckSummary, guessSqlRiskLevel, riskLevelColor, riskLevelLabel, sanitizeQuerySql } from "../utils/dbmgmt-console";
+import { downloadQueryResultCsv, formatSqlCheckFailure, formatSqlCheckSummary, guessSqlRiskLevel, quoteSqlIdent, riskLevelColor, riskLevelLabel, sanitizeQuerySql } from "../utils/dbmgmt-console";
 import { formatDateTime } from "../utils/format";
 
 export type DbmgmtConsoleMode = "all" | "query" | "audit";
@@ -35,8 +36,7 @@ function formatSqlBasic(sql: string) {
 }
 
 function instanceTreeTitle(inst: DbInstance) {
-  const env = inst.env === "prod" ? "主库" : inst.env;
-  return `PRO_${inst.host}_${inst.port}_${env}`;
+  return `${formatInstanceLabel(inst)} (${envLabel(inst.env)})`;
 }
 
 export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }) {
@@ -69,6 +69,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const [checkRows, setCheckRows] = useState<DbSqlCheckRow[]>([]);
   const [checkSummary, setCheckSummary] = useState<string>();
   const [checkPassed, setCheckPassed] = useState(false);
+  const [importCheckPassed, setImportCheckPassed] = useState(false);
   const [queryTab, setQueryTab] = useState<"history" | "result" | "structure">("history");
   const [historyRows, setHistoryRows] = useState<DbSqlExecution[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -79,6 +80,10 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const currentInstance = useMemo(() => instances.find((i) => i.id === instanceId), [instances, instanceId]);
   const writeRisk = useMemo(() => guessSqlRiskLevel(sql), [sql]);
   const isReadOnlySql = writeRisk === "low";
+  const canWriteSql = useMemo(
+    () => !perm || perm.can_manage || perm.can_dml || perm.can_ddl || perm.can_import,
+    [perm],
+  );
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "数据库";
 
   useEffect(() => {
@@ -101,29 +106,36 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
 
   const buildInstanceTree = useCallback(async () => {
     if (!projectId) return;
-    const mysqlInsts = instances.filter((i) => i.driver === "mysql");
-    const children: DataNode[] = [];
-    for (const inst of mysqlInsts) {
-      const instKey = `inst:${inst.id}`;
-      let dbChildren: DataNode[] = [];
-      if (instanceId === inst.id) {
-        const dbs = await listDbDatabases(projectId, inst.id).catch(() => []);
-        dbChildren = await Promise.all(
-          (dbs ?? []).map(async (d) => {
-            const tables = database === d.name ? await listDbTables(projectId, inst.id, d.name).catch(() => []) : [];
-            return {
-              title: d.name,
-              key: `db:${inst.id}:${d.name}`,
-              children: (tables ?? []).map((t) => ({ title: t.name, key: `table:${inst.id}:${d.name}.${t.name}`, isLeaf: true })),
-            };
-          }),
-        );
-      }
-      children.push({ title: instanceTreeTitle(inst), key: instKey, children: dbChildren });
+    const byDriver = new Map<string, DbInstance[]>();
+    for (const inst of instances) {
+      const d = (inst.driver || "mysql").toLowerCase();
+      if (!byDriver.has(d)) byDriver.set(d, []);
+      byDriver.get(d)!.push(inst);
     }
-    setTreeData([
-      { title: projectName, key: "root", children: [{ title: "mysql", key: "mysql", children }] },
-    ]);
+    const driverNodes: DataNode[] = [];
+    for (const [driver, insts] of byDriver.entries()) {
+      const children: DataNode[] = [];
+      for (const inst of insts) {
+        const instKey = `inst:${inst.id}`;
+        let dbChildren: DataNode[] = [];
+        if (instanceId === inst.id) {
+          const dbs = await listDbDatabases(projectId, inst.id).catch(() => []);
+          dbChildren = await Promise.all(
+            (dbs ?? []).map(async (d) => {
+              const tables = database === d.name ? await listDbTables(projectId, inst.id, d.name).catch(() => []) : [];
+              return {
+                title: d.name,
+                key: `db:${inst.id}:${d.name}`,
+                children: (tables ?? []).map((t) => ({ title: t.name, key: `table:${inst.id}:${d.name}.${t.name}`, isLeaf: true })),
+              };
+            }),
+          );
+        }
+        children.push({ title: instanceTreeTitle(inst), key: instKey, children: dbChildren });
+      }
+      driverNodes.push({ title: driver, key: `driver:${driver}`, children });
+    }
+    setTreeData([{ title: projectName, key: "root", children: driverNodes }]);
   }, [projectId, instances, instanceId, database, projectName]);
 
   useEffect(() => {
@@ -189,10 +201,12 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       const iid = Number(m[1]);
       const dbn = m[2];
       const tbl = m[3];
+      const inst = instances.find((i) => i.id === iid);
+      const drv = (inst?.driver || "mysql").toLowerCase();
       setInstanceId(iid);
       setDatabase(dbn);
       setSelectedTable(tbl);
-      setSql(`SELECT * FROM \`${tbl}\` LIMIT 100`);
+      setSql(`SELECT * FROM ${quoteSqlIdent(tbl, drv)} LIMIT 100`);
       if (projectId) {
         const cols = await listDbColumns(projectId, iid, dbn, tbl).catch(() => []);
         setTableColumns(cols ?? []);
@@ -210,6 +224,10 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const runQuery = async () => {
     if (!projectId || !instanceId) {
       message.warning("请先选择实例");
+      return;
+    }
+    if (isQueryMode && perm && !perm.can_query && !perm.can_manage) {
+      message.error("当前账号无 SQL 查询权限");
       return;
     }
     if (!database) {
@@ -263,9 +281,37 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
     }
   };
 
+  const runImportCheck = async () => {
+    if (!projectId || !instanceId || !database) {
+      message.warning("请先选择数据库");
+      return;
+    }
+    if (!importSql.trim()) {
+      message.warning("请上传 SQL 文件");
+      return;
+    }
+    try {
+      const res = await checkDbSql(projectId, instanceId, { database, sql: importSql });
+      setCheckRows(res.rows ?? []);
+      setCheckSummary(formatSqlCheckSummary(res));
+      setCheckOpen(true);
+      const passed = (res.error_count ?? 0) === 0;
+      setImportCheckPassed(passed);
+      if (!passed) message.error(formatSqlCheckFailure(res));
+      else message.success("文件 SQL 预检通过");
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "预检失败");
+      setImportCheckPassed(false);
+    }
+  };
+
   const runExecute = async () => {
     if (!projectId || !instanceId) {
       message.warning("请先选择实例");
+      return;
+    }
+    if (perm && !canWriteSql) {
+      message.error("当前账号无 SQL 变更权限（DML/DDL/导入）");
       return;
     }
     const instanceDDL = /^\s*CREATE\s+DATABASE\b/i.test(sql.trim()) || /^\s*DROP\s+DATABASE\b/i.test(sql.trim());
@@ -310,6 +356,14 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const submitImport = async () => {
     if (!projectId || !instanceId || !database) {
       message.warning("请先选择数据库");
+      return;
+    }
+    if (perm && !canWriteSql) {
+      message.error("当前账号无 SQL 文件导入权限");
+      return;
+    }
+    if (!importCheckPassed) {
+      message.warning("请先对 SQL 文件内容执行检测并通过后再提交");
       return;
     }
     if (!importSql.trim()) {
@@ -358,7 +412,9 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
     });
   }, [historyRows, historyKeyword, instances]);
 
-  const selectedDbPath = database ? `${projectName}/mysql/${currentInstance ? instanceTreeTitle(currentInstance) : ""}/${database}` : "/";
+  const selectedDbPath = database
+    ? `${projectName}/${(currentInstance?.driver || "mysql").toLowerCase()}/${currentInstance ? instanceTreeTitle(currentInstance) : ""}/${database}`
+    : "/";
 
   return (
     <Card title={pageTitle}>
@@ -390,7 +446,13 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                 <Alert type="info" showIcon message="当前未选择实例信息!" style={{ marginBottom: 12 }} />
               ) : null}
               <Space style={{ marginBottom: 12 }} wrap>
-                <Button type="primary" icon={<PlayCircleOutlined />} loading={loading} onClick={() => void runQuery()}>
+                <Button
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
+                  loading={loading}
+                  disabled={perm != null && !perm.can_query && !perm.can_manage}
+                  onClick={() => void runQuery()}
+                >
                   查询
                 </Button>
                 <Button onClick={() => setSql(formatSqlBasic(sql))}>格式化</Button>
@@ -427,12 +489,16 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                     maxCount={1}
                     beforeUpload={(file) => {
                       setImportFileName(file.name);
-                      void file.text().then(setImportSql);
+                      void file.text().then((t) => {
+                        setImportSql(t);
+                        setImportCheckPassed(false);
+                      });
                       return false;
                     }}
                     onRemove={() => {
                       setImportFileName("");
                       setImportSql("");
+                      setImportCheckPassed(false);
                     }}
                   >
                     <Button icon={<UploadOutlined />}>选取文件</Button>
@@ -458,6 +524,9 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                   </Radio.Group>
                 </Form.Item>
               </Form>
+              {perm && !canWriteSql && mode === "audit" ? (
+                <Alert type="warning" showIcon message="当前账号无 SQL 变更权限，请先在「权限申请」中申请 DML/DDL 或导入权限。" style={{ marginBottom: 12 }} />
+              ) : null}
               {auditTab === "sql" && isReadOnlySql ? (
                 <Alert
                   type="info"
@@ -474,16 +543,25 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                     </Button>
                     <Button
                       type="primary"
-                      disabled={!checkPassed || isReadOnlySql}
+                      disabled={!checkPassed || isReadOnlySql || !canWriteSql}
                       onClick={() => void runExecute()}
                     >
                       提交sql
                     </Button>
                   </>
                 ) : (
-                  <Button type="primary" disabled={!database || !importSql.trim() || !changeDesc.trim()} onClick={() => void submitImport()}>
-                    提交
-                  </Button>
+                  <>
+                    <Button type="primary" style={{ background: "#fa8c16", borderColor: "#fa8c16" }} onClick={() => void runImportCheck()}>
+                      sql检测
+                    </Button>
+                    <Button
+                      type="primary"
+                      disabled={!importCheckPassed || !database || !importSql.trim() || !changeDesc.trim() || !canWriteSql}
+                      onClick={() => void submitImport()}
+                    >
+                      提交
+                    </Button>
+                  </>
                 )}
               </Space>
               <div style={{ marginTop: 24 }}>
@@ -504,14 +582,22 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               <MonacoSqlEditor value={sql} onChange={setSql} height={280} />
               <Space style={{ marginTop: 12 }} wrap>
                 {isQueryMode ? (
-                  <Button type="primary" icon={<PlayCircleOutlined />} loading={loading} onClick={() => void runQuery()}>
+                  <Button
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
+                  loading={loading}
+                  disabled={perm != null && !perm.can_query && !perm.can_manage}
+                  onClick={() => void runQuery()}
+                >
                     查询
                   </Button>
                 ) : null}
                 {isAuditMode && !isReadOnlySql ? (
                   <>
-                    <Button onClick={() => void runCheck()}>SQL 检查</Button>
-                    <Button type="primary" danger onClick={() => void runExecute()}>
+                    <Button onClick={() => void runCheck()} disabled={!canWriteSql}>
+                      SQL 检查
+                    </Button>
+                    <Button type="primary" danger disabled={!canWriteSql} onClick={() => void runExecute()}>
                       提交 SQL
                     </Button>
                   </>

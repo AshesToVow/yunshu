@@ -27,3 +27,7 @@ web/tsconfig.*.tsbuildinfo
 
 jenkinsfile-new/
 jenkinslib/
+
+# Database full dumps (local only, exceed GitHub size limit)
+configs/yunshu.full.sql
+configs/yunshu.full.sql.*

@@ -171,7 +171,30 @@ func marshalReviewSet(rs *goinception.ReviewSet) string {
 	if rs == nil {
 		return ""
 	}
-	b, _ := json.Marshal(rs)
+	safe := sanitizeReviewSet(rs)
+	b, _ := json.Marshal(safe)
+	return string(b)
+}
+
+func sanitizeReviewSet(rs *goinception.ReviewSet) *goinception.ReviewSet {
+	if rs == nil {
+		return nil
+	}
+	cp := *rs
+	cp.FullSQL = ""
+	return &cp
+}
+
+func sanitizeReviewJSON(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	rs := reviewSetFromJSON(raw)
+	if rs == nil {
+		return raw
+	}
+	b, _ := json.Marshal(sanitizeReviewSet(rs))
 	return string(b)
 }
 

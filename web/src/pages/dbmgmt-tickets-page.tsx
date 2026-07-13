@@ -6,6 +6,7 @@ import { auditModeLabel, ticketTypeLabel } from "../components/dbmgmt/dbmgmt-ui-
 import { listDbTickets, type DbTicket } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
+import { ticketStatusLabel } from "../utils/dbmgmt-labels";
 
 function ticketTypeColor(t?: string) {
   if (t === "sql_import") return "purple";
@@ -13,14 +14,12 @@ function ticketTypeColor(t?: string) {
   return "cyan";
 }
 
-function statusLabel(s?: string) {
-  const map: Record<string, { text: string; color: string }> = {
-    success: { text: "执行成功", color: "green" },
-    executing: { text: "执行中", color: "orange" },
-    pending_approval: { text: "待审批", color: "default" },
-    failed: { text: "执行失败", color: "red" },
-  };
-  return map[s ?? ""] ?? { text: s || "—", color: "default" };
+function statusTagColor(s?: string) {
+  if (s === "success") return "green";
+  if (s === "executing") return "orange";
+  if (s === "failed" || s === "rejected") return "red";
+  if (s === "pending_execution") return "blue";
+  return "default";
 }
 
 const TICKET_TYPE_OPTIONS = [
@@ -141,10 +140,7 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
             title: "任务状态",
             dataIndex: "status",
             width: 100,
-            render: (v: string) => {
-              const s = statusLabel(v);
-              return <Tag color={s.color}>{s.text}</Tag>;
-            },
+            render: (v: string) => <Tag color={statusTagColor(v)}>{ticketStatusLabel(v)}</Tag>,
           },
           {
             title: "操作",

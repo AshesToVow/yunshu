@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"yunshu/internal/pkg/auth"
@@ -164,6 +165,29 @@ func handleJSONOK[T any](c *gin.Context, okData any, call func(context.Context, 
 		return
 	}
 	response.Success(c, okData)
+}
+
+// bindOptionalJSON 绑定可选 JSON 请求体：空 body 视为零值；非法 JSON 或校验失败则返回 false。
+func bindOptionalJSON[T any](c *gin.Context) (T, bool) {
+	var req T
+	if err := c.ShouldBindJSON(&req); err != nil {
+		if isEmptyRequestBody(err) {
+			return req, true
+		}
+		response.Error(c, constants.ErrBadRequestWithMsg(bindErrorMessage(err)))
+		return req, false
+	}
+	return req, true
+}
+
+func isEmptyRequestBody(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	return strings.TrimSpace(err.Error()) == "EOF"
 }
 
 func handleQueryWithKind[T any, R any](c *gin.Context, call func(context.Context, string, T) (R, error)) {

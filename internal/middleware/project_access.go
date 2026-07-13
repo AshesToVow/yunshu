@@ -21,7 +21,8 @@ import (
 func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, logger *logx.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if memberRepo == nil {
-			c.Next()
+			response.Error(c, constants.ErrInternal)
+			c.Abort()
 			return
 		}
 		user, ok := auth.CurrentUserFromContext(c)

@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// Doctor 检查 gRPC 连通性与 Token 有效性。
+// Doctor 检查 gRPC 连通性与 Token 有效性（不触发 PublicRegister，避免轮换 Token）。
 func Doctor(cfg Config) error {
 	if err := cfg.normalize(); err != nil {
 		return err
@@ -21,8 +21,26 @@ func Doctor(cfg Config) error {
 		return fmt.Errorf("server-id is required")
 	}
 	token := strings.TrimSpace(cfg.Token)
-	if token == "" && strings.TrimSpace(cfg.RegisterSecret) == "" {
-		return fmt.Errorf("token or register-secret is required")
+	tokenFile := effectiveTokenFile(cfg)
+	if token == "" && tokenFile != "" {
+		if saved, err := loadTokenFile(tokenFile); err == nil {
+			token = saved
+		}
+	}
+	if token == "" {
+		if strings.TrimSpace(cfg.RegisterSecret) != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			conn, err := grpc.NewClient(cfg.GrpcServer, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				return fmt.Errorf("grpc dial failed: %w", err)
+			}
+			defer conn.Close()
+			fmt.Printf("OK grpc dial %s (register-secret present; use --token or --token-file to verify runtime-config)\n", cfg.GrpcServer)
+			_ = ctx
+			return nil
+		}
+		return fmt.Errorf("token, token-file, or register-secret is required")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -34,16 +52,6 @@ func Doctor(cfg Config) error {
 	}
 	defer conn.Close()
 	cli := pb.NewAgentRuntimeServiceClient(conn)
-
-	if token == "" {
-		pid, tk, err := publicRegister(ctx, cli, cfg.ServerID, cfg.Name, cfg.Version, strings.TrimSpace(cfg.RegisterSecret))
-		if err != nil {
-			return fmt.Errorf("public-register failed: %w", err)
-		}
-		// doctor 为 CLI 诊断工具：成功结果输出到 stdout 供运维直接查看。
-		fmt.Printf("OK public-register project_id=%d token_len=%d\n", pid, len(tk))
-		token = tk
-	}
 
 	bundle, err := fetchRuntimeConfig(ctx, cli, token)
 	if err != nil {

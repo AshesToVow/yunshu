@@ -103,7 +103,7 @@ func (s *Service) CreateAppUserRequest(ctx context.Context, projectID uint, body
 	if privLevel == model.DbAppUserPrivDatabase && strings.TrimSpace(body.DatabaseName) == "" && applyType != model.DbAppUserApplyRevoke {
 		return nil, constants.ErrBadRequestWithMsg("库级权限须指定数据库")
 	}
-	privs := normalizeMySQLPrivs(body.Privileges)
+	privs := normalizeMySQLPrivs(body.Privileges, inst.Env == model.DbEnvProd)
 	if applyType == model.DbAppUserApplyAddIP && len(privs) == 0 {
 		privs = []string{"USAGE"}
 	}
@@ -240,6 +240,9 @@ func (s *Service) RejectAppUserRequest(ctx context.Context, projectID, id uint, 
 	if err != nil {
 		return err
 	}
+	if req.Status != model.DbAccessRequestStatusPending {
+		return constants.ErrBadRequestWithMsg("申请已结束")
+	}
 	steps, _ := s.repo.ListAppUserRequestSteps(ctx, id)
 	var cur *model.DbAppUserRequestStep
 	for i := range steps {
@@ -280,6 +283,10 @@ func (s *Service) initAppUserRequestSteps(ctx context.Context, req *model.DbAppU
 		return err
 	}
 	if len(stages) == 0 {
+		inst, instErr := s.repo.GetInstance(ctx, req.InstanceID)
+		if instErr == nil && inst.Env == model.DbEnvProd {
+			return constants.ErrBadRequestWithMsg("生产环境须启用至少一级审批流后方可提交应用用户申请")
+		}
 		req.Status = model.DbAccessRequestStatusApproved
 		if err := s.repo.UpdateAppUserRequest(ctx, req); err != nil {
 			return err
@@ -335,7 +342,7 @@ func (s *Service) executeAppUserRequest(ctx context.Context, req *model.DbAppUse
 	sqlStmts, password, err := buildAppUserSQL(req)
 	if err != nil {
 		req.ExecuteError = err.Error()
-		req.Status = model.DbTicketStatusFailed
+		req.Status = model.DbAccessRequestStatusRejected
 		_ = s.repo.UpdateAppUserRequest(ctx, req)
 		return err
 	}
@@ -349,7 +356,7 @@ func (s *Service) executeAppUserRequest(ctx context.Context, req *model.DbAppUse
 	for i, sqlText := range sqlStmts {
 		if _, err := sess.DB.ExecContext(ctx, sqlText); err != nil {
 			req.ExecuteError = err.Error()
-			req.Status = model.DbTicketStatusFailed
+			req.Status = model.DbAccessRequestStatusRejected
 			_ = s.repo.UpdateAppUserRequest(ctx, req)
 			return constants.ErrBadRequestWithMsg(formatMySQLGrantExecError(err, inst, req, i+1, sqlText))
 		}
@@ -373,7 +380,7 @@ func (s *Service) executeAppUserRequest(ctx context.Context, req *model.DbAppUse
 			}
 		}
 	}
-	req.Status = model.DbTicketStatusSuccess
+	req.Status = model.DbAccessRequestStatusApproved
 	req.ExecuteError = ""
 	return s.repo.UpdateAppUserRequest(ctx, req)
 }
@@ -387,7 +394,10 @@ func buildAppUserSQL(req *model.DbAppUserRequest) (stmts []string, password stri
 	var parts []string
 	switch req.ApplyType {
 	case model.DbAppUserApplyNewUser:
-		password = randomMySQLPassword(16)
+		password, err = randomMySQLPassword(16)
+		if err != nil {
+			return nil, "", err
+		}
 		for _, h := range hosts {
 			parts = append(parts, fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s'",
 				escapeMySQLString(req.MySQLUser), escapeMySQLString(h), escapeMySQLString(password)))
@@ -397,7 +407,10 @@ func buildAppUserSQL(req *model.DbAppUserRequest) (stmts []string, password stri
 		for _, h := range hosts {
 			if needsCreateUserForHost(req, h) {
 				if password == "" {
-					password = randomMySQLPassword(16)
+					password, err = randomMySQLPassword(16)
+					if err != nil {
+						return nil, "", err
+					}
 				}
 				parts = append(parts, fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s'",
 					escapeMySQLString(req.MySQLUser), escapeMySQLString(h), escapeMySQLString(password)))
@@ -464,7 +477,7 @@ func splitGrantHosts(raw, fallback string) []string {
 	return out
 }
 
-func normalizeMySQLPrivs(in []string) []string {
+func normalizeMySQLPrivs(in []string, prodEnv bool) []string {
 	allowed := map[string]struct{}{
 		"SELECT": {}, "INSERT": {}, "UPDATE": {}, "DELETE": {},
 		"CREATE": {}, "ALTER": {}, "INDEX": {}, "DROP": {},
@@ -474,6 +487,10 @@ func normalizeMySQLPrivs(in []string) []string {
 		"GRANT": {}, "SUPER": {}, "PROCESS": {}, "RELOAD": {}, "SHUTDOWN": {},
 		"SHOW DATABASES": {}, "REPLICATION CLIENT": {}, "REPLICATION SLAVE": {}, "CREATE USER": {},
 		"USAGE": {},
+	}
+	dangerous := map[string]struct{}{
+		"GRANT": {}, "SUPER": {}, "PROCESS": {}, "RELOAD": {}, "SHUTDOWN": {},
+		"CREATE USER": {}, "REPLICATION SLAVE": {}, "REPLICATION CLIENT": {},
 	}
 	var out []string
 	seen := map[string]struct{}{}
@@ -485,6 +502,11 @@ func normalizeMySQLPrivs(in []string) []string {
 		if _, ok := allowed[up]; !ok {
 			continue
 		}
+		if prodEnv {
+			if _, blocked := dangerous[up]; blocked {
+				continue
+			}
+		}
 		if _, ok := seen[up]; ok {
 			continue
 		}
@@ -494,14 +516,16 @@ func normalizeMySQLPrivs(in []string) []string {
 	return out
 }
 
-func randomMySQLPassword(n int) string {
+func randomMySQLPassword(n int) (string, error) {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
 	s := base64.RawURLEncoding.EncodeToString(b)
 	if len(s) > n {
-		return s[:n]
+		return s[:n], nil
 	}
-	return s
+	return s, nil
 }
 
 func (s *Service) RevealInstanceAccountPassword(ctx context.Context, projectID, accountID uint, actor *auth.CurrentUser) (string, error) {

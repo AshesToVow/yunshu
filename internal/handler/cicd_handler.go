@@ -496,8 +496,10 @@ func (h *CicdHandler) ApproveReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req cicd.ReviewReleaseRequest
-	_ = c.ShouldBindJSON(&req)
+	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	if !ok {
+		return
+	}
 	userID, name := reviewerFromContext(c)
 	run, err := h.svc.ApproveReleaseRun(c.Request.Context(), projectID, runID, userID, name, req.Comment)
 	if err != nil {
@@ -512,8 +514,10 @@ func (h *CicdHandler) RejectReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req cicd.ReviewReleaseRequest
-	_ = c.ShouldBindJSON(&req)
+	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	if !ok {
+		return
+	}
 	userID, name := reviewerFromContext(c)
 	run, err := h.svc.RejectReleaseRun(c.Request.Context(), projectID, runID, userID, name, req.Comment)
 	if err != nil {
@@ -542,8 +546,10 @@ func (h *CicdHandler) TerminateReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req cicd.ReviewReleaseRequest
-	_ = c.ShouldBindJSON(&req)
+	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	if !ok {
+		return
+	}
 	userID, name := reviewerFromContext(c)
 	run, err := h.svc.TerminateReleaseRun(c.Request.Context(), projectID, runID, userID, name, req.Comment)
 	if err != nil {

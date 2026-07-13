@@ -179,3 +179,39 @@ export function ticketTypeLabel(t?: string) {
 export function auditModeLabel(mode?: string) {
   return mode === "manual" ? "人工审核" : "系统审核";
 }
+
+/** 平台权限申请可选权限项（与后端 grant/access_request 对齐） */
+export const DB_PRIVILEGE_OPTIONS = [
+  { value: "select", label: "SELECT（查询）" },
+  { value: "insert", label: "INSERT" },
+  { value: "update", label: "UPDATE" },
+  { value: "delete", label: "DELETE" },
+  { value: "create", label: "CREATE（建表等）" },
+  { value: "create_database", label: "CREATE DATABASE（新建库）" },
+  { value: "alter", label: "ALTER" },
+  { value: "drop", label: "DROP" },
+  { value: "truncate", label: "TRUNCATE" },
+  { value: "index", label: "INDEX" },
+  { value: "export", label: "导出" },
+  { value: "import", label: "导入" },
+] as const;
+
+const DB_PRIVILEGE_LABELS: Record<string, string> = {
+  select: "SELECT",
+  insert: "INSERT",
+  update: "UPDATE",
+  delete: "DELETE",
+  create: "CREATE",
+  create_database: "CREATE DATABASE",
+  alter: "ALTER",
+  drop: "DROP",
+  truncate: "TRUNCATE",
+  index: "INDEX",
+  export: "导出",
+  import: "导入",
+};
+
+export function privilegeSummary(privileges?: string[]) {
+  if (!privileges?.length) return "—";
+  return privileges.map((p) => DB_PRIVILEGE_LABELS[p] ?? p.toUpperCase()).join("、");
+}

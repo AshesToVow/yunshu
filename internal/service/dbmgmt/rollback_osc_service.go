@@ -70,9 +70,12 @@ func (s *Service) GetTicketRollback(ctx context.Context, projectID, ticketID uin
 	return items, nil
 }
 
-func (s *Service) ListTicketOSCJobs(ctx context.Context, projectID, ticketID uint) ([]OSCJobItem, error) {
+func (s *Service) ListTicketOSCJobs(ctx context.Context, projectID, ticketID uint, actor *auth.CurrentUser) ([]OSCJobItem, error) {
 	ticket, err := s.repo.GetSqlTicketInProject(ctx, projectID, ticketID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureTicketOSCAccess(ctx, projectID, ticket, actor); err != nil {
 		return nil, err
 	}
 	rows := goinception.ParseExecuteRows(ticket.ExecuteJSON)
@@ -88,6 +91,26 @@ func (s *Service) ListTicketOSCJobs(ctx context.Context, projectID, ticketID uin
 		})
 	}
 	return out, nil
+}
+
+func (s *Service) ensureTicketOSCAccess(ctx context.Context, projectID uint, ticket *model.DbSqlTicket, actor *auth.CurrentUser) error {
+	if actor == nil {
+		return constants.ErrForbidden
+	}
+	if auth.IsSuperAdminRole(actor.RoleCodes) {
+		return nil
+	}
+	if ticket.SubmitterUserID == actorUserID(actor) {
+		return nil
+	}
+	if ok, _ := s.isProjectAdminOrOwner(ctx, projectID, actor); ok {
+		return nil
+	}
+	perm, _ := s.GetEffectivePermission(ctx, projectID, ticket.InstanceID, actor)
+	if perm != nil && perm.CanManage {
+		return nil
+	}
+	return constants.ErrForbidden
 }
 
 func (s *Service) GetTicketOSCPercent(ctx context.Context, projectID, ticketID uint, sqlsha1 string, actor *auth.CurrentUser) (*goinception.ReviewSet, error) {
@@ -126,13 +149,16 @@ func (s *Service) ensureOSCAccess(ctx context.Context, projectID, ticketID uint,
 	if ticket.SubmitterUserID != actorUserID(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
 		perm, _ := s.GetEffectivePermission(ctx, projectID, ticket.InstanceID, actor)
 		if perm == nil || !perm.CanManage {
-			return constants.ErrForbidden
+			if ok, _ := s.isProjectAdminOrOwner(ctx, projectID, actor); !ok {
+				return constants.ErrForbidden
+			}
 		}
 	}
-	jobs, err := s.ListTicketOSCJobs(ctx, projectID, ticketID)
-	if err != nil {
-		return err
+	rows := goinception.ParseExecuteRows(ticket.ExecuteJSON)
+	if len(rows) == 0 {
+		rows = goinception.ParseExecuteRows(ticket.ReviewJSON)
 	}
+	jobs := goinception.ExtractOSCJobs(rows)
 	for _, j := range jobs {
 		if j.SQLSHA1 == sqlsha1 {
 			return nil
