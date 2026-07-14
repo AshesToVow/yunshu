@@ -62,7 +62,9 @@ func clusterLogConfigName(projectID uint) string {
 }
 
 // BuildK8sLoggieBundle 生成 Namespace + Sink + ClusterLogConfig 清单。
-func BuildK8sLoggieBundle(projectID, clusterID uint, ns, dsName string, esCfg config.ElasticsearchConfig) LoggieK8sBundle {
+// requirePodLabel=true 时仅采集带 yunshu.project_id=<projectID> 的 Pod；
+// false（默认）则采集集群内全部 Pod stdout，并固定写入 project_id。
+func BuildK8sLoggieBundle(projectID, clusterID uint, ns, dsName string, esCfg config.ElasticsearchConfig, requirePodLabel bool) LoggieK8sBundle {
 	ns = defaultK8sNamespace(ns)
 	dsName = defaultK8sDaemonSet(dsName)
 	esCfg = esCfg.Normalized()
@@ -125,8 +127,14 @@ spec:
 %s    index: %s
 %s`, sinkName, ns, projectKey, hostsYAML.String(), indexSink, authBlock)
 
-	// project_id 固定写入 Yunshu 项目 ID（不依赖 Pod 标签缺省）；
-	// labelSelector 仍只采集打了 yunshu.project_id 的 Pod，避免扫全集群。
+	// project_id 固定写入 Yunshu 项目 ID。
+	// Loggie labelSelector 为 map（非 matchExpressions）；缺标签时会 matches no pods。
+	selectorBlock := "    type: pod\n"
+	if requirePodLabel {
+		selectorBlock += fmt.Sprintf(`    labelSelector:
+      "yunshu.project_id": %q
+`, projectKey)
+	}
 	clcYAML := fmt.Sprintf(`apiVersion: loggie.io/v1beta1
 kind: ClusterLogConfig
 metadata:
@@ -135,11 +143,7 @@ metadata:
     yunshu.project_id: %q
 spec:
   selector:
-    type: pod
-    # Loggie 要求 map 形式，不支持 matchExpressions
-    labelSelector:
-      "yunshu.project_id": %q
-  pipeline:
+%s  pipeline:
     sources: |
       - type: file
         name: container-logs
@@ -165,7 +169,7 @@ spec:
           - action: regex(body)
             pattern: '^(?P<ts>\\S+)\\s+(?P<stream>stdout|stderr)\\s+(?P<flag>\\S)\\s+(?P<message>.*)$'
             ignoreError: true
-`, clcName, projectKey, projectKey, sinkName, projectKey)
+`, clcName, projectKey, selectorBlock, sinkName, projectKey)
 
 	combined := strings.TrimSpace(nsYAML) + "\n---\n" + strings.TrimSpace(sinkYAML) + "\n---\n" + strings.TrimSpace(clcYAML) + "\n"
 

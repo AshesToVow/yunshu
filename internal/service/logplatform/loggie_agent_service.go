@@ -81,6 +81,9 @@ type LoggieBootstrapRequest struct {
 	ClusterID            uint     `json:"cluster_id"`
 	K8sNamespace         string   `json:"k8s_namespace"`
 	DaemonSetName        string   `json:"daemonset_name"`
+	// K8sRequirePodLabel=true 时 ClusterLogConfig 仅匹配带 yunshu.project_id 的 Pod。
+	// 默认 false：采集全部 Pod（便于联调；多项目共集群时请改为 true 并给业务打标）。
+	K8sRequirePodLabel *bool `json:"k8s_require_pod_label"`
 	LogPaths             []string `json:"log_paths"`
 	ServiceID            uint     `json:"service_id"`
 	LogSourceID          uint     `json:"log_source_id"`
@@ -155,6 +158,7 @@ type loggieStoredBootstrapConfig struct {
 	ClusterID          uint                    `json:"cluster_id"`
 	K8sNamespace       string                  `json:"k8s_namespace"`
 	DaemonSetName      string                  `json:"daemonset_name"`
+	K8sRequirePodLabel bool                    `json:"k8s_require_pod_label"`
 	AutoFromLogSources bool                    `json:"auto_from_log_sources"`
 	Sources            []loggieBootstrapSource `json:"sources"`
 	// legacy single-pipeline fields
@@ -336,7 +340,7 @@ func (s *LoggieAgentService) bootstrapK8s(ctx context.Context, projectID uint, r
 	if s.esProvider != nil {
 		esCfg, _ = s.esProvider.Resolve(ctx)
 	}
-	k8sBundle := BuildK8sLoggieBundle(projectID, stored.ClusterID, stored.K8sNamespace, stored.DaemonSetName, esCfg)
+	k8sBundle := BuildK8sLoggieBundle(projectID, stored.ClusterID, stored.K8sNamespace, stored.DaemonSetName, esCfg, stored.K8sRequirePodLabel)
 	deployed := false
 	deployMsg := ""
 	if req.DeployAfterBootstrap {
@@ -433,7 +437,7 @@ func (s *LoggieAgentService) GeneratePipelineBundle(ctx context.Context, project
 		if s.esProvider != nil {
 			esCfg, _ = s.esProvider.Resolve(ctx)
 		}
-		k8sBundle := BuildK8sLoggieBundle(projectID, stored.ClusterID, stored.K8sNamespace, stored.DaemonSetName, esCfg)
+		k8sBundle := BuildK8sLoggieBundle(projectID, stored.ClusterID, stored.K8sNamespace, stored.DaemonSetName, esCfg, stored.K8sRequirePodLabel)
 		return &LoggiePipelineBundle{
 			PipelineYAML:      k8sBundle.CombinedManifest,
 			PipelinesOnlyYAML: k8sBundle.ClusterLogConfigYAML,
@@ -504,7 +508,7 @@ func (s *LoggieAgentService) deployConfigK8s(ctx context.Context, projectID uint
 	if s.esProvider != nil {
 		esCfg, _ = s.esProvider.Resolve(ctx)
 	}
-	bundle := BuildK8sLoggieBundle(projectID, stored.ClusterID, stored.K8sNamespace, stored.DaemonSetName, esCfg)
+	bundle := BuildK8sLoggieBundle(projectID, stored.ClusterID, stored.K8sNamespace, stored.DaemonSetName, esCfg, stored.K8sRequirePodLabel)
 	err := s.applyK8sLoggieManifest(ctx, stored.ClusterID, bundle.CombinedManifest)
 	result := &LoggieDeployResult{
 		Success:       err == nil,

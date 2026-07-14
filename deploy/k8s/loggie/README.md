@@ -29,8 +29,14 @@ Pod/Node 日志 → Loggie DaemonSet → ES Sink → Elasticsearch
 | `@timestamp` | 时间戳 |
 | `file_path` | 文件路径 |
 
-**必须**给要采集的业务 Pod 打标签 `yunshu.project_id=<项目ID>`，否则 ClusterLogConfig 的 labelSelector 不会选中任何 Pod，Yunshu 显示「无上报」。  
-清单里会固定写入 ES 字段 `project_id`（与项目一致）；`yunshu.server_id` 等可选。
+清单里会固定写入 ES 字段 `project_id`（与项目一致）。  
+
+- **默认（联调）**：ClusterLogConfig 不带 `labelSelector`，采集全部 Pod stdout。  
+- **生产（多项目共集群）**：勾选「仅采集带标签的 Pod」，并执行  
+  `kubectl -n <ns> label deploy <name> yunshu.project_id=<项目ID> --overwrite`  
+  若 Loggie 出现 `matches no pods`，就是标签选择器没命中。  
+
+注意：项目里的「日志源配置」（节点+容器路径）只服务**二进制** Loggie；K8s DaemonSet 只认 ClusterLogConfig/Sink。
 
 引用独立 Sink CR 时用 **`sinkRef: yunshu-es`**。误写成 `sink: yunshu-es` 会触发  
 `cannot unmarshal !!str yunshu-es into sink.Config`，采集链路不会生效。

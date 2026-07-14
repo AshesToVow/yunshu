@@ -153,6 +153,7 @@ export interface LoggieBootstrapPayload {
   cluster_id?: number;
   k8s_namespace?: string;
   daemonset_name?: string;
+  k8s_require_pod_label?: boolean;
   log_paths?: string[];
   service_id?: number;
   log_source_id?: number;

@@ -161,6 +161,7 @@ func (s *LoggieAgentService) buildStoredConfigFromRequest(req LoggieBootstrapReq
 		ClusterID:          req.ClusterID,
 		K8sNamespace:       defaultK8sNamespace(req.K8sNamespace),
 		DaemonSetName:      defaultK8sDaemonSet(req.DaemonSetName),
+		K8sRequirePodLabel: req.K8sRequirePodLabel != nil && *req.K8sRequirePodLabel,
 		AutoFromLogSources: autoFromLogSourcesEnabled(req.AutoFromLogSources),
 		Sources:            sources,
 		LogPaths:           req.LogPaths,

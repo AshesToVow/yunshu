@@ -100,6 +100,7 @@ export function LoggieStatusPage() {
       cluster_id: row?.cluster_id || undefined,
       k8s_namespace: row?.k8s_namespace || "loggie",
       daemonset_name: row?.daemonset_name || "loggie",
+      k8s_require_pod_label: false,
     });
     setBootstrapOpen(true);
     if (mode === "binary" && projectId && row && row.server_id > 0) {
@@ -130,6 +131,7 @@ export function LoggieStatusPage() {
           cluster_id: values.cluster_id,
           k8s_namespace: values.k8s_namespace,
           daemonset_name: values.daemonset_name,
+          k8s_require_pod_label: !!values.k8s_require_pod_label,
           monitor_port: values.monitor_port,
           deploy_after_bootstrap: values.deploy_after_bootstrap,
         });
@@ -474,6 +476,15 @@ export function LoggieStatusPage() {
                     </Space>
                     <Tag color="blue" style={{ marginBottom: 12, whiteSpace: "normal", height: "auto" }}>
                       将对 Pod 标签 yunshu.project_id={projectId} 采集容器日志；请先用 Helm 安装 Loggie CRD/Controller，见 deploy/k8s/loggie/
+                    </Tag>
+                    <Form.Item name="k8s_require_pod_label" valuePropName="checked">
+                      <Checkbox>
+                        仅采集带标签 yunshu.project_id 的 Pod（默认关闭=采全集群；生产多项目共集群时建议开启）
+                      </Checkbox>
+                    </Form.Item>
+                    <Tag color="warning" style={{ marginBottom: 12, whiteSpace: "normal", height: "auto" }}>
+                      「日志源配置」里为某节点选 metrics-server 路径属于二进制 Loggie；K8s DaemonSet 只认 ClusterLogConfig，不认该表。
+                      Loggie 日志出现 matches no pods 时说明选择器没有匹配到任何 Pod。
                     </Tag>
                     <Form.Item name="deploy_after_bootstrap" valuePropName="checked">
                       <Checkbox>
