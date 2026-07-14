@@ -219,8 +219,10 @@ func provideLoggieAgentService(
 	logSourceRepo interfaces.LogSourceRepository,
 	es *service.ElasticsearchProvider,
 	encryptionKey SecurityEncryptionKey,
+	k8sRuntime *service.K8sRuntimeService,
+	k8sWorkload *service.K8sWorkloadService,
 ) (*service.LoggieAgentService, error) {
-	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, es, string(encryptionKey))
+	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, es, string(encryptionKey), k8sRuntime, k8sWorkload)
 }
 
 var ServiceSet = wire.NewSet(

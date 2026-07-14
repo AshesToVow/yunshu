@@ -33,6 +33,18 @@ Pod/Node 日志 → Loggie DaemonSet → ES Sink → Elasticsearch
 
 ## 部署
 
+### 方式 A：Yunshu 控制台（推荐）
+
+1. 先 Helm 安装 Loggie CRD / Controller / DaemonSet（见 `01-install-note.yaml`）
+2. 打开 **Loggie 状态** → **K8s 引导**
+3. 选择已接入的集群、Namespace（默认 `loggie`）、DaemonSet 名（默认 `loggie`）
+4. 勾选「引导后立即 apply」：Yunshu 会通过集群 kubeconfig apply Namespace + Sink + ClusterLogConfig，并滚动重启 DaemonSet
+5. 给业务 Pod 打标签：`yunshu.project_id=<项目ID>`（可选 `yunshu.server_id` / `yunshu.service_id` / `yunshu.log_source_id`）
+
+二进制主机采集仍走同一页面的服务器行「引导」→ SSH 下发。
+
+### 方式 B：kubectl 手工
+
 ```bash
 kubectl apply -f deploy/k8s/loggie/00-namespace.yaml
 # 先 helm install loggie（见 01-install-note.yaml）
