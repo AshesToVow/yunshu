@@ -1,5 +1,5 @@
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Card, Col, DatePicker, Form, Input, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Col, DatePicker, Form, Input, Row, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,6 +25,7 @@ type SearchForm = {
   log_source_id?: number;
   keyword?: string;
   level?: string;
+  file_path?: string;
   time_range?: [Dayjs, Dayjs];
   page?: number;
   page_size?: number;
@@ -69,6 +70,8 @@ export function ProjectLogsPage() {
     setSources(data.list);
   }, []);
 
+  const [emptyHint, setEmptyHint] = useState<string>("");
+
   const runSearch = useCallback(
     async (override?: Partial<SearchForm>) => {
       const values = { ...form.getFieldsValue(), ...override };
@@ -79,7 +82,9 @@ export function ProjectLogsPage() {
       const page = values.page ?? 1;
       const pageSize = values.page_size ?? 100;
       const range = values.time_range;
+      const filePath = values.file_path?.trim() || undefined;
       setLoading(true);
+      setEmptyHint("");
       try {
         const res = await searchProjectLogs(values.project_id, {
           server_id: values.server_id,
@@ -87,6 +92,7 @@ export function ProjectLogsPage() {
           log_source_id: values.log_source_id,
           keyword: values.keyword?.trim() || undefined,
           level: values.level?.trim() || undefined,
+          file_path: filePath,
           from: range?.[0]?.toISOString(),
           to: range?.[1]?.toISOString(),
           page,
@@ -95,6 +101,13 @@ export function ProjectLogsPage() {
         setRows(res.list);
         setTotal(res.total);
         form.setFieldsValue({ page, page_size: pageSize });
+        if ((res.total ?? 0) === 0 && filePath) {
+          setEmptyHint(
+            `按文件名「${filePath}」无命中。常见原因：① ES 里历史文档还没有 file_path（需在 Loggie 状态页「同步下发」后才会写入）；② ${filePath} 已轮转停写，活跃文件可能是更大编号（如 748.log）。请先清空文件名筛选项再查，或把时间范围扩到该文件最后写入时间。`,
+          );
+        } else if ((res.total ?? 0) === 0 && !range?.[0] && !range?.[1]) {
+          setEmptyHint("未选时间范围且无数据。可先设近 24 小时，或确认 Loggie 已在采集并写入 ES。");
+        }
       } catch (e: unknown) {
         message.error(String((e as Error)?.message ?? e));
       } finally {
@@ -152,9 +165,15 @@ export function ProjectLogsPage() {
       title: "文件",
       dataIndex: "file_path",
       width: 200,
-      render: (v?: string) => (
-        <Typography.Text className="log-meta-cell log-file-cell">{v || "-"}</Typography.Text>
-      ),
+      render: (v?: string) => {
+        if (!v) return "-";
+        const base = v.split(/[/\\]/).pop() || v;
+        return (
+          <Typography.Text className="log-meta-cell log-file-cell" title={v}>
+            {base}
+          </Typography.Text>
+        );
+      },
     },
     {
       title: "Pod",
@@ -292,8 +311,17 @@ export function ProjectLogsPage() {
                 />
               </Form.Item>
             </Col>
+            <Col span={8}>
+              <Form.Item label="文件名" name="file_path" tooltip="需先「同步下发」Loggie 后新日志才有 file_path。清空可查看全部文件。示例：748.log / info.log">
+                <Input allowClear placeholder="748.log / info.log（留空=不限文件）" />
+              </Form.Item>
+            </Col>
           </Row>
         </Form>
+
+        {emptyHint ? (
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={emptyHint} />
+        ) : null}
 
         <div className="project-logs-table-wrap">
           <Table

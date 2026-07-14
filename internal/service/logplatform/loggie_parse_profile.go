@@ -22,6 +22,8 @@ var parseProfileByName = map[string]pipelineParseProfile{
 	"java_bracket":  profileElasticsearch(),
 	"spring":        profileSpringLog(),
 	"microservice":  profileSpringLog(),
+	"cri":           profileCRI(),
+	"k8s":           profileCRI(),
 	"nginx_access":  profileNginxAccess(),
 	"plain":         {name: "plain"},
 }
@@ -67,6 +69,17 @@ func profileNginxAccess() pipelineParseProfile {
 	}
 }
 
+func profileCRI() pipelineParseProfile {
+	return pipelineParseProfile{
+		name:             "cri",
+		multilinePattern: `^\d{4}-\d{2}-\d{2}T`,
+		// 2024-07-14T02:32:33.306038878+00:00 stderr F Trace[...]
+		regexPattern:        `^(?P<ts>\S+)\s+(?P<stream>stdout|stderr)\s+(?P<flag>\S)\s+(?P<message>.*)$`,
+		timestampFromLayout: "2006-01-02T15:04:05.999999999Z07:00",
+		timestampLocation:   "UTC",
+	}
+}
+
 func usesSyslogFormat(paths []string) bool {
 	for _, p := range paths {
 		p = strings.ToLower(p)
@@ -106,6 +119,8 @@ func detectParseProfile(path string, multilineRule *string) pipelineParseProfile
 func inferProfileFromPath(path string) pipelineParseProfile {
 	p := strings.ToLower(strings.TrimSpace(path))
 	switch {
+	case strings.Contains(p, "/var/log/pods/"), strings.Contains(p, "/pods/kube-"), strings.Contains(p, "kube-apiserver"):
+		return profileCRI()
 	case strings.Contains(p, "elasticsearch"), strings.Contains(p, "/es/"), strings.HasSuffix(p, "es.log"):
 		return profileElasticsearch()
 	case usesSyslogFormat([]string{path}):

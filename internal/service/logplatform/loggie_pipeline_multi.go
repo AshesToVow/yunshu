@@ -38,6 +38,10 @@ func logSourceToGlobPath(src model.ServiceLogSource) string {
 		}
 		return strings.TrimRight(path, "/") + "/" + inc
 	}
+	// 目录型路径自动追加 /*.log，否则 file source 不会匹配目录下的滚动文件
+	if !strings.ContainsAny(path, "*?") && !strings.HasSuffix(strings.ToLower(path), ".log") {
+		return strings.TrimRight(path, "/") + "/*.log"
+	}
 	return path
 }
 
@@ -108,7 +112,9 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
       - type: file
         name: %s
         paths:
-%s        fields:
+%s        addonMeta: true
+        readFromTail: false
+        fields:
           project_id: %q
           server_id: %q%s%s
         multiline:
@@ -131,11 +137,48 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
 		serviceField,
 		logSourceField,
 		parseProfile.multilinePattern,
-		interceptorBlock,
+		ensureFileMetaActions(interceptorBlock, entry.Paths),
 		hostsBlock,
 		quoteYAML(indexSink),
 		sinkAuth,
 	)
+}
+
+// ensureFileMetaActions 保证 transformer 里把 state.filename 提升为 file_path，便于检索区分多文件。
+func ensureFileMetaActions(interceptorBlock string, paths []string) string {
+	fileMeta := `          - action: copy(state.filename, file_path)
+            ignoreError: true
+`
+	k8sMeta := ""
+	if isK8sPodLogPath(paths) {
+		k8sMeta = `          - action: regex(file_path)
+            pattern: '.*/pods/(?P<namespace>[^_]+)_(?P<pod>.+)_(?P<pod_uid>[0-9a-fA-F-]{32,36})/(?P<container>[^/]+)/(?P<log_file>[^/]+)$'
+            ignoreError: true
+`
+	}
+	if strings.TrimSpace(interceptorBlock) == "" {
+		return `    interceptors:
+      - type: transformer
+        actions:
+` + fileMeta + k8sMeta
+	}
+	// append before end of actions block
+	if strings.Contains(interceptorBlock, "copy(state.filename, file_path)") {
+		if k8sMeta != "" && !strings.Contains(interceptorBlock, "pod_uid") {
+			return interceptorBlock + k8sMeta
+		}
+		return interceptorBlock
+	}
+	return interceptorBlock + fileMeta + k8sMeta
+}
+
+func isK8sPodLogPath(paths []string) bool {
+	for _, p := range paths {
+		if strings.Contains(strings.ToLower(p), "/var/log/pods/") || strings.Contains(strings.ToLower(p), "/pods/") {
+			return true
+		}
+	}
+	return false
 }
 
 func renderPipelinesYAML(projectID, serverID uint, entries []LoggiePipelineSourceEntry, esCfg config.ElasticsearchConfig) string {

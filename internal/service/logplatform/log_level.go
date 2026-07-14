@@ -70,6 +70,26 @@ func levelMessageClauses(level string) []map[string]any {
 	}
 }
 
+func filePathFilter(path string) map[string]any {
+	path = strings.TrimSpace(path)
+	pattern := "*" + path + "*"
+	should := []map[string]any{
+		{"wildcard": map[string]any{"file_path.keyword": pattern}},
+		{"wildcard": map[string]any{"file_path": pattern}},
+		{"wildcard": map[string]any{"log_file.keyword": pattern}},
+		{"wildcard": map[string]any{"log_file": pattern}},
+		{"wildcard": map[string]any{"state.filename.keyword": pattern}},
+		{"wildcard": map[string]any{"state.filename": pattern}},
+		{"match_phrase": map[string]any{"file_path": path}},
+	}
+	return map[string]any{
+		"bool": map[string]any{
+			"should":               should,
+			"minimum_should_match": 1,
+		},
+	}
+}
+
 func pickLevel(src map[string]any) string {
 	meta := nestedFields(src)
 	if lv := normalizeLevel(pickString(src, "level", "log.level", "severity")); lv != "" {
@@ -84,8 +104,13 @@ func pickLevel(src map[string]any) string {
 }
 
 func pickFilePath(src map[string]any) string {
-	if fp := pickString(src, "file_path", "filepath", "filename", "path", "systemSource", "log.file.path"); fp != "" {
+	if fp := pickString(src, "file_path", "filepath", "filename", "path", "systemSource", "log.file.path", "log_file"); fp != "" {
 		return fp
+	}
+	if state, ok := src["state"].(map[string]any); ok {
+		if fp := pickString(state, "filename"); fp != "" {
+			return fp
+		}
 	}
 	if logObj, ok := src["log"].(map[string]any); ok {
 		if fileObj, ok := logObj["file"].(map[string]any); ok {

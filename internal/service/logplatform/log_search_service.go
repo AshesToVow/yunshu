@@ -28,6 +28,7 @@ type LogSearchQuery struct {
 	LogSourceID *uint  `form:"log_source_id"`
 	Keyword     string `form:"keyword"`
 	Level       string `form:"level"`
+	FilePath    string `form:"file_path"`
 	From        string `form:"from"`
 	To          string `form:"to"`
 	Page        int    `form:"page"`
@@ -84,6 +85,9 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 		if clause := levelFilter(lv); clause != nil {
 			filters = append(filters, clause)
 		}
+	}
+	if fp := strings.TrimSpace(q.FilePath); fp != "" {
+		filters = append(filters, filePathFilter(fp))
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		must = append(must, map[string]any{
@@ -339,6 +343,20 @@ func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 	}
 	if item.Level == "" {
 		item.Level = extractLevelFromMessage(item.Message)
+	}
+	if meta := nestedFields(src); meta != nil {
+		if item.Namespace == "" {
+			item.Namespace = pickString(meta, "namespace")
+		}
+		if item.Pod == "" {
+			item.Pod = pickString(meta, "pod")
+		}
+		if item.Container == "" {
+			item.Container = pickString(meta, "container")
+		}
+		if item.FilePath == "" {
+			item.FilePath = pickString(meta, "file_path", "log_file", "filename")
+		}
 	}
 	item.ServerID = pickUint(src, "server_id")
 	if item.ServerID == 0 {

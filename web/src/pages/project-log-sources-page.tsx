@@ -247,6 +247,7 @@ export function ProjectLogSourcesPage() {
                   placeholder="自动识别"
                   options={[
                     { value: "elasticsearch", label: "Elasticsearch / Java 方括号 [WARN ]" },
+                    { value: "cri", label: "K8s CRI 容器日志（/var/log/pods）" },
                     { value: "spring", label: "Spring / 微服务 2024-01-01 INFO" },
                     { value: "syslog", label: "Syslog /var/log/messages" },
                     { value: "nginx_access", label: "Nginx access" },

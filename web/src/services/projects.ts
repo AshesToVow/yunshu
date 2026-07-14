@@ -473,6 +473,7 @@ export async function searchProjectLogs(
     log_source_id?: number;
     keyword?: string;
     level?: string;
+    file_path?: string;
     from?: string;
     to?: string;
     page?: number;
