@@ -1,10 +1,12 @@
-# Loggie DaemonSet 请使用官方 Helm 或安装包部署，本仓库仅提供 Sink / ClusterLogConfig。
+# Loggie DaemonSet 请用官方 Helm 部署（本仓库只提供 Sink / ClusterLogConfig）。
 #
-# 参考：
-#   helm repo add loggie https://loggie-io.github.io/loggie
-#   helm install loggie loggie/loggie -n loggie --create-namespace
+# 参考：https://loggie-io.github.io/docs/getting-started/install/kubernetes/
 #
-# 安装完成后应用：
-#   kubectl apply -f deploy/k8s/loggie/00-namespace.yaml
-#   kubectl apply -f deploy/k8s/loggie/02-sink-elasticsearch.yaml
-#   kubectl apply -f deploy/k8s/loggie/03-clusterlogconfig.yaml
+#   VERSION=v1.4.0
+#   helm pull ... && tar xvzf loggie-$VERSION.tgz && cd loggie
+#   # values.yaml 关键（与 Yunshu 清单配套）：
+#   #   config.loggie.discovery.kubernetes.containerRuntime: containerd
+#   #   config.loggie.discovery.kubernetes.parseStdout: false   # 勿改为 true
+#   helm upgrade --install loggie ./ -n loggie --create-namespace
+#
+# 然后 Apply Sink + ClusterLogConfig（控制台「K8s 引导」或本目录 yaml）。

@@ -44,6 +44,12 @@ Pod/Node 日志 → Loggie DaemonSet → ES Sink → Elasticsearch
 
 `labelSelector` 必须是简单 map（例如 `"yunshu.project_id": "1"`），**不要**写 Kubernetes 的 `matchExpressions`。
 
+若出现 `Config.Pattern` / `Field validation for 'Pattern' failed`：
+
+1. Helm **`parseStdout` 必须为 `false`**（开着时 Loggie 会自动给 `paths: stdout` 注入 codec，常见空 Pattern）。  
+2. 不要在 interceptors 里嵌 `transformer`+`regex`。  
+3. CRI 解包在 **source.codec** 里写完整 `pattern` + `bodyFields: log`（见 `03-clusterlogconfig.yaml`）。
+
 ## 部署
 
 ### 方式 A：Yunshu 控制台（推荐）

@@ -1,6 +1,6 @@
-# 示例：联调默认用 pod-template-hash: * 匹配绝大多数 Deployment/Pods。
-# 注意：kubectl apply 若未带 last-applied 注解，省略 labelSelector 往往删不掉旧字段——请先 delete 再 apply。
-# kubectl label deploy 不会给 Pod 打标；需 label pod 或 patch deploy.spec.template.metadata.labels。
+# 联调：pod-template-hash:* + stdout + 显式 regex codec（解 CRI）。
+# 重要：Helm values 里 discovery.kubernetes.parseStdout 必须为 false。
+# 若 parseStdout:true，Loggie 会再注入 codec，易出现 Config.Pattern required。
 apiVersion: loggie.io/v1beta1
 kind: ClusterLogConfig
 metadata:
@@ -12,8 +12,6 @@ spec:
     type: pod
     labelSelector:
       "pod-template-hash": "*"
-      # 生产多项目共集群改为：
-      # "yunshu.project_id": "1"
   pipeline:
     sources: |
       - type: file
@@ -22,21 +20,15 @@ spec:
         paths:
           - stdout
         addonMeta: true
+        codec:
+          type: regex
+          pattern: '^(?P<time>\S+)\s+(?P<stream>stdout|stderr)\s+(?P<logtag>\S)\s+(?P<log>.*)$'
+          bodyFields: log
     sinkRef: yunshu-es
     interceptors: |
       - type: addK8sMeta
         addFields:
           project_id: "1"
-          server_id: "${pod.labels.yunshu\\.server_id}"
-          service_id: "${pod.labels.yunshu\\.service_id}"
-          log_source_id: "${pod.labels.yunshu\\.log_source_id}"
           namespace: "${namespace}"
           pod: "${pod.name}"
           container: "${container.name}"
-      - type: transformer
-        actions:
-          - action: copy(state.filename, file_path)
-            ignoreError: true
-          - action: regex(body)
-            pattern: '^(?P<ts>\S+)\s+(?P<stream>stdout|stderr)\s+(?P<flag>\S)\s+(?P<message>.*)$'
-            ignoreError: true

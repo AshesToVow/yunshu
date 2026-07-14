@@ -483,8 +483,8 @@ export function LoggieStatusPage() {
                       </Checkbox>
                     </Form.Item>
                     <Tag color="warning" style={{ marginBottom: 12, whiteSpace: "normal", height: "auto" }}>
-                      Loggie 的 type=pod 必须有 labelSelector（省略≠采全集群）。默认用 pod-template-hash:*；勾选上方则只采 yunshu.project_id。
-                      kubectl label deploy 不会给 Pod 打标；matches no pods 时用 kubectl get clusterlogconfig -o yaml 核对选择器，必要时先 delete 再 apply。
+                      type=pod 必须有 labelSelector。Helm 保持 parseStdout=false；Config.Pattern 报错多为 parseStdout=true 或旧 CLC 未 delete。
+                      默认 pod-template-hash:*；勾选则仅采 yunshu.project_id（需 label pod，不是 label deploy）。
                     </Tag>
                     <Form.Item name="deploy_after_bootstrap" valuePropName="checked">
                       <Checkbox>

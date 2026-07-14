@@ -156,6 +156,11 @@ spec:
         paths:
           - stdout
         addonMeta: true
+        # 显式 CRI 解包；Helm 请保持 parseStdout: false，避免自动注入空 Pattern 的 codec
+        codec:
+          type: regex
+          pattern: '^(?P<time>\\S+)\\s+(?P<stream>stdout|stderr)\\s+(?P<logtag>\\S)\\s+(?P<log>.*)$'
+          bodyFields: log
     sinkRef: %s
     interceptors: |
       - type: addK8sMeta
@@ -167,13 +172,6 @@ spec:
           namespace: "${namespace}"
           pod: "${pod.name}"
           container: "${container.name}"
-      - type: transformer
-        actions:
-          - action: copy(state.filename, file_path)
-            ignoreError: true
-          - action: regex(body)
-            pattern: '^(?P<ts>\\S+)\\s+(?P<stream>stdout|stderr)\\s+(?P<flag>\\S)\\s+(?P<message>.*)$'
-            ignoreError: true
 `, clcName, projectKey, selectorBlock, sinkName, projectKey)
 
 	combined := strings.TrimSpace(nsYAML) + "\n---\n" + strings.TrimSpace(sinkYAML) + "\n---\n" + strings.TrimSpace(clcYAML) + "\n"
