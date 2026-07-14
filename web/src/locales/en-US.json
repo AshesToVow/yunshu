@@ -102,8 +102,8 @@
       "eventWarning": { "title": "Warnings", "hint": "Warning-type events in samples" },
       "alertFiring": { "title": "Firing alerts", "hint": "Unresolved alert events" },
       "alertEventsToday": { "title": "Alerts today", "hint": "New events this calendar day" },
-      "logAgentsOnline": { "title": "Agents online", "hint": "Heartbeat within 90s" },
-      "logAgentsOffline": { "title": "Agents offline", "hint": "Enabled but not online" }
+      "loggieAgentsOnline": { "title": "Loggie online", "hint": "Heartbeat within 3 minutes" },
+      "loggieAgentsOffline": { "title": "Loggie offline", "hint": "Registered but not online" }
     },
     "uptimeFormat": "{{hours}}h {{minutes}}m"
   }

@@ -12,8 +12,6 @@ import (
 
 	"log/slog"
 	"yunshu/internal/bootstrap"
-	grpcclient "yunshu/internal/grpc/client"
-	grpcserver "yunshu/internal/grpc/server"
 	"yunshu/internal/handler"
 	"yunshu/internal/model"
 
@@ -54,92 +52,21 @@ var serverCmd = &cobra.Command{
 			return fmt.Errorf("reload casbin policy: %w", err)
 		}
 
-		// ?????????
 		ctx := context.Background()
 		if err := initReadonlyDemoUser(ctx, app.DB, app.Enforcer, bootLog); err != nil {
 			bootLog.Error("Failed to init readonly demo user", "error", err)
-			// ??????????
 		}
-
-		projectRepo := repository.NewProjectRepository(app.DB)
-		serverRepo := repository.NewServerRepository(app.DB)
-		serverGroupRepo := repository.NewServerGroupRepository(app.DB)
-		cloudAccountRepo := repository.NewCloudAccountRepository(app.DB)
-		serviceRepo := repository.NewServiceRepository(app.DB)
-		logRepo := repository.NewLogSourceRepository(app.DB)
-		logAgentRepo := repository.NewLogAgentRepository(app.DB)
-		agentDiscoveryRepo := repository.NewAgentDiscoveryRepository(app.DB)
-
-		userRepo := repository.NewUserRepository(app.DB)
-		departmentRepo := repository.NewDepartmentRepository(app.DB)
-		projectMemberRepo := repository.NewProjectMemberRepository(app.DB)
-		cmdbSvc, err := service.NewCMDBService(serverRepo, serverGroupRepo, cloudAccountRepo, app.Config.Security.EncryptionKey)
-		if err != nil {
-			return err
-		}
-		projectSvc := service.NewProjectMgmtService(projectRepo, serverRepo, serverGroupRepo, serviceRepo, logRepo, projectMemberRepo, userRepo, departmentRepo)
-		agentSvc := service.NewLogAgentService(logAgentRepo, serverRepo, logRepo, app.Config.Agent.RegisterSecret, app.Config.Agent.DiscoveryRoots)
-		discoverySvc := service.NewAgentDiscoveryService(agentDiscoveryRepo, logAgentRepo, serverRepo, logRepo)
-
-		grpcImpl := grpcserver.NewLogPlatformServer(projectSvc, cmdbSvc, agentSvc, discoverySvc)
-		grpcRuntime, err := grpcserver.Start(
-			app.Config.GRPC.ListenAddr,
-			grpcImpl,
-			app.Config.GRPC.InternalToken,
-			app.Config.GRPC.MaxRecvMsgBytes,
-			app.Config.GRPC.MaxSendMsgBytes,
-		)
-		if err != nil {
-			return fmt.Errorf("start grpc server: %w", err)
-		}
-
-		grpcCallTimeout := time.Duration(app.Config.GRPC.CallTimeoutSeconds) * time.Second
-		if grpcCallTimeout <= 0 {
-			grpcCallTimeout = 30 * time.Second
-		}
-		runtimeClient, err := grpcclient.Dial(
-			app.Config.GRPC.TargetAddr,
-			app.Config.GRPC.InternalToken,
-			5*time.Second,
-			app.Config.GRPC.MaxRecvMsgBytes,
-			app.Config.GRPC.MaxSendMsgBytes,
-			grpcCallTimeout,
-		)
-		if err != nil {
-			return fmt.Errorf("dial grpc runtime: %w", err)
-		}
-		defer runtimeClient.Close()
 
 		bgWorkersCtx, bgWorkersCancel := context.WithCancel(context.Background())
 		defer bgWorkersCancel()
 
-		k8sEventForwardMgr, err := router.Register(app, runtimeClient, bgWorkersCtx)
+		k8sEventForwardMgr, err := router.Register(app, bgWorkersCtx)
 		if err != nil {
 			return fmt.Errorf("register http routes: %w", err)
 		}
 		if k8sEventForwardMgr != nil {
 			defer k8sEventForwardMgr.Stop()
 		}
-
-		sweepCtx, sweepCancel := context.WithCancel(context.Background())
-		defer sweepCancel()
-		go func() {
-			ticker := time.NewTicker(45 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-sweepCtx.Done():
-					return
-				case <-ticker.C:
-					ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-					err := agentSvc.RecordOfflineEpisodes(ctx)
-					cancel()
-					if err != nil {
-						slog.Default().With("component", "agent").Warn("Failed to record agent offline episodes", "error", err)
-					}
-				}
-			}
-		}()
 
 		server := &http.Server{
 			Addr:              fmt.Sprintf(":%d", app.Config.App.Port),
@@ -168,18 +95,10 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 
-		grpcShutdown := time.Duration(app.Config.GRPC.ShutdownTimeoutSeconds) * time.Second
-		if grpcShutdown <= 0 {
-			grpcShutdown = 5 * time.Second
-		}
 		httpShutdown := time.Duration(app.Config.HTTP.ShutdownTimeoutSeconds) * time.Second
 		if httpShutdown <= 0 {
 			httpShutdown = 10 * time.Second
 		}
-
-		ctxGRPC, cancelGRPC := context.WithTimeout(context.Background(), grpcShutdown)
-		defer cancelGRPC()
-		grpcRuntime.Stop(ctxGRPC)
 
 		ctxHTTP, cancelHTTP := context.WithTimeout(context.Background(), httpShutdown)
 		defer cancelHTTP()
@@ -188,16 +107,14 @@ var serverCmd = &cobra.Command{
 	},
 }
 
-// initReadonlyDemoUser ?????????
-// ???: viewer, ??: viewer123, ??: viewer (?????)
+// initReadonlyDemoUser 初始化只读演示账号 viewer/viewer123。
 func initReadonlyDemoUser(ctx context.Context, db *gorm.DB, enforcer *casbin.SyncedEnforcer, logger *slog.Logger) error {
 	userRepo := repository.NewUserRepository(db)
 	roleRepo := repository.NewRoleRepository(db)
 	permRepo := repository.NewPermissionRepository(db)
 
-	// 1. ????? viewer ??
 	roleCode := "viewer"
-	roleName := "?????"
+	roleName := "只读用户"
 	var role *model.Role
 	allRoles, err := roleRepo.ListAll(ctx)
 	if err != nil {
@@ -210,12 +127,11 @@ func initReadonlyDemoUser(ctx context.Context, db *gorm.DB, enforcer *casbin.Syn
 		}
 	}
 
-	// ????????
 	if role == nil {
 		role = &model.Role{
 			Code:        roleCode,
 			Name:        roleName,
-			Description: "????????????",
+			Description: "只读演示账号，仅可查看",
 		}
 		if err := db.Create(role).Error; err != nil {
 			return fmt.Errorf("create role: %w", err)
@@ -223,8 +139,6 @@ func initReadonlyDemoUser(ctx context.Context, db *gorm.DB, enforcer *casbin.Syn
 		logger.Info("Created readonly role", "code", roleCode)
 	}
 
-	// 2. ????????? GET ?? + K8s ????
-	// ??????
 	if _, err := enforcer.RemoveFilteredPolicy(0, roleCode); err != nil {
 		logger.Warn("Failed to remove old Casbin policies", "error", err)
 	}
@@ -262,7 +176,6 @@ func initReadonlyDemoUser(ctx context.Context, db *gorm.DB, enforcer *casbin.Syn
 
 	logger.Info("Configured readonly role permissions", "role", roleCode, "policies_added", added)
 
-	// 3. ?????????
 	username := "viewer"
 	email := "viewer@yunshu.demo"
 	plainPassword := "viewer123"
@@ -272,7 +185,6 @@ func initReadonlyDemoUser(ctx context.Context, db *gorm.DB, enforcer *casbin.Syn
 		if err != gorm.ErrRecordNotFound {
 			return fmt.Errorf("get user: %w", err)
 		}
-		// ???????????
 		hashedPassword, err := password.Hash(plainPassword)
 		if err != nil {
 			return fmt.Errorf("hash password: %w", err)
@@ -292,17 +204,14 @@ func initReadonlyDemoUser(ctx context.Context, db *gorm.DB, enforcer *casbin.Syn
 		logger.Info("Demo user already exists", "username", username)
 	}
 
-	// 4. ????? viewer ??
 	if err := userRepo.ReplaceRoles(ctx, user, []model.Role{*role}); err != nil {
 		return fmt.Errorf("bind role to user: %w", err)
 	}
 
-	// ?? Casbin ??
 	if err := service.SyncUserRoles(enforcer, user.ID, []model.Role{*role}); err != nil {
 		return fmt.Errorf("sync user roles: %w", err)
 	}
 
 	logger.Info("Initialized demo user", "username", username, "password", plainPassword, "role", roleCode)
-	logger.Info("Demo user login info", "username", username, "password", plainPassword)
 	return nil
 }

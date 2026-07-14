@@ -103,3 +103,34 @@ func (r *MenuRepository) BatchUpdateStatus(ctx context.Context, ids []uint, stat
 	}
 	return r.db.WithContext(ctx).Model(&model.Menu{}).Where("id IN ?", ids).Update("status", status).Error
 }
+
+func (r *MenuRepository) ListPermissionBindings(ctx context.Context) ([]model.MenuPermissionBinding, error) {
+	var list []model.MenuPermissionBinding
+	err := r.db.WithContext(ctx).Order("menu_id ASC, id ASC").Find(&list).Error
+	return list, err
+}
+
+func (r *MenuRepository) ListPermissionBindingsByMenuID(ctx context.Context, menuID uint) ([]model.MenuPermissionBinding, error) {
+	var list []model.MenuPermissionBinding
+	err := r.db.WithContext(ctx).Where("menu_id = ?", menuID).Order("id ASC").Find(&list).Error
+	return list, err
+}
+
+func (r *MenuRepository) ReplacePermissionBindings(ctx context.Context, menuID uint, bindings []model.MenuPermissionBinding) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("menu_id = ?", menuID).Delete(&model.MenuPermissionBinding{}).Error; err != nil {
+			return err
+		}
+		if len(bindings) == 0 {
+			return nil
+		}
+		for i := range bindings {
+			bindings[i].MenuID = menuID
+			bindings[i].ID = 0
+			if bindings[i].Mode == "" {
+				bindings[i].Mode = "any"
+			}
+		}
+		return tx.Create(&bindings).Error
+	})
+}

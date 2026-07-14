@@ -286,3 +286,11 @@ func (s *MenuService) invalidateCache() {
 	s.treeCache = nil
 	s.treeCacheExpireAt = time.Time{}
 }
+
+func (s *MenuService) ListPermissionBindings(ctx context.Context) ([]model.MenuPermissionBinding, error) {
+	return s.menuRepo.ListPermissionBindings(ctx)
+}
+
+func (s *MenuService) ListAllFlat(ctx context.Context) ([]model.Menu, error) {
+	return s.menuRepo.ListAll(ctx)
+}

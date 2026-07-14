@@ -1,0 +1,10 @@
+# Loggie DaemonSet 请使用官方 Helm 或安装包部署，本仓库仅提供 Sink / ClusterLogConfig。
+#
+# 参考：
+#   helm repo add loggie https://loggie-io.github.io/loggie
+#   helm install loggie loggie/loggie -n loggie --create-namespace
+#
+# 安装完成后应用：
+#   kubectl apply -f deploy/k8s/loggie/00-namespace.yaml
+#   kubectl apply -f deploy/k8s/loggie/02-sink-elasticsearch.yaml
+#   kubectl apply -f deploy/k8s/loggie/03-clusterlogconfig.yaml

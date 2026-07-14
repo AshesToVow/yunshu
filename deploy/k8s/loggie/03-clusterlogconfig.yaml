@@ -1,0 +1,27 @@
+apiVersion: loggie.io/v1beta1
+kind: ClusterLogConfig
+metadata:
+  name: yunshu-container-logs
+spec:
+  selector:
+    type: pod
+  pipeline:
+    sources: |
+      - type: file
+        name: stdout
+        containerName: "*"
+        paths:
+          - /var/log/pods/*/*/*.log
+    sink: yunshu-es
+    interceptors: |
+      - type: addK8sMeta
+        addFields:
+          project_id: "${pod.labels.yunshu\\.project_id}"
+          server_id: "${pod.labels.yunshu\\.server_id}"
+          service_id: "${pod.labels.yunshu\\.service_id}"
+          log_source_id: "${pod.labels.yunshu\\.log_source_id}"
+      - type: transformer
+        actions:
+          - action: regex(body)
+            pattern: '(?P<message>.*)'
+            ignoreError: true

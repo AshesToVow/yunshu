@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	grpcclient "yunshu/internal/grpc/client"
 	"yunshu/internal/config"
 
 	"gorm.io/gorm"
@@ -12,16 +11,16 @@ type Runtime struct {
 	DB                      *gorm.DB
 	Config                  *config.Config
 	YamlK8sEventForwardBase config.K8sEventForwardConfig
-	GRPCClient              *grpcclient.RuntimeClient
 	Enabled                 map[string]bool
 	// Deps 为 *router.RouteDeps，使用 any 避免 plugin ↔ router 循环依赖。
 	Deps any
 	// 下列字段由 router 填充，供插件后台任务使用。
-	K8sRuntime  any // *service.K8sRuntimeService
-	MysqlBackup any // *service.MysqlBackupService
-	Dbmgmt      any // *dbmgmt.Service
-	Cicd        any // *cicd.Service
-	Alert       any // *service.AlertService
+	K8sRuntime   any // *service.K8sRuntimeService
+	MysqlBackup  any // *service.MysqlBackupService
+	Dbmgmt       any // *dbmgmt.Service
+	Cicd         any // *cicd.Service
+	Alert        any // *service.AlertService
+	LogRetention any // *service.LogRetentionService
 }
 
 // IsEnabled 判断某插件是否在当前配置下启用。

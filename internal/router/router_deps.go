@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"yunshu/internal/bootstrap"
-	grpcclient "yunshu/internal/grpc/client"
 	"yunshu/internal/handler"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/middleware"
@@ -88,8 +87,9 @@ type RouteDeps struct {
 	alertSvc               *service.AlertService
 	cicdSvc                *cicdsvc.Service
 	cicdHandler            *handler.CicdHandler
-	logAgentHandler        *handler.LogAgentHandler
-	agentDiscoveryHandler  *handler.AgentDiscoveryHandler
+	logPlatformHandler     *handler.LogPlatformHandler
+	loggieHandler          *handler.LoggieHandler
+	logRetentionSvc        *service.LogRetentionService
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -132,18 +132,22 @@ func (d *RouteDeps) AlertService() *service.AlertService {
 	return d.alertSvc
 }
 
-func assembleRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
+// LogRetentionService 供 project 插件保留策略调度使用。
+func (d *RouteDeps) LogRetentionService() *service.LogRetentionService {
+	if d == nil {
+		return nil
+	}
+	return d.logRetentionSvc
+}
+
+func assembleRouteDeps(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	if repos == nil {
 		repos = newRouteRepositories(app.DB)
 	}
-	return wireRouteDepsWithRepos(app, runtimeClient, repos, svcs)
+	return wireRouteDepsWithRepos(app, repos, svcs)
 }
 
-func wireRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient) (*RouteDeps, error) {
-	return InitializeRouteDeps(app, runtimeClient)
-}
-
-func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
+func wireRouteDepsWithRepos(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	if svcs == nil {
 		return nil, fmt.Errorf("route services required (use InitializeRouteDeps)")
 	}
@@ -173,10 +177,20 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	departmentHandler := handler.NewDepartmentHandler(svcs.Department)
 	roleHandler := handler.NewRoleHandler(svcs.Role)
 	permissionHandler := handler.NewPermissionHandler(svcs.Permission, &app.Config.Plugins)
-	policyHandler := handler.NewPolicyHandler(svcs.Policy, svcs.Permission, &app.Config.Plugins)
+	policyGovernance := service.NewPolicyGovernanceService(
+		userRepo,
+		repos.Role,
+		permissionRepo,
+		repos.Menu,
+		projectMemberRepo,
+		k8sClusterAccessRepo,
+		app.Enforcer,
+		&app.Config.Plugins,
+	)
+	policyHandler := handler.NewPolicyHandler(svcs.Policy, policyGovernance, svcs.Permission, &app.Config.Plugins)
 	k8sScopedPolicyHandler := handler.NewK8sScopedPolicyHandler(svcs.K8sScopedPolicy)
 	regHandler := handler.NewRegistrationHandler(svcs.Registration)
-	menuHandler := handler.NewMenuHandler(svcs.Menu, &app.Config.Plugins)
+	menuHandler := handler.NewMenuHandler(svcs.Menu, &app.Config.Plugins, app.Enforcer)
 	dictEntryHandler := handler.NewDictEntryHandler(svcs.DictEntry)
 	alertHandler := handler.NewAlertHandler(svcs.Alert)
 	cloudExpiryRuleHandler := handler.NewCloudExpiryRuleHandler(svcs.CloudExpiryRule, svcs.Alert)
@@ -211,10 +225,10 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	rbacHandler := handler.NewRBACHandler(svcs.K8sRBAC)
 	serviceAccountHandler := handler.NewServiceAccountHandler(svcs.K8sServiceAccount)
 	overviewHandler := handler.NewOverviewHandler(svcs.Overview)
-	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt)
+	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt, svcs.LogSearch)
 	cmdbHandler := handler.NewCMDBHandler(svcs.CMDB)
-	logAgentHandler := handler.NewLogAgentHandler(svcs.LogAgent, runtimeClient.AgentSrv)
-	agentDiscoveryHandler := handler.NewAgentDiscoveryHandler(svcs.AgentDiscovery, runtimeClient.AgentSrv)
+	logPlatformHandler := handler.NewLogPlatformHandler(svcs.LogRetention)
+	loggieHandler := handler.NewLoggieHandler(svcs.LoggieAgent)
 
 	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, userRepo, app.Logger)
 	wsAuthMiddleware := middleware.WSAuth(app.Redis, userRepo, app.Logger)
@@ -294,7 +308,8 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		alertSvc:              svcs.Alert,
 		cicdSvc:               svcs.Cicd,
 		cicdHandler:           cicdHandler,
-		logAgentHandler:       logAgentHandler,
-		agentDiscoveryHandler: agentDiscoveryHandler,
+		logPlatformHandler:    logPlatformHandler,
+		loggieHandler:         loggieHandler,
+		logRetentionSvc:       svcs.LogRetention,
 	}, nil
 }

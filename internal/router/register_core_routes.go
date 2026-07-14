@@ -74,6 +74,10 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	policies := api.Group("/policies")
 	policies.Use(d.authMiddleware, d.authorize, d.opAudit)
+	policies.GET("/menu-links", d.policyHandler.MenuLinks)
+	policies.GET("/conflicts", d.policyHandler.Conflicts)
+	policies.GET("/permission-tree", d.policyHandler.PermissionTree)
+	policies.POST("/simulate", d.policyHandler.Simulate)
 	policies.GET("", d.policyHandler.List)
 	policies.POST("", d.policyHandler.Grant)
 	policies.DELETE("", d.policyHandler.Revoke)
@@ -93,6 +97,8 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	menus.GET("/tree", d.menuHandler.Tree)
 	menus.POST("", d.menuHandler.Create)
 	menus.PUT("/status", d.menuHandler.BatchStatus)
+	menus.GET("/:id/bindings", d.menuHandler.GetBindings)
+	menus.PUT("/:id/bindings", d.menuHandler.ReplaceBindings)
 	menus.PUT("/:id", d.menuHandler.Update)
 	menus.DELETE("/:id", d.menuHandler.Delete)
 

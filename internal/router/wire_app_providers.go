@@ -12,18 +12,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// 具名类型避免 Wire「multiple bindings for string」。
 type (
 	AppDisplayName        string
 	SecurityEncryptionKey string
-	AgentRegisterSecret   string
 )
 
 type appRouteConfig struct {
-	AppName             AppDisplayName
-	EncryptionKey       SecurityEncryptionKey
-	AgentRegisterSecret AgentRegisterSecret
-	AgentDiscoveryRoots []string
+	AppName       AppDisplayName
+	EncryptionKey SecurityEncryptionKey
 }
 
 func provideDB(app *bootstrap.App) *gorm.DB {
@@ -60,16 +56,14 @@ func provideDbmgmtConfig(app *bootstrap.App) config.DbmgmtConfig {
 
 func provideAppRouteConfig(app *bootstrap.App) *appRouteConfig {
 	return &appRouteConfig{
-		AppName:             AppDisplayName(app.Config.App.Name),
-		EncryptionKey:       SecurityEncryptionKey(app.Config.Security.EncryptionKey),
-		AgentRegisterSecret: AgentRegisterSecret(app.Config.Agent.RegisterSecret),
-		AgentDiscoveryRoots: app.Config.Agent.DiscoveryRoots,
+		AppName:       AppDisplayName(app.Config.App.Name),
+		EncryptionKey: SecurityEncryptionKey(app.Config.Security.EncryptionKey),
 	}
 }
 
 var appRouteConfigFields = wire.FieldsOf(
 	new(*appRouteConfig),
-	"AppName", "EncryptionKey", "AgentRegisterSecret", "AgentDiscoveryRoots",
+	"AppName", "EncryptionKey",
 )
 
 func providePluginsEnabled(app *bootstrap.App) map[string]bool {

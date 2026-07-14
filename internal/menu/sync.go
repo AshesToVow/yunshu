@@ -170,6 +170,15 @@ func patchLegacyMenu(ctx context.Context, db *gorm.DB, m *model.Menu) error {
 			m.Redirect = "/dict-entries"
 			needSave = true
 		}
+	case "/agent-list":
+		if !m.Hidden {
+			m.Hidden = true
+			needSave = true
+		}
+		if strings.TrimSpace(m.Redirect) != "/loggie-status" {
+			m.Redirect = "/loggie-status"
+			needSave = true
+		}
 	}
 
 	if m.Hidden && m.Status != 0 {
@@ -328,7 +337,7 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepIcon:           "FileTextOutlined",
 		keepSort:           4,
 		preferNameContains: "日志",
-		knownChildPaths:    []string{"/project-services", "/project-log-sources", "/project-logs", "/agent-list"},
+		knownChildPaths:    []string{"/project-services", "/project-log-sources", "/project-logs", "/log-retention"},
 	},
 	{
 		paths:              []string{"/mysql-backup", "/mysql-backup/"},
@@ -355,7 +364,8 @@ func reparentExtractedMenus(ctx context.Context, db *gorm.DB) error {
 		"/project-services",
 		"/project-log-sources",
 		"/project-logs",
-		"/agent-list",
+		"/log-retention",
+		"/loggie-status",
 	} {
 		pid := logParentID
 		if err := reparentMenuByPath(ctx, db, path, &pid); err != nil {

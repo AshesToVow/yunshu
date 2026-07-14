@@ -273,6 +273,14 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "dbmgmt_goinception_host", Label: "goInception 地址", Value: "10.10.10.103", Sort: intRef(1), Status: 1, Remark: "dbmgmt.goinception_host"},
 			{DictType: "dbmgmt_goinception_port", Label: "goInception 端口", Value: "4000", Sort: intRef(1), Status: 1, Remark: "dbmgmt.goinception_port"},
 			{DictType: "dbmgmt_goinception_backup", Label: "goInception 执行前备份", Value: "true", Sort: intRef(1), Status: 1, Remark: "dbmgmt.goinception_backup：true/false"},
+			// Elasticsearch（字典优先，config.yaml 兜底）
+			{DictType: "elasticsearch_enabled", Label: "启用 ES 日志检索", Value: "false", Sort: intRef(1), Status: 1, Remark: "true/false；Loggie 采集写入 ES 后开启"},
+			{DictType: "elasticsearch_addresses", Label: "ES 地址列表", Value: "http://127.0.0.1:9200", Sort: intRef(1), Status: 1, Remark: "单节点填一个；集群可 JSON 数组或逗号分隔"},
+			{DictType: "elasticsearch_username", Label: "ES 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "Basic 认证用户名"},
+			{DictType: "elasticsearch_password", Label: "ES 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：Basic 认证密码"},
+			{DictType: "elasticsearch_index_pattern", Label: "ES 索引模式", Value: "yunshu-logs-*", Sort: intRef(1), Status: 1, Remark: "elasticsearch.index_pattern"},
+			{DictType: "elasticsearch_default_retention_days", Label: "默认保留天数", Value: "30", Sort: intRef(1), Status: 1, Remark: "elasticsearch.default_retention_days"},
+			{DictType: "elasticsearch_cleanup_cron_spec", Label: "清理 Cron", Value: "0 3 * * *", Sort: intRef(1), Status: 1, Remark: "elasticsearch.cleanup_cron_spec"},
 		}
 		singletonTypes := map[string]struct{}{
 			"mail_host":                                 {},

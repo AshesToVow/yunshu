@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
 
 	"yunshu/internal/pkg/auth"
@@ -17,12 +15,13 @@ import (
 )
 
 type ProjectHandler struct {
-	svc *service.ProjectMgmtService
+	svc       *service.ProjectMgmtService
+	logSearch *service.LogSearchService
 }
 
 // NewProjectHandler 创建相关逻辑。
-func NewProjectHandler(svc *service.ProjectMgmtService) *ProjectHandler {
-	return &ProjectHandler{svc: svc}
+func NewProjectHandler(svc *service.ProjectMgmtService, logSearch *service.LogSearchService) *ProjectHandler {
+	return &ProjectHandler{svc: svc, logSearch: logSearch}
 }
 
 // List 查询列表对应的 HTTP 接口处理逻辑。
@@ -145,100 +144,37 @@ func (h *ProjectHandler) DeleteLogSource(c *gin.Context) {
 	response.Success(c, gin.H{"message": "deleted"})
 }
 
-// StreamLogs 处理对应的 HTTP 请求并返回统一响应。
-func (h *ProjectHandler) StreamLogs(c *gin.Context) {
+// SearchLogs 经 Elasticsearch 检索项目日志（Loggie 采集写入 ES）。
+func (h *ProjectHandler) SearchLogs(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-
-	q, ok := bindQuery[service.LogStreamQuery](c)
+	q, ok := bindQuery[service.LogSearchQuery](c)
 	if !ok {
 		return
 	}
 	q.ProjectID = projectID
-
-	if err := h.svc.ValidateLogSourceAccess(c.Request.Context(), q.ProjectID, q.ServerID, q.LogSourceID); err != nil {
+	if err := h.svc.ValidateLogSearchFilters(c.Request.Context(), projectID, q.ServerID, q.LogSourceID); err != nil {
 		response.Error(c, err)
 		return
 	}
-
-	streamKey := service.BuildLogStreamKey(q.ProjectID, q.ServerID, q.LogSourceID)
-	var includeRe *regexp.Regexp
-	if q.Include != nil && strings.TrimSpace(*q.Include) != "" {
-		re, err := regexp.Compile(*q.Include)
-		if err != nil {
-			response.Error(c, constants.ErrIncludeRegexInvalid)
-			return
-		}
-		includeRe = re
+	if h.logSearch == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未配置"))
+		return
 	}
-	var excludeRe *regexp.Regexp
-	if q.Exclude != nil && strings.TrimSpace(*q.Exclude) != "" {
-		re, err := regexp.Compile(*q.Exclude)
-		if err != nil {
-			response.Error(c, constants.ErrExcludeRegexInvalid)
-			return
-		}
-		excludeRe = re
+	res, err := h.logSearch.Search(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
 	}
-	hl := ""
-	if q.Highlight != nil {
-		hl = strings.TrimSpace(*q.Highlight)
-	}
-	targetFilePath := ""
-	if q.FilePath != nil {
-		targetFilePath = strings.TrimSpace(*q.FilePath)
-	}
-	replayLines := q.TailLines
-	if replayLines <= 0 {
-		replayLines = 200
-	}
-
-	ch, cancelSub := service.AgentLogBroker.Subscribe(streamKey, replayLines, q.AfterID)
-	defer cancelSub()
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
-
-	// SSE：须在参数校验通过后再写头，避免非法请求返回 JSON 却已发送 event-stream。
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Writer.Flush()
-
-	for {
-		select {
-		case <-c.Request.Context().Done():
-			return
-		case <-ticker.C:
-			_, _ = c.Writer.WriteString("event: ping\ndata: {}\n\n")
-			c.Writer.Flush()
-		case event := <-ch:
-			if targetFilePath != "" && strings.TrimSpace(event.FilePath) != targetFilePath {
-				continue
-			}
-			line := event.Line
-			if includeRe != nil && !includeRe.MatchString(line) {
-				continue
-			}
-			if excludeRe != nil && excludeRe.MatchString(line) {
-				continue
-			}
-			if hl != "" && strings.Contains(line, hl) {
-				line = strings.ReplaceAll(line, hl, "\x1b[31m"+hl+"\x1b[0m")
-			}
-			if len(line) > 4096 {
-				line = line[:4096] + " ...<truncated>"
-			}
-			c.SSEvent("log", gin.H{
-				"id":        event.ID,
-				"line":      line,
-				"file_path": strings.TrimSpace(event.FilePath),
-			})
-			c.Writer.Flush()
-		}
-	}
+	response.Success(c, gin.H{
+		"list":      res.List,
+		"total":     res.Total,
+		"page":      res.Page,
+		"page_size": res.PageSize,
+	})
 }
 
 // ExportLogs 导出对应的 HTTP 接口处理逻辑。
@@ -248,18 +184,27 @@ func (h *ProjectHandler) ExportLogs(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	q, ok := bindQuery[service.LogExportQuery](c)
+	q, ok := bindQuery[service.LogSearchQuery](c)
 	if !ok {
 		return
 	}
 	q.ProjectID = projectID
-	data, filename, err := h.svc.ExportLogs(c.Request.Context(), q)
+	if err := h.svc.ValidateLogSearchFilters(c.Request.Context(), projectID, q.ServerID, q.LogSourceID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if h.logSearch == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未配置"))
+		return
+	}
+	text, err := h.logSearch.Export(c.Request.Context(), q)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
+	filename := fmt.Sprintf("project-%d-logs-%s.txt", projectID, time.Now().Format("20060102-150405"))
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	c.Data(http.StatusOK, "text/plain; charset=utf-8", data)
+	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(text))
 }
 
 // ListProjectMembers 项目成员列表。

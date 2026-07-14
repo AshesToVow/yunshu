@@ -92,13 +92,12 @@ flowchart TB
   subgraph be["Yunshu 后端 · go run . server"]
     HTTP["Gin HTTP :8080<br/>Swagger / REST"]
     MW["中间件链<br/>JWT · Casbin · K8sScope · 审计"]
-    GRPC["gRPC :18080<br/>日志 Agent Ingest"]
     WORKERS["插件 StartWorkers<br/>云到期 · 备份调度 · Jenkins 同步 · K8s Event 转发"]
 
     subgraph plugins["plugins.enabled 编译期插件"]
       direction LR
       CORE["core<br/>用户/角色/菜单/字典"]
-      PROJ["project<br/>项目/成员/日志 SSE"]
+      PROJ["project<br/>项目/成员/ES 日志检索"]
       CMDB["cmdb<br/>服务器/云账号/终端"]
       K8SPL["k8s<br/>多集群控制台"]
       ALERT["alert<br/>规则/订阅/云到期"]
@@ -118,7 +117,8 @@ flowchart TB
 
   subgraph ext["外部系统"]
     K8SAPI["Kubernetes API<br/>Kom SDK 多集群"]
-    AGENT["log-agent<br/>目标机部署"]
+    LOGGIE["Loggie + Elasticsearch<br/>目标机采集"]
+    ES[(Elasticsearch)]
     SSH["SSH 目标服务器"]
     JENKINS["Jenkins"]
     MINIO["MinIO<br/>备份归档 / CI 制品"]
@@ -139,9 +139,9 @@ flowchart TB
   plugins --> SVC
   WORKERS --> SVC
 
-  AGENT -->|"上报/拉配置"| GRPC
-  GRPC --> SVC
-  PROJ --> AGENT
+  LOGGIE -->|"bulk 写入"| ES[(Elasticsearch)]
+  REACT -->|"检索/导出"| HTTP
+  PROJ --> LOGGIE
   CMDB --> SSH
   BACKUP --> SSH
   BACKUP --> MINIO
@@ -172,8 +172,6 @@ flowchart LR
   MW --> SVC[Service]
   SVC --> DB[(MySQL)]
   SVC --> RD[(Redis)]
-  SVC --> GRPC[gRPC :18080]
-  GRPC --> AGENT[log-agent]
   SVC --> KOM[Kom SDK]
   KOM --> K8S[(Kubernetes API)]
 ```
@@ -237,7 +235,6 @@ npm run dev
 | 前端 | http://localhost:5173 |
 | 后端 API | http://localhost:8080 |
 | Swagger | http://localhost:8080/swagger/index.html |
-| gRPC（Agent） | localhost:18080 |
 
 > 后端二进制入口为 Cobra 子命令，根命令名为 `permission-system`（`go run . server` 即可）。
 
@@ -313,16 +310,15 @@ git checkout main
 
 | 配置块 | 说明 |
 |--------|------|
-| `app` / `http` | 服务端口、超时；**日志 SSE 长连接**建议 `read_timeout_seconds` / `write_timeout_seconds` 为 `0` |
+| `app` / `http` | 服务端口、超时 |
 | `mysql` / `redis` | 业务库与缓存 |
-| `grpc` | 平台 gRPC（Agent Ingest、runtime-config）；默认 `18080` |
+| `elasticsearch` | Loggie 写入 / 控制台检索后端（部分项可在**数据字典**覆盖） |
 | `auth` | JWT 密钥、Token 有效期、邮箱验证码 TTL |
-| `agent` | `register_secret`（Agent 自注册）、`discovery_roots`（引导扫描目录） |
 | `security.encryption_key` | 服务器 SSH 等敏感字段加密 |
 | `alert` | Webhook、Prometheus 富化、聚合窗口等（部分项可在**数据字典**覆盖） |
 | `dbmgmt` | 查询超时、结果行数、goInception 地址、生产强制审批等（部分项可在**数据字典**覆盖，见 [docs/dbmgmt.md](docs/dbmgmt.md)） |
 
-生产环境务必修改：MySQL/Redis 密码、`auth.jwt_secret`、`security.encryption_key`、`agent.register_secret`。
+生产环境务必修改：MySQL/Redis 密码、`auth.jwt_secret`、`security.encryption_key`。
 
 ---
 
@@ -365,52 +361,14 @@ git checkout main
 3. **安全说明**：详情接口**不回显**完整 kubeconfig/密钥，仅显示 `kubeconfig_configured` 与脱敏后的直连字段；更新凭证需重新粘贴。
 4. **组件状态 / 命名空间**：在集群详情或对应菜单查看。
 
-### 日志平台与 Agent
+### 日志平台（Loggie + Elasticsearch）
 
-#### 1. 平台侧准备
+1. 在 **项目管理** 中创建项目、**服务器**、**服务**、**日志源**（path 供引导参考）。
+2. 配置 `configs/config.yaml` 或数据字典中的 **Elasticsearch** 连接（见 [docs/log-platform-es.md](docs/log-platform-es.md)）。
+3. 打开 **Loggie 状态** → **引导**：一键生成 `pipeline.yml`、心跳脚本并下载部署到目标机。
+4. 在 **日志检索** 中按项目/服务器/级别/关键词查询；**保留策略** 管理 ES 索引生命周期。
 
-1. 在 **项目管理** 中创建项目，添加 **服务器**、**服务**、**日志源**（file 类型 path 支持 glob，如 `/var/log/pods/*/*.log`）。
-2. **Agent 列表**：注册 Agent 或使用 Bootstrap 命令（见集群/服务器页说明）。
-3. `configs/config.yaml` 中配置 `agent.register_secret` 与可选 `agent.discovery_roots`（如 `/var/log`）。
-
-#### 2. 部署 log-agent（目标机器）
-
-```bash
-# 编译
-go build -o log-agent ./cmd/logagent
-
-# 常用参数（需先在平台拿到 server_id、token）
-./log-agent \
-  --grpc-server=<平台IP>:18080 \
-  --server-id=<服务器ID> \
-  --token=<Agent Token> \
-  --enable-runtime-pull=true \
-  --enable-discovery=true \
-  --discovery-interval=30m \
-  --discovery-roots=/var/log,/var/log/pods
-```
-
-或使用主程序子命令：
-
-```bash
-go run . log-agent --grpc-server=127.0.0.1:18080 --server-id=1 --token=<token>
-```
-
-诊断连通性与 Token：
-
-```bash
-go run . log-agent-doctor --grpc-server=127.0.0.1:18080 --server-id=1 --token=<token>
-```
-
-#### 3. 控制台查看日志
-
-1. 打开 **项目 → 日志平台**。
-2. 选择项目、服务器、服务、日志源；可选具体日志文件（来自 Agent **发现**）。
-3. 点击 **开始**：SSE 拉流；URL 会同步 `project_id` / `server_id` / `log_source_id`，支持刷新后 `autostart=1` 恢复。
-4. 离开页面后底部 **日志流 Dock** 可后台继续；返回日志页可暂停/停止。
-5. **发现未配置日志源**：面板展示 Agent 上报且未匹配现有源的路径，可 **一键创建日志源**。
-
-API 细节见：[docs/log-platform-api.md](docs/log-platform-api.md)
+旧版 `log-agent` + gRPC `:18080` 方案已移除，进程仅监听 HTTP `:8080`。
 
 ### 告警平台要点
 
@@ -480,12 +438,8 @@ FLUSH PRIVILEGES;
 go run . migrate
 go run . seed
 
-# 启动 HTTP + gRPC 服务
+# 启动 HTTP 服务
 go run . server
-
-# 日志 Agent（见上文）
-go run . log-agent --help
-go run . log-agent-doctor --help
 
 # 测试与格式化
 go test ./...
@@ -507,9 +461,8 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 | 登录后菜单为空 | 执行 `seed`；检查角色是否分配；检查菜单 `status` |
 | K8s 操作 403 | 依次检查：授权管理 API → 集群档位 → NS 黑/白名单；请求是否带 `cluster_id` |
 | Pod Exec 403 | 需 `readonly_exec`；WS 需 Casbin + 档位；检查 Origin 与 token |
-| 日志 SSE 中断 | 网关/反向代理禁用缓冲；后端 `write_timeout_seconds=0`；见 `config.yaml` 注释 |
-| Agent 不上报 | `log-agent-doctor`；gRPC 18080 是否可达；`register_secret` / token |
-| 发现列表为空 | Agent 需 `--enable-discovery`；先配置至少一条日志源或 `discovery_roots`；等待扫描/重启 Agent |
+| Loggie 无上报 | 控制台 **Loggie 状态**；目标机 `9196` 监控端口；ES 连通与 pipeline 配置 |
+| ES 检索为空 | 确认 `elasticsearch.enabled`；索引 `yunshu-logs-*` 是否有数据 |
 | 集群详情无 kubeconfig | 预期行为（安全脱敏）；更新时重新粘贴 YAML |
 | 首页 Pod 统计与预期不符 | 非 super-admin 仅聚合**有项目成员关系且具备 readonly+ 档位**的集群 |
 | Docker 后端连不上库 | 检查 `MYSQL_*` / `REDIS_*` 环境变量与服务名 `yunshu-mysql` |
@@ -921,14 +874,11 @@ erDiagram
 
 ```text
 yunshu/
-├── cmd/                    # Cobra：server / migrate / seed / log-agent
-├── cmd/logagent/           # 独立 log-agent 二进制入口
+├── cmd/                    # Cobra：server / migrate / seed
 ├── configs/                # config.yaml、casbin_model.conf、plugins.enabled
 ├── docs/                   # 产品手册、API、架构文档（见 docs/CODEBASE-MAP.md）
 ├── internal/
-│   ├── agent/              # 日志 Agent 运行时
 │   ├── bootstrap/          # 应用启动、迁移
-│   ├── grpc/               # gRPC 服务（日志 Ingest 等）
 │   ├── handler/            # HTTP 处理器
 │   ├── menu/               # 内置菜单 catalog + seed 同步（internal/menu/catalog.go）
 │   ├── middleware/         # Auth、Casbin、K8sScope、ErrorHandler、审计

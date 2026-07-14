@@ -73,8 +73,9 @@ const PATH_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
       "/project-members",
       "/project-services",
       "/project-logs",
+      "/log-retention",
+      "/loggie-status",
       "/project-log-sources",
-      "/agent-list",
     ],
   },
   {

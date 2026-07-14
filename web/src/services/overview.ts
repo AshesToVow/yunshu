@@ -13,8 +13,8 @@ export interface OverviewResponse {
   event_cluster_errors: number;
   alert_firing_count: number;
   alert_events_today_count: number;
-  log_agents_online_count: number;
-  log_agents_offline_count: number;
+  loggie_agents_online_count: number;
+  loggie_agents_offline_count: number;
 }
 
 export interface OverviewProjectLaunchSeries {

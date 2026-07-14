@@ -1,6 +1,6 @@
 package main
 
-// permission-system 后端可执行入口：将 CLI 委托给 cmd 包（server / migrate / log-agent 等）。
+// permission-system 后端可执行入口：将 CLI 委托给 cmd 包（server / migrate / seed 等）。
 //
 // @title YunShu CMDB API
 // @version 1.0

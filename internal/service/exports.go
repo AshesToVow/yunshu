@@ -23,6 +23,7 @@ type (
 	RoleService         = system.RoleService
 	PermissionService   = system.PermissionService
 	PolicyService       = system.PolicyService
+	PolicyGovernanceService = system.PolicyGovernanceService
 	UserGroupService    = system.UserGroupService
 	RegistrationService = system.RegistrationService
 	MenuService         = system.MenuService
@@ -52,6 +53,7 @@ var (
 	NewRoleService         = system.NewRoleService
 	NewPermissionService   = system.NewPermissionService
 	NewPolicyService       = system.NewPolicyService
+	NewPolicyGovernanceService = system.NewPolicyGovernanceService
 	NewUserGroupService    = system.NewUserGroupService
 	NewRegistrationService = system.NewRegistrationService
 	NewMenuService         = system.NewMenuService
@@ -96,6 +98,17 @@ type (
 	UserGroupDetailResponse  = system.UserGroupDetailResponse
 	PolicyGrantRequest       = system.PolicyGrantRequest
 	PolicyItemResponse       = system.PolicyItemResponse
+	PolicySimulateRequest    = system.PolicySimulateRequest
+	PolicySimulateResponse   = system.PolicySimulateResponse
+	PolicyConflictsResponse  = system.PolicyConflictsResponse
+	PolicyConflictItem       = system.PolicyConflictItem
+	PermissionTreeResponse   = system.PermissionTreeResponse
+	PermissionTreeNode       = system.PermissionTreeNode
+	PermissionMenuLinksResponse = system.PermissionMenuLinksResponse
+	MenuLink                 = system.MenuLink
+	MenuPermissionBindingsResponse = system.MenuPermissionBindingsResponse
+	MenuPermissionBindingsReplaceRequest = system.MenuPermissionBindingsReplaceRequest
+	MenuPermissionBindingItem = system.MenuPermissionBindingItem
 	OperationLogListQuery    = system.OperationLogListQuery
 	LoginLogListQuery        = system.LoginLogListQuery
 	MenuCreatePayload        = system.MenuCreatePayload
@@ -165,8 +178,6 @@ type (
 	LogSourceItem            = project.LogSourceItem
 	LogSourceListQuery       = project.LogSourceListQuery
 	LogSourceUpsertRequest   = project.LogSourceUpsertRequest
-	LogStreamQuery           = project.LogStreamQuery
-	LogExportQuery           = project.LogExportQuery
 	ProjectMemberItem        = project.ProjectMemberItem
 	ProjectMemberAddRequest  = project.ProjectMemberAddRequest
 	ProjectMemberUpdateRequest = project.ProjectMemberUpdateRequest
@@ -269,40 +280,35 @@ type (
 
 // --- logplatform ---
 type (
-	LogAgentService       = logplatform.LogAgentService
-	AgentDiscoveryService = logplatform.AgentDiscoveryService
+	LogSearchService      = logplatform.LogSearchService
+	LogSearchQuery        = logplatform.LogSearchQuery
+	LogSearchItem         = logplatform.LogSearchItem
+	LogRetentionService   = logplatform.LogRetentionService
+	ElasticsearchProvider = logplatform.ElasticsearchProvider
+	LoggieAgentService    = logplatform.LoggieAgentService
+	LogRetentionItem      = logplatform.LogRetentionItem
+	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
+	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult
+	ESStorageStats        = logplatform.ESStorageStats
 )
 
 var (
-	NewLogAgentService       = logplatform.NewLogAgentService
-	NewAgentDiscoveryService = logplatform.NewAgentDiscoveryService
-	BuildLogStreamKey        = logplatform.BuildLogStreamKey
+	NewLogSearchService      = logplatform.NewLogSearchService
+	NewLogRetentionService   = logplatform.NewLogRetentionService
+	NewElasticsearchProvider = logplatform.NewElasticsearchProvider
+	NewLoggieAgentService    = logplatform.NewLoggieAgentService
+	RunLogRetentionScheduler = logplatform.RunLogRetentionScheduler
 )
 
-var AgentLogBroker = logplatform.AgentLogBroker
-
-const MaxLogHistoryPerStream = logplatform.MaxLogHistoryPerStream
-
 type (
-	AgentBootstrapRequest            = logplatform.AgentBootstrapRequest
-	AgentBootstrapResult             = logplatform.AgentBootstrapResult
-	AgentRuntimeSource               = logplatform.AgentRuntimeSource
-	AgentRuntimeConfigResult         = logplatform.AgentRuntimeConfigResult
-	AgentBatchHeartbeatRefreshRequest = logplatform.AgentBatchHeartbeatRefreshRequest
-	AgentBatchHeartbeatRefreshResult  = logplatform.AgentBatchHeartbeatRefreshResult
-	AgentDiscoveryItem               = logplatform.AgentDiscoveryItem
-	AgentDiscoveryReportRequest      = logplatform.AgentDiscoveryReportRequest
-	AgentDiscoveryReportResult       = logplatform.AgentDiscoveryReportResult
-	AgentDiscoveryListQuery          = logplatform.AgentDiscoveryListQuery
-	AgentDiscoveryListItem           = logplatform.AgentDiscoveryListItem
-	LogAgentRegisterRequest          = logplatform.LogAgentRegisterRequest
-	LogAgentPublicRegisterRequest    = logplatform.LogAgentPublicRegisterRequest
-	LogAgentRegisterResult           = logplatform.LogAgentRegisterResult
-	LogAgentHealthReportRequest      = logplatform.LogAgentHealthReportRequest
-	LogAgentStatusResult             = logplatform.LogAgentStatusResult
-	LogAgentListQuery                = logplatform.LogAgentListQuery
-	LogAgentListItem                 = logplatform.LogAgentListItem
-	AgentLogEvent                    = logplatform.AgentLogEvent
+	LoggieHeartbeatRequest         = logplatform.LoggieHeartbeatRequest
+	LoggieBootstrapRequest         = logplatform.LoggieBootstrapRequest
+	LoggieBootstrapResult          = logplatform.LoggieBootstrapResult
+	LoggieDeployRequest            = logplatform.LoggieDeployRequest
+	LoggieDeployResult             = logplatform.LoggieDeployResult
+	LoggieBootstrapSourcePreview   = logplatform.LoggieBootstrapSourcePreview
+	LoggieStatusItem               = logplatform.LoggieStatusItem
+	ESConfigPreviewItem            = logplatform.ESConfigPreviewItem
 )
 
 // --- mysqlbackup ---

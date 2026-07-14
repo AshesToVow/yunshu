@@ -56,8 +56,9 @@ type routeServices struct {
 	Cicd                 *cicdsvc.Service
 	MysqlBackup          *service.MysqlBackupService
 	Dbmgmt               *dbmgmtsvc.Service
-	LogAgent             *service.LogAgentService
-	AgentDiscovery       *service.AgentDiscoveryService
+	LogSearch            *service.LogSearchService
+	LogRetention         *service.LogRetentionService
+	LoggieAgent          *service.LoggieAgentService
 	AlertReceiverGroup   *service.AlertReceiverGroupService
 	K8sEventForwardAdmin *service.K8sEventForwardAdminService
 	K8sSearch            *service.K8sSearchService

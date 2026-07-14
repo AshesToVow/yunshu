@@ -123,17 +123,14 @@ func (r *OverviewRepository) FillAlertAndAgentStats(ctx context.Context, dayStar
 		Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).
 		Count(&out.AlertEventsTodayCount).Error
 	var online int64
-	_ = r.db.WithContext(ctx).Model(&model.LogAgent{}).
-		Where("deleted_at IS NULL AND status = ?", 1).
+	_ = r.db.WithContext(ctx).Model(&model.LoggieAgent{}).
 		Where("last_seen_at IS NOT NULL AND last_seen_at >= ?", agentCutoff).
 		Count(&online).Error
-	out.LogAgentsOnlineCount = online
+	out.LoggieAgentsOnlineCount = online
 	var totalAgents int64
-	_ = r.db.WithContext(ctx).Model(&model.LogAgent{}).
-		Where("deleted_at IS NULL AND status = ?", 1).
-		Count(&totalAgents).Error
+	_ = r.db.WithContext(ctx).Model(&model.LoggieAgent{}).Count(&totalAgents).Error
 	if totalAgents >= online {
-		out.LogAgentsOfflineCount = totalAgents - online
+		out.LoggieAgentsOfflineCount = totalAgents - online
 	}
 	return out, nil
 }

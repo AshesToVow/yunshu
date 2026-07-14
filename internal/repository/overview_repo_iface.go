@@ -17,8 +17,8 @@ type OverviewMetricsRow struct {
 type OverviewStats struct {
 	AlertFiringCount      int64
 	AlertEventsTodayCount int64
-	LogAgentsOnlineCount  int64
-	LogAgentsOfflineCount int64
+	LoggieAgentsOnlineCount  int64
+	LoggieAgentsOfflineCount int64
 }
 
 type OverviewPersonCount struct {

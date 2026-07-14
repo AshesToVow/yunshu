@@ -50,8 +50,8 @@ interface DashboardMetrics {
   eventClusterErrors: number;
   alertFiring: number;
   alertEventsToday: number;
-  logAgentsOnline: number;
-  logAgentsOffline: number;
+  loggieAgentsOnline: number;
+  loggieAgentsOffline: number;
 }
 
 const defaultMetrics: DashboardMetrics = {
@@ -67,8 +67,8 @@ const defaultMetrics: DashboardMetrics = {
   eventClusterErrors: 0,
   alertFiring: 0,
   alertEventsToday: 0,
-  logAgentsOnline: 0,
-  logAgentsOffline: 0,
+  loggieAgentsOnline: 0,
+  loggieAgentsOffline: 0,
 };
 
 const assetStats = [
@@ -88,8 +88,8 @@ const k8sStats = [
 const alertAndAgentStats = [
   { key: "alertFiring", icon: <AlertOutlined />, accent: CHART_ERROR },
   { key: "alertEventsToday", icon: <AlertOutlined />, accent: CHART_WARNING },
-  { key: "logAgentsOnline", icon: <ApiOutlined />, accent: CHART_SUCCESS },
-  { key: "logAgentsOffline", icon: <DisconnectOutlined />, accent: CHART_MUTED },
+  { key: "loggieAgentsOnline", icon: <ApiOutlined />, accent: CHART_SUCCESS },
+  { key: "loggieAgentsOffline", icon: <DisconnectOutlined />, accent: CHART_MUTED },
 ] as const;
 
 const dashboardDrillDown: Partial<Record<keyof DashboardMetrics, string>> = {
@@ -103,8 +103,8 @@ const dashboardDrillDown: Partial<Record<keyof DashboardMetrics, string>> = {
   eventWarning: "/events",
   alertFiring: "/alert-monitor-platform/history",
   alertEventsToday: "/alert-monitor-platform/history",
-  logAgentsOnline: "/agent-list",
-  logAgentsOffline: "/agent-list",
+  loggieAgentsOnline: "/loggie-status",
+  loggieAgentsOffline: "/loggie-status",
 };
 
 export function DashboardPage() {
@@ -144,8 +144,8 @@ export function DashboardPage() {
             eventClusterErrors: overview.event_cluster_errors,
             alertFiring: overview.alert_firing_count ?? 0,
             alertEventsToday: overview.alert_events_today_count ?? 0,
-            logAgentsOnline: overview.log_agents_online_count ?? 0,
-            logAgentsOffline: overview.log_agents_offline_count ?? 0,
+            loggieAgentsOnline: overview.loggie_agents_online_count ?? 0,
+            loggieAgentsOffline: overview.loggie_agents_offline_count ?? 0,
           });
         } else {
           setMetrics(defaultMetrics);

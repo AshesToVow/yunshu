@@ -1,12 +1,26 @@
 import { LinkOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Empty, Input, Select, Space, Table, Tabs, Tag, Tree, Typography, message } from "antd";
+import { Alert, Button, Card, Empty, Input, InputNumber, Select, Space, Table, Tabs, Tag, Tree, Typography, message } from "antd";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
-import { getPermissionOptions } from "../services/permissions";
-import { getPolicies, grantPolicy, revokePolicy } from "../services/policies";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { listAllPermissions } from "../services/permissions";
+import {
+  getPermissionTree,
+  getPolicies,
+  getPolicyConflicts,
+  getPolicyMenuLinks,
+  grantPolicy,
+  revokePolicy,
+  simulatePolicy,
+} from "../services/policies";
 import { getRoleOptions } from "../services/roles";
-import type { PermissionItem, PolicyItem, RoleItem } from "../types/api";
-import { buildPermissionTreeData, normalizeCheckedKeys } from "../utils/tree";
+import type { PermissionItem, PermissionTreeNode, PolicyConflictItem, PolicyItem, RoleItem } from "../types/api";
+import {
+  buildPermissionTreeData,
+  buildUnifiedPermissionTreeData,
+  collectGrantedPermissionIds,
+  normalizeCheckedKeys,
+} from "../utils/tree";
+import { isAPIResourceAllowedByPlugins } from "../modules/plugin-path";
 import { usePlugins } from "../contexts/plugin-context";
 
 export function PoliciesPage() {
@@ -16,6 +30,10 @@ export function PoliciesPage() {
   const [list, setList] = useState<PolicyItem[]>([]);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [permissions, setPermissions] = useState<PermissionItem[]>([]);
+  const [allPermissions, setAllPermissions] = useState<PermissionItem[]>([]);
+  const [menuLinks, setMenuLinks] = useState<Record<string, { path: string }[]>>({});
+  const [conflicts, setConflicts] = useState<PolicyConflictItem[]>([]);
+  const [unifiedTree, setUnifiedTree] = useState<PermissionTreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState<number>();
@@ -24,8 +42,24 @@ export function PoliciesPage() {
   const [permissionKeyword, setPermissionKeyword] = useState("");
   const [roleStatus, setRoleStatus] = useState<number | undefined>();
   const [assignPager, setAssignPager] = useState({ current: 1, pageSize: 10 });
+  const [simulateUserId, setSimulateUserId] = useState<number>();
+  const [simulatePath, setSimulatePath] = useState("/api/v1/projects/1/dbmgmt/instances");
+  const [simulateMethod, setSimulateMethod] = useState("GET");
+  const [simulateResult, setSimulateResult] = useState<string>("");
 
-  const permissionTreeData = useMemo(() => buildPermissionTreeData(permissions), [permissions]);
+  const isResourceAllowed = useCallback(
+    (resource: string) => isAPIResourceAllowedByPlugins(resource, isPluginEnabled),
+    [isPluginEnabled],
+  );
+
+  const permissionTreeData = useMemo(
+    () =>
+      buildPermissionTreeData(allPermissions.length ? allPermissions : permissions, {
+        menuLinks,
+        isPluginAllowed: isResourceAllowed,
+      }),
+    [allPermissions, permissions, menuLinks, isResourceAllowed],
+  );
   const permissionIdSet = useMemo(() => new Set(permissions.map((permission) => permission.id)), [permissions]);
   const selectedRole = useMemo(
     () => roles.find((role) => role.id === selectedRoleId) ?? null,
@@ -35,6 +69,7 @@ export function PoliciesPage() {
     () => (selectedRoleId ? list.filter((policy) => policy.role_id === selectedRoleId) : []),
     [list, selectedRoleId],
   );
+  const unifiedTreeData = useMemo(() => buildUnifiedPermissionTreeData(unifiedTree), [unifiedTree]);
   const filteredRoles = useMemo(() => {
     const key = roleKeyword.trim().toLowerCase();
     return roles.filter((role) => {
@@ -76,19 +111,71 @@ export function PoliciesPage() {
     setAssignPager((p) => ({ ...p, current: 1 }));
   }, [selectedRoleId]);
 
+  useEffect(() => {
+    if (!selectedRoleId) {
+      setConflicts([]);
+      setUnifiedTree([]);
+      return;
+    }
+    void loadRoleExtras(selectedRoleId);
+  }, [selectedRoleId]);
+
+  async function loadRoleExtras(roleId: number) {
+    try {
+      const [conflictData, treeData] = await Promise.all([getPolicyConflicts(roleId), getPermissionTree(roleId)]);
+      setConflicts(conflictData.items ?? []);
+      setUnifiedTree(treeData.tree ?? []);
+    } catch {
+      setConflicts([]);
+      setUnifiedTree([]);
+    }
+  }
+
+  async function handleFixMenuEntryConflicts() {
+    if (!selectedRoleId) return;
+    const targets = conflicts.filter((c) => c.type === "menu_needs_entry_api" && c.permission_id);
+    if (targets.length === 0) {
+      message.info("没有可自动修复的入口 API 冲突（需权限项已存在）");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      let granted = 0;
+      for (const item of targets) {
+        await grantPolicy({ role_id: selectedRoleId, permission_id: item.permission_id! });
+        granted += 1;
+      }
+      message.success(`已为角色补齐 ${granted} 个菜单入口 GET 权限`);
+      await Promise.all([bootstrap(selectedRoleId), loadRoleExtras(selectedRoleId)]);
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message ?? e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function bootstrap(preferredRoleId?: number) {
     setLoading(true);
     try {
-      const [policyList, roleData, permissionData] = await Promise.all([
+      const [policyList, roleData, permissionData, allPerms, linksData] = await Promise.all([
         getPolicies(),
         getRoleOptions(),
-        getPermissionOptions({ isPluginEnabled }),
+        listAllPermissions().then((all) => ({
+          list: all.filter((p) => isResourceAllowed(p.resource)),
+          total: all.length,
+          page: 1,
+          page_size: all.length,
+        })),
+        listAllPermissions(),
+        getPolicyMenuLinks(),
       ]);
 
       const allowedResources = new Set(permissionData.list.map((p) => `${p.resource}::${p.action}`));
       setList(policyList.filter((p) => allowedResources.has(`${p.resource}::${p.action}`)));
       setRoles(roleData.list);
       setPermissions(permissionData.list);
+      setAllPermissions(allPerms);
+      setMenuLinks(linksData.links ?? {});
 
       const nextRoleId = preferredRoleId ?? selectRoleId(roleData.list, selectedRoleId);
       setSelectedRoleId(nextRoleId);
@@ -118,14 +205,7 @@ export function PoliciesPage() {
 
     if (toGrant.length === 0 && toRevoke.length === 0) {
       if (linkNext === "k8s" && selectedRoleId) {
-        const qs = new URLSearchParams({
-          subject: "role",
-          role_id: String(selectedRoleId),
-          from: "policies",
-        });
-        if (linkUserId > 0) qs.set("user_id", String(linkUserId));
-        if (linkUsername) qs.set("username", linkUsername);
-        navigate(`/k8s-scoped-policies?${qs.toString()}`);
+        navigateToK8s(selectedRoleId);
         return;
       }
       message.info("授权编排没有变化");
@@ -140,18 +220,36 @@ export function PoliciesPage() {
       ]);
       message.success("授权编排已同步");
       await bootstrap(selectedRoleId);
+      await loadRoleExtras(selectedRoleId);
       if (linkNext === "k8s" && selectedRoleId) {
-        const qs = new URLSearchParams({
-          subject: "role",
-          role_id: String(selectedRoleId),
-          from: "policies",
-        });
-        if (linkUserId > 0) qs.set("user_id", String(linkUserId));
-        if (linkUsername) qs.set("username", linkUsername);
-        navigate(`/k8s-scoped-policies?${qs.toString()}`);
+        navigateToK8s(selectedRoleId);
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function navigateToK8s(roleId: number) {
+    const qs = new URLSearchParams({ subject: "role", role_id: String(roleId), from: "policies" });
+    if (linkUserId > 0) qs.set("user_id", String(linkUserId));
+    if (linkUsername) qs.set("username", linkUsername);
+    navigate(`/k8s-scoped-policies?${qs.toString()}`);
+  }
+
+  async function handleSimulate() {
+    if (!simulateUserId) {
+      message.warning("请输入用户 ID");
+      return;
+    }
+    try {
+      const result = await simulatePolicy({
+        user_id: simulateUserId,
+        path: simulatePath.trim(),
+        method: simulateMethod,
+      });
+      setSimulateResult(JSON.stringify(result, null, 2));
+    } catch {
+      setSimulateResult("");
     }
   }
 
@@ -166,26 +264,10 @@ export function PoliciesPage() {
           closable
           style={{ marginBottom: 12 }}
           message={`用户「${linkUsername}」已绑定角色，请为角色模板勾选 API 权限`}
-          description={
-            linkNext === "k8s"
-              ? "勾选完成后点击「同步权限」，将自动进入 K8s 集群档位配置。"
-              : "勾选完成后点击「同步权限」保存。"
-          }
+          description="勾选完成后点击「同步权限」保存；侧栏菜单可见性将随入口 GET 权限联动。"
           action={
             linkNext === "k8s" && selectedRoleId ? (
-              <Button
-                size="small"
-                onClick={() => {
-                  const qs = new URLSearchParams({
-                    subject: "role",
-                    role_id: String(selectedRoleId),
-                    from: "policies",
-                  });
-                  if (linkUserId > 0) qs.set("user_id", String(linkUserId));
-                  if (linkUsername) qs.set("username", linkUsername);
-                  navigate(`/k8s-scoped-policies?${qs.toString()}`);
-                }}
-              >
+              <Button size="small" onClick={() => navigateToK8s(selectedRoleId)}>
                 跳过，直接配置 K8s
               </Button>
             ) : (
@@ -199,7 +281,7 @@ export function PoliciesPage() {
       ) : null}
       <Card className="table-card policies-auth-page__card" loading={loading}>
         <div className="toolbar auth-toolbar">
-          <Space>
+          <Space wrap>
             <Input
               allowClear
               value={roleKeyword}
@@ -299,12 +381,42 @@ export function PoliciesPage() {
                 destroyInactiveTabPane={false}
                 items={[
                   {
-                    key: "tree",
-                    label: "权限勾选",
+                    key: "unified",
+                    label: "菜单+API 树",
                     children: (
                       <div className="auth-tab-pane auth-tab-pane--tree">
                         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                          仅影响 HTTP 接口能否调用；与 K8s 集群档位、命名空间黑白名单是不同一层（见手册）。
+                          按侧栏菜单分组展示入口 API；勾选后点击「同步权限」写入 Casbin。
+                        </Typography.Paragraph>
+                        <div className="tree-shell auth-tree-shell">
+                          <Tree
+                            checkable
+                            defaultExpandAll
+                            checkedKeys={checkedPermissionIds}
+                            treeData={unifiedTreeData}
+                            onCheck={(checkedKeys) => {
+                              const nextIds = normalizeCheckedKeys(checkedKeys).filter((id) => permissionIdSet.has(id));
+                              setCheckedPermissionIds(nextIds);
+                            }}
+                          />
+                        </div>
+                        <Button
+                          size="small"
+                          style={{ marginTop: 8 }}
+                          onClick={() => setCheckedPermissionIds(collectGrantedPermissionIds(unifiedTree))}
+                        >
+                          重置为当前已授权
+                        </Button>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "tree",
+                    label: "API 权限树",
+                    children: (
+                      <div className="auth-tab-pane auth-tab-pane--tree">
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                          叶子节点后缀为关联菜单 path；灰色「插件未启用」项不可勾选。
                         </Typography.Paragraph>
                         <div className="tree-shell auth-tree-shell">
                           <Tree
@@ -318,6 +430,103 @@ export function PoliciesPage() {
                             }}
                           />
                         </div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "conflicts",
+                    label: `冲突分析（${conflicts.length}）`,
+                    children: (
+                      <div className="auth-tab-pane auth-tab-pane--table">
+                        {conflicts.length === 0 ? (
+                          <Empty description="未发现治理冲突" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        ) : (
+                          <>
+                            <Space style={{ marginBottom: 12 }}>
+                              <Button
+                                type="primary"
+                                loading={submitting}
+                                disabled={!conflicts.some((c) => c.type === "menu_needs_entry_api" && c.permission_id)}
+                                onClick={() => void handleFixMenuEntryConflicts()}
+                              >
+                                一键补齐入口 API
+                              </Button>
+                              <Button onClick={() => selectedRoleId && void loadRoleExtras(selectedRoleId)}>重新分析</Button>
+                              <Typography.Text type="secondary">
+                                menu_needs_entry_api：菜单可见但缺少对应 GET；若路径映射已修正，重启后风险可能自动消失。
+                              </Typography.Text>
+                            </Space>
+                            <Table
+                            rowKey={(row, idx) => `${row.type}-${row.menu_path ?? row.resource}-${idx}`}
+                            dataSource={conflicts}
+                            size="small"
+                            pagination={false}
+                            scroll={{ y: "calc(100dvh - 360px)" }}
+                            columns={[
+                              {
+                                title: "级别",
+                                dataIndex: "severity",
+                                width: 80,
+                                render: (v: string) => (
+                                  <Tag color={v === "error" ? "red" : v === "warning" ? "orange" : "blue"}>{v}</Tag>
+                                ),
+                              },
+                              { title: "类型", dataIndex: "type", width: 180 },
+                              { title: "说明", dataIndex: "message" },
+                              { title: "菜单", dataIndex: "menu_path", width: 160 },
+                              {
+                                title: "入口 API",
+                                width: 260,
+                                render: (_: unknown, row: PolicyConflictItem) =>
+                                  row.resource ? `${row.action || "GET"} ${row.resource}` : "—",
+                              },
+                              {
+                                title: "建议",
+                                dataIndex: "suggest_fix",
+                                render: (v: string) => v || "—",
+                              },
+                            ]}
+                          />
+                          </>
+                        )}
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "simulate",
+                    label: "策略模拟",
+                    children: (
+                      <div className="auth-tab-pane">
+                        <Space wrap style={{ marginBottom: 12 }}>
+                          <InputNumber
+                            placeholder="用户 ID"
+                            value={simulateUserId}
+                            onChange={(v) => setSimulateUserId(typeof v === "number" ? v : undefined)}
+                            min={1}
+                          />
+                          <Input
+                            placeholder="API path"
+                            value={simulatePath}
+                            onChange={(e) => setSimulatePath(e.target.value)}
+                            style={{ width: 360 }}
+                          />
+                          <Select
+                            value={simulateMethod}
+                            onChange={setSimulateMethod}
+                            style={{ width: 100 }}
+                            options={["GET", "POST", "PUT", "DELETE", "PATCH"].map((m) => ({ value: m, label: m }))}
+                          />
+                          <Button type="primary" onClick={() => void handleSimulate()}>
+                            模拟
+                          </Button>
+                        </Space>
+                        {simulateResult ? (
+                          <pre style={{ maxHeight: 360, overflow: "auto", background: "#f5f5f5", padding: 12, borderRadius: 6 }}>
+                            {simulateResult}
+                          </pre>
+                        ) : (
+                          <Typography.Text type="secondary">输入用户与 API，查看 super-admin / Casbin / 插件 / 项目成员分层判定。</Typography.Text>
+                        )}
                       </div>
                     ),
                   },
@@ -347,9 +556,26 @@ export function PoliciesPage() {
                           scroll={{ y: "calc(100dvh - 320px)" }}
                           columns={[
                             { title: "权限名称", dataIndex: "permission_name" },
-                            { title: "权限编码", dataIndex: "resource", render: (value: string) => <Tag>{value}</Tag> },
+                            {
+                              title: "权限编码",
+                              dataIndex: "resource",
+                              render: (value: string, row: PolicyItem) => {
+                                const key = `${row.resource}::${row.action.toUpperCase()}`;
+                                const menus = menuLinks[key] ?? [];
+                                return (
+                                  <Space direction="vertical" size={0}>
+                                    <Tag>{value}</Tag>
+                                    {menus.length > 0 ? (
+                                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                        菜单: {menus.map((m) => m.path).join(", ")}
+                                      </Typography.Text>
+                                    ) : null}
+                                  </Space>
+                                );
+                              },
+                            },
                             { title: "模板名称", dataIndex: "role_name" },
-                            { title: "状态", dataIndex: "action", width: 80, render: () => <Tag className="status-chip status-chip--ok">正常</Tag> },
+                            { title: "Method", dataIndex: "action", width: 80 },
                           ]}
                         />
                       </div>

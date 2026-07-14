@@ -1,8 +1,12 @@
 package project
 
 import (
+	"context"
+
+	"yunshu/internal/config"
 	"yunshu/internal/model"
 	"yunshu/internal/plugin"
+	"yunshu/internal/service"
 
 	"gorm.io/gorm"
 )
@@ -16,7 +20,7 @@ type module struct {
 }
 
 func (m *module) Name() string        { return "project" }
-func (m *module) Description() string { return "多租户项目、成员、服务配置、日志 Agent 与日志流" }
+func (m *module) Description() string { return "多租户项目、成员、服务配置与 ES 日志检索" }
 
 func (m *module) Models() []any {
 	return []any{
@@ -24,17 +28,21 @@ func (m *module) Models() []any {
 		&model.ProjectMember{},
 		&model.Service{},
 		&model.ServiceLogSource{},
-		&model.LogAgent{},
-		&model.AgentDiscovery{},
+		&model.LogRetentionPolicy{},
+		&model.LoggieAgent{},
 	}
 }
 
 func (m *module) PostMigrate(db *gorm.DB) error {
-	if err := migrateLogAgentsClearPlaceholderListenPort(db); err != nil {
-		return err
-	}
-	if err := migrateAgentDiscoveryUniqueIndex(db); err != nil {
-		return err
-	}
 	return migrateProjectsDefaultMeta(db)
+}
+
+func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
+	if bgCtx == nil || rt == nil {
+		return nil
+	}
+	if svc := rt.LogRetentionSvc(); svc != nil && rt.Config != nil {
+		go service.RunLogRetentionScheduler(bgCtx, svc, config.ElasticsearchConfig{})
+	}
+	return nil
 }

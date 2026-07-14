@@ -27,6 +27,7 @@ func (m *module) Models() []any {
 		&model.UserRole{},
 		&model.RegistrationRequest{},
 		&model.Menu{},
+		&model.MenuPermissionBinding{},
 		&model.LoginLog{},
 		&model.OperationLog{},
 		&model.DictEntry{},

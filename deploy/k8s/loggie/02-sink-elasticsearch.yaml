@@ -1,0 +1,13 @@
+apiVersion: loggie.io/v1beta1
+kind: Sink
+metadata:
+  name: yunshu-es
+  namespace: loggie
+spec:
+  sink: |
+    type: elasticsearch
+    hosts:
+      - http://elasticsearch.logging.svc:9200
+    index: yunshu-logs
+    # username: elastic
+    # password: changeme

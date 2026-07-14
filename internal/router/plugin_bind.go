@@ -29,6 +29,7 @@ func bindPluginRoutes(name string, api *gin.RouterGroup, rt *plugin.Runtime) err
 		RegisterAlertRoutes(api, d)
 	case "project":
 		RegisterProjectRoutes(api, d)
+		RegisterLogPlatformRoutes(api, d)
 	case "cmdb":
 		RegisterCMDBRoutes(api, d)
 	case "backup":

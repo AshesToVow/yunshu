@@ -24,6 +24,27 @@ type LogSourceRepo interface {
 
 var _ LogSourceRepo = (*LogSourceRepository)(nil)
 
+// LogRetentionRepo is implemented by *LogRetentionRepository.
+type LogRetentionRepo interface {
+	GetByScope(ctx context.Context, projectID, serverID uint) (*model.LogRetentionPolicy, error)
+	List(ctx context.Context) ([]model.LogRetentionPolicy, error)
+	Save(ctx context.Context, it *model.LogRetentionPolicy) error
+	DeleteByScope(ctx context.Context, projectID, serverID uint) error
+}
+
+var _ LogRetentionRepo = (*LogRetentionRepository)(nil)
+
+// LoggieAgentRepo is implemented by *LoggieAgentRepository.
+type LoggieAgentRepo interface {
+	GetByToken(ctx context.Context, token string) (*model.LoggieAgent, error)
+	GetByProjectAndServer(ctx context.Context, projectID, serverID uint) (*model.LoggieAgent, error)
+	ListByProject(ctx context.Context, projectID uint) ([]model.LoggieAgent, error)
+	Save(ctx context.Context, it *model.LoggieAgent) error
+	TouchSeen(ctx context.Context, id uint, at time.Time) error
+}
+
+var _ LoggieAgentRepo = (*LoggieAgentRepository)(nil)
+
 // RegistrationRequestRepo is implemented by *RegistrationRequestRepository.
 type RegistrationRequestRepo interface {
 	Create(ctx context.Context, req *model.RegistrationRequest) (error)
@@ -157,15 +178,6 @@ type RoleRepo interface {
 
 var _ RoleRepo = (*RoleRepository)(nil)
 
-// AgentDiscoveryRepo is implemented by *AgentDiscoveryRepository.
-type AgentDiscoveryRepo interface {
-	UpsertMany(ctx context.Context, projectID uint, serverID uint, items []model.AgentDiscovery) (error)
-	List(ctx context.Context, f AgentDiscoveryListFilter) ([]model.AgentDiscovery, error)
-	PruneStale(ctx context.Context, projectID uint, serverID uint, cutoff time.Time) (error)
-}
-
-var _ AgentDiscoveryRepo = (*AgentDiscoveryRepository)(nil)
-
 // CloudAccountRepo is implemented by *CloudAccountRepository.
 type CloudAccountRepo interface {
 	Create(ctx context.Context, item *model.CloudAccount) (error)
@@ -218,10 +230,12 @@ var _ MysqlBackupRepo = (*MysqlBackupRepository)(nil)
 // PermissionRepo is implemented by *PermissionRepository.
 type PermissionRepo interface {
 	Create(ctx context.Context, permission *model.Permission) (error)
+	GetByResourceAction(ctx context.Context, resource, action string) (*model.Permission, error)
 	Save(ctx context.Context, permission *model.Permission) (error)
 	Delete(ctx context.Context, permission *model.Permission) (error)
 	GetByID(ctx context.Context, id uint) (*model.Permission, error)
 	List(ctx context.Context, params PermissionListParams) ([]model.Permission, int64, error)
+	ListFiltered(ctx context.Context, params PermissionListParams) ([]model.Permission, error)
 	ListAll(ctx context.Context) ([]model.Permission, error)
 	BatchSetK8sScopeEnabled(ctx context.Context, params PermissionListParams, enabled bool) (int64, error)
 }
@@ -300,6 +314,9 @@ type MenuRepo interface {
 	Tree(ctx context.Context) ([]model.Menu, error)
 	CountChildren(ctx context.Context, parentID uint) (int64, error)
 	BatchUpdateStatus(ctx context.Context, ids []uint, status int) (error)
+	ListPermissionBindings(ctx context.Context) ([]model.MenuPermissionBinding, error)
+	ListPermissionBindingsByMenuID(ctx context.Context, menuID uint) ([]model.MenuPermissionBinding, error)
+	ReplacePermissionBindings(ctx context.Context, menuID uint, bindings []model.MenuPermissionBinding) (error)
 }
 
 var _ MenuRepo = (*MenuRepository)(nil)
@@ -338,23 +355,6 @@ type K8sNamespaceDenyRepo interface {
 }
 
 var _ K8sNamespaceDenyRepo = (*K8sNamespaceDenyRepository)(nil)
-
-// LogAgentRepo is implemented by *LogAgentRepository.
-type LogAgentRepo interface {
-	GetByServerID(ctx context.Context, serverID uint) (*model.LogAgent, error)
-	GetByProjectAndServer(ctx context.Context, projectID uint, serverID uint) (*model.LogAgent, error)
-	ListByProject(ctx context.Context, projectID uint) ([]model.LogAgent, error)
-	GetByTokenHash(ctx context.Context, tokenHash string) (*model.LogAgent, error)
-	Create(ctx context.Context, it *model.LogAgent) (error)
-	Save(ctx context.Context, it *model.LogAgent) (error)
-	TouchSeen(ctx context.Context, id uint, heartbeatTimeout time.Duration) (error)
-	ListAll(ctx context.Context) ([]model.LogAgent, error)
-	UpdateOfflineMarker(ctx context.Context, id uint, offlineAt time.Time, reason string, sweepSeen *time.Time) (error)
-	GetByIDAndProject(ctx context.Context, id uint, projectID uint) (*model.LogAgent, error)
-	DeleteByIDAndProject(ctx context.Context, id uint, projectID uint) (error)
-}
-
-var _ LogAgentRepo = (*LogAgentRepository)(nil)
 
 // DbmgmtRepo is implemented by *DbmgmtRepository.
 type DbmgmtRepo interface {

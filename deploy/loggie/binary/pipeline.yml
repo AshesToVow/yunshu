@@ -1,0 +1,57 @@
+# 示例 pipeline — 生产环境请通过 Yunshu 控制台「Loggie 状态 → 引导」一键生成
+# Loggie v1.5+ transformer：regex(body) + timestamp(ts) → @timestamp + level 字段
+
+loggie:
+  reload:
+    enabled: true
+    period: 10s
+  http:
+    enabled: true
+    host: "127.0.0.1"
+    port: 9196
+  monitor:
+    enabled: true
+    listeners:
+      filesource: ~
+      filewatcher: ~
+      sink: ~
+      queue: ~
+
+pipelines:
+  - name: yunshu-file-logs
+    sources:
+      - type: file
+        name: app-logs
+        paths:
+          - /var/log/myapp/*.log
+        fields:
+          project_id: "1"
+          server_id: "10"
+        multiline:
+          pattern: '^\d{4}-\d{2}-\d{2}'
+          negate: true
+          match: after
+    interceptors:
+      - type: transformer
+        actions:
+          - action: regex(body)
+            pattern: '^(?P<ts>\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:[.,]\d{3})?(?:Z|[+-]\d{2}:?\d{2})?)\s+(?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL|PANIC)\s+(?P<message>.*)$'
+            ignoreError: true
+          - action: timestamp(ts)
+            fromLayout: "2006-01-02 15:04:05"
+            fromLocation: Local
+            toLayout: "2006-01-02T15:04:05.000Z07:00"
+            toLocation: UTC
+            ignoreError: true
+          - action: move(ts, @timestamp)
+            ignoreError: true
+          - action: move(message, body)
+            ignoreError: true
+    sink:
+      type: elasticsearch
+      hosts:
+        - http://127.0.0.1:9200
+      index: yunshu-logs-${+YYYY.MM.DD}
+      codec:
+        type: json
+        beatsFormat: true

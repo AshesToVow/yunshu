@@ -1,0 +1,41 @@
+# Loggie → Elasticsearch 日志采集
+
+Yunshu 日志平台已切换为 **Loggie 采集 + Elasticsearch 存储 + Yunshu 代理查询**。
+请停用原 `log-agent` DaemonSet，改用本目录清单。
+
+## 架构
+
+```
+Pod/Node 日志 → Loggie DaemonSet → ES Sink → Elasticsearch
+                                              ↓
+                                    Yunshu GET /logs/search
+```
+
+## 前置条件
+
+1. 已部署 Elasticsearch（建议 7.x/8.x，索引前缀 `yunshu-logs`）
+2. 已安装 Loggie CRD 与 Controller（参考 [Loggie 安装文档](https://loggie-io.github.io/docs/user-guide/quick-start/quick-start/)）
+3. Yunshu `config.yaml` 中 `elasticsearch.enabled: true` 并填写 `addresses`
+
+## 字段约定
+
+| 字段 | 说明 |
+|------|------|
+| `project_id` | 项目 ID |
+| `server_id` | 可选，CMDB 服务器 ID |
+| `service_id` | 可选，服务 ID |
+| `log_source_id` | 可选，日志源 ID |
+| `message` / `body` | 日志正文 |
+| `@timestamp` | 时间戳 |
+| `file_path` | 文件路径 |
+
+推荐在 Pod 上打标签 `yunshu.project_id` 等，由 Loggie `addK8sMeta` 写入 ES。
+
+## 部署
+
+```bash
+kubectl apply -f deploy/k8s/loggie/00-namespace.yaml
+# 先 helm install loggie（见 01-install-note.yaml）
+kubectl apply -f deploy/k8s/loggie/02-sink-elasticsearch.yaml
+kubectl apply -f deploy/k8s/loggie/03-clusterlogconfig.yaml
+```

@@ -6,11 +6,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config 根配置：聚合应用、HTTP、gRPC、存储、认证、告警与安全等子配置。
+// Config 根配置：聚合应用、HTTP、存储、认证、告警与安全等子配置。
 type Config struct {
 	App      AppConfig      `mapstructure:"app"`
 	HTTP     HTTPConfig     `mapstructure:"http"`
-	GRPC     GRPCConfig     `mapstructure:"grpc"`
 	Log      LogConfig      `mapstructure:"log"`
 	Database DatabaseConfig `mapstructure:"database"`
 	MySQL    DatabaseConfig `mapstructure:"mysql"` // 兼容旧配置键；与 database 二选一或 database 优先
@@ -22,23 +21,10 @@ type Config struct {
 	Alert           AlertConfig           `mapstructure:"alert"`
 	K8sEventForward K8sEventForwardConfig `mapstructure:"k8s_event_forward"`
 	Security        SecurityConfig        `mapstructure:"security"`
-	Agent           AgentConfig           `mapstructure:"agent"`
 	Plugins         PluginsConfig         `mapstructure:"plugins"`
 	Cicd            CicdConfig            `mapstructure:"cicd"`
 	Dbmgmt          DbmgmtConfig          `mapstructure:"dbmgmt"`
-}
-
-type GRPCConfig struct {
-	ListenAddr      string `mapstructure:"listen_addr"`
-	TargetAddr      string `mapstructure:"target_addr"`
-	MaxRecvMsgBytes int    `mapstructure:"max_recv_msg_bytes"`
-	MaxSendMsgBytes int    `mapstructure:"max_send_msg_bytes"`
-	// InternalToken 供本机 HTTP→gRPC 调用 Project/LogSource 服务；AgentRuntime 仍用 agent token。
-	InternalToken string `mapstructure:"internal_token"`
-	// CallTimeoutSeconds 单次 unary RPC 默认超时（客户端）。
-	CallTimeoutSeconds int `mapstructure:"call_timeout_seconds"`
-	// ShutdownTimeoutSeconds 优雅关闭 gRPC Server 的最长等待。
-	ShutdownTimeoutSeconds int `mapstructure:"shutdown_timeout_seconds"`
+	Elasticsearch   ElasticsearchConfig   `mapstructure:"elasticsearch"`
 }
 
 type AppConfig struct {
@@ -52,7 +38,7 @@ type HTTPConfig struct {
 	ReadTimeoutSeconds       int `mapstructure:"read_timeout_seconds"`
 	WriteTimeoutSeconds      int `mapstructure:"write_timeout_seconds"`
 	IdleTimeoutSeconds       int `mapstructure:"idle_timeout_seconds"`
-	// ShutdownTimeoutSeconds 优雅关闭 HTTP Server 的最长等待（与 gRPC 分离）。
+	// ShutdownTimeoutSeconds 优雅关闭 HTTP Server 的最长等待。
 	ShutdownTimeoutSeconds int `mapstructure:"shutdown_timeout_seconds"`
 }
 
@@ -120,14 +106,6 @@ type SecurityConfig struct {
 	// EncryptionKey is used to encrypt sensitive data (e.g., server SSH credentials).
 	// Recommended: 32-byte key in base64 format.
 	EncryptionKey string `mapstructure:"encryption_key"`
-}
-
-type AgentConfig struct {
-	// RegisterSecret is a shared secret used by log-agent to register itself and obtain an ingest token.
-	// If empty, public registration endpoint is disabled.
-	RegisterSecret string `mapstructure:"register_secret"`
-	// DiscoveryRoots are optional bootstrap paths reported to agents via runtime-config (_discovery_root).
-	DiscoveryRoots []string `mapstructure:"discovery_roots"`
 }
 
 type AlertConfig struct {
@@ -264,21 +242,6 @@ func Load(path string) (*Config, error) {
 	if cfg.Alert.PlatformLimits.GenericMaxChars <= 0 {
 		cfg.Alert.PlatformLimits.GenericMaxChars = 8000
 	}
-	if strings.TrimSpace(cfg.GRPC.ListenAddr) == "" {
-		cfg.GRPC.ListenAddr = "127.0.0.1:18080"
-	}
-	if strings.TrimSpace(cfg.GRPC.TargetAddr) == "" {
-		cfg.GRPC.TargetAddr = cfg.GRPC.ListenAddr
-	}
-	if strings.TrimSpace(cfg.GRPC.InternalToken) == "" && strings.TrimSpace(cfg.Auth.JWTSecret) != "" {
-		cfg.GRPC.InternalToken = cfg.Auth.JWTSecret
-	}
-	if cfg.GRPC.MaxRecvMsgBytes <= 0 {
-		cfg.GRPC.MaxRecvMsgBytes = 8 * 1024 * 1024
-	}
-	if cfg.GRPC.MaxSendMsgBytes <= 0 {
-		cfg.GRPC.MaxSendMsgBytes = 8 * 1024 * 1024
-	}
 	cfg.K8sEventForward.ApplyDefaults()
 	defCicd := DefaultCicdConfig()
 	if !cfg.Cicd.Enabled && !v.IsSet("cicd.enabled") {
@@ -389,11 +352,6 @@ func bindEnv(v *viper.Viper) error {
 		"http.read_timeout_seconds":                nil,
 		"http.write_timeout_seconds":               nil,
 		"http.idle_timeout_seconds":                nil,
-		"grpc.listen_addr":                         nil,
-		"grpc.target_addr":                         nil,
-		"grpc.internal_token":                      nil,
-		"grpc.max_recv_msg_bytes":                  nil,
-		"grpc.max_send_msg_bytes":                  nil,
 		"log.level":                                nil,
 		"log.format":                               nil,
 		"log.output":                               nil,
@@ -443,7 +401,6 @@ func bindEnv(v *viper.Viper) error {
 		"swagger.enabled":                          nil,
 		"swagger.path":                             nil,
 		"security.encryption_key":                  {"ENCRYPTION_KEY"},
-		"agent.register_secret":                    nil,
 		"alert.webhook_token":                      nil,
 		"alert.default_timeout_ms":                 nil,
 		"alert.max_payload_chars":                  nil,

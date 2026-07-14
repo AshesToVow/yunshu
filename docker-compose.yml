@@ -81,7 +81,6 @@ services:
     cpus: 0.6
     ports:
       - "8080:8080"
-      - "18080:18080"
     extra_hosts:
       # Linux 下让容器访问宿主机 MySQL（同机非容器部署）
       - "host.docker.internal:host-gateway"

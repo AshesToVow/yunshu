@@ -30,7 +30,8 @@ func DefaultCatalog() []Spec {
 				{Path: "/project-services", Name: "服务配置", Icon: "SettingOutlined", Sort: 1, Component: "project-services-page", Status: 1},
 				{Path: "/project-log-sources", Name: "日志源配置", Icon: "FileSearchOutlined", Sort: 2, Component: "project-log-sources-page", Status: 1},
 				{Path: "/project-logs", Name: "日志检索", Icon: "FileTextOutlined", Sort: 3, Component: "project-logs-page", Status: 1},
-				{Path: "/agent-list", Name: "Agent 列表", Icon: "RobotOutlined", Sort: 4, Component: "agent-list-page", Status: 1},
+				{Path: "/log-retention", Name: "保留策略", Icon: "HistoryOutlined", Sort: 4, Component: "log-retention-page", Status: 1},
+				{Path: "/loggie-status", Name: "Loggie 状态", Icon: "CloudServerOutlined", Sort: 5, Component: "loggie-status-page", Status: 1},
 			},
 		},
 		{

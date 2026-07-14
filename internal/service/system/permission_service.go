@@ -31,14 +31,26 @@ func NewPermissionService(permissionRepo interfaces.PermissionRepository, enforc
 
 // Create 创建相关的业务逻辑。
 func (s *PermissionService) Create(ctx context.Context, req PermissionCreateRequest) (*PermissionItem, error) {
+	resource := strings.TrimSpace(req.Resource)
+	action := strings.TrimSpace(req.Action)
+	if existing, err := s.permissionRepo.GetByResourceAction(ctx, resource, action); err == nil && existing != nil {
+		response := NewPermissionItem(*existing)
+		return &response, nil
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, bizerrors.Pass(ctx, "permission", "Create", err)
+	}
 	permission := model.Permission{
 		Name:            req.Name,
-		Resource:        req.Resource,
-		Action:          req.Action,
+		Resource:        resource,
+		Action:          action,
 		Description:     req.Description,
 		K8sScopeEnabled: req.K8sScopeEnabled,
 	}
 	if err := s.permissionRepo.Create(ctx, &permission); err != nil {
+		if existing, getErr := s.permissionRepo.GetByResourceAction(ctx, resource, action); getErr == nil && existing != nil {
+			response := NewPermissionItem(*existing)
+			return &response, nil
+		}
 		return nil, bizerrors.Pass(ctx, "permission", "Create", err)
 	}
 	response := NewPermissionItem(permission)
@@ -137,6 +149,23 @@ func (s *PermissionService) List(ctx context.Context, query PermissionListQuery)
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+// ListAllFiltered 返回符合筛选条件的全部权限（不受分页 100 条上限约束）。
+func (s *PermissionService) ListAllFiltered(ctx context.Context, query PermissionListQuery) ([]PermissionItem, error) {
+	permissions, err := s.permissionRepo.ListFiltered(ctx, repository.PermissionListParams{
+		Keyword:    query.Keyword,
+		K8sScope:   query.K8sScope,
+		K8sRelated: query.K8sRelated,
+	})
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "permission", "ListAllFiltered", err)
+	}
+	list := make([]PermissionItem, 0, len(permissions))
+	for _, permission := range permissions {
+		list = append(list, NewPermissionItem(permission))
+	}
+	return list, nil
 }
 
 // BatchSetK8sScope 批量更新 K8s 范围校验开关（默认仅集群资源接口路径）。

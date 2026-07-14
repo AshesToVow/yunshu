@@ -50,3 +50,12 @@ func (rt *Runtime) AlertSvc() *service.AlertService {
 	svc, _ := rt.Alert.(*service.AlertService)
 	return svc
 }
+
+// LogRetentionSvc 返回日志保留策略服务。
+func (rt *Runtime) LogRetentionSvc() *service.LogRetentionService {
+	if rt == nil {
+		return nil
+	}
+	svc, _ := rt.LogRetention.(*service.LogRetentionService)
+	return svc
+}

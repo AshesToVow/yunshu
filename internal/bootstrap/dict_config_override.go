@@ -107,4 +107,10 @@ func (b *Builder) applyDictConfigOverrides(ctx context.Context, ov dictConfigOve
 			"from", b.app.Config.Mail.FromEmail,
 		)
 	}
+
+	b.app.Config.Elasticsearch = dictconfig.ResolveElasticsearchConfig(ctx, b.app.DB, b.app.Config.Elasticsearch)
+	logf("elasticsearch config resolved (dict overrides yaml)",
+		"enabled", b.app.Config.Elasticsearch.Enabled,
+		"addresses", len(b.app.Config.Elasticsearch.Addresses),
+	)
 }

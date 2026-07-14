@@ -28,7 +28,7 @@ COPY --from=builder /yunshu /app/
 COPY configs/ /app/configs/
 
 WORKDIR /app
-EXPOSE 8080 18080
+EXPOSE 8080
 
 # 关键修改：加上 server 参数 ✅
 ENTRYPOINT ["/app/yunshu", "server"]

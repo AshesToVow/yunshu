@@ -28,10 +28,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BRAND_EN_NAME, BRAND_PRIMARY } from "../constants/brand";
-import { LogStreamDockBar } from "../components/log-stream-dock-bar";
 import { GlobalSearchModal } from "../components/global-search-modal";
 import { useAuth } from "../contexts/auth-context";
-import { LogStreamProvider } from "../contexts/log-stream-context";
 import { useMenuTree } from "../hooks/use-menu-tree";
 import { resolveAppLocale } from "../i18n";
 import { buildSiderMenuItems, matchMenuSelectedKey, type AntdMenuItem } from "../utils/admin-menu";
@@ -267,7 +265,6 @@ export function AdminLayout() {
   ];
 
   return (
-    <LogStreamProvider>
     <Layout className={layoutClassName}>
       <Sider width={288} className="admin-sider" breakpoint="lg" collapsedWidth={0}>
         <div className="brand-block">
@@ -389,7 +386,6 @@ export function AdminLayout() {
           </div>
         </Header>
 
-        <LogStreamDockBar />
         <Content className="admin-content">
           {loading ? (
             <div className="page-loading">
@@ -546,6 +542,5 @@ export function AdminLayout() {
         <GlobalSearchModal open={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />
       </Layout>
     </Layout>
-    </LogStreamProvider>
   );
 }

@@ -3,6 +3,7 @@ package router
 import (
 	"strings"
 
+	"yunshu/internal/bootstrap"
 	"yunshu/internal/config"
 	"yunshu/internal/interfaces"
 	"log/slog"
@@ -24,7 +25,7 @@ var repositoryFieldNames = wire.FieldsOf(
 	"ProjectMember", "K8sNsDeny", "K8sNsAllow", "UserGroup", "K8sClusterAccess",
 	"Cluster", "Project", "RegRequest", "Menu", "DictEntry",
 	"Server", "ServerGroup", "CloudAccount", "Service", "LogSource",
-	"LogAgent", "AgentDiscovery", "MysqlBackup", "Dbmgmt",
+	"LogRetention", "LoggieAgent", "MysqlBackup", "Dbmgmt",
 	"AlertEvent", "AlertChannel", "AlertSilence", "AlertMaintenance",
 	"AlertInhibitionRule", "AlertSubscription", "AlertDatasource",
 	"AlertMonitorRule", "AlertReceiverGroup", "AlertDuty", "AlertRuleAssignee",
@@ -200,17 +201,28 @@ func provideK8sHelmService(
 	return service.NewK8sHelmService(runtime, db, cicdCfg)
 }
 
-func provideLogAgentService(
-	repo interfaces.LogAgentRepository,
-	serverRepo interfaces.ServerRepository,
-	logRepo interfaces.LogSourceRepository,
-	registerSecret AgentRegisterSecret,
-	discoveryRoots []string,
-) *service.LogAgentService {
-	return service.NewLogAgentService(repo, serverRepo, logRepo, string(registerSecret), discoveryRoots)
+func provideElasticsearchProvider(app *bootstrap.App) *service.ElasticsearchProvider {
+	return service.NewElasticsearchProvider(app.DB, app.Config.Elasticsearch)
 }
 
-// ServiceSet ?? HTTP ????Service ?????Wire ?????????
+func provideLogSearchService(es *service.ElasticsearchProvider) *service.LogSearchService {
+	return service.NewLogSearchService(es)
+}
+
+func provideLogRetentionService(es *service.ElasticsearchProvider, repo interfaces.LogRetentionRepository) *service.LogRetentionService {
+	return service.NewLogRetentionService(es, repo)
+}
+
+func provideLoggieAgentService(
+	repo interfaces.LoggieAgentRepository,
+	serverRepo interfaces.ServerRepository,
+	logSourceRepo interfaces.LogSourceRepository,
+	es *service.ElasticsearchProvider,
+	encryptionKey SecurityEncryptionKey,
+) (*service.LoggieAgentService, error) {
+	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, es, string(encryptionKey))
+}
+
 var ServiceSet = wire.NewSet(
 	// system
 	service.NewLoginLogService,
@@ -270,7 +282,9 @@ var ServiceSet = wire.NewSet(
 	provideMysqlBackupService,
 	provideDbmgmtService,
 	provideCicdService,
-	provideLogAgentService,
-	service.NewAgentDiscoveryService,
+	provideElasticsearchProvider,
+	provideLogSearchService,
+	provideLogRetentionService,
+	provideLoggieAgentService,
 	wire.Struct(new(routeServices), "*"),
 )

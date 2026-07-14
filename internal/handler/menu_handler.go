@@ -2,15 +2,16 @@ package handler
 
 import (
 	"context"
-	"strings"
 
 	"yunshu/internal/config"
+	"yunshu/internal/menu"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/plugin"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
+	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,21 +19,22 @@ import (
 type MenuHandler struct {
 	service *service.MenuService
 	plugins *config.PluginsConfig
+	enforcer *casbin.SyncedEnforcer
 }
 
 // NewMenuHandler 构造菜单处理器。
-func NewMenuHandler(svc *service.MenuService, plugins *config.PluginsConfig) *MenuHandler {
-	return &MenuHandler{service: svc, plugins: plugins}
+func NewMenuHandler(svc *service.MenuService, plugins *config.PluginsConfig, enforcer *casbin.SyncedEnforcer) *MenuHandler {
+	return &MenuHandler{service: svc, plugins: plugins, enforcer: enforcer}
 }
 
-// Tree 返回菜单树；非 super-admin 时移除仅管理员可见项。
+// Tree 返回菜单树；非 super-admin 时移除仅管理员可见项并按 Casbin 入口权限过滤。
 func (h *MenuHandler) Tree(c *gin.Context) {
 	list, err := h.service.Tree(c.Request.Context())
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	// 如果不是 super-admin，需要从菜单树中移除仅管理员可见项
+
 	user, ok := auth.CurrentUserFromContext(c)
 	if !ok {
 		filtered := plugin.FilterMenusByPlugins(list, h.plugins)
@@ -40,39 +42,65 @@ func (h *MenuHandler) Tree(c *gin.Context) {
 		return
 	}
 
-	isSuper := false
-	for _, rc := range user.RoleCodes {
-		if strings.TrimSpace(rc) == "super-admin" {
-			isSuper = true
-			break
-		}
+	isSuper := auth.IsSuperAdminRole(user.RoleCodes)
+	filtered := list
+	if !isSuper {
+		filtered = filterAdminOnlyMenus(list)
 	}
-
-	if isSuper {
-		filtered := plugin.FilterMenusByPlugins(list, h.plugins)
-		response.Success(c, filtered)
-		return
+	if h.enforcer != nil && !isSuper {
+		bindings, _ := h.service.ListPermissionBindings(c.Request.Context())
+		flat, _ := h.service.ListAllFlat(c.Request.Context())
+		store := menu.NewBindingStore(bindings, flat)
+		filtered = menu.FilterMenusByAccess(filtered, h.enforcer, user.ID, store)
 	}
+	filtered = plugin.FilterMenusByPlugins(filtered, h.plugins)
+	response.Success(c, filtered)
+}
 
-	// 递归过滤 AdminOnly 项
+func filterAdminOnlyMenus(items []model.Menu) []model.Menu {
 	var filter func([]model.Menu) []model.Menu
-	filter = func(items []model.Menu) []model.Menu {
-		var out []model.Menu
-		for _, it := range items {
+	filter = func(nodes []model.Menu) []model.Menu {
+		out := make([]model.Menu, 0, len(nodes))
+		for _, it := range nodes {
 			if it.AdminOnly {
 				continue
 			}
+			child := it
 			if len(it.Children) > 0 {
-				it.Children = filter(it.Children)
+				child.Children = filter(it.Children)
 			}
-			out = append(out, it)
+			out = append(out, child)
 		}
 		return out
 	}
+	return filter(items)
+}
 
-	filtered := filter(list)
-	filtered = plugin.FilterMenusByPlugins(filtered, h.plugins)
-	response.Success(c, filtered)
+// GetBindings 查询菜单入口权限绑定。
+func (h *MenuHandler) GetBindings(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	data, err := h.service.GetPermissionBindings(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, data)
+}
+
+// ReplaceBindings 覆盖菜单自定义入口权限绑定。
+func (h *MenuHandler) ReplaceBindings(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSONOK(c, gin.H{"message": "updated"}, func(ctx context.Context, req service.MenuPermissionBindingsReplaceRequest) error {
+		return h.service.ReplacePermissionBindings(ctx, id, req)
+	})
 }
 
 // Create 创建菜单项。

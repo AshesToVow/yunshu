@@ -70,18 +70,10 @@ cicd:
   approval_reminder_interval_hours: 4
 
 http:
-  read_header_timeout_seconds: 5  #从连接建立到读完请求头的最长时间；防慢连接占满，
-  # 日志流（SSE）为长连接：若 write/read 过短会导致浏览器 net::ERR_INCOMPLETE_CHUNKED_ENCODING
-  read_timeout_seconds: 0  #从连接建立到读完请求体的最长时间；防慢连接占满，影响其它请求。0 表示不限制。
-  write_timeout_seconds: 0  #从连接建立到写完响应体的最长时间；防慢连接占满，影响其它请求。0 表示不限制。
-  idle_timeout_seconds: 120  #连接空闲时间；防慢连接占满，影响其它请求
-
-grpc:
-  listen_addr: 0.0.0.0:18080
-  target_addr: 0.0.0.0:18080
-  internal_token: "YunshuAgentRegisterSecret2026Secure!!"
-  max_recv_msg_bytes: 8388608
-  max_send_msg_bytes: 8388608
+  read_header_timeout_seconds: 5
+  read_timeout_seconds: 0
+  write_timeout_seconds: 0
+  idle_timeout_seconds: 120
 
 log:
   level: debug
@@ -150,12 +142,21 @@ security:
   # 32 bytes key for encrypting sensitive data (base64 recommended)
   encryption_key: "change-me-32bytes-base64"
 
-agent:
-  # log-agent 启动后用于自注册的共享密钥（建议生产环境改为强随机字符串）
-  register_secret: "YunshuAgentRegisterSecret2026Secure!!"
-  # 引导 Agent 扫描的额外根目录（经 runtime-config 以 _discovery_root 下发）
-  discovery_roots:
-    - /var/log
+# 日志检索（Loggie 采集 → Elasticsearch，Yunshu 代理查询）
+elasticsearch:
+  enabled: false
+  addresses:
+    - "http://127.0.0.1:9200"
+  username: ""
+  password: ""
+  index_pattern: "yunshu-logs-*"
+  message_fields: ["message", "body", "log", "content"]
+  timestamp_field: "@timestamp"
+  default_size: 100
+  max_size: 1000
+  timeout_seconds: 30
+  default_retention_days: 30
+  cleanup_cron_spec: "0 3 * * *"   # 每天 03:00 清理过期索引
 
 # 下列键的常见取值可在「系统 → 数据字典」中按类型选用，便于团队统一录入（如 config_yaml_mysql_host、alert_enrich_prometheus_url、k8s_kubeconfig_template 等）。
 alert:

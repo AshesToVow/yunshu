@@ -8,11 +8,9 @@ package router
 
 import (
 	"yunshu/internal/bootstrap"
-	"yunshu/internal/grpc/client"
 	"yunshu/internal/service/alert"
 	"yunshu/internal/service/k8s"
 	"yunshu/internal/service/k8s/eventforward"
-	"yunshu/internal/service/logplatform"
 	"yunshu/internal/service/overview"
 	"yunshu/internal/service/project"
 	"yunshu/internal/service/system"
@@ -25,7 +23,7 @@ import (
 // Injectors from wire.go:
 
 // InitializeRouteDeps is the Wire entry for HTTP route dependencies.
-func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient) (*RouteDeps, error) {
+func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	db := provideDB(app)
 	routerRouteRepositories := newRouteRepositories(db)
 	v := routerRouteRepositories.LoginLog
@@ -33,12 +31,12 @@ func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient
 	v3 := routerRouteRepositories.OperationLog
 	v4 := system.NewOperationLogService(v3)
 	v5 := routerRouteRepositories.User
-	redisClient := provideRedis(app)
+	client := provideRedis(app)
 	authConfig := provideAuthConfig(app)
 	sender := provideMailer(app)
 	routerAppRouteConfig := provideAppRouteConfig(app)
 	appDisplayName := routerAppRouteConfig.AppName
-	v6 := provideAuthService(v5, redisClient, authConfig, sender, appDisplayName)
+	v6 := provideAuthService(v5, client, authConfig, sender, appDisplayName)
 	v7 := routerRouteRepositories.Role
 	v8 := routerRouteRepositories.Department
 	syncedEnforcer := provideEnforcer(app)
@@ -64,7 +62,7 @@ func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient
 	v27 := routerRouteRepositories.Project
 	v28 := system.NewUserGroupService(v22, v5, v9, v27)
 	v29 := routerRouteRepositories.RegRequest
-	v30 := provideRegistrationService(v29, v5, redisClient, authConfig, sender, appDisplayName)
+	v30 := provideRegistrationService(v29, v5, client, authConfig, sender, appDisplayName)
 	v31 := routerRouteRepositories.Menu
 	v32 := system.NewMenuService(v31)
 	v33 := routerRouteRepositories.DictEntry
@@ -84,14 +82,14 @@ func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient
 	v45 := routerRouteRepositories.AlertFiringDelivery
 	v46 := routerRouteRepositories.CloudExpiryRule
 	v47 := routerRouteRepositories.CloudAccount
-	alertStateService := provideAlertStateService(redisClient, v43, alertConfig)
+	alertStateService := provideAlertStateService(client, v43, alertConfig)
 	v48 := routerRouteRepositories.AlertSubscription
 	v49 := routerRouteRepositories.AlertInhibitionRule
 	v50 := provideAlertServiceOptions(v36, v42, alertRuleAssigneeService, v38, v40, securityEncryptionKey, v43, v44, v11, v12, v27, v45, v46, v47, alertStateService, v48, v49)
-	v51 := provideAlertService(db, redisClient, sender, alertConfig, v50)
+	v51 := provideAlertService(db, client, sender, alertConfig, v50)
 	v52 := alert.NewCloudExpiryRuleService(v46)
 	v53 := alert.NewAlertDatasourceService(v12)
-	v54 := alert.NewAlertMonitorRuleService(v11, v12, redisClient)
+	v54 := alert.NewAlertMonitorRuleService(v11, v12, client)
 	v55 := k8s.NewK8sRuntimeService(v23)
 	v56 := k8s.NewK8sClusterService(v23, v33, v55, v20, v21, v9)
 	v57 := k8s.NewK8sPodService(v55, v20, v21)
@@ -114,7 +112,7 @@ func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient
 	v73 := k8s.NewK8sServiceAccountService(v55)
 	v74 := routerRouteRepositories.Overview
 	v75 := providePluginsEnabled(app)
-	v76 := overview.NewOverviewService(v74, v55, redisClient, v9, v19, v75)
+	v76 := overview.NewOverviewService(v74, v55, client, v9, v19, v75)
 	v77 := routerRouteRepositories.Server
 	v78 := routerRouteRepositories.ServerGroup
 	v79 := routerRouteRepositories.Service
@@ -136,16 +134,19 @@ func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient
 	if err != nil {
 		return nil, err
 	}
-	v86 := routerRouteRepositories.LogAgent
-	agentRegisterSecret := routerAppRouteConfig.AgentRegisterSecret
-	v87 := routerAppRouteConfig.AgentDiscoveryRoots
-	v88 := provideLogAgentService(v86, v77, v80, agentRegisterSecret, v87)
-	v89 := routerRouteRepositories.AgentDiscovery
-	v90 := logplatform.NewAgentDiscoveryService(v89, v86, v77, v80)
-	v91 := alert.NewAlertReceiverGroupService(v39, v40)
-	v92 := routerRouteRepositories.K8sEventForward
-	v93 := eventforward.NewK8sEventForwardAdminService(v92)
-	v94 := k8s.NewK8sSearchService(v55, v23, v9, v19, v20, v21)
+	v86 := provideElasticsearchProvider(app)
+	v87 := provideLogSearchService(v86)
+	v88 := routerRouteRepositories.LogRetention
+	v89 := provideLogRetentionService(v86, v88)
+	v90 := routerRouteRepositories.LoggieAgent
+	v91, err := provideLoggieAgentService(v90, v77, v80, v86, securityEncryptionKey)
+	if err != nil {
+		return nil, err
+	}
+	v92 := alert.NewAlertReceiverGroupService(v39, v40)
+	v93 := routerRouteRepositories.K8sEventForward
+	v94 := eventforward.NewK8sEventForwardAdminService(v93)
+	v95 := k8s.NewK8sSearchService(v55, v23, v9, v19, v20, v21)
 	routerRouteServices := &routeServices{
 		LoginLog:             v2,
 		OperationLog:         v4,
@@ -195,14 +196,15 @@ func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient
 		Cicd:                 service,
 		MysqlBackup:          v84,
 		Dbmgmt:               dbmgmtService,
-		LogAgent:             v88,
-		AgentDiscovery:       v90,
-		AlertReceiverGroup:   v91,
-		K8sEventForwardAdmin: v93,
-		K8sSearch:            v94,
+		LogSearch:            v87,
+		LogRetention:         v89,
+		LoggieAgent:          v91,
+		AlertReceiverGroup:   v92,
+		K8sEventForwardAdmin: v94,
+		K8sSearch:            v95,
 		AlertMaintenance:     v42,
 	}
-	routeDeps, err := provideRouteDeps(app, runtimeClient, routerRouteRepositories, routerRouteServices)
+	routeDeps, err := provideRouteDeps(app, routerRouteRepositories, routerRouteServices)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +213,6 @@ func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient
 
 // wire.go:
 
-func provideRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
-	return assembleRouteDeps(app, runtimeClient, repos, svcs)
+func provideRouteDeps(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
+	return assembleRouteDeps(app, repos, svcs)
 }

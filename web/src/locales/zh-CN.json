@@ -102,8 +102,8 @@
       "eventWarning": { "title": "Warning", "hint": "采样中的 Warning 类型" },
       "alertFiring": { "title": "告警 Firing", "hint": "当前仍未恢复的告警事件" },
       "alertEventsToday": { "title": "今日告警事件", "hint": "本自然日新建事件条数" },
-      "logAgentsOnline": { "title": "日志 Agent 在线", "hint": "最近 90s 内有心跳" },
-      "logAgentsOffline": { "title": "日志 Agent 离线", "hint": "已启用但未满足在线条件" }
+      "loggieAgentsOnline": { "title": "Loggie 在线", "hint": "最近 3 分钟内有心跳" },
+      "loggieAgentsOffline": { "title": "Loggie 离线", "hint": "已登记但未满足在线条件" }
     },
     "uptimeFormat": "{{hours}}小时 {{minutes}}分钟"
   }
