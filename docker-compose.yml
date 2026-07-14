@@ -81,9 +81,6 @@ services:
     cpus: 0.6
     ports:
       - "8080:8080"
-    extra_hosts:
-      # Linux 下让容器访问宿主机 MySQL（同机非容器部署）
-      - "host.docker.internal:host-gateway"
     environment:
       - GIN_MODE=release
       - APP_ENV=prod
@@ -92,7 +89,8 @@ services:
       - MYSQL_HOST=${MYSQL_HOST:-host.docker.internal}
       - MYSQL_PORT=${MYSQL_PORT:-3306}
       - MYSQL_USER=${MYSQL_USER:-root}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD:-YunshuDB@2026Secure!}}
+      # 勿用 ${A:-${B:-x}} 嵌套：部分 Compose 会把多余的 } 拼进密码（如 0gvzJr66iNs5}）
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-YunshuDB@2026Secure!}
       - MYSQL_DB_NAME=${MYSQL_DB_NAME:-yunshu}
       - REDIS_ADDR=yunshu-redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-YunshuRedis@2026Secure!}

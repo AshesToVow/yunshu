@@ -29,7 +29,13 @@ Pod/Node 日志 → Loggie DaemonSet → ES Sink → Elasticsearch
 | `@timestamp` | 时间戳 |
 | `file_path` | 文件路径 |
 
-推荐在 Pod 上打标签 `yunshu.project_id` 等，由 Loggie `addK8sMeta` 写入 ES。
+**必须**给要采集的业务 Pod 打标签 `yunshu.project_id=<项目ID>`，否则 ClusterLogConfig 的 labelSelector 不会选中任何 Pod，Yunshu 显示「无上报」。  
+清单里会固定写入 ES 字段 `project_id`（与项目一致）；`yunshu.server_id` 等可选。
+
+引用独立 Sink CR 时用 **`sinkRef: yunshu-es`**。误写成 `sink: yunshu-es` 会触发  
+`cannot unmarshal !!str yunshu-es into sink.Config`，采集链路不会生效。
+
+`labelSelector` 必须是简单 map（例如 `"yunshu.project_id": "1"`），**不要**写 Kubernetes 的 `matchExpressions`。
 
 ## 部署
 

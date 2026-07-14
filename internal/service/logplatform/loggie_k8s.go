@@ -125,6 +125,8 @@ spec:
 %s    index: %s
 %s`, sinkName, ns, projectKey, hostsYAML.String(), indexSink, authBlock)
 
+	// project_id 固定写入 Yunshu 项目 ID（不依赖 Pod 标签缺省）；
+	// labelSelector 仍只采集打了 yunshu.project_id 的 Pod，避免扫全集群。
 	clcYAML := fmt.Sprintf(`apiVersion: loggie.io/v1beta1
 kind: ClusterLogConfig
 metadata:
@@ -134,11 +136,9 @@ metadata:
 spec:
   selector:
     type: pod
+    # Loggie 要求 map 形式，不支持 matchExpressions
     labelSelector:
-      matchExpressions:
-        - key: yunshu.project_id
-          operator: In
-          values: [%q]
+      "yunshu.project_id": %q
   pipeline:
     sources: |
       - type: file
@@ -147,11 +147,11 @@ spec:
         paths:
           - /var/log/pods/*/*/*.log
         addonMeta: true
-    sink: %s
+    sinkRef: %s
     interceptors: |
       - type: addK8sMeta
         addFields:
-          project_id: "${pod.labels.yunshu\\.project_id}"
+          project_id: %q
           server_id: "${pod.labels.yunshu\\.server_id}"
           service_id: "${pod.labels.yunshu\\.service_id}"
           log_source_id: "${pod.labels.yunshu\\.log_source_id}"
@@ -165,7 +165,7 @@ spec:
           - action: regex(body)
             pattern: '^(?P<ts>\\S+)\\s+(?P<stream>stdout|stderr)\\s+(?P<flag>\\S)\\s+(?P<message>.*)$'
             ignoreError: true
-`, clcName, projectKey, projectKey, sinkName)
+`, clcName, projectKey, projectKey, sinkName, projectKey)
 
 	combined := strings.TrimSpace(nsYAML) + "\n---\n" + strings.TrimSpace(sinkYAML) + "\n---\n" + strings.TrimSpace(clcYAML) + "\n"
 
