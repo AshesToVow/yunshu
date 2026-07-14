@@ -31,10 +31,11 @@ Pod/Node 日志 → Loggie DaemonSet → ES Sink → Elasticsearch
 
 清单里会固定写入 ES 字段 `project_id`（与项目一致）。  
 
-- **默认（联调）**：ClusterLogConfig 不带 `labelSelector`，采集全部 Pod stdout。  
-- **生产（多项目共集群）**：勾选「仅采集带标签的 Pod」，并执行  
-  `kubectl -n <ns> label deploy <name> yunshu.project_id=<项目ID> --overwrite`  
-  若 Loggie 出现 `matches no pods`，就是标签选择器没命中。  
+- **默认（联调）**：`labelSelector: pod-template-hash: "*"`（匹配多数 Deployment 创建的 Pod）。Loggie **必须**有 labelSelector，省略≠采全部。  
+- **生产**：勾选「仅采集带 yunshu.project_id 的 Pod」。注意 `kubectl label deploy` **不会**写到 Pod，需：  
+  `kubectl -n <ns> label pod --all yunshu.project_id=<ID> --overwrite`  
+  或 `patch deploy ... spec.template.metadata.labels`。  
+- `kubectl apply` 缺 last-applied 注解时，省略字段**删不掉**旧 `labelSelector`——应先 `kubectl delete clusterlogconfig ...` 再 apply。  
 
 注意：项目里的「日志源配置」（节点+容器路径）只服务**二进制** Loggie；K8s DaemonSet 只认 ClusterLogConfig/Sink。
 

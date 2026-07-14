@@ -1,8 +1,6 @@
-# 示例（联调默认）：采集集群内全部 Pod stdout，固定写入 project_id=1。
-# 生产多项目共集群时请增加 labelSelector（见下方注释），并给业务 Pod 打标。
-#
-# sinkRef 引用 Sink CR；不要写 sink: yunshu-es。
-# labelSelector 必须是 map，不支持 matchExpressions。
+# 示例：联调默认用 pod-template-hash: * 匹配绝大多数 Deployment/Pods。
+# 注意：kubectl apply 若未带 last-applied 注解，省略 labelSelector 往往删不掉旧字段——请先 delete 再 apply。
+# kubectl label deploy 不会给 Pod 打标；需 label pod 或 patch deploy.spec.template.metadata.labels。
 apiVersion: loggie.io/v1beta1
 kind: ClusterLogConfig
 metadata:
@@ -12,16 +10,17 @@ metadata:
 spec:
   selector:
     type: pod
-    # 生产建议打开：
-    # labelSelector:
-    #   "yunshu.project_id": "1"
+    labelSelector:
+      "pod-template-hash": "*"
+      # 生产多项目共集群改为：
+      # "yunshu.project_id": "1"
   pipeline:
     sources: |
       - type: file
         name: container-logs
         containerName: "*"
         paths:
-          - /var/log/pods/*/*/*.log
+          - stdout
         addonMeta: true
     sinkRef: yunshu-es
     interceptors: |

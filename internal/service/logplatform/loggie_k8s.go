@@ -128,12 +128,17 @@ spec:
 %s`, sinkName, ns, projectKey, hostsYAML.String(), indexSink, authBlock)
 
 	// project_id 固定写入 Yunshu 项目 ID。
-	// Loggie labelSelector 为 map（非 matchExpressions）；缺标签时会 matches no pods。
+	// Loggie type=pod 时 labelSelector 为必填 map；省略/空 map 会 matches no pods。
+	// 联调「采全部」用已有 Deployment 标签 pod-template-hash: *（不含静态控制面 Pod）。
 	selectorBlock := "    type: pod\n"
 	if requirePodLabel {
 		selectorBlock += fmt.Sprintf(`    labelSelector:
       "yunshu.project_id": %q
 `, projectKey)
+	} else {
+		selectorBlock += `    labelSelector:
+      "pod-template-hash": "*"
+`
 	}
 	clcYAML := fmt.Sprintf(`apiVersion: loggie.io/v1beta1
 kind: ClusterLogConfig
@@ -149,7 +154,7 @@ spec:
         name: container-logs
         containerName: "*"
         paths:
-          - /var/log/pods/*/*/*.log
+          - stdout
         addonMeta: true
     sinkRef: %s
     interceptors: |

@@ -483,8 +483,8 @@ export function LoggieStatusPage() {
                       </Checkbox>
                     </Form.Item>
                     <Tag color="warning" style={{ marginBottom: 12, whiteSpace: "normal", height: "auto" }}>
-                      「日志源配置」里为某节点选 metrics-server 路径属于二进制 Loggie；K8s DaemonSet 只认 ClusterLogConfig，不认该表。
-                      Loggie 日志出现 matches no pods 时说明选择器没有匹配到任何 Pod。
+                      Loggie 的 type=pod 必须有 labelSelector（省略≠采全集群）。默认用 pod-template-hash:*；勾选上方则只采 yunshu.project_id。
+                      kubectl label deploy 不会给 Pod 打标；matches no pods 时用 kubectl get clusterlogconfig -o yaml 核对选择器，必要时先 delete 再 apply。
                     </Tag>
                     <Form.Item name="deploy_after_bootstrap" valuePropName="checked">
                       <Checkbox>
