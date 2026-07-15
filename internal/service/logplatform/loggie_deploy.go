@@ -188,6 +188,8 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 		{bundle.HeartbeatFilename, []byte(bundle.HeartbeatScript), 0o755},
 		{startScriptFilename, []byte(renderStartScript()), 0o755},
 		{"loggie.service", []byte(renderSystemdUnit(deployDir)), 0o644},
+		{"loggie-heartbeat.service", []byte(renderHeartbeatUnit(deployDir)), 0o644},
+		{"loggie-heartbeat.timer", []byte(renderHeartbeatTimer()), 0o644},
 	}
 	for _, f := range files {
 		if len(f.content) == 0 {
@@ -256,7 +258,7 @@ WantedBy=multi-user.target
 
 func renderStartScript() string {
 	return `#!/usr/bin/env bash
-# Yunshu Loggie start helper — 与二进制同目录
+# 手工调试用；生产请用: systemctl start loggie.service
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 BIN="$DIR/loggie"
@@ -267,17 +269,21 @@ if [[ ! -x "$BIN" ]]; then
   echo "missing binary: $BIN" >&2
   exit 1
 fi
+if command -v file >/dev/null 2>&1; then
+  INFO="$(file -b "$BIN" || true)"
+  if echo "$INFO" | grep -qiE 'ASCII|HTML|text|empty'; then
+    echo "bad binary (not ELF): $BIN — $INFO" >&2
+    exit 1
+  fi
+fi
 if [[ ! -f "$SYS" || ! -f "$PIPE" ]]; then
-  echo "missing pipeline.yml or pipelines.yml under $DIR" >&2
+  echo "need both pipeline.yml (system) and pipelines.yml under $DIR" >&2
   exit 1
 fi
 
 cmd="${1:-start}"
 case "$cmd" in
-  start|run)
-    exec "$BIN" -config.system="$SYS" -config.pipeline="$PIPE"
-    ;;
-  foreground)
+  start|run|foreground)
     exec "$BIN" -config.system="$SYS" -config.pipeline="$PIPE"
     ;;
   *)
@@ -285,6 +291,35 @@ case "$cmd" in
     exit 1
     ;;
 esac
+`
+}
+
+func renderHeartbeatUnit(deployDir string) string {
+	return fmt.Sprintf(`[Unit]
+Description=Yunshu Loggie heartbeat (oneshot)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%s
+EnvironmentFile=-%s/loggie-heartbeat.env
+ExecStart=/bin/bash %s/heartbeat.sh
+Nice=10
+`, deployDir, deployDir, deployDir)
+}
+
+func renderHeartbeatTimer() string {
+	return `[Unit]
+Description=Yunshu Loggie heartbeat every 60s
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=loggie-heartbeat.service
+
+[Install]
+WantedBy=timers.target
 `
 }
 
@@ -315,6 +350,9 @@ func downloadLoggieBinary(ctx context.Context, binaryURL string) ([]byte, error)
 	if len(data) < 1024 {
 		return nil, fmt.Errorf("download too small (%d bytes), not a binary", len(data))
 	}
+	if len(data) < 4 || data[0] != 0x7f || string(data[1:4]) != "ELF" {
+		return nil, fmt.Errorf("downloaded content is not ELF (wrong URL or HTML error page)")
+	}
 	return data, nil
 }
 
@@ -336,11 +374,26 @@ func buildFinalizeInstallScript(deployDir, unit string) string {
 	var b strings.Builder
 	b.WriteString("set -euo pipefail; ")
 	b.WriteString(fmt.Sprintf("DEPLOY=%q; UNIT=%q; BIN=%q/loggie; ", deployDir, unit, deployDir))
-	b.WriteString(`if [[ ! -x "$BIN" ]]; then echo "missing binary $BIN"; exit 1; fi; `)
+	b.WriteString(`ARCH=$(uname -m); echo "host_arch=$ARCH"; `)
+	b.WriteString(`if [[ ! -f "$BIN" ]]; then echo "missing binary $BIN"; exit 1; fi; `)
 	b.WriteString(`chmod +x "$BIN" "$DEPLOY/start.sh" "$DEPLOY/heartbeat.sh" 2>/dev/null || true; `)
+	b.WriteString(`INFO=$(file -b "$BIN" 2>/dev/null || echo unknown); echo "binary_file=$INFO"; `)
+	b.WriteString(`echo "$INFO" | grep -qi ELF || { echo "not an ELF binary: $INFO"; exit 1; }; `)
+	// 官方 GitHub release 的 loggie 资产仅为 linux/amd64
+	b.WriteString(`case "$ARCH" in `)
+	b.WriteString(`x86_64|amd64) echo "$INFO" | grep -qiE 'x86-64|x86_64|AMD64|Intel 80386' || { echo "arch mismatch: host amd64, binary=$INFO"; exit 1; } ;; `)
+	b.WriteString(`aarch64|arm64) echo "ERROR: host is arm64; official Loggie release binary is amd64 only (Exec format error). Use amd64 host or build arm64 Loggie."; exit 1 ;; `)
+	b.WriteString(`*) echo "unsupported arch: $ARCH"; exit 1 ;; esac; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT"; `)
-	b.WriteString(`sudo systemctl daemon-reload; sudo systemctl enable "$UNIT"; sudo systemctl restart "$UNIT"; `)
-	b.WriteString(`echo "installed: $BIN"; ls -la "$DEPLOY"; systemctl is-active "$UNIT" || true`)
+	b.WriteString(`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service; `)
+	b.WriteString(`sudo cp "$DEPLOY/loggie-heartbeat.timer" /etc/systemd/system/loggie-heartbeat.timer; `)
+	b.WriteString(`sudo systemctl daemon-reload; `)
+	b.WriteString(`sudo systemctl enable "$UNIT" loggie-heartbeat.timer; `)
+	b.WriteString(`sudo systemctl restart "$UNIT"; `)
+	b.WriteString(`sudo systemctl restart loggie-heartbeat.timer; `)
+	b.WriteString(`sudo systemctl start loggie-heartbeat.service || true; `)
+	b.WriteString(`echo "installed: $BIN"; ls -la "$DEPLOY"; `)
+	b.WriteString(`systemctl is-active "$UNIT" || true; systemctl is-active loggie-heartbeat.timer || true`)
 	return b.String()
 }
 

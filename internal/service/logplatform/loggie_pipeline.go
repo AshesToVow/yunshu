@@ -80,7 +80,7 @@ func BuildPipelineBundle(opts LoggiePipelineOptions, esCfg config.ElasticsearchC
 		ParseProfile: pipelineParseProfileFor(opts.LogPaths),
 	}
 	pipelinesOnly := renderPipelinesYAML(opts.ProjectID, opts.ServerID, []LoggiePipelineSourceEntry{entry}, esCfg)
-	pipelineYAML := renderFullPipelineYAML(opts.ProjectID, opts.ServerID, opts.MonitorPort, []LoggiePipelineSourceEntry{entry}, esCfg)
+	systemYAML := renderSystemConfigYAML(opts.ProjectID, opts.ServerID, opts.MonitorPort)
 
 	baseURL := strings.TrimRight(strings.TrimSpace(yunshuBaseURL), "/")
 	if baseURL == "" {
@@ -97,7 +97,7 @@ LOGGIE_MONITOR_PORT=%d
 	heartbeatScript := heartbeatScriptTemplate()
 
 	return LoggiePipelineBundle{
-		PipelineYAML:      pipelineYAML,
+		PipelineYAML:      systemYAML,
 		PipelinesOnlyYAML: pipelinesOnly,
 		PipelineFilename:  "pipeline.yml",
 		PipelinesFilename: pipelinesOnlyFilename,
