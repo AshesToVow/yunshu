@@ -28,6 +28,8 @@ type LoggiePipelineBundle struct {
 	EnvFilename       string `json:"env_filename"`
 	HeartbeatScript   string `json:"heartbeat_script"`
 	HeartbeatFilename string `json:"heartbeat_filename"`
+	StartScript       string `json:"start_script"`
+	StartFilename     string `json:"start_filename"`
 	PipelineCount     int    `json:"pipeline_count"`
 }
 
@@ -104,6 +106,8 @@ LOGGIE_MONITOR_PORT=%d
 		EnvFilename:       "loggie-heartbeat.env",
 		HeartbeatScript:   heartbeatScript,
 		HeartbeatFilename: "heartbeat.sh",
+		StartScript:       renderStartScript(),
+		StartFilename:     startScriptFilename,
 		PipelineCount:     1,
 	}
 }

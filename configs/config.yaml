@@ -162,7 +162,8 @@ elasticsearch:
 
 # Loggie Agent（目标机二进制安装 / systemd）
 loggie:
-  binary_url: ""   # 例: https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie_linux_{arch}.tar.gz
+  # 官方 release 直链为裸二进制（非 tar）
+  binary_url: "https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie"
   unit_name: "loggie.service"
   deploy_dir: "/export/loggie"
 

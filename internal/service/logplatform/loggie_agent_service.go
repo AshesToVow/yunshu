@@ -129,6 +129,8 @@ type LoggieBootstrapResult struct {
 	EnvFilename       string   `json:"env_filename"`
 	HeartbeatScript   string   `json:"heartbeat_script"`
 	HeartbeatFilename string   `json:"heartbeat_filename"`
+	StartScript       string   `json:"start_script"`
+	StartFilename     string   `json:"start_filename"`
 	MonitorPort       int      `json:"monitor_port"`
 	PipelineCount     int      `json:"pipeline_count"`
 	SourceCount       int      `json:"source_count"`
@@ -368,7 +370,13 @@ func (s *LoggieAgentService) DeployConfig(ctx context.Context, projectID uint, r
 		result.Message = truncateDeployOutput(err.Error(), 512)
 		return result, nil
 	}
-	result.Message = "配置已下发并热更/重启 Loggie"
+	result.Message = "配置已下发"
+	out := strings.TrimSpace(stdout)
+	if strings.Contains(out, "CONFIG_UPLOADED") {
+		result.Message = "配置已下发（尚未安装 systemd 单元，请执行「安装」）"
+	} else {
+		result.Message = "配置已下发并热更/重启 Loggie"
+	}
 	return result, nil
 }
 

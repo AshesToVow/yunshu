@@ -329,15 +329,17 @@ LOGGIE_DEPLOY_DIR=%s
 `, baseURL, token, monitorPort, deployDir)
 
 	return LoggiePipelineBundle{
-		PipelineYAML:       fullYAML,
-		PipelinesOnlyYAML:  pipelinesOnly,
-		PipelineFilename:   "pipeline.yml",
-		PipelinesFilename:  pipelinesOnlyFilename,
-		DeployDir:          deployDir,
-		EnvFile:            envFile,
-		EnvFilename:        "loggie-heartbeat.env",
-		HeartbeatScript:    heartbeatScriptTemplate(),
-		HeartbeatFilename:  "heartbeat.sh",
-		PipelineCount:      len(entries),
+		PipelineYAML:      fullYAML,
+		PipelinesOnlyYAML: pipelinesOnly,
+		PipelineFilename:  "pipeline.yml",
+		PipelinesFilename: pipelinesOnlyFilename,
+		DeployDir:         deployDir,
+		EnvFile:           envFile,
+		EnvFilename:       "loggie-heartbeat.env",
+		HeartbeatScript:   heartbeatScriptTemplate(),
+		HeartbeatFilename: "heartbeat.sh",
+		StartScript:       renderStartScript(),
+		StartFilename:     startScriptFilename,
+		PipelineCount:     len(entries),
 	}
 }

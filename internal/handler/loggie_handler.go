@@ -87,6 +87,13 @@ func (h *LoggieHandler) DownloadPipeline(c *gin.Context) {
 			content = bundle.PipelineYAML
 		}
 		c.Data(200, "application/x-yaml; charset=utf-8", []byte(content))
+	case "start":
+		name := bundle.StartFilename
+		if name == "" {
+			name = "start.sh"
+		}
+		c.Header("Content-Disposition", "attachment; filename="+name)
+		c.Data(200, "text/x-sh; charset=utf-8", []byte(bundle.StartScript))
 	default:
 		c.Header("Content-Disposition", "attachment; filename="+bundle.PipelineFilename)
 		c.Data(200, "application/x-yaml; charset=utf-8", []byte(bundle.PipelineYAML))

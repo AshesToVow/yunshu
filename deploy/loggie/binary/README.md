@@ -20,10 +20,25 @@
 
 1. CMDB 配置项目服务器、服务、日志源路径  
 2. **Agent 管理** → 选择项目 → **引导**（生成 Token / pipeline）  
-3. 填写 `loggie.binary_url`（或引导表单 URL，支持 `{arch}`）→ **安装**  
-4. 状态列查看：在线、采集（近 5 分钟 ES 文档）、ES Sink  
+3. 二进制直链默认  
+   `https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie`  
+   （裸二进制，安装到目录下的 `loggie` 文件）→ **安装**  
+4. 状态列查看：在线、采集、ES Sink  
 
-热更采集配置：改日志源后点 **热更**（仅下发 `pipelines.yml` + reload-or-restart）。
+### 目标机目录结构
+
+```
+/export/loggie/
+  loggie                 # 二进制
+  pipeline.yml           # 系统配置（含 reload/monitor）
+  pipelines.yml          # 采集管道
+  start.sh               # 前台启动脚本
+  heartbeat.sh           # 心跳
+  loggie-heartbeat.env
+  loggie.service         # systemd 单元（安装时拷到 /etc/systemd/system）
+```
+
+热更：改日志源后点 **热更**（下发 yml/脚本 + `systemctl reload-or-restart`）。
 
 ## 4. 手动安装（备选）
 
@@ -51,9 +66,13 @@ elasticsearch:
   default_retention_days: 30
 
 loggie:
-  binary_url: "https://.../loggie_linux_{arch}.tar.gz"
+  binary_url: "https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie"
   deploy_dir: "/export/loggie"
 ```
+
+前台启动：`/export/loggie/start.sh`  
+systemd：`ExecStart=/export/loggie/loggie -config.system=... -config.pipeline=...`
+
 
 ## 6. 验证
 

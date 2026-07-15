@@ -12,6 +12,11 @@ import (
 )
 
 const loggieRestartUnit = "loggie.service"
+const loggieBinaryName = "loggie"
+const startScriptFilename = "start.sh"
+
+// DefaultLoggieBinaryURL 官方 release 直链（裸二进制，非 tar）。
+const DefaultLoggieBinaryURL = "https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie"
 
 func (s *LoggieAgentService) unitName() string {
 	u := strings.TrimSpace(s.loggieCfg.UnitName)
@@ -29,6 +34,17 @@ func (s *LoggieAgentService) defaultDeployDir() string {
 	return strings.TrimRight(d, "/")
 }
 
+func (s *LoggieAgentService) resolveBinaryURL(override string) string {
+	u := strings.TrimSpace(override)
+	if u == "" {
+		u = strings.TrimSpace(s.loggieCfg.BinaryURL)
+	}
+	if u == "" {
+		u = DefaultLoggieBinaryURL
+	}
+	return u
+}
+
 func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID uint, bundle LoggiePipelineBundle) (stdout, stderr string, err error) {
 	if s.aead == nil {
 		return "", "", fmt.Errorf("SSH 加密密钥未配置，无法远程下发")
@@ -43,6 +59,9 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 	if deployDir == "" {
 		deployDir = s.defaultDeployDir()
 	}
+	if _, err := cli.Exec(ctx, fmt.Sprintf("mkdir -p %q", deployDir), 4096); err != nil {
+		return "", "", fmt.Errorf("mkdir: %w", err)
+	}
 	pipelines := strings.TrimSpace(bundle.PipelinesOnlyYAML)
 	if pipelines == "" {
 		pipelines = bundle.PipelineYAML
@@ -53,8 +72,10 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 		perm    os.FileMode
 	}{
 		{pipelinesOnlyFilename, []byte(pipelines + "\n"), 0o644},
+		{"pipeline.yml", []byte(bundle.PipelineYAML + "\n"), 0o644},
 		{bundle.EnvFilename, []byte(bundle.EnvFile), 0o644},
 		{bundle.HeartbeatFilename, []byte(bundle.HeartbeatScript), 0o755},
+		{startScriptFilename, []byte(renderStartScript()), 0o755},
 	}
 	for _, f := range files {
 		if strings.TrimSpace(f.name) == "" || len(f.content) == 0 {
@@ -66,13 +87,24 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 		}
 	}
 	unit := s.unitName()
-	cmd := fmt.Sprintf("systemctl reload-or-restart %s 2>&1 || systemctl restart %s 2>&1", unit, unit)
+	// 仅热更配置时单元可能尚未安装：先确认 unit 存在再 reload，否则只落盘成功提示安装。
+	cmd := fmt.Sprintf(
+		`set +e; UNIT=%q; `+
+			`if systemctl cat "$UNIT" >/dev/null 2>&1; then `+
+			`systemctl reload-or-restart "$UNIT" 2>&1 || systemctl restart "$UNIT" 2>&1; exit $?; `+
+			`else echo "CONFIG_UPLOADED unit=$UNIT not installed yet; run Install first"; exit 0; fi`,
+		unit,
+	)
 	res, err := cli.Exec(ctx, cmd, 8192)
 	if err != nil {
 		return res.Stdout, res.Stderr, err
 	}
 	if res.ExitCode != 0 {
-		return res.Stdout, res.Stderr, fmt.Errorf("reload-or-restart loggie exit=%d: %s", res.ExitCode, strings.TrimSpace(res.Stdout+res.Stderr))
+		msg := strings.TrimSpace(res.Stdout + res.Stderr)
+		if len(msg) > 200 {
+			msg = msg[:200] + "..."
+		}
+		return res.Stdout, res.Stderr, fmt.Errorf("reload loggie failed: %s", msg)
 	}
 	return res.Stdout, res.Stderr, nil
 }
@@ -123,13 +155,10 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 		deployDir = s.defaultDeployDir()
 	}
 	unit := s.unitName()
-	binURL := strings.TrimSpace(binaryURL)
-	if binURL == "" {
-		binURL = strings.TrimSpace(s.loggieCfg.BinaryURL)
-	}
+	binURL := s.resolveBinaryURL(binaryURL)
 
 	var out, errOut strings.Builder
-	mkdir := fmt.Sprintf("mkdir -p %s/bin %s", deployDir, deployDir)
+	mkdir := fmt.Sprintf("mkdir -p %q", deployDir)
 	res, err := cli.Exec(ctx, mkdir, 4096)
 	out.WriteString(res.Stdout)
 	errOut.WriteString(res.Stderr)
@@ -150,6 +179,7 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 		{pipelinesOnlyFilename, []byte(pipelines + "\n"), 0o644},
 		{bundle.EnvFilename, []byte(bundle.EnvFile), 0o644},
 		{bundle.HeartbeatFilename, []byte(bundle.HeartbeatScript), 0o755},
+		{startScriptFilename, []byte(renderStartScript()), 0o755},
 		{"loggie.service", []byte(renderSystemdUnit(deployDir)), 0o644},
 	}
 	for _, f := range files {
@@ -175,7 +205,12 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 	return out.String(), errOut.String(), nil
 }
 
+// 目录约定：
+//
+//	/export/loggie/loggie          # 二进制
+//	/export/loggie/*.yml / *.sh    # 配置与脚本
 func renderSystemdUnit(deployDir string) string {
+	bin := path.Join(deployDir, loggieBinaryName)
 	return fmt.Sprintf(`[Unit]
 Description=Loggie log collector (Yunshu)
 After=network-online.target
@@ -185,28 +220,71 @@ Wants=network-online.target
 Type=simple
 Environment=DBUS_SESSION_BUS_ADDRESS=disabled:
 WorkingDirectory=%s
-ExecStart=%s/bin/loggie -config.system=%s/pipeline.yml -config.pipeline=%s/pipelines.yml
+ExecStart=%s -config.system=%s/pipeline.yml -config.pipeline=%s/pipelines.yml
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target
-`, deployDir, deployDir, deployDir, deployDir)
+`, deployDir, bin, deployDir, deployDir)
+}
+
+func renderStartScript() string {
+	return `#!/usr/bin/env bash
+# Yunshu Loggie start helper — 与二进制同目录
+set -euo pipefail
+DIR="$(cd "$(dirname "$0")" && pwd)"
+BIN="$DIR/loggie"
+SYS="$DIR/pipeline.yml"
+PIPE="$DIR/pipelines.yml"
+
+if [[ ! -x "$BIN" ]]; then
+  echo "missing binary: $BIN" >&2
+  exit 1
+fi
+if [[ ! -f "$SYS" || ! -f "$PIPE" ]]; then
+  echo "missing pipeline.yml or pipelines.yml under $DIR" >&2
+  exit 1
+fi
+
+cmd="${1:-start}"
+case "$cmd" in
+  start|run)
+    exec "$BIN" -config.system="$SYS" -config.pipeline="$PIPE"
+    ;;
+  foreground)
+    exec "$BIN" -config.system="$SYS" -config.pipeline="$PIPE"
+    ;;
+  *)
+    echo "usage: $0 [start|foreground]" >&2
+    exit 1
+    ;;
+esac
+`
 }
 
 func buildInstallRemoteScript(deployDir, unit, binaryURL string) string {
+	// 直链裸二进制（如 .../v1.5.0/loggie）下载到 $DEPLOY/loggie
 	var b strings.Builder
-	b.WriteString("set -e; ")
-	b.WriteString(fmt.Sprintf("DEPLOY=%q; UNIT=%q; BINURL=%q; ", deployDir, unit, binaryURL))
-	b.WriteString(`ARCH=$(uname -m); case "$ARCH" in x86_64|amd64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; *) echo "unsupported arch $ARCH"; exit 1;; esac; `)
-	b.WriteString(`if [[ -n "$BINURL" ]]; then URL="${BINURL//\{arch\}/$ARCH}"; TMP=$(mktemp -d); cd "$TMP"; `)
-	b.WriteString(`(curl -fsSL "$URL" -o pkg.bin || wget -qO pkg.bin "$URL"); `)
-	b.WriteString(`if file pkg.bin 2>/dev/null | grep -qi 'gzip\|tar'; then tar -xzf pkg.bin; elif file pkg.bin 2>/dev/null | grep -qi 'Zip'; then unzip -o pkg.bin; else cp pkg.bin loggie; fi; `)
-	b.WriteString(`BIN=$(find . -type f -name loggie | head -1); if [[ -z "$BIN" ]]; then BIN=./loggie; fi; install -m 755 "$BIN" "$DEPLOY/bin/loggie"; rm -rf "$TMP"; `)
-	b.WriteString(`elif [[ ! -x "$DEPLOY/bin/loggie" ]]; then echo "binary_url empty and $DEPLOY/bin/loggie missing"; exit 1; fi; `)
+	b.WriteString("set -euo pipefail; ")
+	b.WriteString(fmt.Sprintf("DEPLOY=%q; UNIT=%q; BINURL=%q; BIN=%q/loggie; ", deployDir, unit, binaryURL, deployDir))
+	b.WriteString(`if [[ -z "$BINURL" ]]; then echo "binary_url required"; exit 1; fi; `)
+	b.WriteString(`ARCH=$(uname -m); case "$ARCH" in x86_64|amd64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; esac; `)
+	b.WriteString(`URL="${BINURL//\{arch\}/$ARCH}"; `)
+	b.WriteString(`TMP=$(mktemp); `)
+	b.WriteString(`(curl -fsSL "$URL" -o "$TMP" || wget -qO "$TMP" "$URL"); `)
+	b.WriteString(`# 官方 release 多为裸二进制；若误下到压缩包则解压取 loggie `)
+	b.WriteString(`if file "$TMP" 2>/dev/null | grep -qiE 'gzip|tar archive'; then `)
+	b.WriteString(`TD=$(mktemp -d); tar -xzf "$TMP" -C "$TD"; F=$(find "$TD" -type f -name loggie | head -1); `)
+	b.WriteString(`install -m 755 "$F" "$BIN"; rm -rf "$TD" "$TMP"; `)
+	b.WriteString(`elif file "$TMP" 2>/dev/null | grep -qi 'Zip'; then `)
+	b.WriteString(`TD=$(mktemp -d); unzip -qo "$TMP" -d "$TD"; F=$(find "$TD" -type f -name loggie | head -1); `)
+	b.WriteString(`install -m 755 "$F" "$BIN"; rm -rf "$TD" "$TMP"; `)
+	b.WriteString(`else install -m 755 "$TMP" "$BIN"; rm -f "$TMP"; fi; `)
+	b.WriteString(`chmod +x "$BIN" "$DEPLOY/start.sh" "$DEPLOY/heartbeat.sh" 2>/dev/null || true; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT"; sudo systemctl daemon-reload; sudo systemctl enable "$UNIT"; sudo systemctl restart "$UNIT"; `)
-	b.WriteString(`echo "loggie installed"; systemctl is-active "$UNIT" || true`)
+	b.WriteString(`echo "installed: $BIN"; ls -la "$DEPLOY"; systemctl is-active "$UNIT" || true`)
 	return b.String()
 }
 

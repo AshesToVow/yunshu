@@ -294,6 +294,8 @@ func bootstrapResultFromBundle(
 		EnvFilename:       bundle.EnvFilename,
 		HeartbeatScript:   bundle.HeartbeatScript,
 		HeartbeatFilename: bundle.HeartbeatFilename,
+		StartScript:       bundle.StartScript,
+		StartFilename:     bundle.StartFilename,
 		MonitorPort:       monitorPort,
 		PipelineCount:     bundle.PipelineCount,
 		SourceCount:       sourceCount,

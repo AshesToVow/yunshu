@@ -2,14 +2,12 @@ import {
   CloudServerOutlined,
   CloudUploadOutlined,
   DownloadOutlined,
-  PauseCircleOutlined,
-  PlayCircleOutlined,
   PoweroffOutlined,
   ReloadOutlined,
   SyncOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Checkbox, Form, Input, InputNumber, Modal, Select, Space, Table, Tag, Tooltip, message } from "antd";
+import { Alert, Button, Card, Checkbox, Dropdown, Form, Input, InputNumber, Modal, Select, Space, Table, Tag, Tooltip, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -90,7 +88,7 @@ export function LoggieStatusPage() {
       monitor_port: row.monitor_port ?? 9196,
       yunshu_url: DEFAULT_YUNSHU_URL,
       deploy_after_bootstrap: false,
-      binary_url: "",
+      binary_url: "https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie",
       log_paths: "",
     });
     setBootstrapOpen(true);
@@ -130,7 +128,14 @@ export function LoggieStatusPage() {
         deploy_after_bootstrap: values.deploy_after_bootstrap,
       });
       setBootstrapResult(res);
-      message.success(`引导完成，索引 ${res.es_index_pattern}，pipeline ${res.pipeline_count ?? 0} 条`);
+      if (res.deployed) {
+        message.success(`引导完成，索引 ${res.es_index_pattern}，pipeline ${res.pipeline_count ?? 0} 条`);
+      } else if (res.deploy_message) {
+        const hint = res.deploy_message.length > 120 ? `${res.deploy_message.slice(0, 120)}…` : res.deploy_message;
+        message.warning(`引导完成（配置未完全生效）：${hint}`);
+      } else {
+        message.success(`引导完成，索引 ${res.es_index_pattern}，pipeline ${res.pipeline_count ?? 0} 条`);
+      }
       await reload(projectId);
     } catch (e: unknown) {
       message.error(String((e as Error)?.message ?? e));
@@ -179,95 +184,81 @@ export function LoggieStatusPage() {
   };
 
   const columns: ColumnsType<LoggieStatusItem> = [
-    { title: "服务器", dataIndex: "server_name", width: 140 },
-    { title: "地址", dataIndex: "server_host", width: 160 },
+    { title: "服务器", dataIndex: "server_name", width: 120, ellipsis: true },
+    { title: "地址", dataIndex: "server_host", width: 140, ellipsis: true },
     {
-      title: "Agent",
-      dataIndex: "registered",
-      width: 90,
-      render: (v: boolean) => (v ? <Tag color="blue">已登记</Tag> : <Tag>未登记</Tag>),
+      title: "状态",
+      width: 150,
+      render: (_, r) => (
+        <Space size={4} wrap>
+          {r.registered ? <Tag color="blue">已登记</Tag> : <Tag>未登记</Tag>}
+          {r.online ? <Tag color="success">在线</Tag> : <Tag color="error">离线</Tag>}
+          {r.recent_ingest ? <Tag color="processing">采集</Tag> : <Tag color="warning">无上报</Tag>}
+        </Space>
+      ),
     },
     {
-      title: "在线",
-      dataIndex: "online",
-      width: 80,
-      render: (v: boolean) => (v ? <Tag color="success">在线</Tag> : <Tag color="error">离线</Tag>),
-    },
-    {
-      title: "采集",
-      dataIndex: "recent_ingest",
-      width: 130,
-      render: (v: boolean, r) =>
-        v ? <Tag color="processing">近5分钟 {r.recent_doc_count} 条</Tag> : <Tag color="warning">无上报</Tag>,
-    },
-    {
-      title: "索引",
-      width: 160,
-      render: (_, r) => <Tag>yunshu-agent-{r.server_id}-*</Tag>,
-    },
-    {
-      title: "监控",
-      width: 100,
-      render: (_, r) => (r.monitor_reachable ? <Tag color="success">:{r.monitor_port ?? 9196}</Tag> : <Tag>未上报</Tag>),
-    },
-    {
-      title: "FD/Pipeline",
+      title: "监控/FD",
       width: 110,
       render: (_, r) => {
-        const fd = r.live_probe?.reachable ? r.live_probe.active_fd_count : r.active_fd_count ?? 0;
-        const pl = r.live_probe?.reachable ? r.live_probe.active_pipeline_count : r.active_pipeline_count ?? 0;
+        const fd = r.live_probe?.reachable ? r.live_probe.active_fd_count : (r.active_fd_count ?? 0);
         return (
-          <Tooltip title={r.live_probe?.error || r.monitor_detail || ""}>
+          <Tooltip title={r.live_probe?.error || r.monitor_detail || `索引 yunshu-agent-${r.server_id}-*`}>
             <span>
-              {fd} / {pl}
+              {r.monitor_reachable ? `:${r.monitor_port ?? 9196}` : "-"} / {fd}
             </span>
           </Tooltip>
         );
       },
     },
-    { title: "版本", dataIndex: "version", width: 80, render: (v?: string) => v || "-" },
     {
-      title: "ES Sink",
+      title: "ES",
       dataIndex: "es_sink_ok",
-      width: 80,
-      render: (v: boolean) => (v ? <Tag color="success">正常</Tag> : <Tag>未知</Tag>),
+      width: 70,
+      render: (v: boolean) => (v ? <Tag color="success">OK</Tag> : <Tag>-</Tag>),
     },
-    { title: "最后心跳", dataIndex: "last_seen_at", width: 160, render: (v?: string) => (v ? formatDateTime(v) : "-") },
-    { title: "最近错误", dataIndex: "last_error", ellipsis: true },
+    { title: "心跳", dataIndex: "last_seen_at", width: 150, render: (v?: string) => (v ? formatDateTime(v) : "-") },
+    { title: "错误", dataIndex: "last_error", ellipsis: true, width: 160 },
     {
       title: "操作",
-      width: 420,
+      width: 220,
       fixed: "right",
       render: (_, r) => {
         const busy = (a: AgentAction) => actionLoading === `${a}-${r.server_id}`;
+        const more = [
+          { key: "start", label: "启动", disabled: !r.registered, onClick: () => void runDeployAction(r, "start") },
+          { key: "stop", label: "停止", disabled: !r.registered, onClick: () => void runDeployAction(r, "stop") },
+          { key: "restart", label: "重启", disabled: !r.registered, onClick: () => void runDeployAction(r, "restart") },
+          {
+            key: "pipelines",
+            label: "下载 pipelines",
+            disabled: !r.registered,
+            onClick: () =>
+              void downloadLoggieFile(projectId!, r.server_id, "pipelines").catch((e: unknown) =>
+                message.error(String((e as Error)?.message ?? e)),
+              ),
+          },
+        ];
         return (
-          <Space size="small" wrap>
-            <Button size="small" icon={<ThunderboltOutlined />} onClick={() => void openBootstrap(r)}>
+          <Space size={4} wrap={false}>
+            <Button size="small" type="link" icon={<ThunderboltOutlined />} onClick={() => void openBootstrap(r)}>
               引导
             </Button>
-            <Button size="small" icon={<PoweroffOutlined />} loading={busy("install")} onClick={() => void runDeployAction(r, "install")}>
+            <Button size="small" type="link" icon={<PoweroffOutlined />} loading={busy("install")} onClick={() => void runDeployAction(r, "install")}>
               安装
             </Button>
-            <Button size="small" icon={<PlayCircleOutlined />} disabled={!r.registered} loading={busy("start")} onClick={() => void runDeployAction(r, "start")}>
-              启动
-            </Button>
-            <Button size="small" icon={<PauseCircleOutlined />} disabled={!r.registered} loading={busy("stop")} onClick={() => void runDeployAction(r, "stop")}>
-              停止
-            </Button>
-            <Button size="small" icon={<SyncOutlined />} disabled={!r.registered} loading={busy("sync")} onClick={() => void runDeployAction(r, "sync")}>
+            <Button size="small" type="link" icon={<SyncOutlined />} disabled={!r.registered} loading={busy("sync")} onClick={() => void runDeployAction(r, "sync")}>
               热更
             </Button>
-            <Button size="small" icon={<ReloadOutlined />} disabled={!r.registered} loading={busy("restart")} onClick={() => void runDeployAction(r, "restart")}>
-              重启
-            </Button>
-            <Button
-              size="small"
-              icon={<DownloadOutlined />}
-              disabled={!r.registered}
-              onClick={() => void downloadLoggieFile(projectId!, r.server_id, "pipelines").catch((e: unknown) => message.error(String((e as Error)?.message ?? e)))}
+            <Dropdown
+              menu={{
+                items: more.map((m) => ({ key: m.key, label: m.label, disabled: m.disabled, onClick: m.onClick })),
+              }}
             >
-              pipelines
-            </Button>
+              <Button size="small" type="link">
+                更多
+              </Button>
+            </Dropdown>
           </Space>
         );
       },
@@ -285,11 +276,12 @@ export function LoggieStatusPage() {
   return (
     <div className="loggie-status-page">
       <Card
+        className="table-card"
         title="Agent 管理"
         extra={
-          <Space>
+          <Space wrap>
             <Select
-              style={{ width: 260 }}
+              style={{ minWidth: 180, maxWidth: 260 }}
               options={projectOptions}
               value={projectId}
               onChange={(v) => {
@@ -304,25 +296,33 @@ export function LoggieStatusPage() {
         }
       >
         {esCfg ? (
-          <Space wrap style={{ marginBottom: 12 }}>
+          <Space wrap size={[8, 8]} style={{ marginBottom: 12, maxWidth: "100%" }}>
             <Tag icon={<CloudServerOutlined />} color={esCfg.enabled ? "blue" : "default"}>
               ES {esCfg.enabled ? "已启用" : "未启用"}
             </Tag>
-            {esCfg.addresses?.map((a) => (
-              <Tag key={a}>{a}</Tag>
-            ))}
-            <Tag>检索模式 {esCfg.index_pattern}</Tag>
-            <Tag>写入 yunshu-agent-&#123;server_id&#125;-日</Tag>
+            <Tag>目录 /export/loggie/loggie + yml/脚本</Tag>
+            <Tag>检索 {esCfg.index_pattern}</Tag>
           </Space>
         ) : null}
-        <Table rowKey="server_id" loading={loading} columns={columns} dataSource={rows} size="small" scroll={{ x: 2000 }} pagination={false} />
+        <Table
+          rowKey="server_id"
+          loading={loading}
+          columns={columns}
+          dataSource={rows}
+          size="small"
+          scroll={{ x: 1100 }}
+          pagination={false}
+        />
       </Card>
 
       <Modal
+        className="loggie-bootstrap-modal"
         title={bootstrapServer ? `Agent 引导 — ${bootstrapServer.server_name}` : "Agent 引导"}
         open={bootstrapOpen}
         onCancel={() => setBootstrapOpen(false)}
         width={820}
+        styles={{ body: { maxWidth: "100%", overflowX: "hidden" } }}
+        destroyOnHidden
         footer={
           bootstrapResult ? (
             <Space>
@@ -380,8 +380,12 @@ export function LoggieStatusPage() {
             <Form.Item name="yunshu_url" label="Yunshu API 地址" rules={[{ required: true }]}>
               <Input placeholder="http://10.10.10.103:8080" />
             </Form.Item>
-            <Form.Item name="binary_url" label="Loggie 二进制 URL（安装用，可含 {arch}）">
-              <Input placeholder="https://.../loggie_linux_{arch}.tar.gz" />
+            <Form.Item
+              name="binary_url"
+              label="Loggie 二进制直链（安装到 /export/loggie/loggie）"
+              extra="官方示例：https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie"
+            >
+              <Input placeholder="https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie" />
             </Form.Item>
             <Form.Item name="deploy_after_bootstrap" valuePropName="checked">
               <Checkbox>
@@ -390,15 +394,32 @@ export function LoggieStatusPage() {
             </Form.Item>
           </Form>
         ) : (
-          <Space direction="vertical" style={{ width: "100%" }}>
+          <Space direction="vertical" style={{ width: "100%" }} size="middle">
             <Space wrap>
               <Tag color="blue">Token 已生成</Tag>
               <Tag>索引 {bootstrapResult.es_index_pattern}</Tag>
               <Tag>Pipeline {bootstrapResult.pipeline_count ?? 0}</Tag>
               {bootstrapResult.deployed ? <Tag color="success">已下发</Tag> : null}
             </Space>
-            {bootstrapResult.deploy_message ? <Tag color="warning">{bootstrapResult.deploy_message}</Tag> : null}
-            <Input.TextArea value={bootstrapResult.pipelines_only_yaml || bootstrapResult.pipeline_yaml} rows={14} readOnly />
+            {bootstrapResult.deploy_message ? (
+              <Alert
+                type={bootstrapResult.deployed ? "success" : "warning"}
+                showIcon
+                style={{ maxWidth: "100%" }}
+                message={bootstrapResult.deployed ? "配置已下发" : "配置已生成；systemd 未安装时请点「一键安装」"}
+                description={
+                  <div className="loggie-deploy-msg" title={bootstrapResult.deploy_message}>
+                    {bootstrapResult.deploy_message}
+                  </div>
+                }
+              />
+            ) : null}
+            <Input.TextArea
+              value={bootstrapResult.pipelines_only_yaml || bootstrapResult.pipeline_yaml}
+              rows={14}
+              readOnly
+              style={{ maxWidth: "100%", fontFamily: "monospace", fontSize: 12 }}
+            />
           </Space>
         )}
       </Modal>

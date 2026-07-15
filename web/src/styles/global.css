@@ -4871,3 +4871,44 @@ body {
 .personal-settings__form {
   max-width: 560px;
 }
+
+/* Agent 管理：防止宽表格撑破主内容区 */
+.loggie-status-page {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+.loggie-status-page .table-card.ant-card,
+.loggie-status-page .ant-card-body,
+.loggie-status-page .ant-table-wrapper {
+  max-width: 100%;
+  min-width: 0;
+}
+.loggie-status-page .ant-table {
+  max-width: 100%;
+}
+
+.loggie-status-page .loggie-deploy-msg,
+.loggie-status-page .ant-alert-description {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.loggie-status-page .ant-modal-body {
+  overflow-x: hidden;
+}
+
+.loggie-bootstrap-modal .ant-modal-body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.loggie-bootstrap-modal .loggie-deploy-msg,
+.loggie-bootstrap-modal .ant-alert-description {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+

@@ -131,6 +131,8 @@ export interface LoggieBootstrapResult {
   env_filename?: string;
   heartbeat_script?: string;
   heartbeat_filename?: string;
+  start_script?: string;
+  start_filename?: string;
   monitor_port: number;
   pipeline_count?: number;
   source_count?: number;
@@ -187,12 +189,15 @@ export function downloadLoggieBundle(bundle: LoggieBootstrapResult) {
   if (bundle.heartbeat_script) {
     downloadText(bundle.heartbeat_script, bundle.heartbeat_filename || "heartbeat.sh", "text/x-sh;charset=utf-8");
   }
+  if (bundle.start_script) {
+    downloadText(bundle.start_script, bundle.start_filename || "start.sh", "text/x-sh;charset=utf-8");
+  }
 }
 
 export async function downloadLoggieFile(
   projectId: number,
   serverId: number,
-  file: "pipeline" | "pipelines" | "env" | "heartbeat" = "pipeline",
+  file: "pipeline" | "pipelines" | "env" | "heartbeat" | "start" = "pipeline",
 ) {
   const blob = (await http.get(`/projects/${projectId}/loggie/pipeline/download`, {
     params: { server_id: serverId, file },
@@ -203,6 +208,7 @@ export async function downloadLoggieFile(
     pipelines: "pipelines.yml",
     env: "loggie-heartbeat.env",
     heartbeat: "heartbeat.sh",
+    start: "start.sh",
   };
   downloadText(await blob.text(), names[file] ?? "pipeline.yml");
 }
