@@ -17,6 +17,8 @@ declare module "axios" {
 export const HTTP_TIMEOUT_DEFAULT = 30000;
 /** K8s 列表/详情会聚合 metrics、全集群 Pod 等，后端耗时常超过 15s */
 export const HTTP_TIMEOUT_K8S = 60000;
+/** Loggie Agent 安装含二进制下载/上传，可能较慢 */
+export const HTTP_TIMEOUT_LOGGIE_INSTALL = 300000;
 
 export const http = axios.create({
   baseURL: "/api/v1",
@@ -28,14 +30,18 @@ const K8S_SLOW_PATH =
   /^\/(pods|nodes|namespaces|configmaps|secrets|deployments|statefulsets|daemonsets|jobs|cronjobs|events|ingresses|k8s-services|network-policies|horizontal-pod-autoscalers|persistentvolumeclaims|persistentvolumes|storageclasses|crds|serviceaccounts|helm|rbac|crs|k8s)(\/|$)/;
 
 const CLUSTER_SLOW_PATH = /\/clusters\/\d+\/(namespaces|status|component-statuses|api-resources)/;
+const LOGGIE_INSTALL_PATH = /\/projects\/\d+\/loggie\/install/;
 
 function resolveRequestTimeout(url: string, configured?: number): number | undefined {
-  if (configured != null) return configured;
   const path = url.split("?")[0] ?? url;
+  // 路径慢请求优先于 axios 默认 timeout
+  if (LOGGIE_INSTALL_PATH.test(path)) {
+    return HTTP_TIMEOUT_LOGGIE_INSTALL;
+  }
   if (K8S_SLOW_PATH.test(path) || CLUSTER_SLOW_PATH.test(path)) {
     return HTTP_TIMEOUT_K8S;
   }
-  return undefined;
+  return configured;
 }
 
 function toastOnce(key: string, content: string) {
@@ -76,7 +82,7 @@ http.interceptors.response.use(
     const isTimeout =
       error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
     const errorMessage = isTimeout
-      ? "请求超时，集群响应较慢，请稍后重试"
+      ? "请求超时：Agent 安装/下载可能较慢，请确认 Yunshu 主机可访问 binary_url 后重试"
       : resolved || error.message || "请求失败";
     const silentErrorToast = Boolean(error.config?.silentErrorToast);
 

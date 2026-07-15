@@ -241,7 +241,11 @@ export async function installLoggie(
   projectId: number,
   payload: LoggieDeployPayload & { binary_url?: string; deploy_dir?: string; yunshu_url?: string; monitor_port?: number },
 ) {
-  return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/install`, payload));
+  return await getData(
+    http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/install`, payload, {
+      timeout: 300000,
+    }),
+  );
 }
 
 export async function startLoggie(projectId: number, payload: LoggieDeployPayload) {
