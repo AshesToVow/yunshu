@@ -40,6 +40,7 @@ type LoggieAgentRepo interface {
 	GetByProjectAndServer(ctx context.Context, projectID, serverID uint) (*model.LoggieAgent, error)
 	ListByProject(ctx context.Context, projectID uint) ([]model.LoggieAgent, error)
 	Save(ctx context.Context, it *model.LoggieAgent) error
+	DeleteByProjectAndServer(ctx context.Context, projectID, serverID uint) error
 	TouchSeen(ctx context.Context, id uint, at time.Time) error
 }
 

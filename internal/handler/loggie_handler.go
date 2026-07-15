@@ -174,6 +174,17 @@ func (h *LoggieHandler) InstallLoggie(c *gin.Context) {
 	})
 }
 
+func (h *LoggieHandler) UninstallLoggie(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.LoggieUninstallRequest) (*service.LoggieDeployResult, error) {
+		return h.svc.UninstallLoggie(ctx, projectID, req)
+	})
+}
+
 func (h *LoggieHandler) SyncFromLogSources(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {

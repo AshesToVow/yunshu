@@ -239,11 +239,22 @@ export async function deployLoggieConfig(projectId: number, payload: LoggieDeplo
 
 export async function installLoggie(
   projectId: number,
-  payload: LoggieDeployPayload & { binary_url?: string; deploy_dir?: string; yunshu_url?: string; monitor_port?: number },
+  payload: LoggieDeployPayload & { deploy_dir?: string; yunshu_url?: string; monitor_port?: number },
 ) {
   return await getData(
     http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/install`, payload, {
       timeout: 300000,
+    }),
+  );
+}
+
+export async function uninstallLoggie(
+  projectId: number,
+  payload: LoggieDeployPayload & { skip_remote?: boolean; keep_files?: boolean; force_local?: boolean },
+) {
+  return await getData(
+    http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/uninstall`, payload, {
+      timeout: 120000,
     }),
   );
 }

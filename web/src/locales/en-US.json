@@ -46,8 +46,8 @@
       "/alert-duty": "Alert duty",
       "/mysql-backup": "MySQL backup",
       "/log-platform": "Log platform",
-      "/project-services": "Services",
-      "/project-log-sources": "Log sources",
+      "/project-services": "Services & log sources",
+      "/project-log-sources": "Services & log sources",
       "/project-logs": "Log search",
       "/agent-list": "Agents"
     },

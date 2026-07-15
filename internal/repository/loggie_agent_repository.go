@@ -42,6 +42,12 @@ func (r *LoggieAgentRepository) Save(ctx context.Context, it *model.LoggieAgent)
 	return r.db.WithContext(ctx).Save(it).Error
 }
 
+func (r *LoggieAgentRepository) DeleteByProjectAndServer(ctx context.Context, projectID, serverID uint) error {
+	return r.db.WithContext(ctx).
+		Where("project_id = ? AND server_id = ?", projectID, serverID).
+		Delete(&model.LoggieAgent{}).Error
+}
+
 func (r *LoggieAgentRepository) TouchSeen(ctx context.Context, id uint, at time.Time) error {
 	return r.db.WithContext(ctx).Model(&model.LoggieAgent{}).Where("id = ?", id).Updates(map[string]any{
 		"last_seen_at": at,

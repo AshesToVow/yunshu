@@ -286,6 +286,7 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       { method: "GET", path: "/api/v1/projects/:id/loggie/pipeline/download", summary: "下载 Agent 配置", ui: "Agent 管理", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/loggie/deploy", summary: "SSH 热更配置", ui: "Agent 管理", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/loggie/install", summary: "SSH 安装 Agent", ui: "Agent 管理", auth: true },
+      { method: "POST", path: "/api/v1/projects/:id/loggie/uninstall", summary: "SSH 卸载并删除登记", ui: "Agent 管理", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/loggie/start", summary: "SSH 启动 Agent", ui: "Agent 管理", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/loggie/stop", summary: "SSH 停止 Agent", ui: "Agent 管理", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/loggie/restart", summary: "SSH 重启 Agent", ui: "Agent 管理", auth: true },

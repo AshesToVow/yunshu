@@ -46,8 +46,8 @@
       "/alert-duty": "告警值班",
       "/mysql-backup": "MySQL 备份",
       "/log-platform": "日志平台",
-      "/project-services": "服务配置",
-      "/project-log-sources": "日志源配置",
+      "/project-services": "服务与日志源",
+      "/project-log-sources": "服务与日志源",
       "/project-logs": "日志检索",
       "/agent-list": "Agent 列表"
     },

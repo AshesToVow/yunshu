@@ -28,7 +28,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/project-servers":             {"/api/v1/projects/:id/servers", "GET"},
 
 		"/project-services":            {"/api/v1/projects/:id/services", "GET"},
-		"/project-log-sources":         {"/api/v1/projects/:id/log-sources", "GET"},
+		"/project-log-sources":         {"/api/v1/projects/:id/log-sources", "GET"}, // 兼容旧菜单 path
 		"/project-logs":                {"/api/v1/projects/:id/logs/search", "GET"},
 		"/log-retention":               {"/api/v1/log-platform/retention", "GET"},
 		"/loggie-status":               {"/api/v1/projects/:id/loggie/status", "GET"},
@@ -108,6 +108,11 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	out := make(map[string][]EntryPermission, len(raw))
 	for path, perm := range raw {
 		out[normalizeMenuPath(path)] = []EntryPermission{perm}
+	}
+	// 「服务与日志源」整合页：具备任一列表权限即可进入菜单
+	out["/project-services"] = []EntryPermission{
+		{Resource: "/api/v1/projects/:id/services", Action: "GET"},
+		{Resource: "/api/v1/projects/:id/log-sources", Action: "GET"},
 	}
 	return out
 }

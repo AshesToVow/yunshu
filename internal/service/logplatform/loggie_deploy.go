@@ -3,10 +3,9 @@ package logplatform
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,9 +15,8 @@ import (
 const loggieRestartUnit = "loggie.service"
 const loggieBinaryName = "loggie"
 const startScriptFilename = "start.sh"
-
-// DefaultLoggieBinaryURL 官方 release 直链（裸二进制，非 tar）。
-const DefaultLoggieBinaryURL = "https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie"
+const heartbeatTimerUnit = "loggie-heartbeat.timer"
+const heartbeatOneshotUnit = "loggie-heartbeat.service"
 
 func (s *LoggieAgentService) unitName() string {
 	u := strings.TrimSpace(s.loggieCfg.UnitName)
@@ -36,15 +34,48 @@ func (s *LoggieAgentService) defaultDeployDir() string {
 	return strings.TrimRight(d, "/")
 }
 
-func (s *LoggieAgentService) resolveBinaryURL(override string) string {
-	u := strings.TrimSpace(override)
-	if u == "" {
-		u = strings.TrimSpace(s.loggieCfg.BinaryURL)
+func (s *LoggieAgentService) resolveOfflineBinaryPath() (string, error) {
+	cfgPath := strings.TrimSpace(s.loggieCfg.OfflineBinaryPath)
+	if cfgPath == "" {
+		cfgPath = "deploy/loggie/binary/loggie"
 	}
-	if u == "" {
-		u = DefaultLoggieBinaryURL
+	var candidates []string
+	if filepath.IsAbs(cfgPath) {
+		candidates = append(candidates, cfgPath)
+	} else {
+		if wd, err := os.Getwd(); err == nil {
+			candidates = append(candidates, filepath.Join(wd, cfgPath))
+		}
+		if exe, err := os.Executable(); err == nil {
+			candidates = append(candidates, filepath.Join(filepath.Dir(exe), cfgPath))
+		}
+		candidates = append(candidates, filepath.Join("/app", cfgPath))
 	}
-	return u
+	for _, c := range candidates {
+		st, err := os.Stat(c)
+		if err != nil || st.IsDir() {
+			continue
+		}
+		if st.Size() < 1024 {
+			continue
+		}
+		return c, nil
+	}
+	return "", fmt.Errorf("离线二进制未找到（请将 loggie 放到 deploy/loggie/binary/loggie）：%s", strings.Join(candidates, "; "))
+}
+
+func loadOfflineLoggieBinary(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) < 1024 {
+		return nil, fmt.Errorf("offline binary too small (%d bytes): %s", len(data), path)
+	}
+	if len(data) < 4 || data[0] != 0x7f || string(data[1:4]) != "ELF" {
+		return nil, fmt.Errorf("offline binary is not ELF: %s", path)
+	}
+	return data, nil
 }
 
 func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID uint, bundle LoggiePipelineBundle) (stdout, stderr string, err error) {
@@ -78,6 +109,9 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 		{bundle.EnvFilename, []byte(bundle.EnvFile), 0o644},
 		{bundle.HeartbeatFilename, []byte(bundle.HeartbeatScript), 0o755},
 		{startScriptFilename, []byte(renderStartScript()), 0o755},
+		{"loggie.service", []byte(renderSystemdUnit(deployDir)), 0o644},
+		{"loggie-heartbeat.service", []byte(renderHeartbeatUnit(deployDir)), 0o644},
+		{"loggie-heartbeat.timer", []byte(renderHeartbeatTimer()), 0o644},
 	}
 	for _, f := range files {
 		if strings.TrimSpace(f.name) == "" || len(f.content) == 0 {
@@ -89,13 +123,22 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 		}
 	}
 	unit := s.unitName()
-	// 仅热更配置时单元可能尚未安装：先确认 unit 存在再 reload，否则只落盘成功提示安装。
+	// 热更配置后必须刷新 heartbeat timer，否则 Token/env 更新后平台仍显示离线。
 	cmd := fmt.Sprintf(
-		`set +e; UNIT=%q; `+
+		`set +e; DEPLOY=%q; UNIT=%q; `+
+			`chmod +x "$DEPLOY/heartbeat.sh" "$DEPLOY/start.sh" 2>/dev/null; `+
 			`if systemctl cat "$UNIT" >/dev/null 2>&1; then `+
-			`systemctl reload-or-restart "$UNIT" 2>&1 || systemctl restart "$UNIT" 2>&1; exit $?; `+
+			`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT" 2>/dev/null; `+
+			`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service 2>/dev/null; `+
+			`sudo cp "$DEPLOY/loggie-heartbeat.timer" /etc/systemd/system/loggie-heartbeat.timer 2>/dev/null; `+
+			`sudo systemctl daemon-reload; `+
+			`sudo systemctl reload-or-restart "$UNIT" 2>&1 || sudo systemctl restart "$UNIT" 2>&1; RC=$?; `+
+			`sudo systemctl enable loggie-heartbeat.timer >/dev/null 2>&1; `+
+			`sudo systemctl restart loggie-heartbeat.timer 2>&1; `+
+			`sudo systemctl start loggie-heartbeat.service >/dev/null 2>&1 || true; `+
+			`exit $RC; `+
 			`else echo "CONFIG_UPLOADED unit=$UNIT not installed yet; run Install first"; exit 0; fi`,
-		unit,
+		deployDir, unit,
 	)
 	res, err := cli.Exec(ctx, cmd, 8192)
 	if err != nil {
@@ -120,7 +163,7 @@ func (s *LoggieAgentService) systemctlLoggie(ctx context.Context, serverID uint,
 		return "", "", err
 	}
 	defer cli.Close()
-	res, err := cli.Exec(ctx, fmt.Sprintf("systemctl %s %s", action, s.unitName()), 8192)
+	res, err := cli.Exec(ctx, buildLoggieLifecycleScript(s.unitName(), action), 8192)
 	if err != nil {
 		return res.Stdout, res.Stderr, err
 	}
@@ -128,6 +171,29 @@ func (s *LoggieAgentService) systemctlLoggie(ctx context.Context, serverID uint,
 		return res.Stdout, res.Stderr, fmt.Errorf("systemctl %s exit=%d: %s", action, res.ExitCode, strings.TrimSpace(res.Stdout+res.Stderr))
 	}
 	return res.Stdout, res.Stderr, nil
+}
+
+func buildLoggieLifecycleScript(unit, action string) string {
+	var b strings.Builder
+	b.WriteString("set -euo pipefail; ")
+	b.WriteString(fmt.Sprintf("UNIT=%q; HB_T=%q; HB_S=%q; ", unit, heartbeatTimerUnit, heartbeatOneshotUnit))
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "start":
+		b.WriteString(`sudo systemctl start "$UNIT"; `)
+		b.WriteString(`sudo systemctl enable "$HB_T" >/dev/null 2>&1 || true; `)
+		b.WriteString(`sudo systemctl restart "$HB_T"; `)
+		b.WriteString(`sudo systemctl start "$HB_S" || true`)
+	case "stop":
+		b.WriteString(`sudo systemctl stop "$UNIT" "$HB_T" "$HB_S" 2>/dev/null || true`)
+	case "restart":
+		b.WriteString(`sudo systemctl restart "$UNIT"; `)
+		b.WriteString(`sudo systemctl enable "$HB_T" >/dev/null 2>&1 || true; `)
+		b.WriteString(`sudo systemctl restart "$HB_T"; `)
+		b.WriteString(`sudo systemctl start "$HB_S" || true`)
+	default:
+		b.WriteString(fmt.Sprintf(`sudo systemctl %s "$UNIT"`, action))
+	}
+	return b.String()
 }
 
 func (s *LoggieAgentService) restartLoggieOverSSH(ctx context.Context, serverID uint) (stdout, stderr string, err error) {
@@ -142,11 +208,36 @@ func (s *LoggieAgentService) stopLoggieOverSSH(ctx context.Context, serverID uin
 	return s.systemctlLoggie(ctx, serverID, "stop")
 }
 
-func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID uint, bundle LoggiePipelineBundle, binaryURL string) (stdout, stderr string, err error) {
+func (s *LoggieAgentService) uninstallLoggieOverSSH(ctx context.Context, serverID uint, deployDir string, removeFiles bool) (stdout, stderr string, err error) {
+	if s.aead == nil {
+		return "", "", fmt.Errorf("SSH 加密密钥未配置")
+	}
+	uninstallCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer cancel()
+	cli, _, err := sshserver.DialServer(uninstallCtx, s.aead, "loggie.uninstall", s.serverRepo, serverID)
+	if err != nil {
+		return "", "", err
+	}
+	defer cli.Close()
+
+	dir := strings.TrimRight(strings.TrimSpace(deployDir), "/")
+	if dir == "" {
+		dir = s.defaultDeployDir()
+	}
+	res, err := cli.Exec(uninstallCtx, buildUninstallScript(dir, s.unitName(), removeFiles), 65536)
+	if err != nil {
+		return res.Stdout, res.Stderr, err
+	}
+	if res.ExitCode != 0 {
+		return res.Stdout, res.Stderr, fmt.Errorf("uninstall exit=%d: %s", res.ExitCode, strings.TrimSpace(res.Stdout+res.Stderr))
+	}
+	return res.Stdout, res.Stderr, nil
+}
+
+func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID uint, bundle LoggiePipelineBundle, _binaryURL string) (stdout, stderr string, err error) {
 	if s.aead == nil {
 		return "", "", fmt.Errorf("SSH 加密密钥未配置，无法远程安装")
 	}
-	// 安装含二进制下载/上传，勿跟前端断开一并取消；最长 5 分钟。
 	installCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 	defer cancel()
 
@@ -161,7 +252,6 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 		deployDir = s.defaultDeployDir()
 	}
 	unit := s.unitName()
-	binURL := s.resolveBinaryURL(binaryURL)
 	binRemote := path.Join(deployDir, loggieBinaryName)
 
 	var out, errOut strings.Builder
@@ -172,6 +262,16 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 	if err != nil || res.ExitCode != 0 {
 		return out.String(), errOut.String(), fmt.Errorf("mkdir deploy dir: %w", err)
 	}
+
+	localBin, err := s.resolveOfflineBinaryPath()
+	if err != nil {
+		return out.String(), errOut.String(), err
+	}
+	binData, err := loadOfflineLoggieBinary(localBin)
+	if err != nil {
+		return out.String(), errOut.String(), err
+	}
+	out.WriteString(fmt.Sprintf("offline binary: %s (%d bytes)\n", localBin, len(binData)))
 
 	pipelines := strings.TrimSpace(bundle.PipelinesOnlyYAML)
 	if pipelines == "" {
@@ -201,23 +301,10 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 		}
 	}
 
-	// 由 Yunshu 主机拉取二进制再 SFTP 上传，避免目标机直连 GitHub 超时。
-	binData, dlErr := downloadLoggieBinary(installCtx, binURL)
-	if dlErr != nil {
-		out.WriteString("platform download failed: " + dlErr.Error() + "\n")
-		out.WriteString("fallback: remote curl (may be slow)\n")
-		res, err = cli.Exec(installCtx, buildRemoteDownloadScript(deployDir, binURL), 65536)
-		out.WriteString(res.Stdout)
-		errOut.WriteString(res.Stderr)
-		if err != nil || res.ExitCode != 0 {
-			return out.String(), errOut.String(), fmt.Errorf("download binary failed: %v; remote=%s", dlErr, strings.TrimSpace(res.Stdout+res.Stderr))
-		}
-	} else {
-		if err := cli.UploadBytes(installCtx, binRemote, binData, 0o755); err != nil {
-			return out.String(), errOut.String(), fmt.Errorf("upload binary: %w", err)
-		}
-		out.WriteString(fmt.Sprintf("uploaded binary %s (%d bytes) from platform\n", binRemote, len(binData)))
+	if err := cli.UploadBytes(installCtx, binRemote, binData, 0o755); err != nil {
+		return out.String(), errOut.String(), fmt.Errorf("upload binary: %w", err)
 	}
+	out.WriteString(fmt.Sprintf("uploaded binary %s (%d bytes)\n", binRemote, len(binData)))
 
 	res, err = cli.Exec(installCtx, buildFinalizeInstallScript(deployDir, unit), 65536)
 	out.WriteString(res.Stdout)
@@ -323,53 +410,6 @@ WantedBy=timers.target
 `
 }
 
-func downloadLoggieBinary(ctx context.Context, binaryURL string) ([]byte, error) {
-	url := strings.TrimSpace(binaryURL)
-	if url == "" {
-		return nil, fmt.Errorf("binary_url empty")
-	}
-	client := &http.Client{Timeout: 4 * time.Minute}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "yunshu-loggie-install/1.0")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
-	}
-	// Loggie 裸二进制通常几十 MB，限制 128MB
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 128<<20))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) < 1024 {
-		return nil, fmt.Errorf("download too small (%d bytes), not a binary", len(data))
-	}
-	if len(data) < 4 || data[0] != 0x7f || string(data[1:4]) != "ELF" {
-		return nil, fmt.Errorf("downloaded content is not ELF (wrong URL or HTML error page)")
-	}
-	return data, nil
-}
-
-func buildRemoteDownloadScript(deployDir, binaryURL string) string {
-	var b strings.Builder
-	b.WriteString("set -euo pipefail; ")
-	b.WriteString(fmt.Sprintf("DEPLOY=%q; BINURL=%q; BIN=%q/loggie; ", deployDir, binaryURL, deployDir))
-	b.WriteString(`ARCH=$(uname -m); case "$ARCH" in x86_64|amd64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; esac; `)
-	b.WriteString(`URL="${BINURL//\{arch\}/$ARCH}"; TMP=$(mktemp); `)
-	b.WriteString(`(curl -fsSL --connect-timeout 20 --max-time 240 "$URL" -o "$TMP" || wget -q --timeout=240 -O "$TMP" "$URL"); `)
-	b.WriteString(`if file "$TMP" 2>/dev/null | grep -qiE 'gzip|tar archive'; then `)
-	b.WriteString(`TD=$(mktemp -d); tar -xzf "$TMP" -C "$TD"; F=$(find "$TD" -type f -name loggie | head -1); install -m 755 "$F" "$BIN"; rm -rf "$TD" "$TMP"; `)
-	b.WriteString(`else install -m 755 "$TMP" "$BIN"; rm -f "$TMP"; fi; `)
-	b.WriteString(`chmod +x "$BIN"; ls -la "$BIN"`)
-	return b.String()
-}
-
 func buildFinalizeInstallScript(deployDir, unit string) string {
 	var b strings.Builder
 	b.WriteString("set -euo pipefail; ")
@@ -379,10 +419,9 @@ func buildFinalizeInstallScript(deployDir, unit string) string {
 	b.WriteString(`chmod +x "$BIN" "$DEPLOY/start.sh" "$DEPLOY/heartbeat.sh" 2>/dev/null || true; `)
 	b.WriteString(`INFO=$(file -b "$BIN" 2>/dev/null || echo unknown); echo "binary_file=$INFO"; `)
 	b.WriteString(`echo "$INFO" | grep -qi ELF || { echo "not an ELF binary: $INFO"; exit 1; }; `)
-	// 官方 GitHub release 的 loggie 资产仅为 linux/amd64
 	b.WriteString(`case "$ARCH" in `)
 	b.WriteString(`x86_64|amd64) echo "$INFO" | grep -qiE 'x86-64|x86_64|AMD64|Intel 80386' || { echo "arch mismatch: host amd64, binary=$INFO"; exit 1; } ;; `)
-	b.WriteString(`aarch64|arm64) echo "ERROR: host is arm64; official Loggie release binary is amd64 only (Exec format error). Use amd64 host or build arm64 Loggie."; exit 1 ;; `)
+	b.WriteString(`aarch64|arm64) echo "ERROR: host is arm64; offline package must be linux/arm64 ELF"; exit 1 ;; `)
 	b.WriteString(`*) echo "unsupported arch: $ARCH"; exit 1 ;; esac; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT"; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service; `)
@@ -394,6 +433,24 @@ func buildFinalizeInstallScript(deployDir, unit string) string {
 	b.WriteString(`sudo systemctl start loggie-heartbeat.service || true; `)
 	b.WriteString(`echo "installed: $BIN"; ls -la "$DEPLOY"; `)
 	b.WriteString(`systemctl is-active "$UNIT" || true; systemctl is-active loggie-heartbeat.timer || true`)
+	return b.String()
+}
+
+func buildUninstallScript(deployDir, unit string, removeFiles bool) string {
+	var b strings.Builder
+	b.WriteString("set -euo pipefail; ")
+	b.WriteString(fmt.Sprintf("DEPLOY=%q; UNIT=%q; ", deployDir, unit))
+	b.WriteString(`case "$DEPLOY" in ""|"/"|"/export"|"/opt"|"/usr"|"/var"|"/home"|"/root") echo "refuse unsafe deploy dir: $DEPLOY"; exit 1 ;; esac; `)
+	b.WriteString(`sudo systemctl stop "$UNIT" loggie-heartbeat.timer loggie-heartbeat.service 2>/dev/null || true; `)
+	b.WriteString(`sudo systemctl disable "$UNIT" loggie-heartbeat.timer 2>/dev/null || true; `)
+	b.WriteString(`sudo rm -f "/etc/systemd/system/$UNIT" /etc/systemd/system/loggie-heartbeat.service /etc/systemd/system/loggie-heartbeat.timer; `)
+	b.WriteString(`sudo systemctl daemon-reload; sudo systemctl reset-failed "$UNIT" 2>/dev/null || true; `)
+	if removeFiles {
+		b.WriteString(`if [[ -d "$DEPLOY" ]]; then sudo rm -rf "$DEPLOY"; echo "removed $DEPLOY"; else echo "deploy dir absent: $DEPLOY"; fi; `)
+	} else {
+		b.WriteString(`echo "kept deploy files under $DEPLOY"; `)
+	}
+	b.WriteString(`echo "uninstalled unit=$UNIT"`)
 	return b.String()
 }
 

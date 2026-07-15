@@ -151,7 +151,7 @@ elasticsearch:
   password: ""
   index_pattern: "yunshu-agent-*"
   # Loggie Agent 一键安装：远端 wget/curl 拉取二进制的 URL（可含 {arch} 占位，如 amd64/arm64）
-  # binary_url 配在 loggie 段，见下方 loggie.binary_url
+  # 离线二进制路径配在 loggie 段，见下方 loggie.offline_binary_path
   message_fields: ["message", "body", "log", "content"]
   timestamp_field: "@timestamp"
   default_size: 100
@@ -160,10 +160,10 @@ elasticsearch:
   default_retention_days: 30
   cleanup_cron_spec: "0 3 * * *"   # 每天 03:00 清理过期索引
 
-# Loggie Agent（目标机二进制安装 / systemd）
+# Loggie Agent（目标机离线二进制安装 / systemd）
 loggie:
-  # 官方 release 直链为裸二进制（非 tar）
-  binary_url: "https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie"
+  # Yunshu 主机上的离线包（相对工作目录或绝对路径），安装时 SFTP 上传，不走在线下载
+  offline_binary_path: "deploy/loggie/binary/loggie"
   unit_name: "loggie.service"
   deploy_dir: "/export/loggie"
 

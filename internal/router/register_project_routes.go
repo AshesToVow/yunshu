@@ -37,6 +37,7 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.GET("/loggie/pipeline/download", d.loggieHandler.DownloadPipeline)
 	projectScoped.POST("/loggie/deploy", d.loggieHandler.DeployConfig)
 	projectScoped.POST("/loggie/install", d.loggieHandler.InstallLoggie)
+	projectScoped.POST("/loggie/uninstall", d.loggieHandler.UninstallLoggie)
 	projectScoped.POST("/loggie/start", d.loggieHandler.StartLoggie)
 	projectScoped.POST("/loggie/stop", d.loggieHandler.StopLoggie)
 	projectScoped.POST("/loggie/restart", d.loggieHandler.RestartLoggie)

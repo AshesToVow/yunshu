@@ -103,6 +103,14 @@ type LoggieInstallRequest struct {
 	MonitorPort int    `json:"monitor_port"`
 }
 
+// LoggieUninstallRequest 删除 Agent：远端卸载 + 清除平台登记。
+type LoggieUninstallRequest struct {
+	ServerID    uint `json:"server_id"`
+	SkipRemote  bool `json:"skip_remote"`  // 仅清登记，不 SSH
+	KeepFiles   bool `json:"keep_files"`   // 远端保留部署目录文件
+	ForceLocal  bool `json:"force_local"`  // SSH 失败时仍清登记
+}
+
 type LoggieDeployResult struct {
 	Success       bool   `json:"success"`
 	Message       string `json:"message"`
@@ -487,6 +495,73 @@ func (s *LoggieAgentService) InstallLoggie(ctx context.Context, projectID uint, 
 		return result, nil
 	}
 	result.Message = "Agent 安装完成并已启动"
+	return result, nil
+}
+
+func (s *LoggieAgentService) UninstallLoggie(ctx context.Context, projectID uint, req LoggieUninstallRequest) (*LoggieDeployResult, error) {
+	if projectID == 0 || req.ServerID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("project_id 与 server_id 必填")
+	}
+	sv, err := s.serverRepo.GetByID(ctx, req.ServerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrLogSourceServerNotFound
+		}
+		return nil, bizerrors.Pass(ctx, "loggie", "UninstallLoggie", err)
+	}
+	if sv.ProjectID != projectID {
+		return nil, constants.ErrServerNotInCurrentProject
+	}
+
+	agent, err := s.repo.GetByProjectAndServer(ctx, projectID, req.ServerID)
+	registered := err == nil
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, bizerrors.Pass(ctx, "loggie", "UninstallLoggie", err)
+	}
+	if !registered && req.SkipRemote {
+		return &LoggieDeployResult{Success: true, Message: "未登记，无需删除"}, nil
+	}
+
+	deployDir := s.defaultDeployDir()
+	if registered {
+		stored := parseStoredBootstrapConfig(agent.BootstrapConfig)
+		if d := strings.TrimSpace(stored.DeployDir); d != "" {
+			deployDir = d
+		}
+	}
+
+	result := &LoggieDeployResult{}
+	if !req.SkipRemote {
+		stdout, stderr, remoteErr := s.uninstallLoggieOverSSH(ctx, req.ServerID, deployDir, !req.KeepFiles)
+		result.Stdout = truncateDeployOutput(stdout, 4096)
+		result.Stderr = truncateDeployOutput(stderr, 2048)
+		if remoteErr != nil {
+			if !req.ForceLocal && registered {
+				result.Success = false
+				result.Message = truncateDeployOutput("远端卸载失败，登记未清除："+remoteErr.Error(), 512)
+				return result, nil
+			}
+			result.Message = truncateDeployOutput("远端卸载失败："+remoteErr.Error(), 400)
+		}
+	}
+
+	if registered {
+		if err := s.repo.DeleteByProjectAndServer(ctx, projectID, req.ServerID); err != nil {
+			return nil, bizerrors.Pass(ctx, "loggie", "UninstallLoggie", err)
+		}
+	}
+
+	result.Success = true
+	switch {
+	case req.SkipRemote:
+		result.Message = "已清除平台登记（未操作远端）"
+	case strings.TrimSpace(result.Message) != "":
+		result.Message = "已清除平台登记；" + result.Message
+	case !registered:
+		result.Message = "未登记；远端已尝试卸载"
+	default:
+		result.Message = "已卸载远端并清除平台登记"
+	}
 	return result, nil
 }
 

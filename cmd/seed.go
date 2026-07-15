@@ -506,8 +506,13 @@ func defaultPermissions() []model.Permission {
 		{Name: "Loggie 状态列表", Resource: "/api/v1/projects/:id/loggie/status", Action: "GET", Description: "List loggie status by server"},
 		{Name: "Loggie 引导日志源预览", Resource: "/api/v1/projects/:id/loggie/bootstrap-sources", Action: "GET", Description: "Preview log sources for loggie bootstrap"},
 		{Name: "Loggie 配置下发", Resource: "/api/v1/projects/:id/loggie/deploy", Action: "POST", Description: "Deploy loggie pipeline over SSH"},
+		{Name: "Loggie 安装", Resource: "/api/v1/projects/:id/loggie/install", Action: "POST", Description: "Install loggie agent over SSH"},
+		{Name: "Loggie 卸载", Resource: "/api/v1/projects/:id/loggie/uninstall", Action: "POST", Description: "Uninstall loggie agent and clear registration"},
+		{Name: "Loggie 启动", Resource: "/api/v1/projects/:id/loggie/start", Action: "POST", Description: "Start loggie service over SSH"},
+		{Name: "Loggie 停止", Resource: "/api/v1/projects/:id/loggie/stop", Action: "POST", Description: "Stop loggie service over SSH"},
 		{Name: "Loggie 重启", Resource: "/api/v1/projects/:id/loggie/restart", Action: "POST", Description: "Restart loggie service over SSH"},
 		{Name: "Loggie 同步下发", Resource: "/api/v1/projects/:id/loggie/sync", Action: "POST", Description: "Sync pipelines from log sources and deploy"},
+		{Name: "Loggie 配置下载", Resource: "/api/v1/projects/:id/loggie/pipeline/download", Action: "GET", Description: "Download loggie pipeline bundle"},
 		{Name: "ES 配置预览", Resource: "/api/v1/log-platform/es-config", Action: "GET", Description: "Preview elasticsearch config from dict"},
 		{Name: "项目服务器终端 WS", Resource: "/api/v1/projects/:id/servers/:serverId/terminal/ws", Action: "GET", Description: "Server terminal websocket"},
 

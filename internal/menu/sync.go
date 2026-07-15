@@ -337,7 +337,7 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepIcon:           "FileTextOutlined",
 		keepSort:           4,
 		preferNameContains: "日志",
-		knownChildPaths:    []string{"/project-services", "/project-log-sources", "/project-logs", "/log-retention"},
+		knownChildPaths:    []string{"/project-services", "/project-logs", "/log-retention", "/loggie-status"},
 	},
 	{
 		paths:              []string{"/mysql-backup", "/mysql-backup/"},

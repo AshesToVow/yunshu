@@ -16,7 +16,7 @@ import {
 } from "../services/projects";
 import { useDictOptions } from "../hooks/use-dict-options";
 
-export function ProjectLogSourcesPage() {
+export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [servers, setServers] = useState<ServerItem[]>([]);
@@ -159,22 +159,26 @@ export function ProjectLogSourcesPage() {
     }
   }
 
-  return (
-    <Card
-      title="日志源配置"
-      extra={
-        <Space>
-          <Select style={{ width: 240 }} value={projectId} onChange={setProjectId} options={projectOptions} placeholder="项目" />
-          <Select style={{ width: 300 }} value={serverId} onChange={setServerId} options={serverOptions} placeholder="服务器" allowClear />
-          <Select style={{ width: 220 }} value={serviceId} onChange={setServiceId} options={serviceOptions} placeholder="服务" allowClear />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button>
-          <Button icon={<DeploymentUnitOutlined />} onClick={() => navigate("/loggie-status")} disabled={!serverId}>
-            Loggie 引导
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增日志源</Button>
-        </Space>
-      }
-    >
+  const toolbar = (
+    <Space wrap>
+      <Select style={{ width: 240 }} value={projectId} onChange={setProjectId} options={projectOptions} placeholder="项目" />
+      <Select style={{ width: 300 }} value={serverId} onChange={setServerId} options={serverOptions} placeholder="服务器" allowClear />
+      <Select style={{ width: 220 }} value={serviceId} onChange={setServiceId} options={serviceOptions} placeholder="服务" allowClear />
+      <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+        刷新
+      </Button>
+      <Button icon={<DeploymentUnitOutlined />} onClick={() => navigate("/loggie-status")} disabled={!serverId}>
+        Agent 管理
+      </Button>
+      <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+        新增日志源
+      </Button>
+    </Space>
+  );
+
+  const body = (
+    <>
+      {embedded ? <div style={{ marginBottom: 12 }}>{toolbar}</div> : null}
       <Table
         rowKey="id"
         dataSource={sources}
@@ -191,9 +195,22 @@ export function ProjectLogSourcesPage() {
             width: 200,
             render: (_: unknown, record: LogSourceItem) => (
               <Space>
-                <Button icon={<EditOutlined />} onClick={() => openEdit(record)}>编辑</Button>
-                <Popconfirm title="确认删除日志源？" onConfirm={() => projectId && deleteProjectLogSource(projectId, record.id).then(() => { message.success("已删除"); void load(); })}>
-                  <Button danger icon={<DeleteOutlined />}>删除</Button>
+                <Button icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                  编辑
+                </Button>
+                <Popconfirm
+                  title="确认删除日志源？"
+                  onConfirm={() =>
+                    projectId &&
+                    deleteProjectLogSource(projectId, record.id).then(() => {
+                      message.success("已删除");
+                      void load();
+                    })
+                  }
+                >
+                  <Button danger icon={<DeleteOutlined />}>
+                    删除
+                  </Button>
                 </Popconfirm>
               </Space>
             ),
@@ -207,16 +224,30 @@ export function ProjectLogSourcesPage() {
             <Input />
           </Form.Item>
           <Row gutter={12}>
-            <Col span={8}><Form.Item label="服务" name="service_id" rules={[{ required: true }]}><Select options={serviceOptions} /></Form.Item></Col>
-            <Col span={4}><Form.Item label="类型" name="log_type" rules={[{ required: true }]}><Select options={logTypeOptions} /></Form.Item></Col>
-            <Col span={4}><Form.Item label="状态" name="status" rules={[{ required: true }]}><Select options={logSourceStatusOptions} /></Form.Item></Col>
-            <Col span={8}><Form.Item label="日志目录（file 类型）" name="log_dir"><Input placeholder="/var/log/app" /></Form.Item></Col>
+            <Col span={8}>
+              <Form.Item label="服务" name="service_id" rules={[{ required: true }]}>
+                <Select options={serviceOptions} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label="类型" name="log_type" rules={[{ required: true }]}>
+                <Select options={logTypeOptions} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label="状态" name="status" rules={[{ required: true }]}>
+                <Select options={logSourceStatusOptions} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="日志目录（file 类型）" name="log_dir">
+                <Input placeholder="/var/log/app" />
+              </Form.Item>
+            </Col>
           </Row>
           <Row gutter={12}>
             <Col span={24}>
-              <Space>
-                <span style={{ color: "#999" }}>Loggie 采集：在「Loggie 状态」页生成 pipeline.yml 并部署到目标服务器</span>
-              </Space>
+              <span style={{ color: "#999" }}>配置完成后到「Agent 管理」引导并安装采集端</span>
             </Col>
           </Row>
           <Row gutter={12} style={{ marginTop: 12 }}>
@@ -232,8 +263,16 @@ export function ProjectLogSourcesPage() {
             </Col>
           </Row>
           <Row gutter={12}>
-            <Col span={12}><Form.Item label="include regex" name="include_regex"><Input /></Form.Item></Col>
-            <Col span={12}><Form.Item label="exclude regex" name="exclude_regex"><Input /></Form.Item></Col>
+            <Col span={12}>
+              <Form.Item label="include regex" name="include_regex">
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="exclude regex" name="exclude_regex">
+                <Input />
+              </Form.Item>
+            </Col>
           </Row>
           <Row gutter={12}>
             <Col span={12}>
@@ -258,6 +297,15 @@ export function ProjectLogSourcesPage() {
           </Row>
         </Form>
       </Modal>
+    </>
+  );
+
+  if (embedded) {
+    return body;
+  }
+  return (
+    <Card title="日志源配置" extra={toolbar}>
+      {body}
     </Card>
   );
 }

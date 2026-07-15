@@ -82,7 +82,7 @@ http.interceptors.response.use(
     const isTimeout =
       error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
     const errorMessage = isTimeout
-      ? "请求超时：Agent 安装/下载可能较慢，请确认 Yunshu 主机可访问 binary_url 后重试"
+      ? "请求超时：Agent 安装较慢，请确认离线包 deploy/loggie/binary/loggie 存在且目标机 SSH 可达后重试"
       : resolved || error.message || "请求失败";
     const silentErrorToast = Boolean(error.config?.silentErrorToast);
 
