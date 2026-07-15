@@ -74,8 +74,6 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "钉钉 signSecret（dingtalk_sign_secret）", value: "dingtalk_sign_secret", category: "alert" },
 
   { label: "日志源类型（log_source_type）", value: "log_source_type", category: "log" },
-  { label: "Agent 健康状态（log_agent_health_status）", value: "log_agent_health_status", category: "log" },
-  { label: "平台地址（agent_platform_url）", value: "agent_platform_url", category: "log" },
 
   { label: "K8s Event 转发开关（k8s_event_forward_enabled）", value: "k8s_event_forward_enabled", category: "k8s" },
   { label: "K8s Event 缓冲（k8s_event_forward_watcher_buffer_size）", value: "k8s_event_forward_watcher_buffer_size", category: "k8s" },
@@ -197,7 +195,6 @@ export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "
   if (key.startsWith("mail_") || key === "common_status") return "system";
   if (key.startsWith("server_") || key.startsWith("cloud_")) return "cmdb";
   if (key.startsWith("wecom_") || key.startsWith("dingtalk_")) return "alert";
-  if (key === "agent_platform_url") return "log";
   return "other";
 }
 

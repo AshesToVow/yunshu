@@ -189,19 +189,23 @@ func stripHTML(s string) string {
 	return s
 }
 
-// termIDFilter 兼容顶层与 Loggie fields.* 嵌套、ES7 keyword 映射。
+// termIDFilter 兼容顶层与 Loggie fields.* 嵌套、keyword/long 映射。
 func termIDFilter(field, value string) map[string]any {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return map[string]any{"match_all": map[string]any{}}
 	}
 	paths := []string{field, "fields." + field}
-	should := make([]map[string]any, 0, len(paths)*2)
+	should := make([]map[string]any, 0, len(paths)*4)
 	for _, path := range paths {
 		should = append(should,
 			map[string]any{"term": map[string]any{path + ".keyword": value}},
 			map[string]any{"term": map[string]any{path: value}},
 		)
+		// ES 动态映射常把纯数字打成 long，字符串 term 会没命中
+		if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+			should = append(should, map[string]any{"term": map[string]any{path: n}})
+		}
 	}
 	return map[string]any{
 		"bool": map[string]any{

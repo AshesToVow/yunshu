@@ -3,37 +3,6 @@ version: '3.3'
 # 默认：MySQL 在宿主机（非容器），仅启动 redis + backend + frontend。
 # 若要用容器 MySQL：docker-compose --profile container-mysql up -d
 services:
-  mysql:
-    profiles: ["container-mysql"]
-    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mysql:5.7.22
-    container_name: yunshu-mysql
-    restart: unless-stopped
-    mem_limit: 768m
-    cpus: 0.6
-    environment:
-      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-YunshuDB@2026Secure!}"
-      MYSQL_DATABASE: yunshu
-      TZ: Asia/Shanghai
-    ports:
-      - "3306:3306"
-    volumes:
-      - /export/mysql_data:/var/lib/mysql:Z
-      - ./configs/yunshu_full_20260507.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --max-connections=50
-      - --innodb-buffer-pool-size=64M
-      - --skip-name-resolve
-    networks:
-      - yunshu-network
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-
   redis:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.4.2-alpine
     container_name: yunshu-redis

@@ -296,10 +296,10 @@ cat /var/lib/jenkins/secrets/initialAdminPassword
 sudo su - jenkins
 
 # 生成密钥（一路回车即可，或设置 passphrase）
-ssh-keygen -t ed25519 -C "jenkins-ci@gitee" -f ~/.ssh/id_ed25519_gitee
+ssh-keygen -t ed25519 -C "Gitee SSH Key"
 
 # 查看公钥
-cat ~/.ssh/id_ed25519_gitee.pub
+cat ~/.ssh/id_ed25519.pub
 ```
 
 将公钥添加到 Gitee，有两种方式：

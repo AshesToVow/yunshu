@@ -105,6 +105,10 @@ export function ProjectLogsPage() {
           setEmptyHint(
             `按文件名「${filePath}」无命中。常见原因：① ES 里历史文档还没有 file_path（需在 Loggie 状态页「同步下发」后才会写入）；② ${filePath} 已轮转停写，活跃文件可能是更大编号（如 748.log）。请先清空文件名筛选项再查，或把时间范围扩到该文件最后写入时间。`,
           );
+        } else if ((res.total ?? 0) === 0 && values.server_id) {
+          message.warning("无结果：可尝试清空「服务器」筛选项后再查");
+        } else if ((res.total ?? 0) === 0 && range?.[0] && range?.[1]) {
+          message.warning("无结果：若 ES 文档缺少 @timestamp，请先清空时间范围后再查");
         } else if ((res.total ?? 0) === 0 && !range?.[0] && !range?.[1]) {
           setEmptyHint("未选时间范围且无数据。可先设近 24 小时，或确认 Loggie 已在采集并写入 ES。");
         }

@@ -191,7 +191,6 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       { method: "DELETE", path: "/api/v1/alerts/receiver-groups/:id", summary: "删除接收组", ui: "告警配置中心 · 接收组", auth: true },
       { method: "GET", path: "/api/v1/alerts/cloud-expiry-rules", summary: "云到期规则列表", ui: "告警监控平台 · 云到期", auth: true },
       { method: "POST", path: "/api/v1/alerts/cloud-expiry-rules/evaluate-now", summary: "立即评估云到期规则", ui: "告警监控平台 · 云到期", auth: true },
-      { method: "POST", path: "/api/v1/agents/health/report", summary: "Agent 健康上报", ui: "Agent 列表/日志平台", auth: false },
     ],
   },
   {

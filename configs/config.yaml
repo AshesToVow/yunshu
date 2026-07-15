@@ -244,4 +244,4 @@ k8s_event_forward:
 #
 # 3) 业务页面辅助选项（仅字典，不在 YAML 维护）：
 #    - dingtalk_webhook_url / wecom_webhook_url / alert_webhook_url
-#    - agent_platform_url / wecom_* / dingtalk_* / alert_promql_label_key / alert_threshold_unit 等
+#    - wecom_* / dingtalk_* / alert_promql_label_key / alert_threshold_unit 等

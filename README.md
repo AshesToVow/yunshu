@@ -635,22 +635,19 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 日志采集类型与路径配置
 - [ ] 日志源连通性自检
 
-#### 项目管理-agent列表管理页面
-![项目管理-agent列表管理页面](./images/项目管理-agent列表管理页面.png)
+#### 项目管理-Loggie 状态（替代原 Agent 列表）
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
-- [x] Agent 列表展示
-- [x] Agent 状态查询
-- [ ] Agent 分组与批量操作
+- [x] Loggie 采集状态（在线 / 上报 / 心跳）
+- [x] SSH 二进制引导与下发
+- [x] 同步 pipeline / 重启
+
+~~#### 项目管理-agent列表管理页面~~（已废弃：旧 gRPC log-agent）
 
 #### 项目管理-日志平台页面
 ![项目管理-日志平台页面](./images/项目管理-日志平台页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
-- [x] SSE 实时日志流（`after_id` 断点续传、自动重连）
-- [x] include/exclude/highlight 过滤
-- [x] 文件级别筛选（Agent 发现匹配）
-- [x] URL / session 持久化、`autostart` 恢复
-- [x] 后台日志 Dock（离开页面仍推流）
-- [x] 发现项一键创建日志源
+- [x] ES 日志检索（替代旧 SSE / gRPC 流）
+- [x] 关键字 / 级别 / 时间范围筛选
 - [ ] 日志收藏与分享
 
 ---

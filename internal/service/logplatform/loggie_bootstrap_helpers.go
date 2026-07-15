@@ -152,16 +152,10 @@ func (s *LoggieAgentService) resolveBootstrapSources(
 }
 
 func (s *LoggieAgentService) buildStoredConfigFromRequest(req LoggieBootstrapRequest, sources []loggieBootstrapSource) loggieStoredBootstrapConfig {
-	mode := normalizeDeployMode(req.DeployMode)
 	return loggieStoredBootstrapConfig{
 		MonitorPort:        defaultMonitorPort(req.MonitorPort),
 		YunshuURL:          strings.TrimSpace(req.YunshuURL),
 		DeployDir:          normalizeDeployDir(req.DeployDir),
-		DeployMode:         mode,
-		ClusterID:          req.ClusterID,
-		K8sNamespace:       defaultK8sNamespace(req.K8sNamespace),
-		DaemonSetName:      defaultK8sDaemonSet(req.DaemonSetName),
-		K8sRequirePodLabel: req.K8sRequirePodLabel != nil && *req.K8sRequirePodLabel,
 		AutoFromLogSources: autoFromLogSourcesEnabled(req.AutoFromLogSources),
 		Sources:            sources,
 		LogPaths:           req.LogPaths,
@@ -242,7 +236,6 @@ func bootstrapResultFromBundle(
 		Token:             agent.Token,
 		ProjectID:         projectID,
 		ServerID:          serverID,
-		DeployMode:        deployModeBinary,
 		ESAddresses:       esCfg.Addresses,
 		ESIndexPattern:    esCfg.IndexPattern,
 		ReportURL:         "/api/v1/loggie/heartbeat/report",

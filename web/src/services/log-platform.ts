@@ -80,10 +80,6 @@ export interface LoggieStatusItem {
   server_id: number;
   server_name: string;
   server_host: string;
-  deploy_mode?: "binary" | "k8s" | string;
-  cluster_id?: number;
-  k8s_namespace?: string;
-  daemonset_name?: string;
   registered: boolean;
   online: boolean;
   recent_ingest: boolean;
@@ -123,10 +119,6 @@ export interface LoggieBootstrapResult {
   token: string;
   project_id: number;
   server_id: number;
-  deploy_mode?: "binary" | "k8s" | string;
-  cluster_id?: number;
-  k8s_namespace?: string;
-  daemonset_name?: string;
   es_addresses: string[];
   es_index_pattern: string;
   report_url: string;
@@ -144,16 +136,10 @@ export interface LoggieBootstrapResult {
   source_count?: number;
   deployed?: boolean;
   deploy_message?: string;
-  k8s_manifest?: string;
 }
 
 export interface LoggieBootstrapPayload {
   server_id?: number;
-  deploy_mode?: "binary" | "k8s";
-  cluster_id?: number;
-  k8s_namespace?: string;
-  daemonset_name?: string;
-  k8s_require_pod_label?: boolean;
   log_paths?: string[];
   service_id?: number;
   log_source_id?: number;
@@ -166,8 +152,6 @@ export interface LoggieBootstrapPayload {
 
 export interface LoggieDeployPayload {
   server_id?: number;
-  deploy_mode?: "binary" | "k8s";
-  cluster_id?: number;
   sync_from_db?: boolean;
   restart_loggie?: boolean;
 }
@@ -180,7 +164,6 @@ export interface LoggieDeployResult {
   pipeline_count?: number;
   source_count?: number;
   deployed_at?: string;
-  deploy_mode?: string;
 }
 
 function downloadText(content: string, filename: string, mime = "text/plain;charset=utf-8") {
@@ -194,14 +177,6 @@ function downloadText(content: string, filename: string, mime = "text/plain;char
 }
 
 export function downloadLoggieBundle(bundle: LoggieBootstrapResult) {
-  const manifest = bundle.k8s_manifest || (bundle.deploy_mode === "k8s" ? bundle.pipeline_yaml : "");
-  if (manifest) {
-    downloadText(manifest, bundle.pipeline_filename || "loggie-k8s-manifest.yaml", "application/x-yaml;charset=utf-8");
-    if (bundle.pipelines_only_yaml) {
-      downloadText(bundle.pipelines_only_yaml, bundle.pipelines_filename || "clusterlogconfig.yaml", "application/x-yaml;charset=utf-8");
-    }
-    return;
-  }
   downloadText(bundle.pipeline_yaml, bundle.pipeline_filename || "pipeline.yml", "application/x-yaml;charset=utf-8");
   if (bundle.pipelines_only_yaml) {
     downloadText(bundle.pipelines_only_yaml, bundle.pipelines_filename || "pipelines.yml", "application/x-yaml;charset=utf-8");

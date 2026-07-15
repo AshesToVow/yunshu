@@ -2,7 +2,6 @@ import { CloudServerOutlined, CloudUploadOutlined, DownloadOutlined, ReloadOutli
 import { Button, Card, Checkbox, Form, Input, InputNumber, Modal, Select, Space, Table, Tag, Tooltip, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getClusters, type ClusterItem } from "../services/clusters";
 import {
   bootstrapLoggie,
   deployLoggieConfig,
@@ -29,33 +28,21 @@ const DEFAULT_YUNSHU_URL =
       ? window.location.origin
       : "http://127.0.0.1:8080";
 
-type DeployMode = "binary" | "k8s";
-
 export function LoggieStatusPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [rows, setRows] = useState<LoggieStatusItem[]>([]);
   const [esCfg, setEsCfg] = useState<ESConfigPreview | null>(null);
-  const [clusters, setClusters] = useState<ClusterItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [bootstrapOpen, setBootstrapOpen] = useState(false);
   const [bootstrapServer, setBootstrapServer] = useState<LoggieStatusItem | null>(null);
-  const [bootstrapMode, setBootstrapMode] = useState<DeployMode>("binary");
   const [bootstrapSources, setBootstrapSources] = useState<LoggieBootstrapSourcePreview[]>([]);
   const [bootstrapResult, setBootstrapResult] = useState<LoggieBootstrapResult | null>(null);
   const [bootstrapLoading, setBootstrapLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [form] = Form.useForm();
 
   const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
-  const clusterOptions = useMemo(() => {
-    const filtered = clusters.filter((c) => {
-      if (!projectId) return true;
-      if (c.owning_project_id == null || c.owning_project_id === 0) return true;
-      return c.owning_project_id === projectId;
-    });
-    return filtered.map((c) => ({ value: c.id, label: c.name }));
-  }, [clusters, projectId]);
 
   const reload = useCallback(async (pid?: number) => {
     if (!pid) return;
@@ -73,37 +60,27 @@ export function LoggieStatusPage() {
 
   useEffect(() => {
     void (async () => {
-      const [data, clusterRes] = await Promise.all([
-        getProjects({ page: 1, page_size: 1000 }),
-        getClusters({ page: 1, page_size: 500 }).catch(() => ({ list: [] as ClusterItem[] })),
-      ]);
+      const data = await getProjects({ page: 1, page_size: 1000 });
       setProjects(data.list);
-      setClusters(clusterRes.list ?? []);
       const pid = data.list[0]?.id;
       setProjectId(pid);
       if (pid) await reload(pid);
     })();
   }, [reload]);
 
-  const openBootstrap = async (row: LoggieStatusItem | null, mode: DeployMode) => {
+  const openBootstrap = async (row: LoggieStatusItem) => {
     setBootstrapServer(row);
-    setBootstrapMode(mode);
     setBootstrapResult(null);
     form.setFieldsValue({
-      deploy_mode: mode,
-      auto_from_log_sources: mode === "binary",
+      auto_from_log_sources: true,
       deploy_dir: "/export/loggie",
-      monitor_port: row?.monitor_port ?? 9196,
+      monitor_port: row.monitor_port ?? 9196,
       yunshu_url: DEFAULT_YUNSHU_URL,
       deploy_after_bootstrap: false,
       log_paths: "",
-      cluster_id: row?.cluster_id || undefined,
-      k8s_namespace: row?.k8s_namespace || "loggie",
-      daemonset_name: row?.daemonset_name || "loggie",
-      k8s_require_pod_label: false,
     });
     setBootstrapOpen(true);
-    if (mode === "binary" && projectId && row && row.server_id > 0) {
+    if (projectId && row.server_id > 0) {
       try {
         const res = await getLoggieBootstrapSources(projectId, row.server_id);
         setBootstrapSources(res.list ?? []);
@@ -116,67 +93,37 @@ export function LoggieStatusPage() {
   };
 
   const submitBootstrap = async () => {
-    if (!projectId) return;
+    if (!projectId || !bootstrapServer?.server_id) return;
     const values = await form.validateFields();
-    const mode = (values.deploy_mode || bootstrapMode) as DeployMode;
+    const autoFrom = values.auto_from_log_sources !== false;
+    const paths = String(values.log_paths ?? "")
+      .split("\n")
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+    if (!autoFrom && paths.length === 0) {
+      message.error("未启用自动读取日志源时，请填写日志路径");
+      return;
+    }
     setBootstrapLoading(true);
     try {
-      if (mode === "k8s") {
-        if (!values.cluster_id) {
-          message.error("请选择 K8s 集群");
-          return;
-        }
-        const res = await bootstrapLoggie(projectId, {
-          deploy_mode: "k8s",
-          cluster_id: values.cluster_id,
-          k8s_namespace: values.k8s_namespace,
-          daemonset_name: values.daemonset_name,
-          k8s_require_pod_label: !!values.k8s_require_pod_label,
-          monitor_port: values.monitor_port,
-          deploy_after_bootstrap: values.deploy_after_bootstrap,
-        });
-        setBootstrapResult(res);
-        if (res.deployed) {
-          message.success("K8s 引导完成，已 apply ClusterLogConfig/Sink");
-        } else if (res.deploy_message) {
-          message.warning(`引导完成，但下发失败：${res.deploy_message}`);
-        } else {
-          message.success("K8s 清单已生成");
-        }
+      const res = await bootstrapLoggie(projectId, {
+        server_id: bootstrapServer.server_id,
+        log_paths: autoFrom ? undefined : paths,
+        service_id: values.service_id,
+        log_source_id: values.log_source_id,
+        monitor_port: values.monitor_port,
+        yunshu_url: values.yunshu_url,
+        deploy_dir: values.deploy_dir,
+        auto_from_log_sources: autoFrom,
+        deploy_after_bootstrap: values.deploy_after_bootstrap,
+      });
+      setBootstrapResult(res);
+      if (res.deployed) {
+        message.success(`引导完成，已下发 ${res.pipeline_count ?? 0} 条 pipeline`);
+      } else if (res.deploy_message) {
+        message.warning(`引导完成，但下发失败：${res.deploy_message}`);
       } else {
-        if (!bootstrapServer || !bootstrapServer.server_id) {
-          message.error("二进制模式需选择服务器");
-          return;
-        }
-        const autoFrom = values.auto_from_log_sources !== false;
-        const paths = String(values.log_paths ?? "")
-          .split("\n")
-          .map((s: string) => s.trim())
-          .filter(Boolean);
-        if (!autoFrom && paths.length === 0) {
-          message.error("未启用自动读取日志源时，请填写日志路径");
-          return;
-        }
-        const res = await bootstrapLoggie(projectId, {
-          deploy_mode: "binary",
-          server_id: bootstrapServer.server_id,
-          log_paths: autoFrom ? undefined : paths,
-          service_id: values.service_id,
-          log_source_id: values.log_source_id,
-          monitor_port: values.monitor_port,
-          yunshu_url: values.yunshu_url,
-          deploy_dir: values.deploy_dir,
-          auto_from_log_sources: autoFrom,
-          deploy_after_bootstrap: values.deploy_after_bootstrap,
-        });
-        setBootstrapResult(res);
-        if (res.deployed) {
-          message.success(`引导完成，已下发 ${res.pipeline_count ?? 0} 条 pipeline`);
-        } else if (res.deploy_message) {
-          message.warning(`引导完成，但下发失败：${res.deploy_message}`);
-        } else {
-          message.success(`引导完成，共 ${res.pipeline_count ?? res.source_count ?? 0} 条 pipeline`);
-        }
+        message.success(`引导完成，共 ${res.pipeline_count ?? res.source_count ?? 0} 条 pipeline`);
       }
       await reload(projectId);
     } catch (e: unknown) {
@@ -186,23 +133,16 @@ export function LoggieStatusPage() {
     }
   };
 
-  const rowActionKey = (row: LoggieStatusItem) => `${row.deploy_mode || "binary"}-${row.server_id}-${row.cluster_id || 0}`;
-
   const runDeployAction = async (row: LoggieStatusItem, action: "sync" | "deploy" | "restart") => {
-    if (!projectId) return;
-    const mode = (row.deploy_mode === "k8s" ? "k8s" : "binary") as DeployMode;
-    setActionLoading(rowActionKey(row));
+    if (!projectId || !row.server_id) return;
+    setActionLoading(row.server_id);
     try {
-      const payload = {
-        server_id: row.server_id,
-        deploy_mode: mode,
-        cluster_id: row.cluster_id,
-      };
+      const payload = { server_id: row.server_id };
       const res =
         action === "sync"
           ? await syncLoggieFromLogSources(projectId, payload)
           : action === "deploy"
-            ? await deployLoggieConfig(projectId, { ...payload, sync_from_db: mode === "binary" })
+            ? await deployLoggieConfig(projectId, { ...payload, sync_from_db: true })
             : await restartLoggie(projectId, payload);
       if (res.success) {
         message.success(res.message || "操作成功");
@@ -218,13 +158,7 @@ export function LoggieStatusPage() {
   };
 
   const columns: ColumnsType<LoggieStatusItem> = [
-    {
-      title: "形态",
-      width: 90,
-      render: (_, r) =>
-        r.deploy_mode === "k8s" || r.server_id === 0 ? <Tag color="purple">K8s</Tag> : <Tag>二进制</Tag>,
-    },
-    { title: "名称", dataIndex: "server_name", width: 140 },
+    { title: "服务器", dataIndex: "server_name", width: 140 },
     { title: "地址", dataIndex: "server_host", width: 180 },
     {
       title: "Agent",
@@ -246,33 +180,19 @@ export function LoggieStatusPage() {
         v ? <Tag color="processing">近5分钟 {r.recent_doc_count} 条</Tag> : <Tag color="warning">无上报</Tag>,
     },
     {
-      title: "详情",
-      width: 160,
-      render: (_, r) => {
-        if (r.deploy_mode === "k8s" || r.server_id === 0) {
-          return (
-            <Tooltip title={r.monitor_detail || r.last_error}>
-              <span>
-                {r.k8s_namespace || "loggie"}/{r.daemonset_name || "loggie"}
-                <br />
-                ready {r.active_pipeline_count ?? 0}/{r.active_fd_count ?? 0}
-              </span>
-            </Tooltip>
-          );
-        }
-        return (
-          <Space direction="vertical" size={0}>
-            <span>:{r.monitor_port ?? 9196}</span>
-            {r.monitor_reachable ? <Tag color="success">心跳可达</Tag> : <Tag>未上报</Tag>}
-          </Space>
-        );
-      },
+      title: "监控端口",
+      width: 110,
+      render: (_, r) => (
+        <Space direction="vertical" size={0}>
+          <span>:{r.monitor_port ?? 9196}</span>
+          {r.monitor_reachable ? <Tag color="success">心跳可达</Tag> : <Tag>未上报</Tag>}
+        </Space>
+      ),
     },
     {
       title: "采集 FD",
       width: 100,
       render: (_, r) => {
-        if (r.deploy_mode === "k8s" || r.server_id === 0) return "-";
         const live = r.live_probe?.reachable ? r.live_probe.active_fd_count : undefined;
         const reported = r.active_fd_count ?? 0;
         const text = live != null ? `${reported} / 探测 ${live}` : String(reported);
@@ -287,7 +207,6 @@ export function LoggieStatusPage() {
       title: "Pipeline",
       width: 100,
       render: (_, r) => {
-        if (r.deploy_mode === "k8s" || r.server_id === 0) return r.pipeline_status || "-";
         const cnt = r.active_pipeline_count ?? 0;
         const liveCnt = r.live_probe?.active_pipeline_count;
         return liveCnt != null && r.live_probe?.reachable ? `${cnt} / 探测 ${liveCnt}` : String(cnt || r.pipeline_status || "-");
@@ -304,54 +223,45 @@ export function LoggieStatusPage() {
     { title: "最近错误", dataIndex: "last_error", ellipsis: true },
     {
       title: "操作",
-      width: 360,
+      width: 320,
       fixed: "right",
-      render: (_, r) => {
-        const isK8s = r.deploy_mode === "k8s" || r.server_id === 0;
-        const loadingKey = rowActionKey(r);
-        return (
-          <Space size="small" wrap>
-            <Button
-              size="small"
-              icon={<ThunderboltOutlined />}
-              disabled={!projectId}
-              onClick={() => void openBootstrap(r, isK8s ? "k8s" : "binary")}
-            >
-              引导
-            </Button>
-            <Button
-              size="small"
-              icon={<SyncOutlined />}
-              disabled={!projectId || !r.registered}
-              loading={actionLoading === loadingKey}
-              onClick={() => void runDeployAction(r, isK8s ? "deploy" : "sync")}
-            >
-              {isK8s ? "Apply" : "同步下发"}
-            </Button>
-            <Button
-              size="small"
-              icon={<ReloadOutlined />}
-              disabled={!projectId || !r.registered}
-              loading={actionLoading === loadingKey}
-              onClick={() => void runDeployAction(r, "restart")}
-            >
-              重启
-            </Button>
-            <Button
-              size="small"
-              icon={<DownloadOutlined />}
-              disabled={!projectId || !r.registered}
-              onClick={() =>
-                void downloadLoggieFile(projectId!, r.server_id, "pipelines").catch((e: unknown) =>
-                  message.error(String((e as Error)?.message ?? e)),
-                )
-              }
-            >
-              {isK8s ? "清单" : "pipelines"}
-            </Button>
-          </Space>
-        );
-      },
+      render: (_, r) => (
+        <Space size="small" wrap>
+          <Button size="small" icon={<ThunderboltOutlined />} disabled={!projectId} onClick={() => void openBootstrap(r)}>
+            引导
+          </Button>
+          <Button
+            size="small"
+            icon={<SyncOutlined />}
+            disabled={!projectId || !r.registered}
+            loading={actionLoading === r.server_id}
+            onClick={() => void runDeployAction(r, "sync")}
+          >
+            同步下发
+          </Button>
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            disabled={!projectId || !r.registered}
+            loading={actionLoading === r.server_id}
+            onClick={() => void runDeployAction(r, "restart")}
+          >
+            重启
+          </Button>
+          <Button
+            size="small"
+            icon={<DownloadOutlined />}
+            disabled={!projectId || !r.registered}
+            onClick={() =>
+              void downloadLoggieFile(projectId!, r.server_id, "pipelines").catch((e: unknown) =>
+                message.error(String((e as Error)?.message ?? e)),
+              )
+            }
+          >
+            pipelines
+          </Button>
+        </Space>
+      ),
     },
   ];
 
@@ -362,8 +272,6 @@ export function LoggieStatusPage() {
     { title: "路径", dataIndex: "path", ellipsis: true },
     { title: "Glob", dataIndex: "glob_path", ellipsis: true },
   ];
-
-  const hasK8sRow = rows.some((r) => r.deploy_mode === "k8s" || r.server_id === 0);
 
   return (
     <div className="loggie-status-page">
@@ -380,9 +288,6 @@ export function LoggieStatusPage() {
                 void reload(v);
               }}
             />
-            <Button disabled={!projectId} icon={<CloudServerOutlined />} onClick={() => void openBootstrap(null, "k8s")}>
-              K8s 引导
-            </Button>
             <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void reload(projectId)}>
               刷新
             </Button>
@@ -399,28 +304,13 @@ export function LoggieStatusPage() {
             ))}
             <Tag>索引 {esCfg.index_pattern}</Tag>
             {esCfg.username ? <Tag>用户 {esCfg.username}</Tag> : null}
-            {!hasK8sRow ? <Tag color="purple">可点「K8s 引导」登记 DaemonSet 采集</Tag> : null}
           </Space>
         ) : null}
-        <Table
-          rowKey={(r) => `${r.deploy_mode || "binary"}-${r.server_id}-${r.cluster_id || 0}`}
-          loading={loading}
-          columns={columns}
-          dataSource={rows}
-          size="small"
-          scroll={{ x: 1900 }}
-          pagination={false}
-        />
+        <Table rowKey="server_id" loading={loading} columns={columns} dataSource={rows} size="small" scroll={{ x: 1800 }} pagination={false} />
       </Card>
 
       <Modal
-        title={
-          bootstrapMode === "k8s"
-            ? "Loggie 引导 — K8s DaemonSet"
-            : bootstrapServer
-              ? `Loggie 引导 — ${bootstrapServer.server_name}`
-              : "Loggie 引导"
-        }
+        title={bootstrapServer ? `Loggie 引导 — ${bootstrapServer.server_name}` : "Loggie 引导"}
         open={bootstrapOpen}
         onCancel={() => setBootstrapOpen(false)}
         width={820}
@@ -428,7 +318,7 @@ export function LoggieStatusPage() {
           bootstrapResult ? (
             <Space>
               <Button onClick={() => bootstrapResult && downloadLoggieBundle(bootstrapResult)} type="primary" icon={<DownloadOutlined />}>
-                下载清单/文件
+                下载全部文件
               </Button>
               <Button onClick={() => setBootstrapOpen(false)}>关闭</Button>
             </Space>
@@ -443,122 +333,57 @@ export function LoggieStatusPage() {
         }
       >
         {!bootstrapResult ? (
-          <Form form={form} layout="vertical" initialValues={{ auto_from_log_sources: true, deploy_dir: "/export/loggie", deploy_mode: bootstrapMode }}>
-            <Form.Item name="deploy_mode" label="部署形态" rules={[{ required: true }]}>
-              <Select
-                options={[
-                  { value: "binary", label: "二进制（SSH 下发）", disabled: !bootstrapServer?.server_id },
-                  { value: "k8s", label: "K8s（ClusterLogConfig / Sink）" },
-                ]}
-                onChange={(v: DeployMode) => {
-                  setBootstrapMode(v);
-                  if (v === "k8s") {
-                    form.setFieldsValue({ auto_from_log_sources: false });
-                  }
-                }}
-              />
+          <Form form={form} layout="vertical" initialValues={{ auto_from_log_sources: true, deploy_dir: "/export/loggie" }}>
+            <Form.Item name="auto_from_log_sources" valuePropName="checked">
+              <Checkbox>从 CMDB 日志源自动生成 pipeline（每个日志源独立 service_id / log_source_id）</Checkbox>
             </Form.Item>
-
-            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.deploy_mode !== cur.deploy_mode}>
+            {bootstrapSources.length > 0 ? (
+              <Table
+                size="small"
+                rowKey="log_source_id"
+                columns={sourceColumns}
+                dataSource={bootstrapSources}
+                pagination={false}
+                style={{ marginBottom: 16 }}
+              />
+            ) : (
+              <Tag color="warning" style={{ marginBottom: 12 }}>
+                该服务器暂无已启用的文件类日志源，将使用默认路径或手动填写
+              </Tag>
+            )}
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.auto_from_log_sources !== cur.auto_from_log_sources}>
               {({ getFieldValue }) =>
-                getFieldValue("deploy_mode") === "k8s" ? (
-                  <>
-                    <Form.Item name="cluster_id" label="目标集群" rules={[{ required: true, message: "请选择集群" }]}>
-                      <Select options={clusterOptions} showSearch optionFilterProp="label" placeholder="选择已接入的 K8s 集群" />
-                    </Form.Item>
-                    <Space wrap style={{ width: "100%" }}>
-                      <Form.Item name="k8s_namespace" label="Loggie Namespace">
-                        <Input style={{ width: 180 }} placeholder="loggie" />
-                      </Form.Item>
-                      <Form.Item name="daemonset_name" label="DaemonSet 名称">
-                        <Input style={{ width: 180 }} placeholder="loggie" />
-                      </Form.Item>
-                    </Space>
-                    <Tag color="blue" style={{ marginBottom: 12, whiteSpace: "normal", height: "auto" }}>
-                      将对 Pod 标签 yunshu.project_id={projectId} 采集容器日志；请先用 Helm 安装 Loggie CRD/Controller，见 deploy/k8s/loggie/
-                    </Tag>
-                    <Form.Item name="k8s_require_pod_label" valuePropName="checked">
-                      <Checkbox>
-                        仅采集带标签 yunshu.project_id 的 Pod（默认关闭=采全集群；生产多项目共集群时建议开启）
-                      </Checkbox>
-                    </Form.Item>
-                    <Tag color="warning" style={{ marginBottom: 12, whiteSpace: "normal", height: "auto" }}>
-                      type=pod 必须有 labelSelector。Helm 保持 parseStdout=false；Config.Pattern 报错多为 parseStdout=true 或旧 CLC 未 delete。
-                      默认 pod-template-hash:*；勾选则仅采 yunshu.project_id（需 label pod，不是 label deploy）。
-                    </Tag>
-                    <Form.Item name="deploy_after_bootstrap" valuePropName="checked">
-                      <Checkbox>
-                        <CloudUploadOutlined /> 引导后立即 apply Namespace/Sink/ClusterLogConfig 并滚动重启 DaemonSet
-                      </Checkbox>
-                    </Form.Item>
-                  </>
-                ) : (
-                  <>
-                    <Form.Item name="auto_from_log_sources" valuePropName="checked">
-                      <Checkbox>从 CMDB 日志源自动生成 pipeline（每个日志源独立 service_id / log_source_id）</Checkbox>
-                    </Form.Item>
-                    {bootstrapSources.length > 0 ? (
-                      <Table
-                        size="small"
-                        rowKey="log_source_id"
-                        columns={sourceColumns}
-                        dataSource={bootstrapSources}
-                        pagination={false}
-                        style={{ marginBottom: 16 }}
-                      />
-                    ) : (
-                      <Tag color="warning" style={{ marginBottom: 12 }}>
-                        该服务器暂无已启用的文件类日志源，将使用默认路径或手动填写
-                      </Tag>
-                    )}
-                    <Form.Item noStyle shouldUpdate={(prev, cur) => prev.auto_from_log_sources !== cur.auto_from_log_sources}>
-                      {({ getFieldValue: gv }) =>
-                        gv("auto_from_log_sources") === false ? (
-                          <Form.Item name="log_paths" label="手动日志路径（每行一条 glob）">
-                            <Input.TextArea rows={3} placeholder="/var/log/messages&#10;/var/log/kube-apiserver/*.log" />
-                          </Form.Item>
-                        ) : null
-                      }
-                    </Form.Item>
-                    <Space wrap style={{ width: "100%" }}>
-                      <Form.Item name="monitor_port" label="Loggie HTTP 监控端口">
-                        <InputNumber min={1} max={65535} style={{ width: 160 }} />
-                      </Form.Item>
-                      <Form.Item name="deploy_dir" label="远端部署目录">
-                        <Input style={{ width: 220 }} placeholder="/export/loggie" />
-                      </Form.Item>
-                    </Space>
-                    <Form.Item name="yunshu_url" label="Yunshu 后端地址（写入心跳 env，须为 API :8080）" rules={[{ required: true }]}>
-                      <Input placeholder="http://10.10.10.103:8080" />
-                    </Form.Item>
-                    <Form.Item name="deploy_after_bootstrap" valuePropName="checked">
-                      <Checkbox>
-                        <CloudUploadOutlined /> 引导后立即 SSH 下发 pipelines.yml 并重启 Loggie（需服务器 SSH 凭证）
-                      </Checkbox>
-                    </Form.Item>
-                  </>
-                )
+                getFieldValue("auto_from_log_sources") === false ? (
+                  <Form.Item name="log_paths" label="手动日志路径（每行一条 glob）">
+                    <Input.TextArea rows={3} placeholder="/var/log/messages&#10;/var/log/kube-apiserver/*.log" />
+                  </Form.Item>
+                ) : null
               }
+            </Form.Item>
+            <Space wrap style={{ width: "100%" }}>
+              <Form.Item name="monitor_port" label="Loggie HTTP 监控端口">
+                <InputNumber min={1} max={65535} style={{ width: 160 }} />
+              </Form.Item>
+              <Form.Item name="deploy_dir" label="远端部署目录">
+                <Input style={{ width: 220 }} placeholder="/export/loggie" />
+              </Form.Item>
+            </Space>
+            <Form.Item name="yunshu_url" label="Yunshu 后端地址（写入心跳 env，须为 API :8080）" rules={[{ required: true }]}>
+              <Input placeholder="http://10.10.10.103:8080" />
+            </Form.Item>
+            <Form.Item name="deploy_after_bootstrap" valuePropName="checked">
+              <Checkbox>
+                <CloudUploadOutlined /> 引导后立即 SSH 下发 pipelines.yml 并重启 Loggie（需服务器 SSH 凭证）
+              </Checkbox>
             </Form.Item>
           </Form>
         ) : (
           <Space direction="vertical" style={{ width: "100%" }}>
             <Space wrap>
-              <Tag color="blue">{bootstrapResult.deploy_mode === "k8s" ? "K8s 清单已生成" : "Token 已生成（保存在 env 文件中）"}</Tag>
-              {bootstrapResult.deploy_mode === "k8s" ? (
-                <>
-                  <Tag>集群 {bootstrapResult.cluster_id}</Tag>
-                  <Tag>
-                    {bootstrapResult.k8s_namespace}/{bootstrapResult.daemonset_name}
-                  </Tag>
-                </>
-              ) : (
-                <>
-                  <Tag>监控端口 {bootstrapResult.monitor_port}</Tag>
-                  <Tag>Pipeline {bootstrapResult.pipeline_count ?? 0} 条</Tag>
-                  <Tag>日志源 {bootstrapResult.source_count ?? 0} 个</Tag>
-                </>
-              )}
+              <Tag color="blue">Token 已生成（保存在 env 文件中）</Tag>
+              <Tag>监控端口 {bootstrapResult.monitor_port}</Tag>
+              <Tag>Pipeline {bootstrapResult.pipeline_count ?? 0} 条</Tag>
+              <Tag>日志源 {bootstrapResult.source_count ?? 0} 个</Tag>
               {bootstrapResult.deployed ? <Tag color="success">已下发</Tag> : bootstrapResult.deploy_message ? <Tag color="warning">未下发</Tag> : null}
             </Space>
             {bootstrapResult.deploy_message ? <Tag color="warning">{bootstrapResult.deploy_message}</Tag> : null}
@@ -567,22 +392,11 @@ export function LoggieStatusPage() {
               <Button icon={<DownloadOutlined />} onClick={() => downloadLoggieBundle(bootstrapResult)}>
                 下载全部
               </Button>
-              <Button
-                onClick={() =>
-                  downloadTextFile(
-                    bootstrapResult.pipelines_only_yaml || bootstrapResult.pipeline_yaml,
-                    bootstrapResult.deploy_mode === "k8s" ? "clusterlogconfig.yaml" : "pipelines.yml",
-                  )
-                }
-              >
-                {bootstrapResult.deploy_mode === "k8s" ? "仅 ClusterLogConfig" : "仅 pipelines.yml"}
+              <Button onClick={() => downloadTextFile(bootstrapResult.pipelines_only_yaml || bootstrapResult.pipeline_yaml, "pipelines.yml")}>
+                仅 pipelines.yml
               </Button>
             </Space>
-            <Input.TextArea
-              value={bootstrapResult.k8s_manifest || bootstrapResult.pipelines_only_yaml || bootstrapResult.pipeline_yaml}
-              rows={14}
-              readOnly
-            />
+            <Input.TextArea value={bootstrapResult.pipelines_only_yaml || bootstrapResult.pipeline_yaml} rows={14} readOnly />
           </Space>
         )}
       </Modal>

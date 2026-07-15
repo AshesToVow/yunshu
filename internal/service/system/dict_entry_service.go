@@ -111,12 +111,13 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 
 		// 不再使用数据字典维护 HTTP 方法；清理历史遗留行，避免与「仅保留敏感配置类字典」目标冲突。
 		_ = s.repo.DeleteByTypes(ctx, []string{"http_action"})
+		// 旧 gRPC / log-agent 相关字典已废弃。
+		_ = s.repo.DeleteByTypes(ctx, []string{"agent_platform_url", "log_agent_health_status"})
 
 		seed := []DictEntryCreateRequest{
 			{DictType: "alert_webhook_url", Label: "企业微信机器人 URL 示例", Value: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=replace-me", Sort: intRef(1), Status: 0, Remark: "Webhook 通道 URL 候选"},
 			{DictType: "wecom_webhook_url", Label: "企业微信机器人 URL 示例", Value: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=replace-me", Sort: intRef(1), Status: 0, Remark: "企业微信 Webhook URL"},
 			{DictType: "dingtalk_webhook_url", Label: "钉钉机器人 URL 示例", Value: "https://oapi.dingtalk.com/robot/send?access_token=replace-me", Sort: intRef(1), Status: 0, Remark: "钉钉 Webhook URL"},
-			{DictType: "agent_platform_url", Label: "本机平台地址", Value: "http://127.0.0.1:8080", Sort: intRef(1), Status: 1, Remark: "Agent 部署时平台地址"},
 			// Alert 运行配置（字典优先，YAML 兜底）
 			{DictType: "alert_webhook_token", Label: "Webhook Token 示例", Value: "change-me-alert-token", Sort: intRef(1), Status: 0, Remark: "alert.webhook_token：用于 Alertmanager Webhook 鉴权"},
 			{DictType: "alert_enrich_prometheus_url", Label: "Prometheus 地址示例", Value: "http://127.0.0.1:9090", Sort: intRef(1), Status: 0, Remark: "alert.prometheus_url：用于告警增强查询"},

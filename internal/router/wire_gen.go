@@ -139,7 +139,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v88 := routerRouteRepositories.LogRetention
 	v89 := provideLogRetentionService(v86, v88)
 	v90 := routerRouteRepositories.LoggieAgent
-	v91, err := provideLoggieAgentService(v90, v77, v80, v86, securityEncryptionKey, v55, v60)
+	v91, err := provideLoggieAgentService(v90, v77, v80, v86, securityEncryptionKey)
 	if err != nil {
 		return nil, err
 	}

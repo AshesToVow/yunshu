@@ -48,5 +48,4 @@ elasticsearch:
 
 - `cmd/logagent`、`/api/v1/agents/*`、`/logs/stream`
 - 菜单「Agent 列表」
-
-K8s 部署见 [deploy/k8s/loggie/README.md](../deploy/k8s/loggie/README.md)。
+- Loggie K8s DaemonSet / ClusterLogConfig 引导（仅保留 SSH 二进制部署）

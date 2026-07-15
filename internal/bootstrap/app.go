@@ -128,7 +128,7 @@ func (b *Builder) WithMySQL() *Builder {
 }
 
 // WithDictOverrides 在 MySQL 已就绪后，从数据字典覆盖“运行期可变”的配置项（告警域 + 邮件 + K8s Event 转发）。
-// 注意：mysql/redis/app.env/grpc.listen_addr 等启动期项仍以 env/yaml 为准，避免启动鸡生蛋。
+// 注意：mysql/redis/app.env 等启动期项仍以 env/yaml 为准，避免启动鸡生蛋。
 func (b *Builder) WithDictOverrides() *Builder {
 	if b.err != nil {
 		return b

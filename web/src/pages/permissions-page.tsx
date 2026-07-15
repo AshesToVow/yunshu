@@ -52,7 +52,6 @@ const PERMISSION_SYNC_SKIP = new Set([
   "GET /api/v1/auth/me",
   "PUT /api/v1/auth/me",
   "PUT /api/v1/auth/password",
-  "POST /api/v1/agents/health/report",
   "POST /api/v1/alerts/webhook/alertmanager",
 ]);
 

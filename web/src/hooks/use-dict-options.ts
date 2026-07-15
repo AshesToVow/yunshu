@@ -63,15 +63,6 @@ const fallbackMap: Record<string, Option[]> = {
     { label: "SSH 默认端口 22", value: 22 },
     { label: "RDP 默认端口 3389", value: 3389 },
   ],
-  log_agent_health_status: [
-    { label: "运行中", value: "running" },
-    { label: "启动中", value: "starting" },
-    { label: "已停止", value: "stopped" },
-    { label: "错误", value: "error" },
-    { label: "未知", value: "unknown" },
-    /** 由平台根据心跳推导：库中可能仍为 running，但超过心跳窗口视为离线 */
-    { label: "离线", value: "offline" },
-  ],
   /** 监控规则 PromQL 生成器中的标签键候选；条目以数据字典为准 */
   alert_promql_label_key: [
     { label: "instance", value: "instance" },
@@ -101,7 +92,6 @@ const fallbackMap: Record<string, Option[]> = {
   alert_webhook_url: [],
   wecom_webhook_url: [],
   dingtalk_webhook_url: [],
-  agent_platform_url: [],
   wecom_corp_id: [],
   wecom_corp_secret: [],
   wecom_agent_id: [],
