@@ -134,6 +134,39 @@ func (h *LoggieHandler) RestartLoggie(c *gin.Context) {
 	})
 }
 
+func (h *LoggieHandler) StartLoggie(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.LoggieDeployRequest) (*service.LoggieDeployResult, error) {
+		return h.svc.StartLoggie(ctx, projectID, req)
+	})
+}
+
+func (h *LoggieHandler) StopLoggie(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.LoggieDeployRequest) (*service.LoggieDeployResult, error) {
+		return h.svc.StopLoggie(ctx, projectID, req)
+	})
+}
+
+func (h *LoggieHandler) InstallLoggie(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.LoggieInstallRequest) (*service.LoggieDeployResult, error) {
+		return h.svc.InstallLoggie(ctx, projectID, req)
+	})
+}
+
 func (h *LoggieHandler) SyncFromLogSources(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {

@@ -8,17 +8,20 @@ import (
 	"time"
 
 	"yunshu/internal/config"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/repository"
 )
 
 type LogSearchService struct {
-	es *ElasticsearchProvider
+	es         *ElasticsearchProvider
+	serverRepo interfaces.ServerRepository
 }
 
-func NewLogSearchService(es *ElasticsearchProvider) *LogSearchService {
-	return &LogSearchService{es: es}
+func NewLogSearchService(es *ElasticsearchProvider, serverRepo interfaces.ServerRepository) *LogSearchService {
+	return &LogSearchService{es: es, serverRepo: serverRepo}
 }
 
 type LogSearchQuery struct {
@@ -26,6 +29,7 @@ type LogSearchQuery struct {
 	ServerID    *uint  `form:"server_id"`
 	ServiceID   *uint  `form:"service_id"`
 	LogSourceID *uint  `form:"log_source_id"`
+	ServiceName string `form:"service_name"`
 	Keyword     string `form:"keyword"`
 	Level       string `form:"level"`
 	FilePath    string `form:"file_path"`
@@ -36,18 +40,22 @@ type LogSearchQuery struct {
 }
 
 type LogSearchItem struct {
-	Timestamp   string `json:"timestamp"`
-	Message     string `json:"message"`
-	Highlight   string `json:"highlight,omitempty"`
-	Level       string `json:"level,omitempty"`
-	FilePath    string `json:"file_path,omitempty"`
-	ServerID    uint   `json:"server_id,omitempty"`
-	ServiceID   uint   `json:"service_id,omitempty"`
-	LogSourceID uint   `json:"log_source_id,omitempty"`
-	Host        string `json:"host,omitempty"`
-	Namespace   string `json:"namespace,omitempty"`
-	Pod         string `json:"pod,omitempty"`
-	Container   string `json:"container,omitempty"`
+	Timestamp     string `json:"timestamp"`
+	Message       string `json:"message"`
+	Highlight     string `json:"highlight,omitempty"`
+	Level         string `json:"level,omitempty"`
+	FilePath      string `json:"file_path,omitempty"`
+	ServerID      uint   `json:"server_id,omitempty"`
+	ServiceID     uint   `json:"service_id,omitempty"`
+	LogSourceID   uint   `json:"log_source_id,omitempty"`
+	ServiceName   string `json:"service_name,omitempty"`
+	ServerHost    string `json:"server_host,omitempty"`
+	Host          string `json:"host,omitempty"`
+	Namespace     string `json:"namespace,omitempty"`
+	Pod           string `json:"pod,omitempty"`
+	PodName       string `json:"podname,omitempty"`
+	Container     string `json:"container,omitempty"`
+	ContainerName string `json:"containername,omitempty"`
 }
 
 func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagination.Result[LogSearchItem], error) {
@@ -89,6 +97,9 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 	if fp := strings.TrimSpace(q.FilePath); fp != "" {
 		filters = append(filters, filePathFilter(fp))
 	}
+	if sn := strings.TrimSpace(q.ServiceName); sn != "" {
+		filters = append(filters, termIDFilter("service_name", sn))
+	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		must = append(must, map[string]any{
 			"simple_query_string": map[string]any{
@@ -122,7 +133,8 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 		}
 	}
 
-	raw, err := cli.Search(ctx, cfg.IndexPattern, body)
+	indices := s.resolveIndices(ctx, q)
+	raw, err := cli.Search(ctx, indices, body)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "logsearch", "Search", err)
 	}
@@ -133,6 +145,27 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery) string {
+	if q.ServerID != nil && *q.ServerID > 0 {
+		return AgentIndexPattern(*q.ServerID)
+	}
+	var ids []uint
+	if s.serverRepo != nil {
+		servers, _, err := s.serverRepo.List(ctx, repository.ServerListParams{
+			ProjectID: q.ProjectID,
+			Page:      1,
+			PageSize:  maxSearchIndexServers + 1,
+		})
+		if err == nil {
+			ids = make([]uint, 0, len(servers))
+			for _, sv := range servers {
+				ids = append(ids, sv.ID)
+			}
+		}
+	}
+	return ResolveSearchIndices(nil, ids)
 }
 
 func (s *LogSearchService) Export(ctx context.Context, q LogSearchQuery) (string, error) {
@@ -336,31 +369,62 @@ func pickHighlight(hl map[string]any, fields []string) string {
 func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 	meta := nestedFields(src)
 	item := LogSearchItem{
-		Timestamp: pickString(src, cfg.TimestampField, "@timestamp", "timestamp", "ts", "time"),
-		Message:   pickMessage(src, cfg.MessageFields),
-		Level:     pickLevel(src),
-		FilePath:  pickFilePath(src),
-		Host:      pickString(src, "host", "hostname", "node"),
-		Namespace: pickString(src, "namespace", "k8s.namespace"),
-		Pod:       pickString(src, "pod", "pod_name", "kubernetes.pod.name"),
-		Container: pickString(src, "container", "container_name", "kubernetes.container.name"),
+		Timestamp:     pickString(src, cfg.TimestampField, "@timestamp", "timestamp", "ts", "time"),
+		Message:       pickMessage(src, cfg.MessageFields),
+		Level:         pickLevel(src),
+		FilePath:      pickFilePath(src),
+		Host:          pickString(src, "host", "hostname", "node"),
+		Namespace:     pickString(src, "namespace", "k8s.namespace"),
+		Pod:           pickString(src, "pod", "pod_name", "podname", "kubernetes.pod.name"),
+		PodName:       pickString(src, "podname", "pod", "pod_name"),
+		Container:     pickString(src, "container", "container_name", "containername", "kubernetes.container.name"),
+		ContainerName: pickString(src, "containername", "container", "container_name"),
+		ServiceName:   pickString(src, "service_name"),
+		ServerHost:    pickString(src, "server_host"),
 	}
 	if item.Level == "" {
 		item.Level = extractLevelFromMessage(item.Message)
 	}
-	if meta := nestedFields(src); meta != nil {
+	if meta != nil {
 		if item.Namespace == "" {
 			item.Namespace = pickString(meta, "namespace")
 		}
 		if item.Pod == "" {
-			item.Pod = pickString(meta, "pod")
+			item.Pod = pickString(meta, "pod", "podname")
+		}
+		if item.PodName == "" {
+			item.PodName = pickString(meta, "podname", "pod")
 		}
 		if item.Container == "" {
-			item.Container = pickString(meta, "container")
+			item.Container = pickString(meta, "container", "containername")
+		}
+		if item.ContainerName == "" {
+			item.ContainerName = pickString(meta, "containername", "container")
 		}
 		if item.FilePath == "" {
 			item.FilePath = pickString(meta, "file_path", "log_file", "filename")
 		}
+		if item.ServiceName == "" {
+			item.ServiceName = pickString(meta, "service_name")
+		}
+		if item.ServerHost == "" {
+			item.ServerHost = pickString(meta, "server_host")
+		}
+		if item.Host == "" {
+			item.Host = pickString(meta, "host", "hostname")
+		}
+	}
+	if item.PodName == "" {
+		item.PodName = item.Pod
+	}
+	if item.Pod == "" {
+		item.Pod = item.PodName
+	}
+	if item.ContainerName == "" {
+		item.ContainerName = item.Container
+	}
+	if item.Container == "" {
+		item.Container = item.ContainerName
 	}
 	item.ServerID = pickUint(src, "server_id")
 	if item.ServerID == 0 {

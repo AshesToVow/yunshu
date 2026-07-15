@@ -31,7 +31,7 @@ func DefaultCatalog() []Spec {
 				{Path: "/project-log-sources", Name: "日志源配置", Icon: "FileSearchOutlined", Sort: 2, Component: "project-log-sources-page", Status: 1},
 				{Path: "/project-logs", Name: "日志检索", Icon: "FileTextOutlined", Sort: 3, Component: "project-logs-page", Status: 1},
 				{Path: "/log-retention", Name: "保留策略", Icon: "HistoryOutlined", Sort: 4, Component: "log-retention-page", Status: 1},
-				{Path: "/loggie-status", Name: "Loggie 状态", Icon: "CloudServerOutlined", Sort: 5, Component: "loggie-status-page", Status: 1},
+				{Path: "/loggie-status", Name: "Agent 管理", Icon: "CloudServerOutlined", Sort: 5, Component: "loggie-status-page", Status: 1},
 			},
 		},
 		{

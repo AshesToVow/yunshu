@@ -97,9 +97,9 @@ export function LogRetentionPage() {
             <div>
               <p>Elasticsearch 默认不会自动删除数据。Yunshu 按「保留天数」定时清理过期日志。</p>
               <p>
-                推荐 Loggie 使用<strong>按日滚动索引</strong>（如 <code>yunshu-logs-2026.07.13</code>），清理时直接删除过期索引，效率最高。
+                推荐 Agent 使用<strong>每服务器按日索引</strong>（如 <code>yunshu-agent-7-2026.07.13</code>），清理时按日期删除过期索引。检索模式默认 <code>yunshu-agent-*</code>。
               </p>
-              <p>Loggie 自身的状态检查、pipeline 解析、实时采集由 Agent 侧配置，与 Yunshu 保留策略互补。</p>
+              <p>Agent 状态检测、pipeline 热更、启停由「Agent 管理」页面操作，与保留策略互补。</p>
             </div>
           }
         />

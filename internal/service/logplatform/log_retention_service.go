@@ -172,7 +172,11 @@ func (s *LogRetentionService) RunCleanup(ctx context.Context) (*LogRetentionClea
 		}
 		pattern := strings.TrimSpace(p.IndexPattern)
 		if pattern == "" {
-			pattern = cfg.IndexPattern
+			if p.ServerID > 0 {
+				pattern = AgentIndexPattern(p.ServerID)
+			} else {
+				pattern = GlobalAgentIndexPattern()
+			}
 		}
 		part, err := s.cleanupPolicy(ctx, cli, cfg, pattern, p, now)
 		if err != nil {

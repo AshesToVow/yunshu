@@ -1,4 +1,14 @@
-import { CloudServerOutlined, CloudUploadOutlined, DownloadOutlined, ReloadOutlined, SyncOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import {
+  CloudServerOutlined,
+  CloudUploadOutlined,
+  DownloadOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  PoweroffOutlined,
+  ReloadOutlined,
+  SyncOutlined,
+  ThunderboltOutlined,
+} from "@ant-design/icons";
 import { Button, Card, Checkbox, Form, Input, InputNumber, Modal, Select, Space, Table, Tag, Tooltip, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -11,7 +21,10 @@ import {
   getLoggieBootstrapSources,
   getLoggieStatus,
   getProjects,
+  installLoggie,
   restartLoggie,
+  startLoggie,
+  stopLoggie,
   syncLoggieFromLogSources,
   type ESConfigPreview,
   type LoggieBootstrapResult,
@@ -39,7 +52,7 @@ export function LoggieStatusPage() {
   const [bootstrapSources, setBootstrapSources] = useState<LoggieBootstrapSourcePreview[]>([]);
   const [bootstrapResult, setBootstrapResult] = useState<LoggieBootstrapResult | null>(null);
   const [bootstrapLoading, setBootstrapLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [form] = Form.useForm();
 
   const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
@@ -77,6 +90,7 @@ export function LoggieStatusPage() {
       monitor_port: row.monitor_port ?? 9196,
       yunshu_url: DEFAULT_YUNSHU_URL,
       deploy_after_bootstrap: false,
+      binary_url: "",
       log_paths: "",
     });
     setBootstrapOpen(true);
@@ -109,8 +123,6 @@ export function LoggieStatusPage() {
       const res = await bootstrapLoggie(projectId, {
         server_id: bootstrapServer.server_id,
         log_paths: autoFrom ? undefined : paths,
-        service_id: values.service_id,
-        log_source_id: values.log_source_id,
         monitor_port: values.monitor_port,
         yunshu_url: values.yunshu_url,
         deploy_dir: values.deploy_dir,
@@ -118,13 +130,7 @@ export function LoggieStatusPage() {
         deploy_after_bootstrap: values.deploy_after_bootstrap,
       });
       setBootstrapResult(res);
-      if (res.deployed) {
-        message.success(`引导完成，已下发 ${res.pipeline_count ?? 0} 条 pipeline`);
-      } else if (res.deploy_message) {
-        message.warning(`引导完成，但下发失败：${res.deploy_message}`);
-      } else {
-        message.success(`引导完成，共 ${res.pipeline_count ?? res.source_count ?? 0} 条 pipeline`);
-      }
+      message.success(`引导完成，索引 ${res.es_index_pattern}，pipeline ${res.pipeline_count ?? 0} 条`);
       await reload(projectId);
     } catch (e: unknown) {
       message.error(String((e as Error)?.message ?? e));
@@ -133,22 +139,37 @@ export function LoggieStatusPage() {
     }
   };
 
-  const runDeployAction = async (row: LoggieStatusItem, action: "sync" | "deploy" | "restart") => {
+  type AgentAction = "sync" | "deploy" | "restart" | "start" | "stop" | "install";
+
+  const runDeployAction = async (row: LoggieStatusItem, action: AgentAction) => {
     if (!projectId || !row.server_id) return;
-    setActionLoading(row.server_id);
+    const key = `${action}-${row.server_id}`;
+    setActionLoading(key);
     try {
       const payload = { server_id: row.server_id };
-      const res =
-        action === "sync"
-          ? await syncLoggieFromLogSources(projectId, payload)
-          : action === "deploy"
-            ? await deployLoggieConfig(projectId, { ...payload, sync_from_db: true })
-            : await restartLoggie(projectId, payload);
-      if (res.success) {
-        message.success(res.message || "操作成功");
+      let res;
+      if (action === "install") {
+        const values = form.getFieldsValue();
+        res = await installLoggie(projectId, {
+          ...payload,
+          binary_url: values.binary_url,
+          deploy_dir: values.deploy_dir || "/export/loggie",
+          yunshu_url: values.yunshu_url || DEFAULT_YUNSHU_URL,
+          monitor_port: values.monitor_port || row.monitor_port || 9196,
+        });
+      } else if (action === "sync") {
+        res = await syncLoggieFromLogSources(projectId, payload);
+      } else if (action === "deploy") {
+        res = await deployLoggieConfig(projectId, { ...payload, sync_from_db: true });
+      } else if (action === "start") {
+        res = await startLoggie(projectId, payload);
+      } else if (action === "stop") {
+        res = await stopLoggie(projectId, payload);
       } else {
-        message.error(res.message || "操作失败");
+        res = await restartLoggie(projectId, payload);
       }
+      if (res.success) message.success(res.message || "操作成功");
+      else message.error(res.message || "操作失败");
       await reload(projectId);
     } catch (e: unknown) {
       message.error(String((e as Error)?.message ?? e));
@@ -159,7 +180,7 @@ export function LoggieStatusPage() {
 
   const columns: ColumnsType<LoggieStatusItem> = [
     { title: "服务器", dataIndex: "server_name", width: 140 },
-    { title: "地址", dataIndex: "server_host", width: 180 },
+    { title: "地址", dataIndex: "server_host", width: 160 },
     {
       title: "Agent",
       dataIndex: "registered",
@@ -173,95 +194,83 @@ export function LoggieStatusPage() {
       render: (v: boolean) => (v ? <Tag color="success">在线</Tag> : <Tag color="error">离线</Tag>),
     },
     {
-      title: "日志上报",
+      title: "采集",
       dataIndex: "recent_ingest",
-      width: 120,
+      width: 130,
       render: (v: boolean, r) =>
         v ? <Tag color="processing">近5分钟 {r.recent_doc_count} 条</Tag> : <Tag color="warning">无上报</Tag>,
     },
     {
-      title: "监控端口",
-      width: 110,
-      render: (_, r) => (
-        <Space direction="vertical" size={0}>
-          <span>:{r.monitor_port ?? 9196}</span>
-          {r.monitor_reachable ? <Tag color="success">心跳可达</Tag> : <Tag>未上报</Tag>}
-        </Space>
-      ),
+      title: "索引",
+      width: 160,
+      render: (_, r) => <Tag>yunshu-agent-{r.server_id}-*</Tag>,
     },
     {
-      title: "采集 FD",
+      title: "监控",
       width: 100,
+      render: (_, r) => (r.monitor_reachable ? <Tag color="success">:{r.monitor_port ?? 9196}</Tag> : <Tag>未上报</Tag>),
+    },
+    {
+      title: "FD/Pipeline",
+      width: 110,
       render: (_, r) => {
-        const live = r.live_probe?.reachable ? r.live_probe.active_fd_count : undefined;
-        const reported = r.active_fd_count ?? 0;
-        const text = live != null ? `${reported} / 探测 ${live}` : String(reported);
+        const fd = r.live_probe?.reachable ? r.live_probe.active_fd_count : r.active_fd_count ?? 0;
+        const pl = r.live_probe?.reachable ? r.live_probe.active_pipeline_count : r.active_pipeline_count ?? 0;
         return (
-          <Tooltip title={r.live_probe?.error || r.monitor_detail || "活跃文件句柄数"}>
-            <span>{text}</span>
+          <Tooltip title={r.live_probe?.error || r.monitor_detail || ""}>
+            <span>
+              {fd} / {pl}
+            </span>
           </Tooltip>
         );
       },
     },
-    {
-      title: "Pipeline",
-      width: 100,
-      render: (_, r) => {
-        const cnt = r.active_pipeline_count ?? 0;
-        const liveCnt = r.live_probe?.active_pipeline_count;
-        return liveCnt != null && r.live_probe?.reachable ? `${cnt} / 探测 ${liveCnt}` : String(cnt || r.pipeline_status || "-");
-      },
-    },
-    { title: "版本", dataIndex: "version", width: 90, render: (v?: string) => v || "-" },
+    { title: "版本", dataIndex: "version", width: 80, render: (v?: string) => v || "-" },
     {
       title: "ES Sink",
       dataIndex: "es_sink_ok",
-      width: 90,
+      width: 80,
       render: (v: boolean) => (v ? <Tag color="success">正常</Tag> : <Tag>未知</Tag>),
     },
-    { title: "最后心跳", dataIndex: "last_seen_at", width: 170, render: (v?: string) => (v ? formatDateTime(v) : "-") },
+    { title: "最后心跳", dataIndex: "last_seen_at", width: 160, render: (v?: string) => (v ? formatDateTime(v) : "-") },
     { title: "最近错误", dataIndex: "last_error", ellipsis: true },
     {
       title: "操作",
-      width: 320,
+      width: 420,
       fixed: "right",
-      render: (_, r) => (
-        <Space size="small" wrap>
-          <Button size="small" icon={<ThunderboltOutlined />} disabled={!projectId} onClick={() => void openBootstrap(r)}>
-            引导
-          </Button>
-          <Button
-            size="small"
-            icon={<SyncOutlined />}
-            disabled={!projectId || !r.registered}
-            loading={actionLoading === r.server_id}
-            onClick={() => void runDeployAction(r, "sync")}
-          >
-            同步下发
-          </Button>
-          <Button
-            size="small"
-            icon={<ReloadOutlined />}
-            disabled={!projectId || !r.registered}
-            loading={actionLoading === r.server_id}
-            onClick={() => void runDeployAction(r, "restart")}
-          >
-            重启
-          </Button>
-          <Button
-            size="small"
-            icon={<DownloadOutlined />}
-            disabled={!projectId || !r.registered}
-            onClick={() =>
-              void downloadLoggieFile(projectId!, r.server_id, "pipelines").catch((e: unknown) =>
-                message.error(String((e as Error)?.message ?? e)),
-              )
-            }
-          >
-            pipelines
-          </Button>
-        </Space>
-      ),
+      render: (_, r) => {
+        const busy = (a: AgentAction) => actionLoading === `${a}-${r.server_id}`;
+        return (
+          <Space size="small" wrap>
+            <Button size="small" icon={<ThunderboltOutlined />} onClick={() => void openBootstrap(r)}>
+              引导
+            </Button>
+            <Button size="small" icon={<PoweroffOutlined />} loading={busy("install")} onClick={() => void runDeployAction(r, "install")}>
+              安装
+            </Button>
+            <Button size="small" icon={<PlayCircleOutlined />} disabled={!r.registered} loading={busy("start")} onClick={() => void runDeployAction(r, "start")}>
+              启动
+            </Button>
+            <Button size="small" icon={<PauseCircleOutlined />} disabled={!r.registered} loading={busy("stop")} onClick={() => void runDeployAction(r, "stop")}>
+              停止
+            </Button>
+            <Button size="small" icon={<SyncOutlined />} disabled={!r.registered} loading={busy("sync")} onClick={() => void runDeployAction(r, "sync")}>
+              热更
+            </Button>
+            <Button size="small" icon={<ReloadOutlined />} disabled={!r.registered} loading={busy("restart")} onClick={() => void runDeployAction(r, "restart")}>
+              重启
+            </Button>
+            <Button
+              size="small"
+              icon={<DownloadOutlined />}
+              disabled={!r.registered}
+              onClick={() => void downloadLoggieFile(projectId!, r.server_id, "pipelines").catch((e: unknown) => message.error(String((e as Error)?.message ?? e)))}
+            >
+              pipelines
+            </Button>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -276,7 +285,7 @@ export function LoggieStatusPage() {
   return (
     <div className="loggie-status-page">
       <Card
-        title="Loggie 采集状态"
+        title="Agent 管理"
         extra={
           <Space>
             <Select
@@ -302,15 +311,15 @@ export function LoggieStatusPage() {
             {esCfg.addresses?.map((a) => (
               <Tag key={a}>{a}</Tag>
             ))}
-            <Tag>索引 {esCfg.index_pattern}</Tag>
-            {esCfg.username ? <Tag>用户 {esCfg.username}</Tag> : null}
+            <Tag>检索模式 {esCfg.index_pattern}</Tag>
+            <Tag>写入 yunshu-agent-&#123;server_id&#125;-日</Tag>
           </Space>
         ) : null}
-        <Table rowKey="server_id" loading={loading} columns={columns} dataSource={rows} size="small" scroll={{ x: 1800 }} pagination={false} />
+        <Table rowKey="server_id" loading={loading} columns={columns} dataSource={rows} size="small" scroll={{ x: 2000 }} pagination={false} />
       </Card>
 
       <Modal
-        title={bootstrapServer ? `Loggie 引导 — ${bootstrapServer.server_name}` : "Loggie 引导"}
+        title={bootstrapServer ? `Agent 引导 — ${bootstrapServer.server_name}` : "Agent 引导"}
         open={bootstrapOpen}
         onCancel={() => setBootstrapOpen(false)}
         width={820}
@@ -319,6 +328,13 @@ export function LoggieStatusPage() {
             <Space>
               <Button onClick={() => bootstrapResult && downloadLoggieBundle(bootstrapResult)} type="primary" icon={<DownloadOutlined />}>
                 下载全部文件
+              </Button>
+              <Button
+                icon={<PoweroffOutlined />}
+                loading={actionLoading?.startsWith("install-")}
+                onClick={() => bootstrapServer && void runDeployAction(bootstrapServer, "install")}
+              >
+                一键安装
               </Button>
               <Button onClick={() => setBootstrapOpen(false)}>关闭</Button>
             </Space>
@@ -335,81 +351,57 @@ export function LoggieStatusPage() {
         {!bootstrapResult ? (
           <Form form={form} layout="vertical" initialValues={{ auto_from_log_sources: true, deploy_dir: "/export/loggie" }}>
             <Form.Item name="auto_from_log_sources" valuePropName="checked">
-              <Checkbox>从 CMDB 日志源自动生成 pipeline（每个日志源独立 service_id / log_source_id）</Checkbox>
+              <Checkbox>从 CMDB 日志源自动生成 pipeline（字段含 service_name / project / server）</Checkbox>
             </Form.Item>
             {bootstrapSources.length > 0 ? (
-              <Table
-                size="small"
-                rowKey="log_source_id"
-                columns={sourceColumns}
-                dataSource={bootstrapSources}
-                pagination={false}
-                style={{ marginBottom: 16 }}
-              />
+              <Table size="small" rowKey="log_source_id" columns={sourceColumns} dataSource={bootstrapSources} pagination={false} style={{ marginBottom: 16 }} />
             ) : (
               <Tag color="warning" style={{ marginBottom: 12 }}>
-                该服务器暂无已启用的文件类日志源，将使用默认路径或手动填写
+                该服务器暂无已启用的文件类日志源
               </Tag>
             )}
             <Form.Item noStyle shouldUpdate={(prev, cur) => prev.auto_from_log_sources !== cur.auto_from_log_sources}>
               {({ getFieldValue }) =>
                 getFieldValue("auto_from_log_sources") === false ? (
                   <Form.Item name="log_paths" label="手动日志路径（每行一条 glob）">
-                    <Input.TextArea rows={3} placeholder="/var/log/messages&#10;/var/log/kube-apiserver/*.log" />
+                    <Input.TextArea rows={3} placeholder="/var/log/messages" />
                   </Form.Item>
                 ) : null
               }
             </Form.Item>
             <Space wrap style={{ width: "100%" }}>
-              <Form.Item name="monitor_port" label="Loggie HTTP 监控端口">
-                <InputNumber min={1} max={65535} style={{ width: 160 }} />
+              <Form.Item name="monitor_port" label="监控端口">
+                <InputNumber min={1} max={65535} style={{ width: 140 }} />
               </Form.Item>
               <Form.Item name="deploy_dir" label="远端部署目录">
-                <Input style={{ width: 220 }} placeholder="/export/loggie" />
+                <Input style={{ width: 200 }} placeholder="/export/loggie" />
               </Form.Item>
             </Space>
-            <Form.Item name="yunshu_url" label="Yunshu 后端地址（写入心跳 env，须为 API :8080）" rules={[{ required: true }]}>
+            <Form.Item name="yunshu_url" label="Yunshu API 地址" rules={[{ required: true }]}>
               <Input placeholder="http://10.10.10.103:8080" />
+            </Form.Item>
+            <Form.Item name="binary_url" label="Loggie 二进制 URL（安装用，可含 {arch}）">
+              <Input placeholder="https://.../loggie_linux_{arch}.tar.gz" />
             </Form.Item>
             <Form.Item name="deploy_after_bootstrap" valuePropName="checked">
               <Checkbox>
-                <CloudUploadOutlined /> 引导后立即 SSH 下发 pipelines.yml 并重启 Loggie（需服务器 SSH 凭证）
+                <CloudUploadOutlined /> 引导后仅热更配置（完整安装请用「安装」）
               </Checkbox>
             </Form.Item>
           </Form>
         ) : (
           <Space direction="vertical" style={{ width: "100%" }}>
             <Space wrap>
-              <Tag color="blue">Token 已生成（保存在 env 文件中）</Tag>
-              <Tag>监控端口 {bootstrapResult.monitor_port}</Tag>
-              <Tag>Pipeline {bootstrapResult.pipeline_count ?? 0} 条</Tag>
-              <Tag>日志源 {bootstrapResult.source_count ?? 0} 个</Tag>
-              {bootstrapResult.deployed ? <Tag color="success">已下发</Tag> : bootstrapResult.deploy_message ? <Tag color="warning">未下发</Tag> : null}
+              <Tag color="blue">Token 已生成</Tag>
+              <Tag>索引 {bootstrapResult.es_index_pattern}</Tag>
+              <Tag>Pipeline {bootstrapResult.pipeline_count ?? 0}</Tag>
+              {bootstrapResult.deployed ? <Tag color="success">已下发</Tag> : null}
             </Space>
             {bootstrapResult.deploy_message ? <Tag color="warning">{bootstrapResult.deploy_message}</Tag> : null}
-            <Tag>ES {bootstrapResult.es_addresses?.join(", ")}</Tag>
-            <Space wrap>
-              <Button icon={<DownloadOutlined />} onClick={() => downloadLoggieBundle(bootstrapResult)}>
-                下载全部
-              </Button>
-              <Button onClick={() => downloadTextFile(bootstrapResult.pipelines_only_yaml || bootstrapResult.pipeline_yaml, "pipelines.yml")}>
-                仅 pipelines.yml
-              </Button>
-            </Space>
             <Input.TextArea value={bootstrapResult.pipelines_only_yaml || bootstrapResult.pipeline_yaml} rows={14} readOnly />
           </Space>
         )}
       </Modal>
     </div>
   );
-}
-
-function downloadTextFile(content: string, filename: string) {
-  const blob = new Blob([content], { type: "application/x-yaml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename || "pipelines.yml";
-  a.click();
-  URL.revokeObjectURL(url);
 }

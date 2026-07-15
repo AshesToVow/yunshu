@@ -205,22 +205,32 @@ func provideElasticsearchProvider(app *bootstrap.App) *service.ElasticsearchProv
 	return service.NewElasticsearchProvider(app.DB, app.Config.Elasticsearch)
 }
 
-func provideLogSearchService(es *service.ElasticsearchProvider) *service.LogSearchService {
-	return service.NewLogSearchService(es)
+func provideLogSearchService(es *service.ElasticsearchProvider, serverRepo interfaces.ServerRepository) *service.LogSearchService {
+	return service.NewLogSearchService(es, serverRepo)
 }
 
 func provideLogRetentionService(es *service.ElasticsearchProvider, repo interfaces.LogRetentionRepository) *service.LogRetentionService {
 	return service.NewLogRetentionService(es, repo)
 }
 
+func provideLoggieConfig(app *bootstrap.App) config.LoggieConfig {
+	if app == nil || app.Config == nil {
+		return config.LoggieConfig{}.Normalized()
+	}
+	return app.Config.Loggie.Normalized()
+}
+
 func provideLoggieAgentService(
 	repo interfaces.LoggieAgentRepository,
 	serverRepo interfaces.ServerRepository,
 	logSourceRepo interfaces.LogSourceRepository,
+	projectRepo interfaces.ProjectRepository,
+	serviceRepo interfaces.ServiceRepository,
 	es *service.ElasticsearchProvider,
 	encryptionKey SecurityEncryptionKey,
+	loggieCfg config.LoggieConfig,
 ) (*service.LoggieAgentService, error) {
-	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, es, string(encryptionKey))
+	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, projectRepo, serviceRepo, es, string(encryptionKey), loggieCfg)
 }
 
 var ServiceSet = wire.NewSet(
@@ -285,6 +295,7 @@ var ServiceSet = wire.NewSet(
 	provideElasticsearchProvider,
 	provideLogSearchService,
 	provideLogRetentionService,
+	provideLoggieConfig,
 	provideLoggieAgentService,
 	wire.Struct(new(routeServices), "*"),
 )

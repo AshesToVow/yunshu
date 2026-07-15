@@ -103,14 +103,14 @@ export function ProjectLogsPage() {
         form.setFieldsValue({ page, page_size: pageSize });
         if ((res.total ?? 0) === 0 && filePath) {
           setEmptyHint(
-            `按文件名「${filePath}」无命中。常见原因：① ES 里历史文档还没有 file_path（需在 Loggie 状态页「同步下发」后才会写入）；② ${filePath} 已轮转停写，活跃文件可能是更大编号（如 748.log）。请先清空文件名筛选项再查，或把时间范围扩到该文件最后写入时间。`,
+            `按文件名「${filePath}」无命中。请确认 Agent「热更」后已写入 file_path，或清空文件名筛选项/扩大时间范围。`,
           );
         } else if ((res.total ?? 0) === 0 && values.server_id) {
-          message.warning("无结果：可尝试清空「服务器」筛选项后再查");
+          message.warning(`无结果：将检索索引 yunshu-agent-${values.server_id}-*，可确认 Agent 已写入或清空服务器筛选`);
         } else if ((res.total ?? 0) === 0 && range?.[0] && range?.[1]) {
           message.warning("无结果：若 ES 文档缺少 @timestamp，请先清空时间范围后再查");
         } else if ((res.total ?? 0) === 0 && !range?.[0] && !range?.[1]) {
-          setEmptyHint("未选时间范围且无数据。可先设近 24 小时，或确认 Loggie 已在采集并写入 ES。");
+          setEmptyHint("未选时间范围且无数据。确认 Agent 已在采集并写入 yunshu-agent-{server_id}-日 索引。");
         }
       } catch (e: unknown) {
         message.error(String((e as Error)?.message ?? e));
@@ -166,9 +166,21 @@ export function ProjectLogsPage() {
       render: (_: string, r) => <LogMessageCell highlight={r.highlight} message={r.message} />,
     },
     {
+      title: "服务",
+      dataIndex: "service_name",
+      width: 120,
+      render: (v?: string) => <span className="log-meta-cell">{v || "-"}</span>,
+    },
+    {
+      title: "主机",
+      dataIndex: "host",
+      width: 120,
+      render: (v?: string, r?: LogSearchItem) => <span className="log-meta-cell">{v || r?.server_host || "-"}</span>,
+    },
+    {
       title: "文件",
       dataIndex: "file_path",
-      width: 200,
+      width: 180,
       render: (v?: string) => {
         if (!v) return "-";
         const base = v.split(/[/\\]/).pop() || v;
@@ -180,16 +192,22 @@ export function ProjectLogsPage() {
       },
     },
     {
-      title: "Pod",
-      dataIndex: "pod",
-      width: 140,
+      title: "Namespace",
+      dataIndex: "namespace",
+      width: 110,
       render: (v?: string) => <span className="log-meta-cell">{v || "-"}</span>,
     },
     {
+      title: "Pod",
+      dataIndex: "podname",
+      width: 140,
+      render: (v?: string, r?: LogSearchItem) => <span className="log-meta-cell">{v || r?.pod || "-"}</span>,
+    },
+    {
       title: "容器",
-      dataIndex: "container",
+      dataIndex: "containername",
       width: 100,
-      render: (v?: string) => <span className="log-meta-cell">{v || "-"}</span>,
+      render: (v?: string, r?: LogSearchItem) => <span className="log-meta-cell">{v || r?.container || "-"}</span>,
     },
   ];
 
@@ -200,7 +218,7 @@ export function ProjectLogsPage() {
         title="日志检索"
         extra={
           <Space>
-            <Tag color="blue">Loggie → Elasticsearch</Tag>
+            <Tag color="blue">Agent → Elasticsearch（yunshu-agent-*）</Tag>
             <Button icon={<ReloadOutlined />} onClick={() => void runSearch()}>
               刷新
             </Button>

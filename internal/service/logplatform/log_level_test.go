@@ -61,7 +61,7 @@ func TestBuildMultiPipelineBundle_ElasticsearchLevelRegex(t *testing.T) {
 	})
 	bundle := BuildMultiPipelineBundle(1, 7, sources, 9196, config.ElasticsearchConfig{
 		Addresses:    []string{"http://127.0.0.1:9200"},
-		IndexPattern: "yunshu-logs-*",
+		IndexPattern: "yunshu-agent-*",
 	}, "token", "", "/export/loggie")
 	yaml := bundle.PipelinesOnlyYAML
 	if !strings.Contains(yaml, "(?P<level>") {

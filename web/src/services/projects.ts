@@ -459,10 +459,14 @@ export interface LogSearchItem {
   server_id?: number;
   service_id?: number;
   log_source_id?: number;
+  service_name?: string;
+  server_host?: string;
   host?: string;
   namespace?: string;
   pod?: string;
+  podname?: string;
   container?: string;
+  containername?: string;
 }
 
 export async function searchProjectLogs(

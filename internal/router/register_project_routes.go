@@ -36,6 +36,9 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.GET("/loggie/bootstrap-sources", d.loggieHandler.PreviewBootstrapSources)
 	projectScoped.GET("/loggie/pipeline/download", d.loggieHandler.DownloadPipeline)
 	projectScoped.POST("/loggie/deploy", d.loggieHandler.DeployConfig)
+	projectScoped.POST("/loggie/install", d.loggieHandler.InstallLoggie)
+	projectScoped.POST("/loggie/start", d.loggieHandler.StartLoggie)
+	projectScoped.POST("/loggie/stop", d.loggieHandler.StopLoggie)
 	projectScoped.POST("/loggie/restart", d.loggieHandler.RestartLoggie)
 	projectScoped.POST("/loggie/sync", d.loggieHandler.SyncFromLogSources)
 }

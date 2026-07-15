@@ -149,7 +149,9 @@ elasticsearch:
     - "http://127.0.0.1:9200"
   username: ""
   password: ""
-  index_pattern: "yunshu-logs-*"
+  index_pattern: "yunshu-agent-*"
+  # Loggie Agent 一键安装：远端 wget/curl 拉取二进制的 URL（可含 {arch} 占位，如 amd64/arm64）
+  # binary_url 配在 loggie 段，见下方 loggie.binary_url
   message_fields: ["message", "body", "log", "content"]
   timestamp_field: "@timestamp"
   default_size: 100
@@ -157,6 +159,12 @@ elasticsearch:
   timeout_seconds: 30
   default_retention_days: 30
   cleanup_cron_spec: "0 3 * * *"   # 每天 03:00 清理过期索引
+
+# Loggie Agent（目标机二进制安装 / systemd）
+loggie:
+  binary_url: ""   # 例: https://github.com/loggie-io/loggie/releases/download/v1.5.0/loggie_linux_{arch}.tar.gz
+  unit_name: "loggie.service"
+  deploy_dir: "/export/loggie"
 
 # 下列键的常见取值可在「系统 → 数据字典」中按类型选用，便于团队统一录入（如 config_yaml_mysql_host、alert_enrich_prometheus_url、k8s_kubeconfig_template 等）。
 alert:

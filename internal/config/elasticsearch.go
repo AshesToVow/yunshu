@@ -21,7 +21,7 @@ type ElasticsearchConfig struct {
 func (c ElasticsearchConfig) Normalized() ElasticsearchConfig {
 	out := c
 	if out.IndexPattern == "" {
-		out.IndexPattern = "yunshu-logs-*"
+		out.IndexPattern = "yunshu-agent-*"
 	}
 	if len(out.MessageFields) == 0 {
 		out.MessageFields = []string{"message", "body", "log", "content"}

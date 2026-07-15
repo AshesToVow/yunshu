@@ -45,6 +45,8 @@ func logSourcesToBootstrapSources(list []model.ServiceLogSource) []loggieBootstr
 			LogType:      src.LogType,
 			Path:         strings.TrimSpace(src.Path),
 			IncludeRegex: inc,
+			ExcludeRegex: derefStr(src.ExcludeRegex),
+			Encoding:     derefStr(src.Encoding),
 			Paths:        []string{glob},
 		})
 	}
@@ -69,6 +71,8 @@ func bootstrapSourcesToEntries(projectID, serverID uint, sources []loggieBootstr
 			Paths:        paths,
 			PipelineName: pipelineNameForSource(projectID, serverID, src.LogSourceID, src.ServiceID),
 			ParseProfile: detectParseProfile(paths[0], nil),
+			ExcludeRegex: src.ExcludeRegex,
+			Encoding:     src.Encoding,
 		})
 	}
 	return out
@@ -186,12 +190,51 @@ func (s *LoggieAgentService) bundleFromStored(
 		sources = legacyBootstrapSources(stored)
 	}
 	entries := bootstrapSourcesToEntries(projectID, serverID, sources)
+	s.enrichPipelineEntries(ctx, projectID, serverID, entries)
 	var esCfg config.ElasticsearchConfig
 	if s.esProvider != nil {
 		esCfg, _ = s.esProvider.Resolve(ctx)
 	}
 	bundle := BuildMultiPipelineBundle(projectID, serverID, entries, stored.MonitorPort, esCfg, agent.Token, stored.YunshuURL, stored.DeployDir)
 	return bundle, sources, nil
+}
+
+func (s *LoggieAgentService) enrichPipelineEntries(ctx context.Context, projectID, serverID uint, entries []LoggiePipelineSourceEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	var projectCode, projectName, serverHost, serverName string
+	if s.projectRepo != nil {
+		if p, err := s.projectRepo.GetByID(ctx, projectID); err == nil && p != nil {
+			projectCode = strings.TrimSpace(p.Code)
+			projectName = strings.TrimSpace(p.Name)
+		}
+	}
+	if s.serverRepo != nil {
+		if sv, err := s.serverRepo.GetByID(ctx, serverID); err == nil && sv != nil {
+			serverHost = strings.TrimSpace(sv.Host)
+			serverName = strings.TrimSpace(sv.Name)
+		}
+	}
+	svcNames := map[uint]string{}
+	for i := range entries {
+		entries[i].ProjectCode = projectCode
+		entries[i].ProjectName = projectName
+		entries[i].ServerHost = serverHost
+		entries[i].ServerName = serverName
+		sid := entries[i].ServiceID
+		if sid == 0 || s.serviceRepo == nil {
+			continue
+		}
+		if name, ok := svcNames[sid]; ok {
+			entries[i].ServiceName = name
+			continue
+		}
+		if svc, err := s.serviceRepo.GetByID(ctx, sid); err == nil && svc != nil {
+			svcNames[sid] = strings.TrimSpace(svc.Name)
+			entries[i].ServiceName = svcNames[sid]
+		}
+	}
 }
 
 func (s *LoggieAgentService) PreviewBootstrapSources(ctx context.Context, projectID, serverID uint) ([]LoggieBootstrapSourcePreview, error) {
@@ -233,15 +276,15 @@ func bootstrapResultFromBundle(
 		monitorPort = 9196
 	}
 	return &LoggieBootstrapResult{
-		Token:             agent.Token,
-		ProjectID:         projectID,
-		ServerID:          serverID,
-		ESAddresses:       esCfg.Addresses,
-		ESIndexPattern:    esCfg.IndexPattern,
-		ReportURL:         "/api/v1/loggie/heartbeat/report",
+		Token:          agent.Token,
+		ProjectID:      projectID,
+		ServerID:       serverID,
+		ESAddresses:    esCfg.Addresses,
+		ESIndexPattern: AgentIndexPattern(serverID),
+		ReportURL:      "/api/v1/loggie/heartbeat/report",
 		PipelineHint: fmt.Sprintf(
 			"fields.project_id=%d fields.server_id=%d sink.index=%s monitor_port=%d pipelines=%d",
-			projectID, serverID, strings.TrimSuffix(esCfg.IndexPattern, "*")+"${+YYYY.MM.DD}", monitorPort, bundle.PipelineCount,
+			projectID, serverID, AgentIndexSink(serverID), monitorPort, bundle.PipelineCount,
 		),
 		PipelineYAML:      bundle.PipelineYAML,
 		PipelinesOnlyYAML: bundle.PipelinesOnlyYAML,

@@ -51,7 +51,7 @@ pipelines:
       type: elasticsearch
       hosts:
         - http://127.0.0.1:9200
-      index: yunshu-logs-${+YYYY.MM.DD}
+      index: yunshu-agent-1-${+YYYY.MM.DD}
       codec:
         type: json
         beatsFormat: true

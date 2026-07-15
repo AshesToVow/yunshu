@@ -305,6 +305,7 @@ type (
 	LoggieBootstrapRequest         = logplatform.LoggieBootstrapRequest
 	LoggieBootstrapResult          = logplatform.LoggieBootstrapResult
 	LoggieDeployRequest            = logplatform.LoggieDeployRequest
+	LoggieInstallRequest           = logplatform.LoggieInstallRequest
 	LoggieDeployResult             = logplatform.LoggieDeployResult
 	LoggieBootstrapSourcePreview   = logplatform.LoggieBootstrapSourcePreview
 	LoggieStatusItem               = logplatform.LoggieStatusItem

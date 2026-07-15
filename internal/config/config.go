@@ -25,6 +25,7 @@ type Config struct {
 	Cicd            CicdConfig            `mapstructure:"cicd"`
 	Dbmgmt          DbmgmtConfig          `mapstructure:"dbmgmt"`
 	Elasticsearch   ElasticsearchConfig   `mapstructure:"elasticsearch"`
+	Loggie          LoggieConfig          `mapstructure:"loggie"`
 }
 
 type AppConfig struct {

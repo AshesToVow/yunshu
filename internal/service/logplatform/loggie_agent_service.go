@@ -29,16 +29,22 @@ type LoggieAgentService struct {
 	repo          interfaces.LoggieAgentRepository
 	serverRepo    interfaces.ServerRepository
 	logSourceRepo interfaces.LogSourceRepository
+	projectRepo   interfaces.ProjectRepository
+	serviceRepo   interfaces.ServiceRepository
 	esProvider    *ElasticsearchProvider
 	aead          cipher.AEAD
+	loggieCfg     config.LoggieConfig
 }
 
 func NewLoggieAgentService(
 	repo interfaces.LoggieAgentRepository,
 	serverRepo interfaces.ServerRepository,
 	logSourceRepo interfaces.LogSourceRepository,
+	projectRepo interfaces.ProjectRepository,
+	serviceRepo interfaces.ServiceRepository,
 	esProvider *ElasticsearchProvider,
 	encryptionKey string,
+	loggieCfg config.LoggieConfig,
 ) (*LoggieAgentService, error) {
 	aead, err := cryptox.NewAESGCMFromKeyString(encryptionKey)
 	if err != nil {
@@ -48,8 +54,11 @@ func NewLoggieAgentService(
 		repo:          repo,
 		serverRepo:    serverRepo,
 		logSourceRepo: logSourceRepo,
+		projectRepo:   projectRepo,
+		serviceRepo:   serviceRepo,
 		esProvider:    esProvider,
 		aead:          aead,
+		loggieCfg:     loggieCfg.Normalized(),
 	}, nil
 }
 
@@ -84,6 +93,14 @@ type LoggieDeployRequest struct {
 	ServerID      uint `json:"server_id"`
 	RestartLoggie bool `json:"restart_loggie"`
 	SyncFromDB    bool `json:"sync_from_db"`
+}
+
+type LoggieInstallRequest struct {
+	ServerID    uint   `json:"server_id"`
+	BinaryURL   string `json:"binary_url"`
+	DeployDir   string `json:"deploy_dir"`
+	YunshuURL   string `json:"yunshu_url"`
+	MonitorPort int    `json:"monitor_port"`
 }
 
 type LoggieDeployResult struct {
@@ -125,6 +142,8 @@ type loggieBootstrapSource struct {
 	LogType      string   `json:"log_type"`
 	Path         string   `json:"path"`
 	IncludeRegex string   `json:"include_regex,omitempty"`
+	ExcludeRegex string   `json:"exclude_regex,omitempty"`
+	Encoding     string   `json:"encoding,omitempty"`
 	Paths        []string `json:"paths,omitempty"`
 }
 
@@ -349,7 +368,117 @@ func (s *LoggieAgentService) DeployConfig(ctx context.Context, projectID uint, r
 		result.Message = truncateDeployOutput(err.Error(), 512)
 		return result, nil
 	}
-	result.Message = "配置已下发并重启 Loggie"
+	result.Message = "配置已下发并热更/重启 Loggie"
+	return result, nil
+}
+
+func (s *LoggieAgentService) StartLoggie(ctx context.Context, projectID uint, req LoggieDeployRequest) (*LoggieDeployResult, error) {
+	if projectID == 0 || req.ServerID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("project_id 与 server_id 必填")
+	}
+	if _, err := s.repo.GetByProjectAndServer(ctx, projectID, req.ServerID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrBadRequestWithMsg("请先执行引导登记 Agent")
+		}
+		return nil, bizerrors.Pass(ctx, "loggie", "StartLoggie", err)
+	}
+	stdout, stderr, err := s.startLoggieOverSSH(ctx, req.ServerID)
+	result := &LoggieDeployResult{
+		Success: err == nil,
+		Stdout:  truncateDeployOutput(stdout, 2048),
+		Stderr:  truncateDeployOutput(stderr, 2048),
+	}
+	if err != nil {
+		result.Message = truncateDeployOutput(err.Error(), 512)
+		return result, nil
+	}
+	result.Message = "Loggie 已启动"
+	return result, nil
+}
+
+func (s *LoggieAgentService) StopLoggie(ctx context.Context, projectID uint, req LoggieDeployRequest) (*LoggieDeployResult, error) {
+	if projectID == 0 || req.ServerID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("project_id 与 server_id 必填")
+	}
+	if _, err := s.repo.GetByProjectAndServer(ctx, projectID, req.ServerID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrBadRequestWithMsg("请先执行引导登记 Agent")
+		}
+		return nil, bizerrors.Pass(ctx, "loggie", "StopLoggie", err)
+	}
+	stdout, stderr, err := s.stopLoggieOverSSH(ctx, req.ServerID)
+	result := &LoggieDeployResult{
+		Success: err == nil,
+		Stdout:  truncateDeployOutput(stdout, 2048),
+		Stderr:  truncateDeployOutput(stderr, 2048),
+	}
+	if err != nil {
+		result.Message = truncateDeployOutput(err.Error(), 512)
+		return result, nil
+	}
+	result.Message = "Loggie 已停止"
+	return result, nil
+}
+
+func (s *LoggieAgentService) InstallLoggie(ctx context.Context, projectID uint, req LoggieInstallRequest) (*LoggieDeployResult, error) {
+	if projectID == 0 || req.ServerID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("project_id 与 server_id 必填")
+	}
+	sv, err := s.serverRepo.GetByID(ctx, req.ServerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrLogSourceServerNotFound
+		}
+		return nil, bizerrors.Pass(ctx, "loggie", "InstallLoggie", err)
+	}
+	if sv.ProjectID != projectID {
+		return nil, constants.ErrServerNotInCurrentProject
+	}
+	agent, err := s.ensureAgent(ctx, projectID, req.ServerID, req.MonitorPort)
+	if err != nil {
+		return nil, err
+	}
+	stored := parseStoredBootstrapConfig(agent.BootstrapConfig)
+	if mp := defaultMonitorPort(req.MonitorPort); mp > 0 {
+		stored.MonitorPort = mp
+		agent.MonitorPort = mp
+	}
+	if d := strings.TrimSpace(req.DeployDir); d != "" {
+		stored.DeployDir = normalizeDeployDir(d)
+	}
+	if u := strings.TrimSpace(req.YunshuURL); u != "" {
+		stored.YunshuURL = u
+	}
+	stored.AutoFromLogSources = true
+	sources, err := s.loadBootstrapSourcesFromDB(ctx, projectID, req.ServerID)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "loggie", "InstallLoggie", err)
+	}
+	stored.Sources = sources
+	if raw, err := json.Marshal(stored); err == nil {
+		agent.BootstrapConfig = string(raw)
+	}
+	if err := s.repo.Save(ctx, agent); err != nil {
+		return nil, bizerrors.Pass(ctx, "loggie", "InstallLoggie", err)
+	}
+	bundle, _, err := s.bundleFromStored(ctx, projectID, req.ServerID, agent, stored, true)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "loggie", "InstallLoggie", err)
+	}
+	stdout, stderr, err := s.installLoggieOverSSH(ctx, req.ServerID, bundle, req.BinaryURL)
+	result := &LoggieDeployResult{
+		Success:       err == nil,
+		PipelineCount: bundle.PipelineCount,
+		SourceCount:   len(sources),
+		Stdout:        truncateDeployOutput(stdout, 4096),
+		Stderr:        truncateDeployOutput(stderr, 2048),
+		DeployedAt:    formatDeployTime(time.Now()),
+	}
+	if err != nil {
+		result.Message = truncateDeployOutput(err.Error(), 512)
+		return result, nil
+	}
+	result.Message = "Agent 安装完成并已启动"
 	return result, nil
 }
 
@@ -507,7 +636,7 @@ func (s *LoggieAgentService) recentIngestByServer(ctx context.Context, projectID
 			},
 		},
 	}
-	raw, err := cli.Search(ctx, cfg.IndexPattern, body)
+	raw, err := cli.Search(ctx, GlobalAgentIndexPattern(), body)
 	if err != nil {
 		return out
 	}

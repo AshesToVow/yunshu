@@ -14,7 +14,7 @@ func TestBuildPipelineBundle_AppLogSyntax(t *testing.T) {
 		LogPaths:  []string{"/var/log/myapp/*.log"},
 	}, config.ElasticsearchConfig{
 		Addresses:    []string{"http://127.0.0.1:9200"},
-		IndexPattern: "yunshu-logs-*",
+		IndexPattern: "yunshu-agent-*",
 	}, "token", "http://yunshu:8080")
 
 	yaml := bundle.PipelineYAML
@@ -24,8 +24,14 @@ func TestBuildPipelineBundle_AppLogSyntax(t *testing.T) {
 	if !strings.Contains(yaml, "service_id") && !strings.Contains(yaml, "project_id") {
 		t.Fatal("expected fields.project_id in pipeline")
 	}
-	if !strings.Contains(yaml, "yunshu-logs-${+YYYY.MM.DD}") {
-		t.Fatal("expected daily index pattern")
+	if !strings.Contains(yaml, `yunshu-agent-10-${+YYYY.MM.DD}`) {
+		t.Fatal("expected per-agent daily index")
+	}
+	if !strings.Contains(yaml, "type: schema") {
+		t.Fatal("expected defaults schema interceptor")
+	}
+	if !strings.Contains(yaml, "copy(state.hostname, host)") {
+		t.Fatal("expected hostname copy action")
 	}
 }
 

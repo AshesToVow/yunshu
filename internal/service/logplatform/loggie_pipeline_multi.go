@@ -21,6 +21,13 @@ type LoggiePipelineSourceEntry struct {
 	Paths        []string
 	PipelineName string
 	ParseProfile pipelineParseProfile
+	ServiceName  string
+	ProjectCode  string
+	ProjectName  string
+	ServerHost   string
+	ServerName   string
+	ExcludeRegex string
+	Encoding     string
 }
 
 func logSourceToGlobPath(src model.ServiceLogSource) string {
@@ -72,9 +79,18 @@ func sourcesFromLogSources(projectID, serverID uint, list []model.ServiceLogSour
 			Paths:        []string{glob},
 			PipelineName: pipelineNameForSource(projectID, serverID, src.ID, src.ServiceID),
 			ParseProfile: parseProfileForLogSource(src),
+			ExcludeRegex: derefStr(src.ExcludeRegex),
+			Encoding:     derefStr(src.Encoding),
 		})
 	}
 	return out
+}
+
+func derefStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return strings.TrimSpace(*p)
 }
 
 func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEntry, hostsBlock, indexSink, sinkAuth string) string {
@@ -91,17 +107,39 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
 		pathsLines.WriteString(quoteYAML(p))
 		pathsLines.WriteByte('\n')
 	}
-	serviceField := ""
+	fieldsExtra := ""
 	if entry.ServiceID > 0 {
-		serviceField = fmt.Sprintf("\n          service_id: %q", fmt.Sprintf("%d", entry.ServiceID))
+		fieldsExtra += fmt.Sprintf("\n          service_id: %q", fmt.Sprintf("%d", entry.ServiceID))
 	}
-	logSourceField := ""
 	if entry.LogSourceID > 0 {
-		logSourceField = fmt.Sprintf("\n          log_source_id: %q", fmt.Sprintf("%d", entry.LogSourceID))
+		fieldsExtra += fmt.Sprintf("\n          log_source_id: %q", fmt.Sprintf("%d", entry.LogSourceID))
+	}
+	if sn := strings.TrimSpace(entry.ServiceName); sn != "" {
+		fieldsExtra += fmt.Sprintf("\n          service_name: %q", sn)
+	}
+	if pc := strings.TrimSpace(entry.ProjectCode); pc != "" {
+		fieldsExtra += fmt.Sprintf("\n          project_code: %q", pc)
+	}
+	if pn := strings.TrimSpace(entry.ProjectName); pn != "" {
+		fieldsExtra += fmt.Sprintf("\n          project_name: %q", pn)
+	}
+	if sh := strings.TrimSpace(entry.ServerHost); sh != "" {
+		fieldsExtra += fmt.Sprintf("\n          server_host: %q", sh)
+	}
+	if sn := strings.TrimSpace(entry.ServerName); sn != "" {
+		fieldsExtra += fmt.Sprintf("\n          server_name: %q", sn)
 	}
 	sourceName := "logs"
 	if entry.LogSourceID > 0 {
 		sourceName = fmt.Sprintf("ls-%d", entry.LogSourceID)
+	}
+	excludeBlock := ""
+	if er := strings.TrimSpace(entry.ExcludeRegex); er != "" {
+		excludeBlock = fmt.Sprintf("\n        exclude: [%s]", quoteYAML(er))
+	}
+	encodingBlock := ""
+	if enc := strings.TrimSpace(entry.Encoding); enc != "" {
+		encodingBlock = fmt.Sprintf("\n        charset: %s", quoteYAML(enc))
 	}
 	interceptorBlock := ""
 	if parseProfile.hasTransformer() {
@@ -113,10 +151,10 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
         name: %s
         paths:
 %s        addonMeta: true
-        readFromTail: false
+        readFromTail: false%s%s
         fields:
           project_id: %q
-          server_id: %q%s%s
+          server_id: %q%s
         multiline:
           pattern: '%s'
           negate: true
@@ -132,10 +170,11 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
 		entry.PipelineName,
 		sourceName,
 		pathsLines.String(),
+		excludeBlock,
+		encodingBlock,
 		fmt.Sprintf("%d", projectID),
 		fmt.Sprintf("%d", serverID),
-		serviceField,
-		logSourceField,
+		fieldsExtra,
 		parseProfile.multilinePattern,
 		ensureFileMetaActions(interceptorBlock, entry.Paths),
 		hostsBlock,
@@ -144,15 +183,17 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
 	)
 }
 
-// ensureFileMetaActions 保证 transformer 里把 state.filename 提升为 file_path，便于检索区分多文件。
+// ensureFileMetaActions 保证 transformer 提升 file_path / host，并对 K8s pod 路径抽 typePodFields 风格元信息。
 func ensureFileMetaActions(interceptorBlock string, paths []string) string {
 	fileMeta := `          - action: copy(state.filename, file_path)
+            ignoreError: true
+          - action: copy(state.hostname, host)
             ignoreError: true
 `
 	k8sMeta := ""
 	if isK8sPodLogPath(paths) {
 		k8sMeta = `          - action: regex(file_path)
-            pattern: '.*/pods/(?P<namespace>[^_]+)_(?P<pod>.+)_(?P<pod_uid>[0-9a-fA-F-]{32,36})/(?P<container>[^/]+)/(?P<log_file>[^/]+)$'
+            pattern: '.*/pods/(?P<namespace>[^_]+)_(?P<podname>.+)_(?P<pod_uid>[0-9a-fA-F-]{32,36})/(?P<containername>[^/]+)/(?P<log_file>[^/]+)$'
             ignoreError: true
 `
 	}
@@ -162,12 +203,17 @@ func ensureFileMetaActions(interceptorBlock string, paths []string) string {
         actions:
 ` + fileMeta + k8sMeta
 	}
-	// append before end of actions block
 	if strings.Contains(interceptorBlock, "copy(state.filename, file_path)") {
-		if k8sMeta != "" && !strings.Contains(interceptorBlock, "pod_uid") {
-			return interceptorBlock + k8sMeta
+		out := interceptorBlock
+		if !strings.Contains(out, "copy(state.hostname, host)") {
+			out += `          - action: copy(state.hostname, host)
+            ignoreError: true
+`
 		}
-		return interceptorBlock
+		if k8sMeta != "" && !strings.Contains(out, "podname") {
+			out += k8sMeta
+		}
+		return out
 	}
 	return interceptorBlock + fileMeta + k8sMeta
 }
@@ -183,11 +229,7 @@ func isK8sPodLogPath(paths []string) bool {
 
 func renderPipelinesYAML(projectID, serverID uint, entries []LoggiePipelineSourceEntry, esCfg config.ElasticsearchConfig) string {
 	esCfg = esCfg.Normalized()
-	indexPattern := strings.TrimSpace(esCfg.IndexPattern)
-	if indexPattern == "" {
-		indexPattern = "yunshu-logs-*"
-	}
-	indexSink := strings.TrimSuffix(indexPattern, "*") + "${+YYYY.MM.DD}"
+	indexSink := AgentIndexSink(serverID)
 
 	var hostsLines strings.Builder
 	for _, h := range esCfg.Addresses {
@@ -214,7 +256,7 @@ func renderPipelinesYAML(projectID, serverID uint, entries []LoggiePipelineSourc
 
 	var body strings.Builder
 	body.WriteString("# Generated by Yunshu Loggie Bootstrap\n")
-	body.WriteString(fmt.Sprintf("# project_id=%d server_id=%d pipelines=%d\n", projectID, serverID, len(entries)))
+	body.WriteString(fmt.Sprintf("# project_id=%d server_id=%d pipelines=%d index=%s\n", projectID, serverID, len(entries), AgentIndexPattern(serverID)))
 	body.WriteString("pipelines:\n")
 	for _, e := range entries {
 		body.WriteString(renderPipelineEntry(projectID, serverID, e, hostsBlock, indexSink, sinkAuth.String()))
@@ -234,6 +276,14 @@ loggie:
     enabled: true
     host: "127.0.0.1"
     port: %d
+  defaults:
+    interceptors:
+      - type: schema
+        name: global
+        order: 700
+        addMeta:
+          timestamp:
+            key: "@timestamp"
   monitor:
     enabled: true
     listeners:

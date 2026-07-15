@@ -231,6 +231,21 @@ export async function deployLoggieConfig(projectId: number, payload: LoggieDeplo
   return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/deploy`, payload));
 }
 
+export async function installLoggie(
+  projectId: number,
+  payload: LoggieDeployPayload & { binary_url?: string; deploy_dir?: string; yunshu_url?: string; monitor_port?: number },
+) {
+  return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/install`, payload));
+}
+
+export async function startLoggie(projectId: number, payload: LoggieDeployPayload) {
+  return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/start`, payload));
+}
+
+export async function stopLoggie(projectId: number, payload: LoggieDeployPayload) {
+  return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/stop`, payload));
+}
+
 export async function restartLoggie(projectId: number, payload: LoggieDeployPayload) {
   return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/restart`, payload));
 }

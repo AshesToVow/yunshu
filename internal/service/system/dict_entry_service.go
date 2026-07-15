@@ -279,7 +279,7 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "elasticsearch_addresses", Label: "ES 地址列表", Value: "http://127.0.0.1:9200", Sort: intRef(1), Status: 1, Remark: "单节点填一个；集群可 JSON 数组或逗号分隔"},
 			{DictType: "elasticsearch_username", Label: "ES 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "Basic 认证用户名"},
 			{DictType: "elasticsearch_password", Label: "ES 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：Basic 认证密码"},
-			{DictType: "elasticsearch_index_pattern", Label: "ES 索引模式", Value: "yunshu-logs-*", Sort: intRef(1), Status: 1, Remark: "elasticsearch.index_pattern"},
+			{DictType: "elasticsearch_index_pattern", Label: "ES 索引模式", Value: "yunshu-agent-*", Sort: intRef(1), Status: 1, Remark: "elasticsearch.index_pattern；Agent 分索引前缀通配"},
 			{DictType: "elasticsearch_default_retention_days", Label: "默认保留天数", Value: "30", Sort: intRef(1), Status: 1, Remark: "elasticsearch.default_retention_days"},
 			{DictType: "elasticsearch_cleanup_cron_spec", Label: "清理 Cron", Value: "0 3 * * *", Sort: intRef(1), Status: 1, Remark: "elasticsearch.cleanup_cron_spec"},
 		}

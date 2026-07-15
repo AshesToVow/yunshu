@@ -462,7 +462,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 | K8s 操作 403 | 依次检查：授权管理 API → 集群档位 → NS 黑/白名单；请求是否带 `cluster_id` |
 | Pod Exec 403 | 需 `readonly_exec`；WS 需 Casbin + 档位；检查 Origin 与 token |
 | Loggie 无上报 | 控制台 **Loggie 状态**；目标机 `9196` 监控端口；ES 连通与 pipeline 配置 |
-| ES 检索为空 | 确认 `elasticsearch.enabled`；索引 `yunshu-logs-*` 是否有数据 |
+| ES 检索为空 | 确认 `elasticsearch.enabled`；索引 `yunshu-agent-{server_id}-*` 是否有数据 |
 | 集群详情无 kubeconfig | 预期行为（安全脱敏）；更新时重新粘贴 YAML |
 | 首页 Pod 统计与预期不符 | 非 super-admin 仅聚合**有项目成员关系且具备 readonly+ 档位**的集群 |
 | Docker 后端连不上库 | 检查 `MYSQL_*` / `REDIS_*` 环境变量与服务名 `yunshu-mysql` |

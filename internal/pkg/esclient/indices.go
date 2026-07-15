@@ -113,7 +113,7 @@ func (c *Client) DeleteByQuery(ctx context.Context, indexPattern string, body ma
 	return parseInt64Any(out["deleted"]), nil
 }
 
-// ParseIndexDate 从索引名尾部解析日期（支持 yunshu-logs-2026.07.13）。
+// ParseIndexDate 从索引名尾部解析日期（支持 yunshu-agent-7-2026.07.13 / yunshu-logs-2026.07.13）。
 func ParseIndexDate(indexName string) (time.Time, bool) {
 	m := indexDateSuffix.FindStringSubmatch(strings.TrimSpace(indexName))
 	if len(m) != 4 {

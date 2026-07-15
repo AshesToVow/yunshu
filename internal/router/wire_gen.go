@@ -135,11 +135,11 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		return nil, err
 	}
 	v86 := provideElasticsearchProvider(app)
-	v87 := provideLogSearchService(v86)
+	v87 := provideLogSearchService(v86, v77)
 	v88 := routerRouteRepositories.LogRetention
 	v89 := provideLogRetentionService(v86, v88)
 	v90 := routerRouteRepositories.LoggieAgent
-	v91, err := provideLoggieAgentService(v90, v77, v80, v86, securityEncryptionKey)
+	v91, err := provideLoggieAgentService(v90, v77, v80, v27, v79, v86, securityEncryptionKey, provideLoggieConfig(app))
 	if err != nil {
 		return nil, err
 	}

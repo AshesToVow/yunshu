@@ -18,7 +18,7 @@ func TestBuildMultiPipelineBundle_PerLogSourceFields(t *testing.T) {
 	}
 	bundle := BuildMultiPipelineBundle(1, 7, sources, 9196, config.ElasticsearchConfig{
 		Addresses:    []string{"http://10.10.10.103:9200"},
-		IndexPattern: "yunshu-logs-*",
+		IndexPattern: "yunshu-agent-*",
 	}, "token", "http://127.0.0.1:8080", "/export/loggie")
 
 	yaml := bundle.PipelinesOnlyYAML
@@ -30,6 +30,9 @@ func TestBuildMultiPipelineBundle_PerLogSourceFields(t *testing.T) {
 	}
 	if !strings.Contains(yaml, "log_source_id: \"12\"") || !strings.Contains(yaml, "service_id: \"4\"") {
 		t.Fatal("missing fields for second log source")
+	}
+	if !strings.Contains(yaml, `index: "yunshu-agent-7-${+YYYY.MM.DD}"`) {
+		t.Fatalf("expected per-agent index, got:\n%s", yaml)
 	}
 	if !strings.Contains(yaml, "name: yunshu-p1-s7-ls11") {
 		t.Fatal("expected per-source pipeline name")
