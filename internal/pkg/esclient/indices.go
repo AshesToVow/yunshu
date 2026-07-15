@@ -50,7 +50,10 @@ func (c *Client) CatIndices(ctx context.Context, indexPattern string) ([]IndexIn
 	if pattern == "" {
 		pattern = c.cfg.IndexPattern
 	}
-	path := fmt.Sprintf("/_cat/indices/%s?format=json&bytes=b", pattern)
+	path := "/_cat/indices?format=json&bytes=b"
+	if pattern != "" && pattern != "*" {
+		path = fmt.Sprintf("/_cat/indices/%s?format=json&bytes=b", pattern)
+	}
 	raw, status, err := c.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err

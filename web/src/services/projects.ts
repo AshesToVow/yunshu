@@ -498,11 +498,16 @@ export async function exportProjectLogs(
     service_id?: number;
     log_source_id?: number;
     keyword?: string;
+    level?: string;
+    file_path?: string;
     from?: string;
     to?: string;
     page_size?: number;
   },
 ): Promise<Blob> {
-  const resp = await http.get<Blob>(`/projects/${projectId}/logs/export`, { params: { ...params, project_id: projectId }, responseType: "blob" });
-  return resp.data;
+  // http 拦截器已经返回 response.data（Blob），不可再取 .data
+  return (await http.get(`/projects/${projectId}/logs/export`, {
+    params: { ...params, project_id: projectId },
+    responseType: "blob",
+  })) as unknown as Blob;
 }

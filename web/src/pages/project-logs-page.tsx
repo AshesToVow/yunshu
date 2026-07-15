@@ -226,24 +226,48 @@ export function ProjectLogsPage() {
               icon={<DownloadOutlined />}
               onClick={() => {
                 const v = form.getFieldsValue();
-                if (!v.project_id) return;
+                if (!v.project_id) {
+                  message.warning("请选择项目");
+                  return;
+                }
                 const range = v.time_range;
                 void (async () => {
-                  const blob = await exportProjectLogs(v.project_id!, {
-                    server_id: v.server_id,
-                    service_id: v.service_id,
-                    log_source_id: v.log_source_id,
-                    keyword: v.keyword,
-                    from: range?.[0]?.toISOString(),
-                    to: range?.[1]?.toISOString(),
-                    page_size: 1000,
-                  });
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `project-${v.project_id}-logs.txt`;
-                  a.click();
-                  window.URL.revokeObjectURL(url);
+                  try {
+                    const blob = await exportProjectLogs(v.project_id!, {
+                      server_id: v.server_id,
+                      service_id: v.service_id,
+                      log_source_id: v.log_source_id,
+                      keyword: v.keyword?.trim() || undefined,
+                      level: v.level?.trim() || undefined,
+                      file_path: v.file_path?.trim() || undefined,
+                      from: range?.[0]?.toISOString(),
+                      to: range?.[1]?.toISOString(),
+                      page_size: 1000,
+                    });
+                    if (!(blob instanceof Blob)) {
+                      message.error("导出失败：响应格式异常");
+                      return;
+                    }
+                    if (blob.type && blob.type.includes("application/json")) {
+                      const text = await blob.text();
+                      try {
+                        const err = JSON.parse(text) as { message?: string };
+                        message.error(err.message || "导出失败");
+                      } catch {
+                        message.error("导出失败");
+                      }
+                      return;
+                    }
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `project-${v.project_id}-logs.txt`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    message.success("导出完成");
+                  } catch (e: unknown) {
+                    message.error(String((e as Error)?.message ?? e));
+                  }
                 })();
               }}
             >

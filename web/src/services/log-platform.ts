@@ -18,12 +18,25 @@ export interface LogRetentionItem {
   updated_at?: string;
 }
 
+export interface ESIndexStatItem {
+  name: string;
+  docs_count: number;
+  store_bytes: number;
+  store_human: string;
+  matched_pattern: boolean;
+}
+
 export interface ESStorageStats {
   index_pattern: string;
   index_count: number;
   document_count: number;
   store_bytes: number;
   store_human: string;
+  pattern_index_count?: number;
+  pattern_document_count?: number;
+  pattern_store_bytes?: number;
+  pattern_store_human?: string;
+  indices?: ESIndexStatItem[];
 }
 
 export interface LogRetentionCleanupResult {

@@ -113,11 +113,42 @@ export function LogRetentionPage() {
           }
         >
           {stats ? (
-            <Space size={24} wrap>
-              <span>索引模式：{stats.index_pattern}</span>
-              <span>索引数：{stats.index_count}</span>
-              <span>文档数：{stats.document_count}</span>
-              <span>占用：{stats.store_human}</span>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Space size={24} wrap>
+                <span>
+                  全部索引：{stats.index_count} 个 / {stats.document_count.toLocaleString()} 文档 / {stats.store_human}
+                </span>
+                <span>
+                  匹配 <code>{stats.index_pattern}</code>：{stats.pattern_index_count ?? 0} 个 /{" "}
+                  {(stats.pattern_document_count ?? 0).toLocaleString()} 文档 / {stats.pattern_store_human || "-"}
+                </span>
+              </Space>
+              <Table
+                size="small"
+                rowKey="name"
+                pagination={{ pageSize: 20, showSizeChanger: true }}
+                dataSource={stats.indices ?? []}
+                columns={[
+                  {
+                    title: "索引名",
+                    dataIndex: "name",
+                    ellipsis: true,
+                    render: (name: string, r: { matched_pattern?: boolean }) => (
+                      <Space>
+                        <span>{name}</span>
+                        {r.matched_pattern ? <Tag color="blue">平台日志</Tag> : null}
+                      </Space>
+                    ),
+                  },
+                  {
+                    title: "文档数",
+                    dataIndex: "docs_count",
+                    width: 120,
+                    render: (n: number) => (n ?? 0).toLocaleString(),
+                  },
+                  { title: "占用", dataIndex: "store_human", width: 120 },
+                ]}
+              />
             </Space>
           ) : (
             <span>无法连接 ES 或未启用 elasticsearch.enabled</span>

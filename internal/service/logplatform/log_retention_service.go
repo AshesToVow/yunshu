@@ -59,11 +59,24 @@ type LogRetentionCleanupResult struct {
 }
 
 type ESStorageStats struct {
-	IndexPattern  string `json:"index_pattern"`
-	IndexCount    int    `json:"index_count"`
-	DocumentCount int64  `json:"document_count"`
-	StoreBytes    int64  `json:"store_bytes"`
-	StoreHuman    string `json:"store_human"`
+	IndexPattern         string            `json:"index_pattern"`
+	IndexCount           int               `json:"index_count"`
+	DocumentCount        int64             `json:"document_count"`
+	StoreBytes           int64             `json:"store_bytes"`
+	StoreHuman           string            `json:"store_human"`
+	PatternIndexCount    int               `json:"pattern_index_count"`
+	PatternDocumentCount int64             `json:"pattern_document_count"`
+	PatternStoreBytes    int64             `json:"pattern_store_bytes"`
+	PatternStoreHuman    string            `json:"pattern_store_human"`
+	Indices              []ESIndexStatItem `json:"indices"`
+}
+
+type ESIndexStatItem struct {
+	Name           string `json:"name"`
+	DocsCount      int64  `json:"docs_count"`
+	StoreBytes     int64  `json:"store_bytes"`
+	StoreHuman     string `json:"store_human"`
+	MatchedPattern bool   `json:"matched_pattern"`
 }
 
 func (s *LogRetentionService) List(ctx context.Context) ([]LogRetentionItem, error) {
@@ -131,22 +144,79 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 	if err != nil {
 		return nil, constants.ErrBadRequestWithMsg(err.Error())
 	}
-	indices, err := cli.CatIndices(ctx, cfg.IndexPattern)
+	// 拉全量非系统索引，同时按配置 pattern 做子集汇总
+	indices, err := cli.CatIndices(ctx, "*")
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "logretention", "StorageStats", err)
 	}
-	var docs, bytes int64
+	pattern := strings.TrimSpace(cfg.IndexPattern)
+	if pattern == "" {
+		pattern = "yunshu-agent-*"
+	}
+	var docs, bytes, pDocs, pBytes int64
+	var pCount int
+	items := make([]ESIndexStatItem, 0, len(indices))
 	for _, idx := range indices {
+		matched := matchIndexPattern(idx.Name, pattern)
 		docs += idx.DocsCount
 		bytes += idx.StoreBytes
+		if matched {
+			pCount++
+			pDocs += idx.DocsCount
+			pBytes += idx.StoreBytes
+		}
+		items = append(items, ESIndexStatItem{
+			Name:           idx.Name,
+			DocsCount:      idx.DocsCount,
+			StoreBytes:     idx.StoreBytes,
+			StoreHuman:     humanBytes(idx.StoreBytes),
+			MatchedPattern: matched,
+		})
 	}
 	return &ESStorageStats{
-		IndexPattern:  cfg.IndexPattern,
-		IndexCount:    len(indices),
-		DocumentCount: docs,
-		StoreBytes:    bytes,
-		StoreHuman:    humanBytes(bytes),
+		IndexPattern:         pattern,
+		IndexCount:           len(indices),
+		DocumentCount:        docs,
+		StoreBytes:           bytes,
+		StoreHuman:           humanBytes(bytes),
+		PatternIndexCount:    pCount,
+		PatternDocumentCount: pDocs,
+		PatternStoreBytes:    pBytes,
+		PatternStoreHuman:    humanBytes(pBytes),
+		Indices:              items,
 	}, nil
+}
+
+// matchIndexPattern 简易 glob：仅支持 * 通配（与 ES index_pattern 常见写法一致）。
+func matchIndexPattern(name, pattern string) bool {
+	name = strings.TrimSpace(name)
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" || pattern == "*" {
+		return true
+	}
+	if !strings.Contains(pattern, "*") {
+		return name == pattern
+	}
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return name == pattern
+	}
+	if !strings.HasPrefix(name, parts[0]) {
+		return false
+	}
+	rest := name[len(parts[0]):]
+	for i := 1; i < len(parts)-1; i++ {
+		p := parts[i]
+		if p == "" {
+			continue
+		}
+		idx := strings.Index(rest, p)
+		if idx < 0 {
+			return false
+		}
+		rest = rest[idx+len(p):]
+	}
+	return strings.HasSuffix(rest, parts[len(parts)-1]) || parts[len(parts)-1] == ""
 }
 
 func (s *LogRetentionService) RunCleanup(ctx context.Context) (*LogRetentionCleanupResult, error) {
