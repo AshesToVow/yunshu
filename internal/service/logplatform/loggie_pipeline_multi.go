@@ -145,6 +145,10 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
 	if parseProfile.hasTransformer() {
 		interceptorBlock = parseProfile.renderTransformerActions()
 	}
+	negate := "true"
+	if !parseProfile.multilineNegateValue() {
+		negate = "false"
+	}
 	return fmt.Sprintf(`  - name: %s
     sources:
       - type: file
@@ -157,8 +161,10 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
           server_id: %q%s
         multiline:
           pattern: '%s'
-          negate: true
+          negate: %s
           match: after
+          maxLines: %d
+          timeout: 5s
 %s    sink:
       type: elasticsearch
       hosts:
@@ -176,6 +182,8 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
 		fmt.Sprintf("%d", serverID),
 		fieldsExtra,
 		parseProfile.multilinePattern,
+		negate,
+		parseProfile.multilineMaxLines(),
 		ensureFileMetaActions(interceptorBlock, entry.Paths),
 		hostsBlock,
 		quoteYAML(indexSink),
@@ -274,16 +282,20 @@ loggie:
     period: 10s
   http:
     enabled: true
-    host: "127.0.0.1"
+    # 0.0.0.0：允许 Yunshu 远程探测 /api/v1/help/log（监控/FD）
+    host: "0.0.0.0"
     port: %d
   defaults:
     interceptors:
       - type: schema
         name: global
+        # 先于 pipeline transformer(默认 ~900)：写入采集时间；解析成功后会被 move(@timestamp) 覆盖为日志时间
         order: 700
         addMeta:
           timestamp:
             key: "@timestamp"
+            location: Local
+            layout: "2006-01-02T15:04:05.000Z07:00"
   monitor:
     enabled: true
     listeners:

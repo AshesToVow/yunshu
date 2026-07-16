@@ -9,6 +9,8 @@ import (
 var (
 	levelBracketRE = regexp.MustCompile(`(?i)\[(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PANIC)\s*\]`)
 	levelTokenRE   = regexp.MustCompile(`(?i)\s(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PANIC)\s`)
+	// klog / kube-style：I0716 02:51:52.902837 或行首 I/W/E/F + MMDD
+	levelKlogRE = regexp.MustCompile(`(?:^|[\s>])([IWEF])\d{4}\s+\d{2}:\d{2}:\d{2}`)
 )
 
 func normalizeLevel(level string) string {
@@ -16,6 +18,14 @@ func normalizeLevel(level string) string {
 	switch level {
 	case "WARNING":
 		return "WARN"
+	case "I":
+		return "INFO"
+	case "W":
+		return "WARN"
+	case "E":
+		return "ERROR"
+	case "F":
+		return "FATAL"
 	default:
 		return level
 	}
@@ -30,6 +40,9 @@ func extractLevelFromMessage(message string) string {
 		return normalizeLevel(m[1])
 	}
 	if m := levelTokenRE.FindStringSubmatch(message); len(m) > 1 {
+		return normalizeLevel(m[1])
+	}
+	if m := levelKlogRE.FindStringSubmatch(message); len(m) > 1 {
 		return normalizeLevel(m[1])
 	}
 	return ""
@@ -92,15 +105,15 @@ func filePathFilter(path string) map[string]any {
 
 func pickLevel(src map[string]any) string {
 	meta := nestedFields(src)
-	if lv := normalizeLevel(pickString(src, "level", "log.level", "severity")); lv != "" {
+	if lv := normalizeLevel(pickString(src, "level", "log.level", "severity", "klevel")); lv != "" {
 		return lv
 	}
 	if meta != nil {
-		if lv := normalizeLevel(pickString(meta, "level")); lv != "" {
+		if lv := normalizeLevel(pickString(meta, "level", "klevel")); lv != "" {
 			return lv
 		}
 	}
-	return ""
+	return extractLevelFromMessage(pickString(src, "message", "body", "log", "msg"))
 }
 
 func pickFilePath(src map[string]any) string {

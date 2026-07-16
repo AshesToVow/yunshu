@@ -55,6 +55,47 @@ func TestLevelFilterIncludesMessagePatterns(t *testing.T) {
 	}
 }
 
+func TestDetectParseProfile_CRI(t *testing.T) {
+	p := detectParseProfile("/var/log/pods/kube-system_metrics-server-*/metrics-server/*.log", nil)
+	if p.name != "cri" {
+		t.Fatalf("expected cri profile, got %s", p.name)
+	}
+	actions := p.renderTransformerActions()
+	if !strings.Contains(actions, "move(ts, @timestamp)") {
+		t.Fatal("expected CRI timestamp passthrough move")
+	}
+	if !strings.Contains(actions, "equal(klevel, I)") {
+		t.Fatal("expected klog level mapping")
+	}
+	if strings.Contains(actions, "action: timestamp(ts)") {
+		t.Fatal("CRI should not use timestamp layout conversion")
+	}
+}
+
+func TestExtractLevelFromMessage_Klog(t *testing.T) {
+	msg := `2026-07-16T10:51:52.902943486+08:00 stderr F I0716 02:51:52.902837       1 httplog.go:132] "HTTP" verb="GET"`
+	if lv := extractLevelFromMessage(msg); lv != "INFO" {
+		t.Fatalf("expected INFO from klog, got %q", lv)
+	}
+}
+
+func TestBuildMultiPipelineBundle_ElasticsearchMultiline(t *testing.T) {
+	sources := sourcesFromLogSources(1, 7, []model.ServiceLogSource{
+		{ID: 21, ServiceID: 5, LogType: "file", Path: "/export/elasticsearch-7.14.2/logs/yunshu.log"},
+	})
+	bundle := BuildMultiPipelineBundle(1, 7, sources, 9196, config.ElasticsearchConfig{
+		Addresses:    []string{"http://127.0.0.1:9200"},
+		IndexPattern: "yunshu-agent-*",
+	}, "token", "", "/export/loggie")
+	yaml := bundle.PipelinesOnlyYAML
+	if !strings.Contains(yaml, `pattern: '^\[\d{4}-\d{2}-\d{2}'`) {
+		t.Fatal("expected ES multiline header pattern")
+	}
+	if !strings.Contains(yaml, "maxLines: 500") {
+		t.Fatal("expected multiline maxLines for ES stack traces")
+	}
+}
+
 func TestBuildMultiPipelineBundle_ElasticsearchLevelRegex(t *testing.T) {
 	sources := sourcesFromLogSources(1, 7, []model.ServiceLogSource{
 		{ID: 21, ServiceID: 5, LogType: "file", Path: "/export/elasticsearch-7.14.2/logs/yunshu.log"},

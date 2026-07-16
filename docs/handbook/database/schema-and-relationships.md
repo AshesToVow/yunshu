@@ -14,7 +14,7 @@ erDiagram
   projects ||--o{ servers : owns
   projects ||--o{ services : owns
   projects ||--o{ service_log_sources : owns
-  projects ||--o{ log_agents : owns
+  projects ||--o{ loggie_agents : owns
   projects ||--o{ db_instances : owns
   db_instances ||--o{ db_access_grants : has
   db_instances ||--o{ db_sql_tickets : has
@@ -53,7 +53,8 @@ erDiagram
 | `servers` / `server_credentials` / `cloud_accounts` | 主机与凭据 |
 | `services` | 项目服务 |
 | `service_log_sources` | 日志源 |
-| `log_agents` / `agent_discovery` | Agent 与发现 |
+| `loggie_agents` | Loggie Agent 登记与心跳（替代旧 `log_agents`） |
+| `log_retention_policies` | 日志保留（全局/项目/服务器） |
 
 ### 2.3 数据库管理（`dbmgmt` 插件）
 

@@ -44,7 +44,7 @@ elasticsearch:
   index_pattern: "yunshu-agent-*"
 
 loggie:
-  binary_url: "https://example.com/loggie_linux_{arch}.tar.gz"
+  offline_binary_path: "deploy/loggie/binary/loggie"
   unit_name: "loggie.service"
   deploy_dir: "/export/loggie"
 ```

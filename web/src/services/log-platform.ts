@@ -109,6 +109,7 @@ export interface LoggieStatusItem {
   monitor_reachable?: boolean;
   active_pipeline_count?: number;
   active_fd_count?: number;
+  inactive_fd_count?: number;
   monitor_detail?: string;
   live_probe?: {
     reachable: boolean;

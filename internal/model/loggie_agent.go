@@ -18,6 +18,7 @@ type LoggieAgent struct {
 	MonitorReachable bool      `json:"monitor_reachable" gorm:"default:false;comment:监控端口是否可达"`
 	ActivePipelineCount int    `json:"active_pipeline_count" gorm:"default:0;comment:活跃 pipeline 数"`
 	ActiveFdCount   int        `json:"active_fd_count" gorm:"default:0;comment:活跃文件句柄数"`
+	InactiveFdCount int        `json:"inactive_fd_count" gorm:"default:0;comment:不活跃文件句柄数(追平后常见)"`
 	MonitorDetail   string     `json:"monitor_detail" gorm:"type:text;comment:监控快照 JSON"`
 	BootstrapConfig string     `json:"-" gorm:"type:text;comment:引导参数 JSON 便于重新生成 pipeline"`
 	LastSeenAt      *time.Time `json:"last_seen_at" gorm:"comment:最近心跳"`

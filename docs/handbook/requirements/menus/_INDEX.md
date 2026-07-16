@@ -33,13 +33,25 @@ OpenAPI 全量路由见 **`docs/apipost/permission-system.openapi.yaml`**（由 
 | 路由 | Component | 文档 |
 |------|-----------|------|
 | `/projects` | `projects-page` | [menu-projects.md](./menu-projects.md) |
+| `/application-topology` | `application-topology-page` | （见项目管理模块 M-03） |
 | `/project-members` | `project-members-page` | [menu-project-members.md](./menu-project-members.md) |
 | `/project-servers` | `project-servers-page` | [menu-project-servers.md](./menu-project-servers.md) |
-| `/project-services` | `project-services-page` | [menu-project-services.md](./menu-project-services.md) |
-| `/project-log-sources` | `project-log-sources-page` | [menu-project-log-sources.md](./menu-project-log-sources.md) |
+
+## 日志平台（`/log-platform`）
+
+模块需求：**[../modules/M-04-log-platform.md](../modules/M-04-log-platform.md)**
+
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/project-services` | `project-collect-config-page`（服务+日志源 Tab） | [menu-project-services.md](./menu-project-services.md)、[menu-project-log-sources.md](./menu-project-log-sources.md) |
 | `/project-logs` | `project-logs-page` | [menu-project-logs.md](./menu-project-logs.md) |
-| `/agent-list` | `agent-list-page` | [menu-agent-list.md](./menu-agent-list.md) |
-| `/mysql-backup` | `mysql-backup-page` | [menu-mysql-backup.md](./menu-mysql-backup.md) |
+| `/log-retention` | `log-retention-page` | （见 M-04 §3.3） |
+| `/loggie-status` | `loggie-status-page` | （见 M-04 §3.4；替代旧 agent-list） |
+
+| 旧路由 | 说明 |
+|--------|------|
+| `/agent-list` | 已移除；文档 [menu-agent-list.md](./menu-agent-list.md) 仅作历史参考 |
+| `/mysql-backup` | 独立一级菜单，见 [menu-mysql-backup.md](./menu-mysql-backup.md) / **M-08** |
 
 ## 数据库管理（`/dbmgmt`，插件 `dbmgmt` + `project`）
 

@@ -233,19 +233,35 @@ export function LoggieStatusPage() {
         <Space size={4} wrap>
           {r.registered ? <Tag color="blue">已登记</Tag> : <Tag>未登记</Tag>}
           {r.online ? <Tag color="success">在线</Tag> : <Tag color="error">离线</Tag>}
-          {r.recent_ingest ? <Tag color="processing">采集</Tag> : <Tag color="warning">无上报</Tag>}
+          {r.recent_ingest ? (
+            <Tooltip title="近几分钟 ES 有写入，不等于此刻正在读文件（FD 追平后 active 可为 0）">
+              <Tag color="processing">有写入</Tag>
+            </Tooltip>
+          ) : (
+            <Tag color="warning">无上报</Tag>
+          )}
         </Space>
       ),
     },
     {
       title: "监控/FD",
-      width: 110,
+      width: 140,
       render: (_, r) => {
-        const fd = r.live_probe?.reachable ? r.live_probe.active_fd_count : (r.active_fd_count ?? 0);
+        const active = r.live_probe?.reachable
+          ? r.live_probe.active_fd_count
+          : (r.active_fd_count ?? 0);
+        const inactive = r.live_probe?.reachable
+          ? r.live_probe.inactive_fd_count
+          : (r.inactive_fd_count ?? 0);
+        const tip = [
+          "活跃 FD / 不活跃 FD（追平后 active 常为 0，有 inactive 仍表示已挂载文件）",
+          "「采集」= 近期有写入 ES，与 FD 是否活跃无关",
+          r.live_probe?.error || r.monitor_detail || `索引 yunshu-agent-${r.server_id}-*`,
+        ].filter(Boolean).join("；");
         return (
-          <Tooltip title={r.live_probe?.error || r.monitor_detail || `索引 yunshu-agent-${r.server_id}-*`}>
+          <Tooltip title={tip}>
             <span>
-              {r.monitor_reachable ? `:${r.monitor_port ?? 9196}` : "-"} / {fd}
+              {r.monitor_reachable || r.live_probe?.reachable ? `:${r.monitor_port ?? 9196}` : "-"} / {active}+{inactive}
             </span>
           </Tooltip>
         );

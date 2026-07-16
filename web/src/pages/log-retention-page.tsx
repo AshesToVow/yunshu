@@ -1,5 +1,21 @@
 import { DeleteOutlined, PlayCircleOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Switch, Table, Tag, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Switch,
+  Table,
+  Tag,
+  message,
+} from "antd";
 import { useCallback, useEffect, useState } from "react";
 import {
   deleteProjectLogRetention,
@@ -86,47 +102,50 @@ export function LogRetentionPage() {
     await reload();
   }
 
+  const projectOverrides = policies.filter((p) => p.project_id !== 0);
+
   return (
     <div className="log-retention-page">
-      <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      <Space direction="vertical" size={12} style={{ width: "100%" }}>
         <Alert
           type="info"
           showIcon
-          message="日志保留说明"
-          description={
-            <div>
-              <p>Elasticsearch 默认不会自动删除数据。Yunshu 按「保留天数」定时清理过期日志。</p>
-              <p>
-                推荐 Agent 使用<strong>每服务器按日索引</strong>（如 <code>yunshu-agent-7-2026.07.13</code>），清理时按日期删除过期索引。检索模式默认 <code>yunshu-agent-*</code>。
-              </p>
-              <p>Agent 状态检测、pipeline 热更、启停由「Agent 管理」页面操作，与保留策略互补。</p>
-            </div>
-          }
+          message="按保留天数定时清理过期 ES 索引；Agent 启停与热更请到「Agent 管理」。推荐索引形态：yunshu-agent-{server_id}-YYYY.MM.DD，模式默认 yunshu-agent-*。"
         />
 
         <Card
+          size="small"
           title="ES 存储概览"
           extra={
-            <Button icon={<ReloadOutlined />} onClick={() => void reload()} loading={loading}>
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => void reload()} loading={loading}>
               刷新
             </Button>
           }
         >
           {stats ? (
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Space size={24} wrap>
-                <span>
-                  全部索引：{stats.index_count} 个 / {stats.document_count.toLocaleString()} 文档 / {stats.store_human}
-                </span>
-                <span>
-                  匹配 <code>{stats.index_pattern}</code>：{stats.pattern_index_count ?? 0} 个 /{" "}
-                  {(stats.pattern_document_count ?? 0).toLocaleString()} 文档 / {stats.pattern_store_human || "-"}
-                </span>
-              </Space>
+              <Row gutter={[16, 12]}>
+                <Col xs={12} sm={6}>
+                  <Statistic title="全部索引" value={stats.index_count} suffix="个" />
+                </Col>
+                <Col xs={12} sm={6}>
+                  <Statistic title="全部文档" value={stats.document_count} />
+                </Col>
+                <Col xs={12} sm={6}>
+                  <Statistic title="全部占用" value={stats.store_human || "-"} />
+                </Col>
+                <Col xs={12} sm={6}>
+                  <Statistic
+                    title={`匹配 ${stats.index_pattern || "yunshu-agent-*"}`}
+                    value={stats.pattern_index_count ?? 0}
+                    suffix={`/ ${stats.pattern_store_human || "-"}`}
+                  />
+                </Col>
+              </Row>
               <Table
                 size="small"
                 rowKey="name"
-                pagination={{ pageSize: 20, showSizeChanger: true }}
+                pagination={{ pageSize: 8, showSizeChanger: true, size: "small" }}
                 dataSource={stats.indices ?? []}
                 columns={[
                   {
@@ -134,19 +153,19 @@ export function LogRetentionPage() {
                     dataIndex: "name",
                     ellipsis: true,
                     render: (name: string, r: { matched_pattern?: boolean }) => (
-                      <Space>
+                      <Space size={4}>
                         <span>{name}</span>
-                        {r.matched_pattern ? <Tag color="blue">平台日志</Tag> : null}
+                        {r.matched_pattern ? <Tag color="blue">平台</Tag> : null}
                       </Space>
                     ),
                   },
                   {
-                    title: "文档数",
+                    title: "文档",
                     dataIndex: "docs_count",
-                    width: 120,
+                    width: 100,
                     render: (n: number) => (n ?? 0).toLocaleString(),
                   },
-                  { title: "占用", dataIndex: "store_human", width: 120 },
+                  { title: "占用", dataIndex: "store_human", width: 100 },
                 ]}
               />
             </Space>
@@ -155,97 +174,121 @@ export function LogRetentionPage() {
           )}
         </Card>
 
-        <Card
-          title="全局默认保留策略"
-          extra={
-            <Space>
-              <Button
-                icon={<PlayCircleOutlined />}
-                onClick={() =>
-                  void (async () => {
-                    const res = await runLogRetentionCleanup();
-                    message.success(res.message || "清理完成");
-                    await reload();
-                  })()
-                }
-              >
-                立即清理
-              </Button>
-              <Button type="primary" icon={<SaveOutlined />} onClick={() => void saveGlobal()}>
-                保存
-              </Button>
-            </Space>
-          }
-        >
-          <Form form={globalForm} layout="vertical">
-            <Row gutter={16}>
-              <Col span={6}>
-                <Form.Item label="保留天数" name="retention_days" rules={[{ required: true }]}>
-                  <InputNumber min={1} max={3650} style={{ width: "100%" }} addonAfter="天" />
-                </Form.Item>
-              </Col>
-              <Col span={6}>
-                <Form.Item label="启用自动清理" name="enabled" valuePropName="checked">
-                  <Switch />
-                </Form.Item>
-              </Col>
-              <Col span={6}>
-                <Form.Item label="索引模式（可选）" name="index_pattern">
-                  <Input placeholder="默认 yunshu-logs-*" />
-                </Form.Item>
-              </Col>
-              <Col span={6}>
-                <Form.Item label="备注" name="remark">
-                  <Input placeholder="可选" />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
-        </Card>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} lg={10}>
+            <Card
+              size="small"
+              title="全局默认策略"
+              extra={
+                <Space size={8}>
+                  <Button
+                    size="small"
+                    icon={<PlayCircleOutlined />}
+                    onClick={() =>
+                      void (async () => {
+                        const res = await runLogRetentionCleanup();
+                        message.success(res.message || "清理完成");
+                        await reload();
+                      })()
+                    }
+                  >
+                    立即清理
+                  </Button>
+                  <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => void saveGlobal()}>
+                    保存
+                  </Button>
+                </Space>
+              }
+            >
+              <Form form={globalForm} layout="vertical" size="small">
+                <Row gutter={12}>
+                  <Col span={12}>
+                    <Form.Item label="保留天数" name="retention_days" rules={[{ required: true }]} style={{ marginBottom: 12 }}>
+                      <InputNumber min={1} max={3650} style={{ width: "100%" }} addonAfter="天" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item label="启用自动清理" name="enabled" valuePropName="checked" style={{ marginBottom: 12 }}>
+                      <Switch />
+                    </Form.Item>
+                  </Col>
+                  <Col span={24}>
+                    <Form.Item label="索引模式" name="index_pattern" style={{ marginBottom: 12 }}>
+                      <Input placeholder="默认 yunshu-agent-*" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={24}>
+                    <Form.Item label="备注" name="remark" style={{ marginBottom: 0 }}>
+                      <Input placeholder="可选" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Form>
+            </Card>
+          </Col>
 
-        <Card title="项目级覆盖（可选）">
-          <Space wrap style={{ marginBottom: 16 }}>
-            <Select
-              style={{ width: 280 }}
-              placeholder="选择项目"
-              options={projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))}
-              value={projectId}
-              onChange={setProjectId}
-              allowClear
-            />
-            <InputNumber min={1} max={3650} value={projectDays} onChange={(v) => setProjectDays(v ?? 30)} addonAfter="天" />
-            <span>
-              启用 <Switch checked={projectEnabled} onChange={setProjectEnabled} />
-            </span>
-            <Button type="primary" onClick={() => void saveProjectOverride()}>
-              保存覆盖
-            </Button>
-            <Button danger icon={<DeleteOutlined />} onClick={() => void removeProjectOverride()}>
-              删除覆盖
-            </Button>
-          </Space>
-          <Table
-            rowKey={(r) => `${r.project_id}-${r.id}`}
-            size="small"
-            dataSource={policies}
-            pagination={false}
-            columns={[
-              {
-                title: "范围",
-                dataIndex: "project_id",
-                render: (v: number) => (v === 0 ? <Tag color="blue">全局</Tag> : <Tag>项目 #{v}</Tag>),
-              },
-              { title: "保留天数", dataIndex: "retention_days" },
-              {
-                title: "启用",
-                dataIndex: "enabled",
-                render: (v: boolean) => (v ? <Tag color="success">是</Tag> : <Tag>否</Tag>),
-              },
-              { title: "索引模式", dataIndex: "index_pattern", render: (v?: string) => v || "-" },
-              { title: "更新时间", dataIndex: "updated_at", render: (v?: string) => (v ? formatDateTime(v) : "-") },
-            ]}
-          />
-        </Card>
+          <Col xs={24} lg={14}>
+            <Card size="small" title="项目级覆盖">
+              <Space wrap size={8} style={{ marginBottom: 12, width: "100%" }}>
+                <Select
+                  style={{ minWidth: 220, flex: 1 }}
+                  placeholder="选择项目"
+                  options={projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))}
+                  value={projectId}
+                  onChange={setProjectId}
+                  allowClear
+                  size="small"
+                />
+                <InputNumber
+                  size="small"
+                  min={1}
+                  max={3650}
+                  value={projectDays}
+                  onChange={(v) => setProjectDays(v ?? 30)}
+                  addonAfter="天"
+                />
+                <span>
+                  启用 <Switch size="small" checked={projectEnabled} onChange={setProjectEnabled} />
+                </span>
+                <Button size="small" type="primary" onClick={() => void saveProjectOverride()}>
+                  保存覆盖
+                </Button>
+                <Button size="small" danger icon={<DeleteOutlined />} onClick={() => void removeProjectOverride()}>
+                  删除
+                </Button>
+              </Space>
+              <Table
+                rowKey={(r) => `${r.project_id}-${r.id}`}
+                size="small"
+                dataSource={projectOverrides}
+                pagination={false}
+                locale={{ emptyText: "无项目覆盖，均继承全局策略" }}
+                columns={[
+                  {
+                    title: "项目",
+                    dataIndex: "project_id",
+                    width: 100,
+                    render: (v: number) => <Tag>#{v}</Tag>,
+                  },
+                  { title: "天数", dataIndex: "retention_days", width: 70 },
+                  {
+                    title: "启用",
+                    dataIndex: "enabled",
+                    width: 70,
+                    render: (v: boolean) => (v ? <Tag color="success">是</Tag> : <Tag>否</Tag>),
+                  },
+                  { title: "索引模式", dataIndex: "index_pattern", ellipsis: true, render: (v?: string) => v || "-" },
+                  {
+                    title: "更新",
+                    dataIndex: "updated_at",
+                    width: 150,
+                    render: (v?: string) => (v ? formatDateTime(v) : "-"),
+                  },
+                ]}
+              />
+            </Card>
+          </Col>
+        </Row>
       </Space>
     </div>
   );

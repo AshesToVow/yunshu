@@ -4015,6 +4015,8 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
   line-height: 1.55;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;

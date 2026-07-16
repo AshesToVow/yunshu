@@ -74,6 +74,7 @@ type LoggieHeartbeatRequest struct {
 	MonitorPort         int    `json:"monitor_port"`
 	ActivePipelineCount int    `json:"active_pipeline_count"`
 	ActiveFdCount       int    `json:"active_fd_count"`
+	InactiveFdCount     int    `json:"inactive_fd_count"`
 	MonitorDetail       string `json:"monitor_detail"`
 }
 
@@ -189,6 +190,7 @@ type LoggieStatusItem struct {
 	MonitorReachable    bool                      `json:"monitor_reachable"`
 	ActivePipelineCount int                       `json:"active_pipeline_count"`
 	ActiveFdCount       int                       `json:"active_fd_count"`
+	InactiveFdCount     int                       `json:"inactive_fd_count"`
 	MonitorDetail       string                    `json:"monitor_detail,omitempty"`
 	LiveProbe           *LoggieMonitorProbeResult `json:"live_probe,omitempty"`
 }
@@ -225,8 +227,18 @@ func (s *LoggieAgentService) ReportHeartbeat(ctx context.Context, req LoggieHear
 	}
 	agent.ActivePipelineCount = req.ActivePipelineCount
 	agent.ActiveFdCount = req.ActiveFdCount
+	agent.InactiveFdCount = req.InactiveFdCount
 	if v := strings.TrimSpace(req.MonitorDetail); v != "" {
 		agent.MonitorDetail = truncateString(v, 4096)
+		// 兼容旧心跳脚本：从 monitor_detail 回填 inactive
+		if agent.InactiveFdCount == 0 {
+			var snap struct {
+				InactiveFD int `json:"inactive_fd"`
+			}
+			if json.Unmarshal([]byte(v), &snap) == nil && snap.InactiveFD > 0 {
+				agent.InactiveFdCount = snap.InactiveFD
+			}
+		}
 	}
 	if req.LinesPerMin > 0 {
 		agent.LastIngestAt = &now
@@ -644,6 +656,7 @@ func (s *LoggieAgentService) ListStatus(ctx context.Context, projectID uint) ([]
 			item.MonitorReachable = ag.MonitorReachable
 			item.ActivePipelineCount = ag.ActivePipelineCount
 			item.ActiveFdCount = ag.ActiveFdCount
+			item.InactiveFdCount = ag.InactiveFdCount
 			item.MonitorDetail = ag.MonitorDetail
 			if ag.LastSeenAt != nil && now.Sub(*ag.LastSeenAt) <= loggieHeartbeatTimeout {
 				item.Online = strings.EqualFold(ag.HealthStatus, "running") || ag.HealthStatus == "" || ag.HealthStatus == "unknown"
@@ -651,6 +664,11 @@ func (s *LoggieAgentService) ListStatus(ctx context.Context, projectID uint) ([]
 			probe := ProbeLoggieMonitor(ctx, sv.Host, item.MonitorPort)
 			if probe.Reachable || probe.Error != "" {
 				item.LiveProbe = &probe
+				// 远程探测成功时优先用实时 FD；心跳字段作兜底
+				if probe.Reachable {
+					item.ActiveFdCount = probe.ActiveFdCount
+					item.InactiveFdCount = probe.InActiveFdCount
+				}
 			}
 		}
 		if cnt, ok := ingestMap[sv.ID]; ok {
