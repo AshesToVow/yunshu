@@ -77,6 +77,14 @@ func (r *DbmgmtRepository) ListAllInstances(ctx context.Context) ([]model.DbInst
 	return list, err
 }
 
+func (r *DbmgmtRepository) CountReplicasByPrimary(ctx context.Context, projectID, primaryID uint) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.DbInstance{}).
+		Where("project_id = ? AND primary_instance_id = ? AND role = ?", projectID, primaryID, model.DbInstanceRoleReplica).
+		Count(&n).Error
+	return n, err
+}
+
 // --- Grant ---
 
 func (r *DbmgmtRepository) CreateGrant(ctx context.Context, g *model.DbAccessGrant) error {

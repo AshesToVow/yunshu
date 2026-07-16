@@ -51,15 +51,6 @@ export interface ProjectUpdatePayload {
   owner_department_id?: number;
 }
 
-export type ApplicationTopologyGraph = {
-  nodes: Array<{ id: string; label: string; kind: string; state?: string; state_level?: string }>;
-  edges: Array<{ from: string; to: string; kind?: string }>;
-};
-
-export async function getApplicationTopology(projectId: number) {
-  return getData<ApplicationTopologyGraph>(http.get(`/projects/${projectId}/application-topology`));
-}
-
 export async function getProjects(params: {
   keyword?: string;
   project_type?: string;

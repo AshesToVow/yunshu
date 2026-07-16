@@ -34,3 +34,8 @@ export function envLabel(env?: string) {
   };
   return map[env ?? ""] ?? env ?? "—";
 }
+
+export function instanceRoleLabel(role?: string) {
+  if (role === "replica") return "从库";
+  return "主库";
+}

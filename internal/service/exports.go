@@ -152,7 +152,6 @@ type (
 	ProjectListQuery         = project.ProjectListQuery
 	ProjectCreateRequest     = project.ProjectCreateRequest
 	ProjectUpdateRequest     = project.ProjectUpdateRequest
-	ApplicationTopologyGraph = project.ApplicationTopologyGraph
 	ServerItem               = cmdb.ServerItem
 	ServerListQuery          = cmdb.ServerListQuery
 	ServerUpsertRequest      = cmdb.ServerUpsertRequest

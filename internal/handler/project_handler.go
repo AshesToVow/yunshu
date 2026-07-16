@@ -53,18 +53,6 @@ func (h *ProjectHandler) Update(c *gin.Context) {
 	})
 }
 
-// ApplicationTopology 返回项目应用拓扑图（服务/服务器/日志源）。
-func (h *ProjectHandler) ApplicationTopology(c *gin.Context) {
-	id, err := parseUintParam(c, "id")
-	if err != nil {
-		response.Error(c, err)
-		return
-	}
-	ServeQuery(c, func(ctx context.Context, _ struct{}) (*service.ApplicationTopologyGraph, error) {
-		return h.svc.ApplicationTopology(ctx, id)
-	})
-}
-
 // Delete 删除对应的 HTTP 接口处理逻辑。
 func (h *ProjectHandler) Delete(c *gin.Context) {
 	id, err := parseUintParam(c, "id")

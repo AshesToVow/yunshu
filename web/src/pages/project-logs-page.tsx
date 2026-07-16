@@ -414,7 +414,8 @@ function extractLogLevel(message?: string) {
   if (bracket?.[1]) return normalizeLogLevel(bracket[1]);
   const token = message.match(/\s(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PANIC)\s/i);
   if (token?.[1]) return normalizeLogLevel(token[1]);
-  // klog：I0716 02:51:52... / CRI 行内 I/W/E/F
+  const pipe = message.match(/\|\s*(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s*\|/i);
+  if (pipe?.[1]) return normalizeLogLevel(pipe[1]);
   const klog = message.match(/(?:^|[\s>])([IWEF])\d{4}\s+\d{2}:\d{2}:\d{2}/);
   if (klog?.[1]) {
     const map: Record<string, string> = { I: "INFO", W: "WARN", E: "ERROR", F: "FATAL" };

@@ -460,7 +460,6 @@ func defaultPermissions() []model.Permission {
 		{Name: "创建项目", Resource: "/api/v1/projects", Action: "POST", Description: "Create project"},
 		{Name: "更新项目", Resource: "/api/v1/projects/:id", Action: "PUT", Description: "Update project"},
 		{Name: "删除项目", Resource: "/api/v1/projects/:id", Action: "DELETE", Description: "Delete project"},
-		{Name: "应用拓扑图", Resource: "/api/v1/projects/:id/application-topology", Action: "GET", Description: "Get project application topology"},
 		{Name: "项目成员列表", Resource: "/api/v1/projects/:id/members", Action: "GET", Description: "List project members"},
 		{Name: "添加项目成员", Resource: "/api/v1/projects/:id/members", Action: "POST", Description: "Add project member"},
 		{Name: "更新项目成员", Resource: "/api/v1/projects/:id/members/:memberId", Action: "PUT", Description: "Update project member"},

@@ -5682,28 +5682,6 @@ paths:
           description: 禁止访问
         "500":
           description: 服务器错误
-  /api/v1/projects/{id}/application-topology:
-    get:
-      tags: ["Projects"]
-      summary: Auto-generated from router
-      operationId: get_api_v1_projects_id__application-topology
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: OK（统一 JSON，见 StandardResponse.data）
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/StandardResponse"
-        "400":
-          description: 参数错误
-        "401":
-          description: 未授权
-        "403":
-          description: 禁止访问
-        "500":
-          description: 服务器错误
   /api/v1/projects/{id}/cicd/approval-flow:
     get:
       tags: ["Projects"]

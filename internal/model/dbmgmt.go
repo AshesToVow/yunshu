@@ -18,6 +18,9 @@ const (
 	DbEnvDev  = "dev"
 	DbEnvTest = "test"
 	DbEnvProd = "prod"
+
+	DbInstanceRolePrimary = "primary" // 主库
+	DbInstanceRoleReplica = "replica" // 从库
 )
 
 // --- 授权主体 ---
@@ -92,6 +95,8 @@ type DbInstance struct {
 	ExtraJSON   string `json:"extra_json" gorm:"type:text;comment:驱动扩展参数 JSON"`
 
 	ReadOnly              bool `json:"read_only" gorm:"not null;default:false;comment:只读副本，禁止 DML/DDL"`
+	Role                  string `json:"role" gorm:"size:16;not null;default:'primary';index;comment:primary=主库 replica=从库"`
+	PrimaryInstanceID     *uint  `json:"primary_instance_id,omitempty" gorm:"index;comment:从库关联主库实例 ID"`
 	RequireTicketForDML   bool `json:"require_ticket_for_dml" gorm:"not null;default:true"`
 	OwnerUserID           *uint `json:"owner_user_id,omitempty" gorm:"index"`
 

@@ -11,10 +11,11 @@ pipelines:
         fields:
           project_id: "1"
           server_id: "10"
-        multiline:
+        multi:
+          active: true
           pattern: '^\w{3}\s+\d{1,2}\s+'
-          negate: true
-          match: after
+          maxLines: 200
+          timeout: 5s
     interceptors:
       - type: transformer
         actions:

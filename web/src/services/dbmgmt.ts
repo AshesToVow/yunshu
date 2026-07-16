@@ -15,6 +15,9 @@ export type DbInstance = {
   username: string;
   ssl_mode?: string;
   read_only: boolean;
+  role?: "primary" | "replica";
+  primary_instance_id?: number;
+  primary_instance_name?: string;
   require_ticket_for_dml: boolean;
   owner_user_id?: number;
   status: string;
@@ -40,6 +43,8 @@ export type DbInstancePayload = {
   password?: string;
   ssl_mode?: string;
   read_only?: boolean;
+  role?: "primary" | "replica";
+  primary_instance_id?: number;
   require_ticket_for_dml?: boolean;
   owner_user_id?: number;
   tags?: string;

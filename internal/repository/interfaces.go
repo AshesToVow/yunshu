@@ -366,6 +366,7 @@ type DbmgmtRepo interface {
 	GetInstanceInProject(ctx context.Context, projectID, id uint) (*model.DbInstance, error)
 	ListInstances(ctx context.Context, p DbInstanceListParams) ([]model.DbInstance, int64, error)
 	ListAllInstances(ctx context.Context) ([]model.DbInstance, error)
+	CountReplicasByPrimary(ctx context.Context, projectID, primaryID uint) (int64, error)
 
 	CreateGrant(ctx context.Context, g *model.DbAccessGrant) error
 	UpdateGrant(ctx context.Context, g *model.DbAccessGrant) error

@@ -33,7 +33,6 @@ OpenAPI 全量路由见 **`docs/apipost/permission-system.openapi.yaml`**（由 
 | 路由 | Component | 文档 |
 |------|-----------|------|
 | `/projects` | `projects-page` | [menu-projects.md](./menu-projects.md) |
-| `/application-topology` | `application-topology-page` | （见项目管理模块 M-03） |
 | `/project-members` | `project-members-page` | [menu-project-members.md](./menu-project-members.md) |
 | `/project-servers` | `project-servers-page` | [menu-project-servers.md](./menu-project-servers.md) |
 

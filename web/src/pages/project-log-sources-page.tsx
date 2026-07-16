@@ -279,15 +279,21 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
               <Form.Item
                 label="解析模板（multiline_rule）"
                 name="multiline_rule"
-                tooltip="留空则按路径自动识别：elasticsearch / syslog / spring。也可填 elasticsearch、java_bracket、spring、syslog"
+                tooltip="留空按路径自动识别。Elasticsearch ERROR 堆栈需选 elasticsearch 并热更 Agent。"
               >
                 <Select
                   allowClear
                   placeholder="自动识别"
                   options={[
-                    { value: "elasticsearch", label: "Elasticsearch / Java 方括号 [WARN ]" },
+                    { value: "elasticsearch", label: "Elasticsearch / Java [ERROR ] 方括号堆栈" },
+                    { value: "spring", label: "Spring Boot 2024-01-01 INFO（Logback）" },
+                    { value: "cityeyes-vap", label: "CityEyesVap 管道分隔（JSON/堆栈多行）" },
+                    { value: "kafka", label: "Kafka [时间] INFO" },
+                    { value: "redis", label: "Redis 1:M 日期 * / #" },
+                    { value: "mysql", label: "MySQL 5.7 error log" },
+                    { value: "mysql_slow", label: "MySQL slow query（# Time:）" },
+                    { value: "zookeeper", label: "Zookeeper [myid:1] - INFO" },
                     { value: "cri", label: "K8s CRI 容器日志（/var/log/pods）" },
-                    { value: "spring", label: "Spring / 微服务 2024-01-01 INFO" },
                     { value: "syslog", label: "Syslog /var/log/messages" },
                     { value: "nginx_access", label: "Nginx access" },
                   ]}

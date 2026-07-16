@@ -19,9 +19,23 @@ func TestDetectParseProfile_Elasticsearch(t *testing.T) {
 }
 
 func TestExtractLevelFromMessage_Elasticsearch(t *testing.T) {
-	msg := "[2026-07-13T23:42:49,235][WARN ][o.e.t.ThreadPool ] [yunshuNode] timer thread slept"
-	if lv := extractLevelFromMessage(msg); lv != "WARN" {
-		t.Fatalf("expected WARN, got %q", lv)
+	for _, tc := range []struct {
+		msg, want string
+	}{
+		{"[2026-07-13T23:42:49,235][WARN ][o.e.t.ThreadPool ] [yunshuNode] timer thread slept", "WARN"},
+		{"[2026-07-13T23:42:49,235][ERROR][o.e.g.GatewayService ] [node] failed", "ERROR"},
+		{"[2026-07-13T23:42:49,235][INFO ][o.e.c.r.a.AllocationService] recovered", "INFO"},
+	} {
+		if lv := extractLevelFromMessage(tc.msg); lv != tc.want {
+			t.Fatalf("msg %q: expected %s, got %q", tc.msg, tc.want, lv)
+		}
+	}
+}
+
+func TestExtractLevelFromMessage_CityEyes(t *testing.T) {
+	msg := "CityEyesVap|cityeyes-vap|192.168.30.40|2026-01-16 18:46:13.435|ERROR|http-nio-8891-exec-8|com.jd.example:92|统一异常"
+	if lv := extractLevelFromMessage(msg); lv != "ERROR" {
+		t.Fatalf("expected ERROR, got %q", lv)
 	}
 }
 
@@ -52,6 +66,18 @@ func TestLevelFilterIncludesMessagePatterns(t *testing.T) {
 	}
 	if !foundWildcard {
 		t.Fatal("expected message wildcard for WARN")
+	}
+}
+
+func TestDetectParseProfile_CityEyes(t *testing.T) {
+	rule := "cityeyes-vap"
+	p := detectParseProfile("/export/cityeyes-vap/logs/app.log", &rule)
+	if p.name != "cityeyes-vap" {
+		t.Fatalf("expected cityeyes-vap, got %s", p.name)
+	}
+	actions := p.renderTransformerActions()
+	if !strings.Contains(actions, "(?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)") {
+		t.Fatal("expected pipe-delimited level capture")
 	}
 }
 
@@ -88,11 +114,17 @@ func TestBuildMultiPipelineBundle_ElasticsearchMultiline(t *testing.T) {
 		IndexPattern: "yunshu-agent-*",
 	}, "token", "", "/export/loggie")
 	yaml := bundle.PipelinesOnlyYAML
-	if !strings.Contains(yaml, `pattern: '^\[\d{4}-\d{2}-\d{2}'`) {
-		t.Fatal("expected ES multiline header pattern")
+	if !strings.Contains(yaml, "multi:") || !strings.Contains(yaml, "active: true") {
+		t.Fatal("expected Loggie multi.active multiline config")
+	}
+	if !strings.Contains(yaml, `pattern: '^\['`) {
+		t.Fatal("expected ES multiline header pattern ^[")
 	}
 	if !strings.Contains(yaml, "maxLines: 500") {
 		t.Fatal("expected multiline maxLines for ES stack traces")
+	}
+	if strings.Contains(yaml, "multiline:") {
+		t.Fatal("should not use deprecated multiline: block")
 	}
 }
 
@@ -105,8 +137,8 @@ func TestBuildMultiPipelineBundle_ElasticsearchLevelRegex(t *testing.T) {
 		IndexPattern: "yunshu-agent-*",
 	}, "token", "", "/export/loggie")
 	yaml := bundle.PipelinesOnlyYAML
-	if !strings.Contains(yaml, "(?P<level>") {
-		t.Fatal("expected level capture in elasticsearch pipeline")
+	if !strings.Contains(yaml, "(?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)") {
+		t.Fatal("expected explicit level capture in elasticsearch pipeline")
 	}
 	if !strings.Contains(yaml, "action: timestamp(ts)") {
 		t.Fatal("expected Loggie native timestamp action")
@@ -114,7 +146,7 @@ func TestBuildMultiPipelineBundle_ElasticsearchLevelRegex(t *testing.T) {
 	if !strings.Contains(yaml, `move(ts, @timestamp)`) {
 		t.Fatal("expected move ts to @timestamp")
 	}
-	if !strings.Contains(yaml, "multiline:") {
-		t.Fatal("expected multiline config")
+	if !strings.Contains(yaml, "multi:") {
+		t.Fatal("expected multi config")
 	}
 }

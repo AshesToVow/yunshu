@@ -15,7 +15,6 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
 	projectScoped.PUT("", d.projectHandler.Update)
 	projectScoped.DELETE("", d.projectHandler.Delete)
-	projectScoped.GET("/application-topology", d.projectHandler.ApplicationTopology)
 	projectScoped.GET("/members", d.projectHandler.ListProjectMembers)
 	projectScoped.POST("/members", d.projectHandler.AddProjectMember)
 	projectScoped.PUT("/members/:memberId", d.projectHandler.UpdateProjectMember)

@@ -19,7 +19,6 @@
 |----|------|------|
 | F-01 | 项目 CRUD | `code` 唯一 |
 | F-02 | 项目成员 | owner/成员角色 |
-| F-03 | 应用拓扑 | 拓扑图数据 |
 | F-04 | 服务器分组/CRUD | 分组树 + 主机 |
 | F-05 | 连通性测试/同步/导入导出 | SSH 探测 |
 | F-06 | 云账号与实例同步 | 云厂商 API |
@@ -36,7 +35,6 @@
 | GET | `/api/v1/projects` | `page,page_size,keyword` | 分页 |
 | POST | `/api/v1/projects` | `{ name, code, ... }` | 项目；创建者自动 owner |
 | PUT/DELETE | `/api/v1/projects/:id` | — | 更新/删除 |
-| GET | `/api/v1/projects/:id/application-topology` | — | 拓扑图 |
 | GET | `/api/v1/projects/:id/members` | — | 成员列表 |
 | POST | `/api/v1/projects/:id/members` | `{ user_id, role }` | 添加 |
 | PUT | `/api/v1/projects/:id/members/:memberId` | `{ role }` | 改角色 |

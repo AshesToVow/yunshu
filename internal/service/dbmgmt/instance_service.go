@@ -33,8 +33,11 @@ type InstanceItem struct {
 	ServerName    string  `json:"server_name,omitempty"`
 	Username      string  `json:"username"`
 	SSLMode       string  `json:"ssl_mode"`
-	ReadOnly      bool    `json:"read_only"`
-	RequireTicket bool    `json:"require_ticket_for_dml"`
+	ReadOnly            bool    `json:"read_only"`
+	Role                string  `json:"role"`
+	PrimaryInstanceID   *uint   `json:"primary_instance_id,omitempty"`
+	PrimaryInstanceName string  `json:"primary_instance_name,omitempty"`
+	RequireTicket       bool    `json:"require_ticket_for_dml"`
 	OwnerUserID   *uint   `json:"owner_user_id,omitempty"`
 	Status        string  `json:"status"`
 	LastPingAt    *string `json:"last_ping_at,omitempty"`
@@ -59,6 +62,8 @@ type InstanceUpsertRequest struct {
 	Password              string `json:"password"`
 	SSLMode               string `json:"ssl_mode"`
 	ReadOnly              bool   `json:"read_only"`
+	Role                  string `json:"role"`
+	PrimaryInstanceID     *uint  `json:"primary_instance_id"`
 	RequireTicketForDML   *bool  `json:"require_ticket_for_dml"`
 	OwnerUserID           *uint  `json:"owner_user_id"`
 	Tags                  string `json:"tags"`
@@ -73,14 +78,32 @@ type InstanceListQuery struct {
 	PageSize  int `form:"page_size"`
 }
 
+func normalizeInstanceRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case model.DbInstanceRoleReplica, "slave":
+		return model.DbInstanceRoleReplica
+	default:
+		return model.DbInstanceRolePrimary
+	}
+}
+
 func (s *Service) toInstanceItem(ctx context.Context, inst model.DbInstance) InstanceItem {
 	item := InstanceItem{
 		ID: inst.ID, ProjectID: inst.ProjectID, Name: inst.Name, Env: inst.Env,
 		Driver: inst.Driver, ConnectMode: inst.ConnectMode, Host: inst.Host, Port: inst.Port,
 		Database: inst.Database, ServerID: inst.ServerID, Username: inst.Username,
-		SSLMode: inst.SSLMode, ReadOnly: inst.ReadOnly, RequireTicket: inst.RequireTicketForDML,
+		SSLMode: inst.SSLMode, ReadOnly: inst.ReadOnly, Role: inst.Role,
+		PrimaryInstanceID: inst.PrimaryInstanceID, RequireTicket: inst.RequireTicketForDML,
 		OwnerUserID: inst.OwnerUserID, Status: inst.Status, LastPingOK: inst.LastPingOK,
 		Tags: inst.Tags, Remark: inst.Remark,
+	}
+	if item.Role == "" {
+		item.Role = model.DbInstanceRolePrimary
+	}
+	if inst.PrimaryInstanceID != nil && *inst.PrimaryInstanceID > 0 {
+		if primary, err := s.repo.GetInstanceInProject(ctx, inst.ProjectID, *inst.PrimaryInstanceID); err == nil && primary != nil {
+			item.PrimaryInstanceName = primary.Name
+		}
 	}
 	if inst.LastPingAt != nil {
 		ts := inst.LastPingAt.Format(time.RFC3339)
@@ -191,7 +214,28 @@ func (s *Service) UpsertInstance(ctx context.Context, id uint, req InstanceUpser
 	inst.ServerID = req.ServerID
 	inst.Username = strings.TrimSpace(req.Username)
 	inst.SSLMode = strings.TrimSpace(req.SSLMode)
-	inst.ReadOnly = req.ReadOnly
+	role := normalizeInstanceRole(req.Role)
+	inst.Role = role
+	if role == model.DbInstanceRoleReplica {
+		if req.PrimaryInstanceID == nil || *req.PrimaryInstanceID == 0 {
+			return nil, constants.ErrBadRequestWithMsg("从库须选择关联主库")
+		}
+		if id > 0 && *req.PrimaryInstanceID == id {
+			return nil, constants.ErrBadRequestWithMsg("从库不能关联自身")
+		}
+		primary, err := s.repo.GetInstanceInProject(ctx, req.ProjectID, *req.PrimaryInstanceID)
+		if err != nil {
+			return nil, constants.ErrBadRequestWithMsg("关联主库不存在或不属于当前项目")
+		}
+		if normalizeInstanceRole(primary.Role) != model.DbInstanceRolePrimary {
+			return nil, constants.ErrBadRequestWithMsg("关联目标须为主库实例")
+		}
+		inst.PrimaryInstanceID = req.PrimaryInstanceID
+		inst.ReadOnly = true
+	} else {
+		inst.PrimaryInstanceID = nil
+		inst.ReadOnly = req.ReadOnly
+	}
 	if req.RequireTicketForDML != nil {
 		inst.RequireTicketForDML = *req.RequireTicketForDML
 	}
@@ -230,6 +274,15 @@ func (s *Service) DeleteInstance(ctx context.Context, projectID, id uint, actor 
 	inst, err := s.repo.GetInstanceInProject(ctx, projectID, id)
 	if err != nil {
 		return err
+	}
+	if normalizeInstanceRole(inst.Role) == model.DbInstanceRolePrimary {
+		n, err := s.repo.CountReplicasByPrimary(ctx, projectID, id)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return constants.ErrBadRequestWithMsg("该主库仍有关联从库，请先删除或改绑从库")
+		}
 	}
 	if err := s.repo.DeleteInstance(ctx, id); err != nil {
 		return err

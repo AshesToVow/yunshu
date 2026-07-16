@@ -16,9 +16,6 @@ const DbmgmtSqlQueryPage = lazy(() =>
 const DbmgmtSqlAuditPage = lazy(() =>
   import("../../pages/dbmgmt-console-page").then((m) => ({ default: m.DbmgmtSqlAuditPage })),
 );
-const DbmgmtAccessRequestsPage = lazy(() =>
-  import("../../pages/dbmgmt-access-requests-page").then((m) => ({ default: m.DbmgmtAccessRequestsPage })),
-);
 const DbmgmtQueryApplyPage = lazy(() =>
   import("../../pages/dbmgmt-access-requests-page").then((m) => ({ default: m.DbmgmtQueryApplyPage })),
 );
@@ -76,8 +73,8 @@ export const dbmgmtRoutes: RouteObject[] = [
   // 旧路径兼容
   { path: "dbmgmt/console", element: <Navigate to="/dbmgmt/sql/query" replace /> },
   { path: "dbmgmt/access-requests", element: <Navigate to="/dbmgmt/apply/query" replace /> },
-  { path: "dbmgmt/access-request", element: <Navigate to="/dbmgmt/access-requests/all" replace /> },
+  { path: "dbmgmt/access-request", element: <Navigate to="/dbmgmt/apply/query" replace /> },
+  { path: "dbmgmt/access-requests/all", element: <Navigate to="/dbmgmt/apply/query" replace /> },
   { path: "dbmgmt/todo", element: <Navigate to="/dbmgmt/workflow/pending" replace /> },
   { path: "dbmgmt/tickets", element: <Navigate to="/dbmgmt/workflow/history" replace /> },
-  { path: "dbmgmt/access-requests/all", element: <DbmgmtAccessRequestsPage /> },
 ];

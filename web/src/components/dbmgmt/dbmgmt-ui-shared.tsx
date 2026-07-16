@@ -49,7 +49,8 @@ export const MYSQL_PRIV_GROUPS = {
 
 export function formatInstanceLabel(inst: DbInstance) {
   const driver = (inst.driver || "mysql").toUpperCase();
-  return `${driver}-${inst.host}-${inst.port}`;
+  const role = inst.role === "replica" ? "从库" : "主库";
+  return `${driver}-${inst.host}-${inst.port}（${role}）`;
 }
 
 export function parseMysqlUserKey(key: string) {

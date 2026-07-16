@@ -13,7 +13,7 @@ import {
 } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
-import { envLabel as dbEnvLabel } from "../utils/dbmgmt-labels";
+import { envLabel as dbEnvLabel, instanceRoleLabel } from "../utils/dbmgmt-labels";
 
 function envLabel(env?: string) {
   const label = dbEnvLabel(env);
@@ -140,6 +140,22 @@ export function DbmgmtInstanceDetailPage() {
         <Descriptions.Item label="连接地址">{formatInstanceLabel(instance)}</Descriptions.Item>
         <Descriptions.Item label="驱动">{instance.driver}</Descriptions.Item>
         <Descriptions.Item label="连接模式">{instance.connect_mode || "—"}</Descriptions.Item>
+        <Descriptions.Item label="库角色">
+          <Tag color={(instance.role ?? "primary") === "replica" ? "blue" : "green"}>
+            {instanceRoleLabel(instance.role)}
+          </Tag>
+        </Descriptions.Item>
+        {instance.role === "replica" ? (
+          <Descriptions.Item label="关联主库">
+            {instance.primary_instance_name ? (
+              <Link to={`/dbmgmt/instances/${instance.primary_instance_id}?project=${projectId ?? ""}`}>
+                {instance.primary_instance_name}
+              </Link>
+            ) : (
+              instance.primary_instance_id ? `#${instance.primary_instance_id}` : "—"
+            )}
+          </Descriptions.Item>
+        ) : null}
         <Descriptions.Item label="只读">{instance.read_only ? "是" : "否"}</Descriptions.Item>
         <Descriptions.Item label="DML需工单">{instance.require_ticket_for_dml ? "是" : "否"}</Descriptions.Item>
         {instance.tags ? <Descriptions.Item label="标签">{instance.tags}</Descriptions.Item> : null}
@@ -160,7 +176,7 @@ export function DbmgmtInstanceDetailPage() {
         <Descriptions.Item label="默认库">{instance.database || "—"}</Descriptions.Item>
         <Descriptions.Item label="管理用户">{instance.username}</Descriptions.Item>
         <Descriptions.Item label="SSL">{instance.ssl_mode || "—"}</Descriptions.Item>
-        <Descriptions.Item label="角色">
+        <Descriptions.Item label="写入能力">
           <Tag color={instance.read_only ? "default" : "green"}>{instance.read_only ? "只读" : "可写"}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="创建时间">{instance.created_at ? formatDateTime(instance.created_at) : "—"}</Descriptions.Item>

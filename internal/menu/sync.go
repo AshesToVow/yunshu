@@ -21,6 +21,9 @@ func Sync(ctx context.Context, db *gorm.DB) error {
 	if err := reparentDbmgmtResourceMenus(ctx, db); err != nil {
 		return err
 	}
+	if err := removeApplicationTopologyMenus(ctx, db); err != nil {
+		return err
+	}
 	if err := reparentExtractedMenus(ctx, db); err != nil {
 		return err
 	}
@@ -192,7 +195,7 @@ func patchLegacyMenu(ctx context.Context, db *gorm.DB, m *model.Menu) error {
 	return db.WithContext(ctx).Save(m).Error
 }
 
-// reparentDbmgmtResourceMenus 将实例管理、权限申请归位到「资源管理」目录下，并清理历史重复项。
+// reparentDbmgmtResourceMenus 将实例管理归位到「资源管理」目录下，并清理已废弃的「权限申请」重复菜单。
 func reparentDbmgmtResourceMenus(ctx context.Context, db *gorm.DB) error {
 	var dbmgmt model.Menu
 	if err := db.WithContext(ctx).
@@ -213,28 +216,17 @@ func reparentDbmgmtResourceMenus(ctx context.Context, db *gorm.DB) error {
 		return err
 	}
 	pid := resource.ID
-	for _, path := range []string{
-		"/dbmgmt/instances",
-		"/dbmgmt/access-requests/all",
-		"/dbmgmt/access-request",
-	} {
-		if err := reparentMenuByPath(ctx, db, path, &pid); err != nil {
-			return err
-		}
-	}
-	if err := normalizeDbmgmtAccessRequestMenu(ctx, db, pid); err != nil {
+	if err := reparentMenuByPath(ctx, db, "/dbmgmt/instances", &pid); err != nil {
 		return err
 	}
-	// 删除仍挂在「数据库管理」根下的重复实例/权限申请菜单（sync 后遗留的旧数据）
+	if err := removeDbmgmtAccessRequestMenus(ctx, db); err != nil {
+		return err
+	}
+	// 删除仍挂在「数据库管理」根下的重复实例菜单（sync 后遗留的旧数据）
 	var stray []model.Menu
 	if err := db.WithContext(ctx).
 		Where("parent_id = ?", dbmgmt.ID).
-		Where("path IN ?", []string{
-			"/dbmgmt/instances",
-			"/dbmgmt/access-requests/all",
-			"/dbmgmt/access-request",
-			"/dbmgmt/access-requests",
-		}).
+		Where("path IN ?", []string{"/dbmgmt/instances"}).
 		Find(&stray).Error; err != nil {
 		return err
 	}
@@ -253,44 +245,29 @@ func reparentDbmgmtResourceMenus(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
-func normalizeDbmgmtAccessRequestMenu(ctx context.Context, db *gorm.DB, resourceParentID uint) error {
-	var canonical model.Menu
-	hasCanonical := db.WithContext(ctx).
-		Where("parent_id = ? AND path = ?", resourceParentID, "/dbmgmt/access-requests/all").
-		First(&canonical).Error == nil
-
-	var legacy []model.Menu
+// removeDbmgmtAccessRequestMenus 权限申请已统一到「资源申请」子菜单，删除资源管理下的重复项。
+func removeDbmgmtAccessRequestMenus(ctx context.Context, db *gorm.DB) error {
+	var obsolete []model.Menu
 	if err := db.WithContext(ctx).
-		Where("parent_id = ?", resourceParentID).
-		Where("path IN ?", []string{"/dbmgmt/access-request", "/dbmgmt/access-requests"}).
-		Find(&legacy).Error; err != nil {
+		Where("path IN ?", []string{
+			"/dbmgmt/access-requests/all",
+			"/dbmgmt/access-request",
+			"/dbmgmt/access-requests",
+		}).
+		Find(&obsolete).Error; err != nil {
 		return err
 	}
-	for i := range legacy {
-		m := &legacy[i]
-		if hasCanonical {
-			ids, err := collectMenuSubtreeIDs(ctx, db, m.ID)
-			if err != nil {
-				return err
-			}
-			if len(ids) > 0 {
-				if err := db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.Menu{}).Error; err != nil {
-					return err
-				}
-			}
-			continue
-		}
-		m.Path = "/dbmgmt/access-requests/all"
-		if strings.TrimSpace(m.Component) == "" {
-			m.Component = "dbmgmt-access-requests-page"
-		}
-		if strings.TrimSpace(m.Name) == "" {
-			m.Name = "权限申请"
-		}
-		if err := db.WithContext(ctx).Save(m).Error; err != nil {
+	for _, m := range obsolete {
+		ids, err := collectMenuSubtreeIDs(ctx, db, m.ID)
+		if err != nil {
 			return err
 		}
-		hasCanonical = true
+		if len(ids) == 0 {
+			continue
+		}
+		if err := db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.Menu{}).Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -329,7 +306,7 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepIcon:           "ProjectOutlined",
 		keepSort:           3,
 		preferNameContains: "项目",
-		knownChildPaths:    []string{"/projects", "/application-topology", "/project-members", "/project-servers"},
+		knownChildPaths:    []string{"/projects", "/project-members", "/project-servers"},
 	},
 	{
 		paths:              []string{"/log-platform", "/log-platform/"},
@@ -346,6 +323,29 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepSort:           5,
 		preferNameContains: "MySQL",
 	},
+}
+
+// removeApplicationTopologyMenus 移除已废弃的「应用拓扑图」菜单。
+func removeApplicationTopologyMenus(ctx context.Context, db *gorm.DB) error {
+	var obsolete []model.Menu
+	if err := db.WithContext(ctx).
+		Where("path = ?", "/application-topology").
+		Find(&obsolete).Error; err != nil {
+		return err
+	}
+	for _, m := range obsolete {
+		ids, err := collectMenuSubtreeIDs(ctx, db, m.ID)
+		if err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		if err := db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.Menu{}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // reparentExtractedMenus 将原「项目管理」下的日志/MySQL 菜单迁移至独立一级目录。

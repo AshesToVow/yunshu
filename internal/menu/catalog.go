@@ -19,9 +19,8 @@ func DefaultCatalog() []Spec {
 			Path: "/project-management", Name: "项目管理", Icon: "ProjectOutlined", Sort: 3, Status: 1,
 			Children: []Spec{
 				{Path: "/projects", Name: "项目列表", Icon: "AppstoreOutlined", Sort: 1, Component: "projects-page", Status: 1},
-				{Path: "/application-topology", Name: "应用拓扑图", Icon: "DeploymentUnitOutlined", Sort: 2, Component: "application-topology-page", Status: 1},
-				{Path: "/project-members", Name: "项目成员", Icon: "TeamOutlined", Sort: 3, Component: "project-members-page", Status: 1},
-				{Path: "/project-servers", Name: "服务器管理", Icon: "HddOutlined", Sort: 4, Component: "project-servers-page", Status: 1},
+				{Path: "/project-members", Name: "项目成员", Icon: "TeamOutlined", Sort: 2, Component: "project-members-page", Status: 1},
+				{Path: "/project-servers", Name: "服务器管理", Icon: "HddOutlined", Sort: 3, Component: "project-servers-page", Status: 1},
 			},
 		},
 		{
@@ -49,7 +48,6 @@ func DefaultCatalog() []Spec {
 					Path: "/dbmgmt/resource", Name: "资源管理", Icon: "DatabaseOutlined", Sort: 2, Status: 1,
 					Children: []Spec{
 						{Path: "/dbmgmt/instances", Name: "实例管理", Icon: "DatabaseOutlined", Sort: 1, Component: "dbmgmt-instances-page", Status: 1},
-						{Path: "/dbmgmt/access-requests/all", Name: "权限申请", Icon: "FormOutlined", Sort: 2, Component: "dbmgmt-access-requests-page", Status: 1},
 					},
 				},
 				{

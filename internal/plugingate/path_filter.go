@@ -142,7 +142,7 @@ var uiPathRules = []pathRule{
 	{
 		plugin: "project",
 		prefixes: []string{
-			"/projects", "/application-topology", "/project-members", "/project-services",
+			"/projects", "/project-members", "/project-services",
 			"/project-logs", "/project-log-sources", "/log-retention", "/loggie-status",
 		},
 	},

@@ -27,10 +27,11 @@ pipelines:
         fields:
           project_id: "1"
           server_id: "10"
-        multiline:
+        multi:
+          active: true
           pattern: '^\d{4}-\d{2}-\d{2}'
-          negate: true
-          match: after
+          maxLines: 200
+          timeout: 5s
     interceptors:
       - type: transformer
         actions:

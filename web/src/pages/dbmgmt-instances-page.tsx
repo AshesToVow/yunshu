@@ -14,7 +14,7 @@ import {
 } from "../services/dbmgmt";
 import { getProjectServers, getProjects, type ProjectItem, type ServerItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
-import { envLabel } from "../utils/dbmgmt-labels";
+import { envLabel, instanceRoleLabel } from "../utils/dbmgmt-labels";
 
 const MYSQL_SSL_OPTIONS = [
   { value: "disable", label: "disable（不加密）" },
@@ -42,6 +42,8 @@ export function DbmgmtInstancesPage() {
   const [form] = Form.useForm<DbInstancePayload>();
   const driver = Form.useWatch("driver", form) ?? "mysql";
   const connectMode = Form.useWatch("connect_mode", form) ?? "direct";
+  const instanceRole = Form.useWatch("role", form) ?? "primary";
+  const primaryOptions = rows.filter((r) => (r.role ?? "primary") === "primary" && r.id !== editing?.id);
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
@@ -71,8 +73,22 @@ export function DbmgmtInstancesPage() {
   const columns: ColumnsType<DbInstance> = [
     { title: "名称", dataIndex: "name", render: (v, r) => <Link to={`/dbmgmt/instances/${r.id}?project=${projectId ?? ""}`}>{v}</Link> },
     { title: "环境", dataIndex: "env", render: (v) => <Tag>{envLabel(v)}</Tag> },
+    {
+      title: "库角色",
+      dataIndex: "role",
+      width: 90,
+      render: (v: string | undefined, r) => (
+        <Tag color={(v ?? "primary") === "replica" ? "blue" : "green"}>{instanceRoleLabel(v)}</Tag>
+      ),
+    },
     { title: "驱动", dataIndex: "driver" },
     { title: "连接", render: (_, r) => `${r.host}:${r.port}${r.database ? ` / ${r.database}` : ""}` },
+    {
+      title: "关联主库",
+      width: 120,
+      ellipsis: true,
+      render: (_, r) => (r.role === "replica" ? r.primary_instance_name || (r.primary_instance_id ? `#${r.primary_instance_id}` : "—") : "—"),
+    },
     {
       title: "状态",
       dataIndex: "status",
@@ -86,7 +102,7 @@ export function DbmgmtInstancesPage() {
           <Button size="small" icon={<ThunderboltOutlined />} onClick={() => void pingDbInstance(projectId!, r.id).then(load)}>
             探活
           </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue(r); setOpen(true); }}>
+          <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue({ ...r, role: r.role ?? "primary" }); setOpen(true); }}>
             编辑
           </Button>
           {r.driver === "mysql" && r.backup_link ? <Link to="/mysql-backup">备份</Link> : null}
@@ -103,6 +119,12 @@ export function DbmgmtInstancesPage() {
     const values = await form.validateFields();
     if (values.connect_mode !== "ssh_tunnel") {
       values.server_id = undefined;
+    }
+    if ((values.role ?? "primary") === "primary") {
+      values.primary_instance_id = undefined;
+    }
+    if (values.role === "replica") {
+      values.read_only = true;
     }
     if (editing) {
       await updateDbInstance(projectId, editing.id, values);
@@ -131,13 +153,34 @@ export function DbmgmtInstancesPage() {
     >
       <Table rowKey="id" loading={loading} columns={columns} dataSource={rows} pagination={false} />
       <Modal title={editing ? "编辑实例" : "新建实例"} open={open} onCancel={() => setOpen(false)} onOk={() => void submit()} width={720}>
-        <Form form={form} layout="vertical" initialValues={{ env: "dev", driver: "mysql", connect_mode: "direct", port: 3306, ssl_mode: "disable", require_ticket_for_dml: true }}>
+        <Form form={form} layout="vertical" initialValues={{ env: "dev", driver: "mysql", connect_mode: "direct", port: 3306, ssl_mode: "disable", require_ticket_for_dml: true, role: "primary" }}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
           <Form.Item name="env" label="环境">
             <Select options={[{ value: "dev" }, { value: "test" }, { value: "prod" }]} />
           </Form.Item>
+          <Form.Item name="role" label="库角色" extra="从库须关联主库，并自动设为只读（禁止 DML/DDL）">
+            <Select
+              options={[
+                { value: "primary", label: "主库" },
+                { value: "replica", label: "从库" },
+              ]}
+              onChange={(v) => {
+                if (v === "replica") {
+                  form.setFieldValue("read_only", true);
+                }
+              }}
+            />
+          </Form.Item>
+          {instanceRole === "replica" ? (
+            <Form.Item name="primary_instance_id" label="关联主库" rules={[{ required: true, message: "请选择主库" }]}>
+              <Select
+                placeholder="选择同项目主库实例"
+                options={primaryOptions.map((p) => ({ value: p.id, label: `${p.name} (${p.host}:${p.port})` }))}
+              />
+            </Form.Item>
+          ) : null}
           <Form.Item name="driver" label="驱动">
             <Select options={[{ value: "mysql", label: "MySQL" }, { value: "postgres", label: "PostgreSQL" }]} />
           </Form.Item>
@@ -189,9 +232,9 @@ export function DbmgmtInstancesPage() {
             name="read_only"
             label="只读实例"
             valuePropName="checked"
-            extra="开启后该实例禁止 DML/DDL/导入，仅允许查询（适用于只读副本、从库）"
+            extra={instanceRole === "replica" ? "从库固定为只读" : "开启后禁止 DML/DDL/导入，仅允许查询"}
           >
-            <Switch />
+            <Switch disabled={instanceRole === "replica"} />
           </Form.Item>
           <Form.Item name="require_ticket_for_dml" label="DML 须工单" valuePropName="checked">
             <Switch />

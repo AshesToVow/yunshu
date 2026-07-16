@@ -11,6 +11,8 @@ var (
 	levelTokenRE   = regexp.MustCompile(`(?i)\s(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PANIC)\s`)
 	// klog / kube-style：I0716 02:51:52.902837 或行首 I/W/E/F + MMDD
 	levelKlogRE = regexp.MustCompile(`(?:^|[\s>])([IWEF])\d{4}\s+\d{2}:\d{2}:\d{2}`)
+	// CityEyesVap：| INFO|thread|...
+	levelPipeRE = regexp.MustCompile(`\|\s*(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s*\|`)
 )
 
 func normalizeLevel(level string) string {
@@ -26,6 +28,10 @@ func normalizeLevel(level string) string {
 		return "ERROR"
 	case "F":
 		return "FATAL"
+	case "NOTE":
+		return "INFO"
+	case "SYSTEM":
+		return "INFO"
 	default:
 		return level
 	}
@@ -43,6 +49,9 @@ func extractLevelFromMessage(message string) string {
 		return normalizeLevel(m[1])
 	}
 	if m := levelKlogRE.FindStringSubmatch(message); len(m) > 1 {
+		return normalizeLevel(m[1])
+	}
+	if m := levelPipeRE.FindStringSubmatch(message); len(m) > 1 {
 		return normalizeLevel(m[1])
 	}
 	return ""

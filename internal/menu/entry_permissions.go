@@ -23,7 +23,6 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/alert-maintenance":           {"/api/v1/alerts/maintenance-windows", "GET"},
 
 		"/projects":                    {"/api/v1/projects", "GET"},
-		"/application-topology":        {"/api/v1/projects/:id/application-topology", "GET"},
 		"/project-members":             {"/api/v1/projects/:id/members", "GET"},
 		"/project-servers":             {"/api/v1/projects/:id/servers", "GET"},
 
@@ -38,7 +37,6 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/dbmgmt/apply/app-user":       {"/api/v1/projects/:id/dbmgmt/app-user-requests", "GET"},
 		"/dbmgmt/apply/query-grants":   {"/api/v1/projects/:id/dbmgmt/grants", "GET"},
 		"/dbmgmt/instances":            {"/api/v1/projects/:id/dbmgmt/instances", "GET"},
-		"/dbmgmt/access-requests/all":  {"/api/v1/projects/:id/dbmgmt/access-requests", "GET"},
 		"/dbmgmt/sql/query":            {"/api/v1/projects/:id/dbmgmt/instances", "GET"},
 		"/dbmgmt/sql/audit":            {"/api/v1/projects/:id/dbmgmt/tickets", "GET"},
 		"/dbmgmt/workflow/pending":     {"/api/v1/projects/:id/dbmgmt/tickets", "GET"},

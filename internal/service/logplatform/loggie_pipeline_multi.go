@@ -145,9 +145,14 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
 	if parseProfile.hasTransformer() {
 		interceptorBlock = parseProfile.renderTransformerActions()
 	}
-	negate := "true"
-	if !parseProfile.multilineNegateValue() {
-		negate = "false"
+	multiBlock := ""
+	if pat := strings.TrimSpace(parseProfile.multilinePattern); pat != "" {
+		multiBlock = fmt.Sprintf(`        multi:
+          active: true
+          pattern: '%s'
+          maxLines: %d
+          timeout: 5s
+`, pat, parseProfile.multilineMaxLines())
 	}
 	return fmt.Sprintf(`  - name: %s
     sources:
@@ -159,13 +164,7 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
         fields:
           project_id: %q
           server_id: %q%s
-        multiline:
-          pattern: '%s'
-          negate: %s
-          match: after
-          maxLines: %d
-          timeout: 5s
-%s    sink:
+%s%s    sink:
       type: elasticsearch
       hosts:
 %s      index: %s
@@ -181,9 +180,7 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
 		fmt.Sprintf("%d", projectID),
 		fmt.Sprintf("%d", serverID),
 		fieldsExtra,
-		parseProfile.multilinePattern,
-		negate,
-		parseProfile.multilineMaxLines(),
+		multiBlock,
 		ensureFileMetaActions(interceptorBlock, entry.Paths),
 		hostsBlock,
 		quoteYAML(indexSink),
