@@ -1,6 +1,6 @@
 export type DictTypeOption = { label: string; value: string };
 
-export type DictCategoryId = "all" | "system" | "alert" | "log" | "k8s" | "cmdb" | "backup" | "cicd" | "other";
+export type DictCategoryId = "all" | "system" | "alert" | "log" | "k8s" | "cmdb" | "backup" | "dbmgmt" | "cicd" | "other";
 
 type DictCategoryMeta = {
   id: Exclude<DictCategoryId, "all">;
@@ -17,6 +17,7 @@ export const DICT_CATEGORY_TABS: { id: DictCategoryId; label: string }[] = [
   { id: "k8s", label: "Kubernetes" },
   { id: "cmdb", label: "CMDB / 服务器" },
   { id: "backup", label: "备份 / MinIO" },
+  { id: "dbmgmt", label: "数据库管理" },
   { id: "cicd", label: "CI/CD" },
   { id: "other", label: "其他" },
 ];
@@ -24,10 +25,11 @@ export const DICT_CATEGORY_TABS: { id: DictCategoryId; label: string }[] = [
 export const DICT_CATEGORY_META: Record<Exclude<DictCategoryId, "all">, DictCategoryMeta> = {
   system: { id: "system", label: "系统", color: "blue", description: "邮件、通用状态等基础配置" },
   alert: { id: "alert", label: "告警", color: "volcano", description: "告警规则、通道、Prometheus、企微/钉钉" },
-  log: { id: "log", label: "日志", color: "cyan", description: "日志 Agent、采集源等平台配置" },
+  log: { id: "log", label: "日志", color: "cyan", description: "ES / Kafka / Agent、采集源等平台配置" },
   k8s: { id: "k8s", label: "Kubernetes", color: "purple", description: "集群模板、Event 转发等" },
   cmdb: { id: "cmdb", label: "CMDB / 服务器", color: "geekblue", description: "服务器分组、云厂商凭据模板" },
   backup: { id: "backup", label: "备份 / MinIO", color: "orange", description: "MySQL 备份归档与 MinIO 连接" },
+  dbmgmt: { id: "dbmgmt", label: "数据库管理", color: "gold", description: "SQL 查询、审批、goInception 等平台配置" },
   cicd: { id: "cicd", label: "CI/CD", color: "green", description: "Jenkins、流水线、发布枚举" },
   other: { id: "other", label: "其他", color: "default", description: "未归类的自定义 dict_type" },
 };
@@ -72,8 +74,13 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "钉钉 signSecret（dingtalk_sign_secret）", value: "dingtalk_sign_secret", category: "alert" },
 
   { label: "日志源类型（log_source_type）", value: "log_source_type", category: "log" },
-  { label: "Agent 健康状态（log_agent_health_status）", value: "log_agent_health_status", category: "log" },
-  { label: "平台地址（agent_platform_url）", value: "agent_platform_url", category: "log" },
+  { label: "启用 ES（elasticsearch_enabled）", value: "elasticsearch_enabled", category: "log" },
+  { label: "ES 地址（elasticsearch_addresses）", value: "elasticsearch_addresses", category: "log" },
+  { label: "启用 Kafka 中转（kafka_enabled）", value: "kafka_enabled", category: "log" },
+  { label: "Kafka Brokers（kafka_brokers）", value: "kafka_brokers", category: "log" },
+  { label: "Kafka Topic（kafka_topic）", value: "kafka_topic", category: "log" },
+  { label: "Kafka 消费组（kafka_consumer_group）", value: "kafka_consumer_group", category: "log" },
+  { label: "Kafka 密码（kafka_password）", value: "kafka_password", category: "log" },
 
   { label: "K8s Event 转发开关（k8s_event_forward_enabled）", value: "k8s_event_forward_enabled", category: "k8s" },
   { label: "K8s Event 缓冲（k8s_event_forward_watcher_buffer_size）", value: "k8s_event_forward_watcher_buffer_size", category: "k8s" },
@@ -118,6 +125,19 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "MySQL 备份 Worker 开关（mysql_backup_scheduler_enabled）", value: "mysql_backup_scheduler_enabled", category: "backup" },
   { label: "MySQL 备份调度 Cron（mysql_backup_scheduler_tick_spec）", value: "mysql_backup_scheduler_tick_spec", category: "backup" },
 
+  { label: "SQL 查询超时秒（dbmgmt_query_timeout_seconds）", value: "dbmgmt_query_timeout_seconds", category: "dbmgmt" },
+  { label: "查询最大行数（dbmgmt_max_rows）", value: "dbmgmt_max_rows", category: "dbmgmt" },
+  { label: "SQL 导入上限 MB（dbmgmt_max_import_file_mb）", value: "dbmgmt_max_import_file_mb", category: "dbmgmt" },
+  { label: "生产强制审批（dbmgmt_prod_force_approval）", value: "dbmgmt_prod_force_approval", category: "dbmgmt" },
+  { label: "审批超时小时（dbmgmt_approval_sla_hours）", value: "dbmgmt_approval_sla_hours", category: "dbmgmt" },
+  { label: "审批提醒间隔小时（dbmgmt_approval_reminder_interval_hours）", value: "dbmgmt_approval_reminder_interval_hours", category: "dbmgmt" },
+  { label: "实例探活间隔秒（dbmgmt_ping_interval_seconds）", value: "dbmgmt_ping_interval_seconds", category: "dbmgmt" },
+  { label: "单实例最大并发（dbmgmt_max_concurrent_per_instance）", value: "dbmgmt_max_concurrent_per_instance", category: "dbmgmt" },
+  { label: "启用 goInception（dbmgmt_goinception_enabled）", value: "dbmgmt_goinception_enabled", category: "dbmgmt" },
+  { label: "goInception 地址（dbmgmt_goinception_host）", value: "dbmgmt_goinception_host", category: "dbmgmt" },
+  { label: "goInception 端口（dbmgmt_goinception_port）", value: "dbmgmt_goinception_port", category: "dbmgmt" },
+  { label: "goInception 备份（dbmgmt_goinception_backup）", value: "dbmgmt_goinception_backup", category: "dbmgmt" },
+
   { label: "CI/CD 启用（cicd_enabled）", value: "cicd_enabled", category: "cicd" },
   { label: "Jenkins 地址（cicd_jenkins_base_url）", value: "cicd_jenkins_base_url", category: "cicd" },
   { label: "Jenkins 用户（cicd_jenkins_username）", value: "cicd_jenkins_username", category: "cicd" },
@@ -134,7 +154,10 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "MinIO 凭据 ID（cicd_minio_credential_id）", value: "cicd_minio_credential_id", category: "cicd" },
   { label: "Harbor 凭据 ID（cicd_harbor_credential_id）", value: "cicd_harbor_credential_id", category: "cicd" },
   { label: "Harbor 地址（cicd_harbor_url）", value: "cicd_harbor_url", category: "cicd" },
+  { label: "Harbor 解析 IP（cicd_harbor_host_ip）", value: "cicd_harbor_host_ip", category: "cicd" },
   { label: "Harbor 项目（cicd_harbor_project_group）", value: "cicd_harbor_project_group", category: "cicd" },
+  { label: "Harbor 用户名（cicd_harbor_username）", value: "cicd_harbor_username", category: "cicd" },
+  { label: "Harbor 密码（cicd_harbor_password）", value: "cicd_harbor_password", category: "cicd" },
   { label: "MinIO S3 地址（cicd_minio_endpoint）", value: "cicd_minio_endpoint", category: "cicd" },
   { label: "前端制品桶（cicd_minio_bucket_frontend）", value: "cicd_minio_bucket_frontend", category: "cicd" },
   { label: "后端制品桶（cicd_minio_bucket_backend）", value: "cicd_minio_bucket_backend", category: "cicd" },
@@ -143,6 +166,8 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "手动发布超时（cicd_default_wait_mins）", value: "cicd_default_wait_mins", category: "cicd" },
   { label: "制品保留数（cicd_default_artifact_retain_count）", value: "cicd_default_artifact_retain_count", category: "cicd" },
   { label: "Run 同步间隔（cicd_run_sync_interval_seconds）", value: "cicd_run_sync_interval_seconds", category: "cicd" },
+  { label: "审批超时阈值（cicd_approval_sla_hours）", value: "cicd_approval_sla_hours", category: "cicd" },
+  { label: "审批提醒间隔（cicd_approval_reminder_interval_hours）", value: "cicd_approval_reminder_interval_hours", category: "cicd" },
   { label: "发布模式（cicd_publish_mode）", value: "cicd_publish_mode", category: "cicd" },
   { label: "CI/CD 环境（cicd_tenv）", value: "cicd_tenv", category: "cicd" },
   { label: "应用类型（cicd_pipeline_type）", value: "cicd_pipeline_type", category: "cicd" },
@@ -169,6 +194,7 @@ export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "
   const registered = DICT_TYPE_CATEGORY_MAP.get(key);
   if (registered) return registered;
   if (key.startsWith("cicd_")) return "cicd";
+  if (key.startsWith("dbmgmt_")) return "dbmgmt";
   if (key.startsWith("alert_")) return "alert";
   if (key.startsWith("log_")) return "log";
   if (key.startsWith("k8s_")) return "k8s";
@@ -176,7 +202,6 @@ export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "
   if (key.startsWith("mail_") || key === "common_status") return "system";
   if (key.startsWith("server_") || key.startsWith("cloud_")) return "cmdb";
   if (key.startsWith("wecom_") || key.startsWith("dingtalk_")) return "alert";
-  if (key === "agent_platform_url") return "log";
   return "other";
 }
 
@@ -216,7 +241,7 @@ export function buildGroupedDictTypeSelectOptions(
     grouped.set(cat, list);
   }
 
-  const order: Exclude<DictCategoryId, "all">[] = ["system", "alert", "log", "k8s", "cmdb", "backup", "cicd", "other"];
+  const order: Exclude<DictCategoryId, "all">[] = ["system", "alert", "log", "k8s", "cmdb", "backup", "dbmgmt", "cicd", "other"];
   return order
     .filter((id) => grouped.has(id))
     .map((id) => ({

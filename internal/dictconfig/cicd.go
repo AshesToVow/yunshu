@@ -29,15 +29,20 @@ type CicdDictTypes struct {
 	MinIOCredentialID      string
 	HarborCredentialID     string
 	HarborURL              string
+	HarborHostIP           string
 	HarborProjectGroup     string
+	HarborUsername         string
+	HarborPassword         string
 	MinIOEndpoint          string
 	MinIOBucketFrontend    string
 	MinIOBucketBackend     string
 	MCBin                  string
 	MCAlias                string
-	RunSyncIntervalSeconds string
-	DefaultWaitMins        string
-	DefaultArtifactRetain  string
+	RunSyncIntervalSeconds        string
+	DefaultWaitMins               string
+	DefaultArtifactRetain         string
+	ApprovalSlaHours              string
+	ApprovalReminderIntervalHours string
 }
 
 func DefaultCicdDictTypes() CicdDictTypes {
@@ -58,15 +63,20 @@ func DefaultCicdDictTypes() CicdDictTypes {
 		MinIOCredentialID:      "cicd_minio_credential_id",
 		HarborCredentialID:     "cicd_harbor_credential_id",
 		HarborURL:              "cicd_harbor_url",
+		HarborHostIP:           "cicd_harbor_host_ip",
 		HarborProjectGroup:     "cicd_harbor_project_group",
+		HarborUsername:         "cicd_harbor_username",
+		HarborPassword:         "cicd_harbor_password",
 		MinIOEndpoint:          "cicd_minio_endpoint",
 		MinIOBucketFrontend:    "cicd_minio_bucket_frontend",
 		MinIOBucketBackend:     "cicd_minio_bucket_backend",
 		MCBin:                  "cicd_mc_bin",
 		MCAlias:                "cicd_mc_alias",
-		RunSyncIntervalSeconds: "cicd_run_sync_interval_seconds",
-		DefaultWaitMins:        "cicd_default_wait_mins",
-		DefaultArtifactRetain:  "cicd_default_artifact_retain_count",
+		RunSyncIntervalSeconds:        "cicd_run_sync_interval_seconds",
+		DefaultWaitMins:               "cicd_default_wait_mins",
+		DefaultArtifactRetain:         "cicd_default_artifact_retain_count",
+		ApprovalSlaHours:              "cicd_approval_sla_hours",
+		ApprovalReminderIntervalHours: "cicd_approval_reminder_interval_hours",
 	}
 }
 
@@ -126,8 +136,17 @@ func ResolveCicdConfig(ctx context.Context, db *gorm.DB, yamlBase config.CicdCon
 	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborURL); ok {
 		cfg.Harbor.URL = v
 	}
+	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborHostIP); ok {
+		cfg.Harbor.HostIP = v
+	}
 	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborProjectGroup); ok {
 		cfg.Harbor.ProjectGroup = v
+	}
+	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborUsername); ok {
+		cfg.Harbor.Username = v
+	}
+	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborPassword); ok {
+		cfg.Harbor.Password = v
 	}
 	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.MinIOEndpoint); ok {
 		cfg.MinIO.Endpoint = v
@@ -157,6 +176,16 @@ func ResolveCicdConfig(ctx context.Context, db *gorm.DB, yamlBase config.CicdCon
 	if v, ok := fetchEnabledDictValue(ctx, db, types.DefaultArtifactRetain); ok {
 		if n, ok2 := parseInt(v); ok2 && n >= 0 {
 			cfg.DefaultArtifactRetain = n
+		}
+	}
+	if v, ok := fetchEnabledDictValue(ctx, db, types.ApprovalSlaHours); ok {
+		if n, ok2 := parseInt(v); ok2 && n > 0 {
+			cfg.ApprovalSlaHours = n
+		}
+	}
+	if v, ok := fetchEnabledDictValue(ctx, db, types.ApprovalReminderIntervalHours); ok {
+		if n, ok2 := parseInt(v); ok2 && n > 0 {
+			cfg.ApprovalReminderIntervalHours = n
 		}
 	}
 	cfg.MinIO.Endpoint = resolveCicdMinIOEndpoint(ctx, db, cfg.MinIO.Endpoint)

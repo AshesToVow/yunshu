@@ -110,6 +110,7 @@ export function IngressesPage() {
       <YamlCrudPage<IngressItem, IngressDetail>
         title="Ingress-Nginx 管理"
         needNamespace
+        watchResource="ingresses"
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

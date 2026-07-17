@@ -9,7 +9,6 @@ import (
 	"yunshu/internal/pkg/auth"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/store"
 
@@ -22,10 +21,10 @@ func respondSessionStoreError(c *gin.Context, _ *logx.Logger, err error) {
 	case errors.Is(err, store.ErrSessionNotFound):
 		response.Error(c, constants.ErrLoginSessionExpired)
 	case errors.Is(err, store.ErrRedisRequired), errors.Is(err, store.ErrRedisUnavailable):
-		logutil.HTTP("http.auth").Error("redis session validation failed", "error", err)
+		logx.With(c.Request.Context(), "component", "http.auth").Error("redis session validation failed", "error", err)
 		response.Error(c, constants.ErrInternal)
 	default:
-		logutil.HTTP("http.auth").Error("session validation failed", "error", err)
+		logx.With(c.Request.Context(), "component", "http.auth").Error("session validation failed", "error", err)
 	}
 }
 
@@ -41,7 +40,7 @@ func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepo
 		tokenString := strings.TrimPrefix(header, "Bearer ")
 		claims, err := auth.ParseToken(secret, tokenString)
 		if err != nil {
-			logutil.HTTP("http.auth").Warn("parse token failed", "error", err)
+			logx.With(c.Request.Context(), "component", "http.auth").Warn("parse token failed", "error", err)
 			response.Error(c, constants.ErrAccessTokenInvalid)
 			c.Abort()
 			return
@@ -84,7 +83,7 @@ func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepo
 
 		c.Set(auth.ContextClaimsKey, claims)
 		c.Set(auth.ContextUserKey, currentUser)
-		c.Request = c.Request.WithContext(logutil.WithUser(c.Request.Context(), user.ID, user.Username))
+		c.Request = c.Request.WithContext(logx.WithUser(c.Request.Context(), user.ID, user.Username))
 		c.Next()
 	}
 }

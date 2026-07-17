@@ -20,5 +20,9 @@ func AutoMigrateModels(db *gorm.DB, pluginsCfg *config.PluginsConfig) error {
 	if err := plugin.Migrate(db, pluginsCfg); err != nil {
 		return err
 	}
-	return menu.Sync(context.Background(), db)
+	ctx := context.Background()
+	if err := menu.Sync(ctx, db); err != nil {
+		return err
+	}
+	return plugin.SyncMenuVisibility(ctx, db, pluginsCfg)
 }

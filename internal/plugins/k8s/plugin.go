@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/logutil"
+	"log/slog"
 	"yunshu/internal/plugin"
 	"yunshu/internal/service/k8s/eventforward"
 
@@ -58,7 +58,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 		rt.DB,
 	)
 	if err != nil {
-		logutil.Worker("k8s.event_forward").Errorw(err, "Failed to init K8s event forward manager")
+		slog.Default().With("component", "k8s.event_forward").Error("Failed to init K8s event forward manager", "error", err)
 		return nil
 	}
 	mgr.Start()

@@ -1,6 +1,7 @@
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, DeploymentUnitOutlined, CopyOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, DeploymentUnitOutlined } from "@ant-design/icons";
 import { AutoComplete, Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   getProjects,
   getProjectServers,
@@ -8,18 +9,15 @@ import {
   getProjectLogSources,
   upsertProjectLogSource,
   deleteProjectLogSource,
-  bootstrapProjectAgent,
-  rotateProjectAgentToken,
   type ProjectItem,
   type ServerItem,
   type ServiceItem,
   type LogSourceItem,
 } from "../services/projects";
 import { useDictOptions } from "../hooks/use-dict-options";
-import { DictFillSelect } from "../components/dict-fill-select";
-import { copyToClipboard } from "../utils/clipboard";
 
-export function ProjectLogSourcesPage() {
+export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -30,17 +28,9 @@ export function ProjectLogSourcesPage() {
   const [loading, setLoading] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [bootstrapOpen, setBootstrapOpen] = useState(false);
-  const [bootstrapping, setBootstrapping] = useState(false);
-  const [rotateConfirmOpen, setRotateConfirmOpen] = useState(false);
-  const [rotateConfirmInput, setRotateConfirmInput] = useState("");
-  const [bootstrapResult, setBootstrapResult] = useState<{ run_command: string; systemd_service: string; token: string } | null>(null);
   const [fileOptions, setFileOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [current, setCurrent] = useState<LogSourceItem | null>(null);
-  const [bootstrapServerId, setBootstrapServerId] = useState<number | null>(null);
-  const [form] = Form.useForm<{ id?: number; service_id: number; log_type: string; path: string; log_dir?: string; include_regex?: string; exclude_regex?: string; status: number }>();
-  const [bootstrapForm] = Form.useForm<{ platform_url: string; agent_name?: string; agent_version?: string }>();
-  const platformURLDictOptions = useDictOptions("agent_platform_url");
+  const [form] = Form.useForm<{ id?: number; service_id: number; log_type: string; path: string; log_dir?: string; include_regex?: string; exclude_regex?: string; multiline_rule?: string; status: number }>();
   const logTypeOptions = useDictOptions("log_source_type");
   const logSourceStatusOptions = useDictOptions("common_status");
 
@@ -130,6 +120,7 @@ export function ProjectLogSourcesPage() {
       status: record.status,
       include_regex: record.include_regex ?? undefined,
       exclude_regex: record.exclude_regex ?? undefined,
+      multiline_rule: record.multiline_rule ?? undefined,
     });
     setEditorOpen(true);
   }
@@ -157,6 +148,7 @@ export function ProjectLogSourcesPage() {
         path: finalPath,
         include_regex: v.include_regex,
         exclude_regex: v.exclude_regex,
+        multiline_rule: v.multiline_rule,
         status: v.status,
       });
       message.success(current ? "已更新日志源" : "已创建日志源");
@@ -167,88 +159,26 @@ export function ProjectLogSourcesPage() {
     }
   }
 
-  function openBootstrapForServer() {
-    if (!projectId) return;
-    if (!serverId) {
-      message.warning("请先选择服务器");
-      return;
-    }
-    setBootstrapServerId(serverId);
-    setBootstrapResult(null);
-    bootstrapForm.setFieldsValue({
-      platform_url: window.location.origin.replace(/\/$/, ""),
-      agent_name: `log-agent-s${serverId}`,
-      agent_version: "v0.1.0",
-    });
-    setBootstrapOpen(true);
-  }
+  const toolbar = (
+    <Space wrap>
+      <Select style={{ width: 240 }} value={projectId} onChange={setProjectId} options={projectOptions} placeholder="项目" />
+      <Select style={{ width: 300 }} value={serverId} onChange={setServerId} options={serverOptions} placeholder="服务器" allowClear />
+      <Select style={{ width: 220 }} value={serviceId} onChange={setServiceId} options={serviceOptions} placeholder="服务" allowClear />
+      <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+        刷新
+      </Button>
+      <Button icon={<DeploymentUnitOutlined />} onClick={() => navigate("/loggie-status")} disabled={!serverId}>
+        Agent 管理
+      </Button>
+      <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+        新增日志源
+      </Button>
+    </Space>
+  );
 
-  async function doBootstrap() {
-    if (!projectId || !bootstrapServerId) return;
-    const values = await bootstrapForm.validateFields();
-    setBootstrapping(true);
-    try {
-      const res = await bootstrapProjectAgent(projectId, {
-        server_id: bootstrapServerId,
-        platform_url: values.platform_url,
-        agent_name: values.agent_name,
-        agent_version: values.agent_version,
-      });
-      setBootstrapResult({
-        run_command: res.run_command,
-        systemd_service: res.systemd_service,
-        token: res.token,
-      });
-      message.success("已生成部署命令");
-    } finally {
-      setBootstrapping(false);
-    }
-  }
-
-  async function doRotateToken() {
-    if (!projectId || !bootstrapServerId) return;
-    const values = await bootstrapForm.validateFields();
-    setBootstrapping(true);
-    try {
-      const res = await rotateProjectAgentToken(projectId, {
-        server_id: bootstrapServerId,
-        platform_url: values.platform_url,
-        agent_name: values.agent_name,
-        agent_version: values.agent_version,
-      });
-      setBootstrapResult({
-        run_command: res.run_command,
-        systemd_service: res.systemd_service,
-        token: res.token,
-      });
-      setRotateConfirmOpen(false);
-      message.success("Token已轮换，旧Token立即失效");
-    } finally {
-      setBootstrapping(false);
-    }
-  }
-
-  function openRotateConfirm() {
-    setRotateConfirmInput("");
-    setRotateConfirmOpen(true);
-  }
-
-  return (
-    <Card
-      title="日志源配置"
-      extra={
-        <Space>
-          <Select style={{ width: 240 }} value={projectId} onChange={setProjectId} options={projectOptions} placeholder="项目" />
-          <Select style={{ width: 300 }} value={serverId} onChange={setServerId} options={serverOptions} placeholder="服务器" allowClear />
-          <Select style={{ width: 220 }} value={serviceId} onChange={setServiceId} options={serviceOptions} placeholder="服务" allowClear />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button>
-          <Button icon={<DeploymentUnitOutlined />} onClick={openBootstrapForServer} disabled={!serverId}>
-            部署本机Agent
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增日志源</Button>
-        </Space>
-      }
-    >
+  const body = (
+    <>
+      {embedded ? <div style={{ marginBottom: 12 }}>{toolbar}</div> : null}
       <Table
         rowKey="id"
         dataSource={sources}
@@ -265,9 +195,22 @@ export function ProjectLogSourcesPage() {
             width: 200,
             render: (_: unknown, record: LogSourceItem) => (
               <Space>
-                <Button icon={<EditOutlined />} onClick={() => openEdit(record)}>编辑</Button>
-                <Popconfirm title="确认删除日志源？" onConfirm={() => projectId && deleteProjectLogSource(projectId, record.id).then(() => { message.success("已删除"); void load(); })}>
-                  <Button danger icon={<DeleteOutlined />}>删除</Button>
+                <Button icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                  编辑
+                </Button>
+                <Popconfirm
+                  title="确认删除日志源？"
+                  onConfirm={() =>
+                    projectId &&
+                    deleteProjectLogSource(projectId, record.id).then(() => {
+                      message.success("已删除");
+                      void load();
+                    })
+                  }
+                >
+                  <Button danger icon={<DeleteOutlined />}>
+                    删除
+                  </Button>
                 </Popconfirm>
               </Space>
             ),
@@ -281,16 +224,30 @@ export function ProjectLogSourcesPage() {
             <Input />
           </Form.Item>
           <Row gutter={12}>
-            <Col span={8}><Form.Item label="服务" name="service_id" rules={[{ required: true }]}><Select options={serviceOptions} /></Form.Item></Col>
-            <Col span={4}><Form.Item label="类型" name="log_type" rules={[{ required: true }]}><Select options={logTypeOptions} /></Form.Item></Col>
-            <Col span={4}><Form.Item label="状态" name="status" rules={[{ required: true }]}><Select options={logSourceStatusOptions} /></Form.Item></Col>
-            <Col span={8}><Form.Item label="日志目录（file 类型）" name="log_dir"><Input placeholder="/var/log/app" /></Form.Item></Col>
+            <Col span={8}>
+              <Form.Item label="服务" name="service_id" rules={[{ required: true }]}>
+                <Select options={serviceOptions} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label="类型" name="log_type" rules={[{ required: true }]}>
+                <Select options={logTypeOptions} />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label="状态" name="status" rules={[{ required: true }]}>
+                <Select options={logSourceStatusOptions} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="日志目录（file 类型）" name="log_dir">
+                <Input placeholder="/var/log/app" />
+              </Form.Item>
+            </Col>
           </Row>
           <Row gutter={12}>
             <Col span={24}>
-              <Space>
-                <span style={{ color: "#999" }}>agent-only 模式：请手动填写日志文件路径或 systemd unit</span>
-              </Space>
+              <span style={{ color: "#999" }}>配置完成后到「Agent 管理」引导并安装采集端</span>
             </Col>
           </Row>
           <Row gutter={12} style={{ marginTop: 12 }}>
@@ -306,125 +263,55 @@ export function ProjectLogSourcesPage() {
             </Col>
           </Row>
           <Row gutter={12}>
-            <Col span={12}><Form.Item label="include regex" name="include_regex"><Input /></Form.Item></Col>
-            <Col span={12}><Form.Item label="exclude regex" name="exclude_regex"><Input /></Form.Item></Col>
+            <Col span={12}>
+              <Form.Item label="include regex" name="include_regex">
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="exclude regex" name="exclude_regex">
+                <Input />
+              </Form.Item>
+            </Col>
           </Row>
-        </Form>
-      </Modal>
-
-      <Modal
-        open={bootstrapOpen}
-        title="部署本机 Agent（覆盖该服务器所有日志源）"
-        onCancel={() => setBootstrapOpen(false)}
-        onOk={() => void doBootstrap()}
-        confirmLoading={bootstrapping}
-        width={980}
-      >
-        <Form form={bootstrapForm} layout="vertical">
           <Row gutter={12}>
             <Col span={12}>
-              <Form.Item label="平台地址" name="platform_url" rules={[{ required: true, message: "请输入平台地址" }]}>
-                <Input placeholder="例如：http://10.10.10.10:8080" />
-              </Form.Item>
-              <div style={{ color: "#999", marginTop: -8, marginBottom: 8 }}>
-                项目参数无需手填：系统会使用当前项目上下文自动关联到 Agent Token 与运行配置。
-              </div>
-              <Form.Item label="从字典填充平台地址">
-                <DictFillSelect
-                  form={bootstrapForm}
-                  fieldName="platform_url"
-                  options={platformURLDictOptions}
-                  placeholder="可选：选择后自动填入平台地址"
+              <Form.Item
+                label="解析模板（multiline_rule）"
+                name="multiline_rule"
+                tooltip="留空按路径自动识别。Elasticsearch ERROR 堆栈需选 elasticsearch 并热更 Agent。"
+              >
+                <Select
+                  allowClear
+                  placeholder="自动识别"
+                  options={[
+                    { value: "elasticsearch", label: "Elasticsearch / Java [ERROR ] 方括号堆栈" },
+                    { value: "spring", label: "Spring Boot 2024-01-01 INFO（Logback）" },
+                    { value: "cityeyes-vap", label: "CityEyesVap 管道分隔（JSON/堆栈多行）" },
+                    { value: "kafka", label: "Kafka [时间] INFO" },
+                    { value: "redis", label: "Redis 1:M 日期 * / #" },
+                    { value: "mysql", label: "MySQL 5.7 error log" },
+                    { value: "mysql_slow", label: "MySQL slow query（# Time:）" },
+                    { value: "zookeeper", label: "Zookeeper [myid:1] - INFO" },
+                    { value: "cri", label: "K8s CRI 容器日志（/var/log/pods）" },
+                    { value: "syslog", label: "Syslog /var/log/messages" },
+                    { value: "nginx_access", label: "Nginx access" },
+                  ]}
                 />
               </Form.Item>
             </Col>
-            <Col span={6}>
-              <Form.Item label="Agent 名称" name="agent_name">
-                <Input placeholder="log-agent" />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item label="Agent 版本" name="agent_version">
-                <Input placeholder="v0.1.0" />
-              </Form.Item>
-            </Col>
           </Row>
         </Form>
-        {!bootstrapResult ? null : (
-          <Space direction="vertical" style={{ width: "100%" }} size={10}>
-            <div style={{ color: "#999" }}>Token（请妥善保管）</div>
-            <Input.TextArea rows={2} value={bootstrapResult.token} readOnly />
-            <Button
-              icon={<CopyOutlined />}
-              onClick={() =>
-                void copyToClipboard(bootstrapResult.token)
-                  .then(() => message.success("Token 已复制"))
-                  .catch(() => message.error("复制失败，请手动选中复制"))
-              }
-              style={{ width: 140 }}
-            >
-              复制Token
-            </Button>
-            <Button onClick={openRotateConfirm} loading={bootstrapping} danger style={{ width: 160 }}>
-              轮换Token
-            </Button>
-            <div style={{ color: "#999" }}>一次性运行命令（Linux）</div>
-            <Input.TextArea rows={4} value={bootstrapResult.run_command} readOnly />
-            <Button
-              icon={<CopyOutlined />}
-              onClick={() =>
-                void copyToClipboard(bootstrapResult.run_command)
-                  .then(() => message.success("命令已复制"))
-                  .catch(() => message.error("复制失败，请手动选中复制"))
-              }
-              style={{ width: 140 }}
-            >
-              复制命令
-            </Button>
-            <div style={{ color: "#999" }}>systemd 服务文件（推荐）</div>
-            <Input.TextArea rows={12} value={bootstrapResult.systemd_service} readOnly />
-            <Button
-              icon={<CopyOutlined />}
-              onClick={() =>
-                void copyToClipboard(bootstrapResult.systemd_service)
-                  .then(() => message.success("systemd 配置已复制"))
-                  .catch(() => message.error("复制失败，请手动选中复制"))
-              }
-              style={{ width: 180 }}
-            >
-              复制systemd配置
-            </Button>
-          </Space>
-        )}
       </Modal>
+    </>
+  );
 
-      <Modal
-        open={rotateConfirmOpen}
-        title="确认轮换 Token"
-        onCancel={() => setRotateConfirmOpen(false)}
-        onOk={() => void doRotateToken()}
-        okText="确认轮换"
-        okButtonProps={{
-          danger: true,
-          disabled: (() => {
-            const target = (bootstrapForm.getFieldValue("agent_name") || "").trim();
-            return !target || rotateConfirmInput.trim() !== target;
-          })(),
-          loading: bootstrapping,
-        }}
-      >
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <div style={{ color: "#999" }}>
-            此操作会让旧 Token 立即失效。请输入当前 Agent 名称进行二次确认：
-            <Tag color="orange" style={{ marginLeft: 8 }}>{(bootstrapForm.getFieldValue("agent_name") || "-") as string}</Tag>
-          </div>
-          <Input
-            placeholder="请输入上面的 Agent 名称"
-            value={rotateConfirmInput}
-            onChange={(e) => setRotateConfirmInput(e.target.value)}
-          />
-        </Space>
-      </Modal>
+  if (embedded) {
+    return body;
+  }
+  return (
+    <Card title="日志源配置" extra={toolbar}>
+      {body}
     </Card>
   );
 }

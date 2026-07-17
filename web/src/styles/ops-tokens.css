@@ -1,0 +1,558 @@
+/**
+ * Yunshu Ops — 企业后台风格（非工业/驾驶舱风）
+ */
+
+:root,
+.admin-shell.ops-platform {
+  --ops-radius: 8px;
+  --ys-brand: #0d9488;
+  --ys-brand-strong: #0f766e;
+  --ys-text-muted: #64748b;
+  --ys-font-sans: "IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --ops-font-sans: var(--ys-font-sans);
+
+  --ops-success-bg: #f6ffed;
+  --ops-success-text: #389e0d;
+  --ops-warning-bg: #fffbe6;
+  --ops-warning-text: #d48806;
+  --ops-error-bg: #fff2f0;
+  --ops-error-text: #cf1322;
+  --ops-info-bg: #e6f4ff;
+  --ops-info-text: #0958d9;
+}
+
+.admin-shell.ops-platform.theme-light {
+  --ops-bg-layout: #f4f6f8;
+  --ops-bg-container: #ffffff;
+  --ops-border: #e2e8f0;
+  --ops-text: #0f172a;
+  --ops-text-secondary: #64748b;
+}
+
+.admin-shell.ops-platform.theme-dark {
+  --ops-bg-layout: #141414;
+  --ops-bg-container: #1f1f1f;
+  --ops-border: #303030;
+  --ops-text: rgba(255, 255, 255, 0.85);
+  --ops-text-secondary: rgba(255, 255, 255, 0.45);
+}
+
+/* Reduce visual noise: disable CRT overlay in ops mode */
+.admin-shell.ops-platform::before,
+.admin-shell.ops-platform::after {
+  display: none;
+}
+
+.admin-shell.ops-platform {
+  font-family: var(--ops-font-sans);
+}
+
+.admin-shell.ops-platform .admin-menu .ant-menu-item,
+.admin-shell.ops-platform .admin-menu .ant-menu-submenu-title {
+  font-family: var(--ops-font-sans) !important;
+  font-size: 13px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.admin-shell.ops-platform .admin-header__title {
+  font-family: var(--ops-font-sans) !important;
+  font-size: 15px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.admin-shell.ops-platform .admin-header__route-id {
+  display: none;
+}
+
+.admin-shell.ops-platform .admin-sider__telemetry {
+  display: none;
+}
+
+.admin-shell.ops-platform .brand-block__frame {
+  display: none;
+}
+
+.admin-shell.ops-platform .ant-tag {
+  border-radius: var(--ops-radius) !important;
+  font-family: var(--ops-font-sans) !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+/* 弱化旧版 PageTelemetryHeader 工业风 */
+.admin-shell.ops-platform .page-telemetry {
+  border-bottom: 1px solid var(--admin-border);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+}
+
+.admin-shell.ops-platform .page-telemetry__label {
+  display: none;
+}
+
+.admin-shell.ops-platform .page-telemetry__title {
+  font-family: var(--ops-font-sans) !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  line-height: 1.35 !important;
+}
+
+.admin-shell.ops-platform .page-telemetry__subtitle.ant-typography {
+  font-size: 14px !important;
+}
+
+.admin-shell.ops-platform .page-telemetry__meta {
+  font-family: var(--ops-font-sans) !important;
+  font-size: 13px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.page-stack {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform > .ant-layout,
+.admin-shell.ops-platform > .ant-layout > .ant-layout {
+  min-width: 0;
+}
+
+.admin-shell.ops-platform .table-card > .ant-card-body,
+.admin-shell.ops-platform .page-stack > .ant-card > .ant-card-body {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.admin-shell.ops-platform .table-card .ant-table-wrapper,
+.admin-shell.ops-platform .page-stack > .ant-card .ant-table-wrapper {
+  min-width: 0;
+}
+
+/* 工具栏/筛选行：允许换行，避免固定宽度撑破视口 */
+.ops-filter-bar,
+.k8s-page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ops-filter-bar .ant-select,
+.ops-filter-bar .ant-input,
+.ops-filter-bar .ant-input-affix-wrapper,
+.k8s-page-toolbar .ant-select,
+.k8s-page-toolbar .ant-input,
+.k8s-page-toolbar .ant-tree-select {
+  max-width: 100%;
+}
+
+.monaco-yaml-editor {
+  width: 100%;
+  min-width: 0;
+}
+
+.monaco-yaml-editor__surface {
+  border: 1px solid var(--admin-border, #e2e8f0);
+  border-radius: var(--ops-radius, 8px);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.admin-shell.ops-platform.theme-light .monaco-yaml-editor__surface {
+  border-color: #e2e8f0;
+}
+
+.admin-shell.ops-platform.theme-dark .monaco-yaml-editor__surface {
+  border-color: #303030;
+}
+
+.admin-shell.ops-platform .admin-content {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.yaml-crud-card > .ant-card-body {
+  min-width: 0;
+}
+
+/* 宽表格横向滚动限制在卡片内，避免撑开整页 */
+.k8s-table-scroll-host {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+.k8s-table-scroll-host .ant-table-wrapper {
+  min-width: 0;
+}
+
+.k8s-table-scroll-host .ant-table-container {
+  overflow-x: auto !important;
+}
+
+.k8s-table-scroll-host .ant-table-pagination {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.k8s-table-scroll-host .ant-table-cell {
+  word-break: break-word;
+}
+
+.admin-shell.ops-platform .table-card.ant-card,
+.admin-shell.ops-platform .page-stack > .ant-card {
+  border-radius: var(--ops-radius) !important;
+}
+
+/* Page header */
+.ops-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.ops-page-header__title {
+  margin: 4px 0 0 !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+}
+
+.ops-page-header__description {
+  margin: 4px 0 0 !important;
+  max-width: 72ch;
+}
+
+.ops-page-header__breadcrumb {
+  margin-bottom: 4px;
+}
+
+.ops-page-header__meta {
+  margin-top: 8px;
+  color: var(--admin-text-muted);
+  font-size: 12px;
+}
+
+/* K8s toolbar — 轻量分隔，非控制台面板 */
+.k8s-page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 0 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--admin-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.k8s-page-toolbar__cluster {
+  min-width: 220px;
+}
+
+.k8s-page-toolbar__namespace {
+  min-width: 180px;
+}
+
+.k8s-page-toolbar__search {
+  width: 260px;
+}
+
+.k8s-page-toolbar__watch-label {
+  color: var(--admin-text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .k8s-page-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .k8s-page-toolbar__cluster,
+  .k8s-page-toolbar__namespace,
+  .k8s-page-toolbar__search {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Pod 主从工作台 */
+.pod-workbench {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  min-height: 480px;
+}
+
+.pod-workbench__list {
+  flex: 1 1 58%;
+  min-width: 0;
+}
+
+.pod-workbench__detail {
+  flex: 0 0 38%;
+  min-width: 320px;
+  max-width: 480px;
+}
+
+.pod-detail-panel {
+  height: 100%;
+  padding: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--ops-radius, 6px);
+  background: var(--admin-surface-elevated, #fff);
+  overflow: auto;
+}
+
+.pod-detail-panel--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+
+.pod-detail-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pod-detail-panel__ns {
+  display: block;
+  font-size: 12px;
+}
+
+.pod-detail-panel__name {
+  margin: 2px 0 6px !important;
+  font-size: 15px !important;
+  word-break: break-all;
+}
+
+.pod-detail-panel__actions {
+  margin-top: 8px;
+}
+
+.pod-detail-panel__loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.pod-detail-panel__body .ant-descriptions-item-label {
+  width: 88px;
+}
+
+.ops-stat-card-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ops-stat-card-link:hover {
+  color: inherit;
+}
+
+/* 总览 KPI */
+.dashboard-page .ops-page-header {
+  margin-bottom: 8px;
+}
+
+.dashboard-section-title {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 12px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--admin-text-main) !important;
+}
+
+.dashboard-section-title:first-of-type {
+  margin-top: 4px !important;
+}
+
+.dashboard-stat-card-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dashboard-stat-card-link:hover {
+  color: inherit;
+}
+
+.dashboard-stat-card.ant-card {
+  height: 100%;
+  border-radius: var(--ops-radius) !important;
+  transition: box-shadow 0.2s ease;
+}
+
+.dashboard-stat-card--clickable:hover.ant-card {
+  box-shadow: none !important;
+  border-color: color-mix(in srgb, var(--admin-accent, var(--ys-brand)) 35%, var(--admin-border)) !important;
+}
+
+.dashboard-stat-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dashboard-stat-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.dashboard-stat-card__hint {
+  margin: 8px 0 0 !important;
+  font-size: 13px !important;
+}
+
+.dashboard-stat-card .ant-statistic-title {
+  font-size: 13px !important;
+  color: var(--admin-text-muted) !important;
+}
+
+.cluster-card {
+  height: 100%;
+  border: 1px solid var(--ops-border, rgba(148, 163, 184, 0.18));
+}
+
+.cluster-card__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.cluster-card__meta > span:first-child {
+  color: var(--ops-text-muted, rgba(148, 163, 184, 0.85));
+  flex-shrink: 0;
+}
+
+.cluster-card__actions {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ops-border, rgba(148, 163, 184, 0.12));
+}
+
+.cluster-card-grid__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.pod-detail-panel__tabs {
+  margin-top: 8px;
+}
+
+.pod-detail-panel__tabs .ant-tabs-content {
+  min-height: 200px;
+}
+
+.pod-logs-panel__content,
+.code-block-panel {
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--admin-text-main);
+  border: 1px solid var(--admin-border);
+  padding: 12px;
+  border-radius: var(--ops-radius);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.admin-shell.theme-dark .pod-logs-panel__content,
+.admin-shell.theme-dark .code-block-panel {
+  background: #141414;
+  color: rgba(255, 255, 255, 0.88);
+  border-color: #303030;
+}
+
+.pod-logs-panel__content {
+  max-height: min(52vh, 480px);
+}
+
+.pod-logs-panel__loading {
+  display: flex;
+  justify-content: center;
+  padding: 32px 0;
+}
+
+.k8s-summary-row-wrap {
+  margin: 12px 0;
+}
+
+.k8s-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.k8s-summary-row__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 88px;
+  padding: 8px 14px;
+  border-radius: var(--ops-radius);
+  background: var(--admin-surface-elevated, #fafafa);
+  border: 1px solid var(--admin-border);
+}
+
+.k8s-summary-row__label {
+  font-size: 12px;
+  color: var(--ops-text-muted, rgba(148, 163, 184, 0.85));
+}
+
+.k8s-summary-row__value {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: var(--ops-font-sans);
+  line-height: 1.2;
+}
+
+@media (max-width: 1280px) {
+  .pod-workbench {
+    flex-direction: column;
+  }
+
+  .pod-workbench__detail {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+  }
+}

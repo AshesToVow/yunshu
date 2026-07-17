@@ -1,7 +1,7 @@
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, PlusSquareOutlined, ExpandOutlined, CompressOutlined, CheckCircleOutlined, StopOutlined } from "@ant-design/icons";
+import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, PlusSquareOutlined, ExpandOutlined, CompressOutlined, CheckCircleOutlined, StopOutlined, ApiOutlined } from "@ant-design/icons";
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
-import { getMenuTree, createMenu, updateMenu, deleteMenu, batchUpdateMenuStatus } from "../services/menus";
+import { getMenuTree, createMenu, updateMenu, deleteMenu, batchUpdateMenuStatus, getMenuBindings, replaceMenuBindings, type MenuPermissionBindingItem } from "../services/menus";
 import type { MenuItem, MenuCreatePayload, MenuUpdatePayload } from "../services/menus";
 import { getAntdIconSelectOptions } from "../utils/antd-icon-options";
 
@@ -16,6 +16,11 @@ export function MenusPage() {
   const [parentID, setParentID] = useState<number | undefined>();
   const [form] = Form.useForm<MenuCreatePayload>();
   const watchedIcon = Form.useWatch("icon", form);
+  const [bindingOpen, setBindingOpen] = useState(false);
+  const [bindingMenu, setBindingMenu] = useState<MenuItem | null>(null);
+  const [bindingLoading, setBindingLoading] = useState(false);
+  const [bindingSubmitting, setBindingSubmitting] = useState(false);
+  const [bindingForm] = Form.useForm<{ bindings: MenuPermissionBindingItem[] }>();
 
   const iconSelectOptions = useMemo(() => {
     const base = getAntdIconSelectOptions();
@@ -29,6 +34,42 @@ export function MenusPage() {
   useEffect(() => {
     void loadTree();
   }, []);
+
+  async function openBindings(record: MenuItem) {
+    if (!record.path?.trim()) {
+      message.info("目录节点无路由 path，无需配置入口权限");
+      return;
+    }
+    setBindingMenu(record);
+    setBindingOpen(true);
+    setBindingLoading(true);
+    try {
+      const data = await getMenuBindings(record.id);
+      bindingForm.setFieldsValue({
+        bindings: data.custom?.length
+          ? data.custom
+          : data.default?.length
+            ? data.default.map((b) => ({ resource: b.resource, action: b.action, mode: "any" }))
+            : [{ resource: "", action: "GET", mode: "any" }],
+      });
+    } finally {
+      setBindingLoading(false);
+    }
+  }
+
+  async function handleBindingSubmit() {
+    if (!bindingMenu) return;
+    const values = await bindingForm.validateFields();
+    const bindings = (values.bindings ?? []).filter((b) => b.resource?.trim() && b.action?.trim());
+    setBindingSubmitting(true);
+    try {
+      await replaceMenuBindings(bindingMenu.id, bindings);
+      message.success("入口权限绑定已保存");
+      setBindingOpen(false);
+    } finally {
+      setBindingSubmitting(false);
+    }
+  }
 
   function normalizeTreeOrder(items: MenuItem[]): MenuItem[] {
     const sorted = [...items].sort((a, b) => {
@@ -196,9 +237,14 @@ export function MenusPage() {
             {
               title: "操作",
               key: "action",
-              width: 220,
+              width: 280,
               render: (_: unknown, record: MenuItem) => (
                 <Space wrap>
+                  {record.path ? (
+                    <Button type="link" size="small" icon={<ApiOutlined />} onClick={() => void openBindings(record)}>
+                      入口权限
+                    </Button>
+                  ) : null}
                   <Button
                     type="link"
                     size="small"
@@ -277,6 +323,44 @@ export function MenusPage() {
               <Switch />
             </Form.Item>
           </Space>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={bindingMenu ? `入口权限 · ${bindingMenu.name}` : "入口权限"}
+        open={bindingOpen}
+        onCancel={() => setBindingOpen(false)}
+        onOk={() => void handleBindingSubmit()}
+        confirmLoading={bindingSubmitting}
+        destroyOnClose
+        width={640}
+      >
+        <Typography.Paragraph type="secondary">
+          配置侧栏菜单可见性所需的 Casbin API（通常为 GET）。留空则使用内置 catalog 默认映射。
+        </Typography.Paragraph>
+        <Form form={bindingForm} layout="vertical" disabled={bindingLoading}>
+          <Form.List name="bindings">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map((field) => (
+                  <Space key={field.key} align="baseline" style={{ display: "flex", marginBottom: 8 }}>
+                    <Form.Item {...field} name={[field.name, "resource"]} rules={[{ required: true, message: "resource" }]}>
+                      <Input placeholder="/api/v1/..." style={{ width: 320 }} />
+                    </Form.Item>
+                    <Form.Item {...field} name={[field.name, "action"]} rules={[{ required: true }]}>
+                      <Select style={{ width: 100 }} options={["GET", "POST", "PUT", "DELETE"].map((a) => ({ value: a, label: a }))} />
+                    </Form.Item>
+                    <Button type="link" danger onClick={() => remove(field.name)}>
+                      删除
+                    </Button>
+                  </Space>
+                ))}
+                <Button type="dashed" onClick={() => add({ resource: "", action: "GET", mode: "any" })} block>
+                  添加绑定
+                </Button>
+              </>
+            )}
+          </Form.List>
         </Form>
       </Modal>
     </div>

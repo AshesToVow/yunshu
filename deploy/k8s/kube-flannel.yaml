@@ -1,0 +1,8 @@
+kubectl apply -f https://github.com/flannel-io/flannel/releases/download/v0.24.2/kube-flannel.yml
+
+curl -LO https://github.com/flannel-io/flannel/releases/download/v0.24.2/kube-flannel.yml
+
+# 把镜像改成 Harbor 地址
+sed -i 's|docker.io/flannel/flannel:v0.24.2|harbor.deploy.local/registry/flannel:v0.24.2|g' kube-flannel.yml
+
+kubectl apply -f kube-flannel.yml

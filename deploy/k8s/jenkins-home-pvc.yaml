@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jenkins-home-pvc
+  namespace: default          # 改成 Pod 实际所在的 namespace
+spec:
+  accessModes:
+    - ReadWriteOnce            # Jenkins 单副本用 RWO；多副本需 RWX + NFS
+  storageClassName: nfs-storage
+  resources:
+    requests:
+      storage: 20Gi

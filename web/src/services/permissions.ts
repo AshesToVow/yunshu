@@ -51,27 +51,34 @@ export function batchSetPermissionK8sScope(payload: PermissionBatchK8sScopePaylo
 export function getPermissionOptions(opts?: { isPluginEnabled?: (name: string) => boolean }) {
   const isEnabled = opts?.isPluginEnabled ?? defaultPluginEnabled;
   return (async () => {
-    const pageSize = 200;
-    let page = 1;
-    let total = 0;
-    const list: PermissionItem[] = [];
-
-    while (true) {
-      const data = await getData<PageData<PermissionItem>>(http.get("/permissions", { params: { page, page_size: pageSize } }));
-      if (page === 1) total = data.total ?? 0;
-      if (Array.isArray(data.list) && data.list.length > 0) {
-        list.push(...data.list);
-      }
-      if (!data.list?.length || list.length >= total) break;
-      page += 1;
-    }
-
-    const filtered = filterPermissionsByPlugins(list, isEnabled);
+    const all = await listAllPermissions();
+    const filtered = filterPermissionsByPlugins(all, isEnabled);
     return {
       list: filtered,
       total: filtered.length,
       page: 1,
-      page_size: filtered.length || pageSize,
+      page_size: filtered.length || 200,
     } satisfies PageData<PermissionItem>;
+  })();
+}
+
+export function listAllPermissions() {
+  return (async () => {
+    const pageSize = 100;
+    let page = 1;
+    const list: PermissionItem[] = [];
+
+    while (true) {
+      const data = await getData<PageData<PermissionItem>>(http.get("/permissions", { params: { page, page_size: pageSize } }));
+      if (!Array.isArray(data.list) || data.list.length === 0) {
+        break;
+      }
+      list.push(...data.list);
+      if (data.list.length < pageSize) {
+        break;
+      }
+      page += 1;
+    }
+    return list;
   })();
 }

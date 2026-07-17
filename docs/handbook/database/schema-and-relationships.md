@@ -14,7 +14,10 @@ erDiagram
   projects ||--o{ servers : owns
   projects ||--o{ services : owns
   projects ||--o{ service_log_sources : owns
-  projects ||--o{ log_agents : owns
+  projects ||--o{ loggie_agents : owns
+  projects ||--o{ db_instances : owns
+  db_instances ||--o{ db_access_grants : has
+  db_instances ||--o{ db_sql_tickets : has
   projects ||--o{ alert_datasources : owns
   alert_monitor_rules }o--|| alert_datasources : uses
   alert_monitor_rules }o--|| projects : derived
@@ -50,9 +53,26 @@ erDiagram
 | `servers` / `server_credentials` / `cloud_accounts` | 主机与凭据 |
 | `services` | 项目服务 |
 | `service_log_sources` | 日志源 |
-| `log_agents` / `agent_discovery` | Agent 与发现 |
+| `loggie_agents` | Loggie Agent 登记与心跳（替代旧 `log_agents`） |
+| `log_retention_policies` | 日志保留（全局/项目/服务器） |
 
-### 2.3 告警
+### 2.3 数据库管理（`dbmgmt` 插件）
+
+| 表 | 说明 |
+|----|------|
+| `db_instances` | MySQL/PostgreSQL 实例（归属 `project_id`） |
+| `db_access_grants` | 平台用户库表级授权（含查询行数上限） |
+| `db_access_requests` / `db_access_request_steps` | 库表权限申请与审批步骤 |
+| `db_app_user_requests` / `db_app_user_request_steps` | 应用用户 CREATE USER / GRANT 申请 |
+| `db_sql_tickets` / `db_sql_ticket_steps` | SQL 变更工单 |
+| `db_sql_executions` | SQL 执行历史（查询页/变更） |
+| `db_audit_logs` | 操作审计摘要 |
+| `db_instance_accounts` | 平台托管 MySQL 账号密码 |
+| `db_approval_flow_stages` | 项目级审批流阶段 |
+
+模型：`internal/model/dbmgmt.go`；运维说明见 [dbmgmt.md](../../dbmgmt.md)。
+
+### 2.4 告警
 
 | 表 | 说明 |
 |----|------|
@@ -67,7 +87,7 @@ erDiagram
 | `alert_duty_blocks` | 值班班次 |
 | `alert_events` | 历史事件 |
 
-### 2.4 K8s 与其它
+### 2.5 K8s 与其它
 
 | 表 | 说明 |
 |----|------|

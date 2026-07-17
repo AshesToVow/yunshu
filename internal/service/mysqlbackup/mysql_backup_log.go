@@ -1,7 +1,7 @@
 package mysqlbackup
 
-import "yunshu/internal/pkg/logutil"
+import "log/slog"
 
-func mysqlBackupLog() *logutil.Component {
-	return logutil.Worker("mysql.backup")
+func mysqlBackupLog() *slog.Logger {
+	return slog.Default().With("component", "mysql.backup")
 }

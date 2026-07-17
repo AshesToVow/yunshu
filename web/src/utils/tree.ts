@@ -1,7 +1,12 @@
-﻿import type { TreeProps } from "antd";
-import type { PermissionItem, RoleItem } from "../types/api";
+import type { TreeProps } from "antd";
+import type { PermissionItem, PermissionTreeNode, RoleItem } from "../types/api";
 
 export type AppTreeData = NonNullable<TreeProps["treeData"]>;
+
+export type PermissionTreeBuildOptions = {
+  menuLinks?: Record<string, { path: string }[]>;
+  isPluginAllowed?: (resource: string) => boolean;
+};
 
 export function buildRoleTreeData(roles: RoleItem[]): AppTreeData {
   const enabledRoles = roles.filter((role) => role.status === 1);
@@ -39,7 +44,7 @@ export function buildRoleTreeData(roles: RoleItem[]): AppTreeData {
   return treeData;
 }
 
-export function buildPermissionTreeData(permissions: PermissionItem[]): AppTreeData {
+export function buildPermissionTreeData(permissions: PermissionItem[], opts?: PermissionTreeBuildOptions): AppTreeData {
   const moduleMap = new Map<string, Map<string, PermissionItem[]>>();
 
   for (const permission of permissions) {
@@ -77,13 +82,52 @@ export function buildPermissionTreeData(permissions: PermissionItem[]): AppTreeD
               }
               return left.name.localeCompare(right.name);
             })
-            .map((permission) => ({
-              key: permission.id,
-              value: permission.id,
-              title: `${permission.action} · ${permission.name}`,
-            })),
+            .map((permission) => {
+              const key = `${permission.resource}::${permission.action.toUpperCase()}`;
+              const menus = opts?.menuLinks?.[key] ?? [];
+              const menuHint = menus.length > 0 ? ` → ${menus.map((m) => m.path).join(", ")}` : "";
+              const pluginOff = opts?.isPluginAllowed ? !opts.isPluginAllowed(permission.resource) : false;
+              return {
+                key: permission.id,
+                value: permission.id,
+                disableCheckbox: pluginOff,
+                title: `${permission.action} · ${permission.name}${menuHint}${pluginOff ? "（插件未启用）" : ""}`,
+              };
+            }),
         })),
     }));
+}
+
+export function buildUnifiedPermissionTreeData(nodes: PermissionTreeNode[]): AppTreeData {
+  const walk = (items: PermissionTreeNode[]): AppTreeData =>
+    items.map((node) => {
+      const isAPI = node.node_type === "api";
+      const suffix = node.plugin_disabled ? "（插件未启用）" : "";
+      const grantedTag = node.granted ? " ✓" : "";
+      return {
+        key: node.key,
+        title: `${node.title}${suffix}${grantedTag}`,
+        selectable: false,
+        disableCheckbox: !isAPI || !!node.plugin_disabled,
+        value: isAPI ? node.permission_id : undefined,
+        children: node.children?.length ? walk(node.children) : undefined,
+      };
+    });
+  return walk(nodes);
+}
+
+export function collectGrantedPermissionIds(nodes: PermissionTreeNode[]): number[] {
+  const ids: number[] = [];
+  const walk = (items: PermissionTreeNode[]) => {
+    for (const node of items) {
+      if (node.node_type === "api" && node.granted && node.permission_id) {
+        ids.push(node.permission_id);
+      }
+      if (node.children?.length) walk(node.children);
+    }
+  };
+  walk(nodes);
+  return ids;
 }
 
 export function normalizeCheckedKeys(checkedKeys: Parameters<NonNullable<TreeProps["onCheck"]>>[0]): number[] {

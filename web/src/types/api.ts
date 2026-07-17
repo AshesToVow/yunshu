@@ -223,6 +223,81 @@ export interface PolicyPayload {
   permission_id: number;
 }
 
+export interface MenuLinkItem {
+  path: string;
+  name?: string;
+}
+
+export interface PermissionMenuLinksResponse {
+  links: Record<string, MenuLinkItem[]>;
+}
+
+export interface PolicySimulateLayer {
+  layer: string;
+  allowed?: boolean;
+  skipped?: boolean;
+  reason?: string;
+  matched_roles?: string[];
+  required?: string;
+  plugin?: string;
+}
+
+export interface PolicyMenuImpact {
+  path: string;
+  name?: string;
+  visible: boolean;
+  reason?: string;
+}
+
+export interface PolicySimulateRequest {
+  user_id: number;
+  path: string;
+  method: string;
+  cluster_id?: number;
+  namespace?: string;
+  project_id?: number;
+}
+
+export interface PolicySimulateResponse {
+  allowed: boolean;
+  layers: PolicySimulateLayer[];
+  menu_impact?: PolicyMenuImpact[];
+}
+
+export interface PolicyConflictItem {
+  type: string;
+  severity: string;
+  message: string;
+  menu_path?: string;
+  menu_name?: string;
+  resource?: string;
+  action?: string;
+  permission_name?: string;
+  permission_id?: number;
+  plugin?: string;
+  suggest_fix?: string;
+}
+
+export interface PermissionTreeNode {
+  key: string;
+  title: string;
+  node_type: "menu" | "api";
+  permission_id?: number;
+  resource?: string;
+  action?: string;
+  menu_path?: string;
+  granted?: boolean;
+  plugin?: string;
+  plugin_disabled?: boolean;
+  children?: PermissionTreeNode[];
+}
+
+export interface PermissionTreeResponse {
+  role_id: number;
+  role_code: string;
+  tree: PermissionTreeNode[];
+}
+
 export interface MessageData {
   message: string;
 }

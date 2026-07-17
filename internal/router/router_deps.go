@@ -1,13 +1,15 @@
 package router
 
 import (
+	"fmt"
+
 	"yunshu/internal/bootstrap"
-	grpcclient "yunshu/internal/grpc/client"
 	"yunshu/internal/handler"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/middleware"
 	"yunshu/internal/service"
 	cicdsvc "yunshu/internal/service/cicd"
+	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,44 +48,49 @@ type RouteDeps struct {
 	dictEntryHandler         *handler.DictEntryHandler
 	adminHandler             *handler.AdminHandler
 
-	alertHandler              *handler.AlertHandler
-	alertPlatformHandler      *handler.AlertPlatformHandler
-	alertSubscriptionHandler  *handler.AlertSubscriptionHandler
-	alertInhibitionHandler    *handler.AlertInhibitionHandler
+	alertHandler             *handler.AlertHandler
+	alertPlatformHandler     *handler.AlertPlatformHandler
+	alertSubscriptionHandler *handler.AlertSubscriptionHandler
+	alertInhibitionHandler   *handler.AlertInhibitionHandler
 	alertReceiverGroupHandler *handler.AlertReceiverGroupHandler
-	cloudExpiryRuleHandler    *handler.CloudExpiryRuleHandler
+	cloudExpiryRuleHandler   *handler.CloudExpiryRuleHandler
 
-	clusterHandler          *handler.ClusterHandler
-	podHandler              *handler.PodHandler
-	namespaceHandler        *handler.NamespaceHandler
-	nodeHandler             *handler.NodeHandler
-	workloadHandler         *handler.WorkloadHandler
-	configHandler           *handler.ConfigHandler
-	storageHandler          *handler.StorageHandler
-	serviceResourceHandler  *handler.ServiceResourceHandler
-	ingressHandler          *handler.IngressHandler
-	networkPolicyHandler    *handler.NetworkPolicyHandler
-	k8sDiscoveryHandler     *handler.K8sDiscoveryHandler
-	k8sHPAHandler           *handler.K8sHPAHandler
-	k8sResourceWatchHandler *handler.K8sResourceWatchHandler
-	k8sSearchHandler        *handler.K8sSearchHandler
-	k8sEventForwardHandler  *handler.K8sEventForwardHandler
-	eventHandler            *handler.EventHandler
-	crdHandler              *handler.CRDHandler
-	crHandler               *handler.CRHandler
-	rbacHandler             *handler.RBACHandler
-	serviceAccountHandler   *handler.ServiceAccountHandler
-	overviewHandler         *handler.OverviewHandler
+	clusterHandler           *handler.ClusterHandler
+	podHandler               *handler.PodHandler
+	namespaceHandler         *handler.NamespaceHandler
+	nodeHandler              *handler.NodeHandler
+	workloadHandler          *handler.WorkloadHandler
+	configHandler            *handler.ConfigHandler
+	storageHandler           *handler.StorageHandler
+	serviceResourceHandler   *handler.ServiceResourceHandler
+	ingressHandler           *handler.IngressHandler
+	networkPolicyHandler     *handler.NetworkPolicyHandler
+	k8sDiscoveryHandler      *handler.K8sDiscoveryHandler
+	k8sHPAHandler            *handler.K8sHPAHandler
+	helmHandler              *handler.HelmHandler
+	k8sResourceWatchHandler  *handler.K8sResourceWatchHandler
+	k8sSearchHandler         *handler.K8sSearchHandler
+	k8sEventForwardHandler   *handler.K8sEventForwardHandler
+	eventHandler             *handler.EventHandler
+	crdHandler               *handler.CRDHandler
+	crHandler                *handler.CRHandler
+	rbacHandler              *handler.RBACHandler
+	serviceAccountHandler    *handler.ServiceAccountHandler
+	overviewHandler          *handler.OverviewHandler
 
-	projectHandler        *handler.ProjectHandler
-	cmdbHandler           *handler.CMDBHandler
-	mysqlBackupSvc        *service.MysqlBackupService
-	mysqlBackupHandler    *handler.MysqlBackupHandler
-	alertSvc              *service.AlertService
-	cicdSvc               *cicdsvc.Service
-	cicdHandler           *handler.CicdHandler
-	logAgentHandler       *handler.LogAgentHandler
-	agentDiscoveryHandler *handler.AgentDiscoveryHandler
+	projectHandler         *handler.ProjectHandler
+	cmdbHandler            *handler.CMDBHandler
+	mysqlBackupSvc         *service.MysqlBackupService
+	mysqlBackupHandler     *handler.MysqlBackupHandler
+	dbmgmtSvc              *dbmgmtsvc.Service
+	dbmgmtHandler          *handler.DbmgmtHandler
+	alertSvc               *service.AlertService
+	cicdSvc                *cicdsvc.Service
+	cicdHandler            *handler.CicdHandler
+	logPlatformHandler     *handler.LogPlatformHandler
+	loggieHandler          *handler.LoggieHandler
+	logRetentionSvc        *service.LogRetentionService
+	kafkaToESSvc           *service.KafkaToESService
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -102,6 +109,14 @@ func (d *RouteDeps) MysqlBackupService() *service.MysqlBackupService {
 	return d.mysqlBackupSvc
 }
 
+// DbmgmtService 供 dbmgmt 插件后台任务使用。
+func (d *RouteDeps) DbmgmtService() *dbmgmtsvc.Service {
+	if d == nil {
+		return nil
+	}
+	return d.dbmgmtSvc
+}
+
 // CicdService 供 cicd 插件后台任务使用。
 func (d *RouteDeps) CicdService() *cicdsvc.Service {
 	if d == nil {
@@ -118,24 +133,32 @@ func (d *RouteDeps) AlertService() *service.AlertService {
 	return d.alertSvc
 }
 
-func assembleRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
+// LogRetentionService 供 project 插件保留策略调度使用。
+func (d *RouteDeps) LogRetentionService() *service.LogRetentionService {
+	if d == nil {
+		return nil
+	}
+	return d.logRetentionSvc
+}
+
+// KafkaToESService 供 project 插件 Kafka→ES 消费使用。
+func (d *RouteDeps) KafkaToESService() *service.KafkaToESService {
+	if d == nil {
+		return nil
+	}
+	return d.kafkaToESSvc
+}
+
+func assembleRouteDeps(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	if repos == nil {
 		repos = newRouteRepositories(app.DB)
 	}
-	return wireRouteDepsWithRepos(app, runtimeClient, repos, svcs)
+	return wireRouteDepsWithRepos(app, repos, svcs)
 }
 
-func wireRouteDeps(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient) (*RouteDeps, error) {
-	return assembleRouteDeps(app, runtimeClient, newRouteRepositories(app.DB), nil)
-}
-
-func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
+func wireRouteDepsWithRepos(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	if svcs == nil {
-		var err error
-		svcs, err = buildRouteServices(app, repos)
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("route services required (use InitializeRouteDeps)")
 	}
 
 	systemHandler := handler.NewSystemHandler(app.Config.App.Name, app.Config.App.Env)
@@ -153,6 +176,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	userGroupHandler := handler.NewUserGroupHandler(svcs.UserGroup)
 
 	mysqlBackupHandler := handler.NewMysqlBackupHandler(svcs.MysqlBackup)
+	dbmgmtHandler := handler.NewDbmgmtHandler(svcs.Dbmgmt)
 	cicdHandler := handler.NewCicdHandler(svcs.Cicd)
 
 	authHandler := handler.NewAuthHandler(svcs.Auth, svcs.LoginLog)
@@ -161,11 +185,21 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	userHandler := handler.NewUserHandler(svcs.User)
 	departmentHandler := handler.NewDepartmentHandler(svcs.Department)
 	roleHandler := handler.NewRoleHandler(svcs.Role)
-	permissionHandler := handler.NewPermissionHandler(svcs.Permission)
-	policyHandler := handler.NewPolicyHandler(svcs.Policy, &app.Config.Plugins)
+	permissionHandler := handler.NewPermissionHandler(svcs.Permission, &app.Config.Plugins)
+	policyGovernance := service.NewPolicyGovernanceService(
+		userRepo,
+		repos.Role,
+		permissionRepo,
+		repos.Menu,
+		projectMemberRepo,
+		k8sClusterAccessRepo,
+		app.Enforcer,
+		&app.Config.Plugins,
+	)
+	policyHandler := handler.NewPolicyHandler(svcs.Policy, policyGovernance, svcs.Permission, &app.Config.Plugins)
 	k8sScopedPolicyHandler := handler.NewK8sScopedPolicyHandler(svcs.K8sScopedPolicy)
 	regHandler := handler.NewRegistrationHandler(svcs.Registration)
-	menuHandler := handler.NewMenuHandler(svcs.Menu, &app.Config.Plugins)
+	menuHandler := handler.NewMenuHandler(svcs.Menu, &app.Config.Plugins, app.Enforcer)
 	dictEntryHandler := handler.NewDictEntryHandler(svcs.DictEntry)
 	alertHandler := handler.NewAlertHandler(svcs.Alert)
 	cloudExpiryRuleHandler := handler.NewCloudExpiryRuleHandler(svcs.CloudExpiryRule, svcs.Alert)
@@ -190,6 +224,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	networkPolicyHandler := handler.NewNetworkPolicyHandler(svcs.K8sNetworkPolicy)
 	k8sDiscoveryHandler := handler.NewK8sDiscoveryHandler(svcs.K8sDiscovery)
 	k8sHPAHandler := handler.NewK8sHPAHandler(svcs.K8sHPA)
+	helmHandler := handler.NewHelmHandler(svcs.K8sHelm)
 	k8sResourceWatchHandler := handler.NewK8sResourceWatchHandler(svcs.K8sRuntime)
 	k8sSearchHandler := handler.NewK8sSearchHandler(svcs.K8sSearch)
 	k8sEventForwardHandler := handler.NewK8sEventForwardHandler(svcs.K8sEventForwardAdmin)
@@ -199,10 +234,10 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 	rbacHandler := handler.NewRBACHandler(svcs.K8sRBAC)
 	serviceAccountHandler := handler.NewServiceAccountHandler(svcs.K8sServiceAccount)
 	overviewHandler := handler.NewOverviewHandler(svcs.Overview)
-	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt)
+	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt, svcs.LogSearch)
 	cmdbHandler := handler.NewCMDBHandler(svcs.CMDB)
-	logAgentHandler := handler.NewLogAgentHandler(svcs.LogAgent, runtimeClient.AgentSrv)
-	agentDiscoveryHandler := handler.NewAgentDiscoveryHandler(svcs.AgentDiscovery, runtimeClient.AgentSrv)
+	logPlatformHandler := handler.NewLogPlatformHandler(svcs.LogRetention, svcs.KafkaToES)
+	loggieHandler := handler.NewLoggieHandler(svcs.LoggieAgent)
 
 	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, userRepo, app.Logger)
 	wsAuthMiddleware := middleware.WSAuth(app.Redis, userRepo, app.Logger)
@@ -262,6 +297,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		networkPolicyHandler:    networkPolicyHandler,
 		k8sDiscoveryHandler:     k8sDiscoveryHandler,
 		k8sHPAHandler:           k8sHPAHandler,
+		helmHandler:             helmHandler,
 		k8sResourceWatchHandler: k8sResourceWatchHandler,
 		k8sSearchHandler:        k8sSearchHandler,
 		k8sEventForwardHandler:  k8sEventForwardHandler,
@@ -276,10 +312,14 @@ func wireRouteDepsWithRepos(app *bootstrap.App, runtimeClient *grpcclient.Runtim
 		cmdbHandler:           cmdbHandler,
 		mysqlBackupSvc:        svcs.MysqlBackup,
 		mysqlBackupHandler:    mysqlBackupHandler,
+		dbmgmtSvc:             svcs.Dbmgmt,
+		dbmgmtHandler:         dbmgmtHandler,
 		alertSvc:              svcs.Alert,
 		cicdSvc:               svcs.Cicd,
 		cicdHandler:           cicdHandler,
-		logAgentHandler:       logAgentHandler,
-		agentDiscoveryHandler: agentDiscoveryHandler,
+		logPlatformHandler:    logPlatformHandler,
+		loggieHandler:         loggieHandler,
+		logRetentionSvc:       svcs.LogRetention,
+		kafkaToESSvc:          svcs.KafkaToES,
 	}, nil
 }

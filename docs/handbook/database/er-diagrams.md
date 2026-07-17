@@ -33,6 +33,12 @@ erDiagram
   PROJECTS ||--o{ AGENT_DISCOVERIES : "project_id"
   SERVERS ||--o{ AGENT_DISCOVERIES : "server_id"
 
+  PROJECTS ||--o{ DB_INSTANCES : "project_id"
+  DB_INSTANCES ||--o{ DB_ACCESS_GRANTS : "instance_id"
+  DB_INSTANCES ||--o{ DB_SQL_TICKETS : "instance_id"
+  DB_INSTANCES ||--o{ DB_SQL_EXECUTIONS : "instance_id"
+  USERS ||--o{ DB_ACCESS_GRANTS : "user_id"
+
   PROJECTS ||--o{ ALERT_DATASOURCES : "project_id"
   ALERT_DATASOURCES ||--o{ ALERT_MONITOR_RULES : "datasource_id"
   ALERT_MONITOR_RULES ||--o{ ALERT_RULE_ASSIGNEES : "monitor_rule_id"
@@ -491,6 +497,29 @@ SELECT
 FROM k8s_clusters
 WHERE name = ? AND deleted_at IS NULL;
 ```
+
+## 6) 数据库管理（dbmgmt）子图
+
+```mermaid
+erDiagram
+  PROJECTS ||--o{ DB_INSTANCES : "project_id"
+  DB_INSTANCES ||--o{ DB_ACCESS_GRANTS : "instance_id"
+  DB_INSTANCES ||--o{ DB_ACCESS_REQUESTS : "instance_id"
+  DB_INSTANCES ||--o{ DB_APP_USER_REQUESTS : "instance_id"
+  DB_INSTANCES ||--o{ DB_SQL_TICKETS : "instance_id"
+  DB_INSTANCES ||--o{ DB_SQL_EXECUTIONS : "instance_id"
+  DB_INSTANCES ||--o{ DB_INSTANCE_ACCOUNTS : "instance_id"
+  USERS ||--o{ DB_ACCESS_GRANTS : "user_id"
+  USERS ||--o{ DB_ACCESS_REQUESTS : "requester_id"
+  USERS ||--o{ DB_APP_USER_REQUESTS : "requester_id"
+  USERS ||--o{ DB_SQL_TICKETS : "submitter_id"
+  DB_ACCESS_REQUESTS ||--o{ DB_ACCESS_REQUEST_STEPS : "request_id"
+  DB_APP_USER_REQUESTS ||--o{ DB_APP_USER_REQUEST_STEPS : "request_id"
+  DB_SQL_TICKETS ||--o{ DB_SQL_TICKET_STEPS : "ticket_id"
+  PROJECTS ||--o{ DB_APPROVAL_FLOW_STAGES : "project_id"
+```
+
+表清单与运维说明见 [schema-and-relationships.md](./schema-and-relationships.md) §2.3、[dbmgmt.md](../../dbmgmt.md)。
 
 ## 说明
 

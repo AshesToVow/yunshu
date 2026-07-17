@@ -1,0 +1,19 @@
+#创建长期 Token Secret（平台长期用）
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: yunshu-admin-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: yunshu-admin
+type: kubernetes.io/service-account-token
+EOF
+
+sleep 10
+
+kubectl get secret yunshu-admin-token -n kube-system
+kubectl get secret yunshu-admin-token -n kube-system -o jsonpath='{.data.token}' | base64 -d
+echo
+#获取 ca_data（direct 模式必填，除非跳过 TLS）
+grep certificate-authority-data /etc/kubernetes/admin.conf | awk '{print $2}'

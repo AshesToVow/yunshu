@@ -1,8 +1,6 @@
 package alert
 
 import (
-	"strings"
-
 	"yunshu/internal/model"
 
 	"gorm.io/gorm"
@@ -22,19 +20,10 @@ func dropAlertMonitorRulesLegacyDutyScheduleID(db *gorm.DB) error {
 	if db == nil || !db.Migrator().HasTable(&model.AlertMonitorRule{}) {
 		return nil
 	}
-	if db.Dialector.Name() != "mysql" {
+	if !db.Migrator().HasColumn(&model.AlertMonitorRule{}, "duty_schedule_id") {
 		return nil
 	}
-	err := db.Exec("ALTER TABLE `alert_monitor_rules` DROP COLUMN `duty_schedule_id`").Error
-	if err == nil {
-		return nil
-	}
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "1091") || strings.Contains(msg, "check that column/key exists") ||
-		strings.Contains(msg, "unknown column") || strings.Contains(msg, "1054") {
-		return nil
-	}
-	return err
+	return db.Migrator().DropColumn(&model.AlertMonitorRule{}, "duty_schedule_id")
 }
 
 func migrateNormalizeAlertEventStatus(db *gorm.DB) error {

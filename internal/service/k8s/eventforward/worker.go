@@ -78,7 +78,7 @@ func (w *Worker) loop() {
 			return
 		case <-ticker.C:
 			if err := w.processBatch(); err != nil {
-				forwardLog().Warnw("Failed to process K8s event forward batch", "error", err)
+				forwardLog().Warn("Failed to process K8s event forward batch", "error", err)
 			}
 		}
 	}
@@ -122,7 +122,7 @@ func (w *Worker) processBatch() error {
 				continue
 			}
 			if ev.Attempts >= w.maxRetry {
-				forwardLog().Warnw("K8s forwarded event exceeded max retries, marking processed",
+				forwardLog().Warn("K8s forwarded event exceeded max retries, marking processed",
 					"event_id", ev.ID, "cluster_id", ev.ClusterID, "attempts", ev.Attempts)
 				_ = w.repo.MarkEventProcessed(ctx, ev.ID, true)
 				processedIDs[ev.ID] = true
@@ -140,7 +140,7 @@ func (w *Worker) processBatch() error {
 
 		for clusterID, batch := range grouped {
 			if err := w.push(ctx, webhookURL, rule.Name, clusterID, batch); err != nil {
-				forwardLog().Warnw("Failed to push K8s event forward webhook",
+				forwardLog().Warn("Failed to push K8s event forward webhook",
 					"rule", rule.Name,
 					"cluster_id", clusterID,
 					"error", err)
@@ -160,7 +160,7 @@ func (w *Worker) processBatch() error {
 		if processedIDs[ev.ID] || matchedIDs[ev.ID] {
 			continue
 		}
-		forwardLog().Debugw("K8s forwarded event matched no rule, leaving unprocessed",
+		forwardLog().Debug("K8s forwarded event matched no rule, leaving unprocessed",
 			"event_id", ev.ID, "cluster_id", ev.ClusterID, "namespace", ev.Namespace)
 	}
 	return nil

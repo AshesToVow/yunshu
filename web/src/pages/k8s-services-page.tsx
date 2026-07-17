@@ -110,6 +110,7 @@ export function K8sServicesPage() {
     <YamlCrudPage<K8sServiceItem, K8sServiceDetail>
       title="Service 管理"
       needNamespace
+      watchResource="services"
       onLoadNamespaces={async (cid) => {
         const res = await listClusterNamespaces(cid);
         return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

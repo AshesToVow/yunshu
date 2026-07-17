@@ -7,7 +7,7 @@ import (
 	"strings"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
-	"yunshu/internal/pkg/logutil"
+	"log/slog"
 
 	"yunshu/internal/pkg/k8sutil"
 
@@ -95,7 +95,7 @@ type K8sNodeService struct {
 	dyn     *DynamicResourceService
 }
 
-// NewK8sNodeService 创建相关逻辑。
+// NewK8sNodeService ???????
 func NewK8sNodeService(runtime *K8sRuntimeService) *K8sNodeService {
 	return &K8sNodeService{runtime: runtime, dyn: NewDynamicResourceService(runtime)}
 }
@@ -160,7 +160,7 @@ func quantityMapToStringMap(src map[corev1.ResourceName]resource.Quantity) map[s
 	return out
 }
 
-// List 查询列表相关的业务逻辑。
+// List ????????????
 func (s *K8sNodeService) List(ctx context.Context, query NodeListQuery) ([]NodeListItem, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
 	if err != nil {
@@ -171,7 +171,7 @@ func (s *K8sNodeService) List(ctx context.Context, query NodeListQuery) ([]NodeL
 		return nil, bizerrors.Internalf(ctx, "k8s.node", "api", err, constants.ErrFmt6af6d441fc65)
 	}
 
-	// 统计每个 node 上的 pod 数
+	// ???? node ?? pod ?
 	podCountByNode := map[string]int{}
 	podReqCPUByNode := map[string]resource.Quantity{}
 	podReqMemByNode := map[string]resource.Quantity{}
@@ -180,7 +180,7 @@ func (s *K8sNodeService) List(ctx context.Context, query NodeListQuery) ([]NodeL
 	{
 		var pods []corev1.Pod
 		if e := k.WithContext(ctx).Resource(&corev1.Pod{}).AllNamespace().List(&pods).Error; e != nil {
-			logutil.Service("k8s.node").Warnw("list pods for node stats failed", "error", e, "cluster_id", query.ClusterID)
+			slog.Default().With("component", "k8s.node").Warn("list pods for node stats failed", "error", e, "cluster_id", query.ClusterID)
 		} else {
 			for _, p := range pods {
 				if !isPodCountedOnNode(p) {
@@ -208,7 +208,7 @@ func (s *K8sNodeService) List(ctx context.Context, query NodeListQuery) ([]NodeL
 		}
 	}
 
-	// 尝试读取 metrics.k8s.io 的 NodeMetrics（若未安装 metrics-server，会失败，忽略即可）
+	// ???? metrics.k8s.io ? NodeMetrics????? metrics-server??????????
 	metricsByNode := map[string]nodeMetricSummary{}
 	{
 		metricsGVK := schema.GroupVersionKind{Group: "metrics.k8s.io", Version: "v1beta1", Kind: "NodeMetrics"}
@@ -288,7 +288,7 @@ func mapKeys(m map[string]string) []string {
 	return out
 }
 
-// Detail 查询详情相关的业务逻辑。
+// Detail ????????????
 func (s *K8sNodeService) Detail(ctx context.Context, query NodeDetailQuery) (*NodeDetail, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
 	if err != nil {
@@ -404,13 +404,13 @@ func quantityPercent(usage, alloc resource.Quantity) float64 {
 		return 0
 	}
 	if p > 1000 {
-		// 极端异常时避免把 UI 撑爆
+		// ???????? UI ??
 		return 1000
 	}
 	return p
 }
 
-// quantityPercentScaled 将 usage 与「单副本资源量 × 副本规模」比较，用于 Deployment 等工作负载列表。
+// quantityPercentScaled ? usage ???????? ? ?????????? Deployment ????????
 func quantityPercentScaled(usage, perUnit resource.Quantity, scale int64) float64 {
 	if scale < 1 {
 		scale = 1
@@ -475,7 +475,7 @@ func nodeTaintsToCore(in []NodeTaint) ([]corev1.Taint, error) {
 	return out, nil
 }
 
-// SetSchedulability 对应 kubectl cordon（禁止调度）/ uncordon（恢复调度）。
+// SetSchedulability ?? kubectl cordon??????/ uncordon???????
 func (s *K8sNodeService) SetSchedulability(ctx context.Context, req NodeSchedulabilityRequest) error {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -500,7 +500,7 @@ func (s *K8sNodeService) SetSchedulability(ctx context.Context, req NodeSchedula
 	return nil
 }
 
-// ReplaceTaints 用请求体中的列表替换节点全部污点。
+// ReplaceTaints ?????????????????
 func (s *K8sNodeService) ReplaceTaints(ctx context.Context, req NodeTaintsReplaceRequest) error {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {

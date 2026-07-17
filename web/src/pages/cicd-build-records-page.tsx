@@ -1,5 +1,5 @@
 import { DeleteOutlined, EyeOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Drawer, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
@@ -21,6 +21,20 @@ function resultTag(r: string) {
     pending: "default",
   };
   return <Tag color={map[r] || "default"}>{r === "success" ? "构建成功" : r === "failure" ? "构建失败" : r}</Tag>;
+}
+
+function buildArtifactLabel(row: CicdBuildRun) {
+  if (row.package_path) return row.package_path;
+  if (row.image_address) return row.image_address;
+  return "";
+}
+
+function buildArtifactType(row: CicdBuildRun): "minio" | "helm" | "image" | null {
+  if (!row.package_path) {
+    return row.image_address ? "image" : null;
+  }
+  if (row.package_path.startsWith("oci://") || row.package_path.includes("/chartrepo/")) return "helm";
+  return "minio";
 }
 
 export function CicdBuildRecordsPage() {
@@ -108,10 +122,36 @@ export function CicdBuildRecordsPage() {
       { title: "分支", dataIndex: "branch_name", width: 120 },
       {
         title: "制品路径",
-        dataIndex: "package_path",
+        key: "artifact",
         ellipsis: true,
-        width: 220,
-        render: (v) => v || "—",
+        width: 260,
+        render: (_, row) => {
+          const label = buildArtifactLabel(row);
+          if (!label) return "—";
+          const type = buildArtifactType(row);
+          const typeTag =
+            type === "helm" ? (
+              <Tag color="geekblue" style={{ marginRight: 6 }}>
+                Helm
+              </Tag>
+            ) : type === "image" ? (
+              <Tag color="purple" style={{ marginRight: 6 }}>
+                镜像
+              </Tag>
+            ) : null;
+          const tip =
+            row.package_path && row.image_address
+              ? `Chart/MinIO: ${row.package_path}\n镜像: ${row.image_address}`
+              : undefined;
+          return (
+            <Tooltip title={tip}>
+              <span>
+                {typeTag}
+                {label}
+              </span>
+            </Tooltip>
+          );
+        },
       },
       { title: "开始时间", dataIndex: "started_at", width: 170, render: (v) => formatDateTime(v) },
       {
@@ -197,7 +237,7 @@ export function CicdBuildRecordsPage() {
               ["环境", detail.tenv],
               ["版本", detail.version],
               ["结果", detail.build_result],
-              ["制品路径", detail.package_path],
+              ["制品路径", detail.package_path || detail.image_address],
               ["镜像", detail.image_address],
               ["Jenkins", detail.jenkins_build_url],
               ["开始", formatDateTime(detail.started_at)],

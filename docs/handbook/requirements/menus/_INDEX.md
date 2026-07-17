@@ -35,11 +35,75 @@ OpenAPI 全量路由见 **`docs/apipost/permission-system.openapi.yaml`**（由 
 | `/projects` | `projects-page` | [menu-projects.md](./menu-projects.md) |
 | `/project-members` | `project-members-page` | [menu-project-members.md](./menu-project-members.md) |
 | `/project-servers` | `project-servers-page` | [menu-project-servers.md](./menu-project-servers.md) |
-| `/project-services` | `project-services-page` | [menu-project-services.md](./menu-project-services.md) |
-| `/project-log-sources` | `project-log-sources-page` | [menu-project-log-sources.md](./menu-project-log-sources.md) |
+
+## 日志平台（`/log-platform`）
+
+模块需求：**[../modules/M-04-log-platform.md](../modules/M-04-log-platform.md)**
+
+| 路由 | Component | 文档 |
+|------|-----------|------|
+| `/project-services` | `project-collect-config-page`（服务+日志源 Tab） | [menu-project-services.md](./menu-project-services.md)、[menu-project-log-sources.md](./menu-project-log-sources.md) |
 | `/project-logs` | `project-logs-page` | [menu-project-logs.md](./menu-project-logs.md) |
-| `/agent-list` | `agent-list-page` | [menu-agent-list.md](./menu-agent-list.md) |
-| `/mysql-backup` | `mysql-backup-page` | [menu-mysql-backup.md](./menu-mysql-backup.md) |
+| `/log-retention` | `log-retention-page` | （见 M-04 §3.3） |
+| `/loggie-status` | `loggie-status-page` | （见 M-04 §3.4；替代旧 agent-list） |
+
+| 旧路由 | 说明 |
+|--------|------|
+| `/agent-list` | 已移除；文档 [menu-agent-list.md](./menu-agent-list.md) 仅作历史参考 |
+| `/mysql-backup` | 独立一级菜单，见 [menu-mysql-backup.md](./menu-mysql-backup.md) / **M-08** |
+
+## 数据库管理（`/dbmgmt`，插件 `dbmgmt` + `project`）
+
+完整说明见 [docs/dbmgmt.md](../../../dbmgmt.md) 与 [menu-dbmgmt.md](./menu-dbmgmt.md)。
+
+### 资源申请
+
+| 路由 | Component |
+|------|-----------|
+| `/dbmgmt/apply/database` | `dbmgmt-database-apply-page` |
+| `/dbmgmt/apply/query` | `dbmgmt-query-apply-page` |
+| `/dbmgmt/apply/app-user` | `dbmgmt-app-user-apply-page` |
+| `/dbmgmt/apply/query-grants` | `dbmgmt-query-grants-page` |
+
+### 资源管理
+
+| 路由 | Component |
+|------|-----------|
+| `/dbmgmt/instances` | `dbmgmt-instances-page` |
+| `/dbmgmt/instances/:id` | `dbmgmt-instance-detail-page` |
+| `/dbmgmt/access-requests/all` | `dbmgmt-access-requests-page` |
+
+### SQL 操作
+
+| 路由 | Component |
+|------|-----------|
+| `/dbmgmt/sql/query` | `dbmgmt-console-page`（mode=query） |
+| `/dbmgmt/sql/audit` | `dbmgmt-console-page`（mode=audit） |
+
+### 工单管理
+
+| 路由 | Component |
+|------|-----------|
+| `/dbmgmt/workflow/pending` | `dbmgmt-todo-page` |
+| `/dbmgmt/workflow/history` | `dbmgmt-tickets-page` |
+| `/dbmgmt/workflow/tickets/:ticketId` | `dbmgmt-ticket-detail-page` |
+| `/dbmgmt/approval-flow` | `dbmgmt-approval-flow-page` |
+
+### 其他
+
+| 路由 | Component |
+|------|-----------|
+| `/dbmgmt/audit` | `dbmgmt-audit-page` |
+| `/dbmgmt/grants` | `dbmgmt-grants-page`（菜单隐藏） |
+
+### 旧路径重定向
+
+| 旧路由 | 新路由 |
+|--------|--------|
+| `/dbmgmt/console` | `/dbmgmt/sql/query` 或 `/dbmgmt/sql/audit` |
+| `/dbmgmt/todo` | `/dbmgmt/workflow/pending` |
+| `/dbmgmt/tickets` | `/dbmgmt/workflow/history` |
+| `/dbmgmt/access-requests` | `/dbmgmt/access-requests/all` |
 
 ## CI/CD（`/cicd`，插件 `cicd` + `project`）
 

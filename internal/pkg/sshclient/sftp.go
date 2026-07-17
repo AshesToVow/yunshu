@@ -39,10 +39,10 @@ func (c *Client) DownloadFile(ctx context.Context, remotePath, localPath string)
 	defer dst.Close()
 
 	done := make(chan error, 1)
-	go func() {
+	safeGo(func() {
 		_, copyErr := io.Copy(dst, src)
 		done <- copyErr
-	}()
+	})
 
 	select {
 	case <-ctx.Done():

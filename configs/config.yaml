@@ -1,6 +1,6 @@
 app:
   name: yunshu-cmdb
-  env: prod
+  env: dev
   port: 8080
 
 # 业务插件（GVA 风格）：按需启停模块；空 enabled 表示启用默认全集。
@@ -13,13 +13,30 @@ plugins:
     - cmdb
     - backup
     - cicd
+    - dbmgmt
+
+# 数据库管理（字典 dbmgmt_* 可覆盖）
+dbmgmt:
+  query_timeout_seconds: 30
+  max_result_rows: 1000
+  max_import_file_mb: 10
+  prod_force_approval: true
+  approval_sla_hours: 24
+  approval_reminder_interval_hours: 4
+  allowed_drivers: [mysql, postgres]
+  ping_interval_seconds: 300
+  max_concurrent_per_instance: 5
+  goinception_enabled: true
+  goinception_host: "10.10.10.103"
+  goinception_port: 4000
+  goinception_backup: true
 
 # CI/CD（字典 cicd_* 优先覆盖下列 YAML）
 cicd:
   enabled: true
   jenkins:
-    base_url: ""
-    username: ""
+    base_url: "http://10.10.10.103:8080"
+    username: "admin"
     api_token: ""
     job_folder: ""
   jenkinsfile:
@@ -34,8 +51,11 @@ cicd:
     bucket_frontend: frontend-artifacts
     bucket_backend: backend-artifacts
   harbor:
-    url: harbor.jdicity.local
+    url: harbor.deploy.local
+    host_ip: 10.10.10.103
     project_group: registry
+    # username/password 也可在数据字典 cicd_harbor_username / cicd_harbor_password 配置
+  # 与Jenkins中的凭据ID一致
   credentials:
     git: gitee_registry_ssh
     ssh_deploy: target-server-credential
@@ -44,20 +64,16 @@ cicd:
   run_sync_interval_seconds: 15
   default_wait_mins: 60
   default_artifact_retain_count: 10
+  # 审批超时时间
+  approval_sla_hours: 24
+  # 审批提醒间隔时间
+  approval_reminder_interval_hours: 4
 
 http:
-  read_header_timeout_seconds: 5  #从连接建立到读完请求头的最长时间；防慢连接占满，
-  # 日志流（SSE）为长连接：若 write/read 过短会导致浏览器 net::ERR_INCOMPLETE_CHUNKED_ENCODING
-  read_timeout_seconds: 0  #从连接建立到读完请求体的最长时间；防慢连接占满，影响其它请求。0 表示不限制。
-  write_timeout_seconds: 0  #从连接建立到写完响应体的最长时间；防慢连接占满，影响其它请求。0 表示不限制。
-  idle_timeout_seconds: 120  #连接空闲时间；防慢连接占满，影响其它请求
-
-grpc:
-  listen_addr: 0.0.0.0:18080
-  target_addr: 0.0.0.0:18080
-  internal_token: "YunshuAgentRegisterSecret2026Secure!!"
-  max_recv_msg_bytes: 8388608
-  max_send_msg_bytes: 8388608
+  read_header_timeout_seconds: 5
+  read_timeout_seconds: 0
+  write_timeout_seconds: 0
+  idle_timeout_seconds: 120
 
 log:
   level: debug
@@ -66,16 +82,31 @@ log:
   file_path: ./logs  # log file directory path
 
 mysql:
+  driver: mysql              # mysql（默认）或 postgres
   host: 10.10.10.103        # Docker 服务名，容器内部通信
   port: 3306
   user: root
-  password: "0gvzJr66iNs5"  # 生产环境务必修改
+  password: "0gvzJr66iNs5"  # 生产环境务必修改，勿提交真实密码
   db_name: yunshu
   charset: utf8mb4
   loc: Asia%2FShanghai
   max_idle_conns: 5          # 降低以节省内存
   max_open_conns: 20         # 降低以节省内存
   conn_max_lifetime_seconds: 3600
+
+# PostgreSQL 示例（与 mysql 二选一；也可用 database: 键，见 .codegraph/kite-comparison.md）
+# database:
+#   driver: postgres
+#   host: 127.0.0.1
+#   port: 5432
+#   user: yunshu
+#   password: secret
+#   db_name: yunshu
+#   sslmode: disable
+#   timezone: Asia/Shanghai
+#   max_idle_conns: 5
+#   max_open_conns: 20
+#   conn_max_lifetime_seconds: 3600
 
 redis:
   addr: 10.10.10.103:6379    # Docker 服务名，容器内部通信
@@ -111,12 +142,43 @@ security:
   # 32 bytes key for encrypting sensitive data (base64 recommended)
   encryption_key: "change-me-32bytes-base64"
 
-agent:
-  # log-agent 启动后用于自注册的共享密钥（建议生产环境改为强随机字符串）
-  register_secret: "YunshuAgentRegisterSecret2026Secure!!"
-  # 引导 Agent 扫描的额外根目录（经 runtime-config 以 _discovery_root 下发）
-  discovery_roots:
-    - /var/log
+# 日志检索（Loggie 采集 → Elasticsearch，Yunshu 代理查询）
+elasticsearch:
+  enabled: false
+  addresses:
+    - "http://127.0.0.1:9200"
+  username: ""
+  password: ""
+  index_pattern: "yunshu-agent-*"
+  # Loggie Agent 一键安装：远端 wget/curl 拉取二进制的 URL（可含 {arch} 占位，如 amd64/arm64）
+  # 离线二进制路径配在 loggie 段，见下方 loggie.offline_binary_path
+  message_fields: ["message", "body", "log", "content"]
+  timestamp_field: "@timestamp"
+  default_size: 100
+  max_size: 1000
+  timeout_seconds: 30
+  default_retention_days: 30
+  cleanup_cron_spec: "0 3 * * *"   # 每天 03:00 清理过期索引
+
+# Kafka 日志中转（可选；字典 kafka_* 优先）。enabled=false 时 Loggie 直写 ES；true 时 Loggie→Kafka，Yunshu 消费写 ES
+kafka:
+  enabled: false
+  brokers:
+    - "127.0.0.1:9092"
+  topic: "yunshu-logs"
+  consumer_group: "yunshu-log-es"
+  username: ""
+  password: ""
+  sasl_mechanism: ""   # plain / scram-sha-256 / scram-sha-512；有账号时默认 plain
+  batch_size: 200
+  workers: 1
+
+# Loggie Agent（目标机离线二进制安装 / systemd）
+loggie:
+  # Yunshu 主机上的离线包（相对工作目录或绝对路径），安装时 SFTP 上传，不走在线下载
+  offline_binary_path: "deploy/loggie/binary/loggie"
+  unit_name: "loggie.service"
+  deploy_dir: "/export/loggie"
 
 # 下列键的常见取值可在「系统 → 数据字典」中按类型选用，便于团队统一录入（如 config_yaml_mysql_host、alert_enrich_prometheus_url、k8s_kubeconfig_template 等）。
 alert:
@@ -204,4 +266,4 @@ k8s_event_forward:
 #
 # 3) 业务页面辅助选项（仅字典，不在 YAML 维护）：
 #    - dingtalk_webhook_url / wecom_webhook_url / alert_webhook_url
-#    - agent_platform_url / wecom_* / dingtalk_* / alert_promql_label_key / alert_threshold_unit 等
+#    - wecom_* / dingtalk_* / alert_promql_label_key / alert_threshold_unit 等

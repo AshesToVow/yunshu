@@ -1,4 +1,4 @@
-﻿package alert
+package alert
 
 import (
 	"context"
@@ -73,15 +73,15 @@ func webhookPayloadLogAttrs(payload AlertManagerPayload) []any {
 }
 
 func (s *AlertService) logWebhookWarn(msg string, attrs ...any) {
-	alertLog().Warnw(msg, attrs...)
+	alertLog().Warn(msg, attrs...)
 }
 
 func (s *AlertService) logWebhookError(err error, msg string, attrs ...any) {
-	alertLog().Errorw(err, msg, attrs...)
+	alertLog().Error(msg, append(attrs, "error", err)...)
 }
 
 func (s *AlertService) logWebhookInfo(msg string, attrs ...any) {
-	alertLog().Infow(msg, attrs...)
+	alertLog().Info(msg, attrs...)
 }
 
 func (s *AlertService) ingestWebhookPayloadWithRetry(ctx context.Context, payload AlertManagerPayload) {

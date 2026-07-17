@@ -79,7 +79,7 @@ func (w *Watcher) ensureWatches() {
 
 	ids, err := w.repo.ListEnabledClusterIDs(ctx)
 	if err != nil {
-		forwardLog().Warnw("Failed to list K8s event forward clusters", "error", err)
+		forwardLog().Warn("Failed to list K8s event forward clusters", "error", err)
 		return
 	}
 	for _, id := range ids {
@@ -124,31 +124,31 @@ func (w *Watcher) watchCluster(clusterID string, id uint) {
 func (w *Watcher) runClusterWatch(clusterID string, id uint) {
 	ctx := w.ctx
 	if err := w.runtime.EnsureClusterRegistered(ctx, id); err != nil {
-		forwardLog().Warnw("Failed to register cluster for event watch", "cluster_id", clusterID, "error", err)
+		forwardLog().Warn("Failed to register cluster for event watch", "cluster_id", clusterID, "error", err)
 		return
 	}
 
 	var watcher watch.Interface
 	var evt eventsv1.Event
 	if err := kom.Cluster(clusterID).WithContext(ctx).Resource(&evt).AllNamespace().Watch(&watcher).Error; err != nil {
-		forwardLog().Warnw("Failed to start K8s event watch", "cluster_id", clusterID, "error", err)
+		forwardLog().Warn("Failed to start K8s event watch", "cluster_id", clusterID, "error", err)
 		return
 	}
 	defer watcher.Stop()
 
-	forwardLog().Infow("Started watching K8s events", "cluster_id", clusterID)
+	forwardLog().Info("Started watching K8s events", "cluster_id", clusterID)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case e, ok := <-watcher.ResultChan():
 			if !ok {
-				forwardLog().Infow("K8s event watch channel closed", "cluster_id", clusterID)
+				forwardLog().Info("K8s event watch channel closed", "cluster_id", clusterID)
 				return
 			}
 			var typed eventsv1.Event
 			if err := kom.Cluster(clusterID).WithContext(ctx).Tools().ConvertRuntimeObjectToTypedObject(e.Object, &typed); err != nil {
-				forwardLog().Warnw("Failed to convert K8s event", "cluster_id", clusterID, "error", err)
+				forwardLog().Warn("Failed to convert K8s event", "cluster_id", clusterID, "error", err)
 				continue
 			}
 			m := w.fromK8sEvent(clusterID, &typed)
@@ -156,7 +156,7 @@ func (w *Watcher) runClusterWatch(clusterID string, id uint) {
 				continue
 			}
 			if err := w.enqueue(m); err != nil {
-				forwardLog().Warnw("Failed to enqueue K8s event", "evt_key", m.EvtKey, "error", err)
+				forwardLog().Warn("Failed to enqueue K8s event", "evt_key", m.EvtKey, "error", err)
 			}
 		}
 	}
@@ -219,7 +219,7 @@ func (w *Watcher) persistLoop() {
 			err := w.repo.SaveForwardedEvent(ctx, ev)
 			cancel()
 			if err != nil {
-				forwardLog().Warnw("Failed to save K8s forwarded event", "error", err)
+				forwardLog().Warn("Failed to save K8s forwarded event", "error", err)
 			}
 		}
 	}

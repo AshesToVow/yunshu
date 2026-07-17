@@ -19,6 +19,7 @@ export function ConfigmapsPage() {
       <YamlCrudPage<ConfigMapItem, ConfigDetail>
         title="ConfigMap 管理"
         needNamespace
+        watchResource="configmaps"
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

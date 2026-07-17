@@ -24,6 +24,28 @@ type LogSourceRepo interface {
 
 var _ LogSourceRepo = (*LogSourceRepository)(nil)
 
+// LogRetentionRepo is implemented by *LogRetentionRepository.
+type LogRetentionRepo interface {
+	GetByScope(ctx context.Context, projectID, serverID uint) (*model.LogRetentionPolicy, error)
+	List(ctx context.Context) ([]model.LogRetentionPolicy, error)
+	Save(ctx context.Context, it *model.LogRetentionPolicy) error
+	DeleteByScope(ctx context.Context, projectID, serverID uint) error
+}
+
+var _ LogRetentionRepo = (*LogRetentionRepository)(nil)
+
+// LoggieAgentRepo is implemented by *LoggieAgentRepository.
+type LoggieAgentRepo interface {
+	GetByToken(ctx context.Context, token string) (*model.LoggieAgent, error)
+	GetByProjectAndServer(ctx context.Context, projectID, serverID uint) (*model.LoggieAgent, error)
+	ListByProject(ctx context.Context, projectID uint) ([]model.LoggieAgent, error)
+	Save(ctx context.Context, it *model.LoggieAgent) error
+	DeleteByProjectAndServer(ctx context.Context, projectID, serverID uint) error
+	TouchSeen(ctx context.Context, id uint, at time.Time) error
+}
+
+var _ LoggieAgentRepo = (*LoggieAgentRepository)(nil)
+
 // RegistrationRequestRepo is implemented by *RegistrationRequestRepository.
 type RegistrationRequestRepo interface {
 	Create(ctx context.Context, req *model.RegistrationRequest) (error)
@@ -157,15 +179,6 @@ type RoleRepo interface {
 
 var _ RoleRepo = (*RoleRepository)(nil)
 
-// AgentDiscoveryRepo is implemented by *AgentDiscoveryRepository.
-type AgentDiscoveryRepo interface {
-	UpsertMany(ctx context.Context, projectID uint, serverID uint, items []model.AgentDiscovery) (error)
-	List(ctx context.Context, f AgentDiscoveryListFilter) ([]model.AgentDiscovery, error)
-	PruneStale(ctx context.Context, projectID uint, serverID uint, cutoff time.Time) (error)
-}
-
-var _ AgentDiscoveryRepo = (*AgentDiscoveryRepository)(nil)
-
 // CloudAccountRepo is implemented by *CloudAccountRepository.
 type CloudAccountRepo interface {
 	Create(ctx context.Context, item *model.CloudAccount) (error)
@@ -218,10 +231,12 @@ var _ MysqlBackupRepo = (*MysqlBackupRepository)(nil)
 // PermissionRepo is implemented by *PermissionRepository.
 type PermissionRepo interface {
 	Create(ctx context.Context, permission *model.Permission) (error)
+	GetByResourceAction(ctx context.Context, resource, action string) (*model.Permission, error)
 	Save(ctx context.Context, permission *model.Permission) (error)
 	Delete(ctx context.Context, permission *model.Permission) (error)
 	GetByID(ctx context.Context, id uint) (*model.Permission, error)
 	List(ctx context.Context, params PermissionListParams) ([]model.Permission, int64, error)
+	ListFiltered(ctx context.Context, params PermissionListParams) ([]model.Permission, error)
 	ListAll(ctx context.Context) ([]model.Permission, error)
 	BatchSetK8sScopeEnabled(ctx context.Context, params PermissionListParams, enabled bool) (int64, error)
 }
@@ -300,6 +315,9 @@ type MenuRepo interface {
 	Tree(ctx context.Context) ([]model.Menu, error)
 	CountChildren(ctx context.Context, parentID uint) (int64, error)
 	BatchUpdateStatus(ctx context.Context, ids []uint, status int) (error)
+	ListPermissionBindings(ctx context.Context) ([]model.MenuPermissionBinding, error)
+	ListPermissionBindingsByMenuID(ctx context.Context, menuID uint) ([]model.MenuPermissionBinding, error)
+	ReplacePermissionBindings(ctx context.Context, menuID uint, bindings []model.MenuPermissionBinding) (error)
 }
 
 var _ MenuRepo = (*MenuRepository)(nil)
@@ -339,20 +357,63 @@ type K8sNamespaceDenyRepo interface {
 
 var _ K8sNamespaceDenyRepo = (*K8sNamespaceDenyRepository)(nil)
 
-// LogAgentRepo is implemented by *LogAgentRepository.
-type LogAgentRepo interface {
-	GetByServerID(ctx context.Context, serverID uint) (*model.LogAgent, error)
-	GetByProjectAndServer(ctx context.Context, projectID uint, serverID uint) (*model.LogAgent, error)
-	ListByProject(ctx context.Context, projectID uint) ([]model.LogAgent, error)
-	GetByTokenHash(ctx context.Context, tokenHash string) (*model.LogAgent, error)
-	Create(ctx context.Context, it *model.LogAgent) (error)
-	Save(ctx context.Context, it *model.LogAgent) (error)
-	TouchSeen(ctx context.Context, id uint, heartbeatTimeout time.Duration) (error)
-	ListAll(ctx context.Context) ([]model.LogAgent, error)
-	UpdateOfflineMarker(ctx context.Context, id uint, offlineAt time.Time, reason string, sweepSeen *time.Time) (error)
-	GetByIDAndProject(ctx context.Context, id uint, projectID uint) (*model.LogAgent, error)
-	DeleteByIDAndProject(ctx context.Context, id uint, projectID uint) (error)
+// DbmgmtRepo is implemented by *DbmgmtRepository.
+type DbmgmtRepo interface {
+	CreateInstance(ctx context.Context, inst *model.DbInstance) error
+	UpdateInstance(ctx context.Context, inst *model.DbInstance) error
+	DeleteInstance(ctx context.Context, id uint) error
+	GetInstance(ctx context.Context, id uint) (*model.DbInstance, error)
+	GetInstanceInProject(ctx context.Context, projectID, id uint) (*model.DbInstance, error)
+	ListInstances(ctx context.Context, p DbInstanceListParams) ([]model.DbInstance, int64, error)
+	ListAllInstances(ctx context.Context) ([]model.DbInstance, error)
+	CountReplicasByPrimary(ctx context.Context, projectID, primaryID uint) (int64, error)
+
+	CreateGrant(ctx context.Context, g *model.DbAccessGrant) error
+	UpdateGrant(ctx context.Context, g *model.DbAccessGrant) error
+	DeleteGrant(ctx context.Context, id uint) error
+	GetGrantInProject(ctx context.Context, projectID, id uint) (*model.DbAccessGrant, error)
+	ListGrants(ctx context.Context, projectID, instanceID uint) ([]model.DbAccessGrant, error)
+	ListGrantsForPrincipal(ctx context.Context, projectID, instanceID uint, kind, ref string) ([]model.DbAccessGrant, error)
+
+	CreateAccessRequest(ctx context.Context, req *model.DbAccessRequest) error
+	UpdateAccessRequest(ctx context.Context, req *model.DbAccessRequest) error
+	GetAccessRequestInProject(ctx context.Context, projectID, id uint) (*model.DbAccessRequest, error)
+	ListAccessRequests(ctx context.Context, p DbAccessRequestListParams) ([]model.DbAccessRequest, int64, error)
+	CreateAccessRequestStep(ctx context.Context, step *model.DbAccessRequestStep) error
+	ListAccessRequestSteps(ctx context.Context, requestID uint) ([]model.DbAccessRequestStep, error)
+	UpdateAccessRequestStep(ctx context.Context, step *model.DbAccessRequestStep) error
+
+	CreateSqlTicket(ctx context.Context, t *model.DbSqlTicket) error
+	UpdateSqlTicket(ctx context.Context, t *model.DbSqlTicket) error
+	GetSqlTicketInProject(ctx context.Context, projectID, id uint) (*model.DbSqlTicket, error)
+	ListSqlTickets(ctx context.Context, p DbSqlTicketListParams) ([]model.DbSqlTicket, int64, error)
+	CreateSqlTicketStep(ctx context.Context, step *model.DbSqlTicketStep) error
+	ListSqlTicketSteps(ctx context.Context, ticketID uint) ([]model.DbSqlTicketStep, error)
+	UpdateSqlTicketStep(ctx context.Context, step *model.DbSqlTicketStep) error
+
+	CreateSqlExecution(ctx context.Context, ex *model.DbSqlExecution) error
+	ListSqlExecutions(ctx context.Context, p DbSqlExecutionListParams) ([]model.DbSqlExecution, int64, error)
+	CreateAuditLog(ctx context.Context, log *model.DbAuditLog) error
+	ListAuditLogs(ctx context.Context, p DbAuditLogListParams) ([]model.DbAuditLog, int64, error)
+
+	ListApprovalFlowStages(ctx context.Context, projectID uint) ([]model.DbApprovalFlowStage, error)
+	UpsertApprovalFlowStage(ctx context.Context, stage *model.DbApprovalFlowStage) error
+	DeleteApprovalFlowStagesNotIn(ctx context.Context, projectID uint, keys []string) error
+	ListPendingAccessStepsForReminder(ctx context.Context, sla time.Duration) ([]model.DbAccessRequestStep, error)
+	ListPendingTicketStepsForReminder(ctx context.Context, sla time.Duration) ([]model.DbSqlTicketStep, error)
+
+	CreateAppUserRequest(ctx context.Context, req *model.DbAppUserRequest) error
+	UpdateAppUserRequest(ctx context.Context, req *model.DbAppUserRequest) error
+	GetAppUserRequestInProject(ctx context.Context, projectID, id uint) (*model.DbAppUserRequest, error)
+	ListAppUserRequests(ctx context.Context, p DbAppUserRequestListParams) ([]model.DbAppUserRequest, int64, error)
+	CreateAppUserRequestStep(ctx context.Context, step *model.DbAppUserRequestStep) error
+	ListAppUserRequestSteps(ctx context.Context, requestID uint) ([]model.DbAppUserRequestStep, error)
+	UpdateAppUserRequestStep(ctx context.Context, step *model.DbAppUserRequestStep) error
+
+	CreateInstanceAccount(ctx context.Context, acc *model.DbInstanceAccount) error
+	ListInstanceAccounts(ctx context.Context, projectID, instanceID uint) ([]model.DbInstanceAccount, error)
+	GetInstanceAccount(ctx context.Context, projectID, id uint) (*model.DbInstanceAccount, error)
 }
 
-var _ LogAgentRepo = (*LogAgentRepository)(nil)
+var _ DbmgmtRepo = (*DbmgmtRepository)(nil)
 

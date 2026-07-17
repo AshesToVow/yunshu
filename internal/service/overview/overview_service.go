@@ -21,8 +21,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// logAgentOnlineWindow 须与 LogAgentService 心跳超时一致，用于总览「在线 Agent」计数。
-const logAgentOnlineWindow = 90 * time.Second
+// loggieAgentOnlineWindow 与 Loggie 心跳超时一致，用于总览「在线 Loggie」计数。
+const loggieAgentOnlineWindow = 3 * time.Minute
 
 type OverviewResponse struct {
 	UsersCount    int64 `json:"users_count"`
@@ -46,9 +46,9 @@ type OverviewResponse struct {
 	AlertFiringCount      int64 `json:"alert_firing_count"`
 	AlertEventsTodayCount int64 `json:"alert_events_today_count"`
 
-	// Log agents（与 Agent 列表「在线」判定一致：最近心跳在 90s 内）
-	LogAgentsOnlineCount  int64 `json:"log_agents_online_count"`
-	LogAgentsOfflineCount int64 `json:"log_agents_offline_count"`
+	// Loggie 采集 Agent（最近心跳在窗口内视为在线）
+	LoggieAgentsOnlineCount  int64 `json:"loggie_agents_online_count"`
+	LoggieAgentsOfflineCount int64 `json:"loggie_agents_offline_count"`
 }
 
 type OverviewProjectLaunchSeries struct {
@@ -115,14 +115,18 @@ var overviewSeriesColors = []string{
 	"#64748b", "#eab308", "#22c55e", "#ec4899", "#06b6d4",
 }
 
-func (s *OverviewService) resolveProjectScope(ctx context.Context) (projectIDs []uint, unrestricted bool) {
+func (s *OverviewService) resolveProjectScope(ctx context.Context) (projectIDs []uint, unrestricted bool, err error) {
 	unrestricted = true
 	u, ok := auth.RequestUserFromContext(ctx)
-	if ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes) && s.memberRepo != nil {
-		unrestricted = false
-		projectIDs, _ = s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+	if !ok || u == nil || auth.IsSuperAdminRole(u.RoleCodes) || s.memberRepo == nil {
+		return nil, unrestricted, nil
 	}
-	return projectIDs, unrestricted
+	unrestricted = false
+	projectIDs, err = s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+	if err != nil {
+		return nil, false, bizerrors.Pass(ctx, "overview", "resolveProjectScope", err)
+	}
+	return projectIDs, unrestricted, nil
 }
 
 func overviewMonthRange(now time.Time) (start, end time.Time, dayLabels []string, dayIndex map[string]int) {
@@ -148,7 +152,10 @@ func (s *OverviewService) ProjectLaunches(ctx context.Context) (*OverviewProject
 	if s.repo == nil {
 		return nil, constants.ErrInternal
 	}
-	projectIDs, unrestricted := s.resolveProjectScope(ctx)
+	projectIDs, unrestricted, err := s.resolveProjectScope(ctx)
+	if err != nil {
+		return nil, err
+	}
 	start, end, dayLabels, dayIndex := overviewMonthRange(time.Now())
 	rows, err := s.repo.CountReleaseLaunchesByProjectDay(ctx, start, end, projectIDs, unrestricted)
 	if err != nil {
@@ -208,7 +215,10 @@ func (s *OverviewService) ReleaseByPerson(ctx context.Context) (*OverviewRelease
 	if s.repo == nil {
 		return nil, constants.ErrInternal
 	}
-	projectIDs, unrestricted := s.resolveProjectScope(ctx)
+	projectIDs, unrestricted, err := s.resolveProjectScope(ctx)
+	if err != nil {
+		return nil, err
+	}
 	start, end, _, _ := overviewMonthRange(time.Now())
 	rows, err := s.repo.CountReleaseRunsByPerson(ctx, start, end, projectIDs, unrestricted)
 	if err != nil {
@@ -252,13 +262,11 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 	}
 	s.fillOverviewAlertAndAgents(ctx, out)
 
-	var clusters []model.K8sCluster
-	unrestricted := true
-	var projectIDs []uint
-	if u, ok := auth.RequestUserFromContext(ctx); ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes) && s.memberRepo != nil {
-		unrestricted = false
-		projectIDs, _ = s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+	projectIDs, unrestricted, err := s.resolveProjectScope(ctx)
+	if err != nil {
+		return nil, err
 	}
+	var clusters []model.K8sCluster
 	clusters, err = s.repo.ListEnabledClusters(ctx, projectIDs, unrestricted)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "overview", "Get", err)
@@ -392,14 +400,14 @@ func (s *OverviewService) fillOverviewAlertAndAgents(ctx context.Context, out *O
 	now := time.Now()
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	dayEnd := dayStart.Add(24 * time.Hour)
-	stats, err := s.repo.FillAlertAndAgentStats(ctx, dayStart, dayEnd, now.Add(-logAgentOnlineWindow))
+	stats, err := s.repo.FillAlertAndAgentStats(ctx, dayStart, dayEnd, now.Add(-loggieAgentOnlineWindow))
 	if err != nil || stats == nil {
 		return
 	}
 	out.AlertFiringCount = stats.AlertFiringCount
 	out.AlertEventsTodayCount = stats.AlertEventsTodayCount
-	out.LogAgentsOnlineCount = stats.LogAgentsOnlineCount
-	out.LogAgentsOfflineCount = stats.LogAgentsOfflineCount
+	out.LoggieAgentsOnlineCount = stats.LoggieAgentsOnlineCount
+	out.LoggieAgentsOfflineCount = stats.LoggieAgentsOfflineCount
 }
 
 func isPodNormal(p corev1.Pod) bool {
@@ -463,6 +471,6 @@ func (s *OverviewService) filterOverviewClusters(ctx context.Context, clusters [
 // String 的功能实现。
 func (o OverviewResponse) String() string {
 	return fmt.Sprintf("users=%d clusters=%d alerts_firing=%d alerts_today=%d agents_on=%d agents_off=%d pod_normal=%d pod_abnormal=%d pod_errors=%d event_total=%d event_warning=%d event_errors=%d",
-		o.UsersCount, o.ClustersCount, o.AlertFiringCount, o.AlertEventsTodayCount, o.LogAgentsOnlineCount, o.LogAgentsOfflineCount,
+		o.UsersCount, o.ClustersCount, o.AlertFiringCount, o.AlertEventsTodayCount, o.LoggieAgentsOnlineCount, o.LoggieAgentsOfflineCount,
 		o.PodNormalCount, o.PodAbnormalCount, o.PodClusterErrors, o.EventTotalCount, o.EventWarningCount, o.EventClusterErrors)
 }

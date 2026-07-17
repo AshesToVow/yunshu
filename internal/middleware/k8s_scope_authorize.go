@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"bytes"
@@ -18,7 +18,6 @@ import (
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/service"
-	"yunshu/internal/pkg/logutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -99,7 +98,7 @@ func (c *k8sScopeCatalogCache) refresh() {
 	perms, err := c.repo.ListAll(context.Background())
 	if err != nil {
 		c.loadErr = err
-		logutil.HTTP("http.k8s_scope").Errorw(err, "permission catalog refresh failed")
+		logx.With(context.Background(), "component", "http.k8s_scope").Error("permission catalog refresh failed", "error", err)
 		return
 	}
 	c.loadErr = nil
@@ -175,7 +174,7 @@ func K8sScopeAuthorize(
 		if nsDenyRepo != nil && namespace != "" && namespace != "_cluster" {
 			denied, err := nsDenyRepo.IsDenied(c.Request.Context(), pack, clusterID, namespace)
 			if err != nil {
-				logutil.HTTP("http.k8s_scope").Error("namespace deny check failed", "error", err)
+				logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace deny check failed", "error", err)
 				response.Error(c, constants.ErrInternal)
 				c.Abort()
 				return
@@ -190,7 +189,7 @@ func K8sScopeAuthorize(
 		if nsAllowRepo != nil && clusterID > 0 && namespace != "" && namespace != "_cluster" {
 			active, err := nsAllowRepo.WhitelistActiveForCluster(c.Request.Context(), pack, clusterID)
 			if err != nil {
-				logutil.HTTP("http.k8s_scope").Error("namespace allow check failed", "error", err)
+				logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace allow check failed", "error", err)
 				response.Error(c, constants.ErrInternal)
 				c.Abort()
 				return
@@ -198,7 +197,7 @@ func K8sScopeAuthorize(
 			if active {
 				ok, err := nsAllowRepo.NamespaceAllowed(c.Request.Context(), pack, clusterID, namespace)
 				if err != nil {
-					logutil.HTTP("http.k8s_scope").Error("namespace allow match failed", "error", err)
+					logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace allow match failed", "error", err)
 					response.Error(c, constants.ErrInternal)
 					c.Abort()
 					return

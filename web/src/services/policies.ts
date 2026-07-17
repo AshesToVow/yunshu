@@ -1,4 +1,13 @@
-import type { MessageData, PolicyItem, PolicyPayload } from "../types/api";
+import type {
+  MessageData,
+  PermissionMenuLinksResponse,
+  PermissionTreeResponse,
+  PolicyConflictItem,
+  PolicyItem,
+  PolicyPayload,
+  PolicySimulateRequest,
+  PolicySimulateResponse,
+} from "../types/api";
 import { getData, http } from "./http";
 
 export function getPolicies() {
@@ -11,4 +20,22 @@ export function grantPolicy(payload: PolicyPayload) {
 
 export function revokePolicy(payload: PolicyPayload) {
   return getData<MessageData>(http.delete("/policies", { data: payload }));
+}
+
+export function getPolicyMenuLinks() {
+  return getData<PermissionMenuLinksResponse>(http.get("/policies/menu-links"));
+}
+
+export function simulatePolicy(payload: PolicySimulateRequest) {
+  return getData<PolicySimulateResponse>(http.post("/policies/simulate", payload));
+}
+
+export function getPolicyConflicts(roleId: number) {
+  return getData<{ role_id: number; role_code: string; items: PolicyConflictItem[] }>(
+    http.get("/policies/conflicts", { params: { role_id: roleId } }),
+  );
+}
+
+export function getPermissionTree(roleId: number) {
+  return getData<PermissionTreeResponse>(http.get("/policies/permission-tree", { params: { role_id: roleId } }));
 }

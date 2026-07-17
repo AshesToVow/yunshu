@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { AppRoutes } from "./app-routes";
 import { ErrorBoundary } from "../components/error-boundary";
+import { BRAND_PRIMARY } from "../constants/brand";
 import { AuthProvider } from "../contexts/auth-context";
 import { PluginProvider } from "../contexts/plugin-context";
 
@@ -13,8 +14,14 @@ export function App() {
     return saved === "light" ? "light" : "dark";
   });
   const [accent, setAccent] = useState<string>(() => {
-    return window.localStorage.getItem("admin-theme-accent") ?? "#e61919";
+    return window.localStorage.getItem("admin-theme-accent") ?? BRAND_PRIMARY;
   });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = mode;
+    document.documentElement.style.setProperty("--ys-brand", accent);
+    document.documentElement.style.setProperty("--admin-accent", accent);
+  }, [mode, accent]);
 
   useEffect(() => {
     const onModeChange = (event: Event) => {
@@ -55,29 +62,30 @@ export function App() {
         algorithm,
         token: {
           colorPrimary: accent,
-          colorSuccess: "#4af626",
-          colorWarning: "#f59e0b",
-          colorError: accent,
-          borderRadius: 0,
+          colorSuccess: "#389e0d",
+          colorWarning: "#d48806",
+          colorError: "#cf1322",
+          colorInfo: "#0958d9",
+          borderRadius: 8,
           fontFamily:
             '"IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
           fontFamilyCode: '"JetBrains Mono", "IBM Plex Mono", "Consolas", monospace',
-          colorBgLayout: isDark ? "#0a0a0a" : "#f4f4f0",
-          colorText: isDark ? "#eaeaea" : "#050505",
-          colorTextSecondary: isDark ? "rgba(234,234,234,0.58)" : "rgba(5,5,5,0.56)",
-          colorBorder: isDark ? "rgba(234,234,234,0.14)" : "rgba(5,5,5,0.14)",
+          colorBgLayout: isDark ? "#141414" : "#f4f6f8",
+          colorText: isDark ? "rgba(255,255,255,0.88)" : "#0f172a",
+          colorTextSecondary: isDark ? "rgba(255,255,255,0.55)" : "#64748b",
+          colorBorder: isDark ? "#303030" : "#e2e8f0",
         },
         components: {
           Layout: {
             headerBg: "transparent",
-            siderBg: isDark ? "#121212" : "#ffffff",
-            bodyBg: isDark ? "#0a0a0a" : "#f4f4f0",
+            siderBg: isDark ? "#1f1f1f" : "#ffffff",
+            bodyBg: isDark ? "#141414" : "#f4f6f8",
           },
           Menu: {
-            darkItemBg: "#121212",
-            darkSubMenuItemBg: "#121212",
-            darkItemSelectedBg: "rgba(230, 25, 25, 0.18)",
-            darkItemHoverBg: "rgba(230, 25, 25, 0.08)",
+            darkItemBg: "#1f1f1f",
+            darkSubMenuItemBg: "#1f1f1f",
+            darkItemSelectedBg: "rgba(13, 148, 136, 0.18)",
+            darkItemHoverBg: "rgba(13, 148, 136, 0.08)",
             itemSelectedColor: accent,
           },
           Card: {
@@ -87,8 +95,8 @@ export function App() {
             controlHeightLG: 44,
           },
           Table: {
-            headerBg: isDark ? "#1a1a1a" : "#eae8e3",
-            rowHoverBg: isDark ? "rgba(230, 25, 25, 0.08)" : "rgba(230, 25, 25, 0.06)",
+            headerBg: isDark ? "#1f1f1f" : "#f8fafc",
+            rowHoverBg: isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)",
           },
         },
       }}

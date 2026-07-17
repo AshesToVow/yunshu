@@ -95,6 +95,10 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 	}
 	s.komMu.Unlock()
 
+	// kom RegisterByConfigWithID 在 clusterID 已存在且 Kubectl 非空时会直接返回旧实例，不更新 server/凭据。
+	// 切换 kubeconfig/direct 或修改 API 地址后必须先 Remove，否则仍会连到旧地址（如 10.10.10.103）。
+	kom.Clusters().RemoveClusterById(clusterID)
+
 	// 使用 kom 原生 RegisterByStringWithID，与 RegisterByPathWithID 等价，避免临时文件在容器/Windows 下的路径问题。
 	_, err := kom.Clusters().RegisterByStringWithID(kubeconfig, clusterID)
 	if err != nil {
@@ -130,8 +134,9 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 
 // DeleteRegisterCache 删除相关的业务逻辑。
 func (s *K8sRuntimeService) DeleteRegisterCache(clusterID uint) {
-	s.komMu.Lock()
 	key := strconv.FormatUint(uint64(clusterID), 10)
+	kom.Clusters().RemoveClusterById(key)
+	s.komMu.Lock()
 	delete(s.registeredHash, key)
 	st := s.connState[key]
 	st.State = "unknown"

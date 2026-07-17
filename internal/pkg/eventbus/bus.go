@@ -1,11 +1,10 @@
-﻿// Package eventbus 提供进程内、非阻塞事件分发（对齐 k8m eventbus：慢消费者丢事件，不阻塞发布方）。
+// Package eventbus 提供进程内、非阻塞事件分发（对齐 k8m eventbus：慢消费者丢事件，不阻塞发布方）。
 // 不含 AI/MCP；供集群连接、Watch 等扩展点使用。
 package eventbus
 
 import (
+	"log/slog"
 	"sync"
-
-	"yunshu/internal/pkg/logutil"
 )
 
 // Type 事件类型。
@@ -67,7 +66,7 @@ func (b *Bus) Publish(e Event) {
 		}
 	}
 	if dropped > 0 {
-		logutil.Worker("eventbus").Warnw("Dropped events for slow consumers",
+		slog.Default().With("component", "eventbus").Warn("Dropped events for slow consumers",
 			"type", e.Type, "dropped", dropped)
 	}
 }

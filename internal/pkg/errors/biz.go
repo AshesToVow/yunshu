@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"log/slog"
+	logx "yunshu/internal/pkg/logger"
 )
 
 // BizError is the unified business error type (OneX: code, reason, message, error_code, metadata).
@@ -115,8 +115,11 @@ func (e *BizError) logBiz(ctx context.Context, level string) {
 	if e == nil || e.logged {
 		return
 	}
-	log := slog.Default()
-	attrs := []any{"error_code", e.ErrorCode, "reason", e.Reason, "http_status", e.HTTPStatus()}
+	attrs := []any{
+		"error_code", e.ErrorCode,
+		"reason", e.Reason,
+		"http_status", e.HTTPStatus(),
+	}
 	if e.Operation != "" {
 		attrs = append(attrs, "operation", e.Operation)
 	}
@@ -126,6 +129,7 @@ func (e *BizError) logBiz(ctx context.Context, level string) {
 	if e.Cause != nil {
 		attrs = append(attrs, "error", e.Cause)
 	}
+	log := logx.With(ctx)
 	if level == "warn" {
 		log.Warn(e.Message, attrs...)
 	} else {

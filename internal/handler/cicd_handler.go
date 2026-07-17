@@ -172,7 +172,7 @@ func (h *CicdHandler) CreateDeployConfig(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req cicd.DeployConfigUpsertRequest) (*model.CicdDeployConfig, error) {
+	ServeJSON201(c, func(ctx context.Context, req cicd.DeployConfigUpsertRequest) (*cicd.DeployConfigUpsertResult, error) {
 		return h.svc.UpsertDeployConfig(ctx, projectID, serviceID, 0, req)
 	})
 }
@@ -198,12 +198,12 @@ func (h *CicdHandler) UpdateDeployConfig(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	row, err := h.svc.UpsertDeployConfig(c.Request.Context(), projectID, serviceID, configID, req)
+	result, err := h.svc.UpsertDeployConfig(c.Request.Context(), projectID, serviceID, configID, req)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, row)
+	response.Success(c, result)
 }
 
 func (h *CicdHandler) DeleteDeployConfig(c *gin.Context) {
@@ -392,12 +392,38 @@ func (h *CicdHandler) ListReleaseRuns(c *gin.Context) {
 		q.ProjectID = projectID
 		if q.Mine {
 			if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
-				switch strings.TrimSpace(q.Status) {
-				case model.CicdRunStatusPendingApproval:
-					q.ApproverUserID = &u.ID
-				case model.CicdRunStatusPendingExecution:
-					q.ExecutorUserID = &u.ID
+				scope := strings.TrimSpace(q.MineScope)
+				if scope == "" {
+					scope = "all"
 				}
+				tabStatus := strings.TrimSpace(q.Status)
+				switch tabStatus {
+				case model.CicdRunStatusPendingApproval:
+					q.MineTab = "approval"
+					switch scope {
+					case "pending":
+						q.ApproverUserID = &u.ID
+					case "done":
+						q.Status = ""
+						q.ApprovalDoneUserID = &u.ID
+					default:
+						q.Status = ""
+						q.ApprovalMineUserID = &u.ID
+					}
+				case model.CicdRunStatusPendingExecution:
+					q.MineTab = "execution"
+					switch scope {
+					case "pending":
+						q.ExecutorUserID = &u.ID
+					case "done":
+						q.Status = ""
+						q.ExecutionDoneUserID = &u.ID
+					default:
+						q.Status = ""
+						q.ExecutionMineUserID = &u.ID
+					}
+				}
+				q.MineViewerUserID = &u.ID
 			}
 		}
 		return h.svc.ListReleaseRuns(ctx, q)
@@ -470,8 +496,10 @@ func (h *CicdHandler) ApproveReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req cicd.ReviewReleaseRequest
-	_ = c.ShouldBindJSON(&req)
+	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	if !ok {
+		return
+	}
 	userID, name := reviewerFromContext(c)
 	run, err := h.svc.ApproveReleaseRun(c.Request.Context(), projectID, runID, userID, name, req.Comment)
 	if err != nil {
@@ -486,8 +514,10 @@ func (h *CicdHandler) RejectReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req cicd.ReviewReleaseRequest
-	_ = c.ShouldBindJSON(&req)
+	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	if !ok {
+		return
+	}
 	userID, name := reviewerFromContext(c)
 	run, err := h.svc.RejectReleaseRun(c.Request.Context(), projectID, runID, userID, name, req.Comment)
 	if err != nil {
@@ -516,8 +546,10 @@ func (h *CicdHandler) TerminateReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req cicd.ReviewReleaseRequest
-	_ = c.ShouldBindJSON(&req)
+	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	if !ok {
+		return
+	}
 	userID, name := reviewerFromContext(c)
 	run, err := h.svc.TerminateReleaseRun(c.Request.Context(), projectID, runID, userID, name, req.Comment)
 	if err != nil {

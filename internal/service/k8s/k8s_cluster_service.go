@@ -314,6 +314,9 @@ func (s *K8sClusterService) Update(ctx context.Context, id uint, req K8sClusterU
 	// 处理连接模式变更
 	if req.ConnectionMode != nil {
 		cluster.ConnectionMode = *req.ConnectionMode
+		if *req.ConnectionMode == "kubeconfig" {
+			cluster.DirectConfig = ""
+		}
 	}
 
 	// 处理直连配置更新

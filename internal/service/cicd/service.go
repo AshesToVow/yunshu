@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,8 +16,8 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/jenkins"
+	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/pagination"
 
 	"gorm.io/gorm"
@@ -28,15 +29,34 @@ type Service struct {
 	projectRepo   interfaces.ProjectRepository
 	userGroupRepo interfaces.UserGroupRepository
 	userRepo      interfaces.UserRepository
+	nsEnsurer     K8sNamespaceEnsurer
+	mailer        mailer.Sender
+	appName       string
 	yamlCicd      config.CicdConfig
 	syncMu        sync.Mutex
 }
 
-func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, yamlCicd config.CicdConfig) *Service {
+func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
 	if yamlCicd.RunSyncIntervalSeconds <= 0 {
 		yamlCicd.RunSyncIntervalSeconds = 15
 	}
-	return &Service{db: db, serverRepo: serverRepo, projectRepo: projectRepo, userGroupRepo: userGroupRepo, userRepo: userRepo, yamlCicd: yamlCicd}
+	if yamlCicd.ApprovalSlaHours <= 0 {
+		yamlCicd.ApprovalSlaHours = 24
+	}
+	if yamlCicd.ApprovalReminderIntervalHours <= 0 {
+		yamlCicd.ApprovalReminderIntervalHours = 4
+	}
+	return &Service{
+		db:            db,
+		serverRepo:    serverRepo,
+		projectRepo:   projectRepo,
+		userGroupRepo: userGroupRepo,
+		userRepo:      userRepo,
+		nsEnsurer:     nsEnsurer,
+		mailer:        emailSender,
+		appName:       strings.TrimSpace(appName),
+		yamlCicd:      yamlCicd,
+	}
 }
 
 func (s *Service) resolvedConfig(ctx context.Context) config.CicdConfig {
@@ -199,7 +219,7 @@ func (s *Service) UpsertService(ctx context.Context, serviceID uint, req Service
 	if serviceID > 0 {
 		if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", serviceID, req.ProjectID).First(&row).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, bizerrors.NotFound("cicd service", serviceID)
+			return nil, constants.ErrNotFound
 		}
 		return nil, err
 		}
@@ -259,7 +279,7 @@ func (s *Service) loadService(ctx context.Context, projectID, serviceID uint) (*
 	var row model.CicdService
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", serviceID, projectID).First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, bizerrors.NotFound("cicd service", serviceID)
+			return nil, constants.ErrNotFound
 		}
 		return nil, err
 	}
@@ -358,6 +378,9 @@ func (s *Service) UpsertCiConfig(ctx context.Context, projectID, serviceID uint,
 	}
 	row.Version = strings.TrimSpace(req.Version)
 	row.NodeVersion = strings.TrimSpace(req.NodeVersion)
+	if row.NodeVersion == "" {
+		row.NodeVersion = model.DefaultNodeToolName
+	}
 	row.NpmInstallMode = strings.TrimSpace(req.NpmInstallMode)
 	row.CleanNpmCache = req.CleanNpmCache
 	row.CleanNodeModules = req.CleanNodeModules
@@ -423,6 +446,13 @@ type DeployConfigListItem struct {
 	model.CicdDeployConfig
 	ServerCount int    `json:"server_count"`
 	NodesStatus string `json:"nodes_status"`
+}
+
+// DeployConfigUpsertResult 保存发布配置结果（DB 保存与 Jenkins 同步解耦）。
+type DeployConfigUpsertResult struct {
+	Config           *model.CicdDeployConfig `json:"config"`
+	JenkinsSync      *JenkinsSyncResult      `json:"jenkins_sync,omitempty"`
+	JenkinsSyncError string                  `json:"jenkins_sync_error,omitempty"`
 }
 
 func (s *Service) ListDeployConfigs(ctx context.Context, projectID, serviceID uint) ([]DeployConfigListItem, error) {
@@ -500,7 +530,7 @@ func summarizeDeployNodes(dc model.CicdDeployConfig, servers map[uint]model.Serv
 	return len(ids), "部分异常"
 }
 
-func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, configID uint, req DeployConfigUpsertRequest) (*model.CicdDeployConfig, error) {
+func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, configID uint, req DeployConfigUpsertRequest) (*DeployConfigUpsertResult, error) {
 	if _, err := s.loadService(ctx, projectID, serviceID); err != nil {
 		return nil, err
 	}
@@ -512,7 +542,7 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 	var row model.CicdDeployConfig
 	if configID > 0 {
 		if err := s.db.WithContext(ctx).Where("id = ? AND service_id = ?", configID, serviceID).First(&row).Error; err != nil {
-			return nil, bizerrors.NotFound("deploy config", configID)
+			return nil, constants.ErrNotFound
 		}
 	}
 	row.ServiceID = serviceID
@@ -603,14 +633,24 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 			return nil, err
 		}
 	}
+	result := &DeployConfigUpsertResult{Config: &row}
 	if strings.EqualFold(row.DeployKind, model.CicdDeployKindContainer) {
-		if svc, err := s.loadService(ctx, projectID, serviceID); err == nil {
-			if ci, err := s.requireCiConfig(ctx, projectID, serviceID); err == nil {
-				_, _ = s.syncJenkinsJob(ctx, svc, ci)
-			}
+		svc, svcErr := s.loadService(ctx, projectID, serviceID)
+		if svcErr != nil {
+			slog.Default().With("component", "cicd").Warn("skip jenkins sync after deploy config save: load service failed",
+				"service_id", serviceID, "config_id", row.ID, "error", svcErr)
+		} else if ci, ciErr := s.requireCiConfig(ctx, projectID, serviceID); ciErr != nil {
+			slog.Default().With("component", "cicd").Warn("skip jenkins sync after deploy config save: ci config missing",
+				"service_id", serviceID, "config_id", row.ID, "error", ciErr)
+		} else if syncResult, syncErr := s.syncJenkinsJob(ctx, svc, ci); syncErr != nil {
+			result.JenkinsSyncError = jenkins.HumanizeAPIError(syncErr)
+			slog.Default().With("component", "cicd").Warn("jenkins job sync failed after deploy config save",
+				"service_id", serviceID, "config_id", row.ID, "error", syncErr)
+		} else {
+			result.JenkinsSync = syncResult
 		}
 	}
-	return &row, nil
+	return result, nil
 }
 
 func (s *Service) DeleteDeployConfig(ctx context.Context, projectID, serviceID, configID uint) error {
@@ -817,6 +857,7 @@ func (s *Service) ListBuildRuns(ctx context.Context, q BuildRunListQuery) (*pagi
 	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	s.enrichBuildRunPackagePaths(ctx, rows)
 	svcNames := s.loadServiceNameMap(ctx, rows)
 	items := make([]BuildRunItem, 0, len(rows))
 	for _, row := range rows {
@@ -838,10 +879,17 @@ type ReleaseRunListQuery struct {
 	Tenv           string `form:"tenv"`
 	Keyword        string `form:"keyword"`
 	Mine           bool   `form:"mine"`
-	Page           int    `form:"page"`
-	PageSize       int    `form:"page_size"`
-	ApproverUserID *uint  // 内部：待审核列表按当前审批人过滤
-	ExecutorUserID *uint  // 内部：待执行列表按提交人过滤
+	MineScope           string `form:"mine_scope"` // pending | done | all（与 mine 联用）
+	Page                int    `form:"page"`
+	PageSize            int    `form:"page_size"`
+	ApproverUserID      *uint  // 内部：待审核
+	ExecutorUserID      *uint  // 内部：待执行（提交人）
+	ApprovalDoneUserID  *uint  // 内部：我已审批
+	ExecutionDoneUserID *uint  // 内部：我已执行
+	ApprovalMineUserID  *uint  // 内部：审批待办全部
+	ExecutionMineUserID *uint  // 内部：执行待办全部
+	MineTab             string `form:"-"` // approval | execution（mine 待办列表）
+	MineViewerUserID    *uint  `form:"-"`
 }
 
 type ReleaseRunItem struct {
@@ -850,6 +898,7 @@ type ReleaseRunItem struct {
 	ServiceIdentifier string `json:"service_identifier"`
 	ProjectName       string `json:"project_name"`
 	CurrentStageName  string `json:"current_stage_name,omitempty"`
+	MineStatus        string `json:"mine_status,omitempty"` // mine_pending | mine_done（待办列表按当前用户视角）
 }
 
 func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*pagination.Result[ReleaseRunItem], error) {
@@ -877,11 +926,24 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 		like := "%" + kw + "%"
 		dbq = dbq.Where("title LIKE ? OR submitter_name LIKE ?", like, like)
 	}
-	if q.ApproverUserID != nil && *q.ApproverUserID > 0 && strings.TrimSpace(q.Status) == model.CicdRunStatusPendingApproval {
+	if q.ApproverUserID != nil && *q.ApproverUserID > 0 {
 		dbq = s.filterReleaseRunsForApprover(dbq, *q.ApproverUserID)
 	}
-	if q.ExecutorUserID != nil && *q.ExecutorUserID > 0 && strings.TrimSpace(q.Status) == model.CicdRunStatusPendingExecution {
-		dbq = dbq.Where("submitter_user_id = ?", *q.ExecutorUserID)
+	if q.ApprovalDoneUserID != nil && *q.ApprovalDoneUserID > 0 {
+		dbq = s.filterReleaseRunsApprovalDone(dbq, *q.ApprovalDoneUserID)
+	}
+	if q.ApprovalMineUserID != nil && *q.ApprovalMineUserID > 0 {
+		dbq = s.filterReleaseRunsApprovalMine(dbq, *q.ApprovalMineUserID)
+	}
+	if q.ExecutorUserID != nil && *q.ExecutorUserID > 0 {
+		dbq = dbq.Where("status = ?", model.CicdRunStatusPendingExecution).
+			Where("submitter_user_id = ?", *q.ExecutorUserID)
+	}
+	if q.ExecutionDoneUserID != nil && *q.ExecutionDoneUserID > 0 {
+		dbq = s.filterReleaseRunsExecutionDone(dbq, *q.ExecutionDoneUserID)
+	}
+	if q.ExecutionMineUserID != nil && *q.ExecutionMineUserID > 0 {
+		dbq = s.filterReleaseRunsExecutionMine(dbq, *q.ExecutionMineUserID)
 	}
 	var total int64
 	if err := dbq.Count(&total).Error; err != nil {
@@ -925,13 +987,16 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 		}
 		items = append(items, item)
 	}
+	if q.MineViewerUserID != nil && *q.MineViewerUserID > 0 {
+		s.enrichReleaseRunMineStatus(ctx, items, *q.MineViewerUserID, strings.TrimSpace(q.MineTab))
+	}
 	return &pagination.Result[ReleaseRunItem]{List: items, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
 func (s *Service) GetBuildRun(ctx context.Context, projectID, runID uint) (*BuildRunItem, error) {
 	var row model.CicdBuildRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
-		return nil, bizerrors.NotFound("build run", runID)
+		return nil, constants.ErrNotFound
 	}
 	item := BuildRunItem{CicdBuildRun: row}
 	var svc model.CicdService
@@ -964,7 +1029,7 @@ func (s *Service) GetBuildRunLog(ctx context.Context, projectID, runID uint) (st
 func (s *Service) GetReleaseRunLog(ctx context.Context, projectID, runID uint) (string, error) {
 	var row model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
-		return "", bizerrors.NotFound("release run", runID)
+		return "", constants.ErrNotFound
 	}
 	if row.JenkinsBuildNumber <= 0 {
 		return "", nil
@@ -1054,33 +1119,70 @@ func (s *Service) syncPendingRuns(ctx context.Context) {
 	_ = s.db.WithContext(ctx).
 		Where("build_result = ? AND (package_path = '' OR package_path IS NULL)", model.CicdRunStatusSuccess).
 		Order("id DESC").
-		Limit(10).
+		Limit(30).
 		Find(&backfillBuilds).Error
 	for _, run := range backfillBuilds {
-		s.backfillBuildPackagePath(ctx, client, run)
+		s.backfillBuildArtifacts(ctx, client, run)
+	}
+	s.syncApprovalReminders(ctx)
+}
+
+func (s *Service) enrichBuildRunPackagePaths(ctx context.Context, rows []model.CicdBuildRun) {
+	client, _, err := s.jenkinsClient(ctx)
+	if err != nil {
+		return
+	}
+	for i := range rows {
+		if rows[i].BuildResult != model.CicdRunStatusSuccess {
+			continue
+		}
+		if strings.TrimSpace(rows[i].PackagePath) != "" && strings.TrimSpace(rows[i].ImageAddress) != "" {
+			continue
+		}
+		s.backfillBuildArtifacts(ctx, client, rows[i])
+		var updated model.CicdBuildRun
+		if err := s.db.WithContext(ctx).Select("package_path", "image_address").Where("id = ?", rows[i].ID).First(&updated).Error; err == nil {
+			rows[i].PackagePath = updated.PackagePath
+			rows[i].ImageAddress = updated.ImageAddress
+		}
 	}
 }
 
-func (s *Service) backfillBuildPackagePath(ctx context.Context, client *jenkins.Client, run model.CicdBuildRun) {
-	if run.BuildNumber <= 0 || strings.TrimSpace(run.PackagePath) != "" {
+func (s *Service) backfillBuildArtifacts(ctx context.Context, client *jenkins.Client, run model.CicdBuildRun) {
+	if run.BuildNumber <= 0 {
+		return
+	}
+	needPackage := strings.TrimSpace(run.PackagePath) == ""
+	needImage := strings.TrimSpace(run.ImageAddress) == ""
+	if !needPackage && !needImage {
 		return
 	}
 	var svc model.CicdService
 	if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
 		return
 	}
-	cfg := s.resolvedConfig(ctx)
-	bucket := dictconfig.MinIOBucketForService(cfg, svc.ServiceType)
-	if bucket == "" {
+	var ci model.CicdCiConfig
+	_ = s.db.WithContext(ctx).Where("service_id = ?", run.ServiceID).First(&ci).Error
+	jobName := resolveJenkinsJobName(&svc)
+	if jobName == "" {
 		return
 	}
-	logText, err := client.GetConsoleLog(ctx, svc.JenkinsJob, run.BuildNumber)
+	logText, err := client.GetConsoleLog(ctx, jobName, run.BuildNumber)
 	if err != nil {
 		return
 	}
-	if path := extractPackagePathFromConsole(logText, svc.JenkinsJob, bucket); path != "" {
-		_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Update("package_path", path).Error
+	artifacts := s.resolveBuildArtifactsFromLog(ctx, svc, ci, logText)
+	updates := map[string]any{}
+	if needPackage && strings.TrimSpace(artifacts.PackagePath) != "" {
+		updates["package_path"] = artifacts.PackagePath
 	}
+	if needImage && strings.TrimSpace(artifacts.ImageAddress) != "" {
+		updates["image_address"] = artifacts.ImageAddress
+	}
+	if len(updates) == 0 {
+		return
+	}
+	_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Updates(updates).Error
 }
 
 func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, run model.CicdBuildRun) {
@@ -1091,32 +1193,29 @@ func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, r
 	if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
 		return
 	}
-	info, err := client.GetBuild(ctx, svc.JenkinsJob, run.BuildNumber)
+	var ci model.CicdCiConfig
+	_ = s.db.WithContext(ctx).Where("service_id = ?", run.ServiceID).First(&ci).Error
+	jobName := resolveJenkinsJobName(&svc)
+	if jobName == "" {
+		return
+	}
+	info, err := client.GetBuild(ctx, jobName, run.BuildNumber)
 	if err != nil {
 		return
 	}
 	status := jenkins.MapResultToStatus(info.Result, info.Building)
-	cfg := s.resolvedConfig(ctx)
-	bucket := dictconfig.MinIOBucketForService(cfg, svc.ServiceType)
 	updates := map[string]any{
 		"jenkins_build_url": info.URL,
 		"updated_at":        time.Now(),
 	}
-	if strings.TrimSpace(run.PackagePath) == "" && bucket != "" {
-		if logText, err := client.GetConsoleLog(ctx, svc.JenkinsJob, run.BuildNumber); err == nil {
-			if path := extractPackagePathFromConsole(logText, svc.JenkinsJob, bucket); path != "" {
-				updates["package_path"] = path
+	if strings.TrimSpace(run.PackagePath) == "" || strings.TrimSpace(run.ImageAddress) == "" {
+		if logText, err := client.GetConsoleLog(ctx, jobName, run.BuildNumber); err == nil {
+			artifacts := s.resolveBuildArtifactsFromLog(ctx, svc, ci, logText)
+			if strings.TrimSpace(run.PackagePath) == "" && strings.TrimSpace(artifacts.PackagePath) != "" {
+				updates["package_path"] = artifacts.PackagePath
 			}
-			if strings.TrimSpace(run.ImageAddress) == "" {
-				if img := extractImageAddressFromConsole(logText); img != "" {
-					updates["image_address"] = img
-				}
-			}
-		}
-	} else if strings.TrimSpace(run.ImageAddress) == "" {
-		if logText, err := client.GetConsoleLog(ctx, svc.JenkinsJob, run.BuildNumber); err == nil {
-			if img := extractImageAddressFromConsole(logText); img != "" {
-				updates["image_address"] = img
+			if strings.TrimSpace(run.ImageAddress) == "" && strings.TrimSpace(artifacts.ImageAddress) != "" {
+				updates["image_address"] = artifacts.ImageAddress
 			}
 		}
 	}

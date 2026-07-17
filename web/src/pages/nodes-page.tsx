@@ -227,6 +227,7 @@ export function NodesPage() {
     <>
       <YamlCrudPage<Item, Detail>
         title="Node 资源管理"
+        description="集群节点状态、资源用量、污点与调度策略"
         needNamespace={false}
         disableMutations
         actionColumnWidth={380}

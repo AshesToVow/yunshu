@@ -51,23 +51,36 @@ func ShouldRunAfterLast(spec string, last time.Time, hasLast bool, now time.Time
 	return !now.Before(next)
 }
 
-// ShouldRunWithDayAnchor 定时任务到点判断：首次启用等到当天 Cron 到点，同窗口不重复跑。
+// ShouldRunWithDayAnchor 定时任务到点判断：首次启用等到下一次 Cron 触发，同窗口不重复跑。
 func ShouldRunWithDayAnchor(spec string, last *time.Time, now time.Time) bool {
 	sched, err := parseSchedule(spec)
 	if err != nil {
 		return false
 	}
-	var anchor time.Time
-	if last != nil && !last.IsZero() {
-		anchor = *last
-	} else {
-		anchor = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Add(-time.Second)
+	if last == nil || last.IsZero() {
+		dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		dueToday := sched.Next(dayStart.Add(-time.Second))
+		if now.Before(dueToday) {
+			return false
+		}
+		// 首次启用且处于当天计划时刻窗口内：允许执行
+		if now.Sub(dueToday) <= 3*time.Minute {
+			return true
+		}
+		// 首次启用但已错过当天计划时刻：不补跑，等下一次 cron
+		nextDue := sched.Next(dueToday)
+		if now.Before(nextDue) {
+			return false
+		}
+		last = &dueToday
 	}
+	var anchor time.Time
+	anchor = *last
 	dueAt := sched.Next(anchor)
 	if now.Before(dueAt) {
 		return false
 	}
-	if last != nil && !last.IsZero() && !last.Before(dueAt) {
+	if !last.Before(dueAt) {
 		return false
 	}
 	return true

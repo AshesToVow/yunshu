@@ -211,7 +211,7 @@ export function CrsPage() {
 
   return (
     <Card className="table-card" title="CR 实例管理">
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
+      <div className="ops-filter-bar" style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
         <Space wrap>
           <Select
             placeholder="选择集群"
@@ -226,7 +226,7 @@ export function CrsPage() {
           />
           <TreeSelect
             placeholder="选择 CR 类型（按 Group/Kind）"
-            style={{ minWidth: 420 }}
+            style={{ minWidth: 200, maxWidth: "min(420px, 100%)" }}
             value={selectedResourceName}
             onChange={(v) => setSelectedResourceName(String(v || ""))}
             treeData={resourceTree}

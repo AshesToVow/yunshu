@@ -26,9 +26,11 @@ RUN apk add --no-cache tzdata ca-certificates
 
 COPY --from=builder /yunshu /app/
 COPY configs/ /app/configs/
+# 离线 Loggie 安装包（linux/amd64 ELF），安装 Agent 时由平台 SFTP 上传
+COPY deploy/loggie/binary/loggie /app/deploy/loggie/binary/loggie
 
 WORKDIR /app
-EXPOSE 8080 18080
+EXPOSE 8080
 
 # 关键修改：加上 server 参数 ✅
 ENTRYPOINT ["/app/yunshu", "server"]

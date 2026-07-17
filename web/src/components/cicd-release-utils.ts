@@ -11,6 +11,8 @@ export function cicdReleaseStatusTagColor(s: string) {
     cancelled: "default",
     aborted: "warning",
     rejected: "error",
+    mine_pending: "warning",
+    mine_done: "success",
   };
   return map[s] || "default";
 }
@@ -26,8 +28,30 @@ export function cicdReleaseStatusLabel(s: string) {
     cancelled: "已取消",
     aborted: "已中止",
     rejected: "已驳回",
+    mine_pending: "待审批",
+    mine_done: "已审批",
   };
   return label[s] || s;
+}
+
+/** 待办列表状态：优先按当前用户 mine_status，否则用工单全局 status */
+export function cicdTodoStatusLabel(
+  row: { status: string; mine_status?: string },
+  tab: "pending_approval" | "pending_execution" = "pending_approval",
+) {
+  if (row.mine_status === "mine_done") {
+    return tab === "pending_execution" ? "已执行" : "已审批";
+  }
+  if (row.mine_status === "mine_pending") {
+    return tab === "pending_execution" ? "待执行" : "待审批";
+  }
+  return cicdReleaseStatusLabel(row.status);
+}
+
+export function cicdTodoStatusTagColor(row: { status: string; mine_status?: string }) {
+  if (row.mine_status === "mine_done") return cicdReleaseStatusTagColor("mine_done");
+  if (row.mine_status === "mine_pending") return cicdReleaseStatusTagColor("mine_pending");
+  return cicdReleaseStatusTagColor(row.status);
 }
 
 export function cicdReleaseTypeLabel(releaseType: string) {

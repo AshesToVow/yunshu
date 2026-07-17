@@ -3,13 +3,16 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"yunshu/internal/bootstrap"
+	"yunshu/internal/config"
 	"yunshu/internal/menu"
 	"yunshu/internal/model"
+	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/password"
+	"yunshu/internal/plugin"
 	"yunshu/internal/service"
-	"yunshu/internal/pkg/logutil"
 
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
@@ -30,6 +33,8 @@ var seedCmd = &cobra.Command{
 		}
 		defer app.Close()
 
+		logx.Init(app.Logger)
+
 		ctx := context.Background()
 		// 确保新增字段（如 permissions.k8s_scope_enabled）在 seed 前已完成迁移
 		if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
@@ -45,7 +50,7 @@ var seedCmd = &cobra.Command{
 			return fmt.Errorf("remove stale permissions: %w", err)
 		}
 		if removedStale > 0 {
-			logutil.Worker("seed").Infow("removed stale permissions", "count", removedStale)
+			slog.Default().With("component", "seed").Info("removed stale permissions", "count", removedStale)
 			fmt.Printf("removed %d stale permission records\n", removedStale)
 		}
 
@@ -106,7 +111,7 @@ var seedCmd = &cobra.Command{
 			if err := tx.Model(&adminUser).Association("Roles").Replace([]model.Role{adminRole}); err != nil {
 				return err
 			}
-			return seedMenus(ctx, tx)
+			return seedMenus(ctx, tx, &app.Config.Plugins)
 		})
 		if err != nil {
 			return err
@@ -120,10 +125,10 @@ var seedCmd = &cobra.Command{
 		}
 
 		if adminCreated {
-			logutil.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email, "password", "Admin@123")
+			slog.Default().With("component", "seed").Info("Seed completed", "username", adminUser.Username, "email", adminUser.Email, "password", "Admin@123")
 			fmt.Println("seed completed: created admin user admin / Admin@123")
 		} else {
-			logutil.Worker("seed").Infow("Seed completed", "username", adminUser.Username, "email", adminUser.Email)
+			slog.Default().With("component", "seed").Info("Seed completed", "username", adminUser.Username, "email", adminUser.Email)
 			fmt.Println("seed completed")
 		}
 		return nil
@@ -175,6 +180,10 @@ func defaultPermissions() []model.Permission {
 		{Name: "授权列表", Resource: "/api/v1/policies", Action: "GET", Description: "View policy list"},
 		{Name: "创建授权策略", Resource: "/api/v1/policies", Action: "POST", Description: "Grant permission to role"},
 		{Name: "删除授权策略", Resource: "/api/v1/policies", Action: "DELETE", Description: "Revoke permission from role (JSON body)"},
+		{Name: "权限菜单关联", Resource: "/api/v1/policies/menu-links", Action: "GET", Description: "List permission to menu path links"},
+		{Name: "策略冲突分析", Resource: "/api/v1/policies/conflicts", Action: "GET", Description: "Analyze role policy conflicts"},
+		{Name: "统一权限树", Resource: "/api/v1/policies/permission-tree", Action: "GET", Description: "Get menu+API permission tree for role"},
+		{Name: "策略模拟", Resource: "/api/v1/policies/simulate", Action: "POST", Description: "Simulate API authorization layers"},
 		{Name: "K8s 动作码目录", Resource: "/api/v1/k8s-policies/actions", Action: "GET", Description: "List k8s scope action codes (reference)"},
 		{Name: "K8s API 路径目录", Resource: "/api/v1/k8s-policies/paths", Action: "GET", Description: "List k8s scope API paths (reference)"},
 		{Name: "K8s 集群档位列表", Resource: "/api/v1/k8s-policies", Action: "GET", Description: "List k8s cluster access grants by role"},
@@ -196,6 +205,8 @@ func defaultPermissions() []model.Permission {
 		{Name: "批量更新菜单状态", Resource: "/api/v1/menus/status", Action: "PUT", Description: "Batch update menu status"},
 		{Name: "更新菜单", Resource: "/api/v1/menus/:id", Action: "PUT", Description: "Update menu"},
 		{Name: "删除菜单", Resource: "/api/v1/menus/:id", Action: "DELETE", Description: "Delete menu"},
+		{Name: "菜单入口权限绑定", Resource: "/api/v1/menus/:id/bindings", Action: "GET", Description: "Get menu entry permission bindings"},
+		{Name: "更新菜单入口权限绑定", Resource: "/api/v1/menus/:id/bindings", Action: "PUT", Description: "Replace menu entry permission bindings"},
 		{Name: "数据字典列表", Resource: "/api/v1/dict/entries", Action: "GET", Description: "List dict entries"},
 		{Name: "数据字典新增", Resource: "/api/v1/dict/entries", Action: "POST", Description: "Create dict entry"},
 		{Name: "数据字典更新", Resource: "/api/v1/dict/entries/:id", Action: "PUT", Description: "Update dict entry"},
@@ -428,6 +439,18 @@ func defaultPermissions() []model.Permission {
 		{Name: "HPA 详情", Resource: "/api/v1/horizontal-pod-autoscalers/detail", Action: "GET", Description: "Get HPA YAML"},
 		{Name: "HPA 应用 YAML", Resource: "/api/v1/horizontal-pod-autoscalers/apply", Action: "POST", Description: "Apply HPA yaml"},
 		{Name: "删除 HPA", Resource: "/api/v1/horizontal-pod-autoscalers", Action: "DELETE", Description: "Delete HPA"},
+
+		{Name: "Harbor 信息", Resource: "/api/v1/helm/harbor/info", Action: "GET", Description: "Get Harbor helm repo info"},
+		{Name: "Harbor Chart 列表", Resource: "/api/v1/helm/harbor/charts", Action: "GET", Description: "List Harbor helm charts"},
+		{Name: "Harbor Chart 版本", Resource: "/api/v1/helm/harbor/charts/versions", Action: "GET", Description: "List Harbor chart versions"},
+		{Name: "Helm Release 列表", Resource: "/api/v1/helm/releases", Action: "GET", Description: "List helm releases"},
+		{Name: "Helm Release 详情", Resource: "/api/v1/helm/releases/detail", Action: "GET", Description: "Get helm release detail"},
+		{Name: "Helm Release 历史", Resource: "/api/v1/helm/releases/history", Action: "GET", Description: "Get helm release history"},
+		{Name: "Helm Release Values", Resource: "/api/v1/helm/releases/values", Action: "GET", Description: "Get helm release values"},
+		{Name: "Helm 安装", Resource: "/api/v1/helm/releases/install", Action: "POST", Description: "Install helm release from Harbor [k8s-scope=on]", K8sScopeEnabled: true},
+		{Name: "Helm 升级", Resource: "/api/v1/helm/releases/upgrade", Action: "POST", Description: "Upgrade helm release [k8s-scope=on]", K8sScopeEnabled: true},
+		{Name: "Helm 回滚", Resource: "/api/v1/helm/releases/rollback", Action: "POST", Description: "Rollback helm release [k8s-scope=on]", K8sScopeEnabled: true},
+		{Name: "Helm 卸载", Resource: "/api/v1/helm/releases", Action: "DELETE", Description: "Uninstall helm release [k8s-scope=on]", K8sScopeEnabled: true},
 		{Name: "网络策略列表", Resource: "/api/v1/network-policies", Action: "GET", Description: "List network policies"},
 		{Name: "网络策略详情", Resource: "/api/v1/network-policies/detail", Action: "GET", Description: "Get network policy detail"},
 		{Name: "网络策略应用 YAML", Resource: "/api/v1/network-policies/apply", Action: "POST", Description: "Apply network policy yaml"},
@@ -437,7 +460,6 @@ func defaultPermissions() []model.Permission {
 		{Name: "创建项目", Resource: "/api/v1/projects", Action: "POST", Description: "Create project"},
 		{Name: "更新项目", Resource: "/api/v1/projects/:id", Action: "PUT", Description: "Update project"},
 		{Name: "删除项目", Resource: "/api/v1/projects/:id", Action: "DELETE", Description: "Delete project"},
-		{Name: "应用拓扑图", Resource: "/api/v1/projects/:id/application-topology", Action: "GET", Description: "Get project application topology"},
 		{Name: "项目成员列表", Resource: "/api/v1/projects/:id/members", Action: "GET", Description: "List project members"},
 		{Name: "添加项目成员", Resource: "/api/v1/projects/:id/members", Action: "POST", Description: "Add project member"},
 		{Name: "更新项目成员", Resource: "/api/v1/projects/:id/members/:memberId", Action: "PUT", Description: "Update project member"},
@@ -456,6 +478,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "项目云账号保存", Resource: "/api/v1/projects/:id/cloud-accounts", Action: "POST", Description: "Upsert cloud account"},
 		{Name: "项目云账号更新", Resource: "/api/v1/projects/:id/cloud-accounts/:accountId", Action: "PUT", Description: "Update cloud account"},
 		{Name: "项目云账号同步", Resource: "/api/v1/projects/:id/cloud-accounts/:accountId/sync", Action: "PUT", Description: "Sync cloud account"},
+		{Name: "项目云账号删除", Resource: "/api/v1/projects/:id/cloud-accounts/:accountId", Action: "DELETE", Description: "Delete cloud account"},
 		{Name: "项目服务器导入", Resource: "/api/v1/projects/:id/servers/import", Action: "POST", Description: "Import servers"},
 		{Name: "项目服务器导入模板", Resource: "/api/v1/projects/:id/servers/import-template", Action: "GET", Description: "Servers import template"},
 		{Name: "项目服务器导出", Resource: "/api/v1/projects/:id/servers/export", Action: "GET", Description: "Export servers"},
@@ -468,16 +491,30 @@ func defaultPermissions() []model.Permission {
 		{Name: "项目日志源列表", Resource: "/api/v1/projects/:id/log-sources", Action: "GET", Description: "List log sources"},
 		{Name: "项目日志源保存", Resource: "/api/v1/projects/:id/log-sources", Action: "POST", Description: "Upsert log source"},
 		{Name: "删除项目日志源", Resource: "/api/v1/projects/:id/log-sources/:logSourceId", Action: "DELETE", Description: "Delete log source"},
-		{Name: "Agent 登记", Resource: "/api/v1/agents/register", Action: "POST", Description: "Register log agent"},
-		{Name: "项目 Agent 列表", Resource: "/api/v1/projects/:id/agents/list", Action: "GET", Description: "List agents"},
-		{Name: "删除项目 Agent", Resource: "/api/v1/projects/:id/agents/:agentId", Action: "DELETE", Description: "Delete project agent registration"},
-		{Name: "项目 Agent 心跳刷新", Resource: "/api/v1/projects/:id/agents/heartbeat-refresh", Action: "POST", Description: "Batch refresh agent heartbeat"},
-		{Name: "项目 Agent 状态", Resource: "/api/v1/projects/:id/agents/status", Action: "GET", Description: "Agent status"},
-		{Name: "项目 Agent 引导", Resource: "/api/v1/projects/:id/agents/bootstrap", Action: "POST", Description: "Agent bootstrap"},
-		{Name: "项目 Agent 轮换令牌", Resource: "/api/v1/projects/:id/agents/rotate-token", Action: "POST", Description: "Rotate agent token"},
-		{Name: "项目 Agent 发现列表", Resource: "/api/v1/projects/:id/agents/discovery", Action: "GET", Description: "Agent discovery list"},
-		{Name: "项目日志流", Resource: "/api/v1/projects/:id/logs/stream", Action: "GET", Description: "Stream project logs"},
-		{Name: "项目日志导出", Resource: "/api/v1/projects/:id/logs/export", Action: "GET", Description: "Export project logs"},
+		{Name: "项目日志检索", Resource: "/api/v1/projects/:id/logs/search", Action: "GET", Description: "Search project logs from Elasticsearch"},
+		{Name: "项目日志导出", Resource: "/api/v1/projects/:id/logs/export", Action: "GET", Description: "Export project logs from Elasticsearch"},
+		{Name: "日志保留策略查询", Resource: "/api/v1/log-platform/retention", Action: "GET", Description: "Get global log retention policy"},
+		{Name: "日志保留策略保存", Resource: "/api/v1/log-platform/retention", Action: "PUT", Description: "Upsert global log retention policy"},
+		{Name: "日志保留策略列表", Resource: "/api/v1/log-platform/retention/list", Action: "GET", Description: "List log retention policies"},
+		{Name: "ES 存储概览", Resource: "/api/v1/log-platform/es-storage", Action: "GET", Description: "Elasticsearch storage stats"},
+		{Name: "Kafka 队列观测", Resource: "/api/v1/log-platform/kafka-stats", Action: "GET", Description: "Kafka lag and consumer stats"},
+		{Name: "Kafka 配置预览", Resource: "/api/v1/log-platform/kafka-config", Action: "GET", Description: "Preview kafka config from dict"},
+		{Name: "日志保留手动清理", Resource: "/api/v1/log-platform/retention/cleanup", Action: "POST", Description: "Run log retention cleanup"},
+		{Name: "项目日志保留查询", Resource: "/api/v1/projects/:id/log-retention", Action: "GET", Description: "Get project log retention policy"},
+		{Name: "项目日志保留保存", Resource: "/api/v1/projects/:id/log-retention", Action: "PUT", Description: "Upsert project log retention policy"},
+		{Name: "Loggie 心跳上报", Resource: "/api/v1/loggie/heartbeat/report", Action: "POST", Description: "Loggie agent heartbeat"},
+		{Name: "Loggie 引导", Resource: "/api/v1/projects/:id/loggie/bootstrap", Action: "POST", Description: "Bootstrap loggie agent token"},
+		{Name: "Loggie 状态列表", Resource: "/api/v1/projects/:id/loggie/status", Action: "GET", Description: "List loggie status by server"},
+		{Name: "Loggie 引导日志源预览", Resource: "/api/v1/projects/:id/loggie/bootstrap-sources", Action: "GET", Description: "Preview log sources for loggie bootstrap"},
+		{Name: "Loggie 配置下发", Resource: "/api/v1/projects/:id/loggie/deploy", Action: "POST", Description: "Deploy loggie pipeline over SSH"},
+		{Name: "Loggie 安装", Resource: "/api/v1/projects/:id/loggie/install", Action: "POST", Description: "Install loggie agent over SSH"},
+		{Name: "Loggie 卸载", Resource: "/api/v1/projects/:id/loggie/uninstall", Action: "POST", Description: "Uninstall loggie agent and clear registration"},
+		{Name: "Loggie 启动", Resource: "/api/v1/projects/:id/loggie/start", Action: "POST", Description: "Start loggie service over SSH"},
+		{Name: "Loggie 停止", Resource: "/api/v1/projects/:id/loggie/stop", Action: "POST", Description: "Stop loggie service over SSH"},
+		{Name: "Loggie 重启", Resource: "/api/v1/projects/:id/loggie/restart", Action: "POST", Description: "Restart loggie service over SSH"},
+		{Name: "Loggie 同步下发", Resource: "/api/v1/projects/:id/loggie/sync", Action: "POST", Description: "Sync pipelines from log sources and deploy"},
+		{Name: "Loggie 配置下载", Resource: "/api/v1/projects/:id/loggie/pipeline/download", Action: "GET", Description: "Download loggie pipeline bundle"},
+		{Name: "ES 配置预览", Resource: "/api/v1/log-platform/es-config", Action: "GET", Description: "Preview elasticsearch config from dict"},
 		{Name: "项目服务器终端 WS", Resource: "/api/v1/projects/:id/servers/:serverId/terminal/ws", Action: "GET", Description: "Server terminal websocket"},
 
 		{Name: "MySQL备份实例列表", Resource: "/api/v1/projects/:id/mysql-backup/instances", Action: "GET", Description: "List MySQL backup instances"},
@@ -491,6 +528,53 @@ func defaultPermissions() []model.Permission {
 		{Name: "MySQL备份任务停止", Resource: "/api/v1/projects/:id/mysql-backup/jobs/:jobId/stop", Action: "POST", Description: "Stop running MySQL backup job"},
 		{Name: "MySQL备份任务删除", Resource: "/api/v1/projects/:id/mysql-backup/jobs/:jobId", Action: "DELETE", Description: "Delete MySQL backup job record"},
 		{Name: "MySQL备份预签名下载", Resource: "/api/v1/projects/:id/mysql-backup/jobs/:jobId/presign", Action: "GET", Description: "Presign MySQL backup download URL"},
+		{Name: "MySQL备份Dump选项", Resource: "/api/v1/projects/:id/mysql-backup/mysqldump-options", Action: "GET", Description: "List mysqldump backup options"},
+
+		{Name: "数据库实例列表", Resource: "/api/v1/projects/:id/dbmgmt/instances", Action: "GET", Description: "List DB instances"},
+		{Name: "数据库实例创建", Resource: "/api/v1/projects/:id/dbmgmt/instances", Action: "POST", Description: "Create DB instance"},
+		{Name: "数据库实例详情", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId", Action: "GET", Description: "Get DB instance"},
+		{Name: "数据库实例更新", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId", Action: "PUT", Description: "Update DB instance"},
+		{Name: "数据库实例删除", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId", Action: "DELETE", Description: "Delete DB instance"},
+		{Name: "数据库实例探活", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/ping", Action: "POST", Description: "Ping DB instance"},
+		{Name: "数据库元数据库列表", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/metadata/databases", Action: "GET", Description: "List databases"},
+		{Name: "数据库元数据表列表", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/metadata/tables", Action: "GET", Description: "List tables"},
+		{Name: "数据库元数据列列表", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/metadata/columns", Action: "GET", Description: "List columns"},
+		{Name: "数据库只读查询", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/query", Action: "POST", Description: "Execute read-only SQL"},
+		{Name: "数据库写操作", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/execute", Action: "POST", Description: "Execute SQL with approval"},
+		{Name: "数据库SQL导入", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/import", Action: "POST", Description: "Import SQL file"},
+		{Name: "数据库授权列表", Resource: "/api/v1/projects/:id/dbmgmt/grants", Action: "GET", Description: "List DB grants"},
+		{Name: "数据库授权创建", Resource: "/api/v1/projects/:id/dbmgmt/grants", Action: "POST", Description: "Create DB grant"},
+		{Name: "数据库授权删除", Resource: "/api/v1/projects/:id/dbmgmt/grants/:grantId", Action: "DELETE", Description: "Delete DB grant"},
+		{Name: "数据库授权更新", Resource: "/api/v1/projects/:id/dbmgmt/grants/:grantId", Action: "PUT", Description: "Update DB grant"},
+		{Name: "数据库SQL预检", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/check", Action: "POST", Description: "Check SQL via goInception"},
+		{Name: "数据库工单详情", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId", Action: "GET", Description: "Get DB SQL ticket detail"},
+		{Name: "数据库工单审批步骤", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/steps", Action: "GET", Description: "List DB ticket approval steps"},
+		{Name: "数据库工单回滚SQL", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/rollback", Action: "GET", Description: "Get DB ticket rollback SQL"},
+		{Name: "数据库工单回滚预览", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/rollback/preview", Action: "GET", Description: "Preview DB rollback ticket"},
+		{Name: "数据库工单回滚提交", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/rollback/submit", Action: "POST", Description: "Submit DB rollback ticket"},
+		{Name: "数据库工单OSC列表", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/osc", Action: "GET", Description: "List DB ticket OSC jobs"},
+		{Name: "数据库工单OSC进度", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/osc/:sqlsha1", Action: "GET", Description: "Get DB ticket OSC percent"},
+		{Name: "数据库工单OSC控制", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/osc/:sqlsha1/control", Action: "POST", Description: "Control DB ticket OSC job"},
+		{Name: "数据库有效权限", Resource: "/api/v1/projects/:id/dbmgmt/grants/effective", Action: "GET", Description: "Get effective DB permission"},
+		{Name: "数据库审批流查询", Resource: "/api/v1/projects/:id/dbmgmt/approval-flow", Action: "GET", Description: "Get DB approval flow"},
+		{Name: "数据库审批流保存", Resource: "/api/v1/projects/:id/dbmgmt/approval-flow", Action: "PUT", Description: "Upsert DB approval flow"},
+		{Name: "数据库权限申请列表", Resource: "/api/v1/projects/:id/dbmgmt/access-requests", Action: "GET", Description: "List DB access requests"},
+		{Name: "数据库权限申请创建", Resource: "/api/v1/projects/:id/dbmgmt/access-requests", Action: "POST", Description: "Create DB access request"},
+		{Name: "数据库权限申请通过", Resource: "/api/v1/projects/:id/dbmgmt/access-requests/:requestId/approve", Action: "POST", Description: "Approve DB access request"},
+		{Name: "数据库权限申请拒绝", Resource: "/api/v1/projects/:id/dbmgmt/access-requests/:requestId/reject", Action: "POST", Description: "Reject DB access request"},
+		{Name: "应用用户权限申请列表", Resource: "/api/v1/projects/:id/dbmgmt/app-user-requests", Action: "GET", Description: "List DB app user requests"},
+		{Name: "应用用户权限申请创建", Resource: "/api/v1/projects/:id/dbmgmt/app-user-requests", Action: "POST", Description: "Create DB app user request"},
+		{Name: "应用用户权限申请通过", Resource: "/api/v1/projects/:id/dbmgmt/app-user-requests/:requestId/approve", Action: "POST", Description: "Approve DB app user request"},
+		{Name: "应用用户权限申请拒绝", Resource: "/api/v1/projects/:id/dbmgmt/app-user-requests/:requestId/reject", Action: "POST", Description: "Reject DB app user request"},
+		{Name: "实例 MySQL 用户列表", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/mysql-users", Action: "GET", Description: "List MySQL users on instance"},
+		{Name: "实例 MySQL 用户权限查询", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/mysql-user-privileges", Action: "GET", Description: "Get MySQL user privileges for apply form"},
+		{Name: "实例账号密码查看", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/accounts/:accountId/password", Action: "GET", Description: "Reveal platform-managed account password"},
+		{Name: "数据库工单列表", Resource: "/api/v1/projects/:id/dbmgmt/tickets", Action: "GET", Description: "List DB SQL tickets"},
+		{Name: "数据库工单审批通过", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/approve", Action: "POST", Description: "Approve DB SQL ticket"},
+		{Name: "数据库工单审批拒绝", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/reject", Action: "POST", Description: "Reject DB SQL ticket"},
+		{Name: "数据库工单执行", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/execute", Action: "POST", Description: "Execute approved DB SQL ticket"},
+		{Name: "数据库执行历史", Resource: "/api/v1/projects/:id/dbmgmt/executions", Action: "GET", Description: "List DB SQL executions"},
+		{Name: "数据库审计日志", Resource: "/api/v1/projects/:id/dbmgmt/audit-logs", Action: "GET", Description: "List DB audit logs"},
 
 		{Name: "CI/CD 应用服务列表", Resource: "/api/v1/projects/:id/cicd/services", Action: "GET", Description: "List CI/CD services"},
 		{Name: "CI/CD 创建应用服务", Resource: "/api/v1/projects/:id/cicd/services", Action: "POST", Description: "Create CI/CD service"},
@@ -540,6 +624,9 @@ func defaultPermissions() []model.Permission {
 	}
 }
 
-func seedMenus(ctx context.Context, db *gorm.DB) error {
-	return menu.Sync(ctx, db)
+func seedMenus(ctx context.Context, db *gorm.DB, cfg *config.PluginsConfig) error {
+	if err := menu.Sync(ctx, db); err != nil {
+		return err
+	}
+	return plugin.SyncMenuVisibility(ctx, db, cfg)
 }

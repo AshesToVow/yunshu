@@ -1,25 +1,30 @@
 # 需求说明：日志平台与 Agent
 
+> **演进说明（2026-07）**：原「自研 gRPC log-agent」方案已废弃。现行方案为 **Loggie 二进制 Agent + Elasticsearch**。  
+> **标准模块开发需求请以 [modules/M-04-log-platform.md](./modules/M-04-log-platform.md) 为准。**
+
 ## 1. 目标
 
-在服务器上部署 **log-agent** 二进制，通过 **gRPC** 向平台上报日志批次；平台侧维护 Agent 注册、心跳、项目维度日志检索与导出。
+在项目服务器上部署 **Loggie**，采集日志写入 ES；Yunshu 提供服务/日志源配置、Agent 生命周期、检索导出与保留策略。
 
 ## 2. 子功能
 
 | 子功能 | 说明 |
 |--------|------|
-| Agent 注册 | `register-secret` 或长期 token |
-| 心跳 / 状态 | 项目下批量刷新 |
-| 运行时配置拉取 | `enable-runtime-pull` |
-| 发现扫描 | `agent_discovery` 上报 |
-| 日志 | HTTP 流式/导出，与 `log_sources` 绑定 |
+| 服务与日志源 | 同页 Tab；绑定服务器路径 |
+| Agent 引导/安装 | Token + pipeline；离线包 `deploy/loggie/binary/loggie` |
+| 心跳 | `POST /api/v1/loggie/heartbeat/report` + systemd timer |
+| 检索/导出 | ES `yunshu-agent-*` |
+| 保留与 ES 统计 | 日索引清理；全量索引列表 |
 
 ## 3. 注意事项
 
-- gRPC 地址 `grpc.target_addr` / `listen_addr` 需与 Agent `-grpc-server` 一致。
-- Agent 默认**出站连接**，`listen-port=0` 表示本机不监听服务端口。
-- 平台 HTTP `8080` 与 gRPC `18080` 防火墙需分别放行。
+- `yunshu_url` 填**后端**地址。  
+- 热更/重启须同步心跳 timer。  
+- 官方/离线包架构需与目标机 `uname -m` 一致。
 
 ## 4. 相关文档
 
-`docs/log-platform-api.md`、部署手册中的 Agent 章节。
+- [M-04-log-platform.md](./modules/M-04-log-platform.md)
+- [docs/log-platform-es.md](../../log-platform-es.md)
+- [deploy/loggie/binary/README.md](../../../deploy/loggie/binary/README.md)

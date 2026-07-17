@@ -7,38 +7,216 @@
 package router
 
 import (
-	"gorm.io/gorm"
 	"yunshu/internal/bootstrap"
-	"yunshu/internal/grpc/client"
+	"yunshu/internal/service/alert"
+	"yunshu/internal/service/k8s"
+	"yunshu/internal/service/k8s/eventforward"
+	"yunshu/internal/service/overview"
+	"yunshu/internal/service/project"
+	"yunshu/internal/service/system"
+)
+
+import (
+	_ "yunshu/internal/plugins/all"
 )
 
 // Injectors from wire.go:
 
 // InitializeRouteDeps is the Wire entry for HTTP route dependencies.
-func InitializeRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient) (*RouteDeps, error) {
+func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	db := provideDB(app)
-	routerRouteRepositories := provideRouteRepositories(db)
-	routerRouteServices, err := provideRouteServices(app, routerRouteRepositories)
+	routerRouteRepositories := newRouteRepositories(db)
+	v := routerRouteRepositories.LoginLog
+	v2 := system.NewLoginLogService(v)
+	v3 := routerRouteRepositories.OperationLog
+	v4 := system.NewOperationLogService(v3)
+	v5 := routerRouteRepositories.User
+	client := provideRedis(app)
+	authConfig := provideAuthConfig(app)
+	sender := provideMailer(app)
+	routerAppRouteConfig := provideAppRouteConfig(app)
+	appDisplayName := routerAppRouteConfig.AppName
+	v6 := provideAuthService(v5, client, authConfig, sender, appDisplayName)
+	v7 := routerRouteRepositories.Role
+	v8 := routerRouteRepositories.Department
+	syncedEnforcer := provideEnforcer(app)
+	v9 := routerRouteRepositories.ProjectMember
+	v10 := routerRouteRepositories.AlertRuleAssignee
+	v11 := routerRouteRepositories.AlertMonitorRule
+	v12 := routerRouteRepositories.AlertDatasource
+	alertRuleAssigneeService := alert.NewAlertRuleAssigneeService(v10, v11, v12, v5, v9, v8)
+	v13 := system.NewUserService(v5, v7, v8, syncedEnforcer, v9, alertRuleAssigneeService)
+	v14 := system.NewDepartmentService(v8, v5, alertRuleAssigneeService)
+	v15 := system.NewRoleService(v7, syncedEnforcer)
+	v16 := routerRouteRepositories.Permission
+	v17 := system.NewPermissionService(v16, syncedEnforcer)
+	v18 := system.NewPolicyService(v7, v16, syncedEnforcer)
+	v19 := routerRouteRepositories.K8sClusterAccess
+	v20 := routerRouteRepositories.K8sNsDeny
+	v21 := routerRouteRepositories.K8sNsAllow
+	v22 := routerRouteRepositories.UserGroup
+	v23 := routerRouteRepositories.Cluster
+	v24 := k8s.NewK8sScopedPolicyService(v7, v16, v19, v20, v21, v22, v5, v23)
+	v25 := k8s.NewK8sNamespaceDenyService(v20)
+	v26 := k8s.NewK8sNamespaceAllowService(v21)
+	v27 := routerRouteRepositories.Project
+	v28 := system.NewUserGroupService(v22, v5, v9, v27)
+	v29 := routerRouteRepositories.RegRequest
+	v30 := provideRegistrationService(v29, v5, client, authConfig, sender, appDisplayName)
+	v31 := routerRouteRepositories.Menu
+	v32 := system.NewMenuService(v31)
+	v33 := routerRouteRepositories.DictEntry
+	v34 := system.NewDictEntryService(v33)
+	v35 := routerRouteRepositories.AlertSilence
+	v36 := alert.NewAlertSilenceService(v35)
+	v37 := routerRouteRepositories.AlertDuty
+	v38 := alert.NewAlertDutyService(v37, v11, v5)
+	v39 := routerRouteRepositories.AlertReceiverGroup
+	v40 := alert.NewReceiverGroupCache(v39)
+	alertConfig := provideAlertConfig(app)
+	v41 := routerRouteRepositories.AlertMaintenance
+	v42 := alert.NewAlertMaintenanceService(v41)
+	securityEncryptionKey := routerAppRouteConfig.EncryptionKey
+	v43 := routerRouteRepositories.AlertEvent
+	v44 := routerRouteRepositories.AlertChannel
+	v45 := routerRouteRepositories.AlertFiringDelivery
+	v46 := routerRouteRepositories.CloudExpiryRule
+	v47 := routerRouteRepositories.CloudAccount
+	alertStateService := provideAlertStateService(client, v43, alertConfig)
+	v48 := routerRouteRepositories.AlertSubscription
+	v49 := routerRouteRepositories.AlertInhibitionRule
+	v50 := provideAlertServiceOptions(v36, v42, alertRuleAssigneeService, v38, v40, securityEncryptionKey, v43, v44, v11, v12, v27, v45, v46, v47, alertStateService, v48, v49)
+	v51 := provideAlertService(db, client, sender, alertConfig, v50)
+	v52 := alert.NewCloudExpiryRuleService(v46)
+	v53 := alert.NewAlertDatasourceService(v12)
+	v54 := alert.NewAlertMonitorRuleService(v11, v12, client)
+	v55 := k8s.NewK8sRuntimeService(v23)
+	v56 := k8s.NewK8sClusterService(v23, v33, v55, v20, v21, v9)
+	v57 := k8s.NewK8sPodService(v55, v20, v21)
+	v58 := k8s.NewK8sNamespaceService(v55, v20, v21)
+	v59 := k8s.NewK8sNodeService(v55)
+	v60 := k8s.NewK8sWorkloadService(v55)
+	v61 := k8s.NewK8sConfigService(v55)
+	v62 := k8s.NewK8sStorageService(v55)
+	v63 := k8s.NewK8sServiceResourceService(v55)
+	v64 := k8s.NewK8sIngressService(v55, v19)
+	v65 := k8s.NewK8sNetworkPolicyService(v55)
+	v66 := k8s.NewK8sDiscoveryService(v55)
+	v67 := k8s.NewK8sHPAService(v55)
+	cicdConfig := provideCicdConfig(app)
+	v68 := provideK8sHelmService(v55, db, cicdConfig)
+	v69 := k8s.NewK8sEventService(v55, v20, v21)
+	v70 := k8s.NewK8sCRDService(v55)
+	v71 := k8s.NewK8sCRService(v55)
+	v72 := k8s.NewK8sRBACService(v55)
+	v73 := k8s.NewK8sServiceAccountService(v55)
+	v74 := routerRouteRepositories.Overview
+	v75 := providePluginsEnabled(app)
+	v76 := overview.NewOverviewService(v74, v55, client, v9, v19, v75)
+	v77 := routerRouteRepositories.Server
+	v78 := routerRouteRepositories.ServerGroup
+	v79 := routerRouteRepositories.Service
+	v80 := routerRouteRepositories.LogSource
+	v81 := project.NewProjectMgmtService(v27, v77, v78, v79, v80, v9, v5, v8)
+	v82, err := provideCMDBService(v77, v78, v47, securityEncryptionKey)
 	if err != nil {
 		return nil, err
 	}
-	routerRouteDeps, err := provideRouteDeps(app, runtimeClient, routerRouteRepositories, routerRouteServices)
+	service := provideCicdService(db, v77, v27, v22, v5, cicdConfig, sender, appDisplayName, v58)
+	v83 := routerRouteRepositories.MysqlBackup
+	v84, err := provideMysqlBackupService(v83, v77, v27, v5, db, securityEncryptionKey, sender, appDisplayName)
 	if err != nil {
 		return nil, err
 	}
-	return routerRouteDeps, nil
+	v85 := routerRouteRepositories.Dbmgmt
+	dbmgmtConfig := provideDbmgmtConfig(app)
+	dbmgmtService, err := provideDbmgmtService(v85, v77, v27, v22, v5, db, securityEncryptionKey, sender, appDisplayName, dbmgmtConfig)
+	if err != nil {
+		return nil, err
+	}
+	v86 := provideElasticsearchProvider(app)
+	v87 := provideLogSearchService(v86, v77)
+	v88 := routerRouteRepositories.LogRetention
+	v89 := provideLogRetentionService(v86, v88)
+	v90 := provideKafkaProvider(app)
+	v91 := provideKafkaToESService(v90, v86)
+	v92 := routerRouteRepositories.LoggieAgent
+	loggieConfig := provideLoggieConfig(app)
+	v93, err := provideLoggieAgentService(v92, v77, v80, v27, v79, v86, v90, securityEncryptionKey, loggieConfig)
+	if err != nil {
+		return nil, err
+	}
+	v94 := alert.NewAlertReceiverGroupService(v39, v40)
+	v95 := routerRouteRepositories.K8sEventForward
+	v96 := eventforward.NewK8sEventForwardAdminService(v95)
+	v97 := k8s.NewK8sSearchService(v55, v23, v9, v19, v20, v21)
+	routerRouteServices := &routeServices{
+		LoginLog:             v2,
+		OperationLog:         v4,
+		Auth:                 v6,
+		User:                 v13,
+		Department:           v14,
+		Role:                 v15,
+		Permission:           v17,
+		Policy:               v18,
+		K8sScopedPolicy:      v24,
+		K8sNamespaceDeny:     v25,
+		K8sNamespaceAllow:    v26,
+		UserGroup:            v28,
+		Registration:         v30,
+		Menu:                 v32,
+		DictEntry:            v34,
+		AlertSilence:         v36,
+		AlertDuty:            v38,
+		AlertAssignee:        alertRuleAssigneeService,
+		AlertReceiverCache:   v40,
+		Alert:                v51,
+		CloudExpiryRule:      v52,
+		AlertDatasource:      v53,
+		AlertMonitorRule:     v54,
+		K8sRuntime:           v55,
+		K8sCluster:           v56,
+		K8sPod:               v57,
+		K8sNamespace:         v58,
+		K8sNode:              v59,
+		K8sWorkload:          v60,
+		K8sConfig:            v61,
+		K8sStorage:           v62,
+		K8sServiceResource:   v63,
+		K8sIngress:           v64,
+		K8sNetworkPolicy:     v65,
+		K8sDiscovery:         v66,
+		K8sHPA:               v67,
+		K8sHelm:              v68,
+		K8sEvent:             v69,
+		K8sCRD:               v70,
+		K8sCR:                v71,
+		K8sRBAC:              v72,
+		K8sServiceAccount:    v73,
+		Overview:             v76,
+		ProjectMgmt:          v81,
+		CMDB:                 v82,
+		Cicd:                 service,
+		MysqlBackup:          v84,
+		Dbmgmt:               dbmgmtService,
+		LogSearch:            v87,
+		LogRetention:         v89,
+		KafkaToES:            v91,
+		LoggieAgent:          v93,
+		AlertReceiverGroup:   v94,
+		K8sEventForwardAdmin: v96,
+		K8sSearch:            v97,
+		AlertMaintenance:     v42,
+	}
+	routeDeps, err := provideRouteDeps(app, routerRouteRepositories, routerRouteServices)
+	if err != nil {
+		return nil, err
+	}
+	return routeDeps, nil
 }
 
 // wire.go:
 
-func provideDB(app *bootstrap.App) *gorm.DB {
-	return app.DB
-}
-
-func provideRouteRepositories(db *gorm.DB) *routeRepositories {
-	return newRouteRepositories(db)
-}
-
-func provideRouteDeps(app *bootstrap.App, runtimeClient *client.RuntimeClient, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
-	return assembleRouteDeps(app, runtimeClient, repos, svcs)
+func provideRouteDeps(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
+	return assembleRouteDeps(app, repos, svcs)
 }

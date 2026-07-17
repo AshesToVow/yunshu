@@ -15,3 +15,15 @@ func parseUintParam(c *gin.Context, key string) (uint, error) {
 	}
 	return uint(id), nil
 }
+
+func parseUintQuery(c *gin.Context, key string) (uint, error) {
+	raw := c.Query(key)
+	if raw == "" {
+		return 0, constants.ErrBadRequestWithMsg(key + " 必填")
+	}
+	id, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return 0, constants.ErrInvalidRequestParam
+	}
+	return uint(id), nil
+}

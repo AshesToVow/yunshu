@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { getProjects, getProjectServers, getProjectServices, upsertProjectService, deleteProjectService, type ProjectItem, type ServerItem, type ServiceItem } from "../services/projects";
 
-export function ProjectServicesPage() {
+export function ProjectServicesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
@@ -94,18 +94,22 @@ export function ProjectServicesPage() {
     }
   }
 
-  return (
-    <Card
-      title="服务配置"
-      extra={
-        <Space>
-          <Select style={{ width: 260 }} value={projectId} onChange={setProjectId} options={projectOptions} placeholder="选择项目" />
-          <Select style={{ width: 260 }} value={serverId} onChange={setServerId} options={serverOptions} placeholder="选择服务器" allowClear />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增服务</Button>
-        </Space>
-      }
-    >
+  const toolbar = (
+    <Space wrap>
+      <Select style={{ width: 260 }} value={projectId} onChange={setProjectId} options={projectOptions} placeholder="选择项目" />
+      <Select style={{ width: 260 }} value={serverId} onChange={setServerId} options={serverOptions} placeholder="选择服务器" allowClear />
+      <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+        刷新
+      </Button>
+      <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+        新增服务
+      </Button>
+    </Space>
+  );
+
+  const body = (
+    <>
+      {embedded ? <div style={{ marginBottom: 12 }}>{toolbar}</div> : null}
       <Table
         rowKey="id"
         dataSource={list}
@@ -142,6 +146,15 @@ export function ProjectServicesPage() {
           <Form.Item label="状态" name="status" rules={[{ required: true }]}><Select options={serviceStatusOptions} /></Form.Item>
         </Form>
       </Modal>
+    </>
+  );
+
+  if (embedded) {
+    return body;
+  }
+  return (
+    <Card title="服务配置" extra={toolbar}>
+      {body}
     </Card>
   );
 }

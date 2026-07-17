@@ -13,11 +13,13 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/pkg/mysqlbackup"
 	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/sshserver"
 	"yunshu/internal/pkg/sshclient"
 	"yunshu/internal/repository"
@@ -32,8 +34,11 @@ type MysqlBackupService struct {
 	backupRepo   interfaces.MysqlBackupRepository
 	serverRepo   interfaces.ServerRepository
 	projectRepo  interfaces.ProjectRepository
+	userRepo     interfaces.UserRepository
 	db           *gorm.DB
 	aead         cipher.AEAD
+	mailer       mailer.Sender
+	appName      string
 	schedMu      sync.Mutex
 	schedRunning map[uint]bool
 	jobCancels   sync.Map // jobID -> context.CancelFunc
@@ -43,8 +48,11 @@ func NewMysqlBackupService(
 	backupRepo interfaces.MysqlBackupRepository,
 	serverRepo interfaces.ServerRepository,
 	projectRepo interfaces.ProjectRepository,
+	userRepo interfaces.UserRepository,
 	db *gorm.DB,
 	encryptionKey string,
+	emailSender mailer.Sender,
+	appName string,
 ) (*MysqlBackupService, error) {
 	aead, err := cryptox.NewAESGCMFromKeyString(encryptionKey)
 	if err != nil {
@@ -54,8 +62,11 @@ func NewMysqlBackupService(
 		backupRepo:   backupRepo,
 		serverRepo:   serverRepo,
 		projectRepo:  projectRepo,
+		userRepo:     userRepo,
 		db:           db,
 		aead:         aead,
+		mailer:       emailSender,
+		appName:      strings.TrimSpace(appName),
 		schedRunning: make(map[uint]bool),
 	}, nil
 }
@@ -90,6 +101,9 @@ type MysqlBackupInstanceItem struct {
 	ScheduleEnabled    bool     `json:"schedule_enabled"`
 	CronSpec           string   `json:"cron_spec"`
 	LastScheduledAt    string   `json:"last_scheduled_at,omitempty"`
+	NotifyEnabled      bool     `json:"notify_enabled"`
+	NotifyUserIDs      []uint   `json:"notify_user_ids"`
+	NotifyUsers        []MysqlBackupNotifyUserItem `json:"notify_users,omitempty"`
 	CreatedAt          string   `json:"created_at,omitempty"`
 	UpdatedAt          string   `json:"updated_at,omitempty"`
 }
@@ -122,6 +136,8 @@ type MysqlBackupInstanceUpsertRequest struct {
 	InnobackupexBin    string   `json:"innobackupex_bin"`
 	ScheduleEnabled    *bool    `json:"schedule_enabled"`
 	CronSpec           string   `json:"cron_spec"`
+	NotifyEnabled      *bool    `json:"notify_enabled"`
+	NotifyUserIDs      []uint   `json:"notify_user_ids"`
 }
 
 type MysqlBackupInstanceListQuery struct {
@@ -152,7 +168,7 @@ func (s *MysqlBackupService) ListInstances(ctx context.Context, q MysqlBackupIns
 	return &pagination.Result[MysqlBackupInstanceItem]{List: out, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
-func (s *MysqlBackupService) UpsertInstance(ctx context.Context, id uint, req MysqlBackupInstanceUpsertRequest) (*MysqlBackupInstanceItem, error) {
+func (s *MysqlBackupService) UpsertInstance(ctx context.Context, id uint, req MysqlBackupInstanceUpsertRequest, actor *auth.CurrentUser) (*MysqlBackupInstanceItem, error) {
 	if err := s.ensureServerInProject(ctx, req.ProjectID, req.ServerID); err != nil {
 		return nil, err
 	}
@@ -289,6 +305,26 @@ func (s *MysqlBackupService) UpsertInstance(ctx context.Context, id uint, req My
 		return nil, constants.ErrBadRequestWithMsg("启用定时备份时必须填写 cron_spec（Cron 表达式）")
 	}
 
+	if req.NotifyEnabled != nil {
+		inst.NotifyEnabled = *req.NotifyEnabled
+	} else if id == 0 {
+		inst.NotifyEnabled = true
+	}
+	if req.NotifyUserIDs != nil {
+		ids := dedupeNotifyUserIDs(req.NotifyUserIDs)
+		if inst.NotifyEnabled && len(ids) == 0 {
+			return nil, constants.ErrBadRequestWithMsg("开启备份通知时须至少指定一名接收用户")
+		}
+		inst.NotifyUserIDs = marshalNotifyUserIDs(ids)
+	} else if id == 0 {
+		if actor != nil && actor.ID > 0 {
+			inst.NotifyUserIDs = marshalNotifyUserIDs([]uint{actor.ID})
+		} else {
+			inst.NotifyUserIDs = "[]"
+			inst.NotifyEnabled = false
+		}
+	}
+
 	if pw := strings.TrimSpace(req.MysqlPassword); pw != "" {
 		enc, err := cryptox.EncryptString(s.aead, pw)
 		if err != nil {
@@ -327,16 +363,28 @@ func (s *MysqlBackupService) PingInstance(ctx context.Context, projectID, instan
 	if err != nil {
 		return false, "", err
 	}
-	if err := mysqlbackup.Ping(ctx, inst.MysqlHost, inst.MysqlPort, inst.MysqlUser, pw, inst.MysqlSocket); err != nil {
-		if strings.TrimSpace(inst.MysqlSocket) != "" {
-			return false, fmt.Sprintf("mysqlping,socket=%s status=0i", inst.MysqlSocket), nil
+	sshCli, _, err := s.dialServer(ctx, inst.ServerID)
+	if err != nil {
+		return false, "", err
+	}
+	defer sshCli.Close()
+	script := mysqlbackup.BuildMysqlPingRemoteScript(
+		inst.MysqlSocket, inst.MysqlHost, inst.MysqlPort, inst.MysqlUser, pw, inst.MysqldumpBin, shellQuote,
+	)
+	res, err := sshCli.Exec(ctx, script, 4096)
+	out := strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+	if err != nil || !strings.Contains(out, "status=1i") {
+		if out == "" {
+			connectLog := mysqlbackup.FormatMysqldumpConnectLog(inst.MysqlSocket, inst.MysqlHost, inst.MysqlPort, inst.MysqlUser)
+			if err != nil {
+				out = fmt.Sprintf("mysqlping,%s status=0i error=%s", connectLog, err.Error())
+			} else {
+				out = fmt.Sprintf("mysqlping,%s status=0i", connectLog)
+			}
 		}
-		return false, fmt.Sprintf("mysqlping,host=%s,port=%d status=0i", inst.MysqlHost, inst.MysqlPort), nil
+		return false, out, nil
 	}
-	if strings.TrimSpace(inst.MysqlSocket) != "" {
-		return true, fmt.Sprintf("mysqlping,socket=%s status=1i", inst.MysqlSocket), nil
-	}
-	return true, fmt.Sprintf("mysqlping,host=%s,port=%d status=1i", inst.MysqlHost, inst.MysqlPort), nil
+	return true, out, nil
 }
 
 func (s *MysqlBackupService) findLatestBackupArtifact(ctx context.Context, inst *model.MysqlBackupInstance) (*mysqlbackup.BackupArtifact, error) {
@@ -392,7 +440,7 @@ func (s *MysqlBackupService) RunBackup(ctx context.Context, projectID, instanceI
 func (s *MysqlBackupService) enqueueBackup(ctx context.Context, projectID, instanceID uint, trigger string) (*model.MysqlBackupJob, error) {
 	n, _ := s.backupRepo.FailStaleRunningJobs(ctx, 2*time.Hour)
 	if n > 0 {
-		mysqlBackupLog().Warnw("Marked stale MySQL backup jobs as failed", "count", n)
+		mysqlBackupLog().Warn("Marked stale MySQL backup jobs as failed", "count", n)
 	}
 	inst, _, err := s.loadInstanceSecrets(ctx, projectID, instanceID)
 	if err != nil {
@@ -449,6 +497,9 @@ func (s *MysqlBackupService) runBackupJobAsync(jobID, projectID, instanceID uint
 
 func (s *MysqlBackupService) finishBackupJob(ctx context.Context, jobID, projectID, instanceID uint, trigger string) {
 	started := time.Now()
+	defer func() {
+		s.tryNotifyBackupJobEmail(context.Background(), jobID, projectID, instanceID, trigger, time.Since(started))
+	}()
 	job, err := s.backupRepo.GetJob(ctx, jobID)
 	if err != nil {
 		return
@@ -505,7 +556,7 @@ func (s *MysqlBackupService) logBackupJobBegin(jobID uint, inst *model.MysqlBack
 	if inst == nil {
 		return
 	}
-	mysqlBackupLog().Infow("Started MySQL backup job",
+	mysqlBackupLog().Info("Started MySQL backup job",
 		"job_id", jobID,
 		"instance_id", inst.ID,
 		"project_id", inst.ProjectID,
@@ -529,15 +580,15 @@ func (s *MysqlBackupService) logBackupJobDone(jobID, instanceID uint, instanceNa
 	}
 	attrs = append(attrs, extra...)
 	if runErr != nil {
-		mysqlBackupLog().Errorw(runErr, "Failed to finish MySQL backup job", attrs...)
+		mysqlBackupLog().Error("Failed to finish MySQL backup job", append(attrs, "error", runErr)...)
 		return
 	}
-	mysqlBackupLog().Infow("Finished MySQL backup job", attrs...)
+	mysqlBackupLog().Info("Finished MySQL backup job", attrs...)
 }
 
 func (s *MysqlBackupService) logBackupPhase(jobID uint, phase string, attrs ...any) {
 	base := []any{"job_id", jobID, "phase", phase}
-	mysqlBackupLog().Infow("MySQL backup job phase", append(base, attrs...)...)
+	mysqlBackupLog().Info("MySQL backup job phase", append(base, attrs...)...)
 }
 
 func validateMysqlBackupScope(scope, dbName, tableName, databaseNames string) error {
@@ -819,7 +870,7 @@ func (s *MysqlBackupService) StopJob(ctx context.Context, projectID, jobID uint)
 	job.Status = "cancelled"
 	job.ErrorMessage = msg
 	job.FinishedAt = &now
-	mysqlBackupLog().Infow("MySQL backup job stopped by user", "job_id", jobID, "instance_id", job.InstanceID)
+	mysqlBackupLog().Info("MySQL backup job stopped by user", "job_id", jobID, "instance_id", job.InstanceID)
 	return job, nil
 }
 
@@ -923,7 +974,7 @@ func (s *MysqlBackupService) startPollBackupJobLog(ctx context.Context, jobID ui
 
 func (s *MysqlBackupService) decryptInstancePassword(inst *model.MysqlBackupInstance) (string, error) {
 	if inst == nil || inst.EncPassword == "" {
-		return "", constants.ErrBadRequestWithMsg("未配置 MySQL 密码，无法执行 mysqldump 回退")
+		return "", constants.ErrBadRequestWithMsg("未配置 MySQL 密码，无法执行备份")
 	}
 	return cryptox.DecryptString(s.aead, inst.EncPassword)
 }
@@ -976,7 +1027,11 @@ func (s *MysqlBackupService) toInstanceItem(ctx context.Context, inst model.Mysq
 		MysqldumpExtraArgs: inst.MysqldumpExtraArgs, MysqldumpBin: inst.MysqldumpBin,
 		XtrabackupTool: inst.XtrabackupTool, XtrabackupBin: inst.XtrabackupBin, InnobackupexBin: inst.InnobackupexBin,
 		ScheduleEnabled: inst.ScheduleEnabled, CronSpec: inst.CronSpec,
+		NotifyEnabled: inst.NotifyEnabled,
 	}
+	notifyIDs := parseNotifyUserIDs(inst.NotifyUserIDs)
+	item.NotifyUserIDs = notifyIDs
+	item.NotifyUsers = s.resolveNotifyUserBriefs(ctx, notifyIDs)
 	item.MysqldumpOptions = parseMysqldumpOptionsForAPI(inst.MysqldumpOptions)
 	if inst.LastScheduledAt != nil && !inst.LastScheduledAt.IsZero() {
 		item.LastScheduledAt = inst.LastScheduledAt.Format(time.RFC3339)

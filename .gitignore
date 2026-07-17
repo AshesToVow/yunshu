@@ -11,7 +11,7 @@
 *.test
 *.out
 *.tar
-
+.agent/
 # Project-specific binaries
 log-agent-linux-amd64
 
@@ -23,6 +23,11 @@ web/dist/
 web/node_modules/
 web/tsconfig.*.tsbuildinfo
 .cursor/
+.impeccable/
 
-./jenkinsfile-new/
-./jenkinslib/
+jenkinsfile-new/
+jenkinslib/
+
+# Database full dumps (local only, exceed GitHub size limit)
+configs/yunshu.full.sql
+configs/yunshu.full.sql.*

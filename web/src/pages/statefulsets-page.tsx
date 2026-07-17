@@ -189,6 +189,7 @@ export function StatefulsetsPage() {
       <YamlCrudPage<WorkloadItem, WorkloadDetail>
         title="StatefulSet 控制器管理"
         needNamespace
+        watchResource="statefulsets"
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

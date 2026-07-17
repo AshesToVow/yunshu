@@ -14,10 +14,35 @@ declare module "axios" {
   }
 }
 
+export const HTTP_TIMEOUT_DEFAULT = 30000;
+/** K8s 列表/详情会聚合 metrics、全集群 Pod 等，后端耗时常超过 15s */
+export const HTTP_TIMEOUT_K8S = 60000;
+/** Loggie Agent 安装含二进制下载/上传，可能较慢 */
+export const HTTP_TIMEOUT_LOGGIE_INSTALL = 300000;
+
 export const http = axios.create({
   baseURL: "/api/v1",
-  timeout: 15000,
+  timeout: HTTP_TIMEOUT_DEFAULT,
 });
+
+/** 与 K8s API 代理相关的慢路径（自动延长 axios 超时） */
+const K8S_SLOW_PATH =
+  /^\/(pods|nodes|namespaces|configmaps|secrets|deployments|statefulsets|daemonsets|jobs|cronjobs|events|ingresses|k8s-services|network-policies|horizontal-pod-autoscalers|persistentvolumeclaims|persistentvolumes|storageclasses|crds|serviceaccounts|helm|rbac|crs|k8s)(\/|$)/;
+
+const CLUSTER_SLOW_PATH = /\/clusters\/\d+\/(namespaces|status|component-statuses|api-resources)/;
+const LOGGIE_INSTALL_PATH = /\/projects\/\d+\/loggie\/install/;
+
+function resolveRequestTimeout(url: string, configured?: number): number | undefined {
+  const path = url.split("?")[0] ?? url;
+  // 路径慢请求优先于 axios 默认 timeout
+  if (LOGGIE_INSTALL_PATH.test(path)) {
+    return HTTP_TIMEOUT_LOGGIE_INSTALL;
+  }
+  if (K8S_SLOW_PATH.test(path) || CLUSTER_SLOW_PATH.test(path)) {
+    return HTTP_TIMEOUT_K8S;
+  }
+  return configured;
+}
 
 function toastOnce(key: string, content: string) {
   message.error({ content, key });
@@ -40,6 +65,11 @@ http.interceptors.request.use((config) => {
   if (!config.headers["X-Request-ID"]) {
     config.headers["X-Request-ID"] = nextRequestId();
   }
+  const url = String(config.url ?? "");
+  const resolvedTimeout = resolveRequestTimeout(url, config.timeout);
+  if (resolvedTimeout != null) {
+    config.timeout = resolvedTimeout;
+  }
   return config;
 });
 
@@ -49,7 +79,11 @@ http.interceptors.response.use(
     const status = error.response?.status;
     const rawData = error.response?.data as { message?: string; error_code?: string } | undefined;
     const resolved = resolveApiErrorDisplayMessage(rawData?.error_code, rawData?.message);
-    const errorMessage = resolved || error.message || "请求失败";
+    const isTimeout =
+      error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
+    const errorMessage = isTimeout
+      ? "请求超时：Agent 安装较慢，请确认离线包 deploy/loggie/binary/loggie 存在且目标机 SSH 可达后重试"
+      : resolved || error.message || "请求失败";
     const silentErrorToast = Boolean(error.config?.silentErrorToast);
 
     if (silentErrorToast) {
@@ -72,6 +106,8 @@ http.interceptors.response.use(
     } else if (status === 403) {
       // 统一 403 提示：用固定 key，避免与页面内提示重复弹出
       toastOnce("forbidden", typeof errorMessage === "string" ? errorMessage : "无访问权限");
+    } else if (isTimeout) {
+      toastOnce("http-timeout", errorMessage);
     } else {
       // 用于“同名探测/存在性检查”场景：先调用 detail 接口判断是否存在，
       // 若不存在会返回类似“xxx 不存在”的业务错误，但不应该弹 toast 干扰用户操作。

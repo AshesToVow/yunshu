@@ -2,9 +2,11 @@ package cicd
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
+	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/jenkins"
@@ -12,8 +14,14 @@ import (
 
 var (
 	packagePathFullRe = regexp.MustCompile(`(?i)([\w-]+-artifacts)/([\w./-]+\.(?:tar\.gz|jar|bin))`)
-	artifactFileRe    = regexp.MustCompile(`(?i)([\w-]+-\d{8}_\d{6}-[\w]+\.(?:tar\.gz|jar|bin))`)
+	artifactFileRe    = regexp.MustCompile(`(?i)([\w.-]+-\d{8}_\d{6}-[\w]+\.(?:tar\.gz|jar|bin))`)
+	deployInfoJarRe   = regexp.MustCompile(`(?i)JAR:\s*([\w.-]+-\d{8}_\d{6}-[\w]+\.(?:tar\.gz|jar|bin))`)
+	helmPushOCIRe     = regexp.MustCompile(`(?i)helm\s+push\s+\S+\s+(oci://[^\s'"]+)`)
+	helmChartRepoRe   = regexp.MustCompile(`(?i)https?://[^\s'"]+/chartrepo/[^\s'"]+`)
+	helmChartTgzRe    = regexp.MustCompile(`(?i)([\w.-]+)-(\d+(?:\.\d+)*)\.tgz`)
 	imageAddressRe    = regexp.MustCompile(`(?i)((?:[\w.-]+\.)*[\w.-]+/[\w.-]+/[\w.-]+:[\w._-]+)`)
+	imageTaggedRe     = regexp.MustCompile(`(?i)Successfully tagged (\S+)`)
+	imagePushRepoRe   = regexp.MustCompile(`(?i)The push refers to repository \[([^\]]+)\]`)
 )
 
 // JenkinsSyncResult Jenkins Job 创建/更新结果。
@@ -66,8 +74,144 @@ func (s *Service) syncJenkinsJob(ctx context.Context, svc *model.CicdService, ci
 	return result, nil
 }
 
-// extractPackagePathFromConsole 从 Jenkins Console 解析 MinIO 制品路径（bucket/job/file）。
-func extractPackagePathFromConsole(log, jobName, bucket string) string {
+// resolveJenkinsJobName Jenkins Job 名：优先 jenkins_job，否则用服务标识符。
+func resolveJenkinsJobName(svc *model.CicdService) string {
+	if svc == nil {
+		return ""
+	}
+	if v := strings.TrimSpace(svc.JenkinsJob); v != "" {
+		return v
+	}
+	return strings.TrimSpace(svc.Identifier)
+}
+
+func minioFolderHints(svc *model.CicdService, ci *model.CicdCiConfig) []string {
+	seen := make(map[string]struct{})
+	var hints []string
+	add := func(v string) {
+		v = strings.Trim(strings.TrimSpace(v), "/")
+		if v == "" {
+			return
+		}
+		if _, ok := seen[v]; ok {
+			return
+		}
+		seen[v] = struct{}{}
+		hints = append(hints, v)
+	}
+	add(resolveJenkinsJobName(svc))
+	if ci != nil {
+		add(ci.ProjectName)
+	}
+	if svc != nil {
+		add(svc.Identifier)
+	}
+	return hints
+}
+
+func helmChartNameHints(svc *model.CicdService, ci *model.CicdCiConfig, dc *model.CicdDeployConfig) []string {
+	seen := make(map[string]struct{})
+	var hints []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		key := strings.ToLower(v)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		hints = append(hints, v)
+	}
+	if dc != nil {
+		add(dc.ImageName)
+	}
+	if ci != nil {
+		add(ci.ProjectName)
+	}
+	if svc != nil {
+		add(svc.Identifier)
+		add(svc.Name)
+	}
+	return hints
+}
+
+func harborOCIChartRef(harbor config.HarborConfig, chartName string) string {
+	host := strings.TrimSpace(harbor.URL)
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimSuffix(host, "/")
+	project := strings.TrimSpace(harbor.ProjectGroup)
+	chartName = strings.TrimSpace(chartName)
+	if host == "" || project == "" || chartName == "" {
+		return ""
+	}
+	return fmt.Sprintf("oci://%s/%s/%s", host, project, chartName)
+}
+
+// extractHelmChartRefFromConsole 从 Jenkins Console 解析 Harbor Helm Chart（OCI 或 chartrepo）。
+func extractHelmChartRefFromConsole(log string, harbor config.HarborConfig, chartHints ...string) string {
+	log = strings.TrimSpace(log)
+	if log == "" {
+		return ""
+	}
+	if m := helmPushOCIRe.FindStringSubmatch(log); len(m) >= 2 {
+		return strings.TrimSpace(m[1])
+	}
+	if m := helmChartRepoRe.FindStringSubmatch(log); len(m) > 0 {
+		return strings.TrimSpace(m[0])
+	}
+	for _, hint := range chartHints {
+		hint = strings.TrimSpace(hint)
+		if hint == "" {
+			continue
+		}
+		for _, m := range helmChartTgzRe.FindAllStringSubmatch(log, -1) {
+			if len(m) < 3 {
+				continue
+			}
+			if !strings.EqualFold(m[1], hint) {
+				continue
+			}
+			base := harborOCIChartRef(harbor, hint)
+			if base == "" {
+				continue
+			}
+			return base + ":" + m[2]
+		}
+	}
+	return ""
+}
+
+type resolvedBuildArtifacts struct {
+	PackagePath  string
+	ImageAddress string
+}
+
+func (s *Service) resolveBuildArtifactsFromLog(ctx context.Context, svc model.CicdService, ci model.CicdCiConfig, logText string) resolvedBuildArtifacts {
+	cfg := s.resolvedConfig(ctx)
+	usesK8s := s.serviceUsesK8sPipeline(ctx, &svc)
+	dc := s.primaryContainerDeployConfig(ctx, svc.ID)
+	folderHints := minioFolderHints(&svc, &ci)
+	bucket := dictconfig.MinIOBucketForService(cfg, svc.ServiceType)
+
+	out := resolvedBuildArtifacts{}
+	if bucket != "" {
+		out.PackagePath = extractPackagePathFromConsole(logText, bucket, folderHints...)
+	}
+	if usesK8s {
+		hint := s.buildImageNameHint(ctx, svc)
+		out.ImageAddress = extractImageAddressFromConsole(logText, hint)
+		if out.PackagePath == "" {
+			out.PackagePath = extractHelmChartRefFromConsole(logText, cfg.Harbor, helmChartNameHints(&svc, &ci, dc)...)
+		}
+	}
+	return out
+}
+
+// extractPackagePathFromConsole 从 Jenkins Console 解析 MinIO 制品路径（bucket/folder/file）。
+func extractPackagePathFromConsole(log, bucket string, folderHints ...string) string {
 	log = strings.TrimSpace(log)
 	if log == "" {
 		return ""
@@ -75,25 +219,43 @@ func extractPackagePathFromConsole(log, jobName, bucket string) string {
 	if m := packagePathFullRe.FindStringSubmatch(log); len(m) >= 3 {
 		return m[1] + "/" + strings.TrimPrefix(m[2], "/")
 	}
-	jobName = strings.Trim(strings.TrimSpace(jobName), "/")
 	bucket = strings.TrimSpace(bucket)
-	if jobName == "" || bucket == "" {
+	if bucket == "" {
 		return ""
 	}
-	prefix := bucket + "/" + jobName + "/"
-	if idx := strings.LastIndex(log, prefix); idx >= 0 {
-		rest := log[idx+len(prefix):]
-		if end := strings.IndexAny(rest, " \t\r\n\"'"); end > 0 {
-			rest = rest[:end]
+	for _, folder := range folderHints {
+		folder = strings.Trim(strings.TrimSpace(folder), "/")
+		if folder == "" {
+			continue
 		}
-		rest = strings.Trim(rest, ".,;)")
-		if rest != "" && isDeployArtifactName(rest) {
-			return prefix + rest
+		prefix := bucket + "/" + folder + "/"
+		if idx := strings.LastIndex(log, prefix); idx >= 0 {
+			rest := log[idx+len(prefix):]
+			if end := strings.IndexAny(rest, " \t\r\n\"'"); end > 0 {
+				rest = rest[:end]
+			}
+			rest = strings.Trim(rest, ".,;)")
+			if rest != "" && isDeployArtifactName(rest) {
+				return prefix + rest
+			}
 		}
 	}
-	if m := artifactFileRe.FindAllString(log, -1); len(m) > 0 {
-		name := m[len(m)-1]
-		return bucket + "/" + jobName + "/" + name
+	artifactName := ""
+	if m := deployInfoJarRe.FindStringSubmatch(log); len(m) >= 2 {
+		artifactName = strings.TrimSpace(m[1])
+	}
+	if artifactName == "" {
+		if m := artifactFileRe.FindAllString(log, -1); len(m) > 0 {
+			artifactName = m[len(m)-1]
+		}
+	}
+	if artifactName == "" {
+		return ""
+	}
+	for _, folder := range folderHints {
+		if path := buildArtifactPackagePath(folder, bucket, artifactName); path != "" {
+			return path
+		}
 	}
 	return ""
 }
@@ -108,22 +270,130 @@ func buildArtifactPackagePath(jobName, bucket, artifactName string) string {
 	return bucket + "/" + jobName + "/" + artifactName
 }
 
+func (s *Service) buildImageNameHint(ctx context.Context, svc model.CicdService) string {
+	if dc := s.primaryContainerDeployConfig(ctx, svc.ID); dc != nil {
+		if v := strings.TrimSpace(dc.ImageName); v != "" {
+			return strings.ToLower(v)
+		}
+	}
+	var ci model.CicdCiConfig
+	if err := s.db.WithContext(ctx).Where("service_id = ?", svc.ID).First(&ci).Error; err == nil {
+		if v := strings.TrimSpace(ci.ProjectName); v != "" {
+			return strings.ToLower(v)
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(svc.Identifier))
+}
+
 // extractImageAddressFromConsole 从 Jenkins Console 解析 Harbor 完整镜像地址。
-func extractImageAddressFromConsole(log string) string {
+func extractImageAddressFromConsole(log string, hints ...string) string {
 	log = strings.TrimSpace(log)
 	if log == "" {
 		return ""
 	}
+	hint := strings.ToLower(strings.TrimSpace(firstNonEmpty(hints...)))
+
+	if tagged := pickBusinessImage(collectSubmatch1(imageTaggedRe, log), hint); tagged != "" {
+		return tagged
+	}
+	if pushed := pickBusinessImage(collectSubmatch1(imagePushRepoRe, log), hint); pushed != "" {
+		return pushed
+	}
+
 	const marker = "镜像Tag:"
 	if idx := strings.LastIndex(log, marker); idx >= 0 {
-		rest := log[idx:]
-		if m := imageAddressRe.FindStringSubmatch(rest); len(m) >= 2 {
-			return strings.TrimSpace(m[1])
+		tagLine := log[idx:]
+		if tag := strings.TrimSpace(strings.TrimPrefix(tagLine, marker)); tag != "" {
+			for _, img := range imageAddressRe.FindAllString(log, -1) {
+				img = strings.TrimSpace(img)
+				if strings.HasSuffix(strings.ToLower(img), ":"+strings.ToLower(tag)) && !isIgnoredCIImage(img) {
+					if hint == "" || strings.Contains(strings.ToLower(img), "/"+hint+":") {
+						return img
+					}
+				}
+			}
 		}
 	}
+
 	matches := imageAddressRe.FindAllString(log, -1)
-	if len(matches) == 0 {
-		return ""
+	for i := len(matches) - 1; i >= 0; i-- {
+		img := strings.TrimSpace(matches[i])
+		if isIgnoredCIImage(img) {
+			continue
+		}
+		if hint != "" && !strings.Contains(strings.ToLower(img), "/"+hint+":") {
+			continue
+		}
+		return img
 	}
-	return strings.TrimSpace(matches[len(matches)-1])
+	for i := len(matches) - 1; i >= 0; i-- {
+		img := strings.TrimSpace(matches[i])
+		if !isIgnoredCIImage(img) {
+			return img
+		}
+	}
+	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func collectSubmatch1(re *regexp.Regexp, log string) []string {
+	matches := re.FindAllStringSubmatch(log, -1)
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		if len(m) >= 2 {
+			out = append(out, strings.TrimSpace(m[1]))
+		}
+	}
+	return out
+}
+
+func pickBusinessImage(candidates []string, hint string) string {
+	for i := len(candidates) - 1; i >= 0; i-- {
+		img := candidates[i]
+		if isIgnoredCIImage(img) {
+			continue
+		}
+		if hint != "" && !strings.Contains(strings.ToLower(img), "/"+hint) {
+			continue
+		}
+		return img
+	}
+	for i := len(candidates) - 1; i >= 0; i-- {
+		if !isIgnoredCIImage(candidates[i]) {
+			return candidates[i]
+		}
+	}
+	return ""
+}
+
+func isIgnoredCIImage(img string) bool {
+	lower := strings.ToLower(strings.TrimSpace(img))
+	if lower == "" {
+		return true
+	}
+	ignored := []string{
+		"/inbound-agent:",
+		"/jenkins/inbound-agent:",
+		"/maven:",
+		"/docker:",
+		"/nodejs:",
+		"/kubectl:",
+		"/helm_jq:",
+		"/helm:",
+		"/pause:",
+	}
+	for _, part := range ignored {
+		if strings.Contains(lower, part) {
+			return true
+		}
+	}
+	return false
 }

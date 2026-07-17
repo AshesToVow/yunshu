@@ -9,8 +9,8 @@ import (
 
 // MysqlBackupSchedulerDictTypes 定时备份 Worker 字典项（不写 config.yaml）。
 type MysqlBackupSchedulerDictTypes struct {
-	Enabled   string
-	TickSpec  string
+	Enabled  string
+	TickSpec string
 }
 
 func DefaultMysqlBackupSchedulerDictTypes() MysqlBackupSchedulerDictTypes {

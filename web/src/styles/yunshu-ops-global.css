@@ -1,0 +1,537 @@
+/**
+ * Yunshu Ops — global layer (Impeccable product + Taste auth)
+ * Loaded last. Overrides legacy global.css / design-system industrial rules.
+ */
+
+/* ── Token bridge ── */
+:root {
+  --ys-brand: #0d9488;
+  --ys-brand-strong: #0f766e;
+  --ys-bg: #f4f6f8;
+  --ys-surface: #ffffff;
+  --ys-border: #e2e8f0;
+  --ys-text: #0f172a;
+  --ys-text-muted: #64748b;
+  --ys-font-sans: "IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ys-font-mono: "JetBrains Mono", "IBM Plex Mono", Consolas, monospace;
+  --ys-radius: 8px;
+  --ys-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ys-duration: 180ms;
+  --admin-accent: var(--ys-brand);
+}
+
+html {
+  color-scheme: light dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: var(--ys-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ys-text);
+  background: var(--ys-bg) !important;
+  background-image: none !important;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ── Ops shell theme surfaces ── */
+.admin-shell.ops-platform.theme-light {
+  --admin-bg: #f4f6f8;
+  --admin-surface: #ffffff;
+  --admin-surface-elevated: #ffffff;
+  --admin-border: #e2e8f0;
+  --admin-text-main: #0f172a;
+  --admin-text-muted: #64748b;
+  --ops-bg-layout: #f4f6f8;
+  --ops-bg-container: #ffffff;
+  --ops-border: #e2e8f0;
+  --ops-text: #0f172a;
+  --ops-text-secondary: #64748b;
+  background: var(--admin-bg) !important;
+  color: var(--admin-text-main);
+}
+
+.admin-shell.ops-platform.theme-dark {
+  --admin-bg: #141414;
+  --admin-surface: #1f1f1f;
+  --admin-surface-elevated: #1f1f1f;
+  --admin-border: #303030;
+  --admin-text-main: rgba(255, 255, 255, 0.88);
+  --admin-text-muted: rgba(255, 255, 255, 0.55);
+  --ops-bg-layout: #141414;
+  --ops-bg-container: #1f1f1f;
+  --ops-border: #303030;
+  --ops-text: rgba(255, 255, 255, 0.88);
+  --ops-text-secondary: rgba(255, 255, 255, 0.55);
+  background: var(--admin-bg) !important;
+  color: var(--admin-text-main);
+}
+
+.admin-shell.ops-platform::before,
+.admin-shell.ops-platform::after {
+  display: none !important;
+}
+
+/* ── Sider & brand ── */
+.admin-shell.ops-platform .admin-sider.ant-layout-sider {
+  background: var(--admin-surface) !important;
+  border-right: 1px solid var(--admin-border) !important;
+}
+
+.admin-shell.ops-platform.layout-soft-sider .admin-sider,
+.admin-shell.ops-platform.theme-light.layout-soft-sider .admin-sider {
+  background: var(--admin-surface) !important;
+  background-image: none !important;
+}
+
+.admin-shell.ops-platform .brand-block {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  padding: 20px 16px 16px !important;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-shell.ops-platform .brand-block__mark {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  background: var(--admin-accent, var(--ys-brand)) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  font-family: var(--ys-font-sans) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+
+.admin-shell.ops-platform .brand-block__eyebrow.ant-typography {
+  font-family: var(--ys-font-sans) !important;
+  font-size: 11px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--admin-text-muted) !important;
+}
+
+.admin-shell.ops-platform .brand-block__title.ant-typography {
+  font-family: var(--ys-font-sans) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  line-height: 1.3 !important;
+  color: var(--admin-text-main) !important;
+}
+
+.admin-shell.ops-platform .brand-block__subtitle.ant-typography {
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  color: var(--admin-text-muted) !important;
+}
+
+/* ── Navigation ── */
+.admin-shell.ops-platform .admin-menu {
+  padding: 8px 10px 16px !important;
+  background: transparent !important;
+  border-inline-end: none !important;
+}
+
+.admin-shell.ops-platform .admin-menu .ant-menu-item,
+.admin-shell.ops-platform .admin-menu .ant-menu-submenu-title {
+  height: 40px !important;
+  line-height: 40px !important;
+  margin-block: 2px !important;
+  border-radius: var(--ys-radius) !important;
+  font-family: var(--ys-font-sans) !important;
+  font-size: 13px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.admin-shell.ops-platform .admin-menu .ant-menu-item-selected,
+.admin-shell.ops-platform .admin-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  border-left: none !important;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--admin-accent, var(--ys-brand)) 14%, transparent) !important;
+}
+
+.admin-shell.ops-platform.theme-light .admin-menu .ant-menu-item-selected {
+  color: var(--admin-accent, var(--ys-brand)) !important;
+}
+
+/* ── Header ── */
+.admin-shell.ops-platform .admin-header.ant-layout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px !important;
+  padding: 0 20px !important;
+  margin: 0 !important;
+  border-bottom: 1px solid var(--admin-border) !important;
+  background: var(--admin-surface) !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+.admin-shell.ops-platform.layout-soft-header .admin-header,
+.admin-shell.ops-platform.theme-light.layout-soft-header .admin-header {
+  background: var(--admin-surface) !important;
+  border-bottom-color: var(--admin-border) !important;
+}
+
+.admin-shell.ops-platform .admin-header__title {
+  font-family: var(--ys-font-sans) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--admin-text-main) !important;
+}
+
+.admin-shell.ops-platform .admin-header__left {
+  min-width: 0;
+}
+
+.admin-shell.ops-platform .admin-icon-btn.ant-btn {
+  border-radius: var(--ys-radius) !important;
+  color: var(--admin-text-muted);
+}
+
+.admin-shell.ops-platform .admin-icon-btn.ant-btn:hover {
+  color: var(--admin-text-main);
+  background: color-mix(in srgb, var(--admin-accent, var(--ys-brand)) 8%, transparent);
+}
+
+/* ── Content area ── */
+.admin-shell.ops-platform .admin-content {
+  padding: 20px 24px 28px !important;
+  background: var(--admin-bg) !important;
+}
+
+.admin-shell.ops-platform.layout-compact .admin-content {
+  padding: 12px 16px 20px !important;
+}
+
+/* ── Cards & tables ── */
+.admin-shell.ops-platform .table-card.ant-card,
+.admin-shell.ops-platform .form-card.ant-card,
+.admin-shell.ops-platform .glass-card.ant-card,
+.admin-shell.ops-platform .stats-card.ant-card,
+.admin-shell.ops-platform .yaml-crud-card.ant-card,
+.admin-shell.ops-platform .page-stack > .ant-card {
+  border-radius: var(--ys-radius) !important;
+  border: 1px solid var(--admin-border) !important;
+  box-shadow: none !important;
+  background: var(--admin-surface-elevated) !important;
+}
+
+.admin-shell.ops-platform .ant-card-head {
+  border-bottom: 1px solid var(--admin-border);
+  min-height: 44px;
+}
+
+.admin-shell.ops-platform .ant-card-head-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-shell.ops-platform .ant-table-wrapper .ant-table-thead > tr > th {
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--admin-surface) !important;
+}
+
+.admin-shell.ops-platform .ant-table-wrapper .ant-table-tbody > tr > td {
+  font-size: 13px;
+}
+
+.admin-shell.ops-platform .ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: color-mix(in srgb, var(--admin-accent, var(--ys-brand)) 4%, var(--admin-surface-elevated)) !important;
+}
+
+/* ── Forms & inputs ── */
+.admin-shell.ops-platform .ant-form-item-label > label {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.admin-shell.ops-platform .ant-input,
+.admin-shell.ops-platform .ant-input-affix-wrapper,
+.admin-shell.ops-platform .ant-select-selector,
+.admin-shell.ops-platform .ant-picker {
+  border-radius: var(--ys-radius) !important;
+  transition: border-color var(--ys-duration) var(--ys-ease), box-shadow var(--ys-duration) var(--ys-ease);
+}
+
+.admin-shell.ops-platform .ant-input::placeholder,
+.admin-shell.ops-platform .ant-select-selection-placeholder {
+  color: #94a3b8 !important;
+}
+
+/* ── Buttons ── */
+.admin-shell.ops-platform .ant-btn {
+  border-radius: var(--ys-radius);
+  font-weight: 500;
+  box-shadow: none !important;
+}
+
+.admin-shell.ops-platform .ant-btn-primary {
+  background: var(--admin-accent, var(--ys-brand)) !important;
+  border-color: var(--admin-accent, var(--ys-brand)) !important;
+}
+
+.admin-shell.ops-platform .ant-btn-primary:not(:disabled):hover {
+  background: var(--ys-brand-strong) !important;
+  border-color: var(--ys-brand-strong) !important;
+}
+
+/* ── Tags ── */
+.admin-shell.ops-platform .ant-tag {
+  border-radius: 6px !important;
+  font-family: var(--ys-font-sans) !important;
+  font-size: 12px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* ── Tabs & modal ── */
+.admin-shell.ops-platform .ant-tabs-tab {
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.admin-shell.ops-platform .ant-modal-content,
+.admin-shell.ops-platform .ant-drawer-content {
+  border-radius: 12px;
+}
+
+.admin-shell.ops-platform .ant-modal-header {
+  border-bottom: 1px solid var(--admin-border);
+}
+
+/* ── Page headers ── */
+.admin-shell.ops-platform .page-telemetry {
+  border-bottom: 1px solid var(--admin-border);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+}
+
+.admin-shell.ops-platform .page-telemetry__title {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  line-height: 1.35 !important;
+}
+
+.admin-shell.ops-platform .ops-page-header__title {
+  font-size: 20px !important;
+  text-wrap: balance;
+}
+
+/* ── Dashboard KPI ── */
+.admin-shell.ops-platform .dashboard-stat-card.ant-card {
+  transition: border-color var(--ys-duration) var(--ys-ease);
+}
+
+.admin-shell.ops-platform .dashboard-stat-card--clickable:hover.ant-card {
+  box-shadow: none !important;
+  border-color: color-mix(in srgb, var(--admin-accent, var(--ys-brand)) 35%, var(--admin-border)) !important;
+}
+
+.admin-shell.ops-platform .dashboard-stat-card .ant-statistic-content-value {
+  font-size: 24px !important;
+  font-weight: 600 !important;
+  color: var(--admin-text-main) !important;
+}
+
+.admin-shell.ops-platform .dashboard-section-title {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+/* ── Code / logs ── */
+.admin-shell.ops-platform .pod-logs-panel__content,
+.admin-shell.ops-platform .code-block-panel {
+  font-family: var(--ys-font-mono) !important;
+  font-size: 12px;
+  border-radius: var(--ys-radius);
+}
+
+/* ── Settings drawer ── */
+.admin-shell.ops-platform .admin-settings-drawer .ant-drawer-header {
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-shell.ops-platform .admin-accent-dot {
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: border-color var(--ys-duration) var(--ys-ease);
+}
+
+.admin-shell.ops-platform .admin-accent-dot.is-active {
+  border-color: var(--admin-text-main);
+}
+
+/* ── Auth shell (login) — taste-skill trust-first, override global.css ── */
+.gw-auth-shell {
+  min-height: 100vh;
+  font-family: var(--ys-font-sans);
+}
+
+.gw-auth-shell.is-dark {
+  color: #e2e8f0 !important;
+  background: linear-gradient(145deg, #0c1220 0%, #111827 48%, #0f172a 100%) !important;
+}
+
+.gw-auth-shell.is-light {
+  color: var(--ys-text) !important;
+  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 52%, #e8eef5 100%) !important;
+}
+
+.gw-auth-shell::before {
+  background:
+    radial-gradient(circle at 18% 22%, color-mix(in srgb, var(--login-accent, var(--ys-brand)) 12%, transparent), transparent 34%),
+    radial-gradient(circle at 82% 78%, color-mix(in srgb, var(--login-accent, var(--ys-brand)) 8%, transparent), transparent 38%) !important;
+}
+
+.gw-auth-brand__logoDot {
+  background: var(--login-accent, var(--ys-brand)) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--login-accent, var(--ys-brand)) 22%, transparent) !important;
+}
+
+.gw-auth-shell .login-submitBtn.ant-btn,
+.gw-auth-shell .login-submitBtn {
+  height: 44px;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  background: var(--login-accent, var(--ys-brand)) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.gw-auth-shell .login-submitBtn.ant-btn:not(:disabled):hover,
+.gw-auth-shell .login-submitBtn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--login-accent, #0d9488) 88%, #000 12%) !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.gw-auth-shell.is-light .ant-input-affix-wrapper,
+.gw-auth-shell.is-light .ant-input {
+  background: #fff !important;
+  border-color: #e2e8f0 !important;
+  color: var(--ys-text) !important;
+}
+
+.gw-auth-shell.is-dark .ant-input-affix-wrapper,
+.gw-auth-shell.is-dark .ant-input {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+.gw-auth-shell .gw-auth-toolbar {
+  border-radius: 10px;
+  border-color: var(--admin-border, #e2e8f0);
+  background: color-mix(in srgb, var(--admin-surface, #fff) 88%, transparent);
+}
+
+.gw-auth-shell.is-dark .gw-auth-toolbar {
+  background: color-mix(in srgb, #1e293b 92%, transparent);
+  border-color: #334155;
+}
+
+.gw-accent-blue { --login-accent: #2563eb; }
+.gw-accent-violet { --login-accent: #7c3aed; }
+.gw-accent-emerald { --login-accent: #0d9488; }
+.gw-accent-amber { --login-accent: #d97706; }
+
+/* ── Legacy page headers → product style ── */
+.admin-shell.ops-platform .page-telemetry {
+  border-bottom: 1px solid var(--admin-border);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+}
+
+.admin-shell.ops-platform .page-telemetry__label {
+  display: none !important;
+}
+
+.admin-shell.ops-platform .page-telemetry__title {
+  font-family: var(--ys-font-sans) !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  line-height: 1.35 !important;
+}
+
+.admin-shell.ops-platform .page-telemetry__meta {
+  font-family: var(--ys-font-sans) !important;
+  font-size: 12px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* ── Split panels (auth / policies) ── */
+.admin-shell.ops-platform .auth-split {
+  gap: 16px;
+}
+
+.admin-shell.ops-platform .glass-card.ant-card {
+  border: 1px solid var(--admin-border) !important;
+  box-shadow: none !important;
+  border-radius: var(--ys-radius) !important;
+}
+
+.admin-shell.ops-platform .auth-split .is-selected-row > td {
+  background: color-mix(in srgb, var(--admin-accent, var(--ys-brand)) 12%, transparent) !important;
+}
+
+/* ── User header trigger ── */
+.admin-shell.ops-platform .user-header-trigger.ant-btn {
+  height: 36px;
+  border-radius: var(--ys-radius);
+  padding-inline: 10px;
+}
+
+.admin-shell.ops-platform .admin-header__user-wrap {
+  border-radius: var(--ys-radius);
+  border: 1px solid var(--admin-border);
+  padding: 2px 4px 2px 8px;
+}
+
+/* ── Empty states ── */
+.admin-shell.ops-platform .ant-empty-description {
+  color: var(--admin-text-muted);
+  font-size: 13px;
+}
+
+/* ── Pagination ── */
+.admin-shell.ops-platform .ant-pagination-item-active {
+  border-color: var(--admin-accent, var(--ys-brand));
+}
+
+.admin-shell.ops-platform .ant-pagination-item-active a {
+  color: var(--admin-accent, var(--ys-brand));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell.ops-platform *,
+  .gw-auth-shell * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

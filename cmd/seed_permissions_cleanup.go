@@ -18,7 +18,6 @@ type permissionPair struct {
 // stalePermissions 历史误同步或已下线路由，不应出现在 permissions 表。
 func stalePermissions() []permissionPair {
 	return []permissionPair{
-		// 已废弃告警子模块
 		{Resource: "/api/v1/alerts/duty-schedules", Action: "GET"},
 		{Resource: "/api/v1/alerts/duty-schedules", Action: "POST"},
 		{Resource: "/api/v1/alerts/duty-schedules/:id", Action: "PUT"},
@@ -48,7 +47,20 @@ func stalePermissions() []permissionPair {
 		{Resource: "/api/v1/auth/me", Action: "GET"},
 		{Resource: "/api/v1/auth/me", Action: "PUT"},
 		{Resource: "/api/v1/auth/password", Action: "PUT"},
+		// 已废弃 log-agent / gRPC
+		{Resource: "/api/v1/agents/public-register", Action: "POST"},
+		{Resource: "/api/v1/agents/register", Action: "POST"},
 		{Resource: "/api/v1/agents/health/report", Action: "POST"},
+		{Resource: "/api/v1/agents/discovery/report", Action: "POST"},
+		{Resource: "/api/v1/agents/runtime-config", Action: "GET"},
+		{Resource: "/api/v1/projects/:id/agents", Action: "GET"},
+		{Resource: "/api/v1/projects/:id/agents", Action: "POST"},
+		{Resource: "/api/v1/projects/:id/agents/:agentId", Action: "DELETE"},
+		{Resource: "/api/v1/projects/:id/agents/bootstrap", Action: "POST"},
+		{Resource: "/api/v1/projects/:id/agents/status", Action: "GET"},
+		{Resource: "/api/v1/projects/:id/agents/discovery", Action: "GET"},
+		{Resource: "/api/v1/projects/:id/agents/heartbeat/batch", Action: "POST"},
+		{Resource: "/api/v1/projects/:id/logs/stream", Action: "GET"},
 	}
 }
 

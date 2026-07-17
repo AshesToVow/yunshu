@@ -15,9 +15,10 @@ type (
 	CloudAccountRepository        = repository.CloudAccountRepo
 	ServiceRepository             = repository.ServiceRepo
 	LogSourceRepository           = repository.LogSourceRepo
-	LogAgentRepository            = repository.LogAgentRepo
-	AgentDiscoveryRepository      = repository.AgentDiscoveryRepo
+	LogRetentionRepository        = repository.LogRetentionRepo
+	LoggieAgentRepository         = repository.LoggieAgentRepo
 	MysqlBackupRepository         = repository.MysqlBackupRepo
+	DbmgmtRepository              = repository.DbmgmtRepo
 	LoginLogRepository            = repository.LoginLogRepo
 	OperationLogRepository        = repository.OperationLogRepo
 	MenuRepository                = repository.MenuRepo

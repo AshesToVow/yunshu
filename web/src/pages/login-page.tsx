@@ -1,5 +1,4 @@
 import {
-  AppstoreOutlined,
   BgColorsOutlined,
   BulbFilled,
   BulbOutlined,
@@ -11,7 +10,7 @@ import {
 } from "@ant-design/icons";
 import type { InputRef } from "antd";
 import { Button, Form, Input, Modal, message } from "antd";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { sendEmailCode, sendPasswordLoginCode, registerByEmail } from "../services/auth";
 import { extractApiErrorMessage } from "../services/http";
@@ -23,8 +22,18 @@ import type {
   SendPasswordLoginCodeResult,
 } from "../types/api";
 import { useAuth } from "../contexts/auth-context";
+import { BRAND_DESCRIPTION } from "../constants/brand";
 import { resolveEmailFromForm } from "../utils/form-email";
 import loginHeroImage from "../assets/login-hero.svg";
+
+type LoginAccent = "blue" | "violet" | "emerald" | "amber";
+
+const LOGIN_ACCENT_COLORS: Record<LoginAccent, string> = {
+  blue: "#2563eb",
+  violet: "#7c3aed",
+  emerald: "#0d9488",
+  amber: "#d97706",
+};
 
 type AuthTabKey = "account" | "email";
 type ButtonFxState = "idle" | "loading" | "success";
@@ -62,10 +71,8 @@ export function LoginPage() {
   const [buttonFx, setButtonFx] = useState<ButtonFxState>("idle");
   const [darkMode, setDarkMode] = useState<boolean>(() => window.localStorage.getItem("admin-theme-mode") !== "light");
   const [langMode, setLangMode] = useState<"zh" | "en">("zh");
-  const [panelAlign, setPanelAlign] = useState<"left" | "center" | "right">("right");
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [layoutOpen, setLayoutOpen] = useState(false);
-  const [accent, setAccent] = useState<"blue" | "violet" | "emerald" | "amber">("blue");
+  const [accent, setAccent] = useState<LoginAccent>("emerald");
 
   const [passwordForm] = Form.useForm<PasswordLoginPayload>();
   const [emailForm] = Form.useForm<EmailLoginPayload>();
@@ -76,6 +83,10 @@ export function LoginPage() {
   useCountdown(passwordCodeCountdown, setPasswordCodeCountdown);
   useCountdown(emailCodeCountdown, setEmailCodeCountdown);
   useCountdown(registerCodeCountdown, setRegisterCodeCountdown);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--login-accent", LOGIN_ACCENT_COLORS[accent]);
+  }, [accent]);
 
   useEffect(() => {
     const mode = darkMode ? "dark" : "light";
@@ -210,11 +221,48 @@ export function LoginPage() {
 
   const isZh = langMode === "zh";
   const submitButtonLabel = isZh ? "登录" : "Login";
-  const cardTitle = isZh ? "欢迎回来 👋🏻" : "Welcome Back 👋🏻";
-  const cardSubTitle = isZh ? "请输入您的账户信息以开始管理您的系统" : "Please enter your account information to continue.";
+  const cardTitle = isZh ? "欢迎回来" : "Welcome back";
+  const cardSubTitle = isZh ? "登录云枢运维平台，继续你的值班与发布工作" : "Sign in to Yunshu Ops to continue on-call and release work.";
   const appTitle = isZh ? "云枢运维平台" : "Yunshu Ops Platform";
-  const introTitle = isZh ? "云枢运维平台" : "Yunshu Ops Platform";
-  const introDesc = isZh ? "开箱即用的企业级运维管理系统" : "Out-of-the-box enterprise operations platform";
+  const introTitle = isZh ? "云原生运维，一站治理" : "Cloud-native ops, unified control";
+  const introDesc = isZh
+    ? "权限、资源编排、发布与告警在同一平台完成，为值班与变更而设计。"
+    : BRAND_DESCRIPTION;
+  const introFeatures = isZh
+    ? ["Kubernetes 资源编排", "项目管理", "CI/CD 发布流水线", "日志平台", "CMDB 资产治理", "告警与值班联动"]
+    : [
+        "Kubernetes orchestration",
+        "Project management",
+        "CI/CD pipelines",
+        "Log platform",
+        "CMDB governance",
+        "Alerts & on-call",
+      ];
+
+  function renderAuthTabs() {
+    return (
+      <div className="gw-auth-tabs" role="tablist" aria-label={isZh ? "登录方式" : "Login method"}>
+        <button
+          type="button"
+          className={`gw-auth-tabs__item ${tab === "account" ? "is-active" : ""}`}
+          onClick={() => setTab("account")}
+          role="tab"
+          aria-selected={tab === "account"}
+        >
+          {isZh ? "用户名密码登录" : "Account Login"}
+        </button>
+        <button
+          type="button"
+          className={`gw-auth-tabs__item ${tab === "email" ? "is-active" : ""}`}
+          onClick={() => setTab("email")}
+          role="tab"
+          aria-selected={tab === "email"}
+        >
+          {isZh ? "邮箱验证码登录" : "Email Login"}
+        </button>
+      </div>
+    );
+  }
 
   function renderFormCard() {
     return (
@@ -224,26 +272,7 @@ export function LoginPage() {
           <div className="gw-auth-card__sub">{cardSubTitle}</div>
         </div>
 
-        <div className="login-light-switch" role="tablist" aria-label="登录方式">
-          <button
-            type="button"
-            className={`login-light-switch__item ${tab === "account" ? "is-active" : ""}`}
-            onClick={() => setTab("account")}
-            role="tab"
-            aria-selected={tab === "account"}
-          >
-            {isZh ? "用户名密码登录" : "Account Login"}
-          </button>
-          <button
-            type="button"
-            className={`login-light-switch__item ${tab === "email" ? "is-active" : ""}`}
-            onClick={() => setTab("email")}
-            role="tab"
-            aria-selected={tab === "email"}
-          >
-            {isZh ? "邮箱验证码登录" : "Email Login"}
-          </button>
-        </div>
+        {renderAuthTabs()}
 
         <div className="login-light-card__hint">
           {tab === "account"
@@ -351,7 +380,15 @@ export function LoginPage() {
   }
 
   return (
-    <div className={`gw-auth-shell ${darkMode ? "is-dark" : "is-light"} gw-accent-${accent}`}>
+    <div
+      className={`gw-auth-shell ${darkMode ? "is-dark" : "is-light"} gw-accent-${accent}`}
+      style={{ "--login-accent": LOGIN_ACCENT_COLORS[accent] } as CSSProperties}
+    >
+      <div className="gw-auth-shell__ambient" aria-hidden="true">
+        <span className="gw-auth-shell__orb gw-auth-shell__orb--1" />
+        <span className="gw-auth-shell__orb gw-auth-shell__orb--2" />
+        <span className="gw-auth-shell__orb gw-auth-shell__orb--3" />
+      </div>
       <div className="gw-auth-brand">
         <span className="gw-auth-brand__logoDot" />
         <span>{appTitle}</span>
@@ -360,36 +397,22 @@ export function LoginPage() {
         <button
           type="button"
           className={`gw-auth-toolbar__btn ${paletteOpen ? "is-active" : ""}`}
-          onClick={() => {
-            setPaletteOpen((v) => !v);
-            setLayoutOpen(false);
-          }}
+          onClick={() => setPaletteOpen((v) => !v)}
         >
           <BgColorsOutlined />
         </button>
         {paletteOpen ? (
           <div className="gw-auth-toolbar__panel gw-auth-toolbar__panel--palette">
-            <button type="button" className={`gw-auth-dot gw-auth-dot--blue ${accent === "blue" ? "is-active" : ""}`} onClick={() => setAccent("blue")} />
-            <button type="button" className={`gw-auth-dot gw-auth-dot--violet ${accent === "violet" ? "is-active" : ""}`} onClick={() => setAccent("violet")} />
-            <button type="button" className={`gw-auth-dot gw-auth-dot--emerald ${accent === "emerald" ? "is-active" : ""}`} onClick={() => setAccent("emerald")} />
-            <button type="button" className={`gw-auth-dot gw-auth-dot--amber ${accent === "amber" ? "is-active" : ""}`} onClick={() => setAccent("amber")} />
-          </div>
-        ) : null}
-        <button
-          type="button"
-          className={`gw-auth-toolbar__btn ${layoutOpen ? "is-active" : ""}`}
-          onClick={() => {
-            setLayoutOpen((v) => !v);
-            setPaletteOpen(false);
-          }}
-        >
-          <AppstoreOutlined />
-        </button>
-        {layoutOpen ? (
-          <div className="gw-auth-toolbar__panel gw-auth-toolbar__panel--layout">
-            <button type="button" className={panelAlign === "left" ? "is-active" : ""} onClick={() => setPanelAlign("left")}>{isZh ? "居左" : "Left"}</button>
-            <button type="button" className={panelAlign === "center" ? "is-active" : ""} onClick={() => setPanelAlign("center")}>{isZh ? "居中" : "Center"}</button>
-            <button type="button" className={panelAlign === "right" ? "is-active" : ""} onClick={() => setPanelAlign("right")}>{isZh ? "居右" : "Right"}</button>
+            {(Object.keys(LOGIN_ACCENT_COLORS) as LoginAccent[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`gw-auth-dot ${accent === key ? "is-active" : ""}`}
+                style={{ background: LOGIN_ACCENT_COLORS[key] }}
+                onClick={() => setAccent(key)}
+                aria-label={key}
+              />
+            ))}
           </div>
         ) : null}
         <button type="button" className="gw-auth-toolbar__btn" onClick={() => setLangMode((v) => (v === "zh" ? "en" : "zh"))}>
@@ -400,16 +423,20 @@ export function LoginPage() {
         </button>
       </div>
 
-      <div className={`gw-auth-main gw-auth-main--${panelAlign}`}>
-        {panelAlign === "left" ? renderFormCard() : null}
-        {panelAlign !== "center" ? (
-          <aside className="gw-auth-slogan">
-            <img className="gw-auth-slogan__image" src={loginHeroImage} alt="云枢运维平台插画" />
-            <div className="gw-auth-slogan__title">{introTitle}</div>
-            <div className="gw-auth-slogan__desc">{introDesc}</div>
+      <div className="gw-auth-main">
+        <div className="gw-auth-frame">
+          <aside className="gw-auth-story" aria-label={isZh ? "平台介绍" : "Platform intro"}>
+            <img className="gw-auth-story__hero" src={loginHeroImage} alt={isZh ? "云枢运维平台插画" : "Yunshu Ops illustration"} />
+            <h1 className="gw-auth-story__title">{introTitle}</h1>
+            <p className="gw-auth-story__desc">{introDesc}</p>
+            <ul className="gw-auth-story__points" aria-label={isZh ? "平台能力" : "Platform capabilities"}>
+              {introFeatures.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
           </aside>
-        ) : null}
-        {panelAlign !== "left" ? renderFormCard() : null}
+          <div className="gw-auth-panel">{renderFormCard()}</div>
+        </div>
       </div>
 
       <Modal

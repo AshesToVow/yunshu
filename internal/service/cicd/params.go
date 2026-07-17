@@ -132,7 +132,7 @@ func applyCredentialParams(params map[string]string, cfg config.CicdConfig, svc 
 func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
 	harborURL := strings.TrimSpace(cfg.Harbor.URL)
 	if harborURL == "" {
-		harborURL = "harbor.jdicity.local"
+		harborURL = "harbor.deploy.local"
 	}
 	harborCred := strings.TrimSpace(cfg.Credentials.Harbor)
 	if harborCred == "" {
@@ -142,7 +142,12 @@ func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
 	if harborProject == "" {
 		harborProject = "registry"
 	}
+	harborHostIP := strings.TrimSpace(cfg.Harbor.HostIP)
+	if harborHostIP == "" {
+		harborHostIP = "10.10.10.103"
+	}
 	params["HARBOR_URL"] = harborURL
+	params["HARBOR_HOST_IP"] = harborHostIP
 	params["HARBOR_CREDENTIAL_ID"] = harborCred
 	params["PROJECT_GROUP"] = harborProject
 }
@@ -161,6 +166,7 @@ func buildK8sCiParams(params map[string]string, ci *model.CicdCiConfig, in Build
 	if imageName == "" && in.Service != nil {
 		imageName = strings.TrimSpace(in.Service.Identifier)
 	}
+	imageName = strings.ToLower(imageName)
 	params["projectName"] = imageName
 	params["imageName"] = imageName
 	if ci != nil && strings.TrimSpace(ci.Version) != "" {
@@ -192,6 +198,7 @@ func buildFrontendParams(params map[string]string, ci *model.CicdCiConfig, in Bu
 	}
 	params["cleanNpmCache"] = boolStr(ci.CleanNpmCache)
 	params["cleanNodeModules"] = boolStr(ci.CleanNodeModules)
+	params["nodeToolName"] = model.NodeToolNameFromConfig(ci)
 	retain := in.Cfg.DefaultArtifactRetain
 	if retain <= 0 {
 		retain = 10

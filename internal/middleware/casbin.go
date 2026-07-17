@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"strings"
@@ -7,7 +7,6 @@ import (
 	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/service"
 
@@ -37,7 +36,7 @@ func Authorize(enforcer *casbin.SyncedEnforcer, logger *logx.Logger, k8sAccessRe
 
 		allowed, err := enforcer.Enforce(service.UserSubject(user.ID), path, c.Request.Method)
 		if err != nil {
-			logutil.HTTP("http.authorize").Error("casbin authorize failed", "error", err, "path", path, "method", c.Request.Method)
+			logx.With(c.Request.Context(), "component", "http.authorize").Error("casbin authorize failed", "error", err, "path", path, "method", c.Request.Method)
 			response.Error(c, constants.ErrInternal)
 			c.Abort()
 			return
@@ -67,9 +66,6 @@ func allowReadByK8sClusterGrant(c *gin.Context, accessRepo interfaces.K8sCluster
 	normalizedPath := strings.TrimSpace(path)
 	if normalizedPath == "" {
 		return false
-	}
-	if normalizedPath == "/api/v1/menus/tree" {
-		return true
 	}
 	if !service.IsK8sReadAPIPath(normalizedPath) {
 		return false

@@ -41,7 +41,7 @@ type MysqlBackupInstance struct {
 	MysqlPort     int    `json:"mysql_port" gorm:"not null;default:3306"`
 	MysqlSocket   string `json:"mysql_socket" gorm:"size:512;comment:Unix socket 路径，配置后 mysqldump 优先走 socket"`
 	MysqlUser     string `json:"mysql_user" gorm:"size:128;not null"`
-	EncPassword   string `json:"-" gorm:"type:longtext;comment:加密后的 MySQL 密码"`
+	EncPassword   string `json:"-" gorm:"type:text;comment:加密后的 MySQL 密码"`
 	BackupMode    string `json:"backup_mode" gorm:"size:32;not null;default:'mysqldump'"`
 
 	// BackupScope：all | database | table（mysqldump 模式）
@@ -75,6 +75,11 @@ type MysqlBackupInstance struct {
 	ScheduleEnabled bool       `json:"schedule_enabled" gorm:"not null;default:false;index"`
 	CronSpec        string     `json:"cron_spec" gorm:"size:256;not null;default:''"`
 	LastScheduledAt *time.Time `json:"last_scheduled_at,omitempty"`
+
+	// NotifyEnabled 任务结束（成功/失败/取消）是否发邮件；收件人见 NotifyUserIDs。
+	NotifyEnabled bool   `json:"notify_enabled" gorm:"not null;default:false"`
+	// NotifyUserIDs JSON 数组，如 [1,5]；首项通常为创建/主接收人，其余为额外通知用户。
+	NotifyUserIDs string `json:"-" gorm:"type:text;comment:JSON array of user ids for backup email notify"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

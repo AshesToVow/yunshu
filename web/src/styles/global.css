@@ -3996,6 +3996,54 @@ body {
   flex-shrink: 0;
 }
 
+.project-logs-page .project-logs-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.project-logs-page .project-logs-table .ant-table-cell {
+  vertical-align: top;
+}
+
+.project-logs-page .project-logs-table .ant-table-tbody > tr > td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.project-logs-page .log-message-cell {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+  line-height: 1.55;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: inherit;
+}
+
+.project-logs-page .log-message-cell mark {
+  background: #ffe58f;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.admin-shell.theme-dark .project-logs-page .log-message-cell mark {
+  background: rgba(250, 173, 20, 0.35);
+}
+
+.project-logs-page .log-meta-cell {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.project-logs-page .log-file-cell {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .project-logs-terminal-wrap {
   flex: 1 1 auto;
   min-height: 280px;
@@ -4825,3 +4873,44 @@ body {
 .personal-settings__form {
   max-width: 560px;
 }
+
+/* Agent 管理：防止宽表格撑破主内容区 */
+.loggie-status-page {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+.loggie-status-page .table-card.ant-card,
+.loggie-status-page .ant-card-body,
+.loggie-status-page .ant-table-wrapper {
+  max-width: 100%;
+  min-width: 0;
+}
+.loggie-status-page .ant-table {
+  max-width: 100%;
+}
+
+.loggie-status-page .loggie-deploy-msg,
+.loggie-status-page .ant-alert-description {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.loggie-status-page .ant-modal-body {
+  overflow-x: hidden;
+}
+
+.loggie-bootstrap-modal .ant-modal-body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.loggie-bootstrap-modal .loggie-deploy-msg,
+.loggie-bootstrap-modal .ant-alert-description {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+

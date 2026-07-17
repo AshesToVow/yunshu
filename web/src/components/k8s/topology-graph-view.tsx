@@ -1,5 +1,14 @@
 import { Empty, Tag, Typography } from "antd";
 import { useMemo } from "react";
+import {
+  CHART_BRAND,
+  CHART_ERROR,
+  CHART_INFO,
+  CHART_MUTED,
+  CHART_SECONDARY,
+  CHART_SUCCESS,
+  CHART_WARNING,
+} from "../../constants/chart-colors";
 
 export type TopologyNode = {
   id: string;
@@ -21,28 +30,28 @@ export type TopologyGraph = {
 };
 
 const KIND_COLORS: Record<string, string> = {
-  Project: "#1677ff",
-  ServerGroup: "#722ed1",
-  Server: "#13c2c2",
-  AppService: "#52c41a",
-  LogSource: "#fa8c16",
-  Deployment: "#1677ff",
-  ReplicaSet: "#597ef7",
-  StatefulSet: "#597ef7",
-  DaemonSet: "#597ef7",
-  Pod: "#52c41a",
-  Service: "#13c2c2",
-  Ingress: "#722ed1",
+  Project: CHART_BRAND,
+  ServerGroup: CHART_SECONDARY,
+  Server: CHART_BRAND,
+  AppService: CHART_SUCCESS,
+  LogSource: CHART_WARNING,
+  Deployment: CHART_INFO,
+  ReplicaSet: CHART_INFO,
+  StatefulSet: CHART_INFO,
+  DaemonSet: CHART_INFO,
+  Pod: CHART_SUCCESS,
+  Service: CHART_BRAND,
+  Ingress: CHART_SECONDARY,
 };
 
 function borderColor(level?: string): string {
   switch (level) {
     case "abnormal":
-      return "#ff4d4f";
+      return CHART_ERROR;
     case "progressing":
-      return "#faad14";
+      return CHART_WARNING;
     default:
-      return "#1677ff";
+      return CHART_INFO;
   }
 }
 
@@ -172,7 +181,7 @@ export function TopologyGraphView({ graph, loading, emptyText = "暂无拓扑数
         {layout.nodes.map((n) => (
           <g key={n.id} transform={`translate(${n.x}, ${n.y})`}>
             <rect width={148} height={56} rx={8} fill="#fff" stroke={borderColor(n.state_level)} strokeWidth={2} />
-            <text x={10} y={20} fontSize={12} fontWeight={600} fill={KIND_COLORS[n.kind] ?? "#262626"}>
+            <text x={10} y={20} fontSize={12} fontWeight={600} fill={KIND_COLORS[n.kind] ?? CHART_MUTED}>
               {n.kind}
             </text>
             <text x={10} y={38} fontSize={11} fill="#262626">

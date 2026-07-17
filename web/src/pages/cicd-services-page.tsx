@@ -144,6 +144,7 @@ function defaultCiFormValues(svc: CicdServiceItem) {
     build_shell: isFront ? "run build" : "clean package -DskipTests",
     build_path: isFront ? "dist" : "target",
     npm_install_mode: "install",
+    node_version: "node24",
     java_tool_name: "jdk8",
     project_name: svc.identifier,
     description: svc.name,
@@ -446,14 +447,20 @@ export function CicdServicesPage() {
       artifact_name: undefined,
       build_run_id: undefined,
       image_address: undefined,
-      publish_mode: "自动发布",
+      publish_mode: "制品发布",
     });
     setReleaseModalOpen(true);
     if (isContainer) {
       setReleaseBuildRunsLoading(true);
       try {
         const res = await listBuildRuns(projectId, { service_id: svc.id, page: 1, page_size: 50 });
-        const runs = (res.list ?? []).filter((r) => r.build_result === "success" && r.image_address);
+        const runs = (res.list ?? []).filter(
+          (r) =>
+            r.build_result === "success" &&
+            r.image_address &&
+            !r.image_address.includes("/inbound-agent") &&
+            !r.image_address.includes("/jenkins/inbound-agent"),
+        );
         setReleaseBuildRuns(runs);
         if (runs.length === 1) {
           releaseForm.setFieldsValue({ build_run_id: runs[0].id, image_address: runs[0].image_address });
@@ -641,7 +648,7 @@ export function CicdServicesPage() {
       <Alert
         type="info"
         showIcon
-        message="使用前请在「数据字典」配置 cicd_jenkins_base_url、cicd_jenkins_api_token；容器化应用另需配置 cicd_harbor_url、cicd_harbor_credential_id、cicd_harbor_project_group（Harbor 凭据须在 Jenkins 凭据库中预先创建）。保存 CI 配置后 Yunshu 会自动在 Jenkins 创建/更新 Pipeline Job。"
+        message="使用前请在「数据字典」配置 cicd_jenkins_base_url、cicd_jenkins_api_token；容器化应用另需配置 cicd_harbor_url、cicd_harbor_host_ip、cicd_harbor_credential_id、cicd_harbor_project_group（Harbor 凭据须在 Jenkins 凭据库中预先创建）。保存 CI 配置后 Yunshu 会自动在 Jenkins 创建/更新 Pipeline Job。"
         style={{ marginBottom: 12 }}
       />
 
@@ -688,6 +695,7 @@ export function CicdServicesPage() {
           </Button>
         </Space>
 
+        <div className="k8s-table-scroll-host">
         <Table<CicdServiceItem>
           rowKey="id"
           loading={loading}
@@ -706,6 +714,7 @@ export function CicdServicesPage() {
             },
           }}
         />
+        </div>
       </Card>
 
       <Modal
@@ -828,8 +837,18 @@ export function CicdServicesPage() {
           )}
           {isFrontend && (
             <>
-              <Form.Item name="node_version" label="Node.js 版本">
-                <Input placeholder="Node.js 14.17.0" />
+              <Form.Item
+                name="node_version"
+                label="Node.js 工具"
+                extra="与 Jenkins → Global Tool Configuration 中 Node 安装名称一致（如 node24、node20、node18）"
+              >
+                <Select
+                  options={[
+                    { label: "Node 24 (node24)", value: "node24" },
+                    { label: "Node 20 LTS (node20)", value: "node20" },
+                    { label: "Node 18 LTS (node18)", value: "node18" },
+                  ]}
+                />
               </Form.Item>
               <Form.Item name="npm_install_mode" label="依赖安装">
                 <Select options={npmInstallModes.map((o) => ({ label: o.label, value: o.value }))} />
@@ -1085,15 +1104,15 @@ export function CicdServicesPage() {
                           const name = releaseService?.name ?? "应用";
                           setFieldsValue({
                             title: `${name}-${releaseOpLabel(String(v))}`,
-                            publish_mode: v === "container_rollback" ? "回滚" : "自动发布",
+                            publish_mode: v === "container_rollback" ? "回滚" : "制品发布",
                           });
                         }}
                       />
                     </Form.Item>
                     {!isRollback ? (
                       <>
-                        <Form.Item name="publish_mode" label="发布模式">
-                          <Select options={publishModes.filter((o) => o.value === "自动发布" || o.value === "手动发布").map((o) => ({ label: o.label, value: o.value }))} />
+                        <Form.Item name="publish_mode" hidden initialValue="制品发布">
+                          <Input />
                         </Form.Item>
                         <Form.Item
                           name="build_run_id"

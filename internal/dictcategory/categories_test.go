@@ -15,6 +15,12 @@ func TestApplyFilterCicd(t *testing.T) {
 	}
 }
 
+func TestResolveDbmgmt(t *testing.T) {
+	if got := Resolve("dbmgmt_goinception_enabled"); got != "dbmgmt" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestResolveCaseInsensitive(t *testing.T) {
 	if got := Resolve("CICD_ENABLED"); got != "cicd" {
 		t.Fatalf("got %q", got)

@@ -1,21 +1,16 @@
-import { PauseOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined } from "@ant-design/icons";
-import { Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Tag, message } from "antd";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
-import "xterm/css/xterm.css";
-import { useLogStream } from "../contexts/log-stream-context";
-import { parseLogStreamFromSearch, syncLogStreamSearchParams } from "../lib/log-stream-session";
+import { DownloadOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Col, DatePicker, Form, Input, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import dayjs, { type Dayjs } from "dayjs";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   exportProjectLogs,
-  getProjectAgentDiscovery,
-  getProjectAgentStatus,
   getProjectLogSources,
   getProjectServers,
   getProjectServices,
   getProjects,
-  upsertProjectLogSource,
-  type AgentDiscoveryItem,
+  searchProjectLogs,
+  type LogSearchItem,
   type LogSourceItem,
   type ProjectItem,
   type ServerItem,
@@ -23,170 +18,39 @@ import {
 } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
-type StreamForm = {
+type SearchForm = {
   project_id?: number;
   server_id?: number;
   service_id?: number;
   log_source_id?: number;
+  keyword?: string;
+  level?: string;
   file_path?: string;
-  tail_lines?: number;
-  include?: string;
-  exclude?: string;
-  highlight?: string;
+  time_range?: [Dayjs, Dayjs];
+  page?: number;
+  page_size?: number;
 };
 
-function globToRegExp(pattern: string): RegExp | null {
-  const src = pattern.trim();
-  if (!src) return null;
-  let re = "^";
-  let i = 0;
-  while (i < src.length) {
-    const ch = src[i];
-    if (ch === "*") {
-      if (src[i + 1] === "*") {
-        re += ".*";
-        i += 2;
-      } else {
-        re += "[^/]*";
-        i += 1;
-      }
-      continue;
-    }
-    if (ch === "?") {
-      re += ".";
-      i += 1;
-      continue;
-    }
-    if (ch === ".") {
-      re += "\\.";
-      i += 1;
-      continue;
-    }
-    if ("+^$(){}|[]\\".includes(ch)) {
-      re += `\\${ch}`;
-      i += 1;
-      continue;
-    }
-    re += ch;
-    i += 1;
-  }
-  re += "$";
-  try {
-    return new RegExp(re);
-  } catch {
-    return null;
-  }
-}
-
-function pathMatchesSource(filePath: string, sourcePath: string): boolean {
-  const file = filePath.trim();
-  const src = sourcePath.trim();
-  if (!file || !src) return false;
-  if (!src.includes("*") && !src.includes("?")) return file === src;
-  const re = globToRegExp(src);
-  if (!re) return false;
-  return re.test(file);
-}
-
 export function ProjectLogsPage() {
-  const logStream = useLogStream();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [sources, setSources] = useState<LogSourceItem[]>([]);
-  const [discoveryFiles, setDiscoveryFiles] = useState<AgentDiscoveryItem[]>([]);
-  const [creatingPath, setCreatingPath] = useState<string | null>(null);
+  const [rows, setRows] = useState<LogSearchItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const [agentStatus, setAgentStatus] = useState({
-    stateText: "未检测",
-    online: false,
-    recentPublishing: false,
-    lastSeenText: "-",
-    checked: false,
-  });
-
-  const termHostRef = useRef<HTMLDivElement | null>(null);
-  const termWrapRef = useRef<HTMLDivElement | null>(null);
-  const termRef = useRef<Terminal | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
-  const bootstrappedRef = useRef(false);
-
-  const [form] = Form.useForm<StreamForm>();
+  const [form] = Form.useForm<SearchForm>();
   const watchProjectId = Form.useWatch("project_id", form);
   const watchServerId = Form.useWatch("server_id", form);
-  const watchLogSourceId = Form.useWatch("log_source_id", form);
-
-  const { streaming, streamModeHint, lineCount, linesPerSec, paused, start, stop, togglePause, attachWriter, registerTerminalClear, setForm } =
-    logStream;
 
   const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
   const serverOptions = useMemo(
-    () => servers.map((s) => ({ value: s.id, label: `${s.name} ${s.host}:${s.port} (${s.os_type || "-"} ${s.os_arch || "-"})` })),
+    () => servers.map((s) => ({ value: s.id, label: `${s.name} ${s.host}:${s.port}` })),
     [servers],
   );
   const serviceOptions = useMemo(() => services.map((s) => ({ value: s.id, label: s.name })), [services]);
   const sourceOptions = useMemo(() => sources.map((s) => ({ value: s.id, label: `${s.log_type}:${s.path}` })), [sources]);
-  const selectedSource = useMemo(() => sources.find((s) => s.id === watchLogSourceId), [sources, watchLogSourceId]);
-  const matchedFiles = useMemo(() => {
-    if (!selectedSource || (selectedSource.log_type ?? "").toLowerCase() !== "file") return [];
-    const sourcePath = (selectedSource.path ?? "").trim();
-    if (!sourcePath) return [];
-    return discoveryFiles
-      .filter((it) => pathMatchesSource(it.value, sourcePath))
-      .sort((a, b) => a.value.localeCompare(b.value));
-  }, [discoveryFiles, selectedSource]);
-
-  const discoveryOrphans = useMemo(() => {
-    if (!watchServerId) return [];
-    const list =
-      sources.length === 0
-        ? discoveryFiles
-        : discoveryFiles.filter((it) => !sources.some((s) => pathMatchesSource(it.value, s.path)));
-    return list.sort((a, b) => a.value.localeCompare(b.value)).slice(0, 12);
-  }, [discoveryFiles, sources, watchServerId]);
-
-  const fileOptions = useMemo(
-    () => [{ value: "", label: "全部匹配文件" }, ...matchedFiles.map((it) => ({ value: it.value, label: it.value }))],
-    [matchedFiles],
-  );
-
-  useEffect(() => {
-    termRef.current = new Terminal({ convertEol: true, fontSize: 12, scrollback: 5000 });
-    fitRef.current = new FitAddon();
-    termRef.current.loadAddon(fitRef.current);
-    if (termHostRef.current) {
-      termRef.current.open(termHostRef.current);
-      fitRef.current.fit();
-    }
-    const onResize = () => fitRef.current?.fit();
-    window.addEventListener("resize", onResize);
-    const wrap = termWrapRef.current;
-    const ro =
-      wrap &&
-      new ResizeObserver(() => {
-        fitRef.current?.fit();
-      });
-    if (wrap && ro) ro.observe(wrap);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      ro?.disconnect();
-      termRef.current?.dispose();
-      termRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const detachWrite = attachWriter((line) => {
-      termRef.current?.writeln(line);
-    });
-    const detachClear = registerTerminalClear(() => {
-      termRef.current?.clear();
-    });
-    return () => {
-      detachWrite();
-      detachClear();
-    };
-  }, [attachWriter, registerTerminalClear]);
 
   const reloadServers = useCallback(async (projectId?: number) => {
     if (!projectId) return;
@@ -204,362 +68,358 @@ export function ProjectLogsPage() {
     if (!projectId) return;
     const data = await getProjectLogSources(projectId, { page: 1, page_size: 1000, service_id: serviceId });
     setSources(data.list);
-    return data.list;
   }, []);
 
-  const reloadDiscoveryFiles = useCallback(async (projectId?: number, serverId?: number) => {
-    setDiscoveryFiles([]);
-    if (!projectId || !serverId) return;
-    try {
-      const data = await getProjectAgentDiscovery(projectId, {
-        server_id: serverId,
-        kind: "file",
-        limit: 2000,
-        fresh_hours: 24 * 7,
-      });
-      setDiscoveryFiles(data.list);
-    } catch {
-      setDiscoveryFiles([]);
-    }
-  }, []);
+  const [emptyHint, setEmptyHint] = useState<string>("");
+
+  const runSearch = useCallback(
+    async (override?: Partial<SearchForm>) => {
+      const values = { ...form.getFieldsValue(), ...override };
+      if (!values.project_id) {
+        message.warning("请选择项目");
+        return;
+      }
+      const page = values.page ?? 1;
+      const pageSize = values.page_size ?? 100;
+      const range = values.time_range;
+      const filePath = values.file_path?.trim() || undefined;
+      setLoading(true);
+      setEmptyHint("");
+      try {
+        const res = await searchProjectLogs(values.project_id, {
+          server_id: values.server_id,
+          service_id: values.service_id,
+          log_source_id: values.log_source_id,
+          keyword: values.keyword?.trim() || undefined,
+          level: values.level?.trim() || undefined,
+          file_path: filePath,
+          from: range?.[0]?.toISOString(),
+          to: range?.[1]?.toISOString(),
+          page,
+          page_size: pageSize,
+        });
+        setRows(res.list);
+        setTotal(res.total);
+        form.setFieldsValue({ page, page_size: pageSize });
+        if ((res.total ?? 0) === 0 && filePath) {
+          setEmptyHint(
+            `按文件名「${filePath}」无命中。请确认 Agent「热更」后已写入 file_path，或清空文件名筛选项/扩大时间范围。`,
+          );
+        } else if ((res.total ?? 0) === 0 && values.server_id) {
+          message.warning(`无结果：将检索索引 yunshu-agent-${values.server_id}-*，可确认 Agent 已写入或清空服务器筛选`);
+        } else if ((res.total ?? 0) === 0 && range?.[0] && range?.[1]) {
+          message.warning("无结果：若 ES 文档缺少 @timestamp，请先清空时间范围后再查");
+        } else if ((res.total ?? 0) === 0 && !range?.[0] && !range?.[1]) {
+          setEmptyHint("未选时间范围且无数据。确认 Agent 已在采集并写入 yunshu-agent-{server_id}-日 索引。");
+        }
+      } catch (e: unknown) {
+        message.error(String((e as Error)?.message ?? e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [form],
+  );
 
   useEffect(() => {
     void (async () => {
       const data = await getProjects({ page: 1, page_size: 1000 });
       setProjects(data.list);
-
-      const fromUrl = parseLogStreamFromSearch();
-      const merged: StreamForm = {
-        project_id: fromUrl.project_id ?? data.list[0]?.id,
-        server_id: fromUrl.server_id,
-        service_id: fromUrl.service_id,
-        log_source_id: fromUrl.log_source_id,
-        file_path: fromUrl.file_path,
-        tail_lines: fromUrl.tail_lines ?? 200,
-        include: fromUrl.include,
-        exclude: fromUrl.exclude,
-        highlight: fromUrl.highlight,
-      };
-      form.setFieldsValue(merged);
-      setForm(merged);
-
-      if (merged.project_id) {
-        await reloadServers(merged.project_id);
-        if (merged.server_id) {
-          await reloadServices(merged.project_id, merged.server_id);
-          if (merged.service_id) {
-            await reloadSources(merged.project_id, merged.service_id);
-          }
-          if (merged.server_id) {
-            await reloadDiscoveryFiles(merged.project_id, merged.server_id);
-          }
-        }
-      }
-
-      if (!bootstrappedRef.current) {
-        bootstrappedRef.current = true;
-        if (fromUrl.autostart && merged.project_id && merged.server_id && merged.log_source_id) {
-          try {
-            await start(merged);
-          } catch (e: unknown) {
-            message.error(String((e as Error)?.message ?? e));
-          }
-        }
+      const defaultProject = data.list[0]?.id;
+      if (defaultProject) {
+        form.setFieldsValue({
+          project_id: defaultProject,
+          page: 1,
+          page_size: 100,
+          time_range: [dayjs().subtract(24, "hour"), dayjs()],
+        });
+        await reloadServers(defaultProject);
+        await runSearch({ project_id: defaultProject, page: 1, page_size: 100, time_range: [dayjs().subtract(24, "hour"), dayjs()] });
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleStart() {
-    try {
-      const values = await form.validateFields();
-      setForm(values);
-      syncLogStreamSearchParams(values, true);
-      await start(values);
-    } catch (e: unknown) {
-      const err = e as { errorFields?: unknown; message?: string; name?: string };
-      if (err?.errorFields) return;
-      if (err?.name === "AbortError") return;
-      message.error(String(err?.message ?? e));
-    }
-  }
-
-  function handleStop() {
-    const values = form.getFieldsValue();
-    syncLogStreamSearchParams(values, false);
-    stop();
-  }
-
-  function handleFormChange(_: Partial<StreamForm>, all: StreamForm) {
-    setForm(all);
-    syncLogStreamSearchParams(all, streaming);
-  }
-
-  async function createSourceFromDiscovery(filePath: string) {
-    const pid = form.getFieldValue("project_id");
-    const svcId = form.getFieldValue("service_id");
-    if (!pid || !svcId) {
-      message.warning("请先选择项目与服务，再一键创建日志源");
-      return;
-    }
-    setCreatingPath(filePath);
-    try {
-      await upsertProjectLogSource(pid, {
-        service_id: svcId,
-        log_type: "file",
-        path: filePath,
-        status: 1,
-      });
-      message.success("已创建日志源");
-      await reloadSources(pid, svcId);
-      await reloadDiscoveryFiles(pid, form.getFieldValue("server_id"));
-    } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
-    } finally {
-      setCreatingPath(null);
-    }
-  }
-
-  async function refreshAgentHint(projectId?: number, serverId?: number, logSourceId?: number) {
-    if (!projectId || !serverId) {
-      setAgentStatus({
-        stateText: "未检测",
-        online: false,
-        recentPublishing: false,
-        lastSeenText: "-",
-        checked: false,
-      });
-      return;
-    }
-    try {
-      const st = await getProjectAgentStatus(projectId, { server_id: serverId, log_source_id: logSourceId });
-      setAgentStatus({
-        stateText: st.online ? "在线" : "离线",
-        online: st.online,
-        recentPublishing: st.recent_publishing,
-        lastSeenText: st.last_seen_at ? formatDateTime(st.last_seen_at) : "-",
-        checked: true,
-      });
-    } catch {
-      setAgentStatus({
-        stateText: "检测失败",
-        online: false,
-        recentPublishing: false,
-        lastSeenText: "-",
-        checked: true,
-      });
-    }
-  }
-
-  useEffect(() => {
-    void refreshAgentHint(watchProjectId, watchServerId, watchLogSourceId);
-  }, [watchProjectId, watchServerId, watchLogSourceId]);
-
-  useEffect(() => {
-    form.setFieldValue("file_path", undefined);
-  }, [watchProjectId, watchServerId, selectedSource?.id, form]);
-
-  useEffect(() => {
-    void reloadDiscoveryFiles(watchProjectId, watchServerId);
-  }, [watchProjectId, watchServerId, reloadDiscoveryFiles]);
+  const columns: ColumnsType<LogSearchItem> = [
+    {
+      title: "时间",
+      dataIndex: "timestamp",
+      width: 170,
+      fixed: "left",
+      render: (v: string) => <span className="log-meta-cell">{formatDateTime(v)}</span>,
+    },
+    {
+      title: "级别",
+      dataIndex: "level",
+      width: 76,
+      fixed: "left",
+      render: (v?: string, r?: LogSearchItem) => {
+        const level = normalizeLogLevel(v || extractLogLevel(r?.message));
+        if (!level) return "-";
+        const color = level === "ERROR" || level === "FATAL" ? "error" : level === "WARN" ? "warning" : level === "INFO" ? "processing" : "default";
+        return <Tag color={color}>{level}</Tag>;
+      },
+    },
+    {
+      title: "内容",
+      dataIndex: "message",
+      render: (_: string, r) => <LogMessageCell highlight={r.highlight} message={r.message} />,
+    },
+    {
+      title: "服务",
+      dataIndex: "service_name",
+      width: 120,
+      render: (v?: string) => <span className="log-meta-cell">{v || "-"}</span>,
+    },
+    {
+      title: "主机",
+      dataIndex: "host",
+      width: 120,
+      render: (v?: string, r?: LogSearchItem) => <span className="log-meta-cell">{v || r?.server_host || "-"}</span>,
+    },
+    {
+      title: "文件",
+      dataIndex: "file_path",
+      width: 180,
+      render: (v?: string) => {
+        if (!v) return "-";
+        const base = v.split(/[/\\]/).pop() || v;
+        return (
+          <Typography.Text className="log-meta-cell log-file-cell" title={v}>
+            {base}
+          </Typography.Text>
+        );
+      },
+    },
+    {
+      title: "Namespace",
+      dataIndex: "namespace",
+      width: 110,
+      render: (v?: string) => <span className="log-meta-cell">{v || "-"}</span>,
+    },
+    {
+      title: "Pod",
+      dataIndex: "podname",
+      width: 140,
+      render: (v?: string, r?: LogSearchItem) => <span className="log-meta-cell">{v || r?.pod || "-"}</span>,
+    },
+    {
+      title: "容器",
+      dataIndex: "containername",
+      width: 100,
+      render: (v?: string, r?: LogSearchItem) => <span className="log-meta-cell">{v || r?.container || "-"}</span>,
+    },
+  ];
 
   return (
     <div className="project-logs-page">
       <Card
         className="table-card project-logs-card"
-        title="日志平台"
+        title="日志检索"
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => void reloadServers(form.getFieldValue("project_id"))}>
-              刷新服务器
+            <Tag color="blue">Agent → Elasticsearch（yunshu-agent-*）</Tag>
+            <Button icon={<ReloadOutlined />} onClick={() => void runSearch()}>
+              刷新
             </Button>
             <Button
               icon={<DownloadOutlined />}
               onClick={() => {
                 const v = form.getFieldsValue();
-                if (!v.project_id || !v.server_id || !v.log_source_id) return;
+                if (!v.project_id) {
+                  message.warning("请选择项目");
+                  return;
+                }
+                const range = v.time_range;
                 void (async () => {
-                  const blob = await exportProjectLogs(v.project_id!, {
-                    server_id: v.server_id!,
-                    log_source_id: v.log_source_id!,
-                    max_lines: v.tail_lines ?? 2000,
-                    include: v.include,
-                    exclude: v.exclude,
-                  });
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `project-${v.project_id}-server-${v.server_id}-logs.txt`;
-                  a.click();
-                  window.URL.revokeObjectURL(url);
+                  try {
+                    const blob = await exportProjectLogs(v.project_id!, {
+                      server_id: v.server_id,
+                      service_id: v.service_id,
+                      log_source_id: v.log_source_id,
+                      keyword: v.keyword?.trim() || undefined,
+                      level: v.level?.trim() || undefined,
+                      file_path: v.file_path?.trim() || undefined,
+                      from: range?.[0]?.toISOString(),
+                      to: range?.[1]?.toISOString(),
+                      page_size: 1000,
+                    });
+                    if (!(blob instanceof Blob)) {
+                      message.error("导出失败：响应格式异常");
+                      return;
+                    }
+                    if (blob.type && blob.type.includes("application/json")) {
+                      const text = await blob.text();
+                      try {
+                        const err = JSON.parse(text) as { message?: string };
+                        message.error(err.message || "导出失败");
+                      } catch {
+                        message.error("导出失败");
+                      }
+                      return;
+                    }
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `project-${v.project_id}-logs.txt`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    message.success("导出完成");
+                  } catch (e: unknown) {
+                    message.error(String((e as Error)?.message ?? e));
+                  }
                 })();
               }}
             >
               导出
             </Button>
-            {streaming ? (
-              <>
-                <Button icon={paused ? <PlayCircleOutlined /> : <PauseOutlined />} onClick={togglePause}>
-                  {paused ? "继续显示" : "暂停显示"}
-                </Button>
-                <Button danger onClick={handleStop}>
-                  停止
-                </Button>
-              </>
-            ) : (
-              <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void handleStart()}>
-                开始
-              </Button>
-            )}
+            <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => void runSearch({ page: 1 })}>
+              检索
+            </Button>
           </Space>
         }
       >
-        <div className="project-logs-status-panel">
-          <Space size={12} wrap>
-            <span style={{ fontWeight: 600 }}>采集状态面板</span>
-            <Tag color={streaming ? "processing" : "default"}>流状态：{streamModeHint}</Tag>
-            <Tag color={streaming ? "blue" : "default"}>
-              {lineCount} 行 · {linesPerSec} 行/秒
-            </Tag>
-            <Tag color={!agentStatus.checked ? "default" : agentStatus.online ? "success" : "error"}>
-              Agent：{agentStatus.stateText}
-            </Tag>
-            <Tag color={!agentStatus.checked ? "default" : agentStatus.recentPublishing ? "success" : "warning"}>
-              上报：{!agentStatus.checked ? "未检测" : agentStatus.recentPublishing ? "最近有上报" : "最近无上报"}
-            </Tag>
-            <Tag>最后心跳：{agentStatus.lastSeenText}</Tag>
-          </Space>
-        </div>
-
-        {discoveryOrphans.length > 0 ? (
-          <div className="project-logs-discovery-panel">
-            <Space size={8} wrap align="start">
-              <span style={{ fontWeight: 600 }}>Agent 发现（未配置日志源）：</span>
-              {discoveryOrphans.map((it) => (
-                <Tag key={it.value}>
-                  <span className="project-logs-discovery-path">{it.value}</span>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    loading={creatingPath === it.value}
-                    onClick={() => void createSourceFromDiscovery(it.value)}
-                  >
-                    创建日志源
-                  </Button>
-                </Tag>
-              ))}
-            </Space>
-          </div>
-        ) : null}
-
-        <Form form={form} layout="vertical" onValuesChange={handleFormChange}>
+        <Form form={form} layout="vertical">
           <Row gutter={12}>
-            <Col span={5}>
-              <Form.Item label="项目" name="project_id">
+            <Col span={4}>
+              <Form.Item label="项目" name="project_id" rules={[{ required: true, message: "请选择项目" }]}>
                 <Select
                   options={projectOptions}
                   onChange={(pid) => {
-                    form.setFieldsValue({
-                      server_id: undefined,
-                      service_id: undefined,
-                      log_source_id: undefined,
-                      file_path: undefined,
-                    });
+                    form.setFieldsValue({ server_id: undefined, service_id: undefined, log_source_id: undefined });
                     setServers([]);
                     setServices([]);
                     setSources([]);
-                    setDiscoveryFiles([]);
                     void reloadServers(pid);
                   }}
                 />
               </Form.Item>
             </Col>
-            <Col span={5}>
+            <Col span={4}>
               <Form.Item label="服务器" name="server_id">
                 <Select
+                  allowClear
                   options={serverOptions}
-                  placeholder="先选择服务器"
+                  placeholder="全部"
                   onChange={(sid) => {
                     const pid = form.getFieldValue("project_id");
-                    form.setFieldsValue({ service_id: undefined, log_source_id: undefined, file_path: undefined });
+                    form.setFieldsValue({ service_id: undefined, log_source_id: undefined });
                     setServices([]);
                     setSources([]);
                     void reloadServices(pid, sid);
-                    void refreshAgentHint(pid, sid, undefined);
-                    void reloadDiscoveryFiles(pid, sid);
                   }}
                 />
               </Form.Item>
             </Col>
-            <Col span={5}>
+            <Col span={4}>
               <Form.Item label="服务" name="service_id">
                 <Select
-                  options={serviceOptions}
-                  placeholder="服务配置请到“服务配置”页面"
                   allowClear
+                  options={serviceOptions}
+                  placeholder="全部"
                   onChange={(svcId) => {
                     const pid = form.getFieldValue("project_id");
-                    form.setFieldsValue({ log_source_id: undefined, file_path: undefined });
+                    form.setFieldsValue({ log_source_id: undefined });
                     setSources([]);
                     void reloadSources(pid, svcId);
-                    void refreshAgentHint(pid, form.getFieldValue("server_id"), undefined);
                   }}
                 />
               </Form.Item>
             </Col>
-            <Col span={5}>
+            <Col span={4}>
               <Form.Item label="日志源" name="log_source_id">
-                <Select
-                  options={sourceOptions}
-                  placeholder="日志源配置请到“日志源配置”页面"
-                  onChange={(logSourceId) => {
-                    form.setFieldValue("file_path", undefined);
-                    void refreshAgentHint(form.getFieldValue("project_id"), form.getFieldValue("server_id"), logSourceId);
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label="日志文件" name="file_path">
-                <Select
-                  options={fileOptions}
-                  placeholder="默认全部匹配文件"
-                  allowClear
-                  disabled={!selectedSource || (selectedSource.log_type ?? "").toLowerCase() !== "file"}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={12}>
-            <Col span={4}>
-              <Form.Item label="Tail 行数" name="tail_lines">
-                <InputNumber min={1} max={5000} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item label="include（regex）" name="include">
-                <Input placeholder="可选" />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item label="exclude（regex）" name="exclude">
-                <Input placeholder="可选" />
+                <Select allowClear options={sourceOptions} placeholder="全部" />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item label="highlight（关键字）" name="highlight">
-                <Input placeholder="可选" />
+              <Form.Item label="时间范围" name="time_range">
+                <DatePicker.RangePicker showTime style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={8}>
+              <Form.Item label="关键词" name="keyword">
+                <Input placeholder="支持 simple_query_string，高亮匹配内容" allowClear />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label="日志级别" name="level">
+                <Select
+                  allowClear
+                  placeholder="全部"
+                  options={[
+                    { value: "ERROR", label: "ERROR" },
+                    { value: "WARN", label: "WARN" },
+                    { value: "INFO", label: "INFO" },
+                    { value: "DEBUG", label: "DEBUG" },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="文件名" name="file_path" tooltip="需先「同步下发」Loggie 后新日志才有 file_path。清空可查看全部文件。示例：748.log / info.log">
+                <Input allowClear placeholder="748.log / info.log（留空=不限文件）" />
               </Form.Item>
             </Col>
           </Row>
         </Form>
 
-        <div ref={termWrapRef} className="project-logs-terminal-wrap">
-          <div ref={termHostRef} className="project-logs-terminal-host" />
+        {emptyHint ? (
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={emptyHint} />
+        ) : null}
+
+        <div className="project-logs-table-wrap">
+          <Table
+            rowKey={(r, i) => `${r.timestamp}-${i}`}
+            loading={loading}
+            columns={columns}
+            dataSource={rows}
+            size="small"
+            className="project-logs-table"
+            tableLayout="fixed"
+            pagination={{
+              current: form.getFieldValue("page") ?? 1,
+              pageSize: form.getFieldValue("page_size") ?? 100,
+              total,
+              showSizeChanger: true,
+              pageSizeOptions: ["50", "100", "200", "500"],
+              showTotal: (t) => `共 ${t} 条`,
+              onChange: (page, pageSize) => void runSearch({ page, page_size: pageSize }),
+            }}
+            scroll={{ x: 1100 }}
+          />
         </div>
       </Card>
     </div>
   );
+}
+
+function LogMessageCell({ message, highlight }: { message?: string; highlight?: string }) {
+  if (highlight) {
+    return <div className="log-message-cell" dangerouslySetInnerHTML={{ __html: highlight }} />;
+  }
+  return <div className="log-message-cell">{message || "-"}</div>;
+}
+
+function normalizeLogLevel(level?: string) {
+  const v = String(level || "").trim().toUpperCase();
+  if (!v) return "";
+  return v === "WARNING" ? "WARN" : v;
+}
+
+function extractLogLevel(message?: string) {
+  if (!message) return "";
+  const bracket = message.match(/\[(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PANIC)\s*\]/i);
+  if (bracket?.[1]) return normalizeLogLevel(bracket[1]);
+  const token = message.match(/\s(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|PANIC)\s/i);
+  if (token?.[1]) return normalizeLogLevel(token[1]);
+  const pipe = message.match(/\|\s*(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s*\|/i);
+  if (pipe?.[1]) return normalizeLogLevel(pipe[1]);
+  const klog = message.match(/(?:^|[\s>])([IWEF])\d{4}\s+\d{2}:\d{2}:\d{2}/);
+  if (klog?.[1]) {
+    const map: Record<string, string> = { I: "INFO", W: "WARN", E: "ERROR", F: "FATAL" };
+    return map[klog[1]] || "";
+  }
+  return "";
 }

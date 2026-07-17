@@ -12,7 +12,9 @@
 | [../backend-architecture-complete.md](../backend-architecture-complete.md) | 后端完整技术文档 |
 | [../refactoring-report.md](../refactoring-report.md) | 架构重构实施状态 |
 | [../cicd.md](../cicd.md) | **CI/CD 插件**（Jenkins、审批、字典） |
+| [../dbmgmt.md](../dbmgmt.md) | **数据库管理插件**（实例、SQL 审核、授权工单） |
 | [requirements/](./requirements/) | 按业务域拆分的需求说明（功能、子功能、注意事项） |
+| [requirements/modules/_INDEX.md](./requirements/modules/_INDEX.md) | **模块级标准开发需求**（接口/入参/出参/库表）**推荐研发入口** |
 | [requirements/menus/_INDEX.md](./requirements/menus/_INDEX.md) | **按菜单（路由）一页一文**的详细需求，含 API/表/注意事项 |
 | [requirements/menus/menu-k8s-resource-pattern.md](./requirements/menus/menu-k8s-resource-pattern.md) | K8s 控制台列表类页面通用模式（集群/三元策略/典型能力） |
 | [database/schema-and-relationships.md](./database/schema-and-relationships.md) | 表清单、关系说明、与 GORM 模型对应 |
@@ -35,5 +37,5 @@
 - 告警路由、处理人、值班与标题：`docs/alert-routing-and-delivery-guide.md`（**推荐运维阅读**）
 - 订阅标签链路：`docs/alert-subscription-labels-chain.md`
 - 告警平台详细设计：`docs/requirements/R-alert-platform-detailed-design.md`
-- 日志平台 gRPC：`docs/log-platform-api.md`
+- 日志平台（Loggie + ES）：`docs/log-platform-es.md`；模块需求 `docs/handbook/requirements/modules/M-04-log-platform.md`
 - **麒麟 V10 部署**：`docs/deployment/KYLIN_V10_X86_64.md`

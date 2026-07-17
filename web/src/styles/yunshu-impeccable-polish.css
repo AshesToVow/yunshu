@@ -1,0 +1,276 @@
+/**
+ * Yunshu polish layer — Taste Skill + Impeccable aligned tokens
+ * Product ops UI: restrained color, clear focus, no AI-slop gradients on auth.
+ */
+
+:root {
+  --ys-brand: #0d9488;
+  --ys-brand-strong: #0f766e;
+  --ys-brand-soft: color-mix(in srgb, var(--ys-brand) 14%, transparent);
+  --ys-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ys-brand) 28%, transparent);
+  --ys-font-sans: "IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ys-text: #0f172a;
+  --ys-text-muted: #64748b;
+  --ys-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ys-duration: 180ms;
+  --ys-z-dropdown: 100;
+  --ys-z-sticky: 200;
+  --ys-z-modal: 1000;
+  --ys-z-toast: 1100;
+}
+
+/* ---- Login / auth (gw-auth) — taste-skill: trust-first, low motion ---- */
+.gw-auth-shell {
+  --login-accent: var(--ys-brand);
+  font-family: var(--ys-font-sans);
+}
+
+.gw-auth-shell.is-dark {
+  color: #e2e8f0;
+  background: linear-gradient(145deg, #0c1220 0%, #111827 48%, #0f172a 100%);
+}
+
+.gw-auth-shell.is-light {
+  color: var(--ys-text);
+  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 52%, #e8eef5 100%);
+}
+
+.gw-auth-shell::before {
+  background:
+    radial-gradient(circle at 18% 22%, color-mix(in srgb, var(--login-accent) 12%, transparent), transparent 34%),
+    radial-gradient(circle at 82% 78%, color-mix(in srgb, var(--login-accent) 8%, transparent), transparent 38%);
+  animation: gw-auth-bg-shift 14s var(--ys-ease) infinite;
+}
+
+.gw-auth-brand__logoDot {
+  background: var(--login-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--login-accent) 22%, transparent);
+}
+
+.gw-auth-card {
+  border: 1px solid color-mix(in srgb, var(--login-accent) 20%, #94a3b8 80%);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.gw-auth-shell.is-dark .gw-auth-card {
+  background: color-mix(in srgb, #0f172a 92%, transparent);
+  border-color: color-mix(in srgb, var(--login-accent) 24%, #334155 76%);
+}
+
+.gw-auth-shell.is-light .gw-auth-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.gw-auth-card__title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.gw-auth-card__sub {
+  color: var(--ys-text-muted);
+  line-height: 1.55;
+  text-wrap: pretty;
+  max-width: 36ch;
+}
+
+.gw-auth-slogan__title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  max-width: 16ch;
+  margin-inline: auto;
+}
+
+.gw-auth-slogan__desc {
+  color: var(--ys-text-muted);
+  line-height: 1.6;
+  text-wrap: pretty;
+  max-width: 42ch;
+  margin-inline: auto;
+}
+
+.gw-auth-shell.is-dark .gw-auth-slogan__title {
+  color: #f1f5f9;
+}
+
+.gw-auth-shell.is-dark .gw-auth-slogan__desc {
+  color: #94a3b8;
+}
+
+.gw-auth-shell.is-light .gw-auth-slogan__title {
+  color: var(--ys-text);
+}
+
+.gw-auth-shell.is-light .gw-auth-slogan__desc {
+  color: var(--ys-text-muted);
+}
+
+.gw-auth-shell.is-light .gw-auth-slogan::before {
+  background:
+    radial-gradient(circle at 48% 42%, color-mix(in srgb, var(--login-accent) 10%, #ffffff 90%), transparent 62%),
+    radial-gradient(circle at 56% 60%, color-mix(in srgb, var(--login-accent) 6%, transparent), transparent 58%);
+}
+
+.gw-auth-shell .login-light-switch {
+  border-radius: 8px;
+  padding: 3px;
+  background: #e2e8f0;
+}
+
+.gw-auth-shell.is-dark .login-light-switch {
+  background: #1e293b;
+}
+
+.gw-auth-shell .login-light-switch__item.is-active {
+  background: var(--login-accent);
+  color: #fff;
+}
+
+.gw-auth-shell .login-light-card__hint {
+  color: var(--ys-text-muted);
+  font-size: 13px;
+}
+
+.gw-auth-shell .ant-form-item-label > label {
+  font-weight: 500;
+  color: inherit;
+}
+
+.gw-auth-shell .ant-input-affix-wrapper,
+.gw-auth-shell .ant-input {
+  border-radius: 8px;
+  transition: border-color var(--ys-duration) var(--ys-ease), box-shadow var(--ys-duration) var(--ys-ease);
+}
+
+.gw-auth-shell .ant-input-affix-wrapper:focus-within,
+.gw-auth-shell .ant-input:focus-within {
+  box-shadow: var(--ys-focus-ring);
+  border-color: var(--login-accent) !important;
+}
+
+.gw-auth-shell .ant-input::placeholder {
+  color: #94a3b8;
+}
+
+.gw-auth-shell .login-submitBtn.ant-btn {
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background-color var(--ys-duration) var(--ys-ease), border-color var(--ys-duration) var(--ys-ease);
+}
+
+.gw-auth-shell .login-submitBtn.ant-btn:not(:disabled):hover {
+  transform: none;
+}
+
+.gw-accent-blue { --login-accent: #2563eb; }
+.gw-accent-violet { --login-accent: #7c3aed; }
+.gw-accent-emerald { --login-accent: #0d9488; }
+.gw-accent-amber { --login-accent: #d97706; }
+
+/* ---- Admin ops shell — impeccable product register ---- */
+.admin-shell.ops-platform {
+  --admin-accent: var(--ys-brand);
+  --ops-brand: var(--ys-brand);
+  font-family: var(--ys-font-sans);
+}
+
+.admin-shell.ops-platform .ant-btn-primary {
+  background: var(--ys-brand) !important;
+  border-color: var(--ys-brand) !important;
+}
+
+.admin-shell.ops-platform .ant-btn-primary:not(:disabled):hover {
+  background: var(--ys-brand-strong) !important;
+  border-color: var(--ys-brand-strong) !important;
+}
+
+.admin-shell.ops-platform .ant-btn:focus-visible,
+.admin-shell.ops-platform .ant-input:focus-visible,
+.admin-shell.ops-platform .ant-select-selector:focus-visible,
+.admin-shell.ops-platform .ant-picker:focus-visible {
+  outline: 2px solid var(--ys-brand);
+  outline-offset: 2px;
+}
+
+.admin-shell.ops-platform .admin-header.ant-layout-header {
+  border-bottom: 1px solid var(--ops-border);
+}
+
+.admin-shell.ops-platform .admin-content {
+  padding: 20px 24px 28px;
+}
+
+.admin-shell.ops-platform .table-card.ant-card,
+.admin-shell.ops-platform .page-stack > .ant-card,
+.admin-shell.ops-platform .dashboard-stat-card.ant-card {
+  border-radius: var(--ops-radius);
+  border: 1px solid var(--ops-border);
+  box-shadow: none;
+}
+
+.admin-shell.ops-platform .ant-table-wrapper .ant-table-thead > tr > th {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.admin-shell.ops-platform .ant-table-wrapper .ant-table-tbody > tr > td {
+  font-size: 13px;
+}
+
+.admin-shell.ops-platform .brand-block__title {
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.admin-shell.ops-platform .brand-block__subtitle {
+  color: var(--admin-text-muted) !important;
+  line-height: 1.5 !important;
+}
+
+.admin-shell.ops-platform .admin-menu .ant-menu-item-selected {
+  font-weight: 500;
+}
+
+.admin-shell.ops-platform .ops-page-header__title {
+  text-wrap: balance;
+}
+
+.admin-shell.ops-platform .ops-page-header__description {
+  text-wrap: pretty;
+  max-width: 72ch;
+}
+
+.admin-shell.ops-platform .dashboard-section-title {
+  text-wrap: balance;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-auth-shell::before,
+  .gw-auth-slogan__image,
+  .gw-auth-slogan::before {
+    animation: none !important;
+  }
+
+  .gw-auth-shell .login-submitBtn.ant-btn:not(:disabled):hover {
+    transform: none;
+  }
+
+  * {
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .gw-auth-shell.is-dark .gw-auth-card,
+  .gw-auth-shell.is-light .gw-auth-card {
+    backdrop-filter: none;
+    background: #ffffff;
+  }
+
+  .gw-auth-shell.is-dark .gw-auth-card {
+    background: #0f172a;
+  }
+}

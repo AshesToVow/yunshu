@@ -6,13 +6,13 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config 根配置：聚合应用、HTTP、gRPC、存储、认证、告警与安全等子配置。
+// Config 根配置：聚合应用、HTTP、存储、认证、告警与安全等子配置。
 type Config struct {
 	App      AppConfig      `mapstructure:"app"`
 	HTTP     HTTPConfig     `mapstructure:"http"`
-	GRPC     GRPCConfig     `mapstructure:"grpc"`
 	Log      LogConfig      `mapstructure:"log"`
-	MySQL    MySQLConfig    `mapstructure:"mysql"`
+	Database DatabaseConfig `mapstructure:"database"`
+	MySQL    DatabaseConfig `mapstructure:"mysql"` // 兼容旧配置键；与 database 二选一或 database 优先
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Mail     MailConfig     `mapstructure:"mail"`
 	Auth     AuthConfig     `mapstructure:"auth"`
@@ -21,22 +21,12 @@ type Config struct {
 	Alert           AlertConfig           `mapstructure:"alert"`
 	K8sEventForward K8sEventForwardConfig `mapstructure:"k8s_event_forward"`
 	Security        SecurityConfig        `mapstructure:"security"`
-	Agent           AgentConfig           `mapstructure:"agent"`
 	Plugins         PluginsConfig         `mapstructure:"plugins"`
 	Cicd            CicdConfig            `mapstructure:"cicd"`
-}
-
-type GRPCConfig struct {
-	ListenAddr      string `mapstructure:"listen_addr"`
-	TargetAddr      string `mapstructure:"target_addr"`
-	MaxRecvMsgBytes int    `mapstructure:"max_recv_msg_bytes"`
-	MaxSendMsgBytes int    `mapstructure:"max_send_msg_bytes"`
-	// InternalToken 供本机 HTTP→gRPC 调用 Project/LogSource 服务；AgentRuntime 仍用 agent token。
-	InternalToken string `mapstructure:"internal_token"`
-	// CallTimeoutSeconds 单次 unary RPC 默认超时（客户端）。
-	CallTimeoutSeconds int `mapstructure:"call_timeout_seconds"`
-	// ShutdownTimeoutSeconds 优雅关闭 gRPC Server 的最长等待。
-	ShutdownTimeoutSeconds int `mapstructure:"shutdown_timeout_seconds"`
+	Dbmgmt          DbmgmtConfig          `mapstructure:"dbmgmt"`
+	Elasticsearch   ElasticsearchConfig   `mapstructure:"elasticsearch"`
+	Kafka           KafkaConfig           `mapstructure:"kafka"`
+	Loggie          LoggieConfig          `mapstructure:"loggie"`
 }
 
 type AppConfig struct {
@@ -50,7 +40,7 @@ type HTTPConfig struct {
 	ReadTimeoutSeconds       int `mapstructure:"read_timeout_seconds"`
 	WriteTimeoutSeconds      int `mapstructure:"write_timeout_seconds"`
 	IdleTimeoutSeconds       int `mapstructure:"idle_timeout_seconds"`
-	// ShutdownTimeoutSeconds 优雅关闭 HTTP Server 的最长等待（与 gRPC 分离）。
+	// ShutdownTimeoutSeconds 优雅关闭 HTTP Server 的最长等待。
 	ShutdownTimeoutSeconds int `mapstructure:"shutdown_timeout_seconds"`
 }
 
@@ -61,18 +51,25 @@ type LogConfig struct {
 	FilePath string `mapstructure:"file_path"` // log file directory path
 }
 
-type MySQLConfig struct {
+// DatabaseConfig 关系型数据库连接（支持 mysql、postgres）。
+type DatabaseConfig struct {
+	Driver                 string `mapstructure:"driver"` // mysql（默认）、postgres
 	Host                   string `mapstructure:"host"`
 	Port                   int    `mapstructure:"port"`
 	User                   string `mapstructure:"user"`
 	Password               string `mapstructure:"password"`
 	DBName                 string `mapstructure:"db_name"`
-	Charset                string `mapstructure:"charset"`
-	Loc                    string `mapstructure:"loc"`
+	Charset                string `mapstructure:"charset"`  // MySQL
+	Loc                    string `mapstructure:"loc"`      // MySQL parseTime loc
+	SSLMode                string `mapstructure:"sslmode"` // PostgreSQL
+	TimeZone               string `mapstructure:"timezone"` // PostgreSQL
 	MaxIdleConns           int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns           int    `mapstructure:"max_open_conns"`
 	ConnMaxLifetimeSeconds int    `mapstructure:"conn_max_lifetime_seconds"`
 }
+
+// MySQLConfig 为向后兼容保留的类型别名。
+type MySQLConfig = DatabaseConfig
 
 type RedisConfig struct {
 	Addr     string `mapstructure:"addr"`
@@ -111,14 +108,6 @@ type SecurityConfig struct {
 	// EncryptionKey is used to encrypt sensitive data (e.g., server SSH credentials).
 	// Recommended: 32-byte key in base64 format.
 	EncryptionKey string `mapstructure:"encryption_key"`
-}
-
-type AgentConfig struct {
-	// RegisterSecret is a shared secret used by log-agent to register itself and obtain an ingest token.
-	// If empty, public registration endpoint is disabled.
-	RegisterSecret string `mapstructure:"register_secret"`
-	// DiscoveryRoots are optional bootstrap paths reported to agents via runtime-config (_discovery_root).
-	DiscoveryRoots []string `mapstructure:"discovery_roots"`
 }
 
 type AlertConfig struct {
@@ -255,21 +244,6 @@ func Load(path string) (*Config, error) {
 	if cfg.Alert.PlatformLimits.GenericMaxChars <= 0 {
 		cfg.Alert.PlatformLimits.GenericMaxChars = 8000
 	}
-	if strings.TrimSpace(cfg.GRPC.ListenAddr) == "" {
-		cfg.GRPC.ListenAddr = "127.0.0.1:18080"
-	}
-	if strings.TrimSpace(cfg.GRPC.TargetAddr) == "" {
-		cfg.GRPC.TargetAddr = cfg.GRPC.ListenAddr
-	}
-	if strings.TrimSpace(cfg.GRPC.InternalToken) == "" && strings.TrimSpace(cfg.Auth.JWTSecret) != "" {
-		cfg.GRPC.InternalToken = cfg.Auth.JWTSecret
-	}
-	if cfg.GRPC.MaxRecvMsgBytes <= 0 {
-		cfg.GRPC.MaxRecvMsgBytes = 8 * 1024 * 1024
-	}
-	if cfg.GRPC.MaxSendMsgBytes <= 0 {
-		cfg.GRPC.MaxSendMsgBytes = 8 * 1024 * 1024
-	}
 	cfg.K8sEventForward.ApplyDefaults()
 	defCicd := DefaultCicdConfig()
 	if !cfg.Cicd.Enabled && !v.IsSet("cicd.enabled") {
@@ -296,7 +270,79 @@ func Load(path string) (*Config, error) {
 	if cfg.Cicd.DefaultArtifactRetain <= 0 {
 		cfg.Cicd.DefaultArtifactRetain = defCicd.DefaultArtifactRetain
 	}
+	defDbmgmt := DefaultDbmgmtConfig()
+	if cfg.Dbmgmt.QueryTimeoutSeconds <= 0 {
+		cfg.Dbmgmt.QueryTimeoutSeconds = defDbmgmt.QueryTimeoutSeconds
+	}
+	if cfg.Dbmgmt.MaxResultRows <= 0 {
+		cfg.Dbmgmt.MaxResultRows = defDbmgmt.MaxResultRows
+	}
+	if cfg.Dbmgmt.MaxImportFileMB <= 0 {
+		cfg.Dbmgmt.MaxImportFileMB = defDbmgmt.MaxImportFileMB
+	}
+	if cfg.Dbmgmt.ApprovalSlaHours <= 0 {
+		cfg.Dbmgmt.ApprovalSlaHours = defDbmgmt.ApprovalSlaHours
+	}
+	if cfg.Dbmgmt.ApprovalReminderIntervalHours <= 0 {
+		cfg.Dbmgmt.ApprovalReminderIntervalHours = defDbmgmt.ApprovalReminderIntervalHours
+	}
+	if len(cfg.Dbmgmt.AllowedDrivers) == 0 {
+		cfg.Dbmgmt.AllowedDrivers = defDbmgmt.AllowedDrivers
+	}
+	if cfg.Dbmgmt.PingIntervalSeconds <= 0 {
+		cfg.Dbmgmt.PingIntervalSeconds = defDbmgmt.PingIntervalSeconds
+	}
+	if cfg.Dbmgmt.MaxConcurrentPerInstance <= 0 {
+		cfg.Dbmgmt.MaxConcurrentPerInstance = defDbmgmt.MaxConcurrentPerInstance
+	}
+	normalizeDatabaseConfig(&cfg)
 	return &cfg, nil
+}
+
+func normalizeDatabaseConfig(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	db := cfg.Database
+	if strings.TrimSpace(db.Host) == "" && strings.TrimSpace(db.DBName) == "" {
+		db = cfg.MySQL
+	}
+	if strings.TrimSpace(db.Driver) == "" {
+		db.Driver = "mysql"
+	}
+	if db.Port <= 0 {
+		if NormalizeDatabaseDriver(db.Driver) == "postgres" {
+			db.Port = 5432
+		} else {
+			db.Port = 3306
+		}
+	}
+	if strings.TrimSpace(db.Charset) == "" {
+		db.Charset = "utf8mb4"
+	}
+	if strings.TrimSpace(db.Loc) == "" {
+		db.Loc = "Asia%2FShanghai"
+	}
+	if strings.TrimSpace(db.SSLMode) == "" {
+		db.SSLMode = "disable"
+	}
+	if strings.TrimSpace(db.TimeZone) == "" {
+		db.TimeZone = "Asia/Shanghai"
+	}
+	cfg.Database = db
+	cfg.MySQL = db
+}
+
+// NormalizeDatabaseDriver 归一化驱动名。
+func NormalizeDatabaseDriver(driver string) string {
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "", "mysql", "mariadb":
+		return "mysql"
+	case "postgres", "postgresql", "pg":
+		return "postgres"
+	default:
+		return strings.ToLower(strings.TrimSpace(driver))
+	}
 }
 
 func bindEnv(v *viper.Viper) error {
@@ -308,15 +354,24 @@ func bindEnv(v *viper.Viper) error {
 		"http.read_timeout_seconds":                nil,
 		"http.write_timeout_seconds":               nil,
 		"http.idle_timeout_seconds":                nil,
-		"grpc.listen_addr":                         nil,
-		"grpc.target_addr":                         nil,
-		"grpc.internal_token":                      nil,
-		"grpc.max_recv_msg_bytes":                  nil,
-		"grpc.max_send_msg_bytes":                  nil,
 		"log.level":                                nil,
 		"log.format":                               nil,
 		"log.output":                               nil,
 		"log.file_path":                            nil,
+		"database.driver":                          nil,
+		"database.host":                            nil,
+		"database.port":                            nil,
+		"database.user":                            nil,
+		"database.password":                        nil,
+		"database.db_name":                         nil,
+		"database.charset":                       nil,
+		"database.loc":                             nil,
+		"database.sslmode":                         nil,
+		"database.timezone":                        nil,
+		"database.max_idle_conns":                  nil,
+		"database.max_open_conns":                  nil,
+		"database.conn_max_lifetime_seconds":       nil,
+		"mysql.driver":                             nil,
 		"mysql.host":                               nil,
 		"mysql.port":                               nil,
 		"mysql.user":                               nil,
@@ -324,6 +379,8 @@ func bindEnv(v *viper.Viper) error {
 		"mysql.db_name":                            nil,
 		"mysql.charset":                            nil,
 		"mysql.loc":                                nil,
+		"mysql.sslmode":                            nil,
+		"mysql.timezone":                           nil,
 		"mysql.max_idle_conns":                     nil,
 		"mysql.max_open_conns":                     nil,
 		"mysql.conn_max_lifetime_seconds":          nil,
@@ -346,7 +403,6 @@ func bindEnv(v *viper.Viper) error {
 		"swagger.enabled":                          nil,
 		"swagger.path":                             nil,
 		"security.encryption_key":                  {"ENCRYPTION_KEY"},
-		"agent.register_secret":                    nil,
 		"alert.webhook_token":                      nil,
 		"alert.default_timeout_ms":                 nil,
 		"alert.max_payload_chars":                  nil,

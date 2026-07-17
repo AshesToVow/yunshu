@@ -182,6 +182,7 @@ export function JobsPage() {
       <YamlCrudPage<WorkloadItem, WorkloadDetail>
         title="Job 控制器管理"
         needNamespace
+        watchResource="jobs"
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

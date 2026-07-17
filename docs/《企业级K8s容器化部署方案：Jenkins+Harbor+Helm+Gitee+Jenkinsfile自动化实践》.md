@@ -49,16 +49,21 @@
 | 自动发布（默认） | 镜像推送后自动部署到 K8s |
 | 手动发布 | input 确认后部署 |
 | 仅构建 | 仅编译 + 推镜像，不生成 YAML、不部署 |
+| **制品发布** | **Yunshu CD 发布**：跳过 Checkout/Build/推镜像，用参数 `FULL_IMAGE_NAME` 直接生成模板并部署 |
 | 回滚 | kubectl rollout undo 或 Helm 回滚 |
+
+> **Yunshu 与 Jenkins 分工：** CI「打包」用 自动发布/手动发布/仅构建；CD「容器化发布」传 `publishMode=制品发布` + `FULL_IMAGE_NAME=已选 CI 镜像`。详见仓库 `jenkinslib/K8S-CD-ARTIFACT-DEPLOY.md`。
 
 ```mermaid
 flowchart TD
     A{publishMode} -->|回滚| R[回滚阶段]
-    A -->|其他| B[CheckOut → Build]
+    A -->|制品发布| P[读 FULL_IMAGE_NAME]
+    A -->|CI 模式| B[CheckOut → Build]
     B --> C[镜像构建并推送 Harbor]
     C --> D{publishMode}
     D -->|仅构建| Z[结束]
     D -->|自动/手动| E{deployMethod}
+    P --> E
     E -->|kubectl| F[生成部署模板]
     E -->|helm| G[跳过模板]
     F --> H[发布到K8s]
@@ -205,11 +210,11 @@ Slave Pod 容器：mvn、docker（挂载 docker.sock）、kubectl、helm。
 
 | 阶段 | 条件 | 说明 |
 |------|------|------|
-| CheckOut | publishMode ≠ 回滚 | pipeline.checkoutCode |
+| CheckOut | publishMode ∉ {回滚, 制品发布} | pipeline.checkoutCode |
 | Build | 同上 | container(mvn) → build.compile |
 | 镜像构建并推送 | 同上 | 打 tag + harbor.BuildImage（含 Dockerfile 校验） |
-| 生成部署模板 | auto/manual 且 kubectl | template.generateWorkload/Service |
-| 发布到K8s | auto/manual | pipeline.runPublish → k8sdeploy.RunDeploy |
+| 生成部署模板 | auto/manual/**制品发布** 且 kubectl | template.generateWorkload/Service，镜像用 `FULL_IMAGE_NAME` |
+| 发布到K8s | auto/manual/**制品发布** | pipeline.runPublish → k8sdeploy.RunDeploy（制品发布无 input） |
 | 回滚 | rollback | kubectl Rollback 或 HelmRollback |
 | post | always | sendPost（notifyCtx 含 tenv） |
 
@@ -280,6 +285,8 @@ build.compile(buildType, buildshell)  // mvn / gradle 统一入口
 | 探针失败 | 改用基础模板或调整 actuator 路径 |
 | Helm 参数不生效 | deployConfigType 仅 kubectl 有效 |
 | 仅构建仍部署 | publishMode 应为仅构建 |
+| CD 成功但无 Deployment | publishMode=制品发布 时 jenkinsfile 未改，部署阶段被 skip；见 `jenkinslib/K8S-CD-ARTIFACT-DEPLOY.md` |
+| CD 又跑了一遍 CI | 同上，Checkout/Build 未跳过 |
 | 邮件无环境 | 已修复：notifyCtx.tenv |
 | CheckOut/编译失败无邮件 | 已修复：FAILURE 时 sendPost 不依赖 mark |
 

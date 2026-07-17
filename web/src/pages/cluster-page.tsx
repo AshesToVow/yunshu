@@ -1,4 +1,5 @@
 import {
+  AppstoreOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   DeleteOutlined,
@@ -6,13 +7,16 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SettingOutlined,
+  TableOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Segmented, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ClusterCardGrid } from "../components/k8s/cluster-card-grid";
 import { DictLabelFillSelect } from "../components/dict-fill-select";
-import { PageTelemetryHeader } from "../components/page-telemetry-header";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { formatDateTime } from "../utils/format";
 import { batchDeleteK8sClusterGrants, deleteK8sClusterGrant, listClusterAuthMatrix, type K8sAuthMatrixRow } from "../services/k8s-policies";
@@ -37,6 +41,7 @@ function phaseColor(phase: string): string {
 }
 
 export function ClusterPage() {
+  const navigate = useNavigate();
   const kubeTplDict = useDictOptions("k8s_kubeconfig_template");
   const directCfgDict = useDictOptions("k8s_direct_config");
 
@@ -57,6 +62,7 @@ export function ClusterPage() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authSelectedKeys, setAuthSelectedKeys] = useState<React.Key[]>([]);
   const [current, setCurrent] = useState<ClusterItem | null>(null);
+  const [viewMode, setViewMode] = useState<"table" | "cards">("cards");
   const [projectOptions, setProjectOptions] = useState<ProjectItem[]>([]);
   const [form] = Form.useForm<ClusterCreatePayload &
   Partial<ClusterUpdatePayload> & {
@@ -541,16 +547,47 @@ export function ClusterPage() {
     );
   }
 
+  const projectNameById = useCallback(
+    (id?: number | null) => {
+      if (!id) return "";
+      return projectOptions.find((p) => p.id === id)?.name ?? `项目 #${id}`;
+    },
+    [projectOptions],
+  );
+
+  function openClusterPods(record: ClusterItem) {
+    navigate(`/pods?cluster=${record.id}`);
+  }
+
   return (
     <div className="page-stack">
-      <PageTelemetryHeader
-        label="[ K8S / CLUSTER ]"
+      <OpsPageHeader
         title="集群列表"
-        subtitle="纳管 Kubernetes 集群连接、授权矩阵与运行状态"
-        meta={[
-          `TOTAL / ${total}`,
-          loading ? "SYNC / PENDING" : "SYNC / OK",
-        ]}
+        description="纳管 Kubernetes 集群连接、授权矩阵与运行状态"
+        meta={
+          <Space size="middle">
+            <Typography.Text type="secondary">共 {total} 个集群</Typography.Text>
+            <Typography.Text type="secondary">{loading ? "同步中…" : "已同步"}</Typography.Text>
+          </Space>
+        }
+        extra={
+          <Space wrap>
+            <Segmented
+              value={viewMode}
+              onChange={(v) => setViewMode(v as "table" | "cards")}
+              options={[
+                { label: "卡片", value: "cards", icon: <AppstoreOutlined /> },
+                { label: "表格", value: "table", icon: <TableOutlined /> },
+              ]}
+            />
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              新建集群
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadClusters()}>
+              刷新
+            </Button>
+          </Space>
+        }
       />
     <Card className="table-card">
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -561,16 +598,23 @@ export function ClusterPage() {
             style={{ width: 280 }}
             onSearch={(keyword) => setQuery((prev) => ({ ...prev, keyword, page: 1 }))}
           />
-          <div className="toolbar__actions">
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新建集群
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadClusters()}>
-              刷新
-            </Button>
-          </div>
         </div>
 
+        {viewMode === "cards" ? (
+          <ClusterCardGrid
+            list={list}
+            loading={loading}
+            statusByID={statusByID}
+            projectNameById={projectNameById}
+            statusUpdatingID={statusUpdatingID}
+            onConnectTest={handleConnectTest}
+            onToggleStatus={handleToggleStatus}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+            onAuth={openAuthDrawer}
+            onOpenPods={openClusterPods}
+          />
+        ) : (
         <Table
           rowKey="id"
           loading={loading}
@@ -676,6 +720,27 @@ export function ClusterPage() {
             },
           ]}
         />
+        )}
+
+        {viewMode === "cards" && total > list.length ? (
+          <div className="cluster-card-grid__pager">
+            <Button
+              disabled={query.page <= 1}
+              onClick={() => setQuery((prev) => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+            >
+              上一页
+            </Button>
+            <Typography.Text type="secondary">
+              第 {query.page} 页 · 共 {total} 条
+            </Typography.Text>
+            <Button
+              disabled={query.page * query.page_size >= total}
+              onClick={() => setQuery((prev) => ({ ...prev, page: prev.page + 1 }))}
+            >
+              下一页
+            </Button>
+          </div>
+        ) : null}
       </Space>
 
       <Drawer

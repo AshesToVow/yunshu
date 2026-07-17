@@ -15,6 +15,16 @@ func TestShouldRunWithDayAnchorFirstEnableBeforeDue(t *testing.T) {
 	}
 }
 
+func TestShouldRunWithDayAnchorFirstEnableAfterDueNoCatchUp(t *testing.T) {
+	t.Parallel()
+	spec := "0 0 2 * * *"
+	loc := time.FixedZone("CST", 8*3600)
+	now := time.Date(2026, 7, 4, 18, 4, 0, 0, loc)
+	if ShouldRunWithDayAnchor(spec, nil, now) {
+		t.Fatal("should not catch up when first enabled after today's cron time")
+	}
+}
+
 func TestShouldRunWithDayAnchorFirstEnableAtDue(t *testing.T) {
 	t.Parallel()
 	spec := "0 45 22 * * *"

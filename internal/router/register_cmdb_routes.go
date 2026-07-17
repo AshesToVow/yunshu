@@ -35,6 +35,6 @@ func RegisterCMDBRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.POST("/servers/sync", d.cmdbHandler.SyncServers)
 
 	projectsWS := api.Group("/projects")
-	projectsWS.Use(d.wsAuthMiddleware, d.authorize, middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
+	projectsWS.Use(d.wsAuthMiddleware, d.authorize, d.opAudit, middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
 	projectsWS.GET("/:id/servers/:serverId/terminal/ws", d.cmdbHandler.ServerTerminalWS)
 }

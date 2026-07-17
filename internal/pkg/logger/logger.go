@@ -12,10 +12,12 @@ import (
 )
 
 // Logger 三通道日志：info.log（Info+Warn）、error.log（Error+）、sql.log（仅 SQL）。
+// Default 按级别分流到 info/error 文件，供 slog.SetDefault 使用。
 type Logger struct {
-	Info  *slog.Logger
-	Error *slog.Logger
-	SQL   *slog.Logger
+	Info    *slog.Logger
+	Error   *slog.Logger
+	SQL     *slog.Logger
+	Default *slog.Logger
 }
 
 // New 按 config.Log 创建三通道 slog 实例。
@@ -28,19 +30,19 @@ func New(cfg config.LogConfig) *Logger {
 		panic("failed to create log directory: " + err.Error())
 	}
 
+	infoH := buildChannelHandler(cfg, logDir, channelInfo)
+	errH := buildChannelHandler(cfg, logDir, channelError)
+	sqlH := buildChannelHandler(cfg, logDir, channelSQL)
+
 	return &Logger{
-		Info:  buildChannelLogger(cfg, logDir, channelInfo),
-		Error: buildChannelLogger(cfg, logDir, channelError),
-		SQL:   buildChannelLogger(cfg, logDir, channelSQL),
+		Info:    slog.New(infoH),
+		Error:   slog.New(errH),
+		SQL:     slog.New(sqlH),
+		Default: slog.New(&routeHandler{info: infoH, err: errH}),
 	}
 }
 
-// Biz 返回带 component 的业务日志器（默认 layer=service）。
-func (l *Logger) Biz(component string) *Component {
-	return &Component{log: l, component: component, layer: LayerService}
-}
-
-func buildChannelLogger(cfg config.LogConfig, logDir, channel string) *slog.Logger {
+func buildChannelHandler(cfg config.LogConfig, logDir, channel string) slog.Handler {
 	writers := outputWriters(cfg, logDir, channel)
 	multi := io.MultiWriter(writers...)
 
@@ -69,7 +71,7 @@ func buildChannelLogger(cfg config.LogConfig, logDir, channel string) *slog.Logg
 	} else {
 		base = slog.NewTextHandler(multi, opts)
 	}
-	return slog.New(wrapHandler(base, channel))
+	return wrapHandler(base, channel)
 }
 
 func outputWriters(cfg config.LogConfig, logDir, channel string) []io.Writer {

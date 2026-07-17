@@ -51,15 +51,6 @@ export interface ProjectUpdatePayload {
   owner_department_id?: number;
 }
 
-export type ApplicationTopologyGraph = {
-  nodes: Array<{ id: string; label: string; kind: string; state?: string; state_level?: string }>;
-  edges: Array<{ from: string; to: string; kind?: string }>;
-};
-
-export async function getApplicationTopology(projectId: number) {
-  return getData<ApplicationTopologyGraph>(http.get(`/projects/${projectId}/application-topology`));
-}
-
 export async function getProjects(params: {
   keyword?: string;
   project_type?: string;
@@ -450,122 +441,64 @@ export async function deleteProjectLogSource(projectId: number, logSourceId: num
   return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/log-sources/${logSourceId}`));
 }
 
-export async function exportProjectLogs(
-  projectId: number,
-  params: { server_id: number; log_source_id: number; max_lines?: number; include?: string; exclude?: string },
-): Promise<Blob> {
-  const resp = await http.get<Blob>(`/projects/${projectId}/logs/export`, { params, responseType: "blob" });
-  return resp.data;
+export interface LogSearchItem {
+  timestamp: string;
+  message: string;
+  highlight?: string;
+  level?: string;
+  file_path?: string;
+  server_id?: number;
+  service_id?: number;
+  log_source_id?: number;
+  service_name?: string;
+  server_host?: string;
+  host?: string;
+  namespace?: string;
+  pod?: string;
+  podname?: string;
+  container?: string;
+  containername?: string;
 }
 
-export interface AgentDiscoveryItem {
-  kind: "file" | "dir" | "unit" | string;
-  value: string;
-  extra?: string | null;
-  last_seen_at: string;
-}
-
-export async function getProjectAgentDiscovery(
+export async function searchProjectLogs(
   projectId: number,
   params: {
-    server_id: number;
-    kind?: "file" | "dir" | "unit";
-    limit?: number;
+    server_id?: number;
+    service_id?: number;
     log_source_id?: number;
-    unmatched_only?: boolean;
-    prefix?: string;
-    fresh_hours?: number;
+    keyword?: string;
+    level?: string;
+    file_path?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    page_size?: number;
   },
 ) {
-  return await getData(http.get<any, ApiResponse<{ list: AgentDiscoveryItem[] }>>(`/projects/${projectId}/agents/discovery`, { params }));
-}
-
-export interface ProjectAgentStatus {
-  server_id: number;
-  log_source_id: number;
-  agent_id?: number;
-  name?: string;
-  version?: string;
-  last_seen_at?: string | null;
-  online: boolean;
-  recent_publishing: boolean;
-  mode_hint: "agent" | string;
-  listen_port?: number;
-  install_progress?: number;
-  health_status?: string;
-  last_error?: string;
-  /** 最近一次从离线判定恢复在线（RFC3339） */
-  last_online_at?: string | null;
-  /** 最近一次被判定离线（RFC3339） */
-  last_offline_at?: string | null;
-  /** 最近离线原因（产品话术） */
-  last_offline_reason?: string;
-}
-
-export interface ProjectAgentListItem {
-  server_id: number;
-  server_name: string;
-  server_host: string;
-  /** 当前列表所属项目名称（与筛选项目一致） */
-  project_name?: string;
-  agent_id?: number;
-  name?: string;
-  version?: string;
-  last_seen_at?: string | null;
-  online: boolean;
-  listen_port: number;
-  install_progress: number;
-  health_status: string;
-  last_error?: string;
-  recent_publishing?: boolean;
-  last_online_at?: string | null;
-  last_offline_at?: string | null;
-  last_offline_reason?: string;
-}
-
-export interface ProjectAgentBootstrapPayload {
-  server_id: number;
-  log_source_id?: number;
-  source_type?: "file" | "journal" | string;
-  path?: string;
-  platform_url: string;
-  agent_name?: string;
-  agent_version?: string;
-}
-
-export interface ProjectAgentBootstrapResult {
-  agent_id: number;
-  token: string;
-  run_command: string;
-  systemd_service: string;
-}
-
-export async function getProjectAgentStatus(projectId: number, params: { server_id: number; log_source_id?: number }) {
-  return await getData(http.get<any, ApiResponse<ProjectAgentStatus>>(`/projects/${projectId}/agents/status`, { params }));
-}
-
-export async function listProjectAgents(projectId: number, params?: { keyword?: string; health_status?: string; online?: boolean }) {
-  return await getData(http.get<any, ApiResponse<{ list: ProjectAgentListItem[] }>>(`/projects/${projectId}/agents/list`, { params }));
-}
-
-export async function deleteProjectAgent(projectId: number, agentId: number) {
-  return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/agents/${agentId}`));
-}
-
-export async function batchRefreshProjectAgentHeartbeat(projectId: number, payload: { server_ids?: number[] }) {
   return await getData(
-    http.post<any, ApiResponse<{ refreshed: number; list: ProjectAgentListItem[] }>>(
-      `/projects/${projectId}/agents/heartbeat-refresh`,
-      payload,
-    ),
+    http.get<any, ApiResponse<PageData<LogSearchItem>>>(`/projects/${projectId}/logs/search`, {
+      params: { ...params, project_id: projectId },
+    }),
   );
 }
 
-export async function bootstrapProjectAgent(projectId: number, payload: ProjectAgentBootstrapPayload) {
-  return await getData(http.post<any, ApiResponse<ProjectAgentBootstrapResult>>(`/projects/${projectId}/agents/bootstrap`, payload));
+export async function exportProjectLogs(
+  projectId: number,
+  params: {
+    server_id?: number;
+    service_id?: number;
+    log_source_id?: number;
+    keyword?: string;
+    level?: string;
+    file_path?: string;
+    from?: string;
+    to?: string;
+    page_size?: number;
+  },
+): Promise<Blob> {
+  // http 拦截器已经返回 response.data（Blob），不可再取 .data
+  return (await http.get(`/projects/${projectId}/logs/export`, {
+    params: { ...params, project_id: projectId },
+    responseType: "blob",
+  })) as unknown as Blob;
 }
-
-export async function rotateProjectAgentToken(projectId: number, payload: ProjectAgentBootstrapPayload) {
-  return await getData(http.post<any, ApiResponse<ProjectAgentBootstrapResult>>(`/projects/${projectId}/agents/rotate-token`, payload));
-}
-

@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"strings"
@@ -7,7 +7,6 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	logx "yunshu/internal/pkg/logger"
-	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/store"
@@ -36,7 +35,7 @@ func WSAuth(redisClient *redis.Client, userRepo interfaces.UserRepository, logge
 func authenticateWSTicket(c *gin.Context, redisClient *redis.Client, userRepo interfaces.UserRepository, ticket string) bool {
 	userID, tokenID, err := store.ConsumeWSTicket(c.Request.Context(), redisClient, ticket)
 	if err != nil {
-		logutil.HTTP("http.ws_auth").Warn("consume ws ticket failed", "error", err)
+		logx.With(c.Request.Context(), "component", "http.ws_auth").Warn("consume ws ticket failed", "error", err)
 		response.Error(c, constants.ErrWSTicketInvalid)
 		c.Abort()
 		return false

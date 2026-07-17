@@ -57,6 +57,31 @@ resolve_mysqldump() {
 }
 `
 
+// shellResolveMysql 解析 mysql 客户端（与 mysqldump 同目录，非交互 SSH 下 PATH 常不可用）。
+const shellResolveMysql = `
+resolve_mysql() {
+  if [ -n "${MYSQL_BIN_PRESET:-}" ] && [ -x "$MYSQL_BIN_PRESET" ]; then
+    echo "$MYSQL_BIN_PRESET"
+    return 0
+  fi
+  if [ -n "${MYSQLDUMP_BIN_PRESET:-}" ]; then
+    _derived="${MYSQLDUMP_BIN_PRESET/mysqldump/mysql}"
+    if [ -x "$_derived" ]; then echo "$_derived"; return 0; fi
+  fi
+  if command -v mysql >/dev/null 2>&1; then
+    command -v mysql
+    return 0
+  fi
+  for p in /usr/bin/mysql /usr/local/bin/mysql /usr/local/mysql/bin/mysql; do
+    if [ -x "$p" ]; then echo "$p"; return 0; fi
+  done
+  for p in /export/servers/app/*/bin/mysql /opt/mysql/*/bin/mysql /export/servers/*/bin/mysql; do
+    if [ -x "$p" ]; then echo "$p"; return 0; fi
+  done
+  return 1
+}
+`
+
 // shellMysqldumpToGz 将 mysqldump 输出压缩为 .sql.gz（优先 pigz，管道用 stdbuf 降低首包等待）。
 const shellMysqldumpToGz = shellResolveGzip + shellResolveMysqldump + `
 resolve_pigz() {

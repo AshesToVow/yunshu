@@ -3,17 +3,14 @@ package project
 import (
 	"context"
 	"errors"
-	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
-	"yunshu/internal/service/logplatform"
+	bizerrors "yunshu/internal/pkg/errors"
 
 	"gorm.io/gorm"
 )
@@ -236,106 +233,30 @@ func (s *ProjectMgmtService) DeleteLogSource(ctx context.Context, id uint) error
 	return s.logRepo.DeleteByID(ctx, id)
 }
 
-type LogStreamQuery struct {
-	ProjectID   uint    `form:"project_id" binding:"required"`
-	ServerID    uint    `form:"server_id" binding:"required"`
-	LogSourceID uint    `form:"log_source_id" binding:"required"`
-	TailLines   int     `form:"tail_lines"`
-	AfterID     uint64  `form:"after_id"`
-	Include     *string `form:"include"`
-	Exclude     *string `form:"exclude"`
-	Highlight   *string `form:"highlight"`
-	FilePath    *string `form:"file_path"`
-}
-
-type LogExportQuery struct {
-	ProjectID   uint    `form:"project_id"`
-	ServerID    uint    `form:"server_id" binding:"required"`
-	LogSourceID uint    `form:"log_source_id" binding:"required"`
-	MaxLines    int     `form:"max_lines"`
-	Include     *string `form:"include"`
-	Exclude     *string `form:"exclude"`
-}
-
-// ValidateLogSourceAccess 校验日志源属于项目下指定服务器（SSE/导出/审计共用）。
-func (s *ProjectMgmtService) ValidateLogSourceAccess(ctx context.Context, projectID, serverID, logSourceID uint) error {
+// ValidateLogSearchFilters 校验 ES 检索可选过滤条件属于当前项目。
+func (s *ProjectMgmtService) ValidateLogSearchFilters(ctx context.Context, projectID uint, serverID, logSourceID *uint) error {
 	if projectID == 0 {
 		return constants.ErrProjectIDRequired
 	}
-	sv, err := s.serverRepo.GetByID(ctx, serverID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return constants.ErrLogSourceServerNotFound
+	if serverID != nil && *serverID > 0 {
+		sv, err := s.serverRepo.GetByID(ctx, *serverID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return constants.ErrLogSourceServerNotFound
+			}
+			return bizerrors.Pass(ctx, "project", "ValidateLogSearchFilters", err)
 		}
-		return bizerrors.Pass(ctx, "project", "ValidateLogSourceAccess", err)
+		if sv.ProjectID != projectID {
+			return constants.ErrServerNotInCurrentProject
+		}
 	}
-	if sv.ProjectID != projectID {
-		return constants.ErrServerNotInCurrentProject
-	}
-	ok, err := s.logRepo.BelongsToProjectServer(ctx, projectID, serverID, logSourceID)
-	if err != nil {
-		return bizerrors.Pass(ctx, "project", "ValidateLogSourceAccess", err)
-	}
-	if !ok {
-		return constants.ErrNotFoundWithMsg(constants.ErrMsg9d63941807e2)
+	if logSourceID != nil && *logSourceID > 0 {
+		if _, err := s.logRepo.GetByIDInProject(ctx, projectID, *logSourceID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return constants.ErrNotFoundWithMsg(constants.ErrMsg9d63941807e2)
+			}
+			return bizerrors.Pass(ctx, "project", "ValidateLogSearchFilters", err)
+		}
 	}
 	return nil
-}
-
-// ExportLogs 导出相关的业务逻辑。
-func (s *ProjectMgmtService) ExportLogs(ctx context.Context, q LogExportQuery) ([]byte, string, error) {
-	if err := s.ValidateLogSourceAccess(ctx, q.ProjectID, q.ServerID, q.LogSourceID); err != nil {
-		return nil, "", bizerrors.Pass(ctx, "project", "ExportLogs", err)
-	}
-
-	var includeRe *regexp.Regexp
-	var err error
-	if q.Include != nil && strings.TrimSpace(*q.Include) != "" {
-		includeRe, err = regexp.Compile(strings.TrimSpace(*q.Include))
-		if err != nil {
-			return nil, "", constants.ErrBadRequestWithMsg(constants.ErrMsg1e7f0cdb6585)
-		}
-	}
-	var excludeRe *regexp.Regexp
-	if q.Exclude != nil && strings.TrimSpace(*q.Exclude) != "" {
-		excludeRe, err = regexp.Compile(strings.TrimSpace(*q.Exclude))
-		if err != nil {
-			return nil, "", constants.ErrBadRequestWithMsg(constants.ErrMsg9bbaf0815790)
-		}
-	}
-
-	maxLines := q.MaxLines
-	if maxLines <= 0 {
-		maxLines = 2000
-	}
-	if maxLines > logplatform.MaxLogHistoryPerStream {
-		maxLines = logplatform.MaxLogHistoryPerStream
-	}
-	key := logplatform.BuildLogStreamKey(q.ProjectID, q.ServerID, q.LogSourceID)
-	events := logplatform.AgentLogBroker.Snapshot(key, maxLines)
-	lines := make([]string, 0, len(events))
-	for _, ev := range events {
-		line := strings.TrimSpace(ev.Line)
-		if line == "" {
-			continue
-		}
-		if includeRe != nil && !includeRe.MatchString(line) {
-			continue
-		}
-		if excludeRe != nil && excludeRe.MatchString(line) {
-			continue
-		}
-		if fp := strings.TrimSpace(ev.FilePath); fp != "" {
-			lines = append(lines, fmt.Sprintf("[%s] %s", fp, line))
-		} else {
-			lines = append(lines, line)
-		}
-	}
-	content := strings.Join(lines, "\n")
-	if content != "" {
-		content += "\n"
-	}
-	filename := fmt.Sprintf("project-%d-server-%d-source-%d-logs-%s.txt",
-		q.ProjectID, q.ServerID, q.LogSourceID, time.Now().Format("20060102-150405"))
-	return []byte(content), filename, nil
 }

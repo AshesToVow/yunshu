@@ -177,7 +177,7 @@ export function UsersPage() {
     const values = await form.validateFields();
     setSubmitting(true);
     try {
-      await createUser({
+      const created = await createUser({
         username: values.username,
         email: values.email,
         password: values.password,
@@ -191,6 +191,10 @@ export function UsersPage() {
       setEditorOpen(false);
       form.resetFields();
       void loadUsers();
+      const roleIds = (values.role_ids ?? []).filter((id: number) => roleIdSet.has(id));
+      if (roleIds.length > 0) {
+        navigateToPoliciesAfterRoleBind(created, roleIds);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -201,13 +205,19 @@ export function UsersPage() {
       return;
     }
 
+    const target = roleTarget;
+    const roleIds = checkedRoleIds.filter((id) => roleIdSet.has(id));
     setSubmitting(true);
     try {
-      await assignUserRoles(roleTarget.id, { role_ids: checkedRoleIds.filter((id) => roleIdSet.has(id)) });
-      message.success("责任域角色已同步");
+      await assignUserRoles(target.id, { role_ids: roleIds });
+      message.success("责任域角色已同步，正在前往授权管理…");
       setAssignOpen(false);
+      setRoleTarget(null);
       setCheckedRoleIds([]);
       void loadUsers();
+      if (roleIds.length > 0) {
+        navigateToPoliciesAfterRoleBind(target, roleIds);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -300,6 +310,29 @@ export function UsersPage() {
     if (!permTarget) return;
     setPermOpen(false);
     void openK8sAuthClusters(permTarget);
+  }
+
+  function navigateToK8sScopedPolicies(record: UserItem, mode: "user" | "role", roleId?: number) {
+    if (mode === "user") {
+      navigate(`/k8s-scoped-policies?subject=user&user_id=${record.id}`);
+      return;
+    }
+    if (roleId != null && roleId > 0) {
+      navigate(`/k8s-scoped-policies?subject=role&role_id=${roleId}`);
+    }
+  }
+
+  function navigateToPoliciesAfterRoleBind(record: UserItem, roleIds: number[]) {
+    const ids = roleIds.filter((id) => roleIdSet.has(id));
+    if (ids.length === 0) return;
+    const qs = new URLSearchParams({
+      role_id: String(ids[0]),
+      from: "user",
+      user_id: String(record.id),
+      username: record.username,
+      next: "k8s",
+    });
+    navigate(`/policies?${qs.toString()}`);
   }
 
   const k8sAuthColumns: ColumnsType<K8sUserClusterAuthRow> = [
@@ -486,7 +519,11 @@ export function UsersPage() {
           <Form.Item label="邮箱" name="email" rules={[{ required: true, type: "email", message: "请输入正确的邮箱地址" }]}>
             <Input placeholder="例如：admin@example.com" autoComplete="off" />
           </Form.Item>
-          <Form.Item label="初始责任域" name="role_ids">
+          <Form.Item
+            label="初始责任域"
+            name="role_ids"
+            extra="保存后将自动进入「授权管理」，为所选角色配置 API 权限与 K8s 档位"
+          >
             <TreeSelect
               treeCheckable
               treeDefaultExpandAll
@@ -532,7 +569,7 @@ export function UsersPage() {
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Typography.Text className="inline-muted">
-            使用树形勾选为当前账号分配角色模板，已选 {checkedRoleIds.length} 个角色。
+            使用树形勾选为当前账号分配角色模板，已选 {checkedRoleIds.length} 个角色。保存后将自动进入「授权管理」继续配置 API 权限。
           </Typography.Text>
           <div className="tree-shell">
             <Tree
@@ -647,6 +684,21 @@ export function UsersPage() {
                   <Typography.Text type="secondary">未分配角色</Typography.Text>
                 )}
               </div>
+              {permTarget.roles.length > 0 ? (
+                <Button
+                  type="link"
+                  style={{ paddingLeft: 0, marginTop: 4 }}
+                  onClick={() => {
+                    setPermOpen(false);
+                    navigateToPoliciesAfterRoleBind(
+                      permTarget,
+                      permTarget.roles.map((r) => r.id),
+                    );
+                  }}
+                >
+                  前往授权管理配置 API 权限
+                </Button>
+              ) : null}
             </div>
             <div>
               <Typography.Text strong>用户组</Typography.Text>
@@ -676,11 +728,35 @@ export function UsersPage() {
             <div>
               <Typography.Text strong>Kubernetes 集群档位</Typography.Text>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
-                汇总直授、责任域角色、用户组在集群策略中的档位；与「授权集群」入口相同。
+                汇总直授、责任域角色、用户组在集群策略中的档位；下发请至「K8s 集群档位」页。
               </Typography.Paragraph>
-              <Button type="primary" icon={<ClusterOutlined />} onClick={() => openK8sFromPermissionView()}>
-                查看集群授权明细
-              </Button>
+              <Space wrap>
+                <Button icon={<ClusterOutlined />} onClick={() => openK8sFromPermissionView()}>
+                  查看授权明细
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<ClusterOutlined />}
+                  onClick={() => {
+                    if (!permTarget) return;
+                    setPermOpen(false);
+                    navigateToK8sScopedPolicies(permTarget, "user");
+                  }}
+                >
+                  按用户下发档位
+                </Button>
+                {permTarget.roles.length > 0 ? (
+                  <Button
+                    onClick={() => {
+                      if (!permTarget) return;
+                      setPermOpen(false);
+                      navigateToK8sScopedPolicies(permTarget, "role", permTarget.roles[0].id);
+                    }}
+                  >
+                    按角色「{permTarget.roles[0].name}」配置
+                  </Button>
+                ) : null}
+              </Space>
             </div>
           </Space>
         ) : null}
@@ -734,9 +810,35 @@ export function UsersPage() {
         }}
         width={900}
         destroyOnClose
+        extra={
+          k8sAuthTarget ? (
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<ClusterOutlined />}
+                onClick={() => {
+                  setK8sAuthOpen(false);
+                  navigateToK8sScopedPolicies(k8sAuthTarget, "user");
+                }}
+              >
+                按用户下发档位
+              </Button>
+              {k8sAuthTarget.roles[0] ? (
+                <Button
+                  onClick={() => {
+                    setK8sAuthOpen(false);
+                    navigateToK8sScopedPolicies(k8sAuthTarget, "role", k8sAuthTarget.roles[0].id);
+                  }}
+                >
+                  按角色「{k8sAuthTarget.roles[0].name}」配置
+                </Button>
+              ) : null}
+            </Space>
+          ) : null
+        }
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          汇总用户直授、责任域角色、用户组在「集群档位」表中的授权；命名空间白名单来自 k8s_namespace_allow_rules。撤销请至「K8s 集群策略」或集群列表「已授权」中操作。
+          汇总用户直授、责任域角色、用户组在「集群档位」表中的授权；命名空间白名单来自 k8s_namespace_allow_rules。撤销或新增请至「K8s 集群档位」或集群列表「已授权」。
         </Typography.Paragraph>
         <Table<K8sUserClusterAuthRow>
           rowKey="row_key"

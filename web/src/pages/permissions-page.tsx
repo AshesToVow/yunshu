@@ -3,7 +3,7 @@ import { Alert, Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Sp
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatusTag } from "../components/status-tag";
-import { createPermission, deletePermission, getPermissions, getPermission, updatePermission, batchSetPermissionK8sScope } from "../services/permissions";
+import { createPermission, deletePermission, getPermissions, getPermission, updatePermission, batchSetPermissionK8sScope, listAllPermissions } from "../services/permissions";
 import { getRoleOptions } from "../services/roles";
 import { grantPolicy } from "../services/policies";
 import { API_CATALOG_GROUPS, type ApiCatalogRow } from "../constants/api-catalog";
@@ -52,7 +52,6 @@ const PERMISSION_SYNC_SKIP = new Set([
   "GET /api/v1/auth/me",
   "PUT /api/v1/auth/me",
   "PUT /api/v1/auth/password",
-  "POST /api/v1/agents/health/report",
   "POST /api/v1/alerts/webhook/alertmanager",
 ]);
 
@@ -201,19 +200,9 @@ export function PermissionsPage() {
     setSyncingCatalog(true);
     try {
       const existing = new Set<string>();
-      let page = 1;
-      const pageSize = 100;
-      let total = 0;
-      while (true) {
-        const res = await getPermissions({ page, page_size: pageSize });
-        total = Number(res.total) || 0;
-        for (const it of res.list) {
-          existing.add(`${it.action.toUpperCase()} ${it.resource}`);
-        }
-        if (!res.list.length || page * pageSize >= total) {
-          break;
-        }
-        page++;
+      const all = await listAllPermissions();
+      for (const it of all) {
+        existing.add(`${it.action.toUpperCase()} ${it.resource}`);
       }
       const missing: { name: string; resource: string; action: string; description: string }[] = [];
       for (const group of API_CATALOG_GROUPS) {

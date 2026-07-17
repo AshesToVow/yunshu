@@ -2,10 +2,10 @@ package bootstrap
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 
 	"yunshu/internal/dictconfig"
-	"yunshu/internal/pkg/logutil"
 )
 
 type dictConfigOverrides struct {
@@ -61,7 +61,7 @@ func (b *Builder) applyDictConfigOverrides(ctx context.Context, ov dictConfigOve
 	}
 
 	logf := func(msg string, kv ...any) {
-		logutil.Worker("config").Infow(msg, kv...)
+		slog.Default().With("component", "config").Info(msg, kv...)
 	}
 
 	// Alert: webhook_token
@@ -107,4 +107,17 @@ func (b *Builder) applyDictConfigOverrides(ctx context.Context, ov dictConfigOve
 			"from", b.app.Config.Mail.FromEmail,
 		)
 	}
+
+	b.app.Config.Elasticsearch = dictconfig.ResolveElasticsearchConfig(ctx, b.app.DB, b.app.Config.Elasticsearch)
+	logf("elasticsearch config resolved (dict overrides yaml)",
+		"enabled", b.app.Config.Elasticsearch.Enabled,
+		"addresses", len(b.app.Config.Elasticsearch.Addresses),
+	)
+
+	b.app.Config.Kafka = dictconfig.ResolveKafkaConfig(ctx, b.app.DB, b.app.Config.Kafka)
+	logf("kafka config resolved (dict overrides yaml)",
+		"enabled", b.app.Config.Kafka.Enabled,
+		"brokers", len(b.app.Config.Kafka.Brokers),
+		"topic", b.app.Config.Kafka.Topic,
+	)
 }

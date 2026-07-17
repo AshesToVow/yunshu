@@ -4,23 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
-	"time"
 
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
 	"yunshu/internal/middleware"
-	"yunshu/internal/model"
 	"yunshu/internal/pkg/casbinadapter"
+	"yunshu/internal/pkg/database"
 	logx "yunshu/internal/pkg/logger"
-	"yunshu/internal/pkg/logutil"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/providers"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
@@ -66,7 +64,7 @@ func (b *Builder) WithInfra(infra *providers.Infra) *Builder {
 		b.app.YamlK8sEventForwardBase = infra.Config.K8sEventForward
 	}
 	if infra.Logger != nil {
-		logutil.SetDefaultLogger(infra.Logger.Info)
+		logx.Init(infra.Logger)
 	}
 	return b
 }
@@ -98,68 +96,39 @@ func (b *Builder) WithLogger() *Builder {
 	}
 
 	b.app.Logger = logx.New(b.app.Config.Log)
-	logutil.SetDefaultLogger(b.app.Logger.Info)
+	logx.Init(b.app.Logger)
 	return b
 }
 
-func (b *Builder) WithMySQL() *Builder {
+func (b *Builder) WithDatabase() *Builder {
 	if b.err != nil {
 		return b
 	}
 	if b.app.Config == nil {
-		b.err = errors.New("config is required before mysql")
+		b.err = errors.New("config is required before database")
+		return b
+	}
+	if b.app.Logger == nil {
+		b.err = errors.New("logger is required before database")
 		return b
 	}
 
-	cfg := b.app.Config.MySQL
-	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=true&loc=%s",
-		cfg.User,
-		cfg.Password,
-		cfg.Host,
-		cfg.Port,
-		cfg.DBName,
-		cfg.Charset,
-		cfg.Loc,
-	)
-
-	// gormLogLevel := gormlogger.Silent
-	// if b.app.Config.Log.Level == "debug" {
-	// 	gormLogLevel = gormlogger.Info
-	// }
-
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logx.NewGormLogger(b.app.Logger.SQL, b.app.Config.Log.Level),
-	})
+	db, err := database.Open(b.app.Config.Database, b.app.Logger, b.app.Config.Log.Level)
 	if err != nil {
 		b.err = err
 		return b
 	}
-	// 自定义关联表	user_roles,可以在自定义表中添加额外的字段、自定义索引等
-	if err = db.SetupJoinTable(&model.User{}, "Roles", &model.UserRole{}); err != nil {
-		b.err = err
-		return b
-	}
-	if err = db.SetupJoinTable(&model.User{}, "Groups", &model.UserGroupUser{}); err != nil {
-		b.err = err
-		return b
-	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		b.err = err
-		return b
-	}
-	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
-	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetimeSeconds) * time.Second)
-
 	b.app.DB = db
 	return b
 }
 
+// WithMySQL 保留旧链式调用名；实际按 database.driver 连接（默认 mysql）。
+func (b *Builder) WithMySQL() *Builder {
+	return b.WithDatabase()
+}
+
 // WithDictOverrides 在 MySQL 已就绪后，从数据字典覆盖“运行期可变”的配置项（告警域 + 邮件 + K8s Event 转发）。
-// 注意：mysql/redis/app.env/grpc.listen_addr 等启动期项仍以 env/yaml 为准，避免启动鸡生蛋。
+// 注意：mysql/redis/app.env 等启动期项仍以 env/yaml 为准，避免启动鸡生蛋。
 func (b *Builder) WithDictOverrides() *Builder {
 	if b.err != nil {
 		return b
@@ -211,7 +180,7 @@ func (b *Builder) WithCasbin() *Builder {
 	// when parsing policy lines (e.g. invalid/garbage ptype).
 	//
 	// Valid Casbin ptype is typically: p, g, p2, g2, ...
-	_ = b.app.DB.Exec("DELETE FROM casbin_rule WHERE ptype IS NULL OR ptype = '' OR ptype NOT REGEXP '^(p|g)[0-9]*$'").Error
+	_ = database.PruneInvalidCasbinRules(b.app.DB)
 
 	adapter := casbinadapter.NewSafeGormAdapter(b.app.DB, "casbin_rule")
 
@@ -227,9 +196,9 @@ func (b *Builder) WithCasbin() *Builder {
 	policyCount := len(enforcer.GetPolicy())
 	groupingCount := len(enforcer.GetGroupingPolicy())
 	if policyCount == 0 && groupingCount == 0 {
-		logutil.Worker("casbin").Warn("Loaded zero Casbin rules; authorize may deny all until policies are seeded")
+		slog.Default().With("component", "casbin").Warn("Loaded zero Casbin rules; authorize may deny all until policies are seeded")
 	} else {
-		logutil.Worker("casbin").Info("Loaded Casbin policy", "p_rules", policyCount, "g_rules", groupingCount)
+		slog.Default().With("component", "casbin").Info("Loaded Casbin policy", "p_rules", policyCount, "g_rules", groupingCount)
 	}
 	// 冒烟：确认 model 可执行 Enforce（adapter/模型损坏时此处会报错）
 	if _, err = enforcer.Enforce("__casbin_smoke__", "/__smoke__", "GET"); err != nil {
@@ -259,7 +228,7 @@ func (b *Builder) WithMailer() *Builder {
 			YAMLBase: b.yamlMailBase,
 		})
 		enabled := b.app.Mailer.Enabled()
-		logutil.Worker("mail").Info("Initialized mail sender (dict-first, reload on send)",
+		slog.Default().With("component", "mail").Info("Initialized mail sender (dict-first, reload on send)",
 			"enabled", enabled,
 			"host", resolved.Host,
 			"port", resolved.Port,

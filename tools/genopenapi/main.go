@@ -49,10 +49,7 @@ func isPublic(method, path string) bool {
 		"POST /api/v1/auth/email-login":             true,
 		"POST /api/v1/auth/register":                true,
 		"POST /api/v1/alerts/webhook/alertmanager":  true,
-		"POST /api/v1/agents/public-register":       true,
-		"POST /api/v1/agents/health/report":         true,
-		"POST /api/v1/agents/discovery/report":       true,
-		"GET /api/v1/agents/runtime-config":          true,
+		"POST /api/v1/loggie/heartbeat/report":      true,
 	}
 	return public[method+" "+path]
 }
@@ -76,8 +73,10 @@ func tagForPath(path string) string {
 			return "AlertsWebhook"
 		}
 		return "Alerts"
-	case "agents":
-		return "Agents"
+	case "loggie":
+		return "Loggie"
+	case "log-platform":
+		return "LogPlatform"
 	case "dict":
 		return "Dict"
 	case "k8s-policies":

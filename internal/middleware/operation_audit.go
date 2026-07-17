@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"yunshu/internal/pkg/auth"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/service"
-	"yunshu/internal/pkg/logutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -109,7 +108,7 @@ func OperationAudit(opSvc *service.OperationLogService, logger *logx.Logger) gin
 		}
 
 		if err := opSvc.Record(c.Request.Context(), entry); err != nil {
-			logutil.HTTP("http.audit").Error("operation audit persist failed", "error", err, "path", path)
+			logx.With(c.Request.Context(), "component", "http.audit").Error("operation audit persist failed", "error", err, "path", path)
 		}
 	}
 }
@@ -148,8 +147,17 @@ func shouldCaptureRequestBody(c *gin.Context) bool {
 }
 
 func shouldRedactAuditResponseBody(fullPath string) bool {
-	// 字典敏感明文：审计不落库响应体，仅保留路径/状态码/耗时等元数据。
-	return fullPath == "/api/v1/dict/entries/:id/reveal-value"
+	p := strings.ToLower(strings.TrimSpace(fullPath))
+	if p == "/api/v1/dict/entries/:id/reveal-value" {
+		return true
+	}
+	if strings.Contains(p, "/accounts/") && strings.HasSuffix(p, "/password") {
+		return true
+	}
+	if strings.Contains(p, "/auth/password") {
+		return true
+	}
+	return false
 }
 
 func maskSensitiveJSON(s string) string {

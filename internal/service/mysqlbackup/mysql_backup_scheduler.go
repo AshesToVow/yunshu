@@ -25,17 +25,17 @@ func (s *MysqlBackupService) RunMysqlBackupScheduler(ctx context.Context) {
 	log := mysqlBackupLog()
 	cfg := dictconfig.ResolveMysqlBackupSchedulerConfig(ctx, s.db, dictconfig.DefaultMysqlBackupSchedulerDictTypes())
 	if !cfg.Enabled {
-		log.Infow("MySQL backup scheduler disabled by dict")
+		log.Info("MySQL backup scheduler disabled by dict")
 		return
 	}
 	spec := strings.TrimSpace(cfg.TickSpec)
 	if spec == "" {
 		spec = defaultMysqlBackupInnerTick
 	}
-	log.Infow("Started MySQL backup scheduler", "tick_spec", spec)
+	log.Info("Started MySQL backup scheduler", "tick_spec", spec)
 	cronutil.RunWorker(ctx, spec, func() {
 		if err := s.tickScheduledBackups(ctx); err != nil {
-			log.Warnw("MySQL backup scheduler tick failed", "error", err)
+			log.Warn("MySQL backup scheduler tick failed", "error", err)
 		}
 	}, "")
 }

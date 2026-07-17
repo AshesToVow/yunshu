@@ -1,6 +1,6 @@
 # Yunshu 后端架构重构实施报告
 
-**最后更新**: 2026-06-30  
+**最后更新**: 2026-07-12  
 **状态**: ✅ 主干已落地（`go build ./...` / `go test ./internal/... -short` 通过）  
 **代码地图**: [CODEBASE-MAP.md](CODEBASE-MAP.md)
 
@@ -13,13 +13,13 @@
 | 1 | 日志 `logutil` | ✅ | 已删除 `svclog`；HTTP/Service/Worker 组件化 |
 | 2 | 错误 `bizerrors` | ✅ | 已删除 `svcerr`、`pkg/apperror`；HTTP + gRPC 统一 |
 | 3 | Wire 基础设施 | ✅ | `providers.InitializeInfra/Core` |
-| 4 | 路由 Wire | 🟡 | `InitializeRouteDeps`：Repo ✅；Service 仍 `buildRouteServices` 手工装配 |
+| 4 | 路由 Wire | ✅ | `InitializeRouteDeps`：Repo + **全部 Service** 由 Wire 注入 |
 | 5 | Repository | ✅ | 告警 / 系统 / 项目 / K8s 策略 / 总览 / 事件转发等主路径 |
-| 6 | Service 目录拆分 | ✅ | `alert/` `k8s/` `project/` `system/` `logplatform/` `mysqlbackup/` `overview/` `cicd/` `cmdb/` + `exports.go` |
+| 6 | Service 目录拆分 | ✅ | `alert/` `k8s/` `project/` `system/` `logplatform/` `mysqlbackup/` `overview/` `cicd/` `cmdb/` **`dbmgmt/`** + `exports.go` |
 | 7 | Alert 域 | ✅ | 主链路在 `alert` 包；Redis 状态 `NewRedisAlertStateService` |
 | 8 | K8s Event 转发 | ✅ | `k8s/eventforward/`；仓储 `K8sEventForwardRepository` |
 | 9 | 死代码清理 | ✅ | 删除根目录迁移残留；移除 `log-files` / `log-units` stub API |
-| 10 | 业务插件化 | ✅ | `core/k8s/alert/project/cmdb/backup/cicd` |
+| 10 | 业务插件化 | ✅ | `core/k8s/alert/project/cmdb/backup/cicd` **`dbmgmt`** |
 | 11 | CMDB 拆分 | ✅ | 服务器/云账号/终端/云 SDK → `service/cmdb` |
 | 12 | 菜单 catalog | ✅ | `internal/menu/catalog.go` + `Sync` |
 | 13 | seed 优化 | ✅ | 事务、Permission 批量 upsert、Casbin `AddPolicies` |
@@ -42,6 +42,7 @@ internal/service/
 ├── system/
 ├── logplatform/
 ├── mysqlbackup/
+├── dbmgmt/               # 实例、SQL 查询/审核、授权工单、审计
 └── overview/
 
 internal/pkg/
@@ -62,7 +63,7 @@ internal/plugins/       # 各业务插件 init 注册 + StartWorkers
 
 | 项 | 说明 |
 |----|------|
-| 全量 Wire Service | `route_services.go` ~50 个 `NewXxx` 可逐步改为 ProviderSet |
+| 全量 Wire Handler 装配 | ⬜ 可选：`assembleRouteDeps` 中 Handler 仍手工 `NewXxx` |
 | Handler 直引子包 | 弱化 `exports.go`，新代码优先 `import alert` 等 |
 | `mysqlbackup.db` | MinIO / dictconfig 仍直用 `*gorm.DB` |
 | 插件菜单与 Casbin 联动 | 按 `plugins.enabled` 过滤侧栏；角色菜单授权待完善 |
@@ -85,6 +86,7 @@ cd internal/router && go generate
 
 - [backend-architecture-complete.md](backend-architecture-complete.md) — 完整技术文档  
 - [cicd.md](cicd.md) — CI/CD 插件说明  
+- [dbmgmt.md](dbmgmt.md) — 数据库管理插件说明  
 - [code-review-report.md](code-review-report.md) — 历史审查记录（部分条目已解决，见文首说明）  
 - [architecture-diagrams.md](architecture-diagrams.md) — 架构图
 

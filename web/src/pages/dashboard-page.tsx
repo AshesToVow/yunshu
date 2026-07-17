@@ -13,13 +13,22 @@ import {
   ThunderboltOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Card, Col, Row, Space, Statistic, Typography } from "antd";
+import { Card, Col, Row, Space, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
+import {
+  CHART_BRAND,
+  CHART_ERROR,
+  CHART_INFO,
+  CHART_MUTED,
+  CHART_SECONDARY,
+  CHART_SUCCESS,
+  CHART_WARNING,
+} from "../constants/chart-colors";
 import { useTranslation } from "react-i18next";
 import { BarChart } from "../components/bar-chart";
 import { LineChart } from "../components/line-chart";
-import { PageTelemetryHeader } from "../components/page-telemetry-header";
-import { useAdminThemeMode } from "../hooks/use-admin-theme-mode";
+import { DashboardStatCard } from "../components/ops/dashboard-stat-card";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
   getOverview,
   getOverviewProjectLaunches,
@@ -41,8 +50,8 @@ interface DashboardMetrics {
   eventClusterErrors: number;
   alertFiring: number;
   alertEventsToday: number;
-  logAgentsOnline: number;
-  logAgentsOffline: number;
+  loggieAgentsOnline: number;
+  loggieAgentsOffline: number;
 }
 
 const defaultMetrics: DashboardMetrics = {
@@ -58,35 +67,48 @@ const defaultMetrics: DashboardMetrics = {
   eventClusterErrors: 0,
   alertFiring: 0,
   alertEventsToday: 0,
-  logAgentsOnline: 0,
-  logAgentsOffline: 0,
+  loggieAgentsOnline: 0,
+  loggieAgentsOffline: 0,
 };
 
 const assetStats = [
-  { key: "users", icon: <TeamOutlined />, accent: "#22d3ee" },
-  { key: "clusters", icon: <ClusterOutlined />, accent: "#38bdf8" },
-  { key: "servers", icon: <DesktopOutlined />, accent: "#a78bfa" },
-  { key: "pendingRegistrations", icon: <SafetyCertificateOutlined />, accent: "#fbbf24" },
+  { key: "users", icon: <TeamOutlined />, accent: CHART_BRAND },
+  { key: "clusters", icon: <ClusterOutlined />, accent: CHART_BRAND },
+  { key: "servers", icon: <DesktopOutlined />, accent: CHART_SECONDARY },
+  { key: "pendingRegistrations", icon: <SafetyCertificateOutlined />, accent: CHART_WARNING },
 ] as const;
 
 const k8sStats = [
-  { key: "podNormal", icon: <CheckCircleOutlined />, accent: "#34d399" },
-  { key: "podAbnormal", icon: <WarningOutlined />, accent: "#fb7185" },
-  { key: "eventTotal", icon: <CloudOutlined />, accent: "#818cf8" },
-  { key: "eventWarning", icon: <ThunderboltOutlined />, accent: "#f97316" },
+  { key: "podNormal", icon: <CheckCircleOutlined />, accent: CHART_SUCCESS },
+  { key: "podAbnormal", icon: <WarningOutlined />, accent: CHART_ERROR },
+  { key: "eventTotal", icon: <CloudOutlined />, accent: CHART_INFO },
+  { key: "eventWarning", icon: <ThunderboltOutlined />, accent: CHART_WARNING },
 ] as const;
 
 const alertAndAgentStats = [
-  { key: "alertFiring", icon: <AlertOutlined />, accent: "#f87171" },
-  { key: "alertEventsToday", icon: <AlertOutlined />, accent: "#fbbf24" },
-  { key: "logAgentsOnline", icon: <ApiOutlined />, accent: "#4ade80" },
-  { key: "logAgentsOffline", icon: <DisconnectOutlined />, accent: "#94a3b8" },
+  { key: "alertFiring", icon: <AlertOutlined />, accent: CHART_ERROR },
+  { key: "alertEventsToday", icon: <AlertOutlined />, accent: CHART_WARNING },
+  { key: "loggieAgentsOnline", icon: <ApiOutlined />, accent: CHART_SUCCESS },
+  { key: "loggieAgentsOffline", icon: <DisconnectOutlined />, accent: CHART_MUTED },
 ] as const;
+
+const dashboardDrillDown: Partial<Record<keyof DashboardMetrics, string>> = {
+  users: "/users",
+  clusters: "/clusters",
+  servers: "/project-servers",
+  pendingRegistrations: "/registrations",
+  podNormal: "/pods",
+  podAbnormal: "/pods",
+  eventTotal: "/events",
+  eventWarning: "/events",
+  alertFiring: "/alert-monitor-platform/history",
+  alertEventsToday: "/alert-monitor-platform/history",
+  loggieAgentsOnline: "/loggie-status",
+  loggieAgentsOffline: "/loggie-status",
+};
 
 export function DashboardPage() {
   const { t } = useTranslation();
-  const themeMode = useAdminThemeMode();
-  const isLight = themeMode === "light";
   const [metrics, setMetrics] = useState<DashboardMetrics>(defaultMetrics);
   const [loading, setLoading] = useState(true);
   const [projectLaunches, setProjectLaunches] = useState<OverviewProjectLaunchesResponse | null>(null);
@@ -122,8 +144,8 @@ export function DashboardPage() {
             eventClusterErrors: overview.event_cluster_errors,
             alertFiring: overview.alert_firing_count ?? 0,
             alertEventsToday: overview.alert_events_today_count ?? 0,
-            logAgentsOnline: overview.log_agents_online_count ?? 0,
-            logAgentsOffline: overview.log_agents_offline_count ?? 0,
+            loggieAgentsOnline: overview.loggie_agents_online_count ?? 0,
+            loggieAgentsOffline: overview.loggie_agents_offline_count ?? 0,
           });
         } else {
           setMetrics(defaultMetrics);
@@ -145,17 +167,10 @@ export function DashboardPage() {
   }, []);
 
   const ui = useMemo(
-    () =>
-      isLight
-        ? {
-            faint: "rgba(5, 5, 5, 0.32)",
-            chartDark: false,
-          }
-        : {
-            faint: "rgba(186, 214, 238, 0.55)",
-            chartDark: true,
-          },
-    [isLight],
+    () => ({
+      chartDark: false,
+    }),
+    [],
   );
 
   const launchSeries = useMemo(
@@ -178,165 +193,123 @@ export function DashboardPage() {
   );
 
   return (
-    <div className="overview-big-screen overview-cockpit">
-      <div className="overview-big-screen__top">
-        <PageTelemetryHeader
-          className="overview-cockpit__header"
-          label={t("dashboard.label")}
-          title={t("dashboard.title")}
-          subtitle={t("dashboard.subtitle")}
-          meta={[loading ? t("dashboard.syncPending") : t("dashboard.syncLive")]}
-        />
+    <div className="page-stack dashboard-page">
+      <OpsPageHeader
+        title={t("dashboard.title")}
+        description={t("dashboard.subtitle")}
+        meta={
+          <Typography.Text type="secondary">
+            {loading ? t("dashboard.syncPending") : t("dashboard.syncLive")}
+          </Typography.Text>
+        }
+      />
 
-        <Typography.Text className="overview-big-screen__section-label">
-          <TeamOutlined /> {t("dashboard.sectionAssets")}
-        </Typography.Text>
-        <Row gutter={[16, 16]} className="overview-big-screen__metrics">
-          {assetStats.map((item) => (
-            <Col xs={24} sm={12} xl={6} key={item.key}>
-              <Card className="overview-big-screen__stat-card" loading={loading} bordered={false}>
-                <div className="overview-big-screen__stat-head">
-                  <span
-                    className="overview-big-screen__stat-icon"
-                    style={isLight ? undefined : { boxShadow: `0 0 24px ${item.accent}44` }}
-                  >
-                    {item.icon}
-                  </span>
-                  <Statistic
-                    title={<span className="overview-big-screen__stat-title">{t(`dashboard.stats.${item.key}.title`)}</span>}
-                    value={metrics[item.key as keyof DashboardMetrics] as number}
-                    valueStyle={{
-                      color: item.accent,
-                      fontSize: 36,
-                      fontWeight: 700,
-                      fontFamily: "var(--overview-num-font, ui-monospace, monospace)",
-                    }}
-                  />
-                </div>
-                <Typography.Paragraph className="overview-big-screen__stat-hint">{t(`dashboard.stats.${item.key}.hint`)}</Typography.Paragraph>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-
-        <Typography.Text className="overview-big-screen__section-label">
-          <ClusterOutlined /> {t("dashboard.sectionK8s")}
-        </Typography.Text>
-        <Row gutter={[16, 16]} className="overview-big-screen__metrics">
-          {k8sStats.map((item) => (
-            <Col xs={24} sm={12} xl={6} key={item.key}>
-              <Card className="overview-big-screen__stat-card overview-big-screen__stat-card--k8s" loading={loading} bordered={false}>
-                <div className="overview-big-screen__stat-head">
-                  <span
-                    className="overview-big-screen__stat-icon"
-                    style={isLight ? undefined : { boxShadow: `0 0 28px ${item.accent}55` }}
-                  >
-                    {item.icon}
-                  </span>
-                  <Statistic
-                    title={<span className="overview-big-screen__stat-title">{t(`dashboard.stats.${item.key}.title`)}</span>}
-                    value={metrics[item.key as keyof DashboardMetrics] as number}
-                    valueStyle={{
-                      color: item.accent,
-                      fontSize: 34,
-                      fontWeight: 700,
-                      fontFamily: "var(--overview-num-font, ui-monospace, monospace)",
-                    }}
-                  />
-                </div>
-                <Typography.Paragraph className="overview-big-screen__stat-hint">{t(`dashboard.stats.${item.key}.hint`)}</Typography.Paragraph>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-
-        <Typography.Text className="overview-big-screen__section-label">
-          <AlertOutlined /> {t("dashboard.sectionAlert")}
-        </Typography.Text>
-        <Row gutter={[16, 16]} className="overview-big-screen__metrics">
-          {alertAndAgentStats.map((item) => (
-            <Col xs={24} sm={12} xl={6} key={item.key}>
-              <Card className="overview-big-screen__stat-card overview-big-screen__stat-card--alert" loading={loading} bordered={false}>
-                <div className="overview-big-screen__stat-head">
-                  <span
-                    className="overview-big-screen__stat-icon"
-                    style={isLight ? undefined : { boxShadow: `0 0 28px ${item.accent}55` }}
-                  >
-                    {item.icon}
-                  </span>
-                  <Statistic
-                    title={<span className="overview-big-screen__stat-title">{t(`dashboard.stats.${item.key}.title`)}</span>}
-                    value={metrics[item.key as keyof DashboardMetrics] as number}
-                    valueStyle={{
-                      color: item.accent,
-                      fontSize: 34,
-                      fontWeight: 700,
-                      fontFamily: "var(--overview-num-font, ui-monospace, monospace)",
-                    }}
-                  />
-                </div>
-                <Typography.Paragraph className="overview-big-screen__stat-hint">{t(`dashboard.stats.${item.key}.hint`)}</Typography.Paragraph>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-
-        <Row gutter={[16, 16]} className="overview-big-screen__trend-row" style={{ marginTop: 8 }}>
-          <Col xs={24} xl={14}>
-            <Card
-              className="overview-big-screen__panel overview-big-screen__trend-main-card"
-              title={
-                <Space>
-                  <LineChartOutlined style={{ color: "#38bdf8" }} />
-                  <span>{t("dashboard.projectLaunchTitle")}</span>
-                </Space>
-              }
-              loading={loading && !projectLaunches}
-              bordered={false}
-            >
-              {projectLaunches && launchSeries.length > 0 ? (
-                <LineChart
-                  darkMode={ui.chartDark}
-                  labels={projectLaunches.days}
-                  series={launchSeries}
-                  height={360}
-                  yAxisLabel={t("dashboard.launchCountLabel")}
-                />
-              ) : (
-                <Typography.Text type="secondary" style={{ color: ui.faint }}>
-                  {t("dashboard.projectLaunchEmpty")}
-                </Typography.Text>
-              )}
-            </Card>
+      <Typography.Title level={5} className="dashboard-section-title">
+        <TeamOutlined /> {t("dashboard.sectionAssets")}
+      </Typography.Title>
+      <Row gutter={[16, 16]}>
+        {assetStats.map((item) => (
+          <Col xs={24} sm={12} xl={6} key={item.key}>
+            <DashboardStatCard
+              title={t(`dashboard.stats.${item.key}.title`)}
+              value={metrics[item.key as keyof DashboardMetrics] as number}
+              hint={t(`dashboard.stats.${item.key}.hint`)}
+              icon={item.icon}
+              accent={item.accent}
+              loading={loading}
+              to={dashboardDrillDown[item.key]}
+            />
           </Col>
-          <Col xs={24} xl={10}>
-            <Card
-              className="overview-big-screen__panel overview-big-screen__trend-main-card"
-              title={
-                <Space>
-                  <BarChartOutlined style={{ color: "#3b82f6" }} />
-                  <span>{t("dashboard.releaseByPersonTitle")}</span>
-                </Space>
-              }
-              loading={loading && !releaseByPerson}
-              bordered={false}
-            >
-              {releaseByPerson && personBars.length > 0 ? (
-                <BarChart
-                  darkMode={ui.chartDark}
-                  items={personBars}
-                  height={360}
-                  valueLabel={t("dashboard.releaseCountLabel")}
-                />
-              ) : (
-                <Typography.Text type="secondary" style={{ color: ui.faint }}>
-                  {t("dashboard.releaseByPersonEmpty")}
-                </Typography.Text>
-              )}
-            </Card>
+        ))}
+      </Row>
+
+      <Typography.Title level={5} className="dashboard-section-title">
+        <ClusterOutlined /> {t("dashboard.sectionK8s")}
+      </Typography.Title>
+      <Row gutter={[16, 16]}>
+        {k8sStats.map((item) => (
+          <Col xs={24} sm={12} xl={6} key={item.key}>
+            <DashboardStatCard
+              title={t(`dashboard.stats.${item.key}.title`)}
+              value={metrics[item.key as keyof DashboardMetrics] as number}
+              hint={t(`dashboard.stats.${item.key}.hint`)}
+              icon={item.icon}
+              accent={item.accent}
+              loading={loading}
+              to={dashboardDrillDown[item.key]}
+            />
           </Col>
-        </Row>
-      </div>
+        ))}
+      </Row>
+
+      <Typography.Title level={5} className="dashboard-section-title">
+        <AlertOutlined /> {t("dashboard.sectionAlert")}
+      </Typography.Title>
+      <Row gutter={[16, 16]}>
+        {alertAndAgentStats.map((item) => (
+          <Col xs={24} sm={12} xl={6} key={item.key}>
+            <DashboardStatCard
+              title={t(`dashboard.stats.${item.key}.title`)}
+              value={metrics[item.key as keyof DashboardMetrics] as number}
+              hint={t(`dashboard.stats.${item.key}.hint`)}
+              icon={item.icon}
+              accent={item.accent}
+              loading={loading}
+              to={dashboardDrillDown[item.key]}
+            />
+          </Col>
+        ))}
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 8 }}>
+        <Col xs={24} xl={14}>
+          <Card
+            className="table-card"
+            title={
+              <Space>
+                <LineChartOutlined />
+                <span>{t("dashboard.projectLaunchTitle")}</span>
+              </Space>
+            }
+            loading={loading && !projectLaunches}
+          >
+            {projectLaunches && launchSeries.length > 0 ? (
+              <LineChart
+                darkMode={ui.chartDark}
+                labels={projectLaunches.days}
+                series={launchSeries}
+                height={360}
+                yAxisLabel={t("dashboard.launchCountLabel")}
+              />
+            ) : (
+              <Typography.Text type="secondary">{t("dashboard.projectLaunchEmpty")}</Typography.Text>
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} xl={10}>
+          <Card
+            className="table-card"
+            title={
+              <Space>
+                <BarChartOutlined />
+                <span>{t("dashboard.releaseByPersonTitle")}</span>
+              </Space>
+            }
+            loading={loading && !releaseByPerson}
+          >
+            {releaseByPerson && personBars.length > 0 ? (
+              <BarChart
+                darkMode={ui.chartDark}
+                items={personBars}
+                height={360}
+                valueLabel={t("dashboard.releaseCountLabel")}
+              />
+            ) : (
+              <Typography.Text type="secondary">{t("dashboard.releaseByPersonEmpty")}</Typography.Text>
+            )}
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 }

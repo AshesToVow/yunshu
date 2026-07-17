@@ -1,7 +1,12 @@
 package handler
 
 import (
+	"context"
+
+	"yunshu/internal/config"
+	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
+	"yunshu/internal/plugin"
 	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -9,11 +14,12 @@ import (
 
 type PermissionHandler struct {
 	service *service.PermissionService
+	plugins *config.PluginsConfig
 }
 
 // NewPermissionHandler 创建相关逻辑。
-func NewPermissionHandler(service *service.PermissionService) *PermissionHandler {
-	return &PermissionHandler{service: service}
+func NewPermissionHandler(service *service.PermissionService, plugins *config.PluginsConfig) *PermissionHandler {
+	return &PermissionHandler{service: service, plugins: plugins}
 }
 
 // Create godoc
@@ -118,7 +124,37 @@ func (h *PermissionHandler) Detail(c *gin.Context) {
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/permissions [get]
 func (h *PermissionHandler) List(c *gin.Context) {
-	ServeQuery(c, h.service.List)
+	ServeQuery(c, func(ctx context.Context, query service.PermissionListQuery) (*pagination.Result[service.PermissionItem], error) {
+		if h.plugins != nil {
+			items, err := h.service.ListAllFiltered(ctx, query)
+			if err != nil {
+				return nil, err
+			}
+			filtered := make([]service.PermissionItem, 0, len(items))
+			for _, item := range items {
+				if plugin.IsAPIResourceAllowed(item.Resource, h.plugins) {
+					filtered = append(filtered, item)
+				}
+			}
+			page, pageSize := pagination.Normalize(query.Page, query.PageSize)
+			total := int64(len(filtered))
+			start := (page - 1) * pageSize
+			if start > len(filtered) {
+				start = len(filtered)
+			}
+			end := start + pageSize
+			if end > len(filtered) {
+				end = len(filtered)
+			}
+			return &pagination.Result[service.PermissionItem]{
+				List:     filtered[start:end],
+				Total:    total,
+				Page:     page,
+				PageSize: pageSize,
+			}, nil
+		}
+		return h.service.List(ctx, query)
+	})
 }
 
 // BatchSetK8sScope godoc

@@ -31,6 +31,17 @@ func (r *PermissionRepository) Create(ctx context.Context, permission *model.Per
 	return r.db.WithContext(ctx).Create(permission).Error
 }
 
+func (r *PermissionRepository) GetByResourceAction(ctx context.Context, resource, action string) (*model.Permission, error) {
+	var permission model.Permission
+	err := r.db.WithContext(ctx).
+		Where("resource = ? AND action = ?", strings.TrimSpace(resource), strings.TrimSpace(action)).
+		First(&permission).Error
+	if err != nil {
+		return nil, err
+	}
+	return &permission, nil
+}
+
 func (r *PermissionRepository) Save(ctx context.Context, permission *model.Permission) error {
 	return r.db.WithContext(ctx).Save(permission).Error
 }
@@ -84,6 +95,15 @@ func (r *PermissionRepository) List(ctx context.Context, params PermissionListPa
 		return nil, 0, err
 	}
 	return permissions, total, nil
+}
+
+func (r *PermissionRepository) ListFiltered(ctx context.Context, params PermissionListParams) ([]model.Permission, error) {
+	query := applyPermissionListFilters(r.db.WithContext(ctx).Model(&model.Permission{}), params)
+	var permissions []model.Permission
+	if err := query.Order("id DESC").Find(&permissions).Error; err != nil {
+		return nil, err
+	}
+	return permissions, nil
 }
 
 // BatchSetK8sScopeEnabled 按列表筛选条件批量更新 k8s_scope_enabled。
