@@ -306,7 +306,7 @@ func (s *LoggieAgentService) Bootstrap(ctx context.Context, projectID uint, req 
 	if s.esProvider != nil {
 		esCfg, _ = s.esProvider.Resolve(ctx)
 	}
-	return bootstrapResultFromBundle(agent, projectID, req.ServerID, bundle, esCfg, len(finalSources), deployed, deployMsg), nil
+	return bootstrapResultFromBundle(agent, projectID, req.ServerID, sv.Host, bundle, esCfg, len(finalSources), deployed, deployMsg), nil
 }
 
 func (s *LoggieAgentService) ensureAgent(ctx context.Context, projectID, serverID uint, monitorPort int) (*model.LoggieAgent, error) {

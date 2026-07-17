@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
@@ -105,6 +106,23 @@ func (h *LogPlatformHandler) KafkaConfigPreview(c *gin.Context) {
 		return
 	}
 	response.Success(c, cfg)
+}
+
+func (h *LogPlatformHandler) DeleteKafkaTopic(c *gin.Context) {
+	if h.kafka == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Kafka 服务未初始化"))
+		return
+	}
+	topic := strings.TrimSpace(c.Param("topic"))
+	if topic == "" {
+		response.Error(c, constants.ErrBadRequestWithMsg("topic 不能为空"))
+		return
+	}
+	if err := h.kafka.DeleteTopic(c.Request.Context(), topic); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted", "topic": topic})
 }
 
 func (h *LogPlatformHandler) GetProjectRetention(c *gin.Context) {

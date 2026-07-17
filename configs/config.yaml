@@ -165,7 +165,7 @@ kafka:
   enabled: false
   brokers:
     - "127.0.0.1:9092"
-  topic_prefix: "yunshu-agent"   # 实际 Topic = yunshu-agent-{server_id}
+  topic_prefix: "yunshu-agent"   # 实际 Topic = yunshu-agent-{服务器IP}-YYYY.MM.DD（IP 中的 . 转为 -）
   consumer_group: "yunshu-log-es" # 必填消费组
   username: ""
   password: ""

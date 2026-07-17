@@ -116,6 +116,14 @@ export async function getKafkaConfigPreview() {
   return await getData(http.get<any, ApiResponse<KafkaConfigPreview>>("/log-platform/kafka-config"));
 }
 
+export async function deleteKafkaTopic(topic: string) {
+  return await getData(
+    http.delete<any, ApiResponse<{ message: string; topic: string }>>(
+      `/log-platform/kafka-topics/${encodeURIComponent(topic)}`,
+    ),
+  );
+}
+
 export async function runLogRetentionCleanup() {
   return await getData(http.post<any, ApiResponse<LogRetentionCleanupResult>>("/log-platform/retention/cleanup"));
 }

@@ -201,7 +201,14 @@ func (s *LoggieAgentService) bundleFromStored(
 		kafkaCfg, _ = s.kafkaProvider.Resolve(ctx)
 	}
 	if kafkaCfg.SinkViaKafka() {
-		if topic, err := EnsureAgentKafkaTopic(ctx, kafkaCfg, serverID); err != nil {
+		host := ""
+		for _, e := range entries {
+			if h := strings.TrimSpace(e.ServerHost); h != "" {
+				host = h
+				break
+			}
+		}
+		if topic, err := EnsureAgentKafkaTopic(ctx, kafkaCfg, host); err != nil {
 			slog.Default().With("component", "loggie").Warn("ensure kafka topic failed",
 				"server_id", serverID, "topic", topic, "err", err)
 		}
@@ -276,6 +283,7 @@ func (s *LoggieAgentService) PreviewBootstrapSources(ctx context.Context, projec
 func bootstrapResultFromBundle(
 	agent *model.LoggieAgent,
 	projectID, serverID uint,
+	serverHost string,
 	bundle LoggiePipelineBundle,
 	esCfg config.ElasticsearchConfig,
 	sourceCount int,
@@ -286,16 +294,20 @@ func bootstrapResultFromBundle(
 	if monitorPort == 0 {
 		monitorPort = 9196
 	}
+	host := strings.TrimSpace(serverHost)
+	if host == "" {
+		host = fmt.Sprintf("server-%d", serverID)
+	}
 	return &LoggieBootstrapResult{
 		Token:          agent.Token,
 		ProjectID:      projectID,
 		ServerID:       serverID,
 		ESAddresses:    esCfg.Addresses,
-		ESIndexPattern: AgentIndexPattern(serverID),
+		ESIndexPattern: AgentIndexPattern(host),
 		ReportURL:      "/api/v1/loggie/heartbeat/report",
 		PipelineHint: fmt.Sprintf(
 			"fields.project_id=%d fields.server_id=%d sink.index=%s monitor_port=%d pipelines=%d",
-			projectID, serverID, AgentIndexSink(serverID), monitorPort, bundle.PipelineCount,
+			projectID, serverID, AgentIndexSink(host), monitorPort, bundle.PipelineCount,
 		),
 		PipelineYAML:      bundle.PipelineYAML,
 		PipelinesOnlyYAML: bundle.PipelinesOnlyYAML,

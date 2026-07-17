@@ -78,7 +78,7 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "ES 地址（elasticsearch_addresses）", value: "elasticsearch_addresses", category: "log" },
   { label: "启用 Kafka 中转（kafka_enabled）", value: "kafka_enabled", category: "log" },
   { label: "Kafka Brokers（kafka_brokers）", value: "kafka_brokers", category: "log" },
-  { label: "Kafka Topic 前缀（kafka_topic_prefix）", value: "kafka_topic_prefix", category: "log" },
+  { label: "Kafka Topic（kafka_topic）", value: "kafka_topic", category: "log" },
   { label: "Kafka 消费组（kafka_consumer_group）", value: "kafka_consumer_group", category: "log" },
   { label: "Kafka 密码（kafka_password）", value: "kafka_password", category: "log" },
 

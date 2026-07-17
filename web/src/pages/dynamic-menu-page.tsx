@@ -1,6 +1,6 @@
 import { Alert, Card, Result, Spin, Typography } from "antd";
 import { Suspense, useMemo } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useMenuTree } from "../hooks/use-menu-tree";
 import { createLazyMenuPage } from "../utils/menu-page-loader";
 import { findMenuByPath, normalizeMenuPath } from "../utils/menu-path";
@@ -126,6 +126,10 @@ export function DynamicMenuPage() {
 
   const normalizedPath = useMemo(() => normalizeMenuPath(location.pathname), [location.pathname]);
   const hasPathFallback = Boolean(PATH_COMPONENT_FALLBACK[normalizedPath]);
+
+  if (normalizedPath === "/log-kafka") {
+    return <Navigate to="/log-retention?tab=kafka" replace />;
+  }
 
   if (!pluginsLoading && !isPathAllowedByPlugins(location.pathname, isPluginEnabled)) {
     return (

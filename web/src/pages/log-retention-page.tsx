@@ -24,9 +24,10 @@ import {
   Tag,
   message,
 } from "antd";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  deleteKafkaTopic,
   deleteProjectLogRetention,
   getESStorageStats,
   getGlobalLogRetention,
@@ -145,6 +146,33 @@ export function LogRetentionPage() {
 
   const projectOverrides = policies.filter((p) => p.project_id !== 0);
   const partitions: KafkaPartitionLag[] = kafkaStats?.partitions ?? [];
+  const topicRows = useMemo(() => {
+    const map = new Map<string, { topic: string; lag_total: number; partitions: KafkaPartitionLag[] }>();
+    for (const p of partitions) {
+      const topic = p.topic || "-";
+      const row = map.get(topic) ?? { topic, lag_total: 0, partitions: [] };
+      row.partitions.push(p);
+      if (p.lag > 0) row.lag_total += p.lag;
+      map.set(topic, row);
+    }
+    for (const t of kafkaStats?.topics || []) {
+      if (!map.has(t)) map.set(t, { topic: t, lag_total: 0, partitions: [] });
+    }
+    return Array.from(map.values()).sort((a, b) => a.topic.localeCompare(b.topic));
+  }, [partitions, kafkaStats?.topics]);
+
+  const showEmptyTopicHint =
+    !!kafkaStats?.sink_via_kafka && (kafkaStats?.topics || []).length === 0;
+
+  async function handleDeleteTopic(topic: string) {
+    try {
+      await deleteKafkaTopic(topic);
+      message.success(`已删除 Topic：${topic}`);
+      await reloadKafka();
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message ?? e));
+    }
+  }
 
   return (
     <div className="log-retention-page">
@@ -163,7 +191,7 @@ export function LogRetentionPage() {
                 <Alert
                   type="info"
                   showIcon
-                  message="按保留天数定时清理过期 ES 索引；Agent 启停与热更请到「Agent 管理」。推荐索引：yunshu-agent-{server_id}-YYYY.MM.DD。"
+                  message="按保留天数定时清理过期 ES 索引；Agent 启停与热更请到「Agent 管理」。推荐索引：yunshu-agent-{服务器IP}-YYYY.MM.DD。"
                 />
 
                 <Card
@@ -364,10 +392,18 @@ export function LogRetentionPage() {
                 <Alert
                   type="info"
                   showIcon
-                  message="开启 Kafka 后：每个 Agent 独立 Topic（yunshu-agent-{server_id}），Yunshu 使用消费组统一消费写 ES。引导/热更 Agent 时会自动建 Topic。"
+                  message="开启 Kafka 后：每个 Agent 独立 Topic（yunshu-agent-{服务器IP}-YYYY.MM.DD），ES 索引同名形态。引导/热更 Agent 时会自动建当日 Topic。"
                 />
 
-                {kafkaStats?.message ? (
+                {showEmptyTopicHint ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="暂无 Agent Topic（yunshu-agent-{ip}-YYYY.MM.DD），请先引导/热更 Agent"
+                  />
+                ) : null}
+
+                {kafkaStats?.message && !showEmptyTopicHint ? (
                   <Alert type={kafkaStats.sink_via_kafka ? "info" : "warning"} showIcon message={kafkaStats.message} />
                 ) : null}
 
@@ -413,7 +449,7 @@ export function LogRetentionPage() {
                       <Tag color="blue">{kafkaStats?.consumer_group || kafkaCfg?.consumer_group || "-"}</Tag>
                     </span>
                     <span>Topic 前缀：{kafkaStats?.topic_prefix || kafkaCfg?.topic_prefix || "yunshu-agent"}</span>
-                    <span>示例 Topic：{kafkaCfg?.topic_example || "yunshu-agent-1"}</span>
+                    <span>示例 Topic：{kafkaCfg?.topic_example || "yunshu-agent-10-10-10-1-2026.07.17"}</span>
                     <span>订阅 Topic 数：{(kafkaStats?.topics || []).length}</span>
                     <span>Brokers：{(kafkaStats?.brokers || kafkaCfg?.brokers || []).join(", ") || "-"}</span>
                     <span>最近消费：{kafkaStats?.last_consume_at ? formatDateTime(kafkaStats.last_consume_at) : "-"}</span>
@@ -423,40 +459,89 @@ export function LogRetentionPage() {
                     <div style={{ marginTop: 8 }}>
                       <Space wrap size={[4, 4]}>
                         {kafkaStats!.topics!.map((t) => (
-                          <Tag key={t}>{t}</Tag>
+                          <Tag
+                            key={t}
+                            closable
+                            onClose={(e) => {
+                              e.preventDefault();
+                              void handleDeleteTopic(t);
+                            }}
+                          >
+                            {t}
+                          </Tag>
                         ))}
                       </Space>
                     </div>
                   ) : null}
-                  {kafkaStats?.last_error ? (
+                  {kafkaStats?.last_error && !String(kafkaStats.last_error).includes("暂无 Agent Topic") ? (
                     <Alert style={{ marginTop: 12 }} type="error" showIcon message={kafkaStats.last_error} />
                   ) : null}
                 </Card>
 
-                <Card title="分区积压（按 Topic）" size="small">
+                <Card title="Topic 积压（展开查看分区）" size="small">
                   <Table
-                    rowKey={(r) => `${r.topic ?? ""}-${r.partition}`}
+                    rowKey="topic"
                     size="small"
                     loading={kafkaLoading}
                     pagination={{ pageSize: 10, size: "small" }}
-                    dataSource={partitions}
-                    locale={{ emptyText: kafkaStats?.sink_via_kafka ? "暂无分区数据" : "未启用 Kafka 中转" }}
+                    dataSource={topicRows}
+                    locale={{ emptyText: kafkaStats?.sink_via_kafka ? "暂无 Topic 数据" : "未启用 Kafka 中转" }}
+                    expandable={{
+                      expandedRowRender: (row) => (
+                        <Table
+                          size="small"
+                          pagination={false}
+                          rowKey={(r) => `${r.topic ?? ""}-${r.partition}`}
+                          dataSource={row.partitions}
+                          columns={[
+                            { title: "分区", dataIndex: "partition", width: 80 },
+                            { title: "高水位", dataIndex: "high_water_mark", width: 120 },
+                            {
+                              title: "消费位移",
+                              dataIndex: "consumer_offset",
+                              width: 120,
+                              render: (v: number) => (v < 0 ? "-" : v),
+                            },
+                            {
+                              title: "Lag",
+                              dataIndex: "lag",
+                              width: 100,
+                              render: (v: number) =>
+                                v < 0 ? <Tag>-</Tag> : <Tag color={v > 1000 ? "red" : v > 0 ? "orange" : "green"}>{v}</Tag>,
+                            },
+                          ]}
+                        />
+                      ),
+                      rowExpandable: (row) => (row.partitions?.length ?? 0) > 0,
+                    }}
                     columns={[
                       { title: "Topic", dataIndex: "topic", ellipsis: true },
-                      { title: "分区", dataIndex: "partition", width: 80 },
-                      { title: "高水位", dataIndex: "high_water_mark", width: 120 },
                       {
-                        title: "消费位移",
-                        dataIndex: "consumer_offset",
-                        width: 120,
-                        render: (v: number) => (v < 0 ? "-" : v),
+                        title: "分区数",
+                        width: 90,
+                        render: (_, row) => row.partitions.length || "-",
                       },
                       {
-                        title: "Lag",
-                        dataIndex: "lag",
-                        width: 100,
+                        title: "Lag 合计",
+                        dataIndex: "lag_total",
+                        width: 110,
                         render: (v: number) =>
-                          v < 0 ? <Tag>-</Tag> : <Tag color={v > 1000 ? "red" : v > 0 ? "orange" : "green"}>{v}</Tag>,
+                          v > 0 ? <Tag color={v > 1000 ? "red" : "orange"}>{v}</Tag> : <Tag color="green">0</Tag>,
+                      },
+                      {
+                        title: "操作",
+                        width: 90,
+                        render: (_, row) => (
+                          <Button
+                            type="link"
+                            danger
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            onClick={() => void handleDeleteTopic(row.topic)}
+                          >
+                            删除
+                          </Button>
+                        ),
                       },
                     ]}
                   />

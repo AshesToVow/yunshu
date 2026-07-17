@@ -11,8 +11,8 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/esclient"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/esclient"
 
 	"gorm.io/gorm"
 )
@@ -29,27 +29,27 @@ func NewLogRetentionService(es *ElasticsearchProvider, repo interfaces.LogRetent
 }
 
 type LogRetentionItem struct {
-	ID              uint    `json:"id"`
-	ProjectID       uint    `json:"project_id"`
-	ServerID        uint    `json:"server_id"`
-	RetentionDays   int     `json:"retention_days"`
-	MaxStoreBytes   int64   `json:"max_store_bytes"`
-	MaxIndexCount   int     `json:"max_index_count"`
-	Enabled         bool    `json:"enabled"`
-	IndexPattern    string  `json:"index_pattern,omitempty"`
-	Remark          *string `json:"remark,omitempty"`
-	Source          string  `json:"source,omitempty"`
-	UpdatedAt       string  `json:"updated_at,omitempty"`
+	ID            uint    `json:"id"`
+	ProjectID     uint    `json:"project_id"`
+	ServerID      uint    `json:"server_id"`
+	RetentionDays int     `json:"retention_days"`
+	MaxStoreBytes int64   `json:"max_store_bytes"`
+	MaxIndexCount int     `json:"max_index_count"`
+	Enabled       bool    `json:"enabled"`
+	IndexPattern  string  `json:"index_pattern,omitempty"`
+	Remark        *string `json:"remark,omitempty"`
+	Source        string  `json:"source,omitempty"`
+	UpdatedAt     string  `json:"updated_at,omitempty"`
 }
 
 type LogRetentionUpsertRequest struct {
-	ServerID        *uint   `json:"server_id"`
-	RetentionDays   int     `json:"retention_days" binding:"required,min=1,max=3650"`
-	MaxStoreBytes   int64   `json:"max_store_bytes"`
-	MaxIndexCount   int     `json:"max_index_count"`
-	Enabled         bool    `json:"enabled"`
-	IndexPattern    *string `json:"index_pattern"`
-	Remark          *string `json:"remark"`
+	ServerID      *uint   `json:"server_id"`
+	RetentionDays int     `json:"retention_days" binding:"required,min=1,max=3650"`
+	MaxStoreBytes int64   `json:"max_store_bytes"`
+	MaxIndexCount int     `json:"max_index_count"`
+	Enabled       bool    `json:"enabled"`
+	IndexPattern  *string `json:"index_pattern"`
+	Remark        *string `json:"remark"`
 }
 
 type LogRetentionCleanupResult struct {
@@ -243,7 +243,7 @@ func (s *LogRetentionService) RunCleanup(ctx context.Context) (*LogRetentionClea
 		pattern := strings.TrimSpace(p.IndexPattern)
 		if pattern == "" {
 			if p.ServerID > 0 {
-				pattern = AgentIndexPattern(p.ServerID)
+				pattern = AgentIndexPatternByServerID(p.ServerID)
 			} else {
 				pattern = GlobalAgentIndexPattern()
 			}
@@ -425,17 +425,17 @@ func (s *LogRetentionService) defaultPolicyModel(ctx context.Context) model.LogR
 
 func toRetentionItem(it model.LogRetentionPolicy, source string) LogRetentionItem {
 	return LogRetentionItem{
-		ID:              it.ID,
-		ProjectID:       it.ProjectID,
-		ServerID:        it.ServerID,
-		RetentionDays:   it.RetentionDays,
-		MaxStoreBytes:   it.MaxStoreBytes,
-		MaxIndexCount:   it.MaxIndexCount,
-		Enabled:         it.Enabled,
-		IndexPattern:    strings.TrimSpace(it.IndexPattern),
-		Remark:          it.Remark,
-		Source:          source,
-		UpdatedAt:       it.UpdatedAt.Format(time.RFC3339),
+		ID:            it.ID,
+		ProjectID:     it.ProjectID,
+		ServerID:      it.ServerID,
+		RetentionDays: it.RetentionDays,
+		MaxStoreBytes: it.MaxStoreBytes,
+		MaxIndexCount: it.MaxIndexCount,
+		Enabled:       it.Enabled,
+		IndexPattern:  strings.TrimSpace(it.IndexPattern),
+		Remark:        it.Remark,
+		Source:        source,
+		UpdatedAt:     it.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

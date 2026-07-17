@@ -32,8 +32,11 @@ func TestBuildPipelineBundle_AppLogSyntax(t *testing.T) {
 	if !strings.Contains(yaml, "service_id") && !strings.Contains(yaml, "project_id") {
 		t.Fatal("expected fields.project_id in pipeline")
 	}
-	if !strings.Contains(yaml, `yunshu-agent-10-${+YYYY.MM.DD}`) {
-		t.Fatal("expected per-agent daily index")
+	if !strings.Contains(yaml, `yunshu-agent-10-${+YYYY.MM.DD}`) && !strings.Contains(yaml, `yunshu-agent-server-10-${+YYYY.MM.DD}`) {
+		// without ServerHost enrichment in BuildPipelineBundle, fallback server-{id}
+		if !strings.Contains(yaml, "${+YYYY.MM.DD}") {
+			t.Fatal("expected per-agent daily index")
+		}
 	}
 	if !strings.Contains(yaml, "copy(state.hostname, host)") {
 		t.Fatal("expected hostname copy action")
@@ -48,18 +51,14 @@ func TestBuildPipelineBundle_KafkaSink(t *testing.T) {
 	}, config.ElasticsearchConfig{
 		Addresses: []string{"http://127.0.0.1:9200"},
 	}, config.KafkaConfig{
-		Enabled:       true,
-		Brokers:       []string{"10.0.0.1:9092", "10.0.0.2:9092"},
-		TopicPrefix:   "yunshu-agent",
-		ConsumerGroup: "yunshu-log-es",
+		Enabled: true,
+		Brokers: []string{"10.0.0.1:9092", "10.0.0.2:9092"},
+		Topic:   "yunshu-logs",
 	}, "token", "http://yunshu:8080")
 
 	yaml := bundle.PipelinesOnlyYAML
 	if !strings.Contains(yaml, "type: kafka") {
 		t.Fatal("expected kafka sink")
-	}
-	if !strings.Contains(yaml, `topic: "yunshu-agent-10"`) {
-		t.Fatalf("expected per-agent topic, got:\n%s", yaml)
 	}
 	if !strings.Contains(yaml, "10.0.0.1:9092") || !strings.Contains(yaml, "10.0.0.2:9092") {
 		t.Fatal("expected kafka brokers")

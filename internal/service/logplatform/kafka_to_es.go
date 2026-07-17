@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"yunshu/internal/config"
+	"yunshu/internal/pkg/constants"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl"
@@ -149,13 +150,14 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 	}
 	s.stopConsumer()
 	if len(topics) == 0 {
-		s.setLastError("暂无 Agent Topic（yunshu-agent-{server_id}），请先引导/热更 Agent")
+		s.setLastError("暂无 Agent Topic（yunshu-agent-{ip}-YYYY.MM.DD），请先引导/热更 Agent")
 		s.activeTopics.Store([]string(nil))
 		s.mu.Lock()
 		s.cfgFingerprint = fp
 		s.mu.Unlock()
 		return
 	}
+	s.setLastError("")
 	s.startConsumer(parent, cfg, topics)
 }
 
@@ -169,6 +171,7 @@ func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.Kafk
 	s.mu.Unlock()
 	s.runningFlag.Store(true)
 	s.activeTopics.Store(append([]string(nil), topics...))
+	s.setLastError("")
 	slog.Default().With("component", "kafka-to-es").Info("kafka consumer starting",
 		"group", cfg.ConsumerGroup, "topics", len(topics), "brokers", len(cfg.Brokers))
 
@@ -303,11 +306,11 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 	var root map[string]any
 	if err := json.Unmarshal([]byte(s), &root); err != nil {
 		now := time.Now().UTC()
-		serverID, _ := ParseServerIDFromAgentKafkaTopic(topic, topicPrefix)
+		host := resolveHostForIndex(nil, topic, topicPrefix, 0)
 		return map[string]any{
 			"@timestamp": now.Format(time.RFC3339Nano),
 			"message":    s,
-		}, AgentIndexForDay(serverID, now), nil
+		}, resolveIndexName(host, 0, topic, topicPrefix, now), nil
 	}
 
 	doc := map[string]any{}
@@ -329,6 +332,13 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 	if f, ok := doc["fields"].(map[string]any); ok {
 		fields = f
 	}
+	serverHost := strings.TrimSpace(fmt.Sprint(fields["server_host"]))
+	if serverHost == "" || serverHost == "<nil>" {
+		serverHost = strings.TrimSpace(fmt.Sprint(doc["server_host"]))
+		if serverHost == "<nil>" {
+			serverHost = ""
+		}
+	}
 	serverID := parseUintAny(fields["server_id"])
 	if serverID == 0 {
 		serverID = parseUintAny(doc["server_id"])
@@ -337,6 +347,10 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 		if id, ok := ParseServerIDFromAgentKafkaTopic(topic, topicPrefix); ok {
 			serverID = id
 		}
+	}
+	host := resolveHostForIndex(fields, topic, topicPrefix, serverID)
+	if serverHost != "" {
+		host = serverHost
 	}
 	ts := parseTimestampAny(doc["@timestamp"])
 	if ts.IsZero() {
@@ -348,7 +362,39 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 	if _, ok := doc["@timestamp"]; !ok {
 		doc["@timestamp"] = ts.Format(time.RFC3339Nano)
 	}
-	return doc, AgentIndexForDay(serverID, ts), nil
+	return doc, resolveIndexName(host, serverID, topic, topicPrefix, ts), nil
+}
+
+func resolveHostForIndex(fields map[string]any, topic, topicPrefix string, serverID uint) string {
+	if fields != nil {
+		if h := strings.TrimSpace(fmt.Sprint(fields["server_host"])); h != "" && h != "<nil>" {
+			return h
+		}
+	}
+	if key, ok := ParseHostKeyFromAgentName(topic, topicPrefix); ok {
+		return key
+	}
+	if serverID > 0 {
+		return fmt.Sprintf("server-%d", serverID)
+	}
+	return "unknown"
+}
+
+func resolveIndexName(host string, serverID uint, topic, topicPrefix string, ts time.Time) string {
+	host = strings.TrimSpace(host)
+	if host != "" && host != "unknown" && !strings.HasPrefix(host, "server-") {
+		return AgentIndexForDay(host, ts)
+	}
+	if key, ok := ParseHostKeyFromAgentName(topic, topicPrefix); ok {
+		return fmt.Sprintf("%s-%s-%s", defaultAgentIndexPrefix, key, ts.UTC().Format("2006.01.02"))
+	}
+	if serverID > 0 {
+		return AgentIndexForDayByServerID(serverID, ts)
+	}
+	if id, ok := ParseServerIDFromAgentKafkaTopic(topic, topicPrefix); ok {
+		return AgentIndexForDayByServerID(id, ts)
+	}
+	return AgentIndexForDay(host, ts)
 }
 
 func parseUintAny(v any) uint {
@@ -442,7 +488,7 @@ func (s *KafkaToESService) ConfigPreview(ctx context.Context) (*KafkaConfigPrevi
 		Enabled:         cfg.Enabled,
 		Brokers:         cfg.Brokers,
 		TopicPrefix:     cfg.TopicPrefix,
-		TopicExample:    AgentKafkaTopic(1, cfg.TopicPrefix),
+		TopicExample:    AgentKafkaTopicForDay("10.10.10.1", cfg.TopicPrefix, time.Now().UTC()),
 		ConsumerGroup:   cfg.ConsumerGroup,
 		Username:        cfg.Username,
 		HasPassword:     strings.TrimSpace(cfg.Password) != "",
@@ -512,12 +558,37 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	out.LagTotal = lagTotal
 	if out.ConsumerRunning {
 		out.Message = fmt.Sprintf("消费组 %s 运行中，订阅 %d 个 Agent Topic", cfg.ConsumerGroup, len(topics))
+		if strings.Contains(out.LastError, "暂无 Agent Topic") {
+			out.LastError = ""
+		}
 	} else if len(topics) == 0 {
-		out.Message = "暂无 Agent Topic，请先引导/热更 Agent（将自动创建 yunshu-agent-{server_id}）"
+		out.Message = "暂无 Agent Topic，请先引导/热更 Agent（将自动创建 yunshu-agent-{ip}-YYYY.MM.DD）"
 	} else {
 		out.Message = "消费者未运行（请确认 ES 已启用）"
+		if strings.Contains(out.LastError, "暂无 Agent Topic") {
+			out.LastError = ""
+		}
 	}
 	return out, nil
+}
+
+// DeleteTopic 删除 Agent Topic。
+func (s *KafkaToESService) DeleteTopic(ctx context.Context, topic string) error {
+	if s == nil || s.kafka == nil {
+		return constants.ErrBadRequestWithMsg("Kafka 未配置")
+	}
+	cfg, err := s.kafka.Resolve(ctx)
+	if err != nil {
+		return err
+	}
+	if !cfg.SinkViaKafka() {
+		return constants.ErrBadRequestWithMsg("Kafka 中转未启用")
+	}
+	if err := DeleteAgentKafkaTopic(ctx, cfg, topic); err != nil {
+		return constants.ErrBadRequestWithMsg(err.Error())
+	}
+	s.kafka.InvalidateCache()
+	return nil
 }
 
 func fetchKafkaLagMulti(ctx context.Context, cfg config.KafkaConfig, topics []string) ([]KafkaPartitionLag, int64, error) {
