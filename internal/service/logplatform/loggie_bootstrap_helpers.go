@@ -195,7 +195,11 @@ func (s *LoggieAgentService) bundleFromStored(
 	if s.esProvider != nil {
 		esCfg, _ = s.esProvider.Resolve(ctx)
 	}
-	bundle := BuildMultiPipelineBundle(projectID, serverID, entries, stored.MonitorPort, esCfg, agent.Token, stored.YunshuURL, stored.DeployDir)
+	var kafkaCfg config.KafkaConfig
+	if s.kafkaProvider != nil {
+		kafkaCfg, _ = s.kafkaProvider.Resolve(ctx)
+	}
+	bundle := BuildMultiPipelineBundle(projectID, serverID, entries, stored.MonitorPort, esCfg, kafkaCfg, agent.Token, stored.YunshuURL, stored.DeployDir)
 	return bundle, sources, nil
 }
 

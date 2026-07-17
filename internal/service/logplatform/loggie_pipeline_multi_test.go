@@ -19,7 +19,7 @@ func TestBuildMultiPipelineBundle_PerLogSourceFields(t *testing.T) {
 	bundle := BuildMultiPipelineBundle(1, 7, sources, 9196, config.ElasticsearchConfig{
 		Addresses:    []string{"http://10.10.10.103:9200"},
 		IndexPattern: "yunshu-agent-*",
-	}, "token", "http://127.0.0.1:8080", "/export/loggie")
+	}, config.KafkaConfig{}, "token", "http://127.0.0.1:8080", "/export/loggie")
 
 	yaml := bundle.PipelinesOnlyYAML
 	if bundle.PipelineCount != 2 {

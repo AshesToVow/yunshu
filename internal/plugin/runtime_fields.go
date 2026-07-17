@@ -59,3 +59,12 @@ func (rt *Runtime) LogRetentionSvc() *service.LogRetentionService {
 	svc, _ := rt.LogRetention.(*service.LogRetentionService)
 	return svc
 }
+
+// KafkaToESSvc 返回 Kafka→ES 消费服务。
+func (rt *Runtime) KafkaToESSvc() *service.KafkaToESService {
+	if rt == nil {
+		return nil
+	}
+	svc, _ := rt.KafkaToES.(*service.KafkaToESService)
+	return svc
+}

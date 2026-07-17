@@ -32,6 +32,7 @@ type LoggieAgentService struct {
 	projectRepo   interfaces.ProjectRepository
 	serviceRepo   interfaces.ServiceRepository
 	esProvider    *ElasticsearchProvider
+	kafkaProvider *KafkaProvider
 	aead          cipher.AEAD
 	loggieCfg     config.LoggieConfig
 }
@@ -43,6 +44,7 @@ func NewLoggieAgentService(
 	projectRepo interfaces.ProjectRepository,
 	serviceRepo interfaces.ServiceRepository,
 	esProvider *ElasticsearchProvider,
+	kafkaProvider *KafkaProvider,
 	encryptionKey string,
 	loggieCfg config.LoggieConfig,
 ) (*LoggieAgentService, error) {
@@ -57,6 +59,7 @@ func NewLoggieAgentService(
 		projectRepo:   projectRepo,
 		serviceRepo:   serviceRepo,
 		esProvider:    esProvider,
+		kafkaProvider: kafkaProvider,
 		aead:          aead,
 		loggieCfg:     loggieCfg.Normalized(),
 	}, nil
@@ -276,10 +279,6 @@ func (s *LoggieAgentService) Bootstrap(ctx context.Context, projectID uint, req 
 	agent.MonitorPort = stored.MonitorPort
 	if err := s.repo.Save(ctx, agent); err != nil {
 		return nil, bizerrors.Pass(ctx, "loggie", "Bootstrap", err)
-	}
-	var esCfg config.ElasticsearchConfig
-	if s.esProvider != nil {
-		esCfg, _ = s.esProvider.Resolve(ctx)
 	}
 	bundle, finalSources, err := s.bundleFromStored(ctx, projectID, req.ServerID, agent, stored, false)
 	if err != nil {

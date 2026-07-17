@@ -80,6 +80,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/project-members": "project-members-page",
   "/project-logs": "project-logs-page",
   "/log-retention": "log-retention-page",
+  "/log-kafka": "log-kafka-page",
   "/loggie-status": "loggie-status-page",
   "/project-log-sources": "project-collect-config-page",
   "/network-policies": "network-policies-page",

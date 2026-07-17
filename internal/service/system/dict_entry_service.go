@@ -282,6 +282,16 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "elasticsearch_index_pattern", Label: "ES 索引模式", Value: "yunshu-agent-*", Sort: intRef(1), Status: 1, Remark: "elasticsearch.index_pattern；Agent 分索引前缀通配"},
 			{DictType: "elasticsearch_default_retention_days", Label: "默认保留天数", Value: "30", Sort: intRef(1), Status: 1, Remark: "elasticsearch.default_retention_days"},
 			{DictType: "elasticsearch_cleanup_cron_spec", Label: "清理 Cron", Value: "0 3 * * *", Sort: intRef(1), Status: 1, Remark: "elasticsearch.cleanup_cron_spec"},
+			// Kafka 日志中转（字典优先；enabled=true 时 Loggie→Kafka→Yunshu 写 ES）
+			{DictType: "kafka_enabled", Label: "启用 Kafka 中转", Value: "false", Sort: intRef(1), Status: 1, Remark: "true/false；关闭则 Loggie 直写 ES"},
+			{DictType: "kafka_brokers", Label: "Kafka Broker 列表", Value: "127.0.0.1:9092", Sort: intRef(1), Status: 1, Remark: "单节点一个地址；集群 JSON 数组或逗号分隔 host:port"},
+			{DictType: "kafka_topic", Label: "Kafka Topic", Value: "yunshu-logs", Sort: intRef(1), Status: 1, Remark: "Loggie sink 与 Yunshu 消费共用"},
+			{DictType: "kafka_consumer_group", Label: "Kafka 消费组", Value: "yunshu-log-es", Sort: intRef(1), Status: 1, Remark: "Yunshu 写 ES 消费者组"},
+			{DictType: "kafka_username", Label: "Kafka 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "SASL 用户名，可选"},
+			{DictType: "kafka_password", Label: "Kafka 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：SASL 密码"},
+			{DictType: "kafka_sasl_mechanism", Label: "Kafka SASL 机制", Value: "plain", Sort: intRef(1), Status: 0, Remark: "plain / scram-sha-256 / scram-sha-512"},
+			{DictType: "kafka_batch_size", Label: "Kafka 消费批大小", Value: "200", Sort: intRef(1), Status: 1, Remark: "写入 ES 的批量条数"},
+			{DictType: "kafka_workers", Label: "Kafka 消费并发", Value: "1", Sort: intRef(1), Status: 1, Remark: "消费者并发数"},
 		}
 		singletonTypes := map[string]struct{}{
 			"mail_host":                                 {},
@@ -346,6 +356,22 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			"dbmgmt_goinception_host":                   {},
 			"dbmgmt_goinception_port":                   {},
 			"dbmgmt_goinception_backup":                 {},
+			"elasticsearch_enabled":                     {},
+			"elasticsearch_addresses":                   {},
+			"elasticsearch_username":                    {},
+			"elasticsearch_password":                    {},
+			"elasticsearch_index_pattern":               {},
+			"elasticsearch_default_retention_days":      {},
+			"elasticsearch_cleanup_cron_spec":           {},
+			"kafka_enabled":                             {},
+			"kafka_brokers":                             {},
+			"kafka_topic":                               {},
+			"kafka_consumer_group":                      {},
+			"kafka_username":                            {},
+			"kafka_password":                            {},
+			"kafka_sasl_mechanism":                      {},
+			"kafka_batch_size":                          {},
+			"kafka_workers":                             {},
 		}
 		for _, item := range seed {
 			var (

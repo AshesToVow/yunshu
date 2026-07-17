@@ -90,6 +90,7 @@ type RouteDeps struct {
 	logPlatformHandler     *handler.LogPlatformHandler
 	loggieHandler          *handler.LoggieHandler
 	logRetentionSvc        *service.LogRetentionService
+	kafkaToESSvc           *service.KafkaToESService
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -138,6 +139,14 @@ func (d *RouteDeps) LogRetentionService() *service.LogRetentionService {
 		return nil
 	}
 	return d.logRetentionSvc
+}
+
+// KafkaToESService 供 project 插件 Kafka→ES 消费使用。
+func (d *RouteDeps) KafkaToESService() *service.KafkaToESService {
+	if d == nil {
+		return nil
+	}
+	return d.kafkaToESSvc
 }
 
 func assembleRouteDeps(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
@@ -227,7 +236,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, repos *routeRepositories, svcs *
 	overviewHandler := handler.NewOverviewHandler(svcs.Overview)
 	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt, svcs.LogSearch)
 	cmdbHandler := handler.NewCMDBHandler(svcs.CMDB)
-	logPlatformHandler := handler.NewLogPlatformHandler(svcs.LogRetention)
+	logPlatformHandler := handler.NewLogPlatformHandler(svcs.LogRetention, svcs.KafkaToES)
 	loggieHandler := handler.NewLoggieHandler(svcs.LoggieAgent)
 
 	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, userRepo, app.Logger)
@@ -311,5 +320,6 @@ func wireRouteDepsWithRepos(app *bootstrap.App, repos *routeRepositories, svcs *
 		logPlatformHandler:    logPlatformHandler,
 		loggieHandler:         loggieHandler,
 		logRetentionSvc:       svcs.LogRetention,
+		kafkaToESSvc:          svcs.KafkaToES,
 	}, nil
 }

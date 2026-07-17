@@ -2,11 +2,27 @@
 
 ## 概述
 
-1. **Loggie**（目标机 Agent）：采集文件日志并 bulk 写入 ES  
+1. **Loggie**（目标机 Agent）：采集文件日志  
+   - `kafka.enabled=false`：bulk 直写 ES  
+   - `kafka.enabled=true`：写入 Kafka，由 Yunshu 消费后 bulk 写入 ES  
 2. **Elasticsearch**：按 **Agent（服务器）分索引** 持久化  
-3. **Yunshu**：项目/CMDB 管 Agent 生命周期，代理检索与保留策略  
+3. **Yunshu**：项目/CMDB 管 Agent 生命周期，代理检索与保留策略；可选 Kafka→ES 消费与积压观测  
 
 不依赖 Grafana / Loki；K8s ClusterLogConfig 引导已移除。若日志路径为 `/var/log/pods/...`，pipeline 会按 [typePodFields](https://loggie-io.github.io/docs/reference/global/discovery/#typepodfields) 风格从路径抽取 `namespace` / `podname` / `containername`。
+
+## Kafka 中转（可选）
+
+数据字典（`kafka_*`，优先于 `configs/config.yaml` 的 `kafka:`）：
+
+| dict_type | 说明 |
+|-----------|------|
+| `kafka_enabled` | `true` 启用中转；`false` 直写 ES |
+| `kafka_brokers` | 单节点或集群（JSON 数组 / 逗号分隔） |
+| `kafka_topic` | 默认 `yunshu-logs` |
+| `kafka_consumer_group` | 默认 `yunshu-log-es` |
+| `kafka_username` / `kafka_password` / `kafka_sasl_mechanism` | 可选 SASL |
+
+开启后需 **重新热更/下发** Agent pipeline，并保证 `elasticsearch.enabled=true`（消费端写 ES）。观测页：**日志平台 → 保留策略 → Kafka 队列**。
 
 ## 索引约定
 

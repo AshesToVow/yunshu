@@ -112,7 +112,7 @@ func TestBuildMultiPipelineBundle_ElasticsearchMultiline(t *testing.T) {
 	bundle := BuildMultiPipelineBundle(1, 7, sources, 9196, config.ElasticsearchConfig{
 		Addresses:    []string{"http://127.0.0.1:9200"},
 		IndexPattern: "yunshu-agent-*",
-	}, "token", "", "/export/loggie")
+	}, config.KafkaConfig{}, "token", "", "/export/loggie")
 	yaml := bundle.PipelinesOnlyYAML
 	if !strings.Contains(yaml, "multi:") || !strings.Contains(yaml, "active: true") {
 		t.Fatal("expected Loggie multi.active multiline config")
@@ -135,7 +135,7 @@ func TestBuildMultiPipelineBundle_ElasticsearchLevelRegex(t *testing.T) {
 	bundle := BuildMultiPipelineBundle(1, 7, sources, 9196, config.ElasticsearchConfig{
 		Addresses:    []string{"http://127.0.0.1:9200"},
 		IndexPattern: "yunshu-agent-*",
-	}, "token", "", "/export/loggie")
+	}, config.KafkaConfig{}, "token", "", "/export/loggie")
 	yaml := bundle.PipelinesOnlyYAML
 	if !strings.Contains(yaml, "(?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)") {
 		t.Fatal("expected explicit level capture in elasticsearch pipeline")

@@ -58,6 +58,7 @@ type routeServices struct {
 	Dbmgmt               *dbmgmtsvc.Service
 	LogSearch            *service.LogSearchService
 	LogRetention         *service.LogRetentionService
+	KafkaToES            *service.KafkaToESService
 	LoggieAgent          *service.LoggieAgentService
 	AlertReceiverGroup   *service.AlertReceiverGroupService
 	K8sEventForwardAdmin *service.K8sEventForwardAdminService

@@ -13,6 +13,8 @@ func RegisterLogPlatformRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	g.GET("/retention/list", d.logPlatformHandler.ListRetentionPolicies)
 	g.GET("/es-storage", d.logPlatformHandler.StorageStats)
 	g.GET("/es-config", d.loggieHandler.ESConfigPreview)
+	g.GET("/kafka-stats", d.logPlatformHandler.KafkaStats)
+	g.GET("/kafka-config", d.logPlatformHandler.KafkaConfigPreview)
 	g.POST("/retention/cleanup", d.logPlatformHandler.RunCleanup)
 
 	api.POST("/loggie/heartbeat/report", d.loggieHandler.ReportHeartbeat)

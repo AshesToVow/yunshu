@@ -160,6 +160,19 @@ elasticsearch:
   default_retention_days: 30
   cleanup_cron_spec: "0 3 * * *"   # 每天 03:00 清理过期索引
 
+# Kafka 日志中转（可选；字典 kafka_* 优先）。enabled=false 时 Loggie 直写 ES；true 时 Loggie→Kafka，Yunshu 消费写 ES
+kafka:
+  enabled: false
+  brokers:
+    - "127.0.0.1:9092"
+  topic: "yunshu-logs"
+  consumer_group: "yunshu-log-es"
+  username: ""
+  password: ""
+  sasl_mechanism: ""   # plain / scram-sha-256 / scram-sha-512；有账号时默认 plain
+  batch_size: 200
+  workers: 1
+
 # Loggie Agent（目标机离线二进制安装 / systemd）
 loggie:
   # Yunshu 主机上的离线包（相对工作目录或绝对路径），安装时 SFTP 上传，不走在线下载

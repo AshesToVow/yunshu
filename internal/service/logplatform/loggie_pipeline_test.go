@@ -15,7 +15,7 @@ func TestBuildPipelineBundle_AppLogSyntax(t *testing.T) {
 	}, config.ElasticsearchConfig{
 		Addresses:    []string{"http://127.0.0.1:9200"},
 		IndexPattern: "yunshu-agent-*",
-	}, "token", "http://yunshu:8080")
+	}, config.KafkaConfig{}, "token", "http://yunshu:8080")
 
 	sys := bundle.PipelineYAML
 	if !strings.Contains(sys, "reload:") {
@@ -40,6 +40,31 @@ func TestBuildPipelineBundle_AppLogSyntax(t *testing.T) {
 	}
 }
 
+func TestBuildPipelineBundle_KafkaSink(t *testing.T) {
+	bundle := BuildPipelineBundle(LoggiePipelineOptions{
+		ProjectID: 1,
+		ServerID:  10,
+		LogPaths:  []string{"/var/log/myapp/*.log"},
+	}, config.ElasticsearchConfig{
+		Addresses: []string{"http://127.0.0.1:9200"},
+	}, config.KafkaConfig{
+		Enabled: true,
+		Brokers: []string{"10.0.0.1:9092", "10.0.0.2:9092"},
+		Topic:   "yunshu-logs",
+	}, "token", "http://yunshu:8080")
+
+	yaml := bundle.PipelinesOnlyYAML
+	if !strings.Contains(yaml, "type: kafka") {
+		t.Fatal("expected kafka sink")
+	}
+	if !strings.Contains(yaml, "10.0.0.1:9092") || !strings.Contains(yaml, "10.0.0.2:9092") {
+		t.Fatal("expected kafka brokers")
+	}
+	if strings.Contains(yaml, "type: elasticsearch") {
+		t.Fatal("should not use elasticsearch sink when kafka enabled")
+	}
+}
+
 func TestBuildPipelineBundle_SyslogProfile(t *testing.T) {
 	bundle := BuildPipelineBundle(LoggiePipelineOptions{
 		ProjectID: 1,
@@ -47,7 +72,7 @@ func TestBuildPipelineBundle_SyslogProfile(t *testing.T) {
 		LogPaths:  []string{"/var/log/messages"},
 	}, config.ElasticsearchConfig{
 		Addresses: []string{"http://10.10.10.103:9200"},
-	}, "token", "")
+	}, config.KafkaConfig{}, "token", "")
 
 	yaml := bundle.PipelinesOnlyYAML
 	if !strings.Contains(yaml, "pattern: '^\\w{3}\\s+\\d{1,2}\\s+'") {

@@ -80,6 +80,30 @@ func (c *Client) CatIndices(ctx context.Context, indexPattern string) ([]IndexIn
 	return out, nil
 }
 
+func (c *Client) Bulk(ctx context.Context, ndjson []byte) error {
+	if c == nil {
+		return fmt.Errorf("elasticsearch client nil")
+	}
+	if len(ndjson) == 0 {
+		return nil
+	}
+	raw, status, err := c.doRequest(ctx, http.MethodPost, "/_bulk", ndjson)
+	if err != nil {
+		return err
+	}
+	if status >= 300 {
+		return fmt.Errorf("elasticsearch bulk failed: status=%d body=%s", status, truncate(string(raw), 512))
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil
+	}
+	if errors, ok := out["errors"].(bool); ok && errors {
+		return fmt.Errorf("elasticsearch bulk has item errors: %s", truncate(string(raw), 512))
+	}
+	return nil
+}
+
 func (c *Client) DeleteIndex(ctx context.Context, index string) error {
 	path := "/" + strings.TrimPrefix(strings.TrimSpace(index), "/")
 	raw, status, err := c.doRequest(ctx, http.MethodDelete, path, nil)

@@ -113,4 +113,11 @@ func (b *Builder) applyDictConfigOverrides(ctx context.Context, ov dictConfigOve
 		"enabled", b.app.Config.Elasticsearch.Enabled,
 		"addresses", len(b.app.Config.Elasticsearch.Addresses),
 	)
+
+	b.app.Config.Kafka = dictconfig.ResolveKafkaConfig(ctx, b.app.DB, b.app.Config.Kafka)
+	logf("kafka config resolved (dict overrides yaml)",
+		"enabled", b.app.Config.Kafka.Enabled,
+		"brokers", len(b.app.Config.Kafka.Brokers),
+		"topic", b.app.Config.Kafka.Topic,
+	)
 }

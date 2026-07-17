@@ -44,5 +44,8 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if svc := rt.LogRetentionSvc(); svc != nil && rt.Config != nil {
 		go service.RunLogRetentionScheduler(bgCtx, svc, config.ElasticsearchConfig{})
 	}
+	if kafkaSvc := rt.KafkaToESSvc(); kafkaSvc != nil {
+		go kafkaSvc.Run(bgCtx)
+	}
 	return nil
 }

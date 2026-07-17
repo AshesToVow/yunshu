@@ -25,8 +25,9 @@
   - [首次登录与初始化](#首次登录与初始化)
   - [权限配置（Casbin + 集群档位）](#权限配置casbin--集群档位)
   - [纳管 Kubernetes 集群](#纳管-kubernetes-集群)
-  - [日志平台与 Agent](#日志平台与-agent)
+  - [日志平台（Loggie + Elasticsearch）](#日志平台loggie--elasticsearch)
   - [告警平台要点](#告警平台要点)
+  - [CI/CD 要点（cicd 插件）](#cicd-要点cicd-插件)
   - [数据库管理要点（dbmgmt 插件）](#数据库管理要点dbmgmt-插件)
 - [前端路由索引](#前端路由索引)
 - [常用 CLI 命令](#常用-cli-命令)
@@ -36,9 +37,10 @@
   - [1. 登录与概览](#1-登录与概览)
   - [2. 系统管理](#2-系统管理)
   - [3. 项目管理](#3-项目管理)
-  - [4. 数据库管理（dbmgmt）](#4-数据库管理dbmgmt)
-  - [5. 告警平台](#5-告警平台)
-  - [6. Kubernetes 管理](#6-kubernetes-管理)
+  - [4. 日志平台](#4-日志平台)
+  - [5. 数据库管理（dbmgmt）](#5-数据库管理dbmgmt)
+  - [6. 告警平台](#6-告警平台)
+  - [7. Kubernetes 管理](#7-kubernetes-管理)
 - [告警通知与恢复示例](#告警通知与恢复示例)
 - [数据库 ER 图](#数据库-er-图)
 - [项目结构](#项目结构)
@@ -53,9 +55,10 @@ Yunshu 主要能力：
 
 - 多模块后台管理（用户、角色、菜单、组织、字典、审计）
 - **双层 K8s 鉴权**：Casbin API 权限 + 集群档位（`readonly` / `readonly_exec` / `admin`）+ 命名空间黑/白名单
-- 项目维度的 **CMDB**（服务器、云账号、SSH/Web 终端）、服务、日志源、Agent、**SSE 实时日志**与 Agent 发现
+- 项目维度的 **CMDB**（服务器、云账号、SSH/Web 终端）与服务配置
+- **日志平台**（Loggie Agent + Elasticsearch）：按服务器按日索引采集、检索、导出、保留策略、Agent 安装/热更/启停
 - **MySQL 备份**（mysqldump / xtrabackup / innobackupex，MinIO 存储，Cron 调度）
-- **数据库管理（dbmgmt）**：MySQL/PostgreSQL 实例纳管、SQL 查询与审核（goInception）、库表级授权、应用用户 GRANT、审批工单与审计（对齐 smartdbs 菜单；`dbmgmt` 插件）
+- **数据库管理（dbmgmt）**：MySQL/PostgreSQL 实例纳管（主库/从库）、SQL 查询与审核（goInception）、库表级授权、应用用户 GRANT、审批工单与审计
 - **CI/CD**（Jenkins 打包、多级审批发布、制品 MinIO；`cicd` 插件）
 - 告警数据源、规则、值班、静默、策略、**云到期规则**、多渠道通知（钉钉/邮件等）
 - Kubernetes 资源可视化管理（工作负载、网络、存储、RBAC、CRD、Ingress-Nginx 运维）
@@ -69,6 +72,8 @@ Yunshu 主要能力：
 | 邮箱 | `rootwxd@163.com` |
 
 业务功能以**编译期插件**组织，由 `configs/config.yaml` 的 `plugins.enabled` 控制启停，详见 [docs/plugins.md](docs/plugins.md)。
+
+> **日志架构**：采集链路为 **目标机 Loggie → Elasticsearch**；Yunshu 后端仅提供 HTTP `:8080`（Agent 引导/心跳、检索、保留策略），不向业务机开放独立采集端口。
 
 ---
 
@@ -97,7 +102,7 @@ flowchart TB
     subgraph plugins["plugins.enabled 编译期插件"]
       direction LR
       CORE["core<br/>用户/角色/菜单/字典"]
-      PROJ["project<br/>项目/成员/ES 日志检索"]
+      PROJ["project<br/>项目/成员/日志平台"]
       CMDB["cmdb<br/>服务器/云账号/终端"]
       K8SPL["k8s<br/>多集群控制台"]
       ALERT["alert<br/>规则/订阅/云到期"]
@@ -139,15 +144,17 @@ flowchart TB
   plugins --> SVC
   WORKERS --> SVC
 
-  LOGGIE -->|"bulk 写入"| ES[(Elasticsearch)]
+  LOGGIE -->|"bulk 写入"| ES
   REACT -->|"检索/导出"| HTTP
-  PROJ --> LOGGIE
+  PROJ -->|"引导/心跳/检索"| ES
+  PROJ -->|"SSH 安装/热更"| LOGGIE
   CMDB --> SSH
   BACKUP --> SSH
   BACKUP --> MINIO
   CICD --> JENKINS
   CICD --> MINIO
   DBMGMT --> GOINC
+  DBMGMT -->|"直连/SSH 隧道"| MYSQL
   K8SPL --> K8SAPI
   ALERT --> PROM
   ALERT --> CLOUD
@@ -160,8 +167,9 @@ flowchart TB
 |------|------|
 | **插件** | 同一二进制，`config.yaml` → `plugins.enabled` 控制路由、迁移、Worker；详见 [docs/plugins.md](docs/plugins.md) |
 | **项目维度** | CMDB / 日志 / 备份 / **dbmgmt** / CI/CD API 多在 `/api/v1/projects/:id/...` 下，需项目成员权限 |
+| **日志** | Loggie 在目标机采集并写 ES；Yunshu 经 HTTP 管理 Agent 与代理检索 |
 | **K8s 三元策略** | Casbin API 授权 → 路由 K8s 范围校验 → 集群档位 + NS 黑/白名单（见下文） |
-| **配置优先级** | 数据字典 `dict_entries` 可覆盖 YAML（Jenkins、MinIO、邮件、备份调度等） |
+| **配置优先级** | 数据字典 `dict_entries` 可覆盖 YAML（Jenkins、MinIO、邮件、备份调度、dbmgmt 等） |
 
 ### 分层架构
 
@@ -310,13 +318,31 @@ git checkout main
 
 | 配置块 | 说明 |
 |--------|------|
-| `app` / `http` | 服务端口、超时 |
+| `app` / `http` | 服务端口、超时（仅 HTTP，默认 `:8080`） |
 | `mysql` / `redis` | 业务库与缓存 |
-| `elasticsearch` | Loggie 写入 / 控制台检索后端（部分项可在**数据字典**覆盖） |
+| `elasticsearch` | Loggie 写入 / 控制台检索后端（索引模式、保留天数、清理 Cron；部分项可在**数据字典**覆盖） |
+| `loggie` | 离线二进制路径、systemd 单元名、远端部署目录（见下方示例） |
 | `auth` | JWT 密钥、Token 有效期、邮箱验证码 TTL |
-| `security.encryption_key` | 服务器 SSH 等敏感字段加密 |
+| `security.encryption_key` | 服务器 SSH / 云账号等敏感字段加密 |
 | `alert` | Webhook、Prometheus 富化、聚合窗口等（部分项可在**数据字典**覆盖） |
 | `dbmgmt` | 查询超时、结果行数、goInception 地址、生产强制审批等（部分项可在**数据字典**覆盖，见 [docs/dbmgmt.md](docs/dbmgmt.md)） |
+| `plugins.enabled` | 编译期插件启停：`core` / `project` / `cmdb` / `k8s` / `alert` / `backup` / `cicd` / `dbmgmt` |
+
+日志平台相关示例：
+
+```yaml
+elasticsearch:
+  enabled: true
+  addresses: ["http://127.0.0.1:9200"]
+  index_pattern: "yunshu-agent-*"
+  default_retention_days: 30
+  cleanup_cron_spec: "0 3 * * *"
+
+loggie:
+  offline_binary_path: "deploy/loggie/binary/loggie"
+  unit_name: "loggie.service"
+  deploy_dir: "/export/loggie"
+```
 
 生产环境务必修改：MySQL/Redis 密码、`auth.jwt_secret`、`security.encryption_key`。
 
@@ -363,12 +389,26 @@ git checkout main
 
 ### 日志平台（Loggie + Elasticsearch）
 
-1. 在 **项目管理** 中创建项目、**服务器**、**服务**、**日志源**（path 供引导参考）。
-2. 配置 `configs/config.yaml` 或数据字典中的 **Elasticsearch** 连接（见 [docs/log-platform-es.md](docs/log-platform-es.md)）。
-3. 打开 **Loggie 状态** → **引导**：一键生成 `pipeline.yml`、心跳脚本并下载部署到目标机。
-4. 在 **日志检索** 中按项目/服务器/级别/关键词查询；**保留策略** 管理 ES 索引生命周期。
+完整说明见 **[docs/log-platform-es.md](docs/log-platform-es.md)**、模块需求 [M-04](docs/handbook/requirements/modules/M-04-log-platform.md)。
 
-旧版 `log-agent` + gRPC `:18080` 方案已移除，进程仅监听 HTTP `:8080`。
+**链路**：目标机 Loggie 采集文件 → bulk 写入 ES（按服务器按日索引）→ Yunshu 控制台检索 / 导出 / 保留清理。
+
+| 索引写入 | 检索 / 保留 |
+|----------|-------------|
+| `yunshu-agent-{server_id}-YYYY.MM.DD` | 单机 `yunshu-agent-{server_id}-*`；全局 `yunshu-agent-*` |
+
+**推荐操作流程**：
+
+1. **项目管理**：创建项目、纳管服务器；在 **日志平台 → 服务与日志源** 配置服务与采集路径（可选解析模板：elasticsearch / spring / cri / kafka / redis / mysql / cityeyes-vap 等）。
+2. 配置 `elasticsearch` + `loggie`（见上文「配置说明」），并确保 `plugins.enabled` 含 `project`。
+3. **Agent 管理**：选择服务器 → **引导 / 安装**（离线二进制从 `deploy/loggie/binary/loggie` SFTP 上传）→ 生成 `pipeline.yml` / `pipelines.yml` / 心跳脚本并装 systemd。
+4. **热更 / 同步**：日志源变更后热更 pipeline（无需重装）；启停 / 重启走 systemd；心跳上报在线状态与 FD 监控。
+5. **日志检索**：按项目、服务器、服务、级别、文件路径、关键字、时间范围查询与导出。
+6. **保留策略**：按天数清理过期 `yunshu-agent-*` 日索引；可查看 ES 存储概览。
+
+**部署目录示例**（目标机）：`/export/loggie/{loggie, pipeline.yml, pipelines.yml, start.sh, heartbeat.sh, loggie.service, ...}`
+
+---
 
 ### 告警平台要点
 
@@ -395,10 +435,14 @@ git checkout main
 
 1. 在 `plugins.enabled` 中启用 **`dbmgmt` + `project`**，执行 `migrate` 与 `seed`。
 2. **数据字典**（分类「数据库管理」）或 `config.yaml` 的 `dbmgmt` 块配置 goInception、超时、行数上限等。
-3. **资源管理 → 实例管理**：纳管 MySQL/PostgreSQL，探活确认 `online`。
-4. **资源申请**：查询权限（SELECT）、新建库、应用用户（CREATE USER / GRANT / 回收）走审批后落库或执行 SQL。
+3. **资源管理 → 实例管理**：纳管 MySQL/PostgreSQL；区分 **主库 / 从库**（从库须关联主库并自动只读）；探活确认 `online`。
+4. **资源申请**（四类入口，互不重复）：
+   - 数据库创建申请
+   - 平台查询权限申请（SELECT）
+   - 应用用户权限申请（CREATE USER / GRANT / 回收）
+   - 查询权限管理（已生效授权）
 5. **SQL 操作**：只读走 **SQL 查询**；DDL/DML 走 **SQL 审核**（goInception 预检 → 工单 → 审批 → 执行）。
-6. **审计日志**（`/dbmgmt/audit`）记录查询/执行/授权/工单等；**查询历史**在 SQL 查询页（`db_sql_executions`）。
+6. **工单管理**：待审核 / 历史工单 / 审批流配置；**审计日志**记录查询、执行、授权等。
 
 **MySQL 管理员授权要点**：平台从云枢服务器 IP 连接实例时，须对 **`管理员@'<平台IP>'`** 授予 **GRANT OPTION**，不能只授 `@'%'`（更具体的 host 条目优先匹配）。
 
@@ -418,14 +462,15 @@ FLUSH PRIVILEGES;
 | 插件管理 | `/plugins` |
 | 用户/角色/授权/API/菜单 | `/users`、`/roles`、`/policies`、`/permissions`、`/menus` |
 | K8s 档位/NS 策略 | `/k8s-scoped-policies` |
-| 项目与日志 | `/projects`、`/project-members`、`/project-servers`、`/project-logs`、`/project-log-sources`、`/agent-list` |
+| 项目管理 | `/projects`、`/project-members`、`/project-servers` |
+| 日志平台 | `/project-services`（服务与日志源）、`/project-logs`、`/log-retention`、`/loggie-status` |
 | MySQL 备份 | `/mysql-backup` |
-| 数据库管理 | `/dbmgmt/instances`、`/dbmgmt/sql/query`、`/dbmgmt/sql/audit`、`/dbmgmt/workflow/pending`、`/dbmgmt/audit`（详见 [docs/dbmgmt.md](docs/dbmgmt.md)） |
+| 数据库管理 | `/dbmgmt/instances`、`/dbmgmt/apply/*`、`/dbmgmt/sql/query`、`/dbmgmt/sql/audit`、`/dbmgmt/workflow/pending`、`/dbmgmt/audit` |
 | CI/CD | `/cicd/services`、`/cicd/todo`、`/cicd/build-records`、`/cicd/release-records` |
-| 集群与资源 | `/clusters`、`/pods`、`/deployments`、`/k8s/event-forward`、… |
-| 告警 | `/alert-channels`、`/alert-monitor-platform`（含云到期规则 Tab）、`/alert-duty` |
+| 集群与资源 | `/clusters`、`/pods`、`/deployments`、`/k8s/event-forward`、`/k8s-resource-topology`、… |
+| 告警 | `/alert-channels`、`/alert-monitor-platform`（含云到期规则 Tab）、`/alert-duty`、`/alert-maintenance` |
 
-> 已废弃侧栏入口（seed 会隐藏并重定向）：`/alert-config-center` → 监控平台「策略与联调」；`/alert-events` → 监控平台「历史」；`/runtime-config` → `/dict-entries`。
+> 已废弃/重定向：`/alert-config-center` → 监控平台「策略与联调」；`/alert-events` → 监控平台「历史」；`/runtime-config` → `/dict-entries`；旧 `/agent-list`、应用拓扑图菜单已移除。
 
 完整菜单由 `internal/menu/catalog.go` + `seed` 写入 `menus` 表；前端按插件启用状态与权限动态加载（`web/src/modules/`）。
 
@@ -461,14 +506,16 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 | 登录后菜单为空 | 执行 `seed`；检查角色是否分配；检查菜单 `status` |
 | K8s 操作 403 | 依次检查：授权管理 API → 集群档位 → NS 黑/白名单；请求是否带 `cluster_id` |
 | Pod Exec 403 | 需 `readonly_exec`；WS 需 Casbin + 档位；检查 Origin 与 token |
-| Loggie 无上报 | 控制台 **Loggie 状态**；目标机 `9196` 监控端口；ES 连通与 pipeline 配置 |
-| ES 检索为空 | 确认 `elasticsearch.enabled`；索引 `yunshu-agent-{server_id}-*` 是否有数据 |
+| Loggie 无上报 / 离线 | **Agent 管理** 看心跳与探活；目标机 `systemctl status loggie`；监控端口默认 `9196`；确认 Token / `YUNSHU_URL` 指向后端 `:8080` |
+| ES 检索为空 | 确认 `elasticsearch.enabled`；索引 `yunshu-agent-{server_id}-*` 是否有文档；时间范围是否过窄；热更后新日志才按新解析模板入库 |
+| ERROR 堆栈拆成多行 | 确认解析模板为 `elasticsearch` 且 pipeline 使用 `multi.active`；热更 Agent 后再产生日志 |
 | 集群详情无 kubeconfig | 预期行为（安全脱敏）；更新时重新粘贴 YAML |
 | 首页 Pod 统计与预期不符 | 非 super-admin 仅聚合**有项目成员关系且具备 readonly+ 档位**的集群 |
 | Docker 后端连不上库 | 检查 `MYSQL_*` / `REDIS_*` 环境变量与服务名 `yunshu-mysql` |
 | dbmgmt 应用用户审批 1044 | 实例管理员对目标库无 GRANT OPTION；检查 `root@'<平台IP>'` 而非仅 `root@'%'` |
 | SQL 审核报「禁止多语句」 | 启用 `dbmgmt_goinception_enabled` 并确认 goInception 可达 |
 | dbmgmt 菜单不可见 | 确认 `plugins.enabled` 含 `dbmgmt` + `project`；执行 `seed`；角色勾选 dbmgmt API |
+| 从库无法写操作 | 从库角色自动只读属预期；写操作请连主库 |
 
 ---
 
@@ -516,28 +563,28 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 用户增删改查
 - [x] 用户状态管理
-- [ ] 批量导入审批流
+
 
 #### 用户管理-用户设置页面
 ![用户管理-用户设置页面](./images/用户管理-用户设置页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 个人信息维护
 - [x] 账号基础设置
-- [ ] 个性化主题/通知偏好
+- [x] 个性化主题/通知偏好
 
 #### 系统管理-角色管理页面
 ![系统管理-角色管理页面](./images/系统管理-角色管理页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 角色增删改查
 - [x] 角色与用户绑定
-- [ ] 角色模板快速复制
+- [x] 角色模板快速复制
 
 #### 系统管理-授权管理页面
 ![系统管理-授权管理页面](./images/系统管理-授权管理页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] Casbin 权限规则维护
 - [x] API 级授权分配
-- [ ] 可视化权限冲突分析
+- [x] 可视化权限冲突分析
 
 #### 系统管理-菜单管理页面
 ![系统管理-菜单管理页面](./images/系统管理-菜单管理页面.png)
@@ -558,35 +605,35 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 字典项增删改查
 - [x] 字典在业务表单中复用
-- [ ] 字典国际化多语言
+- [x] 字典国际化多语言
 
 #### 系统管理-登录日志页面
 ![系统管理-登录日志页面](./images/系统管理-登录日志页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 登录记录查询
 - [x] 关键字段筛选
-- [ ] 异常登录自动告警
+- [ ] 异常登录记录日志
 
 #### 系统管理-操作日志管理
 ![系统管理-操作日志管理](./images/系统管理-操作日志管理.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 操作行为审计
 - [x] 接口请求与操作者关联
-- [ ] 审计日志归档到对象存储
+
 
 #### 系统管理-IP封禁管理页面
 ![系统管理-IP封禁管理页面](./images/系统管理-IP封禁管理页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 封禁列表管理
 - [x] 封禁状态即时生效
-- [ ] 自动解封策略配置
+- [x] 自动解封策略配置
 
 #### 系统管理-注册审核管理页面
 ![系统管理-注册审核管理页面](./images/系统管理-注册审核管理页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 注册申请审核
 - [x] 审核状态流转
-- [ ] 审核 SLA 超时提醒
+- [x] 审核 SLA 超时提醒
 
 #### 系统管理-API管理页面
 ![系统管理-API管理页面](./images/系统管理-API管理页面.png)
@@ -619,50 +666,62 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 项目服务器管理
 - [x] 基础连接信息维护
-- [ ] 服务器批量导入向导
+- [x] SSH / Web 终端（CMDB）
+- [x] 服务器批量导入向导
 
-#### 项目管理-服务配置页面
-![项目管理-服务配置页面](./images/项目管理-服务配置页面.png)
+#### 项目管理-项目成员页面
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
-- [x] 服务配置维护
-- [x] 服务与项目/服务器关联
-- [ ] 服务模板复用
-
-#### 项目管理-日志源配置页面
-![项目管理-日志源配置页面](./images/项目管理-日志源配置页面.png)
-![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
-- [x] 日志源增删改查
-- [x] 日志采集类型与路径配置
-- [ ] 日志源连通性自检
-
-#### 项目管理-Loggie 状态（替代原 Agent 列表）
-![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
-- [x] Loggie 采集状态（在线 / 上报 / 心跳）
-- [x] SSH 二进制引导与下发
-- [x] 同步 pipeline / 重启
-
-~~#### 项目管理-agent列表管理页面~~（已废弃：旧 gRPC log-agent）
-
-#### 项目管理-日志平台页面
-![项目管理-日志平台页面](./images/项目管理-日志平台页面.png)
-![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
-- [x] ES 日志检索（替代旧 SSE / gRPC 流）
-- [x] 关键字 / 级别 / 时间范围筛选
-- [ ] 日志收藏与分享
+- [x] 项目成员增删改
+- [x] owner / 成员角色
+- [ ] 按组织批量邀请
 
 ---
 
-### 4. 数据库管理（dbmgmt）
+### 4. 日志平台
+
+> 侧栏独立一级菜单「日志平台」。采集链路：**Loggie Agent → Elasticsearch**，Yunshu 提供引导、心跳、检索与保留。详见 [docs/log-platform-es.md](docs/log-platform-es.md)。
+
+#### 日志平台-服务与日志源
+![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+- [x] 服务与日志源合并配置页（Tabs）
+- [x] 路径 / include / exclude / 编码
+- [x] 解析模板（elasticsearch、spring、cri、kafka、redis、mysql、zookeeper、cityeyes-vap 等）
+- [x] 多行合并（Loggie `multi.active`，Java 堆栈 / CRI / JSON 续行）
+
+#### 日志平台-日志检索
+![项目管理-日志平台页面](./images/项目管理-日志平台页面.png)
+![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+- [x] 按项目 / 服务器 / 服务 / 级别 / 文件路径 / 关键字 / 时间检索
+- [x] 结果高亮与导出
+- [x] 使用日志内时间（`@timestamp`，解析成功时）而非仅采集时间
+- [ ] 日志收藏与分享
+
+#### 日志平台-保留策略
+![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+- [x] 全局 / 项目级保留天数
+- [x] ES 存储概览（索引数、文档、占用）
+- [x] 立即清理与按日索引删除
+
+#### 日志平台-Agent 管理
+![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+- [x] 引导 / 离线安装 / 热更 pipeline / 启停重启 / 卸载
+- [x] 在线状态、心跳、ES 写入探测、监控端口与 FD（active+inactive）
+- [x] 按日志源自动生成多 pipeline
+
+---
+
+### 5. 数据库管理（dbmgmt）
 
 > 需启用 `dbmgmt` + `project` 插件。完整运维手册见 [docs/dbmgmt.md](docs/dbmgmt.md)。
 
 #### 数据库管理-实例与 SQL 操作
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 实例纳管（MySQL/PostgreSQL）、探活、元数据树
+- [x] **主库 / 从库**角色（从库关联主库并自动只读）
 - [x] 实例详情：DB 管理、MySQL 用户管理（SHOW GRANTS、托管密码查看）
 - [x] SQL 查询页：只读 SQL、查询历史（`db_sql_executions`）
 - [x] SQL 审核页：goInception 预检、多语句（启用 goInception 时）、SQL 文件导入、工单提交
-- [x] 菜单对齐 smartdbs：资源申请 / 资源管理 / SQL 操作 / 工单管理
+- [x] 菜单：资源申请 / 资源管理（实例） / SQL 操作 / 工单管理
 - [ ] 列级脱敏
 
 #### 数据库管理-授权与工单
@@ -670,20 +729,21 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 平台查询权限申请（SELECT + 行数上限 `query_limit_num`）
 - [x] 库表级权限申请、新建库申请
 - [x] 应用用户权限（新用户 / 加权限 / 加 IP / 回收）
+- [x] 查询权限管理（已生效授权）
 - [x] 三阶段可配置审批流；待审核 / 历史工单；SQL 回滚与 OSC
 - [x] 审计日志（查询/执行/授权/工单/应用用户）
 - [ ] 跨项目授权模板复用
 
 ---
 
-### 5. 告警平台
+### 6. 告警平台
 
 #### 告警平台-数据源配置页面
 ![告警平台-数据源配置页面](./images/告警平台-数据源配置页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 告警数据源按项目绑定
 - [x] 数据源列表与筛选
-- [ ] 数据源健康探测
+- [x] 数据源健康探测
 
 #### 告警平台-告警规则与值班人配置页面
 ![告警平台-告警规则与值班人配置页面](./images/告警平台-告警规则与值班人配置页面.png)
@@ -711,14 +771,14 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 静默规则管理
 - [x] 生效时间控制
-- [ ] 静默模板管理
+- [x] 静默模板管理
 
 #### 告警通知-告警渠道页面
 ![告警通知-告警渠道页面](./images/告警通知-告警渠道页面.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 告警渠道配置
 - [x] 多渠道参数维护
-- [ ] 渠道联调测试按钮
+- [x] 渠道联调测试按钮
 
 #### 告警平台-promql查询页面
 ![告警平台-promql查询页面](./images/告警平台-promql查询页面.png)
@@ -749,7 +809,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 ---
 
-### 6. Kubernetes 管理
+### 7. Kubernetes 管理
 
 #### 集群与基础资源
 
@@ -819,7 +879,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] K8s RBAC 资源可视化管理
 - [x] 集群访问档位（`k8s_cluster_access_grants`）+ 命名空间黑/白名单
 - [x] API 管理「K8s 范围校验」开关
-- [ ] 权限变更模拟器（预检查）
+- [x] 权限变更模拟器（预检查）
 
 ---
 
@@ -848,13 +908,15 @@ erDiagram
   SERVERS ||--|| SERVER_CREDENTIALS : "server_id(unique)"
   SERVERS ||--o{ SERVICES : "server_id"
   SERVICES ||--o{ SERVICE_LOG_SOURCES : "service_id"
+  PROJECTS ||--o{ LOGGIE_AGENTS : "project_id"
+  SERVERS ||--o{ LOGGIE_AGENTS : "server_id(unique)"
   PROJECTS ||--o{ CLOUD_ACCOUNTS : "project_id"
   SERVER_GROUPS ||--o{ CLOUD_ACCOUNTS : "group_id"
 
-  PROJECTS ||--o{ LOG_AGENTS : "project_id"
-  SERVERS ||--o{ LOG_AGENTS : "server_id(unique)"
-  PROJECTS ||--o{ AGENT_DISCOVERIES : "project_id"
-  SERVERS ||--o{ AGENT_DISCOVERIES : "server_id"
+  PROJECTS ||--o{ DB_INSTANCES : "project_id"
+  DB_INSTANCES ||--o{ DB_INSTANCES : "primary_instance_id(replica)"
+  DB_INSTANCES ||--o{ DB_ACCESS_GRANTS : "instance_id"
+  DB_INSTANCES ||--o{ DB_SQL_TICKETS : "instance_id"
 
   PROJECTS ||--o{ ALERT_DATASOURCES : "project_id"
   ALERT_DATASOURCES ||--o{ ALERT_MONITOR_RULES : "datasource_id"
@@ -864,6 +926,8 @@ erDiagram
 ```
 
 更多细分图（系统管理 / 项目管理 / **dbmgmt** / 告警 / 日志 / K8s）请见：`docs/handbook/database/er-diagrams.md`。
+
+> Elasticsearch 中的日志文档不在 MySQL ER 内；索引约定见 [docs/log-platform-es.md](docs/log-platform-es.md)。
 
 ---
 
@@ -907,16 +971,19 @@ yunshu/
 | **业务插件（GVA 风格）** | [docs/plugins.md](docs/plugins.md) |
 | **CI/CD 插件** | [docs/cicd.md](docs/cicd.md) |
 | **数据库管理（dbmgmt）** | [docs/dbmgmt.md](docs/dbmgmt.md) |
+| **日志平台（Loggie + ES）** | [docs/log-platform-es.md](docs/log-platform-es.md) |
+| 模块需求索引（M-00～M-10） | [docs/handbook/requirements/modules/_INDEX.md](docs/handbook/requirements/modules/_INDEX.md) |
 | 后端完整架构 | [docs/backend-architecture-complete.md](docs/backend-architecture-complete.md) |
 | 重构实施状态 | [docs/refactoring-report.md](docs/refactoring-report.md) |
 | 产品手册总览 | [docs/handbook/README.md](docs/handbook/README.md) |
 | 权限设计（必读） | [docs/handbook/permissions/casbin-and-k8s-triple-policy.md](docs/handbook/permissions/casbin-and-k8s-triple-policy.md) |
-| 日志平台 API | [docs/log-platform-api.md](docs/log-platform-api.md) |
-| K8s 控制台需求 | [docs/handbook/requirements/R-04-kubernetes-console.md](docs/handbook/requirements/R-04-kubernetes-console.md) |
-| 日志与 Agent 需求 | [docs/handbook/requirements/R-06-log-platform-and-agent.md](docs/handbook/requirements/R-06-log-platform-and-agent.md) |
+| K8s 控制台需求 | [docs/handbook/requirements/modules/M-06-kubernetes.md](docs/handbook/requirements/modules/M-06-kubernetes.md) |
+| 日志平台模块需求 | [docs/handbook/requirements/modules/M-04-log-platform.md](docs/handbook/requirements/modules/M-04-log-platform.md) |
+| 数据库管理模块需求 | [docs/handbook/requirements/modules/M-07-dbmgmt.md](docs/handbook/requirements/modules/M-07-dbmgmt.md) |
 | 告警通知 | [docs/alert-notify-guide.md](docs/alert-notify-guide.md) |
 | 告警路由投递 | [docs/alert-routing-and-delivery-guide.md](docs/alert-routing-and-delivery-guide.md) |
 | 数据库 ER（细分） | [docs/handbook/database/er-diagrams.md](docs/handbook/database/er-diagrams.md) |
+| Loggie 离线二进制 | [deploy/loggie/binary/README.md](deploy/loggie/binary/README.md) |
 | 麒麟部署示例 | [docs/deployment/KYLIN_V10_X86_64.md](docs/deployment/KYLIN_V10_X86_64.md) |
 | 文档索引（全部） | [docs/README.md](docs/README.md) |
 | OpenAPI 集合 | [docs/apipost/README.md](docs/apipost/README.md) |

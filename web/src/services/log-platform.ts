@@ -66,6 +66,52 @@ export async function getESStorageStats() {
   return await getData(http.get<any, ApiResponse<ESStorageStats>>("/log-platform/es-storage"));
 }
 
+export interface KafkaPartitionLag {
+  partition: number;
+  high_water_mark: number;
+  consumer_offset: number;
+  lag: number;
+}
+
+export interface KafkaQueueStats {
+  enabled: boolean;
+  sink_via_kafka: boolean;
+  brokers: string[];
+  topic: string;
+  consumer_group: string;
+  consumer_running: boolean;
+  lag_total: number;
+  partitions?: KafkaPartitionLag[];
+  consumed_total: number;
+  written_total: number;
+  error_total: number;
+  last_consume_at?: string;
+  last_error?: string;
+  message?: string;
+  has_sasl?: boolean;
+}
+
+export interface KafkaConfigPreview {
+  enabled: boolean;
+  brokers: string[];
+  topic: string;
+  consumer_group: string;
+  username?: string;
+  has_password: boolean;
+  sasl_mechanism?: string;
+  batch_size: number;
+  workers: number;
+  sink_via_kafka: boolean;
+}
+
+export async function getKafkaQueueStats() {
+  return await getData(http.get<any, ApiResponse<KafkaQueueStats>>("/log-platform/kafka-stats"));
+}
+
+export async function getKafkaConfigPreview() {
+  return await getData(http.get<any, ApiResponse<KafkaConfigPreview>>("/log-platform/kafka-config"));
+}
+
 export async function runLogRetentionCleanup() {
   return await getData(http.post<any, ApiResponse<LogRetentionCleanupResult>>("/log-platform/retention/cleanup"));
 }

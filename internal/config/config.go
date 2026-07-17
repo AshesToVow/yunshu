@@ -25,6 +25,7 @@ type Config struct {
 	Cicd            CicdConfig            `mapstructure:"cicd"`
 	Dbmgmt          DbmgmtConfig          `mapstructure:"dbmgmt"`
 	Elasticsearch   ElasticsearchConfig   `mapstructure:"elasticsearch"`
+	Kafka           KafkaConfig           `mapstructure:"kafka"`
 	Loggie          LoggieConfig          `mapstructure:"loggie"`
 }
 

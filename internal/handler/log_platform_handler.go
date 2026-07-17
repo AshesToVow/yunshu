@@ -12,10 +12,11 @@ import (
 
 type LogPlatformHandler struct {
 	retention *service.LogRetentionService
+	kafka     *service.KafkaToESService
 }
 
-func NewLogPlatformHandler(retention *service.LogRetentionService) *LogPlatformHandler {
-	return &LogPlatformHandler{retention: retention}
+func NewLogPlatformHandler(retention *service.LogRetentionService, kafka *service.KafkaToESService) *LogPlatformHandler {
+	return &LogPlatformHandler{retention: retention, kafka: kafka}
 }
 
 func (h *LogPlatformHandler) GetGlobalRetention(c *gin.Context) {
@@ -78,6 +79,32 @@ func (h *LogPlatformHandler) RunCleanup(c *gin.Context) {
 		return
 	}
 	response.Success(c, res)
+}
+
+func (h *LogPlatformHandler) KafkaStats(c *gin.Context) {
+	if h.kafka == nil {
+		response.Success(c, service.KafkaQueueStats{Message: "Kafka 服务未初始化"})
+		return
+	}
+	stats, err := h.kafka.Stats(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, stats)
+}
+
+func (h *LogPlatformHandler) KafkaConfigPreview(c *gin.Context) {
+	if h.kafka == nil {
+		response.Success(c, service.KafkaConfigPreviewItem{})
+		return
+	}
+	cfg, err := h.kafka.ConfigPreview(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, cfg)
 }
 
 func (h *LogPlatformHandler) GetProjectRetention(c *gin.Context) {

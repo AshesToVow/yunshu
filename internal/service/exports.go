@@ -284,17 +284,23 @@ type (
 	LogSearchItem         = logplatform.LogSearchItem
 	LogRetentionService   = logplatform.LogRetentionService
 	ElasticsearchProvider = logplatform.ElasticsearchProvider
+	KafkaProvider         = logplatform.KafkaProvider
+	KafkaToESService      = logplatform.KafkaToESService
 	LoggieAgentService    = logplatform.LoggieAgentService
 	LogRetentionItem      = logplatform.LogRetentionItem
 	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
 	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult
 	ESStorageStats        = logplatform.ESStorageStats
+	KafkaQueueStats       = logplatform.KafkaQueueStats
+	KafkaConfigPreviewItem = logplatform.KafkaConfigPreviewItem
 )
 
 var (
 	NewLogSearchService      = logplatform.NewLogSearchService
 	NewLogRetentionService   = logplatform.NewLogRetentionService
 	NewElasticsearchProvider = logplatform.NewElasticsearchProvider
+	NewKafkaProvider         = logplatform.NewKafkaProvider
+	NewKafkaToESService      = logplatform.NewKafkaToESService
 	NewLoggieAgentService    = logplatform.NewLoggieAgentService
 	RunLogRetentionScheduler = logplatform.RunLogRetentionScheduler
 )

@@ -3,6 +3,7 @@ package logplatform
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 const (
@@ -13,6 +14,14 @@ const (
 // AgentIndexSink 生成 Loggie ES sink 的按日索引名（单服务器）。
 func AgentIndexSink(serverID uint) string {
 	return fmt.Sprintf("%s-%d-${+YYYY.MM.DD}", defaultAgentIndexPrefix, serverID)
+}
+
+// AgentIndexForDay 消费端按日索引名（已解析日期）。
+func AgentIndexForDay(serverID uint, day time.Time) string {
+	if day.IsZero() {
+		day = time.Now().UTC()
+	}
+	return fmt.Sprintf("%s-%d-%s", defaultAgentIndexPrefix, serverID, day.UTC().Format("2006.01.02"))
 }
 
 // AgentIndexPattern 单服务器检索通配。

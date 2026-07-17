@@ -25,7 +25,7 @@ export const DICT_CATEGORY_TABS: { id: DictCategoryId; label: string }[] = [
 export const DICT_CATEGORY_META: Record<Exclude<DictCategoryId, "all">, DictCategoryMeta> = {
   system: { id: "system", label: "系统", color: "blue", description: "邮件、通用状态等基础配置" },
   alert: { id: "alert", label: "告警", color: "volcano", description: "告警规则、通道、Prometheus、企微/钉钉" },
-  log: { id: "log", label: "日志", color: "cyan", description: "日志 Agent、采集源等平台配置" },
+  log: { id: "log", label: "日志", color: "cyan", description: "ES / Kafka / Agent、采集源等平台配置" },
   k8s: { id: "k8s", label: "Kubernetes", color: "purple", description: "集群模板、Event 转发等" },
   cmdb: { id: "cmdb", label: "CMDB / 服务器", color: "geekblue", description: "服务器分组、云厂商凭据模板" },
   backup: { id: "backup", label: "备份 / MinIO", color: "orange", description: "MySQL 备份归档与 MinIO 连接" },
@@ -74,6 +74,13 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "钉钉 signSecret（dingtalk_sign_secret）", value: "dingtalk_sign_secret", category: "alert" },
 
   { label: "日志源类型（log_source_type）", value: "log_source_type", category: "log" },
+  { label: "启用 ES（elasticsearch_enabled）", value: "elasticsearch_enabled", category: "log" },
+  { label: "ES 地址（elasticsearch_addresses）", value: "elasticsearch_addresses", category: "log" },
+  { label: "启用 Kafka 中转（kafka_enabled）", value: "kafka_enabled", category: "log" },
+  { label: "Kafka Brokers（kafka_brokers）", value: "kafka_brokers", category: "log" },
+  { label: "Kafka Topic（kafka_topic）", value: "kafka_topic", category: "log" },
+  { label: "Kafka 消费组（kafka_consumer_group）", value: "kafka_consumer_group", category: "log" },
+  { label: "Kafka 密码（kafka_password）", value: "kafka_password", category: "log" },
 
   { label: "K8s Event 转发开关（k8s_event_forward_enabled）", value: "k8s_event_forward_enabled", category: "k8s" },
   { label: "K8s Event 缓冲（k8s_event_forward_watcher_buffer_size）", value: "k8s_event_forward_watcher_buffer_size", category: "k8s" },

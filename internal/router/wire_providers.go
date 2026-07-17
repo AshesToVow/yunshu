@@ -205,6 +205,18 @@ func provideElasticsearchProvider(app *bootstrap.App) *service.ElasticsearchProv
 	return service.NewElasticsearchProvider(app.DB, app.Config.Elasticsearch)
 }
 
+func provideKafkaProvider(app *bootstrap.App) *service.KafkaProvider {
+	base := config.KafkaConfig{}
+	if app != nil && app.Config != nil {
+		base = app.Config.Kafka
+	}
+	return service.NewKafkaProvider(app.DB, base)
+}
+
+func provideKafkaToESService(kafka *service.KafkaProvider, es *service.ElasticsearchProvider) *service.KafkaToESService {
+	return service.NewKafkaToESService(kafka, es)
+}
+
 func provideLogSearchService(es *service.ElasticsearchProvider, serverRepo interfaces.ServerRepository) *service.LogSearchService {
 	return service.NewLogSearchService(es, serverRepo)
 }
@@ -227,10 +239,11 @@ func provideLoggieAgentService(
 	projectRepo interfaces.ProjectRepository,
 	serviceRepo interfaces.ServiceRepository,
 	es *service.ElasticsearchProvider,
+	kafka *service.KafkaProvider,
 	encryptionKey SecurityEncryptionKey,
 	loggieCfg config.LoggieConfig,
 ) (*service.LoggieAgentService, error) {
-	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, projectRepo, serviceRepo, es, string(encryptionKey), loggieCfg)
+	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, projectRepo, serviceRepo, es, kafka, string(encryptionKey), loggieCfg)
 }
 
 var ServiceSet = wire.NewSet(
@@ -293,6 +306,8 @@ var ServiceSet = wire.NewSet(
 	provideDbmgmtService,
 	provideCicdService,
 	provideElasticsearchProvider,
+	provideKafkaProvider,
+	provideKafkaToESService,
 	provideLogSearchService,
 	provideLogRetentionService,
 	provideLoggieConfig,

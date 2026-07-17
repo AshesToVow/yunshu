@@ -138,15 +138,18 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v87 := provideLogSearchService(v86, v77)
 	v88 := routerRouteRepositories.LogRetention
 	v89 := provideLogRetentionService(v86, v88)
-	v90 := routerRouteRepositories.LoggieAgent
-	v91, err := provideLoggieAgentService(v90, v77, v80, v27, v79, v86, securityEncryptionKey, provideLoggieConfig(app))
+	v90 := provideKafkaProvider(app)
+	v91 := provideKafkaToESService(v90, v86)
+	v92 := routerRouteRepositories.LoggieAgent
+	loggieConfig := provideLoggieConfig(app)
+	v93, err := provideLoggieAgentService(v92, v77, v80, v27, v79, v86, v90, securityEncryptionKey, loggieConfig)
 	if err != nil {
 		return nil, err
 	}
-	v92 := alert.NewAlertReceiverGroupService(v39, v40)
-	v93 := routerRouteRepositories.K8sEventForward
-	v94 := eventforward.NewK8sEventForwardAdminService(v93)
-	v95 := k8s.NewK8sSearchService(v55, v23, v9, v19, v20, v21)
+	v94 := alert.NewAlertReceiverGroupService(v39, v40)
+	v95 := routerRouteRepositories.K8sEventForward
+	v96 := eventforward.NewK8sEventForwardAdminService(v95)
+	v97 := k8s.NewK8sSearchService(v55, v23, v9, v19, v20, v21)
 	routerRouteServices := &routeServices{
 		LoginLog:             v2,
 		OperationLog:         v4,
@@ -198,10 +201,11 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		Dbmgmt:               dbmgmtService,
 		LogSearch:            v87,
 		LogRetention:         v89,
-		LoggieAgent:          v91,
-		AlertReceiverGroup:   v92,
-		K8sEventForwardAdmin: v94,
-		K8sSearch:            v95,
+		KafkaToES:            v91,
+		LoggieAgent:          v93,
+		AlertReceiverGroup:   v94,
+		K8sEventForwardAdmin: v96,
+		K8sSearch:            v97,
 		AlertMaintenance:     v42,
 	}
 	routeDeps, err := provideRouteDeps(app, routerRouteRepositories, routerRouteServices)

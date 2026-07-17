@@ -67,7 +67,7 @@ func quoteYAML(s string) string {
 }
 
 // BuildPipelineBundle 生成完整 Loggie 部署文件（pipeline + 心跳脚本 + env）。
-func BuildPipelineBundle(opts LoggiePipelineOptions, esCfg config.ElasticsearchConfig, token, yunshuBaseURL string) LoggiePipelineBundle {
+func BuildPipelineBundle(opts LoggiePipelineOptions, esCfg config.ElasticsearchConfig, kafkaCfg config.KafkaConfig, token, yunshuBaseURL string) LoggiePipelineBundle {
 	opts.LogPaths = defaultLogPaths(opts.LogPaths)
 	opts.MonitorPort = defaultMonitorPort(opts.MonitorPort)
 	opts.PipelineName = defaultPipelineName(opts.ProjectID, opts.ServerID, opts.PipelineName)
@@ -79,7 +79,7 @@ func BuildPipelineBundle(opts LoggiePipelineOptions, esCfg config.ElasticsearchC
 		PipelineName: opts.PipelineName,
 		ParseProfile: pipelineParseProfileFor(opts.LogPaths),
 	}
-	pipelinesOnly := renderPipelinesYAML(opts.ProjectID, opts.ServerID, []LoggiePipelineSourceEntry{entry}, esCfg)
+	pipelinesOnly := renderPipelinesYAML(opts.ProjectID, opts.ServerID, []LoggiePipelineSourceEntry{entry}, esCfg, kafkaCfg)
 	systemYAML := renderSystemConfigYAML(opts.ProjectID, opts.ServerID, opts.MonitorPort)
 
 	baseURL := strings.TrimRight(strings.TrimSpace(yunshuBaseURL), "/")

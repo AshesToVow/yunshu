@@ -28,7 +28,13 @@ func DefaultCatalog() []Spec {
 			Children: []Spec{
 				{Path: "/project-services", Name: "服务与日志源", Icon: "SettingOutlined", Sort: 1, Component: "project-collect-config-page", Status: 1},
 				{Path: "/project-logs", Name: "日志检索", Icon: "FileTextOutlined", Sort: 2, Component: "project-logs-page", Status: 1},
-				{Path: "/log-retention", Name: "保留策略", Icon: "HistoryOutlined", Sort: 3, Component: "log-retention-page", Status: 1},
+				{
+					Path: "/log-retention-group", Name: "保留策略", Icon: "HistoryOutlined", Sort: 3, Status: 1,
+					Children: []Spec{
+						{Path: "/log-retention", Name: "索引保留", Icon: "HistoryOutlined", Sort: 1, Component: "log-retention-page", Status: 1},
+						{Path: "/log-kafka", Name: "Kafka 队列", Icon: "ClusterOutlined", Sort: 2, Component: "log-kafka-page", Status: 1},
+					},
+				},
 				{Path: "/loggie-status", Name: "Agent 管理", Icon: "CloudServerOutlined", Sort: 4, Component: "loggie-status-page", Status: 1},
 			},
 		},

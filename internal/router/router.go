@@ -35,6 +35,7 @@ func Register(app *bootstrap.App, bgCtx context.Context) (*eventforward.Manager,
 		Cicd:                    d.CicdService(),
 		Alert:                   d.AlertService(),
 		LogRetention:            d.LogRetentionService(),
+		KafkaToES:               d.KafkaToESService(),
 	}
 
 	api := app.Engine.Group("/api/v1")

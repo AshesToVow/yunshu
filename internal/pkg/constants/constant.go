@@ -93,7 +93,7 @@ var (
 	ErrCaptchaRequired         = BizError(http.StatusBadRequest, 20010, "请先填写验证码")
 	ErrCaptchaInvalidOrExpired = BizError(http.StatusUnauthorized, 20011, "验证码无效或已过期，请重新获取")
 	ErrUsernameTaken           = BizError(http.StatusConflict, 20012, "用户名已被占用，请更换后重试")
-	ErrCaptchaCoolingDown      = BizError(http.StatusConflict, 20013, "验证码已发送，请稍后再试")
+	ErrCaptchaCoolingDown      = BizError(http.StatusConflict, 20013, "图形验证码刷新过于频繁，请稍后再试")
 )
 
 // —— 日志采集 Agent 21xxx ——
