@@ -302,6 +302,10 @@ func (s *LoggieAgentService) Bootstrap(ctx context.Context, projectID uint, req 
 			deployMsg = truncateDeployOutput(out, 256)
 		}
 	}
+	var esCfg config.ElasticsearchConfig
+	if s.esProvider != nil {
+		esCfg, _ = s.esProvider.Resolve(ctx)
+	}
 	return bootstrapResultFromBundle(agent, projectID, req.ServerID, bundle, esCfg, len(finalSources), deployed, deployMsg), nil
 }
 
