@@ -40,6 +40,7 @@ import {
   runLogRetentionCleanup,
   upsertGlobalLogRetention,
   upsertProjectLogRetention,
+  type ESIndexStatItem,
   type ESStorageStats,
   type KafkaConfigPreview,
   type KafkaPartitionLag,
@@ -247,7 +248,7 @@ export function LogRetentionPage() {
                           />
                         </Col>
                       </Row>
-                      <Table
+                      <Table<ESIndexStatItem>
                         size="small"
                         rowKey="name"
                         pagination={{ pageSize: 8, showSizeChanger: true, size: "small" }}
@@ -257,7 +258,7 @@ export function LogRetentionPage() {
                             title: "索引名",
                             dataIndex: "name",
                             ellipsis: true,
-                            render: (name: string, r: { matched_pattern?: boolean }) => (
+                            render: (name: string, r) => (
                               <Space size={4}>
                                 <span>{name}</span>
                                 {r.matched_pattern ? <Tag color="blue">平台</Tag> : null}
@@ -274,7 +275,7 @@ export function LogRetentionPage() {
                           {
                             title: "操作",
                             width: 90,
-                            render: (_, r: { name: string; matched_pattern?: boolean }) =>
+                            render: (_, r) =>
                               r.matched_pattern ? (
                                 <Popconfirm
                                   title={`确认删除索引 ${r.name}？`}
