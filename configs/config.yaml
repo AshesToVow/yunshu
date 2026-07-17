@@ -160,17 +160,18 @@ elasticsearch:
   default_retention_days: 30
   cleanup_cron_spec: "0 3 * * *"   # 每天 03:00 清理过期索引
 
-# Kafka 日志中转（可选；字典 kafka_* 优先）。enabled=false 时 Loggie 直写 ES；true 时 Loggie→Kafka，Yunshu 消费写 ES
+# Kafka 日志中转（可选；字典 kafka_* 优先）。enabled=false 时 Loggie 直写 ES；true 时每 Agent 一个 Topic
 kafka:
   enabled: false
   brokers:
     - "127.0.0.1:9092"
-  topic: "yunshu-logs"
-  consumer_group: "yunshu-log-es"
+  topic_prefix: "yunshu-agent"   # 实际 Topic = yunshu-agent-{server_id}
+  consumer_group: "yunshu-log-es" # 必填消费组
   username: ""
   password: ""
-  sasl_mechanism: ""   # plain / scram-sha-256 / scram-sha-512；有账号时默认 plain
+  sasl_mechanism: ""
   batch_size: 200
+  topic_partitions: 3
   workers: 1
 
 # Loggie Agent（目标机离线二进制安装 / systemd）

@@ -27,7 +27,7 @@ func DefaultKafkaDictTypes() KafkaDictTypes {
 	return KafkaDictTypes{
 		Enabled:       "kafka_enabled",
 		Brokers:       "kafka_brokers",
-		Topic:         "kafka_topic",
+		Topic:         "kafka_topic_prefix",
 		ConsumerGroup: "kafka_consumer_group",
 		Username:      "kafka_username",
 		Password:      "kafka_password",
@@ -39,6 +39,7 @@ func DefaultKafkaDictTypes() KafkaDictTypes {
 
 // ResolveKafkaConfig 字典优先合并 kafka 配置。
 // brokers 支持 JSON 数组或逗号/分号/换行分隔（单节点与集群均可）。
+// Topic 前缀：优先 kafka_topic_prefix，兼容旧 kafka_topic。
 func ResolveKafkaConfig(ctx context.Context, db *gorm.DB, base config.KafkaConfig) config.KafkaConfig {
 	if db == nil {
 		return base.Normalized()
@@ -54,7 +55,9 @@ func ResolveKafkaConfig(ctx context.Context, db *gorm.DB, base config.KafkaConfi
 		}
 	}
 	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.Topic); ok {
-		out.Topic = strings.TrimSpace(v)
+		out.TopicPrefix = strings.TrimSpace(v)
+	} else if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, "kafka_topic"); ok {
+		out.TopicPrefix = strings.TrimSpace(v)
 	}
 	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.ConsumerGroup); ok {
 		out.ConsumerGroup = strings.TrimSpace(v)

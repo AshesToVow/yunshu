@@ -19,7 +19,7 @@ import (
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
-// KafkaToESService 消费 Kafka 日志并 bulk 写入 Elasticsearch；同时提供积压观测。
+// KafkaToESService 以消费者组订阅各 Agent Topic，bulk 写入 Elasticsearch。
 type KafkaToESService struct {
 	kafka *KafkaProvider
 	es    *ElasticsearchProvider
@@ -35,26 +35,30 @@ type KafkaToESService struct {
 	lastConsumeAt atomic.Int64
 	lastError     atomic.Value
 	runningFlag   atomic.Bool
+	activeTopics  atomic.Value // []string
 }
 
 func NewKafkaToESService(kafka *KafkaProvider, es *ElasticsearchProvider) *KafkaToESService {
 	s := &KafkaToESService{kafka: kafka, es: es}
 	s.lastError.Store("")
+	s.activeTopics.Store([]string(nil))
 	return s
 }
 
 type KafkaPartitionLag struct {
-	Partition      int   `json:"partition"`
-	HighWaterMark  int64 `json:"high_water_mark"`
-	ConsumerOffset int64 `json:"consumer_offset"`
-	Lag            int64 `json:"lag"`
+	Topic          string `json:"topic"`
+	Partition      int    `json:"partition"`
+	HighWaterMark  int64  `json:"high_water_mark"`
+	ConsumerOffset int64  `json:"consumer_offset"`
+	Lag            int64  `json:"lag"`
 }
 
 type KafkaQueueStats struct {
 	Enabled         bool                `json:"enabled"`
 	SinkViaKafka    bool                `json:"sink_via_kafka"`
 	Brokers         []string            `json:"brokers"`
-	Topic           string              `json:"topic"`
+	TopicPrefix     string              `json:"topic_prefix"`
+	Topics          []string            `json:"topics,omitempty"`
 	ConsumerGroup   string              `json:"consumer_group"`
 	ConsumerRunning bool                `json:"consumer_running"`
 	LagTotal        int64               `json:"lag_total"`
@@ -69,19 +73,20 @@ type KafkaQueueStats struct {
 }
 
 type KafkaConfigPreviewItem struct {
-	Enabled       bool     `json:"enabled"`
-	Brokers       []string `json:"brokers"`
-	Topic         string   `json:"topic"`
-	ConsumerGroup string   `json:"consumer_group"`
-	Username      string   `json:"username,omitempty"`
-	HasPassword   bool     `json:"has_password"`
-	SASLMechanism string   `json:"sasl_mechanism,omitempty"`
-	BatchSize     int      `json:"batch_size"`
-	Workers       int      `json:"workers"`
-	SinkViaKafka  bool     `json:"sink_via_kafka"`
+	Enabled         bool     `json:"enabled"`
+	Brokers         []string `json:"brokers"`
+	TopicPrefix     string   `json:"topic_prefix"`
+	TopicExample    string   `json:"topic_example"`
+	ConsumerGroup   string   `json:"consumer_group"`
+	Username        string   `json:"username,omitempty"`
+	HasPassword     bool     `json:"has_password"`
+	SASLMechanism   string   `json:"sasl_mechanism,omitempty"`
+	BatchSize       int      `json:"batch_size"`
+	TopicPartitions int      `json:"topic_partitions"`
+	Workers         int      `json:"workers"`
+	SinkViaKafka    bool     `json:"sink_via_kafka"`
 }
 
-// Run 阻塞直至 ctx 取消：按字典配置启停消费者。
 func (s *KafkaToESService) Run(ctx context.Context) {
 	if s == nil {
 		return
@@ -110,11 +115,11 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 		s.setLastError(err.Error())
 		return
 	}
-	fp := kafkaFingerprint(cfg)
+	cfg = cfg.Normalized()
 	if !cfg.SinkViaKafka() {
 		s.stopConsumer()
 		s.mu.Lock()
-		s.cfgFingerprint = fp
+		s.cfgFingerprint = kafkaFingerprint(cfg, nil)
 		s.mu.Unlock()
 		return
 	}
@@ -130,6 +135,12 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 		return
 	}
 
+	topics, err := listAgentKafkaTopics(parent, cfg)
+	if err != nil {
+		s.setLastError("list topics: " + err.Error())
+		// 仍尝试按已有 fingerprint 继续；无 topic 则停
+	}
+	fp := kafkaFingerprint(cfg, topics)
 	s.mu.Lock()
 	same := s.running && s.cfgFingerprint == fp
 	s.mu.Unlock()
@@ -137,20 +148,29 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 		return
 	}
 	s.stopConsumer()
-	s.startConsumer(parent, cfg)
+	if len(topics) == 0 {
+		s.setLastError("暂无 Agent Topic（yunshu-agent-{server_id}），请先引导/热更 Agent")
+		s.activeTopics.Store([]string(nil))
+		s.mu.Lock()
+		s.cfgFingerprint = fp
+		s.mu.Unlock()
+		return
+	}
+	s.startConsumer(parent, cfg, topics)
 }
 
-func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.KafkaConfig) {
+func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.KafkaConfig, topics []string) {
 	cfg = cfg.Normalized()
 	runCtx, cancel := context.WithCancel(parent)
 	s.mu.Lock()
 	s.cancel = cancel
 	s.running = true
-	s.cfgFingerprint = kafkaFingerprint(cfg)
+	s.cfgFingerprint = kafkaFingerprint(cfg, topics)
 	s.mu.Unlock()
 	s.runningFlag.Store(true)
+	s.activeTopics.Store(append([]string(nil), topics...))
 	slog.Default().With("component", "kafka-to-es").Info("kafka consumer starting",
-		"topic", cfg.Topic, "group", cfg.ConsumerGroup, "brokers", len(cfg.Brokers))
+		"group", cfg.ConsumerGroup, "topics", len(topics), "brokers", len(cfg.Brokers))
 
 	go func() {
 		defer func() {
@@ -159,7 +179,7 @@ func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.Kafk
 			s.running = false
 			s.mu.Unlock()
 		}()
-		s.consumeLoop(runCtx, cfg)
+		s.consumeLoop(runCtx, cfg, topics)
 	}()
 }
 
@@ -175,17 +195,18 @@ func (s *KafkaToESService) stopConsumer() {
 	s.runningFlag.Store(false)
 }
 
-func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConfig) {
+func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConfig, topics []string) {
 	dialer, err := kafkaDialer(cfg)
 	if err != nil {
 		s.setLastError(err.Error())
 		slog.Default().With("component", "kafka-to-es").Error("kafka dialer", "err", err)
 		return
 	}
+	// 必须使用消费者组 + 多 Topic（每 Agent 一个）
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        cfg.Brokers,
 		GroupID:        cfg.ConsumerGroup,
-		Topic:          cfg.Topic,
+		GroupTopics:    topics,
 		MinBytes:       1,
 		MaxBytes:       10e6,
 		MaxWait:        time.Second,
@@ -199,13 +220,14 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 	batch := make([]kafka.Message, 0, batchSize)
 	flushInterval := 2 * time.Second
 	lastFlush := time.Now()
+	prefix := cfg.TopicPrefix
 
 	flush := func() {
 		if len(batch) == 0 {
 			return
 		}
 		toWrite := append([]kafka.Message(nil), batch...)
-		if err := s.writeBatch(ctx, toWrite); err != nil {
+		if err := s.writeBatch(ctx, toWrite, prefix); err != nil {
 			s.errorTotal.Add(1)
 			s.setLastError(err.Error())
 			slog.Default().With("component", "kafka-to-es").Warn("bulk write failed", "err", err, "n", len(toWrite))
@@ -248,14 +270,14 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 	}
 }
 
-func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message) error {
+func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message, topicPrefix string) error {
 	cli, _, err := s.es.Client(ctx)
 	if err != nil {
 		return err
 	}
 	var ndjson strings.Builder
 	for _, m := range msgs {
-		doc, index, err := parseKafkaLogMessage(m.Value)
+		doc, index, err := parseKafkaLogMessage(m.Value, m.Topic, topicPrefix)
 		if err != nil {
 			s.errorTotal.Add(1)
 			continue
@@ -273,7 +295,7 @@ func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message)
 	return cli.Bulk(ctx, []byte(ndjson.String()))
 }
 
-func parseKafkaLogMessage(raw []byte) (map[string]any, string, error) {
+func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any, string, error) {
 	s := strings.TrimSpace(string(raw))
 	if s == "" {
 		return nil, "", fmt.Errorf("empty message")
@@ -281,10 +303,11 @@ func parseKafkaLogMessage(raw []byte) (map[string]any, string, error) {
 	var root map[string]any
 	if err := json.Unmarshal([]byte(s), &root); err != nil {
 		now := time.Now().UTC()
+		serverID, _ := ParseServerIDFromAgentKafkaTopic(topic, topicPrefix)
 		return map[string]any{
 			"@timestamp": now.Format(time.RFC3339Nano),
 			"message":    s,
-		}, AgentIndexForDay(0, now), nil
+		}, AgentIndexForDay(serverID, now), nil
 	}
 
 	doc := map[string]any{}
@@ -309,6 +332,11 @@ func parseKafkaLogMessage(raw []byte) (map[string]any, string, error) {
 	serverID := parseUintAny(fields["server_id"])
 	if serverID == 0 {
 		serverID = parseUintAny(doc["server_id"])
+	}
+	if serverID == 0 {
+		if id, ok := ParseServerIDFromAgentKafkaTopic(topic, topicPrefix); ok {
+			serverID = id
+		}
 	}
 	ts := parseTimestampAny(doc["@timestamp"])
 	if ts.IsZero() {
@@ -390,11 +418,11 @@ func kafkaDialer(cfg config.KafkaConfig) (*kafka.Dialer, error) {
 	return d, nil
 }
 
-func kafkaFingerprint(cfg config.KafkaConfig) string {
+func kafkaFingerprint(cfg config.KafkaConfig, topics []string) string {
 	cfg = cfg.Normalized()
-	return fmt.Sprintf("%v|%s|%s|%s|%s|%d|%v",
-		cfg.Enabled, strings.Join(cfg.Brokers, ","), cfg.Topic, cfg.ConsumerGroup,
-		cfg.Username, cfg.BatchSize, cfg.SASLMechanism)
+	return fmt.Sprintf("%v|%s|%s|%s|%s|%d|%v|%s",
+		cfg.Enabled, strings.Join(cfg.Brokers, ","), cfg.TopicPrefix, cfg.ConsumerGroup,
+		cfg.Username, cfg.BatchSize, cfg.SASLMechanism, strings.Join(topics, ","))
 }
 
 func (s *KafkaToESService) setLastError(msg string) {
@@ -411,16 +439,18 @@ func (s *KafkaToESService) ConfigPreview(ctx context.Context) (*KafkaConfigPrevi
 	}
 	cfg = cfg.Normalized()
 	return &KafkaConfigPreviewItem{
-		Enabled:       cfg.Enabled,
-		Brokers:       cfg.Brokers,
-		Topic:         cfg.Topic,
-		ConsumerGroup: cfg.ConsumerGroup,
-		Username:      cfg.Username,
-		HasPassword:   strings.TrimSpace(cfg.Password) != "",
-		SASLMechanism: cfg.SASLMechanism,
-		BatchSize:     cfg.BatchSize,
-		Workers:       cfg.Workers,
-		SinkViaKafka:  cfg.SinkViaKafka(),
+		Enabled:         cfg.Enabled,
+		Brokers:         cfg.Brokers,
+		TopicPrefix:     cfg.TopicPrefix,
+		TopicExample:    AgentKafkaTopic(1, cfg.TopicPrefix),
+		ConsumerGroup:   cfg.ConsumerGroup,
+		Username:        cfg.Username,
+		HasPassword:     strings.TrimSpace(cfg.Password) != "",
+		SASLMechanism:   cfg.SASLMechanism,
+		BatchSize:       cfg.BatchSize,
+		TopicPartitions: cfg.TopicPartitions,
+		Workers:         cfg.Workers,
+		SinkViaKafka:    cfg.SinkViaKafka(),
 	}, nil
 }
 
@@ -437,6 +467,9 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	if v, ok := s.lastError.Load().(string); ok {
 		out.LastError = v
 	}
+	if topics, ok := s.activeTopics.Load().([]string); ok {
+		out.Topics = append([]string(nil), topics...)
+	}
 	if s == nil || s.kafka == nil {
 		out.Message = "Kafka 未配置"
 		return out, nil
@@ -450,7 +483,7 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	out.Enabled = cfg.Enabled
 	out.SinkViaKafka = cfg.SinkViaKafka()
 	out.Brokers = cfg.Brokers
-	out.Topic = cfg.Topic
+	out.TopicPrefix = cfg.TopicPrefix
 	out.ConsumerGroup = cfg.ConsumerGroup
 	out.HasSASL = strings.TrimSpace(cfg.Username) != ""
 
@@ -459,7 +492,15 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 		return out, nil
 	}
 
-	lags, lagTotal, lagErr := fetchKafkaLag(ctx, cfg)
+	topics := out.Topics
+	if len(topics) == 0 {
+		if listed, err := listAgentKafkaTopics(ctx, cfg); err == nil {
+			topics = listed
+			out.Topics = listed
+		}
+	}
+
+	lags, lagTotal, lagErr := fetchKafkaLagMulti(ctx, cfg, topics)
 	if lagErr != nil {
 		out.Message = lagErr.Error()
 		if out.LastError == "" {
@@ -470,40 +511,58 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	out.Partitions = lags
 	out.LagTotal = lagTotal
 	if out.ConsumerRunning {
-		out.Message = "消费运行中"
+		out.Message = fmt.Sprintf("消费组 %s 运行中，订阅 %d 个 Agent Topic", cfg.ConsumerGroup, len(topics))
+	} else if len(topics) == 0 {
+		out.Message = "暂无 Agent Topic，请先引导/热更 Agent（将自动创建 yunshu-agent-{server_id}）"
 	} else {
 		out.Message = "消费者未运行（请确认 ES 已启用）"
 	}
 	return out, nil
 }
 
-func fetchKafkaLag(ctx context.Context, cfg config.KafkaConfig) ([]KafkaPartitionLag, int64, error) {
+func fetchKafkaLagMulti(ctx context.Context, cfg config.KafkaConfig, topics []string) ([]KafkaPartitionLag, int64, error) {
+	if len(topics) == 0 {
+		return nil, 0, nil
+	}
+	var all []KafkaPartitionLag
+	var total int64
+	for _, topic := range topics {
+		lags, err := fetchTopicLag(ctx, cfg, topic)
+		if err != nil {
+			continue
+		}
+		all = append(all, lags...)
+		total += sumLag(lags)
+	}
+	return all, total, nil
+}
+
+func fetchTopicLag(ctx context.Context, cfg config.KafkaConfig, topic string) ([]KafkaPartitionLag, error) {
 	dialer, err := kafkaDialer(cfg)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	conn, err := dialer.DialContext(ctx, "tcp", cfg.Brokers[0])
 	if err != nil {
-		return nil, 0, fmt.Errorf("dial kafka: %w", err)
+		return nil, err
 	}
 	defer conn.Close()
 
-	parts, err := conn.ReadPartitions(cfg.Topic)
+	parts, err := conn.ReadPartitions(topic)
 	if err != nil {
-		return nil, 0, fmt.Errorf("read partitions: %w", err)
+		return nil, err
 	}
-
 	base := make([]KafkaPartitionLag, 0, len(parts))
 	seen := map[int]struct{}{}
 	for _, p := range parts {
-		if p.Topic != cfg.Topic {
+		if p.Topic != topic {
 			continue
 		}
 		if _, ok := seen[p.ID]; ok {
 			continue
 		}
 		seen[p.ID] = struct{}{}
-		pc, err := dialer.DialLeader(ctx, "tcp", cfg.Brokers[0], cfg.Topic, p.ID)
+		pc, err := dialer.DialLeader(ctx, "tcp", cfg.Brokers[0], topic, p.ID)
 		if err != nil {
 			continue
 		}
@@ -513,17 +572,17 @@ func fetchKafkaLag(ctx context.Context, cfg config.KafkaConfig) ([]KafkaPartitio
 			continue
 		}
 		base = append(base, KafkaPartitionLag{
+			Topic:          topic,
 			Partition:      p.ID,
 			HighWaterMark:  hw,
 			ConsumerOffset: -1,
 			Lag:            -1,
 		})
 	}
-
-	if lags, err := fetchGroupOffsets(ctx, dialer, cfg, base); err == nil {
-		return lags, sumLag(lags), nil
+	if lags, err := fetchGroupOffsets(ctx, dialer, cfg, topic, base); err == nil {
+		return lags, nil
 	}
-	return base, 0, nil
+	return base, nil
 }
 
 func sumLag(parts []KafkaPartitionLag) int64 {
@@ -536,7 +595,7 @@ func sumLag(parts []KafkaPartitionLag) int64 {
 	return n
 }
 
-func fetchGroupOffsets(ctx context.Context, dialer *kafka.Dialer, cfg config.KafkaConfig, base []KafkaPartitionLag) ([]KafkaPartitionLag, error) {
+func fetchGroupOffsets(ctx context.Context, dialer *kafka.Dialer, cfg config.KafkaConfig, topic string, base []KafkaPartitionLag) ([]KafkaPartitionLag, error) {
 	transport := &kafka.Transport{}
 	if dialer != nil && dialer.SASLMechanism != nil {
 		transport.SASL = dialer.SASLMechanism
@@ -558,7 +617,7 @@ func fetchGroupOffsets(ctx context.Context, dialer *kafka.Dialer, cfg config.Kaf
 	}
 
 	list, err := client.ListOffsets(ctx, &kafka.ListOffsetsRequest{
-		Topics: map[string][]kafka.OffsetRequest{cfg.Topic: offsetReqs},
+		Topics: map[string][]kafka.OffsetRequest{topic: offsetReqs},
 	})
 	if err != nil {
 		return nil, err
@@ -566,7 +625,7 @@ func fetchGroupOffsets(ctx context.Context, dialer *kafka.Dialer, cfg config.Kaf
 
 	offResp, err := client.OffsetFetch(ctx, &kafka.OffsetFetchRequest{
 		GroupID: cfg.ConsumerGroup,
-		Topics:  map[string][]int{cfg.Topic: partIDs},
+		Topics:  map[string][]int{topic: partIDs},
 	})
 	if err != nil {
 		return nil, err
@@ -574,7 +633,7 @@ func fetchGroupOffsets(ctx context.Context, dialer *kafka.Dialer, cfg config.Kaf
 
 	hwByPart := map[int]int64{}
 	if list != nil {
-		if topicParts, ok := list.Topics[cfg.Topic]; ok {
+		if topicParts, ok := list.Topics[topic]; ok {
 			for _, p := range topicParts {
 				hwByPart[p.Partition] = p.LastOffset
 			}
@@ -582,7 +641,7 @@ func fetchGroupOffsets(ctx context.Context, dialer *kafka.Dialer, cfg config.Kaf
 	}
 	cgByPart := map[int]int64{}
 	if offResp != nil {
-		if topicParts, ok := offResp.Topics[cfg.Topic]; ok {
+		if topicParts, ok := offResp.Topics[topic]; ok {
 			for _, p := range topicParts {
 				cgByPart[p.Partition] = p.CommittedOffset
 			}
@@ -606,6 +665,7 @@ func fetchGroupOffsets(ctx context.Context, dialer *kafka.Dialer, cfg config.Kaf
 			lag = hw
 		}
 		out = append(out, KafkaPartitionLag{
+			Topic:          topic,
 			Partition:      p.Partition,
 			HighWaterMark:  hw,
 			ConsumerOffset: cg,

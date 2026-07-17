@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"yunshu/internal/config"
@@ -198,6 +199,12 @@ func (s *LoggieAgentService) bundleFromStored(
 	var kafkaCfg config.KafkaConfig
 	if s.kafkaProvider != nil {
 		kafkaCfg, _ = s.kafkaProvider.Resolve(ctx)
+	}
+	if kafkaCfg.SinkViaKafka() {
+		if topic, err := EnsureAgentKafkaTopic(ctx, kafkaCfg, serverID); err != nil {
+			slog.Default().With("component", "loggie").Warn("ensure kafka topic failed",
+				"server_id", serverID, "topic", topic, "err", err)
+		}
 	}
 	bundle := BuildMultiPipelineBundle(projectID, serverID, entries, stored.MonitorPort, esCfg, kafkaCfg, agent.Token, stored.YunshuURL, stored.DeployDir)
 	return bundle, sources, nil

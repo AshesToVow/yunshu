@@ -143,7 +143,7 @@ var uiPathRules = []pathRule{
 		plugin: "project",
 		prefixes: []string{
 			"/projects", "/project-members", "/project-services",
-			"/project-logs", "/project-log-sources", "/log-retention", "/log-kafka", "/loggie-status",
+			"/project-logs", "/project-log-sources", "/log-retention", "/loggie-status",
 		},
 	},
 	{plugin: "cmdb", prefixes: []string{"/project-servers", "/server-console"}},

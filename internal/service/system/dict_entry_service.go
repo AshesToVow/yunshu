@@ -285,8 +285,8 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			// Kafka 日志中转（字典优先；enabled=true 时 Loggie→Kafka→Yunshu 写 ES）
 			{DictType: "kafka_enabled", Label: "启用 Kafka 中转", Value: "false", Sort: intRef(1), Status: 1, Remark: "true/false；关闭则 Loggie 直写 ES"},
 			{DictType: "kafka_brokers", Label: "Kafka Broker 列表", Value: "127.0.0.1:9092", Sort: intRef(1), Status: 1, Remark: "单节点一个地址；集群 JSON 数组或逗号分隔 host:port"},
-			{DictType: "kafka_topic", Label: "Kafka Topic", Value: "yunshu-logs", Sort: intRef(1), Status: 1, Remark: "Loggie sink 与 Yunshu 消费共用"},
-			{DictType: "kafka_consumer_group", Label: "Kafka 消费组", Value: "yunshu-log-es", Sort: intRef(1), Status: 1, Remark: "Yunshu 写 ES 消费者组"},
+			{DictType: "kafka_topic_prefix", Label: "Kafka Topic 前缀", Value: "yunshu-agent", Sort: intRef(1), Status: 1, Remark: "每 Agent 独立 Topic：{prefix}-{server_id}"},
+			{DictType: "kafka_consumer_group", Label: "Kafka 消费组", Value: "yunshu-log-es", Sort: intRef(1), Status: 1, Remark: "必填；Yunshu 写 ES 消费者组"},
 			{DictType: "kafka_username", Label: "Kafka 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "SASL 用户名，可选"},
 			{DictType: "kafka_password", Label: "Kafka 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：SASL 密码"},
 			{DictType: "kafka_sasl_mechanism", Label: "Kafka SASL 机制", Value: "plain", Sort: intRef(1), Status: 0, Remark: "plain / scram-sha-256 / scram-sha-512"},
@@ -365,6 +365,7 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			"elasticsearch_cleanup_cron_spec":           {},
 			"kafka_enabled":                             {},
 			"kafka_brokers":                             {},
+			"kafka_topic_prefix":                        {},
 			"kafka_topic":                               {},
 			"kafka_consumer_group":                      {},
 			"kafka_username":                            {},

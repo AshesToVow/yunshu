@@ -73,7 +73,6 @@ const PATH_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
       "/project-services",
       "/project-logs",
       "/log-retention",
-      "/log-kafka",
       "/loggie-status",
       "/project-log-sources",
     ],

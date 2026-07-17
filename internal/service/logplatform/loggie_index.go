@@ -24,6 +24,43 @@ func AgentIndexForDay(serverID uint, day time.Time) string {
 	return fmt.Sprintf("%s-%d-%s", defaultAgentIndexPrefix, serverID, day.UTC().Format("2006.01.02"))
 }
 
+// AgentKafkaTopic 每个 Agent 独立 Kafka Topic：{prefix}-{server_id}。
+func AgentKafkaTopic(serverID uint, prefix string) string {
+	p := strings.Trim(strings.TrimSpace(prefix), "-")
+	if p == "" {
+		p = defaultAgentIndexPrefix
+	}
+	return fmt.Sprintf("%s-%d", p, serverID)
+}
+
+// ParseServerIDFromAgentKafkaTopic 从 yunshu-agent-7 解析 server_id。
+func ParseServerIDFromAgentKafkaTopic(topic, prefix string) (uint, bool) {
+	p := strings.Trim(strings.TrimSpace(prefix), "-")
+	if p == "" {
+		p = defaultAgentIndexPrefix
+	}
+	topic = strings.TrimSpace(topic)
+	head := p + "-"
+	if !strings.HasPrefix(topic, head) {
+		return 0, false
+	}
+	rest := strings.TrimPrefix(topic, head)
+	if rest == "" {
+		return 0, false
+	}
+	var id uint64
+	for _, ch := range rest {
+		if ch < '0' || ch > '9' {
+			return 0, false
+		}
+		id = id*10 + uint64(ch-'0')
+	}
+	if id == 0 {
+		return 0, false
+	}
+	return uint(id), true
+}
+
 // AgentIndexPattern 单服务器检索通配。
 func AgentIndexPattern(serverID uint) string {
 	return fmt.Sprintf("%s-%d-*", defaultAgentIndexPrefix, serverID)

@@ -18,11 +18,11 @@
 |-----------|------|
 | `kafka_enabled` | `true` 启用中转；`false` 直写 ES |
 | `kafka_brokers` | 单节点或集群（JSON 数组 / 逗号分隔） |
-| `kafka_topic` | 默认 `yunshu-logs` |
-| `kafka_consumer_group` | 默认 `yunshu-log-es` |
+| `kafka_topic_prefix` | Topic 前缀，默认 `yunshu-agent`；实际 Topic=`{prefix}-{server_id}` |
+| `kafka_consumer_group` | **必填**消费组，默认 `yunshu-log-es` |
 | `kafka_username` / `kafka_password` / `kafka_sasl_mechanism` | 可选 SASL |
 
-开启后需 **重新热更/下发** Agent pipeline，并保证 `elasticsearch.enabled=true`（消费端写 ES）。观测页：**日志平台 → 保留策略 → Kafka 队列**。
+开启后需 **重新热更/下发** Agent pipeline（引导/热更时自动创建该 Agent 的 Topic）。观测：**日志平台 → 保留策略 → Kafka 队列** Tab。
 
 ## 索引约定
 
