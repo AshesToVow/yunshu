@@ -67,6 +67,7 @@ export async function getESStorageStats() {
 }
 
 export interface KafkaPartitionLag {
+  topic?: string;
   partition: number;
   high_water_mark: number;
   consumer_offset: number;
@@ -77,7 +78,8 @@ export interface KafkaQueueStats {
   enabled: boolean;
   sink_via_kafka: boolean;
   brokers: string[];
-  topic: string;
+  topic_prefix?: string;
+  topics?: string[];
   consumer_group: string;
   consumer_running: boolean;
   lag_total: number;
@@ -94,12 +96,14 @@ export interface KafkaQueueStats {
 export interface KafkaConfigPreview {
   enabled: boolean;
   brokers: string[];
-  topic: string;
+  topic_prefix?: string;
+  topic_example?: string;
   consumer_group: string;
   username?: string;
   has_password: boolean;
   sasl_mechanism?: string;
   batch_size: number;
+  topic_partitions?: number;
   workers: number;
   sink_via_kafka: boolean;
 }

@@ -48,14 +48,18 @@ func TestBuildPipelineBundle_KafkaSink(t *testing.T) {
 	}, config.ElasticsearchConfig{
 		Addresses: []string{"http://127.0.0.1:9200"},
 	}, config.KafkaConfig{
-		Enabled: true,
-		Brokers: []string{"10.0.0.1:9092", "10.0.0.2:9092"},
-		Topic:   "yunshu-logs",
+		Enabled:       true,
+		Brokers:       []string{"10.0.0.1:9092", "10.0.0.2:9092"},
+		TopicPrefix:   "yunshu-agent",
+		ConsumerGroup: "yunshu-log-es",
 	}, "token", "http://yunshu:8080")
 
 	yaml := bundle.PipelinesOnlyYAML
 	if !strings.Contains(yaml, "type: kafka") {
 		t.Fatal("expected kafka sink")
+	}
+	if !strings.Contains(yaml, `topic: "yunshu-agent-10"`) {
+		t.Fatalf("expected per-agent topic, got:\n%s", yaml)
 	}
 	if !strings.Contains(yaml, "10.0.0.1:9092") || !strings.Contains(yaml, "10.0.0.2:9092") {
 		t.Fatal("expected kafka brokers")
