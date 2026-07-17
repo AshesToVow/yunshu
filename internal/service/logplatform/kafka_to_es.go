@@ -538,12 +538,12 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 		return out, nil
 	}
 
+	// 始终以 broker 实况为准，避免删除后仍展示内存中的 activeTopics
 	topics := out.Topics
-	if len(topics) == 0 {
-		if listed, err := listAgentKafkaTopics(ctx, cfg); err == nil {
-			topics = listed
-			out.Topics = listed
-		}
+	if listed, err := listAgentKafkaTopics(ctx, cfg); err == nil {
+		topics = listed
+		out.Topics = listed
+		s.activeTopics.Store(append([]string(nil), listed...))
 	}
 
 	lags, lagTotal, lagErr := fetchKafkaLagMulti(ctx, cfg, topics)
@@ -584,9 +584,23 @@ func (s *KafkaToESService) DeleteTopic(ctx context.Context, topic string) error 
 	if !cfg.SinkViaKafka() {
 		return constants.ErrBadRequestWithMsg("Kafka 中转未启用")
 	}
+	topic = strings.TrimSpace(topic)
 	if err := DeleteAgentKafkaTopic(ctx, cfg, topic); err != nil {
 		return constants.ErrBadRequestWithMsg(err.Error())
 	}
+	// 立即从内存订阅列表移除，并强制下次 reconcile 重建消费者
+	if cur, ok := s.activeTopics.Load().([]string); ok {
+		next := make([]string, 0, len(cur))
+		for _, t := range cur {
+			if t != topic {
+				next = append(next, t)
+			}
+		}
+		s.activeTopics.Store(next)
+	}
+	s.mu.Lock()
+	s.cfgFingerprint = ""
+	s.mu.Unlock()
 	s.kafka.InvalidateCache()
 	return nil
 }

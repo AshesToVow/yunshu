@@ -497,6 +497,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "日志保留策略保存", Resource: "/api/v1/log-platform/retention", Action: "PUT", Description: "Upsert global log retention policy"},
 		{Name: "日志保留策略列表", Resource: "/api/v1/log-platform/retention/list", Action: "GET", Description: "List log retention policies"},
 		{Name: "ES 存储概览", Resource: "/api/v1/log-platform/es-storage", Action: "GET", Description: "Elasticsearch storage stats"},
+		{Name: "ES 索引删除", Resource: "/api/v1/log-platform/es-indices/:index", Action: "DELETE", Description: "Delete elasticsearch index"},
 		{Name: "Kafka 队列观测", Resource: "/api/v1/log-platform/kafka-stats", Action: "GET", Description: "Kafka lag and consumer stats"},
 		{Name: "Kafka 配置预览", Resource: "/api/v1/log-platform/kafka-config", Action: "GET", Description: "Preview kafka config from dict"},
 		{Name: "Kafka Topic 删除", Resource: "/api/v1/log-platform/kafka-topics/:topic", Action: "DELETE", Description: "Delete agent kafka topic"},

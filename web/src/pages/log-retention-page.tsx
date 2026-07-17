@@ -14,6 +14,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Popconfirm,
   Row,
   Select,
   Space,
@@ -27,6 +28,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  deleteESIndex,
   deleteKafkaTopic,
   deleteProjectLogRetention,
   getESStorageStats,
@@ -147,16 +149,19 @@ export function LogRetentionPage() {
   const projectOverrides = policies.filter((p) => p.project_id !== 0);
   const partitions: KafkaPartitionLag[] = kafkaStats?.partitions ?? [];
   const topicRows = useMemo(() => {
+    const topicList = kafkaStats?.topics || [];
     const map = new Map<string, { topic: string; lag_total: number; partitions: KafkaPartitionLag[] }>();
+    for (const t of topicList) {
+      map.set(t, { topic: t, lag_total: 0, partitions: [] });
+    }
+    const allowOrphan = topicList.length === 0;
     for (const p of partitions) {
       const topic = p.topic || "-";
+      if (!allowOrphan && !map.has(topic)) continue;
       const row = map.get(topic) ?? { topic, lag_total: 0, partitions: [] };
       row.partitions.push(p);
       if (p.lag > 0) row.lag_total += p.lag;
       map.set(topic, row);
-    }
-    for (const t of kafkaStats?.topics || []) {
-      if (!map.has(t)) map.set(t, { topic: t, lag_total: 0, partitions: [] });
     }
     return Array.from(map.values()).sort((a, b) => a.topic.localeCompare(b.topic));
   }, [partitions, kafkaStats?.topics]);
@@ -168,7 +173,26 @@ export function LogRetentionPage() {
     try {
       await deleteKafkaTopic(topic);
       message.success(`已删除 Topic：${topic}`);
+      setKafkaStats((prev) =>
+        prev
+          ? {
+              ...prev,
+              topics: (prev.topics || []).filter((t) => t !== topic),
+              partitions: (prev.partitions || []).filter((p) => p.topic !== topic),
+            }
+          : prev,
+      );
       await reloadKafka();
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message ?? e));
+    }
+  }
+
+  async function handleDeleteIndex(index: string) {
+    try {
+      await deleteESIndex(index);
+      message.success(`已删除索引：${index}`);
+      await reloadES();
     } catch (e: unknown) {
       message.error(String((e as Error)?.message ?? e));
     }
@@ -247,6 +271,27 @@ export function LogRetentionPage() {
                             render: (n: number) => (n ?? 0).toLocaleString(),
                           },
                           { title: "占用", dataIndex: "store_human", width: 100 },
+                          {
+                            title: "操作",
+                            width: 90,
+                            render: (_, r: { name: string; matched_pattern?: boolean }) =>
+                              r.matched_pattern ? (
+                                <Popconfirm
+                                  title={`确认删除索引 ${r.name}？`}
+                                  description="删除后不可恢复"
+                                  okText="删除"
+                                  okButtonProps={{ danger: true }}
+                                  cancelText="取消"
+                                  onConfirm={() => void handleDeleteIndex(r.name)}
+                                >
+                                  <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                                    删除
+                                  </Button>
+                                </Popconfirm>
+                              ) : (
+                                <span style={{ color: "#999" }}>-</span>
+                              ),
+                          },
                         ]}
                       />
                     </Space>

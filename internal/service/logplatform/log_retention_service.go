@@ -187,6 +187,38 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 	}, nil
 }
 
+// DeleteIndex 手动删除单个 ES 索引（仅允许匹配平台 index_pattern 或 yunshu-agent-*）。
+func (s *LogRetentionService) DeleteIndex(ctx context.Context, indexName string) error {
+	indexName = strings.TrimSpace(indexName)
+	if indexName == "" {
+		return constants.ErrBadRequestWithMsg("索引名不能为空")
+	}
+	if strings.HasPrefix(indexName, ".") {
+		return constants.ErrBadRequestWithMsg("禁止删除系统索引")
+	}
+	if s.es == nil {
+		return constants.ErrBadRequestWithMsg("Elasticsearch 未配置")
+	}
+	cli, cfg, err := s.es.Client(ctx)
+	if err != nil {
+		return constants.ErrBadRequestWithMsg(err.Error())
+	}
+	pattern := strings.TrimSpace(cfg.IndexPattern)
+	if pattern == "" {
+		pattern = "yunshu-agent-*"
+	}
+	allowed := matchIndexPattern(indexName, pattern) ||
+		matchIndexPattern(indexName, "yunshu-agent-*") ||
+		matchIndexPattern(indexName, GlobalAgentIndexPattern())
+	if !allowed {
+		return constants.ErrBadRequestWithMsg(fmt.Sprintf("仅允许删除匹配 %s 的平台索引", pattern))
+	}
+	if err := cli.DeleteIndex(ctx, indexName); err != nil {
+		return bizerrors.Pass(ctx, "logretention", "DeleteIndex", err)
+	}
+	return nil
+}
+
 // matchIndexPattern 简易 glob：仅支持 * 通配（与 ES index_pattern 常见写法一致）。
 func matchIndexPattern(name, pattern string) bool {
 	name = strings.TrimSpace(name)

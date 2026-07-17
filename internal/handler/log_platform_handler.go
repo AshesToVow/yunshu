@@ -69,6 +69,23 @@ func (h *LogPlatformHandler) StorageStats(c *gin.Context) {
 	response.Success(c, stats)
 }
 
+func (h *LogPlatformHandler) DeleteESIndex(c *gin.Context) {
+	if h.retention == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未启用"))
+		return
+	}
+	index := strings.TrimSpace(c.Param("index"))
+	if index == "" {
+		response.Error(c, constants.ErrBadRequestWithMsg("索引名不能为空"))
+		return
+	}
+	if err := h.retention.DeleteIndex(c.Request.Context(), index); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted", "index": index})
+}
+
 func (h *LogPlatformHandler) RunCleanup(c *gin.Context) {
 	if h.retention == nil {
 		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未启用"))

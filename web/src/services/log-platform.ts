@@ -66,6 +66,14 @@ export async function getESStorageStats() {
   return await getData(http.get<any, ApiResponse<ESStorageStats>>("/log-platform/es-storage"));
 }
 
+export async function deleteESIndex(index: string) {
+  return await getData(
+    http.delete<any, ApiResponse<{ message: string; index: string }>>(
+      `/log-platform/es-indices/${encodeURIComponent(index)}`,
+    ),
+  );
+}
+
 export interface KafkaPartitionLag {
   topic?: string;
   partition: number;
