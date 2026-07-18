@@ -18,12 +18,12 @@ type K8sCluster struct {
 	// ConnectionMode 连接模式: kubeconfig 或 direct
 	ConnectionMode string `json:"-" gorm:"size:32;default:'kubeconfig';comment:连接模式 kubeconfig/direct"`
 
-	// Kubeconfig is stored so the backend can register the cluster via Kom SDK.
-	// Excluded from API responses; only used internally.
-	Kubeconfig string `json:"-" gorm:"type:longtext;not null;comment:集群连接配置"`
+	// Kubeconfig is stored encrypted (AES-GCM via security.encryption_key) so the backend can register via Kom.
+	// Excluded from API responses; only used internally. Legacy plaintext rows are accepted on read.
+	Kubeconfig string `json:"-" gorm:"type:longtext;not null;comment:集群连接配置(加密)"`
 
-	// DirectConfig 直连配置 JSON，当 ConnectionMode=direct 时使用
-	DirectConfig string `json:"-" gorm:"type:longtext;comment:直连配置JSON"`
+	// DirectConfig 直连配置 JSON（加密），当 ConnectionMode=direct 时使用
+	DirectConfig string `json:"-" gorm:"type:longtext;comment:直连配置JSON(加密)"`
 
 	Status int `json:"status" gorm:"not null;default:1;index;comment:状态 1启用 0禁用"`
 

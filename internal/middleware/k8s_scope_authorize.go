@@ -110,9 +110,9 @@ func (c *k8sScopeCatalogCache) refresh() {
 }
 
 // K8sScopeAuthorize:
-// 1) 仅对纳入 K8s 范围目录的接口启用（permissions.k8s_scope_enabled 等）
-// 2) 集群/命名空间访问由 DB 表 k8s_cluster_access_grants 档位控制（不经 Casbin）
-// 3) 命名空间黑名单优先；白名单（若该集群对任一主体有允许规则）在黑名单之后判定；含 super-admin 仍受黑名单/白名单约束
+// 1) 只要请求带具体 namespace：始终做 NS deny/allow（含未纳入目录的 GET；super-admin 仍受约束）
+// 2) 纳入目录 / forceTier / K8s 只读路径：再做集群档位校验
+// 3) 档位由 DB 表 k8s_cluster_access_grants 控制（不经 Casbin）
 func K8sScopeAuthorize(
 	logger *logx.Logger,
 	permRepo interfaces.PermissionRepository,
@@ -126,25 +126,34 @@ func K8sScopeAuthorize(
 		if strings.TrimSpace(routePath) == "" {
 			routePath = c.Request.URL.Path
 		}
-		actionCode, tracked := catalog.get(routePath, c.Request.Method)
-		forceTier := k8sScopeForceTierCheck(routePath, c.Request.Method)
-		if !tracked && !forceTier {
+		method := c.Request.Method
+		actionCode, tracked := catalog.get(routePath, method)
+		forceTier := k8sScopeForceTierCheck(routePath, method)
+		needTier := tracked || forceTier ||
+			(strings.EqualFold(method, "GET") && service.IsK8sReadAPIPath(routePath))
+
+		clusterID, namespace := extractClusterNamespaceFromRequest(c)
+		concreteNS := strings.TrimSpace(namespace)
+		needNS := clusterID > 0 && concreteNS != "" && concreteNS != "_cluster"
+
+		if !needTier && !needNS {
 			c.Next()
 			return
 		}
-		if catalog.unavailable() {
-			response.Error(c, constants.ErrInternal)
-			c.Abort()
-			return
-		}
+
 		user, ok := auth.CurrentUserFromContext(c)
 		if !ok {
 			response.Error(c, constants.ErrNotLoggedIn)
 			c.Abort()
 			return
 		}
+		pack := k8sauth.PackFromCurrentUser(user)
+		c.Request = c.Request.WithContext(k8sauth.WithRequestScope(c.Request.Context(), k8sauth.RequestScope{
+			ClusterID: clusterID,
+			Namespace: concreteNS,
+			Pack:      pack,
+		}))
 
-		clusterID, namespace := extractClusterNamespaceFromRequest(c)
 		if clusterID == 0 {
 			if forceTier {
 				msg := "须在请求中携带 cluster_id，以便集群档位校验"
@@ -160,54 +169,58 @@ func K8sScopeAuthorize(
 			c.Next()
 			return
 		}
-		if strings.TrimSpace(namespace) == "" {
+
+		if concreteNS == "" {
 			if forceTier && strings.Contains(strings.TrimSpace(routePath), "exec") {
 				response.Error(c, constants.ErrBadRequestWithMsg("Pod Exec 须指定 namespace"))
 				c.Abort()
 				return
 			}
-			namespace = "_cluster"
 		}
 
-		pack := k8sauth.PackFromCurrentUser(user)
-
-		if nsDenyRepo != nil && namespace != "" && namespace != "_cluster" {
-			denied, err := nsDenyRepo.IsDenied(c.Request.Context(), pack, clusterID, namespace)
-			if err != nil {
-				logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace deny check failed", "error", err)
-				response.Error(c, constants.ErrInternal)
-				c.Abort()
-				return
-			}
-			if denied {
-				response.Error(c, constants.ErrForbiddenWithMsg("当前主体在此集群下禁止访问命名空间「"+namespace+"」"))
-				c.Abort()
-				return
-			}
-		}
-
-		if nsAllowRepo != nil && clusterID > 0 && namespace != "" && namespace != "_cluster" {
-			active, err := nsAllowRepo.WhitelistActiveForCluster(c.Request.Context(), pack, clusterID)
-			if err != nil {
-				logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace allow check failed", "error", err)
-				response.Error(c, constants.ErrInternal)
-				c.Abort()
-				return
-			}
-			if active {
-				ok, err := nsAllowRepo.NamespaceAllowed(c.Request.Context(), pack, clusterID, namespace)
+		if needNS {
+			if nsDenyRepo != nil {
+				denied, err := nsDenyRepo.IsDenied(c.Request.Context(), pack, clusterID, concreteNS)
 				if err != nil {
-					logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace allow match failed", "error", err)
+					logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace deny check failed", "error", err)
 					response.Error(c, constants.ErrInternal)
 					c.Abort()
 					return
 				}
-				if !ok {
-					response.Error(c, constants.ErrForbiddenWithMsg("当前主体在此集群下仅允许访问白名单内的命名空间"))
+				if denied {
+					response.Error(c, constants.ErrForbiddenWithMsg("当前主体在此集群下禁止访问命名空间「"+concreteNS+"」"))
 					c.Abort()
 					return
 				}
 			}
+			if nsAllowRepo != nil {
+				active, err := nsAllowRepo.WhitelistActiveForCluster(c.Request.Context(), pack, clusterID)
+				if err != nil {
+					logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace allow check failed", "error", err)
+					response.Error(c, constants.ErrInternal)
+					c.Abort()
+					return
+				}
+				if active {
+					ok, err := nsAllowRepo.NamespaceAllowed(c.Request.Context(), pack, clusterID, concreteNS)
+					if err != nil {
+						logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace allow match failed", "error", err)
+						response.Error(c, constants.ErrInternal)
+						c.Abort()
+						return
+					}
+					if !ok {
+						response.Error(c, constants.ErrForbiddenWithMsg("当前主体在此集群下仅允许访问白名单内的命名空间"))
+						c.Abort()
+						return
+					}
+				}
+			}
+		}
+
+		if !needTier {
+			c.Next()
+			return
 		}
 
 		for _, rc := range user.RoleCodes {
@@ -217,6 +230,11 @@ func K8sScopeAuthorize(
 			}
 		}
 
+		if catalog.unavailable() {
+			response.Error(c, constants.ErrInternal)
+			c.Abort()
+			return
+		}
 		if accessRepo == nil {
 			response.Error(c, constants.ErrInternal)
 			c.Abort()
@@ -224,7 +242,7 @@ func K8sScopeAuthorize(
 		}
 
 		perms := catalog.permissions()
-		required := service.RequiredK8sAccessRank(perms, routePath, c.Request.Method, actionCode)
+		required := service.RequiredK8sAccessRank(perms, routePath, method, actionCode)
 		if required <= 0 {
 			required = service.K8sAccessRankAdmin
 		}

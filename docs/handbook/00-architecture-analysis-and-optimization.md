@@ -10,8 +10,8 @@
 | RBAC / 菜单 / 字典 | `/api/v1/roles`、`/permissions`、`/menus`、`/dict-entries` | `permissions`、`casbin_rule`（经适配器）、`menus`、`dict_entries` | API 权限 + Casbin；字典可覆盖邮件等配置 |
 | 项目管理 | `/api/v1/projects/*` | `projects`、`project_members`、`servers`… | 租户边界；成员与告警通知联动 |
 | 告警 | `/api/v1/alerts/*` | `alert_*` 系列表 | 通道、策略、数据源、静默、监控规则、处理人、值班班次 |
-| K8s 运行时 | `/api/v1/clusters`、`/pods`… | `k8s_clusters` + 集群外资源 | 多集群连接；部分读接口可由 K8s 三元策略兜底 |
-| K8s 三元策略 | `/api/v1/k8s-policies/*` | Casbin 中 `k8s:cluster:*` 对象 | 集群/命名空间/资源路径维度的授权 |
+| K8s 运行时 | `/api/v1/clusters`、`/pods`… | `k8s_clusters` + 集群外资源 | 多集群 Kom 连接；kubeconfig/direct_config 经 AES-GCM 落库 |
+| K8s 集群档位与 NS 策略 | `/api/v1/k8s-policies/*`、deny/allow 规则表 | `k8s_cluster_access_grants`、`k8s_namespace_*_rules` | 档位 readonly / readonly_exec / admin；NS 黑白名单（含 cluster_id=0 通配）；由 `K8sScopeAuthorize` 统一校验 |
 | 日志 Agent | gRPC + `/api/v1/projects/:id/agents/*` | `log_agents`、`service_log_sources` | Agent 注册、心跳、日志上报 |
 | 数据库管理 | `/api/v1/projects/:id/dbmgmt/*` | `db_*` 系列表 | 实例、SQL 查询/审核、授权工单、goInception |
 | CI/CD | `/api/v1/projects/:id/cicd/*` | `cicd_*` 系列表 | Jenkins 打包、审批发布 |
@@ -23,9 +23,10 @@
 ### 2.1 HTTP 请求（业务 API）
 
 1. `middleware.Auth`：解析 `Authorization: Bearer`，校验 Redis 会话（若启用）、加载用户与角色。
-2. `middleware.Authorize`（Casbin）：`super-admin` 全放行；否则 `(user_id, FullPath, Method)`；部分 **GET** 在具备 K8s 三元策略时可放行（见 `middleware/casbin.go`）。
-3. `middleware.OperationAudit`：写操作日志（视路由配置）。
-4. Handler → Service → Repository → MySQL。
+2. `middleware.Authorize`（Casbin）：`super-admin` 全放行；否则 `(user_id, FullPath, Method)`；部分 **GET** 在具备 K8s 集群档位时可放行（见 `middleware/casbin.go`）。
+3. `middleware.K8sScopeAuthorize`（K8s 路由组）：具体 namespace 始终做 deny/allow（含 super-admin）；读/写路径再按集群档位校验。
+4. `middleware.OperationAudit`：写操作日志（视路由配置）。
+5. Handler → Service → Repository → MySQL。
 
 ### 2.2 告警通知邮箱合并
 
@@ -46,6 +47,7 @@
 
 3. **事务边界**
    - 「创建项目 + owner 成员」已在成员写入失败时软删回滚项目，避免脏数据；其它多表写操作可按业务需要引入显式事务（`db.Transaction`）。
+   - 删除 K8s 集群时会级联清理该集群的档位授权、NS 规则与已转发事件（保留 `cluster_id=0` 全局规则）。
 
 4. **字典与配置**
    - 邮件等配置优先字典、YAML 兜底，避免双源不一致；启动迁移含字典去重 SQL（`migrate_schema.go`）。
@@ -63,7 +65,8 @@
 ## 5. 安全与合规
 
 - 生产必须替换 `jwt_secret`、`encryption_key`、`agent.register_secret` 等。
-- 服务器凭证、云账号密钥经 AES-GCM 存储，密钥长度需符合配置说明。
+- 服务器凭证、云账号密钥、**K8s 集群 kubeconfig / direct_config** 经 AES-GCM 存储（同一 `security.encryption_key`）；存量明文在读取时兼容并建议在更新集群时重写为密文。
+- K8s 命名空间黑/白名单对读写路径均生效；`cluster_id=0` 表示全部集群通配。
 
 ---
 

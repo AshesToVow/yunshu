@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
-
+	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8sutil"
 
 	kom "github.com/weibaohui/kom/kom"
@@ -61,7 +63,7 @@ func (s *DynamicResourceService) ListByGVK(ctx context.Context, k *kom.Kubectl, 
 	if err := q.List(&list).Error; err != nil {
 		return nil, err
 	}
-	return list, nil
+	return s.filterUnstructuredByNSPolicy(ctx, gvk, namespace, list)
 }
 
 // ListByGVKWithSelector 查询列表相关的业务逻辑。
@@ -76,15 +78,18 @@ func (s *DynamicResourceService) ListByGVKWithSelector(ctx context.Context, k *k
 	if err := q.List(&list).Error; err != nil {
 		return nil, err
 	}
-	return list, nil
+	return s.filterUnstructuredByNSPolicy(ctx, gvk, namespace, list)
 }
 
 // GetByGVK 获取相关的业务逻辑。
 func (s *DynamicResourceService) GetByGVK(ctx context.Context, k *kom.Kubectl, gvk schema.GroupVersionKind, namespace, name string) (*unstructured.Unstructured, error) {
+	ns := strings.TrimSpace(namespace)
+	if err := s.ensureNamespaceAllowed(ctx, ns); err != nil {
+		return nil, err
+	}
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(gvk)
 	q := k.WithContext(ctx).Resource(u).Name(strings.TrimSpace(name))
-	ns := strings.TrimSpace(namespace)
 	if ns != "" {
 		q = q.Namespace(ns)
 	}
@@ -92,6 +97,104 @@ func (s *DynamicResourceService) GetByGVK(ctx context.Context, k *kom.Kubectl, g
 		return nil, err
 	}
 	return u, nil
+}
+
+func (s *DynamicResourceService) ensureNamespaceAllowed(ctx context.Context, namespace string) error {
+	ns := strings.TrimSpace(namespace)
+	if ns == "" || s == nil || s.runtime == nil {
+		return nil
+	}
+	clusterID := k8sauth.ClusterIDFromContext(ctx)
+	if clusterID == 0 {
+		return nil
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return nil
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	allowed, err := NamespaceAllowedByPolicy(
+		ctx,
+		s.runtime.NamespaceDenyRepo(),
+		s.runtime.NamespaceAllowRepo(),
+		pack,
+		clusterID,
+		ns,
+	)
+	if err != nil {
+		return bizerrors.Pass(ctx, "k8s.dyn", "ensureNamespaceAllowed", err)
+	}
+	if !allowed {
+		return constants.ErrForbiddenWithMsg("当前主体在此集群下禁止访问命名空间「" + ns + "」")
+	}
+	return nil
+}
+
+func (s *DynamicResourceService) filterUnstructuredByNSPolicy(
+	ctx context.Context,
+	gvk schema.GroupVersionKind,
+	namespace string,
+	list []unstructured.Unstructured,
+) ([]unstructured.Unstructured, error) {
+	if gvkClusterScoped(gvk) || len(list) == 0 {
+		return list, nil
+	}
+	ns := strings.TrimSpace(namespace)
+	if ns != "" {
+		if err := s.ensureNamespaceAllowed(ctx, ns); err != nil {
+			return nil, err
+		}
+		return list, nil
+	}
+	clusterID := k8sauth.ClusterIDFromContext(ctx)
+	if clusterID == 0 || s == nil || s.runtime == nil {
+		return list, nil
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return list, nil
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	names := make([]string, 0, len(list))
+	seen := map[string]struct{}{}
+	for i := range list {
+		n := list[i].GetNamespace()
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		names = append(names, n)
+	}
+	allowedNames, err := FilterNamespaceNamesByPolicy(
+		ctx,
+		s.runtime.NamespaceDenyRepo(),
+		s.runtime.NamespaceAllowRepo(),
+		pack,
+		clusterID,
+		names,
+	)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "k8s.dyn", "filterUnstructuredByNSPolicy", err)
+	}
+	okSet := make(map[string]struct{}, len(allowedNames))
+	for _, n := range allowedNames {
+		okSet[n] = struct{}{}
+	}
+	out := make([]unstructured.Unstructured, 0, len(list))
+	for i := range list {
+		n := list[i].GetNamespace()
+		if n == "" {
+			out = append(out, list[i])
+			continue
+		}
+		if _, yes := okSet[n]; yes {
+			out = append(out, list[i])
+		}
+	}
+	return out, nil
 }
 
 // DeleteByGVK 删除相关的业务逻辑。
@@ -112,11 +215,16 @@ func (s *DynamicResourceService) DeleteByGVK(ctx context.Context, k *kom.Kubectl
 	if name == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsge278df185255)
 	}
-	dc := k.DynamicClient()
 	if namespaced {
 		if ns == "" {
 			ns = metav1.NamespaceDefault
 		}
+		if err := s.ensureNamespaceAllowed(ctx, ns); err != nil {
+			return err
+		}
+	}
+	dc := k.DynamicClient()
+	if namespaced {
 		return dc.Resource(gvr).Namespace(ns).Delete(ctx, name, deleteOptions)
 	}
 	return dc.Resource(gvr).Delete(ctx, name, deleteOptions)

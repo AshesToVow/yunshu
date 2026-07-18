@@ -100,12 +100,12 @@ func isScopedK8sPermission(p model.Permission) bool {
 		return true
 	}
 
-	// 默认策略：高风险/变更类接口纳入三元授权，读接口默认不纳入。
+	// 默认策略：K8s 资源读写均纳入范围校验（命名空间策略 + 集群档位）。
 	m := strings.ToUpper(strings.TrimSpace(method))
 	if strings.Contains(path, "/exec") {
 		return true
 	}
-	return m == "POST" || m == "PUT" || m == "PATCH" || m == "DELETE"
+	return m == "GET" || m == "POST" || m == "PUT" || m == "PATCH" || m == "DELETE"
 }
 
 func autoActionCode(path, method string) string {

@@ -264,7 +264,7 @@ func (s *K8sPodService) List(ctx context.Context, query PodListQuery) ([]PodItem
 	kw := strings.ToLower(strings.TrimSpace(query.Keyword))
 	out := make([]PodItem, 0, len(pods))
 	for _, p := range pods {
-		if clusterWide && !s.namespaceAllowed(ctx, query.ClusterID, p.Namespace) {
+		if !s.namespaceAllowed(ctx, query.ClusterID, p.Namespace) {
 			continue
 		}
 		usageKey := p.Name
@@ -288,9 +288,10 @@ func (s *K8sPodService) namespaceAllowed(ctx context.Context, clusterID uint, na
 		return true
 	}
 	u, ok := auth.RequestUserFromContext(ctx)
-	if !ok || u == nil || auth.IsSuperAdminRole(u.RoleCodes) {
+	if !ok || u == nil {
 		return true
 	}
+	// super-admin 仍受 NS deny/allow 约束（与 K8sScopeAuthorize 一致）
 	if s.nsDenyRepo == nil && s.nsAllowRepo == nil {
 		return true
 	}
@@ -357,6 +358,9 @@ func mapPodItem(p corev1.Pod, usage podCPUMemUsage, alloc nodeAllocResources) Po
 
 // Detail 查询详情相关的业务逻辑。
 func (s *K8sPodService) Detail(ctx context.Context, query PodDetailQuery) (*PodDetail, error) {
+	if !s.namespaceAllowed(ctx, query.ClusterID, query.Namespace) {
+		return nil, constants.ErrForbiddenWithMsg("当前主体在此集群下禁止访问命名空间「" + strings.TrimSpace(query.Namespace) + "」")
+	}
 	_, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
 	if err != nil {
 		return nil, err

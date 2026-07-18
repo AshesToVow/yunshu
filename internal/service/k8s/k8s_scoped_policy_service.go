@@ -54,7 +54,7 @@ type K8sScopedPolicyGrantPresetRequest struct {
 	GroupID       uint   `json:"group_id"`
 	ClusterIDs    []uint `json:"cluster_ids"`
 	Preset        string `json:"preset" binding:"required"` // readonly | readonly_exec | admin
-	// 仅对具体集群 ID 写入（cluster_id=0 全部集群时不写）
+	// 仅对具体集群 ID 写入；cluster_id=0（全部集群）写入通配规则（cluster_id=0），与 IsDenied 语义一致
 	DenyNamespaces  []string `json:"deny_namespaces"`
 	AllowNamespaces []string `json:"allow_namespaces"`
 }
@@ -300,10 +300,12 @@ func syncDenyNamespaces(ctx context.Context, nsDenyRepo interfaces.K8sNamespaceD
 		}
 		concreteClusters = append(concreteClusters, cid)
 	}
+	targets := concreteClusters
 	if hasWildCluster || len(concreteClusters) == 0 {
-		return 0, len(denyNS), nil
+		// 全部集群：写 cluster_id=0 通配规则（读路径已 OR cluster_id=0）
+		targets = []uint{0}
 	}
-	for _, cid := range concreteClusters {
+	for _, cid := range targets {
 		for _, raw := range denyNS {
 			ns := strings.TrimSpace(raw)
 			if ns == "" || ns == "*" || ns == "_cluster" {
@@ -345,10 +347,11 @@ func syncAllowNamespaces(ctx context.Context, nsAllowRepo interfaces.K8sNamespac
 		}
 		concreteClusters = append(concreteClusters, cid)
 	}
+	targets := concreteClusters
 	if hasWildCluster || len(concreteClusters) == 0 {
-		return 0, len(allowNS), nil
+		targets = []uint{0}
 	}
-	for _, cid := range concreteClusters {
+	for _, cid := range targets {
 		for _, raw := range allowNS {
 			ns := strings.TrimSpace(raw)
 			if ns == "" || ns == "*" || ns == "_cluster" {

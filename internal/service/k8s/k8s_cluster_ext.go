@@ -104,19 +104,46 @@ func isMaskedSecretValue(s string) bool {
 }
 
 // resolveClusterKubeconfig 解析集群连接配置：直连模式从 direct_config 实时生成（保证 Token 与库内 JSON 一致）。
+// 库内字段可能为 AES-GCM 密文，需经 OpenCredential 解密（无 runtime 时仅兼容明文）。
 func resolveClusterKubeconfig(cluster *model.K8sCluster) (string, error) {
+	return resolveClusterKubeconfigWithOpener(cluster, nil)
+}
+
+func (s *K8sRuntimeService) resolveClusterKubeconfig(cluster *model.K8sCluster) (string, error) {
+	return resolveClusterKubeconfigWithOpener(cluster, s)
+}
+
+type clusterSecretOpener interface {
+	OpenCredential(stored string) (string, error)
+}
+
+func resolveClusterKubeconfigWithOpener(cluster *model.K8sCluster, opener clusterSecretOpener) (string, error) {
 	if cluster == nil {
 		return "", fmt.Errorf("cluster is nil")
 	}
+	open := func(stored string) (string, error) {
+		if opener != nil {
+			return opener.OpenCredential(stored)
+		}
+		return stored, nil
+	}
 	mode := strings.TrimSpace(cluster.ConnectionMode)
 	if mode == "direct" && strings.TrimSpace(cluster.DirectConfig) != "" {
+		raw, err := open(cluster.DirectConfig)
+		if err != nil {
+			return "", fmt.Errorf("解密直连配置失败: %w", err)
+		}
 		var dc DirectConfig
-		if err := json.Unmarshal([]byte(cluster.DirectConfig), &dc); err != nil {
+		if err := json.Unmarshal([]byte(raw), &dc); err != nil {
 			return "", fmt.Errorf("解析直连配置失败: %w", err)
 		}
 		return buildKubeconfigFromDirectConfig(&dc)
 	}
-	kc := strings.TrimSpace(cluster.Kubeconfig)
+	kcStored, err := open(cluster.Kubeconfig)
+	if err != nil {
+		return "", fmt.Errorf("解密 kubeconfig 失败: %w", err)
+	}
+	kc := strings.TrimSpace(kcStored)
 	if kc == "" {
 		return "", fmt.Errorf("集群 kubeconfig 为空")
 	}

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strconv"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
@@ -35,7 +36,26 @@ func (r *K8sClusterRepository) Update(ctx context.Context, cluster *model.K8sClu
 }
 
 func (r *K8sClusterRepository) Delete(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Delete(&model.K8sCluster{}, id).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&model.K8sCluster{}, id).Error; err != nil {
+			return err
+		}
+		// 级联清理仅绑定该集群的授权与 NS 规则（保留 cluster_id=0 全局通配）
+		if err := tx.Where("cluster_id = ?", id).Delete(&model.K8sClusterAccessGrant{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("cluster_id = ?", id).Delete(&model.K8sNamespaceDenyRule{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("cluster_id = ?", id).Delete(&model.K8sNamespaceAllowRule{}).Error; err != nil {
+			return err
+		}
+		cid := strconv.FormatUint(uint64(id), 10)
+		if err := tx.Where("cluster_id = ?", cid).Delete(&model.K8sForwardedEvent{}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (r *K8sClusterRepository) GetByID(ctx context.Context, id uint) (*model.K8sCluster, error) {

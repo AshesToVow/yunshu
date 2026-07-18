@@ -13,6 +13,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 	"github.com/weibaohui/kom/kom"
+	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -129,14 +130,25 @@ func (w *Watcher) runClusterWatch(clusterID string, id uint) {
 	}
 
 	var watcher watch.Interface
-	var evt eventsv1.Event
-	if err := kom.Cluster(clusterID).WithContext(ctx).Resource(&evt).AllNamespace().Watch(&watcher).Error; err != nil {
-		forwardLog().Warn("Failed to start K8s event watch", "cluster_id", clusterID, "error", err)
-		return
+	useCoreV1 := false
+	var evtV1 eventsv1.Event
+	if err := kom.Cluster(clusterID).WithContext(ctx).Resource(&evtV1).AllNamespace().Watch(&watcher).Error; err != nil {
+		forwardLog().Warn("events.k8s.io/v1 watch failed, falling back to core/v1 Event",
+			"cluster_id", clusterID, "error", err)
+		var evtCore corev1.Event
+		if err2 := kom.Cluster(clusterID).WithContext(ctx).Resource(&evtCore).AllNamespace().Watch(&watcher).Error; err2 != nil {
+			forwardLog().Warn("Failed to start K8s event watch", "cluster_id", clusterID, "error", err2)
+			return
+		}
+		useCoreV1 = true
 	}
 	defer watcher.Stop()
 
-	forwardLog().Info("Started watching K8s events", "cluster_id", clusterID)
+	api := "events.k8s.io/v1"
+	if useCoreV1 {
+		api = "core/v1"
+	}
+	forwardLog().Info("Started watching K8s events", "cluster_id", clusterID, "api", api)
 	for {
 		select {
 		case <-ctx.Done():
@@ -146,12 +158,22 @@ func (w *Watcher) runClusterWatch(clusterID string, id uint) {
 				forwardLog().Info("K8s event watch channel closed", "cluster_id", clusterID)
 				return
 			}
-			var typed eventsv1.Event
-			if err := kom.Cluster(clusterID).WithContext(ctx).Tools().ConvertRuntimeObjectToTypedObject(e.Object, &typed); err != nil {
-				forwardLog().Warn("Failed to convert K8s event", "cluster_id", clusterID, "error", err)
-				continue
+			var m *model.K8sForwardedEvent
+			if useCoreV1 {
+				var typed corev1.Event
+				if err := kom.Cluster(clusterID).WithContext(ctx).Tools().ConvertRuntimeObjectToTypedObject(e.Object, &typed); err != nil {
+					forwardLog().Warn("Failed to convert core/v1 K8s event", "cluster_id", clusterID, "error", err)
+					continue
+				}
+				m = w.fromCoreV1Event(clusterID, &typed)
+			} else {
+				var typed eventsv1.Event
+				if err := kom.Cluster(clusterID).WithContext(ctx).Tools().ConvertRuntimeObjectToTypedObject(e.Object, &typed); err != nil {
+					forwardLog().Warn("Failed to convert K8s event", "cluster_id", clusterID, "error", err)
+					continue
+				}
+				m = w.fromK8sEvent(clusterID, &typed)
 			}
-			m := w.fromK8sEvent(clusterID, &typed)
 			if m == nil || !m.ShouldForward() {
 				continue
 			}
@@ -182,6 +204,37 @@ func (w *Watcher) fromK8sEvent(clusterID string, evt *eventsv1.Event) *model.K8s
 		Reason:    evt.Reason,
 		Level:     evt.Type,
 		Message:   evt.Note,
+		Timestamp: ts,
+		Processed: false,
+	}
+}
+
+func (w *Watcher) fromCoreV1Event(clusterID string, evt *corev1.Event) *model.K8sForwardedEvent {
+	ts := time.Now()
+	if !evt.LastTimestamp.IsZero() {
+		ts = evt.LastTimestamp.Time
+	} else if !evt.EventTime.IsZero() {
+		ts = evt.EventTime.Time
+	} else if !evt.CreationTimestamp.IsZero() {
+		ts = evt.CreationTimestamp.Time
+	}
+	key := string(evt.UID)
+	if key == "" {
+		key = fmt.Sprintf("%s/%s/%s/%s/%d", clusterID, evt.Namespace, evt.InvolvedObject.Name, evt.Reason, ts.UnixNano())
+	}
+	ns := evt.InvolvedObject.Namespace
+	if ns == "" {
+		ns = evt.Namespace
+	}
+	return &model.K8sForwardedEvent{
+		EvtKey:    key,
+		ClusterID: clusterID,
+		Namespace: ns,
+		Name:      evt.InvolvedObject.Name,
+		Type:      evt.Type,
+		Reason:    evt.Reason,
+		Level:     evt.Type,
+		Message:   evt.Message,
 		Timestamp: ts,
 		Processed: false,
 	}

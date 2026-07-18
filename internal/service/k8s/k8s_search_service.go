@@ -225,7 +225,7 @@ func (s *K8sSearchService) namespaceAllowed(ctx context.Context, clusterID uint,
 		return true
 	}
 	u, ok := auth.RequestUserFromContext(ctx)
-	if !ok || u == nil || auth.IsSuperAdminRole(u.RoleCodes) {
+	if !ok || u == nil {
 		return true
 	}
 	if s.nsDenyRepo == nil && s.nsAllowRepo == nil {

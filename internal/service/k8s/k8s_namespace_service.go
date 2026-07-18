@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"yunshu/internal/interfaces"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8sutil"
@@ -370,6 +371,20 @@ func summarizeResourceQuotasForList(rqs []corev1.ResourceQuota) string {
 
 // Detail ????????????
 func (s *K8sNamespaceService) Detail(ctx context.Context, query NamespaceDetailQuery) (*NamespaceDetail, error) {
+	name := strings.TrimSpace(query.Name)
+	if name != "" {
+		u, ok := auth.RequestUserFromContext(ctx)
+		if ok && u != nil {
+			pack := k8sauth.PackFromCurrentUser(u)
+			allowed, err := NamespaceAllowedByPolicy(ctx, s.nsDenyRepo, s.nsAllowRepo, pack, query.ClusterID, name)
+			if err != nil {
+				return nil, bizerrors.Pass(ctx, "k8s.namespace", "Detail", err)
+			}
+			if !allowed {
+				return nil, constants.ErrForbiddenWithMsg("当前主体在此集群下禁止访问命名空间「" + name + "」")
+			}
+		}
+	}
 	_, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
 	if err != nil {
 		return nil, err
