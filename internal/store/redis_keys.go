@@ -17,14 +17,24 @@ func EmailCodeCooldownKey(scene, email string) string {
 	return "auth:email_code_cooldown:" + strings.TrimSpace(scene) + ":" + normalizeEmailKey(email)
 }
 
-// PasswordLoginCodeKey 密码登录验证码缓存键
-func PasswordLoginCodeKey(username string) string {
-	return "auth:password_login_code:" + strings.TrimSpace(username)
+// PasswordLoginCodeKey 密码登录图形验证码缓存键，按验证码 key（captchaKey）索引。
+func PasswordLoginCodeKey(captchaKey string) string {
+	return "auth:password_login_code:" + strings.TrimSpace(captchaKey)
 }
 
 // PasswordLoginCodeCooldownKey 密码登录验证码冷却缓存键
 func PasswordLoginCodeCooldownKey(username string) string {
 	return "auth:password_login_code_cooldown:" + strings.TrimSpace(username)
+}
+
+// LoginFailCountKey 记录某账号连续密码登录失败次数的缓存键。
+func LoginFailCountKey(username string) string {
+	return "auth:login_fail_count:" + strings.TrimSpace(username)
+}
+
+// LoginFailLockKey 账号因连续失败被临时锁定的标记键。
+func LoginFailLockKey(username string) string {
+	return "auth:login_fail_lock:" + strings.TrimSpace(username)
 }
 
 // normalizeEmailKey 邮箱缓存键归一化函数

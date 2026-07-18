@@ -19,7 +19,39 @@ func (s *AlertService) tickCloudExpiryRules(ctx context.Context) error {
 	return s.tickCloudExpiryRulesWithMode(ctx, false)
 }
 
+// cloudExpiryEvalLeaderKey 云到期定时评估的集群单实例锁。与内置监控规则的 alert:monitor:eval:leader 同理：
+// 多副本部署时若无此锁，每个副本都会各自扫描同一规则、调用云 API 并推送告警，导致重复通知
+//（云到期告警 SkipGroupTiming=true，会绕过分组节流，重复无法在下游被抑制）。
+const cloudExpiryEvalLeaderKey = "alert:cloud-expiry:eval:leader"
+
+// acquireCloudExpiryLeader 尝试成为本轮定时评估的唯一执行者。无 Redis（单机）时恒为 true。
+// TTL 仅作为持锁副本崩溃时的兜底，正常路径由 release 在扫描结束后主动释放，不阻塞下一分钟的调度。
+func (s *AlertService) acquireCloudExpiryLeader(ctx context.Context) (bool, func()) {
+	if s.redis == nil {
+		return true, func() {}
+	}
+	ttl := 5 * time.Minute
+	ok, err := s.redis.SetNX(ctx, cloudExpiryEvalLeaderKey, "1", ttl).Result()
+	if err != nil || !ok {
+		return false, func() {}
+	}
+	return true, func() {
+		// 用独立 context 释放，避免调度 ctx 已取消时无法删除锁（否则要等 TTL 才过期）。
+		relCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = s.redis.Del(relCtx, cloudExpiryEvalLeaderKey).Err()
+	}
+}
+
 func (s *AlertService) tickCloudExpiryRulesWithMode(ctx context.Context, force bool) error {
+	if !force {
+		// 定时评估：集群内仅一个副本执行本轮扫描；手动「立即评估」(force) 不受此限制，直接在处理请求的副本上运行。
+		ok, release := s.acquireCloudExpiryLeader(ctx)
+		if !ok {
+			return nil
+		}
+		defer release()
+	}
 	rules, err := s.cloudExpiryRepo.ListEnabled(ctx)
 	if err != nil {
 		return bizerrors.Pass(ctx, "alert.cloud-expiry", "tickCloudExpiryRulesWithMode", err)

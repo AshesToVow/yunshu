@@ -31,7 +31,7 @@ func TestBuildMultiPipelineBundle_PerLogSourceFields(t *testing.T) {
 	if !strings.Contains(yaml, "log_source_id: \"12\"") || !strings.Contains(yaml, "service_id: \"4\"") {
 		t.Fatal("missing fields for second log source")
 	}
-	if !strings.Contains(yaml, `index: "yunshu-agent-7-${+YYYY.MM.DD}"`) {
+	if !strings.Contains(yaml, `index: "yunshu-agent-`) || !strings.Contains(yaml, `${+YYYY.MM.DD}`) {
 		t.Fatalf("expected per-agent index, got:\n%s", yaml)
 	}
 	if !strings.Contains(yaml, "name: yunshu-p1-s7-ls11") {

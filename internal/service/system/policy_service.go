@@ -90,8 +90,14 @@ func (s *PolicyService) Grant(ctx context.Context, req PolicyGrantRequest) error
 		return bizerrors.Pass(ctx, "policy", "Grant", err)
 	}
 
-	_, err = s.enforcer.AddPolicy(role.Code, permission.Resource, permission.Action)
-	return bizerrors.Pass(ctx, "policy", "Grant", err)
+	added, err := s.enforcer.AddPolicy(role.Code, permission.Resource, permission.Action)
+	if err != nil {
+		return bizerrors.Pass(ctx, "policy", "Grant", err)
+	}
+	if !added {
+		return constants.ErrPolicyAlreadyGranted
+	}
+	return nil
 }
 
 // Revoke 执行对应的业务逻辑。
@@ -112,6 +118,12 @@ func (s *PolicyService) Revoke(ctx context.Context, req PolicyGrantRequest) erro
 		return bizerrors.Pass(ctx, "policy", "Revoke", err)
 	}
 
-	_, err = s.enforcer.RemovePolicy(role.Code, permission.Resource, permission.Action)
-	return bizerrors.Pass(ctx, "policy", "Revoke", err)
+	removed, err := s.enforcer.RemovePolicy(role.Code, permission.Resource, permission.Action)
+	if err != nil {
+		return bizerrors.Pass(ctx, "policy", "Revoke", err)
+	}
+	if !removed {
+		return constants.ErrPolicyNotGranted
+	}
+	return nil
 }

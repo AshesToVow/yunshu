@@ -149,9 +149,15 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 
 func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery) string {
 	if q.ServerID != nil && *q.ServerID > 0 {
-		return AgentIndexPattern(*q.ServerID)
+		if s.serverRepo != nil {
+			if sv, err := s.serverRepo.GetByID(ctx, *q.ServerID); err == nil && sv != nil && strings.TrimSpace(sv.Host) != "" {
+				return ResolveSearchIndicesByHosts([]string{sv.Host}, []uint{*q.ServerID})
+			}
+		}
+		return AgentIndexPatternByServerID(*q.ServerID)
 	}
 	var ids []uint
+	var hosts []string
 	if s.serverRepo != nil {
 		servers, _, err := s.serverRepo.List(ctx, repository.ServerListParams{
 			ProjectID: q.ProjectID,
@@ -160,10 +166,17 @@ func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery)
 		})
 		if err == nil {
 			ids = make([]uint, 0, len(servers))
+			hosts = make([]string, 0, len(servers))
 			for _, sv := range servers {
 				ids = append(ids, sv.ID)
+				if h := strings.TrimSpace(sv.Host); h != "" {
+					hosts = append(hosts, h)
+				}
 			}
 		}
+	}
+	if len(hosts) > 0 {
+		return ResolveSearchIndicesByHosts(hosts, ids)
 	}
 	return ResolveSearchIndices(nil, ids)
 }

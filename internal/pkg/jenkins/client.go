@@ -276,6 +276,38 @@ func (c *Client) BuildURL(jobName string, buildNumber int) string {
 }
 
 // ResolveQueueBuildNumber 从 queue item 解析实际 build number（轮询最多 wait）。
+// QueueBuildNumber 单次查询队列项已分配的构建号；未分配（仍在排队）返回 (0, nil)，
+// 不做 lastNumber+1 猜测，供异步补偿场景精确判定。
+func (c *Client) QueueBuildNumber(ctx context.Context, queuePath string) (int, error) {
+	queuePath = strings.TrimSpace(queuePath)
+	if queuePath == "" {
+		return 0, fmt.Errorf("empty queue path")
+	}
+	endpoint := c.BaseURL + queuePath + "/api/json?tree=executable[number]"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, err
+	}
+	c.setAuth(req)
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	var payload struct {
+		Executable *struct {
+			Number int `json:"number"`
+		} `json:"executable"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return 0, err
+	}
+	if payload.Executable != nil {
+		return payload.Executable.Number, nil
+	}
+	return 0, nil
+}
+
 func (c *Client) ResolveQueueBuildNumber(ctx context.Context, queuePath string, lastNumber int, wait time.Duration) (int, error) {
 	if wait <= 0 {
 		wait = 2 * time.Minute

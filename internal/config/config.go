@@ -8,16 +8,16 @@ import (
 
 // Config 根配置：聚合应用、HTTP、存储、认证、告警与安全等子配置。
 type Config struct {
-	App      AppConfig      `mapstructure:"app"`
-	HTTP     HTTPConfig     `mapstructure:"http"`
-	Log      LogConfig      `mapstructure:"log"`
-	Database DatabaseConfig `mapstructure:"database"`
-	MySQL    DatabaseConfig `mapstructure:"mysql"` // 兼容旧配置键；与 database 二选一或 database 优先
-	Redis    RedisConfig    `mapstructure:"redis"`
-	Mail     MailConfig     `mapstructure:"mail"`
-	Auth     AuthConfig     `mapstructure:"auth"`
-	Casbin   CasbinConfig   `mapstructure:"casbin"`
-	Swagger  SwaggerConfig  `mapstructure:"swagger"`
+	App             AppConfig             `mapstructure:"app"`
+	HTTP            HTTPConfig            `mapstructure:"http"`
+	Log             LogConfig             `mapstructure:"log"`
+	Database        DatabaseConfig        `mapstructure:"database"`
+	MySQL           DatabaseConfig        `mapstructure:"mysql"` // 兼容旧配置键；与 database 二选一或 database 优先
+	Redis           RedisConfig           `mapstructure:"redis"`
+	Mail            MailConfig            `mapstructure:"mail"`
+	Auth            AuthConfig            `mapstructure:"auth"`
+	Casbin          CasbinConfig          `mapstructure:"casbin"`
+	Swagger         SwaggerConfig         `mapstructure:"swagger"`
 	Alert           AlertConfig           `mapstructure:"alert"`
 	K8sEventForward K8sEventForwardConfig `mapstructure:"k8s_event_forward"`
 	Security        SecurityConfig        `mapstructure:"security"`
@@ -61,7 +61,7 @@ type DatabaseConfig struct {
 	DBName                 string `mapstructure:"db_name"`
 	Charset                string `mapstructure:"charset"`  // MySQL
 	Loc                    string `mapstructure:"loc"`      // MySQL parseTime loc
-	SSLMode                string `mapstructure:"sslmode"` // PostgreSQL
+	SSLMode                string `mapstructure:"sslmode"`  // PostgreSQL
 	TimeZone               string `mapstructure:"timezone"` // PostgreSQL
 	MaxIdleConns           int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns           int    `mapstructure:"max_open_conns"`
@@ -93,10 +93,17 @@ type AuthConfig struct {
 	AccessTokenTTLMinutes    int    `mapstructure:"access_token_ttl_minutes"`
 	EmailCodeTTLSeconds      int    `mapstructure:"email_code_ttl_seconds"`
 	EmailCodeCooldownSeconds int    `mapstructure:"email_code_cooldown_seconds"`
+	// LoginMaxFailAttempts 连续密码错误次数上限，达到后临时锁定账号；<=0 时用默认值。
+	LoginMaxFailAttempts int `mapstructure:"login_max_fail_attempts"`
+	// LoginLockSeconds 触发锁定后的锁定时长（秒）；<=0 时用默认值。
+	LoginLockSeconds int `mapstructure:"login_lock_seconds"`
 }
 
 type CasbinConfig struct {
 	ModelPath string `mapstructure:"model_path"`
+	// AutoLoadIntervalSeconds 多副本部署时定时从 DB 重新加载策略的间隔（秒）。
+	// <=0 表示关闭（单副本可关闭以省去周期性查询）。默认 30s。
+	AutoLoadIntervalSeconds int `mapstructure:"auto_load_interval_seconds"`
 }
 
 type SwaggerConfig struct {
@@ -184,6 +191,12 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Auth.EmailCodeCooldownSeconds <= 0 {
 		cfg.Auth.EmailCodeCooldownSeconds = 60
+	}
+	if cfg.Auth.LoginMaxFailAttempts <= 0 {
+		cfg.Auth.LoginMaxFailAttempts = 5
+	}
+	if cfg.Auth.LoginLockSeconds <= 0 {
+		cfg.Auth.LoginLockSeconds = 900
 	}
 	if cfg.Alert.DefaultTimeoutMS <= 0 {
 		cfg.Alert.DefaultTimeoutMS = 5000
@@ -364,7 +377,7 @@ func bindEnv(v *viper.Viper) error {
 		"database.user":                            nil,
 		"database.password":                        nil,
 		"database.db_name":                         nil,
-		"database.charset":                       nil,
+		"database.charset":                         nil,
 		"database.loc":                             nil,
 		"database.sslmode":                         nil,
 		"database.timezone":                        nil,

@@ -65,6 +65,16 @@ func SQLDropDictEntriesLegacyCompositeIndex(dialect string) string {
 	}
 }
 
+// SQLDropIndexIfExists 生成删除指定表索引的 DDL（存在才删），用于软删除唯一索引重建前的清理。
+func SQLDropIndexIfExists(dialect, table, index string) string {
+	switch strings.ToLower(strings.TrimSpace(dialect)) {
+	case "postgres":
+		return fmt.Sprintf(`DROP INDEX IF EXISTS %s`, index)
+	default:
+		return fmt.Sprintf("ALTER TABLE `%s` DROP INDEX `%s`", table, index)
+	}
+}
+
 // SQLCreateAgentDiscoveryUniqueIndex creates dialect-specific unique index on agent_discoveries.
 func SQLCreateAgentDiscoveryUniqueIndex(dialect string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(dialect)) {

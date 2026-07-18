@@ -171,7 +171,14 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 	if user.Status != model.StatusEnabled {
 		return nil, constants.ErrAccountDisabled
 	}
+
+	// 密码校验前先检查是否处于失败锁定期，防止暴力破解。
+	if err = s.ensureLoginNotLocked(ctx, username); err != nil {
+		return nil, bizerrors.Reject(ctx, "auth", "Login", err, "reason", "locked", "username", username)
+	}
+
 	if err = password.Compare(user.Password, req.Password); err != nil {
+		s.recordLoginFailure(ctx, username)
 		return nil, bizerrors.Reject(ctx, "auth", "Login", constants.ErrPasswordIncorrect, "reason", "bad_password", "username", username)
 	}
 
@@ -180,6 +187,7 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 		return nil, bizerrors.Pass(ctx, "auth", "Login", err)
 	}
 	s.clearPasswordLoginCode(ctx, req.CaptchaKey)
+	s.clearLoginFailures(ctx, username)
 
 	return s.issueLoginResponse(ctx, user)
 }
@@ -436,7 +444,8 @@ func (s *AuthService) SendPasswordLoginCode(ctx context.Context, username string
 		}
 	}
 
-	// Use base64Captcha to generate image
+	// 生成图形验证码。答案写入 Redis（而非进程内存），保证多副本部署下
+	// 生成与校验可跨实例共享；否则不同副本的 DefaultMemStore 互不可见，校验必失败。
 	driver := base64Captcha.NewDriverDigit(
 		80,  // height
 		240, // width
@@ -444,11 +453,15 @@ func (s *AuthService) SendPasswordLoginCode(ctx context.Context, username string
 		0.35, // maxSkew — lower skew for readability
 		24,  // dotCount — fewer noise dots
 	)
-	memStore := base64Captcha.DefaultMemStore
-	captcha := base64Captcha.NewCaptcha(driver, memStore)
-	captchaKey, imageBase64, err := captcha.Generate()
+	captchaKey, answer, _ := driver.GenerateIdQuestionAnswer()
+	item, err := driver.DrawCaptcha(answer)
 	if err != nil {
 		return nil, bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsg6f15f7c820be)
+	}
+
+	codeTTL := s.emailCodeTTL()
+	if err = s.redis.Set(ctx, store.PasswordLoginCodeKey(captchaKey), answer, codeTTL).Err(); err != nil {
+		return nil, bizerrors.Pass(ctx, "auth", "SendPasswordLoginCode", err)
 	}
 	cooldownTTL := s.emailCodeCooldown()
 	if err = s.redis.Set(ctx, cooldownKey, "1", cooldownTTL).Err(); err != nil {
@@ -458,33 +471,45 @@ func (s *AuthService) SendPasswordLoginCode(ctx context.Context, username string
 	return &SendPasswordLoginCodeResponse{
 		CaptchaKey: captchaKey,
 		// Keep old frontend contract: return raw base64 only (without data URL prefix).
-		Image:      strings.TrimPrefix(imageBase64, "data:image/png;base64,"),
-		ExpiresIn:  int(s.emailCodeTTL().Seconds()),
+		Image:      strings.TrimPrefix(item.EncodeB64string(), "data:image/png;base64,"),
+		ExpiresIn:  int(codeTTL.Seconds()),
 		CooldownIn: int(cooldownTTL.Seconds()),
 	}, nil
 }
 
-// validatePasswordLoginCode verifies the password login code using base64Captcha store.
+// validatePasswordLoginCode 校验密码登录图形验证码。答案存于 Redis（见 SendPasswordLoginCode），
+// 校验成功即删除，保证一次性且跨副本一致。
 func (s *AuthService) validatePasswordLoginCode(ctx context.Context, captchaKey, code string) error {
-	_ = ctx
 	captchaKey = strings.TrimSpace(captchaKey)
 	code = strings.TrimSpace(code)
 	if captchaKey == "" || code == "" {
 		return constants.ErrUnauthorizedWithMsg(constants.ErrMsgdb0b98dd46b0)
 	}
-
-	if !base64Captcha.DefaultMemStore.Verify(captchaKey, code, true) {
-		return constants.ErrCaptchaInvalidOrExpired
+	if s.redis == nil {
+		return bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
 	}
 
+	key := store.PasswordLoginCodeKey(captchaKey)
+	answer, err := s.redis.Get(ctx, key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return constants.ErrCaptchaInvalidOrExpired
+		}
+		return bizerrors.Pass(ctx, "auth", "validatePasswordLoginCode", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(answer), code) {
+		return constants.ErrCaptchaInvalidOrExpired
+	}
 	return nil
 }
 
-// clearPasswordLoginCode removes the password login code from Redis after successful verification
+// clearPasswordLoginCode 校验通过后删除 Redis 中的一次性验证码，防止重放。
 func (s *AuthService) clearPasswordLoginCode(ctx context.Context, captchaKey string) {
-	_ = ctx
-	_ = captchaKey
-	// no-op: base64Captcha.DefaultMemStore.Verify(..., clear=true) already clears used code.
+	captchaKey = strings.TrimSpace(captchaKey)
+	if s.redis == nil || captchaKey == "" {
+		return
+	}
+	_ = s.redis.Del(ctx, store.PasswordLoginCodeKey(captchaKey)).Err()
 }
 
 func (s *AuthService) ensureEmailCodeDependencies(ctx context.Context) error {
@@ -589,6 +614,64 @@ func (s *AuthService) emailCodeCooldown() time.Duration {
 		return time.Minute
 	}
 	return time.Duration(s.cfg.EmailCodeCooldownSeconds) * time.Second
+}
+
+// loginLockThreshold 触发锁定的连续失败次数（<=0 视为关闭锁定）。
+func (s *AuthService) loginLockThreshold() int {
+	return s.cfg.LoginMaxFailAttempts
+}
+
+// loginLockDuration 锁定持续时长。
+func (s *AuthService) loginLockDuration() time.Duration {
+	if s.cfg.LoginLockSeconds <= 0 {
+		return 15 * time.Minute
+	}
+	return time.Duration(s.cfg.LoginLockSeconds) * time.Second
+}
+
+// ensureLoginNotLocked 在校验密码前检查该用户是否处于失败锁定期。
+// Redis 不可用或未启用锁定（阈值<=0）时不阻断登录，避免把可用性问题升级为不可登录。
+func (s *AuthService) ensureLoginNotLocked(ctx context.Context, username string) error {
+	if s.redis == nil || s.loginLockThreshold() <= 0 || username == "" {
+		return nil
+	}
+	key := store.LoginFailLockKey(username)
+	exists, err := s.redis.Exists(ctx, key).Result()
+	if err != nil {
+		// Redis 异常不阻断登录（后续密码校验仍会拦截错误凭证）。
+		return nil
+	}
+	if exists == 0 {
+		return nil
+	}
+	return constants.ErrLoginTooManyAttempts
+}
+
+// recordLoginFailure 累加连续失败次数，达阈值后写入锁定标记。
+func (s *AuthService) recordLoginFailure(ctx context.Context, username string) {
+	if s.redis == nil || s.loginLockThreshold() <= 0 || username == "" {
+		return
+	}
+	countKey := store.LoginFailCountKey(username)
+	n, err := s.redis.Incr(ctx, countKey).Result()
+	if err != nil {
+		return
+	}
+	if n == 1 {
+		// 首次失败设置计数窗口，等于锁定时长，超期自动清零。
+		_ = s.redis.Expire(ctx, countKey, s.loginLockDuration()).Err()
+	}
+	if int(n) >= s.loginLockThreshold() {
+		_ = s.redis.Set(ctx, store.LoginFailLockKey(username), "1", s.loginLockDuration()).Err()
+	}
+}
+
+// clearLoginFailures 登录成功后清除失败计数与锁定标记。
+func (s *AuthService) clearLoginFailures(ctx context.Context, username string) {
+	if s.redis == nil || username == "" {
+		return
+	}
+	_ = s.redis.Del(ctx, store.LoginFailCountKey(username), store.LoginFailLockKey(username)).Err()
 }
 
 func (s *AuthService) buildVerificationEmail(scene, code string, ttl time.Duration) (string, string) {

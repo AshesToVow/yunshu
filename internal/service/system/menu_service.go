@@ -264,6 +264,10 @@ func (s *MenuService) Delete(ctx context.Context, id uint) error {
 		}
 		return bizerrors.Pass(ctx, "menu", "Delete", err)
 	}
+	// 清理该菜单遗留的权限绑定，避免孤儿 menu_permission_bindings 行。
+	if err := s.menuRepo.ReplacePermissionBindings(ctx, id, nil); err != nil {
+		return bizerrors.Pass(ctx, "menu", "Delete", err)
+	}
 	s.invalidateCache()
 	return nil
 }

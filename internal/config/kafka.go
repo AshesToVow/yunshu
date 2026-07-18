@@ -4,7 +4,7 @@ import "strings"
 
 // KafkaConfig 日志中转（Loggie → Kafka → Yunshu 消费写 ES）。
 // enabled=false 时 Agent 直写 Elasticsearch。
-// Topic / TopicPrefix：每个 Agent 独立 Topic，命名为 {prefix}-{server_id}（默认 yunshu-agent-7）。
+// Topic / TopicPrefix：每个 Agent 独立 Topic，命名为 {prefix}-{服务器IP}-{YYYY.MM.DD}（IP 中的点转为 -）。
 type KafkaConfig struct {
 	Enabled bool     `mapstructure:"enabled"`
 	Brokers []string `mapstructure:"brokers"`

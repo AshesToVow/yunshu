@@ -1231,13 +1231,20 @@ func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, r
 	_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Updates(updates).Error
 }
 
+// releaseStuckTimeout 发布工单在 running 且构建号仍未落库时，允许的最长补偿窗口。
+// 超过后仍拿不到构建号，则判定为触发/回填异常并置为 failure，避免永久卡死。
+const releaseStuckTimeout = 30 * time.Minute
+
 func (s *Service) syncOneReleaseRun(ctx context.Context, client *jenkins.Client, run model.CicdReleaseRun) {
-	if run.JenkinsBuildNumber <= 0 {
-		return
-	}
 	var svc model.CicdService
 	if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
 		return
+	}
+	// 构建号未落库（如触发后请求上下文被取消）：先尝试用 queue_url 补偿解析。
+	if run.JenkinsBuildNumber <= 0 {
+		if !s.recoverReleaseBuildNumber(ctx, client, &svc, &run) {
+			return
+		}
 	}
 	info, err := client.GetBuild(ctx, svc.JenkinsJob, run.JenkinsBuildNumber)
 	if err != nil {
@@ -1257,4 +1264,42 @@ func (s *Service) syncOneReleaseRun(ctx context.Context, client *jenkins.Client,
 		updates["finished_at"] = now
 	}
 	_ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).Where("id = ?", run.ID).Updates(updates).Error
+}
+
+// recoverReleaseBuildNumber 针对构建号未落库的 running 工单做补偿：
+// 依据存下的 queue_url 解析 Jenkins 已分配的构建号并回填 run（含内存副本）。
+// 解析成功返回 true；仍未分配则返回 false（下轮再试）；
+// 若已超过 releaseStuckTimeout 仍无构建号，则置为 failure 以避免永久卡死。
+func (s *Service) recoverReleaseBuildNumber(ctx context.Context, client *jenkins.Client, svc *model.CicdService, run *model.CicdReleaseRun) bool {
+	queueURL := strings.TrimSpace(run.JenkinsQueueURL)
+	if queueURL != "" {
+		if buildNum, err := client.QueueBuildNumber(ctx, queueURL); err == nil && buildNum > 0 {
+			updates := map[string]any{
+				"jenkins_build_number": buildNum,
+				"jenkins_build_url":    client.BuildURL(svc.JenkinsJob, buildNum),
+			}
+			if err := s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+				Where("id = ? AND jenkins_build_number = 0", run.ID).
+				Updates(updates).Error; err == nil {
+				run.JenkinsBuildNumber = buildNum
+				return true
+			}
+		}
+	}
+	// 触发时机参考 started_at（无则回退 created_at）；超窗仍无构建号判定为失败。
+	ref := run.StartedAt
+	if ref == nil {
+		ref = &run.CreatedAt
+	}
+	if ref != nil && time.Since(*ref) > releaseStuckTimeout {
+		now := time.Now()
+		_ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+			Where("id = ? AND jenkins_build_number = 0 AND status = ?", run.ID, model.CicdRunStatusRunning).
+			Updates(map[string]any{
+				"status":      model.CicdRunStatusFailure,
+				"finished_at": now,
+				"updated_at":  now,
+			}).Error
+	}
+	return false
 }

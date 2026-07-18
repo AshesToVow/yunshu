@@ -28,6 +28,15 @@ func TestSQLCreateAgentDiscoveryUniqueIndex(t *testing.T) {
 	}
 }
 
+func TestSQLDropIndexIfExists(t *testing.T) {
+	if got := SQLDropIndexIfExists("postgres", "roles", "idx_roles_name"); !containsAll(got, "DROP INDEX IF EXISTS", "idx_roles_name") {
+		t.Fatalf("postgres drop index SQL: %q", got)
+	}
+	if got := SQLDropIndexIfExists("mysql", "roles", "idx_roles_name"); !containsAll(got, "ALTER TABLE", "`roles`", "DROP INDEX", "`idx_roles_name`") {
+		t.Fatalf("mysql drop index SQL: %q", got)
+	}
+}
+
 func containsAll(s string, parts ...string) bool {
 	for _, p := range parts {
 		if !strings.Contains(s, p) {

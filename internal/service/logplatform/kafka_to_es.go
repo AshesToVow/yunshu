@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"yunshu/internal/config"
+	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/esclient"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl"
@@ -149,13 +151,14 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 	}
 	s.stopConsumer()
 	if len(topics) == 0 {
-		s.setLastError("暂无 Agent Topic（yunshu-agent-{server_id}），请先引导/热更 Agent")
+		s.setLastError("暂无 Agent Topic（yunshu-agent-{ip}-YYYY.MM.DD），请先引导/热更 Agent")
 		s.activeTopics.Store([]string(nil))
 		s.mu.Lock()
 		s.cfgFingerprint = fp
 		s.mu.Unlock()
 		return
 	}
+	s.setLastError("")
 	s.startConsumer(parent, cfg, topics)
 }
 
@@ -169,6 +172,7 @@ func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.Kafk
 	s.mu.Unlock()
 	s.runningFlag.Store(true)
 	s.activeTopics.Store(append([]string(nil), topics...))
+	s.setLastError("")
 	slog.Default().With("component", "kafka-to-es").Info("kafka consumer starting",
 		"group", cfg.ConsumerGroup, "topics", len(topics), "brokers", len(cfg.Brokers))
 
@@ -227,18 +231,31 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 			return
 		}
 		toWrite := append([]kafka.Message(nil), batch...)
-		if err := s.writeBatch(ctx, toWrite, prefix); err != nil {
+		res, err := s.writeBatch(ctx, toWrite, prefix)
+		if err != nil {
+			// 传输级失败（ES 不可达 / 5xx）：不提交、不清空 batch，下轮重试形成背压。
 			s.errorTotal.Add(1)
 			s.setLastError(err.Error())
 			slog.Default().With("component", "kafka-to-es").Warn("bulk write failed", "err", err, "n", len(toWrite))
 			return
 		}
+		// 写入成功（可能含被 ES 拒绝的坏文档）：坏文档重试也无用，好文档已落库；
+		// 必须提交 offset 并清空 batch，否则单条毒消息会让 batch 无限增长（OOM）并永久阻塞该消费组。
+		if res != nil && res.Failed > 0 {
+			s.errorTotal.Add(int64(res.Failed))
+			s.setLastError(fmt.Sprintf("bulk 拒绝 %d 条文档（已跳过）：%s", res.Failed, res.FirstError))
+			slog.Default().With("component", "kafka-to-es").Warn("bulk items rejected; skipping poison docs",
+				"failed", res.Failed, "n", len(toWrite), "sample", res.FirstError)
+		}
 		if err := reader.CommitMessages(ctx, toWrite...); err != nil {
+			// 提交失败：不清空 batch，下轮重写。因文档无固定 _id，重写好文档会产生少量重复，属可接受的 at-least-once。
 			s.errorTotal.Add(1)
 			s.setLastError("commit: " + err.Error())
 			return
 		}
-		s.writtenTotal.Add(int64(len(toWrite)))
+		if written := len(toWrite) - failedCount(res); written > 0 {
+			s.writtenTotal.Add(int64(written))
+		}
 		batch = batch[:0]
 		lastFlush = time.Now()
 	}
@@ -270,10 +287,10 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 	}
 }
 
-func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message, topicPrefix string) error {
+func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message, topicPrefix string) (*esclient.BulkResult, error) {
 	cli, _, err := s.es.Client(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var ndjson strings.Builder
 	for _, m := range msgs {
@@ -290,9 +307,16 @@ func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message,
 		ndjson.WriteByte('\n')
 	}
 	if ndjson.Len() == 0 {
-		return nil
+		return &esclient.BulkResult{}, nil
 	}
 	return cli.Bulk(ctx, []byte(ndjson.String()))
+}
+
+func failedCount(res *esclient.BulkResult) int {
+	if res == nil {
+		return 0
+	}
+	return res.Failed
 }
 
 func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any, string, error) {
@@ -303,11 +327,11 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 	var root map[string]any
 	if err := json.Unmarshal([]byte(s), &root); err != nil {
 		now := time.Now().UTC()
-		serverID, _ := ParseServerIDFromAgentKafkaTopic(topic, topicPrefix)
+		host := resolveHostForIndex(nil, topic, topicPrefix, 0)
 		return map[string]any{
 			"@timestamp": now.Format(time.RFC3339Nano),
 			"message":    s,
-		}, AgentIndexForDay(serverID, now), nil
+		}, resolveIndexName(host, 0, topic, topicPrefix, now), nil
 	}
 
 	doc := map[string]any{}
@@ -329,6 +353,13 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 	if f, ok := doc["fields"].(map[string]any); ok {
 		fields = f
 	}
+	serverHost := strings.TrimSpace(fmt.Sprint(fields["server_host"]))
+	if serverHost == "" || serverHost == "<nil>" {
+		serverHost = strings.TrimSpace(fmt.Sprint(doc["server_host"]))
+		if serverHost == "<nil>" {
+			serverHost = ""
+		}
+	}
 	serverID := parseUintAny(fields["server_id"])
 	if serverID == 0 {
 		serverID = parseUintAny(doc["server_id"])
@@ -337,6 +368,10 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 		if id, ok := ParseServerIDFromAgentKafkaTopic(topic, topicPrefix); ok {
 			serverID = id
 		}
+	}
+	host := resolveHostForIndex(fields, topic, topicPrefix, serverID)
+	if serverHost != "" {
+		host = serverHost
 	}
 	ts := parseTimestampAny(doc["@timestamp"])
 	if ts.IsZero() {
@@ -348,7 +383,39 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 	if _, ok := doc["@timestamp"]; !ok {
 		doc["@timestamp"] = ts.Format(time.RFC3339Nano)
 	}
-	return doc, AgentIndexForDay(serverID, ts), nil
+	return doc, resolveIndexName(host, serverID, topic, topicPrefix, ts), nil
+}
+
+func resolveHostForIndex(fields map[string]any, topic, topicPrefix string, serverID uint) string {
+	if fields != nil {
+		if h := strings.TrimSpace(fmt.Sprint(fields["server_host"])); h != "" && h != "<nil>" {
+			return h
+		}
+	}
+	if key, ok := ParseHostKeyFromAgentName(topic, topicPrefix); ok {
+		return key
+	}
+	if serverID > 0 {
+		return fmt.Sprintf("server-%d", serverID)
+	}
+	return "unknown"
+}
+
+func resolveIndexName(host string, serverID uint, topic, topicPrefix string, ts time.Time) string {
+	host = strings.TrimSpace(host)
+	if host != "" && host != "unknown" && !strings.HasPrefix(host, "server-") {
+		return AgentIndexForDay(host, ts)
+	}
+	if key, ok := ParseHostKeyFromAgentName(topic, topicPrefix); ok {
+		return fmt.Sprintf("%s-%s-%s", defaultAgentIndexPrefix, key, ts.UTC().Format("2006.01.02"))
+	}
+	if serverID > 0 {
+		return AgentIndexForDayByServerID(serverID, ts)
+	}
+	if id, ok := ParseServerIDFromAgentKafkaTopic(topic, topicPrefix); ok {
+		return AgentIndexForDayByServerID(id, ts)
+	}
+	return AgentIndexForDay(host, ts)
 }
 
 func parseUintAny(v any) uint {
@@ -442,7 +509,7 @@ func (s *KafkaToESService) ConfigPreview(ctx context.Context) (*KafkaConfigPrevi
 		Enabled:         cfg.Enabled,
 		Brokers:         cfg.Brokers,
 		TopicPrefix:     cfg.TopicPrefix,
-		TopicExample:    AgentKafkaTopic(1, cfg.TopicPrefix),
+		TopicExample:    AgentKafkaTopicForDay("10.10.10.1", cfg.TopicPrefix, time.Now().UTC()),
 		ConsumerGroup:   cfg.ConsumerGroup,
 		Username:        cfg.Username,
 		HasPassword:     strings.TrimSpace(cfg.Password) != "",
@@ -492,12 +559,12 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 		return out, nil
 	}
 
+	// 始终以 broker 实况为准，避免删除后仍展示内存中的 activeTopics
 	topics := out.Topics
-	if len(topics) == 0 {
-		if listed, err := listAgentKafkaTopics(ctx, cfg); err == nil {
-			topics = listed
-			out.Topics = listed
-		}
+	if listed, err := listAgentKafkaTopics(ctx, cfg); err == nil {
+		topics = listed
+		out.Topics = listed
+		s.activeTopics.Store(append([]string(nil), listed...))
 	}
 
 	lags, lagTotal, lagErr := fetchKafkaLagMulti(ctx, cfg, topics)
@@ -512,12 +579,51 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	out.LagTotal = lagTotal
 	if out.ConsumerRunning {
 		out.Message = fmt.Sprintf("消费组 %s 运行中，订阅 %d 个 Agent Topic", cfg.ConsumerGroup, len(topics))
+		if strings.Contains(out.LastError, "暂无 Agent Topic") {
+			out.LastError = ""
+		}
 	} else if len(topics) == 0 {
-		out.Message = "暂无 Agent Topic，请先引导/热更 Agent（将自动创建 yunshu-agent-{server_id}）"
+		out.Message = "暂无 Agent Topic，请先引导/热更 Agent（将自动创建 yunshu-agent-{ip}-YYYY.MM.DD）"
 	} else {
 		out.Message = "消费者未运行（请确认 ES 已启用）"
+		if strings.Contains(out.LastError, "暂无 Agent Topic") {
+			out.LastError = ""
+		}
 	}
 	return out, nil
+}
+
+// DeleteTopic 删除 Agent Topic。
+func (s *KafkaToESService) DeleteTopic(ctx context.Context, topic string) error {
+	if s == nil || s.kafka == nil {
+		return constants.ErrBadRequestWithMsg("Kafka 未配置")
+	}
+	cfg, err := s.kafka.Resolve(ctx)
+	if err != nil {
+		return err
+	}
+	if !cfg.SinkViaKafka() {
+		return constants.ErrBadRequestWithMsg("Kafka 中转未启用")
+	}
+	topic = strings.TrimSpace(topic)
+	if err := DeleteAgentKafkaTopic(ctx, cfg, topic); err != nil {
+		return constants.ErrBadRequestWithMsg(err.Error())
+	}
+	// 立即从内存订阅列表移除，并强制下次 reconcile 重建消费者
+	if cur, ok := s.activeTopics.Load().([]string); ok {
+		next := make([]string, 0, len(cur))
+		for _, t := range cur {
+			if t != topic {
+				next = append(next, t)
+			}
+		}
+		s.activeTopics.Store(next)
+	}
+	s.mu.Lock()
+	s.cfgFingerprint = ""
+	s.mu.Unlock()
+	s.kafka.InvalidateCache()
+	return nil
 }
 
 func fetchKafkaLagMulti(ctx context.Context, cfg config.KafkaConfig, topics []string) ([]KafkaPartitionLag, int64, error) {
