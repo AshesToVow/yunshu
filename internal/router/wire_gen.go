@@ -47,7 +47,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	alertRuleAssigneeService := alert.NewAlertRuleAssigneeService(v10, v11, v12, v5, v9, v8)
 	v13 := system.NewUserService(v5, v7, v8, syncedEnforcer, v9, alertRuleAssigneeService)
 	v14 := system.NewDepartmentService(v8, v5, alertRuleAssigneeService)
-	v15 := system.NewRoleService(v7, syncedEnforcer)
+	v15 := system.NewRoleService(v7, v5, syncedEnforcer)
 	v16 := routerRouteRepositories.Permission
 	v17 := system.NewPermissionService(v16, syncedEnforcer)
 	v18 := system.NewPolicyService(v7, v16, syncedEnforcer)

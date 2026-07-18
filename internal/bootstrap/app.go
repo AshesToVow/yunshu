@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
@@ -36,10 +37,10 @@ type App struct {
 }
 
 type Builder struct {
-	app                      *App
-	err                      error
-	yamlMailBase             config.MailConfig             // config.yaml 中的 mail 底稿（字典覆盖前）
-	yamlK8sEventForwardBase  config.K8sEventForwardConfig // config.yaml 中的 k8s_event_forward 底稿
+	app                     *App
+	err                     error
+	yamlMailBase            config.MailConfig            // config.yaml 中的 mail 底稿（字典覆盖前）
+	yamlK8sEventForwardBase config.K8sEventForwardConfig // config.yaml 中的 k8s_event_forward 底稿
 }
 
 func NewBuilder() *Builder {
@@ -204,6 +205,19 @@ func (b *Builder) WithCasbin() *Builder {
 	if _, err = enforcer.Enforce("__casbin_smoke__", "/__smoke__", "GET"); err != nil {
 		b.err = fmt.Errorf("casbin enforce smoke test: %w", err)
 		return b
+	}
+
+	// 多副本部署：定时从 DB 重新加载策略，使一台副本的授权变更对其他副本可见。
+	// 未配置（0）时取默认 30s；显式配置为负数表示关闭（适用于单副本）。
+	interval := b.app.Config.Casbin.AutoLoadIntervalSeconds
+	if interval == 0 {
+		interval = 30
+	}
+	if interval > 0 {
+		enforcer.StartAutoLoadPolicy(time.Duration(interval) * time.Second)
+		slog.Default().With("component", "casbin").Info("Started Casbin auto policy reload", "interval_seconds", interval)
+	} else {
+		slog.Default().With("component", "casbin").Info("Casbin auto policy reload disabled")
 	}
 
 	b.app.Enforcer = enforcer

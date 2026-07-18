@@ -57,29 +57,14 @@ func ShouldEvalCloudExpiryByCron(spec string, last time.Time, hasLast bool, now 
 func (s *CloudExpiryRuleService) List(ctx context.Context, q CloudExpiryRuleListQuery) ([]model.CloudExpiryRule, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	kw := strings.TrimSpace(q.Keyword)
-	list, total, err := s.repo.List(ctx, kw, (page-1)*pageSize, pageSize)
+	var projectID uint
+	if q.ProjectID != nil && *q.ProjectID > 0 {
+		projectID = *q.ProjectID
+	}
+	// 项目/云厂商过滤下推到 SQL：此前在分页后于内存过滤，会导致 total 失真、跨页数据丢失。
+	list, total, err := s.repo.List(ctx, kw, strings.TrimSpace(q.Provider), projectID, (page-1)*pageSize, pageSize)
 	if err != nil {
 		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.cloud-expiry", "List", err)
-	}
-	if q.ProjectID != nil && *q.ProjectID > 0 {
-		filtered := make([]model.CloudExpiryRule, 0, len(list))
-		for _, row := range list {
-			if row.ProjectID == *q.ProjectID {
-				filtered = append(filtered, row)
-			}
-		}
-		list = filtered
-		total = int64(len(filtered))
-	}
-	if p := strings.TrimSpace(q.Provider); p != "" {
-		filtered := make([]model.CloudExpiryRule, 0, len(list))
-		for _, row := range list {
-			if strings.TrimSpace(row.Provider) == p {
-				filtered = append(filtered, row)
-			}
-		}
-		list = filtered
-		total = int64(len(filtered))
 	}
 	return list, total, page, pageSize, nil
 }

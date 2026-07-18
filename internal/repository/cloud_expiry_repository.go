@@ -17,12 +17,18 @@ func NewCloudExpiryRuleRepository(db *gorm.DB) CloudExpiryRuleRepo {
 	return &CloudExpiryRuleRepository{db: db}
 }
 
-func (r *CloudExpiryRuleRepository) List(ctx context.Context, keyword string, offset, limit int) ([]model.CloudExpiryRule, int64, error) {
+func (r *CloudExpiryRuleRepository) List(ctx context.Context, keyword, provider string, projectID uint, offset, limit int) ([]model.CloudExpiryRule, int64, error) {
 	tx := r.db.WithContext(ctx).Model(&model.CloudExpiryRule{}).
 		Select("cloud_expiry_rules.*, p.name AS project_name").
 		Joins("LEFT JOIN projects p ON p.id = cloud_expiry_rules.project_id AND p.deleted_at IS NULL")
 	if kw := strings.TrimSpace(keyword); kw != "" {
 		tx = tx.Where("cloud_expiry_rules.name LIKE ? OR cloud_expiry_rules.region_scope LIKE ?", "%"+kw+"%", "%"+kw+"%")
+	}
+	if projectID > 0 {
+		tx = tx.Where("cloud_expiry_rules.project_id = ?", projectID)
+	}
+	if p := strings.TrimSpace(provider); p != "" {
+		tx = tx.Where("cloud_expiry_rules.provider = ?", p)
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

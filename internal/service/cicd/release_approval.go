@@ -243,20 +243,35 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 		return fmt.Errorf("trigger jenkins release: %w", err)
 	}
 
+	// Jenkins 构建已触发。以下状态持久化必须与请求上下文解耦：
+	// 若沿用 ctx，客户端/网关超时取消请求会导致构建号乃至 running 状态写不进库，
+	// 而 Jenkins 侧任务照常执行，工单将永久卡在旧状态。用后台 ctx 先落库，
+	// 并存下 queue_url 供同步/补偿流程后续解析构建号。
+	persistCtx := context.WithoutCancel(ctx)
 	now := time.Now()
 	updates := map[string]any{
-		"status":       model.CicdRunStatusRunning,
-		"params_json":  ParamsJSON(params),
-		"started_at":   now,
+		"status":        model.CicdRunStatusRunning,
+		"params_json":   ParamsJSON(params),
+		"started_at":    now,
 		"image_address": p.imageAddress,
 		"artifact_name": p.artifactName,
+		"jenkins_queue_url": strings.TrimSpace(queuePath),
 	}
+	if err := s.db.WithContext(persistCtx).Model(release).Updates(updates).Error; err != nil {
+		return err
+	}
+	// 尽力而为地立即解析构建号；失败/超时不影响工单状态，
+	// 交由 RunSyncWorker 通过 queue_url 补偿（见 recoverReleaseBuildNumber）。
 	if buildNum, err := client.ResolveQueueBuildNumber(ctx, queuePath, lastNum, 90*time.Second); err == nil && buildNum > 0 {
-		updates["jenkins_build_number"] = buildNum
-		updates["jenkins_build_url"] = client.BuildURL(p.svc.JenkinsJob, buildNum)
+		_ = s.db.WithContext(persistCtx).Model(&model.CicdReleaseRun{}).
+			Where("id = ? AND jenkins_build_number = 0", release.ID).
+			Updates(map[string]any{
+				"jenkins_build_number": buildNum,
+				"jenkins_build_url":    client.BuildURL(p.svc.JenkinsJob, buildNum),
+			}).Error
 	}
 	_ = executorUserID
-	return s.db.WithContext(ctx).Model(release).Updates(updates).Error
+	return nil
 }
 
 type ReviewReleaseRequest struct {
@@ -274,6 +289,33 @@ func (s *Service) hasApprovalSteps(ctx context.Context, releaseRunID uint) (bool
 	return n > 0, err
 }
 
+// transitionReleaseStatus 以期望状态为条件原子推进工单状态，返回本次是否抢到转换。
+// 工单表无乐观锁列，靠 WHERE status 条件 + RowsAffected 防止并发审批/执行/终止重复推进。
+func (s *Service) transitionReleaseStatus(ctx context.Context, runID uint, fromStatus string, updates map[string]any) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+		Where("id = ? AND status = ?", runID, fromStatus).
+		Updates(updates)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// claimApprovalStep 以 pending 为条件原子占用审批节点，返回本次是否抢到。
+// 同一节点的 approve / reject 并发时，只有一方成功，另一方视为已被处理。
+func (s *Service) claimApprovalStep(ctx context.Context, stepID uint, updates map[string]any) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
+		Where("id = ? AND status = ?", stepID, model.CicdApprovalStepPending).
+		Updates(updates)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// errReleaseConflict 并发状态流转冲突：本次调用未抢到转换（已被他人处理）。
+var errReleaseConflict = constants.ErrBadRequestWithMsg("工单状态已变更，请刷新后重试")
+
 func (s *Service) approveLegacySingleStep(ctx context.Context, release *model.CicdReleaseRun, runID uint, reviewerUserID *uint, reviewerName, comment string) (*model.CicdReleaseRun, error) {
 	now := time.Now()
 	updates := map[string]any{
@@ -284,8 +326,12 @@ func (s *Service) approveLegacySingleStep(ctx context.Context, release *model.Ci
 		"reviewed_at":      now,
 		"current_stage_key": "",
 	}
-	if err := s.db.WithContext(ctx).Model(release).Updates(updates).Error; err != nil {
+	ok, err := s.transitionReleaseStatus(ctx, runID, model.CicdRunStatusPendingApproval, updates)
+	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return nil, errReleaseConflict
 	}
 	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(release).Error; err != nil {
 		return nil, err
@@ -323,15 +369,20 @@ func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, 
 		return nil, constants.ErrBadRequestWithMsg("您不是当前审批节点的审批人")
 	}
 	now := time.Now()
-	if err := s.db.WithContext(ctx).Model(step).Updates(map[string]any{
+	claimed, err := s.claimApprovalStep(ctx, step.ID, map[string]any{
 		"status":           model.CicdApprovalStepApproved,
 		"reviewer_user_id": reviewerUserID,
 		"reviewer_name":    strings.TrimSpace(reviewerName),
 		"review_comment":   strings.TrimSpace(comment),
 		"reviewed_at":      now,
-	}).Error; err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
+	if !claimed {
+		return nil, errReleaseConflict
+	}
+	step.Status = model.CicdApprovalStepApproved
 	if err := s.advanceReleaseAfterApproval(ctx, &release, step); err != nil {
 		return nil, err
 	}
@@ -363,8 +414,12 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, r
 			"reviewed_at":      now,
 			"finished_at":      now,
 		}
-		if err := s.db.WithContext(ctx).Model(&release).Updates(updates).Error; err != nil {
+		ok, err := s.transitionReleaseStatus(ctx, runID, model.CicdRunStatusPendingApproval, updates)
+		if err != nil {
 			return nil, err
+		}
+		if !ok {
+			return nil, errReleaseConflict
 		}
 		if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
 			return nil, err
@@ -386,14 +441,18 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, r
 		return nil, constants.ErrBadRequestWithMsg("您不是当前审批节点的审批人")
 	}
 	now := time.Now()
-	if err := s.db.WithContext(ctx).Model(step).Updates(map[string]any{
+	claimed, err := s.claimApprovalStep(ctx, step.ID, map[string]any{
 		"status":           model.CicdApprovalStepRejected,
 		"reviewer_user_id": reviewerUserID,
 		"reviewer_name":    strings.TrimSpace(reviewerName),
 		"review_comment":   strings.TrimSpace(comment),
 		"reviewed_at":      now,
-	}).Error; err != nil {
+	})
+	if err != nil {
 		return nil, err
+	}
+	if !claimed {
+		return nil, errReleaseConflict
 	}
 	updates := map[string]any{
 		"status":            model.CicdRunStatusRejected,
@@ -424,7 +483,21 @@ func (s *Service) ExecuteReleaseRun(ctx context.Context, projectID, runID uint, 
 	if executorUserID == nil || release.SubmitterUserID == nil || *executorUserID != *release.SubmitterUserID {
 		return nil, constants.ErrBadRequestWithMsg("仅提交人可执行发布")
 	}
+	// 触发 Jenkins 前先原子占用（pending_execution -> running），防止并发/重复点击重复触发构建。
+	claimed, err := s.transitionReleaseStatus(ctx, runID, model.CicdRunStatusPendingExecution, map[string]any{
+		"status": model.CicdRunStatusRunning,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !claimed {
+		return nil, errReleaseConflict
+	}
 	if err := s.executeReleaseRun(ctx, &release, executorUserID); err != nil {
+		// 触发失败：回退到待执行，允许提交人重试（executeReleaseRun 尚未成功触发构建）。
+		_, _ = s.transitionReleaseStatus(context.WithoutCancel(ctx), runID, model.CicdRunStatusRunning, map[string]any{
+			"status": model.CicdRunStatusPendingExecution,
+		})
 		return nil, err
 	}
 	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
@@ -453,8 +526,12 @@ func (s *Service) TerminateReleaseRun(ctx context.Context, projectID, runID uint
 		"reviewed_at":      now,
 		"finished_at":      now,
 	}
-	if err := s.db.WithContext(ctx).Model(&release).Updates(updates).Error; err != nil {
+	ok, err := s.transitionReleaseStatus(ctx, runID, model.CicdRunStatusPendingExecution, updates)
+	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return nil, errReleaseConflict
 	}
 	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
 		return nil, err

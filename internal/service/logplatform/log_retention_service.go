@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -306,54 +307,12 @@ func (s *LogRetentionService) cleanupPolicy(ctx context.Context, cli *esclient.C
 		return nil, bizerrors.Pass(ctx, "logretention", "cleanupPolicy", err)
 	}
 	res := &LogRetentionCleanupResult{}
-	dated := 0
-	for _, idx := range indices {
-		dt, ok := esclient.ParseIndexDate(idx.Name)
-		if !ok {
-			continue
+	toDelete, dated := planIndexDeletions(indices, cutoff, p.MaxIndexCount, p.MaxStoreBytes)
+	for _, name := range toDelete {
+		if err := cli.DeleteIndex(ctx, name); err != nil {
+			return nil, bizerrors.Pass(ctx, "logretention", "DeleteIndex", err)
 		}
-		dated++
-		if dt.Before(cutoff) {
-			if err := cli.DeleteIndex(ctx, idx.Name); err != nil {
-				return nil, bizerrors.Pass(ctx, "logretention", "DeleteIndex", err)
-			}
-			res.DeletedIndices = append(res.DeletedIndices, idx.Name)
-		}
-	}
-	if p.MaxIndexCount > 0 && len(indices) > p.MaxIndexCount {
-		sortable := make([]esclient.IndexInfo, 0, len(indices))
-		for _, idx := range indices {
-			if dt, ok := esclient.ParseIndexDate(idx.Name); ok {
-				_ = dt
-				sortable = append(sortable, idx)
-			}
-		}
-		excess := len(sortable) - p.MaxIndexCount
-		for i := 0; i < excess && i < len(sortable); i++ {
-			name := sortable[i].Name
-			if err := cli.DeleteIndex(ctx, name); err != nil {
-				return nil, err
-			}
-			res.DeletedIndices = append(res.DeletedIndices, name)
-		}
-	}
-	if p.MaxStoreBytes > 0 {
-		var total int64
-		for _, idx := range indices {
-			total += idx.StoreBytes
-		}
-		if total > p.MaxStoreBytes {
-			for _, idx := range indices {
-				if total <= p.MaxStoreBytes {
-					break
-				}
-				if err := cli.DeleteIndex(ctx, idx.Name); err != nil {
-					return nil, err
-				}
-				total -= idx.StoreBytes
-				res.DeletedIndices = append(res.DeletedIndices, idx.Name)
-			}
-		}
+		res.DeletedIndices = append(res.DeletedIndices, name)
 	}
 	if dated == 0 && len(indices) > 0 {
 		query := map[string]any{
@@ -386,6 +345,76 @@ func (s *LogRetentionService) cleanupPolicy(ctx context.Context, cli *esclient.C
 		res.DeletedDocuments += deleted
 	}
 	return res, nil
+}
+
+// planIndexDeletions 计算需删除的索引名（保序，可直接顺序删除）。
+// 规则依次叠加：① 早于 cutoff 的过期索引；② 超过 maxIndexCount 时淘汰最旧的多余索引；
+// ③ 超过 maxStoreBytes 时从最旧开始淘汰直到低于阈值。
+// 超量/超容淘汰只作用于带日期后缀的索引，且按日期升序（最旧优先），
+// 避免此前「按 _cat 返回顺序删除」误删最新日志。dated 返回带日期索引总数。
+func planIndexDeletions(indices []esclient.IndexInfo, cutoff time.Time, maxIndexCount int, maxStoreBytes int64) (names []string, dated int) {
+	deleted := make(map[string]bool, len(indices))
+	drop := func(name string) {
+		if deleted[name] {
+			return
+		}
+		deleted[name] = true
+		names = append(names, name)
+	}
+
+	// 1) 保留天数
+	for _, idx := range indices {
+		dt, ok := esclient.ParseIndexDate(idx.Name)
+		if !ok {
+			continue
+		}
+		dated++
+		if dt.Before(cutoff) {
+			drop(idx.Name)
+		}
+	}
+
+	// 剩余带日期索引，按日期升序（最旧在前）
+	remaining := make([]esclient.IndexInfo, 0, len(indices))
+	for _, idx := range indices {
+		if deleted[idx.Name] {
+			continue
+		}
+		if _, ok := esclient.ParseIndexDate(idx.Name); !ok {
+			continue
+		}
+		remaining = append(remaining, idx)
+	}
+	sort.Slice(remaining, func(i, j int) bool {
+		di, _ := esclient.ParseIndexDate(remaining[i].Name)
+		dj, _ := esclient.ParseIndexDate(remaining[j].Name)
+		return di.Before(dj)
+	})
+
+	// 2) 最大索引数
+	if maxIndexCount > 0 && len(remaining) > maxIndexCount {
+		excess := len(remaining) - maxIndexCount
+		for i := 0; i < excess; i++ {
+			drop(remaining[i].Name)
+		}
+		remaining = remaining[excess:]
+	}
+
+	// 3) 最大存储
+	if maxStoreBytes > 0 {
+		var total int64
+		for _, idx := range remaining {
+			total += idx.StoreBytes
+		}
+		for _, idx := range remaining {
+			if total <= maxStoreBytes {
+				break
+			}
+			drop(idx.Name)
+			total -= idx.StoreBytes
+		}
+	}
+	return names, dated
 }
 
 func (s *LogRetentionService) getByScope(ctx context.Context, projectID, serverID uint) (LogRetentionItem, error) {

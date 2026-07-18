@@ -80,28 +80,53 @@ func (c *Client) CatIndices(ctx context.Context, indexPattern string) ([]IndexIn
 	return out, nil
 }
 
-func (c *Client) Bulk(ctx context.Context, ndjson []byte) error {
+// BulkResult 描述一次 _bulk 请求的结果。区分「传输级失败」（返回 error，调用方应重试）
+// 与「单条文档失败」（Failed>0，好文档已成功写入，坏文档重试也无用，调用方应记录并跳过）。
+type BulkResult struct {
+	Failed     int    // 被 ES 拒绝的文档数（映射冲突等）
+	FirstError string // 首条失败原因样本，便于定位
+}
+
+func (c *Client) Bulk(ctx context.Context, ndjson []byte) (*BulkResult, error) {
 	if c == nil {
-		return fmt.Errorf("elasticsearch client nil")
+		return nil, fmt.Errorf("elasticsearch client nil")
 	}
 	if len(ndjson) == 0 {
-		return nil
+		return &BulkResult{}, nil
 	}
 	raw, status, err := c.doRequest(ctx, http.MethodPost, "/_bulk", ndjson)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if status >= 300 {
-		return fmt.Errorf("elasticsearch bulk failed: status=%d body=%s", status, truncate(string(raw), 512))
+		return nil, fmt.Errorf("elasticsearch bulk failed: status=%d body=%s", status, truncate(string(raw), 512))
 	}
-	var out map[string]any
+	var out struct {
+		Errors bool `json:"errors"`
+		Items  []map[string]struct {
+			Status int             `json:"status"`
+			Error  json.RawMessage `json:"error"`
+		} `json:"items"`
+	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil
+		// 响应无法解析：请求已成功（status<300），视为已写入，避免误重试导致重复。
+		return &BulkResult{}, nil
 	}
-	if errors, ok := out["errors"].(bool); ok && errors {
-		return fmt.Errorf("elasticsearch bulk has item errors: %s", truncate(string(raw), 512))
+	res := &BulkResult{}
+	if !out.Errors {
+		return res, nil
 	}
-	return nil
+	for _, item := range out.Items {
+		for _, action := range item {
+			if action.Status >= 300 || len(action.Error) > 0 {
+				res.Failed++
+				if res.FirstError == "" && len(action.Error) > 0 {
+					res.FirstError = truncate(string(action.Error), 300)
+				}
+			}
+		}
+	}
+	return res, nil
 }
 
 func (c *Client) DeleteIndex(ctx context.Context, index string) error {

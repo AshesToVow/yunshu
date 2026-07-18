@@ -8,7 +8,7 @@ import (
 
 // CloudExpiryRuleRepo persists cloud expiry evaluation rules.
 type CloudExpiryRuleRepo interface {
-	List(ctx context.Context, keyword string, offset, limit int) ([]model.CloudExpiryRule, int64, error)
+	List(ctx context.Context, keyword, provider string, projectID uint, offset, limit int) ([]model.CloudExpiryRule, int64, error)
 	Create(ctx context.Context, row *model.CloudExpiryRule) error
 	GetByID(ctx context.Context, id uint) (*model.CloudExpiryRule, error)
 	Save(ctx context.Context, row *model.CloudExpiryRule) error

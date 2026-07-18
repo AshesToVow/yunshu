@@ -71,13 +71,21 @@ func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepo
 				groupCodes = append(groupCodes, c)
 			}
 		}
+		// 仅暴露启用中的角色编码：禁用角色不得参与鉴权与菜单过滤。
+		enabledRoles := make([]model.Role, 0, len(user.Roles))
+		for _, r := range user.Roles {
+			if r.Status == model.StatusDisabled {
+				continue
+			}
+			enabledRoles = append(enabledRoles, r)
+		}
 		currentUser := &auth.CurrentUser{
 			ID:           user.ID,
 			Username:     user.Username,
 			Nickname:     user.Nickname,
 			Status:       user.Status,
 			DepartmentID: user.DepartmentID,
-			RoleCodes:    model.ExtractRoleCodes(user.Roles),
+			RoleCodes:    model.ExtractRoleCodes(enabledRoles),
 			GroupCodes:   groupCodes,
 		}
 

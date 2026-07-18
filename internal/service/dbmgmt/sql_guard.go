@@ -34,11 +34,13 @@ var (
 		regexp.MustCompile(`(?i)\bCREATE\s+INDEX\b`),
 		regexp.MustCompile(`(?i)\bDROP\s+INDEX\b`),
 		regexp.MustCompile(`(?i)\bTRUNCATE\b`),
-		regexp.MustCompile(`(?i)\bDELETE\s+FROM\b[^;]*\bWHERE\b\s*($|;)`),
-		regexp.MustCompile(`(?i)\bUPDATE\b[^;]*\bSET\b[^;]*\bWHERE\b\s*($|;)`),
 	}
 	reDML = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE)\b`)
 	reDDL = regexp.MustCompile(`(?i)\b(CREATE|ALTER|DROP|TRUNCATE|RENAME)\b`)
+	// 无 WHERE 的 DELETE/UPDATE 会影响全表，风险高于带条件的定向写。
+	reDeleteStmt = regexp.MustCompile(`(?i)^\s*DELETE\s+FROM\b`)
+	reUpdateStmt = regexp.MustCompile(`(?i)^\s*UPDATE\b`)
+	reHasWhere   = regexp.MustCompile(`(?i)\bWHERE\b`)
 	reRead  = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b`)
 	// goInception 备份库命名：host(点改下划线)_port_原库名，如 10_10_10_103_3306_test
 	reGoInceptionBackupDB = regexp.MustCompile(`^\d{1,3}(?:_\d{1,3}){3}_\d+_.+`)
@@ -147,6 +149,10 @@ func assessSQLSingle(text string, prodEnv bool) SQLAssessment {
 		if re.MatchString(text) {
 			return SQLAssessment{RiskLevel: model.DbRiskHigh, Ops: ops}
 		}
+	}
+	// 无 WHERE 的 DELETE/UPDATE 影响全表，判为高危。
+	if (reDeleteStmt.MatchString(text) || reUpdateStmt.MatchString(text)) && !reHasWhere.MatchString(text) {
+		return SQLAssessment{RiskLevel: model.DbRiskHigh, Ops: ops, Reason: "缺少 WHERE 条件，将影响全表"}
 	}
 	if reDDL.MatchString(text) {
 		return SQLAssessment{RiskLevel: model.DbRiskHigh, Ops: ops}

@@ -133,6 +133,8 @@ auth:
 
 casbin:
   model_path: configs/casbin_model.conf
+  # 多副本部署时定时从 DB 重新加载策略的间隔（秒）。0=默认30s，负数=关闭（单副本）。
+  auto_load_interval_seconds: 30
 
 swagger:
   enabled: true

@@ -17,13 +17,15 @@ import (
 
 type RoleService struct {
 	roleRepo interfaces.RoleRepository
+	userRepo interfaces.UserRepository
 	enforcer *casbin.SyncedEnforcer
 }
 
 // NewRoleService 创建相关逻辑。
-func NewRoleService(roleRepo interfaces.RoleRepository, enforcer *casbin.SyncedEnforcer) *RoleService {
+func NewRoleService(roleRepo interfaces.RoleRepository, userRepo interfaces.UserRepository, enforcer *casbin.SyncedEnforcer) *RoleService {
 	return &RoleService{
 		roleRepo: roleRepo,
+		userRepo: userRepo,
 		enforcer: enforcer,
 	}
 }
@@ -59,6 +61,7 @@ func (s *RoleService) Update(ctx context.Context, id uint, req RoleUpdateRequest
 	}
 
 	oldCode := role.Code
+	oldStatus := role.Status
 	if req.Name != nil {
 		role.Name = *req.Name
 	}
@@ -78,8 +81,27 @@ func (s *RoleService) Update(ctx context.Context, id uint, req RoleUpdateRequest
 	if err = ReplaceRoleCode(s.enforcer, oldCode, role.Code); err != nil {
 		return nil, bizerrors.Pass(ctx, "role", "Update", err)
 	}
+	// 状态切换即时生效：禁用移除 user→role 分组，启用按 DB 绑定补回。
+	if err = s.applyStatusTransition(ctx, role.Code, oldStatus, role.Status); err != nil {
+		return nil, bizerrors.Pass(ctx, "role", "Update", err)
+	}
 	response := NewRoleItem(*role)
 	return &response, nil
+}
+
+// applyStatusTransition 在角色启用/禁用状态发生变化时同步 Casbin user→role 分组。
+func (s *RoleService) applyStatusTransition(ctx context.Context, roleCode string, oldStatus, newStatus int) error {
+	if oldStatus == newStatus {
+		return nil
+	}
+	if newStatus == model.StatusDisabled {
+		return DisableRoleGroupings(s.enforcer, roleCode)
+	}
+	userIDs, err := s.userRepo.ListUserIDsByRoleCode(ctx, roleCode)
+	if err != nil {
+		return err
+	}
+	return EnableRoleGroupings(s.enforcer, roleCode, userIDs)
 }
 
 // Delete 删除相关的业务逻辑。

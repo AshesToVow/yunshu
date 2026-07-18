@@ -13,6 +13,7 @@ import (
 
 	"yunshu/internal/config"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/esclient"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl"
@@ -230,18 +231,31 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 			return
 		}
 		toWrite := append([]kafka.Message(nil), batch...)
-		if err := s.writeBatch(ctx, toWrite, prefix); err != nil {
+		res, err := s.writeBatch(ctx, toWrite, prefix)
+		if err != nil {
+			// 传输级失败（ES 不可达 / 5xx）：不提交、不清空 batch，下轮重试形成背压。
 			s.errorTotal.Add(1)
 			s.setLastError(err.Error())
 			slog.Default().With("component", "kafka-to-es").Warn("bulk write failed", "err", err, "n", len(toWrite))
 			return
 		}
+		// 写入成功（可能含被 ES 拒绝的坏文档）：坏文档重试也无用，好文档已落库；
+		// 必须提交 offset 并清空 batch，否则单条毒消息会让 batch 无限增长（OOM）并永久阻塞该消费组。
+		if res != nil && res.Failed > 0 {
+			s.errorTotal.Add(int64(res.Failed))
+			s.setLastError(fmt.Sprintf("bulk 拒绝 %d 条文档（已跳过）：%s", res.Failed, res.FirstError))
+			slog.Default().With("component", "kafka-to-es").Warn("bulk items rejected; skipping poison docs",
+				"failed", res.Failed, "n", len(toWrite), "sample", res.FirstError)
+		}
 		if err := reader.CommitMessages(ctx, toWrite...); err != nil {
+			// 提交失败：不清空 batch，下轮重写。因文档无固定 _id，重写好文档会产生少量重复，属可接受的 at-least-once。
 			s.errorTotal.Add(1)
 			s.setLastError("commit: " + err.Error())
 			return
 		}
-		s.writtenTotal.Add(int64(len(toWrite)))
+		if written := len(toWrite) - failedCount(res); written > 0 {
+			s.writtenTotal.Add(int64(written))
+		}
 		batch = batch[:0]
 		lastFlush = time.Now()
 	}
@@ -273,10 +287,10 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 	}
 }
 
-func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message, topicPrefix string) error {
+func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message, topicPrefix string) (*esclient.BulkResult, error) {
 	cli, _, err := s.es.Client(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var ndjson strings.Builder
 	for _, m := range msgs {
@@ -293,9 +307,16 @@ func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message,
 		ndjson.WriteByte('\n')
 	}
 	if ndjson.Len() == 0 {
-		return nil
+		return &esclient.BulkResult{}, nil
 	}
 	return cli.Bulk(ctx, []byte(ndjson.String()))
+}
+
+func failedCount(res *esclient.BulkResult) int {
+	if res == nil {
+		return 0
+	}
+	return res.Failed
 }
 
 func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any, string, error) {

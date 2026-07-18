@@ -196,6 +196,7 @@ type CicdReleaseRun struct {
 	ReviewedAt         *time.Time     `json:"reviewed_at,omitempty"`
 	JenkinsBuildNumber int            `json:"jenkins_build_number"`
 	JenkinsBuildURL    string         `json:"jenkins_build_url" gorm:"size:512"`
+	JenkinsQueueURL    string         `json:"jenkins_queue_url" gorm:"size:512;comment:Jenkins 队列项路径，构建号未落库前用于异步补偿"`
 	ParamsJSON         string         `json:"params_json" gorm:"type:text"`
 	StartedAt          *time.Time     `json:"started_at,omitempty"`
 	FinishedAt         *time.Time     `json:"finished_at,omitempty"`

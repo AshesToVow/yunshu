@@ -94,6 +94,7 @@ var (
 	ErrCaptchaInvalidOrExpired = BizError(http.StatusUnauthorized, 20011, "验证码无效或已过期，请重新获取")
 	ErrUsernameTaken           = BizError(http.StatusConflict, 20012, "用户名已被占用，请更换后重试")
 	ErrCaptchaCoolingDown      = BizError(http.StatusConflict, 20013, "图形验证码刷新过于频繁，请稍后再试")
+	ErrLoginTooManyAttempts    = BizError(http.StatusTooManyRequests, 20014, "密码错误次数过多，账号已被临时锁定，请稍后再试")
 )
 
 // —— 日志采集 Agent 21xxx ——
@@ -113,28 +114,30 @@ var (
 
 // —— 项目与日志源 23xxx ——
 var (
-	ErrProjectNotFound             = BizError(http.StatusNotFound, 23001, "项目不存在或已被删除")
-	ErrLogSourceServerNotFound     = BizError(http.StatusNotFound, 23002, "日志源服务器不存在或已移除")
-	ErrServerNotInCurrentProject   = BizError(http.StatusBadRequest, 23003, "该服务器不属于当前项目，请切换项目后再操作")
-	ErrServerProjectMismatch       = BizError(http.StatusBadRequest, 23004, "项目与日志源归属不一致，请刷新后重试")
-	ErrProjectIDRequired           = BizError(http.StatusBadRequest, 23005, "缺少项目标识（project_id），请补充后重试")
-	ErrNameRequired                = BizError(http.StatusBadRequest, 23006, "名称不能为空，请填写后提交")
-	ErrUploadFailed                = BizError(http.StatusBadRequest, 23007, "文件上传失败，请检查网络或文件大小后重试")
-	ErrServerNotInProject          = BizError(http.StatusBadRequest, 23008, "该服务器不在当前项目中，请刷新或切换范围后重试")
-	ErrServerNotInProjectForbidden = BizError(http.StatusForbidden, 23009, "该服务器不在当前项目中，当前账号无权访问")
+	ErrProjectNotFound               = BizError(http.StatusNotFound, 23001, "项目不存在或已被删除")
+	ErrLogSourceServerNotFound       = BizError(http.StatusNotFound, 23002, "日志源服务器不存在或已移除")
+	ErrServerNotInCurrentProject     = BizError(http.StatusBadRequest, 23003, "该服务器不属于当前项目，请切换项目后再操作")
+	ErrServerProjectMismatch         = BizError(http.StatusBadRequest, 23004, "项目与日志源归属不一致，请刷新后重试")
+	ErrProjectIDRequired             = BizError(http.StatusBadRequest, 23005, "缺少项目标识（project_id），请补充后重试")
+	ErrNameRequired                  = BizError(http.StatusBadRequest, 23006, "名称不能为空，请填写后提交")
+	ErrUploadFailed                  = BizError(http.StatusBadRequest, 23007, "文件上传失败，请检查网络或文件大小后重试")
+	ErrServerNotInProject            = BizError(http.StatusBadRequest, 23008, "该服务器不在当前项目中，请刷新或切换范围后重试")
+	ErrServerNotInProjectForbidden   = BizError(http.StatusForbidden, 23009, "该服务器不在当前项目中，当前账号无权访问")
 	ErrProjectMemberRequired         = BizError(http.StatusForbidden, 23010, "您不是该项目的成员，无权访问或操作该项目资源")
 	ErrProjectAdminRequired          = BizError(http.StatusForbidden, 23011, "该操作需要项目管理员或负责人权限")
 	ErrProjectReadonlyMember         = BizError(http.StatusForbidden, 23012, "项目只读成员不能执行此修改类操作")
-	ErrK8sClusterProjectAccessDenied  = BizError(http.StatusForbidden, 23013, "该集群已绑定到其他业务项目，当前账号不在允许范围内")
+	ErrK8sClusterProjectAccessDenied = BizError(http.StatusForbidden, 23013, "该集群已绑定到其他业务项目，当前账号不在允许范围内")
 )
 
 // —— RBAC / 组织 24xxx ——
 var (
-	ErrRoleNotFound       = BizError(http.StatusNotFound, 24001, "角色不存在或已删除")
-	ErrUserGroupNotFound  = BizError(http.StatusNotFound, 24002, "用户组不存在或已删除")
-	ErrPermissionNotFound = BizError(http.StatusNotFound, 24005, "权限项不存在或已变更")
-	ErrMenuNotFound       = BizError(http.StatusNotFound, 24003, "菜单不存在或已下线")
-	ErrDepartmentNotFound = BizError(http.StatusNotFound, 24004, "部门不存在或已撤销")
+	ErrRoleNotFound         = BizError(http.StatusNotFound, 24001, "角色不存在或已删除")
+	ErrUserGroupNotFound    = BizError(http.StatusNotFound, 24002, "用户组不存在或已删除")
+	ErrPermissionNotFound   = BizError(http.StatusNotFound, 24005, "权限项不存在或已变更")
+	ErrMenuNotFound         = BizError(http.StatusNotFound, 24003, "菜单不存在或已下线")
+	ErrDepartmentNotFound   = BizError(http.StatusNotFound, 24004, "部门不存在或已撤销")
+	ErrPolicyAlreadyGranted = BizError(http.StatusConflict, 24006, "该角色已拥有此权限，请勿重复授权")
+	ErrPolicyNotGranted     = BizError(http.StatusNotFound, 24007, "该角色未拥有此权限，无需回收")
 )
 
 // —— 自助注册 25xxx ——

@@ -16,7 +16,54 @@ func bootstrapPreMigrate(db *gorm.DB) error {
 	if err := dropDictEntriesLegacyCompositeIndex(db); err != nil {
 		return err
 	}
+	if err := dropLegacyRoleUniqueIndexes(db); err != nil {
+		return err
+	}
+	if err := dropLegacyPermissionUniqueIndex(db); err != nil {
+		return err
+	}
 	return cleanupDictEntriesDuplicatesOnBoot(db)
+}
+
+// dropLegacyRoleUniqueIndexes 删除不含 deleted_at 的旧唯一索引，使 AutoMigrate 重建为软删除友好的复合索引。
+func dropLegacyRoleUniqueIndexes(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&model.Role{}) {
+		return nil
+	}
+	for _, idx := range []string{"idx_roles_name", "idx_roles_code"} {
+		if err := dropIndexIfPresent(db, "roles", idx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dropLegacyPermissionUniqueIndex 删除旧的两列 idx_resource_action，使其重建为含 deleted_at 的复合索引。
+func dropLegacyPermissionUniqueIndex(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&model.Permission{}) {
+		return nil
+	}
+	// 仅当旧索引不含 deleted_at 时才需重建：无法在此廉价判定列组成，直接尝试删除，AutoMigrate 会按新定义补回。
+	return dropIndexIfPresent(db, "permissions", "idx_resource_action")
+}
+
+func dropIndexIfPresent(db *gorm.DB, table, index string) error {
+	dialect := database.DialectName(db)
+	if dialect != "mysql" && dialect != "postgres" {
+		return nil
+	}
+	if !db.Migrator().HasIndex(table, index) {
+		return nil
+	}
+	err := db.Exec(database.SQLDropIndexIfExists(dialect, table, index)).Error
+	if err == nil {
+		return nil
+	}
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "1091") || strings.Contains(msg, "check that it exists") || strings.Contains(msg, "does not exist") {
+		return nil
+	}
+	return err
 }
 
 func bootstrapPostMigrateCore(db *gorm.DB) error {
