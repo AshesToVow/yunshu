@@ -44,7 +44,7 @@ export function AlertMonitorLayout() {
         ]}
       />
       <Card className="table-card" loading={ctx.loading}>
-        <Space style={{ marginBottom: 12 }} wrap>
+        <Space className="ops-filter-bar" style={{ marginBottom: 12 }} wrap>
           <Typography.Text type="secondary">全局项目上下文</Typography.Text>
           <Select
             style={{ minWidth: 280 }}

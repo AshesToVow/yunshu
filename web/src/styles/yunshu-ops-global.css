@@ -527,6 +527,157 @@ body {
   color: var(--admin-accent, var(--ys-brand));
 }
 
+/* ── Viewport / shell containment (prevent right-edge overflow at 100% zoom) ── */
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.admin-shell.ops-platform.ant-layout {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+/* 右侧主栏：flex 子项默认 min-width:auto 会把宽表/工具栏撑出视口 */
+.admin-shell.ops-platform > .admin-main.ant-layout,
+.admin-shell.ops-platform > .ant-layout:not(.admin-sider) {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-shell.ops-platform .admin-header.ant-layout-header {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  gap: 12px;
+}
+
+.admin-shell.ops-platform .admin-header__left {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.admin-shell.ops-platform .admin-header__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .admin-header__route-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .admin-header__quick-actions {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .admin-header__user-wrap {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.admin-shell.ops-platform .admin-content {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.admin-shell.ops-platform .page-stack,
+.admin-shell.ops-platform .admin-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .page-telemetry {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .page-telemetry > *:first-child {
+  min-width: 0;
+}
+
+.admin-shell.ops-platform .ant-space {
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .ant-space-item {
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .ant-form-item {
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .ant-table-wrapper {
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .ant-tabs,
+.admin-shell.ops-platform .ant-tabs-nav,
+.admin-shell.ops-platform .ant-tabs-nav-list {
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .ant-tabs-nav-wrap {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .admin-shell.ops-platform .page-telemetry {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell.ops-platform .page-telemetry__aside {
+    align-items: flex-start;
+  }
+
+  .admin-shell.ops-platform .page-telemetry__meta {
+    text-align: left;
+  }
+}
+
+@media (max-width: 992px) {
+  .admin-shell.ops-platform .admin-header.ant-layout-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    height: auto !important;
+    min-height: 52px !important;
+    padding-block: 8px !important;
+  }
+
+  .admin-shell.ops-platform .admin-header__left {
+    flex: 1 1 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-shell.ops-platform *,
   .gw-auth-shell * {
