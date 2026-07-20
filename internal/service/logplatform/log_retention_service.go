@@ -158,7 +158,10 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 	var pCount int
 	items := make([]ESIndexStatItem, 0, len(indices))
 	for _, idx := range indices {
-		matched := matchIndexPattern(idx.Name, pattern)
+		// 平台可管索引：配置 pattern 或现行 yunshu-agent-*（含旧 server_id 日索引）
+		matched := matchIndexPattern(idx.Name, pattern) ||
+			matchIndexPattern(idx.Name, "yunshu-agent-*") ||
+			matchIndexPattern(idx.Name, GlobalAgentIndexPattern())
 		docs += idx.DocsCount
 		bytes += idx.StoreBytes
 		if matched {
@@ -174,8 +177,13 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 			MatchedPattern: matched,
 		})
 	}
+	// 展示用：若配置仍是历史 yunshu-logs-*，额外标明实际平台索引模式
+	displayPattern := pattern
+	if !strings.Contains(strings.ToLower(pattern), "yunshu-agent") {
+		displayPattern = pattern + " + yunshu-agent-*"
+	}
 	return &ESStorageStats{
-		IndexPattern:         pattern,
+		IndexPattern:         displayPattern,
 		IndexCount:           len(indices),
 		DocumentCount:        docs,
 		StoreBytes:           bytes,

@@ -67,10 +67,8 @@ func DefaultCatalog() []Spec {
 				},
 				{Path: "/dbmgmt/audit", Name: "审计日志", Icon: "HistoryOutlined", Sort: 5, Component: "dbmgmt-audit-page", Status: 1},
 				{Path: "/dbmgmt/grants", Name: "授权管理", Icon: "SafetyOutlined", Sort: 6, Component: "dbmgmt-grants-page", Status: 1, Hidden: true},
+				{Path: "/mysql-backup", Name: "MySQL 备份", Icon: "CloudServerOutlined", Sort: 7, Component: "mysql-backup-page", Status: 1},
 			},
-		},
-		{
-			Path: "/mysql-backup", Name: "MySQL 备份", Icon: "DatabaseOutlined", Sort: 6, Component: "mysql-backup-page", Status: 1,
 		},
 		{
 			Path: "/system", Name: "系统管理", Icon: "SettingOutlined", Sort: 6, Status: 1,

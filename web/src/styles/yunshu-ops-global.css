@@ -527,6 +527,37 @@ body {
   color: var(--admin-accent, var(--ys-brand));
 }
 
+/* ── 保留策略页：紧凑双栏，避免中间大片留白 ── */
+.log-retention-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.log-retention-es {
+  width: 100%;
+  min-width: 0;
+}
+
+.log-retention-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.log-retention-policy-grid > .ant-card {
+  min-width: 0;
+  height: 100%;
+}
+
+@media (max-width: 992px) {
+  .log-retention-policy-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Viewport / shell containment (prevent right-edge overflow at 100% zoom) ── */
 html {
   width: 100%;
