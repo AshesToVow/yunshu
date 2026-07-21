@@ -17,6 +17,21 @@ func TestSQLDeleteDictDuplicatesDialects(t *testing.T) {
 	}
 }
 
+func TestSQLDeletePermissionDuplicatesDialects(t *testing.T) {
+	if got := SQLDeletePermissionActiveDuplicates("mysql"); !containsAll(got, "DELETE d1 FROM", "permissions", "UPPER") {
+		t.Fatalf("mysql active dedupe unexpected: %q", got)
+	}
+	if got := SQLDeletePermissionActiveDuplicates("postgres"); !containsAll(got, "USING", "permissions") {
+		t.Fatalf("postgres active dedupe unexpected: %q", got)
+	}
+	if got := SQLDeletePermissionSoftDuplicatesWhenActive("mysql"); !containsAll(got, "DELETE p FROM", "deleted_at IS NOT NULL") {
+		t.Fatalf("mysql soft-when-active unexpected: %q", got)
+	}
+	if got := SQLNormalizePermissionActionUpper("mysql"); !containsAll(got, "UPDATE permissions", "BINARY") {
+		t.Fatalf("mysql normalize action unexpected: %q", got)
+	}
+}
+
 func TestSQLCreateAgentDiscoveryUniqueIndex(t *testing.T) {
 	pg, err := SQLCreateAgentDiscoveryUniqueIndex("postgres")
 	if err != nil || !containsAll(pg, "left(value, 512)", "IF NOT EXISTS") {

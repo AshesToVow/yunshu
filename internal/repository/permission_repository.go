@@ -28,13 +28,17 @@ func NewPermissionRepository(db *gorm.DB) PermissionRepo {
 }
 
 func (r *PermissionRepository) Create(ctx context.Context, permission *model.Permission) error {
+	permission.Resource = strings.TrimSpace(permission.Resource)
+	permission.Action = strings.ToUpper(strings.TrimSpace(permission.Action))
 	return r.db.WithContext(ctx).Create(permission).Error
 }
 
 func (r *PermissionRepository) GetByResourceAction(ctx context.Context, resource, action string) (*model.Permission, error) {
 	var permission model.Permission
+	resource = strings.TrimSpace(resource)
+	action = strings.ToUpper(strings.TrimSpace(action))
 	err := r.db.WithContext(ctx).
-		Where("resource = ? AND action = ?", strings.TrimSpace(resource), strings.TrimSpace(action)).
+		Where("resource = ? AND UPPER(action) = ?", resource, action).
 		First(&permission).Error
 	if err != nil {
 		return nil, err
@@ -43,6 +47,8 @@ func (r *PermissionRepository) GetByResourceAction(ctx context.Context, resource
 }
 
 func (r *PermissionRepository) Save(ctx context.Context, permission *model.Permission) error {
+	permission.Resource = strings.TrimSpace(permission.Resource)
+	permission.Action = strings.ToUpper(strings.TrimSpace(permission.Action))
 	return r.db.WithContext(ctx).Save(permission).Error
 }
 

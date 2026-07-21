@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"strings"
 )
 
 func init() {
@@ -136,12 +137,27 @@ var seedCmd = &cobra.Command{
 }
 
 func seedPermissions(ctx context.Context, db *gorm.DB, permissions []model.Permission) error {
+	normalized := make([]model.Permission, 0, len(permissions))
+	seen := make(map[string]struct{}, len(permissions))
+	for _, p := range permissions {
+		p.Resource = strings.TrimSpace(p.Resource)
+		p.Action = strings.ToUpper(strings.TrimSpace(p.Action))
+		if p.Resource == "" || p.Action == "" {
+			continue
+		}
+		key := p.Resource + "::" + p.Action
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, p)
+	}
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "resource"}, {Name: "action"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"name", "description", "k8s_scope_enabled", "updated_at",
+			"name", "description", "k8s_scope_enabled", "updated_at", "deleted_at",
 		}),
-	}).CreateInBatches(permissions, 200).Error
+	}).CreateInBatches(normalized, 200).Error
 }
 
 func defaultPermissions() []model.Permission {
