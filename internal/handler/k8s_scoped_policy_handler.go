@@ -106,6 +106,17 @@ func (h *K8sScopedPolicyHandler) UserClusterAuth(c *gin.Context) {
 	response.Success(c, gin.H{"list": list})
 }
 
+// MyAccess 当前用户在指定集群上的有效档位。
+func (h *K8sScopedPolicyHandler) MyAccess(c *gin.Context) {
+	cid := parseIDQuery(c, "cluster_id")
+	res, err := h.svc.MyAccess(c.Request.Context(), cid)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 type batchDeleteClusterGrantsBody struct {
 	IDs []uint `json:"ids"`
 }

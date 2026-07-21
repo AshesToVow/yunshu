@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
 )
 
 const (
@@ -87,21 +88,18 @@ func BuildK8sScopeActionCatalog(perms []model.Permission) ([]K8sActionItem, []st
 }
 
 func isScopedK8sPermission(p model.Permission) bool {
-	if p.K8sScopeEnabled {
-		return true
-	}
-	path := strings.TrimSpace(p.Resource)
-	method := strings.ToUpper(strings.TrimSpace(p.Action))
 	desc := strings.ToLower(strings.TrimSpace(p.Description))
 	if strings.Contains(desc, strings.ToLower(k8sScopeDisableTag)) {
 		return false
 	}
-	if strings.Contains(desc, strings.ToLower(k8sScopeEnableTag)) {
+	if p.K8sScopeEnabled || strings.Contains(desc, strings.ToLower(k8sScopeEnableTag)) {
 		return true
 	}
-
-	// 默认策略：K8s 资源读写均纳入范围校验（命名空间策略 + 集群档位）。
-	m := strings.ToUpper(strings.TrimSpace(method))
+	path := strings.TrimSpace(p.Resource)
+	if !constants.IsK8sClusterPermissionResource(path) {
+		return false
+	}
+	m := strings.ToUpper(strings.TrimSpace(p.Action))
 	if strings.Contains(path, "/exec") {
 		return true
 	}

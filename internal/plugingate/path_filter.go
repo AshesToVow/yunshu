@@ -35,6 +35,9 @@ func ResolveAPIResourcePlugin(resource string) string {
 	if plugin := resolveDbmgmtAPIResource(r); plugin != "" {
 		return plugin
 	}
+	if plugin := resolveBackupAPIResource(r); plugin != "" {
+		return plugin
+	}
 	for _, rule := range apiResourceRules {
 		for _, prefix := range rule.prefixes {
 			if strings.HasPrefix(r, prefix) {
@@ -60,6 +63,9 @@ func IsMenuPathAllowed(path string, cfg *config.PluginsConfig) bool {
 	if pluginName == "dbmgmt" {
 		return isPluginEnabled(cfg, "dbmgmt") && isPluginEnabled(cfg, "project")
 	}
+	if pluginName == "backup" {
+		return isPluginEnabled(cfg, "backup") && isPluginEnabled(cfg, "project")
+	}
 	return isPluginEnabled(cfg, pluginName)
 }
 
@@ -78,10 +84,14 @@ func IsAPIResourceAllowed(resource string, cfg *config.PluginsConfig) bool {
 	if pluginName == "dbmgmt" {
 		return isPluginEnabled(cfg, "dbmgmt") && isPluginEnabled(cfg, "project")
 	}
+	if pluginName == "backup" {
+		return isPluginEnabled(cfg, "backup") && isPluginEnabled(cfg, "project")
+	}
 	return isPluginEnabled(cfg, pluginName)
 }
 
 // FilterMenusByPlugins 递归过滤菜单树（禁用插件的菜单及其空目录父节点会被移除）。
+// 父目录所属插件关闭时，仍提升已放行的子菜单（例如 /dbmgmt 下的 /mysql-backup）。
 func FilterMenusByPlugins(items []model.Menu, cfg *config.PluginsConfig) []model.Menu {
 	if cfg == nil {
 		return items
@@ -96,12 +106,12 @@ func FilterMenusByPlugins(items []model.Menu, cfg *config.PluginsConfig) []model
 			}
 			path := strings.TrimSpace(it.Path)
 			if path != "" && !IsMenuPathAllowed(path, cfg) {
+				if len(child.Children) > 0 {
+					out = append(out, child.Children...)
+				}
 				continue
 			}
-			if len(child.Children) == 0 && path == "" && len(it.Children) > 0 {
-				continue
-			}
-			if len(it.Children) > 0 && len(child.Children) == 0 && strings.TrimSpace(it.Path) == "" {
+			if len(it.Children) > 0 && len(child.Children) == 0 {
 				continue
 			}
 			out = append(out, child)
@@ -203,6 +213,13 @@ func resolveCicdAPIResource(resource string) string {
 func resolveDbmgmtAPIResource(resource string) string {
 	if strings.Contains(resource, "/projects/") && strings.Contains(resource, "/dbmgmt") {
 		return "dbmgmt"
+	}
+	return ""
+}
+
+func resolveBackupAPIResource(resource string) string {
+	if strings.Contains(resource, "/projects/") && strings.Contains(resource, "/mysql-backup") {
+		return "backup"
 	}
 	return ""
 }

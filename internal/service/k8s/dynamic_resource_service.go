@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/yaml"
 )
 
 type DynamicResourceService struct {
@@ -289,19 +290,31 @@ func (s *DynamicResourceService) ListCR(ctx context.Context, k *kom.Kubectl, gro
 	if err := q.List(&list).Error; err != nil {
 		return nil, err
 	}
-	return list, nil
+	if !namespaced {
+		return list, nil
+	}
+	gvk := schema.GroupVersionKind{Group: strings.TrimSpace(group), Version: strings.TrimSpace(version), Kind: kind}
+	return s.filterUnstructuredByNSPolicy(ctx, gvk, ns, list)
 }
 
 // GetCR 获取相关的业务逻辑。
 func (s *DynamicResourceService) GetCR(ctx context.Context, k *kom.Kubectl, group, version, resource, namespace, name string) (*unstructured.Unstructured, error) {
-	kind, err := s.ResolveCRKindFromCRD(ctx, k, group, version, resource)
+	kind, namespaced, err := s.resolveCRDMeta(ctx, k, group, version, resource)
 	if err != nil {
 		return nil, err
 	}
+	ns := strings.TrimSpace(namespace)
+	if namespaced {
+		if ns == "" {
+			ns = metav1.NamespaceDefault
+		}
+		if err := s.ensureNamespaceAllowed(ctx, ns); err != nil {
+			return nil, err
+		}
+	}
 	var obj unstructured.Unstructured
 	q := k.WithContext(ctx).CRD(group, version, kind).Name(strings.TrimSpace(name))
-	ns := strings.TrimSpace(namespace)
-	if ns != "" {
+	if namespaced && ns != "" {
 		q = q.Namespace(ns)
 	}
 	if err := q.Get(&obj).Error; err != nil {
@@ -320,8 +333,11 @@ func (s *DynamicResourceService) DeleteCR(ctx context.Context, k *kom.Kubectl, g
 	return s.DeleteByGVK(ctx, k, gvk, namespace, name, opts)
 }
 
-// ApplyManifest 提交申请相关的业务逻辑。
+// ApplyManifest 提交申请相关的业务逻辑；Apply 前校验 YAML 中各命名空间是否允许。
 func (s *DynamicResourceService) ApplyManifest(ctx context.Context, k *kom.Kubectl, manifest string, exists func(context.Context) bool) error {
+	if err := s.ensureManifestNamespacesAllowed(ctx, manifest); err != nil {
+		return err
+	}
 	if err := k.WithContext(ctx).Applier().Apply(manifest); err != nil {
 		if k8sutil.IsLikelySuccessfulApplyError(err) {
 			return nil
@@ -332,6 +348,59 @@ func (s *DynamicResourceService) ApplyManifest(ctx context.Context, k *kom.Kubec
 		return fmt.Errorf("%v", err)
 	}
 	return nil
+}
+
+func (s *DynamicResourceService) ensureManifestNamespacesAllowed(ctx context.Context, manifest string) error {
+	for _, ns := range extractManifestNamespaces(manifest) {
+		if err := s.ensureNamespaceAllowed(ctx, ns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// extractManifestNamespaces 从多文档 YAML 提取命名空间资源目标 NS（缺省则视为 default）。
+func extractManifestNamespaces(manifest string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(ns string) {
+		ns = strings.TrimSpace(ns)
+		if ns == "" {
+			ns = metav1.NamespaceDefault
+		}
+		if _, ok := seen[ns]; ok {
+			return
+		}
+		seen[ns] = struct{}{}
+		out = append(out, ns)
+	}
+	for _, doc := range k8sutil.SplitYAMLDocs(manifest) {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+		var m map[string]any
+		if err := yaml.Unmarshal([]byte(doc), &m); err != nil || m == nil {
+			continue
+		}
+		kind, _ := m["kind"].(string)
+		kind = strings.TrimSpace(kind)
+		if kind == "" || gvkClusterScoped(schema.GroupVersionKind{Kind: kind}) {
+			// Namespace 资源本身：校验其 metadata.name（创建 NS 不视为「往某 NS 写」）
+			if kind == "Namespace" {
+				continue
+			}
+			continue
+		}
+		meta, _ := m["metadata"].(map[string]any)
+		if meta == nil {
+			add("")
+			continue
+		}
+		ns, _ := meta["namespace"].(string)
+		add(ns)
+	}
+	return out
 }
 
 // GVKByKind 执行对应的业务逻辑。

@@ -43,8 +43,14 @@ func RequiredK8sAccessRank(perms []model.Permission, routePath, httpMethod, acti
 	if containsPolicyPathKey(admin, key) {
 		return K8sAccessRankAdmin
 	}
-	// 兜底：Exec / 终端先于「GET + k8s 只读前缀」，避免 /pods/exec/ws 被误判为只读档
-	if strings.Contains(strings.ToLower(path), "exec") || strings.Contains(strings.ToLower(code), "exec") {
+	// 兜底：Exec / 终端 / Pod 文件上传删除先于「GET + k8s 只读前缀」
+	pathLower := strings.ToLower(path)
+	codeLower := strings.ToLower(code)
+	if strings.Contains(pathLower, "exec") || strings.Contains(codeLower, "exec") {
+		return K8sAccessRankReadonlyExec
+	}
+	if strings.Contains(pathLower, "/pods/file") &&
+		(strings.Contains(pathLower, "upload") || strings.Contains(pathLower, "delete")) {
 		return K8sAccessRankReadonlyExec
 	}
 	if method == "GET" && IsK8sReadAPIPath(path) {

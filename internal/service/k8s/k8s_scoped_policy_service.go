@@ -9,9 +9,10 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/k8sauth"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sauth"
 
 	"gorm.io/gorm"
 )
@@ -427,12 +428,20 @@ func (s *K8sScopedPolicyService) ListByRole(ctx context.Context, roleID uint) ([
 	return s.ListClusterGrants(ctx, roleID, 0, 0)
 }
 
-// DeleteClusterGrant 删除一条集群档位。
+// DeleteClusterGrant 删除一条集群档位，并清理同主体同集群的 NS 黑/白名单。
 func (s *K8sScopedPolicyService) DeleteClusterGrant(ctx context.Context, id uint) error {
 	if s.accessRepo == nil {
 		return constants.ErrInternal
 	}
-	return s.accessRepo.DeleteByID(ctx, id)
+	g, err := s.accessRepo.GetByID(ctx, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "k8s.policy", "DeleteClusterGrant", err)
+	}
+	if err := s.accessRepo.DeleteByID(ctx, id); err != nil {
+		return err
+	}
+	s.cleanupNSRulesForGrant(ctx, g.PrincipalKind, g.PrincipalRef, g.ClusterID)
+	return nil
 }
 
 // DeleteClusterGrantsBatch 批量删除集群档位（去重 id）。
@@ -449,12 +458,31 @@ func (s *K8sScopedPolicyService) DeleteClusterGrantsBatch(ctx context.Context, i
 			continue
 		}
 		seen[id] = struct{}{}
+		g, e := s.accessRepo.GetByID(ctx, id)
+		if e != nil {
+			return deleted, bizerrors.Pass(ctx, "k8s.policy", "DeleteClusterGrantsBatch", e)
+		}
 		if e := s.accessRepo.DeleteByID(ctx, id); e != nil {
 			return deleted, e
 		}
+		s.cleanupNSRulesForGrant(ctx, g.PrincipalKind, g.PrincipalRef, g.ClusterID)
 		deleted++
 	}
 	return deleted, nil
+}
+
+func (s *K8sScopedPolicyService) cleanupNSRulesForGrant(ctx context.Context, kind, ref string, clusterID uint) {
+	kind = strings.TrimSpace(kind)
+	ref = strings.TrimSpace(ref)
+	if kind == "" || ref == "" {
+		return
+	}
+	if s.nsAllowRepo != nil {
+		_ = s.nsAllowRepo.DeleteByPrincipalCluster(ctx, kind, ref, clusterID)
+	}
+	if s.nsDenyRepo != nil {
+		_ = s.nsDenyRepo.DeleteByPrincipalCluster(ctx, kind, ref, clusterID)
+	}
 }
 
 func presetLabelCN(p string) string {
@@ -750,5 +778,36 @@ func (s *K8sScopedPolicyService) ListUserClusterAuth(ctx context.Context, userID
 		}
 		return out[i].GrantID < out[j].GrantID
 	})
+	return out, nil
+}
+
+// K8sMyAccessResult 当前用户在指定集群上的有效档位。
+type K8sMyAccessResult struct {
+	ClusterID    uint   `json:"cluster_id"`
+	AccessRank   int    `json:"access_rank"`
+	AccessPreset string `json:"access_preset,omitempty"`
+}
+
+// MyAccess 返回当前登录用户对某集群的有效档位（含角色/用户组合并）。
+func (s *K8sScopedPolicyService) MyAccess(ctx context.Context, clusterID uint) (*K8sMyAccessResult, error) {
+	if clusterID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("cluster_id 必填")
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return nil, constants.ErrNotLoggedIn
+	}
+	out := &K8sMyAccessResult{ClusterID: clusterID}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		out.AccessRank = K8sAccessRankAdmin
+		out.AccessPreset = string(PresetK8sAdmin)
+		return out, nil
+	}
+	if s.accessRepo == nil {
+		return out, nil
+	}
+	rank := s.accessRepo.EffectiveTier(ctx, k8sauth.PackFromCurrentUser(u), clusterID)
+	out.AccessRank = rank
+	out.AccessPreset = accessPresetFromRank(rank)
 	return out, nil
 }

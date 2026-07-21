@@ -285,7 +285,8 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			// Kafka 日志中转（字典优先；enabled=true 时 Loggie→Kafka→Yunshu 写 ES）
 			{DictType: "kafka_enabled", Label: "启用 Kafka 中转", Value: "false", Sort: intRef(1), Status: 1, Remark: "true/false；关闭则 Loggie 直写 ES"},
 			{DictType: "kafka_brokers", Label: "Kafka Broker 列表", Value: "127.0.0.1:9092", Sort: intRef(1), Status: 1, Remark: "单节点一个地址；集群 JSON 数组或逗号分隔 host:port"},
-			{DictType: "kafka_topic", Label: "Kafka Topic", Value: "yunshu-logs", Sort: intRef(1), Status: 1, Remark: "Loggie sink 与 Yunshu 消费共用"},
+			{DictType: "kafka_topic_prefix", Label: "Kafka Topic 前缀", Value: "yunshu-agent", Sort: intRef(1), Status: 1, Remark: "Agent Topic：{prefix}-{服务器IP}-YYYY.MM.DD"},
+			{DictType: "kafka_topic", Label: "Kafka Topic 前缀（兼容）", Value: "yunshu-agent", Sort: intRef(2), Status: 0, Remark: "兼容旧键；优先使用 kafka_topic_prefix"},
 			{DictType: "kafka_consumer_group", Label: "Kafka 消费组", Value: "yunshu-log-es", Sort: intRef(1), Status: 1, Remark: "Yunshu 写 ES 消费者组"},
 			{DictType: "kafka_username", Label: "Kafka 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "SASL 用户名，可选"},
 			{DictType: "kafka_password", Label: "Kafka 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：SASL 密码"},
@@ -365,6 +366,7 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			"elasticsearch_cleanup_cron_spec":           {},
 			"kafka_enabled":                             {},
 			"kafka_brokers":                             {},
+			"kafka_topic_prefix":                        {},
 			"kafka_topic":                               {},
 			"kafka_consumer_group":                      {},
 			"kafka_username":                            {},
@@ -411,6 +413,8 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 				}
 			}
 		}
+		// 日志索引/Topic 历史默认值迁移
+		s.migrateLegacyLogDictDefaults(ctx)
 		// 旧类型清理：收敛为单一 alert_promql_label_key 后，不再保留旧 dict_type。
 		_ = s.repo.DeleteByTypes(ctx, []string{dictTypeAlertSilenceMatcherName})
 	})
@@ -418,6 +422,26 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 	// 内置种子处理后再做一次去重，兜底并发/历史脏数据场景。
 	_ = s.repo.CleanupDuplicateTypeLabel(ctx)
 	_ = s.repo.CleanupDuplicateTypeValue(ctx)
+}
+
+func (s *DictEntryService) migrateLegacyLogDictDefaults(ctx context.Context) {
+	rewrite := func(dictType, from, to string) {
+		items, err := s.repo.ListByType(ctx, dictType)
+		if err != nil {
+			return
+		}
+		for i := range items {
+			if strings.TrimSpace(items[i].Value) != from {
+				continue
+			}
+			items[i].Value = to
+			_ = s.repo.Update(ctx, &items[i])
+		}
+	}
+	rewrite("elasticsearch_index_pattern", "yunshu-logs-*", "yunshu-agent-*")
+	rewrite("elasticsearch_index_pattern", "yunshu-logs", "yunshu-agent-*")
+	rewrite("kafka_topic", "yunshu-logs", "yunshu-agent")
+	rewrite("kafka_topic_prefix", "yunshu-logs", "yunshu-agent")
 }
 
 func (s *DictEntryService) migrateAlertSilenceMatcherKeys(ctx context.Context) {

@@ -11,6 +11,9 @@ export interface ClusterItem {
   kubeconfig_configured?: boolean;
   direct_config?: DirectConfigPayload;
   status: number;
+  /** 当前用户对该集群的有效档位：readonly / readonly_exec / admin */
+  access_preset?: string;
+  access_rank?: number;
   created_at: string;
   updated_at: string;
 }

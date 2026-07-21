@@ -13,6 +13,7 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	cryptox "yunshu/internal/pkg/crypto"
 	bizerrors "yunshu/internal/pkg/errors"
@@ -21,16 +22,18 @@ import (
 
 	"github.com/weibaohui/kom/callbacks"
 	kom "github.com/weibaohui/kom/kom"
+	"gorm.io/gorm"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 type K8sRuntimeService struct {
-	repo    interfaces.K8sClusterRepository
-	nsDeny  interfaces.K8sNamespaceDenyRepository
-	nsAllow interfaces.K8sNamespaceAllowRepository
-	aead    cipher.AEAD
+	repo       interfaces.K8sClusterRepository
+	nsDeny     interfaces.K8sNamespaceDenyRepository
+	nsAllow    interfaces.K8sNamespaceAllowRepository
+	memberRepo interfaces.ProjectMemberRepository
+	aead       cipher.AEAD
 
 	komInitOnce    sync.Once
 	komMu          sync.Mutex
@@ -52,6 +55,7 @@ func NewK8sRuntimeService(
 	repo interfaces.K8sClusterRepository,
 	nsDeny interfaces.K8sNamespaceDenyRepository,
 	nsAllow interfaces.K8sNamespaceAllowRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 	encryptionKey string,
 ) (*K8sRuntimeService, error) {
 	var aead cipher.AEAD
@@ -66,6 +70,7 @@ func NewK8sRuntimeService(
 		repo:           repo,
 		nsDeny:         nsDeny,
 		nsAllow:        nsAllow,
+		memberRepo:     memberRepo,
 		aead:           aead,
 		registeredHash: map[string]string{},
 		connState:      map[string]ClusterConnState{},
@@ -205,6 +210,9 @@ func (s *K8sRuntimeService) GetClusterKubectl(ctx context.Context, id uint) (*mo
 	if cluster.Status != 1 {
 		return nil, nil, constants.ErrForbiddenWithMsg(constants.ErrMsgb0e556f1ccc5)
 	}
+	if err := s.ensureOwningProjectAccess(ctx, cluster); err != nil {
+		return nil, nil, err
+	}
 	clusterID := strconv.FormatUint(uint64(id), 10)
 	kubeconfig, kerr := s.resolveClusterKubeconfig(cluster)
 	if kerr != nil {
@@ -218,6 +226,31 @@ func (s *K8sRuntimeService) GetClusterKubectl(ctx context.Context, id uint) (*mo
 		return nil, nil, bizerrors.InternalMsg(ctx, "k8s.runtime", "GetClusterKubectl", constants.ErrMsg5248c9e19a3f, "cluster_id", id)
 	}
 	return cluster, k, nil
+}
+
+// ensureOwningProjectAccess 项目归属集群：有用户上下文时须为项目成员（后台任务无用户则跳过）。
+func (s *K8sRuntimeService) ensureOwningProjectAccess(ctx context.Context, cl *model.K8sCluster) error {
+	if cl == nil || cl.OwningProjectID == nil || *cl.OwningProjectID == 0 {
+		return nil
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return nil
+	}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		return nil
+	}
+	if s.memberRepo == nil {
+		return constants.ErrInternal
+	}
+	_, err := s.memberRepo.GetByProjectAndUser(ctx, *cl.OwningProjectID, u.ID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrK8sClusterProjectAccessDenied
+		}
+		return bizerrors.Pass(ctx, "k8s.runtime", "ensureOwningProjectAccess", err)
+	}
+	return nil
 }
 
 // EnsureClusterRegistered 将集群注册到 kom（供 Event 转发等后台任务使用）。

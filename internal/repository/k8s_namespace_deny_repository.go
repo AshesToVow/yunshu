@@ -108,3 +108,12 @@ func (r *K8sNamespaceDenyRepository) DeleteByID(ctx context.Context, id uint) er
 	}
 	return r.db.WithContext(ctx).Delete(&model.K8sNamespaceDenyRule{}, id).Error
 }
+
+func (r *K8sNamespaceDenyRepository) DeleteByPrincipalCluster(ctx context.Context, principalKind, principalRef string, clusterID uint) error {
+	if r == nil || r.db == nil {
+		return gorm.ErrInvalidDB
+	}
+	return r.db.WithContext(ctx).
+		Where("principal_kind = ? AND principal_ref = ? AND cluster_id = ?", principalKind, principalRef, clusterID).
+		Delete(&model.K8sNamespaceDenyRule{}).Error
+}

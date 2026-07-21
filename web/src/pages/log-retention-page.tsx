@@ -522,16 +522,19 @@ export function LogRetentionPage() {
                     <div style={{ marginTop: 8 }}>
                       <Space wrap size={[4, 4]}>
                         {kafkaStats!.topics!.map((t) => (
-                          <Tag
+                          <Popconfirm
                             key={t}
-                            closable
-                            onClose={(e) => {
-                              e.preventDefault();
-                              void handleDeleteTopic(t);
-                            }}
+                            title={`确认删除 Topic ${t}？`}
+                            description="若 Agent 仍在写入或热更，Topic 可能被自动重建"
+                            okText="删除"
+                            okButtonProps={{ danger: true }}
+                            cancelText="取消"
+                            onConfirm={() => void handleDeleteTopic(t)}
                           >
-                            {t}
-                          </Tag>
+                            <Tag closable onClose={(e) => e.preventDefault()}>
+                              {t}
+                            </Tag>
+                          </Popconfirm>
                         ))}
                       </Space>
                     </div>

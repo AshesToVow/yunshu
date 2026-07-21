@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"yunshu/internal/config"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sauth"
 
 	"gorm.io/gorm"
 	"helm.sh/helm/v3/pkg/action"
@@ -213,10 +215,19 @@ func (s *K8sHelmService) ListReleases(ctx context.Context, q HelmReleaseListQuer
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "helm", "list", err, "列出 Helm Release 失败")
 	}
+	allowedNS, err := s.allowedNamespacesForList(ctx, q.ClusterID, ns, releases)
+	if err != nil {
+		return nil, err
+	}
 	kw := strings.ToLower(strings.TrimSpace(q.Keyword))
 	out := make([]HelmReleaseItem, 0, len(releases))
 	for _, rel := range releases {
 		item := releaseToItem(rel)
+		if allowedNS != nil {
+			if _, ok := allowedNS[item.Namespace]; !ok {
+				continue
+			}
+		}
 		if kw != "" {
 			hay := strings.ToLower(item.Name + " " + item.Chart + " " + item.Namespace)
 			if !strings.Contains(hay, kw) {
@@ -232,6 +243,61 @@ func (s *K8sHelmService) ListReleases(ctx context.Context, q HelmReleaseListQuer
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+// allowedNamespacesForList 全 NS 列表时按 deny/allow 过滤；指定 NS 时若无权限返回空集。
+// 返回 nil 表示不做 NS 过滤（无用户上下文或策略仓库）。
+func (s *K8sHelmService) allowedNamespacesForList(
+	ctx context.Context,
+	clusterID uint,
+	ns string,
+	releases []*release.Release,
+) (map[string]struct{}, error) {
+	if s == nil || s.runtime == nil {
+		return nil, nil
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return nil, nil
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	ns = strings.TrimSpace(ns)
+	names := make([]string, 0)
+	if ns != "" {
+		names = []string{ns}
+	} else {
+		seen := map[string]struct{}{}
+		for _, rel := range releases {
+			if rel == nil {
+				continue
+			}
+			n := strings.TrimSpace(rel.Namespace)
+			if n == "" {
+				continue
+			}
+			if _, ok := seen[n]; ok {
+				continue
+			}
+			seen[n] = struct{}{}
+			names = append(names, n)
+		}
+	}
+	allowed, err := FilterNamespaceNamesByPolicy(
+		ctx,
+		s.runtime.NamespaceDenyRepo(),
+		s.runtime.NamespaceAllowRepo(),
+		pack,
+		clusterID,
+		names,
+	)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "helm", "filterNS", err)
+	}
+	set := make(map[string]struct{}, len(allowed))
+	for _, n := range allowed {
+		set[n] = struct{}{}
+	}
+	return set, nil
 }
 
 // GetRelease 获取单个 Release 详情。

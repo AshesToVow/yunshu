@@ -90,11 +90,11 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v52 := alert.NewCloudExpiryRuleService(v46)
 	v53 := alert.NewAlertDatasourceService(v12)
 	v54 := alert.NewAlertMonitorRuleService(v11, v12, client)
-	v55, err := provideK8sRuntimeService(v23, v20, v21, securityEncryptionKey)
+	v55, err := provideK8sRuntimeService(v23, v20, v21, v9, securityEncryptionKey)
 	if err != nil {
 		return nil, err
 	}
-	v56 := k8s.NewK8sClusterService(v23, v33, v55, v20, v21, v9)
+	v56 := k8s.NewK8sClusterService(v23, v33, v55, v20, v21, v9, v19)
 	v57 := k8s.NewK8sPodService(v55, v20, v21)
 	v58 := k8s.NewK8sNamespaceService(v55, v20, v21)
 	v59 := k8s.NewK8sNodeService(v55)

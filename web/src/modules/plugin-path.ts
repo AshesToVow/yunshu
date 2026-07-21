@@ -123,6 +123,10 @@ export function isPathAllowedByPlugins(path: string, isPluginEnabled: (name: str
   if (cmdbPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
     return isCmdbPageAllowed(isPluginEnabled);
   }
+  const backupPaths = ["/mysql-backup"];
+  if (backupPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
+    return isBackupAllowed(isPluginEnabled);
+  }
   const dbmgmtPaths = ["/dbmgmt"];
   if (dbmgmtPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
     return isDbmgmtAllowed(isPluginEnabled);
@@ -190,6 +194,9 @@ export function resolveAPIResourcePlugin(resource: string): PluginName | null {
   if (r.includes("/projects/") && r.includes("/dbmgmt")) {
     return "dbmgmt";
   }
+  if (r.includes("/projects/") && r.includes("/mysql-backup")) {
+    return "backup";
+  }
   if (r.includes("/projects/") && r.includes("/cicd")) {
     return "cicd";
   }
@@ -214,6 +221,11 @@ export function isDbmgmtAllowed(isPluginEnabled: (name: string) => boolean): boo
   return isPluginEnabled("dbmgmt") && isPluginEnabled("project");
 }
 
+/** MySQL 备份依赖 project 上下文 */
+export function isBackupAllowed(isPluginEnabled: (name: string) => boolean): boolean {
+  return isPluginEnabled("backup") && isPluginEnabled("project");
+}
+
 export function isAPIResourceAllowedByPlugins(
   resource: string,
   isPluginEnabled: (name: string) => boolean,
@@ -223,6 +235,7 @@ export function isAPIResourceAllowedByPlugins(
   if (plugin === "cmdb") return isCmdbPageAllowed(isPluginEnabled);
   if (plugin === "cicd") return isCicdAllowed(isPluginEnabled);
   if (plugin === "dbmgmt") return isDbmgmtAllowed(isPluginEnabled);
+  if (plugin === "backup") return isBackupAllowed(isPluginEnabled);
   return isPluginEnabled(plugin);
 }
 

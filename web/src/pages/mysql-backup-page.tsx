@@ -33,7 +33,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   checkMysqlRemoteBackup,
   createMysqlBackupInstance,
@@ -112,6 +112,7 @@ function MysqldumpOptionsField({ catalog }: { catalog: MysqldumpOptionItem[] }) 
 
 export function MysqlBackupPage() {
   const { user: currentUser } = useAuth();
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [servers, setServers] = useState<ServerItem[]>([]);
@@ -131,11 +132,18 @@ export function MysqlBackupPage() {
   const [notifyUserOptions, setNotifyUserOptions] = useState<UserItem[]>([]);
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((r) => setProjects(r.list || []));
+    void getProjects({ page: 1, page_size: 200 }).then((r) => {
+      const list = r.list || [];
+      setProjects(list);
+      const fromQuery = Number(searchParams.get("project_id") || 0);
+      if (fromQuery > 0 && list.some((p) => p.id === fromQuery)) {
+        setProjectId(fromQuery);
+      }
+    });
     void getUsers({ page: 1, page_size: 500 }).then((r) => {
       setNotifyUserOptions((r.list ?? []).filter((u) => u.email && String(u.email).includes("@")));
     });
-  }, []);
+  }, [searchParams]);
 
   const loadServers = useCallback(async () => {
     if (!projectId) return;

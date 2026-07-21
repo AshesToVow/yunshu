@@ -69,6 +69,8 @@ type K8sClusterItem struct {
 	KubeconfigConfigured bool          `json:"kubeconfig_configured,omitempty"`
 	DirectConfig         *DirectConfig `json:"direct_config,omitempty"`
 	Status               int           `json:"status"`
+	AccessPreset         string        `json:"access_preset,omitempty"`
+	AccessRank           int           `json:"access_rank,omitempty"`
 	CreatedAt            time.Time     `json:"created_at"`
 	UpdatedAt            time.Time     `json:"updated_at"`
 }
@@ -110,6 +112,7 @@ type K8sClusterService struct {
 	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
 	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 	memberRepo  interfaces.ProjectMemberRepository
+	accessRepo  interfaces.K8sClusterAccessRepository
 }
 
 // NewK8sClusterService 创建相关逻辑。
@@ -120,6 +123,7 @@ func NewK8sClusterService(
 	nsDeny interfaces.K8sNamespaceDenyRepository,
 	nsAllow interfaces.K8sNamespaceAllowRepository,
 	memberRepo interfaces.ProjectMemberRepository,
+	accessRepo interfaces.K8sClusterAccessRepository,
 ) *K8sClusterService {
 	return &K8sClusterService{
 		repo:        repo,
@@ -128,6 +132,7 @@ func NewK8sClusterService(
 		nsDenyRepo:  nsDeny,
 		nsAllowRepo: nsAllow,
 		memberRepo:  memberRepo,
+		accessRepo:  accessRepo,
 	}
 }
 
@@ -153,6 +158,59 @@ func (s *K8sClusterService) ensureClusterOwningProjectAccess(ctx context.Context
 		return bizerrors.Pass(ctx, "k8s.cluster", "ensureClusterOwningProjectAccess", err)
 	}
 	return nil
+}
+
+// ensureClusterGrantAccess 非超管需至少具备只读集群档位。
+func (s *K8sClusterService) ensureClusterGrantAccess(ctx context.Context, clusterID uint) error {
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return nil
+	}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		return nil
+	}
+	if s.accessRepo == nil {
+		return constants.ErrForbidden
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	if s.accessRepo.EffectiveTier(ctx, pack, clusterID) < K8sAccessRankReadonly {
+		return constants.ErrForbidden
+	}
+	return nil
+}
+
+func accessPresetFromRank(rank int) string {
+	switch rank {
+	case K8sAccessRankReadonly:
+		return string(PresetK8sReadonly)
+	case K8sAccessRankReadonlyExec:
+		return string(PresetK8sReadonlyExec)
+	case K8sAccessRankAdmin:
+		return string(PresetK8sAdmin)
+	default:
+		return ""
+	}
+}
+
+func (s *K8sClusterService) fillAccessFields(ctx context.Context, item *K8sClusterItem, clusterID uint) {
+	if item == nil {
+		return
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return
+	}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		item.AccessRank = K8sAccessRankAdmin
+		item.AccessPreset = string(PresetK8sAdmin)
+		return
+	}
+	if s.accessRepo == nil {
+		return
+	}
+	rank := s.accessRepo.EffectiveTier(ctx, k8sauth.PackFromCurrentUser(u), clusterID)
+	item.AccessRank = rank
+	item.AccessPreset = accessPresetFromRank(rank)
 }
 
 func (s *K8sClusterService) validateAssignOwningProject(ctx context.Context, pid uint) error {
@@ -190,7 +248,9 @@ func (s *K8sClusterService) List(ctx context.Context, query K8sClusterListQuery)
 		Page:     page,
 		PageSize: pageSize,
 	}
-	if u, ok := auth.RequestUserFromContext(ctx); ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes) && s.memberRepo != nil {
+	u, ok := auth.RequestUserFromContext(ctx)
+	needGrantFilter := ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes)
+	if needGrantFilter && s.memberRepo != nil {
 		ids, err := s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
 		if err != nil {
 			return nil, bizerrors.Pass(ctx, "k8s.cluster", "List", err)
@@ -198,13 +258,60 @@ func (s *K8sClusterService) List(ctx context.Context, query K8sClusterListQuery)
 		params.ProjectMemberFilter = true
 		params.ProjectMemberIDs = ids
 	}
+	// 非超管需按档位过滤：先取足量再内存过滤，保证 total/分页正确。
+	if needGrantFilter {
+		params.Page = 1
+		params.PageSize = 1000
+	}
 	clusters, total, err := s.repo.List(ctx, params)
 	if err != nil {
 		return nil, err
 	}
+
+	var tiersIdx repository.EffectiveTierIndex
+	if needGrantFilter && s.accessRepo != nil {
+		idx, err := s.accessRepo.BuildEffectiveTierIndex(ctx, k8sauth.PackFromCurrentUser(u))
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "k8s.cluster", "List", err)
+		}
+		tiersIdx = idx
+		filtered := make([]model.K8sCluster, 0, len(clusters))
+		for _, c := range clusters {
+			if tiersIdx.ClusterAccessible(c.ID, K8sAccessRankReadonly) {
+				filtered = append(filtered, c)
+			}
+		}
+		clusters = filtered
+		total = int64(len(clusters))
+		start := (page - 1) * pageSize
+		if start > len(clusters) {
+			start = len(clusters)
+		}
+		end := start + pageSize
+		if end > len(clusters) {
+			end = len(clusters)
+		}
+		clusters = clusters[start:end]
+	}
+
 	items := make([]K8sClusterItem, 0, len(clusters))
 	for _, c := range clusters {
-		items = append(items, s.buildClusterItem(c, false))
+		item := s.buildClusterItem(c, false)
+		if needGrantFilter {
+			rank := 0
+			if s.accessRepo != nil {
+				rank = tiersIdx.GlobalRank
+				if r, ok := tiersIdx.PerCluster[c.ID]; ok && r > rank {
+					rank = r
+				}
+			}
+			item.AccessRank = rank
+			item.AccessPreset = accessPresetFromRank(rank)
+		} else if ok && u != nil && auth.IsSuperAdminRole(u.RoleCodes) {
+			item.AccessRank = K8sAccessRankAdmin
+			item.AccessPreset = string(PresetK8sAdmin)
+		}
+		items = append(items, item)
 	}
 	return &K8sClusterListResponse{
 		List:     items,
@@ -309,7 +416,11 @@ func (s *K8sClusterService) Detail(ctx context.Context, id uint) (*K8sClusterIte
 	if err := s.ensureClusterOwningProjectAccess(ctx, cluster); err != nil {
 		return nil, err
 	}
+	if err := s.ensureClusterGrantAccess(ctx, id); err != nil {
+		return nil, err
+	}
 	item := s.buildClusterItem(*cluster, true)
+	s.fillAccessFields(ctx, &item, id)
 	return &item, nil
 }
 
