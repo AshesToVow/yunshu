@@ -182,6 +182,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "删除授权策略", Resource: "/api/v1/policies", Action: "DELETE", Description: "Revoke permission from role (JSON body)"},
 		{Name: "权限菜单关联", Resource: "/api/v1/policies/menu-links", Action: "GET", Description: "List permission to menu path links"},
 		{Name: "策略冲突分析", Resource: "/api/v1/policies/conflicts", Action: "GET", Description: "Analyze role policy conflicts"},
+		{Name: "一键补齐入口API", Resource: "/api/v1/policies/conflicts/fix-menu-entry", Action: "POST", Description: "Create missing menu entry permissions and grant to role"},
 		{Name: "统一权限树", Resource: "/api/v1/policies/permission-tree", Action: "GET", Description: "Get menu+API permission tree for role"},
 		{Name: "策略模拟", Resource: "/api/v1/policies/simulate", Action: "POST", Description: "Simulate API authorization layers"},
 		{Name: "K8s 动作码目录", Resource: "/api/v1/k8s-policies/actions", Action: "GET", Description: "List k8s scope action codes (reference)"},

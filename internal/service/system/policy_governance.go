@@ -261,7 +261,7 @@ func (s *PolicyGovernanceService) Conflicts(ctx context.Context, roleID uint) (*
 	}
 	permByKey := make(map[string]model.Permission, len(permissions))
 	for _, p := range permissions {
-		permByKey[p.Resource+"::"+p.Action] = p
+		permByKey[permissionLookupKey(p.Resource, p.Action)] = p
 	}
 
 	resp := &PolicyConflictsResponse{RoleID: role.ID, RoleCode: role.Code, Items: make([]PolicyConflictItem, 0)}
@@ -296,12 +296,14 @@ func (s *PolicyGovernanceService) Conflicts(ctx context.Context, roleID uint) (*
 				MenuPath:   path,
 				MenuName:   m.Name,
 				Resource:   ep.Resource,
-				Action:     ep.Action,
-				SuggestFix: "在授权管理中勾选对应 GET 权限",
+				Action:     strings.ToUpper(strings.TrimSpace(ep.Action)),
+				SuggestFix: "点击「一键补齐入口 API」或手动勾选对应 GET 权限",
 			}
-			if p, ok := permByKey[ep.Key()]; ok {
+			if p, ok := permByKey[permissionLookupKey(ep.Resource, ep.Action)]; ok {
 				item.Permission = p.Name
 				item.PermissionID = p.ID
+			} else {
+				item.SuggestFix = "入口权限项尚未入库，一键补齐会自动创建并授权"
 			}
 			resp.Items = append(resp.Items, item)
 		}
@@ -346,6 +348,100 @@ func (s *PolicyGovernanceService) Conflicts(ctx context.Context, roleID uint) (*
 		}
 	}
 	return resp, nil
+}
+
+func permissionLookupKey(resource, action string) string {
+	return strings.TrimSpace(resource) + "::" + strings.ToUpper(strings.TrimSpace(action))
+}
+
+// FixMenuEntryAPIsResult 一键补齐入口 API 结果。
+type FixMenuEntryAPIsResult struct {
+	Granted  int `json:"granted"`
+	Created  int `json:"created"`
+	Skipped  int `json:"skipped"`
+	Total    int `json:"total"`
+}
+
+// FixMenuEntryAPIs 为角色补齐菜单入口 GET：权限不存在则创建，未授权则授予。
+func (s *PolicyGovernanceService) FixMenuEntryAPIs(ctx context.Context, roleID uint) (*FixMenuEntryAPIsResult, error) {
+	conflicts, err := s.Conflicts(ctx, roleID)
+	if err != nil {
+		return nil, err
+	}
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "policy", "FixMenuEntryAPIs", err)
+	}
+	out := &FixMenuEntryAPIsResult{}
+	seen := map[string]struct{}{}
+	for _, item := range conflicts.Items {
+		if item.Type != "menu_needs_entry_api" {
+			continue
+		}
+		res := strings.TrimSpace(item.Resource)
+		act := strings.ToUpper(strings.TrimSpace(item.Action))
+		if act == "" {
+			act = "GET"
+		}
+		if res == "" {
+			continue
+		}
+		key := permissionLookupKey(res, act)
+		if _, ok := seen[key]; ok {
+			out.Skipped++
+			continue
+		}
+		seen[key] = struct{}{}
+		out.Total++
+
+		perm, err := s.permissionRepo.GetByResourceAction(ctx, res, act)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, bizerrors.Pass(ctx, "policy", "FixMenuEntryAPIs", err)
+			}
+			// 兼容历史库中 action 大小写不一致
+			perm, err = s.permissionRepo.GetByResourceAction(ctx, res, strings.ToLower(act))
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, bizerrors.Pass(ctx, "policy", "FixMenuEntryAPIs", err)
+			}
+		}
+		if perm == nil || errors.Is(err, gorm.ErrRecordNotFound) {
+			name := strings.TrimSpace(item.Permission)
+			if name == "" && item.MenuName != "" {
+				name = item.MenuName + " 入口"
+			}
+			if name == "" {
+				name = "菜单入口 " + res
+			}
+			perm = &model.Permission{
+				Name:     name,
+				Resource: res,
+				Action:   act,
+			}
+			if item.MenuPath != "" {
+				perm.Description = "入口 API for " + item.MenuPath
+			}
+			if err := s.permissionRepo.Create(ctx, perm); err != nil {
+				return nil, bizerrors.Pass(ctx, "policy", "FixMenuEntryAPIs", err)
+			}
+			out.Created++
+		}
+
+		policyAction := strings.ToUpper(strings.TrimSpace(perm.Action))
+		if policyAction == "" {
+			policyAction = "GET"
+		}
+		added, err := s.enforcer.AddPolicy(role.Code, perm.Resource, policyAction)
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "policy", "FixMenuEntryAPIs", err)
+		}
+		if added {
+			out.Granted++
+		} else {
+			out.Skipped++
+		}
+	}
+	return out, nil
 }
 
 func (s *PolicyGovernanceService) PermissionTree(ctx context.Context, roleID uint) (*PermissionTreeResponse, error) {

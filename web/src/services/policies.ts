@@ -36,6 +36,12 @@ export function getPolicyConflicts(roleId: number) {
   );
 }
 
+export function fixMenuEntryAPIs(roleId: number) {
+  return getData<{ granted: number; created: number; skipped: number; total: number }>(
+    http.post("/policies/conflicts/fix-menu-entry", {}, { params: { role_id: roleId } }),
+  );
+}
+
 export function getPermissionTree(roleId: number) {
   return getData<PermissionTreeResponse>(http.get("/policies/permission-tree", { params: { role_id: roleId } }));
 }
