@@ -5,47 +5,13 @@
 [![Ant Design](https://img.shields.io/badge/Ant%20Design-5.x-1677ff?style=flat-square&logo=antdesign)](https://ant.design/)
 [![Status](https://img.shields.io/badge/Project-Active-brightgreen?style=flat-square)](#)
 
-> 基于 Go + React 的 Kubernetes 运维与项目化告警平台，涵盖系统管理、权限管理、项目管理、**数据库管理（dbmgmt）**、K8s 资源管理、告警平台与日志平台。
+> 基于 Go + React 的 Kubernetes 运维与项目化告警平台，涵盖系统管理、权限管理、项目管理、**数据库管理（dbmgmt）**、K8s 资源管理、告警平台、日志平台、CICD发布。
 
 ---
 
 ## 目录
 
-- [项目简介](#项目简介)
-- [架构与权限模型](#架构与权限模型)
-  - [系统全景图](#系统全景图)
-  - [分层架构](#分层架构)
-- [快速开始](#快速开始)
-  - [环境要求](#环境要求)
-  - [本地源码启动](#本地源码启动)
-  - [Docker Compose 部署](#docker-compose-部署)
-  - [分支切换（git checkout）](#分支切换git-checkout)
-- [配置说明](#配置说明)
-- [运维操作手册](#运维操作手册)
-  - [首次登录与初始化](#首次登录与初始化)
-  - [权限配置（Casbin + 集群档位）](#权限配置casbin--集群档位)
-  - [纳管 Kubernetes 集群](#纳管-kubernetes-集群)
-  - [日志平台（Loggie + Elasticsearch）](#日志平台loggie--elasticsearch)
-  - [告警平台要点](#告警平台要点)
-  - [CI/CD 要点（cicd 插件）](#cicd-要点cicd-插件)
-  - [数据库管理要点（dbmgmt 插件）](#数据库管理要点dbmgmt-插件)
-- [前端路由索引](#前端路由索引)
-- [常用 CLI 命令](#常用-cli-命令)
-- [排障指南](#排障指南)
-- [功能状态标记说明](#功能状态标记说明)
-- [页面功能与截图](#页面功能与截图)
-  - [1. 登录与概览](#1-登录与概览)
-  - [2. 系统管理](#2-系统管理)
-  - [3. 项目管理](#3-项目管理)
-  - [4. 日志平台](#4-日志平台)
-  - [5. 数据库管理（dbmgmt）](#5-数据库管理dbmgmt)
-  - [6. 告警平台](#6-告警平台)
-  - [7. Kubernetes 管理](#7-kubernetes-管理)
-- [告警通知与恢复示例](#告警通知与恢复示例)
-- [数据库 ER 图](#数据库-er-图)
-- [项目结构](#项目结构)
-- [文档链接](#文档链接)
-- [参考项目](#参考项目)
+[TOC]
 
 ---
 
@@ -56,7 +22,7 @@ Yunshu 主要能力：
 - 多模块后台管理（用户、角色、菜单、组织、字典、审计）
 - **双层 K8s 鉴权**：Casbin API 权限 + 集群档位（`readonly` / `readonly_exec` / `admin`）+ 命名空间黑/白名单
 - 项目维度的 **CMDB**（服务器、云账号、SSH/Web 终端）与服务配置
-- **日志平台**（Loggie Agent + Elasticsearch）：按服务器按日索引采集、检索、导出、保留策略、Agent 安装/热更/启停
+- **日志平台**（Loggie Agent + Elasticsearch+kafka）：按服务器按日索引采集、检索、导出、保留策略、Agent 安装/热更/启停
 - **MySQL 备份**（mysqldump / xtrabackup / innobackupex，MinIO 存储，Cron 调度）
 - **数据库管理（dbmgmt）**：MySQL/PostgreSQL 实例纳管（主库/从库）、SQL 查询与审核（goInception）、库表级授权、应用用户 GRANT、审批工单与审计
 - **CI/CD**（Jenkins 打包、多级审批发布、制品 MinIO；`cicd` 插件）
@@ -212,6 +178,8 @@ flowchart LR
 - Node.js 18+
 - MySQL
 - Redis
+- Elasticsearch
+- Kafka
 
 ### 本地源码启动
 
@@ -220,7 +188,7 @@ flowchart LR
 ```bash
 git clone https://github.com/AshesToVow/yunshu.git
 cd yunshu
-git checkout yunshu_prod_20260701
+git checkout prod_yunsh_20260712
 go mod download
 cd web && npm install && cd ..
 
@@ -246,11 +214,10 @@ npm run dev
 
 > 后端二进制入口为 Cobra 子命令，根命令名为 `permission-system`（`go run . server` 即可）。
 
-### Docker Compose 部署
+### Docker-Compose 部署
 
 项目根目录已提供 `docker-compose.yml`，包含以下服务：
 
-- `mysql`（5.7）
 - `redis`（7.x）
 - `backend`（Go API）
 - `frontend`（Nginx + 前端静态资源）
@@ -258,28 +225,29 @@ npm run dev
 #### 1) 启动
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/AshesToVow/yunshu.git
+
 cd yunshu
-git checkout <branch-name>
+git checkout prod_yunsh_20260712
 # 首次或镜像更新时建议带 --build
-docker compose up -d --build
+docker-compose up -d --build
 ```
 
 #### 2) 查看状态与日志
 
 ```bash
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f frontend
+docker-compose ps
+docker-compose logs -f backend
+docker-compose logs -f frontend
 ```
 
 #### 3) 停止与清理
 
 ```bash
-docker compose down
+docker-compose down
 
 # 连同数据卷一起清理（谨慎）
-docker compose down -v
+docker-compose down -v
 ```
 
 #### 4) 访问入口
@@ -533,22 +501,25 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ### 1. 登录与概览
 
 #### 系统登录页面-账密登录
-![系统登录页面-账密登录](./images/系统登录页面-账密登录.png)
+![image-20260722153914496](./images/image-20260722153914496.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 用户名/密码登录
 - [x] 登录失败提示与鉴权校验
 - [ ] 第三方统一登录（如 OAuth2 / SSO）
 
 #### 系统登录页面-邮箱登录
-![系统登录页面-邮箱登录](./images/系统登录页面-邮箱登录.png)
+![image-20260722154255514](./images/image-20260722154255514.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 邮箱验证码登录流程
 - [x] 登录后权限菜单动态加载
 - [ ] 多因子验证（MFA）统一入口
 
 #### 概览页面
-![概览页面](./images/概览页面.png)
+![image-20260722154444834](./images/image-20260722154444834.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 系统总览数据展示
 - [x] 关键指标可视化
 - [x] Pod/事件按**项目成员 + 集群档位**过滤聚合（非 super-admin）
@@ -559,87 +530,102 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ### 2. 系统管理
 
 #### 系统管理-用户管理页面
-![系统管理-用户管理页面](./images/系统管理-用户管理页面.png)
+![image-20260722154513570](./images/image-20260722154513570.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 用户增删改查
 - [x] 用户状态管理
 
 
 #### 用户管理-用户设置页面
-![用户管理-用户设置页面](./images/用户管理-用户设置页面.png)
+![image-20260722154529600](./images/image-20260722154529600.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 个人信息维护
 - [x] 账号基础设置
 - [x] 个性化主题/通知偏好
 
 #### 系统管理-角色管理页面
-![系统管理-角色管理页面](./images/系统管理-角色管理页面.png)
+![image-20260722154548617](./images/image-20260722154548617.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 角色增删改查
 - [x] 角色与用户绑定
 - [x] 角色模板快速复制
 
 #### 系统管理-授权管理页面
-![系统管理-授权管理页面](./images/系统管理-授权管理页面.png)
+![image-20260722154610588](./images/image-20260722154610588.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] Casbin 权限规则维护
 - [x] API 级授权分配
 - [x] 可视化权限冲突分析
 
 #### 系统管理-菜单管理页面
-![系统管理-菜单管理页面](./images/系统管理-菜单管理页面.png)
+![image-20260722154625521](./images/image-20260722154625521.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 菜单树管理
 - [x] 菜单顺序与父子层级维护
 - [ ] 菜单版本回滚
 
 #### 系统管理-组织架构管理页面
-![系统管理-组织架构管理页面](./images/系统管理-组织架构管理页面.png)
+![image-20260722154645177](./images/image-20260722154645177.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 部门树管理
 - [x] 组织层级调整
 - [ ] 组织历史变更审计报表
 
 #### 系统管理-数据字典管理页面
-![系统管理-数据字典管理页面](./images/系统管理-数据字典管理页面.png)
+![image-20260722154702314](./images/image-20260722154702314.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 字典项增删改查
 - [x] 字典在业务表单中复用
 - [x] 字典国际化多语言
+- [x] 分类管理
 
 #### 系统管理-登录日志页面
-![系统管理-登录日志页面](./images/系统管理-登录日志页面.png)
+![image-20260722154728049](./images/image-20260722154728049.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 登录记录查询
 - [x] 关键字段筛选
+- [x] 登录日志删除(管理员)
 - [ ] 异常登录记录日志
 
 #### 系统管理-操作日志管理
-![系统管理-操作日志管理](./images/系统管理-操作日志管理.png)
+![image-20260722154802419](./images/image-20260722154802419.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 操作行为审计
 - [x] 接口请求与操作者关联
 
 
 #### 系统管理-IP封禁管理页面
-![系统管理-IP封禁管理页面](./images/系统管理-IP封禁管理页面.png)
+![image-20260722154827161](./images/image-20260722154827161.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 封禁列表管理
 - [x] 封禁状态即时生效
 - [x] 自动解封策略配置
 
 #### 系统管理-注册审核管理页面
-![系统管理-注册审核管理页面](./images/系统管理-注册审核管理页面.png)
+![image-20260722154858095](./images/image-20260722154858095.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 注册申请审核
 - [x] 审核状态流转
 - [x] 审核 SLA 超时提醒
 
 #### 系统管理-API管理页面
-![系统管理-API管理页面](./images/系统管理-API管理页面.png)
+![image-20260722154917033](./images/image-20260722154917033.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] API 资源项管理
 - [x] API 与权限点绑定
+- [x] API分类
 - [ ] API 文档自动回填
 
 #### 系统管理-页面切换功能
@@ -654,22 +640,27 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ### 3. 项目管理
 
 #### 项目管理-项目列表页面
-![项目管理-项目列表页面](./images/项目管理-项目列表页面.png)
+![image-20260722155001435](./images/image-20260722155001435.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 项目增删改查
 - [x] 项目成员入口
 - [x] 操作栏样式统一优化
 - [ ] 项目归档功能
 
 #### 项目管理-服务器管理页面
-![项目管理-服务器管理页面](./images/项目管理-服务器管理页面.png)
+![image-20260722155148408](./images/image-20260722155148408.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 项目服务器管理
 - [x] 基础连接信息维护
 - [x] SSH / Web 终端（CMDB）
 - [x] 服务器批量导入向导
 
 #### 项目管理-项目成员页面
+
+![image-20260722155125590](./images/image-20260722155125590.png)
+
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 项目成员增删改
 - [x] owner / 成员角色
@@ -682,6 +673,11 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 > 侧栏独立一级菜单「日志平台」。采集链路：**Loggie Agent → Elasticsearch**，Yunshu 提供引导、心跳、检索与保留。详见 [docs/log-platform-es.md](docs/log-platform-es.md)。
 
 #### 日志平台-服务与日志源
+
+![image-20260722155209424](./images/image-20260722155209424.png)
+
+![image-20260722155225324](./images/image-20260722155225324.png)
+
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 服务与日志源合并配置页（Tabs）
 - [x] 路径 / include / exclude / 编码
@@ -689,20 +685,28 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 多行合并（Loggie `multi.active`，Java 堆栈 / CRI / JSON 续行）
 
 #### 日志平台-日志检索
-![项目管理-日志平台页面](./images/项目管理-日志平台页面.png)
+![image-20260722155301298](./images/image-20260722155301298.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 按项目 / 服务器 / 服务 / 级别 / 文件路径 / 关键字 / 时间检索
 - [x] 结果高亮与导出
 - [x] 使用日志内时间（`@timestamp`，解析成功时）而非仅采集时间
 - [ ] 日志收藏与分享
 
 #### 日志平台-保留策略
+
+![image-20260722155330064](./images/image-20260722155330064.png)
+
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 全局 / 项目级保留天数
 - [x] ES 存储概览（索引数、文档、占用）
 - [x] 立即清理与按日索引删除
+- [x] kafka Topic消息积压实时查看
 
 #### 日志平台-Agent 管理
+
+![image-20260722155422523](./images/image-20260722155422523.png)
+
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 引导 / 离线安装 / 热更 pipeline / 启停重启 / 卸载
 - [x] 在线状态、心跳、ES 写入探测、监控端口与 FD（active+inactive）
@@ -715,7 +719,17 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 > 需启用 `dbmgmt` + `project` 插件。完整运维手册见 [docs/dbmgmt.md](docs/dbmgmt.md)。
 
 #### 数据库管理-实例与 SQL 操作
+
+![image-20260722155450267](./images/image-20260722155450267.png)
+
+![image-20260722155631413](./images/image-20260722155631413.png)
+
+![image-20260722155717290](./images/image-20260722155717290.png)
+
+![image-20260722155740083](./images/image-20260722155740083.png)
+
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 实例纳管（MySQL/PostgreSQL）、探活、元数据树
 - [x] **主库 / 从库**角色（从库关联主库并自动只读）
 - [x] 实例详情：DB 管理、MySQL 用户管理（SHOW GRANTS、托管密码查看）
@@ -725,6 +739,17 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 列级脱敏
 
 #### 数据库管理-授权与工单
+
+![image-20260722155532516](./images/image-20260722155532516.png)
+
+![image-20260722155555292](./images/image-20260722155555292.png)
+
+![image-20260722155612961](./images/image-20260722155612961.png)
+
+![image-20260722155824600](./images/image-20260722155824600.png)
+
+![image-20260722155906055](./images/image-20260722155906055.png)
+
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 平台查询权限申请（SELECT + 行数上限 `query_limit_num`）
 - [x] 库表级权限申请、新建库申请
@@ -739,57 +764,66 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ### 6. 告警平台
 
 #### 告警平台-数据源配置页面
-![告警平台-数据源配置页面](./images/告警平台-数据源配置页面.png)
+![image-20260722155925604](./images/image-20260722155925604.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 告警数据源按项目绑定
 - [x] 数据源列表与筛选
 - [x] 数据源健康探测
+- [x] 数据源启用/关停
 
 #### 告警平台-告警规则与值班人配置页面
-![告警平台-告警规则与值班人配置页面](./images/告警平台-告警规则与值班人配置页面.png)
-![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+![image-20260722160020764](./images/image-20260722160020764.png)
+
+![done](./images/image-20260722160054336.png)
+
 - [x] 规则管理与值班人配置
 - [x] 规则项目归属由数据源派生
 - [ ] 规则变更审批流
 
 #### 告警平台-值班总览页面
-![告警平台-值班总览页面](./images/告警平台-值班总览页面.png)
+![image-20260722160116960](./images/image-20260722160116960.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 值班排班总览
 - [x] 值班关联规则可视化
 - [ ] 值班冲突自动检测
 
 #### 告警平台-告警策略与告警记录页面
-![告警平台-告警策略与告警记录页面](./images/告警平台-告警策略与告警记录页面.png)
+![image-20260722160141488](./images/image-20260722160141488.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 告警策略配置
 - [x] 告警记录查询
 - [ ] 记录导出与归档
 
 #### 告警平台-告警静默页面
-![告警平台-告警静默页面](./images/告警平台-告警静默页面.png)
+![image-20260722160159668](./images/image-20260722160159668.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 静默规则管理
 - [x] 生效时间控制
 - [x] 静默模板管理
 
 #### 告警通知-告警渠道页面
-![告警通知-告警渠道页面](./images/告警通知-告警渠道页面.png)
+![image-20260722160211847](./images/image-20260722160211847.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] 告警渠道配置
 - [x] 多渠道参数维护
 - [x] 渠道联调测试按钮
 
 #### 告警平台-promql查询页面
-![告警平台-promql查询页面](./images/告警平台-promql查询页面.png)
+![image-20260722160227204](./images/image-20260722160227204.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
+
 - [x] PromQL 查询调试
 - [x] 查询结果展示
 - [ ] 常用查询语句收藏
 
 ---
 
-## 告警通知与恢复示例
+### 7、告警通知与恢复示例
 
 #### 告警通知与恢复-钉钉示例
 ![告警通知与恢复-钉钉示例](./images/告警通知与恢复-钉钉示例.png)
@@ -809,19 +843,19 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 ---
 
-### 7. Kubernetes 管理
+### 8. Kubernetes 管理
 
 #### 集群与基础资源
 
-![k8s-集群管理页面](./images/k8s-集群管理页面.png)
-![k8s-组件状态页面](./images/k8s-组件状态页面.png)
-![k8s-命名空间管理页面](./images/k8s-命名空间管理页面.png)
-![k8s-Node管理页面](./images/k8s-Node管理页面.png)
-![k8s-Pod管理页面](./images/k8s-Pod管理页面.png)
+![image-20260722160247861](./images/image-20260722160247861.png)
+![image-20260722160303512](./images/image-20260722160303512.png)
+![image-20260722160317928](./images/image-20260722160317928.png)
+![image-20260722160330929](./images/image-20260722160330929.png)
+![image-20260722165220058](./images/image-20260722165220058.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 集群、命名空间、节点、Pod 基础管理
-- [x] 组件状态：Node Ready + kube-system 控制平面 Pod（替代已废弃 ComponentStatus API）
+- [x] 组件状态：Node Ready + kube-system 控制平面 Pod
 - [x] Pod 详情改为只读，编辑收口到表单
 - [x] 集群凭证 API 脱敏；kubeconfig 不回显
 - [x] Node / Ingress-Nginx 重启纳入集群档位校验
@@ -829,11 +863,11 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 工作负载
 
-![k8s-Deployment管理页面](./images/k8s-Deployment管理页面.png)
-![k8s-StatefulSet管理页面](./images/k8s-StatefulSet管理页面.png)
-![k8s-DaemonSet管理页面](./images/k8s-DaemonSet管理页面.png)
-![k8s-job管理页面](./images/k8s-job管理页面.png)
-![k8s-Cronjob管理页面](./images/k8s-Cronjob管理页面.png)
+![image-20260722165311251](./images/image-20260722165311251.png)
+![image-20260722165336458](./images/image-20260722165336458.png)
+![image-20260722165357361](./images/image-20260722165357361.png)
+![image-20260722165414352](./images/image-20260722165414352.png)
+![image-20260722165430800](./images/image-20260722165430800.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 工作负载列表与详情
@@ -842,25 +876,29 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 网络与配置
 
-![k8s-Service管理页面](./images/k8s-Service管理页面.png)
-![k8s-ingress管理页面](./images/k8s-ingress管理页面.png)
-![k8s-IngressClass管理页面](./images/k8s-IngressClass管理页面.png)
-![k8s-网络策略管理页面](./images/k8s-网络策略管理页面.png)
-![k8s-configmap管理页面](./images/k8s-configmap管理页面.png)
-![k9s-secret管理页面](./images/k9s-secret管理页面.png)
+![image-20260722165517717](./images/image-20260722165517717.png)
+![image-20260722165541605](./images/image-20260722165541605.png)
+![image-20260722165603738](./images/image-20260722165603738.png)
+![image-20260722165625756](./images/image-20260722165625756.png)
+![image-20260722165643057](./images/image-20260722165643057.png)
+![image-20260722165702221](./images/image-20260722165702221.png)
+
+![image-20260722165740045](./images/image-20260722165740045.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] Service/Ingress/NetworkPolicy 管理
 - [x] ConfigMap/Secret 管理
-- [ ] Ingress 联调诊断向导
+- [x] Ingress 联调诊断向导
 
 #### 存储与扩展资源
 
-![k8s-PV管理页面](./images/k8s-PV管理页面.png)
-![k8s-PVC管理页面](./images/k8s-PVC管理页面.png)
-![k8s-storageclass管理页面](./images/k8s-storageclass管理页面.png)
-![k8s-CRD管理页面](./images/k8s-CRD管理页面.png)
-![k8s-events管理页面](./images/k8s-events管理页面.png)
+![image-20260722165808340](./images/image-20260722165808340.png)
+![image-20260722165824646](./images/image-20260722165824646.png)
+![image-20260722165840278](./images/image-20260722165840278.png)
+![image-20260722165856152](./images/image-20260722165856152.png)
+![image-20260722165914945](./images/image-20260722165914945.png)
+
+![image-20260722165929052](./images/image-20260722165929052.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] PV/PVC/StorageClass 管理
@@ -869,17 +907,46 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### RBAC 与三元策略
 
-![k8s-role管理页面](./images/k8s-role管理页面.png)
-![k8s-rolebinding管理页面](./images/k8s-rolebinding管理页面.png)
-![k8s-clusterrole管理页面](./images/k8s-clusterrole管理页面.png)
-![k8s-clusterrolebinding管理页面](./images/k8s-clusterrolebinding管理页面.png)
-![k8s-三元策略限制页面](./images/k8s-三元策略限制页面.png)
+![image-20260722165948064](./images/image-20260722165948064.png)
+![image-20260722165959994](./images/image-20260722165959994.png)
+![image-20260722170012736](./images/image-20260722170012736.png)
+![image-20260722170025604](./images/image-20260722170025604.png)
+![image-20260722170042888](./images/image-20260722170042888.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] K8s RBAC 资源可视化管理
+
 - [x] 集群访问档位（`k8s_cluster_access_grants`）+ 命名空间黑/白名单
+
 - [x] API 管理「K8s 范围校验」开关
+
 - [x] 权限变更模拟器（预检查）
+
+  ------
+
+### 9. CICD管理
+
+  #### 应用服务
+
+  ![image-20260722170301115](./images/image-20260722170301115.png)
+
+  #### 待办列表
+
+  ![image-20260722170428831](./images/image-20260722170559841.png)
+
+  ![image-20260722170622318](./images/image-20260722170622318.png)
+
+  #### 审批配置
+
+  ![image-20260722170655167](./images/image-20260722170655167.png)
+
+  #### CI打包
+
+  ![image-20260722170806410](./images/image-20260722170806410.png)
+
+  #### CD发布
+
+  ![image-20260722170836326](./images/image-20260722170836326.png)
 
 ---
 
@@ -992,8 +1059,7 @@ yunshu/
 
 ## 参考项目
 
-- [weibaohui/k8m](https://github.com/weibaohui/k8m) — 多集群权限模型参考
-- [dnsjia/luban](https://github.com/dnsjia/luban)
+- [weibaohui/k8m](https://github.com/weibaohui/k8m)
 
 ---
 

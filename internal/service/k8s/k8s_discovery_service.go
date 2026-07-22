@@ -41,7 +41,7 @@ func (s *K8sDiscoveryService) ListAPIResources(ctx context.Context, clusterID ui
 
 	_, lists, err := cs.Discovery().ServerGroupsAndResources()
 	if err != nil {
-		if lists == nil || len(lists) == 0 {
+		if len(lists) == 0 {
 			return nil, bizerrors.Internalf(ctx, "k8s.discovery", "server_groups", err, "discovery: %v")
 		}
 	}
