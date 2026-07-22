@@ -19,7 +19,11 @@ func bootstrapPreMigrate(db *gorm.DB) error {
 	if err := dropLegacyRoleUniqueIndexes(db); err != nil {
 		return err
 	}
-	if err := dropLegacyPermissionUniqueIndex(db); err != nil {
+	// 先去重，再删含 deleted_at 的失效唯一索引，避免 AutoMigrate 建 (resource,action) 唯一键失败。
+	if err := cleanupPermissionsDuplicatesOnBoot(db); err != nil {
+		return err
+	}
+	if err := dropLegacyPermissionUniqueIndexes(db); err != nil {
 		return err
 	}
 	return cleanupDictEntriesDuplicatesOnBoot(db)
@@ -38,13 +42,38 @@ func dropLegacyRoleUniqueIndexes(db *gorm.DB) error {
 	return nil
 }
 
-// dropLegacyPermissionUniqueIndex 删除旧的两列 idx_resource_action，使其重建为含 deleted_at 的复合索引。
-func dropLegacyPermissionUniqueIndex(db *gorm.DB) error {
+// dropLegacyPermissionUniqueIndexes 删除历史权限唯一索引，由 AutoMigrate 重建为 idx_perm_resource_action。
+func dropLegacyPermissionUniqueIndexes(db *gorm.DB) error {
 	if !db.Migrator().HasTable(&model.Permission{}) {
 		return nil
 	}
-	// 仅当旧索引不含 deleted_at 时才需重建：无法在此廉价判定列组成，直接尝试删除，AutoMigrate 会按新定义补回。
-	return dropIndexIfPresent(db, "permissions", "idx_resource_action")
+	for _, idx := range []string{"idx_resource_action", "idx_perm_resource_action_deleted"} {
+		if err := dropIndexIfPresent(db, "permissions", idx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanupPermissionsDuplicatesOnBoot(db *gorm.DB) error {
+	dialect := database.DialectName(db)
+	if dialect != "mysql" && dialect != "postgres" {
+		return nil
+	}
+	if !db.Migrator().HasTable(&model.Permission{}) {
+		return nil
+	}
+	for _, sql := range []string{
+		database.SQLDeletePermissionActiveDuplicates(dialect),
+		database.SQLNormalizePermissionActionUpper(dialect),
+		database.SQLDeletePermissionSoftDuplicatesWhenActive(dialect),
+		database.SQLDeletePermissionSoftOnlyDuplicates(dialect),
+	} {
+		if err := db.Exec(sql).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func dropIndexIfPresent(db *gorm.DB, table, index string) error {

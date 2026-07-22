@@ -152,13 +152,13 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 	}
 	pattern := strings.TrimSpace(cfg.IndexPattern)
 	if pattern == "" {
-		pattern = "yunshu-agent-*"
+		pattern = GlobalAgentIndexPattern()
 	}
 	var docs, bytes, pDocs, pBytes int64
 	var pCount int
 	items := make([]ESIndexStatItem, 0, len(indices))
 	for _, idx := range indices {
-		matched := matchIndexPattern(idx.Name, pattern)
+		matched := isPlatformManagedIndex(idx.Name, pattern)
 		docs += idx.DocsCount
 		bytes += idx.StoreBytes
 		if matched {
@@ -174,8 +174,12 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 			MatchedPattern: matched,
 		})
 	}
+	displayPattern := GlobalAgentIndexPattern()
+	if strings.Contains(strings.ToLower(pattern), "yunshu-agent") {
+		displayPattern = pattern
+	}
 	return &ESStorageStats{
-		IndexPattern:         pattern,
+		IndexPattern:         displayPattern,
 		IndexCount:           len(indices),
 		DocumentCount:        docs,
 		StoreBytes:           bytes,
@@ -206,18 +210,74 @@ func (s *LogRetentionService) DeleteIndex(ctx context.Context, indexName string)
 	}
 	pattern := strings.TrimSpace(cfg.IndexPattern)
 	if pattern == "" {
-		pattern = "yunshu-agent-*"
+		pattern = GlobalAgentIndexPattern()
 	}
-	allowed := matchIndexPattern(indexName, pattern) ||
-		matchIndexPattern(indexName, "yunshu-agent-*") ||
-		matchIndexPattern(indexName, GlobalAgentIndexPattern())
-	if !allowed {
-		return constants.ErrBadRequestWithMsg(fmt.Sprintf("仅允许删除匹配 %s 的平台索引", pattern))
+	if !isPlatformManagedIndex(indexName, pattern) {
+		return constants.ErrBadRequestWithMsg(fmt.Sprintf("仅允许删除匹配 %s 的平台索引", GlobalAgentIndexPattern()))
 	}
 	if err := cli.DeleteIndex(ctx, indexName); err != nil {
 		return bizerrors.Pass(ctx, "logretention", "DeleteIndex", err)
 	}
 	return nil
+}
+
+// isPlatformManagedIndex 平台可管索引：现行 Agent 通配，或配置 pattern（不含裸 *）。
+func isPlatformManagedIndex(name, cfgPattern string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.HasPrefix(name, ".") {
+		return false
+	}
+	pattern := normalizeRetentionIndexPattern(cfgPattern)
+	return matchIndexPattern(name, pattern) ||
+		matchIndexPattern(name, GlobalAgentIndexPattern())
+}
+
+// normalizeRetentionIndexPattern 将空/历史/裸 * 收敛为 yunshu-agent-*。
+func normalizeRetentionIndexPattern(pattern string) string {
+	p := strings.TrimSpace(pattern)
+	switch strings.ToLower(p) {
+	case "", "*", "yunshu-logs", "yunshu-logs-*":
+		return GlobalAgentIndexPattern()
+	default:
+		return p
+	}
+}
+
+// resolveCleanupPatterns 解析策略应对哪些索引通配执行清理（兼容历史 yunshu-logs-*）。
+func resolveCleanupPatterns(p model.LogRetentionPolicy) []string {
+	raw := strings.TrimSpace(p.IndexPattern)
+	if raw == "" {
+		if p.ServerID > 0 {
+			return []string{AgentIndexPatternByServerID(p.ServerID)}
+		}
+		return []string{GlobalAgentIndexPattern()}
+	}
+	primary := normalizeRetentionIndexPattern(raw)
+	out := []string{primary}
+	if isLegacyLogsIndexPattern(raw) {
+		out = append(out, "yunshu-logs-*")
+	} else if !strings.Contains(strings.ToLower(primary), "yunshu-agent") {
+		out = append(out, GlobalAgentIndexPattern())
+	}
+	seen := map[string]struct{}{}
+	uniq := make([]string, 0, len(out))
+	for _, x := range out {
+		x = strings.TrimSpace(x)
+		if x == "" {
+			continue
+		}
+		if _, ok := seen[x]; ok {
+			continue
+		}
+		seen[x] = struct{}{}
+		uniq = append(uniq, x)
+	}
+	return uniq
+}
+
+func isLegacyLogsIndexPattern(pattern string) bool {
+	p := strings.ToLower(strings.TrimSpace(pattern))
+	return p == "yunshu-logs" || p == "yunshu-logs-*" || strings.HasPrefix(p, "yunshu-logs-")
 }
 
 // matchIndexPattern 简易 glob：仅支持 * 通配（与 ES index_pattern 常见写法一致）。
@@ -273,20 +333,14 @@ func (s *LogRetentionService) RunCleanup(ctx context.Context) (*LogRetentionClea
 		if !p.Enabled {
 			continue
 		}
-		pattern := strings.TrimSpace(p.IndexPattern)
-		if pattern == "" {
-			if p.ServerID > 0 {
-				pattern = AgentIndexPatternByServerID(p.ServerID)
-			} else {
-				pattern = GlobalAgentIndexPattern()
+		for _, pattern := range resolveCleanupPatterns(p) {
+			part, err := s.cleanupPolicy(ctx, cli, cfg, pattern, p, now)
+			if err != nil {
+				return nil, err
 			}
+			res.DeletedIndices = append(res.DeletedIndices, part.DeletedIndices...)
+			res.DeletedDocuments += part.DeletedDocuments
 		}
-		part, err := s.cleanupPolicy(ctx, cli, cfg, pattern, p, now)
-		if err != nil {
-			return nil, err
-		}
-		res.DeletedIndices = append(res.DeletedIndices, part.DeletedIndices...)
-		res.DeletedDocuments += part.DeletedDocuments
 	}
 	if len(res.DeletedIndices) == 0 && res.DeletedDocuments == 0 {
 		res.Message = "无过期日志需要清理"
@@ -307,43 +361,39 @@ func (s *LogRetentionService) cleanupPolicy(ctx context.Context, cli *esclient.C
 		return nil, bizerrors.Pass(ctx, "logretention", "cleanupPolicy", err)
 	}
 	res := &LogRetentionCleanupResult{}
-	toDelete, dated := planIndexDeletions(indices, cutoff, p.MaxIndexCount, p.MaxStoreBytes)
-	for _, name := range toDelete {
-		if err := cli.DeleteIndex(ctx, name); err != nil {
-			return nil, bizerrors.Pass(ctx, "logretention", "DeleteIndex", err)
-		}
-		res.DeletedIndices = append(res.DeletedIndices, name)
-	}
-	if dated == 0 && len(indices) > 0 {
-		query := map[string]any{
-			"range": map[string]any{cfg.TimestampField: map[string]any{"lt": cutoff.Format(time.RFC3339)}},
-		}
-		if p.ProjectID > 0 {
-			query = map[string]any{
-				"bool": map[string]any{
-					"filter": []map[string]any{
-						{"term": map[string]any{"project_id": fmt.Sprintf("%d", p.ProjectID)}},
-						query,
-					},
-				},
+	// 项目级策略：日索引跨项目共享，禁止整索引删除，仅按 project_id 删文档
+	projectScoped := p.ProjectID > 0
+	if !projectScoped {
+		toDelete, dated := planIndexDeletions(indices, cutoff, p.MaxIndexCount, p.MaxStoreBytes)
+		for _, name := range toDelete {
+			if err := cli.DeleteIndex(ctx, name); err != nil {
+				return nil, bizerrors.Pass(ctx, "logretention", "DeleteIndex", err)
 			}
+			res.DeletedIndices = append(res.DeletedIndices, name)
 		}
-		if p.ServerID > 0 {
-			query = map[string]any{
-				"bool": map[string]any{
-					"filter": []map[string]any{
-						{"term": map[string]any{"server_id": fmt.Sprintf("%d", p.ServerID)}},
-						query,
-					},
-				},
-			}
+		if dated > 0 || len(indices) == 0 {
+			return res, nil
 		}
-		deleted, err := cli.DeleteByQuery(ctx, pattern, map[string]any{"query": query})
-		if err != nil {
-			return nil, bizerrors.Pass(ctx, "logretention", "DeleteByQuery", err)
-		}
-		res.DeletedDocuments += deleted
 	}
+	query := map[string]any{
+		"range": map[string]any{cfg.TimestampField: map[string]any{"lt": cutoff.Format(time.RFC3339)}},
+	}
+	filters := make([]map[string]any, 0, 3)
+	if p.ProjectID > 0 {
+		filters = append(filters, map[string]any{"term": map[string]any{"project_id": fmt.Sprintf("%d", p.ProjectID)}})
+	}
+	if p.ServerID > 0 {
+		filters = append(filters, map[string]any{"term": map[string]any{"server_id": fmt.Sprintf("%d", p.ServerID)}})
+	}
+	if len(filters) > 0 {
+		filters = append(filters, query)
+		query = map[string]any{"bool": map[string]any{"filter": filters}}
+	}
+	deleted, err := cli.DeleteByQuery(ctx, pattern, map[string]any{"query": query})
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "logretention", "DeleteByQuery", err)
+	}
+	res.DeletedDocuments += deleted
 	return res, nil
 }
 
@@ -455,7 +505,10 @@ func (s *LogRetentionService) upsert(ctx context.Context, projectID, serverID ui
 	it.MaxIndexCount = req.MaxIndexCount
 	it.Enabled = req.Enabled
 	if req.IndexPattern != nil {
-		it.IndexPattern = strings.TrimSpace(*req.IndexPattern)
+		it.IndexPattern = normalizeRetentionIndexPattern(*req.IndexPattern)
+		if strings.TrimSpace(*req.IndexPattern) == "" {
+			it.IndexPattern = ""
+		}
 	}
 	it.Remark = req.Remark
 	if err := s.repo.Save(ctx, it); err != nil {

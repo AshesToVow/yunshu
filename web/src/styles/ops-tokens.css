@@ -115,10 +115,20 @@
 .page-stack {
   min-width: 0;
   max-width: 100%;
+  width: 100%;
 }
 
 .admin-shell.ops-platform > .ant-layout,
-.admin-shell.ops-platform > .ant-layout > .ant-layout {
+.admin-shell.ops-platform > .ant-layout > .ant-layout,
+.admin-shell.ops-platform > .admin-main {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-shell.ops-platform .table-card,
+.admin-shell.ops-platform .page-stack > .ant-card {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -265,15 +275,21 @@
 }
 
 .k8s-page-toolbar__cluster {
-  min-width: 220px;
+  min-width: 0;
+  width: min(220px, 100%);
+  flex: 1 1 180px;
 }
 
 .k8s-page-toolbar__namespace {
-  min-width: 180px;
+  min-width: 0;
+  width: min(180px, 100%);
+  flex: 1 1 140px;
 }
 
 .k8s-page-toolbar__search {
-  width: 260px;
+  width: min(260px, 100%);
+  flex: 1 1 160px;
+  min-width: 0;
 }
 
 .k8s-page-toolbar__watch-label {

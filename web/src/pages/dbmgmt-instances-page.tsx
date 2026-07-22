@@ -105,7 +105,7 @@ export function DbmgmtInstancesPage() {
           <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue({ ...r, role: r.role ?? "primary" }); setOpen(true); }}>
             编辑
           </Button>
-          {r.driver === "mysql" && r.backup_link ? <Link to="/mysql-backup">备份</Link> : null}
+          {r.driver === "mysql" && r.backup_link ? <Link to={r.backup_link}>备份</Link> : null}
           <Popconfirm title="确认删除？" onConfirm={() => void deleteDbInstance(projectId!, r.id).then(load)}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>

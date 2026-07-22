@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
 )
 
 const (
@@ -87,25 +88,22 @@ func BuildK8sScopeActionCatalog(perms []model.Permission) ([]K8sActionItem, []st
 }
 
 func isScopedK8sPermission(p model.Permission) bool {
-	if p.K8sScopeEnabled {
-		return true
-	}
-	path := strings.TrimSpace(p.Resource)
-	method := strings.ToUpper(strings.TrimSpace(p.Action))
 	desc := strings.ToLower(strings.TrimSpace(p.Description))
 	if strings.Contains(desc, strings.ToLower(k8sScopeDisableTag)) {
 		return false
 	}
-	if strings.Contains(desc, strings.ToLower(k8sScopeEnableTag)) {
+	if p.K8sScopeEnabled || strings.Contains(desc, strings.ToLower(k8sScopeEnableTag)) {
 		return true
 	}
-
-	// 默认策略：高风险/变更类接口纳入三元授权，读接口默认不纳入。
-	m := strings.ToUpper(strings.TrimSpace(method))
+	path := strings.TrimSpace(p.Resource)
+	if !constants.IsK8sClusterPermissionResource(path) {
+		return false
+	}
+	m := strings.ToUpper(strings.TrimSpace(p.Action))
 	if strings.Contains(path, "/exec") {
 		return true
 	}
-	return m == "POST" || m == "PUT" || m == "PATCH" || m == "DELETE"
+	return m == "GET" || m == "POST" || m == "PUT" || m == "PATCH" || m == "DELETE"
 }
 
 func autoActionCode(path, method string) string {

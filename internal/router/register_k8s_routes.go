@@ -6,6 +6,11 @@ import (
 
 // RegisterK8sRoutes Kubernetes 集群与资源管理、K8s 权限策略、总览面板。
 func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
+	// 当前用户档位查询：仅需登录，不依赖 Casbin（用于前端隐藏 Exec/变更按钮）
+	k8sMyAccess := api.Group("/k8s-policies")
+	k8sMyAccess.Use(d.authMiddleware, d.opAudit)
+	k8sMyAccess.GET("/my-access", d.k8sScopedPolicyHandler.MyAccess)
+
 	k8sPolicies := api.Group("/k8s-policies")
 	k8sPolicies.Use(d.authMiddleware, d.authorize, d.opAudit)
 	k8sPolicies.GET("/actions", d.k8sScopedPolicyHandler.Actions)
@@ -44,7 +49,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	clusters.GET("/:id/api-resources", d.k8sDiscoveryHandler.ListAPIResources)
 
 	ef := api.Group("/k8s/event-forward")
-	ef.Use(d.authMiddleware, d.authorize, d.opAudit)
+	ef.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	ef.GET("/rules", d.k8sEventForwardHandler.ListRules)
 	ef.POST("/rules", d.k8sEventForwardHandler.CreateRule)
 	ef.GET("/rules/:id", d.k8sEventForwardHandler.GetRule)

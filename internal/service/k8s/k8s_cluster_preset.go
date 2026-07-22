@@ -79,7 +79,12 @@ func expandExecExtras(perms []model.Permission) []policyPathAction {
 		if code == "" {
 			continue
 		}
-		if !strings.Contains(strings.ToLower(path), "exec") && !strings.Contains(strings.ToLower(code), "exec") {
+		pathLower := strings.ToLower(path)
+		codeLower := strings.ToLower(code)
+		isExec := strings.Contains(pathLower, "exec") || strings.Contains(codeLower, "exec")
+		isPodFileMutate := strings.Contains(pathLower, "/pods/file") &&
+			(strings.Contains(pathLower, "upload") || strings.Contains(pathLower, "delete"))
+		if !isExec && !isPodFileMutate {
 			continue
 		}
 		key := path + "\x00" + code

@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"strings"
 )
 
 func init() {
@@ -136,12 +137,27 @@ var seedCmd = &cobra.Command{
 }
 
 func seedPermissions(ctx context.Context, db *gorm.DB, permissions []model.Permission) error {
+	normalized := make([]model.Permission, 0, len(permissions))
+	seen := make(map[string]struct{}, len(permissions))
+	for _, p := range permissions {
+		p.Resource = strings.TrimSpace(p.Resource)
+		p.Action = strings.ToUpper(strings.TrimSpace(p.Action))
+		if p.Resource == "" || p.Action == "" {
+			continue
+		}
+		key := p.Resource + "::" + p.Action
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, p)
+	}
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "resource"}, {Name: "action"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"name", "description", "k8s_scope_enabled", "updated_at",
+			"name", "description", "k8s_scope_enabled", "updated_at", "deleted_at",
 		}),
-	}).CreateInBatches(permissions, 200).Error
+	}).CreateInBatches(normalized, 200).Error
 }
 
 func defaultPermissions() []model.Permission {
@@ -182,6 +198,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "删除授权策略", Resource: "/api/v1/policies", Action: "DELETE", Description: "Revoke permission from role (JSON body)"},
 		{Name: "权限菜单关联", Resource: "/api/v1/policies/menu-links", Action: "GET", Description: "List permission to menu path links"},
 		{Name: "策略冲突分析", Resource: "/api/v1/policies/conflicts", Action: "GET", Description: "Analyze role policy conflicts"},
+		{Name: "一键补齐入口API", Resource: "/api/v1/policies/conflicts/fix-menu-entry", Action: "POST", Description: "Create missing menu entry permissions and grant to role"},
 		{Name: "统一权限树", Resource: "/api/v1/policies/permission-tree", Action: "GET", Description: "Get menu+API permission tree for role"},
 		{Name: "策略模拟", Resource: "/api/v1/policies/simulate", Action: "POST", Description: "Simulate API authorization layers"},
 		{Name: "K8s 动作码目录", Resource: "/api/v1/k8s-policies/actions", Action: "GET", Description: "List k8s scope action codes (reference)"},
@@ -191,6 +208,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "K8s 集群档位删除", Resource: "/api/v1/k8s-policies/cluster-grants/:id", Action: "DELETE", Description: "Delete one k8s cluster access grant"},
 		{Name: "K8s 集群已授权矩阵", Resource: "/api/v1/k8s-policies/cluster-auth-matrix", Action: "GET", Description: "List cluster auth matrix expanded by user"},
 		{Name: "K8s 用户已授权集群", Resource: "/api/v1/k8s-policies/user-cluster-auth", Action: "GET", Description: "List clusters authorized for a user"},
+		{Name: "K8s 我的集群档位", Resource: "/api/v1/k8s-policies/my-access", Action: "GET", Description: "Get current user effective k8s access tier for a cluster"},
 		{Name: "K8s 集群档位批量删除", Resource: "/api/v1/k8s-policies/cluster-grants/batch-delete", Action: "POST", Description: "Batch delete k8s cluster access grants"},
 		{Name: "K8s 命名空间黑名单列表", Resource: "/api/v1/k8s-namespace-deny-rules", Action: "GET", Description: "List k8s namespace deny rules"},
 		{Name: "K8s 命名空间黑名单新增", Resource: "/api/v1/k8s-namespace-deny-rules", Action: "POST", Description: "Create k8s namespace deny rule"},

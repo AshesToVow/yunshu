@@ -409,7 +409,13 @@ export async function getApprovalFlow(projectId: number) {
 
 export async function saveApprovalFlow(
   projectId: number,
-  stages: { stage_key: string; enabled: boolean; user_group_id?: number }[],
+  stages: {
+    stage_key: string;
+    stage_name?: string;
+    sort_order?: number;
+    enabled: boolean;
+    user_group_id?: number;
+  }[],
 ) {
   return getData<CicdApprovalFlow>(
     http.put(projectPath(projectId, "/approval-flow"), { stages }) as Promise<ApiResponse<CicdApprovalFlow>>,

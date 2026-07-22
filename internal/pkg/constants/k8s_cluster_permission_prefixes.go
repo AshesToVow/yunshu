@@ -1,5 +1,7 @@
 package constants
 
+import "strings"
+
 // K8sClusterPermissionPathPrefixes 与 internal/router/router.go 中挂载了 K8sScopeAuthorize 的路由组前缀一致。
 // permissions.resource 以此任一前缀开头（含带 :id 的路径）即视为「集群资源接口」，供 API 管理页筛选。
 // 后端新增/下线 K8s 范围中间件路由时请同步更新本列表。
@@ -31,4 +33,21 @@ var K8sClusterPermissionPathPrefixes = []string{
 	"/api/v1/rbac",
 	"/api/v1/serviceaccounts",
 	"/api/v1/k8s/event-forward",
+	"/api/v1/helm/releases",
+	"/api/v1/helm/charts",
+	"/api/v1/helm/harbor",
+}
+
+// IsK8sClusterPermissionResource 判断权限 resource 是否为集群相关 API 路径。
+func IsK8sClusterPermissionResource(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+	for _, p := range K8sClusterPermissionPathPrefixes {
+		if path == p || strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
+	return false
 }

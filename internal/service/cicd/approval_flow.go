@@ -2,9 +2,13 @@ package cicd
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
@@ -31,7 +35,9 @@ type ApprovalFlowUpsertRequest struct {
 }
 
 type ApprovalFlowStageUpsertItem struct {
-	StageKey    string `json:"stage_key" binding:"required"`
+	StageKey    string `json:"stage_key"`
+	StageName   string `json:"stage_name"`
+	SortOrder   int    `json:"sort_order"`
 	Enabled     bool   `json:"enabled"`
 	UserGroupID *uint  `json:"user_group_id"`
 }
@@ -50,15 +56,18 @@ type ReleaseApprovalStepItem struct {
 	ReviewedAt     *string `json:"reviewed_at,omitempty"`
 }
 
-var defaultApprovalFlowStages = []struct {
-	Key, Name string
-	Sort      int
-}{
-	{model.CicdApprovalStageTestLead, "测试负责人", 1},
-	{model.CicdApprovalStageRDLead, "研发负责人", 2},
-	{model.CicdApprovalStageProductLead, "项目/产品负责人", 3},
-	{model.CicdApprovalStageOpsLead, "运维负责人", 4},
-}
+var (
+	defaultApprovalFlowStages = []struct {
+		Key, Name string
+		Sort      int
+	}{
+		{model.CicdApprovalStageTestLead, "测试负责人", 1},
+		{model.CicdApprovalStageRDLead, "研发负责人", 2},
+		{model.CicdApprovalStageProductLead, "项目/产品负责人", 3},
+		{model.CicdApprovalStageOpsLead, "运维负责人", 4},
+	}
+	stageKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`)
+)
 
 func stageNameByKey(key string) string {
 	for _, d := range defaultApprovalFlowStages {
@@ -67,6 +76,25 @@ func stageNameByKey(key string) string {
 		}
 	}
 	return key
+}
+
+func generateStageKey() (string, error) {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return "custom_" + hex.EncodeToString(b[:]), nil
+}
+
+func normalizeStageKey(raw string) (string, error) {
+	key := strings.ToLower(strings.TrimSpace(raw))
+	if key == "" {
+		return generateStageKey()
+	}
+	if !stageKeyPattern.MatchString(key) {
+		return "", constants.ErrBadRequestWithMsg("审批节点 Key 须为小写字母开头，仅含 a-z/0-9/_，长度 2-32: " + raw)
+	}
+	return key, nil
 }
 
 func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*ApprovalFlowResponse, error) {
@@ -105,61 +133,96 @@ func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*Approva
 }
 
 func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req ApprovalFlowUpsertRequest) (*ApprovalFlowResponse, error) {
-	allowed := map[string]struct{}{}
-	for _, d := range defaultApprovalFlowStages {
-		allowed[d.Key] = struct{}{}
+	type normalizedStage struct {
+		Key         string
+		Name        string
+		Sort        int
+		Enabled     bool
+		UserGroupID *uint
 	}
-	incoming := map[string]ApprovalFlowStageUpsertItem{}
-	for _, st := range req.Stages {
-		key := strings.TrimSpace(st.StageKey)
-		if key == "" {
-			continue
+	normalized := make([]normalizedStage, 0, len(req.Stages))
+	seen := map[string]struct{}{}
+	for i, st := range req.Stages {
+		key, err := normalizeStageKey(st.StageKey)
+		if err != nil {
+			return nil, err
 		}
-		if _, ok := allowed[key]; !ok {
-			return nil, constants.ErrBadRequestWithMsg("无效的审批节点: " + key)
+		if _, ok := seen[key]; ok {
+			return nil, constants.ErrBadRequestWithMsg("审批节点 Key 重复: " + key)
+		}
+		seen[key] = struct{}{}
+
+		name := strings.TrimSpace(st.StageName)
+		if name == "" {
+			name = stageNameByKey(key)
+		}
+		if utf8.RuneCountInString(name) > 64 {
+			return nil, constants.ErrBadRequestWithMsg("审批节点名称过长: " + name)
 		}
 		if st.Enabled && (st.UserGroupID == nil || *st.UserGroupID == 0) {
-			return nil, constants.ErrBadRequestWithMsg("启用的审批节点须绑定用户组: " + stageNameByKey(key))
+			return nil, constants.ErrBadRequestWithMsg("启用的审批节点须绑定用户组: " + name)
 		}
 		if st.UserGroupID != nil && *st.UserGroupID > 0 {
 			if _, err := s.userGroupRepo.GetByID(ctx, *st.UserGroupID); err != nil {
 				return nil, constants.ErrBadRequestWithMsg("用户组不存在")
 			}
 		}
-		incoming[key] = st
+		sortOrder := st.SortOrder
+		if sortOrder <= 0 {
+			sortOrder = i + 1
+		}
+		var groupID *uint
+		if st.UserGroupID != nil && *st.UserGroupID > 0 {
+			groupID = st.UserGroupID
+		}
+		normalized = append(normalized, normalizedStage{
+			Key: key, Name: name, Sort: sortOrder, Enabled: st.Enabled, UserGroupID: groupID,
+		})
 	}
+	if len(normalized) == 0 {
+		return nil, constants.ErrBadRequestWithMsg("至少保留一个审批节点")
+	}
+
+	keys := make([]string, 0, len(normalized))
+	for _, st := range normalized {
+		keys = append(keys, st.Key)
+	}
+
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, d := range defaultApprovalFlowStages {
-			st, ok := incoming[d.Key]
-			enabled := ok && st.Enabled
-			var groupID *uint
-			if ok && st.UserGroupID != nil && *st.UserGroupID > 0 {
-				groupID = st.UserGroupID
-			}
+		for _, st := range normalized {
 			var row model.CicdApprovalFlowStage
-			err := tx.Where("project_id = ? AND stage_key = ?", projectID, d.Key).First(&row).Error
-			if err != nil {
+			err := tx.Where("project_id = ? AND stage_key = ?", projectID, st.Key).First(&row).Error
+			if err == gorm.ErrRecordNotFound {
 				row = model.CicdApprovalFlowStage{
 					ProjectID:   projectID,
-					StageKey:    d.Key,
-					StageName:   d.Name,
-					SortOrder:   d.Sort,
-					Enabled:     enabled,
-					UserGroupID: groupID,
+					StageKey:    st.Key,
+					StageName:   st.Name,
+					SortOrder:   st.Sort,
+					Enabled:     st.Enabled,
+					UserGroupID: st.UserGroupID,
 				}
 				if err := tx.Create(&row).Error; err != nil {
 					return err
 				}
 				continue
 			}
+			if err != nil {
+				return err
+			}
 			if err := tx.Model(&row).Updates(map[string]any{
-				"enabled":       enabled,
-				"user_group_id": groupID,
+				"stage_name":    st.Name,
+				"sort_order":    st.Sort,
+				"enabled":       st.Enabled,
+				"user_group_id": st.UserGroupID,
 			}).Error; err != nil {
 				return err
 			}
 		}
-		return nil
+		q := tx.Where("project_id = ?", projectID)
+		if len(keys) > 0 {
+			q = q.Where("stage_key NOT IN ?", keys)
+		}
+		return q.Delete(&model.CicdApprovalFlowStage{}).Error
 	})
 	if err != nil {
 		return nil, err

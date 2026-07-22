@@ -3,6 +3,7 @@ package handler
 import (
 	"strconv"
 	"strings"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
@@ -104,6 +105,17 @@ func (h *K8sScopedPolicyHandler) UserClusterAuth(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"list": list})
+}
+
+// MyAccess 当前用户在指定集群上的有效档位。
+func (h *K8sScopedPolicyHandler) MyAccess(c *gin.Context) {
+	cid := parseIDQuery(c, "cluster_id")
+	res, err := h.svc.MyAccess(auth.RequestContext(c), cid)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
 }
 
 type batchDeleteClusterGrantsBody struct {

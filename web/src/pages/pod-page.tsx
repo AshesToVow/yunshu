@@ -11,6 +11,7 @@ import { PhaseTag } from "../components/ops/phase-tag";
 import { PodDetailPanel } from "../components/pod/pod-detail-panel";
 import { PodLogsPanel } from "../components/pod/pod-logs-panel";
 import { useK8sContext } from "../hooks/use-k8s-context";
+import { useK8sClusterTier } from "../hooks/use-k8s-cluster-tier";
 import { useK8sWatch } from "../hooks/use-k8s-watch";
 import { useEditGuardStore } from "../stores/edit-guard-store";
 import { formatDateTime } from "../utils/format";
@@ -44,6 +45,7 @@ export function PodPage() {
     clusterOptions,
     namespaceOptions,
   } = useK8sContext({ needNamespace: true, syncUrl: true });
+  const { canExec, canMutate } = useK8sClusterTier(clusterId);
   const beginEdit = useEditGuardStore((s) => s.beginEdit);
   const endEdit = useEditGuardStore((s) => s.endEdit);
   const [keyword, setKeyword] = useState("");
@@ -961,56 +963,66 @@ export function PodPage() {
                 render: (_: unknown, record: PodItem) => {
                   const stop = (e: MouseEvent) => e.stopPropagation();
                   const moreItems: MenuProps["items"] = [
-                    {
-                      key: "edit",
-                      icon: <EditOutlined />,
-                      label: "高级编辑",
-                      onClick: () => void openEditPod(record),
-                    },
+                    canMutate
+                      ? {
+                          key: "edit",
+                          icon: <EditOutlined />,
+                          label: "高级编辑",
+                          onClick: () => void openEditPod(record),
+                        }
+                      : null,
                     {
                       key: "diagnose",
                       icon: <MedicineBoxOutlined />,
                       label: "排障诊断",
                       onClick: () => void handleDiagnose(record),
                     },
-                    {
-                      key: "files",
-                      icon: <FolderOpenOutlined />,
-                      label: "文件",
-                      onClick: () => {
-                        setSelected(record);
-                        setFileOpen(true);
-                        setFileContent("");
-                        void loadFiles(record, "/");
-                      },
-                    },
-                    {
-                      key: "exec",
-                      icon: <CodeOutlined />,
-                      label: "Exec",
-                      onClick: () => {
-                        setSelected(record);
-                        setExecOpen(true);
-                      },
-                    },
-                    {
-                      key: "restart",
-                      icon: <UndoOutlined />,
-                      label: "重启",
-                      onClick: () => void handleRestartPod(record),
-                    },
-                    { type: "divider" },
-                    {
-                      key: "delete",
-                      danger: true,
-                      icon: <DeleteOutlined />,
-                      label: "删除",
-                      onClick: () => {
-                        setDeleteTarget(record);
-                        setDeleteDialogOpen(true);
-                      },
-                    },
-                  ];
+                    canExec
+                      ? {
+                          key: "files",
+                          icon: <FolderOpenOutlined />,
+                          label: "文件",
+                          onClick: () => {
+                            setSelected(record);
+                            setFileOpen(true);
+                            setFileContent("");
+                            void loadFiles(record, "/");
+                          },
+                        }
+                      : null,
+                    canExec
+                      ? {
+                          key: "exec",
+                          icon: <CodeOutlined />,
+                          label: "Exec",
+                          onClick: () => {
+                            setSelected(record);
+                            setExecOpen(true);
+                          },
+                        }
+                      : null,
+                    canMutate
+                      ? {
+                          key: "restart",
+                          icon: <UndoOutlined />,
+                          label: "重启",
+                          onClick: () => void handleRestartPod(record),
+                        }
+                      : null,
+                    canMutate ? { type: "divider" } : null,
+                    canMutate
+                      ? {
+                          key: "delete",
+                          danger: true,
+                          icon: <DeleteOutlined />,
+                          label: "删除",
+                          onClick: () => {
+                            setDeleteTarget(record);
+                            setDeleteDialogOpen(true);
+                          },
+                        }
+                      : null,
+                  ].filter(Boolean) as MenuProps["items"];
                   return (
                     <Space size={0} wrap onClick={stop}>
                       <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => void openPodLogsInline(record)}>
@@ -1058,7 +1070,7 @@ export function PodPage() {
               ) : null
             }
             onExec={
-              selected
+              selected && canExec
                 ? () => {
                     setExecOpen(true);
                   }
@@ -1066,7 +1078,7 @@ export function PodPage() {
             }
             onDiagnose={selected ? () => void handleDiagnose(selected) : undefined}
             onFiles={
-              selected
+              selected && canExec
                 ? () => {
                     setFileOpen(true);
                     setFileContent("");
@@ -1074,9 +1086,9 @@ export function PodPage() {
                   }
                 : undefined
             }
-            onRestart={selected ? () => void handleRestartPod(selected) : undefined}
+            onRestart={selected && canMutate ? () => void handleRestartPod(selected) : undefined}
             onDelete={
-              selected
+              selected && canMutate
                 ? () => {
                     setDeleteTarget(selected);
                     setDeleteDialogOpen(true);

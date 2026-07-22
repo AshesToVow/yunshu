@@ -235,7 +235,16 @@ export async function getDbApprovalFlow(projectId: number) {
   return getData<{ project_id: number; stages: DbApprovalStage[] }>(http.get(`${base(projectId)}/approval-flow`));
 }
 
-export async function saveDbApprovalFlow(projectId: number, stages: { stage_key: string; enabled: boolean; user_group_id?: number }[]) {
+export async function saveDbApprovalFlow(
+  projectId: number,
+  stages: {
+    stage_key: string;
+    stage_name?: string;
+    sort_order?: number;
+    enabled: boolean;
+    user_group_id?: number;
+  }[],
+) {
   return getData<{ project_id: number; stages: DbApprovalStage[] }>(http.put(`${base(projectId)}/approval-flow`, { stages }));
 }
 

@@ -93,10 +93,9 @@ func (s *K8sEventService) List(ctx context.Context, q EventListQuery) ([]EventIt
 	kw := strings.ToLower(strings.TrimSpace(q.Keyword))
 	kind := strings.TrimSpace(q.Kind)
 	name := strings.TrimSpace(q.Name)
-	clusterWide := ns == metav1.NamespaceAll
 	out := make([]EventItem, 0, len(list))
 	for _, e := range list {
-		if clusterWide && !s.namespaceAllowed(ctx, q.ClusterID, e.Namespace) {
+		if !s.namespaceAllowed(ctx, q.ClusterID, e.Namespace) {
 			continue
 		}
 		if kind != "" && e.InvolvedObject.Kind != kind {
@@ -148,7 +147,7 @@ func (s *K8sEventService) namespaceAllowed(ctx context.Context, clusterID uint, 
 		return true
 	}
 	u, ok := auth.RequestUserFromContext(ctx)
-	if !ok || u == nil || auth.IsSuperAdminRole(u.RoleCodes) {
+	if !ok || u == nil {
 		return true
 	}
 	if s.nsDenyRepo == nil && s.nsAllowRepo == nil {

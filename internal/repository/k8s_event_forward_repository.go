@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
@@ -137,11 +139,39 @@ func (r *K8sEventForwardRepository) HasEnabledRules(ctx context.Context) (bool, 
 }
 
 func (r *K8sEventForwardRepository) ListEnabledClusterIDs(ctx context.Context) ([]uint, error) {
+	rules, err := r.ListEnabledRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[uint]struct{}{}
 	var ids []uint
-	err := r.db.WithContext(ctx).Model(&model.K8sCluster{}).
-		Where("status = ?", 1).
-		Pluck("id", &ids).Error
-	return ids, err
+	for _, rule := range rules {
+		for _, p := range strings.Split(rule.ClusterIDs, ",") {
+			c := strings.TrimSpace(p)
+			if c == "" {
+				continue
+			}
+			n, err := strconv.ParseUint(c, 10, 64)
+			if err != nil || n == 0 {
+				continue
+			}
+			id := uint(n)
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return []uint{}, nil
+	}
+	// 仅保留仍启用的集群
+	var enabled []uint
+	err = r.db.WithContext(ctx).Model(&model.K8sCluster{}).
+		Where("status = ? AND id IN ?", 1, ids).
+		Pluck("id", &enabled).Error
+	return enabled, err
 }
 
 func (r *K8sEventForwardRepository) GetClusterName(ctx context.Context, id uint) string {

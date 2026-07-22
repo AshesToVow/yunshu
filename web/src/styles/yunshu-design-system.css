@@ -258,12 +258,14 @@
 /* Page telemetry header pattern */
 .page-telemetry {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: end;
   margin-bottom: 12px;
   padding-bottom: 12px;
   border-bottom: 2px solid var(--admin-border);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .page-telemetry__label {

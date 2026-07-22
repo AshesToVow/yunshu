@@ -46,8 +46,10 @@ export function buildRoleTreeData(roles: RoleItem[]): AppTreeData {
 
 export function buildPermissionTreeData(permissions: PermissionItem[], opts?: PermissionTreeBuildOptions): AppTreeData {
   const moduleMap = new Map<string, Map<string, PermissionItem[]>>();
+  // 同一 resource+action 只保留最小 id，避免历史重复 seed 导致树节点翻倍。
+  const deduped = dedupePermissionsByResourceAction(permissions);
 
-  for (const permission of permissions) {
+  for (const permission of deduped) {
     const moduleName = getModuleName(permission.resource);
     if (!moduleMap.has(moduleName)) {
       moduleMap.set(moduleName, new Map<string, PermissionItem[]>());
@@ -140,4 +142,16 @@ export function normalizeCheckedKeys(checkedKeys: Parameters<NonNullable<TreePro
 function getModuleName(resource: string) {
   const segments = resource.split("/").filter(Boolean);
   return segments[2] ?? segments[segments.length - 1] ?? resource;
+}
+
+function dedupePermissionsByResourceAction(permissions: PermissionItem[]): PermissionItem[] {
+  const best = new Map<string, PermissionItem>();
+  for (const permission of permissions) {
+    const key = `${permission.resource}::${String(permission.action ?? "").toUpperCase()}`;
+    const prev = best.get(key);
+    if (!prev || permission.id < prev.id) {
+      best.set(key, permission);
+    }
+  }
+  return Array.from(best.values());
 }

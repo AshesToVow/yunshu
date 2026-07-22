@@ -169,17 +169,50 @@ func (s *PermissionService) ListAllFiltered(ctx context.Context, query Permissio
 }
 
 // BatchSetK8sScope 批量更新 K8s 范围校验开关（默认仅集群资源接口路径）。
+// 关闭时写入 [k8s-scope=off] 描述标记，开启时移除该标记，与 isScopedK8sPermission 对齐。
 func (s *PermissionService) BatchSetK8sScope(ctx context.Context, req PermissionBatchK8sScopeRequest) (*PermissionBatchK8sScopeResponse, error) {
 	k8sRelated := strings.TrimSpace(req.K8sRelated)
 	if k8sRelated == "" {
 		k8sRelated = "on"
 	}
-	affected, err := s.permissionRepo.BatchSetK8sScopeEnabled(ctx, repository.PermissionListParams{
+	params := repository.PermissionListParams{
 		Keyword:    strings.TrimSpace(req.Keyword),
 		K8sRelated: k8sRelated,
-	}, req.Enabled)
+	}
+	affected, err := s.permissionRepo.BatchSetK8sScopeEnabled(ctx, params, req.Enabled)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "permission", "BatchSetK8sScope", err)
+	}
+	list, err := s.permissionRepo.ListFiltered(ctx, params)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "permission", "BatchSetK8sScope", err)
+	}
+	const offTag = "[k8s-scope=off]"
+	for i := range list {
+		p := &list[i]
+		desc := p.Description
+		hasOff := strings.Contains(strings.ToLower(desc), strings.ToLower(offTag))
+		if req.Enabled {
+			if !hasOff {
+				continue
+			}
+			p.Description = strings.TrimSpace(strings.ReplaceAll(desc, offTag, ""))
+			p.Description = strings.TrimSpace(strings.ReplaceAll(p.Description, "  ", " "))
+			p.K8sScopeEnabled = true
+		} else {
+			if hasOff {
+				continue
+			}
+			if strings.TrimSpace(desc) == "" {
+				p.Description = offTag
+			} else {
+				p.Description = strings.TrimSpace(desc) + " " + offTag
+			}
+			p.K8sScopeEnabled = false
+		}
+		if err := s.permissionRepo.Save(ctx, p); err != nil {
+			return nil, bizerrors.Pass(ctx, "permission", "BatchSetK8sScope", err)
+		}
 	}
 	return &PermissionBatchK8sScopeResponse{Affected: affected}, nil
 }

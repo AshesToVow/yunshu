@@ -316,13 +316,6 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		preferNameContains: "日志",
 		knownChildPaths:    []string{"/project-services", "/project-logs", "/log-retention", "/loggie-status"},
 	},
-	{
-		paths:              []string{"/mysql-backup", "/mysql-backup/"},
-		keepName:           "MySQL 备份",
-		keepIcon:           "DatabaseOutlined",
-		keepSort:           5,
-		preferNameContains: "MySQL",
-	},
 }
 
 // removeApplicationTopologyMenus 移除已废弃的「应用拓扑图」菜单。
@@ -348,31 +341,49 @@ func removeApplicationTopologyMenus(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
-// reparentExtractedMenus 将原「项目管理」下的日志/MySQL 菜单迁移至独立一级目录。
+// reparentExtractedMenus 将原「项目管理」下的日志菜单迁到「日志平台」；
+// MySQL 备份迁到「数据库管理」下（不再作为一级目录）。
 func reparentExtractedMenus(ctx context.Context, db *gorm.DB) error {
 	var logRoot model.Menu
 	if err := db.WithContext(ctx).
 		Where("path = ? AND (parent_id IS NULL OR parent_id = 0)", "/log-platform").
 		First(&logRoot).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// 日志根目录缺失时仍尝试挂接 MySQL 备份
+		} else {
+			return err
+		}
+	} else {
+		logParentID := logRoot.ID
+		for _, path := range []string{
+			"/project-services",
+			"/project-log-sources",
+			"/project-logs",
+			"/log-retention",
+			"/loggie-status",
+		} {
+			pid := logParentID
+			if err := reparentMenuByPath(ctx, db, path, &pid); err != nil {
+				return err
+			}
+		}
+	}
+	return reparentMysqlBackupUnderDbmgmt(ctx, db)
+}
+
+// reparentMysqlBackupUnderDbmgmt 将 /mysql-backup 挂到「数据库管理」下，并清理残留一级菜单。
+func reparentMysqlBackupUnderDbmgmt(ctx context.Context, db *gorm.DB) error {
+	var dbmgmt model.Menu
+	if err := db.WithContext(ctx).
+		Where("path = ? AND (parent_id IS NULL OR parent_id = 0)", "/dbmgmt").
+		First(&dbmgmt).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
 		return err
 	}
-	logParentID := logRoot.ID
-	for _, path := range []string{
-		"/project-services",
-		"/project-log-sources",
-		"/project-logs",
-		"/log-retention",
-		"/loggie-status",
-	} {
-		pid := logParentID
-		if err := reparentMenuByPath(ctx, db, path, &pid); err != nil {
-			return err
-		}
-	}
-	return reparentMenuByPath(ctx, db, "/mysql-backup", nil)
+	pid := dbmgmt.ID
+	return reparentMenuByPath(ctx, db, "/mysql-backup", &pid)
 }
 
 func reparentMenuByPath(ctx context.Context, db *gorm.DB, menuPath string, parentID *uint) error {

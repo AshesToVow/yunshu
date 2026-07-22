@@ -272,6 +272,7 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 		return nil, bizerrors.Pass(ctx, "overview", "Get", err)
 	}
 	clusters = s.filterOverviewClusters(ctx, clusters)
+	out.ClustersCount = int64(len(clusters))
 	if len(clusters) == 0 {
 		if s.redis != nil {
 			if b, err := json.Marshal(out); err == nil {

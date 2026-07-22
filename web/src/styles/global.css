@@ -16,6 +16,7 @@ body,
 #root,
 .admin-shell {
   min-height: 100vh;
+  max-width: 100%;
 }
 
 body {
@@ -2240,7 +2241,7 @@ body {
 
 .login-shell__body {
   max-width: 1280px;
-  width: min(1280px, calc(100vw - 72px));
+  width: min(1280px, calc(100% - 72px));
   gap: 40px;
   align-items: stretch;
 }
@@ -2326,7 +2327,7 @@ body {
 
 @media (max-width: 1080px) {
   .login-shell__body {
-    width: min(980px, calc(100vw - 36px));
+    width: min(980px, calc(100% - 36px));
     gap: 24px;
   }
 

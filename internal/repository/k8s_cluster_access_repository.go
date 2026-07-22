@@ -73,6 +73,17 @@ func (r *K8sClusterAccessRepository) ListByRoleCode(ctx context.Context, roleCod
 	return r.ListByPrincipal(ctx, model.K8sPrincipalRole, strings.TrimSpace(roleCode))
 }
 
+func (r *K8sClusterAccessRepository) GetByID(ctx context.Context, id uint) (*model.K8sClusterAccessGrant, error) {
+	if r == nil || r.db == nil {
+		return nil, gorm.ErrInvalidDB
+	}
+	var it model.K8sClusterAccessGrant
+	if err := r.db.WithContext(ctx).First(&it, id).Error; err != nil {
+		return nil, err
+	}
+	return &it, nil
+}
+
 func (r *K8sClusterAccessRepository) DeleteByID(ctx context.Context, id uint) error {
 	if r == nil || r.db == nil {
 		return gorm.ErrInvalidDB

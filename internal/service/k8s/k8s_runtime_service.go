@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -9,23 +10,30 @@ import (
 	"strings"
 	"sync"
 	"time"
-	bizerrors "yunshu/internal/pkg/errors"
-	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
+	cryptox "yunshu/internal/pkg/crypto"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/eventbus"
 	"yunshu/internal/pkg/extension"
 
 	"github.com/weibaohui/kom/callbacks"
 	kom "github.com/weibaohui/kom/kom"
+	"gorm.io/gorm"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 type K8sRuntimeService struct {
-	repo interfaces.K8sClusterRepository
+	repo       interfaces.K8sClusterRepository
+	nsDeny     interfaces.K8sNamespaceDenyRepository
+	nsAllow    interfaces.K8sNamespaceAllowRepository
+	memberRepo interfaces.ProjectMemberRepository
+	aead       cipher.AEAD
 
 	komInitOnce    sync.Once
 	komMu          sync.Mutex
@@ -42,14 +50,64 @@ type ClusterConnState struct {
 	ConsecutiveFailures int       `json:"consecutive_failures"`
 }
 
-// NewK8sRuntimeService 创建相关逻辑。
-func NewK8sRuntimeService(repo interfaces.K8sClusterRepository) *K8sRuntimeService {
+// NewK8sRuntimeService 创建运行时；encryptionKey 用于解密库内 kubeconfig/direct_config。
+func NewK8sRuntimeService(
+	repo interfaces.K8sClusterRepository,
+	nsDeny interfaces.K8sNamespaceDenyRepository,
+	nsAllow interfaces.K8sNamespaceAllowRepository,
+	memberRepo interfaces.ProjectMemberRepository,
+	encryptionKey string,
+) (*K8sRuntimeService, error) {
+	var aead cipher.AEAD
+	if strings.TrimSpace(encryptionKey) != "" {
+		a, err := cryptox.NewAESGCMFromKeyString(encryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("k8s runtime encryption_key: %w", err)
+		}
+		aead = a
+	}
 	return &K8sRuntimeService{
 		repo:           repo,
+		nsDeny:         nsDeny,
+		nsAllow:        nsAllow,
+		memberRepo:     memberRepo,
+		aead:           aead,
 		registeredHash: map[string]string{},
 		connState:      map[string]ClusterConnState{},
 		regLocks:       map[string]*sync.Mutex{},
+	}, nil
+}
+
+// SealCredential 加密集群凭证字段。
+func (s *K8sRuntimeService) SealCredential(plain string) (string, error) {
+	if s == nil {
+		return plain, nil
 	}
+	return sealClusterSecret(s.aead, plain)
+}
+
+// OpenCredential 解密集群凭证字段（兼容明文存量）。
+func (s *K8sRuntimeService) OpenCredential(stored string) (string, error) {
+	if s == nil {
+		return stored, nil
+	}
+	return openClusterSecret(s.aead, stored)
+}
+
+// NamespaceDenyRepo 供 DynamicResourceService 做列表过滤。
+func (s *K8sRuntimeService) NamespaceDenyRepo() interfaces.K8sNamespaceDenyRepository {
+	if s == nil {
+		return nil
+	}
+	return s.nsDeny
+}
+
+// NamespaceAllowRepo 供 DynamicResourceService 做列表过滤。
+func (s *K8sRuntimeService) NamespaceAllowRepo() interfaces.K8sNamespaceAllowRepository {
+	if s == nil {
+		return nil
+	}
+	return s.nsAllow
 }
 
 func (s *K8sRuntimeService) getRegLock(clusterID string) *sync.Mutex {
@@ -138,9 +196,8 @@ func (s *K8sRuntimeService) DeleteRegisterCache(clusterID uint) {
 	kom.Clusters().RemoveClusterById(key)
 	s.komMu.Lock()
 	delete(s.registeredHash, key)
-	st := s.connState[key]
-	st.State = "unknown"
-	s.connState[key] = st
+	delete(s.regLocks, key)
+	delete(s.connState, key)
 	s.komMu.Unlock()
 }
 
@@ -153,13 +210,15 @@ func (s *K8sRuntimeService) GetClusterKubectl(ctx context.Context, id uint) (*mo
 	if cluster.Status != 1 {
 		return nil, nil, constants.ErrForbiddenWithMsg(constants.ErrMsgb0e556f1ccc5)
 	}
+	if err := s.ensureOwningProjectAccess(ctx, cluster); err != nil {
+		return nil, nil, err
+	}
 	clusterID := strconv.FormatUint(uint64(id), 10)
-	kubeconfig, kerr := resolveClusterKubeconfig(cluster)
+	kubeconfig, kerr := s.resolveClusterKubeconfig(cluster)
 	if kerr != nil {
 		return nil, nil, constants.ErrBadRequestWithMsg(kerr.Error())
 	}
-	force := kubeconfig != strings.TrimSpace(cluster.Kubeconfig)
-	if err := s.registerClusterIfNeeded(clusterID, kubeconfig, force); err != nil {
+	if err := s.registerClusterIfNeeded(clusterID, kubeconfig, false); err != nil {
 		return nil, nil, bizerrors.Internalf(ctx, "k8s.runtime", "GetClusterKubectl", err, constants.ErrFmtac130d1176b3, "cluster_id", id)
 	}
 	k := kom.Cluster(clusterID)
@@ -167,6 +226,31 @@ func (s *K8sRuntimeService) GetClusterKubectl(ctx context.Context, id uint) (*mo
 		return nil, nil, bizerrors.InternalMsg(ctx, "k8s.runtime", "GetClusterKubectl", constants.ErrMsg5248c9e19a3f, "cluster_id", id)
 	}
 	return cluster, k, nil
+}
+
+// ensureOwningProjectAccess 项目归属集群：有用户上下文时须为项目成员（后台任务无用户则跳过）。
+func (s *K8sRuntimeService) ensureOwningProjectAccess(ctx context.Context, cl *model.K8sCluster) error {
+	if cl == nil || cl.OwningProjectID == nil || *cl.OwningProjectID == 0 {
+		return nil
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return nil
+	}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		return nil
+	}
+	if s.memberRepo == nil {
+		return constants.ErrInternal
+	}
+	_, err := s.memberRepo.GetByProjectAndUser(ctx, *cl.OwningProjectID, u.ID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrK8sClusterProjectAccessDenied
+		}
+		return bizerrors.Pass(ctx, "k8s.runtime", "ensureOwningProjectAccess", err)
+	}
+	return nil
 }
 
 // EnsureClusterRegistered 将集群注册到 kom（供 Event 转发等后台任务使用）。
@@ -213,12 +297,11 @@ func (s *K8sRuntimeService) CheckClusterHeartbeat(ctx context.Context, id uint) 
 		return "", s.GetClusterConnState(id), nil
 	}
 	clusterID := strconv.FormatUint(uint64(id), 10)
-	kubeconfig, kerr := resolveClusterKubeconfig(cluster)
+	kubeconfig, kerr := s.resolveClusterKubeconfig(cluster)
 	if kerr != nil {
 		return "", s.GetClusterConnState(id), constants.ErrBadRequestWithMsg(kerr.Error())
 	}
-	force := kubeconfig != strings.TrimSpace(cluster.Kubeconfig)
-	if err := s.registerClusterIfNeeded(clusterID, kubeconfig, force); err != nil {
+	if err := s.registerClusterIfNeeded(clusterID, kubeconfig, false); err != nil {
 		return "", s.GetClusterConnState(id), err
 	}
 	k := kom.Cluster(clusterID)
@@ -299,7 +382,7 @@ func (s *K8sRuntimeService) GetClusterRestConfig(ctx context.Context, id uint) (
 	if cluster.Status != 1 {
 		return nil, nil, constants.ErrForbiddenWithMsg(constants.ErrMsgb0e556f1ccc5)
 	}
-	kubeconfig, kerr := resolveClusterKubeconfig(cluster)
+	kubeconfig, kerr := s.resolveClusterKubeconfig(cluster)
 	if kerr != nil {
 		return nil, nil, constants.ErrBadRequestWithMsg(kerr.Error())
 	}

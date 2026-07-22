@@ -55,6 +55,79 @@ WHERE d1.deleted_at IS NULL AND d2.deleted_at IS NULL`
 	}
 }
 
+// SQLNormalizePermissionActionUpper 将 action 规范为大写，避免 GET/get 并存。
+func SQLNormalizePermissionActionUpper(dialect string) string {
+	switch strings.ToLower(strings.TrimSpace(dialect)) {
+	case "postgres":
+		return `UPDATE permissions SET action = UPPER(action) WHERE action <> UPPER(action)`
+	default:
+		// MySQL 在 ci 校对下需 BINARY 才能发现大小写差异
+		return `UPDATE permissions SET action = UPPER(action) WHERE BINARY action <> BINARY UPPER(action)`
+	}
+}
+
+// SQLDeletePermissionActiveDuplicates 删除同 resource+action 的多余活跃行（保留最小 id）。
+func SQLDeletePermissionActiveDuplicates(dialect string) string {
+	switch strings.ToLower(strings.TrimSpace(dialect)) {
+	case "postgres":
+		return `
+DELETE FROM permissions d1
+USING permissions d2
+WHERE d1.resource = d2.resource
+  AND UPPER(d1.action) = UPPER(d2.action)
+  AND d1.id > d2.id
+  AND d1.deleted_at IS NULL
+  AND d2.deleted_at IS NULL`
+	default:
+		return `
+DELETE d1 FROM permissions d1
+JOIN permissions d2
+  ON d1.resource = d2.resource AND UPPER(d1.action) = UPPER(d2.action) AND d1.id > d2.id
+WHERE d1.deleted_at IS NULL AND d2.deleted_at IS NULL`
+	}
+}
+
+// SQLDeletePermissionSoftDuplicatesWhenActive 删除已有活跃行时同键的软删除副本。
+func SQLDeletePermissionSoftDuplicatesWhenActive(dialect string) string {
+	switch strings.ToLower(strings.TrimSpace(dialect)) {
+	case "postgres":
+		return `
+DELETE FROM permissions p
+USING permissions a
+WHERE p.resource = a.resource
+  AND UPPER(p.action) = UPPER(a.action)
+  AND p.deleted_at IS NOT NULL
+  AND a.deleted_at IS NULL`
+	default:
+		return `
+DELETE p FROM permissions p
+JOIN permissions a
+  ON p.resource = a.resource AND UPPER(p.action) = UPPER(a.action) AND a.deleted_at IS NULL
+WHERE p.deleted_at IS NOT NULL`
+	}
+}
+
+// SQLDeletePermissionSoftOnlyDuplicates 仅软删除组内去重（保留最小 id）。
+func SQLDeletePermissionSoftOnlyDuplicates(dialect string) string {
+	switch strings.ToLower(strings.TrimSpace(dialect)) {
+	case "postgres":
+		return `
+DELETE FROM permissions d1
+USING permissions d2
+WHERE d1.resource = d2.resource
+  AND UPPER(d1.action) = UPPER(d2.action)
+  AND d1.id > d2.id
+  AND d1.deleted_at IS NOT NULL
+  AND d2.deleted_at IS NOT NULL`
+	default:
+		return `
+DELETE d1 FROM permissions d1
+JOIN permissions d2
+  ON d1.resource = d2.resource AND UPPER(d1.action) = UPPER(d2.action) AND d1.id > d2.id
+WHERE d1.deleted_at IS NOT NULL AND d2.deleted_at IS NOT NULL`
+	}
+}
+
 // SQLDropDictEntriesLegacyCompositeIndex drops legacy MySQL/PG index when present.
 func SQLDropDictEntriesLegacyCompositeIndex(dialect string) string {
 	switch strings.ToLower(strings.TrimSpace(dialect)) {

@@ -142,6 +142,16 @@ func provideRegistrationService(
 	return service.NewRegistrationService(regRepo, userRepo, redisClient, authCfg, sender, string(appName))
 }
 
+func provideK8sRuntimeService(
+	repo interfaces.K8sClusterRepository,
+	nsDeny interfaces.K8sNamespaceDenyRepository,
+	nsAllow interfaces.K8sNamespaceAllowRepository,
+	memberRepo interfaces.ProjectMemberRepository,
+	encryptionKey SecurityEncryptionKey,
+) (*service.K8sRuntimeService, error) {
+	return service.NewK8sRuntimeService(repo, nsDeny, nsAllow, memberRepo, string(encryptionKey))
+}
+
 func provideCMDBService(
 	serverRepo interfaces.ServerRepository,
 	serverGroupRepo interfaces.ServerGroupRepository,
@@ -277,7 +287,7 @@ var ServiceSet = wire.NewSet(
 	service.NewAlertMonitorRuleService,
 	service.NewAlertReceiverGroupService,
 	// k8s
-	service.NewK8sRuntimeService,
+	provideK8sRuntimeService,
 	service.NewK8sClusterService,
 	service.NewK8sPodService,
 	service.NewK8sNamespaceService,

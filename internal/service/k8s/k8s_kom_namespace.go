@@ -22,7 +22,7 @@ func (s *K8sRuntimeService) ListNamespacesViaKom(ctx context.Context, clusterID 
 	if dbErr != nil {
 		return nil, err
 	}
-	kc, kcErr := resolveClusterKubeconfig(cluster)
+	kc, kcErr := s.resolveClusterKubeconfig(cluster)
 	if kcErr != nil {
 		return nil, err
 	}

@@ -69,6 +69,8 @@ type K8sClusterItem struct {
 	KubeconfigConfigured bool          `json:"kubeconfig_configured,omitempty"`
 	DirectConfig         *DirectConfig `json:"direct_config,omitempty"`
 	Status               int           `json:"status"`
+	AccessPreset         string        `json:"access_preset,omitempty"`
+	AccessRank           int           `json:"access_rank,omitempty"`
 	CreatedAt            time.Time     `json:"created_at"`
 	UpdatedAt            time.Time     `json:"updated_at"`
 }
@@ -110,6 +112,7 @@ type K8sClusterService struct {
 	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
 	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 	memberRepo  interfaces.ProjectMemberRepository
+	accessRepo  interfaces.K8sClusterAccessRepository
 }
 
 // NewK8sClusterService 创建相关逻辑。
@@ -120,6 +123,7 @@ func NewK8sClusterService(
 	nsDeny interfaces.K8sNamespaceDenyRepository,
 	nsAllow interfaces.K8sNamespaceAllowRepository,
 	memberRepo interfaces.ProjectMemberRepository,
+	accessRepo interfaces.K8sClusterAccessRepository,
 ) *K8sClusterService {
 	return &K8sClusterService{
 		repo:        repo,
@@ -128,6 +132,7 @@ func NewK8sClusterService(
 		nsDenyRepo:  nsDeny,
 		nsAllowRepo: nsAllow,
 		memberRepo:  memberRepo,
+		accessRepo:  accessRepo,
 	}
 }
 
@@ -143,7 +148,7 @@ func (s *K8sClusterService) ensureClusterOwningProjectAccess(ctx context.Context
 		return nil
 	}
 	if s.memberRepo == nil {
-		return nil
+		return constants.ErrInternal
 	}
 	_, err := s.memberRepo.GetByProjectAndUser(ctx, *cl.OwningProjectID, u.ID)
 	if err != nil {
@@ -153,6 +158,59 @@ func (s *K8sClusterService) ensureClusterOwningProjectAccess(ctx context.Context
 		return bizerrors.Pass(ctx, "k8s.cluster", "ensureClusterOwningProjectAccess", err)
 	}
 	return nil
+}
+
+// ensureClusterGrantAccess 非超管需至少具备只读集群档位。
+func (s *K8sClusterService) ensureClusterGrantAccess(ctx context.Context, clusterID uint) error {
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return nil
+	}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		return nil
+	}
+	if s.accessRepo == nil {
+		return constants.ErrForbidden
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	if s.accessRepo.EffectiveTier(ctx, pack, clusterID) < K8sAccessRankReadonly {
+		return constants.ErrForbidden
+	}
+	return nil
+}
+
+func accessPresetFromRank(rank int) string {
+	switch rank {
+	case K8sAccessRankReadonly:
+		return string(PresetK8sReadonly)
+	case K8sAccessRankReadonlyExec:
+		return string(PresetK8sReadonlyExec)
+	case K8sAccessRankAdmin:
+		return string(PresetK8sAdmin)
+	default:
+		return ""
+	}
+}
+
+func (s *K8sClusterService) fillAccessFields(ctx context.Context, item *K8sClusterItem, clusterID uint) {
+	if item == nil {
+		return
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return
+	}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		item.AccessRank = K8sAccessRankAdmin
+		item.AccessPreset = string(PresetK8sAdmin)
+		return
+	}
+	if s.accessRepo == nil {
+		return
+	}
+	rank := s.accessRepo.EffectiveTier(ctx, k8sauth.PackFromCurrentUser(u), clusterID)
+	item.AccessRank = rank
+	item.AccessPreset = accessPresetFromRank(rank)
 }
 
 func (s *K8sClusterService) validateAssignOwningProject(ctx context.Context, pid uint) error {
@@ -190,18 +248,70 @@ func (s *K8sClusterService) List(ctx context.Context, query K8sClusterListQuery)
 		Page:     page,
 		PageSize: pageSize,
 	}
-	if u, ok := auth.RequestUserFromContext(ctx); ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes) && s.memberRepo != nil {
-		ids, _ := s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+	u, ok := auth.RequestUserFromContext(ctx)
+	needGrantFilter := ok && u != nil && !auth.IsSuperAdminRole(u.RoleCodes)
+	if needGrantFilter && s.memberRepo != nil {
+		ids, err := s.memberRepo.ListProjectIDsByUser(ctx, u.ID)
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "k8s.cluster", "List", err)
+		}
 		params.ProjectMemberFilter = true
 		params.ProjectMemberIDs = ids
+	}
+	// 非超管需按档位过滤：先取足量再内存过滤，保证 total/分页正确。
+	if needGrantFilter {
+		params.Page = 1
+		params.PageSize = 1000
 	}
 	clusters, total, err := s.repo.List(ctx, params)
 	if err != nil {
 		return nil, err
 	}
+
+	var tiersIdx repository.EffectiveTierIndex
+	if needGrantFilter && s.accessRepo != nil {
+		idx, err := s.accessRepo.BuildEffectiveTierIndex(ctx, k8sauth.PackFromCurrentUser(u))
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "k8s.cluster", "List", err)
+		}
+		tiersIdx = idx
+		filtered := make([]model.K8sCluster, 0, len(clusters))
+		for _, c := range clusters {
+			if tiersIdx.ClusterAccessible(c.ID, K8sAccessRankReadonly) {
+				filtered = append(filtered, c)
+			}
+		}
+		clusters = filtered
+		total = int64(len(clusters))
+		start := (page - 1) * pageSize
+		if start > len(clusters) {
+			start = len(clusters)
+		}
+		end := start + pageSize
+		if end > len(clusters) {
+			end = len(clusters)
+		}
+		clusters = clusters[start:end]
+	}
+
 	items := make([]K8sClusterItem, 0, len(clusters))
 	for _, c := range clusters {
-		items = append(items, buildClusterItem(c, false))
+		item := s.buildClusterItem(c, false)
+		if needGrantFilter {
+			rank := 0
+			if s.accessRepo != nil {
+				rank = tiersIdx.GlobalRank
+				if r, ok := tiersIdx.PerCluster[c.ID]; ok && r > rank {
+					rank = r
+				}
+			}
+			item.AccessRank = rank
+			item.AccessPreset = accessPresetFromRank(rank)
+		} else if ok && u != nil && auth.IsSuperAdminRole(u.RoleCodes) {
+			item.AccessRank = K8sAccessRankAdmin
+			item.AccessPreset = string(PresetK8sAdmin)
+		}
+		items = append(items, item)
 	}
 	return &K8sClusterListResponse{
 		List:     items,
@@ -252,15 +362,27 @@ func (s *K8sClusterService) Create(ctx context.Context, req K8sClusterCreateRequ
 		if err != nil {
 			return nil, constants.ErrInternalWithMsg(constants.ErrMsg2569b002d990)
 		}
-		c.DirectConfig = string(directConfigJSON)
-		// 为直连模式生成兼容的kubeconfig
+		sealedDC, err := s.runtime.SealCredential(string(directConfigJSON))
+		if err != nil {
+			return nil, constants.ErrInternalWithMsg("加密直连配置失败")
+		}
+		c.DirectConfig = sealedDC
+		// 为直连模式生成兼容的kubeconfig（库内仍存密封副本，运行时以 DirectConfig 为准）
 		kubeconfig, err := buildKubeconfigFromDirectConfig(req.DirectConfig)
 		if err != nil {
 			return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf(constants.ErrFmt92e759c1fa53, err))
 		}
-		c.Kubeconfig = kubeconfig
+		sealedKC, err := s.runtime.SealCredential(kubeconfig)
+		if err != nil {
+			return nil, constants.ErrInternalWithMsg("加密 kubeconfig 失败")
+		}
+		c.Kubeconfig = sealedKC
 	} else {
-		c.Kubeconfig = req.Kubeconfig
+		sealedKC, err := s.runtime.SealCredential(req.Kubeconfig)
+		if err != nil {
+			return nil, constants.ErrInternalWithMsg("加密 kubeconfig 失败")
+		}
+		c.Kubeconfig = sealedKC
 	}
 
 	if req.OwningProjectID != nil && *req.OwningProjectID > 0 {
@@ -294,7 +416,11 @@ func (s *K8sClusterService) Detail(ctx context.Context, id uint) (*K8sClusterIte
 	if err := s.ensureClusterOwningProjectAccess(ctx, cluster); err != nil {
 		return nil, err
 	}
-	item := buildClusterItem(*cluster, true)
+	if err := s.ensureClusterGrantAccess(ctx, id); err != nil {
+		return nil, err
+	}
+	item := s.buildClusterItem(*cluster, true)
+	s.fillAccessFields(ctx, &item, id)
 	return &item, nil
 }
 
@@ -321,7 +447,11 @@ func (s *K8sClusterService) Update(ctx context.Context, id uint, req K8sClusterU
 
 	// 处理直连配置更新
 	if cluster.ConnectionMode == "direct" && req.DirectConfig != nil {
-		preserveDirectAuthFromStored(cluster.DirectConfig, req.DirectConfig)
+		storedPlain, err := s.runtime.OpenCredential(cluster.DirectConfig)
+		if err != nil {
+			return nil, constants.ErrInternalWithMsg("解密已存直连配置失败")
+		}
+		preserveDirectAuthFromStored(storedPlain, req.DirectConfig)
 		// 如果从字典读取配置
 		if req.DirectConfig.DictConfigKey != "" && s.dictRepo != nil {
 			dictConfig, err := getDirectConfigFromDict(ctx, s.dictRepo, req.DirectConfig.DictConfigKey)
@@ -337,17 +467,29 @@ func (s *K8sClusterService) Update(ctx context.Context, id uint, req K8sClusterU
 		if err != nil {
 			return nil, constants.ErrInternalWithMsg(constants.ErrMsg2569b002d990)
 		}
-		cluster.DirectConfig = string(directConfigJSON)
+		sealedDC, err := s.runtime.SealCredential(string(directConfigJSON))
+		if err != nil {
+			return nil, constants.ErrInternalWithMsg("加密直连配置失败")
+		}
+		cluster.DirectConfig = sealedDC
 
 		// 为直连模式生成兼容的kubeconfig
 		kubeconfig, err := buildKubeconfigFromDirectConfig(req.DirectConfig)
 		if err != nil {
 			return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf(constants.ErrFmt92e759c1fa53, err))
 		}
-		cluster.Kubeconfig = kubeconfig
+		sealedKC, err := s.runtime.SealCredential(kubeconfig)
+		if err != nil {
+			return nil, constants.ErrInternalWithMsg("加密 kubeconfig 失败")
+		}
+		cluster.Kubeconfig = sealedKC
 		s.runtime.DeleteRegisterCache(cluster.ID)
 	} else if req.Kubeconfig != nil {
-		cluster.Kubeconfig = *req.Kubeconfig
+		sealedKC, err := s.runtime.SealCredential(*req.Kubeconfig)
+		if err != nil {
+			return nil, constants.ErrInternalWithMsg("加密 kubeconfig 失败")
+		}
+		cluster.Kubeconfig = sealedKC
 		s.runtime.DeleteRegisterCache(cluster.ID)
 	}
 
@@ -366,7 +508,7 @@ func (s *K8sClusterService) Update(ctx context.Context, id uint, req K8sClusterU
 	if err := s.repo.Update(ctx, cluster); err != nil {
 		return nil, err
 	}
-	out := buildClusterItem(*cluster, true)
+	out := s.buildClusterItem(*cluster, true)
 	return &out, nil
 }
 
@@ -405,11 +547,11 @@ func (s *K8sClusterService) SetStatus(ctx context.Context, id uint, status int) 
 			return nil, err
 		}
 	}
-	out := buildClusterItem(*cluster, true)
+	out := s.buildClusterItem(*cluster, true)
 	return &out, nil
 }
 
-func buildClusterItem(c model.K8sCluster, forDetail bool) K8sClusterItem {
+func (s *K8sClusterService) buildClusterItem(c model.K8sCluster, forDetail bool) K8sClusterItem {
 	item := K8sClusterItem{
 		ID:              c.ID,
 		Name:            c.Name,
@@ -423,8 +565,14 @@ func buildClusterItem(c model.K8sCluster, forDetail bool) K8sClusterItem {
 		item.KubeconfigConfigured = true
 	}
 	if c.ConnectionMode == "direct" && strings.TrimSpace(c.DirectConfig) != "" {
+		raw := c.DirectConfig
+		if s != nil && s.runtime != nil {
+			if plain, err := s.runtime.OpenCredential(c.DirectConfig); err == nil {
+				raw = plain
+			}
+		}
 		var dc DirectConfig
-		if err := json.Unmarshal([]byte(c.DirectConfig), &dc); err == nil {
+		if err := json.Unmarshal([]byte(raw), &dc); err == nil {
 			item.DirectConfig = maskDirectConfigForAPI(&dc)
 		}
 	}

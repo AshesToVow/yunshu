@@ -298,7 +298,7 @@ export function AdminLayout() {
         </div>
       </Sider>
 
-      <Layout>
+      <Layout className="admin-main">
         <Header className="admin-header">
           <div className="admin-header__left">
             <div className="admin-header__title">{pageTitle}</div>

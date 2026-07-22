@@ -160,8 +160,10 @@ func (w *Worker) processBatch() error {
 		if processedIDs[ev.ID] || matchedIDs[ev.ID] {
 			continue
 		}
-		forwardLog().Debug("K8s forwarded event matched no rule, leaving unprocessed",
+		forwardLog().Debug("K8s forwarded event matched no rule, marking processed",
 			"event_id", ev.ID, "cluster_id", ev.ClusterID, "namespace", ev.Namespace)
+		_ = w.repo.MarkEventProcessed(ctx, ev.ID, true)
+		processedIDs[ev.ID] = true
 	}
 	return nil
 }

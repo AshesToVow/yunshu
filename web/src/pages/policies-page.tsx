@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listAllPermissions } from "../services/permissions";
 import {
+  fixMenuEntryAPIs,
   getPermissionTree,
   getPolicies,
   getPolicyConflicts,
@@ -133,19 +134,16 @@ export function PoliciesPage() {
 
   async function handleFixMenuEntryConflicts() {
     if (!selectedRoleId) return;
-    const targets = conflicts.filter((c) => c.type === "menu_needs_entry_api" && c.permission_id);
-    if (targets.length === 0) {
-      message.info("没有可自动修复的入口 API 冲突（需权限项已存在）");
+    if (!conflicts.some((c) => c.type === "menu_needs_entry_api")) {
+      message.info("没有可自动修复的入口 API 冲突");
       return;
     }
     setSubmitting(true);
     try {
-      let granted = 0;
-      for (const item of targets) {
-        await grantPolicy({ role_id: selectedRoleId, permission_id: item.permission_id! });
-        granted += 1;
-      }
-      message.success(`已为角色补齐 ${granted} 个菜单入口 GET 权限`);
+      const result = await fixMenuEntryAPIs(selectedRoleId);
+      message.success(
+        `已补齐入口 API：新建 ${result.created}，授权 ${result.granted}，跳过 ${result.skipped}（共 ${result.total}）`,
+      );
       await Promise.all([bootstrap(selectedRoleId), loadRoleExtras(selectedRoleId)]);
     } catch (e: unknown) {
       message.error(String((e as Error)?.message ?? e));
@@ -446,14 +444,14 @@ export function PoliciesPage() {
                               <Button
                                 type="primary"
                                 loading={submitting}
-                                disabled={!conflicts.some((c) => c.type === "menu_needs_entry_api" && c.permission_id)}
+                                disabled={!conflicts.some((c) => c.type === "menu_needs_entry_api")}
                                 onClick={() => void handleFixMenuEntryConflicts()}
                               >
                                 一键补齐入口 API
                               </Button>
                               <Button onClick={() => selectedRoleId && void loadRoleExtras(selectedRoleId)}>重新分析</Button>
                               <Typography.Text type="secondary">
-                                menu_needs_entry_api：菜单可见但缺少对应 GET；若路径映射已修正，重启后风险可能自动消失。
+                                menu_needs_entry_api：菜单启用但角色缺少入口 GET；一键补齐会自动创建缺失权限项并授权。
                               </Typography.Text>
                             </Space>
                             <Table

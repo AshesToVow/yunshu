@@ -170,6 +170,12 @@ export function LogRetentionPage() {
   const showEmptyTopicHint =
     !!kafkaStats?.sink_via_kafka && (kafkaStats?.topics || []).length === 0;
 
+  function canManageESIndex(name: string, matched?: boolean) {
+    if (matched) return true;
+    const n = String(name || "").trim().toLowerCase();
+    return n.startsWith("yunshu-agent-") && !n.startsWith(".");
+  }
+
   async function handleDeleteTopic(topic: string) {
     try {
       await deleteKafkaTopic(topic);
@@ -200,7 +206,7 @@ export function LogRetentionPage() {
   }
 
   return (
-    <div className="log-retention-page">
+    <div className="log-retention-page page-stack">
       <Tabs
         activeKey={tab}
         onChange={(key) => {
@@ -212,16 +218,19 @@ export function LogRetentionPage() {
             key: "es",
             label: "ES 索引保留",
             children: (
-              <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <div className="log-retention-es">
                 <Alert
                   type="info"
                   showIcon
-                  message="按保留天数定时清理过期 ES 索引；Agent 启停与热更请到「Agent 管理」。推荐索引：yunshu-agent-{服务器IP}-YYYY.MM.DD。"
+                  style={{ marginBottom: 12 }}
+                  message="按保留天数定时清理过期 ES 索引。平台索引：yunshu-agent-{服务器IP}-YYYY.MM.DD（兼容旧 yunshu-agent-{server_id}-日期）。Agent 启停与热更请到「Agent 管理」。"
                 />
 
                 <Card
                   size="small"
+                  className="table-card"
                   title="ES 存储概览"
+                  style={{ marginBottom: 12 }}
                   extra={
                     <Button size="small" icon={<ReloadOutlined />} onClick={() => void reloadES()} loading={loading}>
                       刷新
@@ -229,8 +238,8 @@ export function LogRetentionPage() {
                   }
                 >
                   {stats ? (
-                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                      <Row gutter={[16, 12]}>
+                    <>
+                      <Row gutter={[16, 12]} style={{ marginBottom: 12 }}>
                         <Col xs={12} sm={6}>
                           <Statistic title="全部索引" value={stats.index_count} suffix="个" />
                         </Col>
@@ -242,183 +251,191 @@ export function LogRetentionPage() {
                         </Col>
                         <Col xs={12} sm={6}>
                           <Statistic
-                            title={`匹配 ${stats.index_pattern || "yunshu-agent-*"}`}
+                            title={`可管理 ${stats.index_pattern || "yunshu-agent-*"}`}
                             value={stats.pattern_index_count ?? 0}
                             suffix={`/ ${stats.pattern_store_human || "-"}`}
                           />
                         </Col>
                       </Row>
-                      <Table<ESIndexStatItem>
-                        size="small"
-                        rowKey="name"
-                        pagination={{ pageSize: 8, showSizeChanger: true, size: "small" }}
-                        dataSource={stats.indices ?? []}
-                        columns={[
-                          {
-                            title: "索引名",
-                            dataIndex: "name",
-                            ellipsis: true,
-                            render: (name: string, r) => (
-                              <Space size={4}>
-                                <span>{name}</span>
-                                {r.matched_pattern ? <Tag color="blue">平台</Tag> : null}
-                              </Space>
-                            ),
-                          },
-                          {
-                            title: "文档",
-                            dataIndex: "docs_count",
-                            width: 100,
-                            render: (n: number) => (n ?? 0).toLocaleString(),
-                          },
-                          { title: "占用", dataIndex: "store_human", width: 100 },
-                          {
-                            title: "操作",
-                            width: 90,
-                            render: (_, r) =>
-                              r.matched_pattern ? (
-                                <Popconfirm
-                                  title={`确认删除索引 ${r.name}？`}
-                                  description="删除后不可恢复"
-                                  okText="删除"
-                                  okButtonProps={{ danger: true }}
-                                  cancelText="取消"
-                                  onConfirm={() => void handleDeleteIndex(r.name)}
-                                >
-                                  <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                                    删除
-                                  </Button>
-                                </Popconfirm>
-                              ) : (
-                                <span style={{ color: "#999" }}>-</span>
+                      <div className="k8s-table-scroll-host">
+                        <Table<ESIndexStatItem>
+                          size="small"
+                          rowKey="name"
+                          pagination={{ pageSize: 8, showSizeChanger: true, size: "small" }}
+                          dataSource={stats.indices ?? []}
+                          scroll={{ x: 640 }}
+                          columns={[
+                            {
+                              title: "索引名",
+                              dataIndex: "name",
+                              ellipsis: true,
+                              render: (name: string, r) => (
+                                <Space size={4} wrap>
+                                  <span>{name}</span>
+                                  {canManageESIndex(name, r.matched_pattern) ? <Tag color="blue">平台</Tag> : null}
+                                </Space>
                               ),
-                          },
-                        ]}
-                      />
-                    </Space>
+                            },
+                            {
+                              title: "文档",
+                              dataIndex: "docs_count",
+                              width: 110,
+                              render: (n: number) => (n ?? 0).toLocaleString(),
+                            },
+                            { title: "占用", dataIndex: "store_human", width: 100 },
+                            {
+                              title: "操作",
+                              key: "action",
+                              width: 88,
+                              fixed: "right",
+                              render: (_, r) =>
+                                canManageESIndex(r.name, r.matched_pattern) ? (
+                                  <Popconfirm
+                                    title={`确认删除索引 ${r.name}？`}
+                                    description="删除后不可恢复"
+                                    okText="删除"
+                                    okButtonProps={{ danger: true }}
+                                    cancelText="取消"
+                                    onConfirm={() => void handleDeleteIndex(r.name)}
+                                  >
+                                    <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                                      删除
+                                    </Button>
+                                  </Popconfirm>
+                                ) : (
+                                  <span style={{ color: "#999" }}>-</span>
+                                ),
+                            },
+                          ]}
+                        />
+                      </div>
+                    </>
                   ) : (
                     <span>无法连接 ES 或未启用 elasticsearch.enabled</span>
                   )}
                 </Card>
 
-                <Row gutter={[12, 12]}>
-                  <Col xs={24} lg={10}>
-                    <Card
-                      size="small"
-                      title="全局默认策略"
-                      extra={
-                        <Space size={8}>
-                          <Button
-                            size="small"
-                            icon={<PlayCircleOutlined />}
-                            onClick={() =>
-                              void (async () => {
-                                const res = await runLogRetentionCleanup();
-                                message.success(res.message || "清理完成");
-                                await reloadES();
-                              })()
-                            }
-                          >
-                            立即清理
-                          </Button>
-                          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => void saveGlobal()}>
-                            保存
-                          </Button>
-                        </Space>
-                      }
-                    >
-                      <Form form={globalForm} layout="vertical" size="small">
-                        <Row gutter={12}>
-                          <Col span={12}>
-                            <Form.Item label="保留天数" name="retention_days" rules={[{ required: true }]} style={{ marginBottom: 12 }}>
-                              <InputNumber min={1} max={3650} style={{ width: "100%" }} addonAfter="天" />
-                            </Form.Item>
-                          </Col>
-                          <Col span={12}>
-                            <Form.Item label="启用自动清理" name="enabled" valuePropName="checked" style={{ marginBottom: 12 }}>
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col span={24}>
-                            <Form.Item label="索引模式" name="index_pattern" style={{ marginBottom: 12 }}>
-                              <Input placeholder="默认 yunshu-agent-*" />
-                            </Form.Item>
-                          </Col>
-                          <Col span={24}>
-                            <Form.Item label="备注" name="remark" style={{ marginBottom: 0 }}>
-                              <Input placeholder="可选" />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-                      </Form>
-                    </Card>
-                  </Col>
-
-                  <Col xs={24} lg={14}>
-                    <Card size="small" title="项目级覆盖">
-                      <Space wrap size={8} style={{ marginBottom: 12, width: "100%" }}>
-                        <Select
-                          style={{ minWidth: 220, flex: 1 }}
-                          placeholder="选择项目"
-                          options={projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))}
-                          value={projectId}
-                          onChange={setProjectId}
-                          allowClear
+                <div className="log-retention-policy-grid">
+                  <Card
+                    size="small"
+                    title="全局默认策略"
+                    extra={
+                      <Space size={8} wrap>
+                        <Button
                           size="small"
-                        />
-                        <InputNumber
-                          size="small"
-                          min={1}
-                          max={3650}
-                          value={projectDays}
-                          onChange={(v) => setProjectDays(v ?? 30)}
-                          addonAfter="天"
-                        />
-                        <span>
-                          启用 <Switch size="small" checked={projectEnabled} onChange={setProjectEnabled} />
-                        </span>
-                        <Button size="small" type="primary" onClick={() => void saveProjectOverride()}>
-                          保存覆盖
+                          icon={<PlayCircleOutlined />}
+                          onClick={() =>
+                            void (async () => {
+                              const res = await runLogRetentionCleanup();
+                              message.success(res.message || "清理完成");
+                              await reloadES();
+                            })()
+                          }
+                        >
+                          立即清理
                         </Button>
-                        <Button size="small" danger icon={<DeleteOutlined />} onClick={() => void removeProjectOverride()}>
-                          删除
+                        <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => void saveGlobal()}>
+                          保存
                         </Button>
                       </Space>
-                      <Table
-                        rowKey={(r) => `${r.project_id}-${r.id}`}
+                    }
+                  >
+                    <Form form={globalForm} layout="vertical" size="small">
+                      <Row gutter={12}>
+                        <Col xs={24} sm={12}>
+                          <Form.Item label="保留天数" name="retention_days" rules={[{ required: true }]} style={{ marginBottom: 12 }}>
+                            <InputNumber min={1} max={3650} style={{ width: "100%" }} addonAfter="天" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} sm={12}>
+                          <Form.Item label="启用自动清理" name="enabled" valuePropName="checked" style={{ marginBottom: 12 }}>
+                            <Switch />
+                          </Form.Item>
+                        </Col>
+                        <Col span={24}>
+                          <Form.Item
+                            label="索引模式"
+                            name="index_pattern"
+                            style={{ marginBottom: 12 }}
+                            extra="建议填写 yunshu-agent-*（勿再用历史 yunshu-logs-*）"
+                          >
+                            <Input placeholder="默认 yunshu-agent-*" />
+                          </Form.Item>
+                        </Col>
+                        <Col span={24}>
+                          <Form.Item label="备注" name="remark" style={{ marginBottom: 0 }}>
+                            <Input placeholder="可选" />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </Form>
+                  </Card>
+
+                  <Card size="small" title="项目级覆盖">
+                    <Space className="ops-filter-bar" wrap size={8} style={{ marginBottom: 12, width: "100%" }}>
+                      <Select
+                        style={{ minWidth: 0, width: "min(280px, 100%)", flex: "1 1 200px" }}
+                        placeholder="选择项目"
+                        options={projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))}
+                        value={projectId}
+                        onChange={setProjectId}
+                        allowClear
                         size="small"
-                        dataSource={projectOverrides}
-                        pagination={false}
-                        locale={{ emptyText: "无项目覆盖，均继承全局策略" }}
-                        columns={[
-                          {
-                            title: "项目",
-                            dataIndex: "project_id",
-                            render: (id: number) => {
-                              const p = projects.find((x) => x.id === id);
-                              return p ? `${p.name} (${p.code})` : id;
-                            },
-                          },
-                          { title: "天数", dataIndex: "retention_days", width: 80 },
-                          {
-                            title: "启用",
-                            dataIndex: "enabled",
-                            width: 80,
-                            render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>),
-                          },
-                          { title: "索引模式", dataIndex: "index_pattern", ellipsis: true, render: (v?: string) => v || "-" },
-                          {
-                            title: "更新",
-                            dataIndex: "updated_at",
-                            width: 150,
-                            render: (v?: string) => (v ? formatDateTime(v) : "-"),
-                          },
-                        ]}
                       />
-                    </Card>
-                  </Col>
-                </Row>
-              </Space>
+                      <InputNumber
+                        size="small"
+                        min={1}
+                        max={3650}
+                        value={projectDays}
+                        onChange={(v) => setProjectDays(v ?? 30)}
+                        addonAfter="天"
+                      />
+                      <span>
+                        启用 <Switch size="small" checked={projectEnabled} onChange={setProjectEnabled} />
+                      </span>
+                      <Button size="small" type="primary" onClick={() => void saveProjectOverride()}>
+                        保存覆盖
+                      </Button>
+                      <Button size="small" danger icon={<DeleteOutlined />} onClick={() => void removeProjectOverride()}>
+                        删除
+                      </Button>
+                    </Space>
+                    <Table
+                      rowKey={(r) => `${r.project_id}-${r.id}`}
+                      size="small"
+                      dataSource={projectOverrides}
+                      pagination={false}
+                      scroll={{ x: 560 }}
+                      locale={{ emptyText: "无项目覆盖，均继承全局策略" }}
+                      columns={[
+                        {
+                          title: "项目",
+                          dataIndex: "project_id",
+                          ellipsis: true,
+                          render: (id: number) => {
+                            const p = projects.find((x) => x.id === id);
+                            return p ? `${p.name} (${p.code})` : id;
+                          },
+                        },
+                        { title: "天数", dataIndex: "retention_days", width: 72 },
+                        {
+                          title: "启用",
+                          dataIndex: "enabled",
+                          width: 72,
+                          render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>),
+                        },
+                        { title: "索引模式", dataIndex: "index_pattern", ellipsis: true, render: (v?: string) => v || "-" },
+                        {
+                          title: "更新",
+                          dataIndex: "updated_at",
+                          width: 150,
+                          render: (v?: string) => (v ? formatDateTime(v) : "-"),
+                        },
+                      ]}
+                    />
+                  </Card>
+                </div>
+              </div>
             ),
           },
           {
@@ -438,7 +455,7 @@ export function LogRetentionPage() {
                 <Alert
                   type="info"
                   showIcon
-                  message="开启 Kafka 后：每个 Agent 独立 Topic（yunshu-agent-{服务器IP}-YYYY.MM.DD），ES 索引同名形态。引导/热更 Agent 时会自动建当日 Topic。"
+                  message="开启 Kafka 后：每个 Agent 独立 Topic（yunshu-agent-{服务器IP}-YYYY.MM.DD）。引导/热更 Agent 会自动创建当日 Topic；若 Agent 仍在写入，Broker 也可能因 auto.create.topics 自动重建已删 Topic。"
                 />
 
                 {showEmptyTopicHint ? (
@@ -453,7 +470,7 @@ export function LogRetentionPage() {
                   <Alert type={kafkaStats.sink_via_kafka ? "info" : "warning"} showIcon message={kafkaStats.message} />
                 ) : null}
 
-                <Row gutter={[16, 16]}>
+                <Row gutter={[12, 12]}>
                   <Col xs={24} sm={12} md={6}>
                     <Card size="small">
                       <Statistic
@@ -505,16 +522,19 @@ export function LogRetentionPage() {
                     <div style={{ marginTop: 8 }}>
                       <Space wrap size={[4, 4]}>
                         {kafkaStats!.topics!.map((t) => (
-                          <Tag
+                          <Popconfirm
                             key={t}
-                            closable
-                            onClose={(e) => {
-                              e.preventDefault();
-                              void handleDeleteTopic(t);
-                            }}
+                            title={`确认删除 Topic ${t}？`}
+                            description="若 Agent 仍在写入或热更，Topic 可能被自动重建"
+                            okText="删除"
+                            okButtonProps={{ danger: true }}
+                            cancelText="取消"
+                            onConfirm={() => void handleDeleteTopic(t)}
                           >
-                            {t}
-                          </Tag>
+                            <Tag closable onClose={(e) => e.preventDefault()}>
+                              {t}
+                            </Tag>
+                          </Popconfirm>
                         ))}
                       </Space>
                     </div>
@@ -524,73 +544,81 @@ export function LogRetentionPage() {
                   ) : null}
                 </Card>
 
-                <Card title="Topic 积压（展开查看分区）" size="small">
-                  <Table
-                    rowKey="topic"
-                    size="small"
-                    loading={kafkaLoading}
-                    pagination={{ pageSize: 10, size: "small" }}
-                    dataSource={topicRows}
-                    locale={{ emptyText: kafkaStats?.sink_via_kafka ? "暂无 Topic 数据" : "未启用 Kafka 中转" }}
-                    expandable={{
-                      expandedRowRender: (row) => (
-                        <Table
-                          size="small"
-                          pagination={false}
-                          rowKey={(r) => `${r.topic ?? ""}-${r.partition}`}
-                          dataSource={row.partitions}
-                          columns={[
-                            { title: "分区", dataIndex: "partition", width: 80 },
-                            { title: "高水位", dataIndex: "high_water_mark", width: 120 },
-                            {
-                              title: "消费位移",
-                              dataIndex: "consumer_offset",
-                              width: 120,
-                              render: (v: number) => (v < 0 ? "-" : v),
-                            },
-                            {
-                              title: "Lag",
-                              dataIndex: "lag",
-                              width: 100,
-                              render: (v: number) =>
-                                v < 0 ? <Tag>-</Tag> : <Tag color={v > 1000 ? "red" : v > 0 ? "orange" : "green"}>{v}</Tag>,
-                            },
-                          ]}
-                        />
-                      ),
-                      rowExpandable: (row) => (row.partitions?.length ?? 0) > 0,
-                    }}
-                    columns={[
-                      { title: "Topic", dataIndex: "topic", ellipsis: true },
-                      {
-                        title: "分区数",
-                        width: 90,
-                        render: (_, row) => row.partitions.length || "-",
-                      },
-                      {
-                        title: "Lag 合计",
-                        dataIndex: "lag_total",
-                        width: 110,
-                        render: (v: number) =>
-                          v > 0 ? <Tag color={v > 1000 ? "red" : "orange"}>{v}</Tag> : <Tag color="green">0</Tag>,
-                      },
-                      {
-                        title: "操作",
-                        width: 90,
-                        render: (_, row) => (
-                          <Button
-                            type="link"
-                            danger
+                <Card className="table-card" title="Topic 积压（展开查看分区）" size="small">
+                  <div className="k8s-table-scroll-host">
+                    <Table
+                      rowKey="topic"
+                      size="small"
+                      loading={kafkaLoading}
+                      pagination={{ pageSize: 10, size: "small" }}
+                      dataSource={topicRows}
+                      scroll={{ x: 560 }}
+                      locale={{ emptyText: kafkaStats?.sink_via_kafka ? "暂无 Topic 数据" : "未启用 Kafka 中转" }}
+                      expandable={{
+                        expandedRowRender: (row) => (
+                          <Table
                             size="small"
-                            icon={<DeleteOutlined />}
-                            onClick={() => void handleDeleteTopic(row.topic)}
-                          >
-                            删除
-                          </Button>
+                            pagination={false}
+                            rowKey={(r) => `${r.topic ?? ""}-${r.partition}`}
+                            dataSource={row.partitions}
+                            columns={[
+                              { title: "分区", dataIndex: "partition", width: 80 },
+                              { title: "高水位", dataIndex: "high_water_mark", width: 120 },
+                              {
+                                title: "消费位移",
+                                dataIndex: "consumer_offset",
+                                width: 120,
+                                render: (v: number) => (v < 0 ? "-" : v),
+                              },
+                              {
+                                title: "Lag",
+                                dataIndex: "lag",
+                                width: 100,
+                                render: (v: number) =>
+                                  v < 0 ? <Tag>-</Tag> : <Tag color={v > 1000 ? "red" : v > 0 ? "orange" : "green"}>{v}</Tag>,
+                              },
+                            ]}
+                          />
                         ),
-                      },
-                    ]}
-                  />
+                        rowExpandable: (row) => (row.partitions?.length ?? 0) > 0,
+                      }}
+                      columns={[
+                        { title: "Topic", dataIndex: "topic", ellipsis: true },
+                        {
+                          title: "分区数",
+                          width: 90,
+                          render: (_, row) => row.partitions.length || "-",
+                        },
+                        {
+                          title: "Lag 合计",
+                          dataIndex: "lag_total",
+                          width: 110,
+                          render: (v: number) =>
+                            v > 0 ? <Tag color={v > 1000 ? "red" : "orange"}>{v}</Tag> : <Tag color="green">0</Tag>,
+                        },
+                        {
+                          title: "操作",
+                          key: "action",
+                          width: 88,
+                          fixed: "right",
+                          render: (_, row) => (
+                            <Popconfirm
+                              title={`确认删除 Topic ${row.topic}？`}
+                              description="若 Agent 仍在写入，Broker 可能自动重建该 Topic；建议先热更/停止对应 Agent。"
+                              okText="删除"
+                              okButtonProps={{ danger: true }}
+                              cancelText="取消"
+                              onConfirm={() => void handleDeleteTopic(row.topic)}
+                            >
+                              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                                删除
+                              </Button>
+                            </Popconfirm>
+                          ),
+                        },
+                      ]}
+                    />
+                  </div>
                 </Card>
               </Space>
             ),
