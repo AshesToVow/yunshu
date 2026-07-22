@@ -501,7 +501,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ### 1. 登录与概览
 
 #### 系统登录页面-账密登录
-![image-20260722153914496](D:\gocode\yunshu\images\image-20260722153914496.png)
+![image-20260722153914496](./images/image-20260722153914496.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 用户名/密码登录
@@ -509,7 +509,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 第三方统一登录（如 OAuth2 / SSO）
 
 #### 系统登录页面-邮箱登录
-![image-20260722154255514](D:\gocode\yunshu\images\image-20260722154255514.png)
+![image-20260722154255514](./images/image-20260722154255514.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 邮箱验证码登录流程
@@ -517,7 +517,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 多因子验证（MFA）统一入口
 
 #### 概览页面
-![image-20260722154444834](D:\gocode\yunshu\images\image-20260722154444834.png)
+![image-20260722154444834](./images/image-20260722154444834.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 系统总览数据展示
@@ -530,7 +530,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ### 2. 系统管理
 
 #### 系统管理-用户管理页面
-![image-20260722154513570](D:\gocode\yunshu\images\image-20260722154513570.png)
+![image-20260722154513570](./images/image-20260722154513570.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 用户增删改查
@@ -538,7 +538,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 
 #### 用户管理-用户设置页面
-![image-20260722154529600](D:\gocode\yunshu\images\image-20260722154529600.png)
+![image-20260722154529600](./images/image-20260722154529600.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 个人信息维护
@@ -546,7 +546,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 个性化主题/通知偏好
 
 #### 系统管理-角色管理页面
-![image-20260722154548617](D:\gocode\yunshu\images\image-20260722154548617.png)
+![image-20260722154548617](./images/image-20260722154548617.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 角色增删改查
@@ -554,7 +554,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 角色模板快速复制
 
 #### 系统管理-授权管理页面
-![image-20260722154610588](D:\gocode\yunshu\images\image-20260722154610588.png)
+![image-20260722154610588](./images/image-20260722154610588.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] Casbin 权限规则维护
@@ -562,7 +562,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 可视化权限冲突分析
 
 #### 系统管理-菜单管理页面
-![image-20260722154625521](D:\gocode\yunshu\images\image-20260722154625521.png)
+![image-20260722154625521](./images/image-20260722154625521.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 菜单树管理
@@ -570,7 +570,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 菜单版本回滚
 
 #### 系统管理-组织架构管理页面
-![image-20260722154645177](D:\gocode\yunshu\images\image-20260722154645177.png)
+![image-20260722154645177](./images/image-20260722154645177.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 部门树管理
@@ -578,7 +578,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 组织历史变更审计报表
 
 #### 系统管理-数据字典管理页面
-![image-20260722154702314](D:\gocode\yunshu\images\image-20260722154702314.png)
+![image-20260722154702314](./images/image-20260722154702314.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 字典项增删改查
@@ -587,7 +587,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 分类管理
 
 #### 系统管理-登录日志页面
-![image-20260722154728049](D:\gocode\yunshu\images\image-20260722154728049.png)
+![image-20260722154728049](./images/image-20260722154728049.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 登录记录查询
@@ -596,7 +596,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 异常登录记录日志
 
 #### 系统管理-操作日志管理
-![image-20260722154802419](D:\gocode\yunshu\images\image-20260722154802419.png)
+![image-20260722154802419](./images/image-20260722154802419.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 操作行为审计
@@ -604,7 +604,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 
 #### 系统管理-IP封禁管理页面
-![image-20260722154827161](D:\gocode\yunshu\images\image-20260722154827161.png)
+![image-20260722154827161](./images/image-20260722154827161.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 封禁列表管理
@@ -612,7 +612,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 自动解封策略配置
 
 #### 系统管理-注册审核管理页面
-![image-20260722154858095](D:\gocode\yunshu\images\image-20260722154858095.png)
+![image-20260722154858095](./images/image-20260722154858095.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 注册申请审核
@@ -620,7 +620,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 审核 SLA 超时提醒
 
 #### 系统管理-API管理页面
-![image-20260722154917033](D:\gocode\yunshu\images\image-20260722154917033.png)
+![image-20260722154917033](./images/image-20260722154917033.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] API 资源项管理
@@ -640,7 +640,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ### 3. 项目管理
 
 #### 项目管理-项目列表页面
-![image-20260722155001435](D:\gocode\yunshu\images\image-20260722155001435.png)
+![image-20260722155001435](./images/image-20260722155001435.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 项目增删改查
@@ -649,7 +649,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 项目归档功能
 
 #### 项目管理-服务器管理页面
-![image-20260722155148408](D:\gocode\yunshu\images\image-20260722155148408.png)
+![image-20260722155148408](./images/image-20260722155148408.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 项目服务器管理
@@ -659,7 +659,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 项目管理-项目成员页面
 
-![image-20260722155125590](D:\gocode\yunshu\images\image-20260722155125590.png)
+![image-20260722155125590](./images/image-20260722155125590.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 项目成员增删改
@@ -674,9 +674,9 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 日志平台-服务与日志源
 
-![image-20260722155209424](D:\gocode\yunshu\images\image-20260722155209424.png)
+![image-20260722155209424](./images/image-20260722155209424.png)
 
-![image-20260722155225324](D:\gocode\yunshu\images\image-20260722155225324.png)
+![image-20260722155225324](./images/image-20260722155225324.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 服务与日志源合并配置页（Tabs）
@@ -685,7 +685,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 多行合并（Loggie `multi.active`，Java 堆栈 / CRI / JSON 续行）
 
 #### 日志平台-日志检索
-![image-20260722155301298](D:\gocode\yunshu\images\image-20260722155301298.png)
+![image-20260722155301298](./images/image-20260722155301298.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 按项目 / 服务器 / 服务 / 级别 / 文件路径 / 关键字 / 时间检索
@@ -695,7 +695,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 日志平台-保留策略
 
-![image-20260722155330064](D:\gocode\yunshu\images\image-20260722155330064.png)
+![image-20260722155330064](./images/image-20260722155330064.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 全局 / 项目级保留天数
@@ -705,7 +705,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 日志平台-Agent 管理
 
-![image-20260722155422523](D:\gocode\yunshu\images\image-20260722155422523.png)
+![image-20260722155422523](./images/image-20260722155422523.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 引导 / 离线安装 / 热更 pipeline / 启停重启 / 卸载
@@ -720,13 +720,13 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 数据库管理-实例与 SQL 操作
 
-![image-20260722155450267](D:\gocode\yunshu\images\image-20260722155450267.png)
+![image-20260722155450267](./images/image-20260722155450267.png)
 
-![image-20260722155631413](D:\gocode\yunshu\images\image-20260722155631413.png)
+![image-20260722155631413](./images/image-20260722155631413.png)
 
-![image-20260722155717290](D:\gocode\yunshu\images\image-20260722155717290.png)
+![image-20260722155717290](./images/image-20260722155717290.png)
 
-![image-20260722155740083](D:\gocode\yunshu\images\image-20260722155740083.png)
+![image-20260722155740083](./images/image-20260722155740083.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
@@ -740,15 +740,15 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 数据库管理-授权与工单
 
-![image-20260722155532516](D:\gocode\yunshu\images\image-20260722155532516.png)
+![image-20260722155532516](./images/image-20260722155532516.png)
 
-![image-20260722155555292](D:\gocode\yunshu\images\image-20260722155555292.png)
+![image-20260722155555292](./images/image-20260722155555292.png)
 
-![image-20260722155612961](D:\gocode\yunshu\images\image-20260722155612961.png)
+![image-20260722155612961](./images/image-20260722155612961.png)
 
-![image-20260722155824600](D:\gocode\yunshu\images\image-20260722155824600.png)
+![image-20260722155824600](./images/image-20260722155824600.png)
 
-![image-20260722155906055](D:\gocode\yunshu\images\image-20260722155906055.png)
+![image-20260722155906055](./images/image-20260722155906055.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 平台查询权限申请（SELECT + 行数上限 `query_limit_num`）
@@ -764,7 +764,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ### 6. 告警平台
 
 #### 告警平台-数据源配置页面
-![image-20260722155925604](D:\gocode\yunshu\images\image-20260722155925604.png)
+![image-20260722155925604](./images/image-20260722155925604.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 告警数据源按项目绑定
@@ -773,16 +773,16 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 数据源启用/关停
 
 #### 告警平台-告警规则与值班人配置页面
-![image-20260722160020764](D:\gocode\yunshu\images\image-20260722160020764.png)
+![image-20260722160020764](./images/image-20260722160020764.png)
 
-![done](D:\gocode\yunshu\images\image-20260722160054336.png)
+![done](./images/image-20260722160054336.png)
 
 - [x] 规则管理与值班人配置
 - [x] 规则项目归属由数据源派生
 - [ ] 规则变更审批流
 
 #### 告警平台-值班总览页面
-![image-20260722160116960](D:\gocode\yunshu\images\image-20260722160116960.png)
+![image-20260722160116960](./images/image-20260722160116960.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 值班排班总览
@@ -790,7 +790,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 值班冲突自动检测
 
 #### 告警平台-告警策略与告警记录页面
-![image-20260722160141488](D:\gocode\yunshu\images\image-20260722160141488.png)
+![image-20260722160141488](./images/image-20260722160141488.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 告警策略配置
@@ -798,7 +798,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [ ] 记录导出与归档
 
 #### 告警平台-告警静默页面
-![image-20260722160159668](D:\gocode\yunshu\images\image-20260722160159668.png)
+![image-20260722160159668](./images/image-20260722160159668.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 静默规则管理
@@ -806,7 +806,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 静默模板管理
 
 #### 告警通知-告警渠道页面
-![image-20260722160211847](D:\gocode\yunshu\images\image-20260722160211847.png)
+![image-20260722160211847](./images/image-20260722160211847.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] 告警渠道配置
@@ -814,7 +814,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 渠道联调测试按钮
 
 #### 告警平台-promql查询页面
-![image-20260722160227204](D:\gocode\yunshu\images\image-20260722160227204.png)
+![image-20260722160227204](./images/image-20260722160227204.png)
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 
 - [x] PromQL 查询调试
@@ -847,11 +847,11 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 集群与基础资源
 
-![image-20260722160247861](D:\gocode\yunshu\images\image-20260722160247861.png)
-![image-20260722160303512](D:\gocode\yunshu\images\image-20260722160303512.png)
-![image-20260722160317928](D:\gocode\yunshu\images\image-20260722160317928.png)
-![image-20260722160330929](D:\gocode\yunshu\images\image-20260722160330929.png)
-![image-20260722165220058](D:\gocode\yunshu\images\image-20260722165220058.png)
+![image-20260722160247861](./images/image-20260722160247861.png)
+![image-20260722160303512](./images/image-20260722160303512.png)
+![image-20260722160317928](./images/image-20260722160317928.png)
+![image-20260722160330929](./images/image-20260722160330929.png)
+![image-20260722165220058](./images/image-20260722165220058.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 集群、命名空间、节点、Pod 基础管理
@@ -863,11 +863,11 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 工作负载
 
-![image-20260722165311251](D:\gocode\yunshu\images\image-20260722165311251.png)
-![image-20260722165336458](D:\gocode\yunshu\images\image-20260722165336458.png)
-![image-20260722165357361](D:\gocode\yunshu\images\image-20260722165357361.png)
-![image-20260722165414352](D:\gocode\yunshu\images\image-20260722165414352.png)
-![image-20260722165430800](D:\gocode\yunshu\images\image-20260722165430800.png)
+![image-20260722165311251](./images/image-20260722165311251.png)
+![image-20260722165336458](./images/image-20260722165336458.png)
+![image-20260722165357361](./images/image-20260722165357361.png)
+![image-20260722165414352](./images/image-20260722165414352.png)
+![image-20260722165430800](./images/image-20260722165430800.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 工作负载列表与详情
@@ -876,14 +876,14 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 网络与配置
 
-![image-20260722165517717](D:\gocode\yunshu\images\image-20260722165517717.png)
-![image-20260722165541605](D:\gocode\yunshu\images\image-20260722165541605.png)
-![image-20260722165603738](D:\gocode\yunshu\images\image-20260722165603738.png)
-![image-20260722165625756](D:\gocode\yunshu\images\image-20260722165625756.png)
-![image-20260722165643057](D:\gocode\yunshu\images\image-20260722165643057.png)
-![image-20260722165702221](D:\gocode\yunshu\images\image-20260722165702221.png)
+![image-20260722165517717](./images/image-20260722165517717.png)
+![image-20260722165541605](./images/image-20260722165541605.png)
+![image-20260722165603738](./images/image-20260722165603738.png)
+![image-20260722165625756](./images/image-20260722165625756.png)
+![image-20260722165643057](./images/image-20260722165643057.png)
+![image-20260722165702221](./images/image-20260722165702221.png)
 
-![image-20260722165740045](D:\gocode\yunshu\images\image-20260722165740045.png)
+![image-20260722165740045](./images/image-20260722165740045.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] Service/Ingress/NetworkPolicy 管理
@@ -892,13 +892,13 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### 存储与扩展资源
 
-![image-20260722165808340](D:\gocode\yunshu\images\image-20260722165808340.png)
-![image-20260722165824646](D:\gocode\yunshu\images\image-20260722165824646.png)
-![image-20260722165840278](D:\gocode\yunshu\images\image-20260722165840278.png)
-![image-20260722165856152](D:\gocode\yunshu\images\image-20260722165856152.png)
-![image-20260722165914945](D:\gocode\yunshu\images\image-20260722165914945.png)
+![image-20260722165808340](./images/image-20260722165808340.png)
+![image-20260722165824646](./images/image-20260722165824646.png)
+![image-20260722165840278](./images/image-20260722165840278.png)
+![image-20260722165856152](./images/image-20260722165856152.png)
+![image-20260722165914945](./images/image-20260722165914945.png)
 
-![image-20260722165929052](D:\gocode\yunshu\images\image-20260722165929052.png)
+![image-20260722165929052](./images/image-20260722165929052.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] PV/PVC/StorageClass 管理
@@ -907,11 +907,11 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 #### RBAC 与三元策略
 
-![image-20260722165948064](D:\gocode\yunshu\images\image-20260722165948064.png)
-![image-20260722165959994](D:\gocode\yunshu\images\image-20260722165959994.png)
-![image-20260722170012736](D:\gocode\yunshu\images\image-20260722170012736.png)
-![image-20260722170025604](D:\gocode\yunshu\images\image-20260722170025604.png)
-![image-20260722170042888](D:\gocode\yunshu\images\image-20260722170042888.png)
+![image-20260722165948064](./images/image-20260722165948064.png)
+![image-20260722165959994](./images/image-20260722165959994.png)
+![image-20260722170012736](./images/image-20260722170012736.png)
+![image-20260722170025604](./images/image-20260722170025604.png)
+![image-20260722170042888](./images/image-20260722170042888.png)
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] K8s RBAC 资源可视化管理
@@ -928,25 +928,25 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
   #### 应用服务
 
-  ![image-20260722170301115](D:\gocode\yunshu\images\image-20260722170301115.png)
+  ![image-20260722170301115](./images/image-20260722170301115.png)
 
   #### 待办列表
 
-  ![image-20260722170428831](D:\gocode\yunshu\images\image-20260722170559841.png)
+  ![image-20260722170428831](./images/image-20260722170559841.png)
 
-  ![image-20260722170622318](D:\gocode\yunshu\images\image-20260722170622318.png)
+  ![image-20260722170622318](./images/image-20260722170622318.png)
 
   #### 审批配置
 
-  ![image-20260722170655167](D:\gocode\yunshu\images\image-20260722170655167.png)
+  ![image-20260722170655167](./images/image-20260722170655167.png)
 
   #### CI打包
 
-  ![image-20260722170806410](D:\gocode\yunshu\images\image-20260722170806410.png)
+  ![image-20260722170806410](./images/image-20260722170806410.png)
 
   #### CD发布
 
-  ![image-20260722170836326](D:\gocode\yunshu\images\image-20260722170836326.png)
+  ![image-20260722170836326](./images/image-20260722170836326.png)
 
 ---
 
