@@ -137,6 +137,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	if err != nil {
 		return nil, err
 	}
+	inspectService := provideInspectService(db, client, v53, v27, sender, appDisplayName)
 	v86 := provideElasticsearchProvider(app)
 	v87 := provideLogSearchService(v86, v77)
 	v88 := routerRouteRepositories.LogRetention
@@ -210,6 +211,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		K8sEventForwardAdmin: v96,
 		K8sSearch:            v97,
 		AlertMaintenance:     v42,
+		Inspect:              inspectService,
 	}
 	routeDeps, err := provideRouteDeps(app, routerRouteRepositories, routerRouteServices)
 	if err != nil {

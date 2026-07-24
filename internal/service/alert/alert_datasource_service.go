@@ -207,6 +207,11 @@ func (s *AlertDatasourceService) Delete(ctx context.Context, id uint) error {
 	return nil
 }
 
+// PrometheusClient 返回已启用的 Prometheus 客户端（含凭据明文，仅供服务端内部调用）。
+func (s *AlertDatasourceService) PrometheusClient(ctx context.Context, id uint) (*promapi.Client, *model.AlertDatasource, error) {
+	return s.clientFor(ctx, id)
+}
+
 func (s *AlertDatasourceService) clientFor(ctx context.Context, id uint) (*promapi.Client, *model.AlertDatasource, error) {
 	row, err := s.getRaw(ctx, id)
 	if err != nil {

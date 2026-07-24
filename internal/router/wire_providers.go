@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
@@ -203,6 +204,17 @@ func provideCicdService(
 	return cicdsvc.NewService(db, serverRepo, projectRepo, userGroupRepo, userRepo, cicdCfg, sender, string(appName), k8sNS)
 }
 
+func provideInspectService(
+	db *gorm.DB,
+	redisClient *redis.Client,
+	dsSvc *service.AlertDatasourceService,
+	projectRepo interfaces.ProjectRepository,
+	sender mailer.Sender,
+	appName AppDisplayName,
+) *inspectsvc.Service {
+	return inspectsvc.NewService(db, redisClient, dsSvc, projectRepo, sender, string(appName))
+}
+
 func provideK8sHelmService(
 	runtime *service.K8sRuntimeService,
 	db *gorm.DB,
@@ -315,6 +327,7 @@ var ServiceSet = wire.NewSet(
 	provideMysqlBackupService,
 	provideDbmgmtService,
 	provideCicdService,
+	provideInspectService,
 	provideElasticsearchProvider,
 	provideKafkaProvider,
 	provideKafkaToESService,

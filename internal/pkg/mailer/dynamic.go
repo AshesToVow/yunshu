@@ -38,3 +38,7 @@ func (s *DynamicSender) Send(ctx context.Context, toEmail, subject, textBody str
 func (s *DynamicSender) SendMultipart(ctx context.Context, toEmail, subject, textPlain, htmlBody string) error {
 	return NewSMTPSender(s.resolve(ctx)).SendMultipart(ctx, toEmail, subject, textPlain, htmlBody)
 }
+
+func (s *DynamicSender) SendWithAttachments(ctx context.Context, toEmail, subject, textPlain, htmlBody string, attachments []Attachment) error {
+	return NewSMTPSender(s.resolve(ctx)).SendWithAttachments(ctx, toEmail, subject, textPlain, htmlBody, attachments)
+}

@@ -33,14 +33,21 @@ func TestResolveMenuPathPluginCicd(t *testing.T) {
 	}
 }
 
-func TestIsAPIResourceAllowedCicdRequiresProject(t *testing.T) {
+func TestResolveInspectAPIAndMenu(t *testing.T) {
 	t.Parallel()
-	cfg := &config.PluginsConfig{Enabled: []string{"cicd"}}
-	if IsAPIResourceAllowed("/api/v1/projects/1/cicd/services", cfg) {
-		t.Fatal("cicd API should require project plugin")
+	if got := ResolveAPIResourcePlugin("/api/v1/projects/1/inspect/plan"); got != "inspect" {
+		t.Fatalf("expected inspect, got %q", got)
 	}
-	cfg.Enabled = []string{"cicd", "project"}
-	if !IsAPIResourceAllowed("/api/v1/projects/1/cicd/services", cfg) {
-		t.Fatal("expected allowed when both enabled")
+	if got := ResolveMenuPathPlugin("/project-inspect"); got != "inspect" {
+		t.Fatalf("expected inspect menu, got %q", got)
+	}
+	cfg := &config.PluginsConfig{Enabled: []string{"inspect"}}
+	if IsMenuPathAllowed("/project-inspect", cfg) {
+		t.Fatal("inspect menu should require project plugin")
+	}
+	cfg.Enabled = []string{"inspect", "project"}
+	if !IsMenuPathAllowed("/project-inspect", cfg) {
+		t.Fatal("expected inspect menu allowed")
 	}
 }
+

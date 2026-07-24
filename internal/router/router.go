@@ -34,6 +34,7 @@ func Register(app *bootstrap.App, bgCtx context.Context) (*eventforward.Manager,
 		Dbmgmt:                  d.DbmgmtService(),
 		Cicd:                    d.CicdService(),
 		Alert:                   d.AlertService(),
+		Inspect:                 d.InspectService(),
 		LogRetention:            d.LogRetentionService(),
 		KafkaToES:               d.KafkaToESService(),
 	}

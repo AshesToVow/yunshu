@@ -38,6 +38,9 @@ func ResolveAPIResourcePlugin(resource string) string {
 	if plugin := resolveBackupAPIResource(r); plugin != "" {
 		return plugin
 	}
+	if plugin := resolveInspectAPIResource(r); plugin != "" {
+		return plugin
+	}
 	for _, rule := range apiResourceRules {
 		for _, prefix := range rule.prefixes {
 			if strings.HasPrefix(r, prefix) {
@@ -66,6 +69,9 @@ func IsMenuPathAllowed(path string, cfg *config.PluginsConfig) bool {
 	if pluginName == "backup" {
 		return isPluginEnabled(cfg, "backup") && isPluginEnabled(cfg, "project")
 	}
+	if pluginName == "inspect" {
+		return isPluginEnabled(cfg, "inspect") && isPluginEnabled(cfg, "project")
+	}
 	return isPluginEnabled(cfg, pluginName)
 }
 
@@ -86,6 +92,9 @@ func IsAPIResourceAllowed(resource string, cfg *config.PluginsConfig) bool {
 	}
 	if pluginName == "backup" {
 		return isPluginEnabled(cfg, "backup") && isPluginEnabled(cfg, "project")
+	}
+	if pluginName == "inspect" {
+		return isPluginEnabled(cfg, "inspect") && isPluginEnabled(cfg, "project")
 	}
 	return isPluginEnabled(cfg, pluginName)
 }
@@ -160,6 +169,7 @@ var uiPathRules = []pathRule{
 	{plugin: "backup", prefixes: []string{"/mysql-backup"}},
 	{plugin: "dbmgmt", prefixes: []string{"/dbmgmt"}},
 	{plugin: "cicd", prefixes: []string{"/cicd"}},
+	{plugin: "inspect", prefixes: []string{"/project-inspect"}},
 }
 
 var apiResourceRules = []pathRule{
@@ -224,6 +234,13 @@ func resolveBackupAPIResource(resource string) string {
 	return ""
 }
 
+func resolveInspectAPIResource(resource string) string {
+	if strings.Contains(resource, "/projects/") && strings.Contains(resource, "/inspect") {
+		return "inspect"
+	}
+	return ""
+}
+
 func normalizeUIPath(path string) string {
 	p := strings.TrimSpace(strings.ToLower(path))
 	if p == "" {
@@ -256,7 +273,7 @@ func isPluginEnabled(cfg *config.PluginsConfig, name string) bool {
 }
 
 func resolveEnabled(cfg *config.PluginsConfig) map[string]bool {
-	names := []string{"core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt"}
+	names := []string{"core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect"}
 	if cfg != nil && len(cfg.Enabled) > 0 {
 		names = cfg.Enabled
 	}

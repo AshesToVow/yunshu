@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{.Project}} — 巡检报告</title>
+  <style>
+    body { font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; margin: 24px; color: #1f2937; background: #f8fafc; }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    .meta { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .score { font-size: 36px; font-weight: 700; color: #0f766e; }
+    .grade { font-size: 18px; margin-left: 8px; color: #334155; }
+    .stats span { display: inline-block; margin-right: 12px; font-size: 13px; }
+    .critical { color: #dc2626; }
+    .warning { color: #d97706; }
+    .normal { color: #059669; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 8px 6px; text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; }
+    .hint { font-size: 12px; color: #64748b; margin: 8px 0 0; }
+    ul.findings { margin: 0; padding-left: 18px; }
+    @media print { body { background: #fff; } .card { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <h1>{{.Project}} 巡检报告</h1>
+  <div class="meta">
+    时间：{{.Timestamp.Format "2006-01-02 15:04:05"}}
+    {{if .InspectionUser}} · 执行人：{{.InspectionUser}}{{end}}
+    {{if .Datasource}} · 数据源：{{.Datasource}}{{end}}
+  </div>
+
+  <div class="card">
+    <div><span class="score">{{fmtFloat .Score}}</span><span class="grade">{{.Grade}}</span></div>
+    <p>{{.Summary}}</p>
+    <div class="stats">
+      <span>总计 {{.Total}}</span>
+      <span class="critical">严重 {{.Critical}}</span>
+      <span class="warning">警告 {{.Warning}}</span>
+      <span class="normal">正常 {{.Normal}}</span>
+    </div>
+    <p class="hint">{{.ReportListHint}}</p>
+  </div>
+
+  {{if .Findings}}
+  <div class="card">
+    <h2 style="font-size:16px;margin:0 0 8px;">主要发现</h2>
+    <ul class="findings">
+      {{range .Findings}}
+      <li class="{{.Severity}}">[{{statusText .Severity}}] {{.Type}} / {{.Name}} ×{{.Count}} — {{.Hint}}</li>
+      {{end}}
+    </ul>
+  </div>
+  {{end}}
+
+  {{range .Groups}}
+  <div class="card">
+    <h2 style="font-size:16px;margin:0 0 8px;">{{.Type}}
+      <span class="hint">（{{.Stats.Total}}，严重 {{.Stats.Critical}} / 警告 {{.Stats.Warning}}）</span>
+    </h2>
+    {{if .Metrics}}
+    <table>
+      <thead>
+        <tr><th>名称</th><th>实例</th><th>值</th><th>阈值</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        {{range .Metrics}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{.Instance}}</td>
+          <td>{{fmtFloat .Value}}{{.Unit}}</td>
+          <td>{{fmtFloat .Threshold}}{{.Unit}}</td>
+          <td class="{{.Status}}">{{statusText .Status}}{{if .Error}} ({{.Error}}){{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="hint">本分类无明细（当前模式已过滤正常项）。</p>
+    {{end}}
+  </div>
+  {{end}}
+</body>
+</html>

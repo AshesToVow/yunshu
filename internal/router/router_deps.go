@@ -10,6 +10,7 @@ import (
 	"yunshu/internal/service"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/gin-gonic/gin"
 )
@@ -91,6 +92,8 @@ type RouteDeps struct {
 	loggieHandler          *handler.LoggieHandler
 	logRetentionSvc        *service.LogRetentionService
 	kafkaToESSvc           *service.KafkaToESService
+	inspectSvc             *inspectsvc.Service
+	inspectHandler         *handler.InspectHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -149,6 +152,14 @@ func (d *RouteDeps) KafkaToESService() *service.KafkaToESService {
 	return d.kafkaToESSvc
 }
 
+// InspectService 供 inspect 插件调度器使用。
+func (d *RouteDeps) InspectService() *inspectsvc.Service {
+	if d == nil {
+		return nil
+	}
+	return d.inspectSvc
+}
+
 func assembleRouteDeps(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
 	if repos == nil {
 		repos = newRouteRepositories(app.DB)
@@ -178,6 +189,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, repos *routeRepositories, svcs *
 	mysqlBackupHandler := handler.NewMysqlBackupHandler(svcs.MysqlBackup)
 	dbmgmtHandler := handler.NewDbmgmtHandler(svcs.Dbmgmt)
 	cicdHandler := handler.NewCicdHandler(svcs.Cicd)
+	inspectHandler := handler.NewInspectHandler(svcs.Inspect)
 
 	authHandler := handler.NewAuthHandler(svcs.Auth, svcs.LoginLog)
 	loginLogHandler := handler.NewLoginLogHandler(svcs.LoginLog)
@@ -321,5 +333,7 @@ func wireRouteDepsWithRepos(app *bootstrap.App, repos *routeRepositories, svcs *
 		loggieHandler:         loggieHandler,
 		logRetentionSvc:       svcs.LogRetention,
 		kafkaToESSvc:          svcs.KafkaToES,
+		inspectSvc:            svcs.Inspect,
+		inspectHandler:        inspectHandler,
 	}, nil
 }

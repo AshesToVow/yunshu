@@ -14,6 +14,7 @@ plugins:
     - backup
     - cicd
     - dbmgmt
+    - inspect
 
 # 数据库管理（字典 dbmgmt_* 可覆盖）
 dbmgmt:

@@ -3,6 +3,7 @@ package router
 import (
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	inspectsvc "yunshu/internal/service/inspect"
 	"yunshu/internal/service"
 )
 
@@ -64,4 +65,5 @@ type routeServices struct {
 	K8sEventForwardAdmin *service.K8sEventForwardAdminService
 	K8sSearch            *service.K8sSearchService
 	AlertMaintenance     *service.AlertMaintenanceService
+	Inspect              *inspectsvc.Service
 }
