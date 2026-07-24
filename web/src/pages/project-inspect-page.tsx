@@ -63,13 +63,29 @@ function parseRecipients(raw?: string): string[] {
   }
 }
 
+function toReportBlob(raw: unknown, type: string): Blob {
+  if (raw instanceof Blob) return raw;
+  // http 拦截器会解包为 response.data；TS 仍可能标成 AxiosResponse
+  if (raw && typeof raw === "object" && "data" in raw) {
+    const inner = (raw as { data: unknown }).data;
+    if (inner instanceof Blob) return inner;
+    if (typeof inner === "string" || inner instanceof ArrayBuffer || ArrayBuffer.isView(inner)) {
+      return new Blob([inner as BlobPart], { type });
+    }
+  }
+  if (typeof raw === "string" || raw instanceof ArrayBuffer || ArrayBuffer.isView(raw)) {
+    return new Blob([raw as BlobPart], { type });
+  }
+  return new Blob([], { type });
+}
+
 function openAuthorized(url: string) {
   void http
     .get(url, { responseType: "blob" })
-    .then((data) => {
+    .then((raw: unknown) => {
       const type = url.endsWith(".pdf") ? "application/pdf" : "text/html;charset=utf-8";
-      const blob = data instanceof Blob ? data : new Blob([data as BlobPart], { type });
-      const obj = URL.createObjectURL(blob.type ? blob : new Blob([blob], { type }));
+      const blob = toReportBlob(raw, type);
+      const obj = URL.createObjectURL(blob);
       window.open(obj, "_blank");
       setTimeout(() => URL.revokeObjectURL(obj), 60_000);
     })
