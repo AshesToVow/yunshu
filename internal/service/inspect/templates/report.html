@@ -2,83 +2,179 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{.Project}} — 巡检报告</title>
   <style>
-    body { font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; margin: 24px; color: #1f2937; background: #f8fafc; }
-    h1 { margin: 0 0 8px; font-size: 22px; }
-    .meta { color: #64748b; font-size: 13px; margin-bottom: 20px; }
-    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-    .score { font-size: 36px; font-weight: 700; color: #0f766e; }
-    .grade { font-size: 18px; margin-left: 8px; color: #334155; }
-    .stats span { display: inline-block; margin-right: 12px; font-size: 13px; }
-    .critical { color: #dc2626; }
-    .warning { color: #d97706; }
-    .normal { color: #059669; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border-bottom: 1px solid #e2e8f0; padding: 8px 6px; text-align: left; vertical-align: top; }
-    th { background: #f1f5f9; }
-    .hint { font-size: 12px; color: #64748b; margin: 8px 0 0; }
-    ul.findings { margin: 0; padding-left: 18px; }
-    @media print { body { background: #fff; } .card { break-inside: avoid; } }
+    :root {
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --bg: #eef2f7;
+      --card: #ffffff;
+      --brand: #0f766e;
+      --critical: #dc2626;
+      --warning: #d97706;
+      --normal: #059669;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 400px at 10% -10%, #ccfbf1 0%, transparent 55%),
+        radial-gradient(900px 360px at 100% 0%, #e0e7ff 0%, transparent 50%),
+        var(--bg);
+      font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 48px; }
+    .hero {
+      background: linear-gradient(135deg, #0f766e 0%, #115e59 48%, #1e3a5f 100%);
+      color: #fff;
+      border-radius: 16px;
+      padding: 28px 28px 24px;
+      box-shadow: 0 16px 40px rgba(15, 118, 110, 0.22);
+      margin-bottom: 20px;
+    }
+    .hero h1 { margin: 0 0 8px; font-size: 26px; font-weight: 700; letter-spacing: 0.02em; }
+    .hero .meta { opacity: 0.88; font-size: 13px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .score-box { text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 160px; }
+    .score-num { font-size: 56px; font-weight: 800; color: var(--brand); line-height: 1; }
+    .score-grade {
+      display: inline-block; margin-top: 10px; padding: 4px 12px; border-radius: 999px;
+      background: #ccfbf1; color: #115e59; font-weight: 700; font-size: 14px;
+    }
+    .summary { margin: 0 0 12px; color: #334155; }
+    .stat-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600;
+      background: #f1f5f9; color: #334155;
+    }
+    .pill.critical { background: #fee2e2; color: var(--critical); }
+    .pill.warning { background: #ffedd5; color: var(--warning); }
+    .pill.normal { background: #d1fae5; color: var(--normal); }
+    .hint { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+    h2 { margin: 0 0 12px; font-size: 16px; }
+    .finding {
+      border: 1px solid #fecaca; background: #fff7f7; border-radius: 10px;
+      padding: 12px 14px; margin-bottom: 8px;
+    }
+    .finding.warning { border-color: #fde68a; background: #fffbeb; }
+    .finding .sev { font-weight: 700; margin-right: 6px; }
+    .finding.critical .sev { color: var(--critical); }
+    .finding.warning .sev { color: var(--warning); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: #f8fafc; color: #475569; font-weight: 600; }
+    tr:hover td { background: #f8fafc; }
+    .badge {
+      display: inline-block; min-width: 44px; text-align: center;
+      padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700;
+    }
+    .badge.critical { background: #fee2e2; color: var(--critical); }
+    .badge.warning { background: #ffedd5; color: var(--warning); }
+    .badge.normal { background: #d1fae5; color: var(--normal); }
+    .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+    @media print {
+      body { background: #fff; }
+      .hero { box-shadow: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .card { break-inside: avoid; box-shadow: none; }
+    }
   </style>
 </head>
 <body>
-  <h1>{{.Project}} 巡检报告</h1>
-  <div class="meta">
-    时间：{{.Timestamp.Format "2006-01-02 15:04:05"}}
-    {{if .InspectionUser}} · 执行人：{{.InspectionUser}}{{end}}
-    {{if .Datasource}} · 数据源：{{.Datasource}}{{end}}
-  </div>
-
-  <div class="card">
-    <div><span class="score">{{fmtFloat .Score}}</span><span class="grade">{{.Grade}}</span></div>
-    <p>{{.Summary}}</p>
-    <div class="stats">
-      <span>总计 {{.Total}}</span>
-      <span class="critical">严重 {{.Critical}}</span>
-      <span class="warning">警告 {{.Warning}}</span>
-      <span class="normal">正常 {{.Normal}}</span>
+  <div class="wrap">
+    <div class="hero">
+      <h1>{{.Project}} 巡检报告</h1>
+      <div class="meta">
+        时间 {{.Timestamp.Format "2006-01-02 15:04:05"}}
+        {{if .InspectionUser}} · 执行人 {{.InspectionUser}}{{end}}
+        {{if .Datasource}} · 数据源 {{.Datasource}}{{end}}
+      </div>
     </div>
-    <p class="hint">{{.ReportListHint}}</p>
-  </div>
 
-  {{if .Findings}}
-  <div class="card">
-    <h2 style="font-size:16px;margin:0 0 8px;">主要发现</h2>
-    <ul class="findings">
+    <div class="grid">
+      <div class="card score-box">
+        <div class="score-num">{{fmtFloat .Score}}</div>
+        <div><span class="score-grade">等级 {{.Grade}}</span></div>
+      </div>
+      <div class="card">
+        <h2>巡检概览</h2>
+        <p class="summary">{{.Summary}}</p>
+        <div class="stat-row">
+          <span class="pill">总计 {{.Total}}</span>
+          <span class="pill critical">严重 {{.Critical}}</span>
+          <span class="pill warning">警告 {{.Warning}}</span>
+          <span class="pill normal">正常 {{.Normal}}</span>
+        </div>
+        <p class="hint">{{.ReportListHint}}</p>
+      </div>
+    </div>
+
+    {{if .Findings}}
+    <div class="card">
+      <h2>主要发现</h2>
       {{range .Findings}}
-      <li class="{{.Severity}}">[{{statusText .Severity}}] {{.Type}} / {{.Name}} ×{{.Count}} — {{.Hint}}</li>
+      <div class="finding {{.Severity}}">
+        <span class="sev">[{{statusText .Severity}}]</span>
+        <strong>{{.Type}} / {{.Name}}</strong> ×{{.Count}}
+        <div class="hint" style="margin-top:4px;">{{.Hint}}</div>
+      </div>
       {{end}}
-    </ul>
-  </div>
-  {{end}}
-
-  {{range .Groups}}
-  <div class="card">
-    <h2 style="font-size:16px;margin:0 0 8px;">{{.Type}}
-      <span class="hint">（{{.Stats.Total}}，严重 {{.Stats.Critical}} / 警告 {{.Stats.Warning}}）</span>
-    </h2>
-    {{if .Metrics}}
-    <table>
-      <thead>
-        <tr><th>名称</th><th>实例</th><th>值</th><th>阈值</th><th>状态</th></tr>
-      </thead>
-      <tbody>
-        {{range .Metrics}}
-        <tr>
-          <td>{{.Name}}</td>
-          <td>{{.Instance}}</td>
-          <td>{{fmtFloat .Value}}{{.Unit}}</td>
-          <td>{{fmtFloat .Threshold}}{{.Unit}}</td>
-          <td class="{{.Status}}">{{statusText .Status}}{{if .Error}} ({{.Error}}){{end}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
+    </div>
     {{else}}
-    <p class="hint">本分类无明细（当前模式已过滤正常项）。</p>
+    <div class="card">
+      <h2>主要发现</h2>
+      <p class="summary" style="margin:0;">未发现异常样本，环境整体健康。</p>
+    </div>
     {{end}}
+
+    {{range .Groups}}
+    <div class="card">
+      <div class="section-head">
+        <h2>{{.Type}}</h2>
+        <span class="hint">{{.Stats.Total}} 条 · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}}</span>
+      </div>
+      {{if .Metrics}}
+      <table>
+        <thead>
+          <tr><th>名称</th><th>实例</th><th>当前值</th><th>阈值</th><th>状态</th></tr>
+        </thead>
+        <tbody>
+          {{range .Metrics}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>{{.Instance}}</td>
+            <td>{{fmtFloat .Value}}{{.Unit}}</td>
+            <td>{{fmtFloat .Threshold}}{{.Unit}}</td>
+            <td><span class="badge {{.Status}}">{{statusText .Status}}</span>{{if .Error}} <span class="hint">{{.Error}}</span>{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p class="hint">本分类在当前展示模式下无明细。</p>
+      {{end}}
+    </div>
+    {{end}}
+
+    <div class="footer">Yunshu Inspect · 完整报告以 HTML 为准，可用浏览器「打印 → 另存为 PDF」</div>
   </div>
-  {{end}}
 </body>
 </html>

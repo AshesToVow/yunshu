@@ -52,20 +52,37 @@ func NewService(
 	}
 }
 
-// SeedGlobalTemplates 幂等写入全局巡检模板项。
+// SeedGlobalTemplates 幂等写入/刷新全局巡检模板项（按 type+name upsert）。
 func (s *Service) SeedGlobalTemplates(ctx context.Context) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	var n int64
-	if err := s.db.WithContext(ctx).Model(&model.InspectItem{}).Where("project_id = 0").Count(&n).Error; err != nil {
-		return err
+	for _, want := range defaultTemplateItems() {
+		var row model.InspectItem
+		err := s.db.WithContext(ctx).
+			Where("project_id = 0 AND type = ? AND name = ?", want.Type, want.Name).
+			First(&row).Error
+		if err == gorm.ErrRecordNotFound {
+			if err := s.db.WithContext(ctx).Create(&want).Error; err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		row.Description = want.Description
+		row.Query = want.Query
+		row.Threshold = want.Threshold
+		row.ThresholdType = want.ThresholdType
+		row.Unit = want.Unit
+		row.SortOrder = want.SortOrder
+		// 不覆盖管理员已改的 Enabled
+		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+			return err
+		}
 	}
-	if n > 0 {
-		return nil
-	}
-	items := defaultTemplateItems()
-	return s.db.WithContext(ctx).Create(&items).Error
+	return nil
 }
 
 type PlanUpsertRequest struct {
@@ -82,23 +99,53 @@ func (s *Service) GetOrCreatePlan(ctx context.Context, projectID uint) (*model.I
 	}
 	var plan model.InspectPlan
 	err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&plan).Error
-	if err == nil {
-		return &plan, nil
+	if err != nil {
+		if err != gorm.ErrRecordNotFound {
+			return nil, err
+		}
+		plan = model.InspectPlan{
+			ProjectID:      projectID,
+			Enabled:        false,
+			CronSpec:       "0 0 9 * * *",
+			ReportListMode: "abnormal_only",
+			RecipientsJSON: "[]",
+		}
+		if err := s.db.WithContext(ctx).Create(&plan).Error; err != nil {
+			return nil, err
+		}
 	}
-	if err != gorm.ErrRecordNotFound {
-		return nil, err
-	}
-	plan = model.InspectPlan{
-		ProjectID:      projectID,
-		Enabled:        false,
-		CronSpec:       "0 0 9 * * *",
-		ReportListMode: "abnormal_only",
-		RecipientsJSON: "[]",
-	}
-	if err := s.db.WithContext(ctx).Create(&plan).Error; err != nil {
-		return nil, err
-	}
+	_ = s.ensurePlanDefaults(ctx, &plan)
 	return &plan, nil
+}
+
+// ensurePlanDefaults 首次进入自动绑定数据源、同步模板巡检项，减少手工配置。
+func (s *Service) ensurePlanDefaults(ctx context.Context, plan *model.InspectPlan) error {
+	if plan == nil {
+		return nil
+	}
+	changed := false
+	if plan.DatasourceID == 0 {
+		var ds model.AlertDatasource
+		err := s.db.WithContext(ctx).
+			Where("project_id = ? AND enabled = ? AND type = ?", plan.ProjectID, true, "prometheus").
+			Order("id ASC").
+			First(&ds).Error
+		if err == nil {
+			plan.DatasourceID = ds.ID
+			changed = true
+		}
+	}
+	if changed {
+		if err := s.db.WithContext(ctx).Save(plan).Error; err != nil {
+			return err
+		}
+	}
+	var n int64
+	_ = s.db.WithContext(ctx).Model(&model.InspectItem{}).Where("project_id = ?", plan.ProjectID).Count(&n).Error
+	if n == 0 {
+		_, _ = s.SyncItemsFromTemplate(ctx, plan.ProjectID)
+	}
+	return nil
 }
 
 func (s *Service) UpdatePlan(ctx context.Context, projectID uint, req PlanUpsertRequest) (*model.InspectPlan, error) {
@@ -264,13 +311,13 @@ func (s *Service) DeleteItem(ctx context.Context, projectID, itemID uint) error 
 	return nil
 }
 
-// SyncItemsFromTemplate 将全局模板复制为项目项（已存在同名则跳过）。
+// SyncItemsFromTemplate 将全局模板复制为项目项（已存在同名则跳过；含默认关闭项，便于按需启用）。
 func (s *Service) SyncItemsFromTemplate(ctx context.Context, projectID uint) (int, error) {
 	if projectID == 0 {
 		return 0, constants.ErrBadRequestWithMsg("project_id required")
 	}
 	var globals []model.InspectItem
-	if err := s.db.WithContext(ctx).Where("project_id = 0 AND enabled = ?", true).Find(&globals).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("project_id = 0").Order("sort_order ASC, id ASC").Find(&globals).Error; err != nil {
 		return 0, err
 	}
 	var existing []model.InspectItem
@@ -299,6 +346,17 @@ func (s *Service) SyncItemsFromTemplate(ctx context.Context, projectID uint) (in
 		have[key] = true
 	}
 	return created, nil
+}
+
+// ResetItemsFromTemplate 删除项目自有巡检项后，重新从全局模板全量同步（用于切换 Telegraf 模板等）。
+func (s *Service) ResetItemsFromTemplate(ctx context.Context, projectID uint) (int, error) {
+	if projectID == 0 {
+		return 0, constants.ErrBadRequestWithMsg("project_id required")
+	}
+	if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).Delete(&model.InspectItem{}).Error; err != nil {
+		return 0, err
+	}
+	return s.SyncItemsFromTemplate(ctx, projectID)
 }
 
 type RunListQuery struct {
@@ -396,13 +454,14 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 	if err != nil {
 		return s.failRun(ctx, &run, err)
 	}
-	pdfBytes := renderSimplePDF(data)
+	// PDF 通道存放可打印 HTML（含中文）；浏览器「打印 → 另存为 PDF」即可，避免 Helvetica 中文乱码。
+	printBytes := htmlBytes
 
 	htmlPath, err := s.writeReportFile(plan.ProjectID, run.ID, "html", htmlBytes)
 	if err != nil {
 		return s.failRun(ctx, &run, err)
 	}
-	pdfPath, err := s.writeReportFile(plan.ProjectID, run.ID, "pdf", pdfBytes)
+	pdfPath, err := s.writeReportFile(plan.ProjectID, run.ID, "print.html", printBytes)
 	if err != nil {
 		return s.failRun(ctx, &run, err)
 	}
@@ -425,7 +484,7 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 	plan.LastRunAt = &finished
 	_ = s.db.WithContext(ctx).Model(plan).Update("last_run_at", finished).Error
 
-	_ = s.sendRunEmail(ctx, plan, &run, data, htmlBytes, pdfBytes)
+	_ = s.sendRunEmail(ctx, plan, &run, data, htmlBytes, nil)
 	return &run, nil
 }
 
@@ -475,7 +534,11 @@ func (s *Service) ReadReport(ctx context.Context, projectID, runID uint, kind st
 	ctype := "text/html; charset=utf-8"
 	if kind == "pdf" {
 		path = run.ReportPDFPath
-		ctype = "application/pdf"
+		if path == "" {
+			path = run.ReportHTMLPath
+		}
+		// 打印版实为 HTML（支持中文）；前端可引导浏览器另存 PDF
+		ctype = "text/html; charset=utf-8"
 	}
 	if strings.TrimSpace(path) == "" {
 		return nil, "", constants.ErrNotFoundWithMsg("报告文件不存在")
@@ -500,7 +563,6 @@ func (s *Service) ResendEmail(ctx context.Context, projectID, runID uint) error 
 	if err != nil {
 		return err
 	}
-	pdfBytes, _, _ := s.ReadReport(ctx, projectID, runID, "pdf")
 	data := ReportData{
 		Project:    fmt.Sprintf("project-%d", projectID),
 		Datasource: run.DatasourceName,
@@ -509,7 +571,7 @@ func (s *Service) ResendEmail(ctx context.Context, projectID, runID uint) error 
 		Summary:    run.Summary,
 		Timestamp:  time.Now(),
 	}
-	return s.sendRunEmail(ctx, plan, run, data, htmlBytes, pdfBytes)
+	return s.sendRunEmail(ctx, plan, run, data, htmlBytes, nil)
 }
 
 func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun, data ReportData, html, pdf []byte) error {

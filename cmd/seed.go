@@ -557,6 +557,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "巡检项更新", Resource: "/api/v1/projects/:id/inspect/items/:itemId", Action: "PUT", Description: "Update inspect item"},
 		{Name: "巡检项删除", Resource: "/api/v1/projects/:id/inspect/items/:itemId", Action: "DELETE", Description: "Delete inspect item"},
 		{Name: "巡检项同步模板", Resource: "/api/v1/projects/:id/inspect/items/sync-template", Action: "POST", Description: "Sync inspect items from global template"},
+		{Name: "巡检项重置模板", Resource: "/api/v1/projects/:id/inspect/items/reset-template", Action: "POST", Description: "Reset inspect items from global template"},
 		{Name: "巡检记录列表", Resource: "/api/v1/projects/:id/inspect/runs", Action: "GET", Description: "List inspect runs"},
 		{Name: "巡检立即执行", Resource: "/api/v1/projects/:id/inspect/runs", Action: "POST", Description: "Start inspect run"},
 		{Name: "巡检记录详情", Resource: "/api/v1/projects/:id/inspect/runs/:runId", Action: "GET", Description: "Get inspect run"},

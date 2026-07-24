@@ -8,6 +8,7 @@ import {
 import {
   Button,
   Card,
+  Alert,
   Form,
   Input,
   InputNumber,
@@ -35,6 +36,7 @@ import {
   listInspectItems,
   listInspectRuns,
   resendInspectEmail,
+  resetInspectItems,
   startInspectRun,
   syncInspectItems,
   updateInspectItem,
@@ -169,8 +171,29 @@ export function ProjectInspectPage() {
       { title: "阈值", width: 100, render: (_, r) => `${r.threshold_type} ${r.threshold}${r.unit || ""}` },
       {
         title: "启用",
-        width: 70,
-        render: (_, r) => (r.enabled ? <Tag color="success">是</Tag> : <Tag>否</Tag>),
+        width: 90,
+        render: (_, r) =>
+          r.project_id === 0 ? (
+            r.enabled ? <Tag color="success">是</Tag> : <Tag>否</Tag>
+          ) : (
+            <Switch
+              size="small"
+              checked={r.enabled}
+              onChange={async (checked) => {
+                await updateInspectItem(projectId, r.id, {
+                  name: r.name,
+                  query: r.query,
+                  type: r.type,
+                  description: r.description,
+                  threshold: r.threshold,
+                  threshold_type: r.threshold_type,
+                  unit: r.unit,
+                  enabled: checked,
+                });
+                void refresh(projectId);
+              }}
+            />
+          ),
       },
       {
         title: "操作",
@@ -247,7 +270,7 @@ export function ProjectInspectPage() {
             HTML
           </Button>
           <Button type="link" size="small" onClick={() => openAuthorized(inspectReportPdfUrl(projectId, r.id))}>
-            PDF
+            打印版
           </Button>
           <Button
             type="link"
@@ -311,6 +334,21 @@ export function ProjectInspectPage() {
             label: "计划配置",
             children: (
               <Card loading={loading}>
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message="适配 Prometheus + Telegraf + Blackbox + Pushgateway"
+                  description={
+                    <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+                      <div>1. 在「告警监控平台」为本项目配置 Prometheus 数据源（指向你们的 Prometheus）。</div>
+                      <div>2. 主机/中间件指标：在对应服务器 <code>telegraf.conf</code> 配 <code>inputs.*</code>，由 Prometheus 拉取后再启用巡检项。</div>
+                      <div>3. 连通性/端口：用 Blackbox 的 <code>probe_success</code>（ICMP/TCP/HTTP job 名按 scrape 配置改 PromQL）。</div>
+                      <div>4. 批次任务：Pushgateway 推送后，按 job 名改「Pushgateway」相关巡检项。</div>
+                      <div>5. 已有旧模板时点「重置为 Telegraf 模板」可一键替换项目巡检项。</div>
+                    </div>
+                  }
+                />
                 <Form
                   form={planForm}
                   layout="vertical"
@@ -392,12 +430,24 @@ export function ProjectInspectPage() {
                     <Button
                       onClick={async () => {
                         const r = await syncInspectItems(projectId);
-                        message.success(`已同步 ${r.created} 项`);
+                        message.success(`已补充 ${r.created} 项（同名跳过）`);
                         void refresh(projectId);
                       }}
                     >
                       从模板同步
                     </Button>
+                    <Popconfirm
+                      title="将删除本项目全部巡检项，并按 Telegraf/Blackbox 全局模板重建？"
+                      okText="重置"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={async () => {
+                        const r = await resetInspectItems(projectId);
+                        message.success(`已重置为 ${r.created} 项`);
+                        void refresh(projectId);
+                      }}
+                    >
+                      <Button danger>重置为 Telegraf 模板</Button>
+                    </Popconfirm>
                     <Button
                       type="primary"
                       icon={<PlusOutlined />}

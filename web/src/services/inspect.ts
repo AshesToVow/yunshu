@@ -95,6 +95,10 @@ export function syncInspectItems(projectId: number) {
   return getData<{ created: number }>(http.post(`/projects/${projectId}/inspect/items/sync-template`));
 }
 
+export function resetInspectItems(projectId: number) {
+  return getData<{ created: number }>(http.post(`/projects/${projectId}/inspect/items/reset-template`));
+}
+
 export function listInspectRuns(projectId: number, params?: { page?: number; page_size?: number }) {
   return getData<{ list: InspectRun[]; total: number; page: number; page_size: number }>(
     http.get(`/projects/${projectId}/inspect/runs`, { params }),

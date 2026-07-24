@@ -135,6 +135,20 @@ func (h *InspectHandler) SyncItems(c *gin.Context) {
 	response.Success(c, gin.H{"created": n})
 }
 
+func (h *InspectHandler) ResetItems(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	n, err := h.svc.ResetItemsFromTemplate(c.Request.Context(), projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"created": n})
+}
+
 func (h *InspectHandler) ListRuns(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
