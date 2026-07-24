@@ -160,10 +160,13 @@
           {{range .Metrics}}
           <tr>
             <td>{{.Name}}</td>
-            <td>{{.Instance}}</td>
+            <td>
+              {{.Instance}}
+              {{if .Error}}<div class="hint">{{.Error}}</div>{{end}}
+            </td>
             <td>{{fmtFloat .Value}}{{.Unit}}</td>
             <td>{{fmtFloat .Threshold}}{{.Unit}}</td>
-            <td><span class="badge {{.Status}}">{{statusText .Status}}</span>{{if .Error}} <span class="hint">{{.Error}}</span>{{end}}</td>
+            <td><span class="badge {{.Status}}">{{statusText .Status}}</span></td>
           </tr>
           {{end}}
         </tbody>

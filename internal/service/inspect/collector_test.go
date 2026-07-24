@@ -22,3 +22,38 @@ func TestGetStatusEqual(t *testing.T) {
 		t.Fatal("equal mismatch should be critical")
 	}
 }
+
+func TestResolveInstanceTelegrafHost(t *testing.T) {
+	got := resolveInstance(map[string]string{
+		"__name__": "mem_used_percent",
+		"host":     "10.10.10.5",
+		"cpu":      "cpu-total",
+	})
+	if got != "10.10.10.5" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestResolveInstancePreferHostOverJob(t *testing.T) {
+	got := resolveInstance(map[string]string{
+		"job":  "telegraf",
+		"host": "db-01",
+	})
+	if got != "db-01" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestResolveInstanceStripScrapePort(t *testing.T) {
+	got := resolveInstance(map[string]string{"instance": "10.10.10.5:9273"})
+	if got != "10.10.10.5" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestResolveInstanceKeepBlackboxPort(t *testing.T) {
+	got := resolveInstance(map[string]string{"instance": "10.10.10.5:3306"})
+	if got != "10.10.10.5:3306" {
+		t.Fatalf("got %q", got)
+	}
+}

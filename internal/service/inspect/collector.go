@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -116,8 +118,9 @@ func queryItem(ctx context.Context, cli *promapi.Client, it model.InspectItem, n
 	if len(rows) == 0 {
 		return []MetricSample{{
 			Name: it.Name, Description: it.Description, Type: it.Type,
-			Threshold: it.Threshold, Unit: it.Unit, Status: "normal",
-			Timestamp: now, Instance: "-", Labels: map[string]string{},
+			Threshold: it.Threshold, Unit: it.Unit, Status: "warning",
+			Timestamp: now, Instance: "无数据", Labels: map[string]string{},
+			Error: "Prometheus 无返回样本（检查指标名/job 是否与 Telegraf、Blackbox 一致）",
 		}}
 	}
 	out := make([]MetricSample, 0, len(rows))
@@ -125,7 +128,7 @@ func queryItem(ctx context.Context, cli *promapi.Client, it model.InspectItem, n
 		if math.IsNaN(r.Value) || math.IsInf(r.Value, 0) {
 			continue
 		}
-		inst := firstLabel(r.Metric, "instance", "pod", "node", "job", "ip")
+		inst := resolveInstance(r.Metric)
 		status := getStatus(r.Value, it.Threshold, it.ThresholdType)
 		out = append(out, MetricSample{
 			Instance:    inst,
@@ -143,8 +146,9 @@ func queryItem(ctx context.Context, cli *promapi.Client, it model.InspectItem, n
 	if len(out) == 0 {
 		return []MetricSample{{
 			Name: it.Name, Description: it.Description, Type: it.Type,
-			Threshold: it.Threshold, Unit: it.Unit, Status: "normal",
-			Timestamp: now, Instance: "-", Labels: map[string]string{},
+			Threshold: it.Threshold, Unit: it.Unit, Status: "warning",
+			Timestamp: now, Instance: "无数据", Labels: map[string]string{},
+			Error: "样本均为 NaN/Inf",
 		}}
 	}
 	return out
@@ -203,7 +207,69 @@ func firstLabel(m map[string]string, keys ...string) string {
 			return v
 		}
 	}
+	return ""
+}
+
+// resolveInstance 从 Prometheus 样本标签解析实例标识。
+// Telegraf 常见 host/hostname；Blackbox/Exporter 常见 instance；自定义常有 ip。
+func resolveInstance(m map[string]string) string {
+	if m == nil {
+		return "-"
+	}
+	if v := firstLabel(m,
+		"instance", "host", "hostname", "ip", "agent_host", "agent_hostname",
+		"exported_instance", "exported_host", "node", "pod", "server", "target",
+	); v != "" {
+		return stripInstancePort(v)
+	}
+	// 兜底：除 __name__/job/quantile 外取第一个非空标签
+	skip := map[string]bool{
+		"__name__": true, "job": true, "quantile": true, "le": true,
+		"cpu": true, "mode": true, "path": true, "fstype": true, "device": true,
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		if skip[k] {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if v := strings.TrimSpace(m[k]); v != "" {
+			return v
+		}
+	}
+	if v := strings.TrimSpace(m["job"]); v != "" {
+		return v
+	}
 	return "-"
+}
+
+// stripInstancePort 展示时去掉 :9273 这类 scrape 端口，保留 IP/主机名（探测目标含端口则保留）。
+func stripInstancePort(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return v
+	}
+	// IPv6 [::1]:9100
+	if strings.HasPrefix(v, "[") {
+		if i := strings.LastIndex(v, "]:"); i > 0 {
+			return v[:i+1]
+		}
+		return v
+	}
+	host, port, err := net.SplitHostPort(v)
+	if err != nil {
+		return v
+	}
+	// Blackbox 目标常为 host:业务端口，保留；Telegraf scrape 端口常见 9126/9273/9100 可去掉
+	switch port {
+	case "9100", "9126", "9273", "8080", "9101", "9102":
+		return host
+	default:
+		return v
+	}
 }
 
 // getStatus 对齐 PromAI：越界为 critical；接近阈值为 warning（上界 90%、下界 110%）。

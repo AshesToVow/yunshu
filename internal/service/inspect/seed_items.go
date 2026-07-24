@@ -14,16 +14,16 @@ func defaultTemplateItems() []model.InspectItem {
 	}
 	items := []spec{
 		// —— 主机：Telegraf inputs.cpu / mem / disk / system ——
-		{"基础设施层", "CPU 使用率", "Telegraf inputs.cpu → cpu_usage_*；取非 idle 近似", `100 - cpu_usage_idle{cpu="cpu-total"}`, "greater", "%", 85, 10, true},
+		{"基础设施层", "CPU 使用率", "Telegraf inputs.cpu；保留 host/instance 标签", `100 - cpu_usage_idle{cpu="cpu-total"}`, "greater", "%", 85, 10, true},
 		{"基础设施层", "1 分钟负载", "Telegraf inputs.system → system_load1", `system_load1`, "greater", "", 5, 15, true},
-		{"基础设施层", "内存使用率", "Telegraf inputs.mem → mem_used_percent", `mem_used_percent`, "greater", "%", 85, 20, true},
-		{"基础设施层", "磁盘使用率", "Telegraf inputs.disk；按需改 path 过滤", `disk_used_percent{path=~"/|/data|/export"}`, "greater", "%", 80, 30, true},
-		{"基础设施层", "inode 使用率", "Telegraf inputs.disk → disk_inodes_*", `(disk_inodes_used{path=~"/|/data|/export"} / disk_inodes_total{path=~"/|/data|/export"}) * 100`, "greater", "%", 90, 40, true},
-		{"基础设施层", "TCP 已建立连接", "Telegraf inputs.netstat → netstat_tcp_established", `netstat_tcp_established`, "greater", "", 30000, 45, false},
+		{"基础设施层", "内存使用率", "Telegraf inputs.mem → mem_used_percent（标签多为 host）", `mem_used_percent`, "greater", "%", 85, 20, true},
+		{"基础设施层", "磁盘使用率", "Telegraf inputs.disk；按需改 path", `disk_used_percent{path=~"/|/data|/export"}`, "greater", "%", 80, 30, true},
+		{"基础设施层", "inode 使用率", "Telegraf inputs.disk", `(disk_inodes_used{path=~"/|/data|/export"} / disk_inodes_total{path=~"/|/data|/export"}) * 100`, "greater", "%", 90, 40, true},
+		{"基础设施层", "TCP 已建立连接", "Telegraf inputs.netstat", `netstat_tcp_established`, "greater", "", 30000, 45, false},
 
-		// —— 连通性：Blackbox ——
-		{"基础设施层", "ICMP 连通性", "blackbox icmp；job 名按你们 scrape 配置改", `probe_success{job=~".*icmp.*|icmp"}`, "equal", "", 1, 50, true},
-		{"基础设施层", "TCP/端口探测", "blackbox tcp；常见 job=Service_tcp 或 blackbox", `probe_success{job=~".*tcp.*|Service_tcp|blackbox"}`, "equal", "", 1, 60, true},
+		// —— 连通性：Blackbox（instance 一般为探测目标）——
+		{"基础设施层", "ICMP 连通性", "blackbox icmp；job 名按 scrape 改", `probe_success{job=~".*icmp.*|icmp"}`, "equal", "", 1, 50, true},
+		{"基础设施层", "TCP/端口探测", "blackbox tcp；instance 为目标 host:port", `probe_success{job=~".*tcp.*|Service_tcp|blackbox"}`, "equal", "", 1, 60, true},
 		{"基础设施层", "HTTP 探测", "blackbox http；无则关闭", `probe_success{job=~".*http.*"}`, "equal", "", 1, 65, false},
 
 		// —— Pushgateway：仅示例，job/实例按你们推送约定改 ——
