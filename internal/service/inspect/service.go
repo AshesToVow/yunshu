@@ -392,7 +392,7 @@ type RunCreateRequest struct {
 	DatasourceID uint `json:"datasource_id"`
 }
 
-func (s *Service) StartManualRun(ctx context.Context, projectID, userID uint, req RunCreateRequest) (*model.InspectRun, error) {
+func (s *Service) StartManualRun(ctx context.Context, projectID, userID uint, operatorName string, req RunCreateRequest) (*model.InspectRun, error) {
 	plan, err := s.GetOrCreatePlan(ctx, projectID)
 	if err != nil {
 		return nil, err
@@ -404,10 +404,10 @@ func (s *Service) StartManualRun(ctx context.Context, projectID, userID uint, re
 	if dsID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("请指定 datasource_id 或在计划中配置数据源")
 	}
-	return s.executeRun(ctx, plan, dsID, "manual", userID)
+	return s.executeRun(ctx, plan, dsID, "manual", userID, operatorName)
 }
 
-func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datasourceID uint, trigger string, userID uint) (*model.InspectRun, error) {
+func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datasourceID uint, trigger string, userID uint, operatorName string) (*model.InspectRun, error) {
 	if plan == nil || plan.ProjectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("invalid plan")
 	}
@@ -445,9 +445,9 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 		return s.failRun(ctx, &run, err)
 	}
 	collected := collectItems(ctx, cli, items, 8)
-	user := ""
-	if userID > 0 {
-		user = fmt.Sprintf("user#%d", userID)
+	user := strings.TrimSpace(operatorName)
+	if user == "" && trigger == "cron" {
+		user = "系统定时"
 	}
 	data := buildReportData(projectName, ds.Name, user, plan.ReportListMode, collected)
 	htmlBytes, err := renderHTML(data)

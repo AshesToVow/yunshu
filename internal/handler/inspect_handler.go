@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
@@ -170,10 +171,15 @@ func (h *InspectHandler) CreateRun(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	actor, _ := auth.CurrentUserFromContext(c)
 	var uid uint
+	operator := ""
 	if actor != nil {
 		uid = actor.ID
+		operator = strings.TrimSpace(actor.Nickname)
+		if operator == "" {
+			operator = strings.TrimSpace(actor.Username)
+		}
 	}
-	run, err := h.svc.StartManualRun(c.Request.Context(), projectID, uid, req)
+	run, err := h.svc.StartManualRun(c.Request.Context(), projectID, uid, operator, req)
 	if err != nil {
 		response.Error(c, err)
 		return

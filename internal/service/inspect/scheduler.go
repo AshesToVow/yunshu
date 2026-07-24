@@ -51,7 +51,7 @@ func (s *Service) tickSchedules(ctx context.Context) {
 			continue
 		}
 		runCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-		_, err := s.executeRun(runCtx, plan, plan.DatasourceID, "cron", 0)
+		_, err := s.executeRun(runCtx, plan, plan.DatasourceID, "cron", 0, "")
 		cancel()
 		if err != nil {
 			slog.Default().With("component", "inspect.scheduler").Warn("inspect cron run failed",
