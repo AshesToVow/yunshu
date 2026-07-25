@@ -202,13 +202,23 @@ func (s *AlertService) evaluateOneCloudExpiryRule(ctx context.Context, rule *mod
 				"description": fmt.Sprintf("实例=%s(%s)，区域=%s，到期时间=%s，剩余天数=%d", strings.TrimSpace(ins.Name), instanceID, region, expireAt.Format(time.RFC3339), daysLeft),
 				"value":       fmt.Sprintf("%d", daysLeft),
 			}
-			s.emitCloudExpiryAlert(ctx, fp, firing, labels, annotations, now, manualEval)
+			cloud := &CloudExpiryExtension{
+				Provider:     strings.TrimSpace(acc.Provider),
+				AccountID:    acc.ID,
+				InstanceID:   instanceID,
+				InstanceName: strings.TrimSpace(ins.Name),
+				Region:       region,
+				ExpiresAt:    *expireAt,
+				DaysLeft:     daysLeft,
+				ProjectID:    rule.ProjectID,
+			}
+			s.emitCloudExpiryAlert(ctx, fp, firing, labels, annotations, now, cloud)
 		}
 	}
 	alertLog().Info("Finished cloud expiry rule evaluation", "rule_id", rule.ID, "instances_checked", instScanned)
 }
 
-func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firing bool, labels, annotations map[string]string, now time.Time, manualEval bool) {
+func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firing bool, labels, annotations map[string]string, now time.Time, cloud *CloudExpiryExtension) {
 	s.monitorEvalMu.Lock()
 	active := s.cloudExpiryState[fp]
 	if firing {
@@ -216,24 +226,24 @@ func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firi
 		// 持续 firing 时的外发频率由 ingest 层对 cloud_expiry + SkipGroupTiming 叠加 repeat_interval 控制。
 		s.cloudExpiryState[fp] = true
 		s.monitorEvalMu.Unlock()
-		am := AlertManagerAlert{
-			Status:       "firing",
-			Labels:       labels,
-			Annotations:  annotations,
-			StartsAt:     now,
-			EndsAt:       now.Add(24 * time.Hour),
-			GeneratorURL: "",
-			Fingerprint:  fp,
-			// 定时/手动云到期均跳过 Redis group_wait，命中阈值后尽快入库与投递。
-			SkipGroupTiming: true,
-		}
-		_ = s.receiveAlertmanagerPayloadSync(ctx, AlertManagerPayload{
-			Receiver:     "cloud-expiry",
-			Status:       "firing",
-			GroupLabels:  map[string]string{"alertname": labels["alertname"]},
-			CommonLabels: labels,
-			Alerts:       []AlertManagerAlert{am},
-		})
+		item := NewCanonicalAlert(
+			IngressSourceCloudExpiry,
+			"cloud-expiry",
+			"firing",
+			map[string]string{"alertname": labels["alertname"]},
+			labels,
+			IngressAlertDetail{
+				Status:          "firing",
+				Labels:          labels,
+				Annotations:     annotations,
+				StartsAt:        now,
+				EndsAt:          now.Add(24 * time.Hour),
+				Fingerprint:     fp,
+				SkipGroupTiming: true,
+			},
+		)
+		item.Cloud = cloud
+		_ = s.receiveCanonicalSync(ctx, item)
 		alertLog().Info("Emitted cloud expiry firing alert", "fingerprint", fp, "alertname", labels["alertname"])
 		return
 	}
@@ -243,21 +253,23 @@ func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firi
 	}
 	delete(s.cloudExpiryState, fp)
 	s.monitorEvalMu.Unlock()
-	_ = s.receiveAlertmanagerPayloadSync(ctx, AlertManagerPayload{
-		Receiver:     "cloud-expiry",
-		Status:       "resolved",
-		GroupLabels:  map[string]string{"alertname": labels["alertname"]},
-		CommonLabels: labels,
-		Alerts: []AlertManagerAlert{{
-			Status:       "resolved",
+	item := NewCanonicalAlert(
+		IngressSourceCloudExpiry,
+		"cloud-expiry",
+		"resolved",
+		map[string]string{"alertname": labels["alertname"]},
+		labels,
+		IngressAlertDetail{
+			Status:      "resolved",
 			Labels:       labels,
 			Annotations:  annotations,
 			StartsAt:     now.Add(-time.Minute),
 			EndsAt:       now,
-			GeneratorURL: "",
 			Fingerprint:  fp,
-		}},
-	})
+		},
+	)
+	item.Cloud = cloud
+	_ = s.receiveCanonicalSync(ctx, item)
 }
 
 func parseRegionSet(scope string) map[string]struct{} {

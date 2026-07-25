@@ -22,12 +22,12 @@ import (
 )
 
 type Service struct {
-	db       *gorm.DB
-	redis    *redis.Client
-	dsSvc    *alert.AlertDatasourceService
-	projects interfaces.ProjectRepository
-	mailer   mailer.Sender
-	appName  string
+	db        *gorm.DB
+	redis     *redis.Client
+	dsSvc     *alert.AlertDatasourceService
+	projects  interfaces.ProjectRepository
+	mailer    mailer.Sender
+	appName   string
 	reportDir string
 }
 
@@ -50,6 +50,10 @@ func NewService(
 		appName:   strings.TrimSpace(appName),
 		reportDir: dir,
 	}
+}
+
+func (s *Service) store(ctx context.Context) ReportStore {
+	return resolveReportStore(ctx, s.db, s.reportDir)
 }
 
 // SeedGlobalTemplates 幂等写入/刷新全局巡检模板项（按 type+name upsert）。
@@ -86,11 +90,13 @@ func (s *Service) SeedGlobalTemplates(ctx context.Context) error {
 }
 
 type PlanUpsertRequest struct {
-	Enabled        *bool  `json:"enabled"`
-	CronSpec       string `json:"cron_spec"`
-	DatasourceID   uint   `json:"datasource_id"`
-	ReportListMode string `json:"report_list_mode"`
-	Recipients     []string `json:"recipients"`
+	Enabled          *bool    `json:"enabled"`
+	CronSpec         string   `json:"cron_spec"`
+	DatasourceID     uint     `json:"datasource_id"`
+	ReportListMode   string   `json:"report_list_mode"`
+	ReportTemplateID *uint    `json:"report_template_id"`
+	RetainDays       *int     `json:"retain_days"`
+	Recipients       []string `json:"recipients"`
 }
 
 func (s *Service) GetOrCreatePlan(ctx context.Context, projectID uint) (*model.InspectPlan, error) {
@@ -108,6 +114,7 @@ func (s *Service) GetOrCreatePlan(ctx context.Context, projectID uint) (*model.I
 			Enabled:        false,
 			CronSpec:       "0 0 9 * * *",
 			ReportListMode: "abnormal_only",
+			RetainDays:     90,
 			RecipientsJSON: "[]",
 		}
 		if err := s.db.WithContext(ctx).Create(&plan).Error; err != nil {
@@ -173,6 +180,21 @@ func (s *Service) UpdatePlan(ctx context.Context, projectID uint, req PlanUpsert
 		default:
 			return nil, constants.ErrBadRequestWithMsg("invalid report_list_mode")
 		}
+	}
+	if req.ReportTemplateID != nil {
+		tid := *req.ReportTemplateID
+		if tid > 0 {
+			if _, err := s.resolveReportTemplate(ctx, projectID, tid); err != nil {
+				return nil, constants.ErrBadRequestWithMsg("报告模板不存在或未启用")
+			}
+		}
+		plan.ReportTemplateID = tid
+	}
+	if req.RetainDays != nil {
+		if *req.RetainDays < 0 {
+			return nil, constants.ErrBadRequestWithMsg("retain_days 不能为负")
+		}
+		plan.RetainDays = *req.RetainDays
 	}
 	if req.Recipients != nil {
 		b, _ := json.Marshal(uniqEmails(req.Recipients))
@@ -450,20 +472,39 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 		user = "系统定时"
 	}
 	data := buildReportData(projectName, ds.Name, user, plan.ReportListMode, collected)
-	htmlBytes, err := renderHTML(data)
-	if err != nil {
-		return s.failRun(ctx, &run, err)
-	}
-	// PDF 通道存放可打印 HTML（含中文）；浏览器「打印 → 另存为 PDF」即可，避免 Helvetica 中文乱码。
-	printBytes := htmlBytes
 
-	htmlPath, err := s.writeReportFile(plan.ProjectID, run.ID, "html", htmlBytes)
+	tpl, err := s.resolveReportTemplate(ctx, plan.ProjectID, plan.ReportTemplateID)
 	if err != nil {
 		return s.failRun(ctx, &run, err)
 	}
-	pdfPath, err := s.writeReportFile(plan.ProjectID, run.ID, "print.html", printBytes)
+	htmlBytes, err := renderHTMLWithTemplate(tpl.Code, tpl.Body, data)
 	if err != nil {
+		// 自定义模板失败时回退标准版，避免整次巡检失败
+		htmlBytes, err = renderHTML(data)
+		if err != nil {
+			return s.failRun(ctx, &run, err)
+		}
+	}
+	printBytes := htmlBytes
+	pdfBytes := renderBinaryPDF(data)
+	excelBytes, excelErr := renderExcel(data)
+
+	store := s.store(ctx)
+	htmlKey := reportObjectKey(plan.ProjectID, run.ID, "html")
+	printKey := reportObjectKey(plan.ProjectID, run.ID, "print.html")
+	pdfKey := reportObjectKey(plan.ProjectID, run.ID, "pdf")
+	excelKey := reportObjectKey(plan.ProjectID, run.ID, "xlsx")
+
+	if err := store.Put(ctx, htmlKey, htmlBytes, "text/html; charset=utf-8"); err != nil {
 		return s.failRun(ctx, &run, err)
+	}
+	if err := store.Put(ctx, printKey, printBytes, "text/html; charset=utf-8"); err != nil {
+		return s.failRun(ctx, &run, err)
+	}
+	_ = store.Put(ctx, pdfKey, pdfBytes, "application/pdf")
+	if excelErr == nil && len(excelBytes) > 0 {
+		_ = store.Put(ctx, excelKey, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		run.ReportExcelPath = excelKey
 	}
 
 	finished := time.Now()
@@ -475,8 +516,11 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 	run.CriticalCount = collected.Critical
 	run.WarningCount = collected.Warning
 	run.NormalCount = collected.Normal
-	run.ReportHTMLPath = htmlPath
-	run.ReportPDFPath = pdfPath
+	run.Storage = store.Backend()
+	run.ReportHTMLPath = htmlKey
+	run.ReportPDFPath = pdfKey
+	run.ReportTemplateID = tpl.ID
+	run.ReportTemplateCode = tpl.Code
 	run.FinishedAt = &finished
 	if err := s.db.WithContext(ctx).Save(&run).Error; err != nil {
 		return nil, err
@@ -484,7 +528,7 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 	plan.LastRunAt = &finished
 	_ = s.db.WithContext(ctx).Model(plan).Update("last_run_at", finished).Error
 
-	_ = s.sendRunEmail(ctx, plan, &run, data, htmlBytes, nil)
+	_ = s.sendRunEmail(ctx, plan, &run, data, htmlBytes, pdfBytes)
 	return &run, nil
 }
 
@@ -512,42 +556,117 @@ func (s *Service) failRun(ctx context.Context, run *model.InspectRun, err error)
 	return run, err
 }
 
-func (s *Service) writeReportFile(projectID, runID uint, ext string, body []byte) (string, error) {
-	dir := filepath.Join(s.reportDir, fmt.Sprintf("%d", projectID))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	name := fmt.Sprintf("run-%d.%s", runID, ext)
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, body, 0o644); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
 func (s *Service) ReadReport(ctx context.Context, projectID, runID uint, kind string) ([]byte, string, error) {
 	run, err := s.GetRun(ctx, projectID, runID)
 	if err != nil {
 		return nil, "", err
 	}
-	path := run.ReportHTMLPath
+	key := strings.TrimSpace(run.ReportHTMLPath)
 	ctype := "text/html; charset=utf-8"
-	if kind == "pdf" {
-		path = run.ReportPDFPath
-		if path == "" {
-			path = run.ReportHTMLPath
+	switch kind {
+	case "pdf":
+		key = strings.TrimSpace(run.ReportPDFPath)
+		if key == "" {
+			key = strings.TrimSpace(run.ReportHTMLPath)
 		}
-		// 打印版实为 HTML（支持中文）；前端可引导浏览器另存 PDF
+		ctype = "application/pdf"
+	case "excel", "xlsx":
+		key = strings.TrimSpace(run.ReportExcelPath)
+		ctype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case "print":
+		// 兼容旧数据：print.html 键或回退 HTML
+		if strings.Contains(run.ReportPDFPath, "print.html") {
+			key = run.ReportPDFPath
+		} else {
+			key = reportObjectKey(projectID, runID, "print.html")
+		}
 		ctype = "text/html; charset=utf-8"
 	}
-	if strings.TrimSpace(path) == "" {
+	if key == "" {
 		return nil, "", constants.ErrNotFoundWithMsg("报告文件不存在")
 	}
-	b, err := os.ReadFile(path)
+
+	body, err := s.readReportBytes(ctx, run, key)
 	if err != nil {
+		// PDF 缺失时回退可打印 HTML（含中文）
+		if kind == "pdf" {
+			alt := strings.TrimSpace(run.ReportHTMLPath)
+			if alt != "" {
+				if b2, err2 := s.readReportBytes(ctx, run, alt); err2 == nil {
+					return b2, "text/html; charset=utf-8", nil
+				}
+			}
+		}
 		return nil, "", constants.ErrNotFoundWithMsg("报告文件不存在")
 	}
-	return b, ctype, nil
+	if kind == "pdf" && len(body) >= 4 && string(body[:4]) != "%PDF" {
+		ctype = "text/html; charset=utf-8"
+	}
+	return body, ctype, nil
+}
+
+func (s *Service) readReportBytes(ctx context.Context, run *model.InspectRun, key string) ([]byte, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil, fmt.Errorf("empty key")
+	}
+	// 历史本地绝对/相对路径
+	if strings.Contains(key, string(filepath.Separator)) || strings.HasPrefix(key, "logs") {
+		if b, err := os.ReadFile(key); err == nil {
+			return b, nil
+		}
+	}
+	store := s.store(ctx)
+	if run != nil && run.Storage == StorageLocal {
+		local := newLocalReportStore(s.reportDir)
+		if b, err := local.Get(ctx, key); err == nil {
+			return b, nil
+		}
+		// 兼容旧路径 logs/inspect-reports/{pid}/run-{id}.html
+		if b, err := os.ReadFile(key); err == nil {
+			return b, nil
+		}
+	}
+	if b, err := store.Get(ctx, key); err == nil {
+		return b, nil
+	}
+	// 再试本地（MinIO 降级后的双写场景或历史）
+	return newLocalReportStore(s.reportDir).Get(ctx, key)
+}
+
+func (s *Service) CleanupExpiredReports(ctx context.Context) (int, error) {
+	var plans []model.InspectPlan
+	if err := s.db.WithContext(ctx).Where("retain_days > 0").Find(&plans).Error; err != nil {
+		return 0, err
+	}
+	store := s.store(ctx)
+	deleted := 0
+	for _, plan := range plans {
+		cutoff := time.Now().AddDate(0, 0, -plan.RetainDays)
+		var runs []model.InspectRun
+		if err := s.db.WithContext(ctx).
+			Where("project_id = ? AND created_at < ? AND status = ?", plan.ProjectID, cutoff, "success").
+			Find(&runs).Error; err != nil {
+			continue
+		}
+		for i := range runs {
+			run := &runs[i]
+			for _, key := range []string{run.ReportHTMLPath, run.ReportPDFPath, run.ReportExcelPath} {
+				key = strings.TrimSpace(key)
+				if key == "" {
+					continue
+				}
+				_ = store.Delete(ctx, key)
+				if strings.Contains(key, string(filepath.Separator)) {
+					_ = os.Remove(key)
+				}
+			}
+			if err := s.db.WithContext(ctx).Delete(run).Error; err == nil {
+				deleted++
+			}
+		}
+	}
+	return deleted, nil
 }
 
 func (s *Service) ResendEmail(ctx context.Context, projectID, runID uint) error {
@@ -563,6 +682,10 @@ func (s *Service) ResendEmail(ctx context.Context, projectID, runID uint) error 
 	if err != nil {
 		return err
 	}
+	pdfBytes, _, _ := s.ReadReport(ctx, projectID, runID, "pdf")
+	if len(pdfBytes) >= 4 && string(pdfBytes[:4]) != "%PDF" {
+		pdfBytes = nil
+	}
 	data := ReportData{
 		Project:    fmt.Sprintf("project-%d", projectID),
 		Datasource: run.DatasourceName,
@@ -571,7 +694,7 @@ func (s *Service) ResendEmail(ctx context.Context, projectID, runID uint) error 
 		Summary:    run.Summary,
 		Timestamp:  time.Now(),
 	}
-	return s.sendRunEmail(ctx, plan, run, data, htmlBytes, nil)
+	return s.sendRunEmail(ctx, plan, run, data, htmlBytes, pdfBytes)
 }
 
 func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun, data ReportData, html, pdf []byte) error {

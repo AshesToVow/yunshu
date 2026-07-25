@@ -10,21 +10,7 @@ import (
 	bizerrors "yunshu/internal/pkg/errors"
 )
 
-// IngressCanonicalItem is the unified webhook ingress row (converted from service layer).
-type IngressCanonicalItem struct {
-	Source            string
-	PayloadReceiver   string
-	PayloadStatus     string
-	GroupLabels       map[string]string
-	CommonLabels      map[string]string
-	CommonAnnotations map[string]string
-	Version           string
-	ExternalURL       string
-	TruncatedAlerts   int
-	Alert             IngressAlertDetail
-}
-
-// IngressAlertDetail is one Alertmanager alert inside a payload.
+// IngressAlertDetail is one alert instance inside a canonical ingress item.
 type IngressAlertDetail struct {
 	Status          string
 	Labels          map[string]string
@@ -36,8 +22,8 @@ type IngressAlertDetail struct {
 	SkipGroupTiming bool
 }
 
-// RunIngressPipeline processes canonical webhook items (ingest → routing → delivery → state).
-func RunIngressPipeline(ctx context.Context, host IngressHost, items []IngressCanonicalItem) error {
+// RunIngressPipeline processes canonical ingress items (ingest → routing → delivery → state).
+func RunIngressPipeline(ctx context.Context, host IngressHost, items []CanonicalIngressAlert) error {
 	channels, err := host.LoadEnabledChannels(ctx)
 	if err != nil {
 		return bizerrors.Pass(ctx, "alert.ingest", "RunIngressPipeline", err)
@@ -226,7 +212,7 @@ func deliverToChannels(
 }
 
 func buildOutgoingPayload(
-	ca IngressCanonicalItem,
+	ca CanonicalIngressAlert,
 	alert IngressAlertDetail,
 	title, summary, severity, status string,
 	labels, annotations map[string]string,
@@ -234,7 +220,7 @@ func buildOutgoingPayload(
 	dsID uint, dsName, dsType, groupKey, labelsDigest string,
 	count int64,
 ) map[string]interface{} {
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"source": ca.Source, "title": title, "summary": summary, "severity": severity, "status": status,
 		"receiver": ca.PayloadReceiver, "fingerprint": alert.Fingerprint, "count": count,
 		"labels": labels, "annotations": annotations, "group_labels": ca.GroupLabels,
@@ -244,6 +230,22 @@ func buildOutgoingPayload(
 		"monitorPipeline": monitorPipeline, "datasourceId": dsID, "datasourceName": dsName,
 		"datasourceType": dsType, "groupKey": groupKey, "labelsDigest": labelsDigest,
 	}
+	if ca.Cloud != nil {
+		cloud := map[string]interface{}{
+			"provider":      ca.Cloud.Provider,
+			"account_id":    ca.Cloud.AccountID,
+			"instance_id":   ca.Cloud.InstanceID,
+			"instance_name": ca.Cloud.InstanceName,
+			"region":        ca.Cloud.Region,
+			"days_left":     ca.Cloud.DaysLeft,
+			"project_id":    ca.Cloud.ProjectID,
+		}
+		if !ca.Cloud.ExpiresAt.IsZero() {
+			cloud["expires_at"] = ca.Cloud.ExpiresAt.Format(time.RFC3339)
+		}
+		out["cloud"] = cloud
+	}
+	return out
 }
 
 func normalizeIngressStatus(alertStatus, payloadStatus string) string {
@@ -264,7 +266,7 @@ func pickAlertName(labels, common map[string]string) string {
 	if v := strings.TrimSpace(common["alertname"]); v != "" {
 		return v
 	}
-	return "Alertmanager 告警"
+	return "平台告警"
 }
 
 func pickSummary(annotations, common map[string]string) string {
@@ -276,7 +278,7 @@ func pickSummary(annotations, common map[string]string) string {
 	if v := strings.TrimSpace(common["summary"]); v != "" {
 		return v
 	}
-	return "Alertmanager webhook message"
+	return "告警通知"
 }
 
 func pickSeverity(labels, common map[string]string) string {

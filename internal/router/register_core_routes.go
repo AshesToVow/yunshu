@@ -77,6 +77,7 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	policies.GET("/menu-links", d.policyHandler.MenuLinks)
 	policies.GET("/conflicts", d.policyHandler.Conflicts)
 	policies.POST("/conflicts/fix-menu-entry", d.policyHandler.FixMenuEntryAPIs)
+	policies.POST("/conflicts/fix-disabled-plugin", d.policyHandler.FixDisabledPluginPolicies)
 	policies.GET("/permission-tree", d.policyHandler.PermissionTree)
 	policies.POST("/simulate", d.policyHandler.Simulate)
 	policies.GET("", d.policyHandler.List)

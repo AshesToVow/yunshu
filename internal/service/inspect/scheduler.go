@@ -27,6 +27,9 @@ func (s *Service) RunScheduler(ctx context.Context) {
 			return
 		case <-ticker.C:
 			s.tickSchedules(ctx)
+			if _, err := s.CleanupExpiredReports(ctx); err != nil {
+				log.Warn("inspect report cleanup failed", "error", err.Error())
+			}
 		}
 	}
 }

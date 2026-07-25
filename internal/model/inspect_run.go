@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// InspectRun 一次巡检执行记录（摘要入 DB，明细在报告文件）。
+// InspectRun 一次巡检执行记录（摘要入 DB，明细在报告文件/对象存储）。
 type InspectRun struct {
 	ID uint `json:"id" gorm:"primaryKey;comment:主键ID"`
 
@@ -30,9 +30,14 @@ type InspectRun struct {
 	WarningCount  int `json:"warning_count" gorm:"comment:警告数"`
 	NormalCount   int `json:"normal_count" gorm:"comment:正常数"`
 
-	ReportHTMLPath string `json:"report_html_path" gorm:"size:512;comment:HTML报告路径或对象键"`
-	ReportPDFPath  string `json:"report_pdf_path" gorm:"size:512;comment:PDF报告路径或对象键"`
-	EmailSentAt    *time.Time `json:"email_sent_at" gorm:"comment:邮件发送时间"`
+	// Storage: local | minio
+	Storage            string `json:"storage" gorm:"size:16;not null;default:local;comment:报告存储后端"`
+	ReportHTMLPath     string `json:"report_html_path" gorm:"size:512;comment:HTML报告路径或对象键"`
+	ReportPDFPath      string `json:"report_pdf_path" gorm:"size:512;comment:PDF或打印版路径/对象键"`
+	ReportExcelPath    string `json:"report_excel_path" gorm:"size:512;comment:Excel报告路径或对象键"`
+	ReportTemplateID   uint   `json:"report_template_id" gorm:"comment:所用模板ID快照"`
+	ReportTemplateCode string `json:"report_template_code" gorm:"size:64;comment:所用模板编码快照"`
+	EmailSentAt        *time.Time `json:"email_sent_at" gorm:"comment:邮件发送时间"`
 
 	StartedAt  *time.Time `json:"started_at"`
 	FinishedAt *time.Time `json:"finished_at"`

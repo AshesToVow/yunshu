@@ -29,20 +29,28 @@ import { useSearchParams } from "react-router-dom";
 import { listAlertDatasources, type AlertDatasourceItem } from "../services/alert-platform";
 import {
   createInspectItem,
+  copyInspectReportTemplate,
   deleteInspectItem,
+  deleteInspectReportTemplate,
   getInspectPlan,
+  inspectReportExcelUrl,
   inspectReportHtmlUrl,
   inspectReportPdfUrl,
+  inspectReportPrintUrl,
   listInspectItems,
+  listInspectReportTemplates,
   listInspectRuns,
+  previewInspectReportTemplate,
   resendInspectEmail,
   resetInspectItems,
   startInspectRun,
   syncInspectItems,
   updateInspectItem,
   updateInspectPlan,
+  updateInspectReportTemplate,
   type InspectItem,
   type InspectPlan,
+  type InspectReportTemplate,
   type InspectRun,
 } from "../services/inspect";
 import { getProjects, type ProjectItem } from "../services/projects";
@@ -103,12 +111,16 @@ export function ProjectInspectPage() {
   const [runs, setRuns] = useState<InspectRun[]>([]);
   const [runTotal, setRunTotal] = useState(0);
   const [dsList, setDsList] = useState<AlertDatasourceItem[]>([]);
+  const [reportTemplates, setReportTemplates] = useState<InspectReportTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InspectItem | null>(null);
+  const [tplModalOpen, setTplModalOpen] = useState(false);
+  const [editingTpl, setEditingTpl] = useState<InspectReportTemplate | null>(null);
   const [planForm] = Form.useForm();
   const [itemForm] = Form.useForm();
+  const [tplForm] = Form.useForm();
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((r) => {
@@ -127,22 +139,26 @@ export function ProjectInspectPage() {
     if (!pid) return;
     setLoading(true);
     try {
-      const [p, its, rs, ds] = await Promise.all([
+      const [p, its, rs, ds, tpls] = await Promise.all([
         getInspectPlan(pid),
         listInspectItems(pid),
         listInspectRuns(pid, { page: 1, page_size: 20 }),
         listAlertDatasources({ project_id: pid, page: 1, page_size: 200 }),
+        listInspectReportTemplates(pid),
       ]);
       setPlan(p);
       setItems(its || []);
       setRuns(rs.list || []);
       setRunTotal(rs.total || 0);
       setDsList((ds.list || []).filter((d) => d.enabled !== false));
+      setReportTemplates(tpls || []);
       planForm.setFieldsValue({
         enabled: p.enabled,
         cron_spec: p.cron_spec,
         datasource_id: p.datasource_id || undefined,
         report_list_mode: p.report_list_mode || "abnormal_only",
+        report_template_id: p.report_template_id || undefined,
+        retain_days: p.retain_days ?? 90,
         recipients: parseRecipients(p.recipients_json).join(", "),
       });
     } catch (e: unknown) {
@@ -258,7 +274,7 @@ export function ProjectInspectPage() {
     { title: "时间", width: 170, render: (_, r) => formatDateTime(r.finished_at || r.started_at || r.created_at) },
     {
       title: "报告",
-      width: 220,
+      width: 280,
       render: (_, r) => (
         <Space wrap>
           <Button
@@ -269,8 +285,14 @@ export function ProjectInspectPage() {
           >
             HTML
           </Button>
+          <Button type="link" size="small" onClick={() => openAuthorized(inspectReportPrintUrl(projectId, r.id))}>
+            打印
+          </Button>
           <Button type="link" size="small" onClick={() => openAuthorized(inspectReportPdfUrl(projectId, r.id))}>
-            打印版
+            PDF
+          </Button>
+          <Button type="link" size="small" onClick={() => openAuthorized(inspectReportExcelUrl(projectId, r.id))}>
+            Excel
           </Button>
           <Button
             type="link"
@@ -362,6 +384,8 @@ export function ProjectInspectPage() {
                       cron_spec: values.cron_spec,
                       datasource_id: values.datasource_id,
                       report_list_mode: values.report_list_mode,
+                      report_template_id: values.report_template_id || 0,
+                      retain_days: values.retain_days,
                       recipients,
                     });
                     message.success("已保存");
@@ -405,6 +429,19 @@ export function ProjectInspectPage() {
                         { label: "全部 (all)", value: "all" },
                       ]}
                     />
+                  </Form.Item>
+                  <Form.Item name="report_template_id" label="报告版式">
+                    <Select
+                      allowClear
+                      placeholder="默认标准版"
+                      options={reportTemplates.map((t) => ({
+                        label: `${t.name}${t.project_id === 0 ? "（全局）" : ""}`,
+                        value: t.id,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="retain_days" label="报告保留天数（0=不清理）">
+                    <InputNumber min={0} max={3650} style={{ width: "100%" }} />
                   </Form.Item>
                   <Form.Item name="recipients" label="邮件收件人（逗号分隔）">
                     <Input.TextArea rows={2} placeholder="ops@example.com, oncall@example.com" />
@@ -481,8 +518,161 @@ export function ProjectInspectPage() {
               </Card>
             ),
           },
+          {
+            key: "templates",
+            label: "报告版式",
+            children: (
+              <Card
+                loading={loading}
+                extra={
+                  <Typography.Text type="secondary">内置版式可复制为项目模板后编辑；布局保持简洁。</Typography.Text>
+                }
+              >
+                <Table
+                  rowKey="id"
+                  size="small"
+                  dataSource={reportTemplates}
+                  pagination={false}
+                  columns={[
+                    { title: "名称", dataIndex: "name", width: 160 },
+                    { title: "编码", dataIndex: "code", width: 120 },
+                    {
+                      title: "范围",
+                      width: 100,
+                      render: (_, r) => (r.project_id === 0 ? <Tag>全局</Tag> : <Tag color="blue">项目</Tag>),
+                    },
+                    { title: "说明", dataIndex: "remark", ellipsis: true },
+                    {
+                      title: "操作",
+                      width: 260,
+                      render: (_, r) => (
+                        <Space wrap>
+                          <Button
+                            type="link"
+                            size="small"
+                            onClick={async () => {
+                              const resp = await previewInspectReportTemplate(projectId, { template_id: r.id });
+                              const blob = toReportBlob(resp, "text/html;charset=utf-8");
+                              const url = URL.createObjectURL(blob);
+                              window.open(url, "_blank", "noopener,noreferrer");
+                              setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                            }}
+                          >
+                            预览
+                          </Button>
+                          {r.project_id === 0 ? (
+                            <Button
+                              type="link"
+                              size="small"
+                              onClick={async () => {
+                                await copyInspectReportTemplate(projectId, { source_id: r.id });
+                                message.success("已复制到本项目，可在列表中编辑");
+                                void refresh(projectId);
+                              }}
+                            >
+                              复制到项目
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                type="link"
+                                size="small"
+                                onClick={() => {
+                                  setEditingTpl(r);
+                                  tplForm.setFieldsValue({
+                                    name: r.name,
+                                    remark: r.remark,
+                                    body: r.body || "",
+                                  });
+                                  setTplModalOpen(true);
+                                }}
+                              >
+                                编辑
+                              </Button>
+                              <Popconfirm
+                                title="删除该项目版式？"
+                                onConfirm={async () => {
+                                  await deleteInspectReportTemplate(projectId, r.id);
+                                  message.success("已删除");
+                                  void refresh(projectId);
+                                }}
+                              >
+                                <Button type="link" size="small" danger>
+                                  删除
+                                </Button>
+                              </Popconfirm>
+                            </>
+                          )}
+                        </Space>
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
+            ),
+          },
         ]}
       />
+
+      <Modal
+        title="编辑项目报告版式"
+        open={tplModalOpen}
+        onCancel={() => setTplModalOpen(false)}
+        width={880}
+        destroyOnClose
+        footer={[
+          <Button
+            key="preview"
+            onClick={async () => {
+              const values = await tplForm.validateFields();
+              const resp = await previewInspectReportTemplate(projectId, {
+                code: editingTpl?.code,
+                body: values.body,
+              });
+              const blob = toReportBlob(resp, "text/html;charset=utf-8");
+              const url = URL.createObjectURL(blob);
+              window.open(url, "_blank", "noopener,noreferrer");
+              setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            }}
+          >
+            预览
+          </Button>,
+          <Button key="cancel" onClick={() => setTplModalOpen(false)}>
+            取消
+          </Button>,
+          <Button
+            key="ok"
+            type="primary"
+            onClick={async () => {
+              if (!editingTpl) return;
+              const values = await tplForm.validateFields();
+              await updateInspectReportTemplate(projectId, editingTpl.id, values);
+              message.success("已保存");
+              setTplModalOpen(false);
+              void refresh(projectId);
+            }}
+          >
+            保存
+          </Button>,
+        ]}
+      >
+        <Form form={tplForm} layout="vertical">
+          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="remark" label="说明">
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="body"
+            label="HTML 模板"
+            rules={[{ required: true, message: "请填写模板正文" }]}
+            extra="Go html/template 语法；可用字段：Project、Score、Grade、Summary、Groups、Findings 等。保持简洁即可。"
+          >
+            <Input.TextArea rows={18} style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title={editingItem ? "编辑巡检项" : "新增巡检项"}

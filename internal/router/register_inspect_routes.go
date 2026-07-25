@@ -25,5 +25,14 @@ func RegisterInspectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	inspect.GET("/runs/:runId", d.inspectHandler.GetRun)
 	inspect.GET("/runs/:runId/report.html", d.inspectHandler.ReportHTML)
 	inspect.GET("/runs/:runId/report.pdf", d.inspectHandler.ReportPDF)
+	inspect.GET("/runs/:runId/report.xlsx", d.inspectHandler.ReportExcel)
+	inspect.GET("/runs/:runId/report.print.html", d.inspectHandler.ReportPrint)
 	inspect.POST("/runs/:runId/resend-email", d.inspectHandler.ResendEmail)
+
+	inspect.GET("/report-templates", d.inspectHandler.ListReportTemplates)
+	inspect.POST("/report-templates", d.inspectHandler.CreateReportTemplate)
+	inspect.PUT("/report-templates/:templateId", d.inspectHandler.UpdateReportTemplate)
+	inspect.DELETE("/report-templates/:templateId", d.inspectHandler.DeleteReportTemplate)
+	inspect.POST("/report-templates/copy", d.inspectHandler.CopyReportTemplate)
+	inspect.POST("/report-templates/preview", d.inspectHandler.PreviewReportTemplate)
 }

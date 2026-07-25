@@ -23,6 +23,7 @@ func (m *module) Models() []any {
 		&model.InspectPlan{},
 		&model.InspectItem{},
 		&model.InspectRun{},
+		&model.InspectReportTemplate{},
 	}
 }
 
@@ -32,6 +33,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	}
 	if svc := rt.InspectSvc(); svc != nil {
 		_ = svc.SeedGlobalTemplates(bgCtx)
+		_ = svc.SeedReportTemplates(bgCtx)
 		go svc.RunScheduler(bgCtx)
 	}
 	return nil

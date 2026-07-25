@@ -33,7 +33,7 @@ var repositoryFieldNames = wire.FieldsOf(
 	"AlertFiringDelivery", "CloudExpiryRule", "Overview", "K8sEventForward",
 )
 
-// AppInfraSet ??bootstrap.App ??????????????
+// AppInfraSet extracts infrastructure dependencies from bootstrap.App.
 var AppInfraSet = wire.NewSet(
 	provideDB,
 	provideRedis,
@@ -45,6 +45,7 @@ var AppInfraSet = wire.NewSet(
 	provideDbmgmtConfig,
 	provideAppRouteConfig,
 	appRouteConfigFields,
+	providePluginsConfig,
 	providePluginsEnabled,
 )
 
@@ -286,6 +287,7 @@ var ServiceSet = wire.NewSet(
 	provideRegistrationService,
 	service.NewMenuService,
 	service.NewDictEntryService,
+	service.NewPolicyGovernanceService,
 	// alert
 	service.NewAlertSilenceService,
 	service.NewAlertMaintenanceService,

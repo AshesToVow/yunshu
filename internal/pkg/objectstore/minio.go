@@ -1,6 +1,7 @@
 package objectstore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -126,6 +127,35 @@ func DownloadToTemp(ctx context.Context, db *gorm.DB, objectKey string) (string,
 
 func (c *Client) PutReader(ctx context.Context, objectKey string, r io.Reader, size int64, contentType string) error {
 	key := c.FullKey(objectKey)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
 	_, err := c.cli.PutObject(ctx, c.bucket, key, r, size, minio.PutObjectOptions{ContentType: contentType})
-	return err
+	if err != nil {
+		return wrapMinioError(err, c.endpoint, c.bucket, key)
+	}
+	return nil
+}
+
+// PutBytes 上传内存对象。
+func (c *Client) PutBytes(ctx context.Context, objectKey string, body []byte, contentType string) error {
+	return c.PutReader(ctx, objectKey, bytes.NewReader(body), int64(len(body)), contentType)
+}
+
+// GetBytes 下载对象到内存。
+func (c *Client) GetBytes(ctx context.Context, objectKey string) ([]byte, error) {
+	if c == nil || c.cli == nil {
+		return nil, fmt.Errorf("minio client not initialized")
+	}
+	key := c.FullKey(objectKey)
+	obj, err := c.cli.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, wrapMinioError(err, c.endpoint, c.bucket, key)
+	}
+	defer obj.Close()
+	b, err := io.ReadAll(obj)
+	if err != nil {
+		return nil, wrapMinioError(err, c.endpoint, c.bucket, key)
+	}
+	return b, nil
 }

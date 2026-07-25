@@ -17,6 +17,7 @@ type routeServices struct {
 	Role                 *service.RoleService
 	Permission           *service.PermissionService
 	Policy               *service.PolicyService
+	PolicyGovernance     *service.PolicyGovernanceService
 	K8sScopedPolicy      *service.K8sScopedPolicyService
 	K8sNamespaceDeny     *service.K8sNamespaceDenyService
 	K8sNamespaceAllow    *service.K8sNamespaceAllowService

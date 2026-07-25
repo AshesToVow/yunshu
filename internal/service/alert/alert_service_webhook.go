@@ -88,7 +88,7 @@ func (s *AlertService) logAllChannelsDeliveryFailed(ctx context.Context, title, 
 }
 
 // ReceiveAlertmanager 执行对应的业务逻辑。
-// 配置启用且 Redis 可用时，Webhook 先入队异步消费；内置评估路径应调用 receiveAlertmanagerPayloadSync 避免二次入队。
+// 配置启用且 Redis 可用时，Webhook 先入队异步消费；内置评估路径应调用 receiveCanonicalSync 避免二次入队。
 func (s *AlertService) ReceiveAlertmanager(ctx context.Context, payload AlertManagerPayload) error {
 	if s.shouldEnqueueAlertmanagerWebhook() {
 		if err := s.enqueueAlertmanagerWebhook(ctx, payload); err != nil {

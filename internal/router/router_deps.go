@@ -49,51 +49,51 @@ type RouteDeps struct {
 	dictEntryHandler         *handler.DictEntryHandler
 	adminHandler             *handler.AdminHandler
 
-	alertHandler             *handler.AlertHandler
-	alertPlatformHandler     *handler.AlertPlatformHandler
-	alertSubscriptionHandler *handler.AlertSubscriptionHandler
-	alertInhibitionHandler   *handler.AlertInhibitionHandler
+	alertHandler              *handler.AlertHandler
+	alertPlatformHandler      *handler.AlertPlatformHandler
+	alertSubscriptionHandler  *handler.AlertSubscriptionHandler
+	alertInhibitionHandler    *handler.AlertInhibitionHandler
 	alertReceiverGroupHandler *handler.AlertReceiverGroupHandler
-	cloudExpiryRuleHandler   *handler.CloudExpiryRuleHandler
+	cloudExpiryRuleHandler    *handler.CloudExpiryRuleHandler
 
-	clusterHandler           *handler.ClusterHandler
-	podHandler               *handler.PodHandler
-	namespaceHandler         *handler.NamespaceHandler
-	nodeHandler              *handler.NodeHandler
-	workloadHandler          *handler.WorkloadHandler
-	configHandler            *handler.ConfigHandler
-	storageHandler           *handler.StorageHandler
-	serviceResourceHandler   *handler.ServiceResourceHandler
-	ingressHandler           *handler.IngressHandler
-	networkPolicyHandler     *handler.NetworkPolicyHandler
-	k8sDiscoveryHandler      *handler.K8sDiscoveryHandler
-	k8sHPAHandler            *handler.K8sHPAHandler
-	helmHandler              *handler.HelmHandler
-	k8sResourceWatchHandler  *handler.K8sResourceWatchHandler
-	k8sSearchHandler         *handler.K8sSearchHandler
-	k8sEventForwardHandler   *handler.K8sEventForwardHandler
-	eventHandler             *handler.EventHandler
-	crdHandler               *handler.CRDHandler
-	crHandler                *handler.CRHandler
-	rbacHandler              *handler.RBACHandler
-	serviceAccountHandler    *handler.ServiceAccountHandler
-	overviewHandler          *handler.OverviewHandler
+	clusterHandler          *handler.ClusterHandler
+	podHandler              *handler.PodHandler
+	namespaceHandler        *handler.NamespaceHandler
+	nodeHandler             *handler.NodeHandler
+	workloadHandler         *handler.WorkloadHandler
+	configHandler           *handler.ConfigHandler
+	storageHandler          *handler.StorageHandler
+	serviceResourceHandler  *handler.ServiceResourceHandler
+	ingressHandler          *handler.IngressHandler
+	networkPolicyHandler    *handler.NetworkPolicyHandler
+	k8sDiscoveryHandler     *handler.K8sDiscoveryHandler
+	k8sHPAHandler           *handler.K8sHPAHandler
+	helmHandler             *handler.HelmHandler
+	k8sResourceWatchHandler *handler.K8sResourceWatchHandler
+	k8sSearchHandler        *handler.K8sSearchHandler
+	k8sEventForwardHandler  *handler.K8sEventForwardHandler
+	eventHandler            *handler.EventHandler
+	crdHandler              *handler.CRDHandler
+	crHandler               *handler.CRHandler
+	rbacHandler             *handler.RBACHandler
+	serviceAccountHandler   *handler.ServiceAccountHandler
+	overviewHandler         *handler.OverviewHandler
 
-	projectHandler         *handler.ProjectHandler
-	cmdbHandler            *handler.CMDBHandler
-	mysqlBackupSvc         *service.MysqlBackupService
-	mysqlBackupHandler     *handler.MysqlBackupHandler
-	dbmgmtSvc              *dbmgmtsvc.Service
-	dbmgmtHandler          *handler.DbmgmtHandler
-	alertSvc               *service.AlertService
-	cicdSvc                *cicdsvc.Service
-	cicdHandler            *handler.CicdHandler
-	logPlatformHandler     *handler.LogPlatformHandler
-	loggieHandler          *handler.LoggieHandler
-	logRetentionSvc        *service.LogRetentionService
-	kafkaToESSvc           *service.KafkaToESService
-	inspectSvc             *inspectsvc.Service
-	inspectHandler         *handler.InspectHandler
+	projectHandler     *handler.ProjectHandler
+	cmdbHandler        *handler.CMDBHandler
+	mysqlBackupSvc     *service.MysqlBackupService
+	mysqlBackupHandler *handler.MysqlBackupHandler
+	dbmgmtSvc          *dbmgmtsvc.Service
+	dbmgmtHandler      *handler.DbmgmtHandler
+	alertSvc           *service.AlertService
+	cicdSvc            *cicdsvc.Service
+	cicdHandler        *handler.CicdHandler
+	logPlatformHandler *handler.LogPlatformHandler
+	loggieHandler      *handler.LoggieHandler
+	logRetentionSvc    *service.LogRetentionService
+	kafkaToESSvc       *service.KafkaToESService
+	inspectSvc         *inspectsvc.Service
+	inspectHandler     *handler.InspectHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -160,101 +160,33 @@ func (d *RouteDeps) InspectService() *inspectsvc.Service {
 	return d.inspectSvc
 }
 
-func assembleRouteDeps(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
-	if repos == nil {
-		repos = newRouteRepositories(app.DB)
-	}
-	return wireRouteDepsWithRepos(app, repos, svcs)
-}
-
-func wireRouteDepsWithRepos(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
+// assembleRouteDeps 将 Wire 已注入的 repos/services/handlers 与中间件拼成 RouteDeps。
+func assembleRouteDeps(
+	app *bootstrap.App,
+	repos *routeRepositories,
+	svcs *routeServices,
+	handlers *routeHandlers,
+) (*RouteDeps, error) {
 	if svcs == nil {
 		return nil, fmt.Errorf("route services required (use InitializeRouteDeps)")
 	}
-
-	systemHandler := handler.NewSystemHandler(app.Config.App.Name, app.Config.App.Env)
-	pluginHandler := handler.NewPluginHandler(&app.Config.Plugins)
-	userRepo := repos.User
-	permissionRepo := repos.Permission
-	projectMemberRepo := repos.ProjectMember
-	k8sNsDenyRepo := repos.K8sNsDeny
-	k8sNsAllowRepo := repos.K8sNsAllow
-	k8sClusterAccessRepo := repos.K8sClusterAccess
-	clusterRepo := repos.Cluster
-
-	k8sNamespaceDenyHandler := handler.NewK8sNamespaceDenyHandler(svcs.K8sNamespaceDeny)
-	k8sNamespaceAllowHandler := handler.NewK8sNamespaceAllowHandler(svcs.K8sNamespaceAllow)
-	userGroupHandler := handler.NewUserGroupHandler(svcs.UserGroup)
-
-	mysqlBackupHandler := handler.NewMysqlBackupHandler(svcs.MysqlBackup)
-	dbmgmtHandler := handler.NewDbmgmtHandler(svcs.Dbmgmt)
-	cicdHandler := handler.NewCicdHandler(svcs.Cicd)
-	inspectHandler := handler.NewInspectHandler(svcs.Inspect)
-
-	authHandler := handler.NewAuthHandler(svcs.Auth, svcs.LoginLog)
-	loginLogHandler := handler.NewLoginLogHandler(svcs.LoginLog)
-	opLogHandler := handler.NewOperationLogHandler(svcs.OperationLog)
-	userHandler := handler.NewUserHandler(svcs.User)
-	departmentHandler := handler.NewDepartmentHandler(svcs.Department)
-	roleHandler := handler.NewRoleHandler(svcs.Role)
-	permissionHandler := handler.NewPermissionHandler(svcs.Permission, &app.Config.Plugins)
-	policyGovernance := service.NewPolicyGovernanceService(
-		userRepo,
-		repos.Role,
-		permissionRepo,
-		repos.Menu,
-		projectMemberRepo,
-		k8sClusterAccessRepo,
-		app.Enforcer,
-		&app.Config.Plugins,
-	)
-	policyHandler := handler.NewPolicyHandler(svcs.Policy, policyGovernance, svcs.Permission, &app.Config.Plugins)
-	k8sScopedPolicyHandler := handler.NewK8sScopedPolicyHandler(svcs.K8sScopedPolicy)
-	regHandler := handler.NewRegistrationHandler(svcs.Registration)
-	menuHandler := handler.NewMenuHandler(svcs.Menu, &app.Config.Plugins, app.Enforcer)
-	dictEntryHandler := handler.NewDictEntryHandler(svcs.DictEntry)
-	alertHandler := handler.NewAlertHandler(svcs.Alert)
-	cloudExpiryRuleHandler := handler.NewCloudExpiryRuleHandler(svcs.CloudExpiryRule, svcs.Alert)
-	alertPlatformHandler := handler.NewAlertPlatformHandler(svcs.AlertDatasource, svcs.AlertSilence, svcs.AlertMaintenance, svcs.AlertMonitorRule, svcs.AlertAssignee, svcs.AlertDuty)
-	alertSubscriptionSvc := svcs.Alert.GetSubscriptionService()
-	alertSubscriptionHandler := handler.NewAlertSubscriptionHandler(alertSubscriptionSvc)
-	var alertInhibitionHandler *handler.AlertInhibitionHandler
-	if inh := svcs.Alert.GetInhibitionService(); inh != nil {
-		alertInhibitionHandler = handler.NewAlertInhibitionHandler(inh)
+	if handlers == nil {
+		return nil, fmt.Errorf("route handlers required (use InitializeRouteDeps)")
 	}
-	alertReceiverGroupHandler := handler.NewAlertReceiverGroupHandler(svcs.AlertReceiverGroup)
-	adminHandler := handler.NewAdminHandler(app.Redis)
-	clusterHandler := handler.NewClusterHandler(svcs.K8sCluster)
-	podHandler := handler.NewPodHandler(svcs.K8sPod)
-	namespaceHandler := handler.NewNamespaceHandler(svcs.K8sNamespace)
-	nodeHandler := handler.NewNodeHandler(svcs.K8sNode)
-	workloadHandler := handler.NewWorkloadHandler(svcs.K8sWorkload)
-	configHandler := handler.NewConfigHandler(svcs.K8sConfig)
-	storageHandler := handler.NewStorageHandler(svcs.K8sStorage)
-	serviceResourceHandler := handler.NewServiceResourceHandler(svcs.K8sServiceResource)
-	ingressHandler := handler.NewIngressHandler(svcs.K8sIngress)
-	networkPolicyHandler := handler.NewNetworkPolicyHandler(svcs.K8sNetworkPolicy)
-	k8sDiscoveryHandler := handler.NewK8sDiscoveryHandler(svcs.K8sDiscovery)
-	k8sHPAHandler := handler.NewK8sHPAHandler(svcs.K8sHPA)
-	helmHandler := handler.NewHelmHandler(svcs.K8sHelm)
-	k8sResourceWatchHandler := handler.NewK8sResourceWatchHandler(svcs.K8sRuntime)
-	k8sSearchHandler := handler.NewK8sSearchHandler(svcs.K8sSearch)
-	k8sEventForwardHandler := handler.NewK8sEventForwardHandler(svcs.K8sEventForwardAdmin)
-	eventHandler := handler.NewEventHandler(svcs.K8sEvent)
-	crdHandler := handler.NewCRDHandler(svcs.K8sCRD)
-	crHandler := handler.NewCRHandler(svcs.K8sCR)
-	rbacHandler := handler.NewRBACHandler(svcs.K8sRBAC)
-	serviceAccountHandler := handler.NewServiceAccountHandler(svcs.K8sServiceAccount)
-	overviewHandler := handler.NewOverviewHandler(svcs.Overview)
-	projectHandler := handler.NewProjectHandler(svcs.ProjectMgmt, svcs.LogSearch)
-	cmdbHandler := handler.NewCMDBHandler(svcs.CMDB)
-	logPlatformHandler := handler.NewLogPlatformHandler(svcs.LogRetention, svcs.KafkaToES)
-	loggieHandler := handler.NewLoggieHandler(svcs.LoggieAgent)
+	if repos == nil {
+		repos = newRouteRepositories(app.DB)
+	}
 
-	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, userRepo, app.Logger)
-	wsAuthMiddleware := middleware.WSAuth(app.Redis, userRepo, app.Logger)
-	authorize := middleware.Authorize(app.Enforcer, app.Logger, k8sClusterAccessRepo)
-	k8sScopeAuthorize := middleware.K8sScopeAuthorize(app.Logger, permissionRepo, k8sClusterAccessRepo, k8sNsDenyRepo, k8sNsAllowRepo)
+	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, repos.User, app.Logger)
+	wsAuthMiddleware := middleware.WSAuth(app.Redis, repos.User, app.Logger)
+	authorize := middleware.Authorize(app.Enforcer, app.Logger, repos.K8sClusterAccess)
+	k8sScopeAuthorize := middleware.K8sScopeAuthorize(
+		app.Logger,
+		repos.Permission,
+		repos.K8sClusterAccess,
+		repos.K8sNsDeny,
+		repos.K8sNsAllow,
+	)
 	opAudit := middleware.OperationAudit(svcs.OperationLog, app.Logger)
 
 	return &RouteDeps{
@@ -266,74 +198,74 @@ func wireRouteDepsWithRepos(app *bootstrap.App, repos *routeRepositories, svcs *
 		k8sScopeAuthorize: k8sScopeAuthorize,
 		opAudit:           opAudit,
 
-		projectMemberRepo: projectMemberRepo,
-		clusterRepo:       clusterRepo,
+		projectMemberRepo: repos.ProjectMember,
+		clusterRepo:       repos.Cluster,
 		k8sRuntimeService: svcs.K8sRuntime,
 
-		systemHandler: systemHandler,
-		pluginHandler: pluginHandler,
+		systemHandler: handlers.System,
+		pluginHandler: handlers.Plugin,
 
-		authHandler:              authHandler,
-		loginLogHandler:          loginLogHandler,
-		opLogHandler:             opLogHandler,
-		userHandler:              userHandler,
-		departmentHandler:        departmentHandler,
-		roleHandler:              roleHandler,
-		permissionHandler:        permissionHandler,
-		policyHandler:            policyHandler,
-		k8sScopedPolicyHandler:   k8sScopedPolicyHandler,
-		k8sNamespaceDenyHandler:  k8sNamespaceDenyHandler,
-		k8sNamespaceAllowHandler: k8sNamespaceAllowHandler,
-		userGroupHandler:         userGroupHandler,
-		regHandler:               regHandler,
-		menuHandler:              menuHandler,
-		dictEntryHandler:         dictEntryHandler,
-		adminHandler:             adminHandler,
+		authHandler:              handlers.Auth,
+		loginLogHandler:          handlers.LoginLog,
+		opLogHandler:             handlers.OperationLog,
+		userHandler:              handlers.User,
+		departmentHandler:        handlers.Department,
+		roleHandler:              handlers.Role,
+		permissionHandler:        handlers.Permission,
+		policyHandler:            handlers.Policy,
+		k8sScopedPolicyHandler:   handlers.K8sScopedPolicy,
+		k8sNamespaceDenyHandler:  handlers.K8sNamespaceDeny,
+		k8sNamespaceAllowHandler: handlers.K8sNamespaceAllow,
+		userGroupHandler:         handlers.UserGroup,
+		regHandler:               handlers.Registration,
+		menuHandler:              handlers.Menu,
+		dictEntryHandler:         handlers.DictEntry,
+		adminHandler:             handlers.Admin,
 
-		alertHandler:              alertHandler,
-		alertPlatformHandler:      alertPlatformHandler,
-		alertSubscriptionHandler:  alertSubscriptionHandler,
-		alertInhibitionHandler:    alertInhibitionHandler,
-		alertReceiverGroupHandler: alertReceiverGroupHandler,
-		cloudExpiryRuleHandler:    cloudExpiryRuleHandler,
+		alertHandler:              handlers.Alert,
+		alertPlatformHandler:      handlers.AlertPlatform,
+		alertSubscriptionHandler:  handlers.AlertSubscription,
+		alertInhibitionHandler:    handlers.AlertInhibition,
+		alertReceiverGroupHandler: handlers.AlertReceiverGroup,
+		cloudExpiryRuleHandler:    handlers.CloudExpiryRule,
 
-		clusterHandler:          clusterHandler,
-		podHandler:              podHandler,
-		namespaceHandler:        namespaceHandler,
-		nodeHandler:             nodeHandler,
-		workloadHandler:         workloadHandler,
-		configHandler:           configHandler,
-		storageHandler:          storageHandler,
-		serviceResourceHandler:  serviceResourceHandler,
-		ingressHandler:          ingressHandler,
-		networkPolicyHandler:    networkPolicyHandler,
-		k8sDiscoveryHandler:     k8sDiscoveryHandler,
-		k8sHPAHandler:           k8sHPAHandler,
-		helmHandler:             helmHandler,
-		k8sResourceWatchHandler: k8sResourceWatchHandler,
-		k8sSearchHandler:        k8sSearchHandler,
-		k8sEventForwardHandler:  k8sEventForwardHandler,
-		eventHandler:            eventHandler,
-		crdHandler:              crdHandler,
-		crHandler:               crHandler,
-		rbacHandler:             rbacHandler,
-		serviceAccountHandler:   serviceAccountHandler,
-		overviewHandler:         overviewHandler,
+		clusterHandler:          handlers.Cluster,
+		podHandler:              handlers.Pod,
+		namespaceHandler:        handlers.Namespace,
+		nodeHandler:             handlers.Node,
+		workloadHandler:         handlers.Workload,
+		configHandler:           handlers.Config,
+		storageHandler:          handlers.Storage,
+		serviceResourceHandler:  handlers.ServiceResource,
+		ingressHandler:          handlers.Ingress,
+		networkPolicyHandler:    handlers.NetworkPolicy,
+		k8sDiscoveryHandler:     handlers.K8sDiscovery,
+		k8sHPAHandler:           handlers.K8sHPA,
+		helmHandler:             handlers.Helm,
+		k8sResourceWatchHandler: handlers.K8sResourceWatch,
+		k8sSearchHandler:        handlers.K8sSearch,
+		k8sEventForwardHandler:  handlers.K8sEventForward,
+		eventHandler:            handlers.Event,
+		crdHandler:              handlers.CRD,
+		crHandler:               handlers.CR,
+		rbacHandler:             handlers.RBAC,
+		serviceAccountHandler:   handlers.ServiceAccount,
+		overviewHandler:         handlers.Overview,
 
-		projectHandler:        projectHandler,
-		cmdbHandler:           cmdbHandler,
-		mysqlBackupSvc:        svcs.MysqlBackup,
-		mysqlBackupHandler:    mysqlBackupHandler,
-		dbmgmtSvc:             svcs.Dbmgmt,
-		dbmgmtHandler:         dbmgmtHandler,
-		alertSvc:              svcs.Alert,
-		cicdSvc:               svcs.Cicd,
-		cicdHandler:           cicdHandler,
-		logPlatformHandler:    logPlatformHandler,
-		loggieHandler:         loggieHandler,
-		logRetentionSvc:       svcs.LogRetention,
-		kafkaToESSvc:          svcs.KafkaToES,
-		inspectSvc:            svcs.Inspect,
-		inspectHandler:        inspectHandler,
+		projectHandler:     handlers.Project,
+		cmdbHandler:        handlers.CMDB,
+		mysqlBackupSvc:     svcs.MysqlBackup,
+		mysqlBackupHandler: handlers.MysqlBackup,
+		dbmgmtSvc:          svcs.Dbmgmt,
+		dbmgmtHandler:      handlers.Dbmgmt,
+		alertSvc:           svcs.Alert,
+		cicdSvc:            svcs.Cicd,
+		cicdHandler:        handlers.Cicd,
+		logPlatformHandler: handlers.LogPlatform,
+		loggieHandler:      handlers.Loggie,
+		logRetentionSvc:    svcs.LogRetention,
+		kafkaToESSvc:       svcs.KafkaToES,
+		inspectSvc:         svcs.Inspect,
+		inspectHandler:     handlers.Inspect,
 	}, nil
 }

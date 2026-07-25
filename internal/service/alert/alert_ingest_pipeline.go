@@ -5,7 +5,7 @@ import (
 )
 
 func (s *AlertService) ingestCanonicalAlerts(ctx context.Context, items []CanonicalIngressAlert) error {
-	return RunIngressPipeline(ctx, s.ingressHost(), canonicalItemsToIngress(items))
+	return RunIngressPipeline(ctx, s.ingressHost(), items)
 }
 
 func (s *AlertService) touchFingerprintState(ctx context.Context, fingerprint, status string) (int64, error) {

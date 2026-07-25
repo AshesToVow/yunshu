@@ -214,6 +214,14 @@ func (h *InspectHandler) ReportPDF(c *gin.Context) {
 	h.serveReport(c, "pdf")
 }
 
+func (h *InspectHandler) ReportExcel(c *gin.Context) {
+	h.serveReport(c, "excel")
+}
+
+func (h *InspectHandler) ReportPrint(c *gin.Context) {
+	h.serveReport(c, "print")
+}
+
 func (h *InspectHandler) serveReport(c *gin.Context, kind string) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
@@ -230,7 +238,124 @@ func (h *InspectHandler) serveReport(c *gin.Context, kind string) {
 		response.Error(c, err)
 		return
 	}
+	if kind == "excel" {
+		c.Header("Content-Disposition", `attachment; filename="inspect-run-`+c.Param("runId")+`.xlsx"`)
+	}
+	if kind == "pdf" && strings.HasPrefix(ctype, "application/pdf") {
+		c.Header("Content-Disposition", `attachment; filename="inspect-run-`+c.Param("runId")+`.pdf"`)
+	}
 	c.Data(http.StatusOK, ctype, body)
+}
+
+func (h *InspectHandler) ListReportTemplates(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	list, err := h.svc.ListReportTemplates(c.Request.Context(), projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, list)
+}
+
+func (h *InspectHandler) CreateReportTemplate(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON201(c, func(ctx context.Context, req inspectsvc.ReportTemplateUpsertRequest) (*model.InspectReportTemplate, error) {
+		return h.svc.CreateReportTemplate(ctx, projectID, req)
+	})
+}
+
+func (h *InspectHandler) UpdateReportTemplate(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	tid, err := parseUintParam(c, "templateId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req inspectsvc.ReportTemplateUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdateReportTemplate(c.Request.Context(), projectID, tid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *InspectHandler) DeleteReportTemplate(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	tid, err := parseUintParam(c, "templateId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteReportTemplate(c.Request.Context(), projectID, tid); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"deleted": true})
+}
+
+type copyReportTemplateReq struct {
+	SourceID uint   `json:"source_id"`
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+}
+
+func (h *InspectHandler) CopyReportTemplate(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req copyReportTemplateReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.CopyReportTemplate(c.Request.Context(), projectID, req.SourceID, req.Code, req.Name)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *InspectHandler) PreviewReportTemplate(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req inspectsvc.ReportPreviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	body, err := h.svc.PreviewReportTemplate(c.Request.Context(), projectID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", body)
 }
 
 func (h *InspectHandler) ResendEmail(c *gin.Context) {

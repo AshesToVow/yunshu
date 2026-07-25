@@ -11,8 +11,13 @@ import (
 
 //go:generate go run -mod=mod github.com/google/wire/cmd/wire
 
-func provideRouteDeps(app *bootstrap.App, repos *routeRepositories, svcs *routeServices) (*RouteDeps, error) {
-	return assembleRouteDeps(app, repos, svcs)
+func provideRouteDeps(
+	app *bootstrap.App,
+	repos *routeRepositories,
+	svcs *routeServices,
+	handlers *routeHandlers,
+) (*RouteDeps, error) {
+	return assembleRouteDeps(app, repos, svcs, handlers)
 }
 
 // InitializeRouteDeps is the Wire entry for HTTP route dependencies.
@@ -21,6 +26,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		AppInfraSet,
 		RepositorySet,
 		ServiceSet,
+		HandlerSet,
 		provideRouteDeps,
 	)
 	return nil, nil

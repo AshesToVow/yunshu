@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"html/template"
 	"math"
 	"sort"
 	"strings"
 	"time"
 )
 
-//go:embed templates/report.html
+//go:embed templates/*.html
 var reportFS embed.FS
 
 // ReportData HTML 报告数据。
@@ -188,32 +187,11 @@ func buildFindings(samples []MetricSample) []Finding {
 }
 
 func renderHTML(data ReportData) ([]byte, error) {
-	tpl, err := template.New("report.html").Funcs(template.FuncMap{
-		"fmtFloat": func(v float64) string {
-			if math.Abs(v-math.Round(v)) < 1e-9 {
-				return fmt.Sprintf("%.0f", v)
-			}
-			return fmt.Sprintf("%.2f", v)
-		},
-		"statusText": func(s string) string {
-			switch s {
-			case "critical":
-				return "严重"
-			case "warning":
-				return "警告"
-			default:
-				return "正常"
-			}
-		},
-	}).ParseFS(reportFS, "templates/report.html")
-	if err != nil {
-		return nil, err
-	}
-	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, data); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return renderHTMLWithTemplate("default", "", data)
+}
+
+func renderBinaryPDF(data ReportData) []byte {
+	return renderSimplePDF(data)
 }
 
 // renderSimplePDF 生成纯文本摘要 PDF（无第三方依赖）。

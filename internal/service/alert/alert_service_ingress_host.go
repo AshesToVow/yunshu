@@ -195,27 +195,3 @@ func (h alertIngressHost) OnResolvedComplete(ctx context.Context, fingerprint, g
 	_ = h.s.clearGroupAggregateState(ctx, groupKey)
 	h.s.clearAlertFiringDelivered(ctx, fingerprint)
 }
-
-func canonicalItemsToIngress(items []CanonicalIngressAlert) []IngressCanonicalItem {
-	out := make([]IngressCanonicalItem, len(items))
-	for i, ca := range items {
-		a := ca.Alert
-		out[i] = IngressCanonicalItem{
-			Source:            ca.Source,
-			PayloadReceiver:   ca.PayloadReceiver,
-			PayloadStatus:     ca.PayloadStatus,
-			GroupLabels:       ca.GroupLabels,
-			CommonLabels:      ca.CommonLabels,
-			CommonAnnotations: ca.CommonAnnotations,
-			Version:           ca.Version,
-			ExternalURL:       ca.ExternalURL,
-			TruncatedAlerts:   ca.TruncatedAlerts,
-			Alert: IngressAlertDetail{
-				Status: a.Status, Labels: a.Labels, Annotations: a.Annotations,
-				StartsAt: a.StartsAt, EndsAt: a.EndsAt, GeneratorURL: a.GeneratorURL,
-				Fingerprint: a.Fingerprint, SkipGroupTiming: a.SkipGroupTiming,
-			},
-		}
-	}
-	return out
-}

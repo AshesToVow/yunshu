@@ -7,8 +7,22 @@ export interface InspectPlan {
   cron_spec: string;
   datasource_id: number;
   report_list_mode: string;
+  report_template_id?: number;
+  retain_days?: number;
   recipients_json?: string;
   last_run_at?: string | null;
+}
+
+export interface InspectReportTemplate {
+  id: number;
+  project_id: number;
+  code: string;
+  name: string;
+  engine?: string;
+  body?: string;
+  is_builtin?: boolean;
+  status?: number;
+  remark?: string;
 }
 
 export interface InspectItem {
@@ -41,6 +55,8 @@ export interface InspectRun {
   critical_count: number;
   warning_count: number;
   normal_count: number;
+  storage?: string;
+  report_template_code?: string;
   email_sent_at?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
@@ -52,6 +68,8 @@ export type InspectPlanUpdate = {
   cron_spec?: string;
   datasource_id?: number;
   report_list_mode?: string;
+  report_template_id?: number;
+  retain_days?: number;
   recipients?: string[];
 };
 
@@ -121,10 +139,52 @@ export function resendInspectEmail(projectId: number, runId: number) {
   return getData<{ sent: boolean }>(http.post(`/projects/${projectId}/inspect/runs/${runId}/resend-email`));
 }
 
+export function listInspectReportTemplates(projectId: number) {
+  return getData<InspectReportTemplate[]>(http.get(`/projects/${projectId}/inspect/report-templates`));
+}
+
+export function updateInspectReportTemplate(
+  projectId: number,
+  templateId: number,
+  payload: { name?: string; body?: string; remark?: string; status?: number },
+) {
+  return getData<InspectReportTemplate>(
+    http.put(`/projects/${projectId}/inspect/report-templates/${templateId}`, payload),
+  );
+}
+
+export function deleteInspectReportTemplate(projectId: number, templateId: number) {
+  return getData<{ ok?: boolean }>(http.delete(`/projects/${projectId}/inspect/report-templates/${templateId}`));
+}
+
+export function copyInspectReportTemplate(
+  projectId: number,
+  payload: { source_id: number; code?: string; name?: string },
+) {
+  return getData<InspectReportTemplate>(http.post(`/projects/${projectId}/inspect/report-templates/copy`, payload));
+}
+
+export function previewInspectReportTemplate(
+  projectId: number,
+  payload: { template_id?: number; code?: string; body?: string },
+) {
+  return http.post(`/projects/${projectId}/inspect/report-templates/preview`, payload, {
+    responseType: "blob",
+  });
+}
+
 export function inspectReportHtmlUrl(projectId: number, runId: number) {
   return `/projects/${projectId}/inspect/runs/${runId}/report.html`;
 }
 
 export function inspectReportPdfUrl(projectId: number, runId: number) {
   return `/projects/${projectId}/inspect/runs/${runId}/report.pdf`;
+}
+
+export function inspectReportExcelUrl(projectId: number, runId: number) {
+  return `/projects/${projectId}/inspect/runs/${runId}/report.xlsx`;
+}
+
+export function inspectReportPrintUrl(projectId: number, runId: number) {
+  return `/projects/${projectId}/inspect/runs/${runId}/report.print.html`;
 }
