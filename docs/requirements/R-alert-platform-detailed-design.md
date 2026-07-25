@@ -287,6 +287,7 @@ sequenceDiagram
 |------|------|
 | **风险点** | 规则评估节拍与状态、`decideFiringGroupTiming`、`firing_delivered` 标记等多处 **强依赖 Redis**；文档亦写明无 Redis 时部分能力直接不可用。Redis 宕机、重启或网络抖动时，易出现 **内置规则停摆、节流与状态管理失效**，平台可用性过度绑定单一组件。 |
 | **改进点** | **核心状态双写或兜底**：例如 Redis + 数据库，Redis 不可用时 **降级读库**；**非核心能力可关闭**：节流、订阅静默窗口等在 Redis 不可用时 **自动跳过**，保证 **告警仍能投递**；对外明确 **SLA 与降级行为**（监控 Redis、自动切换策略）。 |
+| **落地（2026-07-25）** | ✅ 降级矩阵见 [alert-redis-degradation.md](../alert-redis-degradation.md)；节流/订阅静默在无 Redis 时跳过；平台规则走 `evaluateMonitorRuleNoRedis`；Webhook 无 Redis 同步处理。指纹追溯：`GET /alerts/events/by-fingerprint`。 |
 
 #### （5）恢复通知与 `firing_delivered` 生命周期
 
@@ -294,6 +295,7 @@ sequenceDiagram
 |------|------|
 | **风险点** | 恢复路径依赖 Redis 中的 **`firing_delivered`** 等标记；若标记 **TTL（如与 `dedup_ttl_seconds` 相关）短于告警持续时长**，可能出现 **长时间 firing 后恢复时标记已过期**，用户 **收不到恢复通知**，形成「只知故障不知恢复」的体验断裂。 |
 | **改进点** | **告警触发时在数据库持久化「已成功 firing 投递」事实**（或等价审计记录）；Redis 标记仅作 **加速缓存**；恢复发送决策以 **数据库记录为最终依据**，避免因 Redis TTL 丢失而导致恢复被错误抑制。 |
+| **落地（2026-07-25）** | ✅ 表 `alert_firing_deliveries`；写入 DB+Redis，读取 Redis 未命中降级 DB；`alert_events.fingerprint` 可检索。 |
 
 ### 13.3 其它补充观察（次要，待后续评审是否纳入正式改进项）
 
@@ -313,3 +315,4 @@ sequenceDiagram
 | 2026-05-08 | 初版：与当前 `ReceiveAlertmanager`、订阅树、聚合、firing/resolved 语义对齐 |
 | 2026-05-08 | 增加数据源 `ping` API、§13 风险与改进（按评审条目对齐） |
 | 2026-07-25 | §13.1(1) 落地：Canonical 统一入站；平台入口不再绕 AM Payload |
+| 2026-07-25 | §13.2(4)(5) 落地：firing_delivered 落库 + Redis 降级文档；指纹追溯 API |

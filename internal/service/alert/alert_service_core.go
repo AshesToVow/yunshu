@@ -33,6 +33,8 @@ type AlertEventListQuery struct {
 	MonitorPipeline string `form:"monitorPipeline"`
 	DatasourceID    uint   `form:"datasourceId"`
 	GroupKey        string `form:"groupKey"`
+	// Fingerprint 按告警指纹筛选投递/跳过留痕（兼容旧数据：group_key 或 payload 内 fingerprint）
+	Fingerprint string `form:"fingerprint"`
 	// Category 策略分类：delivery|routing|silence|inhibition|timing|resolved|failure|other
 	Category string `form:"category"`
 	// ProjectID 按项目过滤：匹配数据源归属或 payload 中的 project_id

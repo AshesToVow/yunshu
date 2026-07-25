@@ -85,7 +85,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v46 := routerRouteRepositories.AlertFiringDelivery
 	v47 := routerRouteRepositories.CloudExpiryRule
 	v48 := routerRouteRepositories.CloudAccount
-	alertStateService := provideAlertStateService(client, v44, alertConfig)
+	alertStateService := provideAlertStateService(client, v44, v46, alertConfig)
 	v49 := routerRouteRepositories.AlertSubscription
 	v50 := routerRouteRepositories.AlertInhibitionRule
 	v51 := provideAlertServiceOptions(v37, v43, alertRuleAssigneeService, v39, v41, securityEncryptionKey, v44, v45, v11, v12, v29, v46, v47, v48, alertStateService, v49, v50)

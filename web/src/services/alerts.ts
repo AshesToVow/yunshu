@@ -30,6 +30,7 @@ export interface AlertEventItem {
   datasourceType?: string;
   groupKey?: string;
   labelsDigest?: string;
+  fingerprint?: string;
   matchedPolicyIds?: string;
   matchedPolicyNames?: string;
   matchedPolicyIdList?: number[];
@@ -185,6 +186,8 @@ export function listAlertEvents(params: {
   /** 与后端 datasourceId 一致，按已配置 Prometheus 数据源筛选 */
   datasourceId?: number;
   groupKey?: string;
+  /** 告警指纹；兼容旧数据会同时匹配 group_key / payload */
+  fingerprint?: string;
   /** 策略分类，与后端 category 一致：inhibition|silence|timing|… */
   category?: string;
   /** 告警监控平台顶栏项目筛选 */
@@ -216,6 +219,37 @@ export function getAlertHistoryStats() {
     /** 历史事件中已出现的数据源，用于筛选下拉 */
     datasource_filter_options?: Array<{ id: number; name: string }>;
   }>(http.get("/alerts/history/stats"));
+}
+
+export type FingerprintDeliveryExplain = {
+  fingerprint: string;
+  firing_delivered: boolean;
+  firing_delivered_source?: string;
+  events: Array<{
+    id: number;
+    created_at: string;
+    status: string;
+    title: string;
+    channel_name: string;
+    success: boolean;
+    error_message: string;
+    category: string;
+    reason_hint: string;
+    response_snippet?: string;
+  }>;
+  skip_summary: Array<{
+    error_message: string;
+    category: string;
+    count: number;
+    hint: string;
+  }>;
+};
+
+/** 按 fingerprint 追溯投递成功/跳过原因 */
+export function explainAlertByFingerprint(fingerprint: string) {
+  return getData<FingerprintDeliveryExplain>(
+    http.get("/alerts/events/by-fingerprint", { params: { fingerprint } }),
+  );
 }
 
 export function sendAlertmanagerWebhook(payload: Record<string, unknown>, token?: string) {

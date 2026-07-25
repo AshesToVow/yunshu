@@ -22,11 +22,22 @@ func (s *AlertService) loadEnabledChannels(ctx context.Context) ([]model.AlertCh
 }
 
 func (s *AlertService) persistAlertEvent(ctx context.Context, event *model.AlertEvent) error {
+	if event != nil && strings.TrimSpace(event.Fingerprint) == "" {
+		fillAlertEventFingerprintFromPayload(event, nil)
+		if strings.TrimSpace(event.Fingerprint) == "" {
+			if fp := alertEventFingerprint(event); fp != "" {
+				event.Fingerprint = truncateText(fp, 512)
+			}
+		}
+	}
 	if err := s.eventRepo.Create(ctx, event); err != nil {
 		return err
 	}
 	if s.alertStateSvc != nil {
-		fp := alertEventFingerprint(event)
+		fp := strings.TrimSpace(event.Fingerprint)
+		if fp == "" {
+			fp = alertEventFingerprint(event)
+		}
 		if fp != "" {
 			_, _ = s.alertStateSvc.TouchFingerprint(ctx, fp, event.Status)
 		}
@@ -37,6 +48,9 @@ func (s *AlertService) persistAlertEvent(ctx context.Context, event *model.Alert
 func alertEventFingerprint(event *model.AlertEvent) string {
 	if event == nil {
 		return ""
+	}
+	if fp := strings.TrimSpace(event.Fingerprint); fp != "" {
+		return fp
 	}
 	if fp := strings.TrimSpace(event.GroupKey); fp != "" {
 		return fp

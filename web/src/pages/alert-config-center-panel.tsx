@@ -6,9 +6,11 @@ import {
   listAlertChannels,
   listAlertEvents,
   listAlertEventsGrouped,
+  explainAlertByFingerprint,
   sendAlertmanagerWebhook,
   type AlertEventGroupItem,
   type AlertEventItem,
+  type FingerprintDeliveryExplain,
   debugAlertRouting,
   type AlertRoutingDebugResult,
 } from "../services/alerts";
@@ -266,6 +268,10 @@ export function AlertConfigCenterPanel({
   /** 格式：`ds:<数据源ID>` 或 `mp:<monitor_pipeline slug>`（兼容历史 prometheus/platform） */
   const [eventSourceFilter, setEventSourceFilter] = useState("");
   const [eventGroupKey, setEventGroupKey] = useState("");
+  const [eventFingerprint, setEventFingerprint] = useState("");
+  const [fpExplain, setFpExplain] = useState<FingerprintDeliveryExplain | null>(null);
+  const [fpExplainOpen, setFpExplainOpen] = useState(false);
+  const [fpExplainLoading, setFpExplainLoading] = useState(false);
   const [eventCategory, setEventCategory] = useState<AlertEventCategory | "">(initialEventCategory ?? "");
   const eventsPageSizeRef = useRef(eventsPageSize);
   eventsPageSizeRef.current = eventsPageSize;
@@ -637,6 +643,7 @@ export function AlertConfigCenterPanel({
           monitorPipeline,
           datasourceId,
           groupKey: eventGroupKey.trim() || undefined,
+          fingerprint: eventFingerprint.trim() || undefined,
           category: eventCategory || undefined,
           projectId: effectiveProjectId > 0 ? effectiveProjectId : undefined,
         });
@@ -651,7 +658,7 @@ export function AlertConfigCenterPanel({
         if (seq === loadEventsSeqRef.current) setEventsLoading(false);
       }
     },
-    [eventKeyword, eventAlertIP, eventStatus, eventSourceFilter, eventGroupKey, eventCategory, effectiveProjectId],
+    [eventKeyword, eventAlertIP, eventStatus, eventSourceFilter, eventGroupKey, eventFingerprint, eventCategory, effectiveProjectId],
   );
 
   const loadEventsGrouped = useCallback(
@@ -709,7 +716,9 @@ export function AlertConfigCenterPanel({
       return;
     }
     const delay =
-      eventKeyword || eventAlertIP || eventStatus || eventSourceFilter || eventGroupKey || eventCategory ? 300 : 0;
+      eventKeyword || eventAlertIP || eventStatus || eventSourceFilter || eventGroupKey || eventFingerprint || eventCategory
+        ? 300
+        : 0;
     const timer = window.setTimeout(() => {
       void reloadEvents(1, eventsPageSizeRef.current);
     }, delay);
@@ -721,6 +730,7 @@ export function AlertConfigCenterPanel({
     eventStatus,
     eventSourceFilter,
     eventGroupKey,
+    eventFingerprint,
     eventCategory,
     eventHistoryMode,
     effectiveProjectId,
@@ -1035,6 +1045,51 @@ export function AlertConfigCenterPanel({
               onChange={(e) => setEventGroupKey(e.target.value)}
               allowClear
             />
+            <Input
+              style={{ width: 240 }}
+              placeholder="fingerprint"
+              value={eventFingerprint}
+              onChange={(e) => setEventFingerprint(e.target.value)}
+              allowClear
+              onPressEnter={() => {
+                const fp = eventFingerprint.trim();
+                if (!fp) return;
+                void (async () => {
+                  setFpExplainLoading(true);
+                  try {
+                    const r = await explainAlertByFingerprint(fp);
+                    setFpExplain(r);
+                    setFpExplainOpen(true);
+                  } catch {
+                    message.error("指纹追溯失败");
+                  } finally {
+                    setFpExplainLoading(false);
+                  }
+                })();
+              }}
+            />
+            <Button
+              loading={fpExplainLoading}
+              disabled={!eventFingerprint.trim()}
+              onClick={() => {
+                const fp = eventFingerprint.trim();
+                if (!fp) return;
+                void (async () => {
+                  setFpExplainLoading(true);
+                  try {
+                    const r = await explainAlertByFingerprint(fp);
+                    setFpExplain(r);
+                    setFpExplainOpen(true);
+                  } catch {
+                    message.error("指纹追溯失败");
+                  } finally {
+                    setFpExplainLoading(false);
+                  }
+                })();
+              }}
+            >
+              指纹追溯
+            </Button>
             <Button icon={<ReloadOutlined />} onClick={() => void reloadEvents(eventsPage, eventsPageSize)}>
               刷新
             </Button>
@@ -1147,6 +1202,38 @@ export function AlertConfigCenterPanel({
                 },
               },
               { title: "GroupKey", dataIndex: "groupKey", width: 140, ellipsis: true, render: (v: string) => v || "-" },
+              {
+                title: "Fingerprint",
+                dataIndex: "fingerprint",
+                width: 160,
+                ellipsis: true,
+                render: (v: string) =>
+                  v ? (
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => {
+                        setEventFingerprint(v);
+                        void (async () => {
+                          setFpExplainLoading(true);
+                          try {
+                            const r = await explainAlertByFingerprint(v);
+                            setFpExplain(r);
+                            setFpExplainOpen(true);
+                          } catch {
+                            message.error("指纹追溯失败");
+                          } finally {
+                            setFpExplainLoading(false);
+                          }
+                        })();
+                      }}
+                    >
+                      {v}
+                    </Button>
+                  ) : (
+                    "-"
+                  ),
+              },
               {
                 title: "级别",
                 dataIndex: "severity",
@@ -1645,6 +1732,61 @@ export function AlertConfigCenterPanel({
             <Switch defaultChecked />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={fpExplain ? `指纹追溯：${fpExplain.fingerprint}` : "指纹追溯"}
+        open={fpExplainOpen}
+        onCancel={() => setFpExplainOpen(false)}
+        footer={null}
+        width={900}
+        destroyOnClose
+      >
+        {fpExplain ? (
+          <Space direction="vertical" style={{ width: "100%" }} size="middle">
+            <Alert
+              type={fpExplain.firing_delivered ? "success" : "warning"}
+              showIcon
+              message={
+                fpExplain.firing_delivered
+                  ? `已有成功 firing 投递（来源：${fpExplain.firing_delivered_source || "-"}）`
+                  : "尚未记录成功 firing 投递（恢复通知可能被抑制）"
+              }
+            />
+            {(fpExplain.skip_summary || []).length > 0 ? (
+              <Card size="small" title="跳过/失败原因汇总">
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey={(r) => r.error_message}
+                  dataSource={fpExplain.skip_summary}
+                  columns={[
+                    { title: "原因码", dataIndex: "error_message", width: 220, ellipsis: true },
+                    { title: "分类", dataIndex: "category", width: 100 },
+                    { title: "次数", dataIndex: "count", width: 70 },
+                    { title: "说明", dataIndex: "hint", ellipsis: true },
+                  ]}
+                />
+              </Card>
+            ) : null}
+            <Card size="small" title="最近留痕（最多 200 条）">
+              <Table
+                size="small"
+                pagination={{ pageSize: 8 }}
+                rowKey="id"
+                dataSource={fpExplain.events || []}
+                columns={[
+                  { title: "时间", dataIndex: "created_at", width: 160 },
+                  { title: "状态", dataIndex: "status", width: 80 },
+                  { title: "通道", dataIndex: "channel_name", width: 140, ellipsis: true },
+                  { title: "分类", dataIndex: "category", width: 90 },
+                  { title: "原因码", dataIndex: "error_message", width: 180, ellipsis: true },
+                  { title: "说明", dataIndex: "reason_hint", ellipsis: true },
+                ]}
+              />
+            </Card>
+          </Space>
+        ) : null}
       </Modal>
 
     </>

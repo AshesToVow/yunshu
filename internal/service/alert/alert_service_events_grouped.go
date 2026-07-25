@@ -23,7 +23,8 @@ func (s *AlertService) ListEventsGrouped(ctx context.Context, q AlertEventListQu
 	page, pageSize = pagination.Normalize(q.Page, q.PageSize)
 	f := repository.AlertEventListFilter{
 		Keyword: q.Keyword, Cluster: q.Cluster, AlertIP: q.AlertIP, Status: q.Status,
-		MonitorPipeline: q.MonitorPipeline, DatasourceID: q.DatasourceID, ProjectID: q.ProjectID, GroupKey: q.GroupKey,
+		MonitorPipeline: q.MonitorPipeline, DatasourceID: q.DatasourceID, ProjectID: q.ProjectID,
+		GroupKey: q.GroupKey, Fingerprint: q.Fingerprint,
 	}
 	if v := strings.TrimSpace(q.Category); v != "" && ValidAlertEventCategory(v) {
 		f.Category = v

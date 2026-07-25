@@ -366,8 +366,14 @@ function unwrapPrometheusQueryData(body: unknown): unknown {
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertMonitorProvider } from "./context";
 import { AlertMonitorLayout } from "./layout";
-import { AlertMonitorModals } from "./modals";
 import { normalizeAlertMonitorTab, tabPathForKey, type AlertMonitorTabKey } from "./tab-config";
+import { lazy, Suspense } from "react";
+import { Spin } from "antd";
+
+const AlertMonitorModals = lazy(async () => {
+  const mod = await import("./modals");
+  return { default: mod.AlertMonitorModals };
+});
 
 export type { AlertMonitorTabKey };
 
@@ -376,7 +382,15 @@ export function AlertMonitorPlatformRoot() {
   return (
     <AlertMonitorProvider value={state as never}>
       <AlertMonitorLayout />
-      <AlertMonitorModals />
+      <Suspense
+        fallback={
+          <div style={{ position: "fixed", right: 16, bottom: 16 }}>
+            <Spin size="small" />
+          </div>
+        }
+      >
+        <AlertMonitorModals />
+      </Suspense>
     </AlertMonitorProvider>
   );
 }

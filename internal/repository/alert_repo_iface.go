@@ -22,6 +22,7 @@ type AlertEventListFilter struct {
 	DatasourceID    uint
 	ProjectID       uint
 	GroupKey        string
+	Fingerprint     string
 	Category        string
 }
 

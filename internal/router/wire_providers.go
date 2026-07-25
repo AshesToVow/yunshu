@@ -1,13 +1,16 @@
 package router
 
 import (
+	"context"
 	"strings"
 
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/config"
+	"yunshu/internal/dictconfig"
 	"yunshu/internal/interfaces"
 	"log/slog"
 	"yunshu/internal/pkg/mailer"
+	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/service"
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
@@ -58,11 +61,13 @@ var RepositorySet = wire.NewSet(
 func provideAlertStateService(
 	redisClient *redis.Client,
 	eventRepo interfaces.AlertEventRepository,
+	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository,
 	cfg config.AlertConfig,
 ) alert.AlertStateService {
 	return alert.NewRedisAlertStateService(
 		redisClient,
 		eventRepo,
+		firingDeliveryRepo,
 		cfg.DedupTTLSeconds,
 		cfg.AggregateTTLSeconds,
 	)
@@ -173,7 +178,13 @@ func provideMysqlBackupService(
 	sender mailer.Sender,
 	appName AppDisplayName,
 ) (*service.MysqlBackupService, error) {
-	return service.NewMysqlBackupService(backupRepo, serverRepo, projectRepo, userRepo, db, string(encryptionKey), sender, string(appName))
+	newStore := func(ctx context.Context) (*objectstore.Client, error) {
+		return objectstore.NewFromDB(ctx, db)
+	}
+	resolveSched := func(ctx context.Context) dictconfig.MysqlBackupSchedulerConfig {
+		return dictconfig.ResolveMysqlBackupSchedulerConfig(ctx, db, dictconfig.DefaultMysqlBackupSchedulerDictTypes())
+	}
+	return service.NewMysqlBackupService(backupRepo, serverRepo, projectRepo, userRepo, newStore, resolveSched, string(encryptionKey), sender, string(appName))
 }
 
 func provideDbmgmtService(

@@ -189,6 +189,34 @@ func fillAlertEventDatasourceFromPayload(ev *model.AlertEvent, payload map[strin
 	if s := strings.TrimSpace(fmt.Sprintf("%v", payload["datasourceType"])); s != "" && s != "<nil>" {
 		ev.DatasourceType = truncateText(s, 32)
 	}
+	fillAlertEventFingerprintFromPayload(ev, payload)
+}
+
+func fillAlertEventFingerprintFromPayload(ev *model.AlertEvent, payload map[string]interface{}) {
+	if ev == nil || strings.TrimSpace(ev.Fingerprint) != "" {
+		return
+	}
+	if payload != nil {
+		if s := strings.TrimSpace(fmt.Sprintf("%v", payload["fingerprint"])); s != "" && s != "<nil>" {
+			ev.Fingerprint = truncateText(s, 512)
+			return
+		}
+		if labels, ok := payload["labels"].(map[string]interface{}); ok {
+			if s := strings.TrimSpace(fmt.Sprintf("%v", labels["fingerprint"])); s != "" && s != "<nil>" {
+				ev.Fingerprint = truncateText(s, 512)
+				return
+			}
+		}
+		if labels, ok := payload["labels"].(map[string]string); ok {
+			if s := strings.TrimSpace(labels["fingerprint"]); s != "" {
+				ev.Fingerprint = truncateText(s, 512)
+				return
+			}
+		}
+	}
+	if s := strings.TrimSpace(ev.GroupKey); s != "" {
+		ev.Fingerprint = truncateText(s, 512)
+	}
 }
 
 func payloadUintAny(v interface{}) uint {

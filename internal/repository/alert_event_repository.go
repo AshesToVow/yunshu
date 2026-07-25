@@ -83,6 +83,13 @@ func (r *AlertEventRepository) listQuery(ctx context.Context, f AlertEventListFi
 	if v := strings.TrimSpace(f.GroupKey); v != "" {
 		tx = tx.Where("group_key = ?", v)
 	}
+	if v := strings.TrimSpace(f.Fingerprint); v != "" {
+		like := "%\"fingerprint\":\"" + v + "\"%"
+		tx = tx.Where(
+			"fingerprint = ? OR group_key = ? OR request_payload LIKE ?",
+			v, v, like,
+		)
+	}
 	if v := strings.TrimSpace(f.Category); v != "" {
 		tx = applyAlertEventCategoryFilter(tx, v)
 	}

@@ -65,7 +65,7 @@ internal/plugins/       # 各业务插件 init 注册 + StartWorkers
 |----|------|
 | 全量 Wire Handler 装配 | ✅ | `HandlerSet` + `routeHandlers`；`assembleRouteDeps` 仅拼中间件与 RouteDeps |
 | Handler 直引子包 | 弱化 `exports.go`，新代码优先 `import alert` 等 |
-| `mysqlbackup.db` | MinIO / dictconfig 仍直用 `*gorm.DB` |
+| `mysqlbackup.db` | ✅ | Service 不再持有 `*gorm.DB`；经 Wire 注入 ObjectStoreFactory / SchedulerConfigResolver |
 | 插件菜单与 Casbin 联动 | ✅ | 菜单 status 双向同步；授权树按插件过滤；冲突分析 + 清理禁用插件策略 |
 | 告警 ingest 统一模型 | ✅ | `CanonicalIngressAlert` 为唯一内部模型；AM Webhook 仅作适配；监控/云到期直接构造（含 `CloudExpiryExtension`） |
 | 巡检报告模板 + 对象存储 | ✅ | 多版式（default/compact/executive）；MinIO 优先落盘；Excel/PDF 导出；保留天数清理 |
