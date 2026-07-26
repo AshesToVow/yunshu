@@ -108,8 +108,9 @@ func podTemplateResourceSummary(spec corev1.PodSpec) string {
 func workloadUsagePercents(u podCPUMemUsage, spec corev1.PodSpec, scale int64) (cpuUse, memUse string, cpuReqPct, cpuLimPct, memReqPct, memLimPct float64) {
 	reqCPU, reqMem, limCPU, limMem := podTemplateResourceTotals(spec)
 	if !u.CPU.IsZero() || !u.Mem.IsZero() {
-		cpuUse = quantityOrDash(u.CPU)
-		memUse = quantityOrDash(u.Mem)
+		// 避免 metrics-server 返回的纳核（…n）直接展示，统一为 m/核 与 Ki/Mi/Gi
+		cpuUse = formatQuantityCPUReadable(u.CPU)
+		memUse = formatQuantityMemReadable(u.Mem)
 	} else {
 		cpuUse = "-"
 		memUse = "-"

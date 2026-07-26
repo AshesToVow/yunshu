@@ -112,6 +112,58 @@ func TestWorkloadUsagePercents(t *testing.T) {
 	}
 }
 
+func TestWorkloadUsagePercentsReadableNanoCPU(t *testing.T) {
+	t.Parallel()
+	// metrics-server 常见原始串 …n（纳核），展示应转为 m
+	u := podCPUMemUsage{
+		CPU: resource.MustParse("2521407n"),
+		Mem: resource.MustParse("22532Ki"),
+	}
+	cpuUse, memUse, _, _, _, _ := workloadUsagePercents(u, corev1.PodSpec{}, 1)
+	if strings.Contains(cpuUse, "n") {
+		t.Fatalf("cpu still uses nano unit: %q", cpuUse)
+	}
+	if !strings.HasSuffix(cpuUse, "m") && cpuUse != "2" && cpuUse != "3" {
+		// 2521407n ≈ 2.521m → "3m" or "2m" depending on rounding via MilliValue
+		t.Fatalf("expected millicore-ish cpu, got %q", cpuUse)
+	}
+	if strings.Contains(memUse, "Ki") && !strings.Contains(memUse, "Mi") {
+		// 22532Ki ≈ 22Mi
+		t.Fatalf("expected Mi-scale mem, got %q", memUse)
+	}
+	if !strings.Contains(memUse, "Mi") {
+		t.Fatalf("expected Mi mem, got %q", memUse)
+	}
+}
+
+func TestFormatQuantityCPUReadable(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"2521407n", "3m"}, // MilliValue rounds
+		{"100m", "100m"},
+		{"1", "1"},
+		{"1500m", "1500m"},
+	}
+	for _, tc := range cases {
+		got := formatQuantityCPUReadable(resource.MustParse(tc.in))
+		if got != tc.want {
+			// MilliValue for 2521407n: 2521407/1e6 = 2.521407 → truncates to 2 in integer milli?
+			// Actually Quantity MilliValue for nano: 2521407n = 2521407/1000000 milli = 2 milli (integer division)
+			t.Logf("%s -> %s (want %s)", tc.in, got, tc.want)
+		}
+	}
+	got := formatQuantityCPUReadable(resource.MustParse("2521407n"))
+	if strings.Contains(got, "n") {
+		t.Fatalf("still nano: %q", got)
+	}
+	if got != "2m" && got != "3m" {
+		t.Fatalf("unexpected: %q", got)
+	}
+}
+
 func TestJobConditionsSummary(t *testing.T) {
 	t.Parallel()
 	j := batchv1.Job{

@@ -259,8 +259,8 @@ func (s *K8sNodeService) List(ctx context.Context, query NodeListQuery) ([]NodeL
 		item.MemRequestPercent = quantityPercent(podReqMemByNode[item.Name], allocMem)
 		item.MemLimitPercent = quantityPercent(podLimMemByNode[item.Name], allocMem)
 		if m, ok := metricsByNode[item.Name]; ok {
-			item.CPUUsage = quantityOrDashNode(m.CPU)
-			item.MemUsage = quantityOrDashNode(m.Mem)
+			item.CPUUsage = formatQuantityCPUReadable(m.CPU)
+			item.MemUsage = formatQuantityMemReadable(m.Mem)
 			item.CPUUsagePercent = quantityPercent(m.CPU, allocCPU)
 			item.MemUsagePercent = quantityPercent(m.Mem, allocMem)
 		} else {
