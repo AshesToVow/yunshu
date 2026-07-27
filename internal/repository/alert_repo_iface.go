@@ -64,7 +64,7 @@ type AlertEventRepo interface {
 	List(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]model.AlertEvent, int64, error)
 	ListGroupedByGroupKey(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]AlertEventGroupRow, int64, error)
 	ListFiringByGroupKeys(ctx context.Context, groupKeys []string) ([]model.AlertEvent, error)
-	HistoryStats(ctx context.Context, dayStart, dayEnd time.Time) (*AlertHistoryStatsRow, error)
+	HistoryStats(ctx context.Context, projectID uint, dayStart, dayEnd time.Time) (*AlertHistoryStatsRow, error)
 }
 
 // AlertChannelRepo is implemented by *AlertChannelRepository.

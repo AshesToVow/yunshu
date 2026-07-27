@@ -81,6 +81,17 @@ export function AlertMonitorModals() {
               }
             />
           </Form.Item>
+          <Form.Item
+            name="alertmanager_url"
+            label="Alertmanager URL"
+            extra={
+              <Typography.Text type="secondary">
+                可选。留空时若 Prometheus 为 <Typography.Text code>:9090</Typography.Text> 则自动推导为 <Typography.Text code>:9093</Typography.Text>，用于拉取 Alertmanager 静默列表。
+              </Typography.Text>
+            }
+          >
+            <Input placeholder="http://alertmanager:9093" allowClear />
+          </Form.Item>
           <Form.Item name="bearer_token" label="Bearer Token">
             <Input.Password placeholder="留空表示不改" autoComplete="new-password" />
           </Form.Item>

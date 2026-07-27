@@ -204,7 +204,7 @@ export function listAlertEvents(params: {
   );
 }
 
-export function getAlertHistoryStats() {
+export function getAlertHistoryStats(params?: { project_id?: number }) {
   return getData<{
     total: number;
     firing: number;
@@ -218,7 +218,7 @@ export function getAlertHistoryStats() {
     monitor_pipeline_values?: string[];
     /** 历史事件中已出现的数据源，用于筛选下拉 */
     datasource_filter_options?: Array<{ id: number; name: string }>;
-  }>(http.get("/alerts/history/stats"));
+  }>(http.get("/alerts/history/stats", { params }));
 }
 
 export type FingerprintDeliveryExplain = {

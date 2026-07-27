@@ -24,11 +24,11 @@ export function SilencesTab() {
                 <Alert
                   type="info"
                   showIcon
-                  message="平台静默 ≠ Alertmanager 静默"
+                  message="平台静默与 Alertmanager 静默"
                   description={
                     <Space direction="vertical" size={8} style={{ width: "100%" }}>
                       <span>
-                        下方「平台静默规则」在<strong>服务端入站分发前</strong>按 ctx.matchers 与告警 labels 比对（含<strong>平台内置监控规则</strong>与 Webhook），命中则<strong>不再向通道发送</strong>。不会调用 Alertmanager API；Prometheus 活跃告警列表仅用于对照 Prom 侧规则，其「静默」按钮与平台规则不是同一批告警名。静默平台规则请用「监控规则与策略」表格中的<strong>静默</strong>，或手动填写 <Typography.Text code>monitor_rule_id</Typography.Text> + <Typography.Text code>alertname</Typography.Text>。
+                        「平台静默规则」在<strong>服务端入站分发前</strong>按 labels 比对，命中则<strong>不再向通道发送</strong>。「Alertmanager 静默」来自当前项目数据源的 <Typography.Text code>/api/v2/silences</Typography.Text>（默认由 Prometheus 地址 9090 推导 9093，可在数据源填写 <Typography.Text code>alertmanager_url</Typography.Text>），在 Alertmanager UI 创建后会在下方列表只读展示。
                       </span>
                       <Space wrap>
                         <Button size="small" onClick={ctx.openHistoryTab}>查看静默后的历史记录</Button>
@@ -98,19 +98,21 @@ export function SilencesTab() {
                   <Button type="primary" onClick={() => void ctx.releaseSelectedSilences()} disabled={ctx.selectedSilenceIds.length === 0}>
                     批量解除静默
                   </Button>
-                  <Button icon={<ReloadOutlined />} onClick={() => void ctx.loadSilences()}>
+                  <Button icon={<ReloadOutlined />} onClick={() => void Promise.all([ctx.loadSilences(), ctx.loadAmSilences()])}>
                     刷新
                   </Button>
                 </Space>
                 <Table
-                  rowKey="id"
+                  rowKey="rowKey"
                   rowSelection={{
                     type: "checkbox",
                     selectedRowKeys: ctx.selectedSilenceIds,
                     onChange: (keys) => ctx.setSelectedSilenceIds(keys.map((k) => Number(k)).filter((n) => Number.isFinite(n))),
+                    getCheckboxProps: (r) => ({ disabled: r.source === "alertmanager" }),
                   }}
+                  loading={ctx.amSilencesLoading}
                   columns={ctx.silColumns}
-                  dataSource={ctx.silenceList}
+                  dataSource={ctx.silenceDisplayList}
                   pagination={false}
                   scroll={{ x: 960 }}
                 />

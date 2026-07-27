@@ -250,6 +250,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "更新告警数据源", Resource: "/api/v1/alerts/datasources/:id", Action: "PUT", Description: "Update alert datasource"},
 		{Name: "删除告警数据源", Resource: "/api/v1/alerts/datasources/:id", Action: "DELETE", Description: "Delete alert datasource"},
 		{Name: "Prometheus 活跃告警快照", Resource: "/api/v1/alerts/datasources/:id/prometheus-alerts", Action: "GET", Description: "GET /api/v1/alerts proxy"},
+		{Name: "Alertmanager 静默列表", Resource: "/api/v1/alerts/datasources/:id/alertmanager-silences", Action: "GET", Description: "GET /api/v2/silences proxy"},
 		{Name: "PromQL 即时查询", Resource: "/api/v1/alerts/datasources/:id/query", Action: "POST", Description: "Prometheus instant query"},
 		{Name: "PromQL 范围查询", Resource: "/api/v1/alerts/datasources/:id/query_range", Action: "POST", Description: "Prometheus range query"},
 		{Name: "告警静默列表", Resource: "/api/v1/alerts/silences", Action: "GET", Description: "List alert silences"},

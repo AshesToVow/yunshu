@@ -361,10 +361,13 @@ export function AlertConfigCenterPanel({
     setWebhookPayload(JSON.stringify(webhookPayloadTemplates[key], null, 2));
   }
 
-  async function loadBase() {
+  async function loadBase(projectId?: number) {
     setBaseLoading(true);
     try {
-      const [statsRes, channelRes] = await Promise.all([getAlertHistoryStats(), listAlertChannels()]);
+      const [statsRes, channelRes] = await Promise.all([
+        getAlertHistoryStats({ project_id: projectId && projectId > 0 ? projectId : undefined }),
+        listAlertChannels(),
+      ]);
       setStats(statsRes);
       setChannels((channelRes.list ?? []).map((c) => ({ id: c.id, name: c.name })));
     } catch {
@@ -701,9 +704,12 @@ export function AlertConfigCenterPanel({
   }, [initialEventCategory]);
 
   useEffect(() => {
-    void loadBase();
     void loadProjects();
   }, []);
+
+  useEffect(() => {
+    void loadBase(effectiveProjectId > 0 ? effectiveProjectId : undefined);
+  }, [effectiveProjectId]);
 
   useEffect(() => {
     if (projectContextId && projectContextId > 0) {

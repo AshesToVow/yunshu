@@ -321,11 +321,11 @@ type AlertHistoryStats struct {
 	DatasourceFilterOptions []AlertDatasourceFilterOption `json:"datasource_filter_options"`
 }
 
-func (s *AlertService) HistoryStats(ctx context.Context) (*AlertHistoryStats, error) {
+func (s *AlertService) HistoryStats(ctx context.Context, projectID uint) (*AlertHistoryStats, error) {
 	now := time.Now()
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	dayEnd := dayStart.Add(24 * time.Hour)
-	row, err := s.eventRepo.HistoryStats(ctx, dayStart, dayEnd)
+	row, err := s.eventRepo.HistoryStats(ctx, projectID, dayStart, dayEnd)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert", "HistoryStats", err)
 	}

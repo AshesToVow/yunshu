@@ -135,6 +135,20 @@ func (h *AlertPlatformHandler) PromActiveAlerts(c *gin.Context) {
 	response.Success(c, gin.H{"data": raw})
 }
 
+func (h *AlertPlatformHandler) AlertmanagerSilences(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	raw, err := h.ds.AlertmanagerSilences(c.Request.Context(), id)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{"data": raw})
+}
+
 func (h *AlertPlatformHandler) ListSilences(c *gin.Context) {
 	ServeQuery(c, func(ctx context.Context, q service.AlertSilenceListQuery) (gin.H, error) {
 		list, total, page, pageSize, err := h.silence.List(ctx, q)
