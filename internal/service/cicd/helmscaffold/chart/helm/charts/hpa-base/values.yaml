@@ -1,0 +1,7 @@
+enabled: false
+nameOverride: ""
+fullnameOverride: ""
+minReplicas: 1
+maxReplicas: 3
+targetCPUUtilizationPercentage: 80
+targetMemoryUtilizationPercentage: null

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: setup
+description: Yunshu ENV-SETUP（全局固化配置，供 Application Chart 依赖）
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

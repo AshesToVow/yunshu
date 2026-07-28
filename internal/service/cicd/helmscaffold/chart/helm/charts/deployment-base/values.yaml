@@ -1,0 +1,123 @@
+enabled: true
+replicaCount: 1
+image:
+  repository: nginx
+  tag: latest
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+# 单端口（兼容 Jenkins --set containerPort）；多端口请用 ports
+containerPort: 8080
+# 推荐写法（与 K8s 一致）；非空时优先于 containerPort
+ports: []
+# ports:
+#   - name: web
+#     containerPort: 8913
+#     protocol: TCP
+#   - name: metrics
+#     containerPort: 9090
+#     protocol: TCP
+# 可选：覆盖容器启动命令
+command: []
+args: []
+workingDir: ""
+env: []
+envFrom: []
+resources:
+  limits:
+    cpu: "1"
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 512Mi
+
+# Deployment 更新策略
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 25%
+    maxSurge: 25%
+
+# Pod 重启策略（Deployment 仅支持 Always；保留字段便于与 Job/文档对齐）
+restartPolicy: Always
+terminationGracePeriodSeconds: 30
+
+# DNS
+dnsPolicy: ClusterFirst
+dnsConfig: {}
+# dnsConfig:
+#   nameservers:
+#     - 10.0.0.10
+#   searches:
+#     - ns.svc.cluster.local
+#   options:
+#     - name: ndots
+#       value: "2"
+
+# 容器生命周期钩子
+lifecycle: {}
+# lifecycle:
+#   postStart:
+#     exec:
+#       command: ["/bin/sh", "-c", "echo postStart"]
+#   preStop:
+#     exec:
+#       command: ["/bin/sh", "-c", "sleep 5"]
+
+  probes:
+  enabled: false
+  # 探针端口：端口名（如 web/http）或数字；空则取 ports[0].name，再回退 http
+  port: ""
+  startupPath: /actuator/health/liveness
+  livenessPath: /actuator/health/liveness
+  readinessPath: /actuator/health/readiness
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# SkyWalking Java Agent（initContainer 拷贝 + 主容器挂载）
+skywalking:
+  enabled: false
+  image: harbor.example/registry/skywalking-java-agent:9.1.0
+  imagePullPolicy: IfNotPresent
+  # init 容器内 Agent 源目录 → 拷贝到 emptyDir
+  agentPathInImage: /skywalking/agent
+  mountPath: /skywalking/agent
+  # 注入到主容器的环境变量（可按需增删）
+  javaToolOptions: "-javaagent:/skywalking/agent/skywalking-agent.jar"
+  agentName: ""
+  collectorBackendServices: "skywalking-oap:11800"
+  extraEnv: []
+  # extraEnv:
+  #   - name: SW_AGENT_NAMESPACE
+  #     value: prod
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# 额外 init / sidecar（原始 YAML 片段，高级扩展）
+initContainers: []
+sidecars: []
+
+configsPath: /export/servers/configs
+mountConfigFiles: true
+extraVolumeMounts: []
+extraVolumes: []
+
+podAnnotations: {}
+podLabels: {}
+podSecurityContext: {}
+securityContext: {}
+serviceAccountName: ""
+priorityClassName: ""
+hostAliases: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
+schedulerName: ""

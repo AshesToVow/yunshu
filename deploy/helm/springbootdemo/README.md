@@ -1,5 +1,7 @@
 # springbootdemo Helm Chart
 
+> 推荐：在 Yunshu CI/CD 容器化发布里选 `deploy_method=helm`，点「下载 Helm 脚手架」，比手工复制本目录更省事。
+
 配合 Yunshu + Jenkins K8s 流水线（`deployMethod=helm`）使用。
 
 ## 放入业务仓库
@@ -11,15 +13,11 @@ springboot-demo/          # 你的 Gitee 仓库
 ├── Dockerfile
 ├── pom.xml
 ├── src/
-└── helm/                 # ← 复制 deploy/helm/springbootdemo 下所有文件到这里
+└── helm/                 # ← 复制本目录内容到这里
     ├── Chart.yaml
     ├── values.yaml
     ├── .helmignore
     └── templates/
-        ├── _helpers.tpl
-        ├── deployment.yaml
-        ├── service.yaml
-        └── NOTES.txt
 ```
 
 Jenkins 共享库要求路径：**仓库根目录 `helm/Chart.yaml`**。

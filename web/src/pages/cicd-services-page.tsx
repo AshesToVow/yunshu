@@ -1,4 +1,5 @@
 import {
+  CloudDownloadOutlined,
   CloudUploadOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -33,6 +34,8 @@ import {
   createDeployConfig,
   deleteCicdService,
   deleteDeployConfig,
+  downloadHelmScaffold,
+  downloadHelmScaffoldPreview,
   getCiConfig,
   listCicdServices,
   listCicdArtifacts,
@@ -187,6 +190,8 @@ export function CicdServicesPage() {
   const [editingDeployConfig, setEditingDeployConfig] = useState<CicdDeployConfig | null>(null);
   const [deployKind, setDeployKind] = useState<"regular" | "container">("regular");
   const [deployForm] = Form.useForm();
+  const deployMethodWatch = Form.useWatch("deploy_method", deployForm) as string | undefined;
+  const [helmScaffoldLoading, setHelmScaffoldLoading] = useState(false);
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
 
@@ -233,6 +238,53 @@ export function CicdServicesPage() {
       setLoading(false);
     }
   }, [projectId, page, pageSize, keyword]);
+
+  const handleDownloadHelmScaffold = useCallback(async () => {
+    if (!projectId) {
+      message.warning("请先选择项目");
+      return;
+    }
+    const values = deployForm.getFieldsValue([
+      "image_name",
+      "replicas",
+      "container_port",
+    ]) as { image_name?: string; replicas?: number; container_port?: number };
+    const chartName = deployService?.identifier || deployService?.name || "app";
+    const imageName = String(values.image_name || chartName).trim();
+    const params = {
+      chart_name: chartName,
+      image_repository: imageName.includes("/") ? imageName : undefined,
+      replica_count: Number(values.replicas) || 1,
+      container_port: Number(values.container_port) || 8080,
+      service_port: Number(values.container_port) || 8080,
+    };
+    setHelmScaffoldLoading(true);
+    try {
+      let blob: Blob;
+      if (deployService?.id) {
+        blob = await downloadHelmScaffold(projectId, deployService.id, params);
+      } else {
+        blob = await downloadHelmScaffoldPreview(projectId, {
+          chart_name: params.chart_name,
+          image_repository: params.image_repository,
+          replica_count: params.replica_count,
+          container_port: params.container_port,
+          service_port: params.service_port,
+        });
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${chartName}-helm-scaffold.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success("已下载：解压后提交 helm/（含 charts/*-base、config-files）与可选 setup/");
+    } catch {
+      // http 拦截器已 toast
+    } finally {
+      setHelmScaffoldLoading(false);
+    }
+  }, [projectId, deployService, deployForm]);
 
   useEffect(() => {
     void loadProjects();
@@ -950,12 +1002,51 @@ export function CicdServicesPage() {
             <Form.Item name="deploy_method" label="部署方式" rules={[{ required: true }]}>
               <Select options={[{ label: "kubectl", value: "kubectl" }, { label: "helm", value: "helm" }]} />
             </Form.Item>
-            <Form.Item name="deploy_config_type" label="工作负载类型" rules={[{ required: true }]}>
-              <Select options={K8S_DEPLOY_CONFIG_TYPES.map((o) => ({ label: o.label, value: o.value }))} />
-            </Form.Item>
-            <Form.Item name="deploy_config_template" label="部署模板" rules={[{ required: true }]}>
-              <Select options={K8S_DEPLOY_TEMPLATES.map((o) => ({ label: o.label, value: o.value }))} />
-            </Form.Item>
+            {deployMethodWatch === "helm" ? (
+              <Alert
+                type="success"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message="Helm 部署：已对齐「Application + base charts」目录架构"
+                description={
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Typography.Text type="secondary">
+                      下载 zip 解压到仓库根目录，得到 <Typography.Text code>helm/</Typography.Text>
+                      （含 charts/deployment-base 等公共模块、config-files、多环境 values）与可选{" "}
+                      <Typography.Text code>setup/</Typography.Text>
+                      。研发只改 values.yaml；Jenkins 使用 <Typography.Text code>helm/Chart.yaml</Typography.Text>。
+                    </Typography.Text>
+                    <Button
+                      type="primary"
+                      icon={<CloudDownloadOutlined />}
+                      loading={helmScaffoldLoading}
+                      onClick={() => void handleDownloadHelmScaffold()}
+                    >
+                      下载 Helm 脚手架
+                    </Button>
+                  </Space>
+                }
+              />
+            ) : null}
+            {deployMethodWatch !== "helm" ? (
+              <>
+                <Form.Item name="deploy_config_type" label="工作负载类型" rules={[{ required: true }]}>
+                  <Select options={K8S_DEPLOY_CONFIG_TYPES.map((o) => ({ label: o.label, value: o.value }))} />
+                </Form.Item>
+                <Form.Item name="deploy_config_template" label="部署模板" rules={[{ required: true }]}>
+                  <Select options={K8S_DEPLOY_TEMPLATES.map((o) => ({ label: o.label, value: o.value }))} />
+                </Form.Item>
+              </>
+            ) : (
+              <>
+                <Form.Item name="deploy_config_type" hidden>
+                  <Input />
+                </Form.Item>
+                <Form.Item name="deploy_config_template" hidden>
+                  <Input />
+                </Form.Item>
+              </>
+            )}
             <Form.Item name="replicas" label="副本数" rules={[{ required: true }]}>
               <InputNumber min={1} max={100} style={{ width: "100%" }} />
             </Form.Item>

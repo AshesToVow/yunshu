@@ -1,0 +1,9 @@
+# 全局固化配置示例（Application 中 setup.enabled=true 后生效）
+# 应用配置里可通过 {{ .Values.setup.domain.xxx }} 引用（勿在业务配置中混用未转义的 {{ }}）
+domain:
+  default:
+    redis:
+      host: redis.example.local
+      port: "6379"
+      password: ""
+# 本 Chart 可不渲染 K8s 资源，仅作为 values 载体

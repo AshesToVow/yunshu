@@ -1,0 +1,4 @@
+1. Application Chart: {{ .Chart.Name }}  Release: {{ .Release.Name }}
+2. 目录架构：helm/charts/{deployment,service,config,hpa,pvc}-base + config-files/ + 可选 ../setup
+3. 研发日常只改 values.yaml（或 values-<env>.yaml）；开启模块：*.enabled
+4. 配置注入：config-files/（推荐）或 config-base.fileConfigs / env

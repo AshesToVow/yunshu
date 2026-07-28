@@ -1,0 +1,13 @@
+# setup 仅作 values 载体；不渲染集群资源
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-setup-placeholder
+  annotations:
+    yunshu.io/setup-chart: "values-only"
+  labels:
+    app.kubernetes.io/name: setup
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  README: |
+    本 ConfigMap 为占位。业务请通过 .Values.setup 引用 setup/values.yaml 中的固化配置。

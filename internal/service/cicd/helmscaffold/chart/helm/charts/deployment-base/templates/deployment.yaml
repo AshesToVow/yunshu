@@ -1,0 +1,228 @@
+{{- if .Values.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "deployment-base.fullname" . }}
+  labels:
+    {{- include "deployment-base.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "deployment-base.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "deployment-base.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if .Values.restartPolicy }}
+      restartPolicy: {{ .Values.restartPolicy }}
+      {{- end }}
+      {{- if .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- if .Values.dnsPolicy }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- end }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccountName }}
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.skywalking.enabled .Values.initContainers }}
+      initContainers:
+        {{- if .Values.skywalking.enabled }}
+        - name: skywalking-agent
+          image: {{ .Values.skywalking.image | quote }}
+          imagePullPolicy: {{ .Values.skywalking.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - cp -r {{ .Values.skywalking.agentPathInImage }}/. {{ .Values.skywalking.mountPath }}/
+          volumeMounts:
+            - name: skywalking-agent
+              mountPath: {{ .Values.skywalking.mountPath }}
+          {{- with .Values.skywalking.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- with .Values.initContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ include "deployment-base.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.workingDir }}
+          workingDir: {{ .Values.workingDir | quote }}
+          {{- end }}
+          ports:
+            {{- if .Values.ports }}
+            {{- range .Values.ports }}
+            - name: {{ .name }}
+              containerPort: {{ .containerPort }}
+              protocol: {{ .protocol | default "TCP" }}
+              {{- if .hostPort }}
+              hostPort: {{ .hostPort }}
+              {{- end }}
+            {{- end }}
+            {{- else }}
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+            {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.lifecycle }}
+          lifecycle:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if or .Values.env .Values.skywalking.enabled }}
+          env:
+            {{- if .Values.skywalking.enabled }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ .Values.skywalking.javaToolOptions | quote }}
+            {{- if .Values.skywalking.agentName }}
+            - name: SW_AGENT_NAME
+              value: {{ .Values.skywalking.agentName | quote }}
+            {{- else }}
+            - name: SW_AGENT_NAME
+              value: {{ include "deployment-base.fullname" . | quote }}
+            {{- end }}
+            {{- if .Values.skywalking.collectorBackendServices }}
+            - name: SW_AGENT_COLLECTOR_BACKEND_SERVICES
+              value: {{ .Values.skywalking.collectorBackendServices | quote }}
+            {{- end }}
+            {{- with .Values.skywalking.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.probes.enabled }}
+          {{- $probePort := .Values.probes.port | default "" }}
+          {{- if and (eq $probePort "") .Values.ports }}
+            {{- $probePort = (index .Values.ports 0).name | default "http" }}
+          {{- end }}
+          {{- if eq $probePort "" }}
+            {{- $probePort = "http" }}
+          {{- end }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.startupPath | default .Values.probes.livenessPath }}
+              port: {{ $probePort }}
+            failureThreshold: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.livenessPath }}
+              port: {{ $probePort }}
+            initialDelaySeconds: {{ .Values.probes.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readinessPath }}
+              port: {{ $probePort }}
+            initialDelaySeconds: {{ .Values.probes.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if or .Values.skywalking.enabled .Values.mountConfigFiles .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- if .Values.skywalking.enabled }}
+            - name: skywalking-agent
+              mountPath: {{ .Values.skywalking.mountPath }}
+            {{- end }}
+            {{- if and .Values.mountConfigFiles .Values.configsPath }}
+            - name: app-configs
+              mountPath: {{ .Values.configsPath }}
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+        {{- with .Values.sidecars }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.skywalking.enabled .Values.mountConfigFiles .Values.extraVolumes }}
+      volumes:
+        {{- if .Values.skywalking.enabled }}
+        - name: skywalking-agent
+          emptyDir: {}
+        {{- end }}
+        {{- if and .Values.mountConfigFiles .Values.configsPath }}
+        - name: app-configs
+          configMap:
+            name: {{ include "deployment-base.fullname" . }}-configs
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -634,6 +634,8 @@ func defaultPermissions() []model.Permission {
 		{Name: "CI/CD 更新发布配置", Resource: "/api/v1/projects/:id/cicd/services/:serviceId/deploy-configs/:configId", Action: "PUT", Description: "Update deploy config"},
 		{Name: "CI/CD 删除发布配置", Resource: "/api/v1/projects/:id/cicd/services/:serviceId/deploy-configs/:configId", Action: "DELETE", Description: "Delete deploy config"},
 		{Name: "CI/CD MinIO 制品列表", Resource: "/api/v1/projects/:id/cicd/services/:serviceId/artifacts", Action: "GET", Description: "List MinIO artifacts"},
+		{Name: "CI/CD 下载 Helm 脚手架", Resource: "/api/v1/projects/:id/cicd/services/:serviceId/helm-scaffold", Action: "GET", Description: "Download Helm chart scaffold zip"},
+		{Name: "CI/CD 预览 Helm 脚手架", Resource: "/api/v1/projects/:id/cicd/helm-scaffold", Action: "GET", Description: "Preview download Helm chart scaffold zip"},
 		{Name: "CI/CD 触发 CI 构建", Resource: "/api/v1/projects/:id/cicd/services/:serviceId/builds", Action: "POST", Description: "Trigger CI build"},
 		{Name: "CI/CD 触发 CD 发布", Resource: "/api/v1/projects/:id/cicd/services/:serviceId/releases", Action: "POST", Description: "Trigger CD release"},
 		{Name: "CI/CD CI 打包记录列表", Resource: "/api/v1/projects/:id/cicd/build-runs", Action: "GET", Description: "List CI build runs"},

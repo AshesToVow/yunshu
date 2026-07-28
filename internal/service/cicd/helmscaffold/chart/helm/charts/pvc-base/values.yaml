@@ -1,0 +1,7 @@
+enabled: false
+nameOverride: ""
+fullnameOverride: ""
+accessModes:
+  - ReadWriteOnce
+size: 10Gi
+storageClassName: ""

@@ -1,0 +1,8 @@
+# 环境覆盖示例：helm upgrade -f values.yaml -f values-dev.yaml
+# 仅写与默认 values 的差异即可
+deployment-base:
+  replicaCount: 1
+  probes:
+    enabled: false
+hpa-base:
+  enabled: false

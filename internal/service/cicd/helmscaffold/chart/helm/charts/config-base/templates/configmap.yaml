@@ -1,0 +1,18 @@
+{{- if and .Values.enabled .Values.fileConfigs }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "config-base.fullname" . }}-configs
+  labels:
+    app.kubernetes.io/name: {{ include "config-base.fullname" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  {{- range $name, $content := .Values.fileConfigs }}
+  {{ $name }}: |
+    {{- if kindIs "map" $content }}
+    {{- $content.fileData | default $content | nindent 4 }}
+    {{- else }}
+    {{- $content | nindent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

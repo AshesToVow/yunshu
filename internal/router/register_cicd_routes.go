@@ -28,6 +28,8 @@ func RegisterCicdRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	cicdGroup.DELETE("/services/:serviceId/deploy-configs/:configId", d.cicdHandler.DeleteDeployConfig)
 
 	cicdGroup.GET("/services/:serviceId/artifacts", d.cicdHandler.ListArtifacts)
+	cicdGroup.GET("/services/:serviceId/helm-scaffold", d.cicdHandler.DownloadHelmScaffold)
+	cicdGroup.GET("/helm-scaffold", d.cicdHandler.DownloadHelmScaffoldPreview)
 
 	cicdGroup.POST("/services/:serviceId/builds", d.cicdHandler.TriggerBuild)
 	cicdGroup.POST("/services/:serviceId/releases", d.cicdHandler.TriggerRelease)

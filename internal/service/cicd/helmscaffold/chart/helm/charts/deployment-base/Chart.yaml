@@ -1,0 +1,6 @@
+apiVersion: v2
+name: deployment-base
+description: Yunshu base — Deployment（探活/资源/env）
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

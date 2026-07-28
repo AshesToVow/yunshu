@@ -1,0 +1,4 @@
+# 将业务配置文件放在本目录，会自动打入 ConfigMap 并挂载到 configsPath（默认 /export/servers/configs）
+# 示例：application.properties、logback.xml 等
+# （勿提交密钥；密钥请用 config-base.secretConfigs 或外部 Secret）
+.gitkeep

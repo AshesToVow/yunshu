@@ -1,0 +1,173 @@
+# =============================================================================
+# Application Chart values（研发主要改本文件）
+# Jenkins / Yunshu 常用 --set：
+#   deployment-base.image.repository / deployment-base.image.tag
+#   deployment-base.replicaCount / deployment-base.containerPort
+#   service-base.port
+# =============================================================================
+
+# --- 研发常用（文档示例风格）---
+replicaCount: __REPLICA_COUNT__
+
+image:
+  repository: __IMAGE_REPOSITORY__
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: __SERVICE_PORT__
+
+containerPort: __CONTAINER_PORT__
+
+configsPath: /export/servers/configs
+
+fileConfigs: {}
+# fileConfigs:
+#   application.properties: |-
+#     server.port=8080
+
+env: []
+# env:
+#   - name: SPRING_PROFILES_ACTIVE
+#     value: prod
+#   - name: JAVA_OPTS
+#     value: "-Xms512m -Xmx1024m"
+
+# --- deployment-base（工作负载）---
+deployment-base:
+  enabled: true
+  nameOverride: __CHART_NAME__
+  fullnameOverride: __CHART_NAME__
+  replicaCount: __REPLICA_COUNT__
+  image:
+    repository: __IMAGE_REPOSITORY__
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  containerPort: __CONTAINER_PORT__
+  # 多端口示例（非空则优先生效，覆盖上面的 containerPort 单端口）
+  ports: []
+  # ports:
+  #   - name: web
+  #     containerPort: 8913
+  #     protocol: TCP
+  env: []
+  configsPath: /export/servers/configs
+  mountConfigFiles: true
+
+  # 更新策略
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  # strategy:
+  #   type: Recreate
+
+  restartPolicy: Always
+  terminationGracePeriodSeconds: 30
+
+  # DNS
+  dnsPolicy: ClusterFirst
+  dnsConfig: {}
+  # dnsConfig:
+  #   options:
+  #     - name: ndots
+  #       value: "2"
+
+  # 生命周期钩子（优雅下线常用 preStop）
+  lifecycle: {}
+  # lifecycle:
+  #   preStop:
+  #     exec:
+  #       command: ["/bin/sh", "-c", "sleep 10"]
+
+  probes:
+    enabled: false
+    port: ""
+    startupPath: /actuator/health/liveness
+    livenessPath: /actuator/health/liveness
+    readinessPath: /actuator/health/readiness
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # SkyWalking Agent（对齐 kubectl「通用微服务含 skywalking」）
+  skywalking:
+    enabled: false
+    image: harbor.example/registry/skywalking-java-agent:9.1.0
+    imagePullPolicy: IfNotPresent
+    agentPathInImage: /skywalking/agent
+    mountPath: /skywalking/agent
+    javaToolOptions: "-javaagent:/skywalking/agent/skywalking-agent.jar"
+    agentName: ""
+    collectorBackendServices: "skywalking-oap.observability:11800"
+    extraEnv: []
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 512Mi
+
+  # 高级扩展
+  initContainers: []
+  sidecars: []
+  extraVolumeMounts: []
+  extraVolumes: []
+  podAnnotations: {}
+  podLabels: {}
+  hostAliases: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+service-base:
+  enabled: true
+  nameOverride: __CHART_NAME__
+  fullnameOverride: __CHART_NAME__
+  selectorName: __CHART_NAME__
+  type: ClusterIP
+  port: __SERVICE_PORT__
+  targetPort: http
+  ports: []
+  # ports:
+  #   - name: web
+  #     port: 8913
+  #     targetPort: web
+  #     protocol: TCP
+
+config-base:
+  enabled: true
+  nameOverride: __CHART_NAME__
+  fullnameOverride: __CHART_NAME__
+  fileConfigs: {}
+  secretConfigs: {}
+
+hpa-base:
+  enabled: false
+  nameOverride: __CHART_NAME__
+  fullnameOverride: __CHART_NAME__
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+pvc-base:
+  enabled: false
+  nameOverride: __CHART_NAME__
+  fullnameOverride: __CHART_NAME__
+  size: 10Gi
+  storageClassName: ""
+
+setup:
+  enabled: false
