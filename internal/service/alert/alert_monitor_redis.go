@@ -122,21 +122,21 @@ func (s *AlertService) monitorShouldReingressFiring(ctx context.Context, fp stri
 }
 
 func (s *AlertService) emitMonitorPlatformFiring(ctx context.Context, rule *model.AlertMonitorRule, labels, annotations map[string]string, fp string, now time.Time) {
-	_ = s.receiveAlertmanagerPayloadSync(ctx, AlertManagerPayload{
-		Receiver:     "platform-monitor",
-		Status:       "firing",
-		GroupLabels:  map[string]string{"alertname": rule.Name},
-		CommonLabels: labels,
-		Alerts: []AlertManagerAlert{{
+	_ = s.receiveCanonicalSync(ctx, NewCanonicalAlert(
+		IngressSourcePlatformMonitor,
+		"platform-monitor",
+		"firing",
+		map[string]string{"alertname": rule.Name},
+		labels,
+		IngressAlertDetail{
 			Status:       "firing",
 			Labels:       labels,
 			Annotations:  annotations,
 			StartsAt:     now,
 			EndsAt:       now.Add(24 * time.Hour),
-			GeneratorURL: "",
 			Fingerprint:  fp,
-		}},
-	})
+		},
+	))
 }
 
 func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *model.AlertMonitorRule, firing bool, labels map[string]string, annotations map[string]string, fp string, now time.Time) {
@@ -201,21 +201,21 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 			"active_firing": "0",
 			"pending_since": "",
 		}).Err()
-		_ = s.receiveAlertmanagerPayloadSync(ctx, AlertManagerPayload{
-			Receiver:     "platform-monitor",
-			Status:       "resolved",
-			GroupLabels:  map[string]string{"alertname": rule.Name},
-			CommonLabels: labels,
-			Alerts: []AlertManagerAlert{{
+		_ = s.receiveCanonicalSync(ctx, NewCanonicalAlert(
+			IngressSourcePlatformMonitor,
+			"platform-monitor",
+			"resolved",
+			map[string]string{"alertname": rule.Name},
+			labels,
+			IngressAlertDetail{
 				Status:       "resolved",
 				Labels:       labels,
 				Annotations:  annotations,
 				StartsAt:     now.Add(-time.Minute),
 				EndsAt:       now,
-				GeneratorURL: "",
 				Fingerprint:  fp,
-			}},
-		})
+			},
+		))
 		return
 	}
 	_ = s.redis.HSet(ctx, key, "pending_since", "").Err()

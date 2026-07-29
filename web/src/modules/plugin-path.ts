@@ -1,5 +1,5 @@
 /** 与后端 plugins.enabled 默认全集一致 */
-export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt"] as const;
+export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect"] as const;
 
 export type PluginName = (typeof DEFAULT_ENABLED_PLUGINS)[number];
 
@@ -93,6 +93,10 @@ const PATH_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
     plugin: "cicd",
     prefixes: ["/cicd"],
   },
+  {
+    plugin: "inspect",
+    prefixes: ["/project-inspect"],
+  },
 ];
 
 function normalizePath(path: string): string {
@@ -134,6 +138,10 @@ export function isPathAllowedByPlugins(path: string, isPluginEnabled: (name: str
   const cicdPaths = ["/cicd"];
   if (cicdPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
     return isCicdAllowed(isPluginEnabled);
+  }
+  const inspectPaths = ["/project-inspect"];
+  if (inspectPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
+    return isInspectAllowed(isPluginEnabled);
   }
   const plugin = resolvePathPlugin(path);
   if (!plugin) return true;
@@ -200,6 +208,9 @@ export function resolveAPIResourcePlugin(resource: string): PluginName | null {
   if (r.includes("/projects/") && r.includes("/cicd")) {
     return "cicd";
   }
+  if (r.includes("/projects/") && r.includes("/inspect")) {
+    return "inspect";
+  }
   for (const rule of API_RESOURCE_PLUGIN_RULES) {
     if (rule.prefixes.some((p) => {
       const prefix = p.trim().toLowerCase();
@@ -226,6 +237,11 @@ export function isBackupAllowed(isPluginEnabled: (name: string) => boolean): boo
   return isPluginEnabled("backup") && isPluginEnabled("project");
 }
 
+/** 项目巡检依赖 project 上下文 */
+export function isInspectAllowed(isPluginEnabled: (name: string) => boolean): boolean {
+  return isPluginEnabled("inspect") && isPluginEnabled("project");
+}
+
 export function isAPIResourceAllowedByPlugins(
   resource: string,
   isPluginEnabled: (name: string) => boolean,
@@ -236,6 +252,7 @@ export function isAPIResourceAllowedByPlugins(
   if (plugin === "cicd") return isCicdAllowed(isPluginEnabled);
   if (plugin === "dbmgmt") return isDbmgmtAllowed(isPluginEnabled);
   if (plugin === "backup") return isBackupAllowed(isPluginEnabled);
+  if (plugin === "inspect") return isInspectAllowed(isPluginEnabled);
   return isPluginEnabled(plugin);
 }
 

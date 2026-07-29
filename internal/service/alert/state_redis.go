@@ -14,18 +14,21 @@ import (
 	bizerrors "yunshu/internal/pkg/errors"
 )
 
-// redisStateStore is the authoritative webhook/runtime aggregate state (Redis).
+// redisStateStore is the authoritative webhook/runtime aggregate state (Redis + DB fallback for firing_delivered).
 type redisStateStore struct {
 	redis              *redis.Client
 	eventRepo          interfaces.AlertEventRepository
+	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository
 	dedupTTL           time.Duration
 	firingDeliveredTTL time.Duration
 }
 
 // NewRedisAlertStateService creates a Redis-backed AlertStateService.
+// firingDeliveryRepo 可为 nil；非 nil 时 Mark/Was/ClearFiringDelivered 会双写/降级读库。
 func NewRedisAlertStateService(
 	redisClient *redis.Client,
 	eventRepo interfaces.AlertEventRepository,
+	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository,
 	dedupTTLSeconds int,
 	aggregateTTLSeconds int,
 ) AlertStateService {
@@ -40,6 +43,7 @@ func NewRedisAlertStateService(
 	return &redisStateStore{
 		redis:              redisClient,
 		eventRepo:          eventRepo,
+		firingDeliveryRepo: firingDeliveryRepo,
 		dedupTTL:           dedup,
 		firingDeliveredTTL: agg,
 	}
@@ -181,9 +185,15 @@ func (s *redisStateStore) MarkFiringDelivered(ctx context.Context, fingerprint s
 	if fp == "" {
 		return nil
 	}
+	if s.firingDeliveryRepo != nil {
+		if err := s.firingDeliveryRepo.Mark(ctx, fp); err != nil {
+			return bizerrors.Pass(ctx, "alert.state", "MarkFiringDelivered", err)
+		}
+	}
 	if s.redisOK() {
 		if err := s.redis.Set(ctx, firingDeliveredRedisKey(fp), "1", s.firingDeliveredTTL).Err(); err != nil {
-			return bizerrors.Pass(ctx, "alert.state", "MarkFiringDelivered", err)
+			// DB 已写入时 Redis 失败不阻断：恢复判定可降级读库
+			return nil
 		}
 	}
 	return nil
@@ -191,18 +201,34 @@ func (s *redisStateStore) MarkFiringDelivered(ctx context.Context, fingerprint s
 
 func (s *redisStateStore) WasFiringDelivered(ctx context.Context, fingerprint string) bool {
 	fp := strings.TrimSpace(fingerprint)
-	if fp == "" || !s.redisOK() {
+	if fp == "" {
 		return false
 	}
-	v, err := s.redis.Get(ctx, firingDeliveredRedisKey(fp)).Result()
-	return err == nil && strings.TrimSpace(v) == "1"
+	if s.redisOK() {
+		v, err := s.redis.Get(ctx, firingDeliveredRedisKey(fp)).Result()
+		if err == nil && strings.TrimSpace(v) == "1" {
+			return true
+		}
+	}
+	if s.firingDeliveryRepo != nil {
+		ok, _ := s.firingDeliveryRepo.Exists(ctx, fp)
+		return ok
+	}
+	return false
 }
 
 func (s *redisStateStore) ClearFiringDelivered(ctx context.Context, fingerprint string) error {
-	if !s.redisOK() || strings.TrimSpace(fingerprint) == "" {
+	fp := strings.TrimSpace(fingerprint)
+	if fp == "" {
 		return nil
 	}
-	return s.redis.Del(ctx, firingDeliveredRedisKey(fingerprint)).Err()
+	if s.redisOK() {
+		_ = s.redis.Del(ctx, firingDeliveredRedisKey(fp)).Err()
+	}
+	if s.firingDeliveryRepo != nil {
+		return s.firingDeliveryRepo.Delete(ctx, fp)
+	}
+	return nil
 }
 
 // ClearCurrentMetric removes cached Prometheus current value for a fingerprint.

@@ -277,14 +277,8 @@ func (s *PolicyGovernanceService) Conflicts(ctx context.Context, roleID uint) (*
 		if len(entryPerms) == 0 {
 			continue
 		}
-		pluginOK := true
 		pluginName := plugingate.ResolveMenuPathPlugin(path)
-		for _, ep := range entryPerms {
-			if !plugingate.IsAPIResourceAllowed(ep.Resource, s.plugins) {
-				pluginOK = false
-				break
-			}
-		}
+		pluginOK := plugingate.IsMenuPathAllowed(path, s.plugins)
 		canAccessEntry := menu.RoleCanAccessMenu(s.enforcer, role.Code, entryPerms)
 
 		if pluginOK && !canAccessEntry {
@@ -315,7 +309,7 @@ func (s *PolicyGovernanceService) Conflicts(ctx context.Context, roleID uint) (*
 				MenuPath:   path,
 				MenuName:   m.Name,
 				Plugin:     pluginName,
-				SuggestFix: "启用插件或撤销相关 API 授权",
+				SuggestFix: "启用插件，或点击「清理禁用插件策略」撤销相关 API 授权",
 			})
 		}
 		if canAccessEntry && m.AdminOnly && role.Code != "super-admin" {
@@ -343,7 +337,7 @@ func (s *PolicyGovernanceService) Conflicts(ctx context.Context, roleID uint) (*
 				Action:     p.Action,
 				Permission: p.Name,
 				Plugin:     plugingate.ResolveAPIResourcePlugin(p.Resource),
-				SuggestFix: "撤销该权限或启用插件",
+				SuggestFix: "撤销该权限，或点击「清理禁用插件策略」；也可重新启用插件",
 			})
 		}
 	}
@@ -356,10 +350,17 @@ func permissionLookupKey(resource, action string) string {
 
 // FixMenuEntryAPIsResult 一键补齐入口 API 结果。
 type FixMenuEntryAPIsResult struct {
-	Granted  int `json:"granted"`
-	Created  int `json:"created"`
-	Skipped  int `json:"skipped"`
-	Total    int `json:"total"`
+	Granted int `json:"granted"`
+	Created int `json:"created"`
+	Skipped int `json:"skipped"`
+	Total   int `json:"total"`
+}
+
+// FixDisabledPluginPoliciesResult 清理禁用插件 Casbin 策略结果。
+type FixDisabledPluginPoliciesResult struct {
+	Revoked int `json:"revoked"`
+	Skipped int `json:"skipped"`
+	Total   int `json:"total"`
 }
 
 // FixMenuEntryAPIs 为角色补齐菜单入口 GET：权限不存在则创建，未授权则授予。
@@ -444,6 +445,46 @@ func (s *PolicyGovernanceService) FixMenuEntryAPIs(ctx context.Context, roleID u
 	return out, nil
 }
 
+// FixDisabledPluginPolicies 撤销角色上属于未启用插件的 Casbin 策略。
+func (s *PolicyGovernanceService) FixDisabledPluginPolicies(ctx context.Context, roleID uint) (*FixDisabledPluginPoliciesResult, error) {
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "policy", "FixDisabledPluginPolicies", err)
+	}
+	permissions, err := s.permissionRepo.ListAll(ctx)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "policy", "FixDisabledPluginPolicies", err)
+	}
+	out := &FixDisabledPluginPoliciesResult{}
+	for _, p := range permissions {
+		if plugingate.IsAPIResourceAllowed(p.Resource, s.plugins) {
+			continue
+		}
+		out.Total++
+		if !hasRolePolicy(s.enforcer, role.Code, p.Resource, p.Action) {
+			out.Skipped++
+			continue
+		}
+		removed, err := s.enforcer.RemovePolicy(role.Code, p.Resource, p.Action)
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "policy", "FixDisabledPluginPolicies", err)
+		}
+		act := strings.ToUpper(strings.TrimSpace(p.Action))
+		if !removed && act != "" && act != p.Action {
+			removed, err = s.enforcer.RemovePolicy(role.Code, p.Resource, act)
+			if err != nil {
+				return nil, bizerrors.Pass(ctx, "policy", "FixDisabledPluginPolicies", err)
+			}
+		}
+		if removed {
+			out.Revoked++
+		} else {
+			out.Skipped++
+		}
+	}
+	return out, nil
+}
+
 func (s *PolicyGovernanceService) PermissionTree(ctx context.Context, roleID uint) (*PermissionTreeResponse, error) {
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
@@ -476,6 +517,12 @@ func (s *PolicyGovernanceService) PermissionTree(ctx context.Context, roleID uin
 				continue
 			}
 			path := strings.TrimSpace(m.Path)
+			children := buildMenu(m.Children)
+			// 插件未启用：不进入授权树，子菜单若仍可见则提升（与侧栏 FilterMenusByPlugins 一致）
+			if path != "" && !plugingate.IsMenuPathAllowed(path, s.plugins) {
+				out = append(out, children...)
+				continue
+			}
 			node := PermissionTreeNode{
 				Key:      "menu:" + strconv.FormatUint(uint64(m.ID), 10),
 				Title:    m.Name,
@@ -485,9 +532,7 @@ func (s *PolicyGovernanceService) PermissionTree(ctx context.Context, roleID uin
 			}
 			if path != "" {
 				node.Plugin = plugingate.ResolveMenuPathPlugin(path)
-				node.PluginOff = !plugingate.IsMenuPathAllowed(path, s.plugins)
 			}
-			children := buildMenu(m.Children)
 			entryPerms := store.Resolve(m)
 			for _, ep := range entryPerms {
 				key := ep.Key()

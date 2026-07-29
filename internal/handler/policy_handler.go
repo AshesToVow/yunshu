@@ -111,6 +111,25 @@ func (h *PolicyHandler) FixMenuEntryAPIs(c *gin.Context) {
 	response.Success(c, data)
 }
 
+// FixDisabledPluginPolicies 清理角色上属于未启用插件的 Casbin 策略。
+func (h *PolicyHandler) FixDisabledPluginPolicies(c *gin.Context) {
+	if h.governance == nil {
+		response.Error(c, constants.ErrInternal)
+		return
+	}
+	roleID, err := strconv.ParseUint(c.Query("role_id"), 10, 32)
+	if err != nil || roleID == 0 {
+		response.Error(c, constants.ErrInvalidRequestParam)
+		return
+	}
+	data, err := h.governance.FixDisabledPluginPolicies(c.Request.Context(), uint(roleID))
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, data)
+}
+
 // PermissionTree 返回菜单+API 合一授权树。
 func (h *PolicyHandler) PermissionTree(c *gin.Context) {
 	if h.governance == nil {

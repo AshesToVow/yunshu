@@ -25,20 +25,21 @@ func (s *AlertService) evaluateMonitorRuleNoRedis(ctx context.Context, rule *mod
 	}
 	if wasActive {
 		delete(s.monitorNoRedisActive, fp)
-		_ = s.receiveAlertmanagerPayloadSync(ctx, AlertManagerPayload{
-			Receiver:     "platform-monitor",
-			Status:       "resolved",
-			GroupLabels:  map[string]string{"alertname": rule.Name},
-			CommonLabels: labels,
-			Alerts: []AlertManagerAlert{{
+		_ = s.receiveCanonicalSync(ctx, NewCanonicalAlert(
+			IngressSourcePlatformMonitor,
+			"platform-monitor",
+			"resolved",
+			map[string]string{"alertname": rule.Name},
+			labels,
+			IngressAlertDetail{
 				Status:      "resolved",
 				Labels:      labels,
 				Annotations: annotations,
 				StartsAt:    now.Add(-time.Minute),
 				EndsAt:      now,
 				Fingerprint: fp,
-			}},
-		})
+			},
+		))
 	}
 }
 

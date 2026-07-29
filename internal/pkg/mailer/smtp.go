@@ -3,6 +3,7 @@ package mailer
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"mime"
@@ -32,11 +33,20 @@ func smtpEnvelopeAddr(raw string) (string, error) {
 	return a.Address, nil
 }
 
+// Attachment 邮件附件。
+type Attachment struct {
+	Filename    string
+	ContentType string
+	Content     []byte
+}
+
 type Sender interface {
 	Enabled() bool
 	Send(ctx context.Context, toEmail, subject, textBody string) error
 	// SendMultipart 发送 multipart/alternative邮件：textPlain 为纯文本，htmlBody 非空时同时附带 HTML（客户端优先展示 HTML）。
 	SendMultipart(ctx context.Context, toEmail, subject, textPlain, htmlBody string) error
+	// SendWithAttachments 发送 HTML 正文并附带文件（multipart/mixed）。
+	SendWithAttachments(ctx context.Context, toEmail, subject, textPlain, htmlBody string, attachments []Attachment) error
 }
 
 type SMTPSender struct {
@@ -58,6 +68,10 @@ func (s *SMTPSender) Send(ctx context.Context, toEmail, subject, textBody string
 }
 
 func (s *SMTPSender) SendMultipart(ctx context.Context, toEmail, subject, textPlain, htmlBody string) error {
+	return s.SendWithAttachments(ctx, toEmail, subject, textPlain, htmlBody, nil)
+}
+
+func (s *SMTPSender) SendWithAttachments(ctx context.Context, toEmail, subject, textPlain, htmlBody string, attachments []Attachment) error {
 	if !s.Enabled() {
 		return errors.New("mail channel is not configured")
 	}
@@ -68,7 +82,7 @@ func (s *SMTPSender) SendMultipart(ctx context.Context, toEmail, subject, textPl
 		return err
 	}
 
-	if err = conn.SetDeadline(time.Now().Add(20 * time.Second)); err != nil {
+	if err = conn.SetDeadline(time.Now().Add(60 * time.Second)); err != nil {
 		_ = conn.Close()
 		return err
 	}
@@ -125,7 +139,7 @@ func (s *SMTPSender) SendMultipart(ctx context.Context, toEmail, subject, textPl
 		return err
 	}
 
-	message := buildMessage(s.cfg, toAddr, subject, textPlain, htmlBody)
+	message := buildMessage(s.cfg, toAddr, subject, textPlain, htmlBody, attachments)
 	if _, err = writer.Write([]byte(message)); err != nil {
 		_ = writer.Close()
 		return err
@@ -137,7 +151,7 @@ func (s *SMTPSender) SendMultipart(ctx context.Context, toEmail, subject, textPl
 	return client.Quit()
 }
 
-func buildMessage(cfg config.MailConfig, toAddr, subject, textPlain, htmlBody string) string {
+func buildMessage(cfg config.MailConfig, toAddr, subject, textPlain, htmlBody string, attachments []Attachment) string {
 	fromAddr, err := smtpEnvelopeAddr(cfg.FromEmail)
 	if err != nil {
 		fromAddr = strings.TrimSpace(cfg.FromEmail)
@@ -151,41 +165,98 @@ func buildMessage(cfg config.MailConfig, toAddr, subject, textPlain, htmlBody st
 	subject = strings.ReplaceAll(strings.ReplaceAll(subject, "\r", " "), "\n", " ")
 	subjEnc := mime.QEncoding.Encode("UTF-8", subject)
 
-	if strings.TrimSpace(htmlBody) == "" {
-		return strings.Join([]string{
-			fmt.Sprintf("From: %s", from),
-			fmt.Sprintf("To: %s", to),
-			fmt.Sprintf("Subject: %s", subjEnc),
-			"MIME-Version: 1.0",
-			"Content-Type: text/plain; charset=UTF-8",
-			"Content-Transfer-Encoding: 8bit",
-			"",
-			textPlain,
-		}, "\r\n")
-	}
-
-	var altBody strings.Builder
-	mw := multipart.NewWriter(&altBody)
-	boundary := mw.Boundary()
-	p1, _ := mw.CreatePart(map[string][]string{
-		"Content-Type":              {"text/plain; charset=UTF-8"},
-		"Content-Transfer-Encoding": {"8bit"},
-	})
-	_, _ = p1.Write([]byte(textPlain))
-	p2, _ := mw.CreatePart(map[string][]string{
-		"Content-Type":              {"text/html; charset=UTF-8"},
-		"Content-Transfer-Encoding": {"8bit"},
-	})
-	_, _ = p2.Write([]byte(htmlBody))
-	_ = mw.Close()
-
-	return strings.Join([]string{
+	headers := []string{
 		fmt.Sprintf("From: %s", from),
 		fmt.Sprintf("To: %s", to),
 		fmt.Sprintf("Subject: %s", subjEnc),
 		"MIME-Version: 1.0",
-		fmt.Sprintf("Content-Type: multipart/alternative; boundary=%s", boundary),
+	}
+
+	if len(attachments) == 0 && strings.TrimSpace(htmlBody) == "" {
+		return strings.Join(append(headers,
+			"Content-Type: text/plain; charset=UTF-8",
+			"Content-Transfer-Encoding: 8bit",
+			"",
+			textPlain,
+		), "\r\n")
+	}
+
+	if len(attachments) == 0 {
+		var altBody strings.Builder
+		mw := multipart.NewWriter(&altBody)
+		boundary := mw.Boundary()
+		p1, _ := mw.CreatePart(map[string][]string{
+			"Content-Type":              {"text/plain; charset=UTF-8"},
+			"Content-Transfer-Encoding": {"8bit"},
+		})
+		_, _ = p1.Write([]byte(textPlain))
+		p2, _ := mw.CreatePart(map[string][]string{
+			"Content-Type":              {"text/html; charset=UTF-8"},
+			"Content-Transfer-Encoding": {"8bit"},
+		})
+		_, _ = p2.Write([]byte(htmlBody))
+		_ = mw.Close()
+		return strings.Join(append(headers,
+			fmt.Sprintf("Content-Type: multipart/alternative; boundary=%s", boundary),
+			"",
+			strings.TrimSuffix(altBody.String(), "\r\n"),
+		), "\r\n")
+	}
+
+	var mixed strings.Builder
+	mw := multipart.NewWriter(&mixed)
+	boundary := mw.Boundary()
+
+	var altBody strings.Builder
+	altMW := multipart.NewWriter(&altBody)
+	altBoundary := altMW.Boundary()
+	p1, _ := altMW.CreatePart(map[string][]string{
+		"Content-Type":              {"text/plain; charset=UTF-8"},
+		"Content-Transfer-Encoding": {"8bit"},
+	})
+	_, _ = p1.Write([]byte(textPlain))
+	if strings.TrimSpace(htmlBody) != "" {
+		p2, _ := altMW.CreatePart(map[string][]string{
+			"Content-Type":              {"text/html; charset=UTF-8"},
+			"Content-Transfer-Encoding": {"8bit"},
+		})
+		_, _ = p2.Write([]byte(htmlBody))
+	}
+	_ = altMW.Close()
+
+	altPart, _ := mw.CreatePart(map[string][]string{
+		"Content-Type": {"multipart/alternative; boundary=" + altBoundary},
+	})
+	_, _ = altPart.Write([]byte(strings.TrimSuffix(altBody.String(), "\r\n")))
+
+	for _, att := range attachments {
+		ct := strings.TrimSpace(att.ContentType)
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		name := strings.TrimSpace(att.Filename)
+		if name == "" {
+			name = "attachment.bin"
+		}
+		ap, _ := mw.CreatePart(map[string][]string{
+			"Content-Type":              {fmt.Sprintf("%s; name=\"%s\"", ct, name)},
+			"Content-Transfer-Encoding": {"base64"},
+			"Content-Disposition":       {fmt.Sprintf("attachment; filename=\"%s\"", name)},
+		})
+		enc := base64.StdEncoding.EncodeToString(att.Content)
+		for i := 0; i < len(enc); i += 76 {
+			end := i + 76
+			if end > len(enc) {
+				end = len(enc)
+			}
+			_, _ = ap.Write([]byte(enc[i:end] + "\r\n"))
+		}
+	}
+	_ = mw.Close()
+
+	return strings.Join(append(headers,
+		fmt.Sprintf("Content-Type: multipart/mixed; boundary=%s", boundary),
 		"",
-		strings.TrimSuffix(altBody.String(), "\r\n"),
-	}, "\r\n")
+		strings.TrimSuffix(mixed.String(), "\r\n"),
+	), "\r\n")
 }

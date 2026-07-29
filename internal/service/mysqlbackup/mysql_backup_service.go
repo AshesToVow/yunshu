@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"yunshu/internal/dictconfig"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
@@ -30,12 +31,19 @@ import (
 	"gorm.io/gorm"
 )
 
+// ObjectStoreFactory 创建 MinIO 客户端；由装配层注入，避免 Service 直拿 *gorm.DB 读字典。
+type ObjectStoreFactory func(ctx context.Context) (*objectstore.Client, error)
+
+// SchedulerConfigResolver 解析备份调度字典配置。
+type SchedulerConfigResolver func(ctx context.Context) dictconfig.MysqlBackupSchedulerConfig
+
 type MysqlBackupService struct {
 	backupRepo   interfaces.MysqlBackupRepository
 	serverRepo   interfaces.ServerRepository
 	projectRepo  interfaces.ProjectRepository
 	userRepo     interfaces.UserRepository
-	db           *gorm.DB
+	newObjectStore ObjectStoreFactory
+	resolveSched   SchedulerConfigResolver
 	aead         cipher.AEAD
 	mailer       mailer.Sender
 	appName      string
@@ -49,7 +57,8 @@ func NewMysqlBackupService(
 	serverRepo interfaces.ServerRepository,
 	projectRepo interfaces.ProjectRepository,
 	userRepo interfaces.UserRepository,
-	db *gorm.DB,
+	newObjectStore ObjectStoreFactory,
+	resolveSched SchedulerConfigResolver,
 	encryptionKey string,
 	emailSender mailer.Sender,
 	appName string,
@@ -58,16 +67,27 @@ func NewMysqlBackupService(
 	if err != nil {
 		return nil, err
 	}
+	if newObjectStore == nil {
+		newObjectStore = func(context.Context) (*objectstore.Client, error) {
+			return nil, fmt.Errorf("object store factory not configured")
+		}
+	}
+	if resolveSched == nil {
+		resolveSched = func(context.Context) dictconfig.MysqlBackupSchedulerConfig {
+			return dictconfig.ResolveMysqlBackupSchedulerConfig(context.Background(), nil, dictconfig.DefaultMysqlBackupSchedulerDictTypes())
+		}
+	}
 	return &MysqlBackupService{
-		backupRepo:   backupRepo,
-		serverRepo:   serverRepo,
-		projectRepo:  projectRepo,
-		userRepo:     userRepo,
-		db:           db,
-		aead:         aead,
-		mailer:       emailSender,
-		appName:      strings.TrimSpace(appName),
-		schedRunning: make(map[uint]bool),
+		backupRepo:     backupRepo,
+		serverRepo:     serverRepo,
+		projectRepo:    projectRepo,
+		userRepo:       userRepo,
+		newObjectStore: newObjectStore,
+		resolveSched:   resolveSched,
+		aead:           aead,
+		mailer:         emailSender,
+		appName:        strings.TrimSpace(appName),
+		schedRunning:   make(map[uint]bool),
 	}, nil
 }
 
@@ -680,7 +700,7 @@ func (s *MysqlBackupService) runMysqldumpUpload(ctx context.Context, inst *model
 		return nil
 	}
 
-	minioCli, err := objectstore.NewFromDB(ctx, s.db)
+	minioCli, err := s.newObjectStore(ctx)
 	if err != nil {
 		return err
 	}
@@ -792,7 +812,7 @@ func (s *MysqlBackupService) runXtrabackupUpload(ctx context.Context, inst *mode
 		return nil
 	}
 
-	minioCli, err := objectstore.NewFromDB(ctx, s.db)
+	minioCli, err := s.newObjectStore(ctx)
 	if err != nil {
 		return err
 	}
@@ -933,7 +953,7 @@ func (s *MysqlBackupService) PresignDownload(ctx context.Context, projectID, job
 	if strings.TrimSpace(job.MinioObject) == "" {
 		return "", constants.ErrBadRequestWithMsg("该任务未上传 MinIO，请查看日志中的远端路径")
 	}
-	cli, err := objectstore.NewFromDB(ctx, s.db)
+	cli, err := s.newObjectStore(ctx)
 	if err != nil {
 		return "", err
 	}

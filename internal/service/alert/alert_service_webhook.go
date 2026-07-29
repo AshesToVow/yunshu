@@ -88,7 +88,7 @@ func (s *AlertService) logAllChannelsDeliveryFailed(ctx context.Context, title, 
 }
 
 // ReceiveAlertmanager 执行对应的业务逻辑。
-// 配置启用且 Redis 可用时，Webhook 先入队异步消费；内置评估路径应调用 receiveAlertmanagerPayloadSync 避免二次入队。
+// 配置启用且 Redis 可用时，Webhook 先入队异步消费；内置评估路径应调用 receiveCanonicalSync 避免二次入队。
 func (s *AlertService) ReceiveAlertmanager(ctx context.Context, payload AlertManagerPayload) error {
 	if s.shouldEnqueueAlertmanagerWebhook() {
 		if err := s.enqueueAlertmanagerWebhook(ctx, payload); err != nil {
@@ -188,6 +188,34 @@ func fillAlertEventDatasourceFromPayload(ev *model.AlertEvent, payload map[strin
 	}
 	if s := strings.TrimSpace(fmt.Sprintf("%v", payload["datasourceType"])); s != "" && s != "<nil>" {
 		ev.DatasourceType = truncateText(s, 32)
+	}
+	fillAlertEventFingerprintFromPayload(ev, payload)
+}
+
+func fillAlertEventFingerprintFromPayload(ev *model.AlertEvent, payload map[string]interface{}) {
+	if ev == nil || strings.TrimSpace(ev.Fingerprint) != "" {
+		return
+	}
+	if payload != nil {
+		if s := strings.TrimSpace(fmt.Sprintf("%v", payload["fingerprint"])); s != "" && s != "<nil>" {
+			ev.Fingerprint = truncateText(s, 512)
+			return
+		}
+		if labels, ok := payload["labels"].(map[string]interface{}); ok {
+			if s := strings.TrimSpace(fmt.Sprintf("%v", labels["fingerprint"])); s != "" && s != "<nil>" {
+				ev.Fingerprint = truncateText(s, 512)
+				return
+			}
+		}
+		if labels, ok := payload["labels"].(map[string]string); ok {
+			if s := strings.TrimSpace(labels["fingerprint"]); s != "" {
+				ev.Fingerprint = truncateText(s, 512)
+				return
+			}
+		}
+	}
+	if s := strings.TrimSpace(ev.GroupKey); s != "" {
+		ev.Fingerprint = truncateText(s, 512)
 	}
 }
 
@@ -293,11 +321,11 @@ type AlertHistoryStats struct {
 	DatasourceFilterOptions []AlertDatasourceFilterOption `json:"datasource_filter_options"`
 }
 
-func (s *AlertService) HistoryStats(ctx context.Context) (*AlertHistoryStats, error) {
+func (s *AlertService) HistoryStats(ctx context.Context, projectID uint) (*AlertHistoryStats, error) {
 	now := time.Now()
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	dayEnd := dayStart.Add(24 * time.Hour)
-	row, err := s.eventRepo.HistoryStats(ctx, dayStart, dayEnd)
+	row, err := s.eventRepo.HistoryStats(ctx, projectID, dayStart, dayEnd)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert", "HistoryStats", err)
 	}

@@ -1,0 +1,31 @@
+apiVersion: v2
+name: __CHART_NAME__
+description: Yunshu Application Chart（依赖 charts/* base 模块，研发主要改 values.yaml）
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: deployment-base
+    version: 0.1.0
+    repository: "file://charts/deployment-base"
+    condition: deployment-base.enabled
+  - name: service-base
+    version: 0.1.0
+    repository: "file://charts/service-base"
+    condition: service-base.enabled
+  - name: config-base
+    version: 0.1.0
+    repository: "file://charts/config-base"
+    condition: config-base.enabled
+  - name: hpa-base
+    version: 0.1.0
+    repository: "file://charts/hpa-base"
+    condition: hpa-base.enabled
+  - name: pvc-base
+    version: 0.1.0
+    repository: "file://charts/pvc-base"
+    condition: pvc-base.enabled
+  - name: setup
+    version: 0.1.0
+    repository: "file://../setup"
+    condition: setup.enabled

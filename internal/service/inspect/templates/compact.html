@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{.Project}} — 巡检报告（紧凑）</title>
+  <style>
+    body {
+      margin: 0;
+      color: #222;
+      background: #fff;
+      font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+    h1 { margin: 0 0 4px; font-size: 18px; font-weight: 650; }
+    .meta { color: #666; margin-bottom: 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; align-items: baseline; }
+    .score { font-size: 28px; font-weight: 700; }
+    .muted { color: #666; }
+    .crit { color: #b91c1c; }
+    .warn { color: #b45309; }
+    .ok { color: #15803d; }
+    h2 { margin: 14px 0 6px; font-size: 14px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 5px 4px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+    th { color: #666; font-weight: 600; }
+    ul { margin: 0; padding-left: 18px; }
+    footer { margin-top: 16px; color: #888; font-size: 12px; }
+    @media print { .wrap { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>{{.Project}} 巡检报告</h1>
+    <div class="meta">
+      {{.Timestamp.Format "2006-01-02 15:04:05"}}
+      {{if .InspectionUser}} · {{.InspectionUser}}{{end}}
+      {{if .Datasource}} · {{.Datasource}}{{end}}
+    </div>
+    <div class="row">
+      <span class="score">{{fmtFloat .Score}}</span>
+      <span class="muted">等级 {{.Grade}}</span>
+      <span>总计 {{.Total}}</span>
+      <span class="crit">严重 {{.Critical}}</span>
+      <span class="warn">警告 {{.Warning}}</span>
+      <span class="ok">正常 {{.Normal}}</span>
+    </div>
+    <p class="muted">{{.Summary}}</p>
+
+    <h2>主要发现</h2>
+    {{if .Findings}}
+    <ul>
+      {{range .Findings}}
+      <li>
+        <span class="{{if eq .Severity "critical"}}crit{{else}}warn{{end}}">[{{statusText .Severity}}]</span>
+        {{.Type}} / {{.Name}} ×{{.Count}} — {{.Hint}}
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="muted">无异常。</p>
+    {{end}}
+
+    {{range .Groups}}
+    <h2>{{.Type}} <span class="muted">({{.Stats.Total}})</span></h2>
+    {{if .Metrics}}
+    <table>
+      <thead><tr><th>名称</th><th>实例</th><th>值</th><th>阈值</th><th>状态</th></tr></thead>
+      <tbody>
+        {{range .Metrics}}
+        <tr>
+          <td>{{.Name}}</td>
+          <td>{{.Instance}}</td>
+          <td>{{fmtFloat .Value}}{{.Unit}}</td>
+          <td>{{fmtFloat .Threshold}}{{.Unit}}</td>
+          <td class="{{if eq .Status "critical"}}crit{{else if eq .Status "warning"}}warn{{else}}ok{{end}}">{{statusText .Status}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="muted">无明细。</p>
+    {{end}}
+    {{end}}
+
+    <footer>Yunshu · 紧凑版</footer>
+  </div>
+</body>
+</html>

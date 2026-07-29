@@ -121,9 +121,31 @@ func (h *AlertHandler) ListEvents(c *gin.Context) {
 	})
 }
 
+// ExplainFingerprintDelivery 按 fingerprint 查询投递/跳过原因与 firing_delivered 状态。
+func (h *AlertHandler) ExplainFingerprintDelivery(c *gin.Context) {
+	fp := strings.TrimSpace(c.Query("fingerprint"))
+	if fp == "" {
+		response.Error(c, constants.ErrBadRequestWithMsg("fingerprint required"))
+		return
+	}
+	out, err := h.svc.ExplainFingerprintDelivery(c.Request.Context(), fp)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, out)
+}
+
 // HistoryStats 处理对应的 HTTP 请求并返回统一响应。
 func (h *AlertHandler) HistoryStats(c *gin.Context) {
-	stats, err := h.svc.HistoryStats(c.Request.Context())
+	var q struct {
+		ProjectID uint `form:"project_id"`
+	}
+	if err := c.ShouldBindQuery(&q); err != nil {
+		response.Error(c, constants.ErrBadRequest)
+		return
+	}
+	stats, err := h.svc.HistoryStats(c.Request.Context(), q.ProjectID)
 	if err != nil {
 		abortService(c, err)
 		return

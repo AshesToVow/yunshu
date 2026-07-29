@@ -83,6 +83,13 @@ func (r *AlertEventRepository) listQuery(ctx context.Context, f AlertEventListFi
 	if v := strings.TrimSpace(f.GroupKey); v != "" {
 		tx = tx.Where("group_key = ?", v)
 	}
+	if v := strings.TrimSpace(f.Fingerprint); v != "" {
+		like := "%\"fingerprint\":\"" + v + "\"%"
+		tx = tx.Where(
+			"fingerprint = ? OR group_key = ? OR request_payload LIKE ?",
+			v, v, like,
+		)
+	}
 	if v := strings.TrimSpace(f.Category); v != "" {
 		tx = applyAlertEventCategoryFilter(tx, v)
 	}
@@ -132,8 +139,10 @@ func (r *AlertEventRepository) ListFiringByGroupKeys(ctx context.Context, groupK
 	return list, err
 }
 
-func (r *AlertEventRepository) HistoryStats(ctx context.Context, dayStart, dayEnd time.Time) (*AlertHistoryStatsRow, error) {
+func (r *AlertEventRepository) HistoryStats(ctx context.Context, projectID uint, dayStart, dayEnd time.Time) (*AlertHistoryStatsRow, error) {
 	stats := &AlertHistoryStatsRow{}
+	base := applyAlertEventProjectFilter(r.db.WithContext(ctx).Model(&model.AlertEvent{}), r.db, projectID).
+		Where("deleted_at IS NULL")
 	var agg struct {
 		Total        int64
 		Firing       int64
@@ -142,16 +151,14 @@ func (r *AlertEventRepository) HistoryStats(ctx context.Context, dayStart, dayEn
 		Failed       int64
 		TodayCreated int64
 	}
-	if err := r.db.WithContext(ctx).Raw(`
-SELECT
-  COUNT(*) AS total,
-  COALESCE(SUM(CASE WHEN status = 'firing' THEN 1 ELSE 0 END), 0) AS firing,
-  COALESCE(SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END), 0) AS resolved,
-  COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0) AS success,
-  COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0) AS failed,
-  COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS today_created
-FROM alert_events
-WHERE deleted_at IS NULL`, dayStart, dayEnd).Scan(&agg).Error; err != nil {
+	if err := base.Select(`
+COUNT(*) AS total,
+COALESCE(SUM(CASE WHEN status = 'firing' THEN 1 ELSE 0 END), 0) AS firing,
+COALESCE(SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END), 0) AS resolved,
+COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0) AS success,
+COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0) AS failed,
+COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS today_created`, dayStart, dayEnd).
+		Scan(&agg).Error; err != nil {
 		return nil, err
 	}
 	stats.Total = agg.Total
@@ -160,21 +167,18 @@ WHERE deleted_at IS NULL`, dayStart, dayEnd).Scan(&agg).Error; err != nil {
 	stats.Success = agg.Success
 	stats.Failed = agg.Failed
 	stats.TodayCreated = agg.TodayCreated
-	if err := r.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Where("TRIM(COALESCE(cluster, '')) != ''").
+	if err := base.Where("TRIM(COALESCE(cluster, '')) != ''").
 		Group("cluster").Order("cluster ASC").Limit(500).
 		Pluck("cluster", &stats.ClusterValues).Error; err != nil {
 		return nil, err
 	}
-	if err := r.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Where("TRIM(COALESCE(monitor_pipeline, '')) != ''").
+	if err := base.Where("TRIM(COALESCE(monitor_pipeline, '')) != ''").
 		Group("monitor_pipeline").Order("monitor_pipeline ASC").Limit(32).
 		Pluck("monitor_pipeline", &stats.MonitorPipelineValues).Error; err != nil {
 		return nil, err
 	}
-	if err := r.db.WithContext(ctx).Model(&model.AlertEvent{}).
+	if err := base.Where("datasource_id > ?", 0).
 		Select("datasource_id AS id, MAX(datasource_name) AS name").
-		Where("datasource_id > ?", 0).
 		Group("datasource_id").Order("id DESC").Limit(200).
 		Scan(&stats.DatasourceFilterOptions).Error; err != nil {
 		return nil, err

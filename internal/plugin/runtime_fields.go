@@ -4,6 +4,7 @@ import (
 	"yunshu/internal/service"
 	"yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	inspectsvc "yunshu/internal/service/inspect"
 )
 
 // K8sRuntimeSvc 返回 K8s 运行时服务（由 router 注入）。
@@ -48,6 +49,15 @@ func (rt *Runtime) AlertSvc() *service.AlertService {
 		return nil
 	}
 	svc, _ := rt.Alert.(*service.AlertService)
+	return svc
+}
+
+// InspectSvc 返回巡检服务（由 router 注入）。
+func (rt *Runtime) InspectSvc() *inspectsvc.Service {
+	if rt == nil {
+		return nil
+	}
+	svc, _ := rt.Inspect.(*inspectsvc.Service)
 	return svc
 }
 

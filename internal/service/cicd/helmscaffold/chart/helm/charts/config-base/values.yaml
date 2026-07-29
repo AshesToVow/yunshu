@@ -1,0 +1,10 @@
+enabled: true
+nameOverride: ""
+fullnameOverride: ""
+# 方法二：在 values 中声明文件内容（键为文件名）
+fileConfigs: {}
+# 示例：
+# fileConfigs:
+#   application.properties: |
+#     server.port=8080
+secretConfigs: {}

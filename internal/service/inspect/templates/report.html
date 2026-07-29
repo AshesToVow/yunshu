@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{.Project}} — 巡检报告</title>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #666;
+      --line: #e5e5e5;
+      --bg: #fafafa;
+      --card: #fff;
+      --accent: #2563eb;
+      --critical: #b91c1c;
+      --warning: #b45309;
+      --normal: #15803d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 40px; }
+    header {
+      border-bottom: 2px solid var(--ink);
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+    header h1 { margin: 0 0 6px; font-size: 22px; font-weight: 650; }
+    header .meta { color: var(--muted); font-size: 13px; }
+    .overview {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 640px) { .overview { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .score { text-align: center; padding: 20px 12px; }
+    .score .num { font-size: 42px; font-weight: 700; color: var(--accent); line-height: 1; }
+    .score .grade { margin-top: 8px; font-size: 13px; color: var(--muted); }
+    h2 { margin: 0 0 10px; font-size: 15px; font-weight: 650; }
+    .summary { margin: 0 0 10px; color: #333; }
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stat {
+      border: 1px solid var(--line);
+      padding: 2px 10px;
+      font-size: 12px;
+      color: #444;
+    }
+    .stat.critical { border-color: #fecaca; color: var(--critical); }
+    .stat.warning { border-color: #fde68a; color: var(--warning); }
+    .stat.normal { border-color: #bbf7d0; color: var(--normal); }
+    .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+    .finding {
+      border-left: 3px solid var(--critical);
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      background: #fff;
+      border-top: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .finding.warning { border-left-color: var(--warning); }
+    .finding .sev { font-weight: 650; margin-right: 6px; }
+    .finding.critical .sev { color: var(--critical); }
+    .finding.warning .sev { color: var(--warning); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; background: #f5f5f5; }
+    .badge { font-size: 12px; font-weight: 650; }
+    .badge.critical { color: var(--critical); }
+    .badge.warning { color: var(--warning); }
+    .badge.normal { color: var(--normal); }
+    .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 28px; }
+    @media print {
+      body { background: #fff; }
+      .panel { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>{{.Project}} 巡检报告</h1>
+      <div class="meta">
+        {{.Timestamp.Format "2006-01-02 15:04:05"}}
+        {{if .InspectionUser}} · {{.InspectionUser}}{{end}}
+        {{if .Datasource}} · {{.Datasource}}{{end}}
+      </div>
+    </header>
+
+    <div class="overview">
+      <div class="panel score">
+        <div class="num">{{fmtFloat .Score}}</div>
+        <div class="grade">等级 {{.Grade}}</div>
+      </div>
+      <div class="panel">
+        <h2>概览</h2>
+        <p class="summary">{{.Summary}}</p>
+        <div class="stats">
+          <span class="stat">总计 {{.Total}}</span>
+          <span class="stat critical">严重 {{.Critical}}</span>
+          <span class="stat warning">警告 {{.Warning}}</span>
+          <span class="stat normal">正常 {{.Normal}}</span>
+        </div>
+        <p class="hint">{{.ReportListHint}}</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>主要发现</h2>
+      {{if .Findings}}
+        {{range .Findings}}
+        <div class="finding {{.Severity}}">
+          <span class="sev">[{{statusText .Severity}}]</span>
+          <strong>{{.Type}} / {{.Name}}</strong> ×{{.Count}}
+          <div class="hint">{{.Hint}}</div>
+        </div>
+        {{end}}
+      {{else}}
+        <p class="summary" style="margin:0;">未发现异常样本。</p>
+      {{end}}
+    </div>
+
+    {{range .Groups}}
+    <div class="panel">
+      <div class="section-head">
+        <h2>{{.Type}}</h2>
+        <span class="hint">{{.Stats.Total}} 条 · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}}</span>
+      </div>
+      {{if .Metrics}}
+      <table>
+        <thead>
+          <tr><th>名称</th><th>实例</th><th>当前值</th><th>阈值</th><th>状态</th></tr>
+        </thead>
+        <tbody>
+          {{range .Metrics}}
+          <tr>
+            <td>{{.Name}}</td>
+            <td>{{.Instance}}{{if .Error}}<div class="hint">{{.Error}}</div>{{end}}</td>
+            <td>{{fmtFloat .Value}}{{.Unit}}</td>
+            <td>{{fmtFloat .Threshold}}{{.Unit}}</td>
+            <td><span class="badge {{.Status}}">{{statusText .Status}}</span></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <p class="hint">当前模式下无明细。</p>
+      {{end}}
+    </div>
+    {{end}}
+
+    <footer>Yunshu 巡检报告</footer>
+  </div>
+</body>
+</html>

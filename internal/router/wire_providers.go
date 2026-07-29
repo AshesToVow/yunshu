@@ -1,17 +1,21 @@
 package router
 
 import (
+	"context"
 	"strings"
 
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/config"
+	"yunshu/internal/dictconfig"
 	"yunshu/internal/interfaces"
 	"log/slog"
 	"yunshu/internal/pkg/mailer"
+	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/service"
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
@@ -32,7 +36,7 @@ var repositoryFieldNames = wire.FieldsOf(
 	"AlertFiringDelivery", "CloudExpiryRule", "Overview", "K8sEventForward",
 )
 
-// AppInfraSet ??bootstrap.App ??????????????
+// AppInfraSet extracts infrastructure dependencies from bootstrap.App.
 var AppInfraSet = wire.NewSet(
 	provideDB,
 	provideRedis,
@@ -44,6 +48,7 @@ var AppInfraSet = wire.NewSet(
 	provideDbmgmtConfig,
 	provideAppRouteConfig,
 	appRouteConfigFields,
+	providePluginsConfig,
 	providePluginsEnabled,
 )
 
@@ -56,11 +61,13 @@ var RepositorySet = wire.NewSet(
 func provideAlertStateService(
 	redisClient *redis.Client,
 	eventRepo interfaces.AlertEventRepository,
+	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository,
 	cfg config.AlertConfig,
 ) alert.AlertStateService {
 	return alert.NewRedisAlertStateService(
 		redisClient,
 		eventRepo,
+		firingDeliveryRepo,
 		cfg.DedupTTLSeconds,
 		cfg.AggregateTTLSeconds,
 	)
@@ -171,7 +178,13 @@ func provideMysqlBackupService(
 	sender mailer.Sender,
 	appName AppDisplayName,
 ) (*service.MysqlBackupService, error) {
-	return service.NewMysqlBackupService(backupRepo, serverRepo, projectRepo, userRepo, db, string(encryptionKey), sender, string(appName))
+	newStore := func(ctx context.Context) (*objectstore.Client, error) {
+		return objectstore.NewFromDB(ctx, db)
+	}
+	resolveSched := func(ctx context.Context) dictconfig.MysqlBackupSchedulerConfig {
+		return dictconfig.ResolveMysqlBackupSchedulerConfig(ctx, db, dictconfig.DefaultMysqlBackupSchedulerDictTypes())
+	}
+	return service.NewMysqlBackupService(backupRepo, serverRepo, projectRepo, userRepo, newStore, resolveSched, string(encryptionKey), sender, string(appName))
 }
 
 func provideDbmgmtService(
@@ -201,6 +214,17 @@ func provideCicdService(
 	k8sNS *service.K8sNamespaceService,
 ) *cicdsvc.Service {
 	return cicdsvc.NewService(db, serverRepo, projectRepo, userGroupRepo, userRepo, cicdCfg, sender, string(appName), k8sNS)
+}
+
+func provideInspectService(
+	db *gorm.DB,
+	redisClient *redis.Client,
+	dsSvc *service.AlertDatasourceService,
+	projectRepo interfaces.ProjectRepository,
+	sender mailer.Sender,
+	appName AppDisplayName,
+) *inspectsvc.Service {
+	return inspectsvc.NewService(db, redisClient, dsSvc, projectRepo, sender, string(appName))
 }
 
 func provideK8sHelmService(
@@ -274,6 +298,7 @@ var ServiceSet = wire.NewSet(
 	provideRegistrationService,
 	service.NewMenuService,
 	service.NewDictEntryService,
+	service.NewPolicyGovernanceService,
 	// alert
 	service.NewAlertSilenceService,
 	service.NewAlertMaintenanceService,
@@ -315,6 +340,7 @@ var ServiceSet = wire.NewSet(
 	provideMysqlBackupService,
 	provideDbmgmtService,
 	provideCicdService,
+	provideInspectService,
 	provideElasticsearchProvider,
 	provideKafkaProvider,
 	provideKafkaToESService,

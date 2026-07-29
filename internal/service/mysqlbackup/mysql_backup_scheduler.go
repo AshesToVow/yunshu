@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"yunshu/internal/dictconfig"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/cronutil"
 )
@@ -19,11 +18,11 @@ func ValidateMysqlBackupCronSpec(spec string) error {
 
 // RunMysqlBackupScheduler 启动定时备份 Worker（字典 mysql_backup_scheduler_* 控制开关与节拍）。
 func (s *MysqlBackupService) RunMysqlBackupScheduler(ctx context.Context) {
-	if s == nil || s.db == nil {
+	if s == nil || s.resolveSched == nil {
 		return
 	}
 	log := mysqlBackupLog()
-	cfg := dictconfig.ResolveMysqlBackupSchedulerConfig(ctx, s.db, dictconfig.DefaultMysqlBackupSchedulerDictTypes())
+	cfg := s.resolveSched(ctx)
 	if !cfg.Enabled {
 		log.Info("MySQL backup scheduler disabled by dict")
 		return

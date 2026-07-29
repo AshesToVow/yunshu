@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { listAllPermissions } from "../services/permissions";
 import {
   fixMenuEntryAPIs,
+  fixDisabledPluginPolicies,
   getPermissionTree,
   getPolicies,
   getPolicyConflicts,
@@ -143,6 +144,29 @@ export function PoliciesPage() {
       const result = await fixMenuEntryAPIs(selectedRoleId);
       message.success(
         `已补齐入口 API：新建 ${result.created}，授权 ${result.granted}，跳过 ${result.skipped}（共 ${result.total}）`,
+      );
+      await Promise.all([bootstrap(selectedRoleId), loadRoleExtras(selectedRoleId)]);
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message ?? e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleFixDisabledPluginPolicies() {
+    if (!selectedRoleId) return;
+    const hasPluginConflicts = conflicts.some(
+      (c) => c.type === "plugin_disabled_policy_active" || c.type === "api_granted_plugin_disabled",
+    );
+    if (!hasPluginConflicts) {
+      message.info("没有可清理的禁用插件策略冲突");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await fixDisabledPluginPolicies(selectedRoleId);
+      message.success(
+        `已清理禁用插件策略：撤销 ${result.revoked}，跳过 ${result.skipped}（共扫描 ${result.total}）`,
       );
       await Promise.all([bootstrap(selectedRoleId), loadRoleExtras(selectedRoleId)]);
     } catch (e: unknown) {
@@ -414,7 +438,7 @@ export function PoliciesPage() {
                     children: (
                       <div className="auth-tab-pane auth-tab-pane--tree">
                         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                          叶子节点后缀为关联菜单 path；灰色「插件未启用」项不可勾选。
+                          叶子节点为可授权 API；未启用插件的菜单已从树中移除。
                         </Typography.Paragraph>
                         <div className="tree-shell auth-tree-shell">
                           <Tree
@@ -440,7 +464,7 @@ export function PoliciesPage() {
                           <Empty description="未发现治理冲突" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                         ) : (
                           <>
-                            <Space style={{ marginBottom: 12 }}>
+                            <Space style={{ marginBottom: 12 }} wrap>
                               <Button
                                 type="primary"
                                 loading={submitting}
@@ -449,9 +473,22 @@ export function PoliciesPage() {
                               >
                                 一键补齐入口 API
                               </Button>
+                              <Button
+                                loading={submitting}
+                                disabled={
+                                  !conflicts.some(
+                                    (c) =>
+                                      c.type === "plugin_disabled_policy_active" ||
+                                      c.type === "api_granted_plugin_disabled",
+                                  )
+                                }
+                                onClick={() => void handleFixDisabledPluginPolicies()}
+                              >
+                                清理禁用插件策略
+                              </Button>
                               <Button onClick={() => selectedRoleId && void loadRoleExtras(selectedRoleId)}>重新分析</Button>
                               <Typography.Text type="secondary">
-                                menu_needs_entry_api：菜单启用但角色缺少入口 GET；一键补齐会自动创建缺失权限项并授权。
+                                menu_needs_entry_api：补齐入口 GET；plugin_disabled_*：撤销未启用插件上的 Casbin 策略。
                               </Typography.Text>
                             </Space>
                             <Table

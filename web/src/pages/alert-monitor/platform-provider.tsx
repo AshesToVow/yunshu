@@ -66,6 +66,7 @@ import {
   listCloudExpiryRules,
   listDutyBlocks,
   pingAlertDatasource,
+  alertmanagerSilences,
   promActiveAlerts,
   promInstantQuery,
   promRangeQuery,
@@ -109,6 +110,21 @@ type QuickSilenceTarget = {
   startsAt: Dayjs;
   endsAt: Dayjs;
 };
+type AlertmanagerSilenceRow = {
+  rowKey: string;
+  source: "alertmanager";
+  amId: string;
+  name: string;
+  comment?: string;
+  matchers?: Array<{ name: string; value: string; is_regex?: boolean }>;
+  starts_at: string;
+  ends_at: string;
+  state: string;
+  enabled: boolean;
+};
+type SilenceDisplayRow =
+  | (AlertSilenceItem & { source: "platform"; rowKey: string })
+  | AlertmanagerSilenceRow;
 type RuleComparator = ">" | ">=" | "<" | "<=" | "==" | "!=";
 type RuleBuilderLogic = "and" | "or";
 type RuleBuilderCondition = { metric: string; comparator: RuleComparator; threshold: number | null };
@@ -164,6 +180,43 @@ function parsePrometheusActiveAlertsTable(body: unknown): PromNativeAlertRow[] {
       labelsShort: short.length > 140 ? `${short.slice(0, 140)}…` : short,
       activeAt: row.activeAt,
       labels,
+    };
+  });
+}
+
+function parseAlertmanagerSilences(raw: unknown): AlertmanagerSilenceRow[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const row = (item ?? {}) as {
+      id?: string;
+      comment?: string;
+      createdBy?: string;
+      startsAt?: string;
+      endsAt?: string;
+      status?: { state?: string; comment?: string; createdBy?: string; startsAt?: string; endsAt?: string };
+      matchers?: Array<{ name?: string; value?: string; isRegex?: boolean; is_regex?: boolean }>;
+    };
+    const state = String(row.status?.state ?? "").toLowerCase();
+    const matchers = Array.isArray(row.matchers)
+      ? row.matchers.map((m) => ({
+          name: String(m?.name ?? ""),
+          value: String(m?.value ?? ""),
+          is_regex: Boolean(m?.isRegex ?? m?.is_regex),
+        }))
+      : [];
+    const amId = String(row.id ?? "");
+    const comment = String(row.comment ?? row.status?.comment ?? "").trim();
+    return {
+      rowKey: `am-${amId}`,
+      source: "alertmanager" as const,
+      amId,
+      name: comment || String(row.createdBy ?? row.status?.createdBy ?? `Alertmanager #${amId}`),
+      comment: comment || undefined,
+      matchers,
+      starts_at: String(row.startsAt ?? row.status?.startsAt ?? ""),
+      ends_at: String(row.endsAt ?? row.status?.endsAt ?? ""),
+      state: state || "unknown",
+      enabled: state === "active" || state === "pending",
     };
   });
 }
@@ -366,8 +419,14 @@ function unwrapPrometheusQueryData(body: unknown): unknown {
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertMonitorProvider } from "./context";
 import { AlertMonitorLayout } from "./layout";
-import { AlertMonitorModals } from "./modals";
 import { normalizeAlertMonitorTab, tabPathForKey, type AlertMonitorTabKey } from "./tab-config";
+import { lazy, Suspense } from "react";
+import { Spin } from "antd";
+
+const AlertMonitorModals = lazy(async () => {
+  const mod = await import("./modals");
+  return { default: mod.AlertMonitorModals };
+});
 
 export type { AlertMonitorTabKey };
 
@@ -376,7 +435,15 @@ export function AlertMonitorPlatformRoot() {
   return (
     <AlertMonitorProvider value={state as never}>
       <AlertMonitorLayout />
-      <AlertMonitorModals />
+      <Suspense
+        fallback={
+          <div style={{ position: "fixed", right: 16, bottom: 16 }}>
+            <Spin size="small" />
+          </div>
+        }
+      >
+        <AlertMonitorModals />
+      </Suspense>
     </AlertMonitorProvider>
   );
 }
@@ -588,6 +655,8 @@ function useAlertMonitorPlatformState() {
   const [nativeAlertsRows, setNativeAlertsRows] = useState<PromNativeAlertRow[]>([]);
   const [selectedNativeAlertKeys, setSelectedNativeAlertKeys] = useState<string[]>([]);
   const [selectedSilenceIds, setSelectedSilenceIds] = useState<number[]>([]);
+  const [amSilenceRows, setAmSilenceRows] = useState<AlertmanagerSilenceRow[]>([]);
+  const [amSilencesLoading, setAmSilencesLoading] = useState(false);
   const [quickSilenceOpen, setQuickSilenceOpen] = useState(false);
   const [quickSilenceSubmitting, setQuickSilenceSubmitting] = useState(false);
   const [quickSilenceTargets, setQuickSilenceTargets] = useState<QuickSilenceTarget[]>([]);
@@ -839,6 +908,31 @@ function useAlertMonitorPlatformState() {
     setSilenceList(r.list ?? []);
   }, [projectContextId]);
 
+  const loadAmSilences = useCallback(async () => {
+    if (!silenceDatasourceId) {
+      setAmSilenceRows([]);
+      return;
+    }
+    setAmSilencesLoading(true);
+    try {
+      const raw = await alertmanagerSilences(silenceDatasourceId);
+      setAmSilenceRows(parseAlertmanagerSilences(raw));
+    } catch {
+      setAmSilenceRows([]);
+    } finally {
+      setAmSilencesLoading(false);
+    }
+  }, [silenceDatasourceId]);
+
+  const silenceDisplayList = useMemo((): SilenceDisplayRow[] => {
+    const platformRows = (silenceList ?? []).map((r) => ({
+      ...r,
+      source: "platform" as const,
+      rowKey: String(r.id),
+    }));
+    return [...platformRows, ...amSilenceRows];
+  }, [silenceList, amSilenceRows]);
+
   const loadNativeSilAlerts = useCallback(async () => {
     if (!silenceDatasourceId) {
       message.warning(
@@ -932,6 +1026,11 @@ function useAlertMonitorPlatformState() {
       cancelled = true;
     };
   }, [tab, projectContextId, loadDatasources, loadSilences, loadRules, loadCloudExpiryRules, cloudExpiryProviderFilter, cloudExpiryKeyword]);
+
+  useEffect(() => {
+    if (tab !== "silences") return;
+    void loadAmSilences();
+  }, [tab, silenceDatasourceId, loadAmSilences]);
 
   useEffect(() => {
     if (tab !== "promql") return;
@@ -1052,6 +1151,7 @@ function useAlertMonitorPlatformState() {
       name: r.name,
       type: r.type,
       base_url: r.base_url,
+      alertmanager_url: r.alertmanager_url ?? "",
       basic_user: r.basic_user ?? "",
       skip_tls_verify: r.skip_tls_verify,
       enabled: r.enabled,
@@ -1119,59 +1219,80 @@ function useAlertMonitorPlatformState() {
   );
 
   const silColumns = [
-    { title: "ID", dataIndex: "id", width: 70 },
-    { title: "名称", dataIndex: "name" },
-    {
-      title: "说明",
-      dataIndex: "comment",
-      width: 140,
-      ellipsis: true,
-      render: (c: string) => (c && String(c).trim() ? c : "—"),
-    },
-    {
-      title: "匹配摘要",
-      key: "m",
-      width: 200,
-      ellipsis: true,
-      render: (_: unknown, r: AlertSilenceItem) => {
-        if (r.matchers?.length) {
-          return r.matchers.map((x) => `${x.name ?? ""}=${x.value ?? ""}`).join(", ");
-        }
-        return r.matchers_json?.slice(0, 80) ?? "—";
+      {
+        title: "来源",
+        key: "source",
+        width: 120,
+        render: (_: unknown, r: SilenceDisplayRow) =>
+          r.source === "alertmanager" ? <Tag color="blue">Alertmanager</Tag> : <Tag color="green">平台</Tag>,
       },
-    },
-    { title: "开始", dataIndex: "starts_at", width: 170, render: (t: string) => formatDateTime(t) },
-    { title: "结束", dataIndex: "ends_at", width: 170, render: (t: string) => formatDateTime(t) },
-    {
-      title: "状态",
-      key: "status",
-      width: 100,
-      render: (_: unknown, r: AlertSilenceItem) => {
-        const expired = dayjs(r.ends_at).isBefore(dayjs());
-        if (expired) return <Tag color="red">已过期</Tag>;
-        return r.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>;
+      {
+        title: "ID",
+        key: "id",
+        width: 120,
+        render: (_: unknown, r: SilenceDisplayRow) => (r.source === "alertmanager" ? r.amId : r.id),
       },
-    },
-    {
-      title: "操作",
-      width: 230,
-      render: (_: unknown, r: AlertSilenceItem) => (
-        <Space>
-          <Button type="link" size="small" disabled={!r.enabled} onClick={() => void releaseSingleSilence(r)}>
-            解除静默
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openSilEdit(r)}>
-            编辑
-          </Button>
-          <Popconfirm title="删除静默？" onConfirm={() => void removeSil(r.id)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+      { title: "名称", dataIndex: "name" },
+      {
+        title: "说明",
+        dataIndex: "comment",
+        width: 140,
+        ellipsis: true,
+        render: (c: string) => (c && String(c).trim() ? c : "—"),
+      },
+      {
+        title: "匹配摘要",
+        key: "m",
+        width: 200,
+        ellipsis: true,
+        render: (_: unknown, r: SilenceDisplayRow) => {
+          if (r.matchers?.length) {
+            return r.matchers.map((x) => `${x.name ?? ""}=${x.value ?? ""}`).join(", ");
+          }
+          if (r.source === "platform") {
+            return r.matchers_json?.slice(0, 80) ?? "—";
+          }
+          return "—";
+        },
+      },
+      { title: "开始", dataIndex: "starts_at", width: 170, render: (t: string) => formatDateTime(t) },
+      { title: "结束", dataIndex: "ends_at", width: 170, render: (t: string) => formatDateTime(t) },
+      {
+        title: "状态",
+        key: "status",
+        width: 100,
+        render: (_: unknown, r: SilenceDisplayRow) => {
+          const expired = dayjs(r.ends_at).isBefore(dayjs());
+          if (expired) return <Tag color="red">已过期</Tag>;
+          if (r.source === "alertmanager") {
+            return r.enabled ? <Tag color="green">{r.state || "active"}</Tag> : <Tag>{r.state || "inactive"}</Tag>;
+          }
+          return r.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>;
+        },
+      },
+      {
+        title: "操作",
+        width: 230,
+        render: (_: unknown, r: SilenceDisplayRow) =>
+          r.source === "alertmanager" ? (
+            <Typography.Text type="secondary">在 Alertmanager UI 管理</Typography.Text>
+          ) : (
+            <Space>
+              <Button type="link" size="small" disabled={!r.enabled} onClick={() => void releaseSingleSilence(r)}>
+                解除静默
+              </Button>
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openSilEdit(r)}>
+                编辑
+              </Button>
+              <Popconfirm title="删除静默？" onConfirm={() => void removeSil(r.id)}>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  删除
+                </Button>
+              </Popconfirm>
+            </Space>
+          ),
+      },
+    ];
 
   function openSilCreate() {
     setSilCurrent(null);
@@ -2263,6 +2384,7 @@ function useAlertMonitorPlatformState() {
     loadMetricOptionsForRule,
     loadNativeSilAlerts,
     loadRules,
+    loadAmSilences,
     loadSilences,
     loading,
     metricKeyword,
@@ -2359,6 +2481,8 @@ function useAlertMonitorPlatformState() {
     silSubmitting,
     silenceDatasource,
     silenceDatasourceId,
+    amSilencesLoading,
+    silenceDisplayList,
     silenceList,
     silenceMatcherNameOptions,
     submitAssign,

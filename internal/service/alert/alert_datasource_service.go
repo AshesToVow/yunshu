@@ -32,6 +32,7 @@ type AlertDatasourceUpsertRequest struct {
 	Name             string `json:"name" binding:"required,max=128"`
 	Type             string `json:"type" binding:"omitempty,max=32"`
 	BaseURL          string `json:"base_url" binding:"required,max=512"`
+	AlertmanagerURL  string `json:"alertmanager_url" binding:"omitempty,max=512"`
 	BearerToken      string `json:"bearer_token"`
 	BasicUser        string `json:"basic_user" binding:"omitempty,max=128"`
 	BasicPassword    string `json:"basic_password" binding:"omitempty,max=256"`
@@ -128,10 +129,11 @@ func (s *AlertDatasourceService) Create(ctx context.Context, req AlertDatasource
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg9a7f154a70af)
 	}
 	row := model.AlertDatasource{
-		ProjectID:     req.ProjectID,
-		Name:          strings.TrimSpace(req.Name),
-		Type:          t,
-		BaseURL:       strings.TrimSpace(req.BaseURL),
+		ProjectID:       req.ProjectID,
+		Name:            strings.TrimSpace(req.Name),
+		Type:            t,
+		BaseURL:         strings.TrimSpace(req.BaseURL),
+		AlertmanagerURL: strings.TrimSpace(req.AlertmanagerURL),
 		BearerToken:   strings.TrimSpace(req.BearerToken),
 		BasicUser:     strings.TrimSpace(req.BasicUser),
 		BasicPassword: strings.TrimSpace(req.BasicPassword),
@@ -166,6 +168,7 @@ func (s *AlertDatasourceService) Update(ctx context.Context, id uint, req AlertD
 	if strings.TrimSpace(req.BaseURL) != "" {
 		row.BaseURL = strings.TrimSpace(req.BaseURL)
 	}
+	row.AlertmanagerURL = strings.TrimSpace(req.AlertmanagerURL)
 	if req.SkipTLSVerify != nil {
 		row.SkipTLSVerify = *req.SkipTLSVerify
 	}
@@ -205,6 +208,11 @@ func (s *AlertDatasourceService) Delete(ctx context.Context, id uint) error {
 		return constants.ErrNotFoundWithMsg(constants.ErrMsg2f3e2fbecdc5)
 	}
 	return nil
+}
+
+// PrometheusClient 返回已启用的 Prometheus 客户端（含凭据明文，仅供服务端内部调用）。
+func (s *AlertDatasourceService) PrometheusClient(ctx context.Context, id uint) (*promapi.Client, *model.AlertDatasource, error) {
+	return s.clientFor(ctx, id)
 }
 
 func (s *AlertDatasourceService) clientFor(ctx context.Context, id uint) (*promapi.Client, *model.AlertDatasource, error) {
@@ -261,6 +269,52 @@ func (s *AlertDatasourceService) PrometheusActiveAlerts(ctx context.Context, id 
 	defer cancel()
 	body, _, err := cli.ActiveAlerts(qctx)
 	return body, bizerrors.Pass(ctx, "alert.datasource", "PrometheusActiveAlerts", err)
+}
+
+func (s *AlertDatasourceService) resolveAlertmanagerURL(row *model.AlertDatasource) (string, error) {
+	if u := strings.TrimSpace(row.AlertmanagerURL); u != "" {
+		return u, nil
+	}
+	derived := promapi.DeriveAlertmanagerURL(row.BaseURL)
+	if derived == "" {
+		return "", constants.ErrBadRequestWithMsg("无法从 Prometheus 地址推导 Alertmanager URL，请在数据源中填写 alertmanager_url")
+	}
+	return derived, nil
+}
+
+func (s *AlertDatasourceService) alertmanagerClientFor(ctx context.Context, id uint) (*promapi.Client, *model.AlertDatasource, error) {
+	row, err := s.getRaw(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil, constants.ErrNotFoundWithMsg(constants.ErrMsg2f3e2fbecdc5)
+		}
+		return nil, nil, bizerrors.Pass(ctx, "alert.datasource", "alertmanagerClientFor", err)
+	}
+	if !row.Enabled {
+		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsgfa357d889ce0)
+	}
+	amURL, err := s.resolveAlertmanagerURL(row)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &promapi.Client{
+		BaseURL:       amURL,
+		BearerToken:   row.BearerToken,
+		BasicUser:     row.BasicUser,
+		BasicPassword: row.BasicPassword,
+		SkipTLSVerify: row.SkipTLSVerify,
+	}, row, nil
+}
+
+func (s *AlertDatasourceService) AlertmanagerSilences(ctx context.Context, id uint) (json.RawMessage, error) {
+	cli, _, err := s.alertmanagerClientFor(ctx, id)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.datasource", "AlertmanagerSilences", err)
+	}
+	qctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	body, _, err := cli.AlertmanagerSilences(qctx)
+	return body, bizerrors.Pass(ctx, "alert.datasource", "AlertmanagerSilences", err)
 }
 
 func (s *AlertDatasourceService) PingDatasource(ctx context.Context, id uint) (*DatasourcePingResult, error) {

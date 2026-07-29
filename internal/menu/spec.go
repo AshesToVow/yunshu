@@ -15,11 +15,11 @@ type Spec struct {
 }
 
 func (s Spec) statusOrDefault() int {
-	if s.Status != 0 {
-		return s.Status
-	}
 	if s.Hidden {
 		return 0
+	}
+	if s.Status != 0 {
+		return s.Status
 	}
 	return 1
 }

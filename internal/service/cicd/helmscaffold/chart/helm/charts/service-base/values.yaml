@@ -1,0 +1,20 @@
+enabled: true
+nameOverride: ""
+fullnameOverride: ""
+selectorName: ""
+type: ClusterIP
+# 单端口（兼容）；多端口请用 ports
+port: 8080
+targetPort: http
+nodePort: null
+# 推荐写法；非空时优先于 port
+ports: []
+# ports:
+#   - name: web
+#     port: 8913
+#     targetPort: web
+#     protocol: TCP
+#   - name: metrics
+#     port: 9090
+#     targetPort: metrics
+#     protocol: TCP

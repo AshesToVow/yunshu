@@ -18,6 +18,7 @@
 | `backup` | `internal/plugins/backup` | MySQL 备份调度与任务 |
 | `cicd` | `internal/plugins/cicd` | CI/CD：Jenkins 打包、MinIO/SSH 发布、执行记录 |
 | `dbmgmt` | `internal/plugins/dbmgmt` | 数据库管理：实例纳管、SQL 查询/审核、授权工单、goInception |
+| `inspect` | `internal/plugins/inspect` | 项目级 Prometheus 巡检报告与定时调度 |
 
 ## 配置
 
@@ -32,11 +33,13 @@ plugins:
     - backup
     - cicd
     - dbmgmt
+    - inspect
 ```
 
 - 省略 `plugins` 或 `enabled` 为空：启用上述默认全集。
 - **CMDB 与 project**：服务器 API 仍挂在 `/api/v1/projects/:id/servers`（功能不变）；`cmdb` 负责路由与表迁移，`project` 负责项目上下文。使用服务器管理时请**同时启用** `project` + `cmdb`。
 - **dbmgmt 与 project**：数据库 API 挂在 `/api/v1/projects/:id/dbmgmt/...`；须**同时启用** `project` + `dbmgmt`。详见 [dbmgmt.md](dbmgmt.md)。
+- **inspect 与 project**：巡检 API 挂在 `/api/v1/projects/:id/inspect/...`；须**同时启用** `project` + `inspect`，并配置项目的 Prometheus `alert_datasources`。
 
 ## 新增插件步骤
 

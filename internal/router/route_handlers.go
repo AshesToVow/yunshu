@@ -1,0 +1,61 @@
+package router
+
+import "yunshu/internal/handler"
+
+// routeHandlers aggregates HTTP handlers built by Wire HandlerSet.
+type routeHandlers struct {
+	System              *handler.SystemHandler
+	Plugin              *handler.PluginHandler
+	Auth                *handler.AuthHandler
+	LoginLog            *handler.LoginLogHandler
+	OperationLog        *handler.OperationLogHandler
+	User                *handler.UserHandler
+	Department          *handler.DepartmentHandler
+	Role                *handler.RoleHandler
+	Permission          *handler.PermissionHandler
+	Policy              *handler.PolicyHandler
+	K8sScopedPolicy     *handler.K8sScopedPolicyHandler
+	K8sNamespaceDeny    *handler.K8sNamespaceDenyHandler
+	K8sNamespaceAllow   *handler.K8sNamespaceAllowHandler
+	UserGroup           *handler.UserGroupHandler
+	Registration        *handler.RegistrationHandler
+	Menu                *handler.MenuHandler
+	DictEntry           *handler.DictEntryHandler
+	Admin               *handler.AdminHandler
+	Alert               *handler.AlertHandler
+	AlertPlatform       *handler.AlertPlatformHandler
+	AlertSubscription   *handler.AlertSubscriptionHandler
+	AlertInhibition     *handler.AlertInhibitionHandler
+	AlertReceiverGroup  *handler.AlertReceiverGroupHandler
+	CloudExpiryRule     *handler.CloudExpiryRuleHandler
+	Cluster             *handler.ClusterHandler
+	Pod                 *handler.PodHandler
+	Namespace           *handler.NamespaceHandler
+	Node                *handler.NodeHandler
+	Workload            *handler.WorkloadHandler
+	Config              *handler.ConfigHandler
+	Storage             *handler.StorageHandler
+	ServiceResource     *handler.ServiceResourceHandler
+	Ingress             *handler.IngressHandler
+	NetworkPolicy       *handler.NetworkPolicyHandler
+	K8sDiscovery        *handler.K8sDiscoveryHandler
+	K8sHPA              *handler.K8sHPAHandler
+	Helm                *handler.HelmHandler
+	K8sResourceWatch    *handler.K8sResourceWatchHandler
+	K8sSearch           *handler.K8sSearchHandler
+	K8sEventForward     *handler.K8sEventForwardHandler
+	Event               *handler.EventHandler
+	CRD                 *handler.CRDHandler
+	CR                  *handler.CRHandler
+	RBAC                *handler.RBACHandler
+	ServiceAccount      *handler.ServiceAccountHandler
+	Overview            *handler.OverviewHandler
+	Project             *handler.ProjectHandler
+	CMDB                *handler.CMDBHandler
+	MysqlBackup         *handler.MysqlBackupHandler
+	Dbmgmt              *handler.DbmgmtHandler
+	Cicd                *handler.CicdHandler
+	LogPlatform         *handler.LogPlatformHandler
+	Loggie              *handler.LoggieHandler
+	Inspect             *handler.InspectHandler
+}

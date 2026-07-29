@@ -1,0 +1,18 @@
+{{- /* 方法一：config-files/* → ConfigMap，供 deployment-base 挂载（无文件时仍创建空 CM，避免挂载失败） */ -}}
+{{- $db := index .Values "deployment-base" | default dict -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $db.fullnameOverride | default .Chart.Name }}-configs
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+{{- $files := .Files.Glob "config-files/**" }}
+{{- range $path, $bytes := $files }}
+{{- $name := base $path }}
+{{- if ne $name ".gitkeep" }}
+  {{ $name }}: |
+{{ $bytes | toString | indent 4 }}
+{{- end }}
+{{- end }}

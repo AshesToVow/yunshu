@@ -197,6 +197,41 @@ export async function listCicdArtifacts(projectId: number, serviceId: number) {
   );
 }
 
+/** 下载按服务生成的 helm/ 脚手架 zip（解压到业务仓库根目录）。 */
+export async function downloadHelmScaffold(
+  projectId: number,
+  serviceId: number,
+  params?: {
+    chart_name?: string;
+    image_repository?: string;
+    replica_count?: number;
+    container_port?: number;
+    service_port?: number;
+  },
+): Promise<Blob> {
+  return (await http.get(`${projectPath(projectId, "/services")}/${serviceId}/helm-scaffold`, {
+    params,
+    responseType: "blob",
+  })) as unknown as Blob;
+}
+
+/** 未保存服务时按参数预览下载脚手架。 */
+export async function downloadHelmScaffoldPreview(
+  projectId: number,
+  params: {
+    chart_name: string;
+    image_repository?: string;
+    replica_count?: number;
+    container_port?: number;
+    service_port?: number;
+  },
+): Promise<Blob> {
+  return (await http.get(projectPath(projectId, "/helm-scaffold"), {
+    params,
+    responseType: "blob",
+  })) as unknown as Blob;
+}
+
 export async function createDeployConfig(projectId: number, serviceId: number, payload: Record<string, unknown>) {
   return getData<CicdDeployConfig>(
     http.post(`${projectPath(projectId, "/services")}/${serviceId}/deploy-configs`, payload) as Promise<

@@ -21,6 +21,7 @@ func DefaultCatalog() []Spec {
 				{Path: "/projects", Name: "项目列表", Icon: "AppstoreOutlined", Sort: 1, Component: "projects-page", Status: 1},
 				{Path: "/project-members", Name: "项目成员", Icon: "TeamOutlined", Sort: 2, Component: "project-members-page", Status: 1},
 				{Path: "/project-servers", Name: "服务器管理", Icon: "HddOutlined", Sort: 3, Component: "project-servers-page", Status: 1},
+				{Path: "/project-inspect", Name: "项目巡检", Icon: "AuditOutlined", Sort: 4, Component: "project-inspect-page", Status: 1},
 			},
 		},
 		{

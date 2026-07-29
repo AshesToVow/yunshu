@@ -32,7 +32,7 @@ HTTP/gRPC 请求
 | 路由依赖 | `internal/router/wire.go` | `InitializeRouteDeps` |
 | 仓储 | `internal/router/repositories.go` | `newRouteRepositories(db)` |
 | 服务 | `internal/router/wire_providers.go` | Wire `ServiceSet` 注入全部领域 Service |
-| Handler | `internal/router/router_deps.go` | `assembleRouteDeps` |
+| Handler | `internal/router/wire_handler_providers.go` | `HandlerSet` → `routeHandlers`；`assembleRouteDeps` 仅拼中间件 |
 
 Handler 普遍 `import "yunshu/internal/service"`，通过 **`internal/service/exports.go`** 类型别名访问子包实现（如 `service.AlertService` → `alert.AlertService`）。
 

@@ -1,0 +1,3 @@
+.DS_Store
+*.tgz
+# charts/*.tgz 由 helm dependency update 生成时可忽略源码冲突；本脚手架直接 vendored 目录

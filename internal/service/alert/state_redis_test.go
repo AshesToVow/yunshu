@@ -17,7 +17,7 @@ func TestRedisState_FiringToResolvedLifecycle(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	state := NewRedisAlertStateService(rdb, nil, 3600, 86400)
+	state := NewRedisAlertStateService(rdb, nil, nil, 3600, 86400)
 	ctx := context.Background()
 	fp := "fp-integration-test"
 

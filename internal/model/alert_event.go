@@ -22,6 +22,8 @@ type AlertEvent struct {
 	DatasourceName     string         `json:"datasourceName" gorm:"size:128;index;comment:数据源显示名"`
 	DatasourceType     string         `json:"datasourceType" gorm:"size:32;index;comment:数据源类型如 prometheus、cloud_expiry"`
 	GroupKey           string         `json:"groupKey" gorm:"size:128;index;comment:聚合分组键"`
+	// Fingerprint 告警实例指纹（AM fingerprint / 平台规则指纹）；用于按指纹追溯投递与跳过原因。
+	Fingerprint        string         `json:"fingerprint" gorm:"size:512;index;comment:告警指纹"`
 	LabelsDigest       string         `json:"labelsDigest" gorm:"size:128;index;comment:标签摘要"`
 	MatchedPolicyIDs   string         `json:"matchedPolicyIds" gorm:"size:256;comment:命中策略ID列表,逗号分隔"`
 	MatchedPolicyNames string         `json:"matchedPolicyNames" gorm:"size:512;comment:命中策略名称列表,逗号分隔"`

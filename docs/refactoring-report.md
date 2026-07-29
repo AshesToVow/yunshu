@@ -13,7 +13,7 @@
 | 1 | 日志 `logutil` | ✅ | 已删除 `svclog`；HTTP/Service/Worker 组件化 |
 | 2 | 错误 `bizerrors` | ✅ | 已删除 `svcerr`、`pkg/apperror`；HTTP + gRPC 统一 |
 | 3 | Wire 基础设施 | ✅ | `providers.InitializeInfra/Core` |
-| 4 | 路由 Wire | ✅ | `InitializeRouteDeps`：Repo + **全部 Service** 由 Wire 注入 |
+| 4 | 路由 Wire | ✅ | `InitializeRouteDeps`：Repo + Service + **全部 Handler** 由 Wire 注入 |
 | 5 | Repository | ✅ | 告警 / 系统 / 项目 / K8s 策略 / 总览 / 事件转发等主路径 |
 | 6 | Service 目录拆分 | ✅ | `alert/` `k8s/` `project/` `system/` `logplatform/` `mysqlbackup/` `overview/` `cicd/` `cmdb/` **`dbmgmt/`** + `exports.go` |
 | 7 | Alert 域 | ✅ | 主链路在 `alert` 包；Redis 状态 `NewRedisAlertStateService` |
@@ -63,11 +63,12 @@ internal/plugins/       # 各业务插件 init 注册 + StartWorkers
 
 | 项 | 说明 |
 |----|------|
-| 全量 Wire Handler 装配 | ⬜ 可选：`assembleRouteDeps` 中 Handler 仍手工 `NewXxx` |
+| 全量 Wire Handler 装配 | ✅ | `HandlerSet` + `routeHandlers`；`assembleRouteDeps` 仅拼中间件与 RouteDeps |
 | Handler 直引子包 | 弱化 `exports.go`，新代码优先 `import alert` 等 |
-| `mysqlbackup.db` | MinIO / dictconfig 仍直用 `*gorm.DB` |
-| 插件菜单与 Casbin 联动 | 按 `plugins.enabled` 过滤侧栏；角色菜单授权待完善 |
-| 告警 ingest 统一模型 | 云到期等仍适配 Alertmanager Webhook 形态（见 R-alert 设计文档） |
+| `mysqlbackup.db` | ✅ | Service 不再持有 `*gorm.DB`；经 Wire 注入 ObjectStoreFactory / SchedulerConfigResolver |
+| 插件菜单与 Casbin 联动 | ✅ | 菜单 status 双向同步；授权树按插件过滤；冲突分析 + 清理禁用插件策略 |
+| 告警 ingest 统一模型 | ✅ | `CanonicalIngressAlert` 为唯一内部模型；AM Webhook 仅作适配；监控/云到期直接构造（含 `CloudExpiryExtension`） |
+| 巡检报告模板 + 对象存储 | ✅ | 多版式（default/compact/executive）；MinIO 优先落盘；Excel/PDF 导出；保留天数清理 |
 
 ---
 

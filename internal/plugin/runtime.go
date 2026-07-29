@@ -20,6 +20,7 @@ type Runtime struct {
 	Dbmgmt       any // *dbmgmt.Service
 	Cicd         any // *cicd.Service
 	Alert        any // *service.AlertService
+	Inspect      any // *inspect.Service
 	LogRetention any // *service.LogRetentionService
 	KafkaToES    any // *service.KafkaToESService
 }

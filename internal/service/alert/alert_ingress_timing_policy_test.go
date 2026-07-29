@@ -12,9 +12,9 @@ func TestApplyIngressGroupTimingPolicy(t *testing.T) {
 	s := &AlertService{cfg: config.AlertConfig{WebhookSkipGroupTiming: true}}
 
 	amItems := []CanonicalIngressAlert{{
-		Source:          "alertmanager",
+		Source:          IngressSourceAlertmanager,
 		PayloadReceiver: "team-a",
-		Alert:           AlertManagerAlert{Fingerprint: "fp-am"},
+		Alert:           IngressAlertDetail{Fingerprint: "fp-am"},
 	}}
 	s.applyIngressGroupTimingPolicy(amItems)
 	if !amItems[0].Alert.SkipGroupTiming {
@@ -22,9 +22,9 @@ func TestApplyIngressGroupTimingPolicy(t *testing.T) {
 	}
 
 	platformItems := []CanonicalIngressAlert{{
-		Source:          "platform_monitor",
+		Source:          IngressSourcePlatformMonitor,
 		PayloadReceiver: "platform-monitor",
-		Alert:           AlertManagerAlert{Fingerprint: "fp-pm"},
+		Alert:           IngressAlertDetail{Fingerprint: "fp-pm"},
 	}}
 	s.applyIngressGroupTimingPolicy(platformItems)
 	if platformItems[0].Alert.SkipGroupTiming {
@@ -32,9 +32,9 @@ func TestApplyIngressGroupTimingPolicy(t *testing.T) {
 	}
 
 	cloudItems := []CanonicalIngressAlert{{
-		Source:          "cloud_expiry",
+		Source:          IngressSourceCloudExpiry,
 		PayloadReceiver: "cloud-expiry",
-		Alert:           AlertManagerAlert{Fingerprint: "fp-ce", SkipGroupTiming: true},
+		Alert:           IngressAlertDetail{Fingerprint: "fp-ce", SkipGroupTiming: true},
 	}}
 	s.applyIngressGroupTimingPolicy(cloudItems)
 	if !cloudItems[0].Alert.SkipGroupTiming {
@@ -43,9 +43,9 @@ func TestApplyIngressGroupTimingPolicy(t *testing.T) {
 
 	sLegacy := &AlertService{cfg: config.AlertConfig{WebhookSkipGroupTiming: false}}
 	legacyItems := []CanonicalIngressAlert{{
-		Source:          "alertmanager",
+		Source:          IngressSourceAlertmanager,
 		PayloadReceiver: "team-a",
-		Alert:           AlertManagerAlert{Fingerprint: "fp-legacy"},
+		Alert:           IngressAlertDetail{Fingerprint: "fp-legacy"},
 	}}
 	sLegacy.applyIngressGroupTimingPolicy(legacyItems)
 	if legacyItems[0].Alert.SkipGroupTiming {

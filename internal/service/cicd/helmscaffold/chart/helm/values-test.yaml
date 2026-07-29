@@ -1,0 +1,4 @@
+deployment-base:
+  replicaCount: 2
+hpa-base:
+  enabled: false

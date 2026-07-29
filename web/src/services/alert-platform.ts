@@ -8,6 +8,7 @@ export interface AlertDatasourceItem {
   name: string;
   type: string;
   base_url: string;
+  alertmanager_url?: string;
   bearer_token?: string;
   /** 编辑时后端可能返回；新建后列表接口可能脱敏 */
   basic_user?: string;
@@ -181,6 +182,11 @@ export function pingAlertDatasource(id: number) {
 /** GET Prometheus /api/v1/alerts，返回原始 JSON（含 data.alerts）。 */
 export function promActiveAlerts(id: number) {
   return getData<{ data: unknown }>(http.get(`/alerts/datasources/${id}/prometheus-alerts`)).then((r) => r.data);
+}
+
+/** GET Alertmanager /api/v2/silences，返回静默数组 JSON。 */
+export function alertmanagerSilences(id: number) {
+  return getData<{ data: unknown }>(http.get(`/alerts/datasources/${id}/alertmanager-silences`)).then((r) => r.data);
 }
 
 export function promInstantQuery(id: number, payload: { query: string; time?: string }) {

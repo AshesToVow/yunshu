@@ -317,6 +317,8 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       { method: "PUT", path: "/api/v1/projects/:id/cicd/services/:serviceId/deploy-configs/:configId", summary: "CI/CD 更新发布配置", ui: "应用服务 · 发布配置", auth: true },
       { method: "DELETE", path: "/api/v1/projects/:id/cicd/services/:serviceId/deploy-configs/:configId", summary: "CI/CD 删除发布配置", ui: "应用服务 · 发布配置", auth: true },
       { method: "GET", path: "/api/v1/projects/:id/cicd/services/:serviceId/artifacts", summary: "CI/CD MinIO 制品列表", ui: "应用服务 · 发布", auth: true },
+      { method: "GET", path: "/api/v1/projects/:id/cicd/services/:serviceId/helm-scaffold", summary: "下载 Helm 脚手架 zip", ui: "应用服务 · 容器化发布", auth: true },
+      { method: "GET", path: "/api/v1/projects/:id/cicd/helm-scaffold", summary: "预览下载 Helm 脚手架", ui: "应用服务 · 容器化发布", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/cicd/services/:serviceId/builds", summary: "CI/CD 触发 CI 构建", ui: "应用服务 · CI 打包", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/cicd/services/:serviceId/releases", summary: "CI/CD 触发 CD 发布", ui: "应用服务 · 发布", auth: true },
       { method: "GET", path: "/api/v1/projects/:id/cicd/build-runs", summary: "CI/CD CI 打包记录列表", ui: "CI 打包记录", auth: true },

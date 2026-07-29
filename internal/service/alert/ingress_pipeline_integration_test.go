@@ -181,28 +181,28 @@ func testChannel() model.AlertChannel {
 	}
 }
 
-func testFiringItem(fp string) IngressCanonicalItem {
+func testFiringItem(fp string) CanonicalIngressAlert {
 	now := time.Now()
-	return IngressCanonicalItem{
-		Source:          "alertmanager",
+	return CanonicalIngressAlert{
+		Source:          IngressSourceAlertmanager,
 		PayloadReceiver: "yunshu",
 		PayloadStatus:   "firing",
 		Alert: IngressAlertDetail{
-			Status:       "firing",
-			Fingerprint:  fp,
-			StartsAt:     now,
-			EndsAt:       now.Add(time.Hour),
-			Labels:       map[string]string{"alertname": "HighCPU", "severity": "warning"},
-			Annotations:  map[string]string{"summary": "cpu high"},
+			Status:          "firing",
+			Fingerprint:     fp,
+			StartsAt:        now,
+			EndsAt:          now.Add(time.Hour),
+			Labels:          map[string]string{"alertname": "HighCPU", "severity": "warning"},
+			Annotations:     map[string]string{"summary": "cpu high"},
 			SkipGroupTiming: true,
 		},
 	}
 }
 
-func testResolvedItem(fp string) IngressCanonicalItem {
+func testResolvedItem(fp string) CanonicalIngressAlert {
 	now := time.Now()
-	return IngressCanonicalItem{
-		Source:          "alertmanager",
+	return CanonicalIngressAlert{
+		Source:          IngressSourceAlertmanager,
 		PayloadReceiver: "yunshu",
 		PayloadStatus:   "resolved",
 		Alert: IngressAlertDetail{
@@ -227,7 +227,7 @@ func TestRunIngressPipeline_FiringDeliverThenResolved(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	if err := RunIngressPipeline(ctx, host, []IngressCanonicalItem{testFiringItem(fp)}); err != nil {
+	if err := RunIngressPipeline(ctx, host, []CanonicalIngressAlert{testFiringItem(fp)}); err != nil {
 		t.Fatalf("firing pipeline: %v", err)
 	}
 	host.mu.Lock()
@@ -239,7 +239,7 @@ func TestRunIngressPipeline_FiringDeliverThenResolved(t *testing.T) {
 	}
 	host.mu.Unlock()
 
-	if err := RunIngressPipeline(ctx, host, []IngressCanonicalItem{testResolvedItem(fp)}); err != nil {
+	if err := RunIngressPipeline(ctx, host, []CanonicalIngressAlert{testResolvedItem(fp)}); err != nil {
 		t.Fatalf("resolved pipeline: %v", err)
 	}
 	host.mu.Lock()
@@ -257,7 +257,7 @@ func TestRunIngressPipeline_ResolvedWithoutPriorFiringSkipped(t *testing.T) {
 		peekShouldSend: true,
 		deliverCode:    200,
 	}
-	if err := RunIngressPipeline(context.Background(), host, []IngressCanonicalItem{testResolvedItem(fp)}); err != nil {
+	if err := RunIngressPipeline(context.Background(), host, []CanonicalIngressAlert{testResolvedItem(fp)}); err != nil {
 		t.Fatal(err)
 	}
 	host.mu.Lock()

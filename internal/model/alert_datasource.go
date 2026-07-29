@@ -15,7 +15,8 @@ type AlertDatasource struct {
 	Name string `json:"name" gorm:"size:128;not null;index;comment:显示名称"`
 	Type string `json:"type" gorm:"size:32;not null;default:prometheus;index;comment:类型 prometheus"`
 
-	BaseURL       string `json:"base_url" gorm:"size:512;not null;comment:API 根地址，如 http://prom:9090"`
+	BaseURL          string `json:"base_url" gorm:"size:512;not null;comment:API 根地址，如 http://prom:9090"`
+	AlertmanagerURL  string `json:"alertmanager_url,omitempty" gorm:"size:512;comment:Alertmanager 地址，空则从 base_url 推导（9090→9093）"`
 	BearerToken   string `json:"bearer_token,omitempty" gorm:"type:text;comment:Bearer Token"`
 	BasicUser     string `json:"basic_user,omitempty" gorm:"size:128;comment:Basic 用户名"`
 	BasicPassword string `json:"basic_password,omitempty" gorm:"size:256;comment:Basic 密码"`

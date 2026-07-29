@@ -4,9 +4,32 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
-// CanonicalIngressAlert 统一入站模型：由 Alertmanager Webhook 载荷或内置评估路径构造。
+// 平台内部入站来源标识（流水线与投递 payload 的 source 字段）。
+const (
+	IngressSourceAlertmanager    = "alertmanager"
+	IngressSourcePlatformMonitor = "platform_monitor"
+	IngressSourceCloudExpiry     = "cloud_expiry"
+	IngressSourceK8sEvent        = "k8s_event"
+)
+
+// CloudExpiryExtension 云到期告警一等扩展字段（不再只能塞进 labels/annotations）。
+type CloudExpiryExtension struct {
+	Provider     string
+	AccountID    uint
+	InstanceID   string
+	InstanceName string
+	Region       string
+	ExpiresAt    time.Time
+	DaysLeft     int
+	ProjectID    uint
+}
+
+// CanonicalIngressAlert 平台统一入站模型。流水线只消费本结构；
+// Alertmanager Webhook 经 CanonicalAlertsFromAlertmanagerPayload 适配进来，
+// 平台自研入口（监控规则 / 云到期）直接构造，不再绕 AM Payload。
 type CanonicalIngressAlert struct {
 	Source            string
 	PayloadReceiver   string
@@ -17,23 +40,41 @@ type CanonicalIngressAlert struct {
 	Version           string
 	ExternalURL       string
 	TruncatedAlerts   int
-	Alert             AlertManagerAlert
+	Alert             IngressAlertDetail
+	Cloud             *CloudExpiryExtension
 }
 
-// CanonicalAlertsFromAlertmanagerPayload 将 Alertmanager Webhook 形态转为统一入站切片。
+// NewCanonicalAlert 构造单条平台入站告警。
+func NewCanonicalAlert(
+	source, receiver, payloadStatus string,
+	groupLabels, commonLabels map[string]string,
+	detail IngressAlertDetail,
+) CanonicalIngressAlert {
+	return CanonicalIngressAlert{
+		Source:          strings.TrimSpace(source),
+		PayloadReceiver: strings.TrimSpace(receiver),
+		PayloadStatus:   strings.TrimSpace(payloadStatus),
+		GroupLabels:     groupLabels,
+		CommonLabels:    commonLabels,
+		Alert:           detail,
+	}
+}
+
+// CanonicalAlertsFromAlertmanagerPayload 将外部 Alertmanager Webhook 形态适配为统一入站切片。
 func CanonicalAlertsFromAlertmanagerPayload(p AlertManagerPayload) []CanonicalIngressAlert {
 	rcv := strings.TrimSpace(p.Receiver)
-	src := "alertmanager"
+	src := IngressSourceAlertmanager
 	switch rcv {
 	case "platform-monitor":
-		src = "platform_monitor"
+		src = IngressSourcePlatformMonitor
 	case "cloud-expiry":
-		src = "cloud_expiry"
+		src = IngressSourceCloudExpiry
 	case "k8s-events":
-		src = "k8s_event"
+		src = IngressSourceK8sEvent
 	}
 	out := make([]CanonicalIngressAlert, 0, len(p.Alerts))
 	for i := range p.Alerts {
+		a := p.Alerts[i]
 		out = append(out, CanonicalIngressAlert{
 			Source:            src,
 			PayloadReceiver:   p.Receiver,
@@ -44,16 +85,32 @@ func CanonicalAlertsFromAlertmanagerPayload(p AlertManagerPayload) []CanonicalIn
 			Version:           p.Version,
 			ExternalURL:       p.ExternalURL,
 			TruncatedAlerts:   p.TruncatedAlerts,
-			Alert:             p.Alerts[i],
+			Alert: IngressAlertDetail{
+				Status:          a.Status,
+				Labels:          a.Labels,
+				Annotations:     a.Annotations,
+				StartsAt:        a.StartsAt,
+				EndsAt:          a.EndsAt,
+				GeneratorURL:    a.GeneratorURL,
+				Fingerprint:     a.Fingerprint,
+				SkipGroupTiming: a.SkipGroupTiming,
+			},
 		})
 	}
 	return out
 }
 
-func (s *AlertService) receiveAlertmanagerPayloadSync(ctx context.Context, payload AlertManagerPayload) error {
-	items := CanonicalAlertsFromAlertmanagerPayload(payload)
+// receiveCanonicalSync 对平台自研入口：应用分组节流策略后入站。
+func (s *AlertService) receiveCanonicalSync(ctx context.Context, items ...CanonicalIngressAlert) error {
+	if len(items) == 0 {
+		return nil
+	}
 	s.applyIngressGroupTimingPolicy(items)
 	return s.ingestCanonicalAlerts(ctx, items)
+}
+
+func (s *AlertService) receiveAlertmanagerPayloadSync(ctx context.Context, payload AlertManagerPayload) error {
+	return s.receiveCanonicalSync(ctx, CanonicalAlertsFromAlertmanagerPayload(payload)...)
 }
 
 // applyIngressGroupTimingPolicy 按告警入口决定是否走 Yunshu 第二层 group timing：

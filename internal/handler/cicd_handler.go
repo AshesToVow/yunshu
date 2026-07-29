@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"strings"
 
 	"yunshu/internal/model"
@@ -660,4 +662,49 @@ func (h *CicdHandler) ListReleaseApprovalSteps(c *gin.Context) {
 		return
 	}
 	response.Success(c, steps)
+}
+
+// DownloadHelmScaffold 按服务生成 helm/ 脚手架 zip（解压到业务仓库根目录即可）。
+func (h *CicdHandler) DownloadHelmScaffold(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	serviceID, err := parseUintParam(c, "serviceId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var q cicd.HelmScaffoldQuery
+	_ = c.ShouldBindQuery(&q)
+	filename, data, err := h.svc.BuildHelmScaffoldZip(c.Request.Context(), projectID, serviceID, q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.QueryEscape(filename)))
+	c.Data(200, "application/zip", data)
+}
+
+// DownloadHelmScaffoldPreview 未绑定服务时按表单参数预览下载脚手架。
+func (h *CicdHandler) DownloadHelmScaffoldPreview(c *gin.Context) {
+	if _, err := parseUintParam(c, "id"); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var q cicd.HelmScaffoldQuery
+	if err := c.ShouldBindQuery(&q); err != nil {
+		response.Error(c, err)
+		return
+	}
+	filename, data, err := h.svc.BuildHelmScaffoldZipPreview(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.QueryEscape(filename)))
+	c.Data(200, "application/zip", data)
 }
