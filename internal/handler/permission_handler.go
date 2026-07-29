@@ -6,7 +6,7 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/plugin"
+	"yunshu/internal/plugingate"
 	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -132,7 +132,7 @@ func (h *PermissionHandler) List(c *gin.Context) {
 			}
 			filtered := make([]service.PermissionItem, 0, len(items))
 			for _, item := range items {
-				if plugin.IsAPIResourceAllowed(item.Resource, h.plugins) {
+				if plugingate.IsAPIResourceAllowed(item.Resource, h.plugins) {
 					filtered = append(filtered, item)
 				}
 			}

@@ -54,5 +54,6 @@ func RegisterCicdRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	cicdGroup.POST("/release-runs/batch-execute", d.cicdHandler.BatchExecuteReleaseRuns)
 	cicdGroup.POST("/release-runs/batch-terminate", d.cicdHandler.BatchTerminateReleaseRuns)
 	cicdGroup.GET("/release-runs/:runId/log", d.cicdHandler.GetReleaseRunLog)
+	cicdGroup.POST("/release-runs/:runId/verify", d.cicdHandler.VerifyReleaseRun)
 	cicdGroup.DELETE("/release-runs/:runId", d.cicdHandler.DeleteReleaseRun)
 }

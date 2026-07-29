@@ -8,12 +8,13 @@ import (
 
 // Info 插件元数据（供管理端展示）。
 type Info struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Enabled     bool   `json:"enabled"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Enabled     bool     `json:"enabled"`
+	Manifest    Manifest `json:"manifest"`
 }
 
-// Catalog 返回全部已注册插件及启停状态。
+// Catalog 返回全部已注册插件及启停状态与契约。
 func Catalog(cfg *config.PluginsConfig) []Info {
 	enabled := ResolveEnabled(cfg)
 	out := make([]Info, 0, len(registry))
@@ -23,6 +24,7 @@ func Catalog(cfg *config.PluginsConfig) []Info {
 			Name:        name,
 			Description: m.Description(),
 			Enabled:     enabled[strings.ToLower(name)],
+			Manifest:    ResolveManifest(m),
 		})
 	}
 	return out

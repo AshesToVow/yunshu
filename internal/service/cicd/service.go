@@ -34,6 +34,9 @@ type Service struct {
 	appName       string
 	yamlCicd      config.CicdConfig
 	syncMu        sync.Mutex
+	// optional post-release verify hooks
+	workloadReadyCheck func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string)
+	errorLogSampler    func(ctx context.Context, projectID, cicdServiceID uint, since time.Time) (int, string)
 }
 
 func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
@@ -251,6 +254,7 @@ func (s *Service) UpsertService(ctx context.Context, serviceID uint, req Service
 			return nil, err
 		}
 	}
+	syncCicdToServiceCatalog(ctx, s.db, &row)
 	return &row, nil
 }
 
@@ -782,6 +786,8 @@ func (s *Service) TriggerRelease(ctx context.Context, projectID, serviceID uint,
 	if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
 		return nil, err
 	}
+	recordReleaseChange(ctx, s.db, &release, "release_create", model.ChangeStatusStarted,
+		fmt.Sprintf("创建并执行发布 #%d：%s", release.ID, release.Title))
 	return &release, nil
 }
 

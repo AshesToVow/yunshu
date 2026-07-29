@@ -23,10 +23,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getReleaseRunDetail,
   getReleaseRunLog,
+  verifyReleaseRun,
   type CicdReleaseApprovalStep,
   type CicdReleaseOperationLog,
   type CicdReleaseRunDetail,
+  type ReleaseVerifyResult,
 } from "../services/cicd";
+import { listAlertEvents, type AlertEventItem } from "../services/alerts";
 import { formatDateTime } from "../utils/format";
 import {
   cicdReleaseKindLabel,
@@ -74,6 +77,9 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
   const [tab, setTab] = useState("info");
   const [logText, setLogText] = useState("");
   const [logLoading, setLogLoading] = useState(false);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyAlerts, setVerifyAlerts] = useState<AlertEventItem[]>([]);
+  const [verifyResult, setVerifyResult] = useState<ReleaseVerifyResult | null>(null);
   const logPreRef = useRef<HTMLPreElement>(null);
 
   const loadDetail = useCallback(async () => {
@@ -115,6 +121,34 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
   useEffect(() => {
     if (tab === "log" && detail) void loadLog();
   }, [tab, loadLog, detail]);
+
+  useEffect(() => {
+    if (tab !== "verify" || !detail) return;
+    void (async () => {
+      setVerifyLoading(true);
+      try {
+        const result = await verifyReleaseRun(projectId, runId);
+        setVerifyResult(result);
+        const res = await listAlertEvents({
+          page: 1,
+          page_size: 30,
+          status: "firing",
+          projectId,
+          severity: "critical,warning",
+        });
+        const since = detail.started_at ? new Date(detail.started_at).getTime() : 0;
+        const list = (res.list || []).filter((a) => {
+          const t = new Date(a.createdAt || (a as any).created_at || 0).getTime();
+          return !since || t >= since - 60_000;
+        });
+        setVerifyAlerts(list);
+      } catch {
+        setVerifyResult(null);
+      } finally {
+        setVerifyLoading(false);
+      }
+    })();
+  }, [tab, detail, projectId, runId]);
 
   const run = detail;
   const releaseParams = run ? parseReleaseParams(run.params_json) : {};
@@ -346,6 +380,58 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
               >
                 {logLoading ? "加载中…" : logText}
               </pre>
+            </div>
+          ),
+        },
+        {
+          key: "verify",
+          label: "发布后验证",
+          children: (
+            <div>
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="后端验证：Ready / 错误日志 / 新告警"
+                description="结果写回 release.verify_status，并记录 change_event。"
+              />
+              {verifyLoading ? (
+                <Typography.Text type="secondary">验证中…</Typography.Text>
+              ) : verifyResult ? (
+                <Space direction="vertical" style={{ width: "100%", marginBottom: 12 }}>
+                  <Tag color={verifyResult.status === "passed" ? "green" : verifyResult.status === "failed" ? "red" : "orange"}>
+                    {verifyResult.status}
+                  </Tag>
+                  <Descriptions size="small" column={1} bordered>
+                    <Descriptions.Item label="Ready">{verifyResult.ready_detail || "-"}</Descriptions.Item>
+                    <Descriptions.Item label="日志错误">{verifyResult.log_detail || `${verifyResult.log_errors}`}</Descriptions.Item>
+                    <Descriptions.Item label="新告警">{verifyResult.alert_detail || `${verifyResult.new_alerts}`}</Descriptions.Item>
+                    <Descriptions.Item label="检查时间">{verifyResult.checked_at}</Descriptions.Item>
+                  </Descriptions>
+                </Space>
+              ) : (
+                <Alert type="warning" showIcon message="验证接口调用失败，以下为前端告警抽样" style={{ marginBottom: 12 }} />
+              )}
+              {verifyAlerts.length === 0 ? (
+                <Alert type="success" showIcon message="未发现同期高优告警列表项" />
+              ) : (
+                <Table
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  dataSource={verifyAlerts}
+                  columns={[
+                    { title: "级别", dataIndex: "severity", width: 90 },
+                    { title: "标题", dataIndex: "title" },
+                    {
+                      title: "时间",
+                      dataIndex: "createdAt",
+                      width: 170,
+                      render: (v: string, row) => formatDateTime(v || (row as any).created_at),
+                    },
+                  ]}
+                />
+              )}
             </div>
           ),
         },

@@ -1,14 +1,39 @@
-package plugin
+package plugingate
 
 import (
 	"testing"
 
 	"yunshu/internal/config"
 	"yunshu/internal/menu"
+	"yunshu/internal/plugin"
 )
 
+type stubPlugin struct {
+	plugin.Base
+	name string
+	mf   plugin.Manifest
+}
+
+func (s *stubPlugin) Name() string             { return s.name }
+func (s *stubPlugin) Manifest() plugin.Manifest { return s.mf }
+
 func TestDesiredMenuStatusBidirectional(t *testing.T) {
-	t.Parallel()
+	plugin.Register(&stubPlugin{
+		name: "core",
+		mf:   plugin.Manifest{MenuPathPrefixes: []string{"/users"}},
+	})
+	plugin.Register(&stubPlugin{
+		name: "project",
+		mf:   plugin.Manifest{MenuPathPrefixes: []string{"/projects"}},
+	})
+	plugin.Register(&stubPlugin{
+		name: "inspect",
+		mf: plugin.Manifest{
+			MenuPathPrefixes: []string{"/project-inspect"},
+			DependsOn:        []string{"project"},
+		},
+	})
+
 	catalog := menu.PathStatusMap()
 
 	disabled := &config.PluginsConfig{Enabled: []string{"core", "project"}}

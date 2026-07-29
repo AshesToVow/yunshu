@@ -16,6 +16,8 @@ import (
 	"yunshu/internal/pkg/goinception"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
+	"yunshu/internal/service/changeevent"
+	"yunshu/internal/service/changegate"
 )
 
 type ExecuteRequest struct {
@@ -639,6 +641,7 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if ticket.Status != model.DbTicketStatusPendingExecution && ticket.Status != model.DbTicketStatusApproved {
 		return constants.ErrBadRequestWithMsg("工单状态不允许执行")
 	}
+	priorStatus := ticket.Status
 	claim := s.db.WithContext(ctx).Model(&model.DbSqlTicket{}).
 		Where("id = ? AND project_id = ? AND status IN ?", ticketID, projectID,
 			[]string{model.DbTicketStatusPendingExecution, model.DbTicketStatusApproved}).
@@ -661,6 +664,16 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	}
 	inst, err := s.repo.GetInstanceInProject(ctx, projectID, ticket.InstanceID)
 	if err != nil {
+		return err
+	}
+	if err := changegate.AssertWritable(ctx, changegate.CheckInput{
+		ProjectID: projectID,
+		Source:    model.ChangeSourceDbmgmt,
+		Env:       strings.ToLower(strings.TrimSpace(inst.Env)),
+		Action:    "sql_ticket_execute",
+	}); err != nil {
+		_ = s.db.WithContext(ctx).Model(&model.DbSqlTicket{}).Where("id = ?", ticketID).
+			Update("status", priorStatus)
 		return err
 	}
 
@@ -687,12 +700,30 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if execErr != nil {
 		ticket.Status = model.DbTicketStatusFailed
 		_ = s.repo.UpdateSqlTicket(ctx, ticket)
+		changeevent.Record(ctx, changeevent.Input{
+			ProjectID: projectID,
+			Source:    model.ChangeSourceDbmgmt,
+			Action:    "sql_ticket_execute",
+			RiskLevel: model.ChangeRiskHigh,
+			Status:    model.ChangeStatusFailed,
+			Summary:   fmt.Sprintf("SQL 工单 #%d 执行失败", ticket.ID),
+			Payload:   map[string]any{"ticket_id": ticket.ID, "instance_id": ticket.InstanceID},
+		})
 		return constants.ErrBadRequestWithMsg("SQL 执行失败: " + execErr.Error())
 	}
 	ticket.Status = model.DbTicketStatusSuccess
 	if err := s.repo.UpdateSqlTicket(ctx, ticket); err != nil {
 		return err
 	}
+	changeevent.Record(ctx, changeevent.Input{
+		ProjectID: projectID,
+		Source:    model.ChangeSourceDbmgmt,
+		Action:    "sql_ticket_execute",
+		RiskLevel: model.ChangeRiskHigh,
+		Status:    model.ChangeStatusSucceeded,
+		Summary:   fmt.Sprintf("SQL 工单 #%d 执行成功", ticket.ID),
+		Payload:   map[string]any{"ticket_id": ticket.ID, "instance_id": ticket.InstanceID},
+	})
 	s.auditTicketEvent(ctx, projectID, ticket.InstanceID, actor, "ticket_execute", ticket, nil)
 	return nil
 }

@@ -80,6 +80,7 @@ type RouteDeps struct {
 	overviewHandler         *handler.OverviewHandler
 
 	projectHandler     *handler.ProjectHandler
+	projectCatalogHandler *handler.ProjectCatalogHandler
 	cmdbHandler        *handler.CMDBHandler
 	mysqlBackupSvc     *service.MysqlBackupService
 	mysqlBackupHandler *handler.MysqlBackupHandler
@@ -252,8 +253,9 @@ func assembleRouteDeps(
 		serviceAccountHandler:   handlers.ServiceAccount,
 		overviewHandler:         handlers.Overview,
 
-		projectHandler:     handlers.Project,
-		cmdbHandler:        handlers.CMDB,
+		projectHandler:        handlers.Project,
+		projectCatalogHandler: handlers.ProjectCatalog,
+		cmdbHandler:           handlers.CMDB,
 		mysqlBackupSvc:     svcs.MysqlBackup,
 		mysqlBackupHandler: handlers.MysqlBackup,
 		dbmgmtSvc:          svcs.Dbmgmt,

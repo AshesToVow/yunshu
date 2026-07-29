@@ -85,6 +85,7 @@ var HandlerSet = wire.NewSet(
 	handler.NewServiceAccountHandler,
 	handler.NewOverviewHandler,
 	handler.NewProjectHandler,
+	handler.NewProjectCatalogHandler,
 	handler.NewCMDBHandler,
 	handler.NewMysqlBackupHandler,
 	handler.NewDbmgmtHandler,

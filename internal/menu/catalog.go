@@ -13,6 +13,7 @@ func DefaultCatalog() []Spec {
 				{Path: "/alert-monitor-platform", Name: "告警监控平台", Icon: "MonitorOutlined", Sort: 2, Component: "alert-monitor-platform-page", Status: 1},
 				{Path: "/alert-duty", Name: "值班总览", Icon: "ScheduleOutlined", Sort: 3, Component: "alert-duty-page", Status: 1},
 				{Path: "/alert-maintenance", Name: "维护窗口", Icon: "CalendarOutlined", Sort: 4, Component: "alert-maintenance-page", Status: 1},
+				{Path: "/alert-quality", Name: "告警质量", Icon: "FundOutlined", Sort: 5, Component: "alert-quality-page", Status: 1},
 			},
 		},
 		{
@@ -22,6 +23,11 @@ func DefaultCatalog() []Spec {
 				{Path: "/project-members", Name: "项目成员", Icon: "TeamOutlined", Sort: 2, Component: "project-members-page", Status: 1},
 				{Path: "/project-servers", Name: "服务器管理", Icon: "HddOutlined", Sort: 3, Component: "project-servers-page", Status: 1},
 				{Path: "/project-inspect", Name: "项目巡检", Icon: "AuditOutlined", Sort: 4, Component: "project-inspect-page", Status: 1},
+				{Path: "/service-catalog", Name: "服务目录", Icon: "ApartmentOutlined", Sort: 5, Component: "service-catalog-page", Status: 1},
+				{Path: "/service-portrait", Name: "服务画像", Icon: "ProfileOutlined", Sort: 6, Component: "service-portrait-page", Status: 1},
+				{Path: "/change-events", Name: "变更事件", Icon: "HistoryOutlined", Sort: 7, Component: "change-events-page", Status: 1},
+				{Path: "/change-center", Name: "变更中心", Icon: "CalendarOutlined", Sort: 8, Component: "change-center-page", Status: 1},
+				{Path: "/incident-workbench", Name: "故障工作台", Icon: "AlertOutlined", Sort: 9, Component: "incident-workbench-page", Status: 1},
 			},
 		},
 		{

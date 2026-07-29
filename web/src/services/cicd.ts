@@ -317,6 +317,24 @@ export async function getReleaseRunLog(projectId: number, runId: number) {
   );
 }
 
+export interface ReleaseVerifyResult {
+  release_id: number;
+  status: string;
+  ready_ok?: boolean | null;
+  ready_detail?: string;
+  log_errors: number;
+  log_detail?: string;
+  new_alerts: number;
+  alert_detail?: string;
+  checked_at: string;
+}
+
+export async function verifyReleaseRun(projectId: number, runId: number) {
+  return getData<ReleaseVerifyResult>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/verify`, {}) as Promise<ApiResponse<ReleaseVerifyResult>>,
+  );
+}
+
 export async function deleteReleaseRun(projectId: number, runId: number) {
   return getData<{ deleted: boolean }>(
     http.delete(`${projectPath(projectId, "/release-runs")}/${runId}`) as Promise<ApiResponse<{ deleted: boolean }>>,

@@ -298,7 +298,7 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepIcon:           "BellOutlined",
 		keepSort:           2,
 		preferNameContains: "告警",
-		knownChildPaths:    []string{"/alert-channels", "/alert-monitor-platform", "/alert-duty", "/alert-maintenance"},
+		knownChildPaths:    []string{"/alert-channels", "/alert-monitor-platform", "/alert-duty", "/alert-maintenance", "/alert-quality"},
 	},
 	{
 		paths:              []string{"/project-management", "/project-management/"},
@@ -306,7 +306,7 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepIcon:           "ProjectOutlined",
 		keepSort:           3,
 		preferNameContains: "项目",
-		knownChildPaths:    []string{"/projects", "/project-members", "/project-servers"},
+		knownChildPaths:    []string{"/projects", "/project-members", "/project-servers", "/project-inspect", "/service-catalog", "/service-portrait", "/change-events", "/change-center", "/incident-workbench"},
 	},
 	{
 		paths:              []string{"/log-platform", "/log-platform/"},

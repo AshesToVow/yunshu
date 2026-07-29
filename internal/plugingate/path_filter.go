@@ -5,6 +5,7 @@ import (
 
 	"yunshu/internal/config"
 	"yunshu/internal/model"
+	"yunshu/internal/plugin"
 )
 
 // ResolveMenuPathPlugin 解析控制台菜单 path 所属插件；未命中返回空（不受插件开关约束）。
@@ -13,10 +14,11 @@ func ResolveMenuPathPlugin(path string) string {
 	if p == "" || p == "/" {
 		return "k8s"
 	}
-	for _, rule := range uiPathRules {
-		for _, prefix := range rule.prefixes {
+	for _, m := range plugin.All() {
+		mf := plugin.ResolveManifest(m)
+		for _, prefix := range mf.MenuPathPrefixes {
 			if pathMatchesPrefix(p, prefix) {
-				return rule.plugin
+				return m.Name()
 			}
 		}
 	}
@@ -29,22 +31,27 @@ func ResolveAPIResourcePlugin(resource string) string {
 	if r == "" {
 		return ""
 	}
-	if plugin := resolveCicdAPIResource(r); plugin != "" {
-		return plugin
+	if pluginName := resolveCicdAPIResource(r); pluginName != "" {
+		return pluginName
 	}
-	if plugin := resolveDbmgmtAPIResource(r); plugin != "" {
-		return plugin
+	if pluginName := resolveDbmgmtAPIResource(r); pluginName != "" {
+		return pluginName
 	}
-	if plugin := resolveBackupAPIResource(r); plugin != "" {
-		return plugin
+	if pluginName := resolveBackupAPIResource(r); pluginName != "" {
+		return pluginName
 	}
-	if plugin := resolveInspectAPIResource(r); plugin != "" {
-		return plugin
+	if pluginName := resolveInspectAPIResource(r); pluginName != "" {
+		return pluginName
 	}
-	for _, rule := range apiResourceRules {
-		for _, prefix := range rule.prefixes {
-			if strings.HasPrefix(r, prefix) {
-				return rule.plugin
+	for _, m := range plugin.All() {
+		mf := plugin.ResolveManifest(m)
+		for _, prefix := range mf.APIPrefixes {
+			prefix = strings.TrimSpace(strings.ToLower(prefix))
+			if prefix == "" {
+				continue
+			}
+			if r == prefix || strings.HasPrefix(r, prefix+"/") || strings.HasPrefix(r, prefix) {
+				return m.Name()
 			}
 		}
 	}
@@ -57,22 +64,7 @@ func IsMenuPathAllowed(path string, cfg *config.PluginsConfig) bool {
 	if pluginName == "" {
 		return true
 	}
-	if pluginName == "cmdb" {
-		return isPluginEnabled(cfg, "cmdb") && isPluginEnabled(cfg, "project")
-	}
-	if pluginName == "cicd" {
-		return isPluginEnabled(cfg, "cicd") && isPluginEnabled(cfg, "project")
-	}
-	if pluginName == "dbmgmt" {
-		return isPluginEnabled(cfg, "dbmgmt") && isPluginEnabled(cfg, "project")
-	}
-	if pluginName == "backup" {
-		return isPluginEnabled(cfg, "backup") && isPluginEnabled(cfg, "project")
-	}
-	if pluginName == "inspect" {
-		return isPluginEnabled(cfg, "inspect") && isPluginEnabled(cfg, "project")
-	}
-	return isPluginEnabled(cfg, pluginName)
+	return isPluginAndDepsEnabled(cfg, pluginName)
 }
 
 // IsAPIResourceAllowed permission resource 是否对当前启用的插件可见。
@@ -81,26 +73,10 @@ func IsAPIResourceAllowed(resource string, cfg *config.PluginsConfig) bool {
 	if pluginName == "" {
 		return true
 	}
-	if pluginName == "cmdb" {
-		return isPluginEnabled(cfg, "cmdb") && isPluginEnabled(cfg, "project")
-	}
-	if pluginName == "cicd" {
-		return isPluginEnabled(cfg, "cicd") && isPluginEnabled(cfg, "project")
-	}
-	if pluginName == "dbmgmt" {
-		return isPluginEnabled(cfg, "dbmgmt") && isPluginEnabled(cfg, "project")
-	}
-	if pluginName == "backup" {
-		return isPluginEnabled(cfg, "backup") && isPluginEnabled(cfg, "project")
-	}
-	if pluginName == "inspect" {
-		return isPluginEnabled(cfg, "inspect") && isPluginEnabled(cfg, "project")
-	}
-	return isPluginEnabled(cfg, pluginName)
+	return isPluginAndDepsEnabled(cfg, pluginName)
 }
 
 // FilterMenusByPlugins 递归过滤菜单树（禁用插件的菜单及其空目录父节点会被移除）。
-// 父目录所属插件关闭时，仍提升已放行的子菜单（例如 /dbmgmt 下的 /mysql-backup）。
 func FilterMenusByPlugins(items []model.Menu, cfg *config.PluginsConfig) []model.Menu {
 	if cfg == nil {
 		return items
@@ -130,78 +106,23 @@ func FilterMenusByPlugins(items []model.Menu, cfg *config.PluginsConfig) []model
 	return walk(items)
 }
 
-type pathRule struct {
-	plugin   string
-	prefixes []string
-}
-
-var uiPathRules = []pathRule{
-	{
-		plugin: "core",
-		prefixes: []string{
-			"/users", "/departments", "/roles", "/permissions", "/policies", "/registrations",
-			"/menus", "/login-logs", "/operation-logs", "/banned-ips", "/dict-entries",
-			"/personal-settings", "/user-groups", "/plugins",
-		},
-	},
-	{
-		plugin: "k8s",
-		prefixes: []string{
-			"/clusters", "/cluster", "/pods", "/namespaces", "/nodes", "/component-status",
-			"/cluster-api-resources", "/horizontal-pod-autoscalers", "/k8s-resource-topology",
-			"/deployments", "/statefulsets", "/daemonsets", "/cronjobs", "/jobs",
-			"/helm/releases", "/helm/charts",
-			"/configmaps", "/secrets", "/ingresses", "/ingress-classes", "/events",
-			"/k8s-services", "/persistentvolumes", "/persistentvolumeclaims", "/storageclasses",
-			"/crds", "/crs", "/rbac", "/serviceaccounts", "/k8s-scoped-policies",
-			"/network-policies", "/k8s/",
-		},
-	},
-	{plugin: "alert", prefixes: []string{"/alert-"}},
-	{
-		plugin: "project",
-		prefixes: []string{
-			"/projects", "/project-members", "/project-services",
-			"/project-logs", "/project-log-sources", "/log-retention", "/loggie-status",
-		},
-	},
-	{plugin: "cmdb", prefixes: []string{"/project-servers", "/server-console"}},
-	{plugin: "backup", prefixes: []string{"/mysql-backup"}},
-	{plugin: "dbmgmt", prefixes: []string{"/dbmgmt"}},
-	{plugin: "cicd", prefixes: []string{"/cicd"}},
-	{plugin: "inspect", prefixes: []string{"/project-inspect"}},
-}
-
-var apiResourceRules = []pathRule{
-	{
-		plugin: "core",
-		prefixes: []string{
-			"/api/v1/users", "/api/v1/departments", "/api/v1/roles", "/api/v1/permissions",
-			"/api/v1/policies", "/api/v1/registrations", "/api/v1/menus", "/api/v1/login-logs",
-			"/api/v1/operation-logs", "/api/v1/security", "/api/v1/dict/entries",
-			"/api/v1/user-groups", "/api/v1/plugins", "/api/v1/auth/logout", "/api/v1/auth/me",
-			"/api/v1/auth/password", "/api/v1/auth/ws-ticket", "/api/v1/overview",
-		},
-	},
-	{
-		plugin: "k8s",
-		prefixes: []string{
-			"/api/v1/clusters", "/api/v1/pods", "/api/v1/namespaces", "/api/v1/nodes",
-			"/api/v1/deployments", "/api/v1/statefulsets", "/api/v1/daemonsets", "/api/v1/cronjobs",
-			"/api/v1/jobs", "/api/v1/configmaps", "/api/v1/secrets", "/api/v1/services",
-			"/api/v1/ingresses", "/api/v1/ingress-classes", "/api/v1/events", "/api/v1/persistentvolumes",
-			"/api/v1/persistentvolumeclaims", "/api/v1/storageclasses", "/api/v1/crds", "/api/v1/crs",
-			"/api/v1/rbac", "/api/v1/serviceaccounts", "/api/v1/k8s-policies",
-			"/api/v1/k8s-namespace-deny-rules", "/api/v1/k8s-namespace-allow-rules",
-			"/api/v1/network-policies", "/api/v1/k8s/", "/api/v1/horizontal-pod-autoscalers",
-			"/api/v1/helm/",
-			"/api/v1/component-status", "/api/v1/k8s-event-forward",
-		},
-	},
-	{plugin: "alert", prefixes: []string{"/api/v1/alerts"}},
-	{plugin: "project", prefixes: []string{"/api/v1/projects"}},
-	{plugin: "cmdb", prefixes: []string{"/api/v1/servers", "/api/v1/cloud-accounts", "/api/v1/server-groups"}},
-	{plugin: "backup", prefixes: []string{"/api/v1/mysql-backup"}},
+func isPluginAndDepsEnabled(cfg *config.PluginsConfig, name string) bool {
+	if !isPluginEnabled(cfg, name) {
+		return false
+	}
+	for _, m := range plugin.All() {
+		if !strings.EqualFold(m.Name(), name) {
+			continue
+		}
+		mf := plugin.ResolveManifest(m)
+		for _, dep := range mf.DependsOn {
+			if !isPluginEnabled(cfg, dep) {
+				return false
+			}
+		}
+		return true
+	}
+	return true
 }
 
 func resolveCicdAPIResource(resource string) string {
@@ -268,22 +189,6 @@ func pathMatchesPrefix(path, prefix string) bool {
 }
 
 func isPluginEnabled(cfg *config.PluginsConfig, name string) bool {
-	enabled := resolveEnabled(cfg)
+	enabled := plugin.ResolveEnabled(cfg)
 	return enabled[strings.ToLower(strings.TrimSpace(name))]
-}
-
-func resolveEnabled(cfg *config.PluginsConfig) map[string]bool {
-	names := []string{"core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect"}
-	if cfg != nil && len(cfg.Enabled) > 0 {
-		names = cfg.Enabled
-	}
-	m := make(map[string]bool, len(names))
-	for _, n := range names {
-		n = strings.TrimSpace(strings.ToLower(n))
-		if n == "" {
-			continue
-		}
-		m[n] = true
-	}
-	return m
 }

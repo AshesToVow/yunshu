@@ -71,6 +71,9 @@ func (r *AlertEventRepository) listQuery(ctx context.Context, f AlertEventListFi
 	if v := strings.ToLower(strings.TrimSpace(f.Status)); v != "" {
 		tx = tx.Where("status = ?", v)
 	}
+	if sevs := parseSeverityFilter(f.Severity); len(sevs) > 0 {
+		tx = tx.Where("LOWER(severity) IN ?", sevs)
+	}
 	if v := strings.TrimSpace(f.MonitorPipeline); v != "" {
 		tx = tx.Where("monitor_pipeline = ?", v)
 	}
@@ -94,6 +97,36 @@ func (r *AlertEventRepository) listQuery(ctx context.Context, f AlertEventListFi
 		tx = applyAlertEventCategoryFilter(tx, v)
 	}
 	return tx
+}
+
+func parseSeverityFilter(raw string) []string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		switch p {
+		case "p1":
+			p = "critical"
+		case "p2":
+			p = "warning"
+		case "p3":
+			p = "info"
+		}
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
 }
 
 func (r *AlertEventRepository) ListGroupedByGroupKey(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]AlertEventGroupRow, int64, error) {

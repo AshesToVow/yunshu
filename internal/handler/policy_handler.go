@@ -7,7 +7,7 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/plugin"
+	"yunshu/internal/plugingate"
 	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -46,7 +46,7 @@ func (h *PolicyHandler) List(c *gin.Context) {
 	}
 	out := make([]service.PolicyItemResponse, 0, len(data))
 	for _, item := range data {
-		if plugin.IsAPIResourceAllowed(item.Resource, h.plugins) {
+		if plugingate.IsAPIResourceAllowed(item.Resource, h.plugins) {
 			out = append(out, item)
 		}
 	}
@@ -181,7 +181,7 @@ func (h *PolicyHandler) validatePermissionPlugin(ctx context.Context, permission
 	if err != nil {
 		return err
 	}
-	if !plugin.IsAPIResourceAllowed(item.Resource, h.plugins) {
+	if !plugingate.IsAPIResourceAllowed(item.Resource, h.plugins) {
 		return constants.ErrBadRequestWithMsg("该权限所属插件未启用，无法授权")
 	}
 	return nil

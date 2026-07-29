@@ -48,6 +48,8 @@ type routeRepositories struct {
 	CloudExpiryRule     interfaces.CloudExpiryRuleRepository
 	Overview            interfaces.OverviewRepository
 	K8sEventForward     interfaces.K8sEventForwardRepository
+	ServiceCatalog      interfaces.ServiceCatalogRepository
+	ChangeEvent         interfaces.ChangeEventRepository
 }
 
 func newRouteRepositories(db *gorm.DB) *routeRepositories {
@@ -92,5 +94,7 @@ func newRouteRepositories(db *gorm.DB) *routeRepositories {
 		CloudExpiryRule:     repository.NewCloudExpiryRuleRepository(db),
 		Overview:            repository.NewOverviewRepository(db),
 		K8sEventForward:     repository.NewK8sEventForwardRepository(db),
+		ServiceCatalog:      repository.NewServiceCatalogRepository(db),
+		ChangeEvent:         repository.NewChangeEventRepository(db),
 	}
 }

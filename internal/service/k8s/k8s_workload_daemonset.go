@@ -109,7 +109,7 @@ func (s *K8sWorkloadService) DaemonSetDetail(ctx context.Context, q NamespacedDe
 
 // DaemonSetRestart 执行对应的业务逻辑。
 func (s *K8sWorkloadService) DaemonSetRestart(ctx context.Context, q NamespacedDetailQuery) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
 	if err != nil {
 		return err
 	}
@@ -124,6 +124,9 @@ func (s *K8sWorkloadService) DaemonSetRestart(ctx context.Context, q NamespacedD
 		}
 		return k8sFail(ctx, "k8s.workload", "api", err)
 	}
+	recordK8sChange(ctx, cluster, "restart", "DaemonSet", q.Namespace, q.Name, map[string]any{
+		"impact": "rolling_restart",
+	})
 	return nil
 }
 

@@ -18,6 +18,23 @@ type module struct {
 func (m *module) Name() string        { return "core" }
 func (m *module) Description() string { return "平台内核：认证、RBAC、菜单、字典、审计" }
 
+func (m *module) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		MenuPathPrefixes: []string{
+			"/users", "/departments", "/roles", "/permissions", "/policies", "/registrations",
+			"/menus", "/login-logs", "/operation-logs", "/banned-ips", "/dict-entries",
+			"/personal-settings", "/user-groups", "/plugins",
+		},
+		APIPrefixes: []string{
+			"/api/v1/users", "/api/v1/departments", "/api/v1/roles", "/api/v1/permissions",
+			"/api/v1/policies", "/api/v1/registrations", "/api/v1/menus", "/api/v1/login-logs",
+			"/api/v1/operation-logs", "/api/v1/security", "/api/v1/dict/entries", "/api/v1/dict-entries",
+			"/api/v1/user-groups", "/api/v1/plugins", "/api/v1/auth/logout", "/api/v1/auth/me",
+			"/api/v1/auth/password", "/api/v1/auth/ws-ticket", "/api/v1/overview",
+		},
+	}
+}
+
 func (m *module) Models() []any {
 	return []any{
 		&model.Department{},

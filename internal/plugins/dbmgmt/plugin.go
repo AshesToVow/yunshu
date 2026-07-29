@@ -5,6 +5,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/plugin"
+	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 )
 
 func init() {
@@ -17,6 +18,14 @@ type module struct {
 
 func (m *module) Name() string        { return "dbmgmt" }
 func (m *module) Description() string { return "多类型数据库接入、SQL 控制台与审批工单" }
+
+func (m *module) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		MenuPathPrefixes: []string{"/dbmgmt"},
+		APIPrefixes:      []string{},
+		DependsOn:        []string{"project"},
+	}
+}
 
 func (m *module) Models() []any {
 	return []any{
@@ -39,7 +48,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc := rt.DbmgmtSvc(); svc != nil {
+	if svc, ok := rt.Dbmgmt.(*dbmgmtsvc.Service); ok && svc != nil {
 		go svc.RunBackgroundWorkers(bgCtx)
 	}
 	return nil

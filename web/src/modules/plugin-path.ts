@@ -1,102 +1,67 @@
-/** 与后端 plugins.enabled 默认全集一致 */
+/** 离线兜底：与后端 plugin.DefaultEnabled 一致；正常应以后端 /plugins 返回为准 */
 export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect"] as const;
 
-export type PluginName = (typeof DEFAULT_ENABLED_PLUGINS)[number];
+export type PluginName = string;
 
-/** 菜单 path → 所属插件；未命中则不受插件开关约束 */
-const PATH_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
+export type PluginManifest = {
+  menu_path_prefixes?: string[];
+  api_prefixes?: string[];
+  depends_on?: string[];
+  workers?: string[];
+};
+
+export type PluginInfoWithManifest = {
+  name: string;
+  description?: string;
+  enabled?: boolean;
+  manifest?: PluginManifest;
+};
+
+let runtimeManifests: PluginInfoWithManifest[] = [];
+
+/** 由 PluginProvider 注入后端契约；未注入时回退本地默认规则 */
+export function setPluginManifests(plugins: PluginInfoWithManifest[]) {
+  runtimeManifests = Array.isArray(plugins) ? plugins : [];
+}
+
+export function getPluginManifests(): PluginInfoWithManifest[] {
+  return runtimeManifests;
+}
+
+const FALLBACK_PATH_RULES: { plugin: string; prefixes: string[] }[] = [
   {
     plugin: "core",
     prefixes: [
-      "/users",
-      "/departments",
-      "/roles",
-      "/permissions",
-      "/policies",
-      "/registrations",
-      "/menus",
-      "/login-logs",
-      "/operation-logs",
-      "/banned-ips",
-      "/dict-entries",
-      "/personal-settings",
-      "/user-groups",
-      "/plugins",
+      "/users", "/departments", "/roles", "/permissions", "/policies", "/registrations",
+      "/menus", "/login-logs", "/operation-logs", "/banned-ips", "/dict-entries",
+      "/personal-settings", "/user-groups", "/plugins",
     ],
   },
   {
     plugin: "k8s",
     prefixes: [
-      "/clusters",
-      "/cluster",
-      "/pods",
-      "/namespaces",
-      "/nodes",
-      "/component-status",
-      "/cluster-api-resources",
-      "/horizontal-pod-autoscalers",
-      "/helm/releases",
-      "/helm/charts",
-      "/k8s-resource-topology",
-      "/deployments",
-      "/statefulsets",
-      "/daemonsets",
-      "/cronjobs",
-      "/jobs",
-      "/configmaps",
-      "/secrets",
-      "/ingresses",
-      "/ingress-classes",
-      "/events",
-      "/k8s-services",
-      "/persistentvolumes",
-      "/persistentvolumeclaims",
-      "/storageclasses",
-      "/crds",
-      "/crs",
-      "/rbac",
-      "/serviceaccounts",
-      "/k8s-scoped-policies",
-      "/network-policies",
-      "/k8s/",
+      "/clusters", "/cluster", "/pods", "/namespaces", "/nodes", "/component-status",
+      "/cluster-api-resources", "/horizontal-pod-autoscalers", "/helm/releases", "/helm/charts",
+      "/k8s-resource-topology", "/deployments", "/statefulsets", "/daemonsets", "/cronjobs", "/jobs",
+      "/configmaps", "/secrets", "/ingresses", "/ingress-classes", "/events", "/k8s-services",
+      "/persistentvolumes", "/persistentvolumeclaims", "/storageclasses", "/crds", "/crs", "/rbac",
+      "/serviceaccounts", "/k8s-scoped-policies", "/network-policies", "/k8s/",
     ],
   },
-  {
-    plugin: "alert",
-    prefixes: ["/alert-"],
-  },
+  { plugin: "alert", prefixes: ["/alert-"] },
   {
     plugin: "project",
     prefixes: [
-      "/projects",
-      "/project-members",
-      "/project-services",
-      "/project-logs",
-      "/log-retention",
-      "/loggie-status",
-      "/project-log-sources",
+      "/projects", "/project-members", "/project-services", "/service-catalog", "/service-portrait",
+      "/project-logs", "/log-retention", "/loggie-status", "/project-log-sources",
+      "/change-events", "/change-center", "/incident-workbench",
     ],
   },
-  {
-    plugin: "cmdb",
-    prefixes: ["/project-servers", "/server-console"],
-  },
-  {
-    plugin: "backup",
-    prefixes: ["/mysql-backup"],
-  },
-  {
-    plugin: "dbmgmt",
-    prefixes: ["/dbmgmt"],
-  },
-  {
-    plugin: "cicd",
-    prefixes: ["/cicd"],
-  },
-  {
-    plugin: "inspect",
-    prefixes: ["/project-inspect"],
-  },
+  { plugin: "cmdb", prefixes: ["/project-servers", "/server-console"] },
+  { plugin: "backup", prefixes: ["/mysql-backup"] },
+  { plugin: "dbmgmt", prefixes: ["/dbmgmt"] },
+  { plugin: "cicd", prefixes: ["/cicd"] },
+  { plugin: "inspect", prefixes: ["/project-inspect"] },
 ];
 
 function normalizePath(path: string): string {
@@ -106,11 +71,34 @@ function normalizePath(path: string): string {
   return withSlash.replace(/\/+$/, "") || "/";
 }
 
+function pathRules(): { plugin: string; prefixes: string[] }[] {
+  if (runtimeManifests.length === 0) return FALLBACK_PATH_RULES;
+  return runtimeManifests
+    .filter((p) => (p.manifest?.menu_path_prefixes?.length ?? 0) > 0)
+    .map((p) => ({ plugin: p.name, prefixes: p.manifest!.menu_path_prefixes! }));
+}
+
+function dependsOf(pluginName: string): string[] {
+  const hit = runtimeManifests.find((p) => p.name.toLowerCase() === pluginName.toLowerCase());
+  return hit?.manifest?.depends_on ?? defaultDepends(pluginName);
+}
+
+function defaultDepends(pluginName: string): string[] {
+  const n = pluginName.toLowerCase();
+  if (["cmdb", "cicd", "dbmgmt", "backup", "inspect"].includes(n)) return ["project"];
+  return [];
+}
+
+function pluginAndDepsEnabled(pluginName: string, isPluginEnabled: (name: string) => boolean): boolean {
+  if (!isPluginEnabled(pluginName)) return false;
+  return dependsOf(pluginName).every((d) => isPluginEnabled(d));
+}
+
 /** 解析路径归属的业务插件；首页总览依赖 k8s 插件 */
 export function resolvePathPlugin(path: string): PluginName | null {
   const normalized = normalizePath(path);
   if (normalized === "/") return "k8s";
-  for (const rule of PATH_PLUGIN_RULES) {
+  for (const rule of pathRules()) {
     if (rule.prefixes.some((p) => {
       const prefix = normalizePath(p);
       return normalized === prefix || normalized.startsWith(`${prefix}/`);
@@ -122,124 +110,73 @@ export function resolvePathPlugin(path: string): PluginName | null {
 }
 
 export function isPathAllowedByPlugins(path: string, isPluginEnabled: (name: string) => boolean): boolean {
-  const normalized = normalizePath(path);
-  const cmdbPaths = ["/project-servers", "/server-console"];
-  if (cmdbPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
-    return isCmdbPageAllowed(isPluginEnabled);
-  }
-  const backupPaths = ["/mysql-backup"];
-  if (backupPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
-    return isBackupAllowed(isPluginEnabled);
-  }
-  const dbmgmtPaths = ["/dbmgmt"];
-  if (dbmgmtPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
-    return isDbmgmtAllowed(isPluginEnabled);
-  }
-  const cicdPaths = ["/cicd"];
-  if (cicdPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
-    return isCicdAllowed(isPluginEnabled);
-  }
-  const inspectPaths = ["/project-inspect"];
-  if (inspectPaths.some((p) => normalized === p || normalized.startsWith(`${p}/`))) {
-    return isInspectAllowed(isPluginEnabled);
-  }
   const plugin = resolvePathPlugin(path);
   if (!plugin) return true;
-  return isPluginEnabled(plugin);
+  return pluginAndDepsEnabled(plugin, isPluginEnabled);
 }
 
-/** CMDB 页面通常依赖 project 上下文；两者应同时启用 */
 export function isCmdbPageAllowed(isPluginEnabled: (name: string) => boolean): boolean {
-  return isPluginEnabled("cmdb") && isPluginEnabled("project");
+  return pluginAndDepsEnabled("cmdb", isPluginEnabled);
 }
 
-const API_RESOURCE_PLUGIN_RULES: { plugin: PluginName; prefixes: string[] }[] = [
-  {
-    plugin: "core",
-    prefixes: [
-      "/api/v1/users",
-      "/api/v1/departments",
-      "/api/v1/roles",
-      "/api/v1/permissions",
-      "/api/v1/policies",
-      "/api/v1/registrations",
-      "/api/v1/menus",
-      "/api/v1/login-logs",
-      "/api/v1/operation-logs",
-      "/api/v1/security",
-      "/api/v1/dict-entries",
-      "/api/v1/user-groups",
-      "/api/v1/plugins",
-      "/api/v1/overview",
-    ],
-  },
-  {
-    plugin: "k8s",
-    prefixes: [
-      "/api/v1/clusters",
-      "/api/v1/pods",
-      "/api/v1/namespaces",
-      "/api/v1/nodes",
-      "/api/v1/k8s-policies",
-      "/api/v1/k8s-namespace-deny-rules",
-      "/api/v1/k8s-namespace-allow-rules",
-      "/api/v1/k8s/",
-    ],
-  },
-  { plugin: "alert", prefixes: ["/api/v1/alerts"] },
-  { plugin: "project", prefixes: ["/api/v1/projects"] },
-  { plugin: "cmdb", prefixes: ["/api/v1/servers", "/api/v1/cloud-accounts", "/api/v1/server-groups"] },
-  { plugin: "backup", prefixes: ["/api/v1/mysql-backup"] },
-];
+export function isCicdAllowed(isPluginEnabled: (name: string) => boolean): boolean {
+  return pluginAndDepsEnabled("cicd", isPluginEnabled);
+}
+
+export function isDbmgmtAllowed(isPluginEnabled: (name: string) => boolean): boolean {
+  return pluginAndDepsEnabled("dbmgmt", isPluginEnabled);
+}
+
+export function isBackupAllowed(isPluginEnabled: (name: string) => boolean): boolean {
+  return pluginAndDepsEnabled("backup", isPluginEnabled);
+}
+
+export function isInspectAllowed(isPluginEnabled: (name: string) => boolean): boolean {
+  return pluginAndDepsEnabled("inspect", isPluginEnabled);
+}
 
 export function resolveAPIResourcePlugin(resource: string): PluginName | null {
   const r = resource.trim().toLowerCase();
   if (!r) return null;
   const cicdOverview = ["/api/v1/overview/project-launches", "/api/v1/overview/release-by-person"];
-  if (cicdOverview.some((p) => r === p || r.startsWith(`${p}/`))) {
-    return "cicd";
-  }
-  if (r.includes("/projects/") && r.includes("/dbmgmt")) {
-    return "dbmgmt";
-  }
-  if (r.includes("/projects/") && r.includes("/mysql-backup")) {
-    return "backup";
-  }
-  if (r.includes("/projects/") && r.includes("/cicd")) {
-    return "cicd";
-  }
-  if (r.includes("/projects/") && r.includes("/inspect")) {
-    return "inspect";
-  }
-  for (const rule of API_RESOURCE_PLUGIN_RULES) {
-    if (rule.prefixes.some((p) => {
-      const prefix = p.trim().toLowerCase();
-      return r === prefix || r.startsWith(`${prefix}/`);
-    })) {
-      return rule.plugin;
+  if (cicdOverview.some((p) => r === p || r.startsWith(`${p}/`))) return "cicd";
+  if (r.includes("/projects/") && r.includes("/dbmgmt")) return "dbmgmt";
+  if (r.includes("/projects/") && r.includes("/mysql-backup")) return "backup";
+  if (r.includes("/projects/") && r.includes("/cicd")) return "cicd";
+  if (r.includes("/projects/") && r.includes("/inspect")) return "inspect";
+
+  if (runtimeManifests.length > 0) {
+    for (const p of runtimeManifests) {
+      const prefixes = p.manifest?.api_prefixes ?? [];
+      for (const prefix of prefixes) {
+        const pref = prefix.trim().toLowerCase();
+        if (!pref) continue;
+        if (r === pref || r.startsWith(`${pref}/`) || r.startsWith(pref)) return p.name;
+      }
     }
+    return null;
+  }
+
+  const fallback: { plugin: string; prefixes: string[] }[] = [
+    {
+      plugin: "core",
+      prefixes: [
+        "/api/v1/users", "/api/v1/departments", "/api/v1/roles", "/api/v1/permissions",
+        "/api/v1/policies", "/api/v1/registrations", "/api/v1/menus", "/api/v1/login-logs",
+        "/api/v1/operation-logs", "/api/v1/security", "/api/v1/dict-entries", "/api/v1/user-groups",
+        "/api/v1/plugins", "/api/v1/overview",
+      ],
+    },
+    { plugin: "k8s", prefixes: ["/api/v1/clusters", "/api/v1/pods", "/api/v1/namespaces", "/api/v1/nodes", "/api/v1/k8s-policies", "/api/v1/k8s/", "/api/v1/helm/"] },
+    { plugin: "alert", prefixes: ["/api/v1/alerts"] },
+    { plugin: "project", prefixes: ["/api/v1/projects"] },
+    { plugin: "cmdb", prefixes: ["/api/v1/servers", "/api/v1/cloud-accounts", "/api/v1/server-groups"] },
+    { plugin: "backup", prefixes: ["/api/v1/mysql-backup"] },
+  ];
+  for (const rule of fallback) {
+    if (rule.prefixes.some((p) => r === p || r.startsWith(`${p}/`))) return rule.plugin;
   }
   return null;
-}
-
-/** CI/CD 依赖 project 上下文；两者应同时启用 */
-export function isCicdAllowed(isPluginEnabled: (name: string) => boolean): boolean {
-  return isPluginEnabled("cicd") && isPluginEnabled("project");
-}
-
-/** 数据库管理依赖 project 上下文 */
-export function isDbmgmtAllowed(isPluginEnabled: (name: string) => boolean): boolean {
-  return isPluginEnabled("dbmgmt") && isPluginEnabled("project");
-}
-
-/** MySQL 备份依赖 project 上下文 */
-export function isBackupAllowed(isPluginEnabled: (name: string) => boolean): boolean {
-  return isPluginEnabled("backup") && isPluginEnabled("project");
-}
-
-/** 项目巡检依赖 project 上下文 */
-export function isInspectAllowed(isPluginEnabled: (name: string) => boolean): boolean {
-  return isPluginEnabled("inspect") && isPluginEnabled("project");
 }
 
 export function isAPIResourceAllowedByPlugins(
@@ -248,12 +185,7 @@ export function isAPIResourceAllowedByPlugins(
 ): boolean {
   const plugin = resolveAPIResourcePlugin(resource);
   if (!plugin) return true;
-  if (plugin === "cmdb") return isCmdbPageAllowed(isPluginEnabled);
-  if (plugin === "cicd") return isCicdAllowed(isPluginEnabled);
-  if (plugin === "dbmgmt") return isDbmgmtAllowed(isPluginEnabled);
-  if (plugin === "backup") return isBackupAllowed(isPluginEnabled);
-  if (plugin === "inspect") return isInspectAllowed(isPluginEnabled);
-  return isPluginEnabled(plugin);
+  return pluginAndDepsEnabled(plugin, isPluginEnabled);
 }
 
 export function filterPermissionsByPlugins<T extends { resource: string }>(

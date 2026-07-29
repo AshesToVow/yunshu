@@ -101,7 +101,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v58 := k8s.NewK8sPodService(v56, v22, v23)
 	v59 := k8s.NewK8sNamespaceService(v56, v22, v23)
 	v60 := k8s.NewK8sNodeService(v56)
-	v61 := k8s.NewK8sWorkloadService(v56)
+	v61 := k8s.NewK8sWorkloadService(v56, db)
 	v62 := k8s.NewK8sConfigService(v56)
 	v63 := k8s.NewK8sStorageService(v56)
 	v64 := k8s.NewK8sServiceResourceService(v56)
@@ -124,38 +124,42 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v80 := routerRouteRepositories.Service
 	v81 := routerRouteRepositories.LogSource
 	v82 := project.NewProjectMgmtService(v29, v78, v79, v80, v81, v9, v5, v8)
-	v83, err := provideCMDBService(v78, v79, v48, securityEncryptionKey)
+	v83 := routerRouteRepositories.ServiceCatalog
+	v84 := project.NewServiceCatalogService(v83, v29, db)
+	v85 := routerRouteRepositories.ChangeEvent
+	v86 := project.NewChangeEventService(v85, v29, db)
+	v87, err := provideCMDBService(v78, v79, v48, securityEncryptionKey)
 	if err != nil {
 		return nil, err
 	}
 	service := provideCicdService(db, v78, v29, v24, v5, cicdConfig, sender, appDisplayName, v59)
-	v84 := routerRouteRepositories.MysqlBackup
-	v85, err := provideMysqlBackupService(v84, v78, v29, v5, db, securityEncryptionKey, sender, appDisplayName)
+	v88 := routerRouteRepositories.MysqlBackup
+	v89, err := provideMysqlBackupService(v88, v78, v29, v5, db, securityEncryptionKey, sender, appDisplayName)
 	if err != nil {
 		return nil, err
 	}
-	v86 := routerRouteRepositories.Dbmgmt
+	v90 := routerRouteRepositories.Dbmgmt
 	dbmgmtConfig := provideDbmgmtConfig(app)
-	dbmgmtService, err := provideDbmgmtService(v86, v78, v29, v24, v5, db, securityEncryptionKey, sender, appDisplayName, dbmgmtConfig)
+	dbmgmtService, err := provideDbmgmtService(v90, v78, v29, v24, v5, db, securityEncryptionKey, sender, appDisplayName, dbmgmtConfig)
 	if err != nil {
 		return nil, err
 	}
-	v87 := provideElasticsearchProvider(app)
-	v88 := provideLogSearchService(v87, v78)
-	v89 := routerRouteRepositories.LogRetention
-	v90 := provideLogRetentionService(v87, v89)
-	v91 := provideKafkaProvider(app)
-	v92 := provideKafkaToESService(v91, v87)
-	v93 := routerRouteRepositories.LoggieAgent
+	v91 := provideElasticsearchProvider(app)
+	v92 := provideLogSearchService(v91, v78)
+	v93 := routerRouteRepositories.LogRetention
+	v94 := provideLogRetentionService(v91, v93)
+	v95 := provideKafkaProvider(app)
+	v96 := provideKafkaToESService(v95, v91)
+	v97 := routerRouteRepositories.LoggieAgent
 	loggieConfig := provideLoggieConfig(app)
-	v94, err := provideLoggieAgentService(v93, v78, v81, v29, v80, v87, v91, securityEncryptionKey, loggieConfig)
+	v98, err := provideLoggieAgentService(v97, v78, v81, v29, v80, v91, v95, securityEncryptionKey, loggieConfig)
 	if err != nil {
 		return nil, err
 	}
-	v95 := alert.NewAlertReceiverGroupService(v40, v41)
-	v96 := routerRouteRepositories.K8sEventForward
-	v97 := eventforward.NewK8sEventForwardAdminService(v96)
-	v98 := k8s.NewK8sSearchService(v56, v25, v9, v20, v22, v23)
+	v99 := alert.NewAlertReceiverGroupService(v40, v41)
+	v100 := routerRouteRepositories.K8sEventForward
+	v101 := eventforward.NewK8sEventForwardAdminService(v100)
+	v102 := k8s.NewK8sSearchService(v56, v25, v9, v20, v22, v23)
 	inspectService := provideInspectService(db, client, v54, v29, sender, appDisplayName)
 	routerRouteServices := &routeServices{
 		LoginLog:             v2,
@@ -203,17 +207,19 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		K8sServiceAccount:    v74,
 		Overview:             v77,
 		ProjectMgmt:          v82,
-		CMDB:                 v83,
+		ServiceCatalog:       v84,
+		ChangeEvent:          v86,
+		CMDB:                 v87,
 		Cicd:                 service,
-		MysqlBackup:          v85,
+		MysqlBackup:          v89,
 		Dbmgmt:               dbmgmtService,
-		LogSearch:            v88,
-		LogRetention:         v90,
-		KafkaToES:            v92,
-		LoggieAgent:          v94,
-		AlertReceiverGroup:   v95,
-		K8sEventForwardAdmin: v97,
-		K8sSearch:            v98,
+		LogSearch:            v92,
+		LogRetention:         v94,
+		KafkaToES:            v96,
+		LoggieAgent:          v98,
+		AlertReceiverGroup:   v99,
+		K8sEventForwardAdmin: v101,
+		K8sSearch:            v102,
 		AlertMaintenance:     v43,
 		Inspect:              inspectService,
 	}
@@ -239,7 +245,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	alertPlatformHandler := handler.NewAlertPlatformHandler(v54, v37, v43, v55, alertRuleAssigneeService, v39)
 	alertSubscriptionHandler := provideAlertSubscriptionHandler(v52)
 	alertInhibitionHandler := provideAlertInhibitionHandler(v52)
-	alertReceiverGroupHandler := handler.NewAlertReceiverGroupHandler(v95)
+	alertReceiverGroupHandler := handler.NewAlertReceiverGroupHandler(v99)
 	cloudExpiryRuleHandler := handler.NewCloudExpiryRuleHandler(v53, v52)
 	clusterHandler := handler.NewClusterHandler(v57)
 	podHandler := handler.NewPodHandler(v58)
@@ -255,21 +261,22 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	k8sHPAHandler := handler.NewK8sHPAHandler(v68)
 	helmHandler := handler.NewHelmHandler(v69)
 	k8sResourceWatchHandler := handler.NewK8sResourceWatchHandler(v56)
-	k8sSearchHandler := handler.NewK8sSearchHandler(v98)
-	k8sEventForwardHandler := handler.NewK8sEventForwardHandler(v97)
+	k8sSearchHandler := handler.NewK8sSearchHandler(v102)
+	k8sEventForwardHandler := handler.NewK8sEventForwardHandler(v101)
 	eventHandler := handler.NewEventHandler(v70)
 	crdHandler := handler.NewCRDHandler(v71)
 	crHandler := handler.NewCRHandler(v72)
 	rbacHandler := handler.NewRBACHandler(v73)
 	serviceAccountHandler := handler.NewServiceAccountHandler(v74)
 	overviewHandler := handler.NewOverviewHandler(v77)
-	projectHandler := handler.NewProjectHandler(v82, v88)
-	cmdbHandler := handler.NewCMDBHandler(v83)
-	mysqlBackupHandler := handler.NewMysqlBackupHandler(v85)
+	projectHandler := handler.NewProjectHandler(v82, v92)
+	projectCatalogHandler := handler.NewProjectCatalogHandler(v84, v86)
+	cmdbHandler := handler.NewCMDBHandler(v87)
+	mysqlBackupHandler := handler.NewMysqlBackupHandler(v89)
 	dbmgmtHandler := handler.NewDbmgmtHandler(dbmgmtService)
 	cicdHandler := handler.NewCicdHandler(service)
-	logPlatformHandler := handler.NewLogPlatformHandler(v90, v92)
-	loggieHandler := handler.NewLoggieHandler(v94)
+	logPlatformHandler := handler.NewLogPlatformHandler(v94, v96)
+	loggieHandler := handler.NewLoggieHandler(v98)
 	inspectHandler := handler.NewInspectHandler(inspectService)
 	routerRouteHandlers := &routeHandlers{
 		System:             systemHandler,
@@ -319,6 +326,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		ServiceAccount:     serviceAccountHandler,
 		Overview:           overviewHandler,
 		Project:            projectHandler,
+		ProjectCatalog:     projectCatalogHandler,
 		CMDB:               cmdbHandler,
 		MysqlBackup:        mysqlBackupHandler,
 		Dbmgmt:             dbmgmtHandler,

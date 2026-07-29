@@ -22,6 +22,7 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.GET("/events/grouped", d.alertHandler.ListEventsGrouped)
 	alerts.GET("/events/by-fingerprint", d.alertHandler.ExplainFingerprintDelivery)
 	alerts.GET("/history/stats", d.alertHandler.HistoryStats)
+	alerts.GET("/quality-report", d.alertHandler.QualityReport)
 
 	alerts.GET("/datasources", d.alertPlatformHandler.ListDatasources)
 	alerts.POST("/datasources", d.alertPlatformHandler.CreateDatasource)

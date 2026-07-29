@@ -6,6 +6,7 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/menu"
 	"yunshu/internal/plugin"
+	"yunshu/internal/plugingate"
 
 	_ "yunshu/internal/plugins/all" // 注册内置业务插件
 
@@ -24,5 +25,5 @@ func AutoMigrateModels(db *gorm.DB, pluginsCfg *config.PluginsConfig) error {
 	if err := menu.Sync(ctx, db); err != nil {
 		return err
 	}
-	return plugin.SyncMenuVisibility(ctx, db, pluginsCfg)
+	return plugingate.SyncMenuVisibility(ctx, db, pluginsCfg)
 }

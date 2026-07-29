@@ -130,6 +130,33 @@ type ProjectMgmtService = project.ProjectMgmtService
 
 var NewProjectMgmtService = project.NewProjectMgmtService
 
+type (
+	ServiceCatalogService       = project.ServiceCatalogService
+	ServiceCatalogListQuery     = project.ServiceCatalogListQuery
+	ServiceCatalogUpsertRequest = project.ServiceCatalogUpsertRequest
+	ServiceLinkRequest          = project.ServiceLinkRequest
+	ServiceCatalogItem          = project.ServiceCatalogItem
+	ChangeEventService          = project.ChangeEventService
+	ChangeEventListQuery        = project.ChangeEventListQuery
+	ServicePortrait             = project.ServicePortrait
+	IncidentContext             = project.IncidentContext
+	IncidentContextQuery        = project.IncidentContextQuery
+	FreezeWindowListQuery       = project.FreezeWindowListQuery
+	FreezeWindowUpsertRequest   = project.FreezeWindowUpsertRequest
+	ConflictCheckQuery          = project.ConflictCheckQuery
+	ConflictCheckResult         = project.ConflictCheckResult
+	IncidentListQuery           = project.IncidentListQuery
+	IncidentOpenRequest         = project.IncidentOpenRequest
+	IncidentUpdateRequest       = project.IncidentUpdateRequest
+	IncidentTimeline            = project.IncidentTimeline
+	PortraitHealth              = project.PortraitHealth
+)
+
+var (
+	NewServiceCatalogService = project.NewServiceCatalogService
+	NewChangeEventService    = project.NewChangeEventService
+)
+
 // --- alert (cloud expiry CRUD) ---
 type (
 	CloudExpiryRuleService       = alert.CloudExpiryRuleService
@@ -332,6 +359,7 @@ var NewMysqlBackupService = mysqlbackup.NewMysqlBackupService
 type (
 	AlertService              = alert.AlertService
 	AlertServiceOptions       = alert.AlertServiceOptions
+	AlertQualityReport        = alert.AlertQualityReport
 	AlertSilenceService       = alert.AlertSilenceService
 	AlertMaintenanceService   = alert.AlertMaintenanceService
 	AlertDutyService          = alert.AlertDutyService

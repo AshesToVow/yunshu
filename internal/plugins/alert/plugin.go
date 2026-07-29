@@ -18,6 +18,14 @@ type module struct {
 func (m *module) Name() string        { return "alert" }
 func (m *module) Description() string { return "告警平台：摄入、规则、值班、多渠道通知" }
 
+func (m *module) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		MenuPathPrefixes: []string{"/alert-"},
+		APIPrefixes:      []string{"/api/v1/alerts"},
+		Workers:          []string{"alert_monitor_eval", "cloud_expiry_eval", "alert_timing"},
+	}
+}
+
 func (m *module) Models() []any {
 	return []any{
 		&model.AlertChannel{},

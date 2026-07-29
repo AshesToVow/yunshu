@@ -11,7 +11,7 @@ import (
 	"yunshu/internal/model"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/password"
-	"yunshu/internal/plugin"
+	"yunshu/internal/plugingate"
 	"yunshu/internal/service"
 
 	"github.com/spf13/cobra"
@@ -509,6 +509,29 @@ func defaultPermissions() []model.Permission {
 		{Name: "项目服务列表", Resource: "/api/v1/projects/:id/services", Action: "GET", Description: "List project services"},
 		{Name: "项目服务保存", Resource: "/api/v1/projects/:id/services", Action: "POST", Description: "Upsert project service"},
 		{Name: "删除项目服务", Resource: "/api/v1/projects/:id/services/:serviceId", Action: "DELETE", Description: "Delete project service"},
+		{Name: "服务目录列表", Resource: "/api/v1/projects/:id/service-catalog", Action: "GET", Description: "List service catalog"},
+		{Name: "服务目录保存", Resource: "/api/v1/projects/:id/service-catalog", Action: "POST", Description: "Upsert service catalog"},
+		{Name: "服务目录详情", Resource: "/api/v1/projects/:id/service-catalog/:catalogId", Action: "GET", Description: "Get service catalog"},
+		{Name: "服务画像", Resource: "/api/v1/projects/:id/service-catalog/:catalogId/portrait", Action: "GET", Description: "Service portrait aggregate"},
+		{Name: "服务目录删除", Resource: "/api/v1/projects/:id/service-catalog/:catalogId", Action: "DELETE", Description: "Delete service catalog"},
+		{Name: "服务目录绑定", Resource: "/api/v1/projects/:id/service-catalog/:catalogId/links", Action: "POST", Description: "Bind service catalog link"},
+		{Name: "服务目录解绑", Resource: "/api/v1/projects/:id/service-catalog/:catalogId/links/:linkId", Action: "DELETE", Description: "Unbind service catalog link"},
+		{Name: "变更事件列表", Resource: "/api/v1/projects/:id/change-events", Action: "GET", Description: "List change events"},
+		{Name: "变更冲突检查", Resource: "/api/v1/projects/:id/change-events/conflict-check", Action: "GET", Description: "Change conflict check"},
+		{Name: "冻结窗口列表", Resource: "/api/v1/projects/:id/change-freeze-windows", Action: "GET", Description: "List change freeze windows"},
+		{Name: "冻结窗口保存", Resource: "/api/v1/projects/:id/change-freeze-windows", Action: "POST", Description: "Upsert change freeze window"},
+		{Name: "冻结窗口删除", Resource: "/api/v1/projects/:id/change-freeze-windows/:freezeId", Action: "DELETE", Description: "Delete change freeze window"},
+		{Name: "故障上下文", Resource: "/api/v1/projects/:id/incident-context", Action: "GET", Description: "Incident context window"},
+		{Name: "故障单列表", Resource: "/api/v1/projects/:id/incidents", Action: "GET", Description: "List incidents"},
+		{Name: "故障单开单", Resource: "/api/v1/projects/:id/incidents", Action: "POST", Description: "Open incident"},
+		{Name: "故障单更新", Resource: "/api/v1/projects/:id/incidents/:incidentId", Action: "PUT", Description: "Update incident"},
+		{Name: "故障单时间线", Resource: "/api/v1/projects/:id/incidents/:incidentId/timeline", Action: "GET", Description: "Incident timeline"},
+		{Name: "故障单备注", Resource: "/api/v1/projects/:id/incidents/:incidentId/notes", Action: "POST", Description: "Add incident note"},
+		{Name: "告警质量报告", Resource: "/api/v1/alerts/quality-report", Action: "GET", Description: "Alert quality report"},
+		{Name: "发布后验证", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/verify", Action: "POST", Description: "Verify release run"},
+		{Name: "工作负载预检", Resource: "/api/v1/deployments/preview-apply", Action: "POST", Description: "Preview workload apply"},
+		{Name: "工作负载快照", Resource: "/api/v1/deployments/snapshots", Action: "GET", Description: "List workload snapshots"},
+		{Name: "工作负载回滚", Resource: "/api/v1/deployments/snapshots/rollback", Action: "POST", Description: "Rollback workload snapshot"},
 		{Name: "项目日志源列表", Resource: "/api/v1/projects/:id/log-sources", Action: "GET", Description: "List log sources"},
 		{Name: "项目日志源保存", Resource: "/api/v1/projects/:id/log-sources", Action: "POST", Description: "Upsert log source"},
 		{Name: "删除项目日志源", Resource: "/api/v1/projects/:id/log-sources/:logSourceId", Action: "DELETE", Description: "Delete log source"},
@@ -676,5 +699,5 @@ func seedMenus(ctx context.Context, db *gorm.DB, cfg *config.PluginsConfig) erro
 	if err := menu.Sync(ctx, db); err != nil {
 		return err
 	}
-	return plugin.SyncMenuVisibility(ctx, db, cfg)
+	return plugingate.SyncMenuVisibility(ctx, db, cfg)
 }

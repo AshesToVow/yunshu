@@ -1,4 +1,4 @@
-package plugin
+package plugingate
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 )
 
 // DesiredMenuStatus 根据插件开关与内置目录计算目标 status。
-// 返回 ok=false 表示该 path 不受插件可见性管理（保持原 status）。
+// 返回 managed=false 表示该 path 不受插件可见性管理（保持原 status）。
 func DesiredMenuStatus(path string, current int, cfg *config.PluginsConfig, catalogStatus map[string]int) (want int, managed bool) {
 	path = strings.TrimSpace(path)
 	if path == "" || ResolveMenuPathPlugin(path) == "" {

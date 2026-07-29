@@ -543,6 +543,19 @@ func (h *CicdHandler) ExecuteReleaseRun(c *gin.Context) {
 	response.Success(c, run)
 }
 
+func (h *CicdHandler) VerifyReleaseRun(c *gin.Context) {
+	projectID, runID, ok := h.releaseRunIDs(c)
+	if !ok {
+		return
+	}
+	result, err := h.svc.VerifyReleaseRun(c.Request.Context(), projectID, runID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 func (h *CicdHandler) TerminateReleaseRun(c *gin.Context) {
 	projectID, runID, ok := h.releaseRunIDs(c)
 	if !ok {

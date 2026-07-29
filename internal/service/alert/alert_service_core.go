@@ -30,6 +30,8 @@ type AlertEventListQuery struct {
 	Cluster         string `form:"cluster"`
 	AlertIP         string `form:"alertIP"`
 	Status          string `form:"status"`
+	// Severity 单值或逗号分隔；支持 critical/warning/info 以及别名 p1/p2/p3
+	Severity        string `form:"severity"`
 	MonitorPipeline string `form:"monitorPipeline"`
 	DatasourceID    uint   `form:"datasourceId"`
 	GroupKey        string `form:"groupKey"`
@@ -89,6 +91,7 @@ type AlertManagerAlert struct {
 }
 
 type AlertService struct {
+	db          *gorm.DB
 	redis       *redis.Client
 	mailer      mailer.Sender
 	cfg         config.AlertConfig
@@ -222,6 +225,7 @@ func NewAlertService(db *gorm.DB, redisClient *redis.Client, sender mailer.Sende
 		}
 	}
 	svc := &AlertService{
+		db:                 db,
 		redis:              redisClient,
 		mailer:             sender,
 		cfg:                cfg,

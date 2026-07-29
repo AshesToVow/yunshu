@@ -54,6 +54,8 @@ type routeServices struct {
 	K8sServiceAccount    *service.K8sServiceAccountService
 	Overview             *service.OverviewService
 	ProjectMgmt          *service.ProjectMgmtService
+	ServiceCatalog       *service.ServiceCatalogService
+	ChangeEvent          *service.ChangeEventService
 	CMDB                 *service.CMDBService
 	Cicd                 *cicdsvc.Service
 	MysqlBackup          *service.MysqlBackupService
