@@ -225,6 +225,7 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 	if err != nil {
 		return err
 	}
+	harborURL, harborProject := s.loadProjectHarbor(ctx, release.ProjectID)
 	params := BuildJenkinsParams(BuildParamsInput{
 		Service:          p.svc,
 		CiConfig:         p.ci,
@@ -239,6 +240,8 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 		ReleaseOperation: p.releaseOp,
 		ForceCleanDeploy: releaseForceCleanDeploy(p.releaseOp),
 		UsesK8sPipeline:  s.serviceUsesK8sPipeline(ctx, p.svc),
+		HarborURL:        harborURL,
+		HarborProject:    harborProject,
 	})
 	lastNum, _ := client.GetLastBuildNumber(ctx, p.svc.JenkinsJob)
 	queuePath, err := client.BuildWithParameters(ctx, p.svc.JenkinsJob, params)

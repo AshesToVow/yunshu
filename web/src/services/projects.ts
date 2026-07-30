@@ -23,6 +23,10 @@ export interface ProjectItem {
   status: number;
   project_type: string;
   lifecycle_status: string;
+  /** 项目 Harbor 地址，空则用全局 cicd 配置 */
+  harbor_url?: string;
+  /** 项目 Harbor 项目名（PROJECT_GROUP），空则用全局 */
+  harbor_project?: string;
   /** 可选归属部门 */
   owner_department_id?: number | null;
   /** 当前登录用户在该项目中的成员角色（owner/admin/member/readonly）；超管列表可能为空 */
@@ -37,6 +41,8 @@ export interface ProjectCreatePayload {
   status: number;
   project_type?: string;
   lifecycle_status?: string;
+  harbor_url?: string;
+  harbor_project?: string;
   owner_department_id?: number;
 }
 
@@ -47,6 +53,8 @@ export interface ProjectUpdatePayload {
   status?: number;
   project_type?: string;
   lifecycle_status?: string;
+  harbor_url?: string;
+  harbor_project?: string;
   /** 传 0 表示清空归属部门 */
   owner_department_id?: number;
 }

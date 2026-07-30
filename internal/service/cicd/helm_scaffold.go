@@ -41,7 +41,19 @@ func (s *Service) BuildHelmScaffoldZip(ctx context.Context, projectID, serviceID
 		if opts.ImageRepository == "" && strings.TrimSpace(cfg.ImageName) != "" {
 			opts.ImageRepository = strings.TrimSpace(cfg.ImageName)
 			if !strings.Contains(opts.ImageRepository, "/") {
-				opts.ImageRepository = fmt.Sprintf("harbor.example/registry/%s", opts.ImageRepository)
+				harborURL, harborProject := s.loadProjectHarbor(ctx, projectID)
+				if harborURL == "" {
+					cicdCfg := s.resolvedConfig(ctx)
+					harborURL = strings.TrimSpace(cicdCfg.Harbor.URL)
+					if harborURL == "" {
+						harborURL = "harbor.example"
+					}
+					harborProject = strings.TrimSpace(cicdCfg.Harbor.ProjectGroup)
+				}
+				if harborProject == "" {
+					harborProject = "registry"
+				}
+				opts.ImageRepository = fmt.Sprintf("%s/%s/%s", stripHarborHost(harborURL), harborProject, opts.ImageRepository)
 			}
 		}
 		if opts.ReplicaCount <= 0 && cfg.Replicas > 0 {

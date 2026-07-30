@@ -18,6 +18,11 @@ type Project struct {
 	// LifecycleStatus 项目生命周期状态，与 Status（启用/停用）独立。
 	LifecycleStatus string `json:"lifecycle_status" gorm:"size:32;not null;default:'active';index;comment:项目生命周期 planning/active/suspended/archived"`
 
+	// HarborURL 项目级 Harbor 地址（如 harbor.example.com）；空则回退全局 cicd 配置。
+	HarborURL string `json:"harbor_url" gorm:"size:256;comment:项目Harbor地址，空则用全局配置"`
+	// HarborProject Harbor 中的项目/命名空间名（如 registry、team-a）；对应 Jenkins PROJECT_GROUP。
+	HarborProject string `json:"harbor_project" gorm:"size:128;comment:项目Harbor项目名，空则用全局配置"`
+
 	// OwnerDepartmentID 可选归属部门，用于组织维度筛选与报表（不自动决定成员权限）。
 	OwnerDepartmentID *uint       `json:"owner_department_id,omitempty" gorm:"index;comment:可选归属部门ID"`
 	OwnerDepartment   *Department `json:"owner_department,omitempty" gorm:"foreignKey:OwnerDepartmentID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`

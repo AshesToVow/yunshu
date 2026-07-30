@@ -27,6 +27,9 @@ type BuildParamsInput struct {
 	ReleaseOperation string
 	ForceCleanDeploy bool
 	UsesK8sPipeline  bool
+	// Harbor 项目级覆盖（空字段表示该键仍用全局配置）。
+	HarborURL     string
+	HarborProject string
 }
 
 // BuildJenkinsParams 将服务配置映射为 Jenkins buildWithParameters 参数（与 jenkinsfile 文档一致）。
@@ -43,7 +46,7 @@ func BuildJenkinsParams(in BuildParamsInput) map[string]string {
 	if params["publishMode"] == "" {
 		params["publishMode"] = "仅构建"
 	}
-	applyCredentialParams(params, in.Cfg, in.Service)
+	applyCredentialParams(params, in.Cfg, in.Service, in)
 
 	svc := in.Service
 	ci := in.CiConfig
@@ -94,7 +97,7 @@ func BuildJenkinsParams(in BuildParamsInput) map[string]string {
 	return params
 }
 
-func applyCredentialParams(params map[string]string, cfg config.CicdConfig, svc *model.CicdService) {
+func applyCredentialParams(params map[string]string, cfg config.CicdConfig, svc *model.CicdService, in BuildParamsInput) {
 	gitCred := strings.TrimSpace(cfg.Credentials.Git)
 	if gitCred == "" {
 		gitCred = "gitee_registry_ssh"
@@ -126,11 +129,14 @@ func applyCredentialParams(params map[string]string, cfg config.CicdConfig, svc 
 		minioEndpoint = "http://192.168.56.102:8021"
 	}
 	params["MINIO_ENDPOINT"] = minioEndpoint
-	applyHarborParams(params, cfg)
+	applyHarborParams(params, cfg, in.HarborURL, in.HarborProject)
 }
 
-func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
+func applyHarborParams(params map[string]string, cfg config.CicdConfig, projectURL, projectGroup string) {
 	harborURL := strings.TrimSpace(cfg.Harbor.URL)
+	if v := strings.TrimSpace(projectURL); v != "" {
+		harborURL = stripHarborHost(v)
+	}
 	if harborURL == "" {
 		harborURL = "harbor.deploy.local"
 	}
@@ -139,6 +145,9 @@ func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
 		harborCred = "HARBOR_ID"
 	}
 	harborProject := strings.TrimSpace(cfg.Harbor.ProjectGroup)
+	if v := strings.TrimSpace(projectGroup); v != "" {
+		harborProject = v
+	}
 	if harborProject == "" {
 		harborProject = "registry"
 	}
@@ -150,6 +159,13 @@ func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
 	params["HARBOR_HOST_IP"] = harborHostIP
 	params["HARBOR_CREDENTIAL_ID"] = harborCred
 	params["PROJECT_GROUP"] = harborProject
+}
+
+func stripHarborHost(raw string) string {
+	v := strings.TrimSpace(raw)
+	v = strings.TrimPrefix(v, "https://")
+	v = strings.TrimPrefix(v, "http://")
+	return strings.TrimRight(v, "/")
 }
 
 func buildK8sCiParams(params map[string]string, ci *model.CicdCiConfig, in BuildParamsInput) {
