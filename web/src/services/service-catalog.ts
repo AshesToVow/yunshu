@@ -39,7 +39,9 @@ export async function upsertServiceCatalog(
 }
 
 export async function deleteServiceCatalog(projectId: number, catalogId: number) {
-  return getData(http.delete(`/projects/${projectId}/service-catalog/${catalogId}`));
+  return getData<{ message: string }>(
+    http.delete(`/projects/${projectId}/service-catalog/${catalogId}`) as Promise<ApiResponse<{ message: string }>>,
+  );
 }
 
 export async function addServiceCatalogLink(

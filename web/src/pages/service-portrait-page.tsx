@@ -91,43 +91,45 @@ export function ServicePortraitPage() {
         {!svc ? (
           <Empty description="请先在服务目录创建并绑定服务" />
         ) : (
-          <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label="标识">{svc.identifier}</Descriptions.Item>
-            <Descriptions.Item label="名称">{svc.name}</Descriptions.Item>
-            <Descriptions.Item label="负责人">{svc.owner || "-"}</Descriptions.Item>
-            <Descriptions.Item label="产品线">{svc.product_line || "-"}</Descriptions.Item>
-            <Descriptions.Item label="关键等级">
-              <Tag>{svc.criticality || "normal"}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="状态">{svc.status === 1 ? "启用" : "停用"}</Descriptions.Item>
-            {portrait?.health ? (
-              <Descriptions.Item label="健康分" span={2}>
-                <Space>
-                  <Tag color={portrait.health.grade === "A" ? "green" : portrait.health.grade === "B" ? "blue" : "orange"}>
-                    {portrait.health.score} / {portrait.health.grade}
-                  </Tag>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {portrait.health.factors?.map((f) => `${f.label}${f.score}`).join(" · ")}
-                  </Typography.Text>
-                </Space>
+          <>
+            <Descriptions bordered size="small" column={2}>
+              <Descriptions.Item label="标识">{svc.identifier}</Descriptions.Item>
+              <Descriptions.Item label="名称">{svc.name}</Descriptions.Item>
+              <Descriptions.Item label="负责人">{svc.owner || "-"}</Descriptions.Item>
+              <Descriptions.Item label="产品线">{svc.product_line || "-"}</Descriptions.Item>
+              <Descriptions.Item label="关键等级">
+                <Tag>{svc.criticality || "normal"}</Tag>
               </Descriptions.Item>
+              <Descriptions.Item label="状态">{svc.status === 1 ? "启用" : "停用"}</Descriptions.Item>
+              {portrait?.health ? (
+                <Descriptions.Item label="健康分" span={2}>
+                  <Space>
+                    <Tag color={portrait.health.grade === "A" ? "green" : portrait.health.grade === "B" ? "blue" : "orange"}>
+                      {portrait.health.score} / {portrait.health.grade}
+                    </Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {portrait.health.factors?.map((f) => `${f.label}${f.score}`).join(" · ")}
+                    </Typography.Text>
+                  </Space>
+                </Descriptions.Item>
+              ) : null}
+            </Descriptions>
+            {portrait?.health?.factors?.length ? (
+              <Table
+                style={{ marginTop: 12 }}
+                size="small"
+                pagination={false}
+                rowKey="key"
+                dataSource={portrait.health.factors}
+                columns={[
+                  { title: "因子", dataIndex: "label", width: 100 },
+                  { title: "得分", width: 100, render: (_: unknown, r: { score: number; max: number }) => `${r.score}/${r.max}` },
+                  { title: "扣分", dataIndex: "deduct", width: 80 },
+                  { title: "说明", dataIndex: "detail" },
+                ]}
+              />
             ) : null}
-          </Descriptions>
-          {portrait?.health?.factors?.length ? (
-            <Table
-              style={{ marginTop: 12 }}
-              size="small"
-              pagination={false}
-              rowKey="key"
-              dataSource={portrait.health.factors}
-              columns={[
-                { title: "因子", dataIndex: "label", width: 100 },
-                { title: "得分", width: 100, render: (_: unknown, r: { score: number; max: number }) => `${r.score}/${r.max}` },
-                { title: "扣分", dataIndex: "deduct", width: 80 },
-                { title: "说明", dataIndex: "detail" },
-              ]}
-            />
-          ) : null}
+          </>
         )}
       </Card>
 
