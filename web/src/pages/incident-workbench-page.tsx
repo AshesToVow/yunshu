@@ -119,7 +119,7 @@ export function IncidentWorkbenchPage() {
         }
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          P1/P2 告警可半自动开单；故障单状态机 open → mitigating → resolved → postmortem，并计算 MTTA/MTTR。
+          把「正在响的告警」升级成可跟踪的故障单：开单 → 接手处置 → 确认恢复 → 复盘；系统自动算 MTTA（开单到接手）和 MTTR（开单到恢复）。
         </Typography.Paragraph>
       </Card>
 
@@ -146,7 +146,7 @@ export function IncidentWorkbenchPage() {
                 { title: "标题", dataIndex: "title" },
                 {
                   title: "操作",
-                  width: 100,
+                  width: 120,
                   render: (_: unknown, row: AlertEventItem) => (
                     <Button
                       type="link"
@@ -156,7 +156,7 @@ export function IncidentWorkbenchPage() {
                         void createFromAlert(row);
                       }}
                     >
-                      开单
+                      开单（建故障单）
                     </Button>
                   ),
                 },
@@ -188,22 +188,22 @@ export function IncidentWorkbenchPage() {
                 },
                 {
                   title: "处置",
-                  width: 180,
+                  width: 220,
                   render: (_: unknown, r: IncidentItem) => (
                     <Space size={0}>
                       {r.status === "open" ? (
                         <Button type="link" size="small" onClick={() => void setStatus(r, "mitigating")}>
-                          接手
+                          接手（开始处置）
                         </Button>
                       ) : null}
                       {r.status === "mitigating" || r.status === "open" ? (
                         <Button type="link" size="small" onClick={() => void setStatus(r, "resolved")}>
-                          恢复
+                          恢复（故障已消除）
                         </Button>
                       ) : null}
                       {r.status === "resolved" ? (
                         <Button type="link" size="small" onClick={() => void setStatus(r, "postmortem")}>
-                          复盘
+                          复盘（归档）
                         </Button>
                       ) : null}
                     </Space>
@@ -260,7 +260,7 @@ export function IncidentWorkbenchPage() {
               时间：{formatDateTime(active.createdAt || (active as any).created_at)}
             </Typography.Text>
             <Button type="primary" onClick={() => void createFromAlert(active)}>
-              从该告警开单
+              从该告警开故障单
             </Button>
           </Space>
         ) : null}
