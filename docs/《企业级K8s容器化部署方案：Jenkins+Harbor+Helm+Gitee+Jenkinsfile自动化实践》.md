@@ -128,6 +128,15 @@ sequenceDiagram
 
 占位符：`{{PRONAME}}` `{{FULL_IMAGE_NAME}}` `{{NAMESPACE}}` `{{REPLICAS}}` `{{CONTAINER_PORT}}` 及 CPU/Memory、Apollo、SkyWalking 等。
 
+`{{APOLLO_META}}` 支持逗号分隔多个 Meta 地址；YAML 中 `value` 须整体加双引号，例如：
+
+```yaml
+- name: APOLLO_OPTS
+  value: "-Denv={{APOLLO_ENV}} -Dapollo.meta={{APOLLO_META}} -Dapollo.bootstrap.namespaces={{APOLLO_NAMESPACES}}"
+```
+
+参考片段见仓库 `deploy/cicd-templates/`。
+
 ---
 
 ## 五、环境准备

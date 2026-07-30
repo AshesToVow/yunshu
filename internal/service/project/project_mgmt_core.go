@@ -123,6 +123,24 @@ func stripHarborHost(raw string) string {
 	return strings.TrimRight(v, "/")
 }
 
+// normalizeApolloMetaList 规范化逗号分隔的多个 Apollo Meta 地址。
+func normalizeApolloMetaList(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return strings.Join(out, ",")
+}
+
 func (s *ProjectMgmtService) enrichMyProjectRole(ctx context.Context, item *ProjectItem) {
 	if item == nil || s.memberRepo == nil {
 		return
@@ -204,7 +222,7 @@ type ProjectCreateRequest struct {
 	LifecycleStatus   string  `json:"lifecycle_status"`
 	HarborURL         string  `json:"harbor_url" binding:"omitempty,max=256"`
 	HarborProject     string  `json:"harbor_project" binding:"omitempty,max=128"`
-	ApolloMeta        string  `json:"apollo_meta" binding:"omitempty,max=512"`
+	ApolloMeta        string  `json:"apollo_meta" binding:"omitempty,max=1024"`
 	ApolloEnv         string  `json:"apollo_env" binding:"omitempty,max=32"`
 	ApolloNamespaces  string  `json:"apollo_namespaces" binding:"omitempty,max=512"`
 	OwnerDepartmentID *uint   `json:"owner_department_id"`
@@ -241,7 +259,7 @@ func (s *ProjectMgmtService) CreateProject(ctx context.Context, creatorUserID ui
 		Name: strings.TrimSpace(req.Name), Code: strings.TrimSpace(req.Code), Description: req.Description,
 		Status: status, ProjectType: pt, LifecycleStatus: ls, OwnerDepartmentID: ownerDept,
 		HarborURL: stripHarborHost(req.HarborURL), HarborProject: strings.TrimSpace(req.HarborProject),
-		ApolloMeta: strings.TrimSpace(req.ApolloMeta), ApolloEnv: strings.TrimSpace(req.ApolloEnv),
+		ApolloMeta: normalizeApolloMetaList(req.ApolloMeta), ApolloEnv: strings.TrimSpace(req.ApolloEnv),
 		ApolloNamespaces: strings.TrimSpace(req.ApolloNamespaces),
 	}
 	if err := s.projectRepo.Create(ctx, &p); err != nil {
@@ -318,7 +336,7 @@ func (s *ProjectMgmtService) UpdateProject(ctx context.Context, id uint, req Pro
 		p.HarborProject = strings.TrimSpace(*req.HarborProject)
 	}
 	if req.ApolloMeta != nil {
-		p.ApolloMeta = strings.TrimSpace(*req.ApolloMeta)
+		p.ApolloMeta = normalizeApolloMetaList(*req.ApolloMeta)
 	}
 	if req.ApolloEnv != nil {
 		p.ApolloEnv = strings.TrimSpace(*req.ApolloEnv)

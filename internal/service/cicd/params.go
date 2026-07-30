@@ -176,8 +176,9 @@ func stripHarborHost(raw string) string {
 
 // applyApolloParams 将项目 Apollo 配置写入 Jenkins 参数，供 shared-lib launch/K8s 模板替换
 // {{APOLLO_META}} / {{APOLLO_ENV}} / {{APOLLO_NAMESPACES}}。
+// APOLLO_META 支持逗号分隔多个 Meta 地址。
 func applyApolloParams(params map[string]string, in BuildParamsInput) {
-	meta := strings.TrimSpace(in.ApolloMeta)
+	meta := normalizeApolloMetaList(in.ApolloMeta)
 	env := strings.TrimSpace(in.ApolloEnv)
 	ns := strings.TrimSpace(in.ApolloNamespaces)
 	if meta == "" && env == "" && ns == "" {
@@ -195,6 +196,24 @@ func applyApolloParams(params map[string]string, in BuildParamsInput) {
 	if ns != "" {
 		params["APOLLO_NAMESPACES"] = ns
 	}
+}
+
+// normalizeApolloMetaList 规范化逗号分隔的多个 Meta 地址（去空白、去空段）。
+func normalizeApolloMetaList(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return strings.Join(out, ",")
 }
 
 func apolloEnvFromTenv(tenv string) string {

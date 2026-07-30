@@ -101,6 +101,14 @@ skywalking:
       cpu: 200m
       memory: 256Mi
 
+# Apollo（meta 支持逗号分隔多个地址；模板侧须 quote）
+apollo:
+  enabled: false
+  env: PRO
+  # meta: "http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080"
+  meta: ""
+  namespaces: "application"
+
 # 额外 init / sidecar（原始 YAML 片段，高级扩展）
 initContainers: []
 sidecars: []

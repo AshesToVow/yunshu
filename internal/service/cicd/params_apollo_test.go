@@ -23,6 +23,18 @@ func TestApplyApolloParams_ProjectOverride(t *testing.T) {
 	}
 }
 
+func TestApplyApolloParams_MultiMeta(t *testing.T) {
+	params := map[string]string{"Tenv": "prod"}
+	applyApolloParams(params, BuildParamsInput{
+		ApolloMeta: " http://10.241.243.21:8080 , http://10.241.243.20:8080,http://10.241.243.19:8080 ",
+		ApolloEnv:  "PRO",
+	})
+	want := "http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080"
+	if params["APOLLO_META"] != want {
+		t.Fatalf("APOLLO_META=%q want %q", params["APOLLO_META"], want)
+	}
+}
+
 func TestApplyApolloParams_ExplicitEnv(t *testing.T) {
 	params := map[string]string{"Tenv": "prod"}
 	applyApolloParams(params, BuildParamsInput{

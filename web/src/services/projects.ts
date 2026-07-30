@@ -27,7 +27,7 @@ export interface ProjectItem {
   harbor_url?: string;
   /** 项目 Harbor 项目名（PROJECT_GROUP），空则用全局 */
   harbor_project?: string;
-  /** Apollo Meta 地址，发布时注入 APOLLO_META */
+  /** Apollo Meta 地址（可逗号分隔多个），发布时注入 APOLLO_META */
   apollo_meta?: string;
   /** Apollo 环境（DEV/FAT/PRO），空则按发布 Tenv 推导 */
   apollo_env?: string;

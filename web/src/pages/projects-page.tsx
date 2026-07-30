@@ -388,9 +388,13 @@ export function ProjectsPage() {
           <Form.Item
             label="Apollo Meta"
             name="apollo_meta"
-            extra="对应 Jenkins APOLLO_META，注入 shared-lib launch/K8s 模板 {{APOLLO_META}}。留空则沿用 Job 默认。"
+            extra="对应 Jenkins APOLLO_META。支持逗号分隔多个地址，注入模板 {{APOLLO_META}}。留空则沿用 Job 默认。"
           >
-            <Input placeholder="如 http://apollo-meta:8080/" allowClear />
+            <Input.TextArea
+              rows={2}
+              placeholder="http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080"
+              allowClear
+            />
           </Form.Item>
           <Form.Item
             label="Apollo 环境"
