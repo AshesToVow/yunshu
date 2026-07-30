@@ -709,7 +709,7 @@ func (s *Service) TriggerBuild(ctx context.Context, projectID, serviceID uint, r
 	if dc == nil {
 		dc = s.firstDeployConfig(ctx, serviceID)
 	}
-	harborURL, harborProject := s.loadProjectHarbor(ctx, projectID)
+	ov := s.loadProjectCicdOverrides(ctx, projectID)
 	params := BuildJenkinsParams(BuildParamsInput{
 		Service:         svc,
 		CiConfig:        ci,
@@ -719,8 +719,11 @@ func (s *Service) TriggerBuild(ctx context.Context, projectID, serviceID uint, r
 		Tenv:            tenv,
 		EmailUser:       s.resolveNotifyEmail(ctx, req.EmailUser, svc, builderUserID),
 		UsesK8sPipeline: s.serviceUsesK8sPipeline(ctx, svc),
-		HarborURL:       harborURL,
-		HarborProject:   harborProject,
+		HarborURL:        ov.HarborURL,
+		HarborProject:    ov.HarborProject,
+		ApolloMeta:       ov.ApolloMeta,
+		ApolloEnv:        ov.ApolloEnv,
+		ApolloNamespaces: ov.ApolloNamespaces,
 	})
 	lastNum, _ := client.GetLastBuildNumber(ctx, svc.JenkinsJob)
 	queuePath, err := client.BuildWithParameters(ctx, svc.JenkinsJob, params)

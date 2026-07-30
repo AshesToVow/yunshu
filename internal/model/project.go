@@ -23,6 +23,13 @@ type Project struct {
 	// HarborProject Harbor 中的项目/命名空间名（如 registry、team-a）；对应 Jenkins PROJECT_GROUP。
 	HarborProject string `json:"harbor_project" gorm:"size:128;comment:项目Harbor项目名，空则用全局配置"`
 
+	// ApolloMeta 项目级 Apollo Meta 地址；发布时作为 Jenkins APOLLO_META 注入 launch/K8s 模板。
+	ApolloMeta string `json:"apollo_meta" gorm:"size:512;comment:项目Apollo Meta地址，空则不覆盖Jenkins默认"`
+	// ApolloEnv Apollo 环境名（如 DEV/FAT/PRO）；空则按发布 Tenv 推导。
+	ApolloEnv string `json:"apollo_env" gorm:"size:32;comment:项目Apollo环境，空则按Tenv推导"`
+	// ApolloNamespaces Apollo bootstrap namespaces（逗号分隔）。
+	ApolloNamespaces string `json:"apollo_namespaces" gorm:"size:512;comment:项目Apollo namespaces"`
+
 	// OwnerDepartmentID 可选归属部门，用于组织维度筛选与报表（不自动决定成员权限）。
 	OwnerDepartmentID *uint       `json:"owner_department_id,omitempty" gorm:"index;comment:可选归属部门ID"`
 	OwnerDepartment   *Department `json:"owner_department,omitempty" gorm:"foreignKey:OwnerDepartmentID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`

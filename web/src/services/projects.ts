@@ -27,6 +27,12 @@ export interface ProjectItem {
   harbor_url?: string;
   /** 项目 Harbor 项目名（PROJECT_GROUP），空则用全局 */
   harbor_project?: string;
+  /** Apollo Meta 地址，发布时注入 APOLLO_META */
+  apollo_meta?: string;
+  /** Apollo 环境（DEV/FAT/PRO），空则按发布 Tenv 推导 */
+  apollo_env?: string;
+  /** Apollo namespaces（逗号分隔） */
+  apollo_namespaces?: string;
   /** 可选归属部门 */
   owner_department_id?: number | null;
   /** 当前登录用户在该项目中的成员角色（owner/admin/member/readonly）；超管列表可能为空 */
@@ -43,6 +49,9 @@ export interface ProjectCreatePayload {
   lifecycle_status?: string;
   harbor_url?: string;
   harbor_project?: string;
+  apollo_meta?: string;
+  apollo_env?: string;
+  apollo_namespaces?: string;
   owner_department_id?: number;
 }
 
@@ -55,6 +64,9 @@ export interface ProjectUpdatePayload {
   lifecycle_status?: string;
   harbor_url?: string;
   harbor_project?: string;
+  apollo_meta?: string;
+  apollo_env?: string;
+  apollo_namespaces?: string;
   /** 传 0 表示清空归属部门 */
   owner_department_id?: number;
 }

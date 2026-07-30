@@ -30,6 +30,10 @@ type BuildParamsInput struct {
 	// Harbor 项目级覆盖（空字段表示该键仍用全局配置）。
 	HarborURL     string
 	HarborProject string
+	// Apollo 项目级覆盖（空字段表示不传该键，沿用 Jenkins Job 默认；供 launch/K8s 模板占位符替换）。
+	ApolloMeta       string
+	ApolloEnv        string
+	ApolloNamespaces string
 }
 
 // BuildJenkinsParams 将服务配置映射为 Jenkins buildWithParameters 参数（与 jenkinsfile 文档一致）。
@@ -94,6 +98,8 @@ func BuildJenkinsParams(in BuildParamsInput) map[string]string {
 	if v := strings.TrimSpace(in.ImageAddress); v != "" {
 		params["FULL_IMAGE_NAME"] = v
 	}
+	// Apollo 需在 deploy 参数（含 Tenv）确定后再注入，SSH 与容器模板共用。
+	applyApolloParams(params, in)
 	return params
 }
 
@@ -166,6 +172,47 @@ func stripHarborHost(raw string) string {
 	v = strings.TrimPrefix(v, "https://")
 	v = strings.TrimPrefix(v, "http://")
 	return strings.TrimRight(v, "/")
+}
+
+// applyApolloParams 将项目 Apollo 配置写入 Jenkins 参数，供 shared-lib launch/K8s 模板替换
+// {{APOLLO_META}} / {{APOLLO_ENV}} / {{APOLLO_NAMESPACES}}。
+func applyApolloParams(params map[string]string, in BuildParamsInput) {
+	meta := strings.TrimSpace(in.ApolloMeta)
+	env := strings.TrimSpace(in.ApolloEnv)
+	ns := strings.TrimSpace(in.ApolloNamespaces)
+	if meta == "" && env == "" && ns == "" {
+		return
+	}
+	if env == "" {
+		env = apolloEnvFromTenv(params["Tenv"])
+	}
+	if meta != "" {
+		params["APOLLO_META"] = meta
+	}
+	if env != "" {
+		params["APOLLO_ENV"] = env
+	}
+	if ns != "" {
+		params["APOLLO_NAMESPACES"] = ns
+	}
+}
+
+func apolloEnvFromTenv(tenv string) string {
+	switch strings.ToLower(strings.TrimSpace(tenv)) {
+	case "prod", "production", "pro":
+		return "PRO"
+	case "uat":
+		return "UAT"
+	case "test", "fat", "qa":
+		return "FAT"
+	case "dev", "development", "local":
+		return "DEV"
+	default:
+		if v := strings.TrimSpace(tenv); v != "" {
+			return strings.ToUpper(v)
+		}
+		return "PRO"
+	}
 }
 
 func buildK8sCiParams(params map[string]string, ci *model.CicdCiConfig, in BuildParamsInput) {

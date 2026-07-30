@@ -61,6 +61,9 @@ type ProjectItem struct {
 	LifecycleStatus   string  `json:"lifecycle_status"`
 	HarborURL         string  `json:"harbor_url"`
 	HarborProject     string  `json:"harbor_project"`
+	ApolloMeta        string  `json:"apollo_meta"`
+	ApolloEnv         string  `json:"apollo_env"`
+	ApolloNamespaces  string  `json:"apollo_namespaces"`
 	OwnerDepartmentID *uint   `json:"owner_department_id,omitempty"`
 	// MyProjectRole 当前登录用户在该项目中的成员角色（owner/admin/member/readonly）；列表与更新接口在非超管时填充；超管可省略。
 	MyProjectRole string `json:"my_project_role,omitempty"`
@@ -78,6 +81,9 @@ func toProjectItem(p model.Project) ProjectItem {
 		LifecycleStatus:   p.LifecycleStatus,
 		HarborURL:         p.HarborURL,
 		HarborProject:     p.HarborProject,
+		ApolloMeta:        p.ApolloMeta,
+		ApolloEnv:         p.ApolloEnv,
+		ApolloNamespaces:  p.ApolloNamespaces,
 		OwnerDepartmentID: p.OwnerDepartmentID,
 		CreatedAt:         p.CreatedAt.Format(time.RFC3339),
 	}
@@ -198,6 +204,9 @@ type ProjectCreateRequest struct {
 	LifecycleStatus   string  `json:"lifecycle_status"`
 	HarborURL         string  `json:"harbor_url" binding:"omitempty,max=256"`
 	HarborProject     string  `json:"harbor_project" binding:"omitempty,max=128"`
+	ApolloMeta        string  `json:"apollo_meta" binding:"omitempty,max=512"`
+	ApolloEnv         string  `json:"apollo_env" binding:"omitempty,max=32"`
+	ApolloNamespaces  string  `json:"apollo_namespaces" binding:"omitempty,max=512"`
 	OwnerDepartmentID *uint   `json:"owner_department_id"`
 }
 
@@ -232,6 +241,8 @@ func (s *ProjectMgmtService) CreateProject(ctx context.Context, creatorUserID ui
 		Name: strings.TrimSpace(req.Name), Code: strings.TrimSpace(req.Code), Description: req.Description,
 		Status: status, ProjectType: pt, LifecycleStatus: ls, OwnerDepartmentID: ownerDept,
 		HarborURL: stripHarborHost(req.HarborURL), HarborProject: strings.TrimSpace(req.HarborProject),
+		ApolloMeta: strings.TrimSpace(req.ApolloMeta), ApolloEnv: strings.TrimSpace(req.ApolloEnv),
+		ApolloNamespaces: strings.TrimSpace(req.ApolloNamespaces),
 	}
 	if err := s.projectRepo.Create(ctx, &p); err != nil {
 		return nil, bizerrors.Pass(ctx, "project", "CreateProject", err)
@@ -259,6 +270,9 @@ type ProjectUpdateRequest struct {
 	LifecycleStatus   *string `json:"lifecycle_status"`
 	HarborURL         *string `json:"harbor_url"`
 	HarborProject     *string `json:"harbor_project"`
+	ApolloMeta        *string `json:"apollo_meta"`
+	ApolloEnv         *string `json:"apollo_env"`
+	ApolloNamespaces  *string `json:"apollo_namespaces"`
 	OwnerDepartmentID *uint   `json:"owner_department_id"`
 }
 
@@ -302,6 +316,15 @@ func (s *ProjectMgmtService) UpdateProject(ctx context.Context, id uint, req Pro
 	}
 	if req.HarborProject != nil {
 		p.HarborProject = strings.TrimSpace(*req.HarborProject)
+	}
+	if req.ApolloMeta != nil {
+		p.ApolloMeta = strings.TrimSpace(*req.ApolloMeta)
+	}
+	if req.ApolloEnv != nil {
+		p.ApolloEnv = strings.TrimSpace(*req.ApolloEnv)
+	}
+	if req.ApolloNamespaces != nil {
+		p.ApolloNamespaces = strings.TrimSpace(*req.ApolloNamespaces)
 	}
 	if req.OwnerDepartmentID != nil {
 		if *req.OwnerDepartmentID == 0 {
