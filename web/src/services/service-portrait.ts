@@ -33,32 +33,8 @@ export interface ServicePortrait {
   } | null;
 }
 
-export interface IncidentRelease {
-  id: number;
-  service_id: number;
-  title: string;
-  status: string;
-  tenv: string;
-  started_at: string;
-}
-
-export interface IncidentContext {
-  project_id: number;
-  window_minutes: number;
-  from: string;
-  to: string;
-  changes: ChangeEventItem[];
-  releases: IncidentRelease[];
-}
-
 export async function getServicePortrait(projectId: number, catalogId: number) {
   return getData<ServicePortrait>(http.get(`/projects/${projectId}/service-catalog/${catalogId}/portrait`));
-}
-
-export async function getIncidentContext(projectId: number, windowMinutes = 30) {
-  return getData<IncidentContext>(
-    http.get(`/projects/${projectId}/incident-context`, { params: { window_minutes: windowMinutes } }),
-  );
 }
 
 export type { PageData };

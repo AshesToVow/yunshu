@@ -29,9 +29,6 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/project-inspect":             {"/api/v1/projects/:id/inspect/plan", "GET"},
 		"/service-catalog":             {"/api/v1/projects/:id/service-catalog", "GET"},
 		"/service-portrait":            {"/api/v1/projects/:id/service-catalog", "GET"},
-		"/change-events":               {"/api/v1/projects/:id/change-events", "GET"},
-		"/change-center":               {"/api/v1/projects/:id/change-events", "GET"},
-		"/incident-workbench":          {"/api/v1/projects/:id/incident-context", "GET"},
 
 		"/project-services":            {"/api/v1/projects/:id/services", "GET"},
 		"/project-log-sources":         {"/api/v1/projects/:id/log-sources", "GET"}, // 兼容旧菜单 path

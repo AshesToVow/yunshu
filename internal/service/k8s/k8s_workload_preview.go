@@ -11,24 +11,17 @@ import (
 	"yunshu/internal/pkg/k8sutil"
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
-	"yunshu/internal/service/changegate"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/yaml"
 )
 
 type WorkloadPreviewResult struct {
-	DryRunOK   bool                   `json:"dry_run_ok"`
-	Message    string                 `json:"message,omitempty"`
-	Diffs      []WorkloadYAMLDiff     `json:"diffs"`
-	Impact     WorkloadImpactSummary  `json:"impact"`
-	Refs       []workloadRef          `json:"refs"`
-	WouldBlock *changegateBlockHint   `json:"would_block,omitempty"`
-}
-
-type changegateBlockHint struct {
-	Allowed bool   `json:"allowed"`
-	Message string `json:"message,omitempty"`
+	DryRunOK  bool                  `json:"dry_run_ok"`
+	Message   string                `json:"message,omitempty"`
+	Diffs     []WorkloadYAMLDiff    `json:"diffs"`
+	Impact    WorkloadImpactSummary `json:"impact"`
+	Refs      []workloadRef         `json:"refs"`
 }
 
 type WorkloadYAMLDiff struct {
@@ -103,19 +96,7 @@ func (s *K8sWorkloadService) PreviewApply(ctx context.Context, req NamespacedApp
 		diff.Unified = unifiedDiff(diff.Before, diff.After, r.Kind+"/"+r.Namespace+"/"+r.Name)
 		out.Diffs = append(out.Diffs, diff)
 	}
-	if pid := projectIDOf(cluster); pid > 0 {
-		ns := ""
-		if len(refs) > 0 {
-			ns = refs[0].Namespace
-		}
-		peek := changegate.Peek(ctx, changegate.CheckInput{
-			ProjectID: pid,
-			Source:    model.ChangeSourceK8s,
-			Namespace: ns,
-			Action:    "apply",
-		})
-		out.WouldBlock = &changegateBlockHint{Allowed: peek.Allowed, Message: peek.Message}
-	}
+	_ = cluster
 	return out, nil
 }
 

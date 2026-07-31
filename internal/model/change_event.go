@@ -23,7 +23,7 @@ const (
 	ChangeStatusAborted   = "aborted"
 )
 
-// ChangeEvent 统一变更流水（画像/变更中心/故障关联的时间线底座）。
+// ChangeEvent 统一变更流水（服务画像等聚合视图的时间线底座）。
 type ChangeEvent struct {
 	ID           uint           `json:"id" gorm:"primaryKey"`
 	ProjectID    uint           `json:"project_id" gorm:"not null;index:idx_change_proj_time,priority:1"`

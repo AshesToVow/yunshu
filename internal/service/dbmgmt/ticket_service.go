@@ -17,7 +17,6 @@ import (
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 	"yunshu/internal/service/changeevent"
-	"yunshu/internal/service/changegate"
 )
 
 type ExecuteRequest struct {
@@ -641,7 +640,6 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if ticket.Status != model.DbTicketStatusPendingExecution && ticket.Status != model.DbTicketStatusApproved {
 		return constants.ErrBadRequestWithMsg("工单状态不允许执行")
 	}
-	priorStatus := ticket.Status
 	claim := s.db.WithContext(ctx).Model(&model.DbSqlTicket{}).
 		Where("id = ? AND project_id = ? AND status IN ?", ticketID, projectID,
 			[]string{model.DbTicketStatusPendingExecution, model.DbTicketStatusApproved}).
@@ -666,17 +664,6 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if err != nil {
 		return err
 	}
-	if err := changegate.AssertWritable(ctx, changegate.CheckInput{
-		ProjectID: projectID,
-		Source:    model.ChangeSourceDbmgmt,
-		Env:       strings.ToLower(strings.TrimSpace(inst.Env)),
-		Action:    "sql_ticket_execute",
-	}); err != nil {
-		_ = s.db.WithContext(ctx).Model(&model.DbSqlTicket{}).Where("id = ?", ticketID).
-			Update("status", priorStatus)
-		return err
-	}
-
 	tid := ticket.ID
 	cfg := s.resolvedConfig(ctx)
 	backup := ticket.IsBackup || cfg.GoInceptionBackup

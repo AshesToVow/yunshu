@@ -25,9 +25,6 @@ func DefaultCatalog() []Spec {
 				{Path: "/project-inspect", Name: "项目巡检", Icon: "AuditOutlined", Sort: 4, Component: "project-inspect-page", Status: 1},
 				{Path: "/service-catalog", Name: "服务目录", Icon: "ApartmentOutlined", Sort: 5, Component: "service-catalog-page", Status: 1},
 				{Path: "/service-portrait", Name: "服务画像", Icon: "ProfileOutlined", Sort: 6, Component: "service-portrait-page", Status: 1},
-				{Path: "/change-events", Name: "变更事件", Icon: "HistoryOutlined", Sort: 7, Component: "change-events-page", Status: 1},
-				{Path: "/change-center", Name: "变更中心", Icon: "CalendarOutlined", Sort: 8, Component: "change-center-page", Status: 1},
-				{Path: "/incident-workbench", Name: "故障工作台", Icon: "AlertOutlined", Sort: 9, Component: "incident-workbench-page", Status: 1},
 			},
 		},
 		{

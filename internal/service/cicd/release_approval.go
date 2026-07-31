@@ -9,7 +9,6 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/changegate"
 )
 
 // releaseRequestSnapshot 审批通过后用于触发 Jenkins 的原始请求快照。
@@ -491,27 +490,6 @@ func (s *Service) ExecuteReleaseRun(ctx context.Context, projectID, runID uint, 
 	}
 	if executorUserID == nil || release.SubmitterUserID == nil || *executorUserID != *release.SubmitterUserID {
 		return nil, constants.ErrBadRequestWithMsg("仅提交人可执行发布")
-	}
-	var catalogID *uint
-	if release.ServiceID > 0 {
-		var link model.ServiceLink
-		if err := s.db.WithContext(ctx).
-			Joins("JOIN service_catalog sc ON sc.id = service_links.service_id AND sc.project_id = ? AND sc.deleted_at IS NULL", projectID).
-			Where("service_links.link_type = ? AND service_links.ref_id = ? AND service_links.deleted_at IS NULL",
-				model.ServiceLinkCicdService, release.ServiceID).
-			Order("service_links.id DESC").First(&link).Error; err == nil {
-			id := link.ServiceID
-			catalogID = &id
-		}
-	}
-	if err := changegate.AssertWritable(ctx, changegate.CheckInput{
-		ProjectID: projectID,
-		Source:    model.ChangeSourceCicd,
-		Env:       strings.ToLower(strings.TrimSpace(release.Tenv)),
-		ServiceID: catalogID,
-		Action:    "release_execute",
-	}); err != nil {
-		return nil, err
 	}
 	// 触发 Jenkins 前先原子占用（pending_execution -> running），防止并发/重复点击重复触发构建。
 	claimed, err := s.transitionReleaseStatus(ctx, runID, model.CicdRunStatusPendingExecution, map[string]any{

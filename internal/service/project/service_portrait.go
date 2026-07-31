@@ -7,7 +7,6 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -102,7 +101,6 @@ func buildPortraitEntries(item *ServiceCatalogItem) []PortraitEntryPoint {
 				fmt.Sprintf("instance_id=%v", derefUint(l.RefID)))
 		}
 	}
-	add("changes", "变更时间线", "/change-events", fmt.Sprintf("service_id=%d", item.ID))
 	return out
 }
 
@@ -152,85 +150,4 @@ func loadCicdSummary(ctx context.Context, db *gorm.DB, item *ServiceCatalogItem)
 		}
 	}
 	return sum
-}
-
-// IncidentContext 故障工作台聚合：近 N 分钟变更 + 发布。
-type IncidentContext struct {
-	ProjectID     uint                `json:"project_id"`
-	WindowMinutes int                 `json:"window_minutes"`
-	From          string              `json:"from"`
-	To            string              `json:"to"`
-	Changes       []model.ChangeEvent `json:"changes"`
-	Releases      []IncidentRelease   `json:"releases"`
-}
-
-type IncidentRelease struct {
-	ID        uint   `json:"id"`
-	ServiceID uint   `json:"service_id"`
-	Title     string `json:"title"`
-	Status    string `json:"status"`
-	Tenv      string `json:"tenv"`
-	StartedAt string `json:"started_at"`
-}
-
-type IncidentContextQuery struct {
-	ProjectID     uint `form:"-"`
-	WindowMinutes int  `form:"window_minutes"`
-}
-
-func (s *ChangeEventService) IncidentContext(ctx context.Context, q IncidentContextQuery) (*IncidentContext, error) {
-	if q.ProjectID == 0 {
-		return nil, constants.ErrBadRequestWithMsg("project_id required")
-	}
-	if _, err := s.projectRepo.GetByID(ctx, q.ProjectID); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, constants.ErrNotFound
-		}
-		return nil, err
-	}
-	mins := q.WindowMinutes
-	if mins <= 0 {
-		mins = 30
-	}
-	if mins > 24*60 {
-		mins = 24 * 60
-	}
-	to := time.Now()
-	from := to.Add(-time.Duration(mins) * time.Minute)
-	list, _, err := s.repo.List(ctx, repository.ChangeEventListParams{
-		ProjectID: q.ProjectID,
-		From:      &from,
-		To:        &to,
-		Page:      1,
-		PageSize:  100,
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := &IncidentContext{
-		ProjectID:     q.ProjectID,
-		WindowMinutes: mins,
-		From:          from.Format(time.RFC3339),
-		To:            to.Format(time.RFC3339),
-		Changes:       list,
-	}
-	if s.db != nil {
-		var runs []model.CicdReleaseRun
-		_ = s.db.WithContext(ctx).
-			Where("project_id = ? AND started_at >= ?", q.ProjectID, from).
-			Order("id DESC").
-			Limit(50).
-			Find(&runs).Error
-		for _, r := range runs {
-			started := ""
-			if r.StartedAt != nil {
-				started = r.StartedAt.Format(time.RFC3339)
-			}
-			out.Releases = append(out.Releases, IncidentRelease{
-				ID: r.ID, ServiceID: r.ServiceID, Title: r.Title,
-				Status: r.Status, Tenv: r.Tenv, StartedAt: started,
-			})
-		}
-	}
-	return out, nil
 }

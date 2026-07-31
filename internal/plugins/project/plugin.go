@@ -27,7 +27,6 @@ func (m *module) Manifest() plugin.Manifest {
 		MenuPathPrefixes: []string{
 			"/projects", "/project-members", "/project-services", "/service-catalog",
 			"/service-portrait", "/project-logs", "/project-log-sources", "/log-retention", "/loggie-status",
-			"/change-events", "/change-center", "/incident-workbench",
 		},
 		APIPrefixes: []string{"/api/v1/projects"},
 		Workers:     []string{"log_retention", "kafka_to_es"},
@@ -45,9 +44,6 @@ func (m *module) Models() []any {
 		&model.ServiceCatalog{},
 		&model.ServiceLink{},
 		&model.ChangeEvent{},
-		&model.ChangeFreezeWindow{},
-		&model.Incident{},
-		&model.IncidentNote{},
 	}
 }
 

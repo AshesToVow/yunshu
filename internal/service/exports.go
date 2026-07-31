@@ -139,16 +139,6 @@ type (
 	ChangeEventService          = project.ChangeEventService
 	ChangeEventListQuery        = project.ChangeEventListQuery
 	ServicePortrait             = project.ServicePortrait
-	IncidentContext             = project.IncidentContext
-	IncidentContextQuery        = project.IncidentContextQuery
-	FreezeWindowListQuery       = project.FreezeWindowListQuery
-	FreezeWindowUpsertRequest   = project.FreezeWindowUpsertRequest
-	ConflictCheckQuery          = project.ConflictCheckQuery
-	ConflictCheckResult         = project.ConflictCheckResult
-	IncidentListQuery           = project.IncidentListQuery
-	IncidentOpenRequest         = project.IncidentOpenRequest
-	IncidentUpdateRequest       = project.IncidentUpdateRequest
-	IncidentTimeline            = project.IncidentTimeline
 	PortraitHealth              = project.PortraitHealth
 )
 

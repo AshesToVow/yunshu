@@ -54,7 +54,6 @@ const FALLBACK_PATH_RULES: { plugin: string; prefixes: string[] }[] = [
     prefixes: [
       "/projects", "/project-members", "/project-services", "/service-catalog", "/service-portrait",
       "/project-logs", "/log-retention", "/loggie-status", "/project-log-sources",
-      "/change-events", "/change-center", "/incident-workbench",
     ],
   },
   { plugin: "cmdb", prefixes: ["/project-servers", "/server-console"] },
