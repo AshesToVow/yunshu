@@ -261,6 +261,7 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       { method: "GET", path: "/api/v1/projects/:id/servers", summary: "服务器分页列表", ui: "服务器管理", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/servers", summary: "创建/更新服务器", ui: "服务器管理", auth: true },
       { method: "GET", path: "/api/v1/projects/:id/servers/:serverId", summary: "服务器详情", ui: "服务器管理/操作台", auth: true },
+      { method: "GET", path: "/api/v1/projects/:id/servers/:serverId/my-access", summary: "当前用户对该服务器的有效权限", ui: "服务器操作台", auth: true },
       { method: "DELETE", path: "/api/v1/projects/:id/servers/:serverId", summary: "删除服务器", ui: "服务器管理", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/servers/:serverId/exec", summary: "执行服务器命令", ui: "服务器操作台", auth: true },
       { method: "GET", path: "/api/v1/projects/:id/servers/:serverId/terminal/ws", summary: "交互式终端 WebSocket", ui: "服务器操作台", auth: true },

@@ -32,6 +32,12 @@ export interface CicdAccessGrantItem {
   nickname?: string;
 }
 
+export async function getMyServerAccess(projectId: number, serverId: number) {
+  return getData<{ can_view: boolean; can_exec: boolean; can_manage: boolean }>(
+    http.get(`/projects/${projectId}/servers/${serverId}/my-access`),
+  );
+}
+
 export async function listServerAccessGrants(projectId: number, params?: { user_id?: number; server_id?: number }) {
   const data = await getData<{ list?: ServerAccessGrantItem[] }>(
     http.get(`/projects/${projectId}/server-access-grants`, { params }),

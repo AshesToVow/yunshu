@@ -112,16 +112,21 @@ func (s *Service) AssertServerAccess(ctx context.Context, projectID, serverID ui
 		if perm.CanManage {
 			return nil
 		}
+		return constants.ErrForbiddenWithMsg("当前账号对该服务器无管理权限")
 	case "exec":
 		if perm.CanExec || perm.CanManage {
 			return nil
 		}
+		if perm.CanView {
+			return constants.ErrForbiddenWithMsg("仅有查看权限，不能 SSH/执行；请在「资源授权」中勾选 SSH/执行")
+		}
+		return constants.ErrForbiddenWithMsg("当前账号对该服务器无 SSH/执行权限")
 	default: // view
 		if perm.CanView || perm.CanExec || perm.CanManage {
 			return nil
 		}
+		return constants.ErrForbiddenWithMsg("当前账号对该服务器无查看权限")
 	}
-	return constants.ErrForbidden
 }
 
 // visibleServerScope 返回 (unrestricted, serverIDs)。unrestricted 时不过滤。
@@ -203,10 +208,10 @@ func (s *Service) UpsertServerGrant(ctx context.Context, req ServerGrantUpsertRe
 	if req.CanView != nil {
 		canView = *req.CanView
 	}
-	if req.CanManage {
-		canView = true
-		req.CanExec = true
-	} else if req.CanExec {
+	canExec, canManage := req.CanExec, req.CanManage
+	if canManage {
+		canView, canExec = true, true
+	} else if canExec {
 		canView = true
 	}
 	kind, ref := projectacl.UserPrincipalRef(req.UserID)
@@ -216,14 +221,18 @@ func (s *Service) UpsertServerGrant(ctx context.Context, req ServerGrantUpsertRe
 		PrincipalKind: kind,
 		PrincipalRef:  ref,
 		CanView:       canView,
-		CanExec:       req.CanExec,
-		CanManage:     req.CanManage,
+		CanExec:       canExec,
+		CanManage:     canManage,
 		Remark:        strings.TrimSpace(req.Remark),
 		CreatedBy:     req.CreatedBy,
 	}
+	// Assignments(map) 强制写入 false，避免冲突更新吞掉 bool 零值。
 	err = s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-		DoUpdates: clause.AssignmentColumns([]string{"can_view", "can_exec", "can_manage", "remark", "updated_at"}),
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"can_view": canView, "can_exec": canExec, "can_manage": canManage,
+			"remark": strings.TrimSpace(req.Remark), "updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
+		}),
 	}).Create(&row).Error
 	if err != nil {
 		return nil, err
@@ -261,8 +270,11 @@ func (s *Service) BulkUpsertServerGrants(ctx context.Context, req ServerGrantBul
 			CanView: canView, CanExec: canExec, CanManage: canManage, CreatedBy: req.CreatedBy,
 		}
 		if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-			DoUpdates: clause.AssignmentColumns([]string{"can_view", "can_exec", "can_manage", "updated_at"}),
+			Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
+			DoUpdates: clause.Assignments(map[string]interface{}{
+				"can_view": canView, "can_exec": canExec, "can_manage": canManage,
+				"updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
+			}),
 		}).Create(&row).Error; err == nil {
 			n++
 		}
@@ -311,8 +323,10 @@ func (s *Service) BootstrapServerGrantsForMembers(ctx context.Context, req Boots
 				Remark: "bootstrap",
 			}
 			if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-				DoUpdates: clause.AssignmentColumns([]string{"can_view", "can_exec", "updated_at"}),
+				Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
+				DoUpdates: clause.Assignments(map[string]interface{}{
+					"can_view": true, "can_exec": true, "updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
+				}),
 			}).Create(&row).Error; err == nil {
 				granted++
 			}

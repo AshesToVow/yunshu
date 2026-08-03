@@ -15,6 +15,7 @@ func RegisterCMDBRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.GET("/servers", d.cmdbHandler.ListServers)
 	projectScoped.POST("/servers", d.cmdbHandler.UpsertServer)
 	projectScoped.GET("/servers/:serverId", d.cmdbHandler.ServerDetail)
+	projectScoped.GET("/servers/:serverId/my-access", d.cmdbHandler.MyServerAccess)
 	projectScoped.DELETE("/servers/:serverId", d.cmdbHandler.DeleteServer)
 	projectScoped.POST("/servers/:serverId/exec", d.cmdbHandler.ExecServerCommand)
 	projectScoped.GET("/server-groups/tree", d.cmdbHandler.ListServerGroups)

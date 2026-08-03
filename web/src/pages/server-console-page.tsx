@@ -3,6 +3,7 @@ import { Alert, Button, Card, Form, Input, Space, Tabs, Tag, Typography, message
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { execProjectServerCommand, getProjectServerDetail, type ServerDetailItem } from "../services/projects";
+import { getMyServerAccess } from "../services/project-resource-grants";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
@@ -37,6 +38,7 @@ export function ServerConsolePage() {
   const [result, setResult] = useState<ExecResult | null>(null);
   const [terminalConnected, setTerminalConnected] = useState(false);
   const [terminalConnecting, setTerminalConnecting] = useState(false);
+  const [canExec, setCanExec] = useState(true);
 
   const wsRef = useRef<WebSocket | null>(null);
   const termBoxRef = useRef<HTMLDivElement | null>(null);
@@ -56,8 +58,12 @@ export function ServerConsolePage() {
   async function loadDetail() {
     setLoading(true);
     try {
-      const data = await getProjectServerDetail(projectId, serverId);
+      const [data, access] = await Promise.all([
+        getProjectServerDetail(projectId, serverId),
+        getMyServerAccess(projectId, serverId).catch(() => ({ can_view: true, can_exec: false, can_manage: false })),
+      ]);
       setServer(data);
+      setCanExec(Boolean(access.can_exec || access.can_manage));
     } finally {
       setLoading(false);
     }
@@ -65,6 +71,10 @@ export function ServerConsolePage() {
 
   async function runCommand() {
     if (!validParams) return;
+    if (!canExec) {
+      message.error("仅有查看权限，不能执行命令");
+      return;
+    }
     const values = await form.validateFields();
     setRunning(true);
     try {
@@ -90,6 +100,10 @@ export function ServerConsolePage() {
 
   async function openTerminal() {
     if (!validParams) return;
+    if (!canExec) {
+      message.error("仅有查看权限，不能连接 SSH 终端");
+      return;
+    }
     if (!xtermRef.current) {
       message.warning("终端正在初始化，请稍后再试");
       return;
@@ -285,6 +299,15 @@ export function ServerConsolePage() {
       </Card>
 
       <Card className="table-card" bodyStyle={{ paddingTop: 8 }}>
+        {!canExec ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="当前账号对该服务器仅有查看权限"
+            description="交互式终端与单次命令执行需要「SSH/执行」授权。请联系项目 owner/admin 在「项目成员 → 资源授权」中勾选 SSH/执行。"
+          />
+        ) : null}
         <Tabs
           items={[
             {
@@ -293,7 +316,12 @@ export function ServerConsolePage() {
               children: (
                 <Space direction="vertical" size={12} style={{ width: "100%" }}>
                   <Space wrap>
-                    <Button type="primary" onClick={openTerminal} disabled={terminalConnected || terminalConnecting} loading={terminalConnecting}>
+                    <Button
+                      type="primary"
+                      onClick={openTerminal}
+                      disabled={!canExec || terminalConnected || terminalConnecting}
+                      loading={terminalConnecting}
+                    >
                       连接终端
                     </Button>
                     <Button onClick={closeTerminal} disabled={!terminalConnected}>
@@ -328,7 +356,13 @@ export function ServerConsolePage() {
                       <Input type="number" min={1} max={120} style={{ width: 180 }} />
                     </Form.Item>
                     <Space>
-                      <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => void runCommand()} loading={running}>
+                      <Button
+                        type="primary"
+                        icon={<PlayCircleOutlined />}
+                        onClick={() => void runCommand()}
+                        loading={running}
+                        disabled={!canExec}
+                      >
                         执行
                       </Button>
                       <Button icon={<ReloadOutlined />} onClick={() => setResult(null)}>

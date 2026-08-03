@@ -32,7 +32,7 @@ export function ProjectResourceGrantsDrawer({ open, projectId, members, onClose 
   const [services, setServices] = useState<CicdServiceItem[]>([]);
   const [userId, setUserId] = useState<number>();
   const [resourceIds, setResourceIds] = useState<number[]>([]);
-  const [caps, setCaps] = useState({ view: true, exec: true, build: true, release: true, manage: false });
+  const [caps, setCaps] = useState({ view: true, exec: false, build: false, release: false, manage: false });
 
   const memberOptions = useMemo(
     () =>
@@ -121,6 +121,8 @@ export function ProjectResourceGrantsDrawer({ open, projectId, members, onClose 
     <Drawer title="项目资源授权" width={860} open={open} onClose={onClose} destroyOnClose>
       <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
         owner/admin 默认可见全部资源，无需授权。普通成员/只读成员仅能访问下方已授权的服务器或 CI/CD 应用。
+        <br />
+        「查看」只能看机器信息；「SSH/执行」才能连终端/跑命令。勾选后点「授予」会覆盖该成员对该资源的原授权。
       </Typography.Paragraph>
       <Tabs
         activeKey={tab}

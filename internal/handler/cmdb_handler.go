@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/middleware"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
@@ -427,7 +428,8 @@ func (h *CMDBHandler) ServerTerminalWS(c *gin.Context) {
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
 	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
-		response.Error(c, err)
+		// WebSocket 必须立刻写响应，避免后续 Upgrade；用 AbortWithError 而非仅挂 c.Error。
+		middleware.AbortWithError(c, err)
 		return
 	}
 
@@ -560,6 +562,27 @@ func (h *CMDBHandler) ListServerGrants(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"list": list})
+}
+
+// MyServerAccess 当前用户对指定服务器的有效权限（含 owner/admin 隐式全量）。
+func (h *CMDBHandler) MyServerAccess(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	serverID, err := parseUintParam(c, "serverId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	perm, err := h.svc.EffectiveServerAccess(c.Request.Context(), projectID, serverID, actor)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, perm)
 }
 
 func (h *CMDBHandler) UpsertServerGrant(c *gin.Context) {

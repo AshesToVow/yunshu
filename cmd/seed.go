@@ -490,6 +490,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "项目服务器列表", Resource: "/api/v1/projects/:id/servers", Action: "GET", Description: "List project servers"},
 		{Name: "项目服务器保存", Resource: "/api/v1/projects/:id/servers", Action: "POST", Description: "Upsert project server"},
 		{Name: "项目服务器详情", Resource: "/api/v1/projects/:id/servers/:serverId", Action: "GET", Description: "Project server detail"},
+		{Name: "项目服务器有效权限", Resource: "/api/v1/projects/:id/servers/:serverId/my-access", Action: "GET", Description: "Current user effective server access"},
 		{Name: "删除项目服务器", Resource: "/api/v1/projects/:id/servers/:serverId", Action: "DELETE", Description: "Delete project server"},
 		{Name: "项目服务器命令", Resource: "/api/v1/projects/:id/servers/:serverId/exec", Action: "POST", Description: "Exec on project server"},
 		{Name: "项目服务器云操作", Resource: "/api/v1/projects/:id/servers/:serverId/cloud-actions", Action: "POST", Description: "Run cloud provider action on server"},
