@@ -5,6 +5,7 @@ import { useAlertMonitor } from "../context";
 import {
   createAlertMonitorRuleFromTemplate,
   listAlertRuleTemplates,
+  type AlertDatasourceItem,
   type AlertRuleTemplateItem,
 } from "../../../services/alert-platform";
 
@@ -165,7 +166,7 @@ export function RulesTab() {
           <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
             <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: "请选择数据源" }]}>
               <Select
-                options={ctx.datasources.map((d) => ({
+                options={ctx.datasources.map((d: AlertDatasourceItem) => ({
                   value: d.id,
                   label: `${d.name}${d.project_id ? ` (项目 ${d.project_id})` : ""}`,
                 }))}
