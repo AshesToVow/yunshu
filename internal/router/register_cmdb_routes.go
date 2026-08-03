@@ -33,6 +33,11 @@ func RegisterCMDBRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.POST("/servers/test/batch", d.cmdbHandler.BatchTestServers)
 	projectScoped.POST("/servers/:serverId/cloud-actions", d.cmdbHandler.CloudServerAction)
 	projectScoped.POST("/servers/sync", d.cmdbHandler.SyncServers)
+	projectScoped.GET("/server-access-grants", d.cmdbHandler.ListServerGrants)
+	projectScoped.POST("/server-access-grants", d.cmdbHandler.UpsertServerGrant)
+	projectScoped.POST("/server-access-grants/bulk", d.cmdbHandler.BulkUpsertServerGrants)
+	projectScoped.POST("/server-access-grants/bootstrap", d.cmdbHandler.BootstrapServerGrants)
+	projectScoped.DELETE("/server-access-grants/:grantId", d.cmdbHandler.DeleteServerGrant)
 
 	projectsWS := api.Group("/projects")
 	projectsWS.Use(d.wsAuthMiddleware, d.authorize, d.opAudit, middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))

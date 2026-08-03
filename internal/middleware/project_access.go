@@ -107,5 +107,8 @@ func isProjectAdminOnlyRoute(method, ginFullPath string) bool {
 	if strings.Contains(ginFullPath, "/api/v1/projects/:id/members") {
 		return true
 	}
+	if strings.Contains(ginFullPath, "/server-access-grants") || strings.Contains(ginFullPath, "/cicd-access-grants") {
+		return true
+	}
 	return false
 }

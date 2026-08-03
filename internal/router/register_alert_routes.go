@@ -47,6 +47,8 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	alerts.GET("/monitor-rules", d.alertPlatformHandler.ListMonitorRules)
 	alerts.POST("/monitor-rules", d.alertPlatformHandler.CreateMonitorRule)
+	alerts.GET("/rule-templates", d.alertPlatformHandler.ListRuleTemplates)
+	alerts.POST("/monitor-rules/from-template", d.alertPlatformHandler.CreateMonitorRuleFromTemplate)
 	alerts.PUT("/monitor-rules/:id", d.alertPlatformHandler.UpdateMonitorRule)
 	alerts.DELETE("/monitor-rules/:id", d.alertPlatformHandler.DeleteMonitorRule)
 	alerts.GET("/monitor-rules/:id/assignees", d.alertPlatformHandler.GetMonitorRuleAssignees)

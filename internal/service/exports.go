@@ -191,6 +191,11 @@ type (
 	ServerSyncResult         = cmdb.ServerSyncResult
 	ServerTestRequest        = cmdb.ServerTestRequest
 	ServerTestResult         = cmdb.ServerTestResult
+	ServerGrantItem          = cmdb.ServerGrantItem
+	ServerGrantUpsertRequest = cmdb.ServerGrantUpsertRequest
+	ServerGrantBulkRequest   = cmdb.ServerGrantBulkRequest
+	BootstrapServerGrantsRequest = cmdb.BootstrapServerGrantsRequest
+	ServerAccessPerm         = cmdb.ServerAccessPerm
 	LogSourceItem            = project.LogSourceItem
 	LogSourceListQuery       = project.LogSourceListQuery
 	LogSourceUpsertRequest   = project.LogSourceUpsertRequest
@@ -357,6 +362,8 @@ type (
 	ReceiverGroupCache        = alert.ReceiverGroupCache
 	AlertDatasourceService    = alert.AlertDatasourceService
 	AlertMonitorRuleService   = alert.AlertMonitorRuleService
+	AlertRuleTemplate         = alert.AlertRuleTemplate
+	CreateFromTemplateRequest = alert.CreateFromTemplateRequest
 	AlertReceiverGroupService = alert.AlertReceiverGroupService
 	AlertInhibitionService    = alert.AlertInhibitionService
 	AlertSubscriptionService  = alert.AlertSubscriptionService
@@ -411,6 +418,7 @@ var (
 	NewAlertReceiverGroupService = alert.NewAlertReceiverGroupService
 	NewAlertInhibitionService    = alert.NewAlertInhibitionServiceWithRepo
 	NewAlertSubscriptionService  = alert.NewAlertSubscriptionService
+	ListAlertRuleTemplates       = alert.ListAlertRuleTemplates
 )
 
 

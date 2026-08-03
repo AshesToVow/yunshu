@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"yunshu/internal/model"
@@ -29,8 +30,10 @@ func (h *CicdHandler) ListServices(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor, _ := auth.CurrentUserFromContext(c)
 	ServeQuery(c, func(ctx context.Context, q cicd.ServiceListQuery) (*pagination.Result[cicd.ServiceItem], error) {
 		q.ProjectID = projectID
+		q.Actor = actor
 		return h.svc.ListServices(ctx, q)
 	})
 }
@@ -43,6 +46,11 @@ func (h *CicdHandler) GetService(c *gin.Context) {
 	}
 	serviceID, err := parseUintParam(c, "serviceId")
 	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertCicdAccess(c.Request.Context(), projectID, serviceID, actor, "view"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -60,6 +68,11 @@ func (h *CicdHandler) CreateService(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertCanCreateCicdService(c.Request.Context(), projectID, actor); err != nil {
+		response.Error(c, err)
+		return
+	}
 	ServeJSON201(c, func(ctx context.Context, req cicd.ServiceUpsertRequest) (*model.CicdService, error) {
 		req.ProjectID = projectID
 		return h.svc.UpsertService(ctx, 0, req)
@@ -74,6 +87,11 @@ func (h *CicdHandler) UpdateService(c *gin.Context) {
 	}
 	serviceID, err := parseUintParam(c, "serviceId")
 	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertCicdAccess(c.Request.Context(), projectID, serviceID, actor, "manage"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -99,6 +117,11 @@ func (h *CicdHandler) DeleteService(c *gin.Context) {
 	}
 	serviceID, err := parseUintParam(c, "serviceId")
 	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertCicdAccess(c.Request.Context(), projectID, serviceID, actor, "manage"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -242,6 +265,11 @@ func (h *CicdHandler) TriggerBuild(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertCicdAccess(c.Request.Context(), projectID, serviceID, actor, "build"); err != nil {
+		response.Error(c, err)
+		return
+	}
 	var req cicd.TriggerBuildRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
@@ -272,6 +300,11 @@ func (h *CicdHandler) TriggerRelease(c *gin.Context) {
 	}
 	serviceID, err := parseUintParam(c, "serviceId")
 	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertCicdAccess(c.Request.Context(), projectID, serviceID, actor, "release"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -322,8 +355,10 @@ func (h *CicdHandler) ListBuildRuns(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor, _ := auth.CurrentUserFromContext(c)
 	ServeQuery(c, func(ctx context.Context, q cicd.BuildRunListQuery) (*pagination.Result[cicd.BuildRunItem], error) {
 		q.ProjectID = projectID
+		q.Actor = actor
 		return h.svc.ListBuildRuns(ctx, q)
 	})
 }
@@ -390,8 +425,10 @@ func (h *CicdHandler) ListReleaseRuns(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor, _ := auth.CurrentUserFromContext(c)
 	ServeQuery(c, func(ctx context.Context, q cicd.ReleaseRunListQuery) (*pagination.Result[cicd.ReleaseRunItem], error) {
 		q.ProjectID = projectID
+		q.Actor = actor
 		if q.Mine {
 			if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
 				scope := strings.TrimSpace(q.MineScope)
@@ -720,4 +757,107 @@ func (h *CicdHandler) DownloadHelmScaffoldPreview(c *gin.Context) {
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.QueryEscape(filename)))
 	c.Data(200, "application/zip", data)
+}
+
+func (h *CicdHandler) ListCicdGrants(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	var userID, serviceID uint
+	if v := strings.TrimSpace(c.Query("user_id")); v != "" {
+		if parsed, e := strconv.ParseUint(v, 10, 32); e == nil {
+			userID = uint(parsed)
+		}
+	}
+	if v := strings.TrimSpace(c.Query("service_id")); v != "" {
+		if parsed, e := strconv.ParseUint(v, 10, 32); e == nil {
+			serviceID = uint(parsed)
+		}
+	}
+	list, err := h.svc.ListCicdGrants(c.Request.Context(), projectID, actor, userID, serviceID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
+}
+
+func (h *CicdHandler) UpsertCicdGrant(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	ServeJSON(c, func(ctx context.Context, req cicd.CicdGrantUpsertRequest) (*model.CicdAccessGrant, error) {
+		req.ProjectID = projectID
+		if actor != nil {
+			id := actor.ID
+			req.CreatedBy = &id
+		}
+		return h.svc.UpsertCicdGrant(ctx, req, actor)
+	})
+}
+
+func (h *CicdHandler) BulkUpsertCicdGrants(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	ServeJSON(c, func(ctx context.Context, req cicd.CicdGrantBulkRequest) (gin.H, error) {
+		req.ProjectID = projectID
+		if actor != nil {
+			id := actor.ID
+			req.CreatedBy = &id
+		}
+		n, err := h.svc.BulkUpsertCicdGrants(ctx, req, actor)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"upserted": n}, nil
+	})
+}
+
+func (h *CicdHandler) DeleteCicdGrant(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	grantID, err := parseUintParam(c, "grantId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.DeleteCicdGrant(c.Request.Context(), projectID, grantID, actor); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted"})
+}
+
+func (h *CicdHandler) BootstrapCicdGrants(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	req := cicd.BootstrapCicdGrantsRequest{ProjectID: projectID}
+	if actor != nil {
+		id := actor.ID
+		req.CreatedBy = &id
+	}
+	stats, err := h.svc.BootstrapCicdGrantsForMembers(c.Request.Context(), req, actor)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, stats)
 }

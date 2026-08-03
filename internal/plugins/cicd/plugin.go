@@ -40,6 +40,7 @@ func (m *module) Models() []any {
 		&model.CicdReleaseRun{},
 		&model.CicdApprovalFlowStage{},
 		&model.CicdReleaseApprovalStep{},
+		&model.CicdAccessGrant{},
 	}
 }
 

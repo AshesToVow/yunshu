@@ -128,11 +128,11 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v84 := project.NewServiceCatalogService(v83, v29, db)
 	v85 := routerRouteRepositories.ChangeEvent
 	v86 := project.NewChangeEventService(v85, v29, db)
-	v87, err := provideCMDBService(v78, v79, v48, securityEncryptionKey)
+	v87, err := provideCMDBService(db, v78, v79, v48, v9, securityEncryptionKey)
 	if err != nil {
 		return nil, err
 	}
-	service := provideCicdService(db, v78, v29, v24, v5, cicdConfig, sender, appDisplayName, v59)
+	service := provideCicdService(db, v78, v29, v24, v5, v9, cicdConfig, sender, appDisplayName, v59)
 	v88 := routerRouteRepositories.MysqlBackup
 	v89, err := provideMysqlBackupService(v88, v78, v29, v5, db, securityEncryptionKey, sender, appDisplayName)
 	if err != nil {

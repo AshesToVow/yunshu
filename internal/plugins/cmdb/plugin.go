@@ -30,5 +30,6 @@ func (m *module) Models() []any {
 		&model.Server{},
 		&model.ServerCredential{},
 		&model.CloudAccount{},
+		&model.ServerAccessGrant{},
 	}
 }

@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/pagination"
@@ -34,8 +38,10 @@ func (h *CMDBHandler) ListServers(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor, _ := auth.CurrentUserFromContext(c)
 	ServeQuery(c, func(ctx context.Context, q service.ServerListQuery) (*pagination.Result[service.ServerItem], error) {
 		q.ProjectID = projectID
+		q.Actor = actor
 		return h.svc.ListServers(ctx, q)
 	})
 }
@@ -47,16 +53,34 @@ func (h *CMDBHandler) UpsertServer(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor, _ := auth.CurrentUserFromContext(c)
 	ServeJSON(c, func(ctx context.Context, req service.ServerUpsertRequest) (*service.ServerItem, error) {
 		req.ProjectID = projectID
+		if req.ID != nil && *req.ID > 0 {
+			if err := h.svc.AssertServerAccess(ctx, projectID, *req.ID, actor, "manage"); err != nil {
+				return nil, err
+			}
+		} else if err := h.svc.AssertCanCreateServer(ctx, projectID, actor); err != nil {
+			return nil, err
+		}
 		return h.svc.UpsertServer(ctx, req)
 	})
 }
 
 // DeleteServer 鍒犻櫎瀵瑰簲鐨?HTTP 鎺ュ彛澶勭悊閫昏緫銆?
 func (h *CMDBHandler) DeleteServer(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
 	id, err := parseUintParam(c, "serverId")
 	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, id, actor, "manage"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -76,6 +100,11 @@ func (h *CMDBHandler) ServerDetail(c *gin.Context) {
 	}
 	serverID, err := parseUintParam(c, "serverId")
 	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "view"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -100,6 +129,11 @@ func (h *CMDBHandler) ExecServerCommand(c *gin.Context) {
 	}
 	serverID, err := parseUintParam(c, "serverId")
 	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -391,6 +425,11 @@ func (h *CMDBHandler) ServerTerminalWS(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+		response.Error(c, err)
+		return
+	}
 
 	conn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -495,5 +534,108 @@ func (h *CMDBHandler) ServerTerminalWS(c *gin.Context) {
 	writeJSON(wsExecMessage{Type: "exit"})
 	sess.Cancel()
 	sess.Wait()
+}
+
+func (h *CMDBHandler) ListServerGrants(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	var userID, serverID uint
+	if v := strings.TrimSpace(c.Query("user_id")); v != "" {
+		if parsed, e := strconv.ParseUint(v, 10, 32); e == nil {
+			userID = uint(parsed)
+		}
+	}
+	if v := strings.TrimSpace(c.Query("server_id")); v != "" {
+		if parsed, e := strconv.ParseUint(v, 10, 32); e == nil {
+			serverID = uint(parsed)
+		}
+	}
+	list, err := h.svc.ListServerGrants(c.Request.Context(), projectID, actor, userID, serverID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
+}
+
+func (h *CMDBHandler) UpsertServerGrant(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	ServeJSON(c, func(ctx context.Context, req service.ServerGrantUpsertRequest) (*model.ServerAccessGrant, error) {
+		req.ProjectID = projectID
+		if actor != nil {
+			id := actor.ID
+			req.CreatedBy = &id
+		}
+		return h.svc.UpsertServerGrant(ctx, req, actor)
+	})
+}
+
+func (h *CMDBHandler) BulkUpsertServerGrants(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	ServeJSON(c, func(ctx context.Context, req service.ServerGrantBulkRequest) (gin.H, error) {
+		req.ProjectID = projectID
+		if actor != nil {
+			id := actor.ID
+			req.CreatedBy = &id
+		}
+		n, err := h.svc.BulkUpsertServerGrants(ctx, req, actor)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"upserted": n}, nil
+	})
+}
+
+func (h *CMDBHandler) DeleteServerGrant(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	grantID, err := parseUintParam(c, "grantId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.DeleteServerGrant(c.Request.Context(), projectID, grantID, actor); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted"})
+}
+
+func (h *CMDBHandler) BootstrapServerGrants(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	req := service.BootstrapServerGrantsRequest{ProjectID: projectID}
+	if actor != nil {
+		id := actor.ID
+		req.CreatedBy = &id
+	}
+	stats, err := h.svc.BootstrapServerGrantsForMembers(c.Request.Context(), req, actor)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, stats)
 }
 
