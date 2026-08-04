@@ -283,15 +283,7 @@ func (s *Service) initAppUserRequestSteps(ctx context.Context, req *model.DbAppU
 		return err
 	}
 	if len(stages) == 0 {
-		inst, instErr := s.repo.GetInstance(ctx, req.InstanceID)
-		if instErr == nil && inst.Env == model.DbEnvProd {
-			return constants.ErrBadRequestWithMsg("生产环境须启用至少一级审批流后方可提交应用用户申请")
-		}
-		req.Status = model.DbAccessRequestStatusApproved
-		if err := s.repo.UpdateAppUserRequest(ctx, req); err != nil {
-			return err
-		}
-		return s.executeAppUserRequest(ctx, req)
+		return constants.ErrBadRequestWithMsg("请先在「审批流配置」中启用至少一级审批后再提交应用用户申请")
 	}
 	now := time.Now()
 	for i, st := range stages {

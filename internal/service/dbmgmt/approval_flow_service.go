@@ -257,15 +257,7 @@ func (s *Service) initAccessRequestSteps(ctx context.Context, req *model.DbAcces
 		return err
 	}
 	if len(stages) == 0 {
-		inst, instErr := s.repo.GetInstance(ctx, req.InstanceID)
-		if instErr == nil && inst.Env == model.DbEnvProd {
-			return constants.ErrBadRequestWithMsg("生产环境须启用至少一级审批流后方可提交权限申请")
-		}
-		req.Status = model.DbAccessRequestStatusApproved
-		if err := s.repo.UpdateAccessRequest(ctx, req); err != nil {
-			return err
-		}
-		return s.grantFromAccessRequest(ctx, req)
+		return constants.ErrBadRequestWithMsg("请先在「审批流配置」中启用至少一级审批后再提交权限申请")
 	}
 	now := time.Now()
 	for i, st := range stages {
@@ -290,12 +282,7 @@ func (s *Service) initSqlTicketSteps(ctx context.Context, ticket *model.DbSqlTic
 		return err
 	}
 	if len(stages) == 0 {
-		inst, instErr := s.repo.GetInstance(ctx, ticket.InstanceID)
-		if instErr == nil && inst.Env == model.DbEnvProd {
-			return constants.ErrBadRequestWithMsg("生产环境须启用至少一级审批流后方可提交 SQL 工单")
-		}
-		ticket.Status = model.DbTicketStatusPendingExecution
-		return s.repo.UpdateSqlTicket(ctx, ticket)
+		return constants.ErrBadRequestWithMsg("请先在「审批流配置」中启用至少一级审批后再提交 SQL 工单")
 	}
 	now := time.Now()
 	for i, st := range stages {

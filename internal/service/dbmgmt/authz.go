@@ -73,11 +73,13 @@ func (s *Service) requireInstanceManage(ctx context.Context, projectID, instance
 func grantMatchesDatabase(g model.DbAccessGrant, database string) bool {
 	db := strings.TrimSpace(g.DatabaseName)
 	target := strings.TrimSpace(database)
+	// 空库名 = 整实例授权，匹配任意目标库（含未选库的实例级 DDL）。
 	if db == "" {
 		return true
 	}
+	// 具名库授权不能覆盖「未指定库」的操作。
 	if target == "" {
-		return true
+		return false
 	}
 	return strings.EqualFold(db, target)
 }
@@ -95,9 +97,6 @@ func (s *Service) effectivePermissionForDatabase(ctx context.Context, projectID,
 		return base, nil
 	}
 	target := strings.TrimSpace(database)
-	if target == "" {
-		return base, nil
-	}
 	scoped := &EffectivePermission{}
 	hasScoped := false
 	now := timeNow()
@@ -118,7 +117,8 @@ func (s *Service) effectivePermissionForDatabase(ctx context.Context, projectID,
 		}
 	}
 	if !hasScoped {
-		return base, nil
+		// 未命中目标库的授权时，不回退到「其它库上的权限并集」，避免跨库串权。
+		return scoped, nil
 	}
 	inst, err := s.repo.GetInstanceInProject(ctx, projectID, instanceID)
 	if err != nil {

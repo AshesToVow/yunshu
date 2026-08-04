@@ -169,13 +169,14 @@ func (s *Service) needsApproval(inst *model.DbInstance, assessment SQLAssessment
 	if assessment.Blocked {
 		return false
 	}
+	// 实例开启「写操作须工单」时，任意变更 SQL 都走审批（含原判定为 low 的边界语句）。
+	if inst.RequireTicketForDML {
+		return true
+	}
 	if inst.Env == model.DbEnvProd && cfg.ProdForceApproval {
 		return assessment.RiskLevel != model.DbRiskLow
 	}
-	if inst.RequireTicketForDML {
-		return assessment.RiskLevel == model.DbRiskHigh || assessment.RiskLevel == model.DbRiskMedium
-	}
-	return assessment.RiskLevel == model.DbRiskHigh
+	return assessment.RiskLevel == model.DbRiskHigh || assessment.RiskLevel == model.DbRiskMedium
 }
 
 func normalizeAuditMode(mode string) string {
