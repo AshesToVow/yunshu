@@ -28,6 +28,7 @@
 | **`severity`** | **必需（若节点配置了匹配级别）** | 只允许 **`severity`**，禁止使用 `sevrity`、`servity`。取值如 `critical`、`warning`。 |
 | **`cluster`** | 按节点配置 | 若在 `match_labels_json` 中写了 `cluster`，则告警侧必须带上相同值。 |
 | **`route`** | 按节点配置 | 常用于区分钉钉/邮件等不同订阅分支；写了就必须一致。 |
+| **`category`** | 按节点配置 | 平台规则模板会写入 `cpu` / `disk` / `memory` / `availability` 等；可在订阅树按类拆路由。Prometheus 规则也可自行打同名标签以对齐。 |
 | 其他业务键 | 按节点配置 | 出现在 `match_labels_json` / `match_regex_json` 中的键，告警侧都要有对应值。 |
 
 **Prometheus `global.external_labels`**：适合放 **整环境通用** 且 **订阅树需要精确匹配** 的键（例如统一 `cluster`、`project_id`），减少每条规则重复写。
@@ -96,9 +97,11 @@ labels:
 }
 ```
 
+从**规则模板**创建时，平台会自动写入 `category`（如 `cpu`、`disk`）。若订阅节点要按类路由，在 `match_labels_json` 中写 `{ "category": "disk" }` 即可，无需再手工补一遍（除非覆盖）。
+
 若再在 JSON 里写 `severity`，会与表单级别合并覆盖——保持与 **匹配级别** 一致即可。
 
-**注意**：内置监控规则依赖后端 **Redis** 做评估节拍与状态；Redis 不可用时规则不会进入 firing。
+**注意**：平台监控规则依赖后端 **Redis** 做评估节拍与状态；Redis 不可用时规则不会进入 firing。生产核心告警仍应以 **Prometheus + Alertmanager Webhook** 为主路径，平台评估器为轻量补充。
 
 ---
 

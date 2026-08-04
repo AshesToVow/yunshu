@@ -26,7 +26,7 @@ func stalePermissions() []permissionPair {
 		{Resource: "/api/v1/alerts/policies", Action: "POST"},
 		{Resource: "/api/v1/alerts/policies/:id", Action: "PUT"},
 		{Resource: "/api/v1/alerts/policies/:id", Action: "DELETE"},
-		{Resource: "/api/v1/alerts/rule-templates", Action: "GET"},
+		// 内置模板仅提供 GET 列表；旧的 CRUD 路径已下线
 		{Resource: "/api/v1/alerts/rule-templates", Action: "POST"},
 		{Resource: "/api/v1/alerts/rule-templates/:id", Action: "PUT"},
 		{Resource: "/api/v1/alerts/rule-templates/:id", Action: "DELETE"},

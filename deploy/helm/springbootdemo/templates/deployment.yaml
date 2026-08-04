@@ -26,6 +26,18 @@ spec:
             - name: http
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
+          {{- if or .Values.javaOpts .Values.apollo.enabled }}
+          env:
+            {{- if .Values.javaOpts }}
+            - name: JAVA_OPTS
+              value: {{ .Values.javaOpts | quote }}
+            {{- end }}
+            {{- if .Values.apollo.enabled }}
+            # meta 可含多个逗号分隔地址，必须 quote，避免 YAML/注入被拆段
+            - name: APOLLO_OPTS
+              value: {{ printf "-Denv=%s -Dapollo.meta=%s -Dapollo.bootstrap.namespaces=%s" .Values.apollo.env .Values.apollo.meta .Values.apollo.namespaces | quote }}
+            {{- end }}
+          {{- end }}
           {{- if .Values.probes.enabled }}
           livenessProbe:
             httpGet:

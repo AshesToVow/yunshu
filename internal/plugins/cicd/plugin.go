@@ -5,6 +5,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/plugin"
+	cicdsvc "yunshu/internal/service/cicd"
 )
 
 func init() {
@@ -18,6 +19,18 @@ type module struct {
 func (m *module) Name() string        { return "cicd" }
 func (m *module) Description() string { return "CI/CD 持续集成与交付：Jenkins 打包、MinIO/SSH 发布、执行记录" }
 
+func (m *module) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		MenuPathPrefixes: []string{"/cicd"},
+		APIPrefixes: []string{
+			"/api/v1/overview/project-launches",
+			"/api/v1/overview/release-by-person",
+		},
+		DependsOn: []string{"project"},
+		Workers:   []string{"cicd_jenkins_sync"},
+	}
+}
+
 func (m *module) Models() []any {
 	return []any{
 		&model.CicdService{},
@@ -27,6 +40,7 @@ func (m *module) Models() []any {
 		&model.CicdReleaseRun{},
 		&model.CicdApprovalFlowStage{},
 		&model.CicdReleaseApprovalStep{},
+		&model.CicdAccessGrant{},
 	}
 }
 
@@ -34,7 +48,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc := rt.CicdSvc(); svc != nil {
+	if svc, ok := rt.Cicd.(*cicdsvc.Service); ok && svc != nil {
 		go svc.RunSyncWorker(bgCtx)
 	}
 	return nil

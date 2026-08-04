@@ -372,14 +372,22 @@ find_pid() {
 }
 ```
 
-**启动命令（含指定 JDK + Apollo）：**
+**启动命令（含指定 JDK + Apollo；Meta 支持逗号分隔多地址，须加引号）：**
 
 ```bash
 nohup ${java_bin} ${jvm_opts} \
-  -Denv=${apollo_env} -Dapollo.meta=${apollo_meta} \
-  -Dapollo.bootstrap.namespaces=${apollo_namespaces} \
+  -Denv="${apollo_env}" -Dapollo.meta="${apollo_meta}" \
+  -Dapollo.bootstrap.namespaces="${apollo_namespaces}" \
   -jar ${jar_path} >> ${app_dir}/${log_path} 2>&1 &
 ```
+
+`apollo_meta` / `{{APOLLO_META}}` 示例：
+
+```text
+http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080
+```
+
+仍用**单个**占位符整串替换，不要拆成多个 Meta 参数。Apollo Client 原生支持逗号分隔集群地址。
 
 不使用 Apollo 时，模板仍会注入默认 Apollo 参数；纯 Spring Boot 演示项目可保持默认或改用 [5.2 自定义脚本](#52-自定义脚本模式startscripttype自定义脚本)。
 
@@ -611,7 +619,7 @@ nohup ${binary_path} ${run_opts} >> ${app_dir}/${log_path} 2>&1 &
 | `{{JARNAME}}`           | 本次部署 JAR 文件名                              | `springboot-demo-20260624_120000-abc1234.jar` |
 | `{{PRONAME}}`           | `projectName`                             | `springboot-demo`                             |
 | `{{APOLLO_ENV}}`        | `APOLLO_ENV`                              | `PRO`                                         |
-| `{{APOLLO_META}}`       | `APOLLO_META`                             | `http://apollo-eurka-service/`                |
+| `{{APOLLO_META}}`       | `APOLLO_META`                             | 单个或多个 Meta，逗号分隔，如 `http://a:8080,http://b:8080` |
 | `{{APOLLO_NAMESPACES}}` | `APOLLO_NAMESPACES`                       | 逗号分隔 namespace 列表                             |
 | `{{PYTHON_BIN}}`        | `pythonToolName`                          | `/export/server/python3/bin/python3`          |
 | `{{APP_CMD}}`           | `appCmd`                                  | `gunicorn -w 4 app:app`                       |
@@ -912,7 +920,7 @@ try {
 | `startScriptType`     | Choice                | `脚本模板` / `自定义脚本`；**默认脚本模板**                   |
 | `customScriptContent` | **Multi-line String** | 自定义 launch 脚本；`startScriptType=自定义脚本` 时**必填** |
 | `APOLLO_ENV`          | String                | Apollo 环境，默认 `PRO`                            |
-| `APOLLO_META`         | String                | Apollo Meta 地址                                |
+| `APOLLO_META`         | String                | Apollo Meta 地址，支持逗号分隔多个                  |
 | `APOLLO_NAMESPACES`   | String                | Apollo namespace 列表                           |
 
 
@@ -930,7 +938,7 @@ try {
 | `cleanDeployDir`      | `false`                                            |
 | `waitMins`            | `60`                                               |
 | `APOLLO_ENV`          | `PRO`                                              |
-| `APOLLO_META`         | `http://apollo-eurka-service/`                     |
+| `APOLLO_META`         | `http://apollo-eurka-service/`（可逗号分隔多地址）   |
 | `APOLLO_NAMESPACES`   | `bigdata.configuration,application,...`            |
 | `JVM_OPTS`            | 见 [5.6 流水线默认值](#56-通用-jvm_optsjava-8--spring-boot) |
 | `MINIO_BUCKET`        | `backend-artifacts`（`config.groovy`）               |

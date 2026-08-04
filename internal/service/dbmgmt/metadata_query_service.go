@@ -75,8 +75,16 @@ func (s *Service) ListDatabases(ctx context.Context, projectID, instanceID uint,
 		}
 		out = append(out, DatabaseInfo{Name: name})
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	sc, err := s.resolveMetadataScope(ctx, projectID, inst, actor)
+	if err != nil {
+		return nil, err
+	}
+	out = sc.filterDatabases(out)
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Service) ListTables(ctx context.Context, projectID, instanceID uint, database string, actor *auth.CurrentUser) ([]TableInfo, error) {
@@ -101,15 +109,29 @@ func (s *Service) ListTables(ctx context.Context, projectID, instanceID uint, da
 		if db == "" {
 			db = "public"
 		}
+		if err := s.requireMetadataDatabaseAccess(ctx, projectID, inst, db, actor); err != nil {
+			return nil, err
+		}
 		rows, err := sess.DB.QueryContext(ctx, `SELECT tablename FROM pg_tables WHERE schemaname = $1 ORDER BY 1`, db)
 		if err != nil {
 			return nil, err
 		}
 		defer rows.Close()
-		return scanTableNames(rows)
+		list, err := scanTableNames(rows)
+		if err != nil {
+			return nil, err
+		}
+		sc, err := s.resolveMetadataScope(ctx, projectID, inst, actor)
+		if err != nil {
+			return nil, err
+		}
+		return sc.filterTables(db, list), nil
 	default:
 		if db == "" {
 			return nil, constants.ErrBadRequestWithMsg("须指定 database")
+		}
+		if err := s.requireMetadataDatabaseAccess(ctx, projectID, inst, db, actor); err != nil {
+			return nil, err
 		}
 		q := fmt.Sprintf("SHOW TABLES FROM `%s`", escapeMySQLIdent(db))
 		rows, err := sess.DB.QueryContext(ctx, q)
@@ -117,7 +139,15 @@ func (s *Service) ListTables(ctx context.Context, projectID, instanceID uint, da
 			return nil, err
 		}
 		defer rows.Close()
-		return scanTableNames(rows)
+		list, err := scanTableNames(rows)
+		if err != nil {
+			return nil, err
+		}
+		sc, err := s.resolveMetadataScope(ctx, projectID, inst, actor)
+		if err != nil {
+			return nil, err
+		}
+		return sc.filterTables(db, list), nil
 	}
 }
 
@@ -153,6 +183,15 @@ func (s *Service) ListColumns(ctx context.Context, projectID, instanceID uint, d
 	tbl := strings.TrimSpace(table)
 	if tbl == "" {
 		return nil, constants.ErrBadRequestWithMsg("须指定 table")
+	}
+	if db == "" && strings.ToLower(inst.Driver) == model.DbDriverPostgres {
+		db = "public"
+	}
+	if db == "" {
+		return nil, constants.ErrBadRequestWithMsg("须指定 database")
+	}
+	if err := s.requireMetadataTableAccess(ctx, projectID, inst, db, tbl, actor); err != nil {
+		return nil, err
 	}
 
 	switch strings.ToLower(inst.Driver) {

@@ -34,6 +34,7 @@ var repositoryFieldNames = wire.FieldsOf(
 	"AlertInhibitionRule", "AlertSubscription", "AlertDatasource",
 	"AlertMonitorRule", "AlertReceiverGroup", "AlertDuty", "AlertRuleAssignee",
 	"AlertFiringDelivery", "CloudExpiryRule", "Overview", "K8sEventForward",
+	"ServiceCatalog", "ChangeEvent",
 )
 
 // AppInfraSet extracts infrastructure dependencies from bootstrap.App.
@@ -160,12 +161,14 @@ func provideK8sRuntimeService(
 }
 
 func provideCMDBService(
+	db *gorm.DB,
 	serverRepo interfaces.ServerRepository,
 	serverGroupRepo interfaces.ServerGroupRepository,
 	cloudAccountRepo interfaces.CloudAccountRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 	encryptionKey SecurityEncryptionKey,
 ) (*service.CMDBService, error) {
-	return service.NewCMDBService(serverRepo, serverGroupRepo, cloudAccountRepo, string(encryptionKey))
+	return service.NewCMDBService(db, serverRepo, serverGroupRepo, cloudAccountRepo, memberRepo, string(encryptionKey))
 }
 
 func provideMysqlBackupService(
@@ -208,12 +211,13 @@ func provideCicdService(
 	projectRepo interfaces.ProjectRepository,
 	userGroupRepo interfaces.UserGroupRepository,
 	userRepo interfaces.UserRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 	cicdCfg config.CicdConfig,
 	sender mailer.Sender,
 	appName AppDisplayName,
 	k8sNS *service.K8sNamespaceService,
 ) *cicdsvc.Service {
-	return cicdsvc.NewService(db, serverRepo, projectRepo, userGroupRepo, userRepo, cicdCfg, sender, string(appName), k8sNS)
+	return cicdsvc.NewService(db, serverRepo, projectRepo, userGroupRepo, userRepo, memberRepo, cicdCfg, sender, string(appName), k8sNS)
 }
 
 func provideInspectService(
@@ -337,6 +341,8 @@ var ServiceSet = wire.NewSet(
 	service.NewOverviewService,
 	provideCMDBService,
 	service.NewProjectMgmtService,
+	service.NewServiceCatalogService,
+	service.NewChangeEventService,
 	provideMysqlBackupService,
 	provideDbmgmtService,
 	provideCicdService,

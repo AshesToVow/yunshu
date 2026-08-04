@@ -198,6 +198,9 @@ type CicdReleaseRun struct {
 	JenkinsBuildURL    string         `json:"jenkins_build_url" gorm:"size:512"`
 	JenkinsQueueURL    string         `json:"jenkins_queue_url" gorm:"size:512;comment:Jenkins 队列项路径，构建号未落库前用于异步补偿"`
 	ParamsJSON         string         `json:"params_json" gorm:"type:text"`
+	VerifyStatus       string         `json:"verify_status" gorm:"size:32;comment:发布后验证状态 passed|failed|partial"`
+	VerifyJSON         string         `json:"verify_json" gorm:"type:text;comment:验证结果 JSON"`
+	VerifiedAt         *time.Time     `json:"verified_at,omitempty"`
 	StartedAt          *time.Time     `json:"started_at,omitempty"`
 	FinishedAt         *time.Time     `json:"finished_at,omitempty"`
 	CreatedAt          time.Time      `json:"created_at"`

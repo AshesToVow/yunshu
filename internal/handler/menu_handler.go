@@ -7,7 +7,7 @@ import (
 	"yunshu/internal/menu"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
-	"yunshu/internal/plugin"
+	"yunshu/internal/plugingate"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -37,7 +37,7 @@ func (h *MenuHandler) Tree(c *gin.Context) {
 
 	user, ok := auth.CurrentUserFromContext(c)
 	if !ok {
-		filtered := plugin.FilterMenusByPlugins(list, h.plugins)
+		filtered := plugingate.FilterMenusByPlugins(list, h.plugins)
 		response.Success(c, filtered)
 		return
 	}
@@ -53,7 +53,7 @@ func (h *MenuHandler) Tree(c *gin.Context) {
 		store := menu.NewBindingStore(bindings, flat)
 		filtered = menu.FilterMenusByAccess(filtered, h.enforcer, user.ID, store)
 	}
-	filtered = plugin.FilterMenusByPlugins(filtered, h.plugins)
+	filtered = plugingate.FilterMenusByPlugins(filtered, h.plugins)
 	response.Success(c, filtered)
 }
 

@@ -227,11 +227,20 @@ GET/PUT    .../dbmgmt/approval-flow
 
 | 现象 | 排查 |
 |------|------|
-| SQL 检测报「禁止多语句」 | 确认 `dbmgmt_goinception_enabled=true` 且 goInception 可达 |
+| SQL 检测报「禁止多语句」 | 确认 `dbmgmt_goinception_enabled=true` 且 goInception 可达；**仅 MySQL 直连实例**支持 |
+| 提交报「须启用至少一级审批」 | 所有环境均需配置审批流；空审批流不再自动通过权限申请/SQL/应用用户 |
+| 查询报「无法解析 SQL 涉及的表」 | 复杂 SQL 仅整库（或 `*`）查询授权可放行；表级授权请用简单 `FROM/JOIN` 或申请库级权限 |
+| 元数据看不到某些库/表 | 已按 `db_access_grants` 过滤；无授权库不会出现在树中 |
 | 应用用户审批 1044 | 实例管理员对目标库无 GRANT OPTION；检查 `root@'<平台IP>'` 而非仅 `root@'%'` |
 | GRANT 语法错误 1064 | 库级勿把 SUPER/GRANT 与库权限混在一条语句（已自动拆分，需新版本） |
 | 审计日志只有查询 | 新版本已记录工单/授权/应用用户；历史数据无回填 |
-| goInception 不可用 | SSH 隧道实例暂不支持 goInception，走本地规则评估 |
+| goInception 不可用 | SSH 隧道实例与 **PostgreSQL** 均不走 goInception，仅本地风险规则 + 人工审批 |
+
+### PostgreSQL 说明
+
+- 支持：纳管、探活、元数据、只读查询、平台库表授权、SQL 工单（人工审批）。
+- **不支持**：goInception 预检/代执行/备份回滚/OSC；MySQL 应用账号 CREATE USER/GRANT 流程。
+- PG 变更请依赖审批流与本地风险评估；勿期望 Inception 语法报告。
 
 ---
 

@@ -39,12 +39,22 @@ func (s *Service) ListServers(ctx context.Context, q ServerListQuery) (*paginati
 		groupID = &gid
 	}
 
+	var visibleIDs []uint
+	unrestricted, ids, err := s.visibleServerScope(ctx, q.ProjectID, q.Actor)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "cmdb", "ListServers", err)
+	}
+	if !unrestricted {
+		visibleIDs = ids
+	}
+
 	list, total, err := s.serverRepo.List(ctx, repository.ServerListParams{
 		ProjectID:  q.ProjectID,
 		Keyword:    strings.TrimSpace(q.Keyword),
 		GroupID:    groupID,
 		SourceType: strings.TrimSpace(q.SourceType),
 		Provider:   strings.TrimSpace(q.Provider),
+		ServerIDs:  visibleIDs,
 		Page:       page,
 		PageSize:   pageSize,
 	})

@@ -55,6 +55,14 @@ deployment-base:
   configsPath: /export/servers/configs
   mountConfigFiles: true
 
+  # Apollo（meta 支持逗号分隔多地址）
+  apollo:
+    enabled: false
+    env: PRO
+    # meta: "http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080"
+    meta: ""
+    namespaces: "application"
+
   # 更新策略
   strategy:
     type: RollingUpdate

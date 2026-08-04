@@ -120,7 +120,7 @@ spec:
           lifecycle:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or .Values.env .Values.skywalking.enabled }}
+          {{- if or .Values.env .Values.skywalking.enabled .Values.apollo.enabled }}
           env:
             {{- if .Values.skywalking.enabled }}
             - name: JAVA_TOOL_OPTIONS
@@ -139,6 +139,11 @@ spec:
             {{- with .Values.skywalking.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+            {{- end }}
+            {{- if .Values.apollo.enabled }}
+            # apollo.meta 支持逗号分隔多地址，必须 quote
+            - name: APOLLO_OPTS
+              value: {{ printf "-Denv=%s -Dapollo.meta=%s -Dapollo.bootstrap.namespaces=%s" .Values.apollo.env .Values.apollo.meta .Values.apollo.namespaces | quote }}
             {{- end }}
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}

@@ -447,11 +447,11 @@ func (s *AuthService) SendPasswordLoginCode(ctx context.Context, username string
 	// 生成图形验证码。答案写入 Redis（而非进程内存），保证多副本部署下
 	// 生成与校验可跨实例共享；否则不同副本的 DefaultMemStore 互不可见，校验必失败。
 	driver := base64Captcha.NewDriverDigit(
-		80,  // height
-		240, // width
-		4,   // length
+		80,   // height
+		240,  // width
+		4,    // length
 		0.35, // maxSkew — lower skew for readability
-		24,  // dotCount — fewer noise dots
+		24,   // dotCount — fewer noise dots
 	)
 	captchaKey, answer, _ := driver.GenerateIdQuestionAnswer()
 	item, err := driver.DrawCaptcha(answer)
@@ -719,161 +719,6 @@ func generateNumericCode(length int) (string, error) {
 
 	return fmt.Sprintf("%0*d", length, number.Int64()), nil
 }
-
-// drawLine draws a line on the image
-// func drawLine(img *image.RGBA, x1, y1, x2, y2 int, c color.RGBA) {
-// 	dx := abs(x2 - x1)
-// 	dy := abs(y2 - y1)
-// 	sx, sy := 1, 1
-// 	if x1 > x2 {
-// 		sx = -1
-// 	}
-// 	if y1 > y2 {
-// 		sy = -1
-// 	}
-// 	err := dx - dy
-
-// 	for {
-// 		if x1 >= 0 && x1 < img.Bounds().Dx() && y1 >= 0 && y1 < img.Bounds().Dy() {
-// 			img.Set(x1, y1, c)
-// 		}
-// 		if x1 == x2 && y1 == y2 {
-// 			break
-// 		}
-// 		e2 := 2 * err
-// 		if e2 > -dy {
-// 			err -= dy
-// 			x1 += sx
-// 		}
-// 		if e2 < dx {
-// 			err += dx
-// 			y1 += sy
-// 		}
-// 	}
-// }
-
-// // drawChar draws a character on the image with larger pixels for better visibility
-// func drawChar(img *image.RGBA, x, y int, ch string, c color.RGBA) {
-// 	charMap := map[rune][][]bool{
-// 		'0': {
-// 			{true, true, true, true, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, true, true, true, true},
-// 		},
-// 		'1': {
-// 			{false, false, true, false, false},
-// 			{false, true, true, false, false},
-// 			{true, true, true, false, false},
-// 			{false, true, true, false, false},
-// 			{false, true, true, false, false},
-// 			{false, true, true, false, false},
-// 			{true, true, true, true, true},
-// 		},
-// 		'2': {
-// 			{true, true, true, true, true},
-// 			{false, false, false, false, true},
-// 			{false, false, false, false, true},
-// 			{true, true, true, true, true},
-// 			{true, false, false, false, false},
-// 			{true, false, false, false, false},
-// 			{true, true, true, true, true},
-// 		},
-// 		'3': {
-// 			{true, true, true, true, true},
-// 			{false, false, false, false, true},
-// 			{false, false, false, false, true},
-// 			{true, true, true, true, true},
-// 			{false, false, false, false, true},
-// 			{false, false, false, false, true},
-// 			{true, true, true, true, true},
-// 		},
-// 		'4': {
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, true, true, true, true},
-// 			{false, false, false, false, true},
-// 			{false, false, false, false, true},
-// 			{false, false, false, false, true},
-// 		},
-// 		'5': {
-// 			{true, true, true, true, true},
-// 			{true, false, false, false, false},
-// 			{true, false, false, false, false},
-// 			{true, true, true, true, true},
-// 			{false, false, false, false, true},
-// 			{false, false, false, false, true},
-// 			{true, true, true, true, true},
-// 		},
-// 		'6': {
-// 			{true, true, true, true, true},
-// 			{true, false, false, false, false},
-// 			{true, false, false, false, false},
-// 			{true, true, true, true, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, true, true, true, true},
-// 		},
-// 		'7': {
-// 			{true, true, true, true, true},
-// 			{false, false, false, false, true},
-// 			{false, false, false, true, false},
-// 			{false, false, true, false, false},
-// 			{false, true, false, false, false},
-// 			{false, true, false, false, false},
-// 			{false, true, false, false, false},
-// 		},
-// 		'8': {
-// 			{true, true, true, true, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, true, true, true, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, true, true, true, true},
-// 		},
-// 		'9': {
-// 			{true, true, true, true, true},
-// 			{true, false, false, false, true},
-// 			{true, false, false, false, true},
-// 			{true, true, true, true, true},
-// 			{false, false, false, false, true},
-// 			{false, false, false, false, true},
-// 			{true, true, true, true, true},
-// 		},
-// 	}
-
-// 	if bitmap, ok := charMap[rune(ch[0])]; ok {
-// 		pixelSize := 6
-// 		for i, row := range bitmap {
-// 			for j, pixel := range row {
-// 				if pixel {
-// 					for py := 0; py < pixelSize; py++ {
-// 						for px := 0; px < pixelSize; px++ {
-// 							tx := x + j*pixelSize + px
-// 							ty := y + i*pixelSize + py
-// 							if tx >= 0 && tx < img.Bounds().Dx() && ty >= 0 && ty < img.Bounds().Dy() {
-// 								img.Set(tx, ty, c)
-// 							}
-// 						}
-// 					}
-// 				}
-// 			}
-// 		}
-// 	}
-// }
-
-// abs returns the absolute value of x
-// func abs(x int) int {
-// 	if x < 0 {
-// 		return -x
-// 	}
-// 	return x
-// }
 
 func parseUintUserID(raw string) (uint, error) {
 	n, err := strconv.ParseUint(strings.TrimSpace(raw), 10, 64)

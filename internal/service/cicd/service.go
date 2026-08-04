@@ -15,6 +15,7 @@ import (
 	"yunshu/internal/dictconfig"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/jenkins"
 	"yunshu/internal/pkg/mailer"
@@ -29,14 +30,18 @@ type Service struct {
 	projectRepo   interfaces.ProjectRepository
 	userGroupRepo interfaces.UserGroupRepository
 	userRepo      interfaces.UserRepository
+	memberRepo    interfaces.ProjectMemberRepository
 	nsEnsurer     K8sNamespaceEnsurer
 	mailer        mailer.Sender
 	appName       string
 	yamlCicd      config.CicdConfig
 	syncMu        sync.Mutex
+	// optional post-release verify hooks
+	workloadReadyCheck func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string)
+	errorLogSampler    func(ctx context.Context, projectID, cicdServiceID uint, since time.Time) (int, string)
 }
 
-func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
+func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
 	if yamlCicd.RunSyncIntervalSeconds <= 0 {
 		yamlCicd.RunSyncIntervalSeconds = 15
 	}
@@ -52,6 +57,7 @@ func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo
 		projectRepo:   projectRepo,
 		userGroupRepo: userGroupRepo,
 		userRepo:      userRepo,
+		memberRepo:    memberRepo,
 		nsEnsurer:     nsEnsurer,
 		mailer:        emailSender,
 		appName:       strings.TrimSpace(appName),
@@ -104,6 +110,7 @@ type ServiceListQuery struct {
 	ServiceType string `form:"service_type"`
 	Page        int    `form:"page"`
 	PageSize    int    `form:"page_size"`
+	Actor       *auth.CurrentUser `form:"-"`
 }
 
 type ServiceItem struct {
@@ -132,6 +139,16 @@ func (s *Service) ListServices(ctx context.Context, q ServiceListQuery) (*pagina
 	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	dbq := s.db.WithContext(ctx).Model(&model.CicdService{}).Where("project_id = ?", q.ProjectID)
+	unrestricted, ids, err := s.visibleCicdServiceScope(ctx, q.ProjectID, q.Actor)
+	if err != nil {
+		return nil, err
+	}
+	if !unrestricted {
+		if len(ids) == 0 {
+			return &pagination.Result[ServiceItem]{List: []ServiceItem{}, Total: 0, Page: page, PageSize: pageSize}, nil
+		}
+		dbq = dbq.Where("id IN ?", ids)
+	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
 		dbq = dbq.Where("name LIKE ? OR identifier LIKE ?", like, like)
@@ -251,6 +268,7 @@ func (s *Service) UpsertService(ctx context.Context, serviceID uint, req Service
 			return nil, err
 		}
 	}
+	syncCicdToServiceCatalog(ctx, s.db, &row)
 	return &row, nil
 }
 
@@ -705,6 +723,7 @@ func (s *Service) TriggerBuild(ctx context.Context, projectID, serviceID uint, r
 	if dc == nil {
 		dc = s.firstDeployConfig(ctx, serviceID)
 	}
+	ov := s.loadProjectCicdOverrides(ctx, projectID)
 	params := BuildJenkinsParams(BuildParamsInput{
 		Service:         svc,
 		CiConfig:        ci,
@@ -714,6 +733,11 @@ func (s *Service) TriggerBuild(ctx context.Context, projectID, serviceID uint, r
 		Tenv:            tenv,
 		EmailUser:       s.resolveNotifyEmail(ctx, req.EmailUser, svc, builderUserID),
 		UsesK8sPipeline: s.serviceUsesK8sPipeline(ctx, svc),
+		HarborURL:        ov.HarborURL,
+		HarborProject:    ov.HarborProject,
+		ApolloMeta:       ov.ApolloMeta,
+		ApolloEnv:        ov.ApolloEnv,
+		ApolloNamespaces: ov.ApolloNamespaces,
 	})
 	lastNum, _ := client.GetLastBuildNumber(ctx, svc.JenkinsJob)
 	queuePath, err := client.BuildWithParameters(ctx, svc.JenkinsJob, params)
@@ -782,6 +806,8 @@ func (s *Service) TriggerRelease(ctx context.Context, projectID, serviceID uint,
 	if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
 		return nil, err
 	}
+	recordReleaseChange(ctx, s.db, &release, "release_create", model.ChangeStatusStarted,
+		fmt.Sprintf("创建并执行发布 #%d：%s", release.ID, release.Title))
 	return &release, nil
 }
 
@@ -823,11 +849,12 @@ func (s *Service) resolveDestIPs(ctx context.Context, projectID uint, dc *model.
 // --- Build / Release Records ---
 
 type BuildRunListQuery struct {
-	ProjectID uint   `form:"project_id"`
-	ServiceID uint   `form:"service_id"`
-	Keyword   string `form:"keyword"`
-	Page      int    `form:"page"`
-	PageSize  int    `form:"page_size"`
+	ProjectID uint              `form:"project_id"`
+	ServiceID uint              `form:"service_id"`
+	Keyword   string            `form:"keyword"`
+	Page      int               `form:"page"`
+	PageSize  int               `form:"page_size"`
+	Actor     *auth.CurrentUser `form:"-"`
 }
 
 type BuildRunItem struct {
@@ -844,6 +871,17 @@ func (s *Service) ListBuildRuns(ctx context.Context, q BuildRunListQuery) (*pagi
 	}
 	if q.ServiceID > 0 {
 		dbq = dbq.Where("service_id = ?", q.ServiceID)
+	} else if q.ProjectID > 0 && q.Actor != nil {
+		unrestricted, ids, err := s.visibleCicdServiceScope(ctx, q.ProjectID, q.Actor)
+		if err != nil {
+			return nil, err
+		}
+		if !unrestricted {
+			if len(ids) == 0 {
+				return &pagination.Result[BuildRunItem]{List: []BuildRunItem{}, Total: 0, Page: page, PageSize: pageSize}, nil
+			}
+			dbq = dbq.Where("service_id IN ?", ids)
+		}
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		like := "%" + kw + "%"
@@ -890,6 +928,7 @@ type ReleaseRunListQuery struct {
 	ExecutionMineUserID *uint  // 内部：执行待办全部
 	MineTab             string `form:"-"` // approval | execution（mine 待办列表）
 	MineViewerUserID    *uint  `form:"-"`
+	Actor               *auth.CurrentUser `form:"-"`
 }
 
 type ReleaseRunItem struct {
@@ -912,6 +951,17 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 	}
 	if q.ServiceID > 0 {
 		dbq = dbq.Where("service_id = ?", q.ServiceID)
+	} else if q.ProjectID > 0 && q.Actor != nil {
+		unrestricted, ids, err := s.visibleCicdServiceScope(ctx, q.ProjectID, q.Actor)
+		if err != nil {
+			return nil, err
+		}
+		if !unrestricted {
+			if len(ids) == 0 {
+				return &pagination.Result[ReleaseRunItem]{List: []ReleaseRunItem{}, Total: 0, Page: page, PageSize: pageSize}, nil
+			}
+			dbq = dbq.Where("service_id IN ?", ids)
+		}
 	}
 	if st := strings.TrimSpace(q.Status); st != "" {
 		dbq = dbq.Where("status = ?", st)

@@ -2,6 +2,7 @@ package alert
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/service/changeevent"
 
 	"gorm.io/gorm"
 )
@@ -72,6 +74,19 @@ func (s *AlertMaintenanceService) Create(ctx context.Context, userID uint, req A
 	if err := s.repo.Create(ctx, &row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.maintenance", "Create", err)
 	}
+	if row.ProjectID > 0 {
+		uid := userID
+		changeevent.Record(ctx, changeevent.Input{
+			ProjectID:   row.ProjectID,
+			Source:      model.ChangeSourceAlert,
+			Action:      "maintenance_create",
+			RiskLevel:   model.ChangeRiskMedium,
+			Status:      model.ChangeStatusSucceeded,
+			ActorUserID: &uid,
+			Summary:     fmt.Sprintf("创建维护窗口：%s", row.Name),
+			Payload:     map[string]any{"window_id": row.ID, "starts_at": row.StartsAt, "ends_at": row.EndsAt},
+		})
+	}
 	return &row, nil
 }
 
@@ -102,6 +117,17 @@ func (s *AlertMaintenanceService) Update(ctx context.Context, id uint, req Alert
 	}
 	if err := s.repo.Save(ctx, row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.maintenance", "Update", err)
+	}
+	if row.ProjectID > 0 {
+		changeevent.Record(ctx, changeevent.Input{
+			ProjectID: row.ProjectID,
+			Source:    model.ChangeSourceAlert,
+			Action:    "maintenance_update",
+			RiskLevel: model.ChangeRiskMedium,
+			Status:    model.ChangeStatusSucceeded,
+			Summary:   fmt.Sprintf("更新维护窗口：%s", row.Name),
+			Payload:   map[string]any{"window_id": row.ID, "starts_at": row.StartsAt, "ends_at": row.EndsAt},
+		})
 	}
 	return row, nil
 }

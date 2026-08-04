@@ -22,6 +22,17 @@ type module struct {
 func (m *module) Name() string        { return "project" }
 func (m *module) Description() string { return "多租户项目、成员、服务配置与 ES 日志检索" }
 
+func (m *module) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		MenuPathPrefixes: []string{
+			"/projects", "/project-members", "/project-services", "/service-catalog",
+			"/service-portrait", "/project-logs", "/project-log-sources", "/log-retention", "/loggie-status",
+		},
+		APIPrefixes: []string{"/api/v1/projects"},
+		Workers:     []string{"log_retention", "kafka_to_es"},
+	}
+}
+
 func (m *module) Models() []any {
 	return []any{
 		&model.Project{},
@@ -30,6 +41,9 @@ func (m *module) Models() []any {
 		&model.ServiceLogSource{},
 		&model.LogRetentionPolicy{},
 		&model.LoggieAgent{},
+		&model.ServiceCatalog{},
+		&model.ServiceLink{},
+		&model.ChangeEvent{},
 	}
 }
 
@@ -41,10 +55,10 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc := rt.LogRetentionSvc(); svc != nil && rt.Config != nil {
+	if svc, ok := rt.LogRetention.(*service.LogRetentionService); ok && svc != nil && rt.Config != nil {
 		go service.RunLogRetentionScheduler(bgCtx, svc, config.ElasticsearchConfig{})
 	}
-	if kafkaSvc := rt.KafkaToESSvc(); kafkaSvc != nil {
+	if kafkaSvc, ok := rt.KafkaToES.(*service.KafkaToESService); ok && kafkaSvc != nil {
 		go kafkaSvc.Run(bgCtx)
 	}
 	return nil

@@ -183,6 +183,8 @@ func (s *Service) createPendingRelease(
 	if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
 		return nil, err
 	}
+	recordReleaseChange(ctx, s.db, &release, "release_create", model.ChangeStatusStarted,
+		fmt.Sprintf("创建发布工单 #%d：%s", release.ID, release.Title))
 	return &release, nil
 }
 
@@ -222,6 +224,7 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 	if err != nil {
 		return err
 	}
+	ov := s.loadProjectCicdOverrides(ctx, release.ProjectID)
 	params := BuildJenkinsParams(BuildParamsInput{
 		Service:          p.svc,
 		CiConfig:         p.ci,
@@ -236,6 +239,11 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 		ReleaseOperation: p.releaseOp,
 		ForceCleanDeploy: releaseForceCleanDeploy(p.releaseOp),
 		UsesK8sPipeline:  s.serviceUsesK8sPipeline(ctx, p.svc),
+		HarborURL:        ov.HarborURL,
+		HarborProject:    ov.HarborProject,
+		ApolloMeta:       ov.ApolloMeta,
+		ApolloEnv:        ov.ApolloEnv,
+		ApolloNamespaces: ov.ApolloNamespaces,
 	})
 	lastNum, _ := client.GetLastBuildNumber(ctx, p.svc.JenkinsJob)
 	queuePath, err := client.BuildWithParameters(ctx, p.svc.JenkinsJob, params)
@@ -503,6 +511,8 @@ func (s *Service) ExecuteReleaseRun(ctx context.Context, projectID, runID uint, 
 	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
 		return nil, err
 	}
+	recordReleaseChange(ctx, s.db, &release, "release_execute", model.ChangeStatusStarted,
+		fmt.Sprintf("执行发布 #%d：%s", release.ID, release.Title))
 	return &release, nil
 }
 
@@ -536,6 +546,8 @@ func (s *Service) TerminateReleaseRun(ctx context.Context, projectID, runID uint
 	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
 		return nil, err
 	}
+	recordReleaseChange(ctx, s.db, &release, "release_terminate", model.ChangeStatusAborted,
+		fmt.Sprintf("终止发布 #%d：%s", release.ID, release.Title))
 	return &release, nil
 }
 

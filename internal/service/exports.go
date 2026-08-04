@@ -130,6 +130,23 @@ type ProjectMgmtService = project.ProjectMgmtService
 
 var NewProjectMgmtService = project.NewProjectMgmtService
 
+type (
+	ServiceCatalogService       = project.ServiceCatalogService
+	ServiceCatalogListQuery     = project.ServiceCatalogListQuery
+	ServiceCatalogUpsertRequest = project.ServiceCatalogUpsertRequest
+	ServiceLinkRequest          = project.ServiceLinkRequest
+	ServiceCatalogItem          = project.ServiceCatalogItem
+	ChangeEventService          = project.ChangeEventService
+	ChangeEventListQuery        = project.ChangeEventListQuery
+	ServicePortrait             = project.ServicePortrait
+	PortraitHealth              = project.PortraitHealth
+)
+
+var (
+	NewServiceCatalogService = project.NewServiceCatalogService
+	NewChangeEventService    = project.NewChangeEventService
+)
+
 // --- alert (cloud expiry CRUD) ---
 type (
 	CloudExpiryRuleService       = alert.CloudExpiryRuleService
@@ -174,6 +191,11 @@ type (
 	ServerSyncResult         = cmdb.ServerSyncResult
 	ServerTestRequest        = cmdb.ServerTestRequest
 	ServerTestResult         = cmdb.ServerTestResult
+	ServerGrantItem          = cmdb.ServerGrantItem
+	ServerGrantUpsertRequest = cmdb.ServerGrantUpsertRequest
+	ServerGrantBulkRequest   = cmdb.ServerGrantBulkRequest
+	BootstrapServerGrantsRequest = cmdb.BootstrapServerGrantsRequest
+	ServerAccessPerm         = cmdb.ServerAccessPerm
 	LogSourceItem            = project.LogSourceItem
 	LogSourceListQuery       = project.LogSourceListQuery
 	LogSourceUpsertRequest   = project.LogSourceUpsertRequest
@@ -332,6 +354,7 @@ var NewMysqlBackupService = mysqlbackup.NewMysqlBackupService
 type (
 	AlertService              = alert.AlertService
 	AlertServiceOptions       = alert.AlertServiceOptions
+	AlertQualityReport        = alert.AlertQualityReport
 	AlertSilenceService       = alert.AlertSilenceService
 	AlertMaintenanceService   = alert.AlertMaintenanceService
 	AlertDutyService          = alert.AlertDutyService
@@ -339,6 +362,8 @@ type (
 	ReceiverGroupCache        = alert.ReceiverGroupCache
 	AlertDatasourceService    = alert.AlertDatasourceService
 	AlertMonitorRuleService   = alert.AlertMonitorRuleService
+	AlertRuleTemplate         = alert.AlertRuleTemplate
+	CreateFromTemplateRequest = alert.CreateFromTemplateRequest
 	AlertReceiverGroupService = alert.AlertReceiverGroupService
 	AlertInhibitionService    = alert.AlertInhibitionService
 	AlertSubscriptionService  = alert.AlertSubscriptionService
@@ -393,6 +418,7 @@ var (
 	NewAlertReceiverGroupService = alert.NewAlertReceiverGroupService
 	NewAlertInhibitionService    = alert.NewAlertInhibitionServiceWithRepo
 	NewAlertSubscriptionService  = alert.NewAlertSubscriptionService
+	ListAlertRuleTemplates       = alert.ListAlertRuleTemplates
 )
 
 

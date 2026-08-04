@@ -21,16 +21,19 @@ RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=1 go build -o /yunshu ./main.go
 # 运行镜像 - 使用 alpine 替代 scratch，包含基础工具和时区数据
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/alpine:3.19
 
-# 安装时区数据和 ca 证书
+# 安装时区数据、ca 证书；busybox 自带 nc，用于等待 MySQL
 RUN apk add --no-cache tzdata ca-certificates
 
-COPY --from=builder /yunshu /app/
+COPY --from=builder /yunshu /app/yunshu
 COPY configs/ /app/configs/
 # 离线 Loggie 安装包（linux/amd64 ELF），安装 Agent 时由平台 SFTP 上传
 COPY deploy/loggie/binary/loggie /app/deploy/loggie/binary/loggie
+COPY deploy/docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 WORKDIR /app
 EXPOSE 8080
 
-# 关键修改：加上 server 参数 ✅
-ENTRYPOINT ["/app/yunshu", "server"]
+# 启动前可选执行 seed（RUN_SEED=1），再 exec server
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["server"]

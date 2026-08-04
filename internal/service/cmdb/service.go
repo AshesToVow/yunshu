@@ -9,13 +9,17 @@ import (
 	"yunshu/internal/interfaces"
 	cryptox "yunshu/internal/pkg/crypto"
 	bizerrors "yunshu/internal/pkg/errors"
+
+	"gorm.io/gorm"
 )
 
 // Service CMDB 服务器资产业务（主机、分组、云账号、SSH/终端）。
 type Service struct {
+	db               *gorm.DB
 	serverRepo       interfaces.ServerRepository
 	serverGroupRepo  interfaces.ServerGroupRepository
 	cloudAccountRepo interfaces.CloudAccountRepository
+	memberRepo       interfaces.ProjectMemberRepository
 	aead             cipher.AEAD
 	ensureMu         sync.Mutex
 	ensuredProjectAt map[uint]time.Time
@@ -23,9 +27,11 @@ type Service struct {
 
 // NewService 创建 CMDB 服务。
 func NewService(
+	db *gorm.DB,
 	serverRepo interfaces.ServerRepository,
 	serverGroupRepo interfaces.ServerGroupRepository,
 	cloudAccountRepo interfaces.CloudAccountRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 	encryptionKey string,
 ) (*Service, error) {
 	aead, err := cryptox.NewAESGCMFromKeyString(encryptionKey)
@@ -33,9 +39,11 @@ func NewService(
 		return nil, bizerrors.Pass(context.Background(), "cmdb", "NewService", err)
 	}
 	return &Service{
+		db:               db,
 		serverRepo:       serverRepo,
 		serverGroupRepo:  serverGroupRepo,
 		cloudAccountRepo: cloudAccountRepo,
+		memberRepo:       memberRepo,
 		aead:             aead,
 		ensuredProjectAt: make(map[uint]time.Time),
 	}, nil

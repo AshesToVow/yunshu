@@ -1,6 +1,7 @@
 import { Button, Popconfirm, Select, Space, Table, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/auth-context";
+import { ProjectResourceGrantsDrawer } from "./project-resource-grants-drawer";
 import {
   addProjectMember,
   listProjectMembers,
@@ -40,6 +41,7 @@ export function ProjectMembersPanel({ projectId }: Props) {
   const [memberAddUserId, setMemberAddUserId] = useState<number | undefined>();
   const [memberAddRole, setMemberAddRole] = useState<string>("member");
   const [userPickOptions, setUserPickOptions] = useState<{ label: string; value: number }[]>([]);
+  const [grantsOpen, setGrantsOpen] = useState(false);
 
   const myRole = useMemo(() => {
     if (!user) return undefined;
@@ -143,6 +145,7 @@ export function ProjectMembersPanel({ projectId }: Props) {
           <Button type="primary" onClick={() => void onAddMember()}>
             添加成员
           </Button>
+          <Button onClick={() => setGrantsOpen(true)}>资源授权</Button>
         </Space>
       ) : (
         <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
@@ -195,8 +198,14 @@ export function ProjectMembersPanel({ projectId }: Props) {
         项目内角色（owner/admin/member/readonly）与网关中间件一致：只读成员仅允许 GET/HEAD；修改项目、成员 CRUD 需 owner/admin。全局 RBAC 与 K8s 集群档位仍各自生效。
       </div>
       <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
-        项目成员用于权限与资源隔离；告警邮件收件人由「告警监控平台 → 监控规则 → 处理人」配置，<strong>不会</strong>自动发给本项目全部成员。
+        项目成员用于权限与资源隔离；普通成员默认不可见项目内全部服务器/CI/CD，需在「资源授权」中按人授予。告警邮件收件人由「告警监控平台 → 监控规则 → 处理人」配置，<strong>不会</strong>自动发给本项目全部成员。
       </div>
+      <ProjectResourceGrantsDrawer
+        open={grantsOpen}
+        projectId={projectId}
+        members={memberList}
+        onClose={() => setGrantsOpen(false)}
+      />
     </Space>
   );
 }

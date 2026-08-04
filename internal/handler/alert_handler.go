@@ -197,3 +197,13 @@ func (h *AlertHandler) ReceiveAlertmanager(c *gin.Context) {
 
 	c.JSON(202, gin.H{"message": "accepted"})
 }
+
+// QualityReport 告警质量治理报告。
+func (h *AlertHandler) QualityReport(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q struct {
+		WindowHours int  `form:"window_hours"`
+		ProjectID   uint `form:"project_id"`
+	}) (*service.AlertQualityReport, error) {
+		return h.svc.QualityReport(ctx, q.WindowHours, q.ProjectID)
+	})
+}

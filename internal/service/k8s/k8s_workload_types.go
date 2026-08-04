@@ -1,5 +1,7 @@
 package k8s
 
+import "gorm.io/gorm"
+
 type NamespacedListQuery struct {
 	ClusterNamespaceKeywordQuery
 	LabelQuery string `form:"label_selector"`
@@ -74,6 +76,7 @@ type WorkloadDetail struct {
 type K8sWorkloadService struct {
 	runtime *K8sRuntimeService
 	dyn     *DynamicResourceService
+	db      *gorm.DB
 }
 
 // NewK8sWorkloadService 创建相关逻辑。
@@ -91,6 +94,6 @@ type RelatedPodItem struct {
 
 // DeploymentPods 执行对应的业务逻辑。
 
-func NewK8sWorkloadService(runtime *K8sRuntimeService) *K8sWorkloadService {
-	return &K8sWorkloadService{runtime: runtime, dyn: NewDynamicResourceService(runtime)}
+func NewK8sWorkloadService(runtime *K8sRuntimeService, db *gorm.DB) *K8sWorkloadService {
+	return &K8sWorkloadService{runtime: runtime, dyn: NewDynamicResourceService(runtime), db: db}
 }

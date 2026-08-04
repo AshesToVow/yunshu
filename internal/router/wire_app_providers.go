@@ -5,6 +5,7 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/plugin"
 	"yunshu/internal/pkg/mailer"
+	"yunshu/internal/service/changeevent"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/google/wire"
@@ -23,6 +24,7 @@ type appRouteConfig struct {
 }
 
 func provideDB(app *bootstrap.App) *gorm.DB {
+	changeevent.BindDB(app.DB)
 	return app.DB
 }
 

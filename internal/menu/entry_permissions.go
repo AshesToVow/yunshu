@@ -21,11 +21,14 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/alert-monitor-platform":      {"/api/v1/alerts/datasources", "GET"},
 		"/alert-duty":                  {"/api/v1/alerts/duty-blocks", "GET"},
 		"/alert-maintenance":           {"/api/v1/alerts/maintenance-windows", "GET"},
+		"/alert-quality":               {"/api/v1/alerts/quality-report", "GET"},
 
 		"/projects":                    {"/api/v1/projects", "GET"},
 		"/project-members":             {"/api/v1/projects/:id/members", "GET"},
 		"/project-servers":             {"/api/v1/projects/:id/servers", "GET"},
 		"/project-inspect":             {"/api/v1/projects/:id/inspect/plan", "GET"},
+		"/service-catalog":             {"/api/v1/projects/:id/service-catalog", "GET"},
+		"/service-portrait":            {"/api/v1/projects/:id/service-catalog", "GET"},
 
 		"/project-services":            {"/api/v1/projects/:id/services", "GET"},
 		"/project-log-sources":         {"/api/v1/projects/:id/log-sources", "GET"}, // 兼容旧菜单 path

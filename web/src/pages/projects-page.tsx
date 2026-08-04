@@ -112,6 +112,11 @@ export function ProjectsPage() {
       status: record.status,
       project_type: record.project_type || "business",
       lifecycle_status: record.lifecycle_status || "active",
+      harbor_url: record.harbor_url || undefined,
+      harbor_project: record.harbor_project || undefined,
+      apollo_meta: record.apollo_meta || undefined,
+      apollo_env: record.apollo_env || undefined,
+      apollo_namespaces: record.apollo_namespaces || undefined,
       owner_department_id: record.owner_department_id && record.owner_department_id > 0 ? record.owner_department_id : undefined,
     });
     setEditorOpen(true);
@@ -129,6 +134,11 @@ export function ProjectsPage() {
           status: values.status,
           project_type: values.project_type,
           lifecycle_status: values.lifecycle_status,
+          harbor_url: values.harbor_url || "",
+          harbor_project: values.harbor_project || "",
+          apollo_meta: values.apollo_meta || "",
+          apollo_env: values.apollo_env || "",
+          apollo_namespaces: values.apollo_namespaces || "",
         };
         const od = values.owner_department_id;
         if (od !== undefined && od !== null && Number(od) > 0) {
@@ -144,6 +154,11 @@ export function ProjectsPage() {
           status: values.status,
           project_type: values.project_type,
           lifecycle_status: values.lifecycle_status,
+          harbor_url: values.harbor_url || "",
+          harbor_project: values.harbor_project || "",
+          apollo_meta: values.apollo_meta || "",
+          apollo_env: values.apollo_env || "",
+          apollo_namespaces: values.apollo_namespaces || "",
         };
         const od = values.owner_department_id;
         if (od !== undefined && od !== null && Number(od) > 0) {
@@ -228,6 +243,30 @@ export function ProjectsPage() {
               if (!id) return <span className="inline-muted">—</span>;
               const label = departmentOptions.find((o) => o.value === id)?.label;
               return <span title={label}>{label ?? `ID ${id}`}</span>;
+            },
+          },
+          {
+            title: "Harbor",
+            key: "harbor",
+            width: 200,
+            ellipsis: true,
+            render: (_: unknown, r: ProjectItem) => {
+              if (!r.harbor_url && !r.harbor_project) return <span className="inline-muted">全局</span>;
+              const text = [r.harbor_url, r.harbor_project].filter(Boolean).join(" / ");
+              return <span title={text}>{text}</span>;
+            },
+          },
+          {
+            title: "Apollo",
+            key: "apollo",
+            width: 200,
+            ellipsis: true,
+            render: (_: unknown, r: ProjectItem) => {
+              if (!r.apollo_meta && !r.apollo_env && !r.apollo_namespaces) {
+                return <span className="inline-muted">未配</span>;
+              }
+              const text = [r.apollo_env, r.apollo_meta].filter(Boolean).join(" · ") || r.apollo_namespaces;
+              return <span title={[r.apollo_env, r.apollo_meta, r.apollo_namespaces].filter(Boolean).join("\n")}>{text}</span>;
             },
           },
           {
@@ -331,6 +370,45 @@ export function ProjectsPage() {
           </Form.Item>
           <Form.Item label="项目状态" name="lifecycle_status" rules={[{ required: true, message: "请选择项目状态" }]}>
             <Select options={[...PROJECT_LIFECYCLE_OPTIONS]} />
+          </Form.Item>
+          <Form.Item
+            label="Harbor 地址"
+            name="harbor_url"
+            extra="如 harbor.example.com（可不写 https://）。留空则使用全局数据字典 cicd_harbor_url。"
+          >
+            <Input placeholder="留空=全局配置" allowClear />
+          </Form.Item>
+          <Form.Item
+            label="Harbor 项目名"
+            name="harbor_project"
+            extra="对应 Jenkins 参数 PROJECT_GROUP。留空则使用全局 cicd_harbor_project_group。"
+          >
+            <Input placeholder="如 registry / team-a" allowClear />
+          </Form.Item>
+          <Form.Item
+            label="Apollo Meta"
+            name="apollo_meta"
+            extra="对应 Jenkins APOLLO_META。支持逗号分隔多个地址，注入模板 {{APOLLO_META}}。留空则沿用 Job 默认。"
+          >
+            <Input.TextArea
+              rows={2}
+              placeholder="http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080"
+              allowClear
+            />
+          </Form.Item>
+          <Form.Item
+            label="Apollo 环境"
+            name="apollo_env"
+            extra="对应 APOLLO_ENV（如 DEV/FAT/PRO）。留空则按发布 Tenv 推导：dev→DEV、test→FAT、prod→PRO。"
+          >
+            <Input placeholder="留空=按 Tenv 推导" allowClear />
+          </Form.Item>
+          <Form.Item
+            label="Apollo Namespaces"
+            name="apollo_namespaces"
+            extra="对应 APOLLO_NAMESPACES，逗号分隔，如 application,application.yml。"
+          >
+            <Input placeholder="application,..." allowClear />
           </Form.Item>
           <Form.Item label="启用状态" name="status" rules={[{ required: true }]}>
             <Select

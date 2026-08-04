@@ -16,6 +16,7 @@ import (
 	"yunshu/internal/pkg/goinception"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
+	"yunshu/internal/service/changeevent"
 )
 
 type ExecuteRequest struct {
@@ -168,13 +169,14 @@ func (s *Service) needsApproval(inst *model.DbInstance, assessment SQLAssessment
 	if assessment.Blocked {
 		return false
 	}
+	// 实例开启「写操作须工单」时，任意变更 SQL 都走审批（含原判定为 low 的边界语句）。
+	if inst.RequireTicketForDML {
+		return true
+	}
 	if inst.Env == model.DbEnvProd && cfg.ProdForceApproval {
 		return assessment.RiskLevel != model.DbRiskLow
 	}
-	if inst.RequireTicketForDML {
-		return assessment.RiskLevel == model.DbRiskHigh || assessment.RiskLevel == model.DbRiskMedium
-	}
-	return assessment.RiskLevel == model.DbRiskHigh
+	return assessment.RiskLevel == model.DbRiskHigh || assessment.RiskLevel == model.DbRiskMedium
 }
 
 func normalizeAuditMode(mode string) string {
@@ -663,7 +665,6 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if err != nil {
 		return err
 	}
-
 	tid := ticket.ID
 	cfg := s.resolvedConfig(ctx)
 	backup := ticket.IsBackup || cfg.GoInceptionBackup
@@ -687,12 +688,30 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if execErr != nil {
 		ticket.Status = model.DbTicketStatusFailed
 		_ = s.repo.UpdateSqlTicket(ctx, ticket)
+		changeevent.Record(ctx, changeevent.Input{
+			ProjectID: projectID,
+			Source:    model.ChangeSourceDbmgmt,
+			Action:    "sql_ticket_execute",
+			RiskLevel: model.ChangeRiskHigh,
+			Status:    model.ChangeStatusFailed,
+			Summary:   fmt.Sprintf("SQL 工单 #%d 执行失败", ticket.ID),
+			Payload:   map[string]any{"ticket_id": ticket.ID, "instance_id": ticket.InstanceID},
+		})
 		return constants.ErrBadRequestWithMsg("SQL 执行失败: " + execErr.Error())
 	}
 	ticket.Status = model.DbTicketStatusSuccess
 	if err := s.repo.UpdateSqlTicket(ctx, ticket); err != nil {
 		return err
 	}
+	changeevent.Record(ctx, changeevent.Input{
+		ProjectID: projectID,
+		Source:    model.ChangeSourceDbmgmt,
+		Action:    "sql_ticket_execute",
+		RiskLevel: model.ChangeRiskHigh,
+		Status:    model.ChangeStatusSucceeded,
+		Summary:   fmt.Sprintf("SQL 工单 #%d 执行成功", ticket.ID),
+		Payload:   map[string]any{"ticket_id": ticket.ID, "instance_id": ticket.InstanceID},
+	})
 	s.auditTicketEvent(ctx, projectID, ticket.InstanceID, actor, "ticket_execute", ticket, nil)
 	return nil
 }

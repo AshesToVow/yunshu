@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
-import { DEFAULT_ENABLED_PLUGINS } from "../modules/plugin-path";
+import { DEFAULT_ENABLED_PLUGINS, setPluginManifests } from "../modules/plugin-path";
 import { listPlugins, type PluginInfo } from "../services/plugins";
 import { useAuth } from "./auth-context";
 
@@ -24,16 +24,20 @@ export function PluginProvider({ children }: PropsWithChildren) {
     if (!isAuthenticated) {
       setEnabled([...DEFAULT_ENABLED_PLUGINS]);
       setPlugins([]);
+      setPluginManifests([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
       const data = await listPlugins();
-      setPlugins(data.plugins ?? []);
+      const list = data.plugins ?? [];
+      setPlugins(list);
+      setPluginManifests(list);
       setEnabled(data.enabled?.length ? data.enabled : [...DEFAULT_ENABLED_PLUGINS]);
     } catch {
       setEnabled([...DEFAULT_ENABLED_PLUGINS]);
+      setPluginManifests([]);
     } finally {
       setLoading(false);
     }

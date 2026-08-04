@@ -11,7 +11,7 @@ import (
 	"yunshu/internal/model"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/password"
-	"yunshu/internal/plugin"
+	"yunshu/internal/plugingate"
 	"yunshu/internal/service"
 
 	"github.com/spf13/cobra"
@@ -269,6 +269,8 @@ func defaultPermissions() []model.Permission {
 		{Name: "刷新告警抑制缓存", Resource: "/api/v1/alerts/inhibition-rules/refresh-cache", Action: "POST", Description: "Refresh inhibition rule cache"},
 		{Name: "监控告警规则列表", Resource: "/api/v1/alerts/monitor-rules", Action: "GET", Description: "List monitor alert rules"},
 		{Name: "创建监控告警规则", Resource: "/api/v1/alerts/monitor-rules", Action: "POST", Description: "Create monitor alert rule"},
+		{Name: "告警规则模板列表", Resource: "/api/v1/alerts/rule-templates", Action: "GET", Description: "List alert rule templates"},
+		{Name: "从模板创建监控规则", Resource: "/api/v1/alerts/monitor-rules/from-template", Action: "POST", Description: "Create monitor rule from template"},
 		{Name: "更新监控告警规则", Resource: "/api/v1/alerts/monitor-rules/:id", Action: "PUT", Description: "Update monitor alert rule"},
 		{Name: "删除监控告警规则", Resource: "/api/v1/alerts/monitor-rules/:id", Action: "DELETE", Description: "Delete monitor alert rule"},
 		{Name: "监控规则处理人", Resource: "/api/v1/alerts/monitor-rules/:id/assignees", Action: "GET", Description: "List rule assignees"},
@@ -488,6 +490,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "项目服务器列表", Resource: "/api/v1/projects/:id/servers", Action: "GET", Description: "List project servers"},
 		{Name: "项目服务器保存", Resource: "/api/v1/projects/:id/servers", Action: "POST", Description: "Upsert project server"},
 		{Name: "项目服务器详情", Resource: "/api/v1/projects/:id/servers/:serverId", Action: "GET", Description: "Project server detail"},
+		{Name: "项目服务器有效权限", Resource: "/api/v1/projects/:id/servers/:serverId/my-access", Action: "GET", Description: "Current user effective server access"},
 		{Name: "删除项目服务器", Resource: "/api/v1/projects/:id/servers/:serverId", Action: "DELETE", Description: "Delete project server"},
 		{Name: "项目服务器命令", Resource: "/api/v1/projects/:id/servers/:serverId/exec", Action: "POST", Description: "Exec on project server"},
 		{Name: "项目服务器云操作", Resource: "/api/v1/projects/:id/servers/:serverId/cloud-actions", Action: "POST", Description: "Run cloud provider action on server"},
@@ -506,9 +509,26 @@ func defaultPermissions() []model.Permission {
 		{Name: "项目服务器连通测试", Resource: "/api/v1/projects/:id/servers/test", Action: "POST", Description: "Test server connection"},
 		{Name: "项目服务器批量测试", Resource: "/api/v1/projects/:id/servers/test/batch", Action: "POST", Description: "Batch test servers"},
 		{Name: "项目服务器同步", Resource: "/api/v1/projects/:id/servers/sync", Action: "POST", Description: "Sync servers"},
+		{Name: "服务器授权列表", Resource: "/api/v1/projects/:id/server-access-grants", Action: "GET", Description: "List server access grants"},
+		{Name: "服务器授权保存", Resource: "/api/v1/projects/:id/server-access-grants", Action: "POST", Description: "Upsert server access grant"},
+		{Name: "服务器授权批量", Resource: "/api/v1/projects/:id/server-access-grants/bulk", Action: "POST", Description: "Bulk upsert server access grants"},
+		{Name: "服务器授权迁移", Resource: "/api/v1/projects/:id/server-access-grants/bootstrap", Action: "POST", Description: "Bootstrap server grants for members"},
+		{Name: "服务器授权删除", Resource: "/api/v1/projects/:id/server-access-grants/:grantId", Action: "DELETE", Description: "Delete server access grant"},
 		{Name: "项目服务列表", Resource: "/api/v1/projects/:id/services", Action: "GET", Description: "List project services"},
 		{Name: "项目服务保存", Resource: "/api/v1/projects/:id/services", Action: "POST", Description: "Upsert project service"},
 		{Name: "删除项目服务", Resource: "/api/v1/projects/:id/services/:serviceId", Action: "DELETE", Description: "Delete project service"},
+		{Name: "服务目录列表", Resource: "/api/v1/projects/:id/service-catalog", Action: "GET", Description: "List service catalog"},
+		{Name: "服务目录保存", Resource: "/api/v1/projects/:id/service-catalog", Action: "POST", Description: "Upsert service catalog"},
+		{Name: "服务目录详情", Resource: "/api/v1/projects/:id/service-catalog/:catalogId", Action: "GET", Description: "Get service catalog"},
+		{Name: "服务画像", Resource: "/api/v1/projects/:id/service-catalog/:catalogId/portrait", Action: "GET", Description: "Service portrait aggregate"},
+		{Name: "服务目录删除", Resource: "/api/v1/projects/:id/service-catalog/:catalogId", Action: "DELETE", Description: "Delete service catalog"},
+		{Name: "服务目录绑定", Resource: "/api/v1/projects/:id/service-catalog/:catalogId/links", Action: "POST", Description: "Bind service catalog link"},
+		{Name: "服务目录解绑", Resource: "/api/v1/projects/:id/service-catalog/:catalogId/links/:linkId", Action: "DELETE", Description: "Unbind service catalog link"},
+		{Name: "告警质量报告", Resource: "/api/v1/alerts/quality-report", Action: "GET", Description: "Alert quality report"},
+		{Name: "发布后验证", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/verify", Action: "POST", Description: "Verify release run"},
+		{Name: "工作负载预检", Resource: "/api/v1/deployments/preview-apply", Action: "POST", Description: "Preview workload apply"},
+		{Name: "工作负载快照", Resource: "/api/v1/deployments/snapshots", Action: "GET", Description: "List workload snapshots"},
+		{Name: "工作负载回滚", Resource: "/api/v1/deployments/snapshots/rollback", Action: "POST", Description: "Rollback workload snapshot"},
 		{Name: "项目日志源列表", Resource: "/api/v1/projects/:id/log-sources", Action: "GET", Description: "List log sources"},
 		{Name: "项目日志源保存", Resource: "/api/v1/projects/:id/log-sources", Action: "POST", Description: "Upsert log source"},
 		{Name: "删除项目日志源", Resource: "/api/v1/projects/:id/log-sources/:logSourceId", Action: "DELETE", Description: "Delete log source"},
@@ -623,6 +643,11 @@ func defaultPermissions() []model.Permission {
 		{Name: "数据库审计日志", Resource: "/api/v1/projects/:id/dbmgmt/audit-logs", Action: "GET", Description: "List DB audit logs"},
 
 		{Name: "CI/CD 应用服务列表", Resource: "/api/v1/projects/:id/cicd/services", Action: "GET", Description: "List CI/CD services"},
+		{Name: "CI/CD 授权列表", Resource: "/api/v1/projects/:id/cicd-access-grants", Action: "GET", Description: "List CI/CD access grants"},
+		{Name: "CI/CD 授权保存", Resource: "/api/v1/projects/:id/cicd-access-grants", Action: "POST", Description: "Upsert CI/CD access grant"},
+		{Name: "CI/CD 授权批量", Resource: "/api/v1/projects/:id/cicd-access-grants/bulk", Action: "POST", Description: "Bulk upsert CI/CD access grants"},
+		{Name: "CI/CD 授权迁移", Resource: "/api/v1/projects/:id/cicd-access-grants/bootstrap", Action: "POST", Description: "Bootstrap CI/CD grants for members"},
+		{Name: "CI/CD 授权删除", Resource: "/api/v1/projects/:id/cicd-access-grants/:grantId", Action: "DELETE", Description: "Delete CI/CD access grant"},
 		{Name: "CI/CD 创建应用服务", Resource: "/api/v1/projects/:id/cicd/services", Action: "POST", Description: "Create CI/CD service"},
 		{Name: "CI/CD 应用服务详情", Resource: "/api/v1/projects/:id/cicd/services/:serviceId", Action: "GET", Description: "Get CI/CD service"},
 		{Name: "CI/CD 更新应用服务", Resource: "/api/v1/projects/:id/cicd/services/:serviceId", Action: "PUT", Description: "Update CI/CD service"},
@@ -676,5 +701,5 @@ func seedMenus(ctx context.Context, db *gorm.DB, cfg *config.PluginsConfig) erro
 	if err := menu.Sync(ctx, db); err != nil {
 		return err
 	}
-	return plugin.SyncMenuVisibility(ctx, db, cfg)
+	return plugingate.SyncMenuVisibility(ctx, db, cfg)
 }

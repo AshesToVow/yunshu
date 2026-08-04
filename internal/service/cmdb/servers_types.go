@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 )
 
 type ServerItem struct {
@@ -60,6 +61,8 @@ type ServerListQuery struct {
 	Provider       string `form:"provider"`
 	Page           int    `form:"page"`
 	PageSize       int    `form:"page_size"`
+	// Actor 由 handler 注入，用于资源 ACL 过滤。
+	Actor *auth.CurrentUser `form:"-"`
 }
 
 type ServerUpsertRequest struct {

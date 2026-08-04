@@ -24,6 +24,9 @@ func Sync(ctx context.Context, db *gorm.DB) error {
 	if err := removeApplicationTopologyMenus(ctx, db); err != nil {
 		return err
 	}
+	if err := removeChangeGovernanceMenus(ctx, db); err != nil {
+		return err
+	}
 	if err := reparentExtractedMenus(ctx, db); err != nil {
 		return err
 	}
@@ -298,7 +301,7 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepIcon:           "BellOutlined",
 		keepSort:           2,
 		preferNameContains: "告警",
-		knownChildPaths:    []string{"/alert-channels", "/alert-monitor-platform", "/alert-duty", "/alert-maintenance"},
+		knownChildPaths:    []string{"/alert-channels", "/alert-monitor-platform", "/alert-duty", "/alert-maintenance", "/alert-quality"},
 	},
 	{
 		paths:              []string{"/project-management", "/project-management/"},
@@ -306,7 +309,7 @@ var duplicateRootMenuSpecs = []rootMenuDedupSpec{
 		keepIcon:           "ProjectOutlined",
 		keepSort:           3,
 		preferNameContains: "项目",
-		knownChildPaths:    []string{"/projects", "/project-members", "/project-servers"},
+		knownChildPaths:    []string{"/projects", "/project-members", "/project-servers", "/project-inspect", "/service-catalog", "/service-portrait"},
 	},
 	{
 		paths:              []string{"/log-platform", "/log-platform/"},
@@ -324,6 +327,28 @@ func removeApplicationTopologyMenus(ctx context.Context, db *gorm.DB) error {
 	if err := db.WithContext(ctx).
 		Where("path = ?", "/application-topology").
 		Find(&obsolete).Error; err != nil {
+		return err
+	}
+	for _, m := range obsolete {
+		ids, err := collectMenuSubtreeIDs(ctx, db, m.ID)
+		if err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		if err := db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.Menu{}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeChangeGovernanceMenus 移除已下线的变更事件 / 变更中心 / 故障工作台菜单。
+func removeChangeGovernanceMenus(ctx context.Context, db *gorm.DB) error {
+	paths := []string{"/change-events", "/change-center", "/incident-workbench"}
+	var obsolete []model.Menu
+	if err := db.WithContext(ctx).Where("path IN ?", paths).Find(&obsolete).Error; err != nil {
 		return err
 	}
 	for _, m := range obsolete {

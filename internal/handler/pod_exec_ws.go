@@ -54,16 +54,15 @@ var wsUpgrader = websocket.Upgrader{
 		if reqHost == "" {
 			return false
 		}
-		// 允许同源；开发环境 localhost 不同端口也放行。
+		// 完整 Host（含端口）一致则放行。
 		if strings.EqualFold(oh.Host, reqHost) {
 			return true
 		}
-		ohName := strings.Split(oh.Host, ":")[0]
-		reqName := strings.Split(reqHost, ":")[0]
-		if ohName == reqName && (ohName == "localhost" || ohName == "127.0.0.1") {
-			return true
-		}
-		return false
+		// 反代常见：nginx proxy_set_header Host $host 会丢掉非标准端口，
+		// Origin 仍带 :8083，导致 10.10.10.4:8083 vs 10.10.10.4 被误判跨域。
+		ohName := strings.ToLower(strings.Split(oh.Host, ":")[0])
+		reqName := strings.ToLower(strings.Split(reqHost, ":")[0])
+		return ohName != "" && ohName == reqName
 	},
 }
 

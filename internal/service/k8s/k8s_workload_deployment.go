@@ -114,7 +114,7 @@ func (s *K8sWorkloadService) DeploymentDetail(ctx context.Context, q NamespacedD
 // 对齐 Kubernetes 中可通过 HPA / scale 子资源调整副本的控制器：Deployment、StatefulSet、ReplicaSet、ReplicationController；
 // 不包含 DaemonSet、Job、CronJob（后三者不按「副本数」做持续水平伸缩）。
 func (s *K8sWorkloadService) DeploymentScale(ctx context.Context, req WorkloadScaleRequest) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
 		return err
 	}
@@ -133,12 +133,16 @@ func (s *K8sWorkloadService) DeploymentScale(ctx context.Context, req WorkloadSc
 	if err := k.WithContext(ctx).Resource(&appsv1.Deployment{}).Namespace(req.Namespace).Update(copyObj).Error; err != nil {
 		return k8sFail(ctx, "k8s.workload", "api", err)
 	}
+	recordK8sChange(ctx, cluster, "scale", "Deployment", req.Namespace, req.Name, map[string]any{
+		"before": map[string]any{"replicas": obj.Spec.Replicas},
+		"after":  map[string]any{"replicas": req.Replicas},
+	})
 	return nil
 }
 
 // DeploymentRestart 执行对应的业务逻辑。
 func (s *K8sWorkloadService) DeploymentRestart(ctx context.Context, q NamespacedDetailQuery) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
 	if err != nil {
 		return err
 	}
@@ -153,6 +157,9 @@ func (s *K8sWorkloadService) DeploymentRestart(ctx context.Context, q Namespaced
 		}
 		return k8sFail(ctx, "k8s.workload", "api", err)
 	}
+	recordK8sChange(ctx, cluster, "restart", "Deployment", q.Namespace, q.Name, map[string]any{
+		"impact": "rolling_restart",
+	})
 	return nil
 }
 

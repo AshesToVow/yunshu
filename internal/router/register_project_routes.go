@@ -41,4 +41,11 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.POST("/loggie/stop", d.loggieHandler.StopLoggie)
 	projectScoped.POST("/loggie/restart", d.loggieHandler.RestartLoggie)
 	projectScoped.POST("/loggie/sync", d.loggieHandler.SyncFromLogSources)
+	projectScoped.GET("/service-catalog", d.projectCatalogHandler.ListCatalog)
+	projectScoped.POST("/service-catalog", d.projectCatalogHandler.UpsertCatalog)
+	projectScoped.GET("/service-catalog/:catalogId", d.projectCatalogHandler.GetCatalog)
+	projectScoped.GET("/service-catalog/:catalogId/portrait", d.projectCatalogHandler.GetPortrait)
+	projectScoped.DELETE("/service-catalog/:catalogId", d.projectCatalogHandler.DeleteCatalog)
+	projectScoped.POST("/service-catalog/:catalogId/links", d.projectCatalogHandler.AddLink)
+	projectScoped.DELETE("/service-catalog/:catalogId/links/:linkId", d.projectCatalogHandler.DeleteLink)
 }

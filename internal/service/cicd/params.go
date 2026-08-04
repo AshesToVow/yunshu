@@ -27,6 +27,13 @@ type BuildParamsInput struct {
 	ReleaseOperation string
 	ForceCleanDeploy bool
 	UsesK8sPipeline  bool
+	// Harbor 项目级覆盖（空字段表示该键仍用全局配置）。
+	HarborURL     string
+	HarborProject string
+	// Apollo 项目级覆盖（空字段表示不传该键，沿用 Jenkins Job 默认；供 launch/K8s 模板占位符替换）。
+	ApolloMeta       string
+	ApolloEnv        string
+	ApolloNamespaces string
 }
 
 // BuildJenkinsParams 将服务配置映射为 Jenkins buildWithParameters 参数（与 jenkinsfile 文档一致）。
@@ -43,7 +50,7 @@ func BuildJenkinsParams(in BuildParamsInput) map[string]string {
 	if params["publishMode"] == "" {
 		params["publishMode"] = "仅构建"
 	}
-	applyCredentialParams(params, in.Cfg, in.Service)
+	applyCredentialParams(params, in.Cfg, in.Service, in)
 
 	svc := in.Service
 	ci := in.CiConfig
@@ -91,10 +98,12 @@ func BuildJenkinsParams(in BuildParamsInput) map[string]string {
 	if v := strings.TrimSpace(in.ImageAddress); v != "" {
 		params["FULL_IMAGE_NAME"] = v
 	}
+	// Apollo 需在 deploy 参数（含 Tenv）确定后再注入，SSH 与容器模板共用。
+	applyApolloParams(params, in)
 	return params
 }
 
-func applyCredentialParams(params map[string]string, cfg config.CicdConfig, svc *model.CicdService) {
+func applyCredentialParams(params map[string]string, cfg config.CicdConfig, svc *model.CicdService, in BuildParamsInput) {
 	gitCred := strings.TrimSpace(cfg.Credentials.Git)
 	if gitCred == "" {
 		gitCred = "gitee_registry_ssh"
@@ -126,11 +135,14 @@ func applyCredentialParams(params map[string]string, cfg config.CicdConfig, svc 
 		minioEndpoint = "http://192.168.56.102:8021"
 	}
 	params["MINIO_ENDPOINT"] = minioEndpoint
-	applyHarborParams(params, cfg)
+	applyHarborParams(params, cfg, in.HarborURL, in.HarborProject)
 }
 
-func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
+func applyHarborParams(params map[string]string, cfg config.CicdConfig, projectURL, projectGroup string) {
 	harborURL := strings.TrimSpace(cfg.Harbor.URL)
+	if v := strings.TrimSpace(projectURL); v != "" {
+		harborURL = stripHarborHost(v)
+	}
 	if harborURL == "" {
 		harborURL = "harbor.deploy.local"
 	}
@@ -139,6 +151,9 @@ func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
 		harborCred = "HARBOR_ID"
 	}
 	harborProject := strings.TrimSpace(cfg.Harbor.ProjectGroup)
+	if v := strings.TrimSpace(projectGroup); v != "" {
+		harborProject = v
+	}
 	if harborProject == "" {
 		harborProject = "registry"
 	}
@@ -150,6 +165,73 @@ func applyHarborParams(params map[string]string, cfg config.CicdConfig) {
 	params["HARBOR_HOST_IP"] = harborHostIP
 	params["HARBOR_CREDENTIAL_ID"] = harborCred
 	params["PROJECT_GROUP"] = harborProject
+}
+
+func stripHarborHost(raw string) string {
+	v := strings.TrimSpace(raw)
+	v = strings.TrimPrefix(v, "https://")
+	v = strings.TrimPrefix(v, "http://")
+	return strings.TrimRight(v, "/")
+}
+
+// applyApolloParams 将项目 Apollo 配置写入 Jenkins 参数，供 shared-lib launch/K8s 模板替换
+// {{APOLLO_META}} / {{APOLLO_ENV}} / {{APOLLO_NAMESPACES}}。
+// APOLLO_META 支持逗号分隔多个 Meta 地址。
+func applyApolloParams(params map[string]string, in BuildParamsInput) {
+	meta := normalizeApolloMetaList(in.ApolloMeta)
+	env := strings.TrimSpace(in.ApolloEnv)
+	ns := strings.TrimSpace(in.ApolloNamespaces)
+	if meta == "" && env == "" && ns == "" {
+		return
+	}
+	if env == "" {
+		env = apolloEnvFromTenv(params["Tenv"])
+	}
+	if meta != "" {
+		params["APOLLO_META"] = meta
+	}
+	if env != "" {
+		params["APOLLO_ENV"] = env
+	}
+	if ns != "" {
+		params["APOLLO_NAMESPACES"] = ns
+	}
+}
+
+// normalizeApolloMetaList 规范化逗号分隔的多个 Meta 地址（去空白、去空段）。
+func normalizeApolloMetaList(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return strings.Join(out, ",")
+}
+
+func apolloEnvFromTenv(tenv string) string {
+	switch strings.ToLower(strings.TrimSpace(tenv)) {
+	case "prod", "production", "pro":
+		return "PRO"
+	case "uat":
+		return "UAT"
+	case "test", "fat", "qa":
+		return "FAT"
+	case "dev", "development", "local":
+		return "DEV"
+	default:
+		if v := strings.TrimSpace(tenv); v != "" {
+			return strings.ToUpper(v)
+		}
+		return "PRO"
+	}
 }
 
 func buildK8sCiParams(params map[string]string, ci *model.CicdCiConfig, in BuildParamsInput) {

@@ -207,3 +207,15 @@ func (h *WorkloadHandler) CronJobPods(c *gin.Context) {
 func (h *WorkloadHandler) Apply(c *gin.Context) {
 	ServeJSONOK(c, true, h.svc.Apply)
 }
+
+func (h *WorkloadHandler) PreviewApply(c *gin.Context) {
+	ServeJSON(c, h.svc.PreviewApply)
+}
+
+func (h *WorkloadHandler) ListSnapshots(c *gin.Context) {
+	ServeQuery(c, h.svc.ListSnapshots)
+}
+
+func (h *WorkloadHandler) RollbackSnapshot(c *gin.Context) {
+	ServeJSONOK(c, true, h.svc.RollbackSnapshot)
+}

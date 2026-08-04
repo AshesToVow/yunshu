@@ -18,6 +18,7 @@ type AlertEventListFilter struct {
 	Cluster         string
 	AlertIP         string
 	Status          string
+	Severity        string // 单值或逗号分隔：critical,warning（P1/P2）
 	MonitorPipeline string
 	DatasourceID    uint
 	ProjectID       uint

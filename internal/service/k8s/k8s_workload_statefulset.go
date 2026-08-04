@@ -110,7 +110,7 @@ func (s *K8sWorkloadService) StatefulSetDetail(ctx context.Context, q Namespaced
 // StatefulSetScale 执行对应的业务逻辑。
 // StatefulSetScale 水平扩缩（修改 replicas）。语义同 DeploymentScale，属 HPA scale 子资源一类。
 func (s *K8sWorkloadService) StatefulSetScale(ctx context.Context, req WorkloadScaleRequest) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
 		return err
 	}
@@ -129,6 +129,10 @@ func (s *K8sWorkloadService) StatefulSetScale(ctx context.Context, req WorkloadS
 	if err := k.WithContext(ctx).Resource(&appsv1.StatefulSet{}).Namespace(req.Namespace).Update(copyObj).Error; err != nil {
 		return k8sFail(ctx, "k8s.workload", "api", err)
 	}
+	recordK8sChange(ctx, cluster, "scale", "StatefulSet", req.Namespace, req.Name, map[string]any{
+		"before": map[string]any{"replicas": obj.Spec.Replicas},
+		"after":  map[string]any{"replicas": req.Replicas},
+	})
 	return nil
 }
 
@@ -172,7 +176,7 @@ func (s *K8sWorkloadService) StatefulSetPatchContainerResources(ctx context.Cont
 
 // StatefulSetRestart 执行对应的业务逻辑。
 func (s *K8sWorkloadService) StatefulSetRestart(ctx context.Context, q NamespacedDetailQuery) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
 	if err != nil {
 		return err
 	}
@@ -187,6 +191,9 @@ func (s *K8sWorkloadService) StatefulSetRestart(ctx context.Context, q Namespace
 		}
 		return k8sFail(ctx, "k8s.workload", "api", err)
 	}
+	recordK8sChange(ctx, cluster, "restart", "StatefulSet", q.Namespace, q.Name, map[string]any{
+		"impact": "rolling_restart",
+	})
 	return nil
 }
 

@@ -51,6 +51,7 @@ type routeHandlers struct {
 	ServiceAccount      *handler.ServiceAccountHandler
 	Overview            *handler.OverviewHandler
 	Project             *handler.ProjectHandler
+	ProjectCatalog      *handler.ProjectCatalogHandler
 	CMDB                *handler.CMDBHandler
 	MysqlBackup         *handler.MysqlBackupHandler
 	Dbmgmt              *handler.DbmgmtHandler

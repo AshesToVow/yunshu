@@ -213,6 +213,15 @@ func (h *AlertPlatformHandler) CreateMonitorRule(c *gin.Context) {
 	ServeJSON(c, h.rules.Create)
 }
 
+func (h *AlertPlatformHandler) ListRuleTemplates(c *gin.Context) {
+	group := c.Query("group")
+	response.Success(c, gin.H{"list": service.ListAlertRuleTemplates(group)})
+}
+
+func (h *AlertPlatformHandler) CreateMonitorRuleFromTemplate(c *gin.Context) {
+	ServeJSON(c, h.rules.CreateFromTemplate)
+}
+
 func (h *AlertPlatformHandler) UpdateMonitorRule(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {

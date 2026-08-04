@@ -333,14 +333,14 @@ func (s *Service) checkMetadataPermission(ctx context.Context, projectID uint, i
 }
 
 func (s *Service) checkQueryPermission(ctx context.Context, projectID uint, inst *model.DbInstance, database string, actor *auth.CurrentUser) error {
-	perm, err := s.GetEffectivePermission(ctx, projectID, inst.ID, actor)
+	perm, err := s.effectivePermissionForDatabase(ctx, projectID, inst.ID, database, actor)
 	if err != nil {
 		return err
 	}
 	if perm.CanManage || perm.CanQuery {
 		return nil
 	}
-	return constants.ErrForbidden
+	return constants.ErrForbiddenWithMsg("你无该库的查询权限，请先申请平台查询权限")
 }
 
 func (s *Service) checkWritePermission(ctx context.Context, projectID uint, inst *model.DbInstance, database string, needDDL bool, actor *auth.CurrentUser) error {

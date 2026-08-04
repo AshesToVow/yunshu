@@ -250,6 +250,38 @@ export function createAlertMonitorRule(payload: Record<string, unknown>) {
   return getData<AlertMonitorRuleItem>(http.post("/alerts/monitor-rules", payload));
 }
 
+export interface AlertRuleTemplateItem {
+  id: string;
+  group: string;
+  name: string;
+  description: string;
+  expr_template: string;
+  for_seconds: number;
+  eval_interval_seconds: number;
+  severity: string;
+  threshold_unit: string;
+  default_params?: Record<string, string>;
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+}
+
+export async function listAlertRuleTemplates(group?: string) {
+  const data = await getData<{ list?: AlertRuleTemplateItem[] }>(
+    http.get("/alerts/rule-templates", { params: group ? { group } : undefined }),
+  );
+  return data.list ?? [];
+}
+
+export function createAlertMonitorRuleFromTemplate(payload: {
+  template_id: string;
+  datasource_id: number;
+  name?: string;
+  params?: Record<string, string>;
+  enabled?: boolean;
+}) {
+  return getData<AlertMonitorRuleItem>(http.post("/alerts/monitor-rules/from-template", payload));
+}
+
 export function updateAlertMonitorRule(id: number, payload: Record<string, unknown>) {
   return getData<AlertMonitorRuleItem>(http.put(`/alerts/monitor-rules/${id}`, payload));
 }

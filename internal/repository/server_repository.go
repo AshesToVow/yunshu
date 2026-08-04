@@ -19,8 +19,10 @@ type ServerListParams struct {
 	GroupID    *uint
 	SourceType string
 	Provider   string
-	Page       int
-	PageSize   int
+	// ServerIDs 非 nil 时限制 id IN (...); 空切片表示无可见资源。
+	ServerIDs []uint
+	Page      int
+	PageSize  int
 }
 
 func NewServerRepository(db *gorm.DB) ServerRepo { return &ServerRepository{db: db} }
@@ -56,6 +58,12 @@ func (r *ServerRepository) ProjectNameByID(ctx context.Context, projectID uint) 
 
 func (r *ServerRepository) List(ctx context.Context, params ServerListParams) ([]model.Server, int64, error) {
 	q := r.db.WithContext(ctx).Model(&model.Server{}).Where("project_id = ?", params.ProjectID)
+	if params.ServerIDs != nil {
+		if len(params.ServerIDs) == 0 {
+			return []model.Server{}, 0, nil
+		}
+		q = q.Where("id IN ?", params.ServerIDs)
+	}
 	if params.GroupID != nil {
 		q = q.Where("group_id = ?", *params.GroupID)
 	}

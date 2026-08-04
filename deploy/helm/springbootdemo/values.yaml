@@ -21,6 +21,17 @@ service:
 
 containerPort: 8080
 
+# Apollo（meta 支持逗号分隔多个地址，须整体作为字符串注入）
+apollo:
+  enabled: false
+  env: PRO
+  # 示例多地址：
+  # meta: "http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080"
+  meta: ""
+  namespaces: "application"
+
+javaOpts: ""
+
 resources:
   limits:
     cpu: "1"

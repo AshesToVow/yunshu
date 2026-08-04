@@ -65,6 +65,9 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-YunshuRedis@2026Secure!}
       - JWT_SECRET=${JWT_SECRET:-YunshuJWTSecretKey2026ChangeInProduction}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-32bytes-base64}
+      # 启动前执行一次 seed（权限/菜单同步）；稳定环境可设 RUN_SEED=0
+      - RUN_SEED=${RUN_SEED:-1}
+      - WAIT_MYSQL=${WAIT_MYSQL:-1}
     volumes:
       - ./configs:/app/configs:ro
       - ./logs:/app/logs

@@ -59,6 +59,11 @@ type ProjectItem struct {
 	Status            int     `json:"status"`
 	ProjectType       string  `json:"project_type"`
 	LifecycleStatus   string  `json:"lifecycle_status"`
+	HarborURL         string  `json:"harbor_url"`
+	HarborProject     string  `json:"harbor_project"`
+	ApolloMeta        string  `json:"apollo_meta"`
+	ApolloEnv         string  `json:"apollo_env"`
+	ApolloNamespaces  string  `json:"apollo_namespaces"`
 	OwnerDepartmentID *uint   `json:"owner_department_id,omitempty"`
 	// MyProjectRole 当前登录用户在该项目中的成员角色（owner/admin/member/readonly）；列表与更新接口在非超管时填充；超管可省略。
 	MyProjectRole string `json:"my_project_role,omitempty"`
@@ -74,6 +79,11 @@ func toProjectItem(p model.Project) ProjectItem {
 		Status:            p.Status,
 		ProjectType:       p.ProjectType,
 		LifecycleStatus:   p.LifecycleStatus,
+		HarborURL:         p.HarborURL,
+		HarborProject:     p.HarborProject,
+		ApolloMeta:        p.ApolloMeta,
+		ApolloEnv:         p.ApolloEnv,
+		ApolloNamespaces:  p.ApolloNamespaces,
 		OwnerDepartmentID: p.OwnerDepartmentID,
 		CreatedAt:         p.CreatedAt.Format(time.RFC3339),
 	}
@@ -103,6 +113,32 @@ func normalizeLifecycleStatus(v string) string {
 		return model.ProjectLifecycleActive
 	}
 	return ""
+}
+
+// stripHarborHost 去掉协议与尾斜杠，便于与 Jenkins HARBOR_URL 约定一致。
+func stripHarborHost(raw string) string {
+	v := strings.TrimSpace(raw)
+	v = strings.TrimPrefix(v, "https://")
+	v = strings.TrimPrefix(v, "http://")
+	return strings.TrimRight(v, "/")
+}
+
+// normalizeApolloMetaList 规范化逗号分隔的多个 Apollo Meta 地址。
+func normalizeApolloMetaList(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return strings.Join(out, ",")
 }
 
 func (s *ProjectMgmtService) enrichMyProjectRole(ctx context.Context, item *ProjectItem) {
@@ -184,6 +220,11 @@ type ProjectCreateRequest struct {
 	Status            int     `json:"status"`
 	ProjectType       string  `json:"project_type"`
 	LifecycleStatus   string  `json:"lifecycle_status"`
+	HarborURL         string  `json:"harbor_url" binding:"omitempty,max=256"`
+	HarborProject     string  `json:"harbor_project" binding:"omitempty,max=128"`
+	ApolloMeta        string  `json:"apollo_meta" binding:"omitempty,max=1024"`
+	ApolloEnv         string  `json:"apollo_env" binding:"omitempty,max=32"`
+	ApolloNamespaces  string  `json:"apollo_namespaces" binding:"omitempty,max=512"`
 	OwnerDepartmentID *uint   `json:"owner_department_id"`
 }
 
@@ -217,6 +258,9 @@ func (s *ProjectMgmtService) CreateProject(ctx context.Context, creatorUserID ui
 	p := model.Project{
 		Name: strings.TrimSpace(req.Name), Code: strings.TrimSpace(req.Code), Description: req.Description,
 		Status: status, ProjectType: pt, LifecycleStatus: ls, OwnerDepartmentID: ownerDept,
+		HarborURL: stripHarborHost(req.HarborURL), HarborProject: strings.TrimSpace(req.HarborProject),
+		ApolloMeta: normalizeApolloMetaList(req.ApolloMeta), ApolloEnv: strings.TrimSpace(req.ApolloEnv),
+		ApolloNamespaces: strings.TrimSpace(req.ApolloNamespaces),
 	}
 	if err := s.projectRepo.Create(ctx, &p); err != nil {
 		return nil, bizerrors.Pass(ctx, "project", "CreateProject", err)
@@ -242,6 +286,11 @@ type ProjectUpdateRequest struct {
 	Status            *int    `json:"status"`
 	ProjectType       *string `json:"project_type"`
 	LifecycleStatus   *string `json:"lifecycle_status"`
+	HarborURL         *string `json:"harbor_url"`
+	HarborProject     *string `json:"harbor_project"`
+	ApolloMeta        *string `json:"apollo_meta"`
+	ApolloEnv         *string `json:"apollo_env"`
+	ApolloNamespaces  *string `json:"apollo_namespaces"`
 	OwnerDepartmentID *uint   `json:"owner_department_id"`
 }
 
@@ -279,6 +328,21 @@ func (s *ProjectMgmtService) UpdateProject(ctx context.Context, id uint, req Pro
 			return nil, constants.ErrBadRequestWithMsg("lifecycle_status 取值不合法")
 		}
 		p.LifecycleStatus = ls
+	}
+	if req.HarborURL != nil {
+		p.HarborURL = stripHarborHost(*req.HarborURL)
+	}
+	if req.HarborProject != nil {
+		p.HarborProject = strings.TrimSpace(*req.HarborProject)
+	}
+	if req.ApolloMeta != nil {
+		p.ApolloMeta = normalizeApolloMetaList(*req.ApolloMeta)
+	}
+	if req.ApolloEnv != nil {
+		p.ApolloEnv = strings.TrimSpace(*req.ApolloEnv)
+	}
+	if req.ApolloNamespaces != nil {
+		p.ApolloNamespaces = strings.TrimSpace(*req.ApolloNamespaces)
 	}
 	if req.OwnerDepartmentID != nil {
 		if *req.OwnerDepartmentID == 0 {

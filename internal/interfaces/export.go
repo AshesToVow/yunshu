@@ -31,4 +31,6 @@ type (
 	K8sNamespaceAllowRepository   = repository.K8sNamespaceAllowRepo
 	OverviewRepository            = repository.OverviewRepo
 	K8sEventForwardRepository     = repository.K8sEventForwardRepo
+	ServiceCatalogRepository      = repository.ServiceCatalogRepo
+	ChangeEventRepository         = repository.ChangeEventRepo
 )

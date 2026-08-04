@@ -16,43 +16,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func (s *K8sWorkloadService) Apply(ctx context.Context, req NamespacedApplyRequest) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(req.Manifest) == "" {
-		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
-	}
-
-	refs := extractWorkloadRefsForApply(req.Manifest)
-
-	err = s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		if len(refs) == 0 {
-			return false
-		}
-		for _, r := range refs {
-			if strings.TrimSpace(r.Name) == "" {
-				continue
-			}
-			if !s.dyn.ExistsByKind(c, k, r.Kind, r.Namespace, r.Name) {
-				return false
-			}
-		}
-		return true
-	})
-	if err != nil {
-		return k8sFail(ctx, "k8s.workload", "api", err)
-	}
-	return nil
-}
-
-type workloadRef struct {
-	Kind      string
-	Name      string
-	Namespace string
-}
-
 func extractWorkloadRefsForApply(manifest string) []workloadRef {
 	docs := k8sutil.SplitYAMLDocs(manifest)
 	out := make([]workloadRef, 0)
@@ -109,6 +72,12 @@ func extractWorkloadRefsForApply(manifest string) []workloadRef {
 	return out
 }
 
+type workloadRef struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
 // DeleteDeployment 删除相关的业务逻辑。
 func (s *K8sWorkloadService) DeleteDeployment(ctx context.Context, req NamespacedDeleteRequest) error {
 	return s.deleteWorkloadByKind(ctx, req, "Deployment")
@@ -132,24 +101,6 @@ func (s *K8sWorkloadService) DeleteJob(ctx context.Context, req NamespacedDelete
 // DeleteCronJob 删除相关的业务逻辑。
 func (s *K8sWorkloadService) DeleteCronJob(ctx context.Context, req NamespacedDeleteRequest) error {
 	return s.deleteWorkloadByKind(ctx, req, "CronJob")
-}
-
-func (s *K8sWorkloadService) deleteWorkloadByKind(ctx context.Context, req NamespacedDeleteRequest, kind string) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
-	if err != nil {
-		return err
-	}
-	gvk, ok := s.dyn.GVKByKind(kind)
-	if !ok {
-		return constants.ErrBadRequestWithMsg(constants.ErrMsgd5692b195622)
-	}
-	if err := s.dyn.DeleteByGVK(ctx, k, gvk, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		return bizerrors.Internalf(ctx, "k8s.workload", "delete", err, constants.ErrFmt32b88f9cc2e5, kind)
-	}
-	return nil
 }
 
 // CronJobSuspend 执行对应的业务逻辑。

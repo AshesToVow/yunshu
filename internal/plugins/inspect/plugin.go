@@ -5,6 +5,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/plugin"
+	inspectsvc "yunshu/internal/service/inspect"
 )
 
 func init() {
@@ -17,6 +18,15 @@ type module struct {
 
 func (m *module) Name() string        { return "inspect" }
 func (m *module) Description() string { return "项目级 Prometheus 巡检报告与定时调度" }
+
+func (m *module) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		MenuPathPrefixes: []string{"/project-inspect"},
+		APIPrefixes:      []string{},
+		DependsOn:        []string{"project"},
+		Workers:          []string{"inspect_scheduler"},
+	}
+}
 
 func (m *module) Models() []any {
 	return []any{
@@ -31,7 +41,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc := rt.InspectSvc(); svc != nil {
+	if svc, ok := rt.Inspect.(*inspectsvc.Service); ok && svc != nil {
 		_ = svc.SeedGlobalTemplates(bgCtx)
 		_ = svc.SeedReportTemplates(bgCtx)
 		go svc.RunScheduler(bgCtx)
