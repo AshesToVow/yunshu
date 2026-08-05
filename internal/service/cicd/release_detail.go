@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 )
 
@@ -34,10 +35,13 @@ type ReleaseRunDetailResponse struct {
 	DestPath         string                    `json:"dest_path"`
 }
 
-func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint) (*ReleaseRunDetailResponse, error) {
+func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (*ReleaseRunDetailResponse, error) {
 	var row model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
 		return nil, constants.ErrNotFound
+	}
+	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "view"); err != nil {
+		return nil, err
 	}
 	item := ReleaseRunItem{CicdReleaseRun: row}
 	var svc model.CicdService

@@ -13,14 +13,16 @@ These files are generated from handler annotations by swaggo:
 The repository maintains a **full REST map** generated from router registration（`internal/router/` + 插件绑定）:
 
 - `docs/apipost/permission-system.openapi.yaml`
+- 配套甲方文档：`docs/API接口设计说明书.md`（含接口编号/参数/响应/错误码/权限）
 
-Regenerate after route changes (scans all `internal/router/register_*.go`):
+Regenerate after route changes:
 
 ```bash
 go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml
+python tools/gen_api_design_md.py
 ```
 
-Import this YAML into APIpost for debugging. Operations use a generic `StandardResponse` schema; extend by hand or use Swagger for handler-level detail.
+Import this YAML into APIpost for debugging. Operations use `StandardResponse` / `ErrorBody` schemas; request body field-level detail follows Handler DTOs.
 
 ## APIpost Import (Swagger / legacy)
 

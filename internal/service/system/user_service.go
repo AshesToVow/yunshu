@@ -2,6 +2,8 @@ package system
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"io"
 	"slices"
@@ -565,7 +567,14 @@ func (s *UserService) ImportUsers(ctx context.Context, r io.Reader) error {
 			continue
 		}
 
-		hashed, _ := password.Hash("123456")
+		rawPass, err := randomImportPassword()
+		if err != nil {
+			return bizerrors.Pass(ctx, "user", "ImportUsers", err)
+		}
+		hashed, err := password.Hash(rawPass)
+		if err != nil {
+			return bizerrors.Pass(ctx, "user", "ImportUsers", err)
+		}
 		user := model.User{
 			Username:     username,
 			Nickname:     nickname,
@@ -574,9 +583,20 @@ func (s *UserService) ImportUsers(ctx context.Context, r io.Reader) error {
 			Status:       status,
 			DepartmentID: departmentID,
 		}
-		_ = s.userRepo.Create(ctx, &user)
+		if err := s.userRepo.Create(ctx, &user); err != nil {
+			return bizerrors.Pass(ctx, "user", "ImportUsers", err)
+		}
 	}
 	return nil
+}
+
+func randomImportPassword() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	// 导入账号须首次改密；随机口令避免固定弱口令进库。
+	return "Tmp!" + hex.EncodeToString(b[:]), nil
 }
 
 // UsersImportTemplateExcel returns the user import template file.

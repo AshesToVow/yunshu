@@ -397,9 +397,20 @@ export function ProjectLogsPage() {
 
 function LogMessageCell({ message, highlight }: { message?: string; highlight?: string }) {
   if (highlight) {
-    return <div className="log-message-cell" dangerouslySetInnerHTML={{ __html: highlight }} />;
+    return <div className="log-message-cell" dangerouslySetInnerHTML={{ __html: sanitizeLogHighlight(highlight) }} />;
   }
   return <div className="log-message-cell">{message || "-"}</div>;
+}
+
+/** 仅允许 <mark> 高亮标签，其余 HTML 一律转义，降低存储型 XSS 风险。 */
+function sanitizeLogHighlight(input: string): string {
+  const escaped = String(input)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  return escaped.replace(/&lt;mark&gt;/gi, "<mark>").replace(/&lt;\/mark&gt;/gi, "</mark>");
 }
 
 function normalizeLogLevel(level?: string) {

@@ -1043,10 +1043,13 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 	return &pagination.Result[ReleaseRunItem]{List: items, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
-func (s *Service) GetBuildRun(ctx context.Context, projectID, runID uint) (*BuildRunItem, error) {
+func (s *Service) GetBuildRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (*BuildRunItem, error) {
 	var row model.CicdBuildRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
 		return nil, constants.ErrNotFound
+	}
+	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "view"); err != nil {
+		return nil, err
 	}
 	item := BuildRunItem{CicdBuildRun: row}
 	var svc model.CicdService
@@ -1057,8 +1060,8 @@ func (s *Service) GetBuildRun(ctx context.Context, projectID, runID uint) (*Buil
 	return &item, nil
 }
 
-func (s *Service) GetBuildRunLog(ctx context.Context, projectID, runID uint) (string, error) {
-	row, err := s.GetBuildRun(ctx, projectID, runID)
+func (s *Service) GetBuildRunLog(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (string, error) {
+	row, err := s.GetBuildRun(ctx, projectID, runID, actor)
 	if err != nil {
 		return "", err
 	}
@@ -1076,10 +1079,13 @@ func (s *Service) GetBuildRunLog(ctx context.Context, projectID, runID uint) (st
 	return client.GetConsoleLog(ctx, svc.JenkinsJob, row.BuildNumber)
 }
 
-func (s *Service) GetReleaseRunLog(ctx context.Context, projectID, runID uint) (string, error) {
+func (s *Service) GetReleaseRunLog(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (string, error) {
 	var row model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
 		return "", constants.ErrNotFound
+	}
+	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "view"); err != nil {
+		return "", err
 	}
 	if row.JenkinsBuildNumber <= 0 {
 		return "", nil

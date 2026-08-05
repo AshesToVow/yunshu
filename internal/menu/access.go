@@ -75,7 +75,7 @@ func UserCanAccessMenu(enforcer *casbin.SyncedEnforcer, userID uint, bindings []
 	for _, b := range bindings {
 		allowed, err := enforcer.Enforce(subject, b.Resource, strings.ToUpper(b.Action))
 		if err != nil {
-			continue
+			return false
 		}
 		if allowed {
 			return true
@@ -120,7 +120,7 @@ func RoleCanAccessMenu(enforcer *casbin.SyncedEnforcer, roleCode string, binding
 	for _, b := range bindings {
 		allowed, err := enforcer.Enforce(roleCode, b.Resource, strings.ToUpper(b.Action))
 		if err != nil {
-			continue
+			return false
 		}
 		if allowed {
 			return true

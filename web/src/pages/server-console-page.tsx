@@ -38,7 +38,8 @@ export function ServerConsolePage() {
   const [result, setResult] = useState<ExecResult | null>(null);
   const [terminalConnected, setTerminalConnected] = useState(false);
   const [terminalConnecting, setTerminalConnecting] = useState(false);
-  const [canExec, setCanExec] = useState(true);
+  const [canExec, setCanExec] = useState(false);
+  const [accessLoaded, setAccessLoaded] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const termBoxRef = useRef<HTMLDivElement | null>(null);
@@ -57,21 +58,24 @@ export function ServerConsolePage() {
 
   async function loadDetail() {
     setLoading(true);
+    setAccessLoaded(false);
+    setCanExec(false);
     try {
       const [data, access] = await Promise.all([
         getProjectServerDetail(projectId, serverId),
-        getMyServerAccess(projectId, serverId).catch(() => ({ can_view: true, can_exec: false, can_manage: false })),
+        getMyServerAccess(projectId, serverId).catch(() => ({ can_view: false, can_exec: false, can_manage: false })),
       ]);
       setServer(data);
       setCanExec(Boolean(access.can_exec || access.can_manage));
     } finally {
+      setAccessLoaded(true);
       setLoading(false);
     }
   }
 
   async function runCommand() {
     if (!validParams) return;
-    if (!canExec) {
+    if (!accessLoaded || !canExec) {
       message.error("仅有查看权限，不能执行命令");
       return;
     }
@@ -100,7 +104,7 @@ export function ServerConsolePage() {
 
   async function openTerminal() {
     if (!validParams) return;
-    if (!canExec) {
+    if (!accessLoaded || !canExec) {
       message.error("仅有查看权限，不能连接 SSH 终端");
       return;
     }
@@ -299,7 +303,9 @@ export function ServerConsolePage() {
       </Card>
 
       <Card className="table-card" bodyStyle={{ paddingTop: 8 }}>
-        {!canExec ? (
+        {!accessLoaded ? (
+          <Alert type="info" showIcon style={{ marginBottom: 12 }} message="正在校验服务器访问权限…" />
+        ) : !canExec ? (
           <Alert
             type="warning"
             showIcon
@@ -319,7 +325,7 @@ export function ServerConsolePage() {
                     <Button
                       type="primary"
                       onClick={openTerminal}
-                      disabled={!canExec || terminalConnected || terminalConnecting}
+                      disabled={!accessLoaded || !canExec || terminalConnected || terminalConnecting}
                       loading={terminalConnecting}
                     >
                       连接终端
@@ -361,7 +367,7 @@ export function ServerConsolePage() {
                         icon={<PlayCircleOutlined />}
                         onClick={() => void runCommand()}
                         loading={running}
-                        disabled={!canExec}
+                        disabled={!accessLoaded || !canExec}
                       >
                         执行
                       </Button>

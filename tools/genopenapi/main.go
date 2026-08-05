@@ -1,5 +1,8 @@
 // genopenapi 从 internal/router/register_*.go 解析 Gin 路由，生成 OpenAPI 3.0.3 文档。
-// 用法：go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml
+// 用法：
+//
+//	go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml
+//	python tools/gen_api_design_md.py
 package main
 
 import (
@@ -168,6 +171,49 @@ func operationDescription(openAPIPath, method, fullPath string) string {
 	return ""
 }
 
+func pathParamNames(openAPIPath string) []string {
+	re := regexp.MustCompile(`\{([a-zA-Z0-9_]+)\}`)
+	ms := re.FindAllStringSubmatch(openAPIPath, -1)
+	out := make([]string, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+func operationSummary(method, openAPIPath string) string {
+	segs := strings.Split(strings.Trim(openAPIPath, "/"), "/")
+	var meaningful []string
+	for _, s := range segs {
+		if s == "" || strings.HasPrefix(s, "{") {
+			continue
+		}
+		meaningful = append(meaningful, s)
+	}
+	tail := openAPIPath
+	if len(meaningful) > 0 {
+		n := 3
+		if len(meaningful) < n {
+			n = len(meaningful)
+		}
+		tail = strings.Join(meaningful[len(meaningful)-n:], "/")
+	}
+	switch strings.ToUpper(method) {
+	case "GET":
+		return "查询 " + tail
+	case "POST":
+		return "创建/提交 " + tail
+	case "PUT":
+		return "更新 " + tail
+	case "PATCH":
+		return "部分更新 " + tail
+	case "DELETE":
+		return "删除 " + tail
+	default:
+		return method + " " + tail
+	}
+}
+
 func main() {
 	routerDir := flag.String("router-dir", "internal/router", "directory containing register_*.go")
 	outPath := flag.String("out", "docs/apipost/permission-system.openapi.yaml", "output openapi yaml")
@@ -213,6 +259,8 @@ info:
   description: |
     由 tools/genopenapi 从 internal/router/register_*.go 自动生成，请勿手工编辑本文件。
     重新生成：go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml
+    配套说明书：python tools/gen_api_design_md.py → docs/API接口设计说明书.md
+    统一响应见 components.schemas.StandardResponse / ErrorBody。
 servers:
   - url: http://127.0.0.1:8080
     description: Local
@@ -257,17 +305,50 @@ paths:
 				sec = `      security:
         - bearerAuth: []
 `
+			} else if r.path == "/api/v1/alerts/webhook/alertmanager" {
+				sec = `      security:
+        - alertWebhookToken: []
+`
 			}
 			desc := operationDescription(p, r.method, r.path)
+			if !isPublic(r.method, r.path) {
+				desc += fmt.Sprintf("权限：JWT + Casbin Enforce(user, %s, %s)。\n", r.path, r.method)
+			}
 			fmt.Fprintf(&sb, "    %s:\n", strings.ToLower(r.method))
 			fmt.Fprintf(&sb, "      tags: [%q]\n", tag)
-			fmt.Fprintf(&sb, "      summary: Auto-generated from router\n")
+			fmt.Fprintf(&sb, "      summary: %q\n", operationSummary(r.method, p))
 			fmt.Fprintf(&sb, "      operationId: %s\n", opID)
 			if desc != "" {
-				fmt.Fprintf(&sb, "      description: |\n        %s", desc)
+				fmt.Fprintf(&sb, "      description: |\n")
+				for _, line := range strings.Split(strings.TrimSuffix(desc, "\n"), "\n") {
+					fmt.Fprintf(&sb, "        %s\n", line)
+				}
 			}
 			if sec != "" {
 				fmt.Fprintf(&sb, "%s", sec)
+			}
+			params := pathParamNames(p)
+			if len(params) > 0 {
+				fmt.Fprintf(&sb, "      parameters:\n")
+				for _, name := range params {
+					fmt.Fprintf(&sb, `        - name: %s
+          in: path
+          required: true
+          schema:
+            type: string
+`, name)
+				}
+			}
+			if r.method == "POST" || r.method == "PUT" || r.method == "PATCH" {
+				fmt.Fprintf(&sb, `      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: 请求体字段以对应 Handler DTO / binding 为准
+`)
 			}
 			fmt.Fprintf(&sb, `      responses:
         "200":
@@ -278,12 +359,34 @@ paths:
                 $ref: "#/components/schemas/StandardResponse"
         "400":
           description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
         "401":
           description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
         "403":
           description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "404":
+          description: 未找到
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
         "500":
           description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
 `)
 		}
 	}
@@ -303,6 +406,7 @@ paths:
   schemas:
     StandardResponse:
       type: object
+      required: [code, message]
       properties:
         code:
           type: integer
@@ -310,11 +414,28 @@ paths:
         message:
           type: string
           example: success
-        error_code:
-          type: string
-          description: 业务错误码（失败时）
         data:
           description: 成功时的载荷，结构因接口而异
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: HTTP 状态码镜像
+          example: 401
+        reason:
+          type: string
+        message:
+          type: string
+          description: 产品话术
+        error_code:
+          type: string
+          description: 业务错误码（字符串形式的数字码）
+          example: "10002"
+        metadata:
+          type: object
+          additionalProperties: true
 `)
 
 	out := sb.String()
