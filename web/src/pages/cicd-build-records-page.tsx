@@ -1,14 +1,19 @@
 import { DeleteOutlined, EyeOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Drawer, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import {
   deleteBuildRun,
   getBuildRun,
   getBuildRunLog,
+  listBuildRunArtifactsMeta,
+  listBuildRunStages,
   listBuildRuns,
+  type CicdArtifactMeta,
   type CicdBuildRun,
+  type CicdRunStage,
 } from "../services/cicd";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
@@ -49,6 +54,9 @@ export function CicdBuildRecordsPage() {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<CicdBuildRun | null>(null);
+  const [stages, setStages] = useState<CicdRunStage[]>([]);
+  const [artifactsMeta, setArtifactsMeta] = useState<CicdArtifactMeta[]>([]);
+  const [activeStageId, setActiveStageId] = useState<number>();
   const [logOpen, setLogOpen] = useState(false);
   const [logText, setLogText] = useState("");
   const [logRun, setLogRun] = useState<CicdBuildRun | null>(null);
@@ -180,6 +188,13 @@ export function CicdBuildRecordsPage() {
                 const r = await getBuildRun(projectId, row.id);
                 setDetail(r);
                 setDetailOpen(true);
+                const [st, arts] = await Promise.all([
+                  listBuildRunStages(projectId, row.id),
+                  listBuildRunArtifactsMeta(projectId, row.id),
+                ]);
+                setStages(st || []);
+                setArtifactsMeta(arts || []);
+                setActiveStageId(st?.[0]?.id);
               }}
             />
             <Button
@@ -226,29 +241,132 @@ export function CicdBuildRecordsPage() {
         />
       </Card>
 
-      <Drawer title="构建详情" width={640} open={detailOpen} onClose={() => setDetailOpen(false)}>
+      <Drawer
+        title="构建详情"
+        width={720}
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setStages([]);
+          setArtifactsMeta([]);
+          setActiveStageId(undefined);
+        }}
+      >
         {detail && (
-          <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8 }}>
-            {[
-              ["应用", detail.service_name],
-              ["标识符", detail.service_identifier],
-              ["分支", detail.branch_name],
-              ["publishMode", detail.publish_mode],
-              ["环境", detail.tenv],
-              ["版本", detail.version],
-              ["结果", detail.build_result],
-              ["制品路径", detail.package_path || detail.image_address],
-              ["镜像", detail.image_address],
-              ["Jenkins", detail.jenkins_build_url],
-              ["开始", formatDateTime(detail.started_at)],
-              ["结束", formatDateTime(detail.finished_at)],
-            ].map(([k, v]) => (
-              <span key={String(k)}>
-                <Typography.Text type="secondary">{k}</Typography.Text>
-                <div style={{ wordBreak: "break-all" }}>{v || "—"}</div>
-              </span>
-            ))}
-          </div>
+          <Space direction="vertical" style={{ width: "100%" }} size="middle">
+            {stages.length > 0 && (
+              <div>
+                <Typography.Text type="secondary">流水线阶段</Typography.Text>
+                <Steps
+                  size="small"
+                  style={{ marginTop: 8 }}
+                  current={Math.max(
+                    0,
+                    stages.findIndex((s) => s.id === activeStageId),
+                  )}
+                  onChange={(i) => setActiveStageId(stages[i]?.id)}
+                  items={stages.map((s) => ({
+                    title: s.stage_name || s.stage_type,
+                    status:
+                      s.status === "success"
+                        ? "finish"
+                        : s.status === "failure" || s.status === "failed"
+                          ? "error"
+                          : s.status === "running"
+                            ? "process"
+                            : "wait",
+                    description: s.duration_sec ? `${s.duration_sec}s` : undefined,
+                  }))}
+                />
+                {(() => {
+                  const st = stages.find((s) => s.id === activeStageId) || stages[0];
+                  if (!st) return null;
+                  let quality = "";
+                  let dashboard = detail.sonar_dashboard_url || "";
+                  if (st.extra_json) {
+                    try {
+                      const extra = JSON.parse(st.extra_json) as Record<string, unknown>;
+                      if (extra.quality_gate) quality = String(extra.quality_gate);
+                      if (extra.dashboard_url) dashboard = String(extra.dashboard_url);
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  return (
+                    <div style={{ marginTop: 12 }}>
+                      {(st.stage_type === "sonar" || quality || dashboard) && (
+                        <Space wrap style={{ marginBottom: 8 }}>
+                          {quality ? <Tag color="blue">Quality Gate: {quality}</Tag> : null}
+                          {dashboard ? (
+                            <Typography.Link href={dashboard} target="_blank" rel="noreferrer">
+                              Sonar Dashboard
+                            </Typography.Link>
+                          ) : null}
+                        </Space>
+                      )}
+                      {st.error_message ? (
+                        <Typography.Text type="danger">{st.error_message}</Typography.Text>
+                      ) : null}
+                      <pre
+                        style={{
+                          maxHeight: 220,
+                          overflow: "auto",
+                          fontSize: 12,
+                          background: "#1e1e1e",
+                          color: "#d4d4d4",
+                          padding: 8,
+                          borderRadius: 6,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {st.logs?.trim() || "（该阶段暂无日志）"}
+                      </pre>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8 }}>
+              {[
+                ["应用", detail.service_name],
+                ["标识符", detail.service_identifier],
+                ["分支", detail.branch_name],
+                ["publishMode", detail.publish_mode],
+                ["环境", detail.tenv],
+                ["版本", detail.version],
+                ["结果", detail.build_result],
+                ["制品路径", detail.package_path || detail.image_address],
+                ["镜像", detail.image_address],
+                ["Sonar", detail.sonar_project_key],
+                ["Jenkins", detail.jenkins_build_url],
+                ["开始", formatDateTime(detail.started_at)],
+                ["结束", formatDateTime(detail.finished_at)],
+              ].map(([k, v]) => (
+                <span key={String(k)}>
+                  <Typography.Text type="secondary">{k}</Typography.Text>
+                  <div style={{ wordBreak: "break-all" }}>{v || "—"}</div>
+                </span>
+              ))}
+            </div>
+            {detail.image_address ? (
+              <Link to="/cicd/image-browser">在仓库中查看镜像 →</Link>
+            ) : null}
+            {artifactsMeta.length > 0 && (
+              <Table
+                size="small"
+                rowKey="id"
+                pagination={false}
+                dataSource={artifactsMeta}
+                columns={[
+                  { title: "类型", dataIndex: "artifact_type", width: 90 },
+                  { title: "名称", dataIndex: "name", ellipsis: true },
+                  { title: "路径", dataIndex: "storage_path", ellipsis: true },
+                  { title: "Digest", dataIndex: "digest", ellipsis: true, width: 160 },
+                ]}
+              />
+            )}
+          </Space>
         )}
       </Drawer>
 

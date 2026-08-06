@@ -69,6 +69,15 @@ cicd:
   approval_sla_hours: 24
   # 审批提醒间隔时间
   approval_reminder_interval_hours: 4
+  # SonarQube（优先用数据字典 cicd_sonar_* 开关控制）
+  sonar:
+    enabled: false
+    url: ""
+    token: ""
+    gate_block: true
+  callback:
+    hmac_secret: ""
+    callback_url: ""
 
 http:
   read_header_timeout_seconds: 5

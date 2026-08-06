@@ -403,6 +403,64 @@ func (h *CicdHandler) GetBuildRunLog(c *gin.Context) {
 	response.Success(c, gin.H{"log": logText})
 }
 
+func (h *CicdHandler) ListBuildRunStages(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	runID, err := parseUintParam(c, "runId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	rows, err := h.svc.ListBuildRunStages(c.Request.Context(), projectID, runID, actor)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, rows)
+}
+
+func (h *CicdHandler) ListBuildRunArtifactsMeta(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	runID, err := parseUintParam(c, "runId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	rows, err := h.svc.ListBuildRunArtifactsMeta(c.Request.Context(), projectID, runID, actor)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, rows)
+}
+
+// JenkinsCallback Jenkins 阶段/门禁/制品 HMAC 回调（无登录）。
+func (h *CicdHandler) JenkinsCallback(c *gin.Context) {
+	body, err := cicd.ReadCallbackBody(c)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	sig := c.GetHeader("X-Yunshu-Signature")
+	if sig == "" {
+		sig = c.GetHeader("X-Hub-Signature-256")
+	}
+	if err := h.svc.HandleJenkinsCallbackRaw(c.Request.Context(), body, sig); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
 func (h *CicdHandler) DeleteBuildRun(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
@@ -595,6 +653,16 @@ func (h *CicdHandler) VerifyReleaseRun(c *gin.Context) {
 		return
 	}
 	response.Success(c, result)
+}
+
+func (h *CicdHandler) PlatformRollbackRelease(c *gin.Context) {
+	projectID, runID, ok := h.releaseRunIDs(c)
+	if !ok {
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req cicd.PlatformRollbackRequest) (map[string]any, error) {
+		return h.svc.PlatformRollbackRelease(ctx, projectID, runID, req)
+	})
 }
 
 func (h *CicdHandler) TerminateReleaseRun(c *gin.Context) {

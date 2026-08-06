@@ -136,6 +136,8 @@ func DefaultCatalog() []Spec {
 				{Path: "/cicd/approval-flow", Name: "审批管理", Icon: "AuditOutlined", Sort: 3, Component: "cicd-approval-flow-page", Status: 1},
 				{Path: "/cicd/build-records", Name: "CI 打包记录", Icon: "CloudUploadOutlined", Sort: 4, Component: "cicd-build-records-page", Status: 1},
 				{Path: "/cicd/release-records", Name: "CD 历史工单", Icon: "DeploymentUnitOutlined", Sort: 5, Component: "cicd-release-records-page", Status: 1},
+				{Path: "/cicd/registries", Name: "镜像仓库", Icon: "DatabaseOutlined", Sort: 6, Component: "cicd-registries-page", Status: 1},
+				{Path: "/cicd/image-browser", Name: "镜像浏览", Icon: "CloudServerOutlined", Sort: 7, Component: "cicd-image-browser-page", Status: 1},
 			},
 		},
 		{

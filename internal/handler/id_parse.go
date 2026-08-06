@@ -2,6 +2,8 @@ package handler
 
 import (
 	"strconv"
+	"strings"
+
 	"yunshu/internal/pkg/constants"
 
 	"github.com/gin-gonic/gin"
@@ -26,4 +28,17 @@ func parseUintQuery(c *gin.Context, key string) (uint, error) {
 		return 0, constants.ErrInvalidRequestParam
 	}
 	return uint(id), nil
+}
+
+// parseOptionalUintQuery 空字符串返回 0，不报错。
+func parseOptionalUintQuery(c *gin.Context, key string) uint {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return 0
+	}
+	id, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return uint(id)
 }

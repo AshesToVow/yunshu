@@ -46,9 +46,11 @@ import {
   updateCicdService,
   updateDeployConfig,
   upsertCiConfig,
+  listPipelineTemplates,
   type CicdArtifactItem,
   type CicdBuildRun,
   type CicdDeployConfig,
+  type CicdPipelineTemplate,
   type CicdServiceItem,
 } from "../services/cicd";
 import { getProjectServers, getProjects, type ProjectItem, type ServerItem } from "../services/projects";
@@ -143,6 +145,7 @@ function defaultCiFormValues(svc: CicdServiceItem) {
   return {
     ref_type: "branch",
     ref_name: "main",
+    language_type: isFront ? "frontend" : "custom",
     build_type: isFront ? "npm" : "mvn",
     build_shell: isFront ? "run build" : "clean package -DskipTests",
     build_path: isFront ? "dist" : "target",
@@ -165,6 +168,7 @@ export function CicdServicesPage() {
   const deployActions = useDictOptions("cicd_deploy_action");
   const startScriptTypes = useDictOptions("cicd_start_script_type");
   const importanceLevels = useDictOptions("cicd_importance_level");
+  const [pipelineTemplates, setPipelineTemplates] = useState<CicdPipelineTemplate[]>([]);
 
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [userOptions, setUserOptions] = useState<UserItem[]>([]);
@@ -183,6 +187,8 @@ export function CicdServicesPage() {
   const [ciDrawerOpen, setCiDrawerOpen] = useState(false);
   const [ciService, setCiService] = useState<CicdServiceItem | null>(null);
   const [ciForm] = Form.useForm();
+  const selectedLanguageType = Form.useWatch("language_type", ciForm) as string | undefined;
+  const selectedTemplate = pipelineTemplates.find((t) => t.language_type === selectedLanguageType);
 
   const [deployWizardOpen, setDeployWizardOpen] = useState(false);
   const [deployStep, setDeployStep] = useState(0);
@@ -289,6 +295,7 @@ export function CicdServicesPage() {
   useEffect(() => {
     void loadProjects();
     void loadUsers();
+    void listPipelineTemplates().then((rows) => setPipelineTemplates(rows || [])).catch(() => setPipelineTemplates([]));
   }, [loadProjects, loadUsers]);
 
   useEffect(() => {
@@ -851,6 +858,34 @@ export function CicdServicesPage() {
             extra="须与远端仓库实际分支一致（Gitee 常见默认分支为 master，勿填 main 除非仓库确有 main）"
           >
             <Input placeholder="master" />
+          </Form.Item>
+          <Form.Item
+            name="language_type"
+            label="流水线语言模板"
+            rules={[{ required: true }]}
+            extra={
+              selectedTemplate?.script_path
+                ? `将使用 Script Path：${selectedTemplate.script_path}`
+                : selectedLanguageType === "custom"
+                  ? "自定义：按服务类型选择 front/backend/k8s Jenkinsfile"
+                  : selectedTemplate?.description
+            }
+          >
+            <Select
+              options={(pipelineTemplates.length
+                ? pipelineTemplates
+                : [
+                    { language_type: "go", name: "Go" },
+                    { language_type: "java", name: "Java" },
+                    { language_type: "frontend", name: "前端" },
+                    { language_type: "python", name: "Python" },
+                    { language_type: "custom", name: "自定义" },
+                  ]
+              ).map((t) => ({
+                label: t.name,
+                value: t.language_type,
+              }))}
+            />
           </Form.Item>
           <Form.Item name="build_type" label="打包模板类型" rules={[{ required: true }]}>
             <Select

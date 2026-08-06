@@ -34,6 +34,10 @@ type BuildParamsInput struct {
 	ApolloMeta       string
 	ApolloEnv        string
 	ApolloNamespaces string
+	// YunshuBuildRunID 注入 Jenkins，便于回调回写阶段/门禁。
+	YunshuBuildRunID uint
+	// EnableSonarOverride 非 nil 时覆盖字典开关（CD 发布通常传 false）。
+	EnableSonarOverride *bool
 }
 
 // BuildJenkinsParams 将服务配置映射为 Jenkins buildWithParameters 参数（与 jenkinsfile 文档一致）。
@@ -98,6 +102,7 @@ func BuildJenkinsParams(in BuildParamsInput) map[string]string {
 	if v := strings.TrimSpace(in.ImageAddress); v != "" {
 		params["FULL_IMAGE_NAME"] = v
 	}
+	applySonarAndCallbackParams(params, in)
 	// Apollo 需在 deploy 参数（含 Tenv）确定后再注入，SSH 与容器模板共用。
 	applyApolloParams(params, in)
 	return params
@@ -399,6 +404,38 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func applySonarAndCallbackParams(params map[string]string, in BuildParamsInput) {
+	enable := in.Cfg.Sonar.Enabled
+	if in.EnableSonarOverride != nil {
+		enable = *in.EnableSonarOverride
+	}
+	// CD「制品发布」默认不跑 Sonar，避免重复扫描。
+	if strings.TrimSpace(in.PublishMode) == model.CicdPublishModeArtifactDeploy {
+		enable = false
+	}
+	if enable {
+		params["enableSonar"] = "true"
+	} else {
+		params["enableSonar"] = "false"
+	}
+	if v := strings.TrimSpace(in.Cfg.Sonar.URL); v != "" {
+		params["SONAR_HOST_URL"] = v
+	}
+	if v := strings.TrimSpace(in.Cfg.Sonar.Token); v != "" {
+		params["SONAR_TOKEN"] = v
+	}
+	if v := strings.TrimSpace(in.Cfg.Callback.CallbackURL); v != "" {
+		params["YUNSHU_CALLBACK_URL"] = v
+	}
+	if v := strings.TrimSpace(in.Cfg.Callback.HMACSecret); v != "" {
+		params["YUNSHU_CALLBACK_HMAC_SECRET"] = v
+	}
+	if in.YunshuBuildRunID > 0 {
+		params["YUNSHU_BUILD_RUN_ID"] = strconv.FormatUint(uint64(in.YunshuBuildRunID), 10)
+		params["YUNSHU_RUN_KIND"] = model.CicdRunKindBuild
+	}
 }
 
 // ParseServerIDs 解析 deploy config 中的服务器 ID 列表。

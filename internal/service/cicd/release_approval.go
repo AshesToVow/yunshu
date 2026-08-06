@@ -66,6 +66,9 @@ func (s *Service) prepareRelease(
 	}
 	if strings.EqualFold(dc.DeployKind, model.CicdDeployKindContainer) {
 		if req.BuildRunID > 0 {
+			if err := s.assertBuildQualityGate(ctx, projectID, serviceID, req.BuildRunID); err != nil {
+				return nil, err
+			}
 			var br model.CicdBuildRun
 			if err := s.db.WithContext(ctx).
 				Where("id = ? AND service_id = ? AND project_id = ?", req.BuildRunID, serviceID, projectID).

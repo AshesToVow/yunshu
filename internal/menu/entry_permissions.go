@@ -102,6 +102,8 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/cicd/approval-flow":   {"/api/v1/projects/:id/cicd/approval-flow", "GET"},
 		"/cicd/build-records":   {"/api/v1/projects/:id/cicd/build-runs", "GET"},
 		"/cicd/release-records": {"/api/v1/projects/:id/cicd/release-runs", "GET"},
+		"/cicd/registries":      {"/api/v1/registries", "GET"},
+		"/cicd/image-browser":   {"/api/v1/registries", "GET"},
 
 		"/crds": {"/api/v1/crds", "GET"},
 		"/crs":  {"/api/v1/crs", "GET"},

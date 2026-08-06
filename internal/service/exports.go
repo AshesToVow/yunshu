@@ -297,6 +297,8 @@ type (
 	K8sAuthMatrixRow           = k8s.K8sAuthMatrixRow
 	K8sUserClusterAuthRow      = k8s.K8sUserClusterAuthRow
 	K8sEventForwardRuleUpsertRequest = eventforward.K8sEventForwardRuleUpsertRequest
+	RolloutUndoRequest         = k8s.RolloutUndoRequest
+	RolloutUndoResult          = k8s.RolloutUndoResult
 )
 
 // --- logplatform ---

@@ -6,6 +6,7 @@ import {
 } from "@ant-design/icons";
 import {
   Alert,
+  Button,
   Descriptions,
   Divider,
   Form,
@@ -16,6 +17,7 @@ import {
   Tabs,
   Tag,
   Typography,
+  message,
 } from "antd";
 import type { FormInstance } from "antd/es/form";
 import type { ColumnsType } from "antd/es/table";
@@ -23,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getReleaseRunDetail,
   getReleaseRunLog,
+  platformRollbackRelease,
   verifyReleaseRun,
   type CicdReleaseApprovalStep,
   type CicdReleaseOperationLog,
@@ -80,6 +83,7 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyAlerts, setVerifyAlerts] = useState<AlertEventItem[]>([]);
   const [verifyResult, setVerifyResult] = useState<ReleaseVerifyResult | null>(null);
+  const [rollbackLoading, setRollbackLoading] = useState(false);
   const logPreRef = useRef<HTMLPreElement>(null);
 
   const loadDetail = useCallback(async () => {
@@ -395,6 +399,29 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
                 message="后端验证：Ready / 错误日志 / 新告警"
                 description="结果写回 release.verify_status，并记录 change_event。"
               />
+              {run.release_kind === "container" ? (
+                <Space style={{ marginBottom: 12 }}>
+                  <Button
+                    danger
+                    loading={rollbackLoading}
+                    onClick={async () => {
+                      setRollbackLoading(true);
+                      try {
+                        const out = await platformRollbackRelease(projectId, runId);
+                        message.success((out?.message as string) || "平台回滚已提交");
+                        const result = await verifyReleaseRun(projectId, runId);
+                        setVerifyResult(result);
+                        await loadDetail();
+                      } finally {
+                        setRollbackLoading(false);
+                      }
+                    }}
+                  >
+                    平台回滚（Deployment/STS）
+                  </Button>
+                  <Typography.Text type="secondary">优先于 Jenkins container_rollback；成功后自动触发验证</Typography.Text>
+                </Space>
+              ) : null}
               {verifyLoading ? (
                 <Typography.Text type="secondary">验证中…</Typography.Text>
               ) : verifyResult ? (

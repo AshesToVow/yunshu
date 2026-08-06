@@ -14,11 +14,30 @@ type CicdConfig struct {
 
 	Credentials CicdCredentialsConfig `mapstructure:"credentials"`
 
+	// Sonar SonarQube 质量门禁（数据字典 cicd_sonar_* 优先）。
+	Sonar CicdSonarConfig `mapstructure:"sonar"`
+	// Callback Jenkins 阶段/制品回调（HMAC；字典 cicd_jenkins_callback_*）。
+	Callback CicdCallbackConfig `mapstructure:"callback"`
+
 	RunSyncIntervalSeconds        int `mapstructure:"run_sync_interval_seconds"`
 	DefaultWaitMins               int `mapstructure:"default_wait_mins"`
 	DefaultArtifactRetain         int `mapstructure:"default_artifact_retain_count"`
 	ApprovalSlaHours              int `mapstructure:"approval_sla_hours"`
 	ApprovalReminderIntervalHours int `mapstructure:"approval_reminder_interval_hours"`
+}
+
+// CicdSonarConfig SonarQube 扫描与质量门禁。
+type CicdSonarConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	URL       string `mapstructure:"url"`
+	Token     string `mapstructure:"token"`
+	GateBlock bool   `mapstructure:"gate_block"` // 门禁失败时是否拦截进入审批/发布
+}
+
+// CicdCallbackConfig Jenkins → Yunshu 回调鉴权与地址。
+type CicdCallbackConfig struct {
+	HMACSecret  string `mapstructure:"hmac_secret"`
+	CallbackURL string `mapstructure:"callback_url"` // 完整回调 URL，注入 Jenkins 参数
 }
 
 type JenkinsConfig struct {
@@ -88,6 +107,10 @@ func DefaultCicdConfig() CicdConfig {
 			SSHDeploy: "target-server-credential",
 			MinIO:     "minio-credentials",
 			Harbor:    "HARBOR_ID",
+		},
+		Sonar: CicdSonarConfig{
+			Enabled:   false,
+			GateBlock: true,
 		},
 		RunSyncIntervalSeconds:        15,
 		DefaultWaitMins:               60,

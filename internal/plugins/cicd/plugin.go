@@ -25,9 +25,12 @@ func (m *module) Manifest() plugin.Manifest {
 		APIPrefixes: []string{
 			"/api/v1/overview/project-launches",
 			"/api/v1/overview/release-by-person",
+			"/api/v1/cicd/jenkins/callback",
+			"/api/v1/registries",
+			"/api/v1/pipeline-templates",
 		},
 		DependsOn: []string{"project"},
-		Workers:   []string{"cicd_jenkins_sync"},
+		Workers:   []string{"cicd_jenkins_sync", "cicd_image_cleanup"},
 	}
 }
 
@@ -41,6 +44,12 @@ func (m *module) Models() []any {
 		&model.CicdApprovalFlowStage{},
 		&model.CicdReleaseApprovalStep{},
 		&model.CicdAccessGrant{},
+		&model.CicdRunStage{},
+		&model.CicdArtifact{},
+		&model.ImageRegistry{},
+		&model.ProjectRegistryBinding{},
+		&model.ImageCleanupPolicy{},
+		&model.CicdPipelineTemplate{},
 	}
 }
 
@@ -50,6 +59,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	}
 	if svc, ok := rt.Cicd.(*cicdsvc.Service); ok && svc != nil {
 		go svc.RunSyncWorker(bgCtx)
+		go svc.RunImageCleanupWorker(bgCtx)
 	}
 	return nil
 }

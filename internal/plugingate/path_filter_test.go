@@ -30,6 +30,9 @@ func ensurePathFilterStubs() {
 			APIPrefixes: []string{
 				"/api/v1/overview/project-launches",
 				"/api/v1/overview/release-by-person",
+				"/api/v1/cicd/jenkins/callback",
+				"/api/v1/registries",
+				"/api/v1/pipeline-templates",
 			},
 			DependsOn: []string{"project"},
 		},
@@ -65,6 +68,11 @@ func TestResolveCicdAPIResource(t *testing.T) {
 	}{
 		{"/api/v1/overview/project-launches", "cicd"},
 		{"/api/v1/overview/release-by-person", "cicd"},
+		{"/api/v1/cicd/jenkins/callback", "cicd"},
+		{"/api/v1/registries", "cicd"},
+		{"/api/v1/registries/1/ping", "cicd"},
+		{"/api/v1/pipeline-templates", "cicd"},
+		{"/api/v1/projects/1/registry-binding", "cicd"},
 		{"/api/v1/projects/1/cicd/services", "cicd"},
 		{"/api/v1/projects/1/members", "project"},
 		{"/api/v1/overview", "core"},

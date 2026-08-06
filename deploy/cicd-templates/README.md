@@ -1,8 +1,30 @@
-# CI/CD 模板参考（Apollo 多 Meta）
+# CI/CD 模板参考（Apollo 多 Meta + 多语言流水线）
 
 Jenkins 共享库（正式源）：
 
 - https://gitee.com/wxd_ops/jenkins_share_libraries_yunshu.git
+
+Jenkinsfile 仓库：
+
+- https://gitee.com/wxd_ops/jenkinsfile_yunshu.git
+
+## 多语言 Script Path（Yunshu `language_type`）
+
+Yunshu CI 配置中的「流水线语言模板」会写入 `cicd_ci_configs.language_type`，同步 Job 时优先解析为下列 Script Path（`custom` 仍按服务类型选 front/backend/k8s）：
+
+| language_type | 推荐 Script Path | 说明 |
+|---------------|------------------|------|
+| `go` | `backend.jenkinsfile` | Go 后端（复用 backend 流水线） |
+| `java` | `backend.jenkinsfile` | Maven/Gradle |
+| `frontend` | `front.jenkinsfile` | npm/yarn |
+| `python` | `backend.jenkinsfile` | Python 后端 |
+| `custom` | （按 service_type） | 兼容旧行为 |
+
+`build_type` 仍表示编译器/打包参数模板（npm/mvn 等），与 `language_type` 并存。
+
+参数约定（与共享库一致）：`enableSonar`、`SONAR_*`、`YUNSHU_CALLBACK_*`、`PROJECT_GROUP`、`APOLLO_*` 等由 Yunshu 触发构建时注入。
+
+## Apollo
 
 对应文件：
 

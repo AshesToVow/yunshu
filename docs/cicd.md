@@ -1,6 +1,6 @@
 # CI/CD 插件说明
 
-**最后更新**: 2026-07-12  
+**最后更新**: 2026-08-06  
 **插件名**: `cicd`（须与 `project` 同时启用）
 
 ---
@@ -50,6 +50,11 @@ plugins:
 | `cicd_jenkins_job_folder` | Job 目录（可选） |
 | `cicd_jenkinsfile_*` | Jenkinsfile 仓库与分支 |
 | `cicd_minio_*` | 制品 MinIO（与备份 `minio_*` **独立**） |
+| `cicd_sonar_enabled` | **SonarQube 门禁总开关**（`true`/`false`，默认关闭） |
+| `cicd_sonar_url` / `cicd_sonar_token` | Sonar 地址与 Token（启用后门禁写入构建参数） |
+| `cicd_sonar_gate_block` | 门禁失败是否拦截进入审批/发布（默认 `true`） |
+| `cicd_jenkins_callback_url` | Jenkins → Yunshu 回调完整 URL（注入 `YUNSHU_CALLBACK_URL`） |
+| `cicd_jenkins_callback_hmac_secret` | 回调 HMAC 密钥（同时注入 Jenkins 参数 `YUNSHU_CALLBACK_HMAC_SECRET`） |
 
 4. 重启后端使字典与插件 Worker 生效。
 
@@ -66,12 +71,39 @@ GET/POST   /api/v1/projects/:id/cicd/services/:serviceId/deploy-configs
 POST       /api/v1/projects/:id/cicd/services/:serviceId/builds
 POST       /api/v1/projects/:id/cicd/services/:serviceId/releases
 GET        /api/v1/projects/:id/cicd/build-runs
+GET        /api/v1/projects/:id/cicd/build-runs/:runId/stages
+GET        /api/v1/projects/:id/cicd/build-runs/:runId/artifacts-meta
 GET        /api/v1/projects/:id/cicd/release-runs
 GET/PUT    /api/v1/projects/:id/cicd/approval-flow
 POST       /api/v1/projects/:id/cicd/release-runs/:runId/approve|reject|execute|terminate
 ```
 
+Jenkins 回调（**无登录**，HMAC 鉴权）：
+
+```text
+POST /api/v1/cicd/jenkins/callback
+Header: X-Yunshu-Signature: sha256=<hmac-sha256-hex(body)>
+```
+
 完整列表见 `internal/router/register_cicd_routes.go` 或 OpenAPI。
+
+---
+
+## 3.1 SonarQube 质量门禁（字典开关）
+
+1. 在数据字典将 `cicd_sonar_enabled` 设为 `true`，并配置 `cicd_sonar_url` / `cicd_sonar_token`。
+2. CI 触发时注入 Jenkins 参数：`enableSonar=true`、`SONAR_HOST_URL`、`YUNSHU_CALLBACK_URL`、`YUNSHU_BUILD_RUN_ID`。
+3. 流水线在 `sonar` / `quality_gate` 阶段通过 HMAC 回调回写 `cicd_run_stages` 与构建上的 `quality_gate_status`。
+4. 当 `cicd_sonar_gate_block=true` 且门禁为 `ERROR`/`NONE`（或成功构建无门禁结果）时，**容器发布选择该构建会被拒绝**（先于审批与执行）。
+5. CD「制品发布」默认强制 `enableSonar=false`，避免重复扫描。
+6. Jenkins 侧实现：共享库 `org.devops.yunshu`（[jenkins_share_libraries_yunshu](https://gitee.com/wxd_ops/jenkins_share_libraries_yunshu)）+ [jenkinsfile_yunshu](https://gitee.com/wxd_ops/jenkinsfile_yunshu)。
+
+---
+
+## 3.2 阶段回调与制品元数据
+
+- 表：`cicd_run_stages`（阶段）、`cicd_artifacts`（包/镜像/Helm + digest）。
+- 回调 `event`：`stage` | `sonar` | `artifact` | `run`；可用 `run_id` 或 `jenkins_job`+`build_number` 定位记录。
 
 ---
 
@@ -88,7 +120,7 @@ POST       /api/v1/projects/:id/cicd/release-runs/:runId/approve|reject|execute|
 `cicd` 插件 `StartWorkers` 启动 `Service.RunSyncWorker`：
 
 - 间隔：`config.cicd.run_sync_interval_seconds`（默认 15s，可被字典覆盖）
-- 作用：轮询 Jenkins，更新 `cicd_build_runs` 状态与日志片段
+- 作用：轮询 Jenkins，更新 `cicd_build_runs` 状态与日志片段（与 HMAC 回调互补）
 
 ---
 
@@ -98,7 +130,7 @@ POST       /api/v1/projects/:id/cicd/release-runs/:runId/approve|reject|execute|
 |------|------|
 | `project` | 路由挂载、成员鉴权、服务器列表（发布目标） |
 | `overview` | 读 `cicd_release_runs` 做图表；**cicd 未启用时返回空数据** |
-| `dictconfig` | Jenkins / MinIO 运行期配置 |
+| `dictconfig` | Jenkins / MinIO / Sonar / 回调运行期配置 |
 | `backup` | MinIO 键名空间独立（`minio_*` vs `cicd_minio_*`） |
 
 ---

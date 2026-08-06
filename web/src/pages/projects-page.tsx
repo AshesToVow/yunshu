@@ -15,6 +15,13 @@ import {
   type ProjectItem,
   type ProjectUpdatePayload,
 } from "../services/projects";
+import {
+  deleteProjectRegistryBinding,
+  getProjectRegistryBinding,
+  listRegistries,
+  upsertProjectRegistryBinding,
+  type ImageRegistryItem,
+} from "../services/cicd";
 import type { DepartmentItem, UserItem } from "../types/api";
 import { formatDateTime } from "../utils/format";
 
@@ -66,6 +73,7 @@ export function ProjectsPage() {
 
   const [memberProject, setMemberProject] = useState<ProjectItem | null>(null);
   const [deptTree, setDeptTree] = useState<DepartmentItem[]>([]);
+  const [registries, setRegistries] = useState<ImageRegistryItem[]>([]);
 
   const departmentOptions = useMemo(() => flattenDepartments(deptTree), [deptTree]);
 
@@ -78,6 +86,9 @@ export function ProjectsPage() {
         setDeptTree([]);
       }
     })();
+    void listRegistries({ page: 1, page_size: 100 })
+      .then((d) => setRegistries(d.list || []))
+      .catch(() => setRegistries([]));
   }, []);
 
   useEffect(() => {
@@ -102,7 +113,7 @@ export function ProjectsPage() {
     setEditorOpen(true);
   }
 
-  function openEdit(record: ProjectItem) {
+  async function openEdit(record: ProjectItem) {
     setCurrent(record);
     form.resetFields();
     form.setFieldsValue({
@@ -119,6 +130,17 @@ export function ProjectsPage() {
       apollo_namespaces: record.apollo_namespaces || undefined,
       owner_department_id: record.owner_department_id && record.owner_department_id > 0 ? record.owner_department_id : undefined,
     });
+    try {
+      const bind = await getProjectRegistryBinding(record.id);
+      if (bind?.registry_id) {
+        form.setFieldsValue({
+          registry_id: bind.registry_id,
+          registry_harbor_project: bind.harbor_project,
+        } as any);
+      }
+    } catch {
+      /* no binding */
+    }
     setEditorOpen(true);
   }
 
@@ -167,6 +189,19 @@ export function ProjectsPage() {
           payload.owner_department_id = 0;
         }
         await updateProject(current.id, payload);
+        const registryId = Number((values as any).registry_id || 0);
+        if (registryId > 0) {
+          await upsertProjectRegistryBinding(current.id, {
+            registry_id: registryId,
+            harbor_project: String((values as any).registry_harbor_project || ""),
+          });
+        } else {
+          try {
+            await deleteProjectRegistryBinding(current.id);
+          } catch {
+            /* no binding */
+          }
+        }
         message.success("已更新项目");
       }
       setEditorOpen(false);
@@ -370,6 +405,27 @@ export function ProjectsPage() {
           </Form.Item>
           <Form.Item label="项目状态" name="lifecycle_status" rules={[{ required: true, message: "请选择项目状态" }]}>
             <Select options={[...PROJECT_LIFECYCLE_OPTIONS]} />
+          </Form.Item>
+          <Form.Item
+            label="选用注册中心"
+            name="registry_id"
+            extra="优先于下方手填 Harbor 字段；清空则删除绑定并回退手填/全局配置。"
+          >
+            <Select
+              allowClear
+              placeholder="不绑定（使用手填或全局默认）"
+              options={registries.map((r) => ({
+                label: `${r.name}${r.is_default ? "（默认）" : ""}`,
+                value: r.id,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label="注册中心 Harbor 项目覆盖"
+            name="registry_harbor_project"
+            extra="绑定注册中心后可覆盖其默认 project；也可继续下方手填兼容字段。"
+          >
+            <Input allowClear placeholder="留空=注册中心 default_project" />
           </Form.Item>
           <Form.Item
             label="Harbor 地址"

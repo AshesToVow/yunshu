@@ -43,6 +43,12 @@ type CicdDictTypes struct {
 	DefaultArtifactRetain         string
 	ApprovalSlaHours              string
 	ApprovalReminderIntervalHours string
+	SonarEnabled                  string
+	SonarURL                      string
+	SonarToken                    string
+	SonarGateBlock                string
+	CallbackHMACSecret            string
+	CallbackURL                   string
 }
 
 func DefaultCicdDictTypes() CicdDictTypes {
@@ -77,6 +83,12 @@ func DefaultCicdDictTypes() CicdDictTypes {
 		DefaultArtifactRetain:         "cicd_default_artifact_retain_count",
 		ApprovalSlaHours:              "cicd_approval_sla_hours",
 		ApprovalReminderIntervalHours: "cicd_approval_reminder_interval_hours",
+		SonarEnabled:                  "cicd_sonar_enabled",
+		SonarURL:                      "cicd_sonar_url",
+		SonarToken:                    "cicd_sonar_token",
+		SonarGateBlock:                "cicd_sonar_gate_block",
+		CallbackHMACSecret:            "cicd_jenkins_callback_hmac_secret",
+		CallbackURL:                   "cicd_jenkins_callback_url",
 	}
 }
 
@@ -187,6 +199,28 @@ func ResolveCicdConfig(ctx context.Context, db *gorm.DB, yamlBase config.CicdCon
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.ApprovalReminderIntervalHours = n
 		}
+	}
+	if v, ok := fetchEnabledDictValue(ctx, db, types.SonarEnabled); ok {
+		if bv, ok2 := parseBoolLoose(v); ok2 {
+			cfg.Sonar.Enabled = bv
+		}
+	}
+	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.SonarURL); ok {
+		cfg.Sonar.URL = strings.TrimRight(v, "/")
+	}
+	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.SonarToken); ok {
+		cfg.Sonar.Token = v
+	}
+	if v, ok := fetchEnabledDictValue(ctx, db, types.SonarGateBlock); ok {
+		if bv, ok2 := parseBoolLoose(v); ok2 {
+			cfg.Sonar.GateBlock = bv
+		}
+	}
+	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.CallbackHMACSecret); ok {
+		cfg.Callback.HMACSecret = v
+	}
+	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.CallbackURL); ok {
+		cfg.Callback.CallbackURL = strings.TrimSpace(v)
 	}
 	cfg.MinIO.Endpoint = resolveCicdMinIOEndpoint(ctx, db, cfg.MinIO.Endpoint)
 	return cfg

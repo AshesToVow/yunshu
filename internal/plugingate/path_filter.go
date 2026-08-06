@@ -129,6 +129,9 @@ func resolveCicdAPIResource(resource string) string {
 	cicdOverview := []string{
 		"/api/v1/overview/project-launches",
 		"/api/v1/overview/release-by-person",
+		"/api/v1/cicd/jenkins/callback",
+		"/api/v1/registries",
+		"/api/v1/pipeline-templates",
 	}
 	for _, p := range cicdOverview {
 		if resource == p || strings.HasPrefix(resource, p+"/") {
@@ -136,6 +139,9 @@ func resolveCicdAPIResource(resource string) string {
 		}
 	}
 	if strings.Contains(resource, "/projects/") && strings.Contains(resource, "/cicd") {
+		return "cicd"
+	}
+	if strings.Contains(resource, "/projects/") && strings.Contains(resource, "/registry-binding") {
 		return "cicd"
 	}
 	return ""

@@ -39,6 +39,7 @@ type Service struct {
 	// optional post-release verify hooks
 	workloadReadyCheck func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string)
 	errorLogSampler    func(ctx context.Context, projectID, cicdServiceID uint, since time.Time) (int, string)
+	k8sRolloutUndo     K8sRolloutUndoFn
 }
 
 func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
@@ -63,6 +64,14 @@ func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo
 		appName:       strings.TrimSpace(appName),
 		yamlCicd:      yamlCicd,
 	}
+}
+
+func (s *Service) SetWorkloadReadyCheck(fn func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string)) {
+	s.workloadReadyCheck = fn
+}
+
+func (s *Service) SetErrorLogSampler(fn func(ctx context.Context, projectID, cicdServiceID uint, since time.Time) (int, string)) {
+	s.errorLogSampler = fn
 }
 
 func (s *Service) resolvedConfig(ctx context.Context) config.CicdConfig {
@@ -311,6 +320,7 @@ type CiConfigUpsertRequest struct {
 	RefType          string `json:"ref_type" binding:"omitempty,oneof=branch tag"`
 	RefName          string `json:"ref_name" binding:"required,max=128"`
 	BuildType        string `json:"build_type" binding:"required,max=32"`
+	LanguageType     string `json:"language_type" binding:"omitempty,max=32"`
 	BuildShell       string `json:"build_shell" binding:"omitempty,max=512"`
 	BuildPath        string `json:"build_path" binding:"omitempty,max=256"`
 	ProjectName      string `json:"project_name" binding:"omitempty,max=128"`
@@ -388,6 +398,11 @@ func (s *Service) UpsertCiConfig(ctx context.Context, projectID, serviceID uint,
 	row.RefType = refType
 	row.RefName = strings.TrimSpace(req.RefName)
 	row.BuildType = strings.TrimSpace(req.BuildType)
+	lt := strings.ToLower(strings.TrimSpace(req.LanguageType))
+	if lt == "" {
+		lt = model.CicdLanguageCustom
+	}
+	row.LanguageType = lt
 	row.BuildShell = strings.TrimSpace(req.BuildShell)
 	row.BuildPath = strings.TrimSpace(req.BuildPath)
 	row.ProjectName = strings.TrimSpace(req.ProjectName)
@@ -724,46 +739,72 @@ func (s *Service) TriggerBuild(ctx context.Context, projectID, serviceID uint, r
 		dc = s.firstDeployConfig(ctx, serviceID)
 	}
 	ov := s.loadProjectCicdOverrides(ctx, projectID)
+
+	// 先落库再触发，便于 Jenkins 回调携带 YUNSHU_BUILD_RUN_ID。
+	now := time.Now()
+	run := model.CicdBuildRun{
+		ProjectID:     projectID,
+		ServiceID:     serviceID,
+		BuildNumber:   0,
+		BranchName:    strings.TrimSpace(req.BranchName),
+		PublishMode:   model.CicdPublishModeBuildOnly,
+		Tenv:          tenv,
+		BuildResult:   model.CicdRunStatusPending,
+		BuilderUserID: builderUserID,
+		BuilderName:   builderName,
+		Version:       ci.Version,
+		StartedAt:     &now,
+	}
+	if run.BranchName == "" && ci != nil {
+		run.BranchName = strings.TrimSpace(ci.RefName)
+	}
+	if err := s.db.WithContext(ctx).Create(&run).Error; err != nil {
+		return nil, err
+	}
+
 	params := BuildJenkinsParams(BuildParamsInput{
-		Service:         svc,
-		CiConfig:        ci,
-		DeployConfig:    dc,
-		Cfg:             cfg,
-		PublishMode:     model.CicdPublishModeBuildOnly,
-		Tenv:            tenv,
-		EmailUser:       s.resolveNotifyEmail(ctx, req.EmailUser, svc, builderUserID),
-		UsesK8sPipeline: s.serviceUsesK8sPipeline(ctx, svc),
+		Service:          svc,
+		CiConfig:         ci,
+		DeployConfig:     dc,
+		Cfg:              cfg,
+		BranchName:       run.BranchName,
+		PublishMode:      model.CicdPublishModeBuildOnly,
+		Tenv:             tenv,
+		EmailUser:        s.resolveNotifyEmail(ctx, req.EmailUser, svc, builderUserID),
+		UsesK8sPipeline:  s.serviceUsesK8sPipeline(ctx, svc),
 		HarborURL:        ov.HarborURL,
 		HarborProject:    ov.HarborProject,
 		ApolloMeta:       ov.ApolloMeta,
 		ApolloEnv:        ov.ApolloEnv,
 		ApolloNamespaces: ov.ApolloNamespaces,
+		YunshuBuildRunID: run.ID,
 	})
 	lastNum, _ := client.GetLastBuildNumber(ctx, svc.JenkinsJob)
 	queuePath, err := client.BuildWithParameters(ctx, svc.JenkinsJob, params)
 	if err != nil {
+		_ = s.db.WithContext(ctx).Model(&run).Updates(map[string]any{
+			"build_result": model.CicdRunStatusFailure,
+			"params_json":  ParamsJSON(params),
+			"finished_at":  time.Now(),
+		}).Error
 		return nil, fmt.Errorf("trigger jenkins build: %w", err)
 	}
-	now := time.Now()
-	run := model.CicdBuildRun{
-		ProjectID:      projectID,
-		ServiceID:      serviceID,
-		BuildNumber:    lastNum + 1,
-		BranchName:     params["branchName"],
-		PublishMode:    params["publishMode"],
-		Tenv:           params["Tenv"],
-		BuildResult:    model.CicdRunStatusRunning,
-		BuilderUserID:  builderUserID,
-		BuilderName:    builderName,
-		Version:        ci.Version,
-		ParamsJSON:     ParamsJSON(params),
-		StartedAt:      &now,
+	updates := map[string]any{
+		"build_result": model.CicdRunStatusRunning,
+		"params_json":  ParamsJSON(params),
+		"branch_name":  params["branchName"],
+		"publish_mode": params["publishMode"],
+		"tenv":         params["Tenv"],
+		"build_number": lastNum + 1,
 	}
 	if buildNum, err := client.ResolveQueueBuildNumber(ctx, queuePath, lastNum, 90*time.Second); err == nil && buildNum > 0 {
-		run.BuildNumber = buildNum
-		run.JenkinsBuildURL = client.BuildURL(svc.JenkinsJob, buildNum)
+		updates["build_number"] = buildNum
+		updates["jenkins_build_url"] = client.BuildURL(svc.JenkinsJob, buildNum)
 	}
-	if err := s.db.WithContext(ctx).Create(&run).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&run).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.WithContext(ctx).Where("id = ?", run.ID).First(&run).Error; err != nil {
 		return nil, err
 	}
 	return &run, nil

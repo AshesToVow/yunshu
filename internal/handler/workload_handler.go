@@ -219,3 +219,11 @@ func (h *WorkloadHandler) ListSnapshots(c *gin.Context) {
 func (h *WorkloadHandler) RollbackSnapshot(c *gin.Context) {
 	ServeJSONOK(c, true, h.svc.RollbackSnapshot)
 }
+
+func (h *WorkloadHandler) DeploymentRolloutUndo(c *gin.Context) {
+	ServeJSON(c, h.svc.DeploymentRolloutUndo)
+}
+
+func (h *WorkloadHandler) StatefulSetRolloutUndo(c *gin.Context) {
+	ServeJSON(c, h.svc.StatefulSetRolloutUndo)
+}

@@ -1,7 +1,9 @@
 package router
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/handler"
@@ -190,7 +192,7 @@ func assembleRouteDeps(
 	)
 	opAudit := middleware.OperationAudit(svcs.OperationLog, app.Logger)
 
-	return &RouteDeps{
+	deps := &RouteDeps{
 		app: app,
 
 		authMiddleware:    authMiddleware,
@@ -269,5 +271,45 @@ func assembleRouteDeps(
 		kafkaToESSvc:       svcs.KafkaToES,
 		inspectSvc:         svcs.Inspect,
 		inspectHandler:     handlers.Inspect,
-	}, nil
+	}
+	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
+	return deps, nil
+}
+
+func wireCicdK8sHooks(cicdSvc *cicdsvc.Service, wl *service.K8sWorkloadService) {
+	if cicdSvc == nil || wl == nil {
+		return
+	}
+	cicdSvc.SetWorkloadReadyCheck(func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string) {
+		return wl.WorkloadReady(ctx, clusterID, namespace, kind, name)
+	})
+	cicdSvc.SetK8sRolloutUndo(func(ctx context.Context, kind string, clusterID uint, namespace, name string, revision int64) (map[string]any, error) {
+		req := service.RolloutUndoRequest{
+			ClusterID: clusterID,
+			Namespace: namespace,
+			Name:      name,
+			Revision:  revision,
+		}
+		var (
+			res *service.RolloutUndoResult
+			err error
+		)
+		switch strings.ToLower(strings.TrimSpace(kind)) {
+		case "statefulset", "sts", "statefulsets":
+			res, err = wl.StatefulSetRolloutUndo(ctx, req)
+		default:
+			res, err = wl.DeploymentRolloutUndo(ctx, req)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"kind":          res.Kind,
+			"namespace":     res.Namespace,
+			"name":          res.Name,
+			"from_revision": res.FromRevision,
+			"to_revision":   res.ToRevision,
+			"message":       res.Message,
+		}, nil
+	})
 }

@@ -73,6 +73,8 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/cicd/approval-flow": "cicd-approval-flow-page",
   "/cicd/build-records": "cicd-build-records-page",
   "/cicd/release-records": "cicd-release-records-page",
+  "/cicd/registries": "cicd-registries-page",
+  "/cicd/image-browser": "cicd-image-browser-page",
   "/dashboard": "dashboard-page",
   "/projects": "projects-page",
   "/project-servers": "project-servers-page",
