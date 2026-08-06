@@ -360,6 +360,8 @@ func defaultPermissions() []model.Permission {
 		{Name: "Node 详情", Resource: "/api/v1/nodes/detail", Action: "GET", Description: "Get node detail"},
 		{Name: "Node 调度状态", Resource: "/api/v1/nodes/schedulability", Action: "POST", Description: "Cordon or uncordon node"},
 		{Name: "Node 污点", Resource: "/api/v1/nodes/taints", Action: "PUT", Description: "Replace node taints"},
+		{Name: "Node Drain", Resource: "/api/v1/nodes/drain", Action: "POST", Description: "Drain node workloads"},
+		{Name: "Node Drain 进度", Resource: "/api/v1/nodes/drain-status", Action: "GET", Description: "Get node drain status"},
 
 		{Name: "RBAC Role 列表", Resource: "/api/v1/rbac/roles", Action: "GET", Description: "List Roles"},
 		{Name: "RBAC RoleBinding 列表", Resource: "/api/v1/rbac/rolebindings", Action: "GET", Description: "List RoleBindings"},
@@ -379,6 +381,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "Deployment 扩缩容", Resource: "/api/v1/deployments/scale", Action: "POST", Description: "Scale deployment"},
 		{Name: "Deployment 垂直扩缩", Resource: "/api/v1/deployments/container-resources", Action: "POST", Description: "Patch deployment container resources"},
 		{Name: "Deployment 重启", Resource: "/api/v1/deployments/restart", Action: "POST", Description: "Restart deployment"},
+		{Name: "Deployment 回滚", Resource: "/api/v1/deployments/rollout-undo", Action: "POST", Description: "Undo deployment rollout"},
 		{Name: "Deployment 关联 Pods", Resource: "/api/v1/deployments/pods", Action: "GET", Description: "List deployment related pods"},
 		{Name: "Deployment 发布状态", Resource: "/api/v1/deployments/rollout-status", Action: "GET", Description: "Get deployment rollout status"},
 		{Name: "删除 Deployment", Resource: "/api/v1/deployments", Action: "DELETE", Description: "Delete deployment"},
@@ -389,6 +392,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "StatefulSet 扩缩容", Resource: "/api/v1/statefulsets/scale", Action: "POST", Description: "Scale statefulset"},
 		{Name: "StatefulSet 垂直扩缩", Resource: "/api/v1/statefulsets/container-resources", Action: "POST", Description: "Patch statefulset container resources"},
 		{Name: "StatefulSet 重启", Resource: "/api/v1/statefulsets/restart", Action: "POST", Description: "Restart statefulset"},
+		{Name: "StatefulSet 回滚", Resource: "/api/v1/statefulsets/rollout-undo", Action: "POST", Description: "Undo statefulset rollout"},
 		{Name: "StatefulSet 关联 Pods", Resource: "/api/v1/statefulsets/pods", Action: "GET", Description: "List statefulset related pods"},
 		{Name: "删除 StatefulSet", Resource: "/api/v1/statefulsets", Action: "DELETE", Description: "Delete statefulset"},
 

@@ -79,6 +79,72 @@ export function setNodeSchedulability(clusterId: number, name: string, unschedul
   );
 }
 
+export type NodeDrainPodItem = {
+  namespace: string;
+  name: string;
+  phase: string;
+  owner_kind?: string;
+  action: string;
+  reason?: string;
+};
+
+export type NodeDrainResult = {
+  node_name: string;
+  cordoned: boolean;
+  dry_run: boolean;
+  evicted: number;
+  skipped: number;
+  failed: number;
+  pending: number;
+  pods: NodeDrainPodItem[];
+  message: string;
+  completed_at?: string;
+};
+
+export type NodeDrainStatus = {
+  node_name: string;
+  unschedulable: boolean;
+  remaining: number;
+  daemonset_pods: number;
+  pods: NodeDrainPodItem[];
+  drained: boolean;
+  message: string;
+};
+
+export function drainNode(
+  clusterId: number,
+  name: string,
+  opts?: {
+    dry_run?: boolean;
+    force?: boolean;
+    ignore_daemon_sets?: boolean;
+    delete_emptydir_data?: boolean;
+    grace_period_seconds?: number;
+  },
+) {
+  return getData<NodeDrainResult>(
+    http.post(
+      "/nodes/drain",
+      {
+        cluster_id: clusterId,
+        name,
+        dry_run: opts?.dry_run ?? false,
+        force: opts?.force ?? false,
+        ignore_daemon_sets: opts?.ignore_daemon_sets ?? true,
+        delete_emptydir_data: opts?.delete_emptydir_data ?? true,
+        grace_period_seconds: opts?.grace_period_seconds,
+      },
+      { timeout: 120000 },
+    ),
+  );
+}
+
+export function getNodeDrainStatus(clusterId: number, name: string) {
+  return getData<NodeDrainStatus>(
+    http.get("/nodes/drain-status", { params: { cluster_id: clusterId, name } }),
+  );
+}
+
 export function replaceNodeTaints(clusterId: number, name: string, taints: NodeTaintInput[]) {
   return getData<{ ok: boolean }>(http.put("/nodes/taints", { cluster_id: clusterId, name, taints }));
 }

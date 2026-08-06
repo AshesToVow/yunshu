@@ -7,6 +7,8 @@ import { ErrorBoundary } from "../components/error-boundary";
 import { BRAND_PRIMARY } from "../constants/brand";
 import { AuthProvider } from "../contexts/auth-context";
 import { PluginProvider } from "../contexts/plugin-context";
+import { WorkloadProgressProvider } from "../contexts/workload-progress-context";
+import { WorkloadProgressFloat } from "../components/workload-progress-float";
 
 export function App() {
   const [mode, setMode] = useState<"dark" | "light">(() => {
@@ -104,11 +106,14 @@ export function App() {
       <AntdApp>
         <AuthProvider>
           <PluginProvider>
-            <BrowserRouter>
-              <ErrorBoundary>
-                <AppRoutes />
-              </ErrorBoundary>
-            </BrowserRouter>
+            <WorkloadProgressProvider>
+              <BrowserRouter>
+                <ErrorBoundary>
+                  <AppRoutes />
+                  <WorkloadProgressFloat />
+                </ErrorBoundary>
+              </BrowserRouter>
+            </WorkloadProgressProvider>
           </PluginProvider>
         </AuthProvider>
       </AntdApp>

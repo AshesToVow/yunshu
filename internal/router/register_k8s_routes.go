@@ -94,7 +94,9 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	nodes.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	nodes.GET("", d.nodeHandler.List)
 	nodes.GET("/detail", d.nodeHandler.Detail)
+	nodes.GET("/drain-status", d.nodeHandler.DrainStatus)
 	nodes.POST("/schedulability", d.nodeHandler.SetSchedulability)
+	nodes.POST("/drain", d.nodeHandler.Drain)
 	nodes.PUT("/taints", d.nodeHandler.ReplaceTaints)
 
 	// Workloads
