@@ -22,8 +22,13 @@ func (r *MysqlBackupRepository) CreateInstance(ctx context.Context, inst *model.
 	return r.db.WithContext(ctx).Create(inst).Error
 }
 
-func (r *MysqlBackupRepository) UpdateInstance(ctx context.Context, inst *model.MysqlBackupInstance) error {
-	return r.db.WithContext(ctx).Save(inst).Error
+// UpdateInstance 更新实例。updatePassword=false 时 Omit EncPassword，防止空密码把密文覆盖掉。
+func (r *MysqlBackupRepository) UpdateInstance(ctx context.Context, inst *model.MysqlBackupInstance, updatePassword bool) error {
+	db := r.db.WithContext(ctx)
+	if !updatePassword {
+		db = db.Omit("EncPassword")
+	}
+	return db.Save(inst).Error
 }
 
 func (r *MysqlBackupRepository) DeleteInstance(ctx context.Context, id uint) error {

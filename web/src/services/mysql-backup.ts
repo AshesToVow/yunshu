@@ -42,6 +42,8 @@ export interface MysqlBackupInstance {
   notify_enabled?: boolean;
   notify_user_ids?: number[];
   notify_users?: MysqlBackupNotifyUser[];
+  /** 后端已保存加密密码（不回显明文） */
+  has_mysql_password?: boolean;
   created_at?: string;
   updated_at?: string;
 }
