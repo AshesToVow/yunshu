@@ -265,7 +265,7 @@ func BuildPipelineJobConfigXML(in JobTemplateInput) string {
 	params.WriteString(stringParam("SONAR_TOKEN", "", "SonarQube Token（运行时由 Yunshu 注入，勿在 Job 默认值存明文）"))
 	params.WriteString(stringParam("YUNSHU_CALLBACK_URL", strings.TrimSpace(cfg.Callback.CallbackURL), "阶段/门禁/制品回调 URL"))
 	params.WriteString(stringParam("YUNSHU_CALLBACK_HMAC_SECRET", "", "回调 HMAC 密钥（运行时由 Yunshu 注入）"))
-	params.WriteString(stringParam("YUNSHU_BUILD_RUN_ID", "", "Yunshu 构建记录 ID"))
+	params.WriteString(stringParam("YUNSHU_BUILD_RUN_ID", "", "Yunshu 构建/发布记录 ID（由 YUNSHU_RUN_KIND 区分）"))
 	params.WriteString(stringParam("YUNSHU_RUN_KIND", "build", "build|release"))
 
 	return fmt.Sprintf(`<?xml version='1.1' encoding='UTF-8'?>

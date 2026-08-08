@@ -81,11 +81,18 @@ func TestApplySonarParams_FromDict(t *testing.T) {
 		t.Fatalf("YUNSHU_BUILD_RUN_ID=%q", params["YUNSHU_BUILD_RUN_ID"])
 	}
 	paramsCD := BuildJenkinsParams(BuildParamsInput{
-		Service: &model.CicdService{ServiceType: model.CicdServiceTypeBackend, Identifier: "demo"},
-		Cfg:     cfg,
-		PublishMode: model.CicdPublishModeArtifactDeploy,
+		Service:             &model.CicdService{ServiceType: model.CicdServiceTypeBackend, Identifier: "demo"},
+		Cfg:                 cfg,
+		PublishMode:         model.CicdPublishModeArtifactDeploy,
+		YunshuReleaseRunID:  99,
 	})
 	if paramsCD["enableSonar"] != "false" {
 		t.Fatalf("CD should disable sonar, got %q", paramsCD["enableSonar"])
+	}
+	if paramsCD["YUNSHU_RUN_KIND"] != model.CicdRunKindRelease {
+		t.Fatalf("YUNSHU_RUN_KIND=%q", paramsCD["YUNSHU_RUN_KIND"])
+	}
+	if paramsCD["YUNSHU_BUILD_RUN_ID"] != "99" {
+		t.Fatalf("YUNSHU_BUILD_RUN_ID=%q", paramsCD["YUNSHU_BUILD_RUN_ID"])
 	}
 }

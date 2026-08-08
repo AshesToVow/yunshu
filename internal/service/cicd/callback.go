@@ -128,10 +128,8 @@ func (s *Service) applyJenkinsCallback(ctx context.Context, req JenkinsCallbackR
 		if err != nil {
 			return err
 		}
-		if req.Stage != nil {
-			if err := s.upsertRunStage(ctx, rr.ProjectID, rr.ServiceID, model.CicdRunKindRelease, rr.ID, req.Stage, req.Sonar); err != nil {
-				return err
-			}
+		if err := s.applyReleaseCallback(ctx, rr, event, req); err != nil {
+			return err
 		}
 	default:
 		return constants.ErrBadRequestWithMsg("不支持的 run_kind：" + runKind)
@@ -272,6 +270,33 @@ func (s *Service) applyBuildCallback(ctx context.Context, br *model.CicdBuildRun
 		}
 	}
 	return nil
+}
+
+func (s *Service) applyReleaseCallback(ctx context.Context, rr *model.CicdReleaseRun, event string, req JenkinsCallbackRequest) error {
+	if req.Stage != nil {
+		if err := s.upsertRunStage(ctx, rr.ProjectID, rr.ServiceID, model.CicdRunKindRelease, rr.ID, req.Stage, req.Sonar); err != nil {
+			return err
+		}
+	}
+	if event != "run" {
+		return nil
+	}
+	st := strings.ToLower(strings.TrimSpace(req.RunStatus))
+	if st == "" {
+		return nil
+	}
+	updates := map[string]any{
+		"status":     st,
+		"updated_at": time.Now(),
+	}
+	if st != model.CicdRunStatusRunning && st != model.CicdRunStatusPending {
+		now := time.Now()
+		updates["finished_at"] = now
+	}
+	if req.BuildNumber > 0 && rr.JenkinsBuildNumber == 0 {
+		updates["jenkins_build_number"] = req.BuildNumber
+	}
+	return s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).Where("id = ?", rr.ID).Updates(updates).Error
 }
 
 func mapStageStatusToQualityGate(status string) string {

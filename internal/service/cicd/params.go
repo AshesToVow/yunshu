@@ -34,8 +34,10 @@ type BuildParamsInput struct {
 	ApolloMeta       string
 	ApolloEnv        string
 	ApolloNamespaces string
-	// YunshuBuildRunID 注入 Jenkins，便于回调回写阶段/门禁。
+	// YunshuBuildRunID 注入 Jenkins，便于 CI 回调回写阶段/门禁。
 	YunshuBuildRunID uint
+	// YunshuReleaseRunID 注入 Jenkins，便于 CD 回调定位发布工单。
+	YunshuReleaseRunID uint
 	// EnableSonarOverride 非 nil 时覆盖字典开关（CD 发布通常传 false）。
 	EnableSonarOverride *bool
 }
@@ -432,7 +434,11 @@ func applySonarAndCallbackParams(params map[string]string, in BuildParamsInput) 
 	if v := strings.TrimSpace(in.Cfg.Callback.HMACSecret); v != "" {
 		params["YUNSHU_CALLBACK_HMAC_SECRET"] = v
 	}
-	if in.YunshuBuildRunID > 0 {
+	if in.YunshuReleaseRunID > 0 {
+		// Job 参数名沿用 YUNSHU_BUILD_RUN_ID；靠 YUNSHU_RUN_KIND=release 区分工单表。
+		params["YUNSHU_BUILD_RUN_ID"] = strconv.FormatUint(uint64(in.YunshuReleaseRunID), 10)
+		params["YUNSHU_RUN_KIND"] = model.CicdRunKindRelease
+	} else if in.YunshuBuildRunID > 0 {
 		params["YUNSHU_BUILD_RUN_ID"] = strconv.FormatUint(uint64(in.YunshuBuildRunID), 10)
 		params["YUNSHU_RUN_KIND"] = model.CicdRunKindBuild
 	}
