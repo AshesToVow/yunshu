@@ -53,7 +53,13 @@ import {
   type CicdPipelineTemplate,
   type CicdServiceItem,
 } from "../services/cicd";
-import { getProjectServers, getProjects, type ProjectItem, type ServerItem } from "../services/projects";
+import {
+  getProjectServerDetail,
+  getProjectServers,
+  getProjects,
+  type ProjectItem,
+  type ServerItem,
+} from "../services/projects";
 import { getClusters, type ClusterItem } from "../services/clusters";
 import { getUsers } from "../services/users";
 import type { UserItem } from "../types/api";
@@ -121,10 +127,46 @@ function parseServerIds(json?: string): number[] {
   if (!json) return [];
   try {
     const parsed = JSON.parse(json) as unknown;
-    return Array.isArray(parsed) ? parsed.map((v) => Number(v)).filter((v) => Number.isFinite(v)) : [];
+    return Array.isArray(parsed) ? parsed.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0) : [];
   } catch {
     return [];
   }
+}
+
+function serverOptionLabel(s: Pick<ServerItem, "name" | "host">) {
+  return `${s.name} (${s.host})`;
+}
+
+async function mergeServersWithSelected(
+  projectId: number,
+  list: ServerItem[],
+  selectedIds: number[],
+): Promise<ServerItem[]> {
+  const byId = new Map<number, ServerItem>();
+  for (const s of list) {
+    byId.set(Number(s.id), s);
+  }
+  const missing = selectedIds.filter((id) => !byId.has(id));
+  if (missing.length === 0) {
+    return list;
+  }
+  const details = await Promise.all(
+    missing.map((id) => getProjectServerDetail(projectId, id).catch(() => null)),
+  );
+  for (const d of details) {
+    if (d) {
+      byId.set(Number(d.id), d);
+    }
+  }
+  // 保持列表接口顺序，缺失的已选主机追加在末尾，便于回显名称
+  const merged = [...list];
+  for (const id of missing) {
+    const s = byId.get(id);
+    if (s && !merged.some((it) => Number(it.id) === id)) {
+      merged.push(s);
+    }
+  }
+  return merged;
 }
 
 function nodesStatusTag(status?: string) {
@@ -200,6 +242,17 @@ export function CicdServicesPage() {
   const [helmScaffoldLoading, setHelmScaffoldLoading] = useState(false);
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
+  const serverOptions = useMemo(
+    () => servers.map((s) => ({ label: serverOptionLabel(s), value: Number(s.id) })),
+    [servers],
+  );
+  const serverLabelById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const s of servers) {
+      m.set(Number(s.id), serverOptionLabel(s));
+    }
+    return m;
+  }, [servers]);
 
   const [expandedDeploys, setExpandedDeploys] = useState<Record<number, CicdDeployConfig[]>>({});
 
@@ -377,7 +430,9 @@ export function CicdServicesPage() {
       getClusters({ page: 1, page_size: 200 }),
       loadDeployConfigs(svc.id),
     ]);
-    setServers(srvRes.list ?? []);
+    const selectedServerIds = editCfg ? parseServerIds(editCfg.server_ids_json) : [];
+    const mergedServers = await mergeServersWithSelected(projectId, srvRes.list ?? [], selectedServerIds);
+    setServers(mergedServers);
     setClusters(clusterRes.list ?? []);
     const ciView = await getCiConfig(projectId, svc.id);
     const base = {
@@ -403,7 +458,7 @@ export function CicdServicesPage() {
     if (editCfg) {
       deployForm.setFieldsValue({
         ...editCfg,
-        server_ids: parseServerIds(editCfg.server_ids_json),
+        server_ids: selectedServerIds,
       });
     } else {
       deployForm.setFieldsValue({
@@ -1105,7 +1160,20 @@ export function CicdServicesPage() {
             <Form.Item name="server_ids" label="发布主机" rules={[{ required: true, message: "请选择发布主机" }]}>
               <Select
                 mode="multiple"
-                options={servers.map((s) => ({ label: `${s.name} (${s.host})`, value: s.id }))}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={serverOptions}
+                placeholder="请选择发布主机"
+                tagRender={(props) => {
+                  const { value, closable, onClose } = props;
+                  const text = serverLabelById.get(Number(value)) ?? serverOptions.find((o) => o.value === Number(value))?.label;
+                  return (
+                    <Tag closable={closable} onClose={onClose} style={{ marginInlineEnd: 4 }}>
+                      {text || String(value)}
+                    </Tag>
+                  );
+                }}
               />
             </Form.Item>
             <Form.Item name="artifact_retain_count" label="历史版本数量">
