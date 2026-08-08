@@ -141,17 +141,20 @@ async function mergeServersWithSelected(
   projectId: number,
   list: ServerItem[],
   selectedIds: number[],
-): Promise<ServerItem[]> {
+): Promise<{ servers: ServerItem[]; unresolvedIds: number[] }> {
   const byId = new Map<number, ServerItem>();
   for (const s of list) {
     byId.set(Number(s.id), s);
   }
   const missing = selectedIds.filter((id) => !byId.has(id));
   if (missing.length === 0) {
-    return list;
+    return { servers: list, unresolvedIds: [] };
   }
+  // 探测请求不弹全局 toast，由调用方汇总成「发布主机」场景提示，避免重复弹窗
   const details = await Promise.all(
-    missing.map((id) => getProjectServerDetail(projectId, id).catch(() => null)),
+    missing.map((id) =>
+      getProjectServerDetail(projectId, id, { silentErrorToast: true }).catch(() => null),
+    ),
   );
   for (const d of details) {
     if (d) {
@@ -160,13 +163,16 @@ async function mergeServersWithSelected(
   }
   // 保持列表接口顺序，缺失的已选主机追加在末尾，便于回显名称
   const merged = [...list];
+  const unresolvedIds: number[] = [];
   for (const id of missing) {
     const s = byId.get(id);
     if (s && !merged.some((it) => Number(it.id) === id)) {
       merged.push(s);
+    } else if (!s) {
+      unresolvedIds.push(id);
     }
   }
-  return merged;
+  return { servers: merged, unresolvedIds };
 }
 
 function nodesStatusTag(status?: string) {
@@ -431,8 +437,17 @@ export function CicdServicesPage() {
       loadDeployConfigs(svc.id),
     ]);
     const selectedServerIds = editCfg ? parseServerIds(editCfg.server_ids_json) : [];
-    const mergedServers = await mergeServersWithSelected(projectId, srvRes.list ?? [], selectedServerIds);
+    const { servers: mergedServers, unresolvedIds } = await mergeServersWithSelected(
+      projectId,
+      srvRes.list ?? [],
+      selectedServerIds,
+    );
     setServers(mergedServers);
+    if (unresolvedIds.length > 0) {
+      message.warning(
+        `发布配置关联的主机不存在或已移除（ID: ${unresolvedIds.join(", ")}），请重新选择发布主机`,
+      );
+    }
     setClusters(clusterRes.list ?? []);
     const ciView = await getCiConfig(projectId, svc.id);
     const base = {
@@ -591,9 +606,12 @@ export function CicdServicesPage() {
         setReleaseArtifacts(list ?? []);
         if ((list ?? []).length === 1) {
           releaseForm.setFieldValue("artifact_name", list[0].name);
+        } else if ((list ?? []).length === 0) {
+          message.warning("暂无 MinIO 制品，请先完成 CI 打包并确认已上传到制品桶");
         }
       } catch {
         setReleaseArtifacts([]);
+        // 全局 toast 已展示接口错误（如 MinIO 未配置/连不上）；此处仅清空选项
       } finally {
         setReleaseArtifactsLoading(false);
       }

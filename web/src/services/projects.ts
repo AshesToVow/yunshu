@@ -218,8 +218,14 @@ export async function deleteProjectServer(projectId: number, serverId: number) {
   return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/servers/${serverId}`));
 }
 
-export async function getProjectServerDetail(projectId: number, serverId: number) {
-  return await getData<ServerDetailItem>(http.get(`/projects/${projectId}/servers/${serverId}`));
+export async function getProjectServerDetail(
+  projectId: number,
+  serverId: number,
+  opts?: { silentErrorToast?: boolean },
+) {
+  return await getData<ServerDetailItem>(
+    http.get(`/projects/${projectId}/servers/${serverId}`, opts?.silentErrorToast ? { silentErrorToast: true } : {}),
+  );
 }
 
 export interface ServerExecPayload {
