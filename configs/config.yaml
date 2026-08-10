@@ -15,6 +15,26 @@ plugins:
     - cicd
     - dbmgmt
     - inspect
+    - ai
+
+# AI（字典 ai_* 优先覆盖）
+ai:
+  enabled: false
+  default_provider: openai_compat
+  timeout_sec: 60
+  max_tokens: 2048
+  openai:
+    base_url: "https://api.openai.com/v1"
+    api_key: ""
+    model: "gpt-4o-mini"
+  deepseek:
+    base_url: "https://api.deepseek.com/v1"
+    api_key: ""
+    model: "deepseek-chat"
+  anthropic:
+    base_url: "https://api.anthropic.com"
+    api_key: ""
+    model: "claude-sonnet-4-20250514"
 
 # 数据库管理（字典 dbmgmt_* 可覆盖）
 dbmgmt:

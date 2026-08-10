@@ -687,6 +687,13 @@ func defaultPermissions() []model.Permission {
 		{Name: "CI/CD CD 发布日志", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/log", Action: "GET", Description: "Get CD release log"},
 		{Name: "CI/CD 删除 CD 工单", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId", Action: "DELETE", Description: "Delete CD release run"},
 
+		{Name: "AI 状态查询", Resource: "/api/v1/ai/status", Action: "GET", Description: "Get AI status"},
+		{Name: "AI 连通测试", Resource: "/api/v1/ai/ping", Action: "POST", Description: "Ping AI provider"},
+		{Name: "AI 运维对话", Resource: "/api/v1/ai/chat", Action: "POST", Description: "AI ops assistant chat"},
+		{Name: "AI Pod 排障分析", Resource: "/api/v1/ai/k8s/pod-diagnose", Action: "POST", Description: "AI analyze pod diagnose"},
+		{Name: "AI CI 构建失败分析", Resource: "/api/v1/ai/cicd/build-fail", Action: "POST", Description: "AI analyze CI build failure"},
+		{Name: "AI 告警解释", Resource: "/api/v1/ai/alert/explain", Action: "POST", Description: "AI explain alert fingerprint delivery"},
+
 		{Name: "Event 列表", Resource: "/api/v1/events", Action: "GET", Description: "List events"},
 		{Name: "Event 分组列表", Resource: "/api/v1/events/grouped", Action: "GET", Description: "List events grouped"},
 		{Name: "CRD 列表", Resource: "/api/v1/crds", Action: "GET", Description: "List custom resource definitions"},

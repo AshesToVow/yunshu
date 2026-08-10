@@ -1,6 +1,6 @@
 export type DictTypeOption = { label: string; value: string };
 
-export type DictCategoryId = "all" | "system" | "alert" | "log" | "k8s" | "cmdb" | "backup" | "dbmgmt" | "cicd" | "other";
+export type DictCategoryId = "all" | "system" | "alert" | "log" | "k8s" | "cmdb" | "backup" | "dbmgmt" | "cicd" | "ai" | "other";
 
 type DictCategoryMeta = {
   id: Exclude<DictCategoryId, "all">;
@@ -19,6 +19,7 @@ export const DICT_CATEGORY_TABS: { id: DictCategoryId; label: string }[] = [
   { id: "backup", label: "备份 / MinIO" },
   { id: "dbmgmt", label: "数据库管理" },
   { id: "cicd", label: "CI/CD" },
+  { id: "ai", label: "AI" },
   { id: "other", label: "其他" },
 ];
 
@@ -31,6 +32,7 @@ export const DICT_CATEGORY_META: Record<Exclude<DictCategoryId, "all">, DictCate
   backup: { id: "backup", label: "备份 / MinIO", color: "orange", description: "MySQL 备份归档与 MinIO 连接" },
   dbmgmt: { id: "dbmgmt", label: "数据库管理", color: "gold", description: "SQL 查询、审批、goInception 等平台配置" },
   cicd: { id: "cicd", label: "CI/CD", color: "green", description: "Jenkins、流水线、发布枚举" },
+  ai: { id: "ai", label: "AI", color: "magenta", description: "大模型 Provider、开关与调用参数" },
   other: { id: "other", label: "其他", color: "default", description: "未归类的自定义 dict_type" },
 };
 
@@ -179,6 +181,20 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "启动脚本类型（cicd_start_script_type）", value: "cicd_start_script_type", category: "cicd" },
   { label: "K8s 凭据（cicd_k8s_credential）", value: "cicd_k8s_credential", category: "cicd" },
   { label: "重要级别（cicd_importance_level）", value: "cicd_importance_level", category: "cicd" },
+
+  { label: "AI 启用（ai_enabled）", value: "ai_enabled", category: "ai" },
+  { label: "AI 默认 Provider（ai_default_provider）", value: "ai_default_provider", category: "ai" },
+  { label: "AI 超时秒（ai_timeout_sec）", value: "ai_timeout_sec", category: "ai" },
+  { label: "AI Max Tokens（ai_max_tokens）", value: "ai_max_tokens", category: "ai" },
+  { label: "OpenAI Base URL（ai_openai_base_url）", value: "ai_openai_base_url", category: "ai" },
+  { label: "OpenAI API Key（ai_openai_api_key）", value: "ai_openai_api_key", category: "ai" },
+  { label: "OpenAI Model（ai_openai_model）", value: "ai_openai_model", category: "ai" },
+  { label: "DeepSeek Base URL（ai_deepseek_base_url）", value: "ai_deepseek_base_url", category: "ai" },
+  { label: "DeepSeek API Key（ai_deepseek_api_key）", value: "ai_deepseek_api_key", category: "ai" },
+  { label: "DeepSeek Model（ai_deepseek_model）", value: "ai_deepseek_model", category: "ai" },
+  { label: "Anthropic Base URL（ai_anthropic_base_url）", value: "ai_anthropic_base_url", category: "ai" },
+  { label: "Anthropic API Key（ai_anthropic_api_key）", value: "ai_anthropic_api_key", category: "ai" },
+  { label: "Anthropic Model（ai_anthropic_model）", value: "ai_anthropic_model", category: "ai" },
 ];
 
 export const PROJECT_DICT_TYPE_OPTIONS: DictTypeOption[] = DICT_TYPE_DEFS.map(({ label, value }) => ({ label, value }));
@@ -194,6 +210,7 @@ export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "
   const registered = DICT_TYPE_CATEGORY_MAP.get(key);
   if (registered) return registered;
   if (key.startsWith("cicd_")) return "cicd";
+  if (key.startsWith("ai_")) return "ai";
   if (key.startsWith("dbmgmt_")) return "dbmgmt";
   if (key.startsWith("alert_")) return "alert";
   if (key.startsWith("log_")) return "log";

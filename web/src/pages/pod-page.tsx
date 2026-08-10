@@ -20,6 +20,7 @@ import { MonacoYamlEditor, validateYaml } from "../components/k8s/monaco-yaml-ed
 import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
 import { createPodByYAML, createPodSimple, deletePod, deletePodFile, downloadPodFile, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, readPodFile, restartPod, updatePodSimple, uploadPodFile, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
+import { analyzePodDiagnoseAI, type AIPodDiagnoseResult } from "../services/ai";
 import { getToken } from "../services/storage";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
@@ -77,6 +78,8 @@ export function PodPage() {
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [diagnoseLoading, setDiagnoseLoading] = useState(false);
   const [diagnoseResult, setDiagnoseResult] = useState<PodDiagnoseResult | null>(null);
+  const [aiDiagnoseLoading, setAiDiagnoseLoading] = useState(false);
+  const [aiDiagnoseResult, setAiDiagnoseResult] = useState<AIPodDiagnoseResult | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const prevPodKeyRef = useRef("");
   const [streaming, setStreaming] = useState(false);
@@ -295,6 +298,7 @@ export function PodPage() {
     setDiagnoseOpen(true);
     setDiagnoseLoading(true);
     setDiagnoseResult(null);
+    setAiDiagnoseResult(null);
     try {
       const res = await getPodDiagnose({ cluster_id: clusterId, namespace: record.namespace, name: record.name });
       setDiagnoseResult(res);
@@ -303,6 +307,24 @@ export function PodPage() {
       setDiagnoseOpen(false);
     } finally {
       setDiagnoseLoading(false);
+    }
+  }
+
+  async function handleAIDiagnose() {
+    if (!clusterId || !selected || aiDiagnoseLoading) return;
+    setAiDiagnoseLoading(true);
+    try {
+      const res = await analyzePodDiagnoseAI({
+        cluster_id: clusterId,
+        namespace: selected.namespace,
+        name: selected.name,
+      });
+      setAiDiagnoseResult(res);
+      if (res.diagnose) setDiagnoseResult(res.diagnose);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 分析失败"));
+    } finally {
+      setAiDiagnoseLoading(false);
     }
   }
 
@@ -1175,6 +1197,16 @@ export function PodPage() {
         open={diagnoseOpen}
         onClose={() => setDiagnoseOpen(false)}
         width={920}
+        extra={
+          <Button
+            type="primary"
+            loading={aiDiagnoseLoading}
+            disabled={!diagnoseResult || diagnoseLoading}
+            onClick={() => void handleAIDiagnose()}
+          >
+            AI 分析
+          </Button>
+        }
       >
         {diagnoseLoading ? (
           <Typography.Text>诊断中...</Typography.Text>
@@ -1186,6 +1218,48 @@ export function PodPage() {
               message={diagnoseResult.summary}
               description={`阶段 ${diagnoseResult.phase} · 节点 ${diagnoseResult.node_name || "-"} · ${diagnoseResult.ready ? "已就绪" : "未就绪"}`}
             />
+            {aiDiagnoseResult ? (
+              <Card size="small" title={`AI 分析（${aiDiagnoseResult.provider} / ${aiDiagnoseResult.model}）`}>
+                <Space direction="vertical" style={{ width: "100%" }} size="small">
+                  <Typography.Paragraph style={{ marginBottom: 0 }}>
+                    {aiDiagnoseResult.ai_summary || "（无摘要）"}
+                  </Typography.Paragraph>
+                  {(aiDiagnoseResult.root_causes || []).length > 0 ? (
+                    <>
+                      <Typography.Text strong>可能根因</Typography.Text>
+                      {(aiDiagnoseResult.root_causes || []).map((c, i) => (
+                        <Alert
+                          key={`cause-${i}`}
+                          type="warning"
+                          showIcon
+                          message={String(c.title || c.cause || `根因 ${i + 1}`)}
+                          description={String(c.detail || c.description || JSON.stringify(c))}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+                  {(aiDiagnoseResult.actions || []).length > 0 ? (
+                    <>
+                      <Typography.Text strong>建议动作</Typography.Text>
+                      {(aiDiagnoseResult.actions || []).map((a, i) => (
+                        <Alert
+                          key={`action-${i}`}
+                          type="info"
+                          showIcon
+                          message={String(a.title || a.action || `建议 ${i + 1}`)}
+                          description={String(a.detail || a.description || JSON.stringify(a))}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+                  {!aiDiagnoseResult.root_causes?.length && !aiDiagnoseResult.actions?.length && aiDiagnoseResult.raw_reply ? (
+                    <pre className="code-block-panel" style={{ maxHeight: 240, fontSize: 12 }}>
+                      {aiDiagnoseResult.raw_reply}
+                    </pre>
+                  ) : null}
+                </Space>
+              </Card>
+            ) : null}
             {diagnoseResult.hints.map((h, i) => (
               <Alert
                 key={`${h.title}-${i}`}

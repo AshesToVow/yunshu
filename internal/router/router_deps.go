@@ -97,6 +97,7 @@ type RouteDeps struct {
 	kafkaToESSvc       *service.KafkaToESService
 	inspectSvc         *inspectsvc.Service
 	inspectHandler     *handler.InspectHandler
+	aiHandler          *handler.AIHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -271,6 +272,7 @@ func assembleRouteDeps(
 		kafkaToESSvc:       svcs.KafkaToES,
 		inspectSvc:         svcs.Inspect,
 		inspectHandler:     handlers.Inspect,
+		aiHandler:          handlers.AI,
 	}
 	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil

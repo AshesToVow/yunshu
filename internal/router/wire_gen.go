@@ -9,6 +9,7 @@ package router
 import (
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/handler"
+	"yunshu/internal/service/ai"
 	"yunshu/internal/service/alert"
 	"yunshu/internal/service/k8s"
 	"yunshu/internal/service/k8s/eventforward"
@@ -161,6 +162,8 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v101 := eventforward.NewK8sEventForwardAdminService(v100)
 	v102 := k8s.NewK8sSearchService(v56, v25, v9, v20, v22, v23)
 	inspectService := provideInspectService(db, client, v54, v29, sender, appDisplayName)
+	aiConfig := provideAIConfig(app)
+	aiService := ai.NewService(db, aiConfig, v58, service, v52)
 	routerRouteServices := &routeServices{
 		LoginLog:             v2,
 		OperationLog:         v4,
@@ -222,6 +225,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		K8sSearch:            v102,
 		AlertMaintenance:     v43,
 		Inspect:              inspectService,
+		AI:                   aiService,
 	}
 	systemHandler := provideSystemHandler(app)
 	pluginHandler := handler.NewPluginHandler(pluginsConfig)
@@ -278,6 +282,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	logPlatformHandler := handler.NewLogPlatformHandler(v94, v96)
 	loggieHandler := handler.NewLoggieHandler(v98)
 	inspectHandler := handler.NewInspectHandler(inspectService)
+	aiHandler := handler.NewAIHandler(aiService)
 	routerRouteHandlers := &routeHandlers{
 		System:             systemHandler,
 		Plugin:             pluginHandler,
@@ -334,6 +339,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		LogPlatform:        logPlatformHandler,
 		Loggie:             loggieHandler,
 		Inspect:            inspectHandler,
+		AI:                 aiHandler,
 	}
 	routeDeps, err := provideRouteDeps(app, routerRouteRepositories, routerRouteServices, routerRouteHandlers)
 	if err != nil {

@@ -1,0 +1,113 @@
+package handler
+
+import (
+	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/response"
+	aisvc "yunshu/internal/service/ai"
+
+	"github.com/gin-gonic/gin"
+)
+
+type AIHandler struct {
+	svc *aisvc.Service
+}
+
+func NewAIHandler(svc *aisvc.Service) *AIHandler {
+	return &AIHandler{svc: svc}
+}
+
+func (h *AIHandler) Status(c *gin.Context) {
+	response.Success(c, h.svc.Status(c.Request.Context()))
+}
+
+func (h *AIHandler) Ping(c *gin.Context) {
+	var req aisvc.PingRequest
+	_ = c.ShouldBindJSON(&req)
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.Ping(c.Request.Context(), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) Chat(c *gin.Context) {
+	var req aisvc.ChatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.Chat(c.Request.Context(), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) PodDiagnose(c *gin.Context) {
+	var req aisvc.PodDiagnoseAIRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.AnalyzePodDiagnose(c.Request.Context(), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) CicdBuildFail(c *gin.Context) {
+	var req aisvc.CicdBuildFailAIRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.AnalyzeCicdBuildFail(c.Request.Context(), uid, user, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) AlertExplain(c *gin.Context) {
+	var req aisvc.AlertExplainAIRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.AnalyzeAlertExplain(c.Request.Context(), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}

@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/service"
+	aisvc "yunshu/internal/service/ai"
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
@@ -47,6 +48,7 @@ var AppInfraSet = wire.NewSet(
 	provideAlertConfig,
 	provideCicdConfig,
 	provideDbmgmtConfig,
+	provideAIConfig,
 	provideAppRouteConfig,
 	appRouteConfigFields,
 	providePluginsConfig,
@@ -347,6 +349,7 @@ var ServiceSet = wire.NewSet(
 	provideDbmgmtService,
 	provideCicdService,
 	provideInspectService,
+	aisvc.NewService,
 	provideElasticsearchProvider,
 	provideKafkaProvider,
 	provideKafkaToESService,

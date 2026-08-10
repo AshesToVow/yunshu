@@ -3,6 +3,7 @@ package all
 
 import (
 	_ "yunshu/internal/plugins/alert"
+	_ "yunshu/internal/plugins/ai"
 	_ "yunshu/internal/plugins/backup"
 	_ "yunshu/internal/plugins/cicd"
 	_ "yunshu/internal/plugins/dbmgmt"

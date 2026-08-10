@@ -1,5 +1,5 @@
 import { DeleteOutlined, EyeOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Card, Drawer, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -15,6 +15,8 @@ import {
   type CicdBuildRun,
   type CicdRunStage,
 } from "../services/cicd";
+import { analyzeCicdBuildFailAI, type AICicdBuildFailResult } from "../services/ai";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
@@ -62,6 +64,8 @@ export function CicdBuildRecordsPage() {
   const [logRun, setLogRun] = useState<CicdBuildRun | null>(null);
   const [logLoading, setLogLoading] = useState(false);
   const logPreRef = useRef<HTMLPreElement>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<AICicdBuildFailResult | null>(null);
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
@@ -119,6 +123,24 @@ export function CicdBuildRecordsPage() {
     }, 3000);
     return () => window.clearInterval(timer);
   }, [logOpen, logRun, projectId, fetchLog, page, pageSize, serviceKeyword]);
+
+  async function handleAIAnalyze(run: CicdBuildRun | null) {
+    if (!projectId || !run || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const res = await analyzeCicdBuildFailAI({ project_id: projectId, run_id: run.id });
+      setAiResult(res);
+      if (!detailOpen) {
+        setDetail(run);
+        setDetailOpen(true);
+      }
+      message.success("AI 分析完成");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 分析失败"));
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const columns = useMemo<ColumnsType<CicdBuildRun>>(
     () => [
@@ -187,6 +209,7 @@ export function CicdBuildRecordsPage() {
                 if (!projectId) return;
                 const r = await getBuildRun(projectId, row.id);
                 setDetail(r);
+                setAiResult(null);
                 setDetailOpen(true);
                 const [st, arts] = await Promise.all([
                   listBuildRunStages(projectId, row.id),
@@ -250,10 +273,53 @@ export function CicdBuildRecordsPage() {
           setStages([]);
           setArtifactsMeta([]);
           setActiveStageId(undefined);
+          setAiResult(null);
         }}
+        extra={
+          <Button
+            type="primary"
+            loading={aiLoading}
+            disabled={!detail || !projectId}
+            onClick={() => void handleAIAnalyze(detail)}
+          >
+            AI 分析
+          </Button>
+        }
       >
         {detail && (
           <Space direction="vertical" style={{ width: "100%" }} size="middle">
+            {aiResult ? (
+              <Card size="small" title={`AI 分析（${aiResult.provider} / ${aiResult.model}）`}>
+                <Space direction="vertical" style={{ width: "100%" }} size="small">
+                  <Typography.Paragraph style={{ marginBottom: 0 }}>
+                    {aiResult.ai_summary || "（无摘要）"}
+                  </Typography.Paragraph>
+                  {(aiResult.root_causes || []).map((c, i) => (
+                    <Alert
+                      key={`cause-${i}`}
+                      type="warning"
+                      showIcon
+                      message={String(c.title || c.cause || `根因 ${i + 1}`)}
+                      description={String(c.evidence || c.detail || c.description || JSON.stringify(c))}
+                    />
+                  ))}
+                  {(aiResult.actions || []).map((a, i) => (
+                    <Alert
+                      key={`action-${i}`}
+                      type="info"
+                      showIcon
+                      message={String(a.title || a.action || `建议 ${i + 1}`)}
+                      description={String(a.command_hint || a.detail || a.description || JSON.stringify(a))}
+                    />
+                  ))}
+                  {!aiResult.root_causes?.length && !aiResult.actions?.length && aiResult.raw_reply ? (
+                    <pre style={{ maxHeight: 200, overflow: "auto", fontSize: 12, whiteSpace: "pre-wrap" }}>
+                      {aiResult.raw_reply}
+                    </pre>
+                  ) : null}
+                </Space>
+              </Card>
+            ) : null}
             {stages.length > 0 && (
               <div>
                 <Typography.Text type="secondary">流水线阶段</Typography.Text>
@@ -388,6 +454,13 @@ export function CicdBuildRecordsPage() {
           <Space>
             <Button onClick={() => logRun && void fetchLog(logRun, false)} loading={logLoading}>
               刷新
+            </Button>
+            <Button
+              loading={aiLoading}
+              disabled={!logRun || !projectId}
+              onClick={() => void handleAIAnalyze(logRun)}
+            >
+              AI 分析
             </Button>
             <Button type="primary" onClick={() => setLogOpen(false)}>
               关闭

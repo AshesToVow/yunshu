@@ -20,6 +20,7 @@ var rules = map[string]rule{
 	"backup": {prefixes: []string{"minio_", "mysql_backup_"}},
 	"dbmgmt": {prefixes: []string{"dbmgmt_"}},
 	"cicd":   {prefixes: []string{"cicd_"}},
+	"ai":     {prefixes: []string{"ai_"}},
 }
 
 // NormalizeID 规范化分类 ID；未知值返回空字符串。
@@ -124,6 +125,8 @@ func Label(category string) string {
 		return "数据库管理"
 	case "cicd":
 		return "CI/CD"
+	case "ai":
+		return "AI"
 	case "other":
 		return "其他"
 	default:

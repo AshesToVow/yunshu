@@ -1,6 +1,7 @@
 package router
 
 import (
+	aisvc "yunshu/internal/service/ai"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 	inspectsvc "yunshu/internal/service/inspect"
@@ -69,4 +70,5 @@ type routeServices struct {
 	K8sSearch            *service.K8sSearchService
 	AlertMaintenance     *service.AlertMaintenanceService
 	Inspect              *inspectsvc.Service
+	AI                   *aisvc.Service
 }

@@ -141,7 +141,13 @@ func DefaultCatalog() []Spec {
 			},
 		},
 		{
-			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 9, Status: 1,
+			Path: "/ai", Name: "AI", Icon: "RobotOutlined", Sort: 9, Status: 1,
+			Children: []Spec{
+				{Path: "/ai/assistant", Name: "AI 运维助手", Icon: "CommentOutlined", Sort: 1, Component: "ai-assistant-page", Status: 1},
+			},
+		},
+		{
+			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 10, Status: 1,
 			Children: []Spec{
 				{Path: "/crds", Name: "CRD 管理", Icon: "BranchesOutlined", Sort: 1, Component: "crds-page", Status: 1},
 				{Path: "/crs", Name: "CR 实例管理", Icon: "DatabaseOutlined", Sort: 2, Component: "crs-page", Status: 1},

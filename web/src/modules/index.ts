@@ -1,5 +1,6 @@
 import type { RouteObject } from "react-router-dom";
 import { alertRoutes, ALERT_PLUGIN } from "./alert/routes";
+import { aiRoutes, AI_PLUGIN } from "./ai/routes";
 import { cicdRoutes, CICD_PLUGIN } from "./cicd/routes";
 import { dbmgmtRoutes, DBMGMT_PLUGIN } from "./dbmgmt/routes";
 import { cmdbRoutes, CMDB_PLUGIN } from "./cmdb/routes";
@@ -15,6 +16,7 @@ const MODULE_ROUTES: Record<string, RouteObject[]> = {
   [ALERT_PLUGIN]: alertRoutes,
   [CICD_PLUGIN]: cicdRoutes,
   [DBMGMT_PLUGIN]: dbmgmtRoutes,
+  [AI_PLUGIN]: aiRoutes,
 };
 
 export function collectModuleRoutes(isPluginEnabled: (name: string) => boolean): RouteObject[] {
