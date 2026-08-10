@@ -60,4 +60,5 @@ type routeHandlers struct {
 	Loggie              *handler.LoggieHandler
 	Inspect             *handler.InspectHandler
 	AI                  *handler.AIHandler
+	Esmgmt              *handler.EsmgmtHandler
 }

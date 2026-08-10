@@ -40,6 +40,14 @@ export interface AIChatResult {
     completion_tokens?: number;
     total_tokens?: number;
   };
+  tool_steps?: Array<{
+    name: string;
+    args?: string;
+    result?: string;
+    ok?: boolean;
+    error?: string;
+  }>;
+  rag_hits?: Array<{ source: string; content: string; score?: number }>;
 }
 
 export interface AIPodDiagnoseResult {
@@ -82,6 +90,10 @@ export function chatAI(payload: {
   messages: AIChatMessage[];
   project_id?: number;
   cluster_id?: number;
+  namespace?: string;
+  enable_tools?: boolean;
+  enable_write_tools?: boolean;
+  disable_rag?: boolean;
 }) {
   return getData<AIChatResult>(
     http.post("/ai/chat", payload, { timeout: 120000 }),

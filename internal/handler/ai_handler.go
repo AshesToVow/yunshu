@@ -111,3 +111,63 @@ func (h *AIHandler) AlertExplain(c *gin.Context) {
 	}
 	response.Success(c, res)
 }
+
+func (h *AIHandler) ListApprovals(c *gin.Context) {
+	var q aisvc.ApprovalListQuery
+	_ = c.ShouldBindQuery(&q)
+	user, _ := auth.CurrentUserFromContext(c)
+	res, err := h.svc.ListApprovals(c.Request.Context(), user, q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) ReviewApproval(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.ReviewApprovalRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	res, err := h.svc.ReviewApproval(c.Request.Context(), user, uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) ExecuteApproval(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	res, err := h.svc.ExecuteApproval(c.Request.Context(), user, uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) SyncKnowledge(c *gin.Context) {
+	n, err := h.svc.SyncKnowledgeBase(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, map[string]any{"indexed": n})
+}

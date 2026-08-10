@@ -17,6 +17,7 @@ type Runtime struct {
 	// 下列字段由 router 填充，供插件后台任务使用。
 	K8sRuntime   any // *service.K8sRuntimeService
 	MysqlBackup  any // *service.MysqlBackupService
+	Esmgmt       any // *esmgmt.Service
 	Dbmgmt       any // *dbmgmt.Service
 	Cicd         any // *cicd.Service
 	Alert        any // *service.AlertService

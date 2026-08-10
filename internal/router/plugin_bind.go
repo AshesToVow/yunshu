@@ -42,6 +42,8 @@ func bindPluginRoutes(name string, api *gin.RouterGroup, rt *plugin.Runtime) err
 		RegisterInspectRoutes(api, d)
 	case "ai":
 		RegisterAIRoutes(api, d)
+	case "esmgmt":
+		RegisterEsmgmtRoutes(api, d)
 	default:
 		return fmt.Errorf("unknown plugin %q", name)
 	}

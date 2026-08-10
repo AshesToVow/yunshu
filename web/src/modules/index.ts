@@ -3,6 +3,7 @@ import { alertRoutes, ALERT_PLUGIN } from "./alert/routes";
 import { aiRoutes, AI_PLUGIN } from "./ai/routes";
 import { cicdRoutes, CICD_PLUGIN } from "./cicd/routes";
 import { dbmgmtRoutes, DBMGMT_PLUGIN } from "./dbmgmt/routes";
+import { esmgmtRoutes, ESMGMT_PLUGIN } from "./esmgmt/routes";
 import { cmdbRoutes, CMDB_PLUGIN } from "./cmdb/routes";
 import { coreRoutes, CORE_PLUGIN } from "./core/routes";
 import { k8sRoutes, K8S_PLUGIN } from "./k8s/routes";
@@ -17,6 +18,7 @@ const MODULE_ROUTES: Record<string, RouteObject[]> = {
   [CICD_PLUGIN]: cicdRoutes,
   [DBMGMT_PLUGIN]: dbmgmtRoutes,
   [AI_PLUGIN]: aiRoutes,
+  [ESMGMT_PLUGIN]: esmgmtRoutes,
 };
 
 export function collectModuleRoutes(isPluginEnabled: (name: string) => boolean): RouteObject[] {

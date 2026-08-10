@@ -2,80 +2,37 @@
 
 ## 概述
 
-`ai` 为编译期业务插件：通过数据字典配置多模型 Provider 与总开关，提供运维助手对话、K8s Pod 排障、CI 构建失败分析与告警解释。不自研 Agent/RAG 框架，仅封装 OpenAI 兼容 Chat Completions 与 Anthropic Messages。
+`ai` 插件：多模型 Provider、运维助手（Tool Calling + RAG）、场景分析、高危操作审批。`esmgmt` 插件：Elasticsearch 连接与集群管理。
 
-## 启用插件
+## 启用
 
-`configs/config.yaml`：
+`plugins.enabled` 包含 `ai` / `esmgmt`；字典 `ai_enabled=true` 并配置 API Key。
 
-```yaml
-plugins:
-  enabled:
-    # ...
-    - ai
-
-ai:
-  enabled: false
-  default_provider: openai_compat
-  timeout_sec: 60
-  max_tokens: 2048
-  openai:
-    base_url: https://api.openai.com/v1
-    api_key: ""
-    model: gpt-4o-mini
-  deepseek:
-    base_url: https://api.deepseek.com/v1
-    api_key: ""
-    model: deepseek-chat
-  anthropic:
-    base_url: https://api.anthropic.com
-    api_key: ""
-    model: claude-sonnet-4-20250514
-```
-
-字典 `ai_*`（`status=1`）优先覆盖 YAML。
-
-## 字典清单
-
-| dict_type | 说明 |
-|-----------|------|
-| `ai_enabled` | 总开关 true/false |
-| `ai_default_provider` | `openai_compat` / `deepseek` / `anthropic` |
-| `ai_timeout_sec` / `ai_max_tokens` | 调用参数 |
-| `ai_openai_base_url` / `ai_openai_api_key` / `ai_openai_model` | OpenAI 兼容（通义/vLLM/LiteLLM 等也可填此组） |
-| `ai_deepseek_*` | DeepSeek |
-| `ai_anthropic_*` | Claude（Anthropic Messages） |
-
-密钥类 seed 默认 `status=0`；启用后填写并设 `status=1`。
-
-## API
+## AI API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/ai/status` | 启用状态、默认 Provider、模型（脱敏） |
+| GET | `/api/v1/ai/status` | 状态（脱敏） |
 | POST | `/api/v1/ai/ping` | 连通测试 |
-| POST | `/api/v1/ai/chat` | 运维助手 |
-| POST | `/api/v1/ai/k8s/pod-diagnose` | Pod 诊断 AI 分析 |
-| POST | `/api/v1/ai/cicd/build-fail` | CI 构建失败 AI 分析 |
-| POST | `/api/v1/ai/alert/explain` | 告警指纹投递 AI 解释 |
+| POST | `/api/v1/ai/chat` | 助手（tools + RAG） |
+| POST | `/api/v1/ai/k8s/pod-diagnose` | Pod AI 分析 |
+| POST | `/api/v1/ai/cicd/build-fail` | CI 失败分析 |
+| POST | `/api/v1/ai/alert/explain` | 告警解释 |
+| GET | `/api/v1/ai/approvals` | 审批列表 |
+| POST | `/api/v1/ai/approvals/:id/review` | 审批 |
+| POST | `/api/v1/ai/approvals/:id/execute` | 执行已批准操作 |
+| POST | `/api/v1/ai/knowledge/sync` | 同步知识库到 ES |
 
-未启用 `ai_enabled` 时返回明确错误。
+Chat 默认只读工具；`enable_write_tools=true` 时写操作只创建审批单。
 
-### CI 构建失败
+## 排障剧本
 
-请求体：`project_id`、`run_id`（可选 `provider`）。后端拉取构建元数据、阶段摘要与 Console 尾部后分析。
+`internal/ai/runbooks/`：CrashLoopBackOff / ImagePullBackOff / PendingUnschedulable。
 
-### 告警解释
+## RAG
 
-请求体：`fingerprint`（必填），可选 `project_id`、`window_hours`。复用确定性指纹追溯，并附带质量报告摘要。
+优先 ES `yunshu-ai-kb-*`，失败回退内嵌文档关键词匹配。
 
-## 安全边界
+## esmgmt
 
-- 只分析与建议，不自动执行 kubectl / Jenkins / 告警配置变更
-- Prompt 不注入密钥；日志与 JSON 有截断
-- 审计记录场景、Provider、token 用量概要
-
-## Prompt 与 Skill
-
-- 运行时模板：`internal/ai/prompts/`（embed）
-- 研发 Agent Skill：`.agents/skills/yunshu-ai-ops`、`.agents/skills/yunshu-k8s-diagnose`
+`/api/v1/esmgmt/*`：连接、health、索引、节点、受限 REST 代理。不替代日志平台检索。

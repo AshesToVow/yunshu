@@ -9,6 +9,7 @@ import (
 	_ "yunshu/internal/plugins/dbmgmt"
 	_ "yunshu/internal/plugins/cmdb"
 	_ "yunshu/internal/plugins/core"
+	_ "yunshu/internal/plugins/esmgmt"
 	_ "yunshu/internal/plugins/inspect"
 	_ "yunshu/internal/plugins/k8s"
 	_ "yunshu/internal/plugins/project"

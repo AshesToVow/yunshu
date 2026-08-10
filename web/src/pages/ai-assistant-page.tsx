@@ -1,16 +1,17 @@
 import { ClearOutlined, RobotOutlined, SendOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Input, Select, Space, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Input, InputNumber, Select, Space, Switch, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   chatAI,
   getAIStatus,
   pingAI,
   type AIChatMessage,
+  type AIChatResult,
   type AIStatus,
 } from "../services/ai";
 import { extractApiErrorMessage } from "../services/http";
 
-type Bubble = AIChatMessage & { id: string };
+type Bubble = AIChatMessage & { id: string; meta?: string };
 
 export function AiAssistantPage() {
   const [status, setStatus] = useState<AIStatus | null>(null);
@@ -20,6 +21,11 @@ export function AiAssistantPage() {
   const [sending, setSending] = useState(false);
   const [pinging, setPinging] = useState(false);
   const [messages, setMessages] = useState<Bubble[]>([]);
+  const [enableTools, setEnableTools] = useState(true);
+  const [enableWrite, setEnableWrite] = useState(false);
+  const [clusterId, setClusterId] = useState<number>();
+  const [namespace, setNamespace] = useState("");
+  const [lastSteps, setLastSteps] = useState<AIChatResult["tool_steps"]>([]);
   const listRef = useRef<HTMLDivElement>(null);
 
   const providerOptions = useMemo(() => {
@@ -84,10 +90,18 @@ export function AiAssistantPage() {
       const res = await chatAI({
         provider: provider || undefined,
         messages: next.map(({ role, content }) => ({ role, content })),
+        cluster_id: clusterId,
+        namespace: namespace || undefined,
+        enable_tools: enableTools,
+        enable_write_tools: enableWrite,
       });
+      setLastSteps(res.tool_steps || []);
+      const meta =
+        (res.tool_steps?.length ? `工具 ${res.tool_steps.length} 次` : "") +
+        (res.rag_hits?.length ? ` · RAG ${res.rag_hits.length}` : "");
       setMessages((prev) => [
         ...prev,
-        { id: `a-${Date.now()}`, role: "assistant", content: res.reply || "（空回复）" },
+        { id: `a-${Date.now()}`, role: "assistant", content: res.reply || "（空回复）", meta },
       ]);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "对话失败"));
@@ -148,11 +162,29 @@ export function AiAssistantPage() {
             <Alert
               type="warning"
               showIcon
-              message="只读建议"
-              description="助手仅提供分析与操作建议，不会自动执行集群变更；请勿粘贴密钥或凭证。"
+              message="工具增强对话"
+              description="默认启用只读工具（list/diagnose/logs）。写操作需勾选并进入审批；请勿粘贴密钥。"
             />
           )}
 
+          <Space wrap>
+            <span>工具</span>
+            <Switch checked={enableTools} onChange={setEnableTools} />
+            <span>写工具(审批)</span>
+            <Switch checked={enableWrite} onChange={setEnableWrite} disabled={!enableTools} />
+            <InputNumber
+              placeholder="cluster_id"
+              value={clusterId}
+              onChange={(v) => setClusterId(typeof v === "number" ? v : undefined)}
+              style={{ width: 140 }}
+            />
+            <Input
+              placeholder="namespace"
+              value={namespace}
+              onChange={(e) => setNamespace(e.target.value)}
+              style={{ width: 160 }}
+            />
+          </Space>
           <div
             ref={listRef}
             style={{
@@ -187,6 +219,7 @@ export function AiAssistantPage() {
                   >
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                       {m.role === "user" ? "我" : "助手"}
+                      {m.meta ? ` · ${m.meta}` : ""}
                     </Typography.Text>
                     <div>{m.content}</div>
                   </div>
@@ -196,6 +229,25 @@ export function AiAssistantPage() {
             )}
           </div>
 
+          {lastSteps && lastSteps.length > 0 ? (
+            <Card size="small" title="最近工具调用">
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {lastSteps.map((s, i) => (
+                  <Alert
+                    key={`${s.name}-${i}`}
+                    type={s.ok ? "success" : "error"}
+                    showIcon
+                    message={s.name}
+                    description={
+                      <pre style={{ margin: 0, maxHeight: 120, overflow: "auto", whiteSpace: "pre-wrap", fontSize: 12 }}>
+                        {s.error || s.result || s.args}
+                      </pre>
+                    }
+                  />
+                ))}
+              </Space>
+            </Card>
+          ) : null}
           <Space.Compact style={{ width: "100%" }}>
             <Input.TextArea
               value={input}

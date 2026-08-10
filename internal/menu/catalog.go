@@ -144,10 +144,19 @@ func DefaultCatalog() []Spec {
 			Path: "/ai", Name: "AI", Icon: "RobotOutlined", Sort: 9, Status: 1,
 			Children: []Spec{
 				{Path: "/ai/assistant", Name: "AI 运维助手", Icon: "CommentOutlined", Sort: 1, Component: "ai-assistant-page", Status: 1},
+				{Path: "/ai/approvals", Name: "AI 操作审批", Icon: "AuditOutlined", Sort: 2, Component: "ai-approvals-page", Status: 1},
 			},
 		},
 		{
-			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 10, Status: 1,
+			Path: "/esmgmt", Name: "Elasticsearch", Icon: "CloudServerOutlined", Sort: 10, Status: 1,
+			Children: []Spec{
+				{Path: "/esmgmt/connections", Name: "连接管理", Icon: "ApiOutlined", Sort: 1, Component: "esmgmt-connections-page", Status: 1},
+				{Path: "/esmgmt/overview", Name: "集群概览", Icon: "FundOutlined", Sort: 2, Component: "esmgmt-overview-page", Status: 1},
+				{Path: "/esmgmt/console", Name: "REST 控制台", Icon: "CodeOutlined", Sort: 3, Component: "esmgmt-console-page", Status: 1},
+			},
+		},
+		{
+			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 11, Status: 1,
 			Children: []Spec{
 				{Path: "/crds", Name: "CRD 管理", Icon: "BranchesOutlined", Sort: 1, Component: "crds-page", Status: 1},
 				{Path: "/crs", Name: "CR 实例管理", Icon: "DatabaseOutlined", Sort: 2, Component: "crs-page", Status: 1},

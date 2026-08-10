@@ -94,6 +94,19 @@ func (c *Client) FullKey(objectKey string) string {
 	return c.prefix + strings.TrimPrefix(objectKey, "/")
 }
 
+// RelativeKey 去掉配置前缀，兼容历史写入的「已含 prefix」对象键。
+func (c *Client) RelativeKey(objectKey string) string {
+	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
+	if c == nil || c.prefix == "" {
+		return key
+	}
+	prefix := strings.TrimPrefix(c.prefix, "/")
+	if prefix != "" && strings.HasPrefix(key, prefix) {
+		return strings.TrimPrefix(key, prefix)
+	}
+	return key
+}
+
 // PresignedGetURL 生成临时下载链接。
 func (c *Client) PresignedGetURL(ctx context.Context, objectKey string, expiry time.Duration) (string, error) {
 	key := c.FullKey(objectKey)

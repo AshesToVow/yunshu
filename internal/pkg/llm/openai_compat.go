@@ -56,11 +56,38 @@ func (c *OpenAICompatClient) Chat(ctx context.Context, req ChatRequest) (*ChatRe
 	if temp <= 0 {
 		temp = 0.2
 	}
+
+	msgs := make([]map[string]any, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		item := map[string]any{
+			"role":    m.Role,
+			"content": m.Content,
+		}
+		if m.Name != "" {
+			item["name"] = m.Name
+		}
+		if m.ToolCallID != "" {
+			item["tool_call_id"] = m.ToolCallID
+		}
+		if len(m.ToolCalls) > 0 {
+			item["tool_calls"] = m.ToolCalls
+		}
+		msgs = append(msgs, item)
+	}
+
 	body := map[string]any{
 		"model":       model,
-		"messages":    req.Messages,
+		"messages":    msgs,
 		"max_tokens":  maxTokens,
 		"temperature": temp,
+	}
+	if len(req.Tools) > 0 {
+		body["tools"] = req.Tools
+		choice := strings.TrimSpace(req.ToolChoice)
+		if choice == "" {
+			choice = "auto"
+		}
+		body["tool_choice"] = choice
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -88,12 +115,15 @@ func (c *OpenAICompatClient) Chat(ctx context.Context, req ChatRequest) (*ChatRe
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 	content := ""
+	var toolCalls []ToolCall
 	if len(parsed.Choices) > 0 {
 		content = parsed.Choices[0].Message.Content
+		toolCalls = parsed.Choices[0].Message.ToolCalls
 	}
 	return &ChatResponse{
-		Content: content,
-		Model:   parsed.Model,
+		Content:   content,
+		Model:     parsed.Model,
+		ToolCalls: toolCalls,
 		Usage: Usage{
 			PromptTokens:     parsed.Usage.PromptTokens,
 			CompletionTokens: parsed.Usage.CompletionTokens,
@@ -102,11 +132,58 @@ func (c *OpenAICompatClient) Chat(ctx context.Context, req ChatRequest) (*ChatRe
 	}, nil
 }
 
+// Embed 调用 /embeddings（不支持时返回错误，由上层降级 BM25）。
+func (c *OpenAICompatClient) Embed(ctx context.Context, texts []string) ([][]float64, error) {
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	if strings.TrimSpace(c.apiKey) == "" {
+		return nil, fmt.Errorf("未配置 API Key")
+	}
+	body := map[string]any{
+		"model": "text-embedding-3-small",
+		"input": texts,
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/embeddings", bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("embeddings HTTP %d: %s", resp.StatusCode, truncate(string(respBody), 300))
+	}
+	var parsed struct {
+		Data []struct {
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, err
+	}
+	out := make([][]float64, 0, len(parsed.Data))
+	for _, d := range parsed.Data {
+		out = append(out, d.Embedding)
+	}
+	return out, nil
+}
+
 type openaiChatResp struct {
 	Model   string `json:"model"`
 	Choices []struct {
 		Message struct {
-			Content string `json:"content"`
+			Content   string     `json:"content"`
+			ToolCalls []ToolCall `json:"tool_calls"`
 		} `json:"message"`
 	} `json:"choices"`
 	Usage struct {

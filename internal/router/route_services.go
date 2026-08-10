@@ -4,6 +4,7 @@ import (
 	aisvc "yunshu/internal/service/ai"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	esmgmtsvc "yunshu/internal/service/esmgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 	"yunshu/internal/service"
 )
@@ -71,4 +72,5 @@ type routeServices struct {
 	AlertMaintenance     *service.AlertMaintenanceService
 	Inspect              *inspectsvc.Service
 	AI                   *aisvc.Service
+	Esmgmt               *esmgmtsvc.Service
 }

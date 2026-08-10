@@ -16,6 +16,7 @@ import (
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	esmgmtsvc "yunshu/internal/service/esmgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/google/wire"
@@ -233,6 +234,20 @@ func provideInspectService(
 	return inspectsvc.NewService(db, redisClient, dsSvc, projectRepo, sender, string(appName))
 }
 
+func provideEsmgmtService(
+	db *gorm.DB,
+	encryptionKey SecurityEncryptionKey,
+	es *service.ElasticsearchProvider,
+) (*esmgmtsvc.Service, error) {
+	newStore := func(ctx context.Context) (*objectstore.Client, error) {
+		return objectstore.NewFromDB(ctx, db)
+	}
+	resolveSched := func(ctx context.Context) dictconfig.EsmgmtBackupSchedulerConfig {
+		return dictconfig.ResolveEsmgmtBackupSchedulerConfig(ctx, db, dictconfig.DefaultEsmgmtBackupSchedulerDictTypes())
+	}
+	return esmgmtsvc.NewService(db, string(encryptionKey), es, newStore, resolveSched)
+}
+
 func provideK8sHelmService(
 	runtime *service.K8sRuntimeService,
 	db *gorm.DB,
@@ -350,6 +365,7 @@ var ServiceSet = wire.NewSet(
 	provideCicdService,
 	provideInspectService,
 	aisvc.NewService,
+	provideEsmgmtService,
 	provideElasticsearchProvider,
 	provideKafkaProvider,
 	provideKafkaToESService,

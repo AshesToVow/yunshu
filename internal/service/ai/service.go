@@ -18,35 +18,51 @@ import (
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
 	"yunshu/internal/service/k8s"
+	"yunshu/internal/service/logplatform"
 
 	"gorm.io/gorm"
 )
 
 // Service AI 业务服务。
 type Service struct {
-	db       *gorm.DB
-	yamlAI   config.AIConfig
-	podSvc   *k8s.K8sPodService
-	cicdSvc  *cicdsvc.Service
-	alertSvc *alert.AlertService
-	rateMu   sync.Mutex
-	rateMap  map[uint]time.Time // 简易限流：每用户最短间隔
+	db          *gorm.DB
+	yamlAI      config.AIConfig
+	podSvc      *k8s.K8sPodService
+	workloadSvc *k8s.K8sWorkloadService
+	nsSvc       *k8s.K8sNamespaceService
+	eventSvc    *k8s.K8sEventService
+	logSearch   *logplatform.LogSearchService
+	esProvider  *logplatform.ElasticsearchProvider
+	cicdSvc     *cicdsvc.Service
+	alertSvc    *alert.AlertService
+	rateMu      sync.Mutex
+	rateMap     map[uint]time.Time // 简易限流：每用户最短间隔
 }
 
 func NewService(
 	db *gorm.DB,
 	yamlAI config.AIConfig,
 	podSvc *k8s.K8sPodService,
+	workloadSvc *k8s.K8sWorkloadService,
+	nsSvc *k8s.K8sNamespaceService,
+	eventSvc *k8s.K8sEventService,
+	logSearch *logplatform.LogSearchService,
+	esProvider *logplatform.ElasticsearchProvider,
 	cicdSvc *cicdsvc.Service,
 	alertSvc *alert.AlertService,
 ) *Service {
 	return &Service{
-		db:       db,
-		yamlAI:   yamlAI,
-		podSvc:   podSvc,
-		cicdSvc:  cicdSvc,
-		alertSvc: alertSvc,
-		rateMap:  make(map[uint]time.Time),
+		db:          db,
+		yamlAI:      yamlAI,
+		podSvc:      podSvc,
+		workloadSvc: workloadSvc,
+		nsSvc:       nsSvc,
+		eventSvc:    eventSvc,
+		logSearch:   logSearch,
+		esProvider:  esProvider,
+		cicdSvc:     cicdSvc,
+		alertSvc:    alertSvc,
+		rateMap:     make(map[uint]time.Time),
 	}
 }
 
@@ -176,17 +192,23 @@ type ChatMessage struct {
 }
 
 type ChatRequest struct {
-	Provider  string        `json:"provider"`
-	Messages  []ChatMessage `json:"messages" binding:"required"`
-	ProjectID uint          `json:"project_id"`
-	ClusterID uint          `json:"cluster_id"`
+	Provider      string        `json:"provider"`
+	Messages      []ChatMessage `json:"messages" binding:"required"`
+	ProjectID     uint          `json:"project_id"`
+	ClusterID     uint          `json:"cluster_id"`
+	Namespace     string        `json:"namespace"`
+	EnableTools   *bool         `json:"enable_tools"`
+	EnableWrite   bool          `json:"enable_write_tools"`
+	DisableRAG    bool          `json:"disable_rag"`
 }
 
 type ChatResponse struct {
-	Reply    string   `json:"reply"`
-	Provider string   `json:"provider"`
-	Model    string   `json:"model"`
-	Usage    llm.Usage `json:"usage"`
+	Reply      string      `json:"reply"`
+	Provider   string      `json:"provider"`
+	Model      string      `json:"model"`
+	Usage      llm.Usage   `json:"usage"`
+	ToolSteps  []toolStep  `json:"tool_steps,omitempty"`
+	RAGHits    []ragHit    `json:"rag_hits,omitempty"`
 }
 
 func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*ChatResponse, error) {
@@ -206,21 +228,51 @@ func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*Chat
 		}
 	}
 
+	enableTools := true
+	if req.EnableTools != nil {
+		enableTools = *req.EnableTools
+	}
+
 	ctxJSON, _ := json.Marshal(map[string]any{
 		"project_id": req.ProjectID,
 		"cluster_id": req.ClusterID,
-		"note":       "只读运维上下文；无密钥",
+		"namespace":  req.Namespace,
+		"note":       "优先使用工具获取真实集群数据；写操作仅创建审批单",
 	})
 	sys, err := prompts.Load("system_ops_assistant", map[string]string{"context_json": string(ctxJSON)})
 	if err != nil {
 		return nil, err
 	}
 
+	var ragHits []ragHit
+	if !req.DisableRAG {
+		q := ""
+		for i := len(req.Messages) - 1; i >= 0; i-- {
+			if strings.EqualFold(req.Messages[i].Role, "user") {
+				q = req.Messages[i].Content
+				break
+			}
+		}
+		ragHits = s.retrieveKnowledge(ctx, q, 4)
+		if len(ragHits) > 0 {
+			var b strings.Builder
+			b.WriteString("\n\n## 知识库检索片段\n")
+			for _, h := range ragHits {
+				b.WriteString("- [")
+				b.WriteString(h.Source)
+				b.WriteString("] ")
+				b.WriteString(truncateStr(h.Content, 800))
+				b.WriteString("\n")
+			}
+			sys += b.String()
+		}
+	}
+
 	msgs := []llm.Message{{Role: "system", Content: sys}}
 	for _, m := range req.Messages {
 		role := strings.ToLower(strings.TrimSpace(m.Role))
-		if role == "system" {
-			continue // 禁止用户覆盖 system
+		if role == "system" || role == "tool" {
+			continue
 		}
 		if role != "assistant" {
 			role = "user"
@@ -232,16 +284,72 @@ func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*Chat
 	if err != nil {
 		return nil, err
 	}
-	resp, err := cli.Chat(ctx, llm.ChatRequest{
-		Model:     pcfg.Model,
-		Messages:  msgs,
-		MaxTokens: cfg.MaxTokens,
-	})
-	if err != nil {
-		return nil, constants.ErrBadRequestWithMsg("AI 调用失败: " + err.Error())
+
+	tools := []llm.ToolDefinition(nil)
+	if enableTools {
+		tools = s.toolDefinitions(req.EnableWrite)
 	}
-	s.logUsage(userID, "chat", name, resp)
-	return &ChatResponse{Reply: resp.Content, Provider: name, Model: resp.Model, Usage: resp.Usage}, nil
+	tc := toolContext{ClusterID: req.ClusterID, ProjectID: req.ProjectID, Namespace: strings.TrimSpace(req.Namespace)}
+	var steps []toolStep
+	var last *llm.ChatResponse
+	usage := llm.Usage{}
+
+	const maxRounds = 6
+	for round := 0; round < maxRounds; round++ {
+		resp, err := cli.Chat(ctx, llm.ChatRequest{
+			Model:     pcfg.Model,
+			Messages:  msgs,
+			MaxTokens: cfg.MaxTokens,
+			Tools:     tools,
+		})
+		if err != nil {
+			return nil, constants.ErrBadRequestWithMsg("AI 调用失败: " + err.Error())
+		}
+		last = resp
+		usage.PromptTokens += resp.Usage.PromptTokens
+		usage.CompletionTokens += resp.Usage.CompletionTokens
+		usage.TotalTokens += resp.Usage.TotalTokens
+
+		if len(resp.ToolCalls) == 0 || !enableTools {
+			s.logUsage(userID, "chat", name, resp)
+			return &ChatResponse{
+				Reply:     resp.Content,
+				Provider:  name,
+				Model:     resp.Model,
+				Usage:     usage,
+				ToolSteps: steps,
+				RAGHits:   ragHits,
+			}, nil
+		}
+
+		msgs = append(msgs, llm.Message{
+			Role:      "assistant",
+			Content:   resp.Content,
+			ToolCalls: resp.ToolCalls,
+		})
+		for _, call := range resp.ToolCalls {
+			step := s.executeTool(ctx, userID, call.Function.Name, call.Function.Arguments, tc)
+			steps = append(steps, step)
+			msgs = append(msgs, llm.Message{
+				Role:       "tool",
+				Content:    step.Result,
+				ToolCallID: call.ID,
+				Name:       call.Function.Name,
+			})
+		}
+	}
+	if last == nil {
+		return nil, constants.ErrBadRequestWithMsg("AI 无响应")
+	}
+	s.logUsage(userID, "chat", name, last)
+	return &ChatResponse{
+		Reply:     last.Content,
+		Provider:  name,
+		Model:     last.Model,
+		Usage:     usage,
+		ToolSteps: steps,
+		RAGHits:   ragHits,
+	}, nil
 }
 
 type PodDiagnoseAIRequest struct {

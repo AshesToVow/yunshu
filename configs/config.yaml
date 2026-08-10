@@ -16,6 +16,7 @@ plugins:
     - dbmgmt
     - inspect
     - ai
+    - esmgmt
 
 # AI（字典 ai_* 优先覆盖）
 ai:

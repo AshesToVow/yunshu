@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"yunshu/internal/model"
 	"yunshu/internal/plugin"
 )
 
@@ -21,4 +22,8 @@ func (m *module) Manifest() plugin.Manifest {
 		APIPrefixes:      []string{"/api/v1/ai"},
 		DependsOn:        []string{"k8s"},
 	}
+}
+
+func (m *module) Models() []any {
+	return []any{&model.AiToolApproval{}}
 }

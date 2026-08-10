@@ -50,7 +50,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 	}
 
 	var system string
-	var msgs []map[string]string
+	var msgs []map[string]any
 	for _, m := range req.Messages {
 		role := strings.ToLower(strings.TrimSpace(m.Role))
 		switch role {
@@ -60,10 +60,40 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 			} else {
 				system += "\n\n" + m.Content
 			}
+		case "tool":
+			msgs = append(msgs, map[string]any{
+				"role": "user",
+				"content": []map[string]any{{
+					"type":        "tool_result",
+					"tool_use_id": m.ToolCallID,
+					"content":     m.Content,
+				}},
+			})
 		case "assistant":
-			msgs = append(msgs, map[string]string{"role": "assistant", "content": m.Content})
+			if len(m.ToolCalls) > 0 {
+				blocks := make([]map[string]any, 0, len(m.ToolCalls)+1)
+				if strings.TrimSpace(m.Content) != "" {
+					blocks = append(blocks, map[string]any{"type": "text", "text": m.Content})
+				}
+				for _, tc := range m.ToolCalls {
+					var input any
+					_ = json.Unmarshal([]byte(tc.Function.Arguments), &input)
+					if input == nil {
+						input = map[string]any{}
+					}
+					blocks = append(blocks, map[string]any{
+						"type":  "tool_use",
+						"id":    tc.ID,
+						"name":  tc.Function.Name,
+						"input": input,
+					})
+				}
+				msgs = append(msgs, map[string]any{"role": "assistant", "content": blocks})
+			} else {
+				msgs = append(msgs, map[string]any{"role": "assistant", "content": m.Content})
+			}
 		default:
-			msgs = append(msgs, map[string]string{"role": "user", "content": m.Content})
+			msgs = append(msgs, map[string]any{"role": "user", "content": m.Content})
 		}
 	}
 	if len(msgs) == 0 {
@@ -77,6 +107,17 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 	}
 	if system != "" {
 		body["system"] = system
+	}
+	if len(req.Tools) > 0 {
+		tools := make([]map[string]any, 0, len(req.Tools))
+		for _, t := range req.Tools {
+			tools = append(tools, map[string]any{
+				"name":         t.Function.Name,
+				"description":  t.Function.Description,
+				"input_schema": t.Function.Parameters,
+			})
+		}
+		body["tools"] = tools
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -105,14 +146,23 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		return nil, fmt.Errorf("解析 Anthropic 响应失败: %w", err)
 	}
 	var b strings.Builder
+	var toolCalls []ToolCall
 	for _, block := range parsed.Content {
-		if block.Type == "text" {
+		switch block.Type {
+		case "text":
 			b.WriteString(block.Text)
+		case "tool_use":
+			args, _ := json.Marshal(block.Input)
+			tc := ToolCall{ID: block.ID, Type: "function"}
+			tc.Function.Name = block.Name
+			tc.Function.Arguments = string(args)
+			toolCalls = append(toolCalls, tc)
 		}
 	}
 	return &ChatResponse{
-		Content: b.String(),
-		Model:   parsed.Model,
+		Content:   b.String(),
+		Model:     parsed.Model,
+		ToolCalls: toolCalls,
 		Usage: Usage{
 			PromptTokens:     parsed.Usage.InputTokens,
 			CompletionTokens: parsed.Usage.OutputTokens,
@@ -124,8 +174,11 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 type anthropicResp struct {
 	Model   string `json:"model"`
 	Content []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+		Type  string         `json:"type"`
+		Text  string         `json:"text"`
+		ID    string         `json:"id"`
+		Name  string         `json:"name"`
+		Input map[string]any `json:"input"`
 	} `json:"content"`
 	Usage struct {
 		InputTokens  int `json:"input_tokens"`

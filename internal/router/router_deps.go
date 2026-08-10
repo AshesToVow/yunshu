@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/service"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	esmgmtsvc "yunshu/internal/service/esmgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/gin-gonic/gin"
@@ -98,6 +99,8 @@ type RouteDeps struct {
 	inspectSvc         *inspectsvc.Service
 	inspectHandler     *handler.InspectHandler
 	aiHandler          *handler.AIHandler
+	esmgmtSvc          *esmgmtsvc.Service
+	esmgmtHandler      *handler.EsmgmtHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -114,6 +117,14 @@ func (d *RouteDeps) MysqlBackupService() *service.MysqlBackupService {
 		return nil
 	}
 	return d.mysqlBackupSvc
+}
+
+// EsmgmtService 供 esmgmt 插件调度器使用。
+func (d *RouteDeps) EsmgmtService() *esmgmtsvc.Service {
+	if d == nil {
+		return nil
+	}
+	return d.esmgmtSvc
 }
 
 // DbmgmtService 供 dbmgmt 插件后台任务使用。
@@ -273,6 +284,8 @@ func assembleRouteDeps(
 		inspectSvc:         svcs.Inspect,
 		inspectHandler:     handlers.Inspect,
 		aiHandler:          handlers.AI,
+		esmgmtSvc:          svcs.Esmgmt,
+		esmgmtHandler:      handlers.Esmgmt,
 	}
 	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil

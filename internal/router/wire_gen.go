@@ -163,7 +163,11 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v102 := k8s.NewK8sSearchService(v56, v25, v9, v20, v22, v23)
 	inspectService := provideInspectService(db, client, v54, v29, sender, appDisplayName)
 	aiConfig := provideAIConfig(app)
-	aiService := ai.NewService(db, aiConfig, v58, service, v52)
+	aiService := ai.NewService(db, aiConfig, v58, v61, v59, v70, v92, v91, service, v52)
+	esmgmtService, err := provideEsmgmtService(db, securityEncryptionKey, v91)
+	if err != nil {
+		return nil, err
+	}
 	routerRouteServices := &routeServices{
 		LoginLog:             v2,
 		OperationLog:         v4,
@@ -226,6 +230,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		AlertMaintenance:     v43,
 		Inspect:              inspectService,
 		AI:                   aiService,
+		Esmgmt:               esmgmtService,
 	}
 	systemHandler := provideSystemHandler(app)
 	pluginHandler := handler.NewPluginHandler(pluginsConfig)
@@ -283,6 +288,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	loggieHandler := handler.NewLoggieHandler(v98)
 	inspectHandler := handler.NewInspectHandler(inspectService)
 	aiHandler := handler.NewAIHandler(aiService)
+	esmgmtHandler := handler.NewEsmgmtHandler(esmgmtService)
 	routerRouteHandlers := &routeHandlers{
 		System:             systemHandler,
 		Plugin:             pluginHandler,
@@ -340,6 +346,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		Loggie:             loggieHandler,
 		Inspect:            inspectHandler,
 		AI:                 aiHandler,
+		Esmgmt:             esmgmtHandler,
 	}
 	routeDeps, err := provideRouteDeps(app, routerRouteRepositories, routerRouteServices, routerRouteHandlers)
 	if err != nil {
