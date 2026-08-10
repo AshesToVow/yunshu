@@ -1,25 +1,16 @@
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Card, Select, Space, Table, Tag, message } from "antd";
 import { useEffect, useState } from "react";
-import { getData, http, extractApiErrorMessage } from "../services/http";
-
-interface ApprovalItem {
-  id: number;
-  user_id: number;
-  tool_name: string;
-  args_json?: string;
-  cluster_id?: number;
-  namespace?: string;
-  resource?: string;
-  reason?: string;
-  status: string;
-  review_note?: string;
-  result_msg?: string;
-  created_at?: string;
-}
+import {
+  executeAIApproval,
+  listAIApprovals,
+  reviewAIApproval,
+  type AIApprovalItem,
+} from "../services/ai";
+import { extractApiErrorMessage } from "../services/http";
 
 export function AiApprovalsPage() {
-  const [list, setList] = useState<ApprovalItem[]>([]);
+  const [list, setList] = useState<AIApprovalItem[]>([]);
   const [total, setTotal] = useState(0);
   const [status, setStatus] = useState<string>("pending");
   const [loading, setLoading] = useState(false);
@@ -28,9 +19,7 @@ export function AiApprovalsPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await getData<{ list: ApprovalItem[]; total: number }>(
-        http.get("/ai/approvals", { params: { status: status || undefined, page, page_size: 10 } }),
-      );
+      const res = await listAIApprovals({ status: status || undefined, page, page_size: 10 });
       setList(res.list || []);
       setTotal(res.total || 0);
     } catch (e) {
@@ -46,7 +35,7 @@ export function AiApprovalsPage() {
 
   async function review(id: number, approve: boolean, execute?: boolean) {
     try {
-      await getData(http.post(`/ai/approvals/${id}/review`, { approve, execute: !!execute, note: approve ? "同意" : "驳回" }));
+      await reviewAIApproval(id, { approve, execute: !!execute, note: approve ? "同意" : "驳回" });
       message.success(approve ? "已批准" : "已驳回");
       void load();
     } catch (e) {
@@ -56,7 +45,7 @@ export function AiApprovalsPage() {
 
   async function execute(id: number) {
     try {
-      await getData(http.post(`/ai/approvals/${id}/execute`, {}));
+      await executeAIApproval(id);
       message.success("已执行");
       void load();
     } catch (e) {
@@ -117,7 +106,7 @@ export function AiApprovalsPage() {
           {
             title: "操作",
             width: 260,
-            render: (_: unknown, row: ApprovalItem) => (
+            render: (_: unknown, row: AIApprovalItem) => (
               <Space>
                 {row.status === "pending" ? (
                   <>

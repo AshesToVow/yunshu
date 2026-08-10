@@ -131,3 +131,35 @@ export function analyzeAlertExplainAI(payload: {
     http.post("/ai/alert/explain", payload, { timeout: 120000 }),
   );
 }
+
+export interface AIApprovalItem {
+  id: number;
+  user_id: number;
+  tool_name: string;
+  args_json?: string;
+  cluster_id?: number;
+  namespace?: string;
+  resource?: string;
+  reason?: string;
+  status: string;
+  review_note?: string;
+  result_msg?: string;
+  created_at?: string;
+}
+
+export function listAIApprovals(params?: { status?: string; page?: number; page_size?: number }) {
+  return getData<{ list: AIApprovalItem[]; total: number }>(
+    http.get("/ai/approvals", { params }),
+  );
+}
+
+export function reviewAIApproval(
+  id: number,
+  payload: { approve: boolean; execute?: boolean; note?: string },
+) {
+  return getData<AIApprovalItem>(http.post(`/ai/approvals/${id}/review`, payload));
+}
+
+export function executeAIApproval(id: number) {
+  return getData<AIApprovalItem>(http.post(`/ai/approvals/${id}/execute`, {}));
+}
