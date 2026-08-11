@@ -248,12 +248,13 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
               title: "启用",
               dataIndex: "enabled",
               width: 80,
-              render: (v: boolean, row: ClusterLogRule) => (
+              render: (v: boolean, row?: ClusterLogRule) => (
                 <Switch
                   size="small"
                   checked={v}
+                  disabled={!row}
                   onChange={(checked) =>
-                    projectId
+                    projectId && row
                       ? void updateClusterLogRule(projectId, row.id, { enabled: checked }).then(load)
                       : undefined
                   }
@@ -263,21 +264,24 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
             {
               title: "操作",
               width: 120,
-              render: (_: unknown, row: ClusterLogRule) => (
-                <Space size={0}>
-                  <Button type="link" size="small" onClick={() => openEdit(row)}>
-                    编辑
-                  </Button>
-                  <Popconfirm
-                    title="删除规则？"
-                    onConfirm={() => (projectId ? void deleteClusterLogRule(projectId, row.id).then(load) : undefined)}
-                  >
-                    <Button type="link" size="small" danger>
-                      删除
+              render: (_: unknown, row?: ClusterLogRule) =>
+                row ? (
+                  <Space size={0}>
+                    <Button type="link" size="small" onClick={() => openEdit(row)}>
+                      编辑
                     </Button>
-                  </Popconfirm>
-                </Space>
-              ),
+                    <Popconfirm
+                      title="删除规则？"
+                      onConfirm={() =>
+                        projectId ? void deleteClusterLogRule(projectId, row.id).then(load) : undefined
+                      }
+                    >
+                      <Button type="link" size="small" danger>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                ) : null,
             },
           ]}
         />
@@ -295,28 +299,30 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
             {
               title: "副本",
               width: 100,
-              render: (_: unknown, r: ClusterLogAgent) => `${r.ready_replicas ?? 0}/${r.desired_replicas ?? 0}`,
+              render: (_: unknown, r?: ClusterLogAgent) =>
+                `${r?.ready_replicas ?? 0}/${r?.desired_replicas ?? 0}`,
             },
             { title: "限流 QPS", dataIndex: "rate_limit_qps", width: 100, render: (v?: number) => v ?? "—" },
             { title: "错误", dataIndex: "last_error", ellipsis: true, render: (v: string) => v || "—" },
             {
               title: "操作",
               width: 90,
-              render: (_: unknown, r: ClusterLogAgent) => (
-                <Button
-                  type="link"
-                  size="small"
-                  onClick={() =>
-                    projectId
-                      ? void refreshClusterLogStatus(projectId, r.cluster_id).then(load).catch((e) => {
-                          message.error(extractApiErrorMessage(e, "刷新失败"));
-                        })
-                      : undefined
-                  }
-                >
-                  刷新
-                </Button>
-              ),
+              render: (_: unknown, r?: ClusterLogAgent) =>
+                r ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() =>
+                      projectId
+                        ? void refreshClusterLogStatus(projectId, r.cluster_id).then(load).catch((e) => {
+                            message.error(extractApiErrorMessage(e, "刷新失败"));
+                          })
+                        : undefined
+                    }
+                  >
+                    刷新
+                  </Button>
+                ) : null,
             },
           ]}
         />
