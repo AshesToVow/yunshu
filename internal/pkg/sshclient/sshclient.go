@@ -79,6 +79,14 @@ func Dial(ctx context.Context, cfg Config) (*Client, error) {
 	return &Client{cfg: cfg, client: ssh.NewClient(cc, chans, reqs)}, nil
 }
 
+// SSHClient 返回底层 *ssh.Client，供需要原生 client 的调用方使用。
+func (c *Client) SSHClient() *ssh.Client {
+	if c == nil {
+		return nil
+	}
+	return c.client
+}
+
 func buildAuthMethods(cfg Config) ([]ssh.AuthMethod, error) {
 	switch cfg.AuthType {
 	case "", AuthPassword:

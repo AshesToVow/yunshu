@@ -2,7 +2,6 @@ package promapi
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +10,8 @@ import (
 	neturl "net/url"
 	"strings"
 	"time"
+
+	"yunshu/internal/pkg/platformhttp"
 )
 
 // Client 调用 Prometheus HTTP API（/api/v1/query、/api/v1/query_range）。
@@ -27,11 +28,10 @@ func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
 	}
-	tr := http.DefaultTransport.(*http.Transport).Clone()
 	if c.SkipTLSVerify {
-		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+		return platformhttp.NewInsecureTLSClient(30*time.Second, "")
 	}
-	return &http.Client{Timeout: 30 * time.Second, Transport: tr}
+	return &http.Client{Timeout: 30 * time.Second}
 }
 
 func (c *Client) authHeader(req *http.Request) {

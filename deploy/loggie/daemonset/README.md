@@ -25,8 +25,11 @@ hostPath：
 
 ## 注意
 
-- 若集群开启命名空间白名单：平台下发 `yunshu-logging` 会跳过 NS 策略校验；业务资源仍受白名单约束
-- 部署时可传 `rate_limit_qps`（项目级采集限流，写入 Loggie rateLimit）
-- 宽采自动 `excludeFiles` 排除 kube-system 等系统命名空间
+- 索引：`yunshu-k8s-{clusterId}-p{projectId}-*`（按项目隔离，避免同集群互盖）
+- DaemonSet/ConfigMap/SA：`yunshu-loggie-p{projectId}`（同 NS `yunshu-logging` 可多项目并存）
+- 平台下发跳过命名空间白名单；部署时 Ensure 当日 Kafka Topic
+- 部署时可传 `rate_limit_qps`；规则变更后若已部署会自动重同步
+- 列表接口返回 `allocated_qps`（生效限流，前端勿本地重算）
+- 旧版 DaemonSet 名 `yunshu-loggie` 需手工删除；新名为 `yunshu-loggie-p{projectId}`
 - 不要在主机日志源里再配 `/var/log/pods`，避免双采
 - 主机进程日志仍用「主机日志源 + SSH Agent」

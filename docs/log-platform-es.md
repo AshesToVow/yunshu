@@ -6,10 +6,10 @@
    - `kafka.enabled=false`：bulk 直写 ES  
    - `kafka.enabled=true`：写入 Kafka，由 Yunshu 消费后 bulk 写入 ES  
 2. **Loggie 集群 DaemonSet**（与主机并列）：采 `/var/log/pods`，规则按 namespace/workload，**不绑 server_id**  
-3. **Elasticsearch**：主机索引 `yunshu-agent-{ip}-*`；集群索引 `yunshu-k8s-{clusterId}-*`  
+3. **Elasticsearch**：主机索引 `yunshu-agent-{ip}-*`；集群索引 `yunshu-k8s-{clusterId}-p{projectId}-*`（按项目隔离）
 4. **Yunshu**：项目管主机 Agent 与集群规则/下发；代理检索与保留策略  
 
-不依赖 Grafana / Loki。旧 K8s ClusterLogConfig 引导已移除，改由「服务与日志采集 → 集群采集」下发 DaemonSet（见 `deploy/loggie/daemonset/README.md`）。
+不依赖 Grafana / Loki。旧 K8s ClusterLogConfig 引导已移除，改由「服务与日志采集 → 集群采集」下发 DaemonSet（见 `deploy/loggie/daemonset/README.md`）。**同集群多项目**使用独立 DaemonSet 名与索引分片，互不覆盖。
 
 ## Kafka 中转（可选）
 
@@ -73,10 +73,13 @@ loggie:
 
 ## 集群采集限流与护栏
 
-- 项目级 QPS：`cluster_log_agents.rate_limit_qps`（部署时传入，默认 2000）。
-- **配额拆分**：规则 `rate_limit_qps>0` 固定占用；其余启用规则均分剩余配额（下限 50），适合高流量多规则项目。
-- 宽采路径用 `excludeFiles` 排除 `kube-system` 等系统 ns。
-- 下发 `yunshu-logging` DaemonSet 跳过命名空间白名单（`WithSkipNamespacePolicy`）。
+- DaemonSet / SA / ConfigMap：`yunshu-loggie-p{projectId}`（同集群多项目互不覆盖；旧名 `yunshu-loggie` 需手工清理）
+- 项目级 QPS：`cluster_log_agents.rate_limit_qps`（部署时传入，默认 2000）
+- **配额拆分**：规则 `rate_limit_qps>0` 固定占用；其余启用规则均分剩余配额（下限 50）
+- 列表接口返回 `allocated_qps`（生效限流；前端勿本地重算）
+- 宽采路径用 `excludeFiles` 排除 `kube-system` 等系统 ns；规则可覆盖 `exclude_namespaces`
+- 下发 `yunshu-logging` DaemonSet 跳过命名空间白名单（`WithSkipNamespacePolicy`）
+- 主机/集群 Loggie sink YAML 共用 `renderLoggieSinkYAML`；Kafka 开关对齐 `SinkViaKafka()`
 
 ## 检索
 
@@ -84,7 +87,7 @@ loggie:
 
 筛选：`collector_mode`（`host`|`k8s`）、`cluster_id`、`namespace`、`pod`、`container`，以及服务器/服务/日志源/级别/文件名/关键字。  
 主机新 pipeline 写入 `collector_mode=host`（旧文档字段缺失仍可命中）；集群为 `k8s`。  
-索引：主机 `yunshu-agent-*`；集群 `yunshu-k8s-{clusterId}-*`；未指定 mode 时两边一起查（仍按 `project_id` 过滤）。
+索引：主机 `yunshu-agent-*`；集群 `yunshu-k8s-{clusterId}-p{projectId}-*`；未指定 mode 时两边一起查（仍按 `project_id` 过滤）。
 
 ## 与 Loggie 手册对照
 

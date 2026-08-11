@@ -258,8 +258,12 @@ func resolveCleanupPatterns(p model.LogRetentionPolicy) []string {
 	raw := strings.TrimSpace(p.IndexPattern)
 	if raw == "" {
 		if p.ServerID > 0 {
-			// 服务器作用域仅主机索引
-			return []string{AgentIndexPatternByServerID(p.ServerID)}
+			// 旧 ID 索引 + 全量 agent（项目级 delete-by-query 按 server_id 过滤，覆盖 IP 日索引）
+			out := []string{AgentIndexPatternByServerID(p.ServerID)}
+			if p.ProjectID > 0 {
+				out = append(out, GlobalAgentIndexPattern())
+			}
+			return out
 		}
 		return []string{GlobalAgentIndexPattern(), GlobalK8sIndexPattern()}
 	}

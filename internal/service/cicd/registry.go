@@ -2,7 +2,6 @@ package cicd
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/pkg/platformhttp"
 
 	"gorm.io/gorm"
 )
@@ -322,14 +322,7 @@ func (s *Service) DeleteProjectRegistryBinding(ctx context.Context, projectID ui
 // --- HTTP helpers ---
 
 func registryHTTPClient(serverName string) *http.Client {
-	tlsCfg := &tls.Config{InsecureSkipVerify: true} // #nosec G402 — 内网仓库自签
-	if sn := strings.TrimSpace(serverName); sn != "" {
-		tlsCfg.ServerName = sn
-	}
-	return &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: tlsCfg},
-	}
+	return platformhttp.NewInsecureTLSClient(30*time.Second, serverName)
 }
 
 func (s *Service) registryDo(ctx context.Context, client *http.Client, r ResolvedRegistry, method, path string) (int, string, error) {

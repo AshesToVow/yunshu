@@ -19,8 +19,8 @@ func (m *module) Description() string { return "CMDB 服务器资产：主机、
 func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		MenuPathPrefixes: []string{"/project-servers", "/server-console"},
-		APIPrefixes:      []string{"/api/v1/servers", "/api/v1/cloud-accounts", "/api/v1/server-groups"},
-		DependsOn:        []string{"project"},
+		APIPrefixes: []string{"/api/v1/cloud-accounts", "/api/v1/server-groups"},
+		DependsOn:   []string{"project"},
 	}
 }
 

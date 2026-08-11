@@ -157,7 +157,7 @@ redis:
 #   use_tls: true
 
 auth:
-  jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"  # 生产环境务必修改，至少32字节
+  jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"  # 生产环境务必修改，至少32字节；勿使用仓库默认值上线
   access_token_ttl_minutes: 120
   email_code_ttl_seconds: 600
   email_code_cooldown_seconds: 60
@@ -168,11 +168,12 @@ casbin:
   auto_load_interval_seconds: 30
 
 swagger:
-  enabled: true
+  enabled: false
   path: /swagger
 
 security:
   # 32 bytes key for encrypting sensitive data (base64 recommended)
+  # 生产环境必须替换；占位值仅用于本地开发
   encryption_key: "change-me-32bytes-base64"
 
 # 日志检索（Loggie 采集 → Elasticsearch，Yunshu 代理查询）

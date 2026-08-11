@@ -21,20 +21,35 @@ func kafkaClient(cfg config.KafkaConfig) (*kafka.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	transport := &kafka.Transport{}
-	if dialer.SASLMechanism != nil {
-		transport.SASL = dialer.SASLMechanism
-	}
 	return &kafka.Client{
 		Addr:      kafka.TCP(cfg.Brokers...),
-		Transport: transport,
+		Timeout:   10 * time.Second,
+		Transport: kafkaTransport(dialer),
 	}, nil
+}
+
+func kafkaTransport(dialer *kafka.Dialer) *kafka.Transport {
+	t := &kafka.Transport{}
+	if dialer != nil && dialer.SASLMechanism != nil {
+		t.SASL = dialer.SASLMechanism
+	}
+	return t
 }
 
 // EnsureAgentKafkaTopic 确保该 Agent 当日 Topic 存在（幂等）：yunshu-agent-{ip}-YYYY.MM.DD
 func EnsureAgentKafkaTopic(ctx context.Context, cfg config.KafkaConfig, serverHost string) (string, error) {
 	cfg = cfg.Normalized()
 	topic := AgentKafkaTopicForDay(serverHost, cfg.TopicPrefix, time.Now().UTC())
+	if err := ensureKafkaTopics(ctx, cfg, []string{topic}); err != nil {
+		return topic, err
+	}
+	return topic, nil
+}
+
+// EnsureK8sKafkaTopic 确保集群采集当日 Topic 存在（含项目隔离）。
+func EnsureK8sKafkaTopic(ctx context.Context, cfg config.KafkaConfig, clusterID, projectID uint) (string, error) {
+	cfg = cfg.Normalized()
+	topic := K8sKafkaTopicForDay(clusterID, projectID, defaultK8sIndexPrefix, time.Now().UTC())
 	if err := ensureKafkaTopics(ctx, cfg, []string{topic}); err != nil {
 		return topic, err
 	}
@@ -85,15 +100,15 @@ func ensureKafkaTopics(ctx context.Context, cfg config.KafkaConfig, topics []str
 	return nil
 }
 
-// DeleteAgentKafkaTopic 删除指定 Agent Topic（需匹配平台命名）。
+// DeleteAgentKafkaTopic 删除指定 Agent 或 K8s 平台 Topic。
 func DeleteAgentKafkaTopic(ctx context.Context, cfg config.KafkaConfig, topic string) error {
 	cfg = cfg.Normalized()
 	topic = strings.TrimSpace(topic)
 	if topic == "" {
 		return fmt.Errorf("topic required")
 	}
-	if !IsAgentKafkaTopic(topic, cfg.TopicPrefix) {
-		return fmt.Errorf("拒绝删除非 Agent Topic: %s", topic)
+	if !IsAgentKafkaTopic(topic, cfg.TopicPrefix) && !IsK8sKafkaTopic(topic, defaultK8sIndexPrefix) {
+		return fmt.Errorf("拒绝删除非平台 Topic: %s", topic)
 	}
 	client, err := kafkaClient(cfg)
 	if err != nil {

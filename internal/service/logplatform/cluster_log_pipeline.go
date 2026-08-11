@@ -35,7 +35,7 @@ func BuildClusterPipelinesYAML(
 	body.WriteString("# rate_limit: fixed rules keep rate_limit_qps; others share remaining project budget equally\n")
 	body.WriteString("pipelines:\n")
 
-	sink := renderClusterSinkBlock(clusterID, esCfg, kafkaCfg)
+	sink := renderClusterSinkBlock(projectID, clusterID, esCfg, kafkaCfg)
 	n := 0
 	for _, rule := range rules {
 		if !rule.Enabled {
@@ -71,7 +71,7 @@ func BuildClusterPipelinesYAML(
 }
 
 // allocateRuleRateLimits 将项目 QPS 配额拆到启用规则：
-// - rate_limit_qps>0：固定占用
+// - rate_limit_qps>0：固定占用（总和超预算时按比例压缩）
 // - =0：均分剩余配额（至少 minInheritedRateLimitQPS）
 func allocateRuleRateLimits(rules []model.ClusterLogRule, projectQPS int) map[uint]int {
 	if projectQPS <= 0 {
@@ -93,6 +93,19 @@ func allocateRuleRateLimits(rules []model.ClusterLogRule, projectQPS int) map[ui
 			continue
 		}
 		inheritIDs = append(inheritIDs, rule.ID)
+	}
+	if fixedSum > projectQPS && fixedSum > 0 {
+		for id, q := range out {
+			nq := q * projectQPS / fixedSum
+			if nq < 1 {
+				nq = 1
+			}
+			out[id] = nq
+		}
+		fixedSum = 0
+		for _, q := range out {
+			fixedSum += q
+		}
 	}
 	if len(inheritIDs) == 0 {
 		return out
@@ -178,7 +191,7 @@ func renderClusterPipelineEntry(
         name: %s
         paths:
 %s%s        addonMeta: true
-        readFromTail: false
+        readFromTail: true
         fields:
           project_id: %q
           cluster_id: %q
@@ -330,76 +343,6 @@ func dedupeStrings(in []string) []string {
 		out = append(out, s)
 	}
 	return out
-}
-
-func renderClusterSinkBlock(clusterID uint, esCfg config.ElasticsearchConfig, kafkaCfg config.KafkaConfig) string {
-	esCfg = esCfg.Normalized()
-	kafkaCfg = kafkaCfg.Normalized()
-	if kafkaCfg.Enabled {
-		var brokers strings.Builder
-		for _, b := range kafkaCfg.Brokers {
-			b = strings.TrimSpace(b)
-			if b == "" {
-				continue
-			}
-			brokers.WriteString("        - ")
-			brokers.WriteString(quoteYAML(b))
-			brokers.WriteByte('\n')
-		}
-		if brokers.Len() == 0 {
-			brokers.WriteString("        - \"127.0.0.1:9092\"\n")
-		}
-		sasl := ""
-		if u := strings.TrimSpace(kafkaCfg.Username); u != "" {
-			mech := kafkaCfg.SASLMechanism
-			if mech == "" || mech == "none" {
-				mech = "plain"
-			}
-			sasl = fmt.Sprintf(`
-      sasl:
-        type: %s
-        userName: %s
-        password: %s`, quoteYAML(mech), quoteYAML(u), quoteYAML(kafkaCfg.Password))
-		}
-		topic := K8sKafkaTopicTemplate(clusterID, defaultK8sIndexPrefix)
-		return fmt.Sprintf(`    sink:
-      type: kafka
-      brokers:
-%s      topic: %s
-      codec:
-        type: json%s
-`, brokers.String(), quoteYAML(topic), sasl)
-	}
-
-	indexSink := K8sIndexSink(clusterID)
-	var hostsLines strings.Builder
-	for _, h := range esCfg.Addresses {
-		h = strings.TrimSpace(h)
-		if h == "" {
-			continue
-		}
-		hostsLines.WriteString("        - ")
-		hostsLines.WriteString(quoteYAML(h))
-		hostsLines.WriteByte('\n')
-	}
-	if hostsLines.Len() == 0 {
-		hostsLines.WriteString("        - \"http://127.0.0.1:9200\"\n")
-	}
-	sinkAuth := ""
-	if u := strings.TrimSpace(esCfg.Username); u != "" {
-		sinkAuth += fmt.Sprintf("\n      username: %s", quoteYAML(u))
-	}
-	if p := strings.TrimSpace(esCfg.Password); p != "" {
-		sinkAuth += fmt.Sprintf("\n      password: %s", quoteYAML(p))
-	}
-	return fmt.Sprintf(`    sink:
-      type: elasticsearch
-      hosts:
-%s      index: %s
-      codec:
-        type: json
-        beatsFormat: true%s
-`, hostsLines.String(), quoteYAML(indexSink), sinkAuth)
 }
 
 // RenderClusterSystemConfigYAML DaemonSet 内 Loggie 系统配置。

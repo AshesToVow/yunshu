@@ -16,7 +16,7 @@ type ClusterLogManifestInput struct {
 	PipelinesYAML string
 }
 
-// RenderClusterLogManifest 生成 Namespace + SA + ConfigMap + DaemonSet YAML。
+// RenderClusterLogManifest 生成 Namespace + SA + ConfigMap + DaemonSet YAML（按项目隔离资源名）。
 func RenderClusterLogManifest(in ClusterLogManifestInput) string {
 	ns := strings.TrimSpace(in.Namespace)
 	if ns == "" {
@@ -26,12 +26,14 @@ func RenderClusterLogManifest(in ClusterLogManifestInput) string {
 	if image == "" {
 		image = "ghcr.io/loggie-io/loggie:v1.7.1"
 	}
+	app := ClusterLoggieAppName(in.ProjectID)
+	cm := ClusterLoggieConfigMapName(in.ProjectID)
+	dataPath := fmt.Sprintf("/var/lib/%s", app)
 	system := indentYAMLBlock(in.SystemYAML, 4)
 	pipelines := indentYAMLBlock(in.PipelinesYAML, 4)
-	labels := fmt.Sprintf("app: yunshu-loggie\n    yunshu.io/project-id: %q\n    yunshu.io/cluster-id: %q",
-		strconv.FormatUint(uint64(in.ProjectID), 10),
-		strconv.FormatUint(uint64(in.ClusterID), 10),
-	)
+	pid := strconv.FormatUint(uint64(in.ProjectID), 10)
+	cid := strconv.FormatUint(uint64(in.ClusterID), 10)
+	labels := fmt.Sprintf("app: %s\n    yunshu.io/project-id: %q\n    yunshu.io/cluster-id: %q", app, pid, cid)
 
 	return fmt.Sprintf(`apiVersion: v1
 kind: Namespace
@@ -43,7 +45,7 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: yunshu-loggie
+  name: %s
   namespace: %s
   labels:
     %s
@@ -51,7 +53,7 @@ metadata:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: yunshu-loggie-config
+  name: %s
   namespace: %s
   labels:
     %s
@@ -64,24 +66,24 @@ data:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: yunshu-loggie
+  name: %s
   namespace: %s
   labels:
     %s
 spec:
   selector:
     matchLabels:
-      app: yunshu-loggie
+      app: %s
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: yunshu-loggie
+        app: %s
         yunshu.io/project-id: %q
         yunshu.io/cluster-id: %q
     spec:
-      serviceAccountName: yunshu-loggie
+      serviceAccountName: %s
       tolerations:
         - operator: Exists
       containers:
@@ -117,7 +119,7 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: yunshu-loggie-config
+            name: %s
         - name: varlogpods
           hostPath:
             path: /var/log/pods
@@ -128,16 +130,19 @@ spec:
             type: DirectoryOrCreate
         - name: data
           hostPath:
-            path: /var/lib/yunshu-loggie
+            path: %s
             type: DirectoryOrCreate
 `,
 		ns, labels,
-		ns, labels,
-		ns, labels, system, pipelines,
-		ns, labels,
-		strconv.FormatUint(uint64(in.ProjectID), 10),
-		strconv.FormatUint(uint64(in.ClusterID), 10),
+		app, ns, labels,
+		cm, ns, labels, system, pipelines,
+		app, ns, labels,
+		app,
+		app, pid, cid,
+		app,
 		image,
+		cm,
+		dataPath,
 	)
 }
 

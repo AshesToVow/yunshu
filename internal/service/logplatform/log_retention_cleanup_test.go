@@ -51,9 +51,18 @@ func TestResolveCleanupPatternsDefaultIncludesK8s(t *testing.T) {
 
 func TestResolveCleanupPatternsServerScoped(t *testing.T) {
 	t.Parallel()
-	got := resolveCleanupPatterns(model.LogRetentionPolicy{ServerID: 7})
-	if len(got) != 1 || got[0] != AgentIndexPatternByServerID(7) {
-		t.Fatalf("server scope should only target agent index, got %v", got)
+	got := resolveCleanupPatterns(model.LogRetentionPolicy{ProjectID: 1, ServerID: 7})
+	hasID, hasGlobal := false, false
+	for _, p := range got {
+		if p == AgentIndexPatternByServerID(7) {
+			hasID = true
+		}
+		if p == GlobalAgentIndexPattern() {
+			hasGlobal = true
+		}
+	}
+	if !hasID || !hasGlobal {
+		t.Fatalf("server+project scope should cover id pattern + global agent, got %v", got)
 	}
 }
 

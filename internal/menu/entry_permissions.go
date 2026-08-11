@@ -105,6 +105,13 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/cicd/registries":      {"/api/v1/registries", "GET"},
 		"/cicd/image-browser":   {"/api/v1/registries", "GET"},
 
+		"/ai/assistant": {"/api/v1/ai/chat", "POST"},
+		"/ai/approvals": {"/api/v1/ai/approvals", "GET"},
+
+		"/esmgmt/connections": {"/api/v1/esmgmt/connections", "GET"},
+		"/esmgmt/overview":    {"/api/v1/esmgmt/cluster/health", "GET"},
+		"/esmgmt/console":     {"/api/v1/esmgmt/proxy", "POST"},
+
 		"/crds": {"/api/v1/crds", "GET"},
 		"/crs":  {"/api/v1/crs", "GET"},
 	}

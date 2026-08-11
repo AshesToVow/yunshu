@@ -43,6 +43,9 @@ func ResolveAPIResourcePlugin(resource string) string {
 	if pluginName := resolveInspectAPIResource(r); pluginName != "" {
 		return pluginName
 	}
+	if pluginName := resolveCmdbAPIResource(r); pluginName != "" {
+		return pluginName
+	}
 	for _, m := range plugin.All() {
 		mf := plugin.ResolveManifest(m)
 		for _, prefix := range mf.APIPrefixes {
@@ -168,6 +171,19 @@ func resolveInspectAPIResource(resource string) string {
 	return ""
 }
 
+func resolveCmdbAPIResource(resource string) string {
+	if strings.Contains(resource, "/cloud-accounts") || strings.Contains(resource, "/server-groups") {
+		return "cmdb"
+	}
+	if strings.Contains(resource, "/projects/") &&
+		(strings.Contains(resource, "/servers") ||
+			strings.Contains(resource, "/server-access") ||
+			strings.Contains(resource, "/ssh")) {
+		return "cmdb"
+	}
+	return ""
+}
+
 func normalizeUIPath(path string) string {
 	p := strings.TrimSpace(strings.ToLower(path))
 	if p == "" {
@@ -190,6 +206,10 @@ func pathMatchesPrefix(path, prefix string) bool {
 	}
 	if prefix == "/" {
 		return path == "/"
+	}
+	// "/alert-" 匹配 "/alert-channels"（连字符前缀，非目录形式）
+	if strings.HasSuffix(prefix, "-") {
+		return strings.HasPrefix(path, prefix)
 	}
 	return strings.HasPrefix(path, prefix+"/")
 }

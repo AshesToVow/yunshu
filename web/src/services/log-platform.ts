@@ -365,6 +365,7 @@ export interface ClusterLogRule {
   exclude_namespaces?: string;
   parse_profile?: string;
   rate_limit_qps?: number;
+  allocated_qps?: number;
   enabled: boolean;
   remark?: string;
 }
@@ -425,6 +426,12 @@ export function deployClusterLog(
   payload: { cluster_id: number; namespace?: string; rate_limit_qps?: number },
 ) {
   return getData<ClusterLogAgent>(http.post(`/projects/${projectId}/cluster-log/deploy`, payload));
+}
+
+export function previewClusterLogPipelines(projectId: number, clusterId: number) {
+  return getData<{ pipelines_yml: string }>(
+    http.get(`/projects/${projectId}/cluster-log/pipelines/preview`, { params: { cluster_id: clusterId } }),
+  );
 }
 
 export function refreshClusterLogStatus(projectId: number, clusterId: number) {

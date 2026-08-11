@@ -9,6 +9,7 @@ import {
   getProjects,
   listClusterLogAgents,
   listClusterLogRules,
+  previewClusterLogPipelines,
   refreshClusterLogStatus,
   updateClusterLogRule,
   type ClusterLogAgent,
@@ -35,38 +36,6 @@ function splitCSV(v?: string): string[] {
     .filter(Boolean);
 }
 
-const MIN_INHERITED_QPS = 50;
-
-/** 与后端 allocateRuleRateLimits 对齐：固定占用 + 均分剩余。 */
-function allocateRuleQPS(rules: ClusterLogRule[], projectQps: number): Map<number, number> {
-  const budget = projectQps > 0 ? projectQps : 2000;
-  const out = new Map<number, number>();
-  const inherit: number[] = [];
-  let fixedSum = 0;
-  for (const r of rules) {
-    if (!r.enabled) continue;
-    const q = r.rate_limit_qps ?? 0;
-    if (q > 0) {
-      out.set(r.id, q);
-      fixedSum += q;
-    } else {
-      inherit.push(r.id);
-    }
-  }
-  if (inherit.length === 0) return out;
-  let remain = budget - fixedSum;
-  if (remain < 0) remain = 0;
-  const base = Math.floor(remain / inherit.length);
-  let extra = remain % inherit.length;
-  for (const id of inherit) {
-    let q = base + (extra > 0 ? 1 : 0);
-    if (extra > 0) extra -= 1;
-    if (q < MIN_INHERITED_QPS) q = MIN_INHERITED_QPS;
-    out.set(id, q);
-  }
-  return out;
-}
-
 /** 集群采集：规则 + DaemonSet 下发（与主机 Loggie 并列）。 */
 export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -77,6 +46,7 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
   const [agents, setAgents] = useState<ClusterLogAgent[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<ClusterLogRule | null>(null);
   const [rateLimitQps, setRateLimitQps] = useState<number>(2000);
   const [form] = Form.useForm();
 
@@ -122,25 +92,75 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
     void load();
   }, [projectId, clusterId]);
 
-  async function onCreate() {
+  function openCreate() {
+    setEditing(null);
+    form.resetFields();
+    form.setFieldsValue({ parse_profile: "cri", enabled: true, rate_limit_qps: 0 });
+    setOpen(true);
+  }
+
+  function openEdit(row: ClusterLogRule) {
+    setEditing(row);
+    form.setFieldsValue({
+      name: row.name,
+      match_namespaces: parseJSONList(row.match_namespaces),
+      match_workloads: parseJSONList(row.match_workloads),
+      exclude_namespaces: parseJSONList(row.exclude_namespaces),
+      parse_profile: row.parse_profile || "cri",
+      rate_limit_qps: row.rate_limit_qps || 0,
+      enabled: row.enabled,
+      remark: row.remark,
+    });
+    setOpen(true);
+  }
+
+  async function onSubmitRule() {
     if (!projectId || !clusterId) return;
     const values = await form.validateFields();
+    const payload = {
+      name: values.name as string,
+      match_namespaces: splitCSV(values.match_namespaces),
+      match_workloads: splitCSV(values.match_workloads),
+      exclude_namespaces: splitCSV(values.exclude_namespaces),
+      parse_profile: (values.parse_profile as string) || "cri",
+      rate_limit_qps: Number(values.rate_limit_qps) || 0,
+      enabled: Boolean(values.enabled ?? true),
+      remark: (values.remark as string) || "",
+    };
     try {
-      await createClusterLogRule(projectId, {
-        cluster_id: clusterId,
-        name: values.name,
-        match_namespaces: splitCSV(values.match_namespaces),
-        match_workloads: splitCSV(values.match_workloads),
-        parse_profile: values.parse_profile || "cri",
-        rate_limit_qps: values.rate_limit_qps || undefined,
-        enabled: values.enabled ?? true,
-        remark: values.remark,
-      });
-      message.success("规则已创建");
+      if (editing) {
+        await updateClusterLogRule(projectId, editing.id, payload);
+        message.success("规则已更新");
+      } else {
+        await createClusterLogRule(projectId, {
+          cluster_id: clusterId,
+          ...payload,
+        });
+        message.success("规则已创建");
+      }
       setOpen(false);
+      setEditing(null);
       void load();
     } catch (e) {
-      message.error(extractApiErrorMessage(e, "创建失败"));
+      message.error(extractApiErrorMessage(e, editing ? "更新失败" : "创建失败"));
+    }
+  }
+
+  async function onPreview() {
+    if (!projectId || !clusterId) return;
+    try {
+      const res = await previewClusterLogPipelines(projectId, clusterId);
+      Modal.info({
+        title: "pipelines.yml 预览",
+        width: 800,
+        content: (
+          <pre style={{ maxHeight: 480, overflow: "auto", fontSize: 12, whiteSpace: "pre-wrap" }}>
+            {res?.pipelines_yml || ""}
+          </pre>
+        ),
+      });
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "预览失败"));
     }
   }
 
@@ -153,7 +173,7 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
         rate_limit_qps: rateLimitQps,
       });
       message.success(
-        `已下发 DaemonSet（ready ${agent.ready_replicas}/${agent.desired_replicas}，QPS ${agent.rate_limit_qps ?? rateLimitQps}）`,
+        `已下发 DaemonSet yunshu-loggie-p${projectId}（ready ${agent.ready_replicas}/${agent.desired_replicas}，QPS ${agent.rate_limit_qps ?? rateLimitQps}）。若集群仍有旧名 yunshu-loggie，可手工删除。`,
       );
       void load();
     } catch (e) {
@@ -185,18 +205,13 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
         <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
           刷新
         </Button>
+        <Button disabled={!clusterId || !projectId} onClick={() => void onPreview()}>
+          预览 Pipeline
+        </Button>
         <Button type="primary" icon={<CloudUploadOutlined />} disabled={!clusterId || !projectId} onClick={() => void onDeploy()}>
           部署/同步 DaemonSet
         </Button>
-        <Button
-          icon={<PlusOutlined />}
-          disabled={!clusterId || !projectId}
-          onClick={() => {
-            form.resetFields();
-            form.setFieldsValue({ parse_profile: "cri", enabled: true, rate_limit_qps: 0 });
-            setOpen(true);
-          }}
-        >
+        <Button icon={<PlusOutlined />} disabled={!clusterId || !projectId} onClick={openCreate}>
           新建规则
         </Button>
       </Space>
@@ -214,6 +229,7 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
             { title: "ID", dataIndex: "id", width: 70 },
             { title: "名称", dataIndex: "name" },
             { title: "Namespaces", dataIndex: "match_namespaces", render: parseJSONList, ellipsis: true },
+            { title: "排除 ns", dataIndex: "exclude_namespaces", render: parseJSONList, ellipsis: true, width: 160 },
             { title: "Workloads", dataIndex: "match_workloads", render: parseJSONList, ellipsis: true },
             { title: "解析", dataIndex: "parse_profile", width: 90 },
             {
@@ -224,12 +240,9 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
             },
             {
               title: "生效 QPS",
+              dataIndex: "allocated_qps",
               width: 90,
-              render: (_: unknown, row: ClusterLogRule) => {
-                const alloc = allocateRuleQPS(rules, rateLimitQps);
-                const v = alloc.get(row.id);
-                return row.enabled ? (v ?? "—") : "—";
-              },
+              render: (v?: number, row?: ClusterLogRule) => (row?.enabled ? (v ?? "—") : "—"),
             },
             {
               title: "启用",
@@ -249,16 +262,21 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
             },
             {
               title: "操作",
-              width: 80,
+              width: 120,
               render: (_: unknown, row: ClusterLogRule) => (
-                <Popconfirm
-                  title="删除规则？"
-                  onConfirm={() => (projectId ? void deleteClusterLogRule(projectId, row.id).then(load) : undefined)}
-                >
-                  <Button type="link" size="small" danger>
-                    删除
+                <Space size={0}>
+                  <Button type="link" size="small" onClick={() => openEdit(row)}>
+                    编辑
                   </Button>
-                </Popconfirm>
+                  <Popconfirm
+                    title="删除规则？"
+                    onConfirm={() => (projectId ? void deleteClusterLogRule(projectId, row.id).then(load) : undefined)}
+                  >
+                    <Button type="link" size="small" danger>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
               ),
             },
           ]}
@@ -303,7 +321,16 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
           ]}
         />
       </Card>
-      <Modal title="新建集群采集规则" open={open} onCancel={() => setOpen(false)} onOk={() => void onCreate()} destroyOnClose>
+      <Modal
+        title={editing ? "编辑集群采集规则" : "新建集群采集规则"}
+        open={open}
+        onCancel={() => {
+          setOpen(false);
+          setEditing(null);
+        }}
+        onOk={() => void onSubmitRule()}
+        destroyOnClose
+      >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="规则名" rules={[{ required: true }]}>
             <Input />
@@ -313,6 +340,13 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
           </Form.Item>
           <Form.Item name="match_workloads" label="Workload 名前缀（逗号分隔，可选）">
             <Input placeholder="my-app" />
+          </Form.Item>
+          <Form.Item
+            name="exclude_namespaces"
+            label="排除 Namespaces"
+            extra="空=默认排除 kube-system / kube-public / kube-node-lease / yunshu-logging（仅新建时回填默认）"
+          >
+            <Input placeholder="kube-system, yunshu-logging" />
           </Form.Item>
           <Form.Item
             name="rate_limit_qps"

@@ -402,8 +402,8 @@ func resolveHostForIndex(fields map[string]any, topic, topicPrefix string, serve
 }
 
 func resolveIndexName(host string, serverID uint, topic, topicPrefix string, ts time.Time) string {
-	if cid, ok := ParseClusterIDFromK8sKafkaTopic(topic, defaultK8sIndexPrefix); ok {
-		return K8sIndexForDay(cid, ts)
+	if cid, pid, ok := ParseK8sKafkaTopicMeta(topic, defaultK8sIndexPrefix); ok {
+		return K8sIndexForDay(cid, pid, ts)
 	}
 	host = strings.TrimSpace(host)
 	if host != "" && host != "unknown" && !strings.HasPrefix(host, "server-") {
@@ -705,14 +705,10 @@ func sumLag(parts []KafkaPartitionLag) int64 {
 }
 
 func fetchGroupOffsets(ctx context.Context, dialer *kafka.Dialer, cfg config.KafkaConfig, topic string, base []KafkaPartitionLag) ([]KafkaPartitionLag, error) {
-	transport := &kafka.Transport{}
-	if dialer != nil && dialer.SASLMechanism != nil {
-		transport.SASL = dialer.SASLMechanism
-	}
-	client := &kafka.Client{
-		Addr:      kafka.TCP(cfg.Brokers...),
-		Timeout:   10 * time.Second,
-		Transport: transport,
+	_ = dialer
+	client, err := kafkaClient(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	partIDs := make([]int, 0, len(base))

@@ -157,18 +157,63 @@ func (s *redisStateStore) IsDuplicate(ctx context.Context, fingerprint string) (
 }
 
 func (s *redisStateStore) CleanupExpiredStates(ctx context.Context, ttl time.Duration) (int64, error) {
-	_ = ctx
-	_ = ttl
-	return 0, nil
+	if !s.redisOK() {
+		return 0, nil
+	}
+	_ = ttl // 指纹键本身带 Expire；此处清理无 TTL 的残留键
+	var deleted int64
+	for _, pattern := range []string{
+		"alert:fingerprint:*",
+		"alert:resolved:sent:*",
+		"alert:firing_delivered:*",
+		"alert:current:*",
+	} {
+		n, err := s.scanDeleteNoTTL(ctx, pattern)
+		if err != nil {
+			return deleted, err
+		}
+		deleted += n
+	}
+	return deleted, nil
+}
+
+func (s *redisStateStore) scanDeleteNoTTL(ctx context.Context, pattern string) (int64, error) {
+	var deleted int64
+	var cursor uint64
+	for {
+		keys, next, err := s.redis.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return deleted, bizerrors.Pass(ctx, "alert.state", "CleanupExpiredStates", err)
+		}
+		for _, key := range keys {
+			t, err := s.redis.TTL(ctx, key).Result()
+			if err != nil {
+				continue
+			}
+			// 已设 TTL 的交给 Redis 过期；仅删无 TTL 的残留
+			if t >= 0 {
+				continue
+			}
+			if n, err := s.redis.Del(ctx, key).Result(); err == nil {
+				deleted += n
+			}
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	return deleted, nil
 }
 
 func (s *redisStateStore) MarkResolvedNotificationSent(ctx context.Context, fingerprint string) (bool, error) {
 	if !s.redisOK() || strings.TrimSpace(fingerprint) == "" {
-		return true, nil
+		// Redis 不可用：返回 false 允许调用方重试发送，避免「当已发送」导致漏通知
+		return false, nil
 	}
 	ok, err := s.redis.SetNX(ctx, resolvedSentRedisKey(fingerprint), "1", s.dedupTTL).Result()
 	if err != nil {
-		return true, bizerrors.Pass(ctx, "alert.state", "MarkResolvedNotificationSent", err)
+		return false, bizerrors.Pass(ctx, "alert.state", "MarkResolvedNotificationSent", err)
 	}
 	return ok, nil
 }

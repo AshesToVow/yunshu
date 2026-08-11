@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/platformhttp"
 
 	"gorm.io/gorm"
 )
@@ -146,16 +146,7 @@ func harborBaseURL(raw string) string {
 }
 
 func (s *K8sHelmService) harborHTTPClient(serverName string) *http.Client {
-	tlsCfg := &tls.Config{InsecureSkipVerify: true} // #nosec G402 — 内网 Harbor 自签证书
-	if serverName = strings.TrimSpace(serverName); serverName != "" {
-		tlsCfg.ServerName = serverName
-	}
-	return &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: tlsCfg,
-		},
-	}
+	return platformhttp.NewInsecureTLSClient(30*time.Second, serverName)
 }
 
 func (s *K8sHelmService) harborAuthHeader(cfg config.HarborConfig) string {

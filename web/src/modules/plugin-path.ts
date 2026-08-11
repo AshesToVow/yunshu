@@ -102,6 +102,9 @@ export function resolvePathPlugin(path: string): PluginName | null {
   for (const rule of pathRules()) {
     if (rule.prefixes.some((p) => {
       const prefix = normalizePath(p);
+      if (prefix.endsWith("-")) {
+        return normalized === prefix || normalized.startsWith(prefix);
+      }
       return normalized === prefix || normalized.startsWith(`${prefix}/`);
     })) {
       return rule.plugin;

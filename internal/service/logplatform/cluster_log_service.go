@@ -72,7 +72,7 @@ type ClusterLogRuleUpsert struct {
 	ParseProfile      string   `json:"parse_profile"`
 	RateLimitQPS      *int     `json:"rate_limit_qps"`
 	Enabled           *bool    `json:"enabled"`
-	Remark            string   `json:"remark"`
+	Remark            *string  `json:"remark"`
 }
 
 func (s *ClusterLogService) ensureProject(ctx context.Context, projectID uint) error {
@@ -97,7 +97,50 @@ func encodeJSONStrings(list []string) string {
 	return string(b)
 }
 
-func (s *ClusterLogService) ListRules(ctx context.Context, projectID, clusterID uint) ([]model.ClusterLogRule, error) {
+func (s *ClusterLogService) ListRules(ctx context.Context, projectID, clusterID uint) ([]ClusterLogRuleItem, error) {
+	list, err := s.listRuleModels(ctx, projectID, clusterID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ClusterLogRuleItem, 0, len(list))
+	alloc := map[uint]int{}
+	if clusterID > 0 {
+		rateQPS := s.agentRateLimitQPS(ctx, projectID, clusterID)
+		alloc = allocateRuleRateLimits(list, rateQPS)
+	} else {
+		byCluster := map[uint][]model.ClusterLogRule{}
+		for _, row := range list {
+			byCluster[row.ClusterID] = append(byCluster[row.ClusterID], row)
+		}
+		for cid, rules := range byCluster {
+			for id, qps := range allocateRuleRateLimits(rules, s.agentRateLimitQPS(ctx, projectID, cid)) {
+				alloc[id] = qps
+			}
+		}
+	}
+	for _, row := range list {
+		item := ClusterLogRuleItem{ClusterLogRule: row, AllocatedQPS: alloc[row.ID]}
+		if !row.Enabled {
+			item.AllocatedQPS = 0
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (s *ClusterLogService) agentRateLimitQPS(ctx context.Context, projectID, clusterID uint) int {
+	rateQPS := defaultClusterLogRateLimitQPS
+	if clusterID == 0 {
+		return rateQPS
+	}
+	var existing model.ClusterLogAgent
+	if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&existing).Error; err == nil && existing.RateLimitQPS > 0 {
+		return existing.RateLimitQPS
+	}
+	return rateQPS
+}
+
+func (s *ClusterLogService) listRuleModels(ctx context.Context, projectID, clusterID uint) ([]model.ClusterLogRule, error) {
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return nil, err
 	}
@@ -110,6 +153,12 @@ func (s *ClusterLogService) ListRules(ctx context.Context, projectID, clusterID 
 		return nil, err
 	}
 	return list, nil
+}
+
+// ClusterLogRuleItem 规则列表项（含后端计算的生效 QPS）。
+type ClusterLogRuleItem struct {
+	model.ClusterLogRule
+	AllocatedQPS int `json:"allocated_qps"`
 }
 
 func (s *ClusterLogService) CreateRule(ctx context.Context, projectID uint, req ClusterLogRuleUpsert) (*model.ClusterLogRule, error) {
@@ -135,6 +184,10 @@ func (s *ClusterLogService) CreateRule(ctx context.Context, projectID uint, req 
 	if len(excludes) == 0 {
 		excludes = append([]string{}, defaultExcludeNamespaces...)
 	}
+	remark := ""
+	if req.Remark != nil {
+		remark = strings.TrimSpace(*req.Remark)
+	}
 	row := &model.ClusterLogRule{
 		ProjectID:         projectID,
 		ClusterID:         req.ClusterID,
@@ -144,7 +197,7 @@ func (s *ClusterLogService) CreateRule(ctx context.Context, projectID uint, req 
 		ExcludeNamespaces: encodeJSONStrings(excludes),
 		ParseProfile:      profile,
 		Enabled:           enabled,
-		Remark:            strings.TrimSpace(req.Remark),
+		Remark:            remark,
 	}
 	if req.RateLimitQPS != nil && *req.RateLimitQPS > 0 {
 		row.RateLimitQPS = *req.RateLimitQPS
@@ -152,6 +205,7 @@ func (s *ClusterLogService) CreateRule(ctx context.Context, projectID uint, req 
 	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
 		return nil, err
 	}
+	s.maybeResyncAgent(ctx, projectID, row.ClusterID)
 	return row, nil
 }
 
@@ -193,15 +247,25 @@ func (s *ClusterLogService) UpdateRule(ctx context.Context, projectID, ruleID ui
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	row.Remark = strings.TrimSpace(req.Remark)
+	if req.Remark != nil {
+		row.Remark = strings.TrimSpace(*req.Remark)
+	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
+	s.maybeResyncAgent(ctx, projectID, row.ClusterID)
 	return &row, nil
 }
 
 func (s *ClusterLogService) DeleteRule(ctx context.Context, projectID, ruleID uint) error {
 	if err := s.ensureProject(ctx, projectID); err != nil {
+		return err
+	}
+	var row model.ClusterLogRule
+	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", ruleID, projectID).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return constants.ErrNotFound
+		}
 		return err
 	}
 	res := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", ruleID, projectID).Delete(&model.ClusterLogRule{})
@@ -211,6 +275,7 @@ func (s *ClusterLogService) DeleteRule(ctx context.Context, projectID, ruleID ui
 	if res.RowsAffected == 0 {
 		return constants.ErrNotFound
 	}
+	s.maybeResyncAgent(ctx, projectID, row.ClusterID)
 	return nil
 }
 
@@ -232,7 +297,7 @@ func (s *ClusterLogService) PreviewPipelines(ctx context.Context, projectID, clu
 	if clusterID == 0 {
 		return "", constants.ErrBadRequestWithMsg("cluster_id 无效")
 	}
-	rules, err := s.ListRules(ctx, projectID, clusterID)
+	rules, err := s.listRuleModels(ctx, projectID, clusterID)
 	if err != nil {
 		return "", err
 	}
@@ -280,7 +345,7 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 		return nil, constants.ErrBadRequestWithMsg("rate_limit_qps 无效")
 	}
 
-	rules, err := s.ListRules(ctx, projectID, clusterID)
+	rules, err := s.listRuleModels(ctx, projectID, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -291,6 +356,11 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 	}
 	qps := resolveProjectRateLimitQPS(rateLimitQPS, existing)
 	esCfg, kafkaCfg := s.resolveSinkConfigs(ctx)
+	if kafkaCfg.SinkViaKafka() {
+		if _, err := EnsureK8sKafkaTopic(ctx, kafkaCfg, clusterID, projectID); err != nil {
+			return nil, constants.ErrBadRequestWithMsg("确保 Kafka Topic 失败: " + err.Error())
+		}
+	}
 	pipelines := BuildClusterPipelinesYAML(projectID, clusterID, rules, esCfg, kafkaCfg, qps)
 	systemYAML := RenderClusterSystemConfigYAML(projectID, clusterID, 9196)
 	manifest := RenderClusterLogManifest(ClusterLogManifestInput{
@@ -313,12 +383,27 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 		return nil, constants.ErrBadRequestWithMsg("下发失败: " + err.Error())
 	}
 
-	desired, ready := s.readDaemonSetReplicas(ctx, clusterID, ns)
+	desired, ready := s.readDaemonSetReplicas(ctx, clusterID, ns, projectID)
 	agent, err := s.upsertAgentStatus(ctx, projectID, clusterID, ns, "deployed", "", desired, ready, qps)
 	if err != nil {
 		return nil, err
 	}
 	return agent, nil
+}
+
+func (s *ClusterLogService) maybeResyncAgent(ctx context.Context, projectID, clusterID uint) {
+	if projectID == 0 || clusterID == 0 || s.dyn == nil {
+		return
+	}
+	var agent model.ClusterLogAgent
+	if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&agent).Error; err != nil {
+		return
+	}
+	st := strings.ToLower(strings.TrimSpace(agent.Status))
+	if st != "deployed" && st != "deploying" {
+		return
+	}
+	_, _ = s.DeployOrSync(ctx, projectID, clusterID, agent.Namespace, agent.RateLimitQPS)
 }
 
 func resolveProjectRateLimitQPS(requested int, existing *model.ClusterLogAgent) int {
@@ -343,7 +428,7 @@ func (s *ClusterLogService) RefreshStatus(ctx context.Context, projectID, cluste
 		}
 		return nil, err
 	}
-	desired, ready := s.readDaemonSetReplicas(ctx, clusterID, agent.Namespace)
+	desired, ready := s.readDaemonSetReplicas(ctx, clusterID, agent.Namespace, projectID)
 	status := agent.Status
 	if desired > 0 && ready >= desired {
 		status = "deployed"
@@ -353,17 +438,18 @@ func (s *ClusterLogService) RefreshStatus(ctx context.Context, projectID, cluste
 	return s.upsertAgentStatus(ctx, projectID, clusterID, agent.Namespace, status, "", desired, ready, agent.RateLimitQPS)
 }
 
-func (s *ClusterLogService) readDaemonSetReplicas(ctx context.Context, clusterID uint, namespace string) (desired, ready int) {
-	return s.readDaemonSetViaKom(ctx, clusterID, namespace)
+func (s *ClusterLogService) readDaemonSetReplicas(ctx context.Context, clusterID uint, namespace string, projectID uint) (desired, ready int) {
+	return s.readDaemonSetViaKom(ctx, clusterID, namespace, projectID)
 }
 
-func (s *ClusterLogService) readDaemonSetViaKom(ctx context.Context, clusterID uint, namespace string) (desired, ready int) {
+func (s *ClusterLogService) readDaemonSetViaKom(ctx context.Context, clusterID uint, namespace string, projectID uint) (desired, ready int) {
 	_, k, err := s.k8sRuntime.GetClusterKubectl(ctx, clusterID)
 	if err != nil || k == nil {
 		return 0, 0
 	}
 	var ds appsv1.DaemonSet
-	if err := k.WithContext(ctx).Resource(&appsv1.DaemonSet{}).Namespace(namespace).Name("yunshu-loggie").Get(&ds).Error; err != nil {
+	name := ClusterLoggieAppName(projectID)
+	if err := k.WithContext(ctx).Resource(&appsv1.DaemonSet{}).Namespace(namespace).Name(name).Get(&ds).Error; err != nil {
 		return 0, 0
 	}
 	return int(ds.Status.DesiredNumberScheduled), int(ds.Status.NumberReady)

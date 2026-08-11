@@ -313,6 +313,7 @@ type (
 	LoggieAgentService    = logplatform.LoggieAgentService
 	ClusterLogService     = logplatform.ClusterLogService
 	ClusterLogRuleUpsert  = logplatform.ClusterLogRuleUpsert
+	ClusterLogRuleItem    = logplatform.ClusterLogRuleItem
 	LogRetentionItem      = logplatform.LogRetentionItem
 	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
 	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult
