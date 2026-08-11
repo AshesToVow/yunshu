@@ -41,6 +41,16 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.POST("/loggie/stop", d.loggieHandler.StopLoggie)
 	projectScoped.POST("/loggie/restart", d.loggieHandler.RestartLoggie)
 	projectScoped.POST("/loggie/sync", d.loggieHandler.SyncFromLogSources)
+	if d.clusterLogHandler != nil {
+		projectScoped.GET("/cluster-log/rules", d.clusterLogHandler.ListRules)
+		projectScoped.POST("/cluster-log/rules", d.clusterLogHandler.CreateRule)
+		projectScoped.PUT("/cluster-log/rules/:rule_id", d.clusterLogHandler.UpdateRule)
+		projectScoped.DELETE("/cluster-log/rules/:rule_id", d.clusterLogHandler.DeleteRule)
+		projectScoped.GET("/cluster-log/agents", d.clusterLogHandler.ListAgents)
+		projectScoped.GET("/cluster-log/pipelines/preview", d.clusterLogHandler.PreviewPipelines)
+		projectScoped.POST("/cluster-log/deploy", d.clusterLogHandler.Deploy)
+		projectScoped.GET("/cluster-log/status", d.clusterLogHandler.RefreshStatus)
+	}
 	projectScoped.GET("/service-catalog", d.projectCatalogHandler.ListCatalog)
 	projectScoped.POST("/service-catalog", d.projectCatalogHandler.UpsertCatalog)
 	projectScoped.GET("/service-catalog/:catalogId", d.projectCatalogHandler.GetCatalog)

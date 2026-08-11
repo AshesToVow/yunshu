@@ -18,6 +18,7 @@ func RegisterEsmgmtRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	g.GET("/cluster/health", d.esmgmtHandler.ClusterHealth)
 	g.GET("/indices", d.esmgmtHandler.ListIndices)
+	g.POST("/indices", d.esmgmtHandler.CreateIndex)
 	g.DELETE("/indices/:name", d.esmgmtHandler.DeleteIndex)
 	g.POST("/indices/:name/open", d.esmgmtHandler.OpenIndex)
 	g.POST("/indices/:name/close", d.esmgmtHandler.CloseIndex)

@@ -301,6 +301,17 @@ func provideLoggieAgentService(
 	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, projectRepo, serviceRepo, es, kafka, string(encryptionKey), loggieCfg)
 }
 
+func provideClusterLogService(
+	db *gorm.DB,
+	projectRepo interfaces.ProjectRepository,
+	es *service.ElasticsearchProvider,
+	kafka *service.KafkaProvider,
+	runtime *service.K8sRuntimeService,
+	loggieCfg config.LoggieConfig,
+) *service.ClusterLogService {
+	return service.NewClusterLogService(db, projectRepo, es, kafka, runtime, loggieCfg, loggieCfg.DaemonSetImage)
+}
+
 var ServiceSet = wire.NewSet(
 	// system
 	service.NewLoginLogService,
@@ -373,5 +384,6 @@ var ServiceSet = wire.NewSet(
 	provideLogRetentionService,
 	provideLoggieConfig,
 	provideLoggieAgentService,
+	provideClusterLogService,
 	wire.Struct(new(routeServices), "*"),
 )

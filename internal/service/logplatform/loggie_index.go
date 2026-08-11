@@ -10,6 +10,7 @@ import (
 
 const (
 	defaultAgentIndexPrefix = "yunshu-agent"
+	defaultK8sIndexPrefix   = "yunshu-k8s"
 	maxSearchIndexServers   = 80
 )
 
@@ -243,4 +244,88 @@ func AgentIndexPrefixForServer(serverID uint) string {
 // AgentIndexPrefixForHost 新版前缀 yunshu-agent-10-10-10-5-
 func AgentIndexPrefixForHost(serverHost string) string {
 	return fmt.Sprintf("%s-%s-", defaultAgentIndexPrefix, SanitizeHostForName(serverHost))
+}
+
+func k8sNamePrefix(prefix string) string {
+	p := strings.Trim(strings.TrimSpace(prefix), "-")
+	if p == "" {
+		p = defaultK8sIndexPrefix
+	}
+	return p
+}
+
+// K8sIndexSink Loggie ES sink：yunshu-k8s-{clusterId}-${+YYYY.MM.DD}
+func K8sIndexSink(clusterID uint) string {
+	return fmt.Sprintf("%s-%d-${+YYYY.MM.DD}", defaultK8sIndexPrefix, clusterID)
+}
+
+// K8sIndexForDay 某日索引名。
+func K8sIndexForDay(clusterID uint, day time.Time) string {
+	if day.IsZero() {
+		day = time.Now().UTC()
+	}
+	return fmt.Sprintf("%s-%d-%s", defaultK8sIndexPrefix, clusterID, day.UTC().Format("2006.01.02"))
+}
+
+// K8sIndexPattern 单集群检索通配。
+func K8sIndexPattern(clusterID uint) string {
+	return fmt.Sprintf("%s-%d-*", defaultK8sIndexPrefix, clusterID)
+}
+
+// GlobalK8sIndexPattern 全量 K8s 日志索引通配。
+func GlobalK8sIndexPattern() string {
+	return defaultK8sIndexPrefix + "-*"
+}
+
+// K8sKafkaTopicTemplate Kafka sink topic 模板。
+func K8sKafkaTopicTemplate(clusterID uint, prefix string) string {
+	return fmt.Sprintf("%s-%d-${+YYYY.MM.DD}", k8sNamePrefix(prefix), clusterID)
+}
+
+// K8sKafkaTopicForDay 具体某日 Topic。
+func K8sKafkaTopicForDay(clusterID uint, prefix string, day time.Time) string {
+	if day.IsZero() {
+		day = time.Now().UTC()
+	}
+	return fmt.Sprintf("%s-%d-%s", k8sNamePrefix(prefix), clusterID, day.UTC().Format("2006.01.02"))
+}
+
+// IsK8sKafkaTopic 判断是否为集群采集 Topic（yunshu-k8s-{id}-YYYY.MM.DD）。
+func IsK8sKafkaTopic(topic, prefix string) bool {
+	p := k8sNamePrefix(prefix)
+	topic = strings.TrimSpace(topic)
+	head := p + "-"
+	if !strings.HasPrefix(topic, head) {
+		return false
+	}
+	rest := strings.TrimPrefix(topic, head)
+	if rest == "" {
+		return false
+	}
+	if m := agentNameDateSuffix.FindStringSubmatch(rest); len(m) == 3 {
+		_, err := strconv.ParseUint(m[1], 10, 64)
+		return err == nil
+	}
+	_, err := strconv.ParseUint(rest, 10, 64)
+	return err == nil
+}
+
+// ParseClusterIDFromK8sKafkaTopic 从 Topic 解析 cluster_id。
+func ParseClusterIDFromK8sKafkaTopic(topic, prefix string) (uint, bool) {
+	p := k8sNamePrefix(prefix)
+	topic = strings.TrimSpace(topic)
+	head := p + "-"
+	if !strings.HasPrefix(topic, head) {
+		return 0, false
+	}
+	rest := strings.TrimPrefix(topic, head)
+	idPart := rest
+	if m := agentNameDateSuffix.FindStringSubmatch(rest); len(m) == 3 {
+		idPart = m[1]
+	}
+	id, err := strconv.ParseUint(idPart, 10, 64)
+	if err != nil || id == 0 {
+		return 0, false
+	}
+	return uint(id), true
 }

@@ -2,13 +2,14 @@
 
 ## 概述
 
-1. **Loggie**（目标机 Agent）：采集文件日志  
+1. **Loggie 主机 Agent**（SSH/systemd）：采集虚机/物理机文件日志  
    - `kafka.enabled=false`：bulk 直写 ES  
    - `kafka.enabled=true`：写入 Kafka，由 Yunshu 消费后 bulk 写入 ES  
-2. **Elasticsearch**：按 **Agent（服务器）分索引** 持久化  
-3. **Yunshu**：项目/CMDB 管 Agent 生命周期，代理检索与保留策略；可选 Kafka→ES 消费与积压观测  
+2. **Loggie 集群 DaemonSet**（与主机并列）：采 `/var/log/pods`，规则按 namespace/workload，**不绑 server_id**  
+3. **Elasticsearch**：主机索引 `yunshu-agent-{ip}-*`；集群索引 `yunshu-k8s-{clusterId}-*`  
+4. **Yunshu**：项目管主机 Agent 与集群规则/下发；代理检索与保留策略  
 
-不依赖 Grafana / Loki；K8s ClusterLogConfig 引导已移除。若日志路径为 `/var/log/pods/...`，pipeline 会按 [typePodFields](https://loggie-io.github.io/docs/reference/global/discovery/#typepodfields) 风格从路径抽取 `namespace` / `podname` / `containername`。
+不依赖 Grafana / Loki。旧 K8s ClusterLogConfig 引导已移除，改由「服务与日志采集 → 集群采集」下发 DaemonSet（见 `deploy/loggie/daemonset/README.md`）。
 
 ## Kafka 中转（可选）
 
@@ -36,9 +37,10 @@
 - `server_id` / `server_host` / `server_name`
 - `service_id` / `service_name`
 - `log_source_id`
+- `collector_mode`：主机 `host`，集群 `k8s`
 - 采集态：`file_path`、`host`（来自 addonMeta）
 
-历史 `yunshu-logs-*` **不会自动迁移**；默认同检索只查 `yunshu-agent-*`。
+历史 `yunshu-logs-*` **不会自动迁移**；默认检索主机 `yunshu-agent-*` 与集群 `yunshu-k8s-*`（可用 `collector_mode` 收窄）。
 
 ## Agent 生命周期（项目作用域）
 
@@ -65,14 +67,24 @@ loggie:
   deploy_dir: "/export/loggie"
 ```
 
+## 保留策略
+
+默认清理 `yunshu-agent-*` 与 `yunshu-k8s-*` 过期日索引；服务器作用域策略仅针对对应主机索引。可为策略显式指定 `index_pattern`。
+
+## 集群采集限流与护栏
+
+- 项目级 QPS：`cluster_log_agents.rate_limit_qps`（部署时传入，默认 2000）。
+- **配额拆分**：规则 `rate_limit_qps>0` 固定占用；其余启用规则均分剩余配额（下限 50），适合高流量多规则项目。
+- 宽采路径用 `excludeFiles` 排除 `kube-system` 等系统 ns。
+- 下发 `yunshu-logging` DaemonSet 跳过命名空间白名单（`WithSkipNamespacePolicy`）。
+
 ## 检索
 
 `GET /api/v1/projects/:id/logs/search`  
-筛选：服务器、服务、日志源、级别、文件名、关键字；结果含服务名、主机、K8s 元信息。
 
-## 保留策略
-
-默认清理 `yunshu-agent-*` 过期日索引；可为单服务器策略指定 `yunshu-agent-{id}-*`。
+筛选：`collector_mode`（`host`|`k8s`）、`cluster_id`、`namespace`、`pod`、`container`，以及服务器/服务/日志源/级别/文件名/关键字。  
+主机新 pipeline 写入 `collector_mode=host`（旧文档字段缺失仍可命中）；集群为 `k8s`。  
+索引：主机 `yunshu-agent-*`；集群 `yunshu-k8s-{clusterId}-*`；未指定 mode 时两边一起查（仍按 `project_id` 过滤）。
 
 ## 与 Loggie 手册对照
 

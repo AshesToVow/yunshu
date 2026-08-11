@@ -311,6 +311,8 @@ type (
 	KafkaProvider         = logplatform.KafkaProvider
 	KafkaToESService      = logplatform.KafkaToESService
 	LoggieAgentService    = logplatform.LoggieAgentService
+	ClusterLogService     = logplatform.ClusterLogService
+	ClusterLogRuleUpsert  = logplatform.ClusterLogRuleUpsert
 	LogRetentionItem      = logplatform.LogRetentionItem
 	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
 	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult
@@ -326,6 +328,7 @@ var (
 	NewKafkaProvider         = logplatform.NewKafkaProvider
 	NewKafkaToESService      = logplatform.NewKafkaToESService
 	NewLoggieAgentService    = logplatform.NewLoggieAgentService
+	NewClusterLogService     = logplatform.NewClusterLogService
 	RunLogRetentionScheduler = logplatform.RunLogRetentionScheduler
 )
 

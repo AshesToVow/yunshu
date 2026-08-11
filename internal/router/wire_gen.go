@@ -157,6 +157,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	if err != nil {
 		return nil, err
 	}
+	clusterLogService := provideClusterLogService(db, v29, v91, v95, v56, loggieConfig)
 	v99 := alert.NewAlertReceiverGroupService(v40, v41)
 	v100 := routerRouteRepositories.K8sEventForward
 	v101 := eventforward.NewK8sEventForwardAdminService(v100)
@@ -224,6 +225,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		LogRetention:         v94,
 		KafkaToES:            v96,
 		LoggieAgent:          v98,
+		ClusterLog:           clusterLogService,
 		AlertReceiverGroup:   v99,
 		K8sEventForwardAdmin: v101,
 		K8sSearch:            v102,
@@ -286,6 +288,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	cicdHandler := handler.NewCicdHandler(service)
 	logPlatformHandler := handler.NewLogPlatformHandler(v94, v96)
 	loggieHandler := handler.NewLoggieHandler(v98)
+	clusterLogHandler := handler.NewClusterLogHandler(clusterLogService)
 	inspectHandler := handler.NewInspectHandler(inspectService)
 	aiHandler := handler.NewAIHandler(aiService)
 	esmgmtHandler := handler.NewEsmgmtHandler(esmgmtService)
@@ -344,6 +347,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		Cicd:               cicdHandler,
 		LogPlatform:        logPlatformHandler,
 		Loggie:             loggieHandler,
+		ClusterLog:         clusterLogHandler,
 		Inspect:            inspectHandler,
 		AI:                 aiHandler,
 		Esmgmt:             esmgmtHandler,

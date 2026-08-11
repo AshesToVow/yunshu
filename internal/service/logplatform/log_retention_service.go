@@ -174,9 +174,14 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 			MatchedPattern: matched,
 		})
 	}
-	displayPattern := GlobalAgentIndexPattern()
-	if strings.Contains(strings.ToLower(pattern), "yunshu-agent") {
+	displayPattern := GlobalAgentIndexPattern() + "," + GlobalK8sIndexPattern()
+	if strings.Contains(strings.ToLower(pattern), "yunshu-agent") || strings.Contains(strings.ToLower(pattern), "yunshu-k8s") {
 		displayPattern = pattern
+		if isGlobalAgentIndexPattern(pattern) {
+			displayPattern = pattern + "," + GlobalK8sIndexPattern()
+		} else if isGlobalK8sIndexPattern(pattern) {
+			displayPattern = GlobalAgentIndexPattern() + "," + pattern
+		}
 	}
 	return &ESStorageStats{
 		IndexPattern:         displayPattern,
@@ -192,7 +197,7 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 	}, nil
 }
 
-// DeleteIndex 手动删除单个 ES 索引（仅允许匹配平台 index_pattern 或 yunshu-agent-*）。
+// DeleteIndex 手动删除单个 ES 索引（仅允许匹配平台 Agent / K8s 索引通配）。
 func (s *LogRetentionService) DeleteIndex(ctx context.Context, indexName string) error {
 	indexName = strings.TrimSpace(indexName)
 	if indexName == "" {
@@ -213,7 +218,11 @@ func (s *LogRetentionService) DeleteIndex(ctx context.Context, indexName string)
 		pattern = GlobalAgentIndexPattern()
 	}
 	if !isPlatformManagedIndex(indexName, pattern) {
-		return constants.ErrBadRequestWithMsg(fmt.Sprintf("仅允许删除匹配 %s 的平台索引", GlobalAgentIndexPattern()))
+		return constants.ErrBadRequestWithMsg(fmt.Sprintf(
+			"仅允许删除匹配 %s 或 %s 的平台索引",
+			GlobalAgentIndexPattern(),
+			GlobalK8sIndexPattern(),
+		))
 	}
 	if err := cli.DeleteIndex(ctx, indexName); err != nil {
 		return bizerrors.Pass(ctx, "logretention", "DeleteIndex", err)
@@ -221,7 +230,7 @@ func (s *LogRetentionService) DeleteIndex(ctx context.Context, indexName string)
 	return nil
 }
 
-// isPlatformManagedIndex 平台可管索引：现行 Agent 通配，或配置 pattern（不含裸 *）。
+// isPlatformManagedIndex 平台可管索引：主机 Agent、集群 K8s，或配置 pattern（不含裸 *）。
 func isPlatformManagedIndex(name, cfgPattern string) bool {
 	name = strings.TrimSpace(name)
 	if name == "" || strings.HasPrefix(name, ".") {
@@ -229,7 +238,8 @@ func isPlatformManagedIndex(name, cfgPattern string) bool {
 	}
 	pattern := normalizeRetentionIndexPattern(cfgPattern)
 	return matchIndexPattern(name, pattern) ||
-		matchIndexPattern(name, GlobalAgentIndexPattern())
+		matchIndexPattern(name, GlobalAgentIndexPattern()) ||
+		matchIndexPattern(name, GlobalK8sIndexPattern())
 }
 
 // normalizeRetentionIndexPattern 将空/历史/裸 * 收敛为 yunshu-agent-*。
@@ -243,21 +253,32 @@ func normalizeRetentionIndexPattern(pattern string) string {
 	}
 }
 
-// resolveCleanupPatterns 解析策略应对哪些索引通配执行清理（兼容历史 yunshu-logs-*）。
+// resolveCleanupPatterns 解析策略应对哪些索引通配执行清理（兼容历史 yunshu-logs-*，并覆盖 yunshu-k8s-*）。
 func resolveCleanupPatterns(p model.LogRetentionPolicy) []string {
 	raw := strings.TrimSpace(p.IndexPattern)
 	if raw == "" {
 		if p.ServerID > 0 {
+			// 服务器作用域仅主机索引
 			return []string{AgentIndexPatternByServerID(p.ServerID)}
 		}
-		return []string{GlobalAgentIndexPattern()}
+		return []string{GlobalAgentIndexPattern(), GlobalK8sIndexPattern()}
 	}
 	primary := normalizeRetentionIndexPattern(raw)
 	out := []string{primary}
 	if isLegacyLogsIndexPattern(raw) {
 		out = append(out, "yunshu-logs-*")
-	} else if !strings.Contains(strings.ToLower(primary), "yunshu-agent") {
-		out = append(out, GlobalAgentIndexPattern())
+	}
+	lower := strings.ToLower(primary)
+	if p.ServerID == 0 {
+		if !strings.Contains(lower, "yunshu-agent") && !strings.Contains(lower, "yunshu-k8s") {
+			out = append(out, GlobalAgentIndexPattern(), GlobalK8sIndexPattern())
+		} else if isGlobalAgentIndexPattern(primary) {
+			out = append(out, GlobalK8sIndexPattern())
+		} else if isGlobalK8sIndexPattern(primary) {
+			out = append(out, GlobalAgentIndexPattern())
+		}
+	} else if !strings.Contains(lower, "yunshu-agent") {
+		out = append(out, AgentIndexPatternByServerID(p.ServerID))
 	}
 	seen := map[string]struct{}{}
 	uniq := make([]string, 0, len(out))
@@ -273,6 +294,14 @@ func resolveCleanupPatterns(p model.LogRetentionPolicy) []string {
 		uniq = append(uniq, x)
 	}
 	return uniq
+}
+
+func isGlobalAgentIndexPattern(pattern string) bool {
+	return strings.EqualFold(strings.TrimSpace(pattern), GlobalAgentIndexPattern())
+}
+
+func isGlobalK8sIndexPattern(pattern string) bool {
+	return strings.EqualFold(strings.TrimSpace(pattern), GlobalK8sIndexPattern())
 }
 
 func isLegacyLogsIndexPattern(pattern string) bool {

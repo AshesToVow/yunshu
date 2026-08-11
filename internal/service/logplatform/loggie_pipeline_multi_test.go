@@ -37,6 +37,9 @@ func TestBuildMultiPipelineBundle_PerLogSourceFields(t *testing.T) {
 	if !strings.Contains(yaml, "name: yunshu-p1-s7-ls11") {
 		t.Fatal("expected per-source pipeline name")
 	}
+	if !strings.Contains(yaml, `collector_mode: "host"`) {
+		t.Fatal("expected collector_mode=host on host pipelines")
+	}
 	if !strings.Contains(bundle.EnvFile, "LOGGIE_DEPLOY_DIR=/export/loggie") {
 		t.Fatal("expected deploy dir in env file")
 	}

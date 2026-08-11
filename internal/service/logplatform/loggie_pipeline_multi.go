@@ -163,7 +163,8 @@ func renderPipelineEntry(projectID, serverID uint, entry LoggiePipelineSourceEnt
         readFromTail: false%s%s
         fields:
           project_id: %q
-          server_id: %q%s
+          server_id: %q
+          collector_mode: "host"%s
 %s%s%s
 `,
 		entry.PipelineName,

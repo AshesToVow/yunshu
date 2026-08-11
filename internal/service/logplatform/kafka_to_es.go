@@ -402,6 +402,9 @@ func resolveHostForIndex(fields map[string]any, topic, topicPrefix string, serve
 }
 
 func resolveIndexName(host string, serverID uint, topic, topicPrefix string, ts time.Time) string {
+	if cid, ok := ParseClusterIDFromK8sKafkaTopic(topic, defaultK8sIndexPrefix); ok {
+		return K8sIndexForDay(cid, ts)
+	}
 	host = strings.TrimSpace(host)
 	if host != "" && host != "unknown" && !strings.HasPrefix(host, "server-") {
 		return AgentIndexForDay(host, ts)

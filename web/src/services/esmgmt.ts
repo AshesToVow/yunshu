@@ -98,6 +98,15 @@ export function listEsmgmtIndices(params?: { connection_id?: number; pattern?: s
   );
 }
 
+export function createEsmgmtIndex(payload: {
+  connection_id?: number;
+  name: string;
+  settings?: Record<string, unknown>;
+  mappings?: Record<string, unknown>;
+}) {
+  return getData<{ ok: boolean; name: string }>(http.post("/esmgmt/indices", payload));
+}
+
 export function deleteEsmgmtIndex(name: string, force?: boolean, connectionId?: number) {
   return getData<{ ok: boolean }>(
     http.delete(`/esmgmt/indices/${encodeURIComponent(name)}`, {

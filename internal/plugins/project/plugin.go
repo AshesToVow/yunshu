@@ -41,6 +41,8 @@ func (m *module) Models() []any {
 		&model.ServiceLogSource{},
 		&model.LogRetentionPolicy{},
 		&model.LoggieAgent{},
+		&model.ClusterLogAgent{},
+		&model.ClusterLogRule{},
 		&model.ServiceCatalog{},
 		&model.ServiceLink{},
 		&model.ChangeEvent{},

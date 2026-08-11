@@ -105,6 +105,9 @@ func (s *DynamicResourceService) ensureNamespaceAllowed(ctx context.Context, nam
 	if ns == "" || s == nil || s.runtime == nil {
 		return nil
 	}
+	if k8sauth.SkipNamespacePolicy(ctx) {
+		return nil
+	}
 	clusterID := k8sauth.ClusterIDFromContext(ctx)
 	if clusterID == 0 {
 		return nil

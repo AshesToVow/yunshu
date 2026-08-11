@@ -133,16 +133,20 @@ func listAgentKafkaTopics(ctx context.Context, cfg config.KafkaConfig) ([]string
 		return nil, err
 	}
 	prefix := cfg.TopicPrefix + "-"
+	k8sPrefix := defaultK8sIndexPrefix + "-"
 	seen := map[string]struct{}{}
 	for _, p := range parts {
 		name := strings.TrimSpace(p.Topic)
-		if name == "" || !strings.HasPrefix(name, prefix) {
+		if name == "" {
 			continue
 		}
-		if !IsAgentKafkaTopic(name, cfg.TopicPrefix) {
+		if strings.HasPrefix(name, prefix) && IsAgentKafkaTopic(name, cfg.TopicPrefix) {
+			seen[name] = struct{}{}
 			continue
 		}
-		seen[name] = struct{}{}
+		if strings.HasPrefix(name, k8sPrefix) && IsK8sKafkaTopic(name, defaultK8sIndexPrefix) {
+			seen[name] = struct{}{}
+		}
 	}
 	out := make([]string, 0, len(seen))
 	for t := range seen {

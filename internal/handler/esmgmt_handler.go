@@ -123,6 +123,19 @@ func (h *EsmgmtHandler) ListIndices(c *gin.Context) {
 	response.Success(c, list)
 }
 
+func (h *EsmgmtHandler) CreateIndex(c *gin.Context) {
+	var req esmgmtsvc.CreateIndexRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.CreateIndex(c.Request.Context(), req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true, "name": strings.TrimSpace(req.Name)})
+}
+
 func (h *EsmgmtHandler) DeleteIndex(c *gin.Context) {
 	connID := parseOptionalUintQuery(c, "connection_id")
 	name := strings.TrimSpace(c.Param("name"))

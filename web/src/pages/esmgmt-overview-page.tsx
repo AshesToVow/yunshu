@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import {
   closeEsmgmtIndex,
   createEsmgmtBackup,
+  createEsmgmtIndex,
   createEsmgmtRestore,
   createEsmgmtSchedule,
   deleteEsmgmtIndex,
@@ -41,6 +42,19 @@ import {
 } from "../services/esmgmt";
 import { extractApiErrorMessage } from "../services/http";
 
+const DEFAULT_CREATE_BODY = `{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1
+  },
+  "mappings": {
+    "properties": {
+      "message": { "type": "text" },
+      "@timestamp": { "type": "date" }
+    }
+  }
+}`;
+
 export function EsmgmtOverviewPage() {
   const [connections, setConnections] = useState<EsmgmtConnection[]>([]);
   const [connectionId, setConnectionId] = useState<number>();
@@ -53,7 +67,10 @@ export function EsmgmtOverviewPage() {
   const [loading, setLoading] = useState(false);
   const [backingUp, setBackingUp] = useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [scheduleForm] = Form.useForm();
+  const [createForm] = Form.useForm();
 
   useEffect(() => {
     void listEsmgmtConnections()
@@ -113,6 +130,47 @@ export function EsmgmtOverviewPage() {
       message.error(extractApiErrorMessage(e, "创建备份失败"));
     } finally {
       setBackingUp(null);
+    }
+  }
+
+  async function onCreateIndex() {
+    const values = await createForm.validateFields();
+    let settings: Record<string, unknown> | undefined;
+    let mappings: Record<string, unknown> | undefined;
+    const raw = String(values.body_json || "").trim();
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        if (parsed.settings && typeof parsed.settings === "object") {
+          settings = parsed.settings as Record<string, unknown>;
+        }
+        if (parsed.mappings && typeof parsed.mappings === "object") {
+          mappings = parsed.mappings as Record<string, unknown>;
+        }
+        // 允许直接把整段当 settings（无 settings/mappings 键时忽略）
+        if (!settings && !mappings && (parsed.number_of_shards != null || parsed.index != null)) {
+          settings = parsed;
+        }
+      } catch {
+        message.error("Body JSON 无法解析");
+        return;
+      }
+    }
+    setCreating(true);
+    try {
+      await createEsmgmtIndex({
+        connection_id: connectionId,
+        name: String(values.name).trim(),
+        settings,
+        mappings,
+      });
+      message.success("索引已创建");
+      setCreateOpen(false);
+      void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "创建索引失败"));
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -198,8 +256,24 @@ export function EsmgmtOverviewPage() {
           message={`集群 ${String(health.cluster_name || "-")} · 节点 ${String(health.number_of_nodes ?? "-")} · 分片 ${String(health.active_shards ?? "-")}`}
         />
       ) : null}
-      <Card title="索引" size="small">
-        <Table
+      <Card
+        title="索引"
+        size="small"
+        extra={
+          <Button
+            size="small"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              createForm.resetFields();
+              createForm.setFieldsValue({ body_json: DEFAULT_CREATE_BODY });
+              setCreateOpen(true);
+            }}
+          >
+            新建索引
+          </Button>
+        }
+      >        <Table
           size="small"
           rowKey="name"
           loading={loading}
@@ -438,6 +512,42 @@ export function EsmgmtOverviewPage() {
           </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
+      <Modal
+        title="新建索引"
+        open={createOpen}
+        onCancel={() => setCreateOpen(false)}
+        onOk={() => void onCreateIndex()}
+        confirmLoading={creating}
+        width={640}
+        destroyOnClose
+      >
+        <Form form={createForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="索引名"
+            rules={[
+              { required: true, message: "请输入索引名" },
+              {
+                validator: async (_, v) => {
+                  const name = String(v || "").trim();
+                  if (!name) return;
+                  if (name.startsWith(".")) throw new Error("禁止系统索引名");
+                  if (/[\\/?*"<>|,#\s]/.test(name)) throw new Error("索引名含非法字符");
+                },
+              },
+            ]}
+          >
+            <Input placeholder="例如 my-app-logs" />
+          </Form.Item>
+          <Form.Item
+            name="body_json"
+            label="settings / mappings（JSON，可选）"
+            extra="可填 { settings, mappings }；留空则按 ES 默认创建空索引"
+          >
+            <Input.TextArea rows={14} style={{ fontFamily: "monospace" }} />
           </Form.Item>
         </Form>
       </Modal>

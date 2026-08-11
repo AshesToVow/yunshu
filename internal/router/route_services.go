@@ -66,6 +66,7 @@ type routeServices struct {
 	LogRetention         *service.LogRetentionService
 	KafkaToES            *service.KafkaToESService
 	LoggieAgent          *service.LoggieAgentService
+	ClusterLog           *service.ClusterLogService
 	AlertReceiverGroup   *service.AlertReceiverGroupService
 	K8sEventForwardAdmin *service.K8sEventForwardAdminService
 	K8sSearch            *service.K8sSearchService

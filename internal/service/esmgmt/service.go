@@ -365,6 +365,50 @@ func (s *Service) ListIndices(ctx context.Context, connectionID uint, pattern st
 	return list, nil
 }
 
+// CreateIndexRequest 新建索引。
+type CreateIndexRequest struct {
+	ConnectionID uint           `json:"connection_id"`
+	Name         string         `json:"name"`
+	Settings     map[string]any `json:"settings"`
+	Mappings     map[string]any `json:"mappings"`
+}
+
+// CreateIndex 创建索引（可选 settings/mappings）；禁止系统索引名，已存在则失败。
+func (s *Service) CreateIndex(ctx context.Context, req CreateIndexRequest) error {
+	index := strings.TrimSpace(req.Name)
+	if index == "" {
+		return constants.ErrBadRequestWithMsg("索引名不能为空")
+	}
+	if strings.HasPrefix(index, ".") {
+		return constants.ErrBadRequestWithMsg("禁止创建系统索引")
+	}
+	if strings.ContainsAny(index, `\/?*"<>|, #`) || strings.Contains(index, " ") {
+		return constants.ErrBadRequestWithMsg("索引名含非法字符")
+	}
+	cli, err := s.resolveClient(ctx, req.ConnectionID)
+	if err != nil {
+		return err
+	}
+	exists, err := cli.IndexExists(ctx, index)
+	if err != nil {
+		return constants.ErrBadRequestWithMsg("检查索引失败: " + err.Error())
+	}
+	if exists {
+		return constants.ErrBadRequestWithMsg("索引已存在")
+	}
+	body := map[string]any{}
+	if len(req.Settings) > 0 {
+		body["settings"] = req.Settings
+	}
+	if len(req.Mappings) > 0 {
+		body["mappings"] = req.Mappings
+	}
+	if err := cli.CreateIndex(ctx, index, body); err != nil {
+		return constants.ErrBadRequestWithMsg("创建索引失败: " + err.Error())
+	}
+	return nil
+}
+
 // DeleteIndex 删除索引；名称含 yunshu-agent 时须 force=true。
 func (s *Service) DeleteIndex(ctx context.Context, connectionID uint, index string, force bool) error {
 	index = strings.TrimSpace(index)

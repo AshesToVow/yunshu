@@ -94,6 +94,7 @@ type RouteDeps struct {
 	cicdHandler        *handler.CicdHandler
 	logPlatformHandler *handler.LogPlatformHandler
 	loggieHandler      *handler.LoggieHandler
+	clusterLogHandler  *handler.ClusterLogHandler
 	logRetentionSvc    *service.LogRetentionService
 	kafkaToESSvc       *service.KafkaToESService
 	inspectSvc         *inspectsvc.Service
@@ -279,6 +280,7 @@ func assembleRouteDeps(
 		cicdHandler:        handlers.Cicd,
 		logPlatformHandler: handlers.LogPlatform,
 		loggieHandler:      handlers.Loggie,
+		clusterLogHandler:  handlers.ClusterLog,
 		logRetentionSvc:    svcs.LogRetention,
 		kafkaToESSvc:       svcs.KafkaToES,
 		inspectSvc:         svcs.Inspect,

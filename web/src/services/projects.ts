@@ -479,6 +479,8 @@ export interface LogSearchItem {
   service_name?: string;
   server_host?: string;
   host?: string;
+  collector_mode?: string;
+  cluster_id?: number;
   namespace?: string;
   pod?: string;
   podname?: string;
@@ -492,6 +494,11 @@ export async function searchProjectLogs(
     server_id?: number;
     service_id?: number;
     log_source_id?: number;
+    collector_mode?: string;
+    cluster_id?: number;
+    namespace?: string;
+    pod?: string;
+    container?: string;
     keyword?: string;
     level?: string;
     file_path?: string;
@@ -514,6 +521,11 @@ export async function exportProjectLogs(
     server_id?: number;
     service_id?: number;
     log_source_id?: number;
+    collector_mode?: string;
+    cluster_id?: number;
+    namespace?: string;
+    pod?: string;
+    container?: string;
     keyword?: string;
     level?: string;
     file_path?: string;
