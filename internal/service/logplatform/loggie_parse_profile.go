@@ -336,11 +336,16 @@ func (p pipelineParseProfile) renderTransformerActions() string {
 		b.WriteString("          - if: equal(klevel, F)\n")
 		b.WriteString("            then:\n")
 		b.WriteString("              - action: add(level, FATAL)\n")
-		b.WriteString("          - action: move(kmsg, message)\n")
-		b.WriteString("            ignoreError: true\n")
+		// nginx 等非 klog 行不会产出 kmsg；无条件 move 会把 message/body 写成 null → ES 出现 "<nil>"
+		b.WriteString("          - if: exist(kmsg)\n")
+		b.WriteString("            then:\n")
+		b.WriteString("              - action: move(kmsg, message)\n")
+		b.WriteString("                ignoreError: true\n")
 	}
 
-	b.WriteString("          - action: move(message, body)\n")
-	b.WriteString("            ignoreError: true\n")
+	b.WriteString("          - if: exist(message)\n")
+	b.WriteString("            then:\n")
+	b.WriteString("              - action: move(message, body)\n")
+	b.WriteString("                ignoreError: true\n")
 	return b.String()
 }

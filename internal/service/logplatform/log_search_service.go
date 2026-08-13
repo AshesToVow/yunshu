@@ -602,11 +602,23 @@ func pickUintMap(src map[string]any, key string) uint {
 
 func pickMessage(src map[string]any, fields []string) string {
 	for _, f := range fields {
-		if v := pickString(src, f); v != "" {
+		if v := anyToLogString(src[f]); v != "" {
 			return v
 		}
 	}
-	return pickString(src, "message", "body", "log")
+	for _, key := range []string{"message", "body", "log", "msg", "content"} {
+		if v := anyToLogString(src[key]); v != "" {
+			return v
+		}
+	}
+	if meta := nestedFields(src); meta != nil {
+		for _, key := range []string{"message", "body", "log", "msg"} {
+			if v := anyToLogString(meta[key]); v != "" {
+				return v
+			}
+		}
+	}
+	return ""
 }
 
 func pickString(src map[string]any, keys ...string) string {
@@ -614,7 +626,8 @@ func pickString(src map[string]any, keys ...string) string {
 		if v, ok := src[k]; ok {
 			switch t := v.(type) {
 			case string:
-				if strings.TrimSpace(t) != "" {
+				s := strings.TrimSpace(t)
+				if s != "" && s != "<nil>" {
 					return t
 				}
 			case float64:

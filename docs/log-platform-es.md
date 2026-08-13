@@ -42,6 +42,12 @@
 
 历史 `yunshu-logs-*` **不会自动迁移**；默认检索主机 `yunshu-agent-*` 与集群 `yunshu-k8s-*`（可用 `collector_mode` 收窄）。
 
+### 常见问题
+
+1. **检索内容为 `<nil>`**：旧版 CRI 解析在非 klog 行上无条件 `move(kmsg/message)` 会清空正文；需重新部署/同步 DaemonSet（或热更主机 Agent）使新 transformer 生效，Kafka 消费端也会跳过 `"<nil>"`。
+2. **Kafka Topic 删了又出现**：采集仍在写（`auto.create.topics`）或再次部署/引导会 Ensure 当日 Topic；先停采集再删。
+3. **ES 管理与保留策略索引不一致**：管理页请选「日志平台 ES」（与保留/检索同源）；自定义连接可能指向另一集群。
+
 ## Agent 生命周期（项目作用域）
 
 | API | 说明 |

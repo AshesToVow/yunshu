@@ -338,15 +338,10 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 	for k, v := range root {
 		doc[k] = v
 	}
-	if _, ok := doc["message"]; !ok {
-		if b, ok := doc["body"]; ok {
-			switch t := b.(type) {
-			case string:
-				doc["message"] = t
-			default:
-				doc["message"] = fmt.Sprint(t)
-			}
-		}
+	if msg := coalesceLogMessage(doc); msg != "" {
+		doc["message"] = msg
+	} else {
+		delete(doc, "message")
 	}
 
 	fields := map[string]any{}
@@ -384,6 +379,48 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 		doc["@timestamp"] = ts.Format(time.RFC3339Nano)
 	}
 	return doc, resolveIndexName(host, serverID, topic, topicPrefix, ts), nil
+}
+
+// coalesceLogMessage 从 Loggie/Kafka 事件中取正文；避免 fmt.Sprint(nil) 写成字面量 "<nil>"。
+func coalesceLogMessage(doc map[string]any) string {
+	if doc == nil {
+		return ""
+	}
+	for _, key := range []string{"message", "body", "log", "msg", "content"} {
+		if s := anyToLogString(doc[key]); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func anyToLogString(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		s := strings.TrimSpace(t)
+		if s == "" || s == "<nil>" || strings.EqualFold(s, "null") {
+			return ""
+		}
+		return t
+	case []byte:
+		return anyToLogString(string(t))
+	case float64, float32, int, int64, int32, uint, uint64, bool:
+		return fmt.Sprint(t)
+	case map[string]any, []any:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	default:
+		s := strings.TrimSpace(fmt.Sprint(t))
+		if s == "" || s == "<nil>" {
+			return ""
+		}
+		return s
+	}
 }
 
 func resolveHostForIndex(fields map[string]any, topic, topicPrefix string, serverID uint) string {

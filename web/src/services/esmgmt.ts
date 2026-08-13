@@ -86,9 +86,13 @@ export function testEsmgmtConnection(payload: {
   return getData<{ ok: boolean; message?: string }>(http.post("/esmgmt/connections/test", payload));
 }
 
+function connParams(connectionId?: number) {
+  return typeof connectionId === "number" ? { connection_id: connectionId } : undefined;
+}
+
 export function getEsmgmtClusterHealth(connectionId?: number) {
   return getData<Record<string, unknown>>(
-    http.get("/esmgmt/cluster/health", { params: connectionId ? { connection_id: connectionId } : undefined }),
+    http.get("/esmgmt/cluster/health", { params: connParams(connectionId) }),
   );
 }
 
@@ -110,26 +114,26 @@ export function createEsmgmtIndex(payload: {
 export function deleteEsmgmtIndex(name: string, force?: boolean, connectionId?: number) {
   return getData<{ ok: boolean }>(
     http.delete(`/esmgmt/indices/${encodeURIComponent(name)}`, {
-      params: { force: force ? "true" : undefined, connection_id: connectionId },
+      params: { force: force ? "true" : undefined, ...connParams(connectionId) },
     }),
   );
 }
 
 export function openEsmgmtIndex(name: string, connectionId?: number) {
   return getData<{ ok: boolean }>(
-    http.post(`/esmgmt/indices/${encodeURIComponent(name)}/open`, {}, { params: { connection_id: connectionId } }),
+    http.post(`/esmgmt/indices/${encodeURIComponent(name)}/open`, {}, { params: connParams(connectionId) }),
   );
 }
 
 export function closeEsmgmtIndex(name: string, connectionId?: number) {
   return getData<{ ok: boolean }>(
-    http.post(`/esmgmt/indices/${encodeURIComponent(name)}/close`, {}, { params: { connection_id: connectionId } }),
+    http.post(`/esmgmt/indices/${encodeURIComponent(name)}/close`, {}, { params: connParams(connectionId) }),
   );
 }
 
 export function listEsmgmtNodes(connectionId?: number) {
   return getData<Record<string, unknown>[]>(
-    http.get("/esmgmt/nodes", { params: connectionId ? { connection_id: connectionId } : undefined }),
+    http.get("/esmgmt/nodes", { params: connParams(connectionId) }),
   );
 }
 
@@ -175,7 +179,7 @@ export function listEsmgmtRestores(params?: { connection_id?: number; limit?: nu
 
 export function listEsmgmtSchedules(connectionId?: number) {
   return getData<EsmgmtBackupSchedule[]>(
-    http.get("/esmgmt/schedules", { params: connectionId ? { connection_id: connectionId } : undefined }),
+    http.get("/esmgmt/schedules", { params: connParams(connectionId) }),
   );
 }
 

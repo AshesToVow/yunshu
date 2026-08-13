@@ -64,6 +64,7 @@ export function EsmgmtOverviewPage() {
   const [backups, setBackups] = useState<EsmgmtBackupJob[]>([]);
   const [restores, setRestores] = useState<EsmgmtRestoreJob[]>([]);
   const [schedules, setSchedules] = useState<EsmgmtBackupSchedule[]>([]);
+  const [indexFilter, setIndexFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [backingUp, setBackingUp] = useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -76,7 +77,9 @@ export function EsmgmtOverviewPage() {
     void listEsmgmtConnections()
       .then((list) => {
         setConnections(list || []);
-        const def = list?.find((c) => c.is_default) || list?.[0];
+        // 优先「日志平台 ES」(id=0)，与保留策略同源
+        const logPlat = list?.find((c) => c.id === 0);
+        const def = logPlat || list?.find((c) => c.is_default) || list?.[0];
         if (def) setConnectionId(def.id);
       })
       .catch(() => undefined);
@@ -236,18 +239,28 @@ export function EsmgmtOverviewPage() {
       <Card size="small">
         <Space wrap>
           <Select
-            style={{ minWidth: 240 }}
+            style={{ minWidth: 360 }}
             placeholder="选择连接"
             value={connectionId}
-            options={connections.map((c) => ({ value: c.id, label: c.name }))}
+            options={connections.map((c) => ({
+              value: c.id,
+              label: c.id === 0 ? `${c.name}（${c.addresses || "日志平台"}）` : `${c.name}（${c.addresses || "-"}）`,
+            }))}
             onChange={setConnectionId}
-            allowClear
           />
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
             刷新
           </Button>
           {status ? <Tag color={statusColor}>{status}</Tag> : null}
         </Space>
+        {connectionId === 0 ? (
+          <Alert
+            style={{ marginTop: 12 }}
+            type="info"
+            showIcon
+            message="当前为「日志平台 ES」，与「日志保留策略」索引列表同源；若仍对不上请核对数据字典 elasticsearch_* 地址。"
+          />
+        ) : null}
       </Card>
       {health ? (
         <Alert
@@ -260,25 +273,38 @@ export function EsmgmtOverviewPage() {
         title="索引"
         size="small"
         extra={
-          <Button
-            size="small"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              createForm.resetFields();
-              createForm.setFieldsValue({ body_json: DEFAULT_CREATE_BODY });
-              setCreateOpen(true);
-            }}
-          >
-            新建索引
-          </Button>
+          <Space wrap>
+            <Input
+              allowClear
+              size="small"
+              placeholder="过滤索引名，如 yunshu-k8s"
+              style={{ width: 220 }}
+              value={indexFilter}
+              onChange={(e) => setIndexFilter(e.target.value)}
+            />
+            <Button
+              size="small"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                createForm.resetFields();
+                createForm.setFieldsValue({ body_json: DEFAULT_CREATE_BODY });
+                setCreateOpen(true);
+              }}
+            >
+              新建索引
+            </Button>
+          </Space>
         }
-      >        <Table
+      >
+        <Table
           size="small"
           rowKey="name"
           loading={loading}
-          dataSource={indices}
-          pagination={{ pageSize: 10 }}
+          dataSource={indices.filter((i) =>
+            !indexFilter.trim() ? true : i.name.toLowerCase().includes(indexFilter.trim().toLowerCase()),
+          )}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
           columns={[
             { title: "索引", dataIndex: "name", ellipsis: true },
             { title: "文档数", dataIndex: "docs_count", width: 100 },
@@ -286,7 +312,8 @@ export function EsmgmtOverviewPage() {
             {
               title: "操作",
               width: 280,
-              render: (_: unknown, row: { name: string }) => (
+              render: (_: unknown, row?: { name: string }) =>
+                row ? (
                 <Space wrap>
                   <Button
                     type="link"
@@ -304,9 +331,17 @@ export function EsmgmtOverviewPage() {
                     关闭
                   </Button>
                   <Popconfirm
-                    title={row.name.includes("yunshu-agent") ? "日志索引，需强制删除确认" : "确认删除索引？"}
+                    title={
+                      row.name.includes("yunshu-agent") || row.name.includes("yunshu-k8s")
+                        ? "日志索引，需强制删除确认"
+                        : "确认删除索引？"
+                    }
                     onConfirm={() =>
-                      void deleteEsmgmtIndex(row.name, row.name.includes("yunshu-agent"), connectionId).then(load)
+                      void deleteEsmgmtIndex(
+                        row.name,
+                        row.name.includes("yunshu-agent") || row.name.includes("yunshu-k8s"),
+                        connectionId,
+                      ).then(load)
                     }
                   >
                     <Button type="link" size="small" danger>
@@ -314,7 +349,7 @@ export function EsmgmtOverviewPage() {
                     </Button>
                   </Popconfirm>
                 </Space>
-              ),
+                ) : null,
             },
           ]}
         />

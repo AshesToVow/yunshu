@@ -152,6 +152,26 @@ func (s *Service) ListConnections(ctx context.Context) ([]model.EsmgmtConnection
 		list[i].HasPassword = strings.TrimSpace(list[i].PasswordEnc) != ""
 		list[i].PasswordEnc = ""
 	}
+	// 前置「日志平台 ES」(id=0)，与保留策略/日志检索同源，避免连到另一套集群导致索引对不上
+	if s.logES != nil {
+		if cfg, err := s.logES.Resolve(ctx); err == nil && cfg.Enabled && len(cfg.Addresses) > 0 {
+			list = append([]model.EsmgmtConnection{{
+				ID:         0,
+				Name:       "日志平台 ES",
+				Addresses:  joinAddresses(cfg.Addresses),
+				Username:   cfg.Username,
+				HasPassword: strings.TrimSpace(cfg.Password) != "",
+				TimeoutSec: cfg.TimeoutSeconds,
+				IsDefault:  true,
+				Remark:     "与日志保留策略、日志检索使用同一 Elasticsearch",
+			}}, list...)
+			for i := range list {
+				if list[i].ID != 0 {
+					list[i].IsDefault = false
+				}
+			}
+		}
+	}
 	return list, nil
 }
 
@@ -421,6 +441,9 @@ func (s *Service) DeleteIndex(ctx context.Context, connectionID uint, index stri
 	if strings.Contains(strings.ToLower(index), "yunshu-agent") && !force {
 		return constants.ErrBadRequestWithMsg("索引名匹配 yunshu-agent，删除可能影响日志平台，请确认后传 force=true")
 	}
+	if strings.Contains(strings.ToLower(index), "yunshu-k8s") && !force {
+		return constants.ErrBadRequestWithMsg("索引名匹配 yunshu-k8s，删除可能影响日志平台，请确认后传 force=true")
+	}
 	cli, err := s.resolveClient(ctx, connectionID)
 	if err != nil {
 		return err
@@ -509,7 +532,7 @@ func (s *Service) decryptPassword(enc string) (string, error) {
 	return pt, nil
 }
 
-// resolveClient：connectionID>0 用该连接；否则默认连接；再否则回退日志平台 ES。
+// resolveClient：connectionID>0 用该连接；0 优先日志平台 ES（与保留/检索同源），再回退默认连接。
 func (s *Service) resolveClient(ctx context.Context, connectionID uint) (*esclient.Client, error) {
 	if connectionID > 0 {
 		cli, err := s.clientFromConnectionID(ctx, connectionID)
@@ -517,6 +540,12 @@ func (s *Service) resolveClient(ctx context.Context, connectionID uint) (*esclie
 			return nil, err
 		}
 		return cli, nil
+	}
+	if s.logES != nil {
+		cli, _, err := s.logES.Client(ctx)
+		if err == nil && cli != nil {
+			return cli, nil
+		}
 	}
 	var def model.EsmgmtConnection
 	err := s.db.WithContext(ctx).Where("is_default = ?", true).First(&def).Error
@@ -530,14 +559,7 @@ func (s *Service) resolveClient(ctx context.Context, connectionID uint) (*esclie
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
-	if s.logES == nil {
-		return nil, constants.ErrBadRequestWithMsg("未配置 Elasticsearch 连接，且日志平台 ES 不可用")
-	}
-	cli, _, err := s.logES.Client(ctx)
-	if err != nil {
-		return nil, constants.ErrBadRequestWithMsg("Elasticsearch 不可用: " + err.Error())
-	}
-	return cli, nil
+	return nil, constants.ErrBadRequestWithMsg("未配置 Elasticsearch 连接，且日志平台 ES 不可用")
 }
 
 func (s *Service) clientFromConnectionID(ctx context.Context, id uint) (*esclient.Client, error) {
