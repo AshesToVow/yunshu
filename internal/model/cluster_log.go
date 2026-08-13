@@ -17,6 +17,8 @@ type ClusterLogAgent struct {
 	DesiredReplicas int        `json:"desired_replicas" gorm:"default:0"`
 	ReadyReplicas   int        `json:"ready_replicas" gorm:"default:0"`
 	RateLimitQPS    int        `json:"rate_limit_qps" gorm:"not null;default:2000;comment:项目在该集群采集 QPS 限流"`
+	PipelinesYAML   string     `json:"pipelines_yml,omitempty" gorm:"type:longtext;comment:自定义 pipelines.yml；空则按规则生成"`
+	PipelinesCustom bool       `json:"pipelines_custom" gorm:"not null;default:false;comment:true=使用 PipelinesYAML 覆盖自动生成"`
 	LastError       string     `json:"last_error" gorm:"size:1024"`
 	LastSyncAt      *time.Time `json:"last_sync_at"`
 	CreatedAt       time.Time  `json:"created_at"`

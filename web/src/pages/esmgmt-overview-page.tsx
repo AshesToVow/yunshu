@@ -74,7 +74,7 @@ export function EsmgmtOverviewPage() {
   const [createForm] = Form.useForm();
 
   useEffect(() => {
-    void listEsmgmtConnections()
+    void listEsmgmtConnections({ include_log_platform: true })
       .then((list) => {
         setConnections(list || []);
         // 优先「日志平台 ES」(id=0)，与保留策略同源

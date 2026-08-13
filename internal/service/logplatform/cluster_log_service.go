@@ -290,24 +290,119 @@ func (s *ClusterLogService) ListAgents(ctx context.Context, projectID uint) ([]m
 	return list, nil
 }
 
-func (s *ClusterLogService) PreviewPipelines(ctx context.Context, projectID, clusterID uint) (string, error) {
+// ClusterPipelinesPreview pipelines 预览（含是否自定义覆盖）。
+type ClusterPipelinesPreview struct {
+	PipelinesYAML string `json:"pipelines_yml"`
+	GeneratedYAML string `json:"generated_yml"`
+	IsCustom      bool   `json:"is_custom"`
+}
+
+func (s *ClusterLogService) PreviewPipelines(ctx context.Context, projectID, clusterID uint) (*ClusterPipelinesPreview, error) {
 	if err := s.ensureProject(ctx, projectID); err != nil {
-		return "", err
+		return nil, err
 	}
 	if clusterID == 0 {
-		return "", constants.ErrBadRequestWithMsg("cluster_id 无效")
+		return nil, constants.ErrBadRequestWithMsg("cluster_id 无效")
 	}
+	generated, err := s.generatePipelinesYAML(ctx, projectID, clusterID, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := &ClusterPipelinesPreview{
+		PipelinesYAML: generated,
+		GeneratedYAML: generated,
+		IsCustom:      false,
+	}
+	var existing model.ClusterLogAgent
+	if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&existing).Error; err == nil {
+		if existing.PipelinesCustom && strings.TrimSpace(existing.PipelinesYAML) != "" {
+			out.IsCustom = true
+			out.PipelinesYAML = existing.PipelinesYAML
+		}
+	}
+	return out, nil
+}
+
+// ClusterPipelinesUpsert 保存/重置自定义 pipelines.yml。
+type ClusterPipelinesUpsert struct {
+	ClusterID     uint   `json:"cluster_id"`
+	PipelinesYAML string `json:"pipelines_yml"`
+	Reset         bool   `json:"reset"`
+	Apply         bool   `json:"apply"`
+	Namespace     string `json:"namespace"`
+	RateLimitQPS  int    `json:"rate_limit_qps"`
+}
+
+func (s *ClusterLogService) SavePipelines(ctx context.Context, projectID uint, req ClusterPipelinesUpsert) (*ClusterPipelinesPreview, error) {
+	if err := s.ensureProject(ctx, projectID); err != nil {
+		return nil, err
+	}
+	if req.ClusterID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("cluster_id 无效")
+	}
+	var agent model.ClusterLogAgent
+	err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, req.ClusterID).First(&agent).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		agent = model.ClusterLogAgent{
+			ProjectID:    projectID,
+			ClusterID:    req.ClusterID,
+			Namespace:    defaultClusterLogNamespace,
+			Status:       "unknown",
+			RateLimitQPS: defaultClusterLogRateLimitQPS,
+		}
+		if err := s.db.WithContext(ctx).Create(&agent).Error; err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+
+	if req.Reset {
+		agent.PipelinesCustom = false
+		agent.PipelinesYAML = ""
+	} else {
+		yml := strings.TrimSpace(req.PipelinesYAML)
+		if yml == "" {
+			return nil, constants.ErrBadRequestWithMsg("pipelines_yml 不能为空")
+		}
+		if !strings.Contains(yml, "pipelines:") {
+			return nil, constants.ErrBadRequestWithMsg("pipelines_yml 须包含 pipelines: 根节点")
+		}
+		agent.PipelinesCustom = true
+		agent.PipelinesYAML = req.PipelinesYAML
+	}
+	if ns := strings.TrimSpace(req.Namespace); ns != "" {
+		agent.Namespace = ns
+	}
+	if req.RateLimitQPS > 0 {
+		agent.RateLimitQPS = req.RateLimitQPS
+	}
+	if err := s.db.WithContext(ctx).Save(&agent).Error; err != nil {
+		return nil, err
+	}
+	if req.Apply {
+		if _, err := s.DeployOrSync(ctx, projectID, req.ClusterID, agent.Namespace, agent.RateLimitQPS); err != nil {
+			return nil, err
+		}
+	}
+	return s.PreviewPipelines(ctx, projectID, req.ClusterID)
+}
+
+func (s *ClusterLogService) generatePipelinesYAML(ctx context.Context, projectID, clusterID uint, rateLimitQPS int) (string, error) {
 	rules, err := s.listRuleModels(ctx, projectID, clusterID)
 	if err != nil {
 		return "", err
 	}
 	esCfg, kafkaCfg := s.resolveSinkConfigs(ctx)
-	rateQPS := defaultClusterLogRateLimitQPS
-	var existing model.ClusterLogAgent
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&existing).Error; err == nil && existing.RateLimitQPS > 0 {
-		rateQPS = existing.RateLimitQPS
+	qps := rateLimitQPS
+	if qps <= 0 {
+		qps = defaultClusterLogRateLimitQPS
+		var existing model.ClusterLogAgent
+		if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&existing).Error; err == nil && existing.RateLimitQPS > 0 {
+			qps = existing.RateLimitQPS
+		}
 	}
-	return BuildClusterPipelinesYAML(projectID, clusterID, rules, esCfg, kafkaCfg, rateQPS), nil
+	return BuildClusterPipelinesYAML(projectID, clusterID, rules, esCfg, kafkaCfg, qps), nil
 }
 
 func (s *ClusterLogService) resolveSinkConfigs(ctx context.Context) (config.ElasticsearchConfig, config.KafkaConfig) {
@@ -361,7 +456,12 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 			return nil, constants.ErrBadRequestWithMsg("确保 Kafka Topic 失败: " + err.Error())
 		}
 	}
-	pipelines := BuildClusterPipelinesYAML(projectID, clusterID, rules, esCfg, kafkaCfg, qps)
+	pipelines := ""
+	if existing != nil && existing.PipelinesCustom && strings.TrimSpace(existing.PipelinesYAML) != "" {
+		pipelines = existing.PipelinesYAML
+	} else {
+		pipelines = BuildClusterPipelinesYAML(projectID, clusterID, rules, esCfg, kafkaCfg, qps)
+	}
 	systemYAML := RenderClusterSystemConfigYAML(projectID, clusterID, 9196)
 	manifest := RenderClusterLogManifest(ClusterLogManifestInput{
 		ProjectID:     projectID,
@@ -401,6 +501,10 @@ func (s *ClusterLogService) maybeResyncAgent(ctx context.Context, projectID, clu
 	}
 	st := strings.ToLower(strings.TrimSpace(agent.Status))
 	if st != "deployed" && st != "deploying" {
+		return
+	}
+	// 自定义 pipelines 时不因规则变更自动覆盖，避免冲掉手工配置
+	if agent.PipelinesCustom {
 		return
 	}
 	_, _ = s.DeployOrSync(ctx, projectID, clusterID, agent.Namespace, agent.RateLimitQPS)

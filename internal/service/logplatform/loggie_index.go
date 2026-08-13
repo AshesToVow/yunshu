@@ -264,42 +264,44 @@ func ClusterLoggieConfigMapName(projectID uint) string {
 	return fmt.Sprintf("yunshu-loggie-config-p%d", projectID)
 }
 
-// K8sIndexSink Loggie ES sink：yunshu-k8s-{clusterId}-p{projectId}-${+YYYY.MM.DD}
-func K8sIndexSink(clusterID, projectID uint) string {
+// K8sIndexSink Loggie ES sink：{prefix}-{clusterId}-p{projectId}-${+YYYY.MM.DD}
+func K8sIndexSink(clusterID, projectID uint, prefix string) string {
+	p := k8sNamePrefix(prefix)
 	if projectID == 0 {
-		return fmt.Sprintf("%s-%d-${+YYYY.MM.DD}", defaultK8sIndexPrefix, clusterID)
+		return fmt.Sprintf("%s-%d-${+YYYY.MM.DD}", p, clusterID)
 	}
-	return fmt.Sprintf("%s-%d-p%d-${+YYYY.MM.DD}", defaultK8sIndexPrefix, clusterID, projectID)
+	return fmt.Sprintf("%s-%d-p%d-${+YYYY.MM.DD}", p, clusterID, projectID)
 }
 
 // K8sIndexForDay 某日索引名（含项目隔离；projectID=0 为旧格式）。
-func K8sIndexForDay(clusterID, projectID uint, day time.Time) string {
+func K8sIndexForDay(clusterID, projectID uint, day time.Time, prefix string) string {
 	if day.IsZero() {
 		day = time.Now().UTC()
 	}
 	d := day.UTC().Format("2006.01.02")
+	p := k8sNamePrefix(prefix)
 	if projectID == 0 {
-		return fmt.Sprintf("%s-%d-%s", defaultK8sIndexPrefix, clusterID, d)
+		return fmt.Sprintf("%s-%d-%s", p, clusterID, d)
 	}
-	return fmt.Sprintf("%s-%d-p%d-%s", defaultK8sIndexPrefix, clusterID, projectID, d)
+	return fmt.Sprintf("%s-%d-p%d-%s", p, clusterID, projectID, d)
 }
 
 // K8sIndexPattern 单集群检索通配（含各项目分片与旧索引）。
-func K8sIndexPattern(clusterID uint) string {
-	return fmt.Sprintf("%s-%d-*", defaultK8sIndexPrefix, clusterID)
+func K8sIndexPattern(clusterID uint, prefix string) string {
+	return fmt.Sprintf("%s-%d-*", k8sNamePrefix(prefix), clusterID)
 }
 
 // K8sIndexPatternByProject 单集群单项目检索通配。
-func K8sIndexPatternByProject(clusterID, projectID uint) string {
+func K8sIndexPatternByProject(clusterID, projectID uint, prefix string) string {
 	if projectID == 0 {
-		return K8sIndexPattern(clusterID)
+		return K8sIndexPattern(clusterID, prefix)
 	}
-	return fmt.Sprintf("%s-%d-p%d-*", defaultK8sIndexPrefix, clusterID, projectID)
+	return fmt.Sprintf("%s-%d-p%d-*", k8sNamePrefix(prefix), clusterID, projectID)
 }
 
 // GlobalK8sIndexPattern 全量 K8s 日志索引通配。
-func GlobalK8sIndexPattern() string {
-	return defaultK8sIndexPrefix + "-*"
+func GlobalK8sIndexPattern(prefix string) string {
+	return k8sNamePrefix(prefix) + "-*"
 }
 
 // K8sKafkaTopicTemplate Kafka sink topic 模板（含项目隔离）。

@@ -174,6 +174,12 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 }
 
 func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery) string {
+	k8sPrefix := ""
+	if s.es != nil {
+		if cfg, err := s.es.Resolve(ctx); err == nil {
+			k8sPrefix = cfg.K8sIndexPrefix
+		}
+	}
 	mode := normalizeCollectorMode(q.CollectorMode)
 	if q.ClusterID != nil && *q.ClusterID > 0 && mode == "" {
 		mode = "k8s"
@@ -181,14 +187,14 @@ func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery)
 	switch mode {
 	case "k8s":
 		if q.ClusterID != nil && *q.ClusterID > 0 {
-			return K8sIndexPattern(*q.ClusterID)
+			return K8sIndexPattern(*q.ClusterID, k8sPrefix)
 		}
-		return GlobalK8sIndexPattern()
+		return GlobalK8sIndexPattern(k8sPrefix)
 	case "host":
 		return s.resolveHostIndices(ctx, q)
 	default:
 		host := s.resolveHostIndices(ctx, q)
-		k8s := GlobalK8sIndexPattern()
+		k8s := GlobalK8sIndexPattern(k8sPrefix)
 		if strings.TrimSpace(host) == "" {
 			return k8s
 		}

@@ -49,7 +49,7 @@ func EnsureAgentKafkaTopic(ctx context.Context, cfg config.KafkaConfig, serverHo
 // EnsureK8sKafkaTopic 确保集群采集当日 Topic 存在（含项目隔离）。
 func EnsureK8sKafkaTopic(ctx context.Context, cfg config.KafkaConfig, clusterID, projectID uint) (string, error) {
 	cfg = cfg.Normalized()
-	topic := K8sKafkaTopicForDay(clusterID, projectID, defaultK8sIndexPrefix, time.Now().UTC())
+	topic := K8sKafkaTopicForDay(clusterID, projectID, cfg.K8sTopicPrefix, time.Now().UTC())
 	if err := ensureKafkaTopics(ctx, cfg, []string{topic}); err != nil {
 		return topic, err
 	}
@@ -107,7 +107,7 @@ func DeleteAgentKafkaTopic(ctx context.Context, cfg config.KafkaConfig, topic st
 	if topic == "" {
 		return fmt.Errorf("topic required")
 	}
-	if !IsAgentKafkaTopic(topic, cfg.TopicPrefix) && !IsK8sKafkaTopic(topic, defaultK8sIndexPrefix) {
+	if !IsAgentKafkaTopic(topic, cfg.TopicPrefix) && !IsK8sKafkaTopic(topic, cfg.K8sTopicPrefix) {
 		return fmt.Errorf("拒绝删除非平台 Topic: %s", topic)
 	}
 	client, err := kafkaClient(cfg)
@@ -148,7 +148,7 @@ func listAgentKafkaTopics(ctx context.Context, cfg config.KafkaConfig) ([]string
 		return nil, err
 	}
 	prefix := cfg.TopicPrefix + "-"
-	k8sPrefix := defaultK8sIndexPrefix + "-"
+	k8sPrefix := k8sNamePrefix(cfg.K8sTopicPrefix) + "-"
 	seen := map[string]struct{}{}
 	for _, p := range parts {
 		name := strings.TrimSpace(p.Topic)
@@ -159,7 +159,7 @@ func listAgentKafkaTopics(ctx context.Context, cfg config.KafkaConfig) ([]string
 			seen[name] = struct{}{}
 			continue
 		}
-		if strings.HasPrefix(name, k8sPrefix) && IsK8sKafkaTopic(name, defaultK8sIndexPrefix) {
+		if strings.HasPrefix(name, k8sPrefix) && IsK8sKafkaTopic(name, cfg.K8sTopicPrefix) {
 			seen[name] = struct{}{}
 		}
 	}

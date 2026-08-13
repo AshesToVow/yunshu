@@ -15,6 +15,7 @@ type KafkaDictTypes struct {
 	Enabled       string
 	Brokers       string
 	Topic         string
+	K8sTopic      string
 	ConsumerGroup string
 	Username      string
 	Password      string
@@ -28,6 +29,7 @@ func DefaultKafkaDictTypes() KafkaDictTypes {
 		Enabled:       "kafka_enabled",
 		Brokers:       "kafka_brokers",
 		Topic:         "kafka_topic_prefix",
+		K8sTopic:      "kafka_k8s_topic_prefix",
 		ConsumerGroup: "kafka_consumer_group",
 		Username:      "kafka_username",
 		Password:      "kafka_password",
@@ -58,6 +60,9 @@ func ResolveKafkaConfig(ctx context.Context, db *gorm.DB, base config.KafkaConfi
 		out.TopicPrefix = strings.TrimSpace(v)
 	} else if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, "kafka_topic"); ok {
 		out.TopicPrefix = strings.TrimSpace(v)
+	}
+	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.K8sTopic); ok {
+		out.K8sTopicPrefix = strings.TrimSpace(v)
 	}
 	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.ConsumerGroup); ok {
 		out.ConsumerGroup = strings.TrimSpace(v)

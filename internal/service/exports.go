@@ -314,6 +314,8 @@ type (
 	ClusterLogService     = logplatform.ClusterLogService
 	ClusterLogRuleUpsert  = logplatform.ClusterLogRuleUpsert
 	ClusterLogRuleItem    = logplatform.ClusterLogRuleItem
+	ClusterPipelinesPreview = logplatform.ClusterPipelinesPreview
+	ClusterPipelinesUpsert  = logplatform.ClusterPipelinesUpsert
 	LogRetentionItem      = logplatform.LogRetentionItem
 	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
 	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult

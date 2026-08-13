@@ -11,6 +11,7 @@ import {
   listClusterLogRules,
   previewClusterLogPipelines,
   refreshClusterLogStatus,
+  saveClusterLogPipelines,
   updateClusterLogRule,
   type ClusterLogAgent,
   type ClusterLogRule,
@@ -47,6 +48,11 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ClusterLogRule | null>(null);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [pipelineText, setPipelineText] = useState("");
+  const [pipelineGenerated, setPipelineGenerated] = useState("");
+  const [pipelineCustom, setPipelineCustom] = useState(false);
+  const [pipelineSaving, setPipelineSaving] = useState(false);
   const [rateLimitQps, setRateLimitQps] = useState<number>(2000);
   const [form] = Form.useForm();
 
@@ -150,17 +156,40 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
     if (!projectId || !clusterId) return;
     try {
       const res = await previewClusterLogPipelines(projectId, clusterId);
-      Modal.info({
-        title: "pipelines.yml 预览",
-        width: 800,
-        content: (
-          <pre style={{ maxHeight: 480, overflow: "auto", fontSize: 12, whiteSpace: "pre-wrap" }}>
-            {res?.pipelines_yml || ""}
-          </pre>
-        ),
-      });
+      setPipelineText(res?.pipelines_yml || "");
+      setPipelineGenerated(res?.generated_yml || res?.pipelines_yml || "");
+      setPipelineCustom(Boolean(res?.is_custom));
+      setPipelineOpen(true);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "预览失败"));
+    }
+  }
+
+  async function onSavePipelines(apply: boolean, reset = false) {
+    if (!projectId || !clusterId) return;
+    setPipelineSaving(true);
+    try {
+      const res = await saveClusterLogPipelines(projectId, {
+        cluster_id: clusterId,
+        pipelines_yml: reset ? undefined : pipelineText,
+        reset,
+        apply,
+        namespace: "yunshu-logging",
+        rate_limit_qps: rateLimitQps,
+      });
+      setPipelineText(res?.pipelines_yml || "");
+      setPipelineGenerated(res?.generated_yml || "");
+      setPipelineCustom(Boolean(res?.is_custom));
+      if (reset) {
+        message.success(apply ? "已恢复自动生成并下发" : "已恢复自动生成");
+      } else {
+        message.success(apply ? "已保存并下发" : "已保存自定义 pipelines.yml");
+      }
+      if (apply) void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "保存失败"));
+    } finally {
+      setPipelineSaving(false);
     }
   }
 
@@ -206,7 +235,7 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
           刷新
         </Button>
         <Button disabled={!clusterId || !projectId} onClick={() => void onPreview()}>
-          预览 Pipeline
+          编辑 Pipeline
         </Button>
         <Button type="primary" icon={<CloudUploadOutlined />} disabled={!clusterId || !projectId} onClick={() => void onDeploy()}>
           部署/同步 DaemonSet
@@ -371,6 +400,50 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
             <Input />
           </Form.Item>
         </Form>
+      </Modal>
+      <Modal
+        title={
+          <Space>
+            <span>pipelines.yml</span>
+            {pipelineCustom ? <Tag color="orange">自定义</Tag> : <Tag>自动生成</Tag>}
+          </Space>
+        }
+        open={pipelineOpen}
+        width={900}
+        onCancel={() => setPipelineOpen(false)}
+        footer={
+          <Space wrap>
+            <Button onClick={() => setPipelineOpen(false)}>关闭</Button>
+            <Button
+              disabled={!pipelineGenerated}
+              onClick={() => {
+                setPipelineText(pipelineGenerated);
+                message.info("已填入当前规则生成的内容，保存后才会覆盖自定义");
+              }}
+            >
+              填入自动生成
+            </Button>
+            <Button loading={pipelineSaving} onClick={() => void onSavePipelines(false, true)}>
+              恢复自动生成
+            </Button>
+            <Button loading={pipelineSaving} type="default" onClick={() => void onSavePipelines(false)}>
+              仅保存
+            </Button>
+            <Button loading={pipelineSaving} type="primary" onClick={() => void onSavePipelines(true)}>
+              保存并下发
+            </Button>
+          </Space>
+        }
+      >
+        <Input.TextArea
+          value={pipelineText}
+          onChange={(e) => setPipelineText(e.target.value)}
+          autoSize={{ minRows: 18, maxRows: 28 }}
+          style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}
+        />
+        <div style={{ marginTop: 8, color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
+          自定义模式下规则变更不会自动覆盖本文件；索引/Topic 前缀见数据字典 elasticsearch_k8s_index_prefix、kafka_k8s_topic_prefix。
+        </div>
       </Modal>
     </Space>
   );

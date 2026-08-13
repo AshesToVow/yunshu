@@ -33,7 +33,7 @@ func TestParseKafkaLogMessage_NilBodyNotNilString(t *testing.T) {
 			"pod":            "dodo-web-x",
 		},
 	})
-	doc, _, err := parseKafkaLogMessage(raw, "yunshu-k8s-4-p1-2026.08.12", "yunshu-agent")
+	doc, _, err := parseKafkaLogMessage(raw, "yunshu-k8s-4-p1-2026.08.12", "yunshu-agent", "yunshu-k8s", "yunshu-k8s")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestParseKafkaLogMessage_UsesBodyString(t *testing.T) {
 			"collector_mode": "k8s",
 		},
 	})
-	doc, index, err := parseKafkaLogMessage(raw, "yunshu-k8s-4-p1-2026.08.12", "yunshu-agent")
+	doc, index, err := parseKafkaLogMessage(raw, "yunshu-k8s-4-p1-2026.08.12", "yunshu-agent", "yunshu-k8s", "yunshu-k8s")
 	if err != nil {
 		t.Fatal(err)
 	}

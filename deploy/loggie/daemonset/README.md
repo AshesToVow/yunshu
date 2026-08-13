@@ -25,10 +25,12 @@ hostPath：
 
 ## 注意
 
-- 索引：`yunshu-k8s-{clusterId}-p{projectId}-*`（按项目隔离，避免同集群互盖）
+- 索引：`yunshu-k8s-{clusterId}-p{projectId}-*`（前缀可由字典 `elasticsearch_k8s_index_prefix` 配置）
+- Topic：`yunshu-k8s-{clusterId}-p{projectId}-*`（前缀可由字典 `kafka_k8s_topic_prefix` 配置）
 - DaemonSet/ConfigMap/SA：`yunshu-loggie-p{projectId}`（同 NS `yunshu-logging` 可多项目并存）
 - 平台下发跳过命名空间白名单；部署时 Ensure 当日 Kafka Topic
-- 部署时可传 `rate_limit_qps`；规则变更后若已部署会自动重同步
+- 部署时可传 `rate_limit_qps`；规则变更后若已部署会自动重同步（**自定义 pipelines 除外**）
+- 支持编辑/保存 `pipelines.yml`（`PUT .../cluster-log/pipelines`）
 - 列表接口返回 `allocated_qps`（生效限流，前端勿本地重算）
 - 旧版 DaemonSet 名 `yunshu-loggie` 需手工删除；新名为 `yunshu-loggie-p{projectId}`
 - 不要在主机日志源里再配 `/var/log/pods`，避免双采

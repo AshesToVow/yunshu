@@ -144,6 +144,15 @@ type ProxyRequest struct {
 }
 
 func (s *Service) ListConnections(ctx context.Context) ([]model.EsmgmtConnection, error) {
+	return s.listConnections(ctx, false)
+}
+
+// ListConnectionsForSelect 含「日志平台 ES」虚拟项（id=0），供集群概览下拉；连接管理页勿用。
+func (s *Service) ListConnectionsForSelect(ctx context.Context) ([]model.EsmgmtConnection, error) {
+	return s.listConnections(ctx, true)
+}
+
+func (s *Service) listConnections(ctx context.Context, includeLogPlatform bool) ([]model.EsmgmtConnection, error) {
 	var list []model.EsmgmtConnection
 	if err := s.db.WithContext(ctx).Order("id desc").Find(&list).Error; err != nil {
 		return nil, err
@@ -152,24 +161,27 @@ func (s *Service) ListConnections(ctx context.Context) ([]model.EsmgmtConnection
 		list[i].HasPassword = strings.TrimSpace(list[i].PasswordEnc) != ""
 		list[i].PasswordEnc = ""
 	}
-	// 前置「日志平台 ES」(id=0)，与保留策略/日志检索同源，避免连到另一套集群导致索引对不上
-	if s.logES != nil {
-		if cfg, err := s.logES.Resolve(ctx); err == nil && cfg.Enabled && len(cfg.Addresses) > 0 {
-			list = append([]model.EsmgmtConnection{{
-				ID:         0,
-				Name:       "日志平台 ES",
-				Addresses:  joinAddresses(cfg.Addresses),
-				Username:   cfg.Username,
-				HasPassword: strings.TrimSpace(cfg.Password) != "",
-				TimeoutSec: cfg.TimeoutSeconds,
-				IsDefault:  true,
-				Remark:     "与日志保留策略、日志检索使用同一 Elasticsearch",
-			}}, list...)
-			for i := range list {
-				if list[i].ID != 0 {
-					list[i].IsDefault = false
-				}
-			}
+	if !includeLogPlatform || s.logES == nil {
+		return list, nil
+	}
+	cfg, err := s.logES.Resolve(ctx)
+	if err != nil || !cfg.Enabled || len(cfg.Addresses) == 0 {
+		return list, nil
+	}
+	virtual := model.EsmgmtConnection{
+		ID:          0,
+		Name:        "日志平台 ES",
+		Addresses:   joinAddresses(cfg.Addresses),
+		Username:    cfg.Username,
+		HasPassword: strings.TrimSpace(cfg.Password) != "",
+		TimeoutSec:  cfg.TimeoutSeconds,
+		IsDefault:   true,
+		Remark:      "只读虚拟连接：与保留策略/日志检索同源，请在数据字典改 elasticsearch_*",
+	}
+	list = append([]model.EsmgmtConnection{virtual}, list...)
+	for i := range list {
+		if list[i].ID != 0 {
+			list[i].IsDefault = false
 		}
 	}
 	return list, nil
@@ -223,7 +235,7 @@ func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequ
 
 func (s *Service) UpdateConnection(ctx context.Context, id uint, req ConnectionUpsertRequest) (*model.EsmgmtConnection, error) {
 	if id == 0 {
-		return nil, constants.ErrBadRequestWithMsg("连接 ID 无效")
+		return nil, constants.ErrBadRequestWithMsg("「日志平台 ES」为只读虚拟连接，不可编辑；请在数据字典修改 elasticsearch_*")
 	}
 	var row model.EsmgmtConnection
 	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
@@ -274,7 +286,7 @@ func (s *Service) UpdateConnection(ctx context.Context, id uint, req ConnectionU
 
 func (s *Service) DeleteConnection(ctx context.Context, id uint) error {
 	if id == 0 {
-		return constants.ErrBadRequestWithMsg("连接 ID 无效")
+		return constants.ErrBadRequestWithMsg("「日志平台 ES」为只读虚拟连接，不可删除；请在数据字典修改 elasticsearch_*")
 	}
 	res := s.db.WithContext(ctx).Delete(&model.EsmgmtConnection{}, id)
 	if res.Error != nil {
@@ -378,7 +390,12 @@ func (s *Service) ListIndices(ctx context.Context, connectionID uint, pattern st
 	if err != nil {
 		return nil, err
 	}
-	list, err := cli.CatIndices(ctx, pattern)
+	// 管理台默认列全量非系统索引；勿回落到主机 elasticsearch_index_pattern（否则看不到 yunshu-k8s-*）
+	pat := strings.TrimSpace(pattern)
+	if pat == "" {
+		pat = "*"
+	}
+	list, err := cli.CatIndices(ctx, pat)
 	if err != nil {
 		return nil, constants.ErrBadRequestWithMsg("索引列表查询失败: " + err.Error())
 	}

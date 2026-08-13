@@ -567,6 +567,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "删除集群日志规则", Resource: "/api/v1/projects/:id/cluster-log/rules/:rule_id", Action: "DELETE", Description: "Delete K8s cluster log rule"},
 		{Name: "集群日志 Agent 列表", Resource: "/api/v1/projects/:id/cluster-log/agents", Action: "GET", Description: "List K8s cluster log agents"},
 		{Name: "集群日志 Pipeline 预览", Resource: "/api/v1/projects/:id/cluster-log/pipelines/preview", Action: "GET", Description: "Preview K8s cluster pipelines.yml"},
+		{Name: "保存集群日志 Pipeline", Resource: "/api/v1/projects/:id/cluster-log/pipelines", Action: "PUT", Description: "Save or reset custom K8s cluster pipelines.yml"},
 		{Name: "部署集群日志采集", Resource: "/api/v1/projects/:id/cluster-log/deploy", Action: "POST", Description: "Deploy or sync Loggie DaemonSet"},
 		{Name: "集群日志采集状态", Resource: "/api/v1/projects/:id/cluster-log/status", Action: "GET", Description: "Refresh K8s cluster log DaemonSet status"},
 		{Name: "Loggie 配置下载", Resource: "/api/v1/projects/:id/loggie/pipeline/download", Action: "GET", Description: "Download loggie pipeline bundle"},

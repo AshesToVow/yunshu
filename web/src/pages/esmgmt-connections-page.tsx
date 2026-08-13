@@ -131,7 +131,8 @@ export function EsmgmtConnectionsPage() {
             {
               title: "操作",
               width: 220,
-              render: (_: unknown, row: EsmgmtConnection) => (
+              render: (_: unknown, row?: EsmgmtConnection) =>
+                row ? (
                 <Space>
                   <Button
                     type="link"
@@ -158,7 +159,7 @@ export function EsmgmtConnectionsPage() {
                     </Button>
                   </Popconfirm>
                 </Space>
-              ),
+                ) : null,
             },
           ]}
         />

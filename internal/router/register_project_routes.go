@@ -48,6 +48,7 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 		projectScoped.DELETE("/cluster-log/rules/:rule_id", d.clusterLogHandler.DeleteRule)
 		projectScoped.GET("/cluster-log/agents", d.clusterLogHandler.ListAgents)
 		projectScoped.GET("/cluster-log/pipelines/preview", d.clusterLogHandler.PreviewPipelines)
+		projectScoped.PUT("/cluster-log/pipelines", d.clusterLogHandler.SavePipelines)
 		projectScoped.POST("/cluster-log/deploy", d.clusterLogHandler.Deploy)
 		projectScoped.GET("/cluster-log/status", d.clusterLogHandler.RefreshStatus)
 	}

@@ -288,13 +288,20 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 }
 
 func (s *KafkaToESService) writeBatch(ctx context.Context, msgs []kafka.Message, topicPrefix string) (*esclient.BulkResult, error) {
-	cli, _, err := s.es.Client(ctx)
+	cli, esCfg, err := s.es.Client(ctx)
 	if err != nil {
 		return nil, err
 	}
+	k8sTopicPrefix := defaultK8sIndexPrefix
+	if s.kafka != nil {
+		if kcfg, err := s.kafka.Resolve(ctx); err == nil {
+			k8sTopicPrefix = kcfg.K8sTopicPrefix
+		}
+	}
+	k8sIndexPrefix := esCfg.K8sIndexPrefix
 	var ndjson strings.Builder
 	for _, m := range msgs {
-		doc, index, err := parseKafkaLogMessage(m.Value, m.Topic, topicPrefix)
+		doc, index, err := parseKafkaLogMessage(m.Value, m.Topic, topicPrefix, k8sTopicPrefix, k8sIndexPrefix)
 		if err != nil {
 			s.errorTotal.Add(1)
 			continue
@@ -319,7 +326,7 @@ func failedCount(res *esclient.BulkResult) int {
 	return res.Failed
 }
 
-func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any, string, error) {
+func parseKafkaLogMessage(raw []byte, topic, topicPrefix, k8sTopicPrefix, k8sIndexPrefix string) (map[string]any, string, error) {
 	s := strings.TrimSpace(string(raw))
 	if s == "" {
 		return nil, "", fmt.Errorf("empty message")
@@ -331,7 +338,7 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 		return map[string]any{
 			"@timestamp": now.Format(time.RFC3339Nano),
 			"message":    s,
-		}, resolveIndexName(host, 0, topic, topicPrefix, now), nil
+		}, resolveIndexName(host, 0, topic, topicPrefix, k8sTopicPrefix, k8sIndexPrefix, now), nil
 	}
 
 	doc := map[string]any{}
@@ -378,7 +385,7 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix string) (map[string]any
 	if _, ok := doc["@timestamp"]; !ok {
 		doc["@timestamp"] = ts.Format(time.RFC3339Nano)
 	}
-	return doc, resolveIndexName(host, serverID, topic, topicPrefix, ts), nil
+	return doc, resolveIndexName(host, serverID, topic, topicPrefix, k8sTopicPrefix, k8sIndexPrefix, ts), nil
 }
 
 // coalesceLogMessage 从 Loggie/Kafka 事件中取正文；避免 fmt.Sprint(nil) 写成字面量 "<nil>"。
@@ -438,9 +445,9 @@ func resolveHostForIndex(fields map[string]any, topic, topicPrefix string, serve
 	return "unknown"
 }
 
-func resolveIndexName(host string, serverID uint, topic, topicPrefix string, ts time.Time) string {
-	if cid, pid, ok := ParseK8sKafkaTopicMeta(topic, defaultK8sIndexPrefix); ok {
-		return K8sIndexForDay(cid, pid, ts)
+func resolveIndexName(host string, serverID uint, topic, topicPrefix, k8sTopicPrefix, k8sIndexPrefix string, ts time.Time) string {
+	if cid, pid, ok := ParseK8sKafkaTopicMeta(topic, k8sTopicPrefix); ok {
+		return K8sIndexForDay(cid, pid, ts, k8sIndexPrefix)
 	}
 	host = strings.TrimSpace(host)
 	if host != "" && host != "unknown" && !strings.HasPrefix(host, "server-") {

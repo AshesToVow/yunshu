@@ -116,12 +116,31 @@ func (h *ClusterLogHandler) PreviewPipelines(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	yaml, err := h.svc.PreviewPipelines(c.Request.Context(), projectID, clusterID)
+	out, err := h.svc.PreviewPipelines(c.Request.Context(), projectID, clusterID)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, gin.H{"pipelines_yml": yaml})
+	response.Success(c, out)
+}
+
+func (h *ClusterLogHandler) SavePipelines(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req service.ClusterPipelinesUpsert
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	out, err := h.svc.SavePipelines(c.Request.Context(), projectID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, out)
 }
 
 type clusterLogDeployReq struct {

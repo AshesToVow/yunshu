@@ -20,7 +20,16 @@ func NewEsmgmtHandler(svc *esmgmtsvc.Service) *EsmgmtHandler {
 }
 
 func (h *EsmgmtHandler) ListConnections(c *gin.Context) {
-	list, err := h.svc.ListConnections(c.Request.Context())
+	includeLog := strings.EqualFold(c.Query("include_log_platform"), "true") || c.Query("include_log_platform") == "1"
+	var (
+		list any
+		err  error
+	)
+	if includeLog {
+		list, err = h.svc.ListConnectionsForSelect(c.Request.Context())
+	} else {
+		list, err = h.svc.ListConnections(c.Request.Context())
+	}
 	if err != nil {
 		response.Error(c, err)
 		return

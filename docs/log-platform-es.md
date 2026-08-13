@@ -19,7 +19,10 @@
 |-----------|------|
 | `kafka_enabled` | `true` 启用中转；`false` 直写 ES |
 | `kafka_brokers` | 单节点或集群（JSON 数组 / 逗号分隔） |
-| `kafka_topic` / `kafka_topic_prefix` | Agent Topic 前缀，默认 `yunshu-agent`；实际 Topic=`yunshu-agent-{ip}-YYYY.MM.DD` |
+| `kafka_topic` / `kafka_topic_prefix` | **主机** Topic 前缀，默认 `yunshu-agent`；实际 Topic=`yunshu-agent-{ip}-YYYY.MM.DD` |
+| `kafka_k8s_topic_prefix` | **集群** Topic 前缀，默认 `yunshu-k8s`；实际=`yunshu-k8s-{clusterId}-p{projectId}-YYYY.MM.DD` |
+| `elasticsearch_index_pattern` | **主机**检索/保留通配，默认 `yunshu-agent-*` |
+| `elasticsearch_k8s_index_prefix` | **集群**索引前缀，默认 `yunshu-k8s` → `yunshu-k8s-{clusterId}-p{projectId}-日期` |
 | `kafka_consumer_group` | 默认 `yunshu-log-es` |
 | `kafka_username` / `kafka_password` / `kafka_sasl_mechanism` | 可选 SASL |
 
@@ -86,6 +89,8 @@ loggie:
 - 宽采路径用 `excludeFiles` 排除 `kube-system` 等系统 ns；规则可覆盖 `exclude_namespaces`
 - 下发 `yunshu-logging` DaemonSet 跳过命名空间白名单（`WithSkipNamespacePolicy`）
 - 主机/集群 Loggie sink YAML 共用 `renderLoggieSinkYAML`；Kafka 开关对齐 `SinkViaKafka()`
+- **pipelines.yml**：支持预览/编辑/保存；`pipelines_custom=true` 时部署用自定义内容，规则变更不再自动覆盖
+- 前缀字典：`kafka_k8s_topic_prefix`、`elasticsearch_k8s_index_prefix`（与主机 `kafka_topic_prefix` / `elasticsearch_index_pattern` 分离）
 
 ## 检索
 

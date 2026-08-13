@@ -429,8 +429,24 @@ export function deployClusterLog(
 }
 
 export function previewClusterLogPipelines(projectId: number, clusterId: number) {
-  return getData<{ pipelines_yml: string }>(
+  return getData<{ pipelines_yml: string; generated_yml: string; is_custom: boolean }>(
     http.get(`/projects/${projectId}/cluster-log/pipelines/preview`, { params: { cluster_id: clusterId } }),
+  );
+}
+
+export function saveClusterLogPipelines(
+  projectId: number,
+  payload: {
+    cluster_id: number;
+    pipelines_yml?: string;
+    reset?: boolean;
+    apply?: boolean;
+    namespace?: string;
+    rate_limit_qps?: number;
+  },
+) {
+  return getData<{ pipelines_yml: string; generated_yml: string; is_custom: boolean }>(
+    http.put(`/projects/${projectId}/cluster-log/pipelines`, payload),
   );
 }
 

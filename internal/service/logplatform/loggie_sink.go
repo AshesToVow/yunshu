@@ -103,11 +103,11 @@ func renderClusterSinkBlock(projectID, clusterID uint, esCfg config.Elasticsearc
 	kafkaCfg = kafkaCfg.Normalized()
 	if kafkaCfg.SinkViaKafka() {
 		return renderLoggieSinkYAML(
-			K8sKafkaTopicTemplate(clusterID, projectID, defaultK8sIndexPrefix),
+			K8sKafkaTopicTemplate(clusterID, projectID, kafkaCfg.K8sTopicPrefix),
 			true,
 			esCfg,
 			kafkaCfg,
 		)
 	}
-	return renderLoggieSinkYAML(K8sIndexSink(clusterID, projectID), false, esCfg, kafkaCfg)
+	return renderLoggieSinkYAML(K8sIndexSink(clusterID, projectID, esCfg.K8sIndexPrefix), false, esCfg, kafkaCfg)
 }

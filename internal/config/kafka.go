@@ -11,6 +11,8 @@ type KafkaConfig struct {
 	// TopicPrefix Agent Topic 前缀；兼容旧键 topic
 	TopicPrefix string `mapstructure:"topic_prefix"`
 	Topic       string `mapstructure:"topic"` // 兼容旧配置，等同 topic_prefix
+	// K8sTopicPrefix 集群采集 Topic 前缀，默认 yunshu-k8s（与主机 TopicPrefix 分离）
+	K8sTopicPrefix string `mapstructure:"k8s_topic_prefix"`
 	// ConsumerGroup 必填：Yunshu 消费写 ES 使用的消费者组
 	ConsumerGroup string `mapstructure:"consumer_group"`
 	Username      string `mapstructure:"username"`
@@ -36,6 +38,11 @@ func (c KafkaConfig) Normalized() KafkaConfig {
 	}
 	out.TopicPrefix = prefix
 	out.Topic = prefix
+	k8sPrefix := strings.Trim(strings.TrimSpace(out.K8sTopicPrefix), "-")
+	if k8sPrefix == "" {
+		k8sPrefix = "yunshu-k8s"
+	}
+	out.K8sTopicPrefix = k8sPrefix
 	if strings.TrimSpace(out.ConsumerGroup) == "" {
 		out.ConsumerGroup = "yunshu-log-es"
 	}
