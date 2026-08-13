@@ -35,6 +35,7 @@ export interface AIChatResult {
   reply: string;
   provider: string;
   model: string;
+  session_id?: number;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -47,7 +48,36 @@ export interface AIChatResult {
     ok?: boolean;
     error?: string;
   }>;
-  rag_hits?: Array<{ source: string; content: string; score?: number }>;
+  rag_hits?: Array<{ source: string; module?: string; content: string; score?: number }>;
+}
+
+export interface AIChatSession {
+  id: number;
+  user_id: number;
+  title: string;
+  project_id?: number;
+  cluster_id?: number;
+  provider?: string;
+  enable_tools: boolean;
+  enable_write: boolean;
+  last_message_at?: string;
+  created_at?: string;
+  updated_at?: string;
+  message_count?: number;
+}
+
+export interface AIChatMessageRow {
+  id: number;
+  session_id: number;
+  role: "user" | "assistant" | string;
+  content: string;
+  meta_json?: string;
+  created_at?: string;
+}
+
+export interface AISessionDetail {
+  session: AIChatSession;
+  messages: AIChatMessageRow[];
 }
 
 export interface AIPodDiagnoseResult {
@@ -88,6 +118,7 @@ export function pingAI(provider?: string) {
 export function chatAI(payload: {
   provider?: string;
   messages: AIChatMessage[];
+  session_id?: number;
   project_id?: number;
   cluster_id?: number;
   namespace?: string;
@@ -98,6 +129,49 @@ export function chatAI(payload: {
   return getData<AIChatResult>(
     http.post("/ai/chat", payload, { timeout: 120000 }),
   );
+}
+
+export function listAISessions(params?: { page?: number; page_size?: number }) {
+  return getData<{ list: AIChatSession[]; total: number; page: number; page_size: number }>(
+    http.get("/ai/sessions", { params }),
+  );
+}
+
+export function createAISession(payload?: {
+  title?: string;
+  project_id?: number;
+  cluster_id?: number;
+  provider?: string;
+  enable_tools?: boolean;
+  enable_write?: boolean;
+}) {
+  return getData<AIChatSession>(http.post("/ai/sessions", payload || {}));
+}
+
+export function getAISession(id: number) {
+  return getData<AISessionDetail>(http.get(`/ai/sessions/${id}`));
+}
+
+export function updateAISession(
+  id: number,
+  payload: {
+    title?: string;
+    project_id?: number;
+    cluster_id?: number;
+    provider?: string;
+    enable_tools?: boolean;
+    enable_write?: boolean;
+  },
+) {
+  return getData<AIChatSession>(http.patch(`/ai/sessions/${id}`, payload));
+}
+
+export function deleteAISession(id: number) {
+  return getData<{ ok: boolean }>(http.delete(`/ai/sessions/${id}`));
+}
+
+export function clearAISession(id: number) {
+  return getData<{ ok: boolean }>(http.post(`/ai/sessions/${id}/clear`, {}));
 }
 
 export function analyzePodDiagnoseAI(payload: {

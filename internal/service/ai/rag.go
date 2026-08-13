@@ -5,29 +5,32 @@ import (
 	"strings"
 	"unicode"
 
-	"yunshu/internal/ai/runbooks"
+	"yunshu/internal/ai/knowledge"
 	"yunshu/internal/ai/prompts"
+	"yunshu/internal/ai/runbooks"
 )
 
 type ragHit struct {
 	Source  string  `json:"source"`
+	Module  string  `json:"module,omitempty"`
 	Content string  `json:"content"`
 	Score   float64 `json:"score"`
 }
 
-// retrieveKnowledge：优先 ES BM25（yunshu-ai-kb-*），失败则回退内嵌文档关键词匹配。
+// retrieveKnowledge：优先 ES BM25（yunshu-ai-kb-*），失败则回退内嵌文档关键词匹配；按功能模块加权过滤。
 func (s *Service) retrieveKnowledge(ctx context.Context, query string, topK int) []ragHit {
 	query = strings.TrimSpace(query)
 	if query == "" || topK <= 0 {
 		return nil
 	}
-	if hits := s.retrieveFromES(ctx, query, topK); len(hits) > 0 {
+	modules := knowledge.InferModules(query)
+	if hits := s.retrieveFromES(ctx, query, modules, topK); len(hits) > 0 {
 		return hits
 	}
-	return retrieveFromEmbed(query, topK)
+	return retrieveFromEmbed(query, modules, topK)
 }
 
-func (s *Service) retrieveFromES(ctx context.Context, query string, topK int) []ragHit {
+func (s *Service) retrieveFromES(ctx context.Context, query string, modules []string, topK int) []ragHit {
 	if s.esProvider == nil {
 		return nil
 	}
@@ -35,14 +38,24 @@ func (s *Service) retrieveFromES(ctx context.Context, query string, topK int) []
 	if err != nil || cli == nil {
 		return nil
 	}
-	body := map[string]any{
-		"size": topK,
-		"query": map[string]any{
+	must := []any{
+		map[string]any{
 			"multi_match": map[string]any{
 				"query":  query,
-				"fields": []string{"title^2", "content", "source"},
+				"fields": []string{"title^2", "content", "source", "module"},
 			},
 		},
+	}
+	boolQ := map[string]any{"must": must}
+	if len(modules) > 0 {
+		boolQ["should"] = []any{
+			map[string]any{"terms": map[string]any{"module": modules}},
+		}
+		boolQ["minimum_should_match"] = 0
+	}
+	body := map[string]any{
+		"size":  topK,
+		"query": map[string]any{"bool": boolQ},
 	}
 	res, err := cli.Search(ctx, "yunshu-ai-kb-*", body)
 	if err != nil || res == nil {
@@ -64,11 +77,26 @@ func (s *Service) retrieveFromES(ctx context.Context, query string, topK int) []
 			continue
 		}
 		score, _ := m["_score"].(float64)
+		mod := strAny(src["module"])
+		// 模块命中时略加权，便于同题多文档时优先相关模块
+		if len(modules) > 0 && mod != "" {
+			for _, want := range modules {
+				if want == mod {
+					score += 2
+					break
+				}
+			}
+		}
 		out = append(out, ragHit{
 			Source:  strAny(src["source"]),
+			Module:  mod,
 			Content: strAny(src["content"]),
 			Score:   score,
 		})
+	}
+	sortRagHits(out)
+	if len(out) > topK {
+		out = out[:topK]
 	}
 	return out
 }
@@ -80,9 +108,13 @@ func strAny(v any) string {
 	return ""
 }
 
-func retrieveFromEmbed(query string, topK int) []ragHit {
+func retrieveFromEmbed(query string, modules []string, topK int) []ragHit {
 	docs := embeddedKBDocs()
 	tokens := tokenize(query)
+	modSet := map[string]struct{}{}
+	for _, m := range modules {
+		modSet[m] = struct{}{}
+	}
 	type scored struct {
 		hit   ragHit
 		score float64
@@ -90,17 +122,24 @@ func retrieveFromEmbed(query string, topK int) []ragHit {
 	var ranked []scored
 	for _, d := range docs {
 		sc := float64(0)
-		lower := strings.ToLower(d.Content + " " + d.Source)
+		lower := strings.ToLower(d.Content + " " + d.Source + " " + d.Module)
 		for _, t := range tokens {
 			if strings.Contains(lower, t) {
 				sc++
 			}
 		}
+		if len(modSet) > 0 {
+			if _, ok := modSet[d.Module]; ok {
+				sc += 3
+			}
+		}
 		if sc > 0 {
-			ranked = append(ranked, scored{hit: ragHit{Source: d.Source, Content: d.Content, Score: sc}, score: sc})
+			ranked = append(ranked, scored{
+				hit:   ragHit{Source: d.Source, Module: d.Module, Content: d.Content, Score: sc},
+				score: sc,
+			})
 		}
 	}
-	// 简单选择排序取 topK
 	for i := 0; i < len(ranked); i++ {
 		for j := i + 1; j < len(ranked); j++ {
 			if ranked[j].score > ranked[i].score {
@@ -118,35 +157,50 @@ func retrieveFromEmbed(query string, topK int) []ragHit {
 	return out
 }
 
+func sortRagHits(hits []ragHit) {
+	for i := 0; i < len(hits); i++ {
+		for j := i + 1; j < len(hits); j++ {
+			if hits[j].Score > hits[i].Score {
+				hits[i], hits[j] = hits[j], hits[i]
+			}
+		}
+	}
+}
+
 type kbDoc struct {
+	Module  string
 	Source  string
 	Content string
 }
 
 func embeddedKBDocs() []kbDoc {
 	var docs []kbDoc
+	for _, d := range knowledge.ModuleDocs() {
+		docs = append(docs, kbDoc{Module: d.Module, Source: d.Source, Content: d.Content})
+	}
 	for _, name := range runbooks.Names() {
 		body, err := runbooks.Load(name)
 		if err != nil {
 			continue
 		}
-		docs = append(docs, kbDoc{Source: "runbook:" + name, Content: body})
+		docs = append(docs, kbDoc{Module: knowledge.ModuleK8s, Source: "runbook:" + name, Content: body})
 	}
 	for _, name := range []string{"system_ops_assistant", "k8s_pod_diagnose", "cicd_build_fail", "alert_explain"} {
 		body, err := prompts.Load(name, map[string]string{"context_json": "{}"})
 		if err != nil {
 			continue
 		}
-		docs = append(docs, kbDoc{Source: "prompt:" + name, Content: truncateStr(body, 4000)})
+		mod := knowledge.ModuleAI
+		switch name {
+		case "k8s_pod_diagnose":
+			mod = knowledge.ModuleK8s
+		case "cicd_build_fail":
+			mod = knowledge.ModuleCICD
+		case "alert_explain":
+			mod = knowledge.ModuleAlert
+		}
+		docs = append(docs, kbDoc{Module: mod, Source: "prompt:" + name, Content: truncateStr(body, 4000)})
 	}
-	docs = append(docs, kbDoc{
-		Source:  "doc:ai.md",
-		Content: "Yunshu AI 模块：字典 ai_* 配置 Provider；API status/ping/chat/k8s pod-diagnose/cicd build-fail/alert explain；只分析建议不自动执行写操作；助手支持只读工具调用与排障剧本。",
-	})
-	docs = append(docs, kbDoc{
-		Source:  "doc:esmgmt",
-		Content: "esmgmt 插件用于 Elasticsearch 集群管理：连接管理、cluster health、索引列表、受限 REST 代理；与日志平台 project-logs / log-platform 职责分离。",
-	})
 	return docs
 }
 
@@ -172,7 +226,7 @@ func tokenize(q string) []string {
 	return out
 }
 
-// SyncKnowledgeBase 将内嵌文档写入 ES 索引 yunshu-ai-kb-v1（可选）。
+// SyncKnowledgeBase 将内嵌文档写入 ES 索引 yunshu-ai-kb-v1（含 module 字段）。
 func (s *Service) SyncKnowledgeBase(ctx context.Context) (int, error) {
 	if s.esProvider == nil {
 		return 0, nil
@@ -185,9 +239,17 @@ func (s *Service) SyncKnowledgeBase(ctx context.Context) (int, error) {
 	n := 0
 	for i, d := range docs {
 		id := strings.ReplaceAll(d.Source, "/", "_")
+		title := d.Source
+		for _, md := range knowledge.ModuleDocs() {
+			if md.Source == d.Source {
+				title = md.Title
+				break
+			}
+		}
 		body := map[string]any{
 			"source":  d.Source,
-			"title":   d.Source,
+			"module":  d.Module,
+			"title":   title,
 			"content": d.Content,
 			"seq":     i,
 		}

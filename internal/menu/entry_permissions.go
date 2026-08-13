@@ -105,7 +105,6 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/cicd/registries":      {"/api/v1/registries", "GET"},
 		"/cicd/image-browser":   {"/api/v1/registries", "GET"},
 
-		"/ai/assistant": {"/api/v1/ai/chat", "POST"},
 		"/ai/approvals": {"/api/v1/ai/approvals", "GET"},
 
 		"/esmgmt/connections": {"/api/v1/esmgmt/connections", "GET"},
@@ -124,6 +123,11 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	out["/project-services"] = []EntryPermission{
 		{Resource: "/api/v1/projects/:id/services", Action: "GET"},
 		{Resource: "/api/v1/projects/:id/log-sources", Action: "GET"},
+	}
+	// AI 助手：对话 + 会话列表任一权限可进入
+	out["/ai/assistant"] = []EntryPermission{
+		{Resource: "/api/v1/ai/chat", Action: "POST"},
+		{Resource: "/api/v1/ai/sessions", Action: "GET"},
 	}
 	return out
 }

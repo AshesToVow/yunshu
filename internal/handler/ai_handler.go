@@ -47,12 +47,131 @@ func (h *AIHandler) Chat(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.Chat(c.Request.Context(), uid, req)
+	res, err := h.svc.Chat(c.Request.Context(), uid, user, req)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
 	response.Success(c, res)
+}
+
+func (h *AIHandler) ListSessions(c *gin.Context) {
+	var q aisvc.SessionListQuery
+	_ = c.ShouldBindQuery(&q)
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.ListSessions(c.Request.Context(), uid, q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) CreateSession(c *gin.Context) {
+	var req aisvc.SessionCreateRequest
+	_ = c.ShouldBindJSON(&req)
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.CreateSession(c.Request.Context(), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) GetSession(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.GetSession(c.Request.Context(), uid, uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) UpdateSession(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.SessionUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.UpdateSession(c.Request.Context(), uid, uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) DeleteSession(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	if err := h.svc.DeleteSession(c.Request.Context(), uid, uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) ClearSession(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	if err := h.svc.ClearSessionMessages(c.Request.Context(), uid, uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
 }
 
 func (h *AIHandler) PodDiagnose(c *gin.Context) {

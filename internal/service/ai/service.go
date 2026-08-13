@@ -27,6 +27,7 @@ import (
 type Service struct {
 	db          *gorm.DB
 	yamlAI      config.AIConfig
+	clusterSvc  *k8s.K8sClusterService
 	podSvc      *k8s.K8sPodService
 	workloadSvc *k8s.K8sWorkloadService
 	nsSvc       *k8s.K8sNamespaceService
@@ -42,6 +43,7 @@ type Service struct {
 func NewService(
 	db *gorm.DB,
 	yamlAI config.AIConfig,
+	clusterSvc *k8s.K8sClusterService,
 	podSvc *k8s.K8sPodService,
 	workloadSvc *k8s.K8sWorkloadService,
 	nsSvc *k8s.K8sNamespaceService,
@@ -54,6 +56,7 @@ func NewService(
 	return &Service{
 		db:          db,
 		yamlAI:      yamlAI,
+		clusterSvc:  clusterSvc,
 		podSvc:      podSvc,
 		workloadSvc: workloadSvc,
 		nsSvc:       nsSvc,
@@ -194,6 +197,7 @@ type ChatMessage struct {
 type ChatRequest struct {
 	Provider      string        `json:"provider"`
 	Messages      []ChatMessage `json:"messages" binding:"required"`
+	SessionID     uint          `json:"session_id"`
 	ProjectID     uint          `json:"project_id"`
 	ClusterID     uint          `json:"cluster_id"`
 	Namespace     string        `json:"namespace"`
@@ -203,15 +207,16 @@ type ChatRequest struct {
 }
 
 type ChatResponse struct {
-	Reply      string      `json:"reply"`
-	Provider   string      `json:"provider"`
-	Model      string      `json:"model"`
-	Usage      llm.Usage   `json:"usage"`
-	ToolSteps  []toolStep  `json:"tool_steps,omitempty"`
-	RAGHits    []ragHit    `json:"rag_hits,omitempty"`
+	Reply      string     `json:"reply"`
+	Provider   string     `json:"provider"`
+	Model      string     `json:"model"`
+	Usage      llm.Usage  `json:"usage"`
+	SessionID  uint       `json:"session_id,omitempty"`
+	ToolSteps  []toolStep `json:"tool_steps,omitempty"`
+	RAGHits    []ragHit   `json:"rag_hits,omitempty"`
 }
 
-func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*ChatResponse, error) {
+func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser, req ChatRequest) (*ChatResponse, error) {
 	cfg, err := s.requireEnabled(ctx)
 	if err != nil {
 		return nil, err
@@ -227,17 +232,31 @@ func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*Chat
 			return nil, constants.ErrBadRequestWithMsg("单条消息过长")
 		}
 	}
+	if req.SessionID > 0 {
+		if _, err := s.getOwnedSession(ctx, userID, req.SessionID); err != nil {
+			return nil, err
+		}
+	}
 
 	enableTools := true
 	if req.EnableTools != nil {
 		enableTools = *req.EnableTools
 	}
 
+	lastUser := ""
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if strings.EqualFold(req.Messages[i].Role, "user") {
+			lastUser = req.Messages[i].Content
+			break
+		}
+	}
+
 	ctxJSON, _ := json.Marshal(map[string]any{
 		"project_id": req.ProjectID,
 		"cluster_id": req.ClusterID,
 		"namespace":  req.Namespace,
-		"note":       "优先使用工具获取真实集群数据；写操作仅创建审批单",
+		"session_id": req.SessionID,
+		"note":       "优先使用工具获取真实平台/集群数据；写操作仅创建审批单",
 	})
 	sys, err := prompts.Load("system_ops_assistant", map[string]string{"context_json": string(ctxJSON)})
 	if err != nil {
@@ -246,20 +265,17 @@ func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*Chat
 
 	var ragHits []ragHit
 	if !req.DisableRAG {
-		q := ""
-		for i := len(req.Messages) - 1; i >= 0; i-- {
-			if strings.EqualFold(req.Messages[i].Role, "user") {
-				q = req.Messages[i].Content
-				break
-			}
-		}
-		ragHits = s.retrieveKnowledge(ctx, q, 4)
+		ragHits = s.retrieveKnowledge(ctx, lastUser, 6)
 		if len(ragHits) > 0 {
 			var b strings.Builder
 			b.WriteString("\n\n## 知识库检索片段\n")
 			for _, h := range ragHits {
 				b.WriteString("- [")
 				b.WriteString(h.Source)
+				if h.Module != "" {
+					b.WriteString("|")
+					b.WriteString(h.Module)
+				}
 				b.WriteString("] ")
 				b.WriteString(truncateStr(h.Content, 800))
 				b.WriteString("\n")
@@ -289,10 +305,31 @@ func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*Chat
 	if enableTools {
 		tools = s.toolDefinitions(req.EnableWrite)
 	}
-	tc := toolContext{ClusterID: req.ClusterID, ProjectID: req.ProjectID, Namespace: strings.TrimSpace(req.Namespace)}
+	tc := toolContext{
+		ClusterID: req.ClusterID,
+		ProjectID: req.ProjectID,
+		Namespace: strings.TrimSpace(req.Namespace),
+		Actor:     actor,
+	}
 	var steps []toolStep
 	var last *llm.ChatResponse
 	usage := llm.Usage{}
+
+	finish := func(reply, model string) (*ChatResponse, error) {
+		sid, perr := s.persistChatTurn(ctx, userID, req, lastUser, reply, steps, ragHits, name, model)
+		if perr != nil {
+			slog.Warn("ai chat persist failed", "user_id", userID, "err", perr)
+		}
+		return &ChatResponse{
+			Reply:     reply,
+			Provider:  name,
+			Model:     model,
+			Usage:     usage,
+			SessionID: sid,
+			ToolSteps: steps,
+			RAGHits:   ragHits,
+		}, nil
+	}
 
 	const maxRounds = 6
 	for round := 0; round < maxRounds; round++ {
@@ -312,14 +349,7 @@ func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*Chat
 
 		if len(resp.ToolCalls) == 0 || !enableTools {
 			s.logUsage(userID, "chat", name, resp)
-			return &ChatResponse{
-				Reply:     resp.Content,
-				Provider:  name,
-				Model:     resp.Model,
-				Usage:     usage,
-				ToolSteps: steps,
-				RAGHits:   ragHits,
-			}, nil
+			return finish(resp.Content, resp.Model)
 		}
 
 		msgs = append(msgs, llm.Message{
@@ -342,14 +372,7 @@ func (s *Service) Chat(ctx context.Context, userID uint, req ChatRequest) (*Chat
 		return nil, constants.ErrBadRequestWithMsg("AI 无响应")
 	}
 	s.logUsage(userID, "chat", name, last)
-	return &ChatResponse{
-		Reply:     last.Content,
-		Provider:  name,
-		Model:     last.Model,
-		Usage:     usage,
-		ToolSteps: steps,
-		RAGHits:   ragHits,
-	}, nil
+	return finish(last.Content, last.Model)
 }
 
 type PodDiagnoseAIRequest struct {

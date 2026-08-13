@@ -8,13 +8,17 @@ description: Yunshu 平台 AI 运维助手相关开发与排障。覆盖 ai 插�
 ## 范围
 
 - LLM tools：`internal/pkg/llm`（tool_calls）
-- Agent：`internal/service/ai`（Chat agent loop、tools.go、rag.go、approval.go）
+- Agent：`internal/service/ai`（Chat agent loop、tools.go、rag.go、approval.go、session.go）
+- 知识模块：`internal/ai/knowledge`（按功能模块 RAG）
 - Runbooks：`internal/ai/runbooks/`
-- API：`/api/v1/ai/*`（含 approvals、knowledge/sync）
-- 前端：助手页工具轨迹、审批页 `/ai/approvals`
+- API：`/api/v1/ai/*`（sessions、approvals、knowledge/sync）
+- 前端：助手页会话列表 + 工具轨迹、审批页 `/ai/approvals`
+- 表：`ai_chat_sessions` / `ai_chat_messages` / `ai_tool_approvals`
 
 ## 约定
 
 - 默认只读工具；写工具仅创建 `ai_tool_approvals`
-- RAG：ES `yunshu-ai-kb-*` 优先，否则内嵌关键词
+- 会话落 MySQL（按 user_id）；chat 可带 `session_id`
+- 工具按模块：k8s / log / cicd / alert
+- RAG：ES `yunshu-ai-kb-*`（含 module）优先，否则内嵌关键词 + 模块加权
 - 禁止用户覆盖 system；截断工具输出

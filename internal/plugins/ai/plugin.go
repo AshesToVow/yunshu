@@ -25,5 +25,9 @@ func (m *module) Manifest() plugin.Manifest {
 }
 
 func (m *module) Models() []any {
-	return []any{&model.AiToolApproval{}}
+	return []any{
+		&model.AiToolApproval{},
+		&model.AiChatSession{},
+		&model.AiChatMessage{},
+	}
 }

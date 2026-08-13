@@ -1,12 +1,13 @@
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Card, Select, Space, Table, Tag, message } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   executeAIApproval,
   listAIApprovals,
   reviewAIApproval,
   type AIApprovalItem,
 } from "../services/ai";
+import { getClusters, type ClusterItem } from "../services/clusters";
 import { extractApiErrorMessage } from "../services/http";
 
 export function AiApprovalsPage() {
@@ -15,6 +16,13 @@ export function AiApprovalsPage() {
   const [status, setStatus] = useState<string>("pending");
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [clusters, setClusters] = useState<ClusterItem[]>([]);
+
+  const clusterNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const c of clusters) m.set(c.id, c.name || `集群 #${c.id}`);
+    return m;
+  }, [clusters]);
 
   async function load() {
     setLoading(true);
@@ -28,6 +36,12 @@ export function AiApprovalsPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    void getClusters({ page: 1, page_size: 1000 })
+      .then((res) => setClusters(res?.list || []))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -98,7 +112,13 @@ export function AiApprovalsPage() {
         columns={[
           { title: "ID", dataIndex: "id", width: 70 },
           { title: "工具", dataIndex: "tool_name", width: 160 },
-          { title: "集群", dataIndex: "cluster_id", width: 80 },
+          {
+            title: "集群",
+            dataIndex: "cluster_id",
+            width: 140,
+            ellipsis: true,
+            render: (id?: number) => (id ? clusterNameById.get(id) || `#${id}` : "—"),
+          },
           { title: "命名空间", dataIndex: "namespace", width: 120 },
           { title: "资源", dataIndex: "resource", ellipsis: true },
           { title: "状态", dataIndex: "status", width: 100, render: statusTag },
@@ -106,28 +126,29 @@ export function AiApprovalsPage() {
           {
             title: "操作",
             width: 260,
-            render: (_: unknown, row: AIApprovalItem) => (
-              <Space>
-                {row.status === "pending" ? (
-                  <>
-                    <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => void review(row.id, true, true)}>
-                      批准并执行
+            render: (_: unknown, row?: AIApprovalItem) =>
+              row ? (
+                <Space>
+                  {row.status === "pending" ? (
+                    <>
+                      <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => void review(row.id, true, true)}>
+                        批准并执行
+                      </Button>
+                      <Button type="link" size="small" onClick={() => void review(row.id, true, false)}>
+                        仅批准
+                      </Button>
+                      <Button type="link" size="small" danger icon={<CloseOutlined />} onClick={() => void review(row.id, false)}>
+                        驳回
+                      </Button>
+                    </>
+                  ) : null}
+                  {row.status === "approved" || row.status === "failed" ? (
+                    <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => void execute(row.id)}>
+                      执行
                     </Button>
-                    <Button type="link" size="small" onClick={() => void review(row.id, true, false)}>
-                      仅批准
-                    </Button>
-                    <Button type="link" size="small" danger icon={<CloseOutlined />} onClick={() => void review(row.id, false)}>
-                      驳回
-                    </Button>
-                  </>
-                ) : null}
-                {row.status === "approved" || row.status === "failed" ? (
-                  <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => void execute(row.id)}>
-                    执行
-                  </Button>
-                ) : null}
-              </Space>
-            ),
+                  ) : null}
+                </Space>
+              ) : null,
           },
         ]}
       />
