@@ -126,7 +126,7 @@ export function EsmgmtConnectionsPage() {
             {
               title: "密码",
               width: 80,
-              render: (_: unknown, r: EsmgmtConnection) => (r.has_password ? "已配置" : "—"),
+              render: (_: unknown, r?: EsmgmtConnection) => (r?.has_password ? "已配置" : "—"),
             },
             {
               title: "操作",
