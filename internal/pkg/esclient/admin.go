@@ -117,7 +117,8 @@ type ProxyResult struct {
 	Body   json.RawMessage `json:"body"`
 }
 
-// ProxyREST 仅允许安全探查类路径。
+// ProxyREST 代理 ES REST（管理员控制台）。允许 GET/POST/PUT/DELETE/HEAD；
+// 禁止脚本执行、节点关机等高危路径。
 func (c *Client) ProxyREST(ctx context.Context, method, path string, body []byte) (*ProxyResult, error) {
 	if c == nil {
 		return nil, fmt.Errorf("elasticsearch client nil")
@@ -136,25 +137,69 @@ func (c *Client) ProxyREST(ctx context.Context, method, path string, body []byte
 
 func proxyPathAllowed(method, path string) bool {
 	switch method {
-	case http.MethodGet, http.MethodPost, http.MethodHead:
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodHead:
 	default:
 		return false
 	}
-	p := strings.ToLower(path)
-	for _, pref := range []string{"/_cluster", "/_cat", "/_nodes", "/_stats", "/_aliases"} {
-		if strings.HasPrefix(p, pref) {
-			return true
-		}
+	full := strings.ToLower(path)
+	if proxyPathBlocked(full) {
+		return false
 	}
-	if strings.Contains(p, "/_search") || strings.HasSuffix(p, "/_mapping") || strings.HasSuffix(p, "/_settings") {
-		if method == http.MethodGet || method == http.MethodPost {
-			return !strings.Contains(p, "_scripts") && !strings.Contains(p, "painless")
-		}
+	p := full
+	if i := strings.IndexByte(p, '?'); i >= 0 {
+		p = p[:i]
 	}
 	if p == "/" {
 		return method == http.MethodGet || method == http.MethodHead
 	}
+	for _, pref := range []string{
+		"/_cluster", "/_cat", "/_nodes", "/_stats", "/_aliases", "/_alias",
+		"/_tasks", "/_ingest", "/_template", "/_index_template", "/_component_template",
+		"/_ilm", "/_data_stream", "/_resolve",
+	} {
+		if strings.HasPrefix(p, pref) {
+			return true
+		}
+	}
+	for _, token := range []string{
+		"/_search", "/_msearch", "/_count", "/_explain", "/_validate",
+		"/_mapping", "/_settings", "/_aliases", "/_alias",
+		"/_doc", "/_create", "/_update", "/_source", "/_bulk", "/_mget",
+		"/_delete_by_query", "/_update_by_query", "/_reindex",
+		"/_refresh", "/_flush", "/_forcemerge", "/_open", "/_close",
+		"/_shrink", "/_split", "/_clone", "/_rollover",
+	} {
+		if strings.Contains(p, token) {
+			return true
+		}
+	}
+	// 索引资源：/my-index、/a,b 等（首段不以 _ 开头）
+	return isIndexResourcePath(p)
+}
+
+func proxyPathBlocked(p string) bool {
+	if strings.Contains(p, "_scripts") || strings.Contains(p, "painless") {
+		return true
+	}
+	if strings.Contains(p, "shutdown") {
+		return true
+	}
 	return false
+}
+
+func isIndexResourcePath(p string) bool {
+	p = strings.Trim(p, "/")
+	if p == "" {
+		return false
+	}
+	first := p
+	if i := strings.IndexByte(p, '/'); i >= 0 {
+		first = p[:i]
+	}
+	if first == "" || strings.HasPrefix(first, "_") {
+		return false
+	}
+	return true
 }
 
 // NewUnmanaged 创建客户端（跳过 Ping），用于已校验的连接配置。

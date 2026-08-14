@@ -4,10 +4,41 @@ import { useEffect, useState } from "react";
 import { listEsmgmtConnections, proxyEsmgmtREST, type EsmgmtConnection } from "../services/esmgmt";
 import { extractApiErrorMessage } from "../services/http";
 
+const METHODS = ["GET", "POST", "PUT", "DELETE", "HEAD"] as const;
+
+type QuickCommand = {
+  label: string;
+  method: (typeof METHODS)[number];
+  path: string;
+  body?: string;
+};
+
+const QUICK_COMMANDS: QuickCommand[] = [
+  { label: "集群健康", method: "GET", path: "/_cluster/health" },
+  { label: "集群设置", method: "GET", path: "/_cluster/settings?include_defaults=true" },
+  { label: "节点列表", method: "GET", path: "/_cat/nodes?v" },
+  { label: "索引列表", method: "GET", path: "/_cat/indices?v" },
+  { label: "分片列表", method: "GET", path: "/_cat/shards?v" },
+  { label: "别名列表", method: "GET", path: "/_cat/aliases?v" },
+  { label: "节点统计", method: "GET", path: "/_nodes/stats" },
+  { label: "索引 Mapping", method: "GET", path: "/my-index/_mapping" },
+  { label: "索引 Settings", method: "GET", path: "/my-index/_settings" },
+  { label: "搜索文档", method: "POST", path: "/my-index/_search", body: '{\n  "query": { "match_all": {} },\n  "size": 10\n}' },
+  { label: "创建/更新索引", method: "PUT", path: "/my-index", body: '{\n  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },\n  "mappings": { "properties": { "title": { "type": "text" } } }\n}' },
+  { label: "更新 Settings", method: "PUT", path: "/my-index/_settings", body: '{\n  "index": { "number_of_replicas": 0 }\n}' },
+  { label: "写入文档", method: "PUT", path: "/my-index/_doc/1", body: '{\n  "title": "hello"\n}' },
+  { label: "删除文档", method: "DELETE", path: "/my-index/_doc/1" },
+  { label: "删除索引", method: "DELETE", path: "/my-index" },
+  { label: "刷新索引", method: "POST", path: "/my-index/_refresh" },
+  { label: "打开索引", method: "POST", path: "/my-index/_open" },
+  { label: "关闭索引", method: "POST", path: "/my-index/_close" },
+  { label: "管理别名", method: "POST", path: "/_aliases", body: '{\n  "actions": [\n    { "add": { "index": "my-index", "alias": "my-alias" } }\n  ]\n}' },
+];
+
 export function EsmgmtConsolePage() {
   const [connections, setConnections] = useState<EsmgmtConnection[]>([]);
   const [connectionId, setConnectionId] = useState<number>();
-  const [method, setMethod] = useState("GET");
+  const [method, setMethod] = useState<(typeof METHODS)[number]>("GET");
   const [path, setPath] = useState("/_cluster/health");
   const [body, setBody] = useState("");
   const [result, setResult] = useState("");
@@ -22,6 +53,14 @@ export function EsmgmtConsolePage() {
       })
       .catch(() => undefined);
   }, []);
+
+  function applyQuickCommand(key: string) {
+    const cmd = QUICK_COMMANDS.find((c) => `${c.method} ${c.path}` === key);
+    if (!cmd) return;
+    setMethod(cmd.method);
+    setPath(cmd.path);
+    setBody(cmd.body || "");
+  }
 
   async function run() {
     setLoading(true);
@@ -41,11 +80,23 @@ export function EsmgmtConsolePage() {
   }
 
   return (
-    <Card className="table-card" title="ES REST 控制台（受限代理）">
+    <Card className="table-card" title="ES REST 控制台（管理员权限）">
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
         <Typography.Text type="secondary">
-          仅允许 _cluster / _cat / _nodes / _search 等只读探查路径，禁止脚本执行。
+          支持 GET / POST / PUT / DELETE / HEAD。允许集群探查、索引与文档读写、别名与模板等管理操作；禁止脚本执行与节点关机。
         </Typography.Text>
+        <Select
+          style={{ width: "100%", maxWidth: 560 }}
+          placeholder="常用命令（选择后可再改路径/Body）"
+          allowClear
+          options={QUICK_COMMANDS.map((c) => ({
+            value: `${c.method} ${c.path}`,
+            label: `${c.label} · ${c.method} ${c.path}`,
+          }))}
+          onChange={(v) => {
+            if (typeof v === "string") applyQuickCommand(v);
+          }}
+        />
         <Space wrap style={{ width: "100%" }}>
           <Select
             style={{ minWidth: 200 }}
@@ -58,7 +109,7 @@ export function EsmgmtConsolePage() {
           <Select
             style={{ width: 110 }}
             value={method}
-            options={["GET", "POST", "HEAD"].map((m) => ({ value: m, label: m }))}
+            options={METHODS.map((m) => ({ value: m, label: m }))}
             onChange={setMethod}
           />
           <Input style={{ minWidth: 320, flex: 1 }} value={path} onChange={(e) => setPath(e.target.value)} />
@@ -70,7 +121,7 @@ export function EsmgmtConsolePage() {
           rows={6}
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="可选 JSON Body（POST）"
+          placeholder="可选 JSON Body（POST / PUT 常用；DELETE 一般为空）"
         />
         <pre className="code-block-panel" style={{ minHeight: 280, margin: 0 }}>
           {result || "响应将显示在这里"}
