@@ -1,0 +1,18 @@
+case_id: CASE-K8S-OOM-001
+title: Pod OOMKilled 典型案例
+category: k8s
+technology: kubernetes
+symptom: 容器反复重启，Reason 为 OOMKilled；或 LastState 显示 OOMKilled
+environment: Kubernetes
+diagnosis: |
+  1. diagnose_pod / get_pod_detail 看 LastState.Reason
+  2. get_pod_logs 看退出前日志
+  3. list_events 确认 Killing/OOM
+root_cause: 内存 limit 过小或应用泄漏导致超限被杀
+solution: 提高 memory limit/request；排查泄漏；必要时滚动重启 Deployment（审批）
+verification: 重启次数下降，无新的 OOMKilled
+risk: 调高 limit 需评估节点容量；重启会短暂中断
+related_tools: '["diagnose_pod","get_pod_detail","get_pod_logs","list_events"]'
+related_sop: '["sop-k8s-pod-oom"]'
+source: seed
+confidence: 0.9

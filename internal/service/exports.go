@@ -196,6 +196,8 @@ type (
 	ServerGrantBulkRequest   = cmdb.ServerGrantBulkRequest
 	BootstrapServerGrantsRequest = cmdb.BootstrapServerGrantsRequest
 	ServerAccessPerm         = cmdb.ServerAccessPerm
+	ServerFileListQuery      = cmdb.ServerFileListQuery
+	ServerFilePathQuery      = cmdb.ServerFilePathQuery
 	LogSourceItem            = project.LogSourceItem
 	LogSourceListQuery       = project.LogSourceListQuery
 	LogSourceUpsertRequest   = project.LogSourceUpsertRequest

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -660,5 +662,138 @@ func (h *CMDBHandler) BootstrapServerGrants(c *gin.Context) {
 		return
 	}
 	response.Success(c, stats)
+}
+
+// ListServerFiles 列出服务器远端目录。
+func (h *CMDBHandler) ListServerFiles(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	serverID, err := parseUintParam(c, "serverId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeQuery(c, func(ctx context.Context, q service.ServerFileListQuery) (gin.H, error) {
+		q.ProjectID = projectID
+		q.ServerID = serverID
+		list, err := h.svc.ListServerFiles(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{
+			"list":              list,
+			"path":              q.Path,
+			"max_transfer_mb":   h.svc.MaxTransferFileMB(ctx),
+		}, nil
+	})
+}
+
+// UploadServerFile 上传文件到服务器。
+func (h *CMDBHandler) UploadServerFile(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	serverID, err := parseUintParam(c, "serverId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+		response.Error(c, err)
+		return
+	}
+	remoteDir := strings.TrimSpace(c.PostForm("path"))
+	if remoteDir == "" {
+		remoteDir = "/"
+	}
+	fh, err := c.FormFile("file")
+	if err != nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("请选择上传文件"))
+		return
+	}
+	file, err := fh.Open()
+	if err != nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("打开上传文件失败"))
+		return
+	}
+	defer file.Close()
+	if err := h.svc.UploadServerFile(c.Request.Context(), projectID, serverID, remoteDir, fh.Filename, file, fh.Size); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "uploaded", "max_transfer_mb": h.svc.MaxTransferFileMB(c.Request.Context())})
+}
+
+// DownloadServerFile 下载服务器文件。
+func (h *CMDBHandler) DownloadServerFile(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	serverID, err := parseUintParam(c, "serverId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+		response.Error(c, err)
+		return
+	}
+	remotePath := strings.TrimSpace(c.Query("path"))
+	if remotePath == "" {
+		response.Error(c, constants.ErrBadRequestWithMsg("path 必填"))
+		return
+	}
+	filename := path.Base(strings.ReplaceAll(remotePath, "\\", "/"))
+	if filename == "" || filename == "." || filename == "/" {
+		filename = "download.bin"
+	}
+	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Disposition", "attachment; filename*=UTF-8''"+url.QueryEscape(filename))
+	c.Status(http.StatusOK)
+	if _, err := h.svc.DownloadServerFile(c.Request.Context(), projectID, serverID, remotePath, c.Writer); err != nil {
+		// headers may already be flushed; best-effort JSON error for early failures
+		if !c.Writer.Written() {
+			response.Error(c, err)
+		}
+		return
+	}
+}
+
+// DeleteServerFile 删除服务器远端文件。
+func (h *CMDBHandler) DeleteServerFile(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	serverID, err := parseUintParam(c, "serverId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSONOK(c, gin.H{"message": "deleted"}, func(ctx context.Context, req service.ServerFilePathQuery) error {
+		req.ProjectID = projectID
+		req.ServerID = serverID
+		return h.svc.DeleteServerFile(ctx, projectID, serverID, req.Path)
+	})
 }
 

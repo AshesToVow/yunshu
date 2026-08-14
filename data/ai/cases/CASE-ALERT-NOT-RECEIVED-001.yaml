@@ -1,0 +1,18 @@
+case_id: CASE-ALERT-NOT-RECEIVED-001
+title: 告警未收到通知典型案例
+category: alert
+technology: alertmanager
+symptom: 监控侧已触发，但钉钉/企微/邮件未收到
+environment: Yunshu 告警中心
+diagnosis: |
+  1. 确认 project_id（或先 list_alerts）
+  2. list_alerts 确认事件与 status
+  3. 取 fingerprint → explain_alert 看投递/跳过/抑制
+root_cause: 订阅未匹配、渠道失败、静默/抑制、或 project 归属缺失导致路由未命中
+solution: 修正订阅标签与接收组；修复渠道；检查静默窗；为告警补 project_id/datasource
+verification: 测试告警可投递且 explain_alert 显示成功
+risk: 关闭抑制可能引入噪音
+related_tools: '["list_alerts","explain_alert"]'
+related_sop: '["sop-alert-delivery"]'
+source: seed
+confidence: 0.88

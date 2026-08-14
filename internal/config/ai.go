@@ -34,7 +34,7 @@ func DefaultAIConfig() AIConfig {
 		Enabled:         false,
 		DefaultProvider: AIProviderOpenAICompat,
 		TimeoutSec:      60,
-		MaxTokens:       2048,
+		MaxTokens:       4096,
 		OpenAI: AIProviderConfig{
 			BaseURL: "https://api.openai.com/v1",
 			Model:   "gpt-4o-mini",

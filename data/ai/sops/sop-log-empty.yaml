@@ -1,0 +1,17 @@
+code: sop-log-empty
+title: 项目日志检索为空 SOP
+scenario: search_logs 无结果
+preconditions: 已知 project_id
+input_params: project_id, keyword
+check_steps: |
+  1. search_logs（明确 keyword，可加 namespace/pod）
+  2. 仍空则核对采集规则与索引前缀
+exec_steps: |
+  1. 调整检索条件与时间范围
+  2. 检查 Loggie/集群采集是否启用
+  3. 核对 Kafka Topic / ES 索引命名
+verify_steps: 能检索到近期日志
+exception_handle: 缺 project_id 先请用户选择项目
+rollback: 无
+risk: 禁止建议删除生产索引
+approval_needed: false

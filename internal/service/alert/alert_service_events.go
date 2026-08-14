@@ -15,6 +15,7 @@ import (
 )
 
 func (s *AlertService) ListEvents(ctx context.Context, q AlertEventListQuery) (list []model.AlertEvent, total int64, page int, pageSize int, err error) {
+	s.ensureAlertEventProjectBackfill(ctx)
 	page, pageSize = pagination.Normalize(q.Page, q.PageSize)
 	f := repository.AlertEventListFilter{
 		Keyword: q.Keyword, Cluster: q.Cluster, AlertIP: q.AlertIP, Status: q.Status,

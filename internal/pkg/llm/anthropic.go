@@ -105,6 +105,11 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		"max_tokens": maxTokens,
 		"messages":   msgs,
 	}
+	temp := req.Temperature
+	if temp <= 0 {
+		temp = 0.2
+	}
+	body["temperature"] = temp
 	if system != "" {
 		body["system"] = system
 	}

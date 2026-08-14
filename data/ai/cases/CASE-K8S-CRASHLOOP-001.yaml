@@ -1,0 +1,18 @@
+case_id: CASE-K8S-CRASHLOOP-001
+title: Pod CrashLoopBackOff 典型案例
+category: k8s
+technology: kubernetes
+symptom: Pod 不断重启，状态 CrashLoopBackOff
+environment: Kubernetes
+diagnosis: |
+  1. diagnose_pod
+  2. get_pod_logs
+  3. list_events
+root_cause: 应用配置错误或依赖不可达导致进程退出
+solution: 修正配置/探针，必要时重建 Pod（需审批）
+verification: Pod Ready 且无持续重启
+risk: 删除 Pod 会中断服务，需审批
+related_tools: '["diagnose_pod","get_pod_logs","list_events"]'
+related_sop: '["sop-k8s-pod-crashloop"]'
+source: seed
+confidence: 0.9

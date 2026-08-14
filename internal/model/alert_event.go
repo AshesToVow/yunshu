@@ -21,6 +21,8 @@ type AlertEvent struct {
 	DatasourceID       uint           `json:"datasourceId" gorm:"index;comment:告警数据源ID，0 表示未绑定或未解析"`
 	DatasourceName     string         `json:"datasourceName" gorm:"size:128;index;comment:数据源显示名"`
 	DatasourceType     string         `json:"datasourceType" gorm:"size:32;index;comment:数据源类型如 prometheus、cloud_expiry"`
+	// ProjectID 业务组归属；入站解析后落库，历史统计按项目过滤优先使用本列。
+	ProjectID          uint           `json:"projectId" gorm:"index;comment:业务组ID，0 表示未解析"`
 	GroupKey           string         `json:"groupKey" gorm:"size:128;index;comment:聚合分组键"`
 	// Fingerprint 告警实例指纹（AM fingerprint / 平台规则指纹）；用于按指纹追溯投递与跳过原因。
 	Fingerprint        string         `json:"fingerprint" gorm:"size:512;index;comment:告警指纹"`

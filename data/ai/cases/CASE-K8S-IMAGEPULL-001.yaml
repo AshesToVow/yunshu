@@ -1,0 +1,18 @@
+case_id: CASE-K8S-IMAGEPULL-001
+title: Pod ImagePullBackOff 典型案例
+category: k8s
+technology: kubernetes
+symptom: Pod 状态 ImagePullBackOff / ErrImagePull，容器无法启动
+environment: Kubernetes
+diagnosis: |
+  1. diagnose_pod 确认 Waiting Reason
+  2. list_events 查 Failed / ErrImagePull
+  3. get_pod_detail 核对 image 与 imagePullSecrets
+root_cause: 镜像地址/Tag 错误、仓库不可达或缺少拉取凭证
+solution: 修正镜像与 Tag；配置正确 imagePullSecrets；确认 Harbor/仓库权限与网络
+verification: Pod 可拉取镜像并进入 Running/Ready
+risk: 误改生产镜像地址可能导致版本回退，变更需确认
+related_tools: '["diagnose_pod","list_events","get_pod_detail"]'
+related_sop: '["sop-k8s-pod-imagepull"]'
+source: seed
+confidence: 0.9

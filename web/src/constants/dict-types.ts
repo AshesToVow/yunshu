@@ -120,6 +120,7 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "京东云服务器密码（server_cloud_jd_password）", value: "server_cloud_jd_password", category: "cmdb" },
   { label: "京东云服务器私钥（server_cloud_jd_private_key）", value: "server_cloud_jd_private_key", category: "cmdb" },
   { label: "京东云服务器端口（server_cloud_jd_port）", value: "server_cloud_jd_port", category: "cmdb" },
+  { label: "服务器文件传输上限 MB（cmdb_max_transfer_file_mb）", value: "cmdb_max_transfer_file_mb", category: "cmdb" },
 
   { label: "MinIO Endpoint（minio_endpoint）", value: "minio_endpoint", category: "backup" },
   { label: "MinIO AccessKey（minio_access_key）", value: "minio_access_key", category: "backup" },

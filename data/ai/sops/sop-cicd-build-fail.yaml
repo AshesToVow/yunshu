@@ -1,0 +1,17 @@
+code: sop-cicd-build-fail
+title: CI/CD 构建失败 SOP
+scenario: 流水线构建失败
+preconditions: 已知 project_id
+input_params: project_id, run_id
+check_steps: |
+  1. list_cicd_builds
+  2. get_cicd_build
+  3. get_cicd_build_log
+exec_steps: |
+  1. 按首个 ERROR 修复代码/依赖/凭证
+  2. 重跑构建
+verify_steps: 构建成功并产出制品
+exception_handle: 缺 project_id 时请用户在助手页选择项目
+rollback: 回退失败提交（人工）
+risk: 生产流水线需与发布窗口对齐
+approval_needed: false

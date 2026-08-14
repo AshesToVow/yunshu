@@ -164,7 +164,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v102 := k8s.NewK8sSearchService(v56, v25, v9, v20, v22, v23)
 	inspectService := provideInspectService(db, client, v54, v29, sender, appDisplayName)
 	aiConfig := provideAIConfig(app)
-	aiService := ai.NewService(db, aiConfig, v57, v58, v61, v59, v70, v92, v91, service, v52)
+	aiService := ai.NewService(db, aiConfig, string(securityEncryptionKey), v57, v58, v61, v59, v70, v92, v91, service, v52)
 	esmgmtService, err := provideEsmgmtService(db, securityEncryptionKey, v91)
 	if err != nil {
 		return nil, err

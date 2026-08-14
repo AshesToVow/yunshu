@@ -129,6 +129,9 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		{Resource: "/api/v1/ai/chat", Action: "POST"},
 		{Resource: "/api/v1/ai/sessions", Action: "GET"},
 	}
+	out["/ai/center"] = []EntryPermission{
+		{Resource: "/api/v1/ai/center/overview", Action: "GET"},
+	}
 	return out
 }
 

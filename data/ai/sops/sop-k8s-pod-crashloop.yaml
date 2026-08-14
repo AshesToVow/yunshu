@@ -1,0 +1,17 @@
+code: sop-k8s-pod-crashloop
+title: Kubernetes Pod CrashLoopBackOff SOP
+scenario: Pod 反复重启
+preconditions: 已选择集群；已知 namespace 与 Pod 名
+input_params: cluster_id, namespace, name
+check_steps: |
+  1. diagnose_pod
+  2. get_pod_logs
+  3. list_events
+exec_steps: |
+  1. 根据日志修正配置
+  2. 如需删 Pod 重建，走审批
+verify_steps: Pod Ready，重启次数不再上升
+exception_handle: 证据不足时向用户索要 namespace/名称
+rollback: 回滚最近 Deployment 变更（需审批）
+risk: 删除/重启影响可用性
+approval_needed: true

@@ -3,15 +3,17 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
-	"yunshu/internal/ai/prompts"
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
+	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/llm"
@@ -25,24 +27,28 @@ import (
 
 // Service AI 业务服务。
 type Service struct {
-	db          *gorm.DB
-	yamlAI      config.AIConfig
-	clusterSvc  *k8s.K8sClusterService
-	podSvc      *k8s.K8sPodService
-	workloadSvc *k8s.K8sWorkloadService
-	nsSvc       *k8s.K8sNamespaceService
-	eventSvc    *k8s.K8sEventService
-	logSearch   *logplatform.LogSearchService
-	esProvider  *logplatform.ElasticsearchProvider
-	cicdSvc     *cicdsvc.Service
-	alertSvc    *alert.AlertService
-	rateMu      sync.Mutex
-	rateMap     map[uint]time.Time // 简易限流：每用户最短间隔
+	db            *gorm.DB
+	yamlAI        config.AIConfig
+	encryptionKey string
+	dataDir       string
+	clusterSvc    *k8s.K8sClusterService
+	podSvc        *k8s.K8sPodService
+	workloadSvc   *k8s.K8sWorkloadService
+	nsSvc         *k8s.K8sNamespaceService
+	eventSvc      *k8s.K8sEventService
+	logSearch     *logplatform.LogSearchService
+	esProvider    *logplatform.ElasticsearchProvider
+	cicdSvc       *cicdsvc.Service
+	alertSvc      *alert.AlertService
+	rateMu        sync.Mutex
+	rateMap       map[uint]time.Time // 简易限流：每用户最短间隔
+	seedOnce      sync.Once
 }
 
 func NewService(
 	db *gorm.DB,
 	yamlAI config.AIConfig,
+	encryptionKey string,
 	clusterSvc *k8s.K8sClusterService,
 	podSvc *k8s.K8sPodService,
 	workloadSvc *k8s.K8sWorkloadService,
@@ -54,19 +60,29 @@ func NewService(
 	alertSvc *alert.AlertService,
 ) *Service {
 	return &Service{
-		db:          db,
-		yamlAI:      yamlAI,
-		clusterSvc:  clusterSvc,
-		podSvc:      podSvc,
-		workloadSvc: workloadSvc,
-		nsSvc:       nsSvc,
-		eventSvc:    eventSvc,
-		logSearch:   logSearch,
-		esProvider:  esProvider,
-		cicdSvc:     cicdSvc,
-		alertSvc:    alertSvc,
-		rateMap:     make(map[uint]time.Time),
+		db:            db,
+		yamlAI:        yamlAI,
+		encryptionKey: encryptionKey,
+		dataDir:       filepath.Join("data", "ai"),
+		clusterSvc:    clusterSvc,
+		podSvc:        podSvc,
+		workloadSvc:   workloadSvc,
+		nsSvc:         nsSvc,
+		eventSvc:      eventSvc,
+		logSearch:     logSearch,
+		esProvider:    esProvider,
+		cicdSvc:       cicdSvc,
+		alertSvc:      alertSvc,
+		rateMap:       make(map[uint]time.Time),
 	}
+}
+
+func (s *Service) ensureSeed() {
+	s.seedOnce.Do(func() {
+		if err := s.EnsureCenterSeed(context.Background()); err != nil {
+			slog.Warn("ai center seed", "err", err)
+		}
+	})
 }
 
 func (s *Service) resolved(ctx context.Context) config.AIConfig {
@@ -75,10 +91,16 @@ func (s *Service) resolved(ctx context.Context) config.AIConfig {
 
 func (s *Service) requireEnabled(ctx context.Context) (config.AIConfig, error) {
 	cfg := s.resolved(ctx)
-	if !cfg.Enabled {
-		return cfg, constants.ErrBadRequestWithMsg("AI 未启用，请在数据字典配置 ai_enabled=true 并填写 Provider")
+	if cfg.Enabled {
+		return cfg, nil
 	}
-	return cfg, nil
+	var n int64
+	_ = s.db.WithContext(ctx).Model(&model.AiLLMModel{}).Where("enabled = ?", true).Count(&n)
+	if n > 0 {
+		cfg.Enabled = true
+		return cfg, nil
+	}
+	return cfg, constants.ErrBadRequestWithMsg("AI 未启用：请在能力中心录入模型，或配置字典 ai_enabled=true")
 }
 
 func (s *Service) checkRate(userID uint) error {
@@ -95,10 +117,27 @@ func (s *Service) checkRate(userID uint) error {
 	return nil
 }
 
-func (s *Service) clientFor(cfg config.AIConfig, provider string) (llm.Client, string, config.AIProviderConfig, error) {
+func (s *Service) clientFor(ctx context.Context, cfg *config.AIConfig, provider string) (llm.Client, string, config.AIProviderConfig, error) {
+	if cfg == nil {
+		return nil, "", config.AIProviderConfig{}, constants.ErrBadRequestWithMsg("AI 配置无效")
+	}
+	row, err := s.findLLMModelForChat(ctx, provider)
+	if err == nil && row != nil {
+		timeout := cfg.TimeoutSec
+		if timeout <= 0 {
+			timeout = 60
+		}
+		if row.MaxTokens > 0 {
+			cfg.MaxTokens = row.MaxTokens
+		}
+		return s.clientFromDBModel(row, timeout)
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, "", config.AIProviderConfig{}, err
+	}
 	name, pcfg := cfg.ProviderConfig(provider)
 	if strings.TrimSpace(pcfg.APIKey) == "" {
-		return nil, name, pcfg, constants.ErrBadRequestWithMsg("未配置 API Key，请启用对应 ai_*_api_key 字典项")
+		return nil, name, pcfg, constants.ErrBadRequestWithMsg("未配置 API Key：请在能力中心录入模型，或启用对应 ai_*_api_key 字典项")
 	}
 	switch name {
 	case config.AIProviderAnthropic:
@@ -112,40 +151,60 @@ func (s *Service) clientFor(cfg config.AIConfig, provider string) (llm.Client, s
 
 // StatusResponse AI 状态（脱敏）。
 type StatusResponse struct {
-	Enabled         bool   `json:"enabled"`
-	DefaultProvider string `json:"default_provider"`
-	TimeoutSec      int    `json:"timeout_sec"`
-	MaxTokens       int    `json:"max_tokens"`
+	Enabled         bool             `json:"enabled"`
+	DefaultProvider string           `json:"default_provider"`
+	TimeoutSec      int              `json:"timeout_sec"`
+	MaxTokens       int              `json:"max_tokens"`
 	Providers       []ProviderStatus `json:"providers"`
 }
 
 type ProviderStatus struct {
-	Name      string `json:"name"`
-	Configured bool  `json:"configured"`
-	BaseURL   string `json:"base_url"`
-	Model     string `json:"model"`
+	Name       string `json:"name"`
+	Configured bool   `json:"configured"`
+	BaseURL    string `json:"base_url"`
+	Model      string `json:"model"`
+	Source     string `json:"source,omitempty"` // db | dict
 }
 
 func (s *Service) Status(ctx context.Context) StatusResponse {
 	cfg := s.resolved(ctx)
+	var providers []ProviderStatus
+	var dbRows []model.AiLLMModel
+	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Order("is_default DESC, id ASC").Find(&dbRows).Error
+	defaultName := cfg.DefaultProvider
+	for _, row := range dbRows {
+		providers = append(providers, ProviderStatus{
+			Name:       row.Name,
+			Configured: strings.TrimSpace(row.APIKeyEnc) != "",
+			BaseURL:    row.BaseURL,
+			Model:      row.ModelName,
+			Source:     "db",
+		})
+		if row.IsDefault {
+			defaultName = row.Name
+		}
+	}
 	mk := func(name string, p config.AIProviderConfig) ProviderStatus {
 		return ProviderStatus{
 			Name:       name,
 			Configured: strings.TrimSpace(p.APIKey) != "",
 			BaseURL:    p.BaseURL,
 			Model:      p.Model,
+			Source:     "dict",
 		}
 	}
+	providers = append(providers,
+		mk(config.AIProviderOpenAICompat, cfg.OpenAI),
+		mk(config.AIProviderDeepSeek, cfg.DeepSeek),
+		mk(config.AIProviderAnthropic, cfg.Anthropic),
+	)
+	enabled := cfg.Enabled || len(dbRows) > 0
 	return StatusResponse{
-		Enabled:         cfg.Enabled,
-		DefaultProvider: cfg.DefaultProvider,
+		Enabled:         enabled,
+		DefaultProvider: defaultName,
 		TimeoutSec:      cfg.TimeoutSec,
 		MaxTokens:       cfg.MaxTokens,
-		Providers: []ProviderStatus{
-			mk(config.AIProviderOpenAICompat, cfg.OpenAI),
-			mk(config.AIProviderDeepSeek, cfg.DeepSeek),
-			mk(config.AIProviderAnthropic, cfg.Anthropic),
-		},
+		Providers:       providers,
 	}
 }
 
@@ -169,7 +228,7 @@ func (s *Service) Ping(ctx context.Context, userID uint, req PingRequest) (*Ping
 	if err := s.checkRate(userID); err != nil {
 		return nil, err
 	}
-	cli, name, pcfg, err := s.clientFor(cfg, req.Provider)
+	cli, name, pcfg, err := s.clientFor(ctx, &cfg, req.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -258,14 +317,15 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 		"session_id": req.SessionID,
 		"note":       "优先使用工具获取真实平台/集群数据；写操作仅创建审批单",
 	})
-	sys, err := prompts.Load("system_ops_assistant", map[string]string{"context_json": string(ctxJSON)})
+	s.ensureSeed()
+	sys, err := s.loadPromptContent(ctx, "system/ops-agent", map[string]string{"context_json": string(ctxJSON)})
 	if err != nil {
 		return nil, err
 	}
 
 	var ragHits []ragHit
 	if !req.DisableRAG {
-		ragHits = s.retrieveKnowledge(ctx, lastUser, 6)
+		ragHits = s.retrieveKnowledge(ctx, lastUser, 8)
 		if len(ragHits) > 0 {
 			var b strings.Builder
 			b.WriteString("\n\n## 知识库检索片段\n")
@@ -296,7 +356,7 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 		msgs = append(msgs, llm.Message{Role: role, Content: strings.TrimSpace(m.Content)})
 	}
 
-	cli, name, pcfg, err := s.clientFor(cfg, req.Provider)
+	cli, name, pcfg, err := s.clientFor(ctx, &cfg, req.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -416,11 +476,11 @@ func (s *Service) AnalyzePodDiagnose(ctx context.Context, userID uint, req PodDi
 	if len(ctxJSON) > 60_000 {
 		ctxJSON = ctxJSON[:60_000]
 	}
-	prompt, err := prompts.Load("k8s_pod_diagnose", map[string]string{"context_json": string(ctxJSON)})
+	prompt, err := s.loadPromptContent(ctx, "diagnosis/k8s-pod", map[string]string{"context_json": string(ctxJSON)})
 	if err != nil {
 		return nil, err
 	}
-	cli, name, pcfg, err := s.clientFor(cfg, req.Provider)
+	cli, name, pcfg, err := s.clientFor(ctx, &cfg, req.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -525,11 +585,11 @@ func (s *Service) AnalyzeCicdBuildFail(ctx context.Context, userID uint, actor *
 	ctxJSON, _ := json.Marshal(bundle)
 	ctxJSON = truncateBytes(ctxJSON, 60_000)
 
-	prompt, err := prompts.Load("cicd_build_fail", map[string]string{"context_json": string(ctxJSON)})
+	prompt, err := s.loadPromptContent(ctx, "diagnosis/cicd-build-fail", map[string]string{"context_json": string(ctxJSON)})
 	if err != nil {
 		return nil, err
 	}
-	cli, name, pcfg, err := s.clientFor(cfg, req.Provider)
+	cli, name, pcfg, err := s.clientFor(ctx, &cfg, req.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -647,11 +707,11 @@ func (s *Service) AnalyzeAlertExplain(ctx context.Context, userID uint, req Aler
 
 	ctxJSON, _ := json.Marshal(bundle)
 	ctxJSON = truncateBytes(ctxJSON, 60_000)
-	prompt, err := prompts.Load("alert_explain", map[string]string{"context_json": string(ctxJSON)})
+	prompt, err := s.loadPromptContent(ctx, "diagnosis/alert-explain", map[string]string{"context_json": string(ctxJSON)})
 	if err != nil {
 		return nil, err
 	}
-	cli, name, pcfg, err := s.clientFor(cfg, req.Provider)
+	cli, name, pcfg, err := s.clientFor(ctx, &cfg, req.Provider)
 	if err != nil {
 		return nil, err
 	}

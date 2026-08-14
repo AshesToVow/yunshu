@@ -77,6 +77,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/cicd/image-browser": "cicd-image-browser-page",
   "/ai/assistant": "ai-assistant-page",
   "/ai/approvals": "ai-approvals-page",
+  "/ai/center": "ai-center-page",
   "/esmgmt/connections": "esmgmt-connections-page",
   "/esmgmt/overview": "esmgmt-overview-page",
   "/esmgmt/console": "esmgmt-console-page",

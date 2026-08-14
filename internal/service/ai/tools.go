@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"yunshu/internal/ai/runbooks"
+	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/llm"
 	"yunshu/internal/service/alert"
@@ -31,184 +33,238 @@ type toolStep struct {
 }
 
 func (s *Service) toolDefinitions(includeWrite bool) []llm.ToolDefinition {
+	s.ensureSeed()
+	defs := s.builtinToolDefinitions(includeWrite)
+	// 追加已启用的脚本工具
+	var scripts []model.AiToolDef
+	_ = s.db.Where("enabled = ? AND runtime = ?", true, "script").Find(&scripts).Error
+	for _, t := range scripts {
+		schema := map[string]any{"type": "object", "properties": map[string]any{}}
+		if strings.TrimSpace(t.InputSchemaJSON) != "" {
+			_ = json.Unmarshal([]byte(t.InputSchemaJSON), &schema)
+		}
+		if !includeWrite && strings.EqualFold(t.Permission, "WRITE") {
+			continue
+		}
+		defs = append(defs, llm.NewFunctionTool(t.Name, t.Description, schema))
+	}
+	return defs
+}
+
+func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition {
 	defs := []llm.ToolDefinition{
 		// --- k8s ---
-		llm.NewFunctionTool("list_clusters", "列出 Yunshu 已接入的 Kubernetes 集群（id/名称）", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"keyword": map[string]any{"type": "string"},
-			},
-		}),
-		llm.NewFunctionTool("list_pods", "列出指定集群/命名空间的 Pod", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"cluster_id": map[string]any{"type": "integer"},
-				"namespace":  map[string]any{"type": "string"},
-				"keyword":    map[string]any{"type": "string"},
-			},
-			"required": []string{"cluster_id"},
-		}),
-		llm.NewFunctionTool("get_pod_detail", "获取 Pod 详情", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"cluster_id": map[string]any{"type": "integer"},
-				"namespace":  map[string]any{"type": "string"},
-				"name":       map[string]any{"type": "string"},
-			},
-			"required": []string{"cluster_id", "namespace", "name"},
-		}),
-		llm.NewFunctionTool("get_pod_logs", "获取 Pod 日志尾部（只读）", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"cluster_id": map[string]any{"type": "integer"},
-				"namespace":  map[string]any{"type": "string"},
-				"name":       map[string]any{"type": "string"},
-				"container":  map[string]any{"type": "string"},
-				"tail_lines": map[string]any{"type": "integer"},
-			},
-			"required": []string{"cluster_id", "namespace", "name"},
-		}),
-		llm.NewFunctionTool("diagnose_pod", "确定性 Pod 排障诊断", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"cluster_id": map[string]any{"type": "integer"},
-				"namespace":  map[string]any{"type": "string"},
-				"name":       map[string]any{"type": "string"},
-			},
-			"required": []string{"cluster_id", "namespace", "name"},
-		}),
-		llm.NewFunctionTool("run_diagnose_runbook", "按排障剧本分析 Pod（先 Diagnose 再套剧本）", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"cluster_id":   map[string]any{"type": "integer"},
-				"namespace":    map[string]any{"type": "string"},
-				"name":         map[string]any{"type": "string"},
-				"runbook_name": map[string]any{"type": "string", "description": "CrashLoopBackOff|ImagePullBackOff|PendingUnschedulable，可空自动匹配"},
-			},
-			"required": []string{"cluster_id", "namespace", "name"},
-		}),
-		llm.NewFunctionTool("list_deployments", "列出 Deployment", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"cluster_id": map[string]any{"type": "integer"},
-				"namespace":  map[string]any{"type": "string"},
-				"keyword":    map[string]any{"type": "string"},
-			},
-			"required": []string{"cluster_id"},
-		}),
-		llm.NewFunctionTool("list_namespaces", "列出命名空间", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"cluster_id": map[string]any{"type": "integer"},
-				"keyword":    map[string]any{"type": "string"},
-			},
-			"required": []string{"cluster_id"},
-		}),
-		llm.NewFunctionTool("list_events", "列出 K8s Events", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"cluster_id": map[string]any{"type": "integer"},
-				"namespace":  map[string]any{"type": "string"},
-				"keyword":    map[string]any{"type": "string"},
-				"limit":      map[string]any{"type": "integer"},
-			},
-			"required": []string{"cluster_id"},
-		}),
-		llm.NewFunctionTool("list_runbooks", "列出内置排障剧本名称", map[string]any{
-			"type":       "object",
-			"properties": map[string]any{},
-		}),
+		llm.NewFunctionTool("list_clusters",
+			"列出 Yunshu 已接入的 K8s 集群（id/名称）。用户未选集群或不知道 cluster_id 时必须先调用。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"keyword": map[string]any{"type": "string", "description": "按集群名称模糊过滤"},
+				},
+			}),
+		llm.NewFunctionTool("list_pods",
+			"列出集群/命名空间下的 Pod。用于定位异常 Pod 名称；已知准确名称可跳过，直接 diagnose_pod。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"cluster_id": map[string]any{"type": "integer", "description": "必填；可从上下文或 list_clusters 获取"},
+					"namespace":  map[string]any{"type": "string", "description": "命名空间，空则按服务默认范围"},
+					"keyword":    map[string]any{"type": "string", "description": "按 Pod 名过滤"},
+				},
+				"required": []string{"cluster_id"},
+			}),
+		llm.NewFunctionTool("get_pod_detail",
+			"获取单个 Pod 详情（规格/状态/容器）。需要完整 YAML 级信息时用；异常排障优先 diagnose_pod。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"cluster_id": map[string]any{"type": "integer"},
+					"namespace":  map[string]any{"type": "string"},
+					"name":       map[string]any{"type": "string", "description": "Pod 名称"},
+				},
+				"required": []string{"cluster_id", "namespace", "name"},
+			}),
+		llm.NewFunctionTool("get_pod_logs",
+			"获取 Pod 容器日志尾部（只读）。CrashLoop/启动失败时必查；可指定 container 与 tail_lines。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"cluster_id": map[string]any{"type": "integer"},
+					"namespace":  map[string]any{"type": "string"},
+					"name":       map[string]any{"type": "string"},
+					"container":  map[string]any{"type": "string", "description": "多容器时指定容器名"},
+					"tail_lines": map[string]any{"type": "integer", "description": "默认 200，最大 1000"},
+				},
+				"required": []string{"cluster_id", "namespace", "name"},
+			}),
+		llm.NewFunctionTool("diagnose_pod",
+			"确定性 Pod 排障诊断（规则引擎）。Pod 异常/CrashLoop/Pending/ImagePull 时优先调用，再决定是否看日志或剧本。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"cluster_id": map[string]any{"type": "integer"},
+					"namespace":  map[string]any{"type": "string"},
+					"name":       map[string]any{"type": "string"},
+				},
+				"required": []string{"cluster_id", "namespace", "name"},
+			}),
+		llm.NewFunctionTool("run_diagnose_runbook",
+			"先 Diagnose 再套内置排障剧本。在 diagnose_pod 后、原因匹配 CrashLoopBackOff/ImagePullBackOff/PendingUnschedulable 时使用。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"cluster_id":   map[string]any{"type": "integer"},
+					"namespace":    map[string]any{"type": "string"},
+					"name":         map[string]any{"type": "string"},
+					"runbook_name": map[string]any{"type": "string", "description": "CrashLoopBackOff|ImagePullBackOff|PendingUnschedulable，可空自动匹配"},
+				},
+				"required": []string{"cluster_id", "namespace", "name"},
+			}),
+		llm.NewFunctionTool("list_deployments",
+			"列出 Deployment。用于找工作负载名称、副本数；扩缩容/重启前先确认 name。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"cluster_id": map[string]any{"type": "integer"},
+					"namespace":  map[string]any{"type": "string"},
+					"keyword":    map[string]any{"type": "string"},
+				},
+				"required": []string{"cluster_id"},
+			}),
+		llm.NewFunctionTool("list_namespaces",
+			"列出命名空间。用户未提供 namespace 时可先列出再缩小范围。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"cluster_id": map[string]any{"type": "integer"},
+					"keyword":    map[string]any{"type": "string"},
+				},
+				"required": []string{"cluster_id"},
+			}),
+		llm.NewFunctionTool("list_events",
+			"列出 K8s Events。配合 Pod 排障查看 FailedScheduling/Failed/Unhealthy 等事件。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"cluster_id": map[string]any{"type": "integer"},
+					"namespace":  map[string]any{"type": "string"},
+					"keyword":    map[string]any{"type": "string"},
+					"limit":      map[string]any{"type": "integer", "description": "默认 50"},
+				},
+				"required": []string{"cluster_id"},
+			}),
+		llm.NewFunctionTool("list_runbooks",
+			"列出内置排障剧本名称。不清楚有哪些剧本时调用。",
+			map[string]any{"type": "object", "properties": map[string]any{}}),
 		// --- log ---
-		llm.NewFunctionTool("search_logs", "按项目检索平台日志（ES，支持 namespace/pod）", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"project_id": map[string]any{"type": "integer"},
-				"keyword":    map[string]any{"type": "string"},
-				"namespace":  map[string]any{"type": "string"},
-				"pod":        map[string]any{"type": "string"},
-				"cluster_id": map[string]any{"type": "integer"},
-				"page_size":  map[string]any{"type": "integer"},
-			},
-			"required": []string{"project_id", "keyword"},
-		}),
+		llm.NewFunctionTool("search_logs",
+			"检索项目日志平台（ES）。必须有 project_id；用于应用日志/错误关键字，与 get_pod_logs（kubectl 实时日志）互补。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer", "description": "必填；来自助手页所选项目或用户提供"},
+					"keyword":    map[string]any{"type": "string", "description": "检索关键字，如 error、Exception"},
+					"namespace":  map[string]any{"type": "string"},
+					"pod":        map[string]any{"type": "string"},
+					"cluster_id": map[string]any{"type": "integer"},
+					"page_size":  map[string]any{"type": "integer", "description": "默认 20，最大 50"},
+				},
+				"required": []string{"project_id", "keyword"},
+			}),
 		// --- cicd ---
-		llm.NewFunctionTool("list_cicd_builds", "列出项目 CI 构建记录", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"project_id": map[string]any{"type": "integer"},
-				"keyword":    map[string]any{"type": "string"},
-				"page_size":  map[string]any{"type": "integer"},
-			},
-			"required": []string{"project_id"},
-		}),
-		llm.NewFunctionTool("get_cicd_build", "获取单次构建详情", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"project_id": map[string]any{"type": "integer"},
-				"run_id":     map[string]any{"type": "integer"},
-			},
-			"required": []string{"project_id", "run_id"},
-		}),
-		llm.NewFunctionTool("get_cicd_build_log", "获取构建控制台日志（截断）", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"project_id": map[string]any{"type": "integer"},
-				"run_id":     map[string]any{"type": "integer"},
-			},
-			"required": []string{"project_id", "run_id"},
-		}),
+		llm.NewFunctionTool("list_cicd_builds",
+			"列出项目 CI 构建记录。构建失败排查第一步；需要 project_id。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer", "description": "必填"},
+					"keyword":    map[string]any{"type": "string", "description": "按分支/构建名过滤"},
+					"page_size":  map[string]any{"type": "integer"},
+				},
+				"required": []string{"project_id"},
+			}),
+		llm.NewFunctionTool("get_cicd_build",
+			"获取单次构建详情（状态/阶段）。在 list_cicd_builds 选定 run_id 后调用。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"run_id":     map[string]any{"type": "integer", "description": "构建记录 ID"},
+				},
+				"required": []string{"project_id", "run_id"},
+			}),
+		llm.NewFunctionTool("get_cicd_build_log",
+			"获取构建控制台日志（截断）。定位编译/测试/推镜像失败的具体错误行。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"run_id":     map[string]any{"type": "integer"},
+				},
+				"required": []string{"project_id", "run_id"},
+			}),
 		// --- alert ---
-		llm.NewFunctionTool("list_alerts", "列出告警事件（可按状态/严重级别/关键词）", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"project_id": map[string]any{"type": "integer"},
-				"status":     map[string]any{"type": "string", "description": "firing|resolved 等"},
-				"severity":   map[string]any{"type": "string"},
-				"keyword":    map[string]any{"type": "string"},
-				"page_size":  map[string]any{"type": "integer"},
-			},
-		}),
-		llm.NewFunctionTool("explain_alert", "解释告警指纹投递路径（发送/跳过/抑制）", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"fingerprint": map[string]any{"type": "string"},
-			},
-			"required": []string{"fingerprint"},
-		}),
+		llm.NewFunctionTool("list_alerts",
+			"列出告警事件。排查「未收到/重复告警」时先列出，再取 fingerprint 调用 explain_alert。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"status":     map[string]any{"type": "string", "description": "firing|resolved 等"},
+					"severity":   map[string]any{"type": "string"},
+					"keyword":    map[string]any{"type": "string"},
+					"page_size":  map[string]any{"type": "integer"},
+				},
+			}),
+		llm.NewFunctionTool("explain_alert",
+			"解释告警指纹投递路径（发送/跳过/抑制）。必须先有 fingerprint（可从 list_alerts 结果取）。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"fingerprint": map[string]any{"type": "string", "description": "告警指纹"},
+				},
+				"required": []string{"fingerprint"},
+			}),
 	}
 	if includeWrite {
 		defs = append(defs,
-			llm.NewFunctionTool("scale_deployment", "扩缩容 Deployment（需审批，不会立即执行）", map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"cluster_id": map[string]any{"type": "integer"},
-					"namespace":  map[string]any{"type": "string"},
-					"name":       map[string]any{"type": "string"},
-					"replicas":   map[string]any{"type": "integer"},
-					"reason":     map[string]any{"type": "string"},
-				},
-				"required": []string{"cluster_id", "namespace", "name", "replicas"},
-			}),
-			llm.NewFunctionTool("restart_deployment", "重启 Deployment（需审批）", map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"cluster_id": map[string]any{"type": "integer"},
-					"namespace":  map[string]any{"type": "string"},
-					"name":       map[string]any{"type": "string"},
-					"reason":     map[string]any{"type": "string"},
-				},
-				"required": []string{"cluster_id", "namespace", "name"},
-			}),
-			llm.NewFunctionTool("delete_pod", "删除 Pod（需审批）", map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"cluster_id": map[string]any{"type": "integer"},
-					"namespace":  map[string]any{"type": "string"},
-					"name":       map[string]any{"type": "string"},
-					"reason":     map[string]any{"type": "string"},
-				},
-				"required": []string{"cluster_id", "namespace", "name"},
-			}),
+			llm.NewFunctionTool("scale_deployment",
+				"申请扩缩容 Deployment：仅创建审批单，不会立即执行。调用前确认 cluster/namespace/name/replicas。",
+				map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"cluster_id": map[string]any{"type": "integer"},
+						"namespace":  map[string]any{"type": "string"},
+						"name":       map[string]any{"type": "string"},
+						"replicas":   map[string]any{"type": "integer"},
+						"reason":     map[string]any{"type": "string", "description": "申请原因，便于审批"},
+					},
+					"required": []string{"cluster_id", "namespace", "name", "replicas"},
+				}),
+			llm.NewFunctionTool("restart_deployment",
+				"申请重启 Deployment：仅创建审批单。",
+				map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"cluster_id": map[string]any{"type": "integer"},
+						"namespace":  map[string]any{"type": "string"},
+						"name":       map[string]any{"type": "string"},
+						"reason":     map[string]any{"type": "string"},
+					},
+					"required": []string{"cluster_id", "namespace", "name"},
+				}),
+			llm.NewFunctionTool("delete_pod",
+				"申请删除 Pod：仅创建审批单。高危操作，须说明 reason。",
+				map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"cluster_id": map[string]any{"type": "integer"},
+						"namespace":  map[string]any{"type": "string"},
+						"name":       map[string]any{"type": "string"},
+						"reason":     map[string]any{"type": "string"},
+					},
+					"required": []string{"cluster_id", "namespace", "name"},
+				}),
 		)
 	}
 	return defs
@@ -216,6 +272,36 @@ func (s *Service) toolDefinitions(includeWrite bool) []llm.ToolDefinition {
 
 func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON string, tc toolContext) toolStep {
 	step := toolStep{Name: name, Args: truncateStr(argsJSON, 2000)}
+	s.ensureSeed()
+
+	// 注册表：禁用 / 脚本工具
+	var reg model.AiToolDef
+	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&reg).Error; err == nil {
+		if !reg.Enabled {
+			step.OK = false
+			step.Error = "工具已禁用"
+			step.Result = step.Error
+			s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
+			return step
+		}
+		if strings.EqualFold(reg.Runtime, "script") {
+			out, err := s.runScriptTool(ctx, toolDefRow{
+				Name: reg.Name, ScriptLang: reg.ScriptLang, ScriptPath: reg.ScriptPath, TimeoutSec: reg.TimeoutSec,
+			}, argsJSON)
+			if err != nil {
+				step.OK = false
+				step.Error = err.Error()
+				step.Result = err.Error()
+				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, err.Error())
+				return step
+			}
+			step.OK = true
+			step.Result = out
+			s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, true, truncateStr(out, 500))
+			return step
+		}
+	}
+
 	var args map[string]any
 	_ = json.Unmarshal([]byte(argsJSON), &args)
 	if args == nil {
@@ -468,8 +554,13 @@ func (s *Service) runDiagnoseRunbook(ctx context.Context, clusterID uint, ns, na
 }
 
 func truncateStr(s string, n int) string {
-	if n <= 0 || len(s) <= n {
+	if n <= 0 {
 		return s
 	}
-	return s[:n] + "…(truncated)"
+	// n 按 rune 截断，避免中文被截断成非法 UTF-8
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	runes := []rune(s)
+	return string(runes[:n]) + "…(truncated)"
 }

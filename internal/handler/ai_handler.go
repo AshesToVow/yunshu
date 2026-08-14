@@ -290,3 +290,237 @@ func (h *AIHandler) SyncKnowledge(c *gin.Context) {
 	}
 	response.Success(c, map[string]any{"indexed": n})
 }
+
+func (h *AIHandler) CenterOverview(c *gin.Context) {
+	response.Success(c, h.svc.CenterOverview(c.Request.Context()))
+}
+
+func (h *AIHandler) ReseedCenter(c *gin.Context) {
+	if err := h.svc.ReseedCenter(c.Request.Context()); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) ListPrompts(c *gin.Context) {
+	rows, err := h.svc.ListPrompts(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) ListPromptVersions(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	rows, err := h.svc.ListPromptVersions(c.Request.Context(), uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) PublishPrompt(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.PromptPublishRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	ver, err := h.svc.PublishPromptVersion(c.Request.Context(), uri.ID, uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, ver)
+}
+
+func (h *AIHandler) RollbackPrompt(c *gin.Context) {
+	var uri struct {
+		ID        uint `uri:"id" binding:"required"`
+		VersionID uint `uri:"vid" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.RollbackPromptVersion(c.Request.Context(), uri.ID, uri.VersionID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) ListLLMModels(c *gin.Context) {
+	rows, err := h.svc.ListLLMModels(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) CreateLLMModel(c *gin.Context) {
+	var req aisvc.LLMModelUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.CreateLLMModel(c.Request.Context(), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) UpdateLLMModel(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.LLMModelUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdateLLMModel(c.Request.Context(), uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) DeleteLLMModel(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteLLMModel(c.Request.Context(), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) SetDefaultLLMModel(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.SetDefaultLLMModel(c.Request.Context(), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) ListCenterTools(c *gin.Context) {
+	rows, err := h.svc.ListTools(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) UpdateToolEnabled(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.UpdateToolEnabled(c.Request.Context(), uri.ID, req.Enabled); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) ListCases(c *gin.Context) {
+	rows, err := h.svc.ListIncidentCases(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) ListSOPs(c *gin.Context) {
+	rows, err := h.svc.ListSOPs(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) ListKBs(c *gin.Context) {
+	rows, err := h.svc.ListKnowledgeBases(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) ListEvalCases(c *gin.Context) {
+	rows, err := h.svc.ListEvalCases(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) RunEval(c *gin.Context) {
+	var req struct {
+		Live bool `json:"live"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	user, _ := auth.CurrentUserFromContext(c)
+	run, err := h.svc.RunEvalSuite(c.Request.Context(), user, req.Live)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, run)
+}

@@ -8,6 +8,7 @@ export interface AIProviderStatus {
   configured: boolean;
   base_url: string;
   model: string;
+  source?: string;
 }
 
 export interface AIStatus {

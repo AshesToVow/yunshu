@@ -1,0 +1,9 @@
+case_code: CASE-007
+title: Kubernetes Pod ImagePullBackOff
+suite: default
+input_question: Pod 一直 ImagePullBackOff 怎么排查？
+expect_keywords: '["diagnose","镜像","ImagePull","事件"]'
+forbid_keywords: '["已删除 Pod","已经扩容"]'
+expect_tools: '["diagnose_pod"]'
+expect_risk: LOW
+score_weight: 8

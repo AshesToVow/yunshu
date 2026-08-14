@@ -2,60 +2,81 @@
 
 ## 概述
 
-`ai` 插件：多模型 Provider、运维助手（Tool Calling + RAG）、场景分析、高危操作审批、MySQL 会话持久化。`esmgmt` 插件：Elasticsearch 连接与集群管理。
+`ai` 插件：多模型、运维助手（Tool Calling + RAG）、场景分析、高危审批、**AI 运维能力中心**（Prompt/知识/案例/SOP/Tool/Evaluation）。
 
 ## 启用
 
-`plugins.enabled` 包含 `ai` / `esmgmt`；字典 `ai_enabled=true` 并配置 API Key。
+`plugins.enabled` 含 `ai`；字典 `ai_enabled=true` 并配置 API Key（或后续 `ai_llm_models`）。
 
-## AI API
+## 能力中心（去硬编码）
+
+权威数据在 **MySQL + `data/ai/**`**：
+
+| 路径 | 内容 |
+|------|------|
+| `data/ai/prompts/` | Prompt 版本种子 |
+| `data/ai/kb/` | 知识库 Markdown |
+| `data/ai/cases/` | 故障案例 YAML |
+| `data/ai/sops/` | SOP YAML |
+| `data/ai/tools/` | 脚本工具（`tool.yaml` + `run.py`/`run.sh`） |
+| `data/ai/eval/` | Evaluation 用例 |
+
+首次对话或访问能力中心会幂等 seed。也可 `POST /api/v1/ai/center/reseed`。
+
+**禁止**再把业务 Prompt/知识 `go:embed` 进运行时（旧 embed 仅作空库过渡回退）。
+
+## 菜单
+
+- `/ai/assistant` 运维助手
+- `/ai/approvals` 操作审批
+- `/ai/center` 能力中心（Prompt/Tools/案例/SOP/KB/Eval）
+
+## 主要 API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/ai/status` | 状态（脱敏） |
-| POST | `/api/v1/ai/ping` | 连通测试 |
-| POST | `/api/v1/ai/chat` | 助手（tools + RAG；可带 `session_id` 落库） |
-| GET | `/api/v1/ai/sessions` | 会话列表 |
-| POST | `/api/v1/ai/sessions` | 创建会话 |
-| GET | `/api/v1/ai/sessions/:id` | 会话详情（含消息） |
-| PATCH | `/api/v1/ai/sessions/:id` | 更新会话元数据 |
-| DELETE | `/api/v1/ai/sessions/:id` | 删除会话 |
-| POST | `/api/v1/ai/sessions/:id/clear` | 清空会话消息 |
-| POST | `/api/v1/ai/k8s/pod-diagnose` | Pod AI 分析 |
-| POST | `/api/v1/ai/cicd/build-fail` | CI 失败分析 |
-| POST | `/api/v1/ai/alert/explain` | 告警解释 |
-| GET | `/api/v1/ai/approvals` | 审批列表 |
-| POST | `/api/v1/ai/approvals/:id/review` | 审批 |
-| POST | `/api/v1/ai/approvals/:id/execute` | 执行已批准操作 |
-| POST | `/api/v1/ai/knowledge/sync` | 同步知识库到 ES |
+| POST | `/api/v1/ai/chat` | 助手（读 DB Prompt + RAG + Tool 注册表） |
+| GET | `/api/v1/ai/center/overview` | 能力中心统计 |
+| POST | `/api/v1/ai/center/reseed` | 从 data/ai 重载种子 |
+| GET/POST | `/api/v1/ai/center/prompts*` | Prompt 与版本 |
+| GET/PATCH | `/api/v1/ai/center/tools*` | Tool 注册表 |
+| GET | `/api/v1/ai/center/cases` `/sops` `/knowledge-bases` | 案例/SOP/KB |
+| POST | `/api/v1/ai/center/eval/run` | Evaluation（`live=true` 走真实 Chat） |
+| POST | `/api/v1/ai/knowledge/sync` | DB→ES 同步 |
 
-Chat 默认只读工具；`enable_write_tools=true` 时写操作只创建审批单。未传 `session_id` 时会自动创建会话并返回 `session_id`。
+另有 sessions、approvals、场景分析接口（见历史文档）。
 
-## 会话持久化（MySQL）
+## Tool 运行时
 
-- 表：`ai_chat_sessions`、`ai_chat_messages`（GORM AutoMigrate）
-- 按 `user_id` 隔离；每轮对话追加 user/assistant 消息
-- 助手页以服务端会话为准（跨浏览器/设备可恢复）
+- `builtin`：现有 Go 服务（K8s/日志/CI/告警等）
+- `script`：Python2.7+/3、Shell、Go 二进制；根目录沙箱 `data/ai/tools`；写操作仍走审批
 
-## 工具（按模块）
+样例脚本工具：
 
-| 模块 | 只读工具 | 写工具（审批） |
-|------|----------|----------------|
-| K8s | `list_clusters` `list_namespaces` `list_pods` `get_pod_detail` `get_pod_logs` `diagnose_pod` `run_diagnose_runbook` `list_deployments` `list_events` `list_runbooks` | `scale_deployment` `restart_deployment` `delete_pod` |
-| 日志 | `search_logs` | — |
-| CI/CD | `list_cicd_builds` `get_cicd_build` `get_cicd_build_log` | — |
-| 告警 | `list_alerts` `explain_alert` | — |
+- `data/ai/tools/linux/disk_check/` → `linux.disk.check`
+- `data/ai/tools/linux/mem_check/` → `linux.mem.check`
+- `data/ai/tools/linux/load_check/` → `linux.load.check`
 
-## 排障剧本
+环境变量 `YUNSHU_AI_PYTHON` 可指定解释器。脚本探测的是 AI 运行环境本机；远端主机请用服务器操作台。
 
-`internal/ai/runbooks/`：CrashLoopBackOff / ImagePullBackOff / PendingUnschedulable。
+## RAG
 
-## RAG（按功能模块）
+优先 DB 故障案例 + chunks + SOP，其次 ES `yunshu-ai-kb-*`，再回退内嵌模块文档。
 
-- 内嵌文档：`internal/ai/knowledge`（ai / k8s / cicd / alert / log / esmgmt / cmdb / dbmgmt）+ runbooks + prompts
-- 检索时按问题关键词推断模块并加权
-- ES 索引 `yunshu-ai-kb-*`（同步写入 `yunshu-ai-kb-v1`，含 `module` 字段）；失败回退内嵌关键词匹配
+## 种子覆盖矩阵（持续补充）
 
-## esmgmt
+| 模块 | 案例 | SOP | KB | 脚本工具 | Builtin |
+|------|------|-----|----|----------|---------|
+| k8s | CrashLoop/ImagePull/Pending/OOM | ✓ | kb_k8s | — | 强 |
+| cicd | 构建失败 | ✓ | kb_cicd | — | list/get/log |
+| alert | 未收到 | ✓ | kb_alert | — | list/explain |
+| log | 检索为空 | ✓ | kb_log | — | search_logs |
+| linux | 磁盘打满 | ✓ | kb_linux | disk/mem/load | — |
+| cmdb/db/esmgmt | — | — | — | — | 暂无 |
 
-`/api/v1/esmgmt/*`：连接、health、索引、节点、受限 REST 代理。不替代日志平台检索。
+## 部署注意
+
+1. 重启服务 AutoMigrate 新表
+2. 重新 seed 权限（能力中心 API）
+3. 菜单同步后可见「AI 能力中心」
+4. 可选：`POST /ai/center/reseed` 与 `POST /ai/knowledge/sync`（新种子幂等导入）

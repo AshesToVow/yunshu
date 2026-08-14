@@ -2,12 +2,14 @@ package ai
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"yunshu/internal/ai/knowledge"
-	"yunshu/internal/ai/prompts"
 	"yunshu/internal/ai/runbooks"
+	"yunshu/internal/model"
 )
 
 type ragHit struct {
@@ -17,17 +19,118 @@ type ragHit struct {
 	Score   float64 `json:"score"`
 }
 
-// retrieveKnowledge：优先 ES BM25（yunshu-ai-kb-*），失败则回退内嵌文档关键词匹配；按功能模块加权过滤。
+// retrieveKnowledge：案例/DB chunks 优先，其次 ES，再回退内嵌文档。
 func (s *Service) retrieveKnowledge(ctx context.Context, query string, topK int) []ragHit {
 	query = strings.TrimSpace(query)
 	if query == "" || topK <= 0 {
 		return nil
 	}
+	s.ensureSeed()
 	modules := knowledge.InferModules(query)
-	if hits := s.retrieveFromES(ctx, query, modules, topK); len(hits) > 0 {
-		return hits
+	if hits := s.retrieveFromDB(ctx, query, modules, topK); len(hits) > 0 {
+		return filterWeakHits(hits, 1)
 	}
-	return retrieveFromEmbed(query, modules, topK)
+	if hits := s.retrieveFromES(ctx, query, modules, topK); len(hits) > 0 {
+		return filterWeakHits(hits, 0.5)
+	}
+	return filterWeakHits(retrieveFromEmbed(query, modules, topK), 1)
+}
+
+func (s *Service) retrieveFromDB(ctx context.Context, query string, modules []string, topK int) []ragHit {
+	tokens := tokenizeQuery(query)
+	if len(tokens) == 0 {
+		return nil
+	}
+	var out []ragHit
+	// 故障案例优先
+	var cases []model.AiIncidentCase
+	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Limit(200).Find(&cases).Error
+	for _, c := range cases {
+		blob := strings.ToLower(c.Title + " " + c.Symptom + " " + c.RootCause + " " + c.Solution + " " + c.Category + " " + c.Technology)
+		sc := scoreTokens(blob, tokens)
+		if sc <= 0 {
+			continue
+		}
+		if len(modules) > 0 {
+			for _, m := range modules {
+				if strings.Contains(blob, m) || (m == "k8s" && strings.Contains(blob, "pod")) {
+					sc += 4
+					break
+				}
+			}
+		}
+		content := "【案例】" + c.Title + "\n现象：" + truncateRunesStr(c.Symptom, 400) +
+			"\n根因：" + truncateRunesStr(c.RootCause, 400) +
+			"\n方案：" + truncateRunesStr(c.Solution, 400)
+		out = append(out, ragHit{Source: "case:" + c.CaseID, Module: "case", Content: content, Score: sc + c.Confidence})
+	}
+	// KB chunks
+	var chunks []model.AiKbChunk
+	_ = s.db.WithContext(ctx).Order("id DESC").Limit(500).Find(&chunks).Error
+	for _, ch := range chunks {
+		blob := strings.ToLower(ch.HeadingPath + " " + ch.Content)
+		sc := scoreTokens(blob, tokens)
+		if sc <= 0 {
+			continue
+		}
+		out = append(out, ragHit{
+			Source:  "chunk:" + strconv.FormatUint(uint64(ch.ID), 10),
+			Module:  "kb",
+			Content: truncateRunesStr(ch.HeadingPath+"\n"+ch.Content, 2200),
+			Score:   sc,
+		})
+	}
+	// SOP
+	var sops []model.AiSOP
+	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Limit(100).Find(&sops).Error
+	for _, sp := range sops {
+		blob := strings.ToLower(sp.Title + " " + sp.Scenario + " " + sp.CheckSteps + " " + sp.ExecSteps)
+		sc := scoreTokens(blob, tokens)
+		if sc <= 0 {
+			continue
+		}
+		content := "【SOP】" + sp.Title + "\n场景：" + truncateRunesStr(sp.Scenario, 300) +
+			"\n检查：" + truncateRunesStr(sp.CheckSteps, 500) +
+			"\n执行：" + truncateRunesStr(sp.ExecSteps, 500)
+		out = append(out, ragHit{Source: "sop:" + sp.Code, Module: "sop", Content: content, Score: sc})
+	}
+	sortRagHits(out)
+	if len(out) > topK {
+		out = out[:topK]
+	}
+	return out
+}
+
+func scoreTokens(blob string, tokens []string) float64 {
+	sc := float64(0)
+	for _, t := range tokens {
+		if strings.Contains(blob, t) {
+			sc++
+		}
+	}
+	return sc
+}
+
+func filterWeakHits(hits []ragHit, minScore float64) []ragHit {
+	if len(hits) == 0 {
+		return nil
+	}
+	out := make([]ragHit, 0, len(hits))
+	for _, h := range hits {
+		if h.Score >= minScore {
+			out = append(out, h)
+		}
+	}
+	if len(out) == 0 && len(hits) > 0 {
+		// 保底取最高分 1～2 条，避免完全无 RAG
+		sortRagHits(hits)
+		n := 2
+		if len(hits) < n {
+			n = len(hits)
+		}
+		return hits[:n]
+	}
+	return out
 }
 
 func (s *Service) retrieveFromES(ctx context.Context, query string, modules []string, topK int) []ragHit {
@@ -42,16 +145,18 @@ func (s *Service) retrieveFromES(ctx context.Context, query string, modules []st
 		map[string]any{
 			"multi_match": map[string]any{
 				"query":  query,
-				"fields": []string{"title^2", "content", "source", "module"},
+				"fields": []string{"title^3", "content", "source^2", "module"},
 			},
 		},
 	}
 	boolQ := map[string]any{"must": must}
 	if len(modules) > 0 {
 		boolQ["should"] = []any{
+			map[string]any{"terms": map[string]any{"module.keyword": modules}},
 			map[string]any{"terms": map[string]any{"module": modules}},
 		}
-		boolQ["minimum_should_match"] = 0
+		// 有模块推断时提高相关模块权重，但不硬过滤（避免字段类型差异导致空结果）
+		boolQ["boost"] = 1.0
 	}
 	body := map[string]any{
 		"size":  topK,
@@ -78,11 +183,10 @@ func (s *Service) retrieveFromES(ctx context.Context, query string, modules []st
 		}
 		score, _ := m["_score"].(float64)
 		mod := strAny(src["module"])
-		// 模块命中时略加权，便于同题多文档时优先相关模块
 		if len(modules) > 0 && mod != "" {
 			for _, want := range modules {
 				if want == mod {
-					score += 2
+					score += 5
 					break
 				}
 			}
@@ -122,7 +226,7 @@ func retrieveFromEmbed(query string, modules []string, topK int) []ragHit {
 	var ranked []scored
 	for _, d := range docs {
 		sc := float64(0)
-		lower := strings.ToLower(d.Content + " " + d.Source + " " + d.Module)
+		lower := strings.ToLower(d.Title + " " + d.Content + " " + d.Source + " " + d.Module)
 		for _, t := range tokens {
 			if strings.Contains(lower, t) {
 				sc++
@@ -130,7 +234,7 @@ func retrieveFromEmbed(query string, modules []string, topK int) []ragHit {
 		}
 		if len(modSet) > 0 {
 			if _, ok := modSet[d.Module]; ok {
-				sc += 3
+				sc += 4
 			}
 		}
 		if sc > 0 {
@@ -170,37 +274,28 @@ func sortRagHits(hits []ragHit) {
 type kbDoc struct {
 	Module  string
 	Source  string
+	Title   string
 	Content string
 }
 
 func embeddedKBDocs() []kbDoc {
 	var docs []kbDoc
 	for _, d := range knowledge.ModuleDocs() {
-		docs = append(docs, kbDoc{Module: d.Module, Source: d.Source, Content: d.Content})
+		docs = append(docs, kbDoc{Module: d.Module, Source: d.Source, Title: d.Title, Content: d.Content})
 	}
 	for _, name := range runbooks.Names() {
 		body, err := runbooks.Load(name)
 		if err != nil {
 			continue
 		}
-		docs = append(docs, kbDoc{Module: knowledge.ModuleK8s, Source: "runbook:" + name, Content: body})
+		docs = append(docs, kbDoc{
+			Module:  knowledge.ModuleK8s,
+			Source:  "runbook:" + name,
+			Title:   "排障剧本 " + name,
+			Content: body,
+		})
 	}
-	for _, name := range []string{"system_ops_assistant", "k8s_pod_diagnose", "cicd_build_fail", "alert_explain"} {
-		body, err := prompts.Load(name, map[string]string{"context_json": "{}"})
-		if err != nil {
-			continue
-		}
-		mod := knowledge.ModuleAI
-		switch name {
-		case "k8s_pod_diagnose":
-			mod = knowledge.ModuleK8s
-		case "cicd_build_fail":
-			mod = knowledge.ModuleCICD
-		case "alert_explain":
-			mod = knowledge.ModuleAlert
-		}
-		docs = append(docs, kbDoc{Module: mod, Source: "prompt:" + name, Content: truncateStr(body, 4000)})
-	}
+	// 注意：不再把 prompt 模板塞进知识库，避免「教模型如何说话」的元指令污染检索
 	return docs
 }
 
@@ -208,26 +303,65 @@ func tokenize(q string) []string {
 	q = strings.ToLower(q)
 	var cur strings.Builder
 	var out []string
+	seen := map[string]struct{}{}
+	add := func(t string) {
+		t = strings.TrimSpace(t)
+		if len(t) < 2 {
+			return
+		}
+		if _, ok := seen[t]; ok {
+			return
+		}
+		seen[t] = struct{}{}
+		out = append(out, t)
+	}
 	flush := func() {
 		t := cur.String()
 		cur.Reset()
-		if len(t) >= 2 {
-			out = append(out, t)
+		add(t)
+	}
+	var cjk []rune
+	flushCJK := func() {
+		if len(cjk) == 0 {
+			return
 		}
+		// 中文连续串：单字（长度≥2 时）+ 二字/三字 gram，改善关键词召回
+		if len(cjk) == 1 {
+			add(string(cjk[0]))
+		} else {
+			for i := 0; i < len(cjk); i++ {
+				add(string(cjk[i]))
+				if i+1 < len(cjk) {
+					add(string(cjk[i : i+2]))
+				}
+				if i+2 < len(cjk) {
+					add(string(cjk[i : i+3]))
+				}
+			}
+		}
+		cjk = cjk[:0]
 	}
 	for _, r := range q {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r > 127 {
-			cur.WriteRune(r)
-		} else {
+		switch {
+		case unicode.Is(unicode.Han, r):
 			flush()
+			cjk = append(cjk, r)
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			flushCJK()
+			cur.WriteRune(r)
+		default:
+			flush()
+			flushCJK()
 		}
 	}
 	flush()
+	flushCJK()
 	return out
 }
 
-// SyncKnowledgeBase 将内嵌文档写入 ES 索引 yunshu-ai-kb-v1（含 module 字段）。
+// SyncKnowledgeBase 将 DB 文档/案例/SOP 同步到 ES（含 module 字段）。
 func (s *Service) SyncKnowledgeBase(ctx context.Context) (int, error) {
+	s.ensureSeed()
 	if s.esProvider == nil {
 		return 0, nil
 	}
@@ -235,28 +369,48 @@ func (s *Service) SyncKnowledgeBase(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	docs := embeddedKBDocs()
 	n := 0
+	var docs []model.AiKbDocument
+	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&docs).Error
 	for i, d := range docs {
-		id := strings.ReplaceAll(d.Source, "/", "_")
-		title := d.Source
-		for _, md := range knowledge.ModuleDocs() {
-			if md.Source == d.Source {
-				title = md.Title
-				break
-			}
-		}
+		id := "doc-" + strconv.FormatUint(uint64(d.ID), 10)
 		body := map[string]any{
-			"source":  d.Source,
-			"module":  d.Module,
-			"title":   title,
-			"content": d.Content,
-			"seq":     i,
+			"source": d.Source, "module": "kb", "title": d.Title, "content": d.Content, "seq": i,
 		}
-		if err := cli.IndexDoc(ctx, "yunshu-ai-kb-v1", id, body); err != nil {
-			continue
+		if err := cli.IndexDoc(ctx, "yunshu-ai-kb-v1", id, body); err == nil {
+			n++
 		}
-		n++
+	}
+	var cases []model.AiIncidentCase
+	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&cases).Error
+	for i, c := range cases {
+		content := c.Title + "\n" + c.Symptom + "\n" + c.RootCause + "\n" + c.Solution
+		body := map[string]any{
+			"source": "case:" + c.CaseID, "module": "case", "title": c.Title, "content": content, "seq": i,
+		}
+		if err := cli.IndexDoc(ctx, "yunshu-ai-kb-v1", "case-"+c.CaseID, body); err == nil {
+			n++
+		}
+	}
+	var sops []model.AiSOP
+	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&sops).Error
+	for i, sp := range sops {
+		content := sp.Title + "\n" + sp.Scenario + "\n" + sp.CheckSteps + "\n" + sp.ExecSteps
+		body := map[string]any{
+			"source": "sop:" + sp.Code, "module": "sop", "title": sp.Title, "content": content, "seq": i,
+		}
+		if err := cli.IndexDoc(ctx, "yunshu-ai-kb-v1", "sop-"+sp.Code, body); err == nil {
+			n++
+		}
 	}
 	return n, nil
+}
+
+func truncateRunesStr(s string, maxRunes int) string {
+	s = strings.TrimSpace(s)
+	if maxRunes <= 0 || utf8.RuneCountInString(s) <= maxRunes {
+		return s
+	}
+	runes := []rune(s)
+	return string(runes[:maxRunes]) + "…"
 }

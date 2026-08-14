@@ -29,5 +29,18 @@ func (m *module) Models() []any {
 		&model.AiToolApproval{},
 		&model.AiChatSession{},
 		&model.AiChatMessage{},
+		&model.AiLLMModel{},
+		&model.AiPrompt{},
+		&model.AiPromptVersion{},
+		&model.AiKnowledgeBase{},
+		&model.AiKbDocument{},
+		&model.AiKbChunk{},
+		&model.AiIncidentCase{},
+		&model.AiSOP{},
+		&model.AiToolDef{},
+		&model.AiEvalCase{},
+		&model.AiEvalRun{},
+		&model.AiEvalResult{},
+		&model.AiAuditEvent{},
 	}
 }

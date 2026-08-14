@@ -1,0 +1,17 @@
+code: sop-alert-delivery
+title: 告警投递失败/未收到 SOP
+scenario: 告警未触达接收人
+preconditions: 尽量提供 project_id 或告警 fingerprint
+input_params: project_id, fingerprint
+check_steps: |
+  1. list_alerts
+  2. explain_alert
+exec_steps: |
+  1. 修正订阅匹配与接收组
+  2. 修复渠道配置
+  3. 检查静默/抑制窗口
+verify_steps: 测试告警投递成功
+exception_handle: 无 fingerprint 时先用 list_alerts 检索标题/时间
+rollback: 恢复误关的抑制规则（如有）
+risk: 关闭抑制可能噪音激增
+approval_needed: false

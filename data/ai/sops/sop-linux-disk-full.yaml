@@ -1,0 +1,17 @@
+code: sop-linux-disk-full
+title: Linux 磁盘打满 SOP
+scenario: 主机磁盘使用率过高
+preconditions: 已知目标路径；具备脚本工具执行环境
+input_params: path
+check_steps: |
+  1. linux.disk.check
+  2. linux.mem.check / linux.load.check（可选）
+exec_steps: |
+  1. 定位大目录（人工 df/du）
+  2. 清理可删日志与临时文件
+  3. 调整日志轮转或扩容
+verify_steps: used_ratio 回落，业务写入正常
+exception_handle: 脚本仅探测本机/运行环境；远程主机请到服务器操作台 SFTP/SSH
+rollback: 无自动回滚
+risk: 误删业务数据；清理需人工确认
+approval_needed: false

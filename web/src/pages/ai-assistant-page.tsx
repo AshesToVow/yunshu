@@ -22,6 +22,7 @@ import {
   type AIStatus,
 } from "../services/ai";
 import { getClusters, type ClusterItem } from "../services/clusters";
+import { getProjects, type ProjectItem } from "../services/projects";
 import { extractApiErrorMessage } from "../services/http";
 
 type Bubble = AIChatMessage & { id: string; meta?: string };
@@ -30,6 +31,7 @@ const PREFS_KEY = "yunshu.ai.assistant.prefs.v1";
 
 type Prefs = {
   clusterId?: number;
+  projectId?: number;
   enableTools: boolean;
   enableWrite: boolean;
   provider?: string;
@@ -44,6 +46,7 @@ function loadPrefs(): Prefs {
       enableTools: parsed.enableTools ?? true,
       enableWrite: parsed.enableWrite ?? false,
       clusterId: parsed.clusterId,
+      projectId: parsed.projectId,
       provider: parsed.provider,
     };
   } catch {
@@ -87,8 +90,11 @@ export function AiAssistantPage() {
   const [enableTools, setEnableTools] = useState(prefs.enableTools);
   const [enableWrite, setEnableWrite] = useState(prefs.enableWrite);
   const [clusterId, setClusterId] = useState<number | undefined>(prefs.clusterId);
+  const [projectId, setProjectId] = useState<number | undefined>(prefs.projectId);
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [lastSteps, setLastSteps] = useState<AIChatResult["tool_steps"]>([]);
+  const [lastRag, setLastRag] = useState<AIChatResult["rag_hits"]>([]);
   const [sessions, setSessions] = useState<AIChatSession[]>([]);
   const [sessionId, setSessionId] = useState<number | undefined>();
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -98,7 +104,7 @@ export function AiAssistantPage() {
     const list = status?.providers || [];
     return list.map((p) => ({
       value: p.name,
-      label: `${p.name}${p.configured ? "" : "（未配置 Key）"} · ${p.model || "-"}`,
+      label: `${p.source === "db" ? "[库] " : ""}${p.name}${p.configured ? "" : "（未配置 Key）"} · ${p.model || "-"}`,
       disabled: !p.configured,
     }));
   }, [status]);
@@ -108,17 +114,25 @@ export function AiAssistantPage() {
     [clusters],
   );
 
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ value: p.id, label: p.name || `项目 #${p.id}` })),
+    [projects],
+  );
+
   useEffect(() => {
     void loadStatus();
     void getClusters({ page: 1, page_size: 1000 })
       .then((res) => setClusters(res?.list || []))
       .catch(() => undefined);
+    void getProjects({ page: 1, page_size: 1000 })
+      .then((res) => setProjects(res?.list || []))
+      .catch(() => undefined);
     void refreshSessions(true);
   }, []);
 
   useEffect(() => {
-    savePrefs({ clusterId, enableTools, enableWrite, provider });
-  }, [clusterId, enableTools, enableWrite, provider]);
+    savePrefs({ clusterId, projectId, enableTools, enableWrite, provider });
+  }, [clusterId, projectId, enableTools, enableWrite, provider]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -168,6 +182,7 @@ export function AiAssistantPage() {
       const detail = await getAISession(id);
       setSessionId(detail.session.id);
       if (detail.session.cluster_id) setClusterId(detail.session.cluster_id);
+      if (detail.session.project_id) setProjectId(detail.session.project_id);
       if (detail.session.provider) setProvider(detail.session.provider);
       setEnableTools(detail.session.enable_tools);
       setEnableWrite(detail.session.enable_write);
@@ -199,6 +214,7 @@ export function AiAssistantPage() {
       const sess = await createAISession({
         provider: provider || undefined,
         cluster_id: clusterId,
+        project_id: projectId,
         enable_tools: enableTools,
         enable_write: enableWrite,
       });
@@ -254,6 +270,7 @@ export function AiAssistantPage() {
         const sess = await createAISession({
           provider: provider || undefined,
           cluster_id: clusterId,
+          project_id: projectId,
           enable_tools: enableTools,
           enable_write: enableWrite,
         });
@@ -276,6 +293,7 @@ export function AiAssistantPage() {
         session_id: sid,
         messages: next.map(({ role, content }) => ({ role, content })),
         cluster_id: clusterId,
+        project_id: projectId,
         enable_tools: enableTools,
         enable_write_tools: enableWrite,
       });
@@ -284,6 +302,7 @@ export function AiAssistantPage() {
         sid = res.session_id;
       }
       setLastSteps(res.tool_steps || []);
+      setLastRag(res.rag_hits || []);
       const meta =
         (res.tool_steps?.length ? `工具 ${res.tool_steps.length} 次` : "") +
         (res.rag_hits?.length ? ` · RAG ${res.rag_hits.length}` : "");
@@ -309,12 +328,14 @@ export function AiAssistantPage() {
     if (!sessionId) {
       setMessages([]);
       setLastSteps([]);
+      setLastRag([]);
       return;
     }
     try {
       await clearAISession(sessionId);
       setMessages([]);
       setLastSteps([]);
+      setLastRag([]);
       setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title: "新对话", message_count: 0 } : s)));
     } catch (e) {
       message.error(extractApiErrorMessage(e, "清空失败"));
@@ -429,8 +450,8 @@ export function AiAssistantPage() {
             <Alert
               type="warning"
               showIcon
-              message="工具增强对话"
-              description="覆盖 K8s / 日志 / CI构建 / 告警只读工具；写操作需勾选并进入审批。对话已持久化到 MySQL，跨设备可恢复。"
+              message="先选上下文，再问事实问题"
+              description="查 Pod/事件请选集群；查日志/构建/告警请选项目。助手会优先调工具取证，知识库只作排查思路参考。写操作需开启「写工具」并走审批。"
             />
           )}
 
@@ -443,8 +464,18 @@ export function AiAssistantPage() {
               allowClear
               showSearch
               optionFilterProp="label"
-              placeholder="选择集群（按名称）"
-              style={{ minWidth: 220 }}
+              placeholder="选择项目（日志/CI/告警）"
+              style={{ minWidth: 200 }}
+              value={projectId}
+              options={projectOptions}
+              onChange={(v) => setProjectId(typeof v === "number" ? v : undefined)}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="选择集群（K8s）"
+              style={{ minWidth: 200 }}
               value={clusterId}
               options={clusterOptions}
               onChange={(v) => setClusterId(typeof v === "number" ? v : undefined)}
@@ -463,7 +494,7 @@ export function AiAssistantPage() {
           >
             {messages.length === 0 ? (
               <Typography.Text type="secondary">
-                可询问：Pod 异常、构建失败日志、告警投递、项目日志检索等。写操作请先选择集群并开启「写工具(审批)」。
+                示例：某命名空间 Pod CrashLoop；某次构建失败原因；告警为什么没收到。请先选好项目/集群，并在问题中给出 namespace 与资源名。
               </Typography.Text>
             ) : (
               <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -509,6 +540,18 @@ export function AiAssistantPage() {
                       </pre>
                     }
                   />
+                ))}
+              </Space>
+            </Card>
+          ) : null}
+          {lastRag && lastRag.length > 0 ? (
+            <Card size="small" title="本次知识库命中">
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {lastRag.map((h, i) => (
+                  <Typography.Paragraph key={`${h.source}-${i}`} style={{ marginBottom: 4, fontSize: 12 }}>
+                    <Tag>{h.module || "doc"}</Tag>
+                    {h.source}
+                  </Typography.Paragraph>
                 ))}
               </Space>
             </Card>
