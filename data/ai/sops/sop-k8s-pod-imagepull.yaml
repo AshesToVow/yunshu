@@ -1,0 +1,18 @@
+code: sop-k8s-pod-imagepull
+title: Kubernetes Pod ImagePullBackOff SOP
+scenario: 镜像拉取失败
+preconditions: 已选择集群；已知 namespace 与 Pod 名
+input_params: cluster_id, namespace, name
+check_steps: |
+  1. diagnose_pod
+  2. list_events
+  3. get_pod_detail 核对 image / imagePullSecrets
+exec_steps: |
+  1. 修正镜像地址与 Tag
+  2. 配置/更新 imagePullSecrets
+  3. 验证仓库网络与权限
+verify_steps: 镜像拉取成功，Pod Running
+exception_handle: 证据不足时索要镜像完整地址与仓库类型
+rollback: 回退到上一可用镜像版本（需审批变更）
+risk: 凭证配置错误影响整命名空间拉取
+approval_needed: false

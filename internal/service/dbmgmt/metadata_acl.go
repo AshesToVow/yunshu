@@ -17,6 +17,8 @@ type dbMetaAccess struct {
 
 type metadataScope struct {
 	unrestricted bool
+	// allDatabases：授权未指定 database_name 时允许枚举全部库，但仍受表级限制（不再等同 manage 级 unrestricted）。
+	allDatabases bool
 	dbs          map[string]*dbMetaAccess
 }
 
@@ -54,8 +56,25 @@ func (s *Service) resolveMetadataScope(ctx context.Context, projectID uint, inst
 			}
 			db := strings.TrimSpace(g.DatabaseName)
 			if db == "" {
-				out.unrestricted = true
-				return out, nil
+				out.allDatabases = true
+				m := out.dbs["*"]
+				if m == nil {
+					m = &dbMetaAccess{}
+					out.dbs["*"] = m
+				}
+				tables := parseTableNamesJSON(g.TableNamesJSON)
+				if tablesAllowAll(tables) {
+					m.allTables = true
+					m.tables = nil
+				} else if !m.allTables {
+					if m.tables == nil {
+						m.tables = map[string]struct{}{}
+					}
+					for _, t := range tables {
+						m.tables[strings.ToLower(t)] = struct{}{}
+					}
+				}
+				continue
 			}
 			key := strings.ToLower(db)
 			m := out.dbs[key]
@@ -84,7 +103,7 @@ func (s *Service) resolveMetadataScope(ctx context.Context, projectID uint, inst
 }
 
 func (sc *metadataScope) allowsDatabase(name string) bool {
-	if sc == nil || sc.unrestricted {
+	if sc == nil || sc.unrestricted || sc.allDatabases {
 		return true
 	}
 	_, ok := sc.dbs[strings.ToLower(strings.TrimSpace(name))]
@@ -92,7 +111,7 @@ func (sc *metadataScope) allowsDatabase(name string) bool {
 }
 
 func (sc *metadataScope) filterDatabases(list []DatabaseInfo) []DatabaseInfo {
-	if sc == nil || sc.unrestricted {
+	if sc == nil || sc.unrestricted || sc.allDatabases {
 		return list
 	}
 	out := make([]DatabaseInfo, 0, len(list))
@@ -109,6 +128,9 @@ func (sc *metadataScope) filterTables(database string, list []TableInfo) []Table
 		return list
 	}
 	m := sc.dbs[strings.ToLower(strings.TrimSpace(database))]
+	if m == nil && sc.allDatabases {
+		m = sc.dbs["*"]
+	}
 	if m == nil {
 		return nil
 	}
@@ -129,6 +151,9 @@ func (sc *metadataScope) allowsTable(database, table string) bool {
 		return true
 	}
 	m := sc.dbs[strings.ToLower(strings.TrimSpace(database))]
+	if m == nil && sc.allDatabases {
+		m = sc.dbs["*"]
+	}
 	if m == nil {
 		return false
 	}

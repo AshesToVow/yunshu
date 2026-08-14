@@ -34,3 +34,13 @@ func (h *NodeHandler) SetSchedulability(c *gin.Context) {
 func (h *NodeHandler) ReplaceTaints(c *gin.Context) {
 	ServeJSONOK(c, gin.H{"ok": true}, h.svc.ReplaceTaints)
 }
+
+// Drain 驱逐节点工作负载（cordon + Evict）。
+func (h *NodeHandler) Drain(c *gin.Context) {
+	ServeJSON(c, h.svc.DrainNode)
+}
+
+// DrainStatus 查询节点 Drain 进度。
+func (h *NodeHandler) DrainStatus(c *gin.Context) {
+	ServeQuery(c, h.svc.DrainStatus)
+}

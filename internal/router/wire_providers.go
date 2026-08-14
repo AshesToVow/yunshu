@@ -12,9 +12,11 @@ import (
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/service"
+	aisvc "yunshu/internal/service/ai"
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	esmgmtsvc "yunshu/internal/service/esmgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/google/wire"
@@ -47,6 +49,7 @@ var AppInfraSet = wire.NewSet(
 	provideAlertConfig,
 	provideCicdConfig,
 	provideDbmgmtConfig,
+	provideAIConfig,
 	provideAppRouteConfig,
 	appRouteConfigFields,
 	providePluginsConfig,
@@ -231,6 +234,20 @@ func provideInspectService(
 	return inspectsvc.NewService(db, redisClient, dsSvc, projectRepo, sender, string(appName))
 }
 
+func provideEsmgmtService(
+	db *gorm.DB,
+	encryptionKey SecurityEncryptionKey,
+	es *service.ElasticsearchProvider,
+) (*esmgmtsvc.Service, error) {
+	newStore := func(ctx context.Context) (*objectstore.Client, error) {
+		return objectstore.NewFromDB(ctx, db)
+	}
+	resolveSched := func(ctx context.Context) dictconfig.EsmgmtBackupSchedulerConfig {
+		return dictconfig.ResolveEsmgmtBackupSchedulerConfig(ctx, db, dictconfig.DefaultEsmgmtBackupSchedulerDictTypes())
+	}
+	return esmgmtsvc.NewService(db, string(encryptionKey), es, newStore, resolveSched)
+}
+
 func provideK8sHelmService(
 	runtime *service.K8sRuntimeService,
 	db *gorm.DB,
@@ -282,6 +299,17 @@ func provideLoggieAgentService(
 	loggieCfg config.LoggieConfig,
 ) (*service.LoggieAgentService, error) {
 	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, projectRepo, serviceRepo, es, kafka, string(encryptionKey), loggieCfg)
+}
+
+func provideClusterLogService(
+	db *gorm.DB,
+	projectRepo interfaces.ProjectRepository,
+	es *service.ElasticsearchProvider,
+	kafka *service.KafkaProvider,
+	runtime *service.K8sRuntimeService,
+	loggieCfg config.LoggieConfig,
+) *service.ClusterLogService {
+	return service.NewClusterLogService(db, projectRepo, es, kafka, runtime, loggieCfg, loggieCfg.DaemonSetImage)
 }
 
 var ServiceSet = wire.NewSet(
@@ -347,6 +375,8 @@ var ServiceSet = wire.NewSet(
 	provideDbmgmtService,
 	provideCicdService,
 	provideInspectService,
+	aisvc.NewService,
+	provideEsmgmtService,
 	provideElasticsearchProvider,
 	provideKafkaProvider,
 	provideKafkaToESService,
@@ -354,5 +384,6 @@ var ServiceSet = wire.NewSet(
 	provideLogRetentionService,
 	provideLoggieConfig,
 	provideLoggieAgentService,
+	provideClusterLogService,
 	wire.Struct(new(routeServices), "*"),
 )

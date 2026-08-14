@@ -284,6 +284,7 @@ export function MysqlBackupPage() {
       mysql_port: row.mysql_port,
       mysql_socket: row.mysql_socket || "",
       mysql_user: row.mysql_user,
+      mysql_password: "",
       backup_mode: row.backup_mode,
       backup_scope: row.backup_scope || "all",
       enabled: row.enabled,
@@ -323,6 +324,13 @@ export function MysqlBackupPage() {
         : [],
     };
     delete (payload as { notify_extra_user_ids?: number[] }).notify_extra_user_ids;
+    // 编辑时留空 = 不修改库中已保存密码；勿把空串提交上去
+    const pw = String(v.mysql_password ?? "").trim();
+    if (editing && !pw) {
+      delete payload.mysql_password;
+    } else {
+      payload.mysql_password = pw;
+    }
     try {
       if (editing) {
         await updateMysqlBackupInstance(projectId, editing.id, payload);
@@ -399,15 +407,22 @@ export function MysqlBackupPage() {
         <Space wrap>
           <Button
             size="small"
-            onClick={() =>
-              void pingMysqlBackupInstance(projectId!, row.id).then((r) => {
-                if (r.ok) {
-                  message.success(r.message || "MySQL 连通正常");
-                } else {
-                  message.error(r.message || "MySQL 连通失败");
-                }
-              })
-            }
+            danger={!row.has_mysql_password}
+            onClick={() => {
+              if (!row.has_mysql_password) {
+                message.warning("尚未保存 MySQL 密码，请先编辑实例填写密码并保存");
+                return;
+              }
+              void pingMysqlBackupInstance(projectId!, row.id)
+                .then((r) => {
+                  if (r.ok) {
+                    message.success(r.message || "MySQL 连通正常");
+                  } else {
+                    message.error(r.message || "MySQL 连通失败");
+                  }
+                })
+                .catch((e) => message.error(String(e)));
+            }}
           >
             Ping
           </Button>
@@ -703,8 +718,28 @@ export function MysqlBackupPage() {
           <Form.Item name="mysql_user" label="MySQL 用户" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="mysql_password" label="MySQL 密码" extra={editing ? "留空表示不修改" : "必填"} rules={editing ? [] : [{ required: true }]}>
-            <Input.Password autoComplete="new-password" />
+          <Form.Item
+            name="mysql_password"
+            label="MySQL 密码"
+            extra={
+              editing
+                ? editing.has_mysql_password
+                  ? "已保存加密密码；留空表示不修改，填写则覆盖"
+                  : "尚未保存密码，Ping/备份前必须填写并保存"
+                : "必填；保存后加密入库，列表 Ping 使用库中密码，无需每次填写"
+            }
+            rules={
+              editing
+                ? editing.has_mysql_password
+                  ? []
+                  : [{ required: true, message: "请填写 MySQL 密码" }]
+                : [{ required: true, message: "请填写 MySQL 密码" }]
+            }
+          >
+            <Input.Password
+              autoComplete="new-password"
+              placeholder={editing?.has_mysql_password ? "••••••••（已配置，留空不修改）" : undefined}
+            />
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(p, c) => p.backup_mode !== c.backup_mode}>
             {({ getFieldValue }) =>

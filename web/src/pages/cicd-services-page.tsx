@@ -46,12 +46,20 @@ import {
   updateCicdService,
   updateDeployConfig,
   upsertCiConfig,
+  listPipelineTemplates,
   type CicdArtifactItem,
   type CicdBuildRun,
   type CicdDeployConfig,
+  type CicdPipelineTemplate,
   type CicdServiceItem,
 } from "../services/cicd";
-import { getProjectServers, getProjects, type ProjectItem, type ServerItem } from "../services/projects";
+import {
+  getProjectServerDetail,
+  getProjectServers,
+  getProjects,
+  type ProjectItem,
+  type ServerItem,
+} from "../services/projects";
 import { getClusters, type ClusterItem } from "../services/clusters";
 import { getUsers } from "../services/users";
 import type { UserItem } from "../types/api";
@@ -119,10 +127,52 @@ function parseServerIds(json?: string): number[] {
   if (!json) return [];
   try {
     const parsed = JSON.parse(json) as unknown;
-    return Array.isArray(parsed) ? parsed.map((v) => Number(v)).filter((v) => Number.isFinite(v)) : [];
+    return Array.isArray(parsed) ? parsed.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0) : [];
   } catch {
     return [];
   }
+}
+
+function serverOptionLabel(s: Pick<ServerItem, "name" | "host">) {
+  return `${s.name} (${s.host})`;
+}
+
+async function mergeServersWithSelected(
+  projectId: number,
+  list: ServerItem[],
+  selectedIds: number[],
+): Promise<{ servers: ServerItem[]; unresolvedIds: number[] }> {
+  const byId = new Map<number, ServerItem>();
+  for (const s of list) {
+    byId.set(Number(s.id), s);
+  }
+  const missing = selectedIds.filter((id) => !byId.has(id));
+  if (missing.length === 0) {
+    return { servers: list, unresolvedIds: [] };
+  }
+  // 探测请求不弹全局 toast，由调用方汇总成「发布主机」场景提示，避免重复弹窗
+  const details = await Promise.all(
+    missing.map((id) =>
+      getProjectServerDetail(projectId, id, { silentErrorToast: true }).catch(() => null),
+    ),
+  );
+  for (const d of details) {
+    if (d) {
+      byId.set(Number(d.id), d);
+    }
+  }
+  // 保持列表接口顺序，缺失的已选主机追加在末尾，便于回显名称
+  const merged = [...list];
+  const unresolvedIds: number[] = [];
+  for (const id of missing) {
+    const s = byId.get(id);
+    if (s && !merged.some((it) => Number(it.id) === id)) {
+      merged.push(s);
+    } else if (!s) {
+      unresolvedIds.push(id);
+    }
+  }
+  return { servers: merged, unresolvedIds };
 }
 
 function nodesStatusTag(status?: string) {
@@ -143,6 +193,7 @@ function defaultCiFormValues(svc: CicdServiceItem) {
   return {
     ref_type: "branch",
     ref_name: "main",
+    language_type: isFront ? "frontend" : "custom",
     build_type: isFront ? "npm" : "mvn",
     build_shell: isFront ? "run build" : "clean package -DskipTests",
     build_path: isFront ? "dist" : "target",
@@ -165,6 +216,7 @@ export function CicdServicesPage() {
   const deployActions = useDictOptions("cicd_deploy_action");
   const startScriptTypes = useDictOptions("cicd_start_script_type");
   const importanceLevels = useDictOptions("cicd_importance_level");
+  const [pipelineTemplates, setPipelineTemplates] = useState<CicdPipelineTemplate[]>([]);
 
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [userOptions, setUserOptions] = useState<UserItem[]>([]);
@@ -183,6 +235,8 @@ export function CicdServicesPage() {
   const [ciDrawerOpen, setCiDrawerOpen] = useState(false);
   const [ciService, setCiService] = useState<CicdServiceItem | null>(null);
   const [ciForm] = Form.useForm();
+  const selectedLanguageType = Form.useWatch("language_type", ciForm) as string | undefined;
+  const selectedTemplate = pipelineTemplates.find((t) => t.language_type === selectedLanguageType);
 
   const [deployWizardOpen, setDeployWizardOpen] = useState(false);
   const [deployStep, setDeployStep] = useState(0);
@@ -194,6 +248,17 @@ export function CicdServicesPage() {
   const [helmScaffoldLoading, setHelmScaffoldLoading] = useState(false);
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
+  const serverOptions = useMemo(
+    () => servers.map((s) => ({ label: serverOptionLabel(s), value: Number(s.id) })),
+    [servers],
+  );
+  const serverLabelById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const s of servers) {
+      m.set(Number(s.id), serverOptionLabel(s));
+    }
+    return m;
+  }, [servers]);
 
   const [expandedDeploys, setExpandedDeploys] = useState<Record<number, CicdDeployConfig[]>>({});
 
@@ -289,6 +354,7 @@ export function CicdServicesPage() {
   useEffect(() => {
     void loadProjects();
     void loadUsers();
+    void listPipelineTemplates().then((rows) => setPipelineTemplates(rows || [])).catch(() => setPipelineTemplates([]));
   }, [loadProjects, loadUsers]);
 
   useEffect(() => {
@@ -370,7 +436,18 @@ export function CicdServicesPage() {
       getClusters({ page: 1, page_size: 200 }),
       loadDeployConfigs(svc.id),
     ]);
-    setServers(srvRes.list ?? []);
+    const selectedServerIds = editCfg ? parseServerIds(editCfg.server_ids_json) : [];
+    const { servers: mergedServers, unresolvedIds } = await mergeServersWithSelected(
+      projectId,
+      srvRes.list ?? [],
+      selectedServerIds,
+    );
+    setServers(mergedServers);
+    if (unresolvedIds.length > 0) {
+      message.warning(
+        `发布配置关联的主机不存在或已移除（ID: ${unresolvedIds.join(", ")}），请重新选择发布主机`,
+      );
+    }
     setClusters(clusterRes.list ?? []);
     const ciView = await getCiConfig(projectId, svc.id);
     const base = {
@@ -396,7 +473,7 @@ export function CicdServicesPage() {
     if (editCfg) {
       deployForm.setFieldsValue({
         ...editCfg,
-        server_ids: parseServerIds(editCfg.server_ids_json),
+        server_ids: selectedServerIds,
       });
     } else {
       deployForm.setFieldsValue({
@@ -529,9 +606,12 @@ export function CicdServicesPage() {
         setReleaseArtifacts(list ?? []);
         if ((list ?? []).length === 1) {
           releaseForm.setFieldValue("artifact_name", list[0].name);
+        } else if ((list ?? []).length === 0) {
+          message.warning("暂无 MinIO 制品，请先完成 CI 打包并确认已上传到制品桶");
         }
       } catch {
         setReleaseArtifacts([]);
+        // 全局 toast 已展示接口错误（如 MinIO 未配置/连不上）；此处仅清空选项
       } finally {
         setReleaseArtifactsLoading(false);
       }
@@ -852,6 +932,34 @@ export function CicdServicesPage() {
           >
             <Input placeholder="master" />
           </Form.Item>
+          <Form.Item
+            name="language_type"
+            label="流水线语言模板"
+            rules={[{ required: true }]}
+            extra={
+              selectedTemplate?.script_path
+                ? `将使用 Script Path：${selectedTemplate.script_path}`
+                : selectedLanguageType === "custom"
+                  ? "自定义：按服务类型选择 front/backend/k8s Jenkinsfile"
+                  : selectedTemplate?.description
+            }
+          >
+            <Select
+              options={(pipelineTemplates.length
+                ? pipelineTemplates
+                : [
+                    { language_type: "go", name: "Go" },
+                    { language_type: "java", name: "Java" },
+                    { language_type: "frontend", name: "前端" },
+                    { language_type: "python", name: "Python" },
+                    { language_type: "custom", name: "自定义" },
+                  ]
+              ).map((t) => ({
+                label: t.name,
+                value: t.language_type,
+              }))}
+            />
+          </Form.Item>
           <Form.Item name="build_type" label="打包模板类型" rules={[{ required: true }]}>
             <Select
               options={(isFrontend ? frontBuildTypes : backBuildTypes).map((o) => ({
@@ -1070,7 +1178,20 @@ export function CicdServicesPage() {
             <Form.Item name="server_ids" label="发布主机" rules={[{ required: true, message: "请选择发布主机" }]}>
               <Select
                 mode="multiple"
-                options={servers.map((s) => ({ label: `${s.name} (${s.host})`, value: s.id }))}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={serverOptions}
+                placeholder="请选择发布主机"
+                tagRender={(props) => {
+                  const { value, closable, onClose } = props;
+                  const text = serverLabelById.get(Number(value)) ?? serverOptions.find((o) => o.value === Number(value))?.label;
+                  return (
+                    <Tag closable={closable} onClose={onClose} style={{ marginInlineEnd: 4 }}>
+                      {text || String(value)}
+                    </Tag>
+                  );
+                }}
               />
             </Form.Item>
             <Form.Item name="artifact_retain_count" label="历史版本数量">

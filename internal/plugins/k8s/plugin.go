@@ -38,7 +38,7 @@ func (m *module) Manifest() plugin.Manifest {
 		APIPrefixes: []string{
 			"/api/v1/clusters", "/api/v1/pods", "/api/v1/namespaces", "/api/v1/nodes",
 			"/api/v1/deployments", "/api/v1/statefulsets", "/api/v1/daemonsets", "/api/v1/cronjobs",
-			"/api/v1/jobs", "/api/v1/configmaps", "/api/v1/secrets", "/api/v1/services",
+			"/api/v1/jobs", "/api/v1/configmaps", "/api/v1/secrets", "/api/v1/k8s-services", "/api/v1/services",
 			"/api/v1/ingresses", "/api/v1/ingress-classes", "/api/v1/events", "/api/v1/persistentvolumes",
 			"/api/v1/persistentvolumeclaims", "/api/v1/storageclasses", "/api/v1/crds", "/api/v1/crs",
 			"/api/v1/rbac", "/api/v1/serviceaccounts", "/api/v1/k8s-policies",

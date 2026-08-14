@@ -115,7 +115,8 @@ var (
 // —— 项目与日志源 23xxx ——
 var (
 	ErrProjectNotFound               = BizError(http.StatusNotFound, 23001, "项目不存在或已被删除")
-	ErrLogSourceServerNotFound       = BizError(http.StatusNotFound, 23002, "日志源服务器不存在或已移除")
+	// ErrLogSourceServerNotFound 表示 CMDB/项目内服务器记录不存在（历史命名含 LogSource，文案按通用服务器表述）。
+	ErrLogSourceServerNotFound = BizError(http.StatusNotFound, 23002, "服务器不存在或已移除")
 	ErrServerNotInCurrentProject     = BizError(http.StatusBadRequest, 23003, "该服务器不属于当前项目，请切换项目后再操作")
 	ErrServerProjectMismatch         = BizError(http.StatusBadRequest, 23004, "项目与日志源归属不一致，请刷新后重试")
 	ErrProjectIDRequired             = BizError(http.StatusBadRequest, 23005, "缺少项目标识（project_id），请补充后重试")

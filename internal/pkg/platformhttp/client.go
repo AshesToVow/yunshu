@@ -3,15 +3,32 @@ package platformhttp
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
 type Client struct {
 	HTTPClient *http.Client
 	Timeout    time.Duration
+}
+
+// NewInsecureTLSClient 内网自签场景的 HTTP 客户端（统一 SkipVerify，避免各处重复造 Dialer）。
+func NewInsecureTLSClient(timeout time.Duration, serverName string) *http.Client {
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	tlsCfg := &tls.Config{InsecureSkipVerify: true} // #nosec G402 — 内网自签由调用方显式选择
+	if sn := strings.TrimSpace(serverName); sn != "" {
+		tlsCfg.ServerName = sn
+	}
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: &http.Transport{TLSClientConfig: tlsCfg},
+	}
 }
 
 func (c Client) httpClient() *http.Client {

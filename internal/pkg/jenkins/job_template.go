@@ -260,6 +260,13 @@ func BuildPipelineJobConfigXML(in JobTemplateInput) string {
 	params.WriteString(stringParam("waitMins", fmt.Sprintf("%d", waitMins), "手动发布等待分钟"))
 	params.WriteString(stringParam("selectedVersion", "", "制品发布/回滚时指定 MinIO 制品文件名（Yunshu CD 发布必传，跳过 Jenkins input）"))
 	params.WriteString(stringParam("emailUser", "", "构建通知邮箱"))
+	params.WriteString(choiceParam("enableSonar", []string{"false", "true"}, "false"))
+	params.WriteString(stringParam("SONAR_HOST_URL", strings.TrimSpace(cfg.Sonar.URL), "SonarQube 地址（字典 cicd_sonar_url）"))
+	params.WriteString(stringParam("SONAR_TOKEN", "", "SonarQube Token（运行时由 Yunshu 注入，勿在 Job 默认值存明文）"))
+	params.WriteString(stringParam("YUNSHU_CALLBACK_URL", strings.TrimSpace(cfg.Callback.CallbackURL), "阶段/门禁/制品回调 URL"))
+	params.WriteString(stringParam("YUNSHU_CALLBACK_HMAC_SECRET", "", "回调 HMAC 密钥（运行时由 Yunshu 注入）"))
+	params.WriteString(stringParam("YUNSHU_BUILD_RUN_ID", "", "Yunshu 构建/发布记录 ID（由 YUNSHU_RUN_KIND 区分）"))
+	params.WriteString(stringParam("YUNSHU_RUN_KIND", "build", "build|release"))
 
 	return fmt.Sprintf(`<?xml version='1.1' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job">

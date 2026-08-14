@@ -20,6 +20,7 @@ type AlertEventGroupItem struct {
 }
 
 func (s *AlertService) ListEventsGrouped(ctx context.Context, q AlertEventListQuery) (list []AlertEventGroupItem, total int64, page int, pageSize int, err error) {
+	s.ensureAlertEventProjectBackfill(ctx)
 	page, pageSize = pagination.Normalize(q.Page, q.PageSize)
 	f := repository.AlertEventListFilter{
 		Keyword: q.Keyword, Cluster: q.Cluster, AlertIP: q.AlertIP, Status: q.Status,

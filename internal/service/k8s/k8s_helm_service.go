@@ -2,9 +2,7 @@ package k8s
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +12,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/platformhttp"
 
 	"gorm.io/gorm"
 	"helm.sh/helm/v3/pkg/action"
@@ -126,10 +125,7 @@ func (s *K8sHelmService) newActionConfig(ctx context.Context, clusterID uint, na
 
 func (s *K8sHelmService) registryClient(cfg config.HarborConfig) (*registry.Client, error) {
 	user, pass, _ := s.harborRegistryLogin(cfg)
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402 — 内网 Harbor 自签证书
-	}
-	httpClient := &http.Client{Transport: tr, Timeout: 5 * time.Minute}
+	httpClient := platformhttp.NewInsecureTLSClient(5*time.Minute, "")
 	opts := []registry.ClientOption{
 		registry.ClientOptEnableCache(true),
 		registry.ClientOptHTTPClient(httpClient),

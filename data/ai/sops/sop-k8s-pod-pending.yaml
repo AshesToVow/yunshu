@@ -1,0 +1,18 @@
+code: sop-k8s-pod-pending
+title: Kubernetes Pod Pending SOP
+scenario: Pod 无法调度
+preconditions: 已选择集群；已知 namespace 与 Pod 名
+input_params: cluster_id, namespace, name
+check_steps: |
+  1. diagnose_pod
+  2. list_events（FailedScheduling）
+  3. get_pod_detail（requests/亲和/PVC）
+exec_steps: |
+  1. 调整资源请求或扩容节点
+  2. 修正污点容忍/亲和
+  3. 修复 PVC Bound
+verify_steps: Pod 被调度且 Running
+exception_handle: 无 Events 时扩大时间窗口或检查控制器
+rollback: 恢复原 requests（需审批）
+risk: 降低 requests 可能引发节点过载
+approval_needed: true

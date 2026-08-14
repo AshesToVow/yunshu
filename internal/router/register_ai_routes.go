@@ -1,0 +1,45 @@
+package router
+
+import "github.com/gin-gonic/gin"
+
+func RegisterAIRoutes(api *gin.RouterGroup, d *RouteDeps) {
+	if d == nil || d.aiHandler == nil {
+		return
+	}
+	g := api.Group("/ai")
+	g.Use(d.authMiddleware, d.authorize, d.opAudit)
+	g.GET("/status", d.aiHandler.Status)
+	g.POST("/ping", d.aiHandler.Ping)
+	g.POST("/chat", d.aiHandler.Chat)
+	g.GET("/sessions", d.aiHandler.ListSessions)
+	g.POST("/sessions", d.aiHandler.CreateSession)
+	g.GET("/sessions/:id", d.aiHandler.GetSession)
+	g.PATCH("/sessions/:id", d.aiHandler.UpdateSession)
+	g.DELETE("/sessions/:id", d.aiHandler.DeleteSession)
+	g.POST("/sessions/:id/clear", d.aiHandler.ClearSession)
+	g.POST("/k8s/pod-diagnose", d.aiHandler.PodDiagnose)
+	g.POST("/cicd/build-fail", d.aiHandler.CicdBuildFail)
+	g.POST("/alert/explain", d.aiHandler.AlertExplain)
+	g.GET("/approvals", d.aiHandler.ListApprovals)
+	g.POST("/approvals/:id/review", d.aiHandler.ReviewApproval)
+	g.POST("/approvals/:id/execute", d.aiHandler.ExecuteApproval)
+	g.POST("/knowledge/sync", d.aiHandler.SyncKnowledge)
+	g.GET("/center/overview", d.aiHandler.CenterOverview)
+	g.POST("/center/reseed", d.aiHandler.ReseedCenter)
+	g.GET("/center/prompts", d.aiHandler.ListPrompts)
+	g.GET("/center/prompts/:id/versions", d.aiHandler.ListPromptVersions)
+	g.POST("/center/prompts/:id/publish", d.aiHandler.PublishPrompt)
+	g.POST("/center/prompts/:id/versions/:vid/rollback", d.aiHandler.RollbackPrompt)
+	g.GET("/center/models", d.aiHandler.ListLLMModels)
+	g.POST("/center/models", d.aiHandler.CreateLLMModel)
+	g.PUT("/center/models/:id", d.aiHandler.UpdateLLMModel)
+	g.DELETE("/center/models/:id", d.aiHandler.DeleteLLMModel)
+	g.POST("/center/models/:id/default", d.aiHandler.SetDefaultLLMModel)
+	g.GET("/center/tools", d.aiHandler.ListCenterTools)
+	g.PATCH("/center/tools/:id", d.aiHandler.UpdateToolEnabled)
+	g.GET("/center/cases", d.aiHandler.ListCases)
+	g.GET("/center/sops", d.aiHandler.ListSOPs)
+	g.GET("/center/knowledge-bases", d.aiHandler.ListKBs)
+	g.GET("/center/eval/cases", d.aiHandler.ListEvalCases)
+	g.POST("/center/eval/run", d.aiHandler.RunEval)
+}

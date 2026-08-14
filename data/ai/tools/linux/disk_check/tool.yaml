@@ -1,0 +1,17 @@
+name: linux.disk.check
+description: 只读探测本机路径磁盘用量（statvfs）；远端主机请用服务器操作台
+runtime: script
+script_lang: python27
+entry: run.py
+module: linux
+permission: READ_ONLY
+risk_level: LOW
+timeout_sec: 15
+require_confirmation: false
+input_schema:
+  type: object
+  properties:
+    path:
+      type: string
+      description: 检查路径，默认 /
+  required: []

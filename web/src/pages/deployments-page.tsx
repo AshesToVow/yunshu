@@ -17,6 +17,7 @@ import { RealtimeUsageText, WorkloadCpuUsageBars, WorkloadMemUsageBars } from ".
 import { useWorkloadFormActions } from "../components/k8s/workload-form-actions";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { InputNumber as AntdInputNumber } from "antd";
+import { useWorkloadProgressOptional } from "../contexts/workload-progress-context";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
 import { TopologyGraphView } from "../components/k8s/topology-graph-view";
 import { getWorkloadTopology, type TopologyGraph } from "../services/k8s-topology";
@@ -30,6 +31,7 @@ import {
   listDeploymentPods,
   patchDeploymentContainerResources,
   restartDeployment,
+  rolloutUndoDeployment,
   scaleDeployment,
   type DeploymentRolloutStatus,
   type WorkloadDetail,
@@ -133,6 +135,7 @@ function DeploymentDetailQuickEdit({
 }
 
 export function DeploymentsPage() {
+  const progress = useWorkloadProgressOptional();
   const listReloadRef = useRef<() => void>(() => {});
   const [form] = Form.useForm<DeploymentFormValues>();
   const formActions = useWorkloadFormActions<DeploymentFormValues>({
@@ -428,8 +431,36 @@ spec:
                     icon: <ReloadOutlined />,
                     onClick: () => {
                       void (async () => {
-                        await restartDeployment(ctx.clusterId, ctx.namespace ?? "default", record.name);
+                        const ns = ctx.namespace ?? "default";
+                        await restartDeployment(ctx.clusterId, ns, record.name);
                         message.success("已触发滚动重启");
+                        progress?.track({
+                          kind: "Deployment",
+                          clusterId: ctx.clusterId,
+                          namespace: ns,
+                          name: record.name,
+                          title: `重启 ${record.name}`,
+                        });
+                        ctx.reload();
+                      })();
+                    },
+                  },
+                  {
+                    key: "undo",
+                    label: "回滚上一版本",
+                    icon: <ReloadOutlined />,
+                    onClick: () => {
+                      void (async () => {
+                        const ns = ctx.namespace ?? "default";
+                        await rolloutUndoDeployment(ctx.clusterId, ns, record.name);
+                        message.success("已触发平台回滚");
+                        progress?.track({
+                          kind: "Deployment",
+                          clusterId: ctx.clusterId,
+                          namespace: ns,
+                          name: record.name,
+                          title: `回滚 ${record.name}`,
+                        });
                         ctx.reload();
                       })();
                     },

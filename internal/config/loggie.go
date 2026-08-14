@@ -9,6 +9,8 @@ type LoggieConfig struct {
 	OfflineBinaryPath string `mapstructure:"offline_binary_path"`
 	UnitName          string `mapstructure:"unit_name"`
 	DeployDir         string `mapstructure:"deploy_dir"`
+	// DaemonSetImage K8s 集群采集 DaemonSet 使用的 Loggie 镜像。
+	DaemonSetImage string `mapstructure:"daemonset_image"`
 }
 
 func (c LoggieConfig) Normalized() LoggieConfig {
@@ -21,6 +23,9 @@ func (c LoggieConfig) Normalized() LoggieConfig {
 	}
 	if strings.TrimSpace(out.OfflineBinaryPath) == "" {
 		out.OfflineBinaryPath = "deploy/loggie/binary/loggie"
+	}
+	if strings.TrimSpace(out.DaemonSetImage) == "" {
+		out.DaemonSetImage = "ghcr.io/loggie-io/loggie:v1.7.1"
 	}
 	return out
 }

@@ -9,6 +9,8 @@ type ElasticsearchConfig struct {
 	Username       string   `mapstructure:"username"`
 	Password       string   `mapstructure:"password"`
 	IndexPattern   string   `mapstructure:"index_pattern"`
+	// K8sIndexPrefix 集群采集索引名前缀，默认 yunshu-k8s → yunshu-k8s-{clusterId}-p{projectId}-日期
+	K8sIndexPrefix string   `mapstructure:"k8s_index_prefix"`
 	MessageFields  []string `mapstructure:"message_fields"`
 	TimestampField string   `mapstructure:"timestamp_field"`
 	DefaultSize           int      `mapstructure:"default_size"`
@@ -27,6 +29,10 @@ func (c ElasticsearchConfig) Normalized() ElasticsearchConfig {
 	}
 	if out.IndexPattern == "*" {
 		out.IndexPattern = "yunshu-agent-*"
+	}
+	out.K8sIndexPrefix = strings.Trim(strings.TrimSpace(out.K8sIndexPrefix), "-")
+	if out.K8sIndexPrefix == "" {
+		out.K8sIndexPrefix = "yunshu-k8s"
 	}
 	if len(out.MessageFields) == 0 {
 		out.MessageFields = []string{"message", "body", "log", "content"}

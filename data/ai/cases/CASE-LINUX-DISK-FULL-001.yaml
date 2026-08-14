@@ -1,0 +1,18 @@
+case_id: CASE-LINUX-DISK-FULL-001
+title: 主机磁盘打满典型案例
+category: linux
+technology: host
+symptom: 磁盘使用率过高、写入失败、服务因磁盘满异常
+environment: Linux 主机 / CMDB 服务器
+diagnosis: |
+  1. 确认主机身份（CMDB 服务器管理）
+  2. 调用 linux.disk.check 查看路径用量
+  3. 必要时 linux.load.check / linux.mem.check 看关联压力
+root_cause: 日志/临时文件膨胀、备份堆积、inode 耗尽或挂载写满
+solution: 清理可删日志与临时目录；扩容磁盘；调整日志轮转。写操作需人工在服务器操作台执行
+verification: used_ratio 回落到阈值以下，业务写入恢复
+risk: 误删业务目录；脚本工具只读，清理需人工确认
+related_tools: '["linux.disk.check","linux.mem.check","linux.load.check"]'
+related_sop: '["sop-linux-disk-full"]'
+source: seed
+confidence: 0.85

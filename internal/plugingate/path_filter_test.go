@@ -30,6 +30,9 @@ func ensurePathFilterStubs() {
 			APIPrefixes: []string{
 				"/api/v1/overview/project-launches",
 				"/api/v1/overview/release-by-person",
+				"/api/v1/cicd/jenkins/callback",
+				"/api/v1/registries",
+				"/api/v1/pipeline-templates",
 			},
 			DependsOn: []string{"project"},
 		},
@@ -55,6 +58,28 @@ func ensurePathFilterStubs() {
 			DependsOn:        []string{"project"},
 		},
 	})
+	plugin.Register(&stubPlugin{
+		name: "alert",
+		mf: plugin.Manifest{
+			MenuPathPrefixes: []string{"/alert-"},
+			APIPrefixes:      []string{"/api/v1/alerts"},
+		},
+	})
+	plugin.Register(&stubPlugin{
+		name: "k8s",
+		mf: plugin.Manifest{
+			MenuPathPrefixes: []string{"/clusters", "/k8s-services"},
+			APIPrefixes:      []string{"/api/v1/clusters", "/api/v1/k8s-services", "/api/v1/pods"},
+		},
+	})
+	plugin.Register(&stubPlugin{
+		name: "cmdb",
+		mf: plugin.Manifest{
+			MenuPathPrefixes: []string{"/project-servers"},
+			APIPrefixes:      []string{"/api/v1/cloud-accounts", "/api/v1/server-groups"},
+			DependsOn:        []string{"project"},
+		},
+	})
 }
 
 func TestResolveCicdAPIResource(t *testing.T) {
@@ -65,6 +90,11 @@ func TestResolveCicdAPIResource(t *testing.T) {
 	}{
 		{"/api/v1/overview/project-launches", "cicd"},
 		{"/api/v1/overview/release-by-person", "cicd"},
+		{"/api/v1/cicd/jenkins/callback", "cicd"},
+		{"/api/v1/registries", "cicd"},
+		{"/api/v1/registries/1/ping", "cicd"},
+		{"/api/v1/pipeline-templates", "cicd"},
+		{"/api/v1/projects/1/registry-binding", "cicd"},
 		{"/api/v1/projects/1/cicd/services", "cicd"},
 		{"/api/v1/projects/1/members", "project"},
 		{"/api/v1/overview", "core"},
@@ -81,6 +111,16 @@ func TestResolveMenuPathPluginCicd(t *testing.T) {
 	ensurePathFilterStubs()
 	if got := ResolveMenuPathPlugin("/cicd/services"); got != "cicd" {
 		t.Fatalf("expected cicd, got %q", got)
+	}
+}
+
+func TestPathMatchesHyphenPrefix(t *testing.T) {
+	t.Parallel()
+	if !pathMatchesPrefix("/alert-channels", "/alert-") {
+		t.Fatal("expected /alert- to match /alert-channels")
+	}
+	if pathMatchesPrefix("/alerts", "/alert-") {
+		t.Fatal("/alert- should not match /alerts")
 	}
 }
 

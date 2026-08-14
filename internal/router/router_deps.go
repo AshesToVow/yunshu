@@ -1,7 +1,9 @@
 package router
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/handler"
@@ -10,6 +12,7 @@ import (
 	"yunshu/internal/service"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	esmgmtsvc "yunshu/internal/service/esmgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/gin-gonic/gin"
@@ -91,10 +94,14 @@ type RouteDeps struct {
 	cicdHandler        *handler.CicdHandler
 	logPlatformHandler *handler.LogPlatformHandler
 	loggieHandler      *handler.LoggieHandler
+	clusterLogHandler  *handler.ClusterLogHandler
 	logRetentionSvc    *service.LogRetentionService
 	kafkaToESSvc       *service.KafkaToESService
 	inspectSvc         *inspectsvc.Service
 	inspectHandler     *handler.InspectHandler
+	aiHandler          *handler.AIHandler
+	esmgmtSvc          *esmgmtsvc.Service
+	esmgmtHandler      *handler.EsmgmtHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -111,6 +118,14 @@ func (d *RouteDeps) MysqlBackupService() *service.MysqlBackupService {
 		return nil
 	}
 	return d.mysqlBackupSvc
+}
+
+// EsmgmtService 供 esmgmt 插件调度器使用。
+func (d *RouteDeps) EsmgmtService() *esmgmtsvc.Service {
+	if d == nil {
+		return nil
+	}
+	return d.esmgmtSvc
 }
 
 // DbmgmtService 供 dbmgmt 插件后台任务使用。
@@ -190,7 +205,7 @@ func assembleRouteDeps(
 	)
 	opAudit := middleware.OperationAudit(svcs.OperationLog, app.Logger)
 
-	return &RouteDeps{
+	deps := &RouteDeps{
 		app: app,
 
 		authMiddleware:    authMiddleware,
@@ -265,9 +280,53 @@ func assembleRouteDeps(
 		cicdHandler:        handlers.Cicd,
 		logPlatformHandler: handlers.LogPlatform,
 		loggieHandler:      handlers.Loggie,
+		clusterLogHandler:  handlers.ClusterLog,
 		logRetentionSvc:    svcs.LogRetention,
 		kafkaToESSvc:       svcs.KafkaToES,
 		inspectSvc:         svcs.Inspect,
 		inspectHandler:     handlers.Inspect,
-	}, nil
+		aiHandler:          handlers.AI,
+		esmgmtSvc:          svcs.Esmgmt,
+		esmgmtHandler:      handlers.Esmgmt,
+	}
+	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
+	return deps, nil
+}
+
+func wireCicdK8sHooks(cicdSvc *cicdsvc.Service, wl *service.K8sWorkloadService) {
+	if cicdSvc == nil || wl == nil {
+		return
+	}
+	cicdSvc.SetWorkloadReadyCheck(func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string) {
+		return wl.WorkloadReady(ctx, clusterID, namespace, kind, name)
+	})
+	cicdSvc.SetK8sRolloutUndo(func(ctx context.Context, kind string, clusterID uint, namespace, name string, revision int64) (map[string]any, error) {
+		req := service.RolloutUndoRequest{
+			ClusterID: clusterID,
+			Namespace: namespace,
+			Name:      name,
+			Revision:  revision,
+		}
+		var (
+			res *service.RolloutUndoResult
+			err error
+		)
+		switch strings.ToLower(strings.TrimSpace(kind)) {
+		case "statefulset", "sts", "statefulsets":
+			res, err = wl.StatefulSetRolloutUndo(ctx, req)
+		default:
+			res, err = wl.DeploymentRolloutUndo(ctx, req)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"kind":          res.Kind,
+			"namespace":     res.Namespace,
+			"name":          res.Name,
+			"from_revision": res.FromRevision,
+			"to_revision":   res.ToRevision,
+			"message":       res.Message,
+		}, nil
+	})
 }

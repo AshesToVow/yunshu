@@ -23,6 +23,7 @@ type Config struct {
 	Security        SecurityConfig        `mapstructure:"security"`
 	Plugins         PluginsConfig         `mapstructure:"plugins"`
 	Cicd            CicdConfig            `mapstructure:"cicd"`
+	AI              AIConfig              `mapstructure:"ai"`
 	Dbmgmt          DbmgmtConfig          `mapstructure:"dbmgmt"`
 	Elasticsearch   ElasticsearchConfig   `mapstructure:"elasticsearch"`
 	Kafka           KafkaConfig           `mapstructure:"kafka"`
@@ -282,6 +283,11 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Cicd.DefaultArtifactRetain <= 0 {
 		cfg.Cicd.DefaultArtifactRetain = defCicd.DefaultArtifactRetain
+	}
+	defAI := DefaultAIConfig()
+	cfg.AI.ApplyDefaults()
+	if !cfg.AI.Enabled && !v.IsSet("ai.enabled") {
+		cfg.AI.Enabled = defAI.Enabled
 	}
 	defDbmgmt := DefaultDbmgmtConfig()
 	if cfg.Dbmgmt.QueryTimeoutSeconds <= 0 {

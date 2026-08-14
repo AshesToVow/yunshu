@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/projectacl"
 )
 
 // releaseRequestSnapshot 审批通过后用于触发 Jenkins 的原始请求快照。
@@ -64,6 +66,9 @@ func (s *Service) prepareRelease(
 	}
 	if strings.EqualFold(dc.DeployKind, model.CicdDeployKindContainer) {
 		if req.BuildRunID > 0 {
+			if err := s.assertBuildQualityGate(ctx, projectID, serviceID, req.BuildRunID); err != nil {
+				return nil, err
+			}
 			var br model.CicdBuildRun
 			if err := s.db.WithContext(ctx).
 				Where("id = ? AND service_id = ? AND project_id = ?", req.BuildRunID, serviceID, projectID).
@@ -226,24 +231,25 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 	}
 	ov := s.loadProjectCicdOverrides(ctx, release.ProjectID)
 	params := BuildJenkinsParams(BuildParamsInput{
-		Service:          p.svc,
-		CiConfig:         p.ci,
-		DeployConfig:     p.dc,
-		Cfg:              cfg,
-		PublishMode:      p.publishMode,
-		Tenv:             p.dc.Tenv,
-		DestIPs:          destIPs,
-		EmailUser:        p.emailUser,
-		ImageAddress:     p.imageAddress,
-		SelectedVersion:  p.artifactName,
-		ReleaseOperation: p.releaseOp,
-		ForceCleanDeploy: releaseForceCleanDeploy(p.releaseOp),
-		UsesK8sPipeline:  s.serviceUsesK8sPipeline(ctx, p.svc),
-		HarborURL:        ov.HarborURL,
-		HarborProject:    ov.HarborProject,
-		ApolloMeta:       ov.ApolloMeta,
-		ApolloEnv:        ov.ApolloEnv,
-		ApolloNamespaces: ov.ApolloNamespaces,
+		Service:            p.svc,
+		CiConfig:           p.ci,
+		DeployConfig:       p.dc,
+		Cfg:                cfg,
+		PublishMode:        p.publishMode,
+		Tenv:               p.dc.Tenv,
+		DestIPs:            destIPs,
+		EmailUser:          p.emailUser,
+		ImageAddress:       p.imageAddress,
+		SelectedVersion:    p.artifactName,
+		ReleaseOperation:   p.releaseOp,
+		ForceCleanDeploy:   releaseForceCleanDeploy(p.releaseOp),
+		UsesK8sPipeline:    s.serviceUsesK8sPipeline(ctx, p.svc),
+		HarborURL:          ov.HarborURL,
+		HarborProject:      ov.HarborProject,
+		ApolloMeta:         ov.ApolloMeta,
+		ApolloEnv:          ov.ApolloEnv,
+		ApolloNamespaces:   ov.ApolloNamespaces,
+		YunshuReleaseRunID: release.ID,
 	})
 	lastNum, _ := client.GetLastBuildNumber(ctx, p.svc.JenkinsJob)
 	queuePath, err := client.BuildWithParameters(ctx, p.svc.JenkinsJob, params)
@@ -324,14 +330,36 @@ func (s *Service) claimApprovalStep(ctx context.Context, stepID uint, updates ma
 // errReleaseConflict 并发状态流转冲突：本次调用未抢到转换（已被他人处理）。
 var errReleaseConflict = constants.ErrBadRequestWithMsg("工单状态已变更，请刷新后重试")
 
-func (s *Service) approveLegacySingleStep(ctx context.Context, release *model.CicdReleaseRun, runID uint, reviewerUserID *uint, reviewerName, comment string) (*model.CicdReleaseRun, error) {
+func (s *Service) assertLegacyReleaseReviewer(ctx context.Context, projectID uint, actor *auth.CurrentUser) error {
+	if actor == nil || actor.ID == 0 {
+		return constants.ErrBadRequestWithMsg("未登录无法审批")
+	}
+	full, err := projectacl.FullAccess(ctx, s.memberRepo, projectID, actor)
+	if err != nil {
+		return err
+	}
+	if !full {
+		return constants.ErrBadRequestWithMsg("未配置审批流时仅项目管理员可审批，请先配置发布审批流")
+	}
+	return nil
+}
+
+func (s *Service) approveLegacySingleStep(ctx context.Context, release *model.CicdReleaseRun, runID uint, actor *auth.CurrentUser, comment string) (*model.CicdReleaseRun, error) {
+	if err := s.assertLegacyReleaseReviewer(ctx, release.ProjectID, actor); err != nil {
+		return nil, err
+	}
+	reviewerUserID := &actor.ID
+	reviewerName := strings.TrimSpace(actor.Username)
+	if reviewerName == "" {
+		reviewerName = strings.TrimSpace(actor.Nickname)
+	}
 	now := time.Now()
 	updates := map[string]any{
-		"status":           model.CicdRunStatusPendingExecution,
-		"reviewer_user_id": reviewerUserID,
-		"reviewer_name":    strings.TrimSpace(reviewerName),
-		"review_comment":   strings.TrimSpace(comment),
-		"reviewed_at":      now,
+		"status":            model.CicdRunStatusPendingExecution,
+		"reviewer_user_id":  reviewerUserID,
+		"reviewer_name":     reviewerName,
+		"review_comment":    strings.TrimSpace(comment),
+		"reviewed_at":       now,
 		"current_stage_key": "",
 	}
 	ok, err := s.transitionReleaseStatus(ctx, runID, model.CicdRunStatusPendingApproval, updates)
@@ -347,7 +375,7 @@ func (s *Service) approveLegacySingleStep(ctx context.Context, release *model.Ci
 	return release, nil
 }
 
-func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, reviewerUserID *uint, reviewerName, comment string) (*model.CicdReleaseRun, error) {
+func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser, comment string) (*model.CicdReleaseRun, error) {
 	var release model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
 		return nil, constants.ErrNotFound
@@ -360,16 +388,21 @@ func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, 
 		return nil, err
 	}
 	if !hasSteps {
-		return s.approveLegacySingleStep(ctx, &release, runID, reviewerUserID, reviewerName, comment)
+		return s.approveLegacySingleStep(ctx, &release, runID, actor, comment)
 	}
-	if reviewerUserID == nil || *reviewerUserID == 0 {
+	if actor == nil || actor.ID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("未登录无法审批")
+	}
+	reviewerUserID := actor.ID
+	reviewerName := strings.TrimSpace(actor.Username)
+	if reviewerName == "" {
+		reviewerName = strings.TrimSpace(actor.Nickname)
 	}
 	step, err := s.getCurrentPendingStep(ctx, runID)
 	if err != nil {
 		return nil, constants.ErrBadRequestWithMsg("当前无待审批节点")
 	}
-	can, err := s.userCanApproveStep(ctx, *reviewerUserID, step)
+	can, err := s.userCanApproveStep(ctx, reviewerUserID, step)
 	if err != nil {
 		return nil, err
 	}
@@ -379,8 +412,8 @@ func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, 
 	now := time.Now()
 	claimed, err := s.claimApprovalStep(ctx, step.ID, map[string]any{
 		"status":           model.CicdApprovalStepApproved,
-		"reviewer_user_id": reviewerUserID,
-		"reviewer_name":    strings.TrimSpace(reviewerName),
+		"reviewer_user_id": &reviewerUserID,
+		"reviewer_name":    reviewerName,
 		"review_comment":   strings.TrimSpace(comment),
 		"reviewed_at":      now,
 	})
@@ -400,7 +433,7 @@ func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, 
 	return &release, nil
 }
 
-func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, reviewerUserID *uint, reviewerName, comment string) (*model.CicdReleaseRun, error) {
+func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser, comment string) (*model.CicdReleaseRun, error) {
 	var release model.CicdReleaseRun
 	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
 		return nil, constants.ErrNotFound
@@ -412,12 +445,23 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, r
 	if err != nil {
 		return nil, err
 	}
+	if actor == nil || actor.ID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("未登录无法审批")
+	}
+	reviewerUserID := actor.ID
+	reviewerName := strings.TrimSpace(actor.Username)
+	if reviewerName == "" {
+		reviewerName = strings.TrimSpace(actor.Nickname)
+	}
 	if !hasSteps {
+		if err := s.assertLegacyReleaseReviewer(ctx, projectID, actor); err != nil {
+			return nil, err
+		}
 		now := time.Now()
 		updates := map[string]any{
 			"status":           model.CicdRunStatusRejected,
-			"reviewer_user_id": reviewerUserID,
-			"reviewer_name":    strings.TrimSpace(reviewerName),
+			"reviewer_user_id": &reviewerUserID,
+			"reviewer_name":    reviewerName,
 			"review_comment":   strings.TrimSpace(comment),
 			"reviewed_at":      now,
 			"finished_at":      now,
@@ -434,14 +478,11 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, r
 		}
 		return &release, nil
 	}
-	if reviewerUserID == nil || *reviewerUserID == 0 {
-		return nil, constants.ErrBadRequestWithMsg("未登录无法审批")
-	}
 	step, err := s.getCurrentPendingStep(ctx, runID)
 	if err != nil {
 		return nil, constants.ErrBadRequestWithMsg("当前无待审批节点")
 	}
-	can, err := s.userCanApproveStep(ctx, *reviewerUserID, step)
+	can, err := s.userCanApproveStep(ctx, reviewerUserID, step)
 	if err != nil {
 		return nil, err
 	}
@@ -451,8 +492,8 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, r
 	now := time.Now()
 	claimed, err := s.claimApprovalStep(ctx, step.ID, map[string]any{
 		"status":           model.CicdApprovalStepRejected,
-		"reviewer_user_id": reviewerUserID,
-		"reviewer_name":    strings.TrimSpace(reviewerName),
+		"reviewer_user_id": &reviewerUserID,
+		"reviewer_name":    reviewerName,
 		"review_comment":   strings.TrimSpace(comment),
 		"reviewed_at":      now,
 	})
@@ -464,8 +505,8 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, r
 	}
 	updates := map[string]any{
 		"status":            model.CicdRunStatusRejected,
-		"reviewer_user_id":  reviewerUserID,
-		"reviewer_name":     strings.TrimSpace(reviewerName),
+		"reviewer_user_id":  &reviewerUserID,
+		"reviewer_name":     reviewerName,
 		"review_comment":    strings.TrimSpace(comment),
 		"reviewed_at":       now,
 		"finished_at":       now,
@@ -551,27 +592,39 @@ func (s *Service) TerminateReleaseRun(ctx context.Context, projectID, runID uint
 	return &release, nil
 }
 
-func (s *Service) BatchApproveReleaseRuns(ctx context.Context, projectID uint, ids []uint, reviewerUserID *uint, reviewerName, comment string) (int, error) {
+func (s *Service) BatchApproveReleaseRuns(ctx context.Context, projectID uint, ids []uint, actor *auth.CurrentUser, comment string) (int, error) {
 	ok := 0
+	var firstErr error
 	for _, id := range ids {
-		if _, err := s.ApproveReleaseRun(ctx, projectID, id, reviewerUserID, reviewerName, comment); err == nil {
+		if _, err := s.ApproveReleaseRun(ctx, projectID, id, actor, comment); err == nil {
 			ok++
+		} else if firstErr == nil {
+			firstErr = err
 		}
 	}
 	if ok == 0 {
+		if firstErr != nil {
+			return 0, firstErr
+		}
 		return 0, constants.ErrBadRequestWithMsg("没有工单审批成功")
 	}
 	return ok, nil
 }
 
-func (s *Service) BatchRejectReleaseRuns(ctx context.Context, projectID uint, ids []uint, reviewerUserID *uint, reviewerName, comment string) (int, error) {
+func (s *Service) BatchRejectReleaseRuns(ctx context.Context, projectID uint, ids []uint, actor *auth.CurrentUser, comment string) (int, error) {
 	ok := 0
+	var firstErr error
 	for _, id := range ids {
-		if _, err := s.RejectReleaseRun(ctx, projectID, id, reviewerUserID, reviewerName, comment); err == nil {
+		if _, err := s.RejectReleaseRun(ctx, projectID, id, actor, comment); err == nil {
 			ok++
+		} else if firstErr == nil {
+			firstErr = err
 		}
 	}
 	if ok == 0 {
+		if firstErr != nil {
+			return 0, firstErr
+		}
 		return 0, constants.ErrBadRequestWithMsg("没有工单驳回成功")
 	}
 	return ok, nil

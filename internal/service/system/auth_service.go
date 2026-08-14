@@ -630,7 +630,7 @@ func (s *AuthService) loginLockDuration() time.Duration {
 }
 
 // ensureLoginNotLocked 在校验密码前检查该用户是否处于失败锁定期。
-// Redis 不可用或未启用锁定（阈值<=0）时不阻断登录，避免把可用性问题升级为不可登录。
+// Redis 异常时 fail-closed（拒绝登录），避免拖垮 Redis 绕过暴力破解防护。
 func (s *AuthService) ensureLoginNotLocked(ctx context.Context, username string) error {
 	if s.redis == nil || s.loginLockThreshold() <= 0 || username == "" {
 		return nil
@@ -638,8 +638,7 @@ func (s *AuthService) ensureLoginNotLocked(ctx context.Context, username string)
 	key := store.LoginFailLockKey(username)
 	exists, err := s.redis.Exists(ctx, key).Result()
 	if err != nil {
-		// Redis 异常不阻断登录（后续密码校验仍会拦截错误凭证）。
-		return nil
+		return constants.ErrBadRequestWithMsg("登录保护服务暂不可用，请稍后重试")
 	}
 	if exists == 0 {
 		return nil

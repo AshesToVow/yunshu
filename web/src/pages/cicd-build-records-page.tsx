@@ -1,15 +1,22 @@
 import { DeleteOutlined, EyeOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Card, Drawer, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import {
   deleteBuildRun,
   getBuildRun,
   getBuildRunLog,
+  listBuildRunArtifactsMeta,
+  listBuildRunStages,
   listBuildRuns,
+  type CicdArtifactMeta,
   type CicdBuildRun,
+  type CicdRunStage,
 } from "../services/cicd";
+import { analyzeCicdBuildFailAI, type AICicdBuildFailResult } from "../services/ai";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
@@ -49,11 +56,16 @@ export function CicdBuildRecordsPage() {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<CicdBuildRun | null>(null);
+  const [stages, setStages] = useState<CicdRunStage[]>([]);
+  const [artifactsMeta, setArtifactsMeta] = useState<CicdArtifactMeta[]>([]);
+  const [activeStageId, setActiveStageId] = useState<number>();
   const [logOpen, setLogOpen] = useState(false);
   const [logText, setLogText] = useState("");
   const [logRun, setLogRun] = useState<CicdBuildRun | null>(null);
   const [logLoading, setLogLoading] = useState(false);
   const logPreRef = useRef<HTMLPreElement>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<AICicdBuildFailResult | null>(null);
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
@@ -111,6 +123,24 @@ export function CicdBuildRecordsPage() {
     }, 3000);
     return () => window.clearInterval(timer);
   }, [logOpen, logRun, projectId, fetchLog, page, pageSize, serviceKeyword]);
+
+  async function handleAIAnalyze(run: CicdBuildRun | null) {
+    if (!projectId || !run || aiLoading) return;
+    setAiLoading(true);
+    try {
+      const res = await analyzeCicdBuildFailAI({ project_id: projectId, run_id: run.id });
+      setAiResult(res);
+      if (!detailOpen) {
+        setDetail(run);
+        setDetailOpen(true);
+      }
+      message.success("AI 分析完成");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 分析失败"));
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const columns = useMemo<ColumnsType<CicdBuildRun>>(
     () => [
@@ -179,7 +209,15 @@ export function CicdBuildRecordsPage() {
                 if (!projectId) return;
                 const r = await getBuildRun(projectId, row.id);
                 setDetail(r);
+                setAiResult(null);
                 setDetailOpen(true);
+                const [st, arts] = await Promise.all([
+                  listBuildRunStages(projectId, row.id),
+                  listBuildRunArtifactsMeta(projectId, row.id),
+                ]);
+                setStages(st || []);
+                setArtifactsMeta(arts || []);
+                setActiveStageId(st?.[0]?.id);
               }}
             />
             <Button
@@ -226,29 +264,175 @@ export function CicdBuildRecordsPage() {
         />
       </Card>
 
-      <Drawer title="构建详情" width={640} open={detailOpen} onClose={() => setDetailOpen(false)}>
+      <Drawer
+        title="构建详情"
+        width={720}
+        open={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+          setStages([]);
+          setArtifactsMeta([]);
+          setActiveStageId(undefined);
+          setAiResult(null);
+        }}
+        extra={
+          <Button
+            type="primary"
+            loading={aiLoading}
+            disabled={!detail || !projectId}
+            onClick={() => void handleAIAnalyze(detail)}
+          >
+            AI 分析
+          </Button>
+        }
+      >
         {detail && (
-          <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8 }}>
-            {[
-              ["应用", detail.service_name],
-              ["标识符", detail.service_identifier],
-              ["分支", detail.branch_name],
-              ["publishMode", detail.publish_mode],
-              ["环境", detail.tenv],
-              ["版本", detail.version],
-              ["结果", detail.build_result],
-              ["制品路径", detail.package_path || detail.image_address],
-              ["镜像", detail.image_address],
-              ["Jenkins", detail.jenkins_build_url],
-              ["开始", formatDateTime(detail.started_at)],
-              ["结束", formatDateTime(detail.finished_at)],
-            ].map(([k, v]) => (
-              <span key={String(k)}>
-                <Typography.Text type="secondary">{k}</Typography.Text>
-                <div style={{ wordBreak: "break-all" }}>{v || "—"}</div>
-              </span>
-            ))}
-          </div>
+          <Space direction="vertical" style={{ width: "100%" }} size="middle">
+            {aiResult ? (
+              <Card size="small" title={`AI 分析（${aiResult.provider} / ${aiResult.model}）`}>
+                <Space direction="vertical" style={{ width: "100%" }} size="small">
+                  <Typography.Paragraph style={{ marginBottom: 0 }}>
+                    {aiResult.ai_summary || "（无摘要）"}
+                  </Typography.Paragraph>
+                  {(aiResult.root_causes || []).map((c, i) => (
+                    <Alert
+                      key={`cause-${i}`}
+                      type="warning"
+                      showIcon
+                      message={String(c.title || c.cause || `根因 ${i + 1}`)}
+                      description={String(c.evidence || c.detail || c.description || JSON.stringify(c))}
+                    />
+                  ))}
+                  {(aiResult.actions || []).map((a, i) => (
+                    <Alert
+                      key={`action-${i}`}
+                      type="info"
+                      showIcon
+                      message={String(a.title || a.action || `建议 ${i + 1}`)}
+                      description={String(a.command_hint || a.detail || a.description || JSON.stringify(a))}
+                    />
+                  ))}
+                  {!aiResult.root_causes?.length && !aiResult.actions?.length && aiResult.raw_reply ? (
+                    <pre style={{ maxHeight: 200, overflow: "auto", fontSize: 12, whiteSpace: "pre-wrap" }}>
+                      {aiResult.raw_reply}
+                    </pre>
+                  ) : null}
+                </Space>
+              </Card>
+            ) : null}
+            {stages.length > 0 && (
+              <div>
+                <Typography.Text type="secondary">流水线阶段</Typography.Text>
+                <Steps
+                  size="small"
+                  style={{ marginTop: 8 }}
+                  current={Math.max(
+                    0,
+                    stages.findIndex((s) => s.id === activeStageId),
+                  )}
+                  onChange={(i) => setActiveStageId(stages[i]?.id)}
+                  items={stages.map((s) => ({
+                    title: s.stage_name || s.stage_type,
+                    status:
+                      s.status === "success"
+                        ? "finish"
+                        : s.status === "failure" || s.status === "failed"
+                          ? "error"
+                          : s.status === "running"
+                            ? "process"
+                            : "wait",
+                    description: s.duration_sec ? `${s.duration_sec}s` : undefined,
+                  }))}
+                />
+                {(() => {
+                  const st = stages.find((s) => s.id === activeStageId) || stages[0];
+                  if (!st) return null;
+                  let quality = "";
+                  let dashboard = detail.sonar_dashboard_url || "";
+                  if (st.extra_json) {
+                    try {
+                      const extra = JSON.parse(st.extra_json) as Record<string, unknown>;
+                      if (extra.quality_gate) quality = String(extra.quality_gate);
+                      if (extra.dashboard_url) dashboard = String(extra.dashboard_url);
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  return (
+                    <div style={{ marginTop: 12 }}>
+                      {(st.stage_type === "sonar" || quality || dashboard) && (
+                        <Space wrap style={{ marginBottom: 8 }}>
+                          {quality ? <Tag color="blue">Quality Gate: {quality}</Tag> : null}
+                          {dashboard ? (
+                            <Typography.Link href={dashboard} target="_blank" rel="noreferrer">
+                              Sonar Dashboard
+                            </Typography.Link>
+                          ) : null}
+                        </Space>
+                      )}
+                      {st.error_message ? (
+                        <Typography.Text type="danger">{st.error_message}</Typography.Text>
+                      ) : null}
+                      <pre
+                        style={{
+                          maxHeight: 220,
+                          overflow: "auto",
+                          fontSize: 12,
+                          background: "#1e1e1e",
+                          color: "#d4d4d4",
+                          padding: 8,
+                          borderRadius: 6,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {st.logs?.trim() || "（该阶段暂无日志）"}
+                      </pre>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 8 }}>
+              {[
+                ["应用", detail.service_name],
+                ["标识符", detail.service_identifier],
+                ["分支", detail.branch_name],
+                ["publishMode", detail.publish_mode],
+                ["环境", detail.tenv],
+                ["版本", detail.version],
+                ["结果", detail.build_result],
+                ["制品路径", detail.package_path || detail.image_address],
+                ["镜像", detail.image_address],
+                ["Sonar", detail.sonar_project_key],
+                ["Jenkins", detail.jenkins_build_url],
+                ["开始", formatDateTime(detail.started_at)],
+                ["结束", formatDateTime(detail.finished_at)],
+              ].map(([k, v]) => (
+                <span key={String(k)}>
+                  <Typography.Text type="secondary">{k}</Typography.Text>
+                  <div style={{ wordBreak: "break-all" }}>{v || "—"}</div>
+                </span>
+              ))}
+            </div>
+            {detail.image_address ? (
+              <Link to="/cicd/image-browser">在仓库中查看镜像 →</Link>
+            ) : null}
+            {artifactsMeta.length > 0 && (
+              <Table
+                size="small"
+                rowKey="id"
+                pagination={false}
+                dataSource={artifactsMeta}
+                columns={[
+                  { title: "类型", dataIndex: "artifact_type", width: 90 },
+                  { title: "名称", dataIndex: "name", ellipsis: true },
+                  { title: "路径", dataIndex: "storage_path", ellipsis: true },
+                  { title: "Digest", dataIndex: "digest", ellipsis: true, width: 160 },
+                ]}
+              />
+            )}
+          </Space>
         )}
       </Drawer>
 
@@ -270,6 +454,13 @@ export function CicdBuildRecordsPage() {
           <Space>
             <Button onClick={() => logRun && void fetchLog(logRun, false)} loading={logLoading}>
               刷新
+            </Button>
+            <Button
+              loading={aiLoading}
+              disabled={!logRun || !projectId}
+              onClick={() => void handleAIAnalyze(logRun)}
+            >
+              AI 分析
             </Button>
             <Button type="primary" onClick={() => setLogOpen(false)}>
               关闭

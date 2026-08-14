@@ -173,13 +173,13 @@ export function LogRetentionPage() {
   function canManageESIndex(name: string, matched?: boolean) {
     if (matched) return true;
     const n = String(name || "").trim().toLowerCase();
-    return n.startsWith("yunshu-agent-") && !n.startsWith(".");
+    return (n.startsWith("yunshu-agent-") || n.startsWith("yunshu-k8s-")) && !n.startsWith(".");
   }
 
   async function handleDeleteTopic(topic: string) {
     try {
       await deleteKafkaTopic(topic);
-      message.success(`已删除 Topic：${topic}`);
+      message.success(`已删除 Topic：${topic}。若采集仍在写入或随后触发部署同步，Topic 可能被自动重建。`);
       setKafkaStats((prev) =>
         prev
           ? {
@@ -223,7 +223,7 @@ export function LogRetentionPage() {
                   type="info"
                   showIcon
                   style={{ marginBottom: 12 }}
-                  message="按保留天数定时清理过期 ES 索引。平台索引：yunshu-agent-{服务器IP}-YYYY.MM.DD（兼容旧 yunshu-agent-{server_id}-日期）。Agent 启停与热更请到「Agent 管理」。"
+                  message="按保留天数定时清理过期 ES 索引。默认覆盖主机 yunshu-agent-* 与集群 yunshu-k8s-*（兼容旧 yunshu-agent-{server_id}-日期）。Agent 启停与热更请到「Agent 管理」；集群 DaemonSet 请到「服务与日志采集 → 集群采集」。"
                 />
 
                 <Card
@@ -357,9 +357,9 @@ export function LogRetentionPage() {
                             label="索引模式"
                             name="index_pattern"
                             style={{ marginBottom: 12 }}
-                            extra="建议填写 yunshu-agent-*（勿再用历史 yunshu-logs-*）"
+                            extra="留空=同时清理 yunshu-agent-* 与 yunshu-k8s-*；也可只填其一"
                           >
-                            <Input placeholder="默认 yunshu-agent-*" />
+                            <Input placeholder="默认 agent+k8s" />
                           </Form.Item>
                         </Col>
                         <Col span={24}>
@@ -455,7 +455,7 @@ export function LogRetentionPage() {
                 <Alert
                   type="info"
                   showIcon
-                  message="开启 Kafka 后：每个 Agent 独立 Topic（yunshu-agent-{服务器IP}-YYYY.MM.DD）。引导/热更 Agent 会自动创建当日 Topic；若 Agent 仍在写入，Broker 也可能因 auto.create.topics 自动重建已删 Topic。"
+                  message="开启 Kafka 后会出现 yunshu-agent-{ip}-日期 与 yunshu-k8s-{cluster}-p{project}-日期 Topic。删除后若仍会「过一会又出现」，通常是：① Agent/DaemonSet 仍在写入（Broker auto.create.topics）；② 重新部署/同步集群采集或引导主机 Agent 会 Ensure 当日 Topic。要真正停掉请先停采集再删 Topic。"
                 />
 
                 {showEmptyTopicHint ? (

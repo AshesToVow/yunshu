@@ -93,6 +93,12 @@ func TestDetectParseProfile_CRI(t *testing.T) {
 	if !strings.Contains(actions, "equal(klevel, I)") {
 		t.Fatal("expected klog level mapping")
 	}
+	if !strings.Contains(actions, "if: exist(kmsg)") {
+		t.Fatal("expected guarded move(kmsg) so non-klog lines keep message")
+	}
+	if !strings.Contains(actions, "if: exist(message)") {
+		t.Fatal("expected guarded move(message, body)")
+	}
 	if strings.Contains(actions, "action: timestamp(ts)") {
 		t.Fatal("CRI should not use timestamp layout conversion")
 	}

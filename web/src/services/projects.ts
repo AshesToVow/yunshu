@@ -218,8 +218,14 @@ export async function deleteProjectServer(projectId: number, serverId: number) {
   return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/servers/${serverId}`));
 }
 
-export async function getProjectServerDetail(projectId: number, serverId: number) {
-  return await getData<ServerDetailItem>(http.get(`/projects/${projectId}/servers/${serverId}`));
+export async function getProjectServerDetail(
+  projectId: number,
+  serverId: number,
+  opts?: { silentErrorToast?: boolean },
+) {
+  return await getData<ServerDetailItem>(
+    http.get(`/projects/${projectId}/servers/${serverId}`, opts?.silentErrorToast ? { silentErrorToast: true } : {}),
+  );
 }
 
 export interface ServerExecPayload {
@@ -239,6 +245,47 @@ export interface ServerExecResult {
 
 export async function execProjectServerCommand(projectId: number, serverId: number, payload: ServerExecPayload) {
   return await getData<ServerExecResult>(http.post(`/projects/${projectId}/servers/${serverId}/exec`, payload));
+}
+
+export interface ServerRemoteFileItem {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+  mode?: string;
+  mod_time?: string;
+}
+
+export async function listProjectServerFiles(projectId: number, serverId: number, path = "/") {
+  return await getData<{ list: ServerRemoteFileItem[]; path?: string; max_transfer_mb?: number }>(
+    http.get(`/projects/${projectId}/servers/${serverId}/files`, { params: { path } }),
+  );
+}
+
+export async function uploadProjectServerFile(projectId: number, serverId: number, path: string, file: File) {
+  const form = new FormData();
+  form.append("path", path || "/");
+  form.append("file", file);
+  return await getData<{ message: string; max_transfer_mb?: number }>(
+    http.post(`/projects/${projectId}/servers/${serverId}/files/upload`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 600000,
+    }),
+  );
+}
+
+export async function downloadProjectServerFile(projectId: number, serverId: number, path: string) {
+  return (await http.get(`/projects/${projectId}/servers/${serverId}/files/download`, {
+    params: { path },
+    responseType: "blob",
+    timeout: 600000,
+  })) as unknown as Blob;
+}
+
+export async function deleteProjectServerFile(projectId: number, serverId: number, path: string) {
+  return await getData<{ message: string }>(
+    http.post(`/projects/${projectId}/servers/${serverId}/files/delete`, { path }),
+  );
 }
 
 export async function testProjectServer(projectId: number, serverId: number) {
@@ -473,6 +520,8 @@ export interface LogSearchItem {
   service_name?: string;
   server_host?: string;
   host?: string;
+  collector_mode?: string;
+  cluster_id?: number;
   namespace?: string;
   pod?: string;
   podname?: string;
@@ -486,6 +535,11 @@ export async function searchProjectLogs(
     server_id?: number;
     service_id?: number;
     log_source_id?: number;
+    collector_mode?: string;
+    cluster_id?: number;
+    namespace?: string;
+    pod?: string;
+    container?: string;
     keyword?: string;
     level?: string;
     file_path?: string;
@@ -508,6 +562,11 @@ export async function exportProjectLogs(
     server_id?: number;
     service_id?: number;
     log_source_id?: number;
+    collector_mode?: string;
+    cluster_id?: number;
+    namespace?: string;
+    pod?: string;
+    container?: string;
     keyword?: string;
     level?: string;
     file_path?: string;

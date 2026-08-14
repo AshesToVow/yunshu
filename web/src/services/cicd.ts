@@ -24,6 +24,7 @@ export interface CicdCiConfig {
   git_url: string;
   ref_type: string;
   ref_name: string;
+  language_type?: string;
   build_type: string;
   build_shell?: string;
   build_path?: string;
@@ -93,6 +94,9 @@ export interface CicdBuildRun {
   finished_at?: string;
   service_name?: string;
   service_identifier?: string;
+  sonar_project_key?: string;
+  sonar_dashboard_url?: string;
+  sonar_summary_json?: string;
 }
 
 export interface CicdReleaseRun {
@@ -480,5 +484,267 @@ export async function listReleaseApprovalSteps(projectId: number, runId: number)
     http.get(`${projectPath(projectId, "/release-runs")}/${runId}/approval-steps`) as Promise<
       ApiResponse<CicdReleaseApprovalStep[]>
     >,
+  );
+}
+
+// --- Build stages / artifacts meta ---
+
+export interface CicdRunStage {
+  id: number;
+  project_id: number;
+  service_id: number;
+  run_kind: string;
+  run_id: number;
+  stage_order: number;
+  stage_type: string;
+  stage_name: string;
+  status: string;
+  started_at?: string;
+  finished_at?: string;
+  duration_sec?: number;
+  logs?: string;
+  error_message?: string;
+  extra_json?: string;
+}
+
+export interface CicdArtifactMeta {
+  id: number;
+  project_id: number;
+  service_id: number;
+  build_run_id: number;
+  artifact_type: string;
+  name: string;
+  storage_path?: string;
+  digest?: string;
+  git_commit?: string;
+  size_bytes?: number;
+}
+
+export async function listBuildRunStages(projectId: number, runId: number) {
+  return getData<CicdRunStage[]>(
+    http.get(`${projectPath(projectId, "/build-runs")}/${runId}/stages`) as Promise<ApiResponse<CicdRunStage[]>>,
+  );
+}
+
+export async function listBuildRunArtifactsMeta(projectId: number, runId: number) {
+  return getData<CicdArtifactMeta[]>(
+    http.get(`${projectPath(projectId, "/build-runs")}/${runId}/artifacts-meta`) as Promise<
+      ApiResponse<CicdArtifactMeta[]>
+    >,
+  );
+}
+
+export async function platformRollbackRelease(
+  projectId: number,
+  runId: number,
+  payload?: {
+    cluster_id?: number;
+    namespace?: string;
+    kind?: string;
+    name?: string;
+    revision?: number;
+  },
+) {
+  return getData<Record<string, unknown>>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/platform-rollback`, payload || {}) as Promise<
+      ApiResponse<Record<string, unknown>>
+    >,
+  );
+}
+
+// --- Image registries ---
+
+export interface ImageRegistryItem {
+  id: number;
+  name: string;
+  type: string;
+  url: string;
+  host_ip?: string;
+  username?: string;
+  default_project?: string;
+  is_default: boolean;
+  status: number;
+  remark?: string;
+  has_password?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProjectRegistryBinding {
+  id?: number;
+  project_id: number;
+  registry_id: number;
+  harbor_project?: string;
+}
+
+export interface HarborProjectItem {
+  project_id?: number;
+  name: string;
+}
+
+export interface HarborRepoItem {
+  name: string;
+  artifact_count?: number;
+}
+
+export interface HarborTagItem {
+  digest: string;
+  tags: string[];
+  size?: number;
+  push_time?: string;
+  linked_build_runs?: { id: number; project_id: number; build_number: number; image_address?: string }[];
+}
+
+export interface ImageCleanupPolicy {
+  id: number;
+  registry_id: number;
+  harbor_project?: string;
+  keep_last_n: number;
+  retain_days: number;
+  enabled: boolean;
+  cron_spec: string;
+  last_run_at?: string;
+  last_result?: string;
+}
+
+export interface CicdPipelineTemplate {
+  id: number;
+  language_type: string;
+  name: string;
+  script_path: string;
+  description?: string;
+  sort: number;
+  status: number;
+}
+
+export async function listRegistries(params?: { page?: number; page_size?: number }) {
+  return getData<PageData<ImageRegistryItem>>(
+    http.get("/registries", { params }) as Promise<ApiResponse<PageData<ImageRegistryItem>>>,
+  );
+}
+
+export async function getRegistry(id: number) {
+  return getData<ImageRegistryItem>(http.get(`/registries/${id}`) as Promise<ApiResponse<ImageRegistryItem>>);
+}
+
+export async function createRegistry(payload: Record<string, unknown>) {
+  return getData<ImageRegistryItem>(http.post("/registries", payload) as Promise<ApiResponse<ImageRegistryItem>>);
+}
+
+export async function updateRegistry(id: number, payload: Record<string, unknown>) {
+  return getData<ImageRegistryItem>(
+    http.put(`/registries/${id}`, payload) as Promise<ApiResponse<ImageRegistryItem>>,
+  );
+}
+
+export async function deleteRegistry(id: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`/registries/${id}`) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function pingRegistry(id: number) {
+  return getData<Record<string, unknown>>(
+    http.post(`/registries/${id}/ping`) as Promise<ApiResponse<Record<string, unknown>>>,
+  );
+}
+
+export async function getProjectRegistryBinding(projectId: number) {
+  return getData<ProjectRegistryBinding | null>(
+    http.get(`/projects/${projectId}/registry-binding`, { silentErrorToast: true }) as Promise<
+      ApiResponse<ProjectRegistryBinding | null>
+    >,
+  ).catch(() => null);
+}
+
+export async function upsertProjectRegistryBinding(
+  projectId: number,
+  payload: { registry_id: number; harbor_project?: string },
+) {
+  return getData<ProjectRegistryBinding>(
+    http.put(`/projects/${projectId}/registry-binding`, payload) as Promise<ApiResponse<ProjectRegistryBinding>>,
+  );
+}
+
+export async function deleteProjectRegistryBinding(projectId: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`/projects/${projectId}/registry-binding`) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function listHarborProjects(params?: { registry_id?: number; project_id?: number }) {
+  return getData<HarborProjectItem[]>(
+    http.get("/registries/browse/projects", { params }) as Promise<ApiResponse<HarborProjectItem[]>>,
+  );
+}
+
+export async function listHarborRepositories(params: {
+  registry_id?: number;
+  project_id?: number;
+  harbor_project: string;
+}) {
+  return getData<HarborRepoItem[]>(
+    http.get("/registries/browse/repositories", { params }) as Promise<ApiResponse<HarborRepoItem[]>>,
+  );
+}
+
+export async function listHarborArtifacts(params: {
+  registry_id?: number;
+  project_id?: number;
+  harbor_project?: string;
+  repository: string;
+}) {
+  return getData<HarborTagItem[]>(
+    http.get("/registries/browse/artifacts", { params }) as Promise<ApiResponse<HarborTagItem[]>>,
+  );
+}
+
+export async function deleteHarborArtifact(payload: {
+  registry_id?: number;
+  project_id?: number;
+  harbor_project?: string;
+  repository: string;
+  reference: string;
+}) {
+  return getData<{ deleted: boolean }>(
+    http.post("/registries/browse/artifacts/delete", payload) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function listCleanupPolicies(registryId?: number) {
+  return getData<ImageCleanupPolicy[]>(
+    http.get("/registries/cleanup-policies", {
+      params: registryId ? { registry_id: registryId } : undefined,
+    }) as Promise<ApiResponse<ImageCleanupPolicy[]>>,
+  );
+}
+
+export async function createCleanupPolicy(payload: Record<string, unknown>) {
+  return getData<ImageCleanupPolicy>(
+    http.post("/registries/cleanup-policies", payload) as Promise<ApiResponse<ImageCleanupPolicy>>,
+  );
+}
+
+export async function updateCleanupPolicy(id: number, payload: Record<string, unknown>) {
+  return getData<ImageCleanupPolicy>(
+    http.put(`/registries/cleanup-policies/${id}`, payload) as Promise<ApiResponse<ImageCleanupPolicy>>,
+  );
+}
+
+export async function deleteCleanupPolicy(id: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`/registries/cleanup-policies/${id}`) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function runCleanupPolicy(id: number) {
+  return getData<{ result: string }>(
+    http.post(`/registries/cleanup-policies/${id}/run`) as Promise<ApiResponse<{ result: string }>>,
+  );
+}
+
+export async function listPipelineTemplates() {
+  return getData<CicdPipelineTemplate[]>(
+    http.get("/pipeline-templates") as Promise<ApiResponse<CicdPipelineTemplate[]>>,
   );
 }

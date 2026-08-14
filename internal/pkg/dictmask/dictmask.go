@@ -16,12 +16,13 @@ func SensitiveDictType(dictType string) bool {
 	switch t {
 	case "alert_webhook_token", "alert_enrich_prometheus_token",
 		"minio_secret_key", "mail_password", "cicd_jenkins_api_token",
-		"k8s_kubeconfig_template", "k8s_direct_config":
+		"k8s_kubeconfig_template", "k8s_direct_config",
+		"ai_openai_api_key", "ai_deepseek_api_key", "ai_anthropic_api_key":
 		return true
 	}
 	suffixes := []string{
 		"_password", "_private_key", "_sk", "_secret", "_token",
-		"_corp_secret", "_app_secret",
+		"_corp_secret", "_app_secret", "_api_key",
 	}
 	for _, s := range suffixes {
 		if strings.HasSuffix(t, s) {

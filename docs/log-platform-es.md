@@ -2,13 +2,14 @@
 
 ## 概述
 
-1. **Loggie**（目标机 Agent）：采集文件日志  
+1. **Loggie 主机 Agent**（SSH/systemd）：采集虚机/物理机文件日志  
    - `kafka.enabled=false`：bulk 直写 ES  
    - `kafka.enabled=true`：写入 Kafka，由 Yunshu 消费后 bulk 写入 ES  
-2. **Elasticsearch**：按 **Agent（服务器）分索引** 持久化  
-3. **Yunshu**：项目/CMDB 管 Agent 生命周期，代理检索与保留策略；可选 Kafka→ES 消费与积压观测  
+2. **Loggie 集群 DaemonSet**（与主机并列）：采 `/var/log/pods`，规则按 namespace/workload，**不绑 server_id**  
+3. **Elasticsearch**：主机索引 `yunshu-agent-{ip}-*`；集群索引 `yunshu-k8s-{clusterId}-p{projectId}-*`（按项目隔离）
+4. **Yunshu**：项目管主机 Agent 与集群规则/下发；代理检索与保留策略  
 
-不依赖 Grafana / Loki；K8s ClusterLogConfig 引导已移除。若日志路径为 `/var/log/pods/...`，pipeline 会按 [typePodFields](https://loggie-io.github.io/docs/reference/global/discovery/#typepodfields) 风格从路径抽取 `namespace` / `podname` / `containername`。
+不依赖 Grafana / Loki。旧 K8s ClusterLogConfig 引导已移除，改由「服务与日志采集 → 集群采集」下发 DaemonSet（见 `deploy/loggie/daemonset/README.md`）。**同集群多项目**使用独立 DaemonSet 名与索引分片，互不覆盖。
 
 ## Kafka 中转（可选）
 
@@ -18,7 +19,10 @@
 |-----------|------|
 | `kafka_enabled` | `true` 启用中转；`false` 直写 ES |
 | `kafka_brokers` | 单节点或集群（JSON 数组 / 逗号分隔） |
-| `kafka_topic` / `kafka_topic_prefix` | Agent Topic 前缀，默认 `yunshu-agent`；实际 Topic=`yunshu-agent-{ip}-YYYY.MM.DD` |
+| `kafka_topic` / `kafka_topic_prefix` | **主机** Topic 前缀，默认 `yunshu-agent`；实际 Topic=`yunshu-agent-{ip}-YYYY.MM.DD` |
+| `kafka_k8s_topic_prefix` | **集群** Topic 前缀，默认 `yunshu-k8s`；实际=`yunshu-k8s-{clusterId}-p{projectId}-YYYY.MM.DD` |
+| `elasticsearch_index_pattern` | **主机**检索/保留通配，默认 `yunshu-agent-*` |
+| `elasticsearch_k8s_index_prefix` | **集群**索引前缀，默认 `yunshu-k8s` → `yunshu-k8s-{clusterId}-p{projectId}-日期` |
 | `kafka_consumer_group` | 默认 `yunshu-log-es` |
 | `kafka_username` / `kafka_password` / `kafka_sasl_mechanism` | 可选 SASL |
 
@@ -36,9 +40,16 @@
 - `server_id` / `server_host` / `server_name`
 - `service_id` / `service_name`
 - `log_source_id`
+- `collector_mode`：主机 `host`，集群 `k8s`
 - 采集态：`file_path`、`host`（来自 addonMeta）
 
-历史 `yunshu-logs-*` **不会自动迁移**；默认同检索只查 `yunshu-agent-*`。
+历史 `yunshu-logs-*` **不会自动迁移**；默认检索主机 `yunshu-agent-*` 与集群 `yunshu-k8s-*`（可用 `collector_mode` 收窄）。
+
+### 常见问题
+
+1. **检索内容为 `<nil>`**：旧版 CRI 解析在非 klog 行上无条件 `move(kmsg/message)` 会清空正文；需重新部署/同步 DaemonSet（或热更主机 Agent）使新 transformer 生效，Kafka 消费端也会跳过 `"<nil>"`。
+2. **Kafka Topic 删了又出现**：采集仍在写（`auto.create.topics`）或再次部署/引导会 Ensure 当日 Topic；先停采集再删。
+3. **ES 管理与保留策略索引不一致**：管理页请选「日志平台 ES」（与保留/检索同源）；自定义连接可能指向另一集群。
 
 ## Agent 生命周期（项目作用域）
 
@@ -65,14 +76,29 @@ loggie:
   deploy_dir: "/export/loggie"
 ```
 
+## 保留策略
+
+默认清理 `yunshu-agent-*` 与 `yunshu-k8s-*` 过期日索引；服务器作用域策略仅针对对应主机索引。可为策略显式指定 `index_pattern`。
+
+## 集群采集限流与护栏
+
+- DaemonSet / SA / ConfigMap：`yunshu-loggie-p{projectId}`（同集群多项目互不覆盖；旧名 `yunshu-loggie` 需手工清理）
+- 项目级 QPS：`cluster_log_agents.rate_limit_qps`（部署时传入，默认 2000）
+- **配额拆分**：规则 `rate_limit_qps>0` 固定占用；其余启用规则均分剩余配额（下限 50）
+- 列表接口返回 `allocated_qps`（生效限流；前端勿本地重算）
+- 宽采路径用 `excludeFiles` 排除 `kube-system` 等系统 ns；规则可覆盖 `exclude_namespaces`
+- 下发 `yunshu-logging` DaemonSet 跳过命名空间白名单（`WithSkipNamespacePolicy`）
+- 主机/集群 Loggie sink YAML 共用 `renderLoggieSinkYAML`；Kafka 开关对齐 `SinkViaKafka()`
+- **pipelines.yml**：支持预览/编辑/保存；`pipelines_custom=true` 时部署用自定义内容，规则变更不再自动覆盖
+- 前缀字典：`kafka_k8s_topic_prefix`、`elasticsearch_k8s_index_prefix`（与主机 `kafka_topic_prefix` / `elasticsearch_index_pattern` 分离）
+
 ## 检索
 
 `GET /api/v1/projects/:id/logs/search`  
-筛选：服务器、服务、日志源、级别、文件名、关键字；结果含服务名、主机、K8s 元信息。
 
-## 保留策略
-
-默认清理 `yunshu-agent-*` 过期日索引；可为单服务器策略指定 `yunshu-agent-{id}-*`。
+筛选：`collector_mode`（`host`|`k8s`）、`cluster_id`、`namespace`、`pod`、`container`，以及服务器/服务/日志源/级别/文件名/关键字。  
+主机新 pipeline 写入 `collector_mode=host`（旧文档字段缺失仍可命中）；集群为 `k8s`。  
+索引：主机 `yunshu-agent-*`；集群 `yunshu-k8s-{clusterId}-p{projectId}-*`；未指定 mode 时两边一起查（仍按 `project_id` 过滤）。
 
 ## 与 Loggie 手册对照
 

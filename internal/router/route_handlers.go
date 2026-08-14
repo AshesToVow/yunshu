@@ -58,5 +58,8 @@ type routeHandlers struct {
 	Cicd                *handler.CicdHandler
 	LogPlatform         *handler.LogPlatformHandler
 	Loggie              *handler.LoggieHandler
+	ClusterLog          *handler.ClusterLogHandler
 	Inspect             *handler.InspectHandler
+	AI                  *handler.AIHandler
+	Esmgmt              *handler.EsmgmtHandler
 }

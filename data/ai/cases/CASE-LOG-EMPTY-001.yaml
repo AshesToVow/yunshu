@@ -1,0 +1,18 @@
+case_id: CASE-LOG-EMPTY-001
+title: 项目日志检索为空典型案例
+category: log
+technology: elasticsearch
+symptom: search_logs 返回空；业务反馈“没有日志”
+environment: Yunshu 日志平台
+diagnosis: |
+  1. 确认 project_id 与 keyword
+  2. search_logs 缩小 namespace/pod/时间
+  3. 仍为空则排查采集 Agent/规则、Kafka Topic、ES 索引前缀
+root_cause: keyword 过宽/过窄、采集未启用、索引/Topic 租户前缀不匹配
+solution: 调整检索条件；检查 Loggie/集群采集规则；核对 ES 索引与 Kafka Topic
+verification: 能检索到近期业务日志
+risk: 删除索引不可恢复，禁止建议随意删索引
+related_tools: '["search_logs"]'
+related_sop: '["sop-log-empty"]'
+source: seed
+confidence: 0.86

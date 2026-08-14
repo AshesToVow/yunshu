@@ -94,7 +94,9 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	nodes.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	nodes.GET("", d.nodeHandler.List)
 	nodes.GET("/detail", d.nodeHandler.Detail)
+	nodes.GET("/drain-status", d.nodeHandler.DrainStatus)
 	nodes.POST("/schedulability", d.nodeHandler.SetSchedulability)
+	nodes.POST("/drain", d.nodeHandler.Drain)
 	nodes.PUT("/taints", d.nodeHandler.ReplaceTaints)
 
 	// Workloads
@@ -103,6 +105,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	deployments.GET("", d.workloadHandler.ListDeployments)
 	deployments.GET("/detail", d.workloadHandler.DeploymentDetail)
 	deployments.GET("/rollout-status", d.workloadHandler.DeploymentRolloutStatus)
+	deployments.POST("/rollout-undo", d.workloadHandler.DeploymentRolloutUndo)
 	deployments.POST("/apply", d.workloadHandler.Apply)
 	deployments.POST("/preview-apply", d.workloadHandler.PreviewApply)
 	deployments.GET("/snapshots", d.workloadHandler.ListSnapshots)
@@ -116,6 +119,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	statefulsets.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	statefulsets.GET("", d.workloadHandler.ListStatefulSets)
 	statefulsets.GET("/detail", d.workloadHandler.StatefulSetDetail)
+	statefulsets.POST("/rollout-undo", d.workloadHandler.StatefulSetRolloutUndo)
 	statefulsets.POST("/apply", d.workloadHandler.Apply)
 	statefulsets.POST("/preview-apply", d.workloadHandler.PreviewApply)
 	statefulsets.POST("/scale", d.workloadHandler.StatefulSetScale)

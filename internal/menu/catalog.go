@@ -136,10 +136,28 @@ func DefaultCatalog() []Spec {
 				{Path: "/cicd/approval-flow", Name: "审批管理", Icon: "AuditOutlined", Sort: 3, Component: "cicd-approval-flow-page", Status: 1},
 				{Path: "/cicd/build-records", Name: "CI 打包记录", Icon: "CloudUploadOutlined", Sort: 4, Component: "cicd-build-records-page", Status: 1},
 				{Path: "/cicd/release-records", Name: "CD 历史工单", Icon: "DeploymentUnitOutlined", Sort: 5, Component: "cicd-release-records-page", Status: 1},
+				{Path: "/cicd/registries", Name: "镜像仓库", Icon: "DatabaseOutlined", Sort: 6, Component: "cicd-registries-page", Status: 1},
+				{Path: "/cicd/image-browser", Name: "镜像浏览", Icon: "CloudServerOutlined", Sort: 7, Component: "cicd-image-browser-page", Status: 1},
 			},
 		},
 		{
-			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 9, Status: 1,
+			Path: "/ai", Name: "AI", Icon: "RobotOutlined", Sort: 9, Status: 1,
+			Children: []Spec{
+				{Path: "/ai/assistant", Name: "AI 运维助手", Icon: "CommentOutlined", Sort: 1, Component: "ai-assistant-page", Status: 1},
+				{Path: "/ai/approvals", Name: "AI 操作审批", Icon: "AuditOutlined", Sort: 2, Component: "ai-approvals-page", Status: 1},
+				{Path: "/ai/center", Name: "AI 能力中心", Icon: "AppstoreOutlined", Sort: 3, Component: "ai-center-page", Status: 1},
+			},
+		},
+		{
+			Path: "/esmgmt", Name: "Elasticsearch", Icon: "CloudServerOutlined", Sort: 10, Status: 1,
+			Children: []Spec{
+				{Path: "/esmgmt/connections", Name: "连接管理", Icon: "ApiOutlined", Sort: 1, Component: "esmgmt-connections-page", Status: 1},
+				{Path: "/esmgmt/overview", Name: "集群概览", Icon: "FundOutlined", Sort: 2, Component: "esmgmt-overview-page", Status: 1},
+				{Path: "/esmgmt/console", Name: "REST 控制台", Icon: "CodeOutlined", Sort: 3, Component: "esmgmt-console-page", Status: 1},
+			},
+		},
+		{
+			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 11, Status: 1,
 			Children: []Spec{
 				{Path: "/crds", Name: "CRD 管理", Icon: "BranchesOutlined", Sort: 1, Component: "crds-page", Status: 1},
 				{Path: "/crs", Name: "CR 实例管理", Icon: "DatabaseOutlined", Sort: 2, Component: "crs-page", Status: 1},

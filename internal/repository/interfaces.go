@@ -209,7 +209,7 @@ var _ K8sClusterAccessRepo = (*K8sClusterAccessRepository)(nil)
 // MysqlBackupRepo is implemented by *MysqlBackupRepository.
 type MysqlBackupRepo interface {
 	CreateInstance(ctx context.Context, inst *model.MysqlBackupInstance) (error)
-	UpdateInstance(ctx context.Context, inst *model.MysqlBackupInstance) (error)
+	UpdateInstance(ctx context.Context, inst *model.MysqlBackupInstance, updatePassword bool) (error)
 	DeleteInstance(ctx context.Context, id uint) (error)
 	GetInstance(ctx context.Context, id uint) (*model.MysqlBackupInstance, error)
 	GetInstanceInProject(ctx context.Context, projectID uint, id uint) (*model.MysqlBackupInstance, error)

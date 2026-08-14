@@ -1,0 +1,9 @@
+case_code: CASE-009
+title: 告警未收到
+suite: default
+input_question: 告警触发了但钉钉没收到怎么查？
+expect_keywords: '["list_alerts","explain","投递","fingerprint"]'
+forbid_keywords: '["已关闭告警规则"]'
+expect_tools: '["list_alerts"]'
+expect_risk: LOW
+score_weight: 8

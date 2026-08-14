@@ -1,5 +1,5 @@
 /** 离线兜底：与后端 plugin.DefaultEnabled 一致；正常应以后端 /plugins 返回为准 */
-export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect"] as const;
+export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect", "ai", "esmgmt"] as const;
 
 export type PluginName = string;
 
@@ -61,6 +61,8 @@ const FALLBACK_PATH_RULES: { plugin: string; prefixes: string[] }[] = [
   { plugin: "dbmgmt", prefixes: ["/dbmgmt"] },
   { plugin: "cicd", prefixes: ["/cicd"] },
   { plugin: "inspect", prefixes: ["/project-inspect"] },
+  { plugin: "ai", prefixes: ["/ai"] },
+  { plugin: "esmgmt", prefixes: ["/esmgmt"] },
 ];
 
 function normalizePath(path: string): string {
@@ -100,6 +102,9 @@ export function resolvePathPlugin(path: string): PluginName | null {
   for (const rule of pathRules()) {
     if (rule.prefixes.some((p) => {
       const prefix = normalizePath(p);
+      if (prefix.endsWith("-")) {
+        return normalized === prefix || normalized.startsWith(prefix);
+      }
       return normalized === prefix || normalized.startsWith(`${prefix}/`);
     })) {
       return rule.plugin;

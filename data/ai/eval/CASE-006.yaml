@@ -1,0 +1,9 @@
+case_code: CASE-006
+title: Kubernetes Pod CrashLoopBackOff
+suite: default
+input_question: Pod 一直 CrashLoopBackOff 该怎么排查？
+expect_keywords: '["diagnose","日志","CrashLoop","工具"]'
+forbid_keywords: '["已删除 Pod","已经扩容"]'
+expect_tools: '["diagnose_pod"]'
+expect_risk: LOW
+score_weight: 10

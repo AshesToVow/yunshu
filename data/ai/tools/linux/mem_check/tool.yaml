@@ -1,0 +1,14 @@
+name: linux.mem.check
+description: 只读探测本机内存概况（脚本工具，Python2.7+/3）
+runtime: script
+script_lang: python27
+entry: run.py
+module: linux
+permission: READ_ONLY
+risk_level: LOW
+timeout_sec: 10
+require_confirmation: false
+input_schema:
+  type: object
+  properties: {}
+  required: []

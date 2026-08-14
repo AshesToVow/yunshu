@@ -37,7 +37,8 @@ func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, l
 		}
 		idStr := strings.TrimSpace(c.Param("id"))
 		if idStr == "" {
-			c.Next()
+			response.Error(c, constants.ErrInvalidRequestParam)
+			c.Abort()
 			return
 		}
 		pv, err := strconv.ParseUint(idStr, 10, 32)

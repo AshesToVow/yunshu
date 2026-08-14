@@ -13,9 +13,9 @@ import (
 )
 
 type IndexInfo struct {
-	Name       string
-	StoreBytes int64
-	DocsCount  int64
+	Name       string `json:"name"`
+	StoreBytes int64  `json:"store_bytes"`
+	DocsCount  int64  `json:"docs_count"`
 }
 
 var indexDateSuffix = regexp.MustCompile(`(\d{4})[.\-](\d{2})[.\-](\d{2})$`)
@@ -137,6 +137,45 @@ func (c *Client) DeleteIndex(ctx context.Context, index string) error {
 	}
 	if status >= 300 && status != 404 {
 		return fmt.Errorf("delete index failed: status=%d body=%s", status, truncate(string(raw), 512))
+	}
+	return nil
+}
+
+// IndexExists 判断索引是否存在。
+func (c *Client) IndexExists(ctx context.Context, index string) (bool, error) {
+	index = strings.Trim(strings.TrimSpace(index), "/")
+	if index == "" {
+		return false, fmt.Errorf("index required")
+	}
+	_, status, err := c.doRequest(ctx, http.MethodHead, "/"+index, nil)
+	if err != nil {
+		return false, err
+	}
+	if status == http.StatusOK {
+		return true, nil
+	}
+	if status == http.StatusNotFound {
+		return false, nil
+	}
+	return false, fmt.Errorf("head index failed: status=%d", status)
+}
+
+// CreateIndex 创建索引（body 含 settings/mappings）。
+func (c *Client) CreateIndex(ctx context.Context, index string, body map[string]any) error {
+	index = strings.Trim(strings.TrimSpace(index), "/")
+	if index == "" {
+		return fmt.Errorf("index required")
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	raw, status, err := c.doRequest(ctx, http.MethodPut, "/"+index, payload)
+	if err != nil {
+		return err
+	}
+	if status >= 300 {
+		return fmt.Errorf("create index failed: status=%d body=%s", status, truncate(string(raw), 400))
 	}
 	return nil
 }

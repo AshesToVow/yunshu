@@ -355,4 +355,105 @@ export async function syncLoggieFromLogSources(projectId: number, payload: Loggi
   return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/sync`, payload));
 }
 
+export interface ClusterLogRule {
+  id: number;
+  project_id: number;
+  cluster_id: number;
+  name: string;
+  match_namespaces?: string;
+  match_workloads?: string;
+  exclude_namespaces?: string;
+  parse_profile?: string;
+  rate_limit_qps?: number;
+  allocated_qps?: number;
+  enabled: boolean;
+  remark?: string;
+}
+
+export interface ClusterLogAgent {
+  id: number;
+  project_id: number;
+  cluster_id: number;
+  namespace: string;
+  status: string;
+  deploy_revision?: number;
+  desired_replicas?: number;
+  ready_replicas?: number;
+  rate_limit_qps?: number;
+  last_error?: string;
+  last_sync_at?: string;
+}
+
+export function listClusterLogRules(projectId: number, clusterId?: number) {
+  return getData<{ list: ClusterLogRule[] }>(
+    http.get(`/projects/${projectId}/cluster-log/rules`, {
+      params: clusterId ? { cluster_id: clusterId } : undefined,
+    }),
+  );
+}
+
+export function createClusterLogRule(
+  projectId: number,
+  payload: {
+    cluster_id: number;
+    name: string;
+    match_namespaces?: string[];
+    match_workloads?: string[];
+    exclude_namespaces?: string[];
+    parse_profile?: string;
+    rate_limit_qps?: number;
+    enabled?: boolean;
+    remark?: string;
+  },
+) {
+  return getData<ClusterLogRule>(http.post(`/projects/${projectId}/cluster-log/rules`, payload));
+}
+
+export function updateClusterLogRule(projectId: number, ruleId: number, payload: Record<string, unknown>) {
+  return getData<ClusterLogRule>(http.put(`/projects/${projectId}/cluster-log/rules/${ruleId}`, payload));
+}
+
+export function deleteClusterLogRule(projectId: number, ruleId: number) {
+  return getData<{ ok: boolean }>(http.delete(`/projects/${projectId}/cluster-log/rules/${ruleId}`));
+}
+
+export function listClusterLogAgents(projectId: number) {
+  return getData<{ list: ClusterLogAgent[] }>(http.get(`/projects/${projectId}/cluster-log/agents`));
+}
+
+export function deployClusterLog(
+  projectId: number,
+  payload: { cluster_id: number; namespace?: string; rate_limit_qps?: number },
+) {
+  return getData<ClusterLogAgent>(http.post(`/projects/${projectId}/cluster-log/deploy`, payload));
+}
+
+export function previewClusterLogPipelines(projectId: number, clusterId: number) {
+  return getData<{ pipelines_yml: string; generated_yml: string; is_custom: boolean }>(
+    http.get(`/projects/${projectId}/cluster-log/pipelines/preview`, { params: { cluster_id: clusterId } }),
+  );
+}
+
+export function saveClusterLogPipelines(
+  projectId: number,
+  payload: {
+    cluster_id: number;
+    pipelines_yml?: string;
+    reset?: boolean;
+    apply?: boolean;
+    namespace?: string;
+    rate_limit_qps?: number;
+  },
+) {
+  return getData<{ pipelines_yml: string; generated_yml: string; is_custom: boolean }>(
+    http.put(`/projects/${projectId}/cluster-log/pipelines`, payload),
+  );
+}
+
+export function refreshClusterLogStatus(projectId: number, clusterId: number) {
+  return getData<ClusterLogAgent>(
+    http.get(`/projects/${projectId}/cluster-log/status`, { params: { cluster_id: clusterId } }),
+  );
+}
+
 export { getProjects };

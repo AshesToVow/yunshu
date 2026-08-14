@@ -56,6 +56,13 @@ func provideDbmgmtConfig(app *bootstrap.App) config.DbmgmtConfig {
 	return app.Config.Dbmgmt
 }
 
+func provideAIConfig(app *bootstrap.App) config.AIConfig {
+	if app == nil || app.Config == nil {
+		return config.DefaultAIConfig()
+	}
+	return app.Config.AI
+}
+
 func provideAppRouteConfig(app *bootstrap.App) *appRouteConfig {
 	return &appRouteConfig{
 		AppName:       AppDisplayName(app.Config.App.Name),

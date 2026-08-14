@@ -62,6 +62,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const [tableColumns, setTableColumns] = useState<{ name: string; data_type: string; nullable: boolean; comment?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [perm, setPerm] = useState<DbEffectivePermission | null>(null);
+  const [permLoaded, setPermLoaded] = useState(false);
   const [riskMsg, setRiskMsg] = useState<string>();
   const [importSql, setImportSql] = useState("");
   const [importFileName, setImportFileName] = useState("");
@@ -81,8 +82,17 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const writeRisk = useMemo(() => guessSqlRiskLevel(sql), [sql]);
   const isReadOnlySql = writeRisk === "low";
   const canWriteSql = useMemo(
-    () => !perm || perm.can_manage || perm.can_dml || perm.can_ddl || perm.can_import,
-    [perm],
+    () =>
+      Boolean(
+        permLoaded &&
+          perm &&
+          (perm.can_manage || perm.can_dml || perm.can_ddl || perm.can_import),
+      ),
+    [perm, permLoaded],
+  );
+  const canQuerySql = useMemo(
+    () => Boolean(permLoaded && perm && (perm.can_query || perm.can_manage)),
+    [perm, permLoaded],
   );
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "数据库";
 
@@ -143,12 +153,23 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   }, [buildInstanceTree]);
 
   const refreshMeta = useCallback(async () => {
-    if (!projectId || !instanceId) return;
-    const p = await getEffectiveDbPermission(projectId, instanceId);
-    setPerm(p);
-    if (database && selectedTable) {
-      const cols = await listDbColumns(projectId, instanceId, database, selectedTable).catch(() => []);
-      setTableColumns(cols ?? []);
+    if (!projectId || !instanceId) {
+      setPerm(null);
+      setPermLoaded(false);
+      return;
+    }
+    setPermLoaded(false);
+    try {
+      const p = await getEffectiveDbPermission(projectId, instanceId);
+      setPerm(p);
+      if (database && selectedTable) {
+        const cols = await listDbColumns(projectId, instanceId, database, selectedTable).catch(() => []);
+        setTableColumns(cols ?? []);
+      }
+    } catch {
+      setPerm(null);
+    } finally {
+      setPermLoaded(true);
     }
   }, [projectId, instanceId, database, selectedTable]);
 
@@ -226,8 +247,8 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       message.warning("请先选择实例");
       return;
     }
-    if (isQueryMode && perm && !perm.can_query && !perm.can_manage) {
-      message.error("当前账号无 SQL 查询权限");
+    if (isQueryMode && !canQuerySql) {
+      message.error(permLoaded ? "当前账号无 SQL 查询权限" : "正在校验权限，请稍候");
       return;
     }
     if (!database) {
@@ -310,8 +331,8 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       message.warning("请先选择实例");
       return;
     }
-    if (perm && !canWriteSql) {
-      message.error("当前账号无 SQL 变更权限（DML/DDL/导入）");
+    if (!canWriteSql) {
+      message.error(permLoaded ? "当前账号无 SQL 变更权限（DML/DDL/导入）" : "正在校验权限，请稍候");
       return;
     }
     const instanceDDL = /^\s*CREATE\s+DATABASE\b/i.test(sql.trim()) || /^\s*DROP\s+DATABASE\b/i.test(sql.trim());
@@ -450,7 +471,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                   type="primary"
                   icon={<PlayCircleOutlined />}
                   loading={loading}
-                  disabled={perm != null && !perm.can_query && !perm.can_manage}
+                  disabled={!canQuerySql}
                   onClick={() => void runQuery()}
                 >
                   查询
@@ -586,7 +607,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                   type="primary"
                   icon={<PlayCircleOutlined />}
                   loading={loading}
-                  disabled={perm != null && !perm.can_query && !perm.can_manage}
+                  disabled={!canQuerySql}
                   onClick={() => void runQuery()}
                 >
                     查询
@@ -717,7 +738,10 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
             />
           ) : null}
 
-          {perm && !perm.can_query && isQueryMode && mode === "query" ? (
+          {!permLoaded && instanceId ? (
+            <Alert type="info" showIcon message="正在校验数据库权限…" style={{ marginBottom: 12 }} />
+          ) : null}
+          {permLoaded && !canQuerySql && isQueryMode && mode === "query" ? (
             <Alert type="warning" showIcon message={<>无查询权限，可 <Link to="/dbmgmt/apply/query">申请查询权限</Link></>} style={{ marginTop: 12 }} />
           ) : null}
           {riskMsg ? <Alert type="info" showIcon message={riskMsg} style={{ marginTop: 12 }} /> : null}

@@ -16,6 +16,7 @@ import { RealtimeUsageText, WorkloadCpuUsageBars, WorkloadMemUsageBars } from ".
 import { useWorkloadFormActions } from "../components/k8s/workload-form-actions";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
+import { useWorkloadProgressOptional } from "../contexts/workload-progress-context";
 import {
   applyStatefulSet,
   buildCpuMemoryResourceMaps,
@@ -25,6 +26,7 @@ import {
   listStatefulSetPods,
   patchStatefulSetContainerResources,
   restartStatefulSet,
+  rolloutUndoStatefulSet,
   scaleStatefulSet,
   type WorkloadDetail,
   type WorkloadItem,
@@ -100,6 +102,7 @@ function StatefulSetDetailQuickEdit({
 }
 
 export function StatefulsetsPage() {
+  const progress = useWorkloadProgressOptional();
   const listReloadRef = useRef<() => void>(() => {});
   const [form] = Form.useForm<StatefulSetFormValues>();
   const formActions = useWorkloadFormActions<StatefulSetFormValues>({
@@ -327,8 +330,36 @@ spec:
                     icon: <ReloadOutlined />,
                     onClick: () => {
                       void (async () => {
-                        await restartStatefulSet(ctx.clusterId, ctx.namespace ?? "default", record.name);
+                        const ns = ctx.namespace ?? "default";
+                        await restartStatefulSet(ctx.clusterId, ns, record.name);
                         message.success("已触发滚动重启");
+                        progress?.track({
+                          kind: "StatefulSet",
+                          clusterId: ctx.clusterId,
+                          namespace: ns,
+                          name: record.name,
+                          title: `重启 ${record.name}`,
+                        });
+                        ctx.reload();
+                      })();
+                    },
+                  },
+                  {
+                    key: "undo",
+                    label: "回滚标记",
+                    icon: <ReloadOutlined />,
+                    onClick: () => {
+                      void (async () => {
+                        const ns = ctx.namespace ?? "default";
+                        await rolloutUndoStatefulSet(ctx.clusterId, ns, record.name);
+                        message.success("已标记 StatefulSet 回滚");
+                        progress?.track({
+                          kind: "StatefulSet",
+                          clusterId: ctx.clusterId,
+                          namespace: ns,
+                          name: record.name,
+                          title: `回滚 ${record.name}`,
+                        });
                         ctx.reload();
                       })();
                     },

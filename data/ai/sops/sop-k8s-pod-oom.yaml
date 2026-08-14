@@ -1,0 +1,18 @@
+code: sop-k8s-pod-oom
+title: Kubernetes Pod OOMKilled SOP
+scenario: 容器因内存超限被杀
+preconditions: 已选择集群；已知 namespace 与 Pod 名
+input_params: cluster_id, namespace, name
+check_steps: |
+  1. diagnose_pod / get_pod_detail 看 OOMKilled
+  2. get_pod_logs
+  3. list_events
+exec_steps: |
+  1. 调高 memory limit（变更需评估）
+  2. 排查泄漏
+  3. 必要时 restart_deployment（审批）
+verify_steps: 无新的 OOMKilled，重启次数稳定
+exception_handle: 无法确认 limit 时先 list_deployments 看模板
+rollback: 回退资源清单版本
+risk: 重启中断；盲目提 limit 挤占节点
+approval_needed: true

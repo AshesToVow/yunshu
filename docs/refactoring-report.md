@@ -88,7 +88,7 @@ cd internal/router && go generate
 - [backend-architecture-complete.md](backend-architecture-complete.md) — 完整技术文档  
 - [cicd.md](cicd.md) — CI/CD 插件说明  
 - [dbmgmt.md](dbmgmt.md) — 数据库管理插件说明  
-- [code-review-report.md](code-review-report.md) — 历史审查记录（部分条目已解决，见文首说明）  
+- 历史审查快照 `code-review-report.md` 已删除；以本文与 [CODEBASE-MAP.md](CODEBASE-MAP.md)、[yunshu-audit-report.md](yunshu-audit-report.md) 为准  
 - [architecture-diagrams.md](architecture-diagrams.md) — 架构图
 
 ---

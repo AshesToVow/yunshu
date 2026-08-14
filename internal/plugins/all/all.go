@@ -3,11 +3,13 @@ package all
 
 import (
 	_ "yunshu/internal/plugins/alert"
+	_ "yunshu/internal/plugins/ai"
 	_ "yunshu/internal/plugins/backup"
 	_ "yunshu/internal/plugins/cicd"
 	_ "yunshu/internal/plugins/dbmgmt"
 	_ "yunshu/internal/plugins/cmdb"
 	_ "yunshu/internal/plugins/core"
+	_ "yunshu/internal/plugins/esmgmt"
 	_ "yunshu/internal/plugins/inspect"
 	_ "yunshu/internal/plugins/k8s"
 	_ "yunshu/internal/plugins/project"

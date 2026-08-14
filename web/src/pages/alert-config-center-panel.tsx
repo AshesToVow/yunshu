@@ -14,6 +14,8 @@ import {
   debugAlertRouting,
   type AlertRoutingDebugResult,
 } from "../services/alerts";
+import { analyzeAlertExplainAI, type AIAlertExplainResult } from "../services/ai";
+import { extractApiErrorMessage } from "../services/http";
 import { stringifyPrettyJSON } from "../services/alert-mappers";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { revealDictEntryValue } from "../services/dict";
@@ -272,6 +274,8 @@ export function AlertConfigCenterPanel({
   const [fpExplain, setFpExplain] = useState<FingerprintDeliveryExplain | null>(null);
   const [fpExplainOpen, setFpExplainOpen] = useState(false);
   const [fpExplainLoading, setFpExplainLoading] = useState(false);
+  const [fpAiLoading, setFpAiLoading] = useState(false);
+  const [fpAiResult, setFpAiResult] = useState<AIAlertExplainResult | null>(null);
   const [eventCategory, setEventCategory] = useState<AlertEventCategory | "">(initialEventCategory ?? "");
   const eventsPageSizeRef = useRef(eventsPageSize);
   eventsPageSizeRef.current = eventsPageSize;
@@ -1065,6 +1069,7 @@ export function AlertConfigCenterPanel({
                   try {
                     const r = await explainAlertByFingerprint(fp);
                     setFpExplain(r);
+                    setFpAiResult(null);
                     setFpExplainOpen(true);
                   } catch {
                     message.error("指纹追溯失败");
@@ -1085,6 +1090,7 @@ export function AlertConfigCenterPanel({
                   try {
                     const r = await explainAlertByFingerprint(fp);
                     setFpExplain(r);
+                    setFpAiResult(null);
                     setFpExplainOpen(true);
                   } catch {
                     message.error("指纹追溯失败");
@@ -1225,6 +1231,7 @@ export function AlertConfigCenterPanel({
                           try {
                             const r = await explainAlertByFingerprint(v);
                             setFpExplain(r);
+                            setFpAiResult(null);
                             setFpExplainOpen(true);
                           } catch {
                             message.error("指纹追溯失败");
@@ -1743,8 +1750,39 @@ export function AlertConfigCenterPanel({
       <Modal
         title={fpExplain ? `指纹追溯：${fpExplain.fingerprint}` : "指纹追溯"}
         open={fpExplainOpen}
-        onCancel={() => setFpExplainOpen(false)}
-        footer={null}
+        onCancel={() => {
+          setFpExplainOpen(false);
+          setFpAiResult(null);
+        }}
+        footer={
+          <Space>
+            <Button
+              type="primary"
+              loading={fpAiLoading}
+              disabled={!fpExplain?.fingerprint}
+              onClick={async () => {
+                if (!fpExplain?.fingerprint) return;
+                setFpAiLoading(true);
+                try {
+                  const res = await analyzeAlertExplainAI({
+                    fingerprint: fpExplain.fingerprint,
+                    project_id: projectContextId,
+                    window_hours: 24,
+                  });
+                  setFpAiResult(res);
+                  message.success("AI 解释完成");
+                } catch (e) {
+                  message.error(extractApiErrorMessage(e, "AI 解释失败"));
+                } finally {
+                  setFpAiLoading(false);
+                }
+              }}
+            >
+              AI 解释
+            </Button>
+            <Button onClick={() => setFpExplainOpen(false)}>关闭</Button>
+          </Space>
+        }
         width={900}
         destroyOnClose
       >
@@ -1759,6 +1797,38 @@ export function AlertConfigCenterPanel({
                   : "尚未记录成功 firing 投递（恢复通知可能被抑制）"
               }
             />
+            {fpAiResult ? (
+              <Card size="small" title={`AI 解释（${fpAiResult.provider} / ${fpAiResult.model}）`}>
+                <Space direction="vertical" style={{ width: "100%" }} size="small">
+                  <Typography.Paragraph style={{ marginBottom: 0 }}>
+                    {fpAiResult.ai_summary || "（无摘要）"}
+                  </Typography.Paragraph>
+                  {(fpAiResult.root_causes || []).map((c, i) => (
+                    <Alert
+                      key={`ai-cause-${i}`}
+                      type="warning"
+                      showIcon
+                      message={String(c.title || c.cause || `原因 ${i + 1}`)}
+                      description={String(c.evidence || c.detail || c.description || JSON.stringify(c))}
+                    />
+                  ))}
+                  {(fpAiResult.actions || []).map((a, i) => (
+                    <Alert
+                      key={`ai-action-${i}`}
+                      type="info"
+                      showIcon
+                      message={String(a.title || a.action || `建议 ${i + 1}`)}
+                      description={String(a.command_hint || a.detail || a.description || JSON.stringify(a))}
+                    />
+                  ))}
+                  {!fpAiResult.root_causes?.length && !fpAiResult.actions?.length && fpAiResult.raw_reply ? (
+                    <pre style={{ maxHeight: 200, overflow: "auto", fontSize: 12, whiteSpace: "pre-wrap" }}>
+                      {fpAiResult.raw_reply}
+                    </pre>
+                  ) : null}
+                </Space>
+              </Card>
+            ) : null}
             {(fpExplain.skip_summary || []).length > 0 ? (
               <Card size="small" title="跳过/失败原因汇总">
                 <Table

@@ -42,7 +42,7 @@ func (s *Service) syncJenkinsJob(ctx context.Context, svc *model.CicdService, ci
 		jobName = strings.TrimSpace(svc.Identifier)
 	}
 	usesK8s := s.serviceUsesK8sPipeline(ctx, svc)
-	scriptPath := dictconfig.JenkinsScriptPath(cfg, svc.ServiceType, usesK8s)
+	scriptPath := s.ResolveScriptPathForService(ctx, svc, ci, usesK8s)
 	existsBefore, err := client.JobExists(ctx, jobName)
 	if err != nil {
 		return nil, err

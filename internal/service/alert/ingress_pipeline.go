@@ -230,6 +230,11 @@ func buildOutgoingPayload(
 		"monitorPipeline": monitorPipeline, "datasourceId": dsID, "datasourceName": dsName,
 		"datasourceType": dsType, "groupKey": groupKey, "labelsDigest": labelsDigest,
 	}
+	if pid := parseLabelUintOrZero(labels["project_id"]); pid > 0 {
+		out["project_id"] = pid
+	} else if ca.Cloud != nil && ca.Cloud.ProjectID > 0 {
+		out["project_id"] = ca.Cloud.ProjectID
+	}
 	if ca.Cloud != nil {
 		cloud := map[string]interface{}{
 			"provider":      ca.Cloud.Provider,

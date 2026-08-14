@@ -9,6 +9,7 @@ package router
 import (
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/handler"
+	"yunshu/internal/service/ai"
 	"yunshu/internal/service/alert"
 	"yunshu/internal/service/k8s"
 	"yunshu/internal/service/k8s/eventforward"
@@ -156,11 +157,18 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	if err != nil {
 		return nil, err
 	}
+	clusterLogService := provideClusterLogService(db, v29, v91, v95, v56, loggieConfig)
 	v99 := alert.NewAlertReceiverGroupService(v40, v41)
 	v100 := routerRouteRepositories.K8sEventForward
 	v101 := eventforward.NewK8sEventForwardAdminService(v100)
 	v102 := k8s.NewK8sSearchService(v56, v25, v9, v20, v22, v23)
 	inspectService := provideInspectService(db, client, v54, v29, sender, appDisplayName)
+	aiConfig := provideAIConfig(app)
+	aiService := ai.NewService(db, aiConfig, string(securityEncryptionKey), v57, v58, v61, v59, v70, v92, v91, service, v52)
+	esmgmtService, err := provideEsmgmtService(db, securityEncryptionKey, v91)
+	if err != nil {
+		return nil, err
+	}
 	routerRouteServices := &routeServices{
 		LoginLog:             v2,
 		OperationLog:         v4,
@@ -217,11 +225,14 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		LogRetention:         v94,
 		KafkaToES:            v96,
 		LoggieAgent:          v98,
+		ClusterLog:           clusterLogService,
 		AlertReceiverGroup:   v99,
 		K8sEventForwardAdmin: v101,
 		K8sSearch:            v102,
 		AlertMaintenance:     v43,
 		Inspect:              inspectService,
+		AI:                   aiService,
+		Esmgmt:               esmgmtService,
 	}
 	systemHandler := provideSystemHandler(app)
 	pluginHandler := handler.NewPluginHandler(pluginsConfig)
@@ -277,7 +288,10 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	cicdHandler := handler.NewCicdHandler(service)
 	logPlatformHandler := handler.NewLogPlatformHandler(v94, v96)
 	loggieHandler := handler.NewLoggieHandler(v98)
+	clusterLogHandler := handler.NewClusterLogHandler(clusterLogService)
 	inspectHandler := handler.NewInspectHandler(inspectService)
+	aiHandler := handler.NewAIHandler(aiService)
+	esmgmtHandler := handler.NewEsmgmtHandler(esmgmtService)
 	routerRouteHandlers := &routeHandlers{
 		System:             systemHandler,
 		Plugin:             pluginHandler,
@@ -333,7 +347,10 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		Cicd:               cicdHandler,
 		LogPlatform:        logPlatformHandler,
 		Loggie:             loggieHandler,
+		ClusterLog:         clusterLogHandler,
 		Inspect:            inspectHandler,
+		AI:                 aiHandler,
+		Esmgmt:             esmgmtHandler,
 	}
 	routeDeps, err := provideRouteDeps(app, routerRouteRepositories, routerRouteServices, routerRouteHandlers)
 	if err != nil {

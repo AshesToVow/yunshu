@@ -374,7 +374,8 @@ func (h *CicdHandler) GetBuildRun(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	item, err := h.svc.GetBuildRun(c.Request.Context(), projectID, runID)
+	actor, _ := auth.CurrentUserFromContext(c)
+	item, err := h.svc.GetBuildRun(c.Request.Context(), projectID, runID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -393,12 +394,71 @@ func (h *CicdHandler) GetBuildRunLog(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	logText, err := h.svc.GetBuildRunLog(c.Request.Context(), projectID, runID)
+	actor, _ := auth.CurrentUserFromContext(c)
+	logText, err := h.svc.GetBuildRunLog(c.Request.Context(), projectID, runID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
 	response.Success(c, gin.H{"log": logText})
+}
+
+func (h *CicdHandler) ListBuildRunStages(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	runID, err := parseUintParam(c, "runId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	rows, err := h.svc.ListBuildRunStages(c.Request.Context(), projectID, runID, actor)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, rows)
+}
+
+func (h *CicdHandler) ListBuildRunArtifactsMeta(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	runID, err := parseUintParam(c, "runId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	rows, err := h.svc.ListBuildRunArtifactsMeta(c.Request.Context(), projectID, runID, actor)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, rows)
+}
+
+// JenkinsCallback Jenkins 阶段/门禁/制品 HMAC 回调（无登录）。
+func (h *CicdHandler) JenkinsCallback(c *gin.Context) {
+	body, err := cicd.ReadCallbackBody(c)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	sig := c.GetHeader("X-Yunshu-Signature")
+	if sig == "" {
+		sig = c.GetHeader("X-Hub-Signature-256")
+	}
+	if err := h.svc.HandleJenkinsCallbackRaw(c.Request.Context(), body, sig); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
 }
 
 func (h *CicdHandler) DeleteBuildRun(c *gin.Context) {
@@ -492,7 +552,8 @@ func (h *CicdHandler) GetReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	detail, err := h.svc.GetReleaseRunDetail(c.Request.Context(), projectID, runID)
+	actor, _ := auth.CurrentUserFromContext(c)
+	detail, err := h.svc.GetReleaseRunDetail(c.Request.Context(), projectID, runID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -511,7 +572,8 @@ func (h *CicdHandler) GetReleaseRunLog(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	logText, err := h.svc.GetReleaseRunLog(c.Request.Context(), projectID, runID)
+	actor, _ := auth.CurrentUserFromContext(c)
+	logText, err := h.svc.GetReleaseRunLog(c.Request.Context(), projectID, runID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -539,8 +601,8 @@ func (h *CicdHandler) ApproveReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	userID, name := reviewerFromContext(c)
-	run, err := h.svc.ApproveReleaseRun(c.Request.Context(), projectID, runID, userID, name, req.Comment)
+	actor, _ := auth.CurrentUserFromContext(c)
+	run, err := h.svc.ApproveReleaseRun(c.Request.Context(), projectID, runID, actor, req.Comment)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -557,8 +619,8 @@ func (h *CicdHandler) RejectReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	userID, name := reviewerFromContext(c)
-	run, err := h.svc.RejectReleaseRun(c.Request.Context(), projectID, runID, userID, name, req.Comment)
+	actor, _ := auth.CurrentUserFromContext(c)
+	run, err := h.svc.RejectReleaseRun(c.Request.Context(), projectID, runID, actor, req.Comment)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -593,6 +655,16 @@ func (h *CicdHandler) VerifyReleaseRun(c *gin.Context) {
 	response.Success(c, result)
 }
 
+func (h *CicdHandler) PlatformRollbackRelease(c *gin.Context) {
+	projectID, runID, ok := h.releaseRunIDs(c)
+	if !ok {
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req cicd.PlatformRollbackRequest) (map[string]any, error) {
+		return h.svc.PlatformRollbackRelease(ctx, projectID, runID, req)
+	})
+}
+
 func (h *CicdHandler) TerminateReleaseRun(c *gin.Context) {
 	projectID, runID, ok := h.releaseRunIDs(c)
 	if !ok {
@@ -612,17 +684,43 @@ func (h *CicdHandler) TerminateReleaseRun(c *gin.Context) {
 }
 
 func (h *CicdHandler) BatchApproveReleaseRuns(c *gin.Context) {
-	h.batchReleaseAction(c, func(ctx context.Context, projectID uint, req cicd.BatchReleaseIDsRequest, userID *uint, name string) (any, error) {
-		n, err := h.svc.BatchApproveReleaseRuns(ctx, projectID, req.IDs, userID, name, req.Comment)
-		return gin.H{"count": n}, err
-	})
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req cicd.BatchReleaseIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	n, err := h.svc.BatchApproveReleaseRuns(c.Request.Context(), projectID, req.IDs, actor, req.Comment)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"count": n})
 }
 
 func (h *CicdHandler) BatchRejectReleaseRuns(c *gin.Context) {
-	h.batchReleaseAction(c, func(ctx context.Context, projectID uint, req cicd.BatchReleaseIDsRequest, userID *uint, name string) (any, error) {
-		n, err := h.svc.BatchRejectReleaseRuns(ctx, projectID, req.IDs, userID, name, req.Comment)
-		return gin.H{"count": n}, err
-	})
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req cicd.BatchReleaseIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	n, err := h.svc.BatchRejectReleaseRuns(c.Request.Context(), projectID, req.IDs, actor, req.Comment)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"count": n})
 }
 
 func (h *CicdHandler) BatchExecuteReleaseRuns(c *gin.Context) {

@@ -1,0 +1,18 @@
+case_id: CASE-K8S-PENDING-001
+title: Pod Pending 调度失败典型案例
+category: k8s
+technology: kubernetes
+symptom: Pod 长期 Pending，未分配节点
+environment: Kubernetes
+diagnosis: |
+  1. diagnose_pod
+  2. list_events 查找 FailedScheduling
+  3. get_pod_detail 核对 requests/亲和/污点容忍/PVC
+root_cause: 资源不足、污点/亲和不匹配、PVC 未 Bound、或 ResourceQuota 限制
+solution: 调整 requests、扩容节点、修正亲和/污点、修复 PVC；必要时 scale（需审批）
+verification: Pod 被调度且进入 Running
+risk: 盲目降低 requests 可能影响稳定性
+related_tools: '["diagnose_pod","list_events","get_pod_detail","list_deployments"]'
+related_sop: '["sop-k8s-pod-pending"]'
+source: seed
+confidence: 0.88

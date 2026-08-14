@@ -16,6 +16,12 @@ const CicdTodoPage = lazy(() =>
 const CicdApprovalFlowPage = lazy(() =>
   import("../../pages/cicd-approval-flow-page").then((m) => ({ default: m.CicdApprovalFlowPage })),
 );
+const CicdRegistriesPage = lazy(() =>
+  import("../../pages/cicd-registries-page").then((m) => ({ default: m.CicdRegistriesPage })),
+);
+const CicdImageBrowserPage = lazy(() =>
+  import("../../pages/cicd-image-browser-page").then((m) => ({ default: m.CicdImageBrowserPage })),
+);
 
 export const CICD_PLUGIN = "cicd";
 
@@ -25,4 +31,6 @@ export const cicdRoutes: RouteObject[] = [
   { path: "cicd/approval-flow", element: <CicdApprovalFlowPage /> },
   { path: "cicd/build-records", element: <CicdBuildRecordsPage /> },
   { path: "cicd/release-records", element: <CicdReleaseRecordsPage /> },
+  { path: "cicd/registries", element: <CicdRegistriesPage /> },
+  { path: "cicd/image-browser", element: <CicdImageBrowserPage /> },
 ];

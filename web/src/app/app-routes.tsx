@@ -4,10 +4,12 @@ import { Navigate, useLocation, useRoutes, type RouteObject } from "react-router
 import { useAuth } from "../contexts/auth-context";
 import { usePlugins } from "../contexts/plugin-context";
 import { collectModuleRoutes } from "../modules";
-import { DynamicMenuPage } from "../pages/dynamic-menu-page";
 
 const AdminLayout = lazy(() => import("../layouts/admin-layout").then((module) => ({ default: module.AdminLayout })));
 const LoginPage = lazy(() => import("../pages/login-page").then((module) => ({ default: module.LoginPage })));
+const DynamicMenuPage = lazy(() =>
+  import("../pages/dynamic-menu-page").then((module) => ({ default: module.DynamicMenuPage })),
+);
 
 function RouteFallback() {
   return (
@@ -62,7 +64,14 @@ export function AppRoutes() {
   const routes = useMemo((): RouteObject[] => {
     const children: RouteObject[] = [
       ...collectModuleRoutes(isPluginEnabled),
-      { path: "*", element: <DynamicMenuPage /> },
+      {
+        path: "*",
+        element: (
+          <Suspense fallback={<RouteFallback />}>
+            <DynamicMenuPage />
+          </Suspense>
+        ),
+      },
     ];
     return [
       { path: "/login", element: <AuthLayout /> },

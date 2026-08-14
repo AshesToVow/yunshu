@@ -10,6 +10,7 @@ import (
 
 const (
 	defaultAgentIndexPrefix = "yunshu-agent"
+	defaultK8sIndexPrefix   = "yunshu-k8s"
 	maxSearchIndexServers   = 80
 )
 
@@ -243,4 +244,126 @@ func AgentIndexPrefixForServer(serverID uint) string {
 // AgentIndexPrefixForHost 新版前缀 yunshu-agent-10-10-10-5-
 func AgentIndexPrefixForHost(serverHost string) string {
 	return fmt.Sprintf("%s-%s-", defaultAgentIndexPrefix, SanitizeHostForName(serverHost))
+}
+
+func k8sNamePrefix(prefix string) string {
+	p := strings.Trim(strings.TrimSpace(prefix), "-")
+	if p == "" {
+		p = defaultK8sIndexPrefix
+	}
+	return p
+}
+
+// ClusterLoggieAppName 项目隔离的 DaemonSet / SA 名。
+func ClusterLoggieAppName(projectID uint) string {
+	return fmt.Sprintf("yunshu-loggie-p%d", projectID)
+}
+
+// ClusterLoggieConfigMapName 项目隔离的 ConfigMap 名。
+func ClusterLoggieConfigMapName(projectID uint) string {
+	return fmt.Sprintf("yunshu-loggie-config-p%d", projectID)
+}
+
+// K8sIndexSink Loggie ES sink：{prefix}-{clusterId}-p{projectId}-${+YYYY.MM.DD}
+func K8sIndexSink(clusterID, projectID uint, prefix string) string {
+	p := k8sNamePrefix(prefix)
+	if projectID == 0 {
+		return fmt.Sprintf("%s-%d-${+YYYY.MM.DD}", p, clusterID)
+	}
+	return fmt.Sprintf("%s-%d-p%d-${+YYYY.MM.DD}", p, clusterID, projectID)
+}
+
+// K8sIndexForDay 某日索引名（含项目隔离；projectID=0 为旧格式）。
+func K8sIndexForDay(clusterID, projectID uint, day time.Time, prefix string) string {
+	if day.IsZero() {
+		day = time.Now().UTC()
+	}
+	d := day.UTC().Format("2006.01.02")
+	p := k8sNamePrefix(prefix)
+	if projectID == 0 {
+		return fmt.Sprintf("%s-%d-%s", p, clusterID, d)
+	}
+	return fmt.Sprintf("%s-%d-p%d-%s", p, clusterID, projectID, d)
+}
+
+// K8sIndexPattern 单集群检索通配（含各项目分片与旧索引）。
+func K8sIndexPattern(clusterID uint, prefix string) string {
+	return fmt.Sprintf("%s-%d-*", k8sNamePrefix(prefix), clusterID)
+}
+
+// K8sIndexPatternByProject 单集群单项目检索通配。
+func K8sIndexPatternByProject(clusterID, projectID uint, prefix string) string {
+	if projectID == 0 {
+		return K8sIndexPattern(clusterID, prefix)
+	}
+	return fmt.Sprintf("%s-%d-p%d-*", k8sNamePrefix(prefix), clusterID, projectID)
+}
+
+// GlobalK8sIndexPattern 全量 K8s 日志索引通配。
+func GlobalK8sIndexPattern(prefix string) string {
+	return k8sNamePrefix(prefix) + "-*"
+}
+
+// K8sKafkaTopicTemplate Kafka sink topic 模板（含项目隔离）。
+func K8sKafkaTopicTemplate(clusterID, projectID uint, prefix string) string {
+	if projectID == 0 {
+		return fmt.Sprintf("%s-%d-${+YYYY.MM.DD}", k8sNamePrefix(prefix), clusterID)
+	}
+	return fmt.Sprintf("%s-%d-p%d-${+YYYY.MM.DD}", k8sNamePrefix(prefix), clusterID, projectID)
+}
+
+// K8sKafkaTopicForDay 具体某日 Topic。
+func K8sKafkaTopicForDay(clusterID, projectID uint, prefix string, day time.Time) string {
+	if day.IsZero() {
+		day = time.Now().UTC()
+	}
+	d := day.UTC().Format("2006.01.02")
+	if projectID == 0 {
+		return fmt.Sprintf("%s-%d-%s", k8sNamePrefix(prefix), clusterID, d)
+	}
+	return fmt.Sprintf("%s-%d-p%d-%s", k8sNamePrefix(prefix), clusterID, projectID, d)
+}
+
+var (
+	// yunshu-k8s-3-p12-2026.08.11 或 yunshu-k8s-3-2026.08.11 或无日期
+	k8sTopicRestRE = regexp.MustCompile(`^(\d+)(?:-p(\d+))?(?:-(\d{4}\.\d{2}\.\d{2}))?$`)
+)
+
+// IsK8sKafkaTopic 判断是否为集群采集 Topic（含项目隔离与旧格式）。
+func IsK8sKafkaTopic(topic, prefix string) bool {
+	_, _, ok := ParseK8sKafkaTopicMeta(topic, prefix)
+	return ok
+}
+
+// ParseK8sKafkaTopicMeta 从 Topic 解析 cluster_id / project_id（旧 Topic projectID=0）。
+func ParseK8sKafkaTopicMeta(topic, prefix string) (clusterID, projectID uint, ok bool) {
+	p := k8sNamePrefix(prefix)
+	topic = strings.TrimSpace(topic)
+	head := p + "-"
+	if !strings.HasPrefix(topic, head) {
+		return 0, 0, false
+	}
+	rest := strings.TrimPrefix(topic, head)
+	m := k8sTopicRestRE.FindStringSubmatch(rest)
+	if len(m) < 2 {
+		return 0, 0, false
+	}
+	cid, err := strconv.ParseUint(m[1], 10, 64)
+	if err != nil || cid == 0 {
+		return 0, 0, false
+	}
+	if len(m) >= 3 && m[2] != "" {
+		pid, err := strconv.ParseUint(m[2], 10, 64)
+		if err != nil {
+			return 0, 0, false
+		}
+		projectID = uint(pid)
+	}
+	return uint(cid), projectID, true
+}
+
+// ParseClusterIDFromK8sKafkaTopic 从 Topic 解析 cluster_id。
+func ParseClusterIDFromK8sKafkaTopic(topic, prefix string) (uint, bool) {
+	cid, _, ok := ParseK8sKafkaTopicMeta(topic, prefix)
+	return cid, ok
 }

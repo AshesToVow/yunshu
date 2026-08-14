@@ -23,7 +23,7 @@ func TestDefaultPathBindingsCoversCatalogLeaves(t *testing.T) {
 }
 
 func TestUserCanAccessMenuEmptyBindings(t *testing.T) {
-	if !UserCanAccessMenu(nil, 1, nil) {
-		t.Fatal("empty bindings should allow access")
+	if UserCanAccessMenu(nil, 1, nil) {
+		t.Fatal("empty bindings should deny access")
 	}
 }

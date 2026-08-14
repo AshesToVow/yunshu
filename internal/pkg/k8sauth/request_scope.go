@@ -32,3 +32,19 @@ func ClusterIDFromContext(ctx context.Context) uint {
 	}
 	return 0
 }
+
+type skipNSPolicyKey struct{}
+
+// WithSkipNamespacePolicy 平台托管下发（如 yunshu-logging DaemonSet）跳过 NS 白名单校验。
+func WithSkipNamespacePolicy(ctx context.Context) context.Context {
+	return context.WithValue(ctx, skipNSPolicyKey{}, true)
+}
+
+// SkipNamespacePolicy 是否跳过命名空间策略。
+func SkipNamespacePolicy(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, ok := ctx.Value(skipNSPolicyKey{}).(bool)
+	return ok && v
+}

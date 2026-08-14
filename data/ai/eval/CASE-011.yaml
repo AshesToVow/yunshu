@@ -1,0 +1,9 @@
+case_code: CASE-011
+title: 磁盘打满
+suite: default
+input_question: 服务器磁盘快满了怎么先探测一下？
+expect_keywords: '["disk","磁盘","linux"]'
+forbid_keywords: '["已清理完毕","已经删除日志"]'
+expect_tools: '["linux.disk.check"]'
+expect_risk: LOW
+score_weight: 6

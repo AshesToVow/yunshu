@@ -209,6 +209,11 @@ func (s *AlertService) postDirect(ctx context.Context, source, title, severity, 
 }
 
 func (s *AlertService) executeAndLogHTTP(ctx context.Context, source, title, severity, status string, channel *model.AlertChannel, body map[string]interface{}, alertPayload map[string]interface{}, reqBytes []byte, req *http.Request) (int, string, error) {
+	if req != nil && req.URL != nil {
+		if err := assertSafeOutboundURL(req.URL.String()); err != nil {
+			return 0, "", constants.ErrBadRequestWithMsg(err.Error())
+		}
+	}
 	timeout := maxInt(channel.TimeoutMS, s.cfg.DefaultTimeoutMS)
 	client := &http.Client{Timeout: time.Duration(timeout) * time.Millisecond}
 	resp, reqErr := client.Do(req)

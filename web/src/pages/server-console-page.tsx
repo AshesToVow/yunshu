@@ -1,9 +1,19 @@
-import { PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, Space, Tabs, Tag, Typography, message } from "antd";
+import { PlayCircleOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Form, Input, Space, Table, Tabs, Tag, Typography, Upload, message } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { execProjectServerCommand, getProjectServerDetail, type ServerDetailItem } from "../services/projects";
+import {
+  deleteProjectServerFile,
+  downloadProjectServerFile,
+  execProjectServerCommand,
+  getProjectServerDetail,
+  listProjectServerFiles,
+  uploadProjectServerFile,
+  type ServerDetailItem,
+  type ServerRemoteFileItem,
+} from "../services/projects";
 import { getMyServerAccess } from "../services/project-resource-grants";
+import { extractApiErrorMessage } from "../services/http";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
@@ -38,7 +48,13 @@ export function ServerConsolePage() {
   const [result, setResult] = useState<ExecResult | null>(null);
   const [terminalConnected, setTerminalConnected] = useState(false);
   const [terminalConnecting, setTerminalConnecting] = useState(false);
-  const [canExec, setCanExec] = useState(true);
+  const [canExec, setCanExec] = useState(false);
+  const [accessLoaded, setAccessLoaded] = useState(false);
+  const [remotePath, setRemotePath] = useState("/");
+  const [fileList, setFileList] = useState<ServerRemoteFileItem[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [maxTransferMB, setMaxTransferMB] = useState(50);
+  const [uploading, setUploading] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const termBoxRef = useRef<HTMLDivElement | null>(null);
@@ -57,21 +73,24 @@ export function ServerConsolePage() {
 
   async function loadDetail() {
     setLoading(true);
+    setAccessLoaded(false);
+    setCanExec(false);
     try {
       const [data, access] = await Promise.all([
         getProjectServerDetail(projectId, serverId),
-        getMyServerAccess(projectId, serverId).catch(() => ({ can_view: true, can_exec: false, can_manage: false })),
+        getMyServerAccess(projectId, serverId).catch(() => ({ can_view: false, can_exec: false, can_manage: false })),
       ]);
       setServer(data);
       setCanExec(Boolean(access.can_exec || access.can_manage));
     } finally {
+      setAccessLoaded(true);
       setLoading(false);
     }
   }
 
   async function runCommand() {
     if (!validParams) return;
-    if (!canExec) {
+    if (!accessLoaded || !canExec) {
       message.error("仅有查看权限，不能执行命令");
       return;
     }
@@ -93,6 +112,52 @@ export function ServerConsolePage() {
     }
   }
 
+  async function loadFiles(path = remotePath) {
+    if (!validParams || !canExec) return;
+    setFilesLoading(true);
+    try {
+      const res = await listProjectServerFiles(projectId, serverId, path || "/");
+      setFileList(res?.list || []);
+      setRemotePath(res?.path || path || "/");
+      if (res?.max_transfer_mb) setMaxTransferMB(res.max_transfer_mb);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "列出远端文件失败"));
+    } finally {
+      setFilesLoading(false);
+    }
+  }
+
+  function parentPath(p: string) {
+    const clean = (p || "/").replace(/\\/g, "/").replace(/\/+$/, "") || "/";
+    if (clean === "/") return "/";
+    const idx = clean.lastIndexOf("/");
+    return idx <= 0 ? "/" : clean.slice(0, idx) || "/";
+  }
+
+  async function handleDownload(row: ServerRemoteFileItem) {
+    try {
+      const blob = await downloadProjectServerFile(projectId, serverId, row.path);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = row.name || "download.bin";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "下载失败"));
+    }
+  }
+
+  async function handleDelete(row: ServerRemoteFileItem) {
+    try {
+      await deleteProjectServerFile(projectId, serverId, row.path);
+      message.success("已删除");
+      await loadFiles(remotePath);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除失败"));
+    }
+  }
+
   function appendTerminalText(text: string) {
     if (!xtermRef.current) return;
     xtermRef.current.write(text);
@@ -100,7 +165,7 @@ export function ServerConsolePage() {
 
   async function openTerminal() {
     if (!validParams) return;
-    if (!canExec) {
+    if (!accessLoaded || !canExec) {
       message.error("仅有查看权限，不能连接 SSH 终端");
       return;
     }
@@ -299,16 +364,21 @@ export function ServerConsolePage() {
       </Card>
 
       <Card className="table-card" bodyStyle={{ paddingTop: 8 }}>
-        {!canExec ? (
+        {!accessLoaded ? (
+          <Alert type="info" showIcon style={{ marginBottom: 12 }} message="正在校验服务器访问权限…" />
+        ) : !canExec ? (
           <Alert
             type="warning"
             showIcon
             style={{ marginBottom: 12 }}
             message="当前账号对该服务器仅有查看权限"
-            description="交互式终端与单次命令执行需要「SSH/执行」授权。请联系项目 owner/admin 在「项目成员 → 资源授权」中勾选 SSH/执行。"
+            description="交互式终端、单次命令与文件传输需要「SSH/执行」授权。请联系项目 owner/admin 在「项目成员 → 资源授权」中勾选 SSH/执行。"
           />
         ) : null}
         <Tabs
+          onChange={(key) => {
+            if (key === "files" && canExec) void loadFiles(remotePath || "/");
+          }}
           items={[
             {
               key: "terminal",
@@ -319,7 +389,7 @@ export function ServerConsolePage() {
                     <Button
                       type="primary"
                       onClick={openTerminal}
-                      disabled={!canExec || terminalConnected || terminalConnecting}
+                      disabled={!accessLoaded || !canExec || terminalConnected || terminalConnecting}
                       loading={terminalConnecting}
                     >
                       连接终端
@@ -361,7 +431,7 @@ export function ServerConsolePage() {
                         icon={<PlayCircleOutlined />}
                         onClick={() => void runCommand()}
                         loading={running}
-                        disabled={!canExec}
+                        disabled={!accessLoaded || !canExec}
                       >
                         执行
                       </Button>
@@ -388,6 +458,101 @@ export function ServerConsolePage() {
                       <Typography.Text type="secondary">暂无执行结果。</Typography.Text>
                     )}
                   </Card>
+                </Space>
+              ),
+            },
+            {
+              key: "files",
+              label: "文件传输",
+              children: (
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message={`单文件上限 ${maxTransferMB} MB（数据字典 cmdb_max_transfer_file_mb）`}
+                    description="通过 SFTP 浏览/上传/下载/删除；需要服务器 SSH 执行权限。"
+                  />
+                  <Space wrap style={{ width: "100%" }}>
+                    <Input
+                      value={remotePath}
+                      onChange={(e) => setRemotePath(e.target.value)}
+                      onPressEnter={() => void loadFiles(remotePath)}
+                      style={{ minWidth: 320, flex: 1 }}
+                      placeholder="/tmp"
+                      disabled={!canExec}
+                    />
+                    <Button icon={<ReloadOutlined />} onClick={() => void loadFiles(remotePath)} loading={filesLoading} disabled={!canExec}>
+                      刷新
+                    </Button>
+                    <Button onClick={() => void loadFiles(parentPath(remotePath))} disabled={!canExec || remotePath === "/"}>
+                      上级
+                    </Button>
+                    <Upload
+                      showUploadList={false}
+                      disabled={!canExec || uploading}
+                      beforeUpload={async (file) => {
+                        setUploading(true);
+                        try {
+                          await uploadProjectServerFile(projectId, serverId, remotePath || "/", file);
+                          message.success("上传成功");
+                          await loadFiles(remotePath);
+                        } catch (e) {
+                          message.error(extractApiErrorMessage(e, "上传失败"));
+                        } finally {
+                          setUploading(false);
+                        }
+                        return false;
+                      }}
+                    >
+                      <Button type="primary" icon={<UploadOutlined />} loading={uploading} disabled={!canExec}>
+                        上传到当前目录
+                      </Button>
+                    </Upload>
+                  </Space>
+                  <Table
+                    rowKey="path"
+                    size="small"
+                    loading={filesLoading}
+                    dataSource={fileList}
+                    pagination={{ pageSize: 50 }}
+                    columns={[
+                      {
+                        title: "名称",
+                        dataIndex: "name",
+                        render: (_, row) =>
+                          row.is_dir ? (
+                            <Button type="link" style={{ padding: 0 }} onClick={() => void loadFiles(row.path)}>
+                              {row.name}/
+                            </Button>
+                          ) : (
+                            row.name
+                          ),
+                      },
+                      {
+                        title: "大小",
+                        dataIndex: "size",
+                        width: 120,
+                        render: (v, row) => (row.is_dir ? "-" : `${v}`),
+                      },
+                      { title: "权限", dataIndex: "mode", width: 140 },
+                      { title: "修改时间", dataIndex: "mod_time", width: 200 },
+                      {
+                        title: "操作",
+                        width: 160,
+                        render: (_, row) =>
+                          row.is_dir ? null : (
+                            <Space size="small">
+                              <Button type="link" size="small" onClick={() => void handleDownload(row)}>
+                                下载
+                              </Button>
+                              <Button type="link" size="small" danger onClick={() => void handleDelete(row)}>
+                                删除
+                              </Button>
+                            </Space>
+                          ),
+                      },
+                    ]}
+                  />
                 </Space>
               ),
             },

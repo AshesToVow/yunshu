@@ -41,7 +41,10 @@ var (
 	reDeleteStmt = regexp.MustCompile(`(?i)^\s*DELETE\s+FROM\b`)
 	reUpdateStmt = regexp.MustCompile(`(?i)^\s*UPDATE\b`)
 	reHasWhere   = regexp.MustCompile(`(?i)\bWHERE\b`)
-	reRead  = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b`)
+	reReadPrefix = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b`)
+	// 文件导出 / 危险副作用：即使以 SELECT/WITH 开头也不得视为只读。
+	reFileExport = regexp.MustCompile(`(?i)\bINTO\s+(OUTFILE|DUMPFILE)\b`)
+	reWriteInBody = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|RENAME|CALL|LOAD\s+DATA|LOCK\s+TABLES)\b`)
 	// goInception 备份库命名：host(点改下划线)_port_原库名，如 10_10_10_103_3306_test
 	reGoInceptionBackupDB = regexp.MustCompile(`^\d{1,3}(?:_\d{1,3}){3}_\d+_.+`)
 )
@@ -154,13 +157,23 @@ func assessSQLSingle(text string, prodEnv bool) SQLAssessment {
 	if (reDeleteStmt.MatchString(text) || reUpdateStmt.MatchString(text)) && !reHasWhere.MatchString(text) {
 		return SQLAssessment{RiskLevel: model.DbRiskHigh, Ops: ops, Reason: "缺少 WHERE 条件，将影响全表"}
 	}
+	if reFileExport.MatchString(text) {
+		return SQLAssessment{
+			RiskLevel: model.DbRiskBlocked, Ops: ops, Blocked: true,
+			Reason: "禁止 SELECT INTO OUTFILE/DUMPFILE",
+		}
+	}
 	if reDDL.MatchString(text) {
 		return SQLAssessment{RiskLevel: model.DbRiskHigh, Ops: ops}
 	}
 	if reDML.MatchString(text) {
 		return SQLAssessment{RiskLevel: model.DbRiskMedium, Ops: ops}
 	}
-	if reRead.MatchString(text) {
+	if reReadPrefix.MatchString(text) {
+		// WITH/SELECT 前缀不能单独判定为只读：CTE 内可跟 DML/DDL。
+		if reWriteInBody.MatchString(text) {
+			return SQLAssessment{RiskLevel: model.DbRiskHigh, Ops: ops, Reason: "语句含写操作关键字"}
+		}
 		return SQLAssessment{RiskLevel: model.DbRiskLow, Ops: ops}
 	}
 	return SQLAssessment{RiskLevel: model.DbRiskHigh, Ops: ops, Reason: "无法解析，保守视为高危"}
@@ -249,7 +262,7 @@ func enforceLimit(sqlText string, maxRows int) string {
 		// 已有 LIMIT：若数值超过上限则追加子查询包装（简单场景直接截断重写）
 		return rewriteLimitClause(text, maxRows)
 	}
-	if reRead.MatchString(text) {
+	if reReadPrefix.MatchString(text) {
 		return fmt.Sprintf("%s LIMIT %d", text, maxRows)
 	}
 	return text

@@ -196,6 +196,8 @@ type (
 	ServerGrantBulkRequest   = cmdb.ServerGrantBulkRequest
 	BootstrapServerGrantsRequest = cmdb.BootstrapServerGrantsRequest
 	ServerAccessPerm         = cmdb.ServerAccessPerm
+	ServerFileListQuery      = cmdb.ServerFileListQuery
+	ServerFilePathQuery      = cmdb.ServerFilePathQuery
 	LogSourceItem            = project.LogSourceItem
 	LogSourceListQuery       = project.LogSourceListQuery
 	LogSourceUpsertRequest   = project.LogSourceUpsertRequest
@@ -297,6 +299,8 @@ type (
 	K8sAuthMatrixRow           = k8s.K8sAuthMatrixRow
 	K8sUserClusterAuthRow      = k8s.K8sUserClusterAuthRow
 	K8sEventForwardRuleUpsertRequest = eventforward.K8sEventForwardRuleUpsertRequest
+	RolloutUndoRequest         = k8s.RolloutUndoRequest
+	RolloutUndoResult          = k8s.RolloutUndoResult
 )
 
 // --- logplatform ---
@@ -309,6 +313,11 @@ type (
 	KafkaProvider         = logplatform.KafkaProvider
 	KafkaToESService      = logplatform.KafkaToESService
 	LoggieAgentService    = logplatform.LoggieAgentService
+	ClusterLogService     = logplatform.ClusterLogService
+	ClusterLogRuleUpsert  = logplatform.ClusterLogRuleUpsert
+	ClusterLogRuleItem    = logplatform.ClusterLogRuleItem
+	ClusterPipelinesPreview = logplatform.ClusterPipelinesPreview
+	ClusterPipelinesUpsert  = logplatform.ClusterPipelinesUpsert
 	LogRetentionItem      = logplatform.LogRetentionItem
 	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
 	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult
@@ -324,6 +333,7 @@ var (
 	NewKafkaProvider         = logplatform.NewKafkaProvider
 	NewKafkaToESService      = logplatform.NewKafkaToESService
 	NewLoggieAgentService    = logplatform.NewLoggieAgentService
+	NewClusterLogService     = logplatform.NewClusterLogService
 	RunLogRetentionScheduler = logplatform.RunLogRetentionScheduler
 )
 

@@ -7,9 +7,11 @@ import {
   PlusOutlined,
   StopOutlined,
   TagsOutlined,
+  ExportOutlined,
 } from "@ant-design/icons";
 import {
   Button,
+  Checkbox,
   Divider,
   Form,
   Input,
@@ -27,7 +29,16 @@ import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
-import { getNodeDetail, listNodes, replaceNodeTaints, setNodeSchedulability, type NodeTaintInput } from "../services/nodes";
+import { useWorkloadProgressOptional } from "../contexts/workload-progress-context";
+import {
+  drainNode,
+  getNodeDetail,
+  listNodes,
+  replaceNodeTaints,
+  setNodeSchedulability,
+  type NodeDrainResult,
+  type NodeTaintInput,
+} from "../services/nodes";
 
 const TAINT_EFFECT_OPTIONS = [
   { value: "NoSchedule", label: "NoSchedule（不调度新 Pod）" },
@@ -85,6 +96,7 @@ type Detail = {
 };
 
 export function NodesPage() {
+  const progress = useWorkloadProgressOptional();
   const { renderKVIcon, viewer } = useKeyValueViewer({
     width: 760,
     compact: true,
@@ -99,6 +111,14 @@ export function NodesPage() {
   const [taintClusterId, setTaintClusterId] = useState(0);
   const [taintRows, setTaintRows] = useState<TaintRow[]>([]);
   const [taintReload, setTaintReload] = useState<(() => void) | null>(null);
+
+  const [drainOpen, setDrainOpen] = useState(false);
+  const [drainSaving, setDrainSaving] = useState(false);
+  const [drainClusterId, setDrainClusterId] = useState(0);
+  const [drainNodeName, setDrainNodeName] = useState("");
+  const [drainForce, setDrainForce] = useState(false);
+  const [drainPreview, setDrainPreview] = useState<NodeDrainResult | null>(null);
+  const [drainReload, setDrainReload] = useState<(() => void) | null>(null);
 
   function openTaintEditor(clusterId: number, record: Item, reload: () => void) {
     setTaintClusterId(clusterId);
@@ -138,6 +158,44 @@ export function NodesPage() {
       taintReload?.();
     } finally {
       setTaintSaving(false);
+    }
+  }
+
+  function openDrain(clusterId: number, record: Item, reload: () => void) {
+    setDrainClusterId(clusterId);
+    setDrainNodeName(record.name);
+    setDrainForce(false);
+    setDrainPreview(null);
+    setDrainReload(() => reload);
+    setDrainOpen(true);
+    void (async () => {
+      try {
+        const preview = await drainNode(clusterId, record.name, { dry_run: true, force: false });
+        setDrainPreview(preview);
+      } catch {
+        /* toasted */
+      }
+    })();
+  }
+
+  async function runDrain() {
+    setDrainSaving(true);
+    try {
+      const result = await drainNode(drainClusterId, drainNodeName, {
+        dry_run: false,
+        force: drainForce,
+      });
+      message.success(result.message || "Drain 已执行");
+      setDrainOpen(false);
+      progress?.track({
+        kind: "NodeDrain",
+        clusterId: drainClusterId,
+        name: drainNodeName,
+        title: `Drain ${drainNodeName}`,
+      });
+      drainReload?.();
+    } finally {
+      setDrainSaving(false);
     }
   }
 
@@ -230,7 +288,7 @@ export function NodesPage() {
         description="集群节点状态、资源用量、污点与调度策略"
         needNamespace={false}
         disableMutations
-        actionColumnWidth={380}
+        actionColumnWidth={440}
         columns={columns}
         api={{
           list: async ({ clusterId, keyword }) => await listNodes(clusterId, keyword),
@@ -278,6 +336,9 @@ export function NodesPage() {
                 </Button>
               </Popconfirm>
             )}
+            <Button type="link" size="small" danger icon={<ExportOutlined />} onClick={() => openDrain(clusterId, record, reload)}>
+              Drain
+            </Button>
           </Space>
         )}
         detailExtra={(d) => (
@@ -461,6 +522,51 @@ export function NodesPage() {
             ]}
           />
         </Space>
+      </Modal>
+
+      <Modal
+        title={`Drain 节点 — ${drainNodeName || "-"}`}
+        open={drainOpen}
+        onCancel={() => setDrainOpen(false)}
+        onOk={() => void runDrain()}
+        okText="执行 Drain"
+        okButtonProps={{ danger: true }}
+        confirmLoading={drainSaving}
+        width={720}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary">
+          将先 <strong>Cordon</strong> 禁止调度，再按 Eviction API 驱逐可迁移 Pod（默认跳过 DaemonSet）。完成后请在右下角进度浮窗观察剩余 Pod。
+        </Typography.Paragraph>
+        <Checkbox checked={drainForce} onChange={(e) => setDrainForce(e.target.checked)} style={{ marginBottom: 12 }}>
+          force：同时驱逐无控制器的裸 Pod
+        </Checkbox>
+        {drainPreview ? (
+          <>
+            <Typography.Text type="secondary">{drainPreview.message}</Typography.Text>
+            <Table
+              size="small"
+              style={{ marginTop: 8 }}
+              pagination={{ pageSize: 8 }}
+              rowKey={(r) => `${r.namespace}/${r.name}`}
+              dataSource={drainPreview.pods || []}
+              columns={[
+                { title: "命名空间", dataIndex: "namespace", width: 140 },
+                { title: "Pod", dataIndex: "name", ellipsis: true },
+                { title: "控制器", dataIndex: "owner_kind", width: 110, render: (v?: string) => v || "—" },
+                {
+                  title: "预览",
+                  dataIndex: "action",
+                  width: 100,
+                  render: (a: string, row) =>
+                    a === "pending" ? <Tag color="orange">将驱逐</Tag> : <Tag>{row.reason || a}</Tag>,
+                },
+              ]}
+            />
+          </>
+        ) : (
+          <Typography.Text type="secondary">正在预览将驱逐的 Pod…</Typography.Text>
+        )}
       </Modal>
     </>
   );

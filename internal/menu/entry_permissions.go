@@ -102,6 +102,14 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/cicd/approval-flow":   {"/api/v1/projects/:id/cicd/approval-flow", "GET"},
 		"/cicd/build-records":   {"/api/v1/projects/:id/cicd/build-runs", "GET"},
 		"/cicd/release-records": {"/api/v1/projects/:id/cicd/release-runs", "GET"},
+		"/cicd/registries":      {"/api/v1/registries", "GET"},
+		"/cicd/image-browser":   {"/api/v1/registries", "GET"},
+
+		"/ai/approvals": {"/api/v1/ai/approvals", "GET"},
+
+		"/esmgmt/connections": {"/api/v1/esmgmt/connections", "GET"},
+		"/esmgmt/overview":    {"/api/v1/esmgmt/cluster/health", "GET"},
+		"/esmgmt/console":     {"/api/v1/esmgmt/proxy", "POST"},
 
 		"/crds": {"/api/v1/crds", "GET"},
 		"/crs":  {"/api/v1/crs", "GET"},
@@ -115,6 +123,14 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	out["/project-services"] = []EntryPermission{
 		{Resource: "/api/v1/projects/:id/services", Action: "GET"},
 		{Resource: "/api/v1/projects/:id/log-sources", Action: "GET"},
+	}
+	// AI 助手：对话 + 会话列表任一权限可进入
+	out["/ai/assistant"] = []EntryPermission{
+		{Resource: "/api/v1/ai/chat", Action: "POST"},
+		{Resource: "/api/v1/ai/sessions", Action: "GET"},
+	}
+	out["/ai/center"] = []EntryPermission{
+		{Resource: "/api/v1/ai/center/overview", Action: "GET"},
 	}
 	return out
 }

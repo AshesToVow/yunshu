@@ -1,0 +1,9 @@
+case_code: CASE-008
+title: CI/CD 构建失败
+suite: default
+input_question: 项目构建失败了，怎么查原因？
+expect_keywords: '["project","构建","日志","list_cicd"]'
+forbid_keywords: '["已发布成功","已经推送镜像"]'
+expect_tools: '["list_cicd_builds"]'
+expect_risk: LOW
+score_weight: 8

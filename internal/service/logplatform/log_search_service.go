@@ -25,18 +25,23 @@ func NewLogSearchService(es *ElasticsearchProvider, serverRepo interfaces.Server
 }
 
 type LogSearchQuery struct {
-	ProjectID   uint   `form:"project_id"`
-	ServerID    *uint  `form:"server_id"`
-	ServiceID   *uint  `form:"service_id"`
-	LogSourceID *uint  `form:"log_source_id"`
-	ServiceName string `form:"service_name"`
-	Keyword     string `form:"keyword"`
-	Level       string `form:"level"`
-	FilePath    string `form:"file_path"`
-	From        string `form:"from"`
-	To          string `form:"to"`
-	Page        int    `form:"page"`
-	PageSize    int    `form:"page_size"`
+	ProjectID     uint   `form:"project_id"`
+	ServerID      *uint  `form:"server_id"`
+	ServiceID     *uint  `form:"service_id"`
+	LogSourceID   *uint  `form:"log_source_id"`
+	ServiceName   string `form:"service_name"`
+	CollectorMode string `form:"collector_mode"` // host|k8s|空=全部
+	ClusterID     *uint  `form:"cluster_id"`
+	Namespace     string `form:"namespace"`
+	Pod           string `form:"pod"`
+	Container     string `form:"container"`
+	Keyword       string `form:"keyword"`
+	Level         string `form:"level"`
+	FilePath      string `form:"file_path"`
+	From          string `form:"from"`
+	To            string `form:"to"`
+	Page          int    `form:"page"`
+	PageSize      int    `form:"page_size"`
 }
 
 type LogSearchItem struct {
@@ -51,6 +56,8 @@ type LogSearchItem struct {
 	ServiceName   string `json:"service_name,omitempty"`
 	ServerHost    string `json:"server_host,omitempty"`
 	Host          string `json:"host,omitempty"`
+	CollectorMode string `json:"collector_mode,omitempty"`
+	ClusterID     uint   `json:"cluster_id,omitempty"`
 	Namespace     string `json:"namespace,omitempty"`
 	Pod           string `json:"pod,omitempty"`
 	PodName       string `json:"podname,omitempty"`
@@ -100,6 +107,25 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 	if sn := strings.TrimSpace(q.ServiceName); sn != "" {
 		filters = append(filters, termIDFilter("service_name", sn))
 	}
+	if q.ClusterID != nil && *q.ClusterID > 0 {
+		filters = append(filters, termIDFilter("cluster_id", strconv.FormatUint(uint64(*q.ClusterID), 10)))
+	}
+	// collector_mode：k8s 精确匹配；host 兼容未热更旧文档（字段缺失）
+	switch normalizeCollectorMode(q.CollectorMode) {
+	case "k8s":
+		filters = append(filters, termIDFilter("collector_mode", "k8s"))
+	case "host":
+		filters = append(filters, hostCollectorModeFilter())
+	}
+	if ns := strings.TrimSpace(q.Namespace); ns != "" {
+		filters = append(filters, termIDFilter("namespace", ns))
+	}
+	if pod := strings.TrimSpace(q.Pod); pod != "" {
+		filters = append(filters, multiFieldTermFilter([]string{"podname", "pod"}, pod))
+	}
+	if ct := strings.TrimSpace(q.Container); ct != "" {
+		filters = append(filters, multiFieldTermFilter([]string{"containername", "container"}, ct))
+	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		must = append(must, map[string]any{
 			"simple_query_string": map[string]any{
@@ -148,6 +174,73 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 }
 
 func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery) string {
+	k8sPrefix := ""
+	if s.es != nil {
+		if cfg, err := s.es.Resolve(ctx); err == nil {
+			k8sPrefix = cfg.K8sIndexPrefix
+		}
+	}
+	mode := normalizeCollectorMode(q.CollectorMode)
+	if q.ClusterID != nil && *q.ClusterID > 0 && mode == "" {
+		mode = "k8s"
+	}
+	switch mode {
+	case "k8s":
+		if q.ClusterID != nil && *q.ClusterID > 0 {
+			return K8sIndexPattern(*q.ClusterID, k8sPrefix)
+		}
+		return GlobalK8sIndexPattern(k8sPrefix)
+	case "host":
+		return s.resolveHostIndices(ctx, q)
+	default:
+		host := s.resolveHostIndices(ctx, q)
+		k8s := GlobalK8sIndexPattern(k8sPrefix)
+		if strings.TrimSpace(host) == "" {
+			return k8s
+		}
+		return host + "," + k8s
+	}
+}
+
+func normalizeCollectorMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "k8s", "cluster", "kubernetes":
+		return "k8s"
+	case "host", "agent":
+		return "host"
+	default:
+		return ""
+	}
+}
+
+// hostCollectorModeFilter 匹配 collector_mode=host，或尚未热更、字段缺失的旧主机文档。
+func hostCollectorModeFilter() map[string]any {
+	return map[string]any{
+		"bool": map[string]any{
+			"should": []map[string]any{
+				termIDFilter("collector_mode", "host"),
+				{
+					"bool": map[string]any{
+						"must_not": []map[string]any{
+							{
+								"bool": map[string]any{
+									"should": []map[string]any{
+										{"exists": map[string]any{"field": "collector_mode"}},
+										{"exists": map[string]any{"field": "fields.collector_mode"}},
+									},
+									"minimum_should_match": 1,
+								},
+							},
+						},
+					},
+				},
+			},
+			"minimum_should_match": 1,
+		},
+	}
+}
+
+func (s *LogSearchService) resolveHostIndices(ctx context.Context, q LogSearchQuery) string {
 	if q.ServerID != nil && *q.ServerID > 0 {
 		if s.serverRepo != nil {
 			if sv, err := s.serverRepo.GetByID(ctx, *q.ServerID); err == nil && sv != nil && strings.TrimSpace(sv.Host) != "" {
@@ -179,6 +272,36 @@ func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery)
 		return ResolveSearchIndicesByHosts(hosts, ids)
 	}
 	return ResolveSearchIndices(nil, ids)
+}
+
+// multiFieldTermFilter 在多个字段上做 term 兼容（含 fields.* 嵌套）。
+func multiFieldTermFilter(fields []string, value string) map[string]any {
+	value = strings.TrimSpace(value)
+	if value == "" || len(fields) == 0 {
+		return map[string]any{"match_all": map[string]any{}}
+	}
+	should := make([]map[string]any, 0, len(fields)*8)
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		for _, path := range []string{field, "fields." + field} {
+			should = append(should,
+				map[string]any{"term": map[string]any{path + ".keyword": value}},
+				map[string]any{"term": map[string]any{path: value}},
+			)
+			if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+				should = append(should, map[string]any{"term": map[string]any{path: n}})
+			}
+		}
+	}
+	return map[string]any{
+		"bool": map[string]any{
+			"should":               should,
+			"minimum_should_match": 1,
+		},
+	}
 }
 
 func (s *LogSearchService) Export(ctx context.Context, q LogSearchQuery) (string, error) {
@@ -387,6 +510,7 @@ func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 		Level:         pickLevel(src),
 		FilePath:      pickFilePath(src),
 		Host:          pickString(src, "host", "hostname", "node"),
+		CollectorMode: pickString(src, "collector_mode"),
 		Namespace:     pickString(src, "namespace", "k8s.namespace"),
 		Pod:           pickString(src, "pod", "pod_name", "podname", "kubernetes.pod.name"),
 		PodName:       pickString(src, "podname", "pod", "pod_name"),
@@ -399,6 +523,9 @@ func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 		item.Level = extractLevelFromMessage(item.Message)
 	}
 	if meta != nil {
+		if item.CollectorMode == "" {
+			item.CollectorMode = pickString(meta, "collector_mode")
+		}
 		if item.Namespace == "" {
 			item.Namespace = pickString(meta, "namespace")
 		}
@@ -443,6 +570,10 @@ func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 	if item.ServerID == 0 {
 		item.ServerID = pickUintMap(meta, "server_id")
 	}
+	item.ClusterID = pickUint(src, "cluster_id")
+	if item.ClusterID == 0 {
+		item.ClusterID = pickUintMap(meta, "cluster_id")
+	}
 	item.ServiceID = pickUint(src, "service_id")
 	if item.ServiceID == 0 {
 		item.ServiceID = pickUintMap(meta, "service_id")
@@ -477,11 +608,23 @@ func pickUintMap(src map[string]any, key string) uint {
 
 func pickMessage(src map[string]any, fields []string) string {
 	for _, f := range fields {
-		if v := pickString(src, f); v != "" {
+		if v := anyToLogString(src[f]); v != "" {
 			return v
 		}
 	}
-	return pickString(src, "message", "body", "log")
+	for _, key := range []string{"message", "body", "log", "msg", "content"} {
+		if v := anyToLogString(src[key]); v != "" {
+			return v
+		}
+	}
+	if meta := nestedFields(src); meta != nil {
+		for _, key := range []string{"message", "body", "log", "msg"} {
+			if v := anyToLogString(meta[key]); v != "" {
+				return v
+			}
+		}
+	}
+	return ""
 }
 
 func pickString(src map[string]any, keys ...string) string {
@@ -489,7 +632,8 @@ func pickString(src map[string]any, keys ...string) string {
 		if v, ok := src[k]; ok {
 			switch t := v.(type) {
 			case string:
-				if strings.TrimSpace(t) != "" {
+				s := strings.TrimSpace(t)
+				if s != "" && s != "<nil>" {
 					return t
 				}
 			case float64:

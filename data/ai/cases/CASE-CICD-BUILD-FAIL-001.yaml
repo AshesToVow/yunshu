@@ -1,0 +1,19 @@
+case_id: CASE-CICD-BUILD-FAIL-001
+title: CI/CD 构建失败典型案例
+category: cicd
+technology: jenkins
+symptom: 流水线构建失败，制品未产出或镜像未推送
+environment: Yunshu CI/CD
+diagnosis: |
+  1. 确认 project_id
+  2. list_cicd_builds 定位失败 run
+  3. get_cicd_build 看阶段
+  4. get_cicd_build_log 抓取首个 ERROR
+root_cause: 编译错误、测试失败、Harbor 推送失败或回调超时
+solution: 按日志修复代码/依赖/凭证；重跑构建；勿编造控制台内容
+verification: 同分支构建成功，制品可查
+risk: 生产发布流水线失败需与变更窗口对齐
+related_tools: '["list_cicd_builds","get_cicd_build","get_cicd_build_log"]'
+related_sop: '["sop-cicd-build-fail"]'
+source: seed
+confidence: 0.9

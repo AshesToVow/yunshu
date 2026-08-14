@@ -189,6 +189,28 @@ func fillAlertEventDatasourceFromPayload(ev *model.AlertEvent, payload map[strin
 	if s := strings.TrimSpace(fmt.Sprintf("%v", payload["datasourceType"])); s != "" && s != "<nil>" {
 		ev.DatasourceType = truncateText(s, 32)
 	}
+	if ev.ProjectID == 0 {
+		if id := payloadUintAny(payload["project_id"]); id > 0 {
+			ev.ProjectID = id
+		} else if id := payloadUintAny(payload["projectId"]); id > 0 {
+			ev.ProjectID = id
+		} else if labels, ok := payload["labels"].(map[string]interface{}); ok {
+			if id := payloadUintAny(labels["project_id"]); id > 0 {
+				ev.ProjectID = id
+			}
+		} else if labels, ok := payload["labels"].(map[string]string); ok {
+			if id := parseLabelUintOrZero(labels["project_id"]); id > 0 {
+				ev.ProjectID = id
+			}
+		}
+		if ev.ProjectID == 0 {
+			if cloud, ok := payload["cloud"].(map[string]interface{}); ok {
+				if id := payloadUintAny(cloud["project_id"]); id > 0 {
+					ev.ProjectID = id
+				}
+			}
+		}
+	}
 	fillAlertEventFingerprintFromPayload(ev, payload)
 }
 
@@ -322,6 +344,7 @@ type AlertHistoryStats struct {
 }
 
 func (s *AlertService) HistoryStats(ctx context.Context, projectID uint) (*AlertHistoryStats, error) {
+	s.ensureAlertEventProjectBackfill(ctx)
 	now := time.Now()
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	dayEnd := dayStart.Add(24 * time.Hour)

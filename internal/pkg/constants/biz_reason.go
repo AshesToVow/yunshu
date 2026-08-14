@@ -50,7 +50,7 @@ var bizReasonByCode = map[int]string{
 	22001: "AlertSilenceNotFound",
 	22002: "AlertWebhookTokenInvalid",
 	23001: "ProjectNotFound",
-	23002: "LogSourceServerNotFound",
+	23002: "ServerNotFound",
 	23003: "ServerNotInCurrentProject",
 	23004: "ServerProjectMismatch",
 	23005: "ProjectIDRequired",

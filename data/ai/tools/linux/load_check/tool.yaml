@@ -1,0 +1,14 @@
+name: linux.load.check
+description: 只读探测本机负载与 CPU 核数（脚本工具，Python2.7+/3）
+runtime: script
+script_lang: python27
+entry: run.py
+module: linux
+permission: READ_ONLY
+risk_level: LOW
+timeout_sec: 10
+require_confirmation: false
+input_schema:
+  type: object
+  properties: {}
+  required: []

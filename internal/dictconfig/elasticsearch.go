@@ -18,6 +18,7 @@ type ElasticsearchDictTypes struct {
 	Username             string
 	Password             string
 	IndexPattern         string
+	K8sIndexPrefix       string
 	DefaultRetentionDays string
 	CleanupCronSpec      string
 }
@@ -29,6 +30,7 @@ func DefaultElasticsearchDictTypes() ElasticsearchDictTypes {
 		Username:             "elasticsearch_username",
 		Password:             "elasticsearch_password",
 		IndexPattern:         "elasticsearch_index_pattern",
+		K8sIndexPrefix:       "elasticsearch_k8s_index_prefix",
 		DefaultRetentionDays: "elasticsearch_default_retention_days",
 		CleanupCronSpec:      "elasticsearch_cleanup_cron_spec",
 	}
@@ -58,6 +60,9 @@ func ResolveElasticsearchConfig(ctx context.Context, db *gorm.DB, base config.El
 	}
 	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.IndexPattern); ok {
 		out.IndexPattern = strings.TrimSpace(v)
+	}
+	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.K8sIndexPrefix); ok {
+		out.K8sIndexPrefix = strings.TrimSpace(v)
 	}
 	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.DefaultRetentionDays); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {

@@ -66,16 +66,16 @@ func normalizeMenuPath(path string) string {
 	return p
 }
 
-// UserCanAccessMenu 判断用户是否具备菜单入口权限（bindings 为空则放行以兼容旧数据）。
+// UserCanAccessMenu 判断用户是否具备菜单入口权限（无绑定则拒绝，避免未配置入口的叶子菜单对全员开放）。
 func UserCanAccessMenu(enforcer *casbin.SyncedEnforcer, userID uint, bindings []EntryPermission) bool {
 	if len(bindings) == 0 {
-		return true
+		return false
 	}
 	subject := fmt.Sprintf("user:%d", userID)
 	for _, b := range bindings {
 		allowed, err := enforcer.Enforce(subject, b.Resource, strings.ToUpper(b.Action))
 		if err != nil {
-			continue
+			return false
 		}
 		if allowed {
 			return true
@@ -112,15 +112,15 @@ func FilterMenusByAccess(items []model.Menu, enforcer *casbin.SyncedEnforcer, us
 	return walk(items)
 }
 
-// RoleCanAccessMenu 判断角色是否具备菜单入口权限。
+// RoleCanAccessMenu 判断角色是否具备菜单入口权限（无绑定则拒绝）。
 func RoleCanAccessMenu(enforcer *casbin.SyncedEnforcer, roleCode string, bindings []EntryPermission) bool {
 	if len(bindings) == 0 {
-		return true
+		return false
 	}
 	for _, b := range bindings {
 		allowed, err := enforcer.Enforce(roleCode, b.Resource, strings.ToUpper(b.Action))
 		if err != nil {
-			continue
+			return false
 		}
 		if allowed {
 			return true

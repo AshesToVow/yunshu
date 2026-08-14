@@ -15,6 +15,27 @@ plugins:
     - cicd
     - dbmgmt
     - inspect
+    - ai
+    - esmgmt
+
+# AI（字典 ai_* 优先覆盖）
+ai:
+  enabled: false
+  default_provider: openai_compat
+  timeout_sec: 60
+  max_tokens: 2048
+  openai:
+    base_url: "https://api.openai.com/v1"
+    api_key: ""
+    model: "gpt-4o-mini"
+  deepseek:
+    base_url: "https://api.deepseek.com/v1"
+    api_key: ""
+    model: "deepseek-chat"
+  anthropic:
+    base_url: "https://api.anthropic.com"
+    api_key: ""
+    model: "claude-sonnet-4-20250514"
 
 # 数据库管理（字典 dbmgmt_* 可覆盖）
 dbmgmt:
@@ -69,6 +90,15 @@ cicd:
   approval_sla_hours: 24
   # 审批提醒间隔时间
   approval_reminder_interval_hours: 4
+  # SonarQube（优先用数据字典 cicd_sonar_* 开关控制）
+  sonar:
+    enabled: false
+    url: ""
+    token: ""
+    gate_block: true
+  callback:
+    hmac_secret: ""
+    callback_url: ""
 
 http:
   read_header_timeout_seconds: 5
@@ -127,7 +157,7 @@ redis:
 #   use_tls: true
 
 auth:
-  jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"  # 生产环境务必修改，至少32字节
+  jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"  # 生产环境务必修改，至少32字节；勿使用仓库默认值上线
   access_token_ttl_minutes: 120
   email_code_ttl_seconds: 600
   email_code_cooldown_seconds: 60
@@ -138,11 +168,12 @@ casbin:
   auto_load_interval_seconds: 30
 
 swagger:
-  enabled: true
+  enabled: false
   path: /swagger
 
 security:
   # 32 bytes key for encrypting sensitive data (base64 recommended)
+  # 生产环境必须替换；占位值仅用于本地开发
   encryption_key: "change-me-32bytes-base64"
 
 # 日志检索（Loggie 采集 → Elasticsearch，Yunshu 代理查询）

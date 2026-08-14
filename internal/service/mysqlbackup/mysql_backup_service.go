@@ -124,8 +124,10 @@ type MysqlBackupInstanceItem struct {
 	NotifyEnabled      bool     `json:"notify_enabled"`
 	NotifyUserIDs      []uint   `json:"notify_user_ids"`
 	NotifyUsers        []MysqlBackupNotifyUserItem `json:"notify_users,omitempty"`
-	CreatedAt          string   `json:"created_at,omitempty"`
-	UpdatedAt          string   `json:"updated_at,omitempty"`
+	// HasMysqlPassword 是否已保存加密密码（不回显明文；编辑表单据此提示「已配置」）。
+	HasMysqlPassword bool   `json:"has_mysql_password"`
+	CreatedAt        string `json:"created_at,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty"`
 }
 
 type MysqlBackupInstanceUpsertRequest struct {
@@ -345,18 +347,21 @@ func (s *MysqlBackupService) UpsertInstance(ctx context.Context, id uint, req My
 		}
 	}
 
+	passwordTouched := false
 	if pw := strings.TrimSpace(req.MysqlPassword); pw != "" {
 		enc, err := cryptox.EncryptString(s.aead, pw)
 		if err != nil {
 			return nil, bizerrors.Pass(ctx, "mysql.backup", "UpsertInstance", err)
 		}
 		inst.EncPassword = enc
+		passwordTouched = true
 	} else if id == 0 {
 		return nil, constants.ErrBadRequestWithMsg("新建实例须填写 mysql_password")
 	}
 
 	if id > 0 {
-		if err := s.backupRepo.UpdateInstance(ctx, inst); err != nil {
+		// 未提交新密码时禁止 Save 覆盖 EncPassword（避免表单空串/零值把库中密文清空）。
+		if err := s.backupRepo.UpdateInstance(ctx, inst, passwordTouched); err != nil {
 			return nil, bizerrors.Pass(ctx, "mysql.backup", "UpsertInstance", err)
 		}
 	} else {
@@ -1007,12 +1012,12 @@ func (s *MysqlBackupService) loadInstanceSecrets(ctx context.Context, projectID,
 		}
 		return nil, "", bizerrors.Pass(ctx, "mysql.backup", "loadInstanceSecrets", err)
 	}
-	if inst.EncPassword == "" {
-		return nil, "", constants.ErrBadRequestWithMsg("未配置 MySQL 密码")
+	if strings.TrimSpace(inst.EncPassword) == "" {
+		return nil, "", constants.ErrBadRequestWithMsg("未配置 MySQL 密码，请编辑实例并保存密码后再试")
 	}
 	pw, err := cryptox.DecryptString(s.aead, inst.EncPassword)
 	if err != nil {
-		return nil, "", bizerrors.Pass(ctx, "mysql.backup", "loadInstanceSecrets", err)
+		return nil, "", constants.ErrBadRequestWithMsg("MySQL 密码解密失败，请重新编辑实例并填写密码后保存")
 	}
 	return inst, pw, nil
 }
@@ -1047,7 +1052,8 @@ func (s *MysqlBackupService) toInstanceItem(ctx context.Context, inst model.Mysq
 		MysqldumpExtraArgs: inst.MysqldumpExtraArgs, MysqldumpBin: inst.MysqldumpBin,
 		XtrabackupTool: inst.XtrabackupTool, XtrabackupBin: inst.XtrabackupBin, InnobackupexBin: inst.InnobackupexBin,
 		ScheduleEnabled: inst.ScheduleEnabled, CronSpec: inst.CronSpec,
-		NotifyEnabled: inst.NotifyEnabled,
+		NotifyEnabled:    inst.NotifyEnabled,
+		HasMysqlPassword: strings.TrimSpace(inst.EncPassword) != "",
 	}
 	notifyIDs := parseNotifyUserIDs(inst.NotifyUserIDs)
 	item.NotifyUserIDs = notifyIDs

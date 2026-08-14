@@ -16,6 +16,7 @@ import {
   type ServerItem,
   type ServiceItem,
 } from "../services/projects";
+import { getClusters, type ClusterItem } from "../services/clusters";
 import { formatDateTime } from "../utils/format";
 
 type SearchForm = {
@@ -23,6 +24,11 @@ type SearchForm = {
   server_id?: number;
   service_id?: number;
   log_source_id?: number;
+  collector_mode?: string;
+  cluster_id?: number;
+  namespace?: string;
+  pod?: string;
+  container?: string;
   keyword?: string;
   level?: string;
   file_path?: string;
@@ -36,6 +42,7 @@ export function ProjectLogsPage() {
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [sources, setSources] = useState<LogSourceItem[]>([]);
+  const [clusters, setClusters] = useState<ClusterItem[]>([]);
   const [rows, setRows] = useState<LogSearchItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -43,6 +50,7 @@ export function ProjectLogsPage() {
   const [form] = Form.useForm<SearchForm>();
   const watchProjectId = Form.useWatch("project_id", form);
   const watchServerId = Form.useWatch("server_id", form);
+  const watchCollectorMode = Form.useWatch("collector_mode", form);
 
   const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
   const serverOptions = useMemo(
@@ -51,6 +59,7 @@ export function ProjectLogsPage() {
   );
   const serviceOptions = useMemo(() => services.map((s) => ({ value: s.id, label: s.name })), [services]);
   const sourceOptions = useMemo(() => sources.map((s) => ({ value: s.id, label: `${s.log_type}:${s.path}` })), [sources]);
+  const clusterOptions = useMemo(() => clusters.map((c) => ({ value: c.id, label: c.name })), [clusters]);
 
   const reloadServers = useCallback(async (projectId?: number) => {
     if (!projectId) return;
@@ -90,6 +99,11 @@ export function ProjectLogsPage() {
           server_id: values.server_id,
           service_id: values.service_id,
           log_source_id: values.log_source_id,
+          collector_mode: values.collector_mode || undefined,
+          cluster_id: values.cluster_id,
+          namespace: values.namespace?.trim() || undefined,
+          pod: values.pod?.trim() || undefined,
+          container: values.container?.trim() || undefined,
           keyword: values.keyword?.trim() || undefined,
           level: values.level?.trim() || undefined,
           file_path: filePath,
@@ -105,12 +119,14 @@ export function ProjectLogsPage() {
           setEmptyHint(
             `按文件名「${filePath}」无命中。请确认 Agent「热更」后已写入 file_path，或清空文件名筛选项/扩大时间范围。`,
           );
+        } else if ((res.total ?? 0) === 0 && values.cluster_id) {
+          message.warning(`无结果：将检索索引 yunshu-k8s-${values.cluster_id}-*，可确认 DaemonSet 已写入或清空集群筛选`);
         } else if ((res.total ?? 0) === 0 && values.server_id) {
           message.warning(`无结果：将检索索引 yunshu-agent-${values.server_id}-*，可确认 Agent 已写入或清空服务器筛选`);
         } else if ((res.total ?? 0) === 0 && range?.[0] && range?.[1]) {
           message.warning("无结果：若 ES 文档缺少 @timestamp，请先清空时间范围后再查");
         } else if ((res.total ?? 0) === 0 && !range?.[0] && !range?.[1]) {
-          setEmptyHint("未选时间范围且无数据。确认 Agent 已在采集并写入 yunshu-agent-{server_id}-日 索引。");
+          setEmptyHint("未选时间范围且无数据。确认主机 Agent 或集群 DaemonSet 已写入对应索引。");
         }
       } catch (e: unknown) {
         message.error(String((e as Error)?.message ?? e));
@@ -123,8 +139,12 @@ export function ProjectLogsPage() {
 
   useEffect(() => {
     void (async () => {
-      const data = await getProjects({ page: 1, page_size: 1000 });
+      const [data, clusterRes] = await Promise.all([
+        getProjects({ page: 1, page_size: 1000 }),
+        getClusters({ page: 1, page_size: 1000 }).catch(() => ({ list: [] as ClusterItem[] })),
+      ]);
       setProjects(data.list);
+      setClusters(clusterRes?.list || []);
       const defaultProject = data.list[0]?.id;
       if (defaultProject) {
         form.setFieldsValue({
@@ -164,6 +184,15 @@ export function ProjectLogsPage() {
       title: "内容",
       dataIndex: "message",
       render: (_: string, r) => <LogMessageCell highlight={r.highlight} message={r.message} />,
+    },
+    {
+      title: "来源",
+      dataIndex: "collector_mode",
+      width: 72,
+      render: (v?: string, r?: LogSearchItem) => {
+        const mode = v || (r?.cluster_id ? "k8s" : "host");
+        return <Tag>{mode === "k8s" ? "K8s" : "主机"}</Tag>;
+      },
     },
     {
       title: "服务",
@@ -218,7 +247,7 @@ export function ProjectLogsPage() {
         title="日志检索"
         extra={
           <Space>
-            <Tag color="blue">Agent → Elasticsearch（yunshu-agent-*）</Tag>
+            <Tag color="blue">主机 yunshu-agent-* / 集群 yunshu-k8s-*</Tag>
             <Button icon={<ReloadOutlined />} onClick={() => void runSearch()}>
               刷新
             </Button>
@@ -237,6 +266,11 @@ export function ProjectLogsPage() {
                       server_id: v.server_id,
                       service_id: v.service_id,
                       log_source_id: v.log_source_id,
+                      collector_mode: v.collector_mode || undefined,
+                      cluster_id: v.cluster_id,
+                      namespace: v.namespace?.trim() || undefined,
+                      pod: v.pod?.trim() || undefined,
+                      container: v.container?.trim() || undefined,
                       keyword: v.keyword?.trim() || undefined,
                       level: v.level?.trim() || undefined,
                       file_path: v.file_path?.trim() || undefined,
@@ -295,10 +329,31 @@ export function ProjectLogsPage() {
                 />
               </Form.Item>
             </Col>
+            <Col span={3}>
+              <Form.Item label="采集来源" name="collector_mode">
+                <Select
+                  allowClear
+                  placeholder="全部"
+                  options={[
+                    { value: "host", label: "主机 Agent" },
+                    { value: "k8s", label: "集群 K8s" },
+                  ]}
+                  onChange={(mode) => {
+                    if (mode === "k8s") {
+                      form.setFieldsValue({ server_id: undefined, service_id: undefined, log_source_id: undefined });
+                    }
+                    if (mode === "host") {
+                      form.setFieldsValue({ cluster_id: undefined, namespace: undefined, pod: undefined, container: undefined });
+                    }
+                  }}
+                />
+              </Form.Item>
+            </Col>
             <Col span={4}>
               <Form.Item label="服务器" name="server_id">
                 <Select
                   allowClear
+                  disabled={watchCollectorMode === "k8s"}
                   options={serverOptions}
                   placeholder="全部"
                   onChange={(sid) => {
@@ -315,6 +370,7 @@ export function ProjectLogsPage() {
               <Form.Item label="服务" name="service_id">
                 <Select
                   allowClear
+                  disabled={watchCollectorMode === "k8s"}
                   options={serviceOptions}
                   placeholder="全部"
                   onChange={(svcId) => {
@@ -328,19 +384,39 @@ export function ProjectLogsPage() {
             </Col>
             <Col span={4}>
               <Form.Item label="日志源" name="log_source_id">
-                <Select allowClear options={sourceOptions} placeholder="全部" />
+                <Select allowClear disabled={watchCollectorMode === "k8s"} options={sourceOptions} placeholder="全部" />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col span={5}>
               <Form.Item label="时间范围" name="time_range">
                 <DatePicker.RangePicker showTime style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={12}>
-            <Col span={8}>
+            <Col span={4}>
+              <Form.Item label="K8s 集群" name="cluster_id">
+                <Select allowClear disabled={watchCollectorMode === "host"} options={clusterOptions} placeholder="全部" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label="Namespace" name="namespace">
+                <Input allowClear disabled={watchCollectorMode === "host"} placeholder="default" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label="Pod" name="pod">
+                <Input allowClear disabled={watchCollectorMode === "host"} placeholder="pod 名" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label="容器" name="container">
+                <Input allowClear disabled={watchCollectorMode === "host"} placeholder="container" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
               <Form.Item label="关键词" name="keyword">
-                <Input placeholder="支持 simple_query_string，高亮匹配内容" allowClear />
+                <Input placeholder="simple_query_string" allowClear />
               </Form.Item>
             </Col>
             <Col span={4}>
@@ -357,6 +433,8 @@ export function ProjectLogsPage() {
                 />
               </Form.Item>
             </Col>
+          </Row>
+          <Row gutter={12}>
             <Col span={8}>
               <Form.Item label="文件名" name="file_path" tooltip="需先「同步下发」Loggie 后新日志才有 file_path。清空可查看全部文件。示例：748.log / info.log">
                 <Input allowClear placeholder="748.log / info.log（留空=不限文件）" />
@@ -397,9 +475,20 @@ export function ProjectLogsPage() {
 
 function LogMessageCell({ message, highlight }: { message?: string; highlight?: string }) {
   if (highlight) {
-    return <div className="log-message-cell" dangerouslySetInnerHTML={{ __html: highlight }} />;
+    return <div className="log-message-cell" dangerouslySetInnerHTML={{ __html: sanitizeLogHighlight(highlight) }} />;
   }
   return <div className="log-message-cell">{message || "-"}</div>;
+}
+
+/** 仅允许 <mark> 高亮标签，其余 HTML 一律转义，降低存储型 XSS 风险。 */
+function sanitizeLogHighlight(input: string): string {
+  const escaped = String(input)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  return escaped.replace(/&lt;mark&gt;/gi, "<mark>").replace(/&lt;\/mark&gt;/gi, "</mark>");
 }
 
 function normalizeLogLevel(level?: string) {

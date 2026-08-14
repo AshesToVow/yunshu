@@ -75,6 +75,7 @@ type CicdCiConfig struct {
 	RefType          string         `json:"ref_type" gorm:"size:16;not null;default:'branch';comment:branch|tag"`
 	RefName          string         `json:"ref_name" gorm:"size:128;not null;default:'main';comment:默认分支或 tag"`
 	BuildType        string         `json:"build_type" gorm:"size:32;not null;comment:npm|yarn|mvn|gradle|python|golang"`
+	LanguageType     string         `json:"language_type" gorm:"size:32;not null;default:'custom';comment:go|java|frontend|python|custom"`
 	BuildShell       string         `json:"build_shell" gorm:"size:512;comment:构建命令参数"`
 	BuildPath        string         `json:"build_path" gorm:"size:256;comment:制品目录 target/build/dist"`
 	ProjectName      string         `json:"project_name" gorm:"size:128;comment:后端 JAR 命名"`
@@ -156,21 +157,98 @@ type CicdBuildRun struct {
 	BuilderUserID     *uint          `json:"builder_user_id,omitempty"`
 	BuilderName       string         `json:"builder_name" gorm:"size:64"`
 	Version           string         `json:"version" gorm:"size:64"`
-	PackagePath       string         `json:"package_path" gorm:"size:512;comment:MinIO 路径"`
-	ImageAddress      string         `json:"image_address" gorm:"size:512"`
-	DownloadURL       string         `json:"download_url" gorm:"size:1024"`
-	SecurityScanPass  *bool          `json:"security_scan_pass,omitempty"`
-	JenkinsQueueID    int64          `json:"jenkins_queue_id"`
-	JenkinsBuildURL   string         `json:"jenkins_build_url" gorm:"size:512"`
-	ParamsJSON        string         `json:"params_json" gorm:"type:text"`
-	StartedAt         *time.Time     `json:"started_at,omitempty"`
-	FinishedAt        *time.Time     `json:"finished_at,omitempty"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
-	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
+	PackagePath        string         `json:"package_path" gorm:"size:512;comment:MinIO 路径"`
+	ImageAddress       string         `json:"image_address" gorm:"size:512"`
+	DownloadURL        string         `json:"download_url" gorm:"size:1024"`
+	SecurityScanPass   *bool          `json:"security_scan_pass,omitempty"`
+	QualityGateStatus  string         `json:"quality_gate_status" gorm:"size:16;comment:OK|WARN|ERROR|NONE"`
+	SonarProjectKey    string         `json:"sonar_project_key" gorm:"size:256"`
+	SonarDashboardURL  string         `json:"sonar_dashboard_url" gorm:"size:1024"`
+	SonarSummaryJSON   string         `json:"sonar_summary_json" gorm:"type:text;comment:bugs/漏洞等摘要 JSON"`
+	GitCommit          string         `json:"git_commit" gorm:"size:64"`
+	JenkinsQueueID     int64          `json:"jenkins_queue_id"`
+	JenkinsBuildURL    string         `json:"jenkins_build_url" gorm:"size:512"`
+	ParamsJSON         string         `json:"params_json" gorm:"type:text"`
+	StartedAt          *time.Time     `json:"started_at,omitempty"`
+	FinishedAt         *time.Time     `json:"finished_at,omitempty"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	DeletedAt          gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 func (CicdBuildRun) TableName() string { return "cicd_build_runs" }
+
+// 流水线阶段 / 质量门禁常量（与 Jenkins 回调约定对齐）。
+const (
+	CicdRunKindBuild   = "build"
+	CicdRunKindRelease = "release"
+
+	CicdStageTypeSonar       = "sonar"
+	CicdStageTypeQualityGate = "quality_gate"
+	CicdStageTypeBuild       = "build"
+	CicdStageTypePush        = "push"
+	CicdStageTypeUpload      = "upload_artifact"
+	CicdStageTypeDeploy      = "deploy"
+
+	CicdStageStatusPending = "pending"
+	CicdStageStatusRunning = "running"
+	CicdStageStatusSuccess = "success"
+	CicdStageStatusFailed  = "failed"
+	CicdStageStatusSkipped = "skipped"
+
+	CicdQualityGateOK    = "OK"
+	CicdQualityGateWarn  = "WARN"
+	CicdQualityGateError = "ERROR"
+	CicdQualityGateNone  = "NONE"
+
+	CicdArtifactTypePackage = "package"
+	CicdArtifactTypeImage   = "image"
+	CicdArtifactTypeHelm    = "helm"
+)
+
+// CicdRunStage 构建/发布流水线阶段执行记录（由 Jenkins HMAC 回调写入）。
+type CicdRunStage struct {
+	ID           uint           `json:"id" gorm:"primaryKey"`
+	ProjectID    uint           `json:"project_id" gorm:"not null;index:idx_cicd_stage_proj"`
+	ServiceID    uint           `json:"service_id" gorm:"not null;index"`
+	RunKind      string         `json:"run_kind" gorm:"size:16;not null;index:idx_cicd_stage_run,priority:1;comment:build|release"`
+	RunID        uint           `json:"run_id" gorm:"not null;index:idx_cicd_stage_run,priority:2"`
+	StageOrder   int            `json:"stage_order" gorm:"not null;default:0"`
+	StageType    string         `json:"stage_type" gorm:"size:64;not null;index"`
+	StageName    string         `json:"stage_name" gorm:"size:128"`
+	Status       string         `json:"status" gorm:"size:32;not null;default:'pending'"`
+	StartedAt    *time.Time     `json:"started_at,omitempty"`
+	FinishedAt   *time.Time     `json:"finished_at,omitempty"`
+	DurationSec  int            `json:"duration_sec"`
+	Logs         string         `json:"logs" gorm:"type:longtext"`
+	ErrorMessage string         `json:"error_message" gorm:"size:1024"`
+	ExtraJSON    string         `json:"extra_json" gorm:"type:text;comment:阶段扩展（如 Sonar 指标）"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+func (CicdRunStage) TableName() string { return "cicd_run_stages" }
+
+// CicdArtifact 构建制品元数据（MinIO 包 / 镜像 / Helm Chart）。
+type CicdArtifact struct {
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	ProjectID   uint           `json:"project_id" gorm:"not null;index:idx_cicd_art_proj"`
+	ServiceID   uint           `json:"service_id" gorm:"not null;index"`
+	BuildRunID  uint           `json:"build_run_id" gorm:"not null;index;comment:关联 cicd_build_runs"`
+	ArtifactType string        `json:"artifact_type" gorm:"size:32;not null;comment:package|image|helm"`
+	Name        string         `json:"name" gorm:"size:256;not null"`
+	StoragePath string         `json:"storage_path" gorm:"size:1024;comment:MinIO object key 或镜像地址"`
+	Digest      string         `json:"digest" gorm:"size:128;comment:sha256:..."`
+	GitCommit   string         `json:"git_commit" gorm:"size:64"`
+	SizeBytes   int64          `json:"size_bytes"`
+	MetaJSON    string         `json:"meta_json" gorm:"type:text"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+func (CicdArtifact) TableName() string { return "cicd_artifacts" }
 
 // CicdReleaseRun CD 发布/工单记录。
 type CicdReleaseRun struct {

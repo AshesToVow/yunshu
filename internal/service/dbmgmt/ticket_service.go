@@ -607,10 +607,16 @@ func (s *Service) RejectTicket(ctx context.Context, projectID, ticketID uint, co
 	if ticket.Status != model.DbTicketStatusPendingApproval {
 		return constants.ErrBadRequestWithMsg("工单已结束，无法驳回")
 	}
-	steps, _ := s.repo.ListSqlTicketSteps(ctx, ticketID)
+	steps, err := s.repo.ListSqlTicketSteps(ctx, ticketID)
+	if err != nil {
+		return err
+	}
 	for i := range steps {
 		if steps[i].Status == model.DbApprovalStepPending {
-			ok, _ := s.userCanApproveStep(ctx, actor, steps[i].UserGroupID)
+			ok, err := s.userCanApproveStep(ctx, actor, steps[i].UserGroupID)
+			if err != nil {
+				return err
+			}
 			if !ok {
 				return constants.ErrForbidden
 			}
@@ -621,7 +627,9 @@ func (s *Service) RejectTicket(ctx context.Context, projectID, ticketID uint, co
 			steps[i].ReviewerName = actorUsername(actor)
 			steps[i].ReviewComment = strings.TrimSpace(comment)
 			steps[i].ReviewedAt = &now
-			_ = s.repo.UpdateSqlTicketStep(ctx, &steps[i])
+			if err := s.repo.UpdateSqlTicketStep(ctx, &steps[i]); err != nil {
+				return err
+			}
 			break
 		}
 	}
