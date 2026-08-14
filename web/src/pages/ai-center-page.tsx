@@ -117,9 +117,37 @@ export function AiCenterPage() {
   async function handleReseed() {
     setLoading(true);
     try {
-      await reseedAICenter();
-      message.success("已从 data/ai 重载种子");
+      const r = await reseedAICenter();
+      const rep = r?.report;
+      if (!r?.ok || rep?.data_root_ok === false) {
+        const warn = rep?.warnings?.join("；") || r?.error || "种子目录不可用";
+        message.error(`重载未完整成功：${warn}`);
+      } else {
+        message.success(
+          `已重载：Prompt ${rep?.prompts ?? 0} / KB ${rep?.knowledge_bases ?? 0} / 案例 ${rep?.cases ?? 0} / SOP ${rep?.sops ?? 0} / Eval ${rep?.eval_cases ?? 0}`,
+        );
+      }
       await refreshOverview();
+      // 刷新各列表
+      void listAICenterPrompts()
+        .then((x) => setPrompts(x?.list || []))
+        .catch(() => undefined);
+      void listAICenterTools()
+        .then((x) => setTools(x?.list || []))
+        .catch(() => undefined);
+      void listAICenterCases()
+        .then((x) => setCases(x?.list || []))
+        .catch(() => undefined);
+      void listAICenterSOPs()
+        .then((x) => setSops(x?.list || []))
+        .catch(() => undefined);
+      void listAICenterKBs()
+        .then((x) => setKbs(x?.list || []))
+        .catch(() => undefined);
+      void listAIEvalCases()
+        .then((x) => setEvalCases(x?.list || []))
+        .catch(() => undefined);
+      void refreshModels();
     } catch (e) {
       message.error(extractApiErrorMessage(e, "重载失败"));
     } finally {
@@ -131,7 +159,12 @@ export function AiCenterPage() {
     setLoading(true);
     try {
       const r = await syncAIKnowledge();
-      message.success(`已同步 ES：${r?.indexed ?? 0} 条`);
+      const n = r?.indexed ?? 0;
+      if (n === 0) {
+        message.warning("ES 同步 0 条：请先「同步 data/ai 种子」写入 KB/案例/SOP，并确认 ES 已启用");
+      } else {
+        message.success(`已同步 ES：${n} 条`);
+      }
     } catch (e) {
       message.error(extractApiErrorMessage(e, "同步失败"));
     } finally {

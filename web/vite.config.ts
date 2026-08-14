@@ -23,7 +23,7 @@ export default defineConfig({
             if (id.includes("monaco-editor") || id.includes("@monaco-editor")) {
               return "monaco-vendor";
             }
-            return;
+            return "vendor";
           }
           if (id.includes("/components/k8s/yaml-crud-page")) {
             return "yaml-crud";
@@ -34,6 +34,7 @@ export default defineConfig({
         },
       },
     },
+    chunkSizeWarningLimit: 1600,
   },
   server: {
     host: "0.0.0.0",

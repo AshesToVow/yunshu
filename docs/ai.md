@@ -79,4 +79,8 @@
 1. 重启服务 AutoMigrate 新表
 2. 重新 seed 权限（能力中心 API）
 3. 菜单同步后可见「AI 能力中心」
-4. 可选：`POST /ai/center/reseed` 与 `POST /ai/knowledge/sync`（新种子幂等导入）
+4. **必须保证运行时可读取 `data/ai`**：
+   - 本地：在仓库根目录启动，或设 `YUNSHU_AI_DATA_DIR`
+   - Docker：`Dockerfile.backend` 已 `COPY data/ai/` → `/app/data/ai`，并设 `YUNSHU_AI_DATA_DIR=/app/data/ai`（需重建镜像）
+5. 能力中心若只有 `tools` 有数、Prompt/KB/案例为 0：说明只 seed 了代码内 builtin，文件种子未读到 → 点「同步 data/ai 种子」看报错，或检查 `data_root_ok`
+6. 「同步知识库到 ES」从 **DB** 读文档/案例/SOP；库为空则 indexed=0。先 reseed，再 sync；且需 ES 已启用

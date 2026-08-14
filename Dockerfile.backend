@@ -26,12 +26,15 @@ RUN apk add --no-cache tzdata ca-certificates
 
 COPY --from=builder /yunshu /app/yunshu
 COPY configs/ /app/configs/
+# AI 能力中心种子（Prompt/KB/案例/SOP/脚本工具/Eval）；运行时 CWD=/app
+COPY data/ai/ /app/data/ai/
 # 离线 Loggie 安装包（linux/amd64 ELF），安装 Agent 时由平台 SFTP 上传
 COPY deploy/loggie/binary/loggie /app/deploy/loggie/binary/loggie
 COPY deploy/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 WORKDIR /app
+ENV YUNSHU_AI_DATA_DIR=/app/data/ai
 EXPOSE 8080
 
 # 启动前可选执行 seed（RUN_SEED=1），再 exec server

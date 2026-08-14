@@ -3,45 +3,131 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
 
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 )
 
+// CenterSeedReport 种子导入结果（供 reseed/overview 诊断）。
+type CenterSeedReport struct {
+	DataRoot     string   `json:"data_root"`
+	DataRootOK   bool     `json:"data_root_ok"`
+	Prompts      int      `json:"prompts"`
+	Knowledge    int      `json:"knowledge_bases"`
+	Documents    int      `json:"kb_documents"`
+	Cases        int      `json:"cases"`
+	SOPs         int      `json:"sops"`
+	ScriptTools  int      `json:"script_tools"`
+	BuiltinTools int      `json:"builtin_tools"`
+	EvalCases    int      `json:"eval_cases"`
+	Warnings     []string `json:"warnings,omitempty"`
+}
+
 // EnsureCenterSeed 从 data/ai 导入种子（幂等：已有同 code/name 则跳过）。
 func (s *Service) EnsureCenterSeed(ctx context.Context) error {
+	_, err := s.EnsureCenterSeedReport(ctx)
+	return err
+}
+
+// EnsureCenterSeedReport 导入并返回计数/告警（目录不存在时返回明确错误）。
+func (s *Service) EnsureCenterSeedReport(ctx context.Context) (*CenterSeedReport, error) {
 	root := s.dataRoot()
-	if err := s.seedPromptsFromDir(ctx, filepath.Join(root, "prompts")); err != nil {
+	rep := &CenterSeedReport{DataRoot: root}
+	if st, err := os.Stat(root); err != nil || !st.IsDir() {
+		msg := fmt.Sprintf("AI 种子目录不存在: %s（请将 data/ai 放到工作目录，或设置 YUNSHU_AI_DATA_DIR；Docker 需 COPY data/ai）", root)
+		rep.Warnings = append(rep.Warnings, msg)
+		slog.Warn("ai center seed", "err", msg)
+		// 仍尝试写入 builtin tools（不依赖文件）
+		if n, err := s.seedBuiltinToolDefsCounted(ctx); err != nil {
+			slog.Warn("ai seed builtin tools", "err", err)
+			rep.Warnings = append(rep.Warnings, "builtin tools: "+err.Error())
+		} else {
+			rep.BuiltinTools = n
+		}
+		return rep, constants.ErrBadRequestWithMsg(msg)
+	}
+	rep.DataRootOK = true
+
+	if n, err := s.seedPromptsFromDirCounted(ctx, filepath.Join(root, "prompts")); err != nil {
 		slog.Warn("ai seed prompts", "err", err)
+		rep.Warnings = append(rep.Warnings, "prompts: "+err.Error())
+	} else {
+		rep.Prompts = n
 	}
-	if err := s.seedKnowledgeFromDir(ctx, filepath.Join(root, "kb")); err != nil {
+	if kb, docs, err := s.seedKnowledgeFromDirCounted(ctx, filepath.Join(root, "kb")); err != nil {
 		slog.Warn("ai seed kb", "err", err)
+		rep.Warnings = append(rep.Warnings, "kb: "+err.Error())
+	} else {
+		rep.Knowledge, rep.Documents = kb, docs
 	}
-	if err := s.seedCasesFromDir(ctx, filepath.Join(root, "cases")); err != nil {
+	if n, err := s.seedCasesFromDirCounted(ctx, filepath.Join(root, "cases")); err != nil {
 		slog.Warn("ai seed cases", "err", err)
+		rep.Warnings = append(rep.Warnings, "cases: "+err.Error())
+	} else {
+		rep.Cases = n
 	}
-	if err := s.seedSOPsFromDir(ctx, filepath.Join(root, "sops")); err != nil {
+	if n, err := s.seedSOPsFromDirCounted(ctx, filepath.Join(root, "sops")); err != nil {
 		slog.Warn("ai seed sops", "err", err)
+		rep.Warnings = append(rep.Warnings, "sops: "+err.Error())
+	} else {
+		rep.SOPs = n
 	}
-	if err := s.seedToolsFromDir(ctx, filepath.Join(root, "tools")); err != nil {
+	if n, err := s.seedToolsFromDirCounted(ctx, filepath.Join(root, "tools")); err != nil {
 		slog.Warn("ai seed tools", "err", err)
+		rep.Warnings = append(rep.Warnings, "script tools: "+err.Error())
+	} else {
+		rep.ScriptTools = n
 	}
-	if err := s.seedBuiltinToolDefs(ctx); err != nil {
+	if n, err := s.seedBuiltinToolDefsCounted(ctx); err != nil {
 		slog.Warn("ai seed builtin tools", "err", err)
+		rep.Warnings = append(rep.Warnings, "builtin tools: "+err.Error())
+	} else {
+		rep.BuiltinTools = n
 	}
-	if err := s.seedEvalFromDir(ctx, filepath.Join(root, "eval")); err != nil {
+	if n, err := s.seedEvalFromDirCounted(ctx, filepath.Join(root, "eval")); err != nil {
 		slog.Warn("ai seed eval", "err", err)
+		rep.Warnings = append(rep.Warnings, "eval: "+err.Error())
+	} else {
+		rep.EvalCases = n
 	}
-	return nil
+	return rep, nil
 }
 
 func (s *Service) dataRoot() string {
+	if v := strings.TrimSpace(os.Getenv("YUNSHU_AI_DATA_DIR")); v != "" {
+		return v
+	}
+	if s.dataDir != "" {
+		if _, err := os.Stat(s.dataDir); err == nil {
+			return s.dataDir
+		}
+	}
+	candidates := []string{
+		filepath.Join("data", "ai"),
+		filepath.Join(".", "data", "ai"),
+	}
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates,
+			filepath.Join(wd, "data", "ai"),
+			filepath.Clean(filepath.Join(wd, "..", "data", "ai")),
+		)
+	}
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "data", "ai"))
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && st.IsDir() {
+			return c
+		}
+	}
 	if s.dataDir != "" {
 		return s.dataDir
 	}
@@ -410,4 +496,68 @@ func (s *Service) seedEvalFromDir(ctx context.Context, dir string) error {
 		}
 	}
 	return nil
+}
+
+func (s *Service) seedPromptsFromDirCounted(ctx context.Context, dir string) (int, error) {
+	if err := s.seedPromptsFromDir(ctx, dir); err != nil {
+		return 0, err
+	}
+	var n int64
+	_ = s.db.WithContext(ctx).Model(&model.AiPrompt{}).Count(&n).Error
+	return int(n), nil
+}
+
+func (s *Service) seedKnowledgeFromDirCounted(ctx context.Context, dir string) (kbN, docN int, err error) {
+	if err = s.seedKnowledgeFromDir(ctx, dir); err != nil {
+		return 0, 0, err
+	}
+	var k, d int64
+	_ = s.db.WithContext(ctx).Model(&model.AiKnowledgeBase{}).Count(&k).Error
+	_ = s.db.WithContext(ctx).Model(&model.AiKbDocument{}).Count(&d).Error
+	return int(k), int(d), nil
+}
+
+func (s *Service) seedCasesFromDirCounted(ctx context.Context, dir string) (int, error) {
+	if err := s.seedCasesFromDir(ctx, dir); err != nil {
+		return 0, err
+	}
+	var n int64
+	_ = s.db.WithContext(ctx).Model(&model.AiIncidentCase{}).Count(&n).Error
+	return int(n), nil
+}
+
+func (s *Service) seedSOPsFromDirCounted(ctx context.Context, dir string) (int, error) {
+	if err := s.seedSOPsFromDir(ctx, dir); err != nil {
+		return 0, err
+	}
+	var n int64
+	_ = s.db.WithContext(ctx).Model(&model.AiSOP{}).Count(&n).Error
+	return int(n), nil
+}
+
+func (s *Service) seedToolsFromDirCounted(ctx context.Context, dir string) (int, error) {
+	if err := s.seedToolsFromDir(ctx, dir); err != nil {
+		return 0, err
+	}
+	var n int64
+	_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("runtime = ?", "script").Count(&n).Error
+	return int(n), nil
+}
+
+func (s *Service) seedBuiltinToolDefsCounted(ctx context.Context) (int, error) {
+	if err := s.seedBuiltinToolDefs(ctx); err != nil {
+		return 0, err
+	}
+	var n int64
+	_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("runtime = ?", "builtin").Count(&n).Error
+	return int(n), nil
+}
+
+func (s *Service) seedEvalFromDirCounted(ctx context.Context, dir string) (int, error) {
+	if err := s.seedEvalFromDir(ctx, dir); err != nil {
+		return 0, err
+	}
+	var n int64
+	_ = s.db.WithContext(ctx).Model(&model.AiEvalCase{}).Count(&n).Error
+	return int(n), nil
 }

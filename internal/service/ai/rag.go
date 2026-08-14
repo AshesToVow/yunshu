@@ -10,6 +10,7 @@ import (
 	"yunshu/internal/ai/knowledge"
 	"yunshu/internal/ai/runbooks"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
 )
 
 type ragHit struct {
@@ -361,9 +362,10 @@ func tokenize(q string) []string {
 
 // SyncKnowledgeBase 将 DB 文档/案例/SOP 同步到 ES（含 module 字段）。
 func (s *Service) SyncKnowledgeBase(ctx context.Context) (int, error) {
-	s.ensureSeed()
+	// 不要只依赖 seedOnce：首次若目录缺失，需在同步前再尝试导入文件种子
+	_, _ = s.EnsureCenterSeedReport(ctx)
 	if s.esProvider == nil {
-		return 0, nil
+		return 0, constants.ErrBadRequestWithMsg("ES 未配置：无法同步知识库")
 	}
 	cli, _, err := s.esProvider.Client(ctx)
 	if err != nil {

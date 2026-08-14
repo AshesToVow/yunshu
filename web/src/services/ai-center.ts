@@ -5,7 +5,23 @@ export function getAICenterOverview() {
 }
 
 export function reseedAICenter() {
-  return getData<{ ok: boolean }>(http.post("/ai/center/reseed", {}));
+  return getData<{
+    ok: boolean;
+    error?: string;
+    report?: {
+      data_root?: string;
+      data_root_ok?: boolean;
+      prompts?: number;
+      knowledge_bases?: number;
+      kb_documents?: number;
+      cases?: number;
+      sops?: number;
+      script_tools?: number;
+      builtin_tools?: number;
+      eval_cases?: number;
+      warnings?: string[];
+    };
+  }>(http.post("/ai/center/reseed", {}));
 }
 
 export function listAICenterPrompts() {

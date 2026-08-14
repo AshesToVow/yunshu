@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"time"
 
 	"yunshu/internal/model"
@@ -129,26 +130,32 @@ func (s *Service) ListEvalCases(ctx context.Context) ([]model.AiEvalCase, error)
 	return rows, err
 }
 
-func (s *Service) ReseedCenter(ctx context.Context) error {
-	return s.EnsureCenterSeed(ctx)
+func (s *Service) ReseedCenter(ctx context.Context) (*CenterSeedReport, error) {
+	return s.EnsureCenterSeedReport(ctx)
 }
 
 func (s *Service) CenterOverview(ctx context.Context) map[string]any {
 	s.ensureSeed()
+	root := s.dataRoot()
+	rootOK := false
+	if st, err := os.Stat(root); err == nil && st.IsDir() {
+		rootOK = true
+	}
 	count := func(model any) int64 {
 		var n int64
 		_ = s.db.WithContext(ctx).Model(model).Count(&n).Error
 		return n
 	}
 	return map[string]any{
-		"prompts":     count(&model.AiPrompt{}),
-		"llm_models":  count(&model.AiLLMModel{}),
-		"tools":       count(&model.AiToolDef{}),
-		"cases":       count(&model.AiIncidentCase{}),
-		"sops":        count(&model.AiSOP{}),
-		"kb":          count(&model.AiKnowledgeBase{}),
-		"eval_cases":  count(&model.AiEvalCase{}),
-		"sessions":    count(&model.AiChatSession{}),
-		"data_root":   s.dataRoot(),
+		"prompts":      count(&model.AiPrompt{}),
+		"llm_models":   count(&model.AiLLMModel{}),
+		"tools":        count(&model.AiToolDef{}),
+		"cases":        count(&model.AiIncidentCase{}),
+		"sops":         count(&model.AiSOP{}),
+		"kb":           count(&model.AiKnowledgeBase{}),
+		"eval_cases":   count(&model.AiEvalCase{}),
+		"sessions":     count(&model.AiChatSession{}),
+		"data_root":    root,
+		"data_root_ok": rootOK,
 	}
 }

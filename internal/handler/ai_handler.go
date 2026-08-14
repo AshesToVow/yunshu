@@ -296,11 +296,17 @@ func (h *AIHandler) CenterOverview(c *gin.Context) {
 }
 
 func (h *AIHandler) ReseedCenter(c *gin.Context) {
-	if err := h.svc.ReseedCenter(c.Request.Context()); err != nil {
+	rep, err := h.svc.ReseedCenter(c.Request.Context())
+	if err != nil {
+		// 仍返回报告，便于前端展示「目录不存在」等诊断
+		if rep != nil {
+			response.Success(c, gin.H{"ok": false, "error": err.Error(), "report": rep})
+			return
+		}
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, gin.H{"ok": true})
+	response.Success(c, gin.H{"ok": true, "report": rep})
 }
 
 func (h *AIHandler) ListPrompts(c *gin.Context) {
