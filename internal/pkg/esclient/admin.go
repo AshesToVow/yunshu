@@ -1,6 +1,7 @@
 package esclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -132,7 +133,24 @@ func (c *Client) ProxyREST(ctx context.Context, method, path string, body []byte
 	if err != nil {
 		return nil, err
 	}
-	return &ProxyResult{Status: status, Body: json.RawMessage(raw)}, nil
+	return &ProxyResult{Status: status, Body: encodeProxyBody(raw)}, nil
+}
+
+// encodeProxyBody 保证响应体可被 JSON 序列化。
+// _cat?v 等接口返回纯文本，直接塞进 json.RawMessage 会导致外层 Success 编码失败 (500)。
+func encodeProxyBody(raw []byte) json.RawMessage {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 {
+		return json.RawMessage("null")
+	}
+	if json.Valid(raw) {
+		return json.RawMessage(raw)
+	}
+	quoted, err := json.Marshal(string(raw))
+	if err != nil {
+		return json.RawMessage(`""`)
+	}
+	return json.RawMessage(quoted)
 }
 
 func proxyPathAllowed(method, path string) bool {
