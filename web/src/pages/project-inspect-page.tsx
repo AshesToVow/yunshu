@@ -1120,7 +1120,7 @@ export function ProjectInspectPage() {
                 {formatDateTime(runDetail.started_at || runDetail.created_at)}
               </Descriptions.Item>
               <Descriptions.Item label="结束时间">
-                {formatDateTime(runDetail.finished_at) || "—"}
+                {runDetail.finished_at ? formatDateTime(runDetail.finished_at) : "—"}
               </Descriptions.Item>
               <Descriptions.Item label="邮件">
                 {runDetail.email_sent_at ? `已发送 · ${formatDateTime(runDetail.email_sent_at)}` : "未发送"}
