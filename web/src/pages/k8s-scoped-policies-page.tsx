@@ -312,6 +312,13 @@ export function K8sScopedPoliciesPage() {
           </Space>
         }
       >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="档位不替代 API 授权"
+          description="此处 GrantPreset 只写入 k8s_cluster_access_grants，用于范围校验（命名空间黑白名单 + 读写档位）。写操作仍须在「授权管理」中授予对应 API（POST/PUT/DELETE）；仅有档位而无 Casbin 权限时写接口仍会 403。"
+        />
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Space wrap style={{ width: "100%", justifyContent: "space-between" }}>
             <Space wrap align="center">
@@ -417,8 +424,10 @@ export function K8sScopedPoliciesPage() {
                 description={
                   <span>
                     此处为<strong>主体</strong>（上方可切换<strong>角色模板</strong>、<strong>用户</strong>或<strong>用户组</strong>）配置<strong>集群维度档位</strong>（只读 / 只读+Exec / 管理），数据在表{" "}
-                    <Typography.Text code>k8s_cluster_access_grants</Typography.Text>。HTTP 接口能否调用仍由<strong>授权管理</strong>中的 Casbin
-                    API 权限决定；带 <Typography.Text code>cluster_id</Typography.Text> 的 K8s 类请求在通过 API 鉴权后，再按此处档位与<strong>命名空间黑/白名单</strong>校验。详见{" "}
+                    <Typography.Text code>k8s_cluster_access_grants</Typography.Text>。
+                    <strong>档位不替代 API 授权</strong>：HTTP 接口能否调用仍由<strong>授权管理</strong>中的 Casbin
+                    API 权限决定；仅下发 admin 档位而没有对应写接口 Casbin 权限时，POST/PUT/DELETE 仍会 403。带{" "}
+                    <Typography.Text code>cluster_id</Typography.Text> 的 K8s 类请求在通过 API 鉴权后，再按此处档位与<strong>命名空间黑/白名单</strong>校验。详见{" "}
                     <Typography.Text code>docs/handbook/permissions/casbin-and-k8s-triple-policy.md</Typography.Text>。
                   </span>
                 }

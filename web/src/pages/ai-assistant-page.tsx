@@ -123,10 +123,10 @@ export function AiAssistantPage() {
     void loadStatus();
     void getClusters({ page: 1, page_size: 1000 })
       .then((res) => setClusters(res?.list || []))
-      .catch(() => undefined);
+      .catch((e) => message.error(extractApiErrorMessage(e, "加载集群失败")));
     void getProjects({ page: 1, page_size: 1000 })
       .then((res) => setProjects(res?.list || []))
-      .catch(() => undefined);
+      .catch((e) => message.error(extractApiErrorMessage(e, "加载项目失败")));
     void refreshSessions(true);
   }, []);
 
@@ -417,7 +417,7 @@ export function AiAssistantPage() {
             <Space wrap>
               <Select
                 style={{ minWidth: 260 }}
-                placeholder="选择 Provider"
+                placeholder="选择模型 Provider"
                 value={provider || undefined}
                 options={providerOptions}
                 onChange={setProvider}

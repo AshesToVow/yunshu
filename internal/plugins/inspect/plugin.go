@@ -23,7 +23,7 @@ func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		MenuPathPrefixes: []string{"/project-inspect"},
 		APIPrefixes:      []string{},
-		DependsOn:        []string{"project"},
+		DependsOn:        []string{"project", "alert"},
 		Workers:          []string{"inspect_scheduler"},
 	}
 }

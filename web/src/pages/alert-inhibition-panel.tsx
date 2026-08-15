@@ -13,6 +13,7 @@ import {
   type AlertInhibitionRulePayload,
 } from "../services/alert-inhibition";
 import { stringifyPrettyJSON } from "../services/alert-mappers";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
 const defaultSourceLabels = '{\n  "alertname": "NodeDown",\n  "severity": "critical"\n}';
@@ -90,7 +91,7 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
       setList(res.list || []);
       setTotal(res.total || 0);
     } catch (e) {
-      message.error(String(e));
+      message.error(extractApiErrorMessage(e, "操作失败"));
     } finally {
       setLoading(false);
     }
@@ -141,7 +142,7 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
       await load();
       await refreshInhibitionCache().catch(() => undefined);
     } catch (e) {
-      message.error(String(e));
+      message.error(extractApiErrorMessage(e, "操作失败"));
     }
   };
 

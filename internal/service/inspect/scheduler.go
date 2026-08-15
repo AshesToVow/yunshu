@@ -53,8 +53,17 @@ func (s *Service) tickSchedules(ctx context.Context) {
 		if !cronutil.ShouldRunWithDayAnchor(plan.CronSpec, plan.LastRunAt, now) {
 			continue
 		}
+		// 执行前先占位 LastRunAt，避免长任务窗口内重复触发
+		claimed := now
+		if err := s.db.WithContext(ctx).Model(plan).Update("last_run_at", claimed).Error; err != nil {
+			continue
+		}
+		plan.LastRunAt = &claimed
+
 		runCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		stopHeartbeat := s.renewLeader(runCtx)
 		_, err := s.executeRun(runCtx, plan, plan.DatasourceID, "cron", 0, "")
+		stopHeartbeat()
 		cancel()
 		if err != nil {
 			slog.Default().With("component", "inspect.scheduler").Warn("inspect cron run failed",
@@ -67,7 +76,8 @@ func (s *Service) acquireLeader(ctx context.Context) (bool, func()) {
 	if s.redis == nil {
 		return true, func() {}
 	}
-	ok, err := s.redis.SetNX(ctx, inspectSchedulerLeaderKey, "1", 2*time.Minute).Result()
+	// TTL 覆盖最长巡检窗口，配合 renewLeader 心跳续期
+	ok, err := s.redis.SetNX(ctx, inspectSchedulerLeaderKey, "1", 12*time.Minute).Result()
 	if err != nil || !ok {
 		return false, func() {}
 	}
@@ -76,4 +86,27 @@ func (s *Service) acquireLeader(ctx context.Context) (bool, func()) {
 		defer cancel()
 		_ = s.redis.Del(relCtx, inspectSchedulerLeaderKey).Err()
 	}
+}
+
+// renewLeader 在长任务期间周期性续期 leader 锁。
+func (s *Service) renewLeader(ctx context.Context) func() {
+	if s.redis == nil {
+		return func() {}
+	}
+	done := make(chan struct{})
+	go func() {
+		t := time.NewTicker(2 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-t.C:
+				_ = s.redis.Expire(ctx, inspectSchedulerLeaderKey, 12*time.Minute).Err()
+			}
+		}
+	}()
+	return func() { close(done) }
 }

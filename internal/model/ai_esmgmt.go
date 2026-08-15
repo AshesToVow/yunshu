@@ -16,7 +16,7 @@ type AiToolApproval struct {
 	Namespace   string         `json:"namespace" gorm:"size:128"`
 	Resource    string         `json:"resource" gorm:"size:256"`
 	Reason      string         `json:"reason" gorm:"size:512"`
-	Status      string         `json:"status" gorm:"size:32;not null;default:pending;index"` // pending|approved|rejected|executed|failed
+	Status      string         `json:"status" gorm:"size:32;not null;default:pending;index"` // pending|approved|rejected|executing|executed|failed
 	ReviewerID  *uint          `json:"reviewer_id,omitempty"`
 	ReviewNote  string         `json:"review_note" gorm:"size:512"`
 	ResultMsg   string         `json:"result_msg" gorm:"size:1024"`

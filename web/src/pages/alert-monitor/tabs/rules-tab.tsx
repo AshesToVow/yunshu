@@ -1,3 +1,4 @@
+import { extractApiErrorMessage } from "../../../services/http";
 import { Alert, Button, Form, Input, InputNumber, Modal, Segmented, Select, Space, Table, Typography, message } from "antd";
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
@@ -34,7 +35,7 @@ export function RulesTab() {
     try {
       setTemplates(await listAlertRuleTemplates());
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载模板失败");
+      message.error(extractApiErrorMessage(e, "加载模板失败"));
     } finally {
       setTplLoading(false);
     }
@@ -51,21 +52,26 @@ export function RulesTab() {
 
   async function submitFromTemplate() {
     if (!selected) return;
-    const v = await form.validateFields();
-    const params: Record<string, string> = {};
-    if (v.threshold != null && String(v.threshold).trim() !== "") {
-      params.threshold = String(v.threshold);
+    try {
+      const v = await form.validateFields();
+      const params: Record<string, string> = {};
+      if (v.threshold != null && String(v.threshold).trim() !== "") {
+        params.threshold = String(v.threshold);
+      }
+      await createAlertMonitorRuleFromTemplate({
+        template_id: selected.id,
+        datasource_id: Number(v.datasource_id),
+        name: v.name,
+        params,
+      });
+      message.success("已从模板创建规则（含 category label，可在订阅树按 category 路由）");
+      setTplOpen(false);
+      setSelected(null);
+      await ctx.loadRules(ctx.projectContextId);
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "从模板创建失败"));
     }
-    await createAlertMonitorRuleFromTemplate({
-      template_id: selected.id,
-      datasource_id: Number(v.datasource_id),
-      name: v.name,
-      params,
-    });
-    message.success("已从模板创建规则（含 category label，可在订阅树按 category 路由）");
-    setTplOpen(false);
-    setSelected(null);
-    await ctx.loadRules(ctx.projectContextId);
   }
 
   return (
@@ -120,7 +126,7 @@ export function RulesTab() {
           </Space>
         }
       />
-      <Table rowKey="id" columns={ctx.ruleColumns} dataSource={ctx.ruleDisplayList} pagination={false} scroll={{ x: 1100 }} />
+      <Table rowKey="id" columns={ctx.ruleColumns} dataSource={ctx.ruleDisplayList} pagination={{ pageSize: 20, showSizeChanger: true }} scroll={{ x: 1100 }} />
 
       <Modal
         title="从规则模板创建"
@@ -149,7 +155,7 @@ export function RulesTab() {
           size="small"
           loading={tplLoading}
           dataSource={filtered}
-          pagination={false}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
           rowSelection={{
             type: "radio",
             selectedRowKeys: selected ? [selected.id] : [],

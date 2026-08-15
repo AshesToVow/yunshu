@@ -1,6 +1,8 @@
 import { DeleteOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, message } from "antd";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
   createEsmgmtConnection,
   deleteEsmgmtConnection,
@@ -97,10 +99,15 @@ export function EsmgmtConnectionsPage() {
   }
 
   return (
-    <div>
-      <Card className="table-card">
-        <div className="toolbar">
+    <div className="page-stack">
+      <OpsPageHeader
+        title="ES 连接管理"
+        description="维护 Elasticsearch 管理连接；密码加密存储。可与集群概览、REST 控制台共用。"
+        breadcrumbs={[{ title: "ES 管理" }, { title: "连接管理" }]}
+        extra={
           <Space>
+            <Link to="/esmgmt/overview">集群概览</Link>
+            <Link to="/esmgmt/console">REST 控制台</Link>
             <Button icon={<ReloadOutlined />} onClick={() => void load()}>
               刷新
             </Button>
@@ -108,11 +115,15 @@ export function EsmgmtConnectionsPage() {
               新建连接
             </Button>
           </Space>
-        </div>
+        }
+      />
+      <Card className="table-card">
         <Table
           rowKey="id"
           loading={loading}
           dataSource={list}
+          locale={{ emptyText: "暂无连接，请新建或检查权限" }}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
           columns={[
             { title: "名称", dataIndex: "name" },
             { title: "地址", dataIndex: "addresses", ellipsis: true },

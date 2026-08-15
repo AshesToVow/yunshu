@@ -82,7 +82,7 @@ export function EsmgmtOverviewPage() {
         const def = logPlat || list?.find((c) => c.is_default) || list?.[0];
         if (def) setConnectionId(def.id);
       })
-      .catch(() => undefined);
+      .catch((e) => message.error(extractApiErrorMessage(e, "加载连接失败")));
   }, []);
 
   async function loadJobs() {
@@ -95,8 +95,8 @@ export function EsmgmtOverviewPage() {
       setBackups(b || []);
       setRestores(r || []);
       setSchedules(s || []);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "加载任务列表失败"));
     }
   }
 
@@ -226,12 +226,25 @@ export function EsmgmtOverviewPage() {
 
   const status = String(health?.status || "");
   const statusColor = status === "green" ? "success" : status === "yellow" ? "warning" : status ? "error" : "default";
+  const statusLabel =
+    status === "green" ? "健康" : status === "yellow" ? "降级" : status === "red" ? "异常" : status || "-";
 
   function jobStatusColor(s: string) {
     if (s === "success") return "success";
     if (s === "failed") return "error";
     if (s === "running" || s === "pending") return "processing";
     return "default";
+  }
+  function jobStatusLabel(s: string) {
+    const map: Record<string, string> = {
+      success: "成功",
+      failed: "失败",
+      running: "执行中",
+      pending: "排队中",
+      manual: "手动",
+      cron: "定时",
+    };
+    return map[s] || s || "-";
   }
 
   return (
@@ -251,7 +264,7 @@ export function EsmgmtOverviewPage() {
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
             刷新
           </Button>
-          {status ? <Tag color={statusColor}>{status}</Tag> : null}
+          {status ? <Tag color={statusColor}>{statusLabel}</Tag> : null}
         </Space>
         {connectionId === 0 ? (
           <Alert
@@ -371,14 +384,14 @@ export function EsmgmtOverviewPage() {
           columns={[
             { title: "ID", dataIndex: "id", width: 70 },
             { title: "索引", dataIndex: "index_name", ellipsis: true },
-            { title: "触发", dataIndex: "trigger", width: 90 },
+            { title: "触发", dataIndex: "trigger", width: 90, render: (v: string) => jobStatusLabel(v) },
             {
               title: "状态",
               dataIndex: "status",
               width: 100,
-              render: (v: string) => <Tag color={jobStatusColor(v)}>{v}</Tag>,
+              render: (v: string) => <Tag color={jobStatusColor(v)}>{jobStatusLabel(v)}</Tag>,
             },
-            { title: "阶段", dataIndex: "phase", width: 90 },
+            { title: "阶段", dataIndex: "phase", width: 90, render: (v: string) => jobStatusLabel(v) },
             { title: "文档数", dataIndex: "doc_count", width: 80 },
             {
               title: "操作",
@@ -430,7 +443,7 @@ export function EsmgmtOverviewPage() {
               title: "状态",
               dataIndex: "status",
               width: 100,
-              render: (v: string) => <Tag color={jobStatusColor(v)}>{v}</Tag>,
+              render: (v: string) => <Tag color={jobStatusColor(v)}>{jobStatusLabel(v)}</Tag>,
             },
             { title: "阶段", dataIndex: "phase", width: 100 },
             { title: "文档数", dataIndex: "doc_count", width: 80 },

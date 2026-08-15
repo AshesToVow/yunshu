@@ -13,7 +13,7 @@ import {
   ThunderboltOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Card, Col, Row, Space, Typography } from "antd";
+import { Card, Col, Row, Space, Typography, Alert } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import {
   CHART_BRAND,
@@ -36,6 +36,7 @@ import {
   type OverviewProjectLaunchesResponse,
   type OverviewReleaseByPersonResponse,
 } from "../services/overview";
+import { extractApiErrorMessage } from "../services/http";
 
 interface DashboardMetrics {
   users: number;
@@ -114,45 +115,51 @@ export function DashboardPage() {
   const [projectLaunches, setProjectLaunches] = useState<OverviewProjectLaunchesResponse | null>(null);
   const [releaseByPerson, setReleaseByPerson] = useState<OverviewReleaseByPersonResponse | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   useEffect(() => {
     let active = true;
 
     async function load() {
       setLoading(true);
+      setLoadError(null);
       try {
         const [overview, launches, byPerson] = await Promise.all([
-          getOverview().catch(() => null),
-          getOverviewProjectLaunches().catch(() => null),
-          getOverviewReleaseByPerson().catch(() => null),
+          getOverview(),
+          getOverviewProjectLaunches(),
+          getOverviewReleaseByPerson(),
         ]);
 
         if (!active) {
           return;
         }
 
-        if (overview) {
-          setMetrics({
-            users: overview.users_count,
-            clusters: overview.clusters_count,
-            pendingRegistrations: overview.pending_registrations_count,
-            servers: overview.servers_count,
-            podNormal: overview.pod_normal_count,
-            podAbnormal: overview.pod_abnormal_count,
-            podClusterErrors: overview.pod_cluster_errors,
-            eventTotal: overview.event_total_count,
-            eventWarning: overview.event_warning_count,
-            eventClusterErrors: overview.event_cluster_errors,
-            alertFiring: overview.alert_firing_count ?? 0,
-            alertEventsToday: overview.alert_events_today_count ?? 0,
-            loggieAgentsOnline: overview.loggie_agents_online_count ?? 0,
-            loggieAgentsOffline: overview.loggie_agents_offline_count ?? 0,
-          });
-        } else {
-          setMetrics(defaultMetrics);
-        }
+        setMetrics({
+          users: overview.users_count,
+          clusters: overview.clusters_count,
+          pendingRegistrations: overview.pending_registrations_count,
+          servers: overview.servers_count,
+          podNormal: overview.pod_normal_count,
+          podAbnormal: overview.pod_abnormal_count,
+          podClusterErrors: overview.pod_cluster_errors,
+          eventTotal: overview.event_total_count,
+          eventWarning: overview.event_warning_count,
+          eventClusterErrors: overview.event_cluster_errors,
+          alertFiring: overview.alert_firing_count ?? 0,
+          alertEventsToday: overview.alert_events_today_count ?? 0,
+          loggieAgentsOnline: overview.loggie_agents_online_count ?? 0,
+          loggieAgentsOffline: overview.loggie_agents_offline_count ?? 0,
+        });
 
         setProjectLaunches(launches);
         setReleaseByPerson(byPerson);
+      } catch (e) {
+        if (active) {
+          setLoadError(extractApiErrorMessage(e, "加载概览失败"));
+          setMetrics(defaultMetrics);
+          setProjectLaunches(null);
+          setReleaseByPerson(null);
+        }
       } finally {
         if (active) {
           setLoading(false);
@@ -199,11 +206,14 @@ export function DashboardPage() {
         description={t("dashboard.subtitle")}
         meta={
           <Typography.Text type="secondary">
-            {loading ? t("dashboard.syncPending") : t("dashboard.syncLive")}
+            {loading ? t("dashboard.syncPending") : loadError ? "同步失败" : t("dashboard.syncLive")}
           </Typography.Text>
         }
       />
 
+      {loadError ? (
+        <Alert type="error" showIcon style={{ marginBottom: 16 }} message="概览数据加载失败" description={loadError} />
+      ) : null}
       <Typography.Title level={5} className="dashboard-section-title">
         <TeamOutlined /> {t("dashboard.sectionAssets")}
       </Typography.Title>

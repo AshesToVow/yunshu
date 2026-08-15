@@ -16,6 +16,8 @@ import {
   message,
 } from "antd";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
   type AILLMModelItem,
   createAICenterModel,
@@ -160,8 +162,12 @@ export function AiCenterPage() {
     try {
       const r = await syncAIKnowledge();
       const n = r?.indexed ?? 0;
+      const failed = r?.failed ?? 0;
+      await refreshOverview();
       if (n === 0) {
         message.warning("ES 同步 0 条：请先「同步 data/ai 种子」写入 KB/案例/SOP，并确认 ES 已启用");
+      } else if (failed > 0) {
+        message.warning(`已同步 ES：${n} 条，失败 ${failed} 条`);
       } else {
         message.success(`已同步 ES：${n} 条`);
       }
@@ -186,10 +192,14 @@ export function AiCenterPage() {
   }
 
   return (
-    <div>
-      <Card className="table-card" title="AI 运维能力中心">
-        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+    <div className="page-stack">
+      <OpsPageHeader
+        title="AI 运维能力中心"
+        description="模型、Prompt、工具、知识库与 Evaluation 统一管理；同步种子后可将知识写入 ES 供助手 RAG。"
+        breadcrumbs={[{ title: "AI" }, { title: "能力中心" }]}
+        extra={
           <Space wrap>
+            <Link to="/ai/assistant">打开助手</Link>
             <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void handleReseed()}>
               重载 data/ai 种子
             </Button>
@@ -203,6 +213,10 @@ export function AiCenterPage() {
               在线 Evaluation（耗 Token）
             </Button>
           </Space>
+        }
+      />
+      <Card className="table-card">
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Space wrap>
             {Object.entries(overview).map(([k, v]) => (
               <Tag key={k}>
@@ -227,7 +241,7 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={prompts}
-                      pagination={false}
+                      pagination={{ pageSize: 20, showSizeChanger: true }}
                       columns={[
                         { title: "ID", dataIndex: "id", width: 60 },
                         { title: "Code", dataIndex: "code" },
@@ -250,7 +264,7 @@ export function AiCenterPage() {
                           rowKey="id"
                           size="small"
                           dataSource={versions}
-                          pagination={false}
+                          pagination={{ pageSize: 20, showSizeChanger: true }}
                           columns={[
                             { title: "Ver", dataIndex: "version", width: 60 },
                             { title: "当前", dataIndex: "is_current", width: 70, render: (v) => (v ? "✓" : "") },

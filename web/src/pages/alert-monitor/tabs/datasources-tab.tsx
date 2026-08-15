@@ -34,7 +34,7 @@ export function DatasourcesTab() {
                     刷新
                   </Button>
                 </Space>
-                <Table rowKey="id" columns={ctx.dsColumns} dataSource={ctx.dsList} pagination={false} scroll={{ x: 900 }} />
+                <Table rowKey="id" columns={ctx.dsColumns} dataSource={ctx.dsList} pagination={{ pageSize: 20, showSizeChanger: true }} scroll={{ x: 900 }} />
               </Space>
   );
 }

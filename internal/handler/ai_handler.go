@@ -17,7 +17,7 @@ func NewAIHandler(svc *aisvc.Service) *AIHandler {
 }
 
 func (h *AIHandler) Status(c *gin.Context) {
-	response.Success(c, h.svc.Status(c.Request.Context()))
+	response.Success(c, h.svc.Status(auth.RequestContext(c)))
 }
 
 func (h *AIHandler) Ping(c *gin.Context) {
@@ -28,7 +28,7 @@ func (h *AIHandler) Ping(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.Ping(c.Request.Context(), uid, req)
+	res, err := h.svc.Ping(auth.RequestContext(c), uid, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -47,7 +47,7 @@ func (h *AIHandler) Chat(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.Chat(c.Request.Context(), uid, user, req)
+	res, err := h.svc.Chat(auth.RequestContext(c), uid, user, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -63,7 +63,7 @@ func (h *AIHandler) ListSessions(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.ListSessions(c.Request.Context(), uid, q)
+	res, err := h.svc.ListSessions(auth.RequestContext(c), uid, q)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -79,7 +79,7 @@ func (h *AIHandler) CreateSession(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.CreateSession(c.Request.Context(), uid, req)
+	res, err := h.svc.CreateSession(auth.RequestContext(c), uid, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -100,7 +100,7 @@ func (h *AIHandler) GetSession(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.GetSession(c.Request.Context(), uid, uri.ID)
+	res, err := h.svc.GetSession(auth.RequestContext(c), uid, uri.ID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -126,7 +126,7 @@ func (h *AIHandler) UpdateSession(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.UpdateSession(c.Request.Context(), uid, uri.ID, req)
+	res, err := h.svc.UpdateSession(auth.RequestContext(c), uid, uri.ID, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -147,7 +147,7 @@ func (h *AIHandler) DeleteSession(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	if err := h.svc.DeleteSession(c.Request.Context(), uid, uri.ID); err != nil {
+	if err := h.svc.DeleteSession(auth.RequestContext(c), uid, uri.ID); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -167,7 +167,7 @@ func (h *AIHandler) ClearSession(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	if err := h.svc.ClearSessionMessages(c.Request.Context(), uid, uri.ID); err != nil {
+	if err := h.svc.ClearSessionMessages(auth.RequestContext(c), uid, uri.ID); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -185,7 +185,7 @@ func (h *AIHandler) PodDiagnose(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.AnalyzePodDiagnose(c.Request.Context(), uid, req)
+	res, err := h.svc.AnalyzePodDiagnose(auth.RequestContext(c), uid, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -204,7 +204,7 @@ func (h *AIHandler) CicdBuildFail(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.AnalyzeCicdBuildFail(c.Request.Context(), uid, user, req)
+	res, err := h.svc.AnalyzeCicdBuildFail(auth.RequestContext(c), uid, user, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -223,7 +223,7 @@ func (h *AIHandler) AlertExplain(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	res, err := h.svc.AnalyzeAlertExplain(c.Request.Context(), uid, req)
+	res, err := h.svc.AnalyzeAlertExplain(auth.RequestContext(c), uid, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -235,7 +235,7 @@ func (h *AIHandler) ListApprovals(c *gin.Context) {
 	var q aisvc.ApprovalListQuery
 	_ = c.ShouldBindQuery(&q)
 	user, _ := auth.CurrentUserFromContext(c)
-	res, err := h.svc.ListApprovals(c.Request.Context(), user, q)
+	res, err := h.svc.ListApprovals(auth.RequestContext(c), user, q)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -257,7 +257,7 @@ func (h *AIHandler) ReviewApproval(c *gin.Context) {
 		return
 	}
 	user, _ := auth.CurrentUserFromContext(c)
-	res, err := h.svc.ReviewApproval(c.Request.Context(), user, uri.ID, req)
+	res, err := h.svc.ReviewApproval(auth.RequestContext(c), user, uri.ID, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -274,7 +274,7 @@ func (h *AIHandler) ExecuteApproval(c *gin.Context) {
 		return
 	}
 	user, _ := auth.CurrentUserFromContext(c)
-	res, err := h.svc.ExecuteApproval(c.Request.Context(), user, uri.ID)
+	res, err := h.svc.ExecuteApproval(auth.RequestContext(c), user, uri.ID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -283,20 +283,20 @@ func (h *AIHandler) ExecuteApproval(c *gin.Context) {
 }
 
 func (h *AIHandler) SyncKnowledge(c *gin.Context) {
-	n, err := h.svc.SyncKnowledgeBase(c.Request.Context())
+	rep, err := h.svc.SyncKnowledgeBase(auth.RequestContext(c))
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, map[string]any{"indexed": n})
+	response.Success(c, rep)
 }
 
 func (h *AIHandler) CenterOverview(c *gin.Context) {
-	response.Success(c, h.svc.CenterOverview(c.Request.Context()))
+	response.Success(c, h.svc.CenterOverview(auth.RequestContext(c)))
 }
 
 func (h *AIHandler) ReseedCenter(c *gin.Context) {
-	rep, err := h.svc.ReseedCenter(c.Request.Context())
+	rep, err := h.svc.ReseedCenter(auth.RequestContext(c))
 	if err != nil {
 		// 仍返回报告，便于前端展示「目录不存在」等诊断
 		if rep != nil {
@@ -310,7 +310,7 @@ func (h *AIHandler) ReseedCenter(c *gin.Context) {
 }
 
 func (h *AIHandler) ListPrompts(c *gin.Context) {
-	rows, err := h.svc.ListPrompts(c.Request.Context())
+	rows, err := h.svc.ListPrompts(auth.RequestContext(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -326,7 +326,7 @@ func (h *AIHandler) ListPromptVersions(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	rows, err := h.svc.ListPromptVersions(c.Request.Context(), uri.ID)
+	rows, err := h.svc.ListPromptVersions(auth.RequestContext(c), uri.ID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -352,7 +352,7 @@ func (h *AIHandler) PublishPrompt(c *gin.Context) {
 	if user != nil {
 		uid = user.ID
 	}
-	ver, err := h.svc.PublishPromptVersion(c.Request.Context(), uri.ID, uid, req)
+	ver, err := h.svc.PublishPromptVersion(auth.RequestContext(c), uri.ID, uid, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -369,7 +369,7 @@ func (h *AIHandler) RollbackPrompt(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.RollbackPromptVersion(c.Request.Context(), uri.ID, uri.VersionID); err != nil {
+	if err := h.svc.RollbackPromptVersion(auth.RequestContext(c), uri.ID, uri.VersionID); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -377,7 +377,7 @@ func (h *AIHandler) RollbackPrompt(c *gin.Context) {
 }
 
 func (h *AIHandler) ListLLMModels(c *gin.Context) {
-	rows, err := h.svc.ListLLMModels(c.Request.Context())
+	rows, err := h.svc.ListLLMModels(auth.RequestContext(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -391,7 +391,7 @@ func (h *AIHandler) CreateLLMModel(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	row, err := h.svc.CreateLLMModel(c.Request.Context(), req)
+	row, err := h.svc.CreateLLMModel(auth.RequestContext(c), req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -412,7 +412,7 @@ func (h *AIHandler) UpdateLLMModel(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	row, err := h.svc.UpdateLLMModel(c.Request.Context(), uri.ID, req)
+	row, err := h.svc.UpdateLLMModel(auth.RequestContext(c), uri.ID, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -428,7 +428,7 @@ func (h *AIHandler) DeleteLLMModel(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.DeleteLLMModel(c.Request.Context(), uri.ID); err != nil {
+	if err := h.svc.DeleteLLMModel(auth.RequestContext(c), uri.ID); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -443,7 +443,7 @@ func (h *AIHandler) SetDefaultLLMModel(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.SetDefaultLLMModel(c.Request.Context(), uri.ID); err != nil {
+	if err := h.svc.SetDefaultLLMModel(auth.RequestContext(c), uri.ID); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -451,7 +451,7 @@ func (h *AIHandler) SetDefaultLLMModel(c *gin.Context) {
 }
 
 func (h *AIHandler) ListCenterTools(c *gin.Context) {
-	rows, err := h.svc.ListTools(c.Request.Context())
+	rows, err := h.svc.ListTools(auth.RequestContext(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -474,7 +474,7 @@ func (h *AIHandler) UpdateToolEnabled(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.UpdateToolEnabled(c.Request.Context(), uri.ID, req.Enabled); err != nil {
+	if err := h.svc.UpdateToolEnabled(auth.RequestContext(c), uri.ID, req.Enabled); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -482,7 +482,7 @@ func (h *AIHandler) UpdateToolEnabled(c *gin.Context) {
 }
 
 func (h *AIHandler) ListCases(c *gin.Context) {
-	rows, err := h.svc.ListIncidentCases(c.Request.Context())
+	rows, err := h.svc.ListIncidentCases(auth.RequestContext(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -491,7 +491,7 @@ func (h *AIHandler) ListCases(c *gin.Context) {
 }
 
 func (h *AIHandler) ListSOPs(c *gin.Context) {
-	rows, err := h.svc.ListSOPs(c.Request.Context())
+	rows, err := h.svc.ListSOPs(auth.RequestContext(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -500,7 +500,7 @@ func (h *AIHandler) ListSOPs(c *gin.Context) {
 }
 
 func (h *AIHandler) ListKBs(c *gin.Context) {
-	rows, err := h.svc.ListKnowledgeBases(c.Request.Context())
+	rows, err := h.svc.ListKnowledgeBases(auth.RequestContext(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -509,7 +509,7 @@ func (h *AIHandler) ListKBs(c *gin.Context) {
 }
 
 func (h *AIHandler) ListEvalCases(c *gin.Context) {
-	rows, err := h.svc.ListEvalCases(c.Request.Context())
+	rows, err := h.svc.ListEvalCases(auth.RequestContext(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -523,7 +523,7 @@ func (h *AIHandler) RunEval(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 	user, _ := auth.CurrentUserFromContext(c)
-	run, err := h.svc.RunEvalSuite(c.Request.Context(), user, req.Live)
+	run, err := h.svc.RunEvalSuite(auth.RequestContext(c), user, req.Live)
 	if err != nil {
 		response.Error(c, err)
 		return

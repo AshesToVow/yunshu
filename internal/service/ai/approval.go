@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
@@ -43,18 +44,23 @@ type ApprovalListQuery struct {
 	Page     int    `form:"page"`
 	PageSize int    `form:"page_size"`
 	MineOnly bool   `form:"mine_only"`
+	All      bool   `form:"all"` // 仅审批角色/超管可看全部
 }
 
 func (s *Service) ListApprovals(ctx context.Context, actor *auth.CurrentUser, q ApprovalListQuery) (*pagination.Result[model.AiToolApproval], error) {
 	if s.db == nil {
 		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
 	}
+	if actor == nil || actor.ID == 0 {
+		return nil, constants.ErrUnauthorized
+	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	db := s.db.WithContext(ctx).Model(&model.AiToolApproval{})
 	if st := strings.TrimSpace(q.Status); st != "" {
 		db = db.Where("status = ?", st)
 	}
-	if q.MineOnly && actor != nil {
+	// 默认仅本人；审批角色显式 all=true 时可看全部
+	if q.MineOnly || !q.All || !canReviewApprovals(actor) {
 		db = db.Where("user_id = ?", actor.ID)
 	}
 	var total int64
@@ -78,6 +84,12 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 	if s.db == nil {
 		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
 	}
+	if actor == nil || actor.ID == 0 {
+		return nil, constants.ErrUnauthorized
+	}
+	if !canReviewApprovals(actor) {
+		return nil, constants.ErrForbiddenWithMsg("无权审批 AI 高危操作")
+	}
 	var row model.AiToolApproval
 	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
 		return nil, constants.ErrNotFound
@@ -85,10 +97,11 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 	if row.Status != "pending" {
 		return nil, constants.ErrBadRequestWithMsg("审批单状态不可变更")
 	}
-	if actor != nil {
-		uid := actor.ID
-		row.ReviewerID = &uid
+	if row.UserID == actor.ID && !auth.IsSuperAdminRole(actor.RoleCodes) {
+		return nil, constants.ErrForbiddenWithMsg("不能审批自己发起的操作")
 	}
+	uid := actor.ID
+	row.ReviewerID = &uid
 	row.ReviewNote = truncateStr(req.Note, 500)
 	if !req.Approve {
 		row.Status = "rejected"
@@ -108,13 +121,35 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 }
 
 func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, id uint) (*model.AiToolApproval, error) {
+	if actor == nil || actor.ID == 0 {
+		return nil, constants.ErrUnauthorized
+	}
+	if !canReviewApprovals(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
+		// 允许申请人在已批准后触发执行，但仍注入本人上下文做 K8s ACL
+		var peek model.AiToolApproval
+		if err := s.db.WithContext(ctx).First(&peek, id).Error; err != nil {
+			return nil, constants.ErrNotFound
+		}
+		if peek.UserID != actor.ID {
+			return nil, constants.ErrForbiddenWithMsg("无权执行该审批单")
+		}
+	}
+	// 乐观锁：仅 approved/failed → executing
+	res := s.db.WithContext(ctx).Model(&model.AiToolApproval{}).
+		Where("id = ? AND status IN ?", id, []string{"approved", "failed"}).
+		Updates(map[string]any{"status": "executing", "updated_at": time.Now()})
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, constants.ErrBadRequestWithMsg("仅已批准的审批单可执行（可能已被他人执行）")
+	}
+
 	var row model.AiToolApproval
 	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
 		return nil, constants.ErrNotFound
 	}
-	if row.Status != "approved" && row.Status != "failed" {
-		return nil, constants.ErrBadRequestWithMsg("仅已批准的审批单可执行")
-	}
+
 	var args map[string]any
 	_ = json.Unmarshal([]byte(row.ArgsJSON), &args)
 	if args == nil {
@@ -142,6 +177,8 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 		name = row.Resource
 	}
 
+	execCtx := auth.WithRequestUser(ctx, actor)
+
 	var execErr error
 	switch row.ToolName {
 	case "scale_deployment":
@@ -150,7 +187,7 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 			break
 		}
 		replicas := int32(getUint("replicas", 1))
-		execErr = s.workloadSvc.DeploymentScale(ctx, k8s.WorkloadScaleRequest{
+		execErr = s.workloadSvc.DeploymentScale(execCtx, k8s.WorkloadScaleRequest{
 			ClusterID: clusterID, Namespace: ns, Name: name, Replicas: replicas,
 		})
 	case "restart_deployment":
@@ -158,7 +195,7 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 			execErr = fmt.Errorf("Workload 服务不可用")
 			break
 		}
-		execErr = s.workloadSvc.DeploymentRestart(ctx, k8s.NamespacedDetailQuery{
+		execErr = s.workloadSvc.DeploymentRestart(execCtx, k8s.NamespacedDetailQuery{
 			ClusterID: clusterID, Namespace: ns, Name: name,
 		})
 	case "delete_pod":
@@ -166,7 +203,7 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 			execErr = fmt.Errorf("Pod 服务不可用")
 			break
 		}
-		execErr = s.podSvc.Delete(ctx, k8s.PodDeleteRequest{
+		execErr = s.podSvc.Delete(execCtx, k8s.PodDeleteRequest{
 			ClusterID: clusterID, Namespace: ns, Name: name,
 		})
 	default:
@@ -179,6 +216,8 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 		row.Status = "executed"
 		row.ResultMsg = "执行成功"
 	}
-	_ = s.db.WithContext(ctx).Save(&row).Error
+	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		return &row, fmt.Errorf("执行结果落库失败: %w", err)
+	}
 	return &row, execErr
 }

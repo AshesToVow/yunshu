@@ -38,9 +38,9 @@ export function AlertMonitorLayout() {
         title="告警监控平台"
         subtitle="数据源、规则、事件、抑制与 PromQL 查询统一管理"
         meta={[
-          ctx.projectContextId ? `PROJECT / ${ctx.activeProjectName}` : "PROJECT / ALL",
-          `TAB / ${tab.toUpperCase()}`,
-          ctx.loading ? "SYNC / PENDING" : "SYNC / OK",
+          ctx.projectContextId ? `项目 · ${ctx.activeProjectName}` : "项目 · 全部",
+          `页签 · ${ALERT_MONITOR_TABS.find((x) => x.key === tab)?.label || tab}`,
+          ctx.loading ? "同步中" : "已同步",
         ]}
       />
       <Card className="table-card" loading={ctx.loading}>

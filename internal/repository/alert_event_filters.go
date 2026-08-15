@@ -15,18 +15,18 @@ func applyAlertEventProjectFilter(tx *gorm.DB, db *gorm.DB, projectID uint) *gor
 	}
 	dsSub := db.Model(&model.AlertDatasource{}).Select("id").Where("project_id = ?", projectID)
 	pid := fmt.Sprintf("%d", projectID)
-	// 优先 project_id 列；兼容历史：数据源归属 / 命中订阅节点 / payload 中的 project_id。
+	// project_id 列命中，或列为空/错值但数据源/订阅/payload 归属本项目。
 	return tx.Where(
 		`(project_id = ?)
-OR (IFNULL(project_id, 0) = 0 AND datasource_id IN (?))
-OR (IFNULL(project_id, 0) = 0 AND matched_policy_ids <> '' AND EXISTS (
+OR (datasource_id IN (?))
+OR (matched_policy_ids <> '' AND EXISTS (
 	SELECT 1 FROM alert_subscription_nodes n
 	WHERE n.project_id = ? AND n.deleted_at IS NULL
 	  AND FIND_IN_SET(n.id, alert_events.matched_policy_ids)
 ))
-OR (IFNULL(project_id, 0) = 0 AND (
+OR (
 	request_payload LIKE ? OR request_payload LIKE ? OR request_payload LIKE ?
-))`,
+)`,
 		projectID,
 		dsSub,
 		projectID,

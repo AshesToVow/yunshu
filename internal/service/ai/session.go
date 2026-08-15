@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
 )
@@ -48,6 +49,15 @@ type SessionDetail struct {
 func (s *Service) CreateSession(ctx context.Context, userID uint, req SessionCreateRequest) (*model.AiChatSession, error) {
 	if userID == 0 {
 		return nil, constants.ErrUnauthorized
+	}
+	actor := resolveActor(ctx, nil)
+	if actor == nil {
+		actor = &auth.CurrentUser{ID: userID}
+	}
+	if req.ProjectID > 0 {
+		if err := s.assertProjectMember(ctx, actor, req.ProjectID); err != nil {
+			return nil, err
+		}
 	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
@@ -123,6 +133,15 @@ func (s *Service) UpdateSession(ctx context.Context, userID, sessionID uint, req
 		updates["title"] = t
 	}
 	if req.ProjectID != nil {
+		if *req.ProjectID > 0 {
+			actor := resolveActor(ctx, nil)
+			if actor == nil {
+				actor = &auth.CurrentUser{ID: userID}
+			}
+			if err := s.assertProjectMember(ctx, actor, *req.ProjectID); err != nil {
+				return nil, err
+			}
+		}
 		updates["project_id"] = *req.ProjectID
 	}
 	if req.ClusterID != nil {

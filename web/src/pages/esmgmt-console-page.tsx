@@ -1,6 +1,8 @@
 import { PlayCircleOutlined } from "@ant-design/icons";
 import { Button, Card, Input, Select, Space, Typography, message } from "antd";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
 import { listEsmgmtConnections, proxyEsmgmtREST, type EsmgmtConnection } from "../services/esmgmt";
 import { extractApiErrorMessage } from "../services/http";
 
@@ -45,13 +47,14 @@ export function EsmgmtConsolePage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    void listEsmgmtConnections()
+    void listEsmgmtConnections({ include_log_platform: true })
       .then((list) => {
         setConnections(list || []);
-        const def = list?.find((c) => c.is_default) || list?.[0];
+        const logPlat = list?.find((c) => c.id === 0);
+        const def = logPlat || list?.find((c) => c.is_default) || list?.[0];
         if (def) setConnectionId(def.id);
       })
-      .catch(() => undefined);
+      .catch((e) => message.error(extractApiErrorMessage(e, "加载连接失败")));
   }, []);
 
   function applyQuickCommand(key: string) {
@@ -80,7 +83,19 @@ export function EsmgmtConsolePage() {
   }
 
   return (
-    <Card className="table-card" title="ES REST 控制台（管理员权限）">
+    <div className="page-stack">
+      <OpsPageHeader
+        title="ES REST 控制台"
+        description="管理员受限代理：支持 GET/POST/PUT/DELETE/HEAD，禁止脚本执行与节点关机。"
+        breadcrumbs={[{ title: "ES 管理" }, { title: "REST 控制台" }]}
+        extra={
+          <Space>
+            <Link to="/esmgmt/overview">集群概览</Link>
+            <Link to="/esmgmt/connections">连接管理</Link>
+          </Space>
+        }
+      />
+      <Card className="table-card">
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
         <Typography.Text type="secondary">
           支持 GET / POST / PUT / DELETE / HEAD。允许集群探查、索引与文档读写、别名与模板等管理操作；禁止脚本执行与节点关机。
@@ -128,6 +143,7 @@ export function EsmgmtConsolePage() {
         </pre>
       </Space>
     </Card>
+    </div>
   );
 }
 

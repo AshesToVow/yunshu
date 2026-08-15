@@ -9,6 +9,7 @@ import {
   TeamOutlined,
 } from "@ant-design/icons";
 import type { TreeSelectProps } from "antd";
+import { extractApiErrorMessage } from "../../services/http";
 import {
   Alert,
   AutoComplete,
@@ -917,8 +918,9 @@ function useAlertMonitorPlatformState() {
     try {
       const raw = await alertmanagerSilences(silenceDatasourceId);
       setAmSilenceRows(parseAlertmanagerSilences(raw));
-    } catch {
+    } catch (e) {
       setAmSilenceRows([]);
+      message.error(extractApiErrorMessage(e, "加载 Alertmanager 静默失败"));
     } finally {
       setAmSilencesLoading(false);
     }
@@ -1068,7 +1070,7 @@ function useAlertMonitorPlatformState() {
       }
       setPromViewMode("table");
     } catch (e) {
-      setPromResult(e instanceof Error ? e.message : String(e));
+      setPromResult(extractApiErrorMessage(e, "操作失败"));
       setPromDataInner(null);
     } finally {
       setPromLoading(false);
@@ -1097,7 +1099,7 @@ function useAlertMonitorPlatformState() {
         message.error(res.message || "连通失败");
       }
     } catch (e) {
-      message.error(e instanceof Error ? e.message : String(e));
+      message.error(extractApiErrorMessage(e, "操作失败"));
     } finally {
       setDsPingId(null);
     }
@@ -1173,15 +1175,22 @@ function useAlertMonitorPlatformState() {
       }
       setDsModalOpen(false);
       await loadDatasources(projectContextId);
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "保存数据源失败"));
     } finally {
       setDsSubmitting(false);
     }
   }
 
   async function removeDs(id: number) {
-    await deleteAlertDatasource(id);
-    message.success("已删除");
-    await loadDatasources(projectContextId);
+    try {
+      await deleteAlertDatasource(id);
+      message.success("已删除");
+      await loadDatasources(projectContextId);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除数据源失败"));
+    }
   }
 
   const nativeAlertsColumns: ColumnsType<PromNativeAlertRow> = useMemo(
@@ -1198,13 +1207,13 @@ function useAlertMonitorPlatformState() {
           return (
             <Space size={6}>
               <Badge status={firing ? "error" : resolved ? "success" : "default"} />
-              <Typography.Text>{v || "-"}</Typography.Text>
+              <Typography.Text>{firing ? "触发中" : resolved ? "已恢复" : v || "-"}</Typography.Text>
             </Space>
           );
         },
       },
-      { title: "Labels", dataIndex: "labelsShort", ellipsis: true },
-      { title: "activeAt", dataIndex: "activeAt", width: 180, ellipsis: true },
+      { title: "标签", dataIndex: "labelsShort", ellipsis: true },
+      { title: "开始时间", dataIndex: "activeAt", width: 180, ellipsis: true },
       {
         title: "操作",
         width: 110,
@@ -1265,7 +1274,9 @@ function useAlertMonitorPlatformState() {
           const expired = dayjs(r.ends_at).isBefore(dayjs());
           if (expired) return <Tag color="red">已过期</Tag>;
           if (r.source === "alertmanager") {
-            return r.enabled ? <Tag color="green">{r.state || "active"}</Tag> : <Tag>{r.state || "inactive"}</Tag>;
+            const st = String(r.state || "").toLowerCase();
+            const label = st === "active" ? "生效中" : st === "pending" ? "待生效" : st === "expired" ? "已过期" : st || "停用";
+            return r.enabled ? <Tag color="green">{label}</Tag> : <Tag>{label}</Tag>;
           }
           return r.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>;
         },
@@ -1765,7 +1776,7 @@ function useAlertMonitorPlatformState() {
       setMetricOptions(names);
       if (names.length === 0) message.warning("未检索到指标，请调整关键字");
     } catch (e) {
-      message.error(`加载指标失败：${e instanceof Error ? e.message : String(e)}`);
+      message.error(`加载指标失败：${extractApiErrorMessage(e, "操作失败")}`);
     } finally {
       setMetricLoading(false);
     }
@@ -1807,7 +1818,7 @@ function useAlertMonitorPlatformState() {
       setLabelValueOptions(vals);
       if (!vals.length) message.warning("未检索到可用标签值");
     } catch (e) {
-      message.error(`加载标签值失败：${e instanceof Error ? e.message : String(e)}`);
+      message.error(`加载标签值失败：${extractApiErrorMessage(e, "操作失败")}`);
     } finally {
       setLabelValueLoading(false);
     }
@@ -1903,15 +1914,22 @@ function useAlertMonitorPlatformState() {
       }
       setRuleModalOpen(false);
       await loadRules(projectContextId);
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "保存规则失败"));
     } finally {
       setRuleSubmitting(false);
     }
   }
 
   async function removeRule(id: number) {
-    await deleteAlertMonitorRule(id);
-    message.success("已删除");
-    await loadRules(projectContextId);
+    try {
+      await deleteAlertMonitorRule(id);
+      message.success("已删除");
+      await loadRules(projectContextId);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除规则失败"));
+    }
   }
 
   const cloudExpiryColumns: ColumnsType<CloudExpiryRuleItem> = [
@@ -2112,7 +2130,7 @@ function useAlertMonitorPlatformState() {
             await updateUser(userIds[0], patch);
             message.success("已同步更新用户资料中的邮箱或部门");
           } catch (e) {
-            message.warning(`处理人已保存，但写回用户资料失败：${e instanceof Error ? e.message : String(e)}`);
+            message.warning(`处理人已保存，但写回用户资料失败：${extractApiErrorMessage(e, "操作失败")}`);
           }
         }
       }
@@ -2184,7 +2202,7 @@ function useAlertMonitorPlatformState() {
       const refreshed = await listDutyBlocks({ monitor_rule_id: dutyRuleId, page: 1, page_size: 500 });
       setBlockList(refreshed.list ?? []);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : String(e));
+      message.error(extractApiErrorMessage(e, "操作失败"));
     } finally {
       setCopyDutyLoading(false);
     }
@@ -2286,7 +2304,7 @@ function useAlertMonitorPlatformState() {
             await updateUser(userIds[0], patch);
             message.success("已同步更新用户资料中的邮箱或部门");
           } catch (e) {
-            message.warning(`班次已保存，但写回用户资料失败：${e instanceof Error ? e.message : String(e)}`);
+            message.warning(`班次已保存，但写回用户资料失败：${extractApiErrorMessage(e, "操作失败")}`);
           }
         }
       }

@@ -170,6 +170,20 @@ func (s *Service) UpdatePlan(ctx context.Context, projectID uint, req PlanUpsert
 		plan.CronSpec = strings.TrimSpace(req.CronSpec)
 	}
 	if req.DatasourceID > 0 {
+		var ds model.AlertDatasource
+		err := s.db.WithContext(ctx).Where("id = ?", req.DatasourceID).First(&ds).Error
+		if err != nil {
+			return nil, constants.ErrBadRequestWithMsg("数据源不存在")
+		}
+		if ds.ProjectID != projectID {
+			return nil, constants.ErrBadRequestWithMsg("数据源不属于当前项目")
+		}
+		if !strings.EqualFold(strings.TrimSpace(ds.Type), "prometheus") {
+			return nil, constants.ErrBadRequestWithMsg("巡检仅支持 Prometheus 数据源")
+		}
+		if !ds.Enabled {
+			return nil, constants.ErrBadRequestWithMsg("数据源未启用")
+		}
 		plan.DatasourceID = req.DatasourceID
 	}
 	mode := strings.TrimSpace(req.ReportListMode)

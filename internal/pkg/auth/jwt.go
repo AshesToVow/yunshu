@@ -102,6 +102,17 @@ func RequestUserFromContext(ctx context.Context) (*CurrentUser, bool) {
 	return u, ok
 }
 
+// WithRequestUser 将用户写入 context（供 AI 审批执行等非 Gin 入口注入 ACL 主体）。
+func WithRequestUser(ctx context.Context, u *CurrentUser) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if u == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, requestUserCtxKey{}, u)
+}
+
 func CurrentUserFromContext(c *gin.Context) (*CurrentUser, bool) {
 	value, exists := c.Get(ContextUserKey)
 	if !exists {
