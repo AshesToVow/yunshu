@@ -43,6 +43,10 @@ func (m *module) Models() []any {
 		&model.AlertSubscriptionMatch{},
 		&model.AlertFiringDelivery{},
 		&model.CloudExpiryRule{},
+		&model.AlertConsulEndpoint{},
+		&model.AlertMonitorObject{},
+		&model.AlertCurEvent{},
+		&model.AlertHisEvent{},
 	}
 }
 

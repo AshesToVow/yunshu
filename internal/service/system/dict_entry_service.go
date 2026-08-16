@@ -119,10 +119,10 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "wecom_webhook_url", Label: "企业微信机器人 URL 示例", Value: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=replace-me", Sort: intRef(1), Status: 0, Remark: "企业微信 Webhook URL"},
 			{DictType: "dingtalk_webhook_url", Label: "钉钉机器人 URL 示例", Value: "https://oapi.dingtalk.com/robot/send?access_token=replace-me", Sort: intRef(1), Status: 0, Remark: "钉钉 Webhook URL"},
 			// Alert 运行配置（字典优先，YAML 兜底）
-			{DictType: "alert_webhook_token", Label: "Webhook Token 示例", Value: "change-me-alert-token", Sort: intRef(1), Status: 0, Remark: "alert.webhook_token：用于 Alertmanager Webhook 鉴权"},
+			{DictType: "alert_webhook_token", Label: "Webhook Token 示例", Value: "change-me-alert-token", Sort: intRef(1), Status: 0, Remark: "alert.webhook_token：K8s Event 等内部入站鉴权（非 Alertmanager）"},
 			{DictType: "alert_enrich_prometheus_url", Label: "Prometheus 地址示例", Value: "http://127.0.0.1:9090", Sort: intRef(1), Status: 0, Remark: "alert.prometheus_url：用于告警增强查询"},
 			{DictType: "alert_enrich_prometheus_token", Label: "Prometheus Token（可选）", Value: "", Sort: intRef(1), Status: 0, Remark: "alert.prometheus_token：敏感信息建议仅在生产库维护"},
-			// K8s Event 多集群转发（字典优先，YAML 兜底；入站复用 /alerts/webhook/alertmanager）
+			// K8s Event 多集群转发（字典优先，YAML 兜底；入站 /alerts/ingress/k8s-events）
 			{DictType: "k8s_event_forward_enabled", Label: "启用 Event 转发", Value: "false", Sort: intRef(1), Status: 0, Remark: "k8s_event_forward.enabled：true/false"},
 			{DictType: "k8s_event_forward_watcher_buffer_size", Label: "监听通道缓冲", Value: "1000", Sort: intRef(1), Status: 0, Remark: "k8s_event_forward.watcher_buffer_size"},
 			{DictType: "k8s_event_forward_worker_interval_seconds", Label: "批处理周期(秒)", Value: "10", Sort: intRef(1), Status: 0, Remark: "k8s_event_forward.worker_interval_seconds"},

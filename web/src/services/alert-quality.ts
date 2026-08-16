@@ -5,7 +5,9 @@ export interface AlertQualityReport {
   window_hours: number;
   from: string;
   to: string;
+  project_id?: number;
   total_events: number;
+  cur_firing_count?: number;
   notify_fail_rate: number;
   notify_failed: number;
   quality_score: number;

@@ -67,7 +67,6 @@ import {
   listCloudExpiryRules,
   listDutyBlocks,
   pingAlertDatasource,
-  alertmanagerSilences,
   promActiveAlerts,
   promInstantQuery,
   promRangeQuery,
@@ -910,21 +909,10 @@ function useAlertMonitorPlatformState() {
   }, [projectContextId]);
 
   const loadAmSilences = useCallback(async () => {
-    if (!silenceDatasourceId) {
-      setAmSilenceRows([]);
-      return;
-    }
-    setAmSilencesLoading(true);
-    try {
-      const raw = await alertmanagerSilences(silenceDatasourceId);
-      setAmSilenceRows(parseAlertmanagerSilences(raw));
-    } catch (e) {
-      setAmSilenceRows([]);
-      message.error(extractApiErrorMessage(e, "加载 Alertmanager 静默失败"));
-    } finally {
-      setAmSilencesLoading(false);
-    }
-  }, [silenceDatasourceId]);
+    // Alertmanager 已下线：不再拉取 /api/v2/silences
+    setAmSilenceRows([]);
+    setAmSilencesLoading(false);
+  }, []);
 
   const silenceDisplayList = useMemo((): SilenceDisplayRow[] => {
     const platformRows = (silenceList ?? []).map((r) => ({
@@ -1109,6 +1097,16 @@ function useAlertMonitorPlatformState() {
     { title: "ID", dataIndex: "id", width: 70 },
     { title: "项目", dataIndex: "project_name", width: 160, render: (v: string, r: AlertDatasourceItem) => v || String(r.project_id || "-") },
     { title: "名称", dataIndex: "name" },
+    {
+      title: "类型",
+      dataIndex: "type",
+      width: 120,
+      render: (v: string) => {
+        const t = (v || "prometheus").toLowerCase();
+        if (t === "victoria" || t === "victoriametrics") return <Tag color="blue">VictoriaMetrics</Tag>;
+        return <Tag>Prometheus</Tag>;
+      },
+    },
     { title: "地址", dataIndex: "base_url", ellipsis: true },
     { title: "启用", dataIndex: "enabled", width: 80, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
     {

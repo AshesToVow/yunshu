@@ -184,9 +184,84 @@ export function promActiveAlerts(id: number) {
   return getData<{ data: unknown }>(http.get(`/alerts/datasources/${id}/prometheus-alerts`)).then((r) => r.data);
 }
 
-/** GET Alertmanager /api/v2/silences，返回静默数组 JSON。 */
-export function alertmanagerSilences(id: number) {
-  return getData<{ data: unknown }>(http.get(`/alerts/datasources/${id}/alertmanager-silences`)).then((r) => r.data);
+/** @deprecated Alertmanager 已下线 */
+export function alertmanagerSilences(_id: number): Promise<unknown> {
+  return Promise.resolve([]);
+}
+
+export interface AlertConsulEndpointItem {
+  id: number;
+  project_id: number;
+  name: string;
+  address: string;
+  token?: string;
+  datacenter?: string;
+  service_tag?: string;
+  enabled: boolean;
+  remark?: string;
+  last_sync_at?: string | null;
+  last_error?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertMonitorObjectItem {
+  id: number;
+  endpoint_id: number;
+  project_id: number;
+  service_name: string;
+  service_id: string;
+  node?: string;
+  address?: string;
+  port?: number;
+  tags_json?: string;
+  meta_json?: string;
+  exporter_role?: string;
+  yunshu_project?: string;
+  health?: string;
+  probe_url?: string;
+  synced_at?: string;
+}
+
+export function listConsulEndpoints(params?: { project_id?: number; keyword?: string; page?: number; page_size?: number }) {
+  return getData<{ list?: AlertConsulEndpointItem[]; items?: AlertConsulEndpointItem[]; total: number; page: number; page_size: number }>(
+    http.get("/alerts/consul-endpoints", { params }),
+  ).then((payload) => normalizePagedPayload(payload));
+}
+
+export function createConsulEndpoint(payload: Record<string, unknown>) {
+  return getData<AlertConsulEndpointItem>(http.post("/alerts/consul-endpoints", payload));
+}
+
+export function updateConsulEndpoint(id: number, payload: Record<string, unknown>) {
+  return getData<AlertConsulEndpointItem>(http.put(`/alerts/consul-endpoints/${id}`, payload));
+}
+
+export function deleteConsulEndpoint(id: number) {
+  return getData<{ message: string }>(http.delete(`/alerts/consul-endpoints/${id}`));
+}
+
+export function pingConsulEndpoint(id: number) {
+  return getData<{ ok: boolean; message: string }>(http.get(`/alerts/consul-endpoints/${id}/ping`));
+}
+
+export function syncConsulEndpoint(id: number) {
+  return getData<{ endpoint_id: number; upserted: number; removed: number; message: string }>(
+    http.post(`/alerts/consul-endpoints/${id}/sync`),
+  );
+}
+
+export function listMonitorObjects(params?: {
+  project_id?: number;
+  endpoint_id?: number;
+  exporter_role?: string;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{ list?: AlertMonitorObjectItem[]; items?: AlertMonitorObjectItem[]; total: number; page: number; page_size: number }>(
+    http.get("/alerts/monitor-objects", { params }),
+  ).then((payload) => normalizePagedPayload(payload));
 }
 
 export function promInstantQuery(id: number, payload: { query: string; time?: string }) {
@@ -248,6 +323,21 @@ export function listAlertMonitorRules(params?: {
 
 export function createAlertMonitorRule(payload: Record<string, unknown>) {
   return getData<AlertMonitorRuleItem>(http.post("/alerts/monitor-rules", payload));
+}
+
+export function importPrometheusYAML(payload: {
+  datasource_id: number;
+  project_id?: number;
+  yaml: string;
+  enabled?: boolean;
+  dry_run?: boolean;
+}) {
+  return getData<{
+    created: number;
+    skipped: number;
+    preview?: Array<{ group_name: string; name: string; expr: string; for_seconds: number; severity: string }>;
+    errors?: string[];
+  }>(http.post("/alerts/monitor-rules/import-prometheus-yaml", payload));
 }
 
 export interface AlertRuleTemplateItem {

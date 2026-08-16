@@ -117,13 +117,31 @@ func (s *AlertDatasourceService) getRaw(ctx context.Context, id uint) (*model.Al
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *AlertDatasourceService) Create(ctx context.Context, req AlertDatasourceUpsertRequest) (*model.AlertDatasource, error) {
-	t := strings.TrimSpace(req.Type)
+func normalizeAlertDatasourceType(t string) (string, error) {
+	t = strings.ToLower(strings.TrimSpace(t))
 	if t == "" {
 		t = "prometheus"
 	}
-	if t != "prometheus" {
-		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg480bba83b97b)
+	switch t {
+	case "prometheus", "victoria", "victoriametrics":
+		if t == "victoriametrics" {
+			t = "victoria"
+		}
+		return t, nil
+	default:
+		return "", constants.ErrBadRequestWithMsg(constants.ErrMsg480bba83b97b)
+	}
+}
+
+func isPromCompatibleDatasourceType(t string) bool {
+	t = strings.ToLower(strings.TrimSpace(t))
+	return t == "" || t == "prometheus" || t == "victoria" || t == "victoriametrics"
+}
+
+func (s *AlertDatasourceService) Create(ctx context.Context, req AlertDatasourceUpsertRequest) (*model.AlertDatasource, error) {
+	t, err := normalizeAlertDatasourceType(req.Type)
+	if err != nil {
+		return nil, err
 	}
 	if req.ProjectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg9a7f154a70af)
@@ -134,12 +152,12 @@ func (s *AlertDatasourceService) Create(ctx context.Context, req AlertDatasource
 		Type:            t,
 		BaseURL:         strings.TrimSpace(req.BaseURL),
 		AlertmanagerURL: strings.TrimSpace(req.AlertmanagerURL),
-		BearerToken:   strings.TrimSpace(req.BearerToken),
-		BasicUser:     strings.TrimSpace(req.BasicUser),
-		BasicPassword: strings.TrimSpace(req.BasicPassword),
-		SkipTLSVerify: req.SkipTLSVerify != nil && *req.SkipTLSVerify,
-		Enabled:       req.Enabled == nil || *req.Enabled,
-		Remark:        strings.TrimSpace(req.Remark),
+		BearerToken:     strings.TrimSpace(req.BearerToken),
+		BasicUser:       strings.TrimSpace(req.BasicUser),
+		BasicPassword:   strings.TrimSpace(req.BasicPassword),
+		SkipTLSVerify:   req.SkipTLSVerify != nil && *req.SkipTLSVerify,
+		Enabled:         req.Enabled == nil || *req.Enabled,
+		Remark:          strings.TrimSpace(req.Remark),
 	}
 	if err := s.repo.Create(ctx, &row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.datasource", "Create", err)
@@ -164,6 +182,13 @@ func (s *AlertDatasourceService) Update(ctx context.Context, id uint, req AlertD
 	}
 	if strings.TrimSpace(req.Name) != "" {
 		row.Name = strings.TrimSpace(req.Name)
+	}
+	if strings.TrimSpace(req.Type) != "" {
+		t, err := normalizeAlertDatasourceType(req.Type)
+		if err != nil {
+			return nil, err
+		}
+		row.Type = t
 	}
 	if strings.TrimSpace(req.BaseURL) != "" {
 		row.BaseURL = strings.TrimSpace(req.BaseURL)
@@ -226,8 +251,8 @@ func (s *AlertDatasourceService) clientFor(ctx context.Context, id uint) (*proma
 	if !row.Enabled {
 		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsgfa357d889ce0)
 	}
-	if row.Type != "prometheus" {
-		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsg9a8a590cfc72)
+	if !isPromCompatibleDatasourceType(row.Type) {
+		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsg480bba83b97b)
 	}
 	return &promapi.Client{
 		BaseURL:       row.BaseURL,
@@ -307,14 +332,9 @@ func (s *AlertDatasourceService) alertmanagerClientFor(ctx context.Context, id u
 }
 
 func (s *AlertDatasourceService) AlertmanagerSilences(ctx context.Context, id uint) (json.RawMessage, error) {
-	cli, _, err := s.alertmanagerClientFor(ctx, id)
-	if err != nil {
-		return nil, bizerrors.Pass(ctx, "alert.datasource", "AlertmanagerSilences", err)
-	}
-	qctx, cancel := context.WithTimeout(ctx, 25*time.Second)
-	defer cancel()
-	body, _, err := cli.AlertmanagerSilences(qctx)
-	return body, bizerrors.Pass(ctx, "alert.datasource", "AlertmanagerSilences", err)
+	_ = ctx
+	_ = id
+	return nil, constants.ErrBadRequestWithMsg("Alertmanager 已下线，请使用平台静默")
 }
 
 func (s *AlertDatasourceService) PingDatasource(ctx context.Context, id uint) (*DatasourcePingResult, error) {
@@ -329,8 +349,11 @@ func (s *AlertDatasourceService) PingDatasource(ctx context.Context, id uint) (*
 	if t == "" {
 		t = "prometheus"
 	}
-	if t != "prometheus" {
-		return &DatasourcePingResult{OK: false, Message: "非 prometheus 类型暂不支持连通性检测", LatencyMs: 0}, nil
+	if t == "victoriametrics" {
+		t = "victoria"
+	}
+	if !isPromCompatibleDatasourceType(t) {
+		return &DatasourcePingResult{OK: false, Message: "仅 prometheus/victoria 支持连通性检测", LatencyMs: 0}, nil
 	}
 	if strings.TrimSpace(row.BaseURL) == "" {
 		return &DatasourcePingResult{OK: false, Message: "base_url 为空", LatencyMs: 0}, nil

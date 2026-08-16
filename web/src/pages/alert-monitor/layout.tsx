@@ -7,6 +7,8 @@ import { ALERT_MONITOR_TABS, normalizeAlertMonitorTab, tabPathForKey, type Alert
 
 const tabLazy: Record<AlertMonitorTabKey, React.LazyExoticComponent<() => JSX.Element>> = {
   datasources: lazy(async () => ({ default: (await import("./tabs/datasources-tab")).DatasourcesTab })),
+  objects: lazy(async () => ({ default: (await import("./tabs/objects-tab")).ObjectsTab })),
+  quality: lazy(async () => ({ default: (await import("./tabs/quality-tab")).QualityTab })),
   policies: lazy(async () => ({ default: (await import("./tabs/policies-tab")).PoliciesTab })),
   history: lazy(async () => ({ default: (await import("./tabs/history-tab")).HistoryTab })),
   inhibition: lazy(async () => ({ default: (await import("./tabs/inhibition-tab")).InhibitionTab })),
@@ -34,9 +36,9 @@ export function AlertMonitorLayout() {
   return (
     <div className="page-stack">
       <PageTelemetryHeader
-        label="[ ALERT / MONITOR ]"
-        title="告警监控平台"
-        subtitle="数据源、规则、事件、抑制与 PromQL 查询统一管理"
+        label="[ ALERT / ENGINE ]"
+        title="告警平台"
+        subtitle="数据源评测 · 规则中心 · 事件与降噪 · 通知（夜莺式引擎，无 Alertmanager）"
         meta={[
           ctx.projectContextId ? `项目 · ${ctx.activeProjectName}` : "项目 · 全部",
           `页签 · ${ALERT_MONITOR_TABS.find((x) => x.key === tab)?.label || tab}`,

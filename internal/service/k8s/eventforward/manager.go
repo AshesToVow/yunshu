@@ -21,7 +21,7 @@ type RuntimeConfig struct {
 	WorkerIntervalSeconds int
 	WorkerBatchSize       int
 	WorkerMaxRetries      int
-	// AlertWebhookURL 本机告警平台入站地址（复用 /alerts/webhook/alertmanager）
+	// AlertWebhookURL 本机告警平台 K8s Event 入站地址（/alerts/ingress/k8s-events）
 	AlertWebhookURL         string
 	UseInternalAlertWebhook bool
 }
@@ -115,7 +115,7 @@ func loadRuntimeConfig(store interfaces.K8sEventForwardRepository, appCfg config
 	if port <= 0 {
 		port = 8080
 	}
-	rt.AlertWebhookURL = fmt.Sprintf("http://127.0.0.1:%d/api/v1/alerts/webhook/alertmanager", port)
+	rt.AlertWebhookURL = fmt.Sprintf("http://127.0.0.1:%d/api/v1/alerts/ingress/k8s-events", port)
 	return rt, nil
 }
 

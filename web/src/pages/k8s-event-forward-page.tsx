@@ -264,7 +264,7 @@ function RulesPanel() {
             K8s Event 标准类型为 <Typography.Text code>Normal</Typography.Text> / <Typography.Text code>Warning</Typography.Text>，仅{" "}
             <Typography.Text code>Normal</Typography.Text> 不转发；告警自动携带集群归属项目的 <Typography.Text code>project_id</Typography.Text>，走项目订阅路由（请在集群管理设置「归属项目」）。Webhook 留空或填{" "}
             <Typography.Text code>internal</Typography.Text> / <Typography.Text code>alertmanager</Typography.Text> 时，将 POST 到告警平台{" "}
-            <Typography.Text code>/api/v1/alerts/webhook/alertmanager</Typography.Text>（鉴权使用数据字典{" "}
+            <Typography.Text code>/api/v1/alerts/ingress/k8s-events</Typography.Text>（鉴权使用数据字典{" "}
             <Typography.Text code>alert_webhook_token</Typography.Text>）。全局开关请在{" "}
             <Link to="/dict-entries?keyword=k8s_event_forward_">数据字典</Link> 维护{" "}
             <Typography.Text code>k8s_event_forward_*</Typography.Text>。
@@ -333,7 +333,7 @@ function RulesPanel() {
           <Form.Item
             name="webhook_url"
             label="Webhook 地址"
-            extra="留空、internal 或 alertmanager 表示复用本机告警平台 Alertmanager Webhook"
+            extra="留空、internal 或 alertmanager 表示复用本机告警平台 K8s Event 入站"
           >
             <Input placeholder="internal" allowClear />
           </Form.Item>

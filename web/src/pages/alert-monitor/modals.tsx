@@ -57,8 +57,22 @@ export function AlertMonitorModals() {
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="type" label="类型">
-            <Input placeholder="prometheus" />
+          <Form.Item
+            name="type"
+            label="类型"
+            rules={[{ required: true, message: "请选择数据源类型" }]}
+            extra={
+              <Typography.Text type="secondary">
+                VictoriaMetrics 使用与 Prometheus 兼容的 HTTP API（/api/v1/query）。
+              </Typography.Text>
+            }
+          >
+            <Select
+              options={[
+                { value: "prometheus", label: "Prometheus" },
+                { value: "victoria", label: "VictoriaMetrics" },
+              ]}
+            />
           </Form.Item>
           <Form.Item
             name="base_url"
@@ -80,17 +94,6 @@ export function AlertMonitorModals() {
                 (option?.value ?? "").toString().toLowerCase().includes(input.toLowerCase())
               }
             />
-          </Form.Item>
-          <Form.Item
-            name="alertmanager_url"
-            label="Alertmanager URL"
-            extra={
-              <Typography.Text type="secondary">
-                可选。留空时若 Prometheus 为 <Typography.Text code>:9090</Typography.Text> 则自动推导为 <Typography.Text code>:9093</Typography.Text>，用于拉取 Alertmanager 静默列表。
-              </Typography.Text>
-            }
-          >
-            <Input placeholder="http://alertmanager:9093" allowClear />
           </Form.Item>
           <Form.Item name="bearer_token" label="Bearer Token">
             <Input.Password placeholder="留空表示不改" autoComplete="new-password" />

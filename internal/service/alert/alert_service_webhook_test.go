@@ -45,7 +45,7 @@ func TestAlertEventSourceFromPayload(t *testing.T) {
 	if got := alertEventSourceFromPayload(map[string]interface{}{"source": "cloud_expiry"}); got != "cloud_expiry" {
 		t.Fatalf("got %q", got)
 	}
-	if got := alertEventSourceFromPayload(nil); got != "alertmanager" {
+	if got := alertEventSourceFromPayload(nil); got != "yunshu" {
 		t.Fatalf("default %q", got)
 	}
 }

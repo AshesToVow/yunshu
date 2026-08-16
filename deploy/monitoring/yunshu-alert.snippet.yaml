@@ -1,0 +1,46 @@
+# 合并进 Yunshu configs/config.yaml 的告警相关建议（夜莺式引擎 / 无 AM）
+#
+# 主路径：Prometheus(数据源) ← Telegraf/PGW/blackbox(+Consul SD)
+#          Yunshu 规则中心评测 → 屏蔽 → 通知
+#
+# K8s Event 转发仍可走内部入站（非 Alertmanager）：
+#   POST /api/v1/alerts/ingress/k8s-events
+#   鉴权：X-Alert-Token / Bearer，与下方 webhook_token（字典 alert_webhook_token）一致
+
+alert:
+  # 数据字典优先：alert_webhook_token（现仅用于 K8s Event 等内部入站，不再对接 Alertmanager）
+  # webhook_token: "change-me-alert-token"
+
+  default_timeout_ms: 5000
+  max_payload_chars: 8000
+  dedup_ttl_seconds: 86400
+  group_by: ["alertname", "cluster", "namespace", "severity", "receiver"]
+  digest_by: ["instance", "pod", "node", "host", "device", "job"]
+  group_wait_seconds: 15
+  group_interval_seconds: 60
+  repeat_interval_seconds: 300
+  # 已无外部 AM；该项仅影响历史兼容逻辑，可保持 true 或忽略
+  webhook_skip_group_timing: true
+  aggregate_ttl_seconds: 86400
+  platform_limits:
+    dingding_max_chars: 4500
+    wecom_max_chars: 3500
+    generic_max_chars: 8000
+  prom_query_timeout_seconds: 5
+  prometheus_enrich_enabled: true
+  prometheus_enrich_queue_size: 1024
+  prometheus_enrich_workers: 4
+  # 内部入站（K8s Event）异步队列
+  webhook_async_disabled: false
+  webhook_queue_max_len: 10000
+  monitor_eval_leader_lock_seconds: 30
+  # monitor_eval_cron_spec: "*/5 * * * * *"
+
+k8s_event_forward:
+  enabled: false
+  watcher_buffer_size: 1000
+  worker_interval_seconds: 10
+  worker_batch_size: 50
+  worker_max_retries: 3
+  # UseInternalAlertWebhook=true 时指向：
+  # http://127.0.0.1:<http.port>/api/v1/alerts/ingress/k8s-events

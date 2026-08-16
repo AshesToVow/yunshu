@@ -3,6 +3,7 @@
 import (
 	bizerrors "yunshu/internal/pkg/errors"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -13,7 +14,20 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+func monitorEvalMetaKey(ruleID uint) string {
+	return fmt.Sprintf("alert:mon:meta:%d", ruleID)
+}
+
+func monitorEvalSeriesStateKey(ruleID uint, fp string) string {
+	return fmt.Sprintf("alert:mon:series:%d:%s", ruleID, fp)
+}
+
+func monitorEvalTrackedSetKey(ruleID uint) string {
+	return fmt.Sprintf("alert:mon:tracked:%d", ruleID)
+}
+
 func monitorEvalStateKey(ruleID uint) string {
+	// 兼容旧单规则状态键；新逻辑以 meta/series 为准。
 	return fmt.Sprintf("alert:mon:state:%d", ruleID)
 }
 
@@ -44,9 +58,16 @@ func (s *AlertService) redisLastEvalTime(ctx context.Context, ruleID uint) (t ti
 	if s.redis == nil {
 		return time.Time{}, false
 	}
-	last, err := s.redis.HGet(ctx, monitorEvalStateKey(ruleID), "last_eval").Result()
+	last, err := s.redis.HGet(ctx, monitorEvalMetaKey(ruleID), "last_eval").Result()
 	if err != nil && err != redis.Nil {
 		return time.Time{}, false
+	}
+	if strings.TrimSpace(last) == "" {
+		// 兼容旧键
+		last, err = s.redis.HGet(ctx, monitorEvalStateKey(ruleID), "last_eval").Result()
+		if err != nil && err != redis.Nil {
+			return time.Time{}, false
+		}
 	}
 	if strings.TrimSpace(last) == "" {
 		return time.Time{}, false
@@ -68,9 +89,15 @@ func (s *AlertService) shouldEvalRuleRedis(ctx context.Context, ruleID uint, int
 	if intervalSec < 5 {
 		intervalSec = 5
 	}
-	last, err := s.redis.HGet(ctx, monitorEvalStateKey(ruleID), "last_eval").Result()
+	last, err := s.redis.HGet(ctx, monitorEvalMetaKey(ruleID), "last_eval").Result()
 	if err != nil && err != redis.Nil {
 		return true
+	}
+	if strings.TrimSpace(last) == "" {
+		last, err = s.redis.HGet(ctx, monitorEvalStateKey(ruleID), "last_eval").Result()
+		if err != nil && err != redis.Nil {
+			return true
+		}
 	}
 	if strings.TrimSpace(last) == "" {
 		return true
@@ -89,8 +116,8 @@ func (s *AlertService) redisTouchLastEval(ctx context.Context, ruleID uint, now 
 	if s.redis == nil {
 		return
 	}
-	_ = s.redis.HSet(ctx, monitorEvalStateKey(ruleID), "last_eval", now.UTC().Format(time.RFC3339Nano)).Err()
-	_ = s.redis.Expire(ctx, monitorEvalStateKey(ruleID), 7*24*time.Hour).Err()
+	_ = s.redis.HSet(ctx, monitorEvalMetaKey(ruleID), "last_eval", now.UTC().Format(time.RFC3339Nano)).Err()
+	_ = s.redis.Expire(ctx, monitorEvalMetaKey(ruleID), 7*24*time.Hour).Err()
 }
 
 func parseRFC3339Ptr(s string) (*time.Time, error) {
@@ -129,14 +156,72 @@ func (s *AlertService) emitMonitorPlatformFiring(ctx context.Context, rule *mode
 		map[string]string{"alertname": rule.Name},
 		labels,
 		IngressAlertDetail{
-			Status:       "firing",
-			Labels:       labels,
-			Annotations:  annotations,
-			StartsAt:     now,
-			EndsAt:       now.Add(24 * time.Hour),
-			Fingerprint:  fp,
+			Status:      "firing",
+			Labels:      labels,
+			Annotations: annotations,
+			StartsAt:    now,
+			EndsAt:      now.Add(24 * time.Hour),
+			Fingerprint: fp,
 		},
 	))
+}
+
+func (s *AlertService) trackMonitorSeries(ctx context.Context, ruleID uint, fp string) {
+	if s.redis == nil || strings.TrimSpace(fp) == "" {
+		return
+	}
+	key := monitorEvalTrackedSetKey(ruleID)
+	_ = s.redis.SAdd(ctx, key, fp).Err()
+	_ = s.redis.Expire(ctx, key, 7*24*time.Hour).Err()
+}
+
+func (s *AlertService) untrackMonitorSeries(ctx context.Context, ruleID uint, fp string) {
+	if s.redis == nil || strings.TrimSpace(fp) == "" {
+		return
+	}
+	_ = s.redis.SRem(ctx, monitorEvalTrackedSetKey(ruleID), fp).Err()
+}
+
+func (s *AlertService) listTrackedMonitorSeries(ctx context.Context, ruleID uint) []string {
+	if s.redis == nil {
+		return nil
+	}
+	out, err := s.redis.SMembers(ctx, monitorEvalTrackedSetKey(ruleID)).Result()
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+func (s *AlertService) saveMonitorSeriesPayload(ctx context.Context, ruleID uint, fp string, labels, annotations map[string]string) {
+	if s.redis == nil {
+		return
+	}
+	lb, _ := json.Marshal(labels)
+	ab, _ := json.Marshal(annotations)
+	_ = s.redis.HSet(ctx, monitorEvalSeriesStateKey(ruleID, fp), map[string]interface{}{
+		"labels_json":      string(lb),
+		"annotations_json": string(ab),
+	}).Err()
+}
+
+func (s *AlertService) loadMonitorSeriesPayload(ctx context.Context, ruleID uint, fp string) (labels, annotations map[string]string) {
+	labels = map[string]string{}
+	annotations = map[string]string{}
+	if s.redis == nil {
+		return labels, annotations
+	}
+	h, err := s.redis.HGetAll(ctx, monitorEvalSeriesStateKey(ruleID, fp)).Result()
+	if err != nil {
+		return labels, annotations
+	}
+	if raw := strings.TrimSpace(h["labels_json"]); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &labels)
+	}
+	if raw := strings.TrimSpace(h["annotations_json"]); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &annotations)
+	}
+	return labels, annotations
 }
 
 func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *model.AlertMonitorRule, firing bool, labels map[string]string, annotations map[string]string, fp string, now time.Time) {
@@ -144,9 +229,7 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 		s.evaluateMonitorRuleNoRedis(ctx, rule, firing, labels, annotations, fp, now)
 		return
 	}
-	defer s.redisTouchLastEval(ctx, rule.ID, now)
-
-	key := monitorEvalStateKey(rule.ID)
+	key := monitorEvalSeriesStateKey(rule.ID, fp)
 	h, err := s.redis.HGetAll(ctx, key).Result()
 	if err != nil {
 		return
@@ -156,6 +239,8 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 	pendingSince, _ := parseRFC3339Ptr(pendingStr)
 
 	if firing {
+		s.trackMonitorSeries(ctx, rule.ID, fp)
+		s.saveMonitorSeriesPayload(ctx, rule.ID, fp, labels, annotations)
 		if active {
 			sev := strings.TrimSpace(labels["severity"])
 			if sev == "" {
@@ -164,6 +249,7 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 			if s.monitorShouldReingressFiring(ctx, fp, labels, rule.Name, sev) {
 				s.emitMonitorPlatformFiring(ctx, rule, labels, annotations, fp, now)
 			}
+			_ = s.redis.Expire(ctx, key, 7*24*time.Hour).Err()
 			return
 		}
 		if pendingSince == nil {
@@ -190,6 +276,7 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 				"active_firing": "1",
 				"pending_since": "",
 			}).Err()
+			_ = s.redis.Expire(ctx, key, 7*24*time.Hour).Err()
 			s.emitMonitorPlatformFiring(ctx, rule, labels, annotations, fp, now)
 			return
 		}
@@ -208,15 +295,16 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 			map[string]string{"alertname": rule.Name},
 			labels,
 			IngressAlertDetail{
-				Status:       "resolved",
-				Labels:       labels,
-				Annotations:  annotations,
-				StartsAt:     now.Add(-time.Minute),
-				EndsAt:       now,
-				Fingerprint:  fp,
+				Status:      "resolved",
+				Labels:      labels,
+				Annotations: annotations,
+				StartsAt:    now.Add(-time.Minute),
+				EndsAt:      now,
+				Fingerprint: fp,
 			},
 		))
-		return
 	}
 	_ = s.redis.HSet(ctx, key, "pending_since", "").Err()
+	s.untrackMonitorSeries(ctx, rule.ID, fp)
+	_ = s.redis.Del(ctx, key).Err()
 }

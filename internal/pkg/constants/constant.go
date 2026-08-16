@@ -307,7 +307,7 @@ const (
 	// 云账号不属于当前项目
 	ErrMsg053a6a395b16 = "云账号不属于当前项目"
 	// 仅 prometheus 数据源支持查询
-	ErrMsg9a8a590cfc72 = "仅 prometheus 数据源支持查询"
+	ErrMsg9a8a590cfc72 = "仅 prometheus/victoria 数据源支持查询"
 	// 仅支持云服务器操作
 	ErrMsg1f9244d53fae = "仅支持云服务器操作"
 	// 令牌不能为空
@@ -437,7 +437,7 @@ const (
 	// 昵称不能为空
 	ErrMsg702f83ff44f3 = "昵称不能为空"
 	// 暂仅支持 type=prometheus
-	ErrMsg480bba83b97b = "暂仅支持 type=prometheus"
+	ErrMsg480bba83b97b = "数据源类型仅支持 prometheus 或 victoria"
 	// 服务不存在
 	ErrMsgac7e51a53391 = "服务不存在"
 	// 服务器不在当前项目中

@@ -42,7 +42,7 @@ type K8sEventForwardRule struct {
 	Description string `json:"description" gorm:"type:text"`
 	// ClusterIDs 逗号分隔的集群 ID，如 "1,2,3"
 	ClusterIDs string `json:"cluster_ids" gorm:"type:text"`
-	// WebhookURL 目标地址；留空/internal/alertmanager 时 POST 本机 /alerts/webhook/alertmanager（与告警平台共用）
+	// WebhookURL 目标地址；留空/internal/alertmanager 时 POST 本机 /alerts/ingress/k8s-events
 	WebhookURL string `json:"webhook_url" gorm:"size:512"`
 	Enabled    bool   `json:"enabled" gorm:"default:true;index"`
 

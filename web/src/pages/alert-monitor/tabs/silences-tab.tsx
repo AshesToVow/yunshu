@@ -24,11 +24,11 @@ export function SilencesTab() {
                 <Alert
                   type="info"
                   showIcon
-                  message="平台静默与 Alertmanager 静默"
+                  message="平台静默（降噪）"
                   description={
                     <Space direction="vertical" size={8} style={{ width: "100%" }}>
                       <span>
-                        「平台静默规则」在<strong>服务端入站分发前</strong>按 labels 比对，命中则<strong>不再向通道发送</strong>。「Alertmanager 静默」来自当前项目数据源的 <Typography.Text code>/api/v2/silences</Typography.Text>（默认由 Prometheus 地址 9090 推导 9093，可在数据源填写 <Typography.Text code>alertmanager_url</Typography.Text>），在 Alertmanager UI 创建后会在下方列表只读展示。
+                        在规则评测产生事件后、通道投递前按 labels 匹配；命中则不再外发。维护窗与临时静默均在此管理。不再对接 Alertmanager 静默。
                       </span>
                       <Space wrap>
                         <Button size="small" onClick={ctx.openHistoryTab}>查看静默后的历史记录</Button>
@@ -37,11 +37,11 @@ export function SilencesTab() {
                   }
                 />
                 <Typography.Title level={5} style={{ margin: 0 }}>
-                  Prometheus 活跃告警（只读快照）
+                  数据源活跃告警（只读快照）
                 </Typography.Title>
                 <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                  与「历史告警记录」不同：此处直接查询当前项目下数据源的 <Typography.Text code>/api/v1/alerts</Typography.Text>
-                  （跟随顶栏「全局项目上下文」），用于对照 Prometheus UI 中 Firing 的条目是否已进 Webhook 链路。
+                  查询数据源 Prometheus <Typography.Text code>/api/v1/alerts</Typography.Text>
+                  ，便于对照「规则中心」与时序库侧状态（含未迁入平台规则的遗留告警）。主路径告警仍以平台规则评测为准。
                   {ctx.silenceDatasource ? (
                     <>
                       {" "}
@@ -98,7 +98,7 @@ export function SilencesTab() {
                   <Button type="primary" onClick={() => void ctx.releaseSelectedSilences()} disabled={ctx.selectedSilenceIds.length === 0}>
                     批量解除静默
                   </Button>
-                  <Button icon={<ReloadOutlined />} onClick={() => void Promise.all([ctx.loadSilences(), ctx.loadAmSilences()])}>
+                  <Button icon={<ReloadOutlined />} onClick={() => void ctx.loadSilences()}>
                     刷新
                   </Button>
                 </Space>

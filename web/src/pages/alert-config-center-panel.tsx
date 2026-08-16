@@ -1498,14 +1498,13 @@ export function AlertConfigCenterPanel({
               ) : null}
             </Space>
           </Card>
-          <Card size="small" title="Webhook 联调（Alertmanager -> 平台）" style={{ marginBottom: 12 }}>
+          <Card size="small" title="内部入站联调（K8s Event）" style={{ marginBottom: 12 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={12}>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                与生产链路一致：Alertmanager 的 <Typography.Text code>webhook_configs</Typography.Text> 指向本平台的{" "}
-                <Typography.Text code>POST /api/v1/alerts/webhook/alertmanager</Typography.Text>，携带与配置一致的 Token（
-                <Typography.Text code>X-Webhook-Token</Typography.Text> / <Typography.Text code>Authorization</Typography.Text> / 查询参数{" "}
-                <Typography.Text code>token</Typography.Text>
-                ）。下方「发送模拟 Webhook」走同一接口，记录出现在「历史告警记录」Tab，并与策略命中、通道分发一致。
+                Alertmanager Webhook 已下线。本面板用于模拟 K8s Event 转发载荷：{" "}
+                <Typography.Text code>POST /api/v1/alerts/ingress/k8s-events</Typography.Text>，携带与配置一致的 Token（
+                <Typography.Text code>X-Alert-Token</Typography.Text> / <Typography.Text code>X-Webhook-Token</Typography.Text>
+                ）。主路径告警请在「规则中心」配置 PromQL。记录出现在「事件台」。
               </Typography.Paragraph>
               <Space wrap>
                 <Input

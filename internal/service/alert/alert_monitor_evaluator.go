@@ -88,6 +88,9 @@ func buildMonitorRuleLabels(rule *model.AlertMonitorRule, projectID uint, ds *mo
 		if typ == "" {
 			typ = "prometheus"
 		}
+		if typ == "victoriametrics" {
+			typ = "victoria"
+		}
 		labels["datasource_type"] = typ
 	}
 	if strings.TrimSpace(rule.Severity) == "" {
@@ -153,7 +156,10 @@ func buildMonitorRuleAnnotations(rule *model.AlertMonitorRule, labels map[string
 	return ann
 }
 
-func parsePromFirstSample(body []byte) (map[string]string, string) {
+func parsePromVectorSamples(body []byte) []struct {
+	Metric map[string]string
+	Value  string
+} {
 	var wrap struct {
 		Status string `json:"status"`
 		Data   struct {
@@ -165,20 +171,38 @@ func parsePromFirstSample(body []byte) (map[string]string, string) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &wrap); err != nil {
-		return map[string]string{}, ""
+		return nil
 	}
 	if wrap.Status != "success" || wrap.Data.ResultType != "vector" || len(wrap.Data.Result) == 0 {
+		return nil
+	}
+	out := make([]struct {
+		Metric map[string]string
+		Value  string
+	}, 0, len(wrap.Data.Result))
+	for _, row := range wrap.Data.Result {
+		value := ""
+		if len(row.Value) >= 2 {
+			value = strings.TrimSpace(fmt.Sprintf("%v", row.Value[1]))
+		}
+		metric := row.Metric
+		if metric == nil {
+			metric = map[string]string{}
+		}
+		out = append(out, struct {
+			Metric map[string]string
+			Value  string
+		}{Metric: metric, Value: value})
+	}
+	return out
+}
+
+func parsePromFirstSample(body []byte) (map[string]string, string) {
+	samples := parsePromVectorSamples(body)
+	if len(samples) == 0 {
 		return map[string]string{}, ""
 	}
-	first := wrap.Data.Result[0]
-	value := ""
-	if len(first.Value) >= 2 {
-		value = strings.TrimSpace(fmt.Sprintf("%v", first.Value[1]))
-	}
-	if first.Metric == nil {
-		return map[string]string{}, value
-	}
-	return first.Metric, value
+	return samples[0].Metric, samples[0].Value
 }
 
 func (s *AlertService) evaluateOneMonitorRule(ctx context.Context, rule *model.AlertMonitorRule, projectID uint) {
@@ -186,7 +210,7 @@ func (s *AlertService) evaluateOneMonitorRule(ctx context.Context, rule *model.A
 	if err != nil {
 		return
 	}
-	if !ds.Enabled || ds.Type != "prometheus" {
+	if !ds.Enabled || !isPromCompatibleDatasourceType(ds.Type) {
 		return
 	}
 	cli := &promapi.Client{
@@ -202,35 +226,73 @@ func (s *AlertService) evaluateOneMonitorRule(ctx context.Context, rule *model.A
 	if err != nil {
 		return
 	}
-	firing, err := promapi.VectorResultNonEmpty(body)
-	if err != nil {
-		return
-	}
 	if projectID == 0 {
 		projectID = ds.ProjectID
 	}
-	labels := buildMonitorRuleLabels(rule, projectID, ds)
-	sampleLabels, sampleValue := parsePromFirstSample(body)
-	for k, v := range sampleLabels {
-		k = strings.TrimSpace(k)
-		v = strings.TrimSpace(v)
-		if k == "" || v == "" {
+	now := time.Now()
+	if s.redis != nil {
+		s.redisTouchLastEval(ctx, rule.ID, now)
+	}
+
+	samples := parsePromVectorSamples(body)
+	current := make(map[string]struct{}, len(samples))
+	for _, sample := range samples {
+		labels := buildMonitorRuleLabels(rule, projectID, ds)
+		for k, v := range sample.Metric {
+			k = strings.TrimSpace(k)
+			v = strings.TrimSpace(v)
+			if k == "" || v == "" {
+				continue
+			}
+			if _, exists := labels[k]; !exists {
+				labels[k] = v
+			}
+		}
+		annotations := buildMonitorRuleAnnotations(rule, labels, sample.Value)
+		if v := strings.TrimSpace(sample.Value); v != "" {
+			annotations["value"] = v
+		}
+		fp := monitorSeriesFingerprint(rule.ID, labels)
+		current[fp] = struct{}{}
+		if s.redis == nil {
+			s.evaluateMonitorRuleNoRedis(ctx, rule, true, labels, annotations, fp, now)
 			continue
 		}
-		if _, exists := labels[k]; !exists {
-			labels[k] = v
-		}
+		s.evaluateMonitorRuleWithRedis(ctx, rule, true, labels, annotations, fp, now)
 	}
-	annotations := buildMonitorRuleAnnotations(rule, labels, sampleValue)
-	if v := strings.TrimSpace(sampleValue); v != "" {
-		annotations["value"] = v
-	}
-	fp := fmt.Sprintf("monitor_rule_%d", rule.ID)
-	now := time.Now()
 
-	if s.redis == nil {
-		s.evaluateMonitorRuleNoRedis(ctx, rule, firing, labels, annotations, fp, now)
+	if s.redis != nil {
+		for _, fp := range s.listTrackedMonitorSeries(ctx, rule.ID) {
+			if _, ok := current[fp]; ok {
+				continue
+			}
+			labels, annotations := s.loadMonitorSeriesPayload(ctx, rule.ID, fp)
+			if len(labels) == 0 {
+				labels = buildMonitorRuleLabels(rule, projectID, ds)
+			}
+			if len(annotations) == 0 {
+				annotations = buildMonitorRuleAnnotations(rule, labels, "")
+			}
+			s.evaluateMonitorRuleWithRedis(ctx, rule, false, labels, annotations, fp, now)
+		}
 		return
 	}
-	s.evaluateMonitorRuleWithRedis(ctx, rule, firing, labels, annotations, fp, now)
+
+	// 无 Redis：对本次未出现的序列做 resolve（进程内 map）。
+	s.monitorEvalMu.Lock()
+	tracked := make([]string, 0)
+	for fp := range s.monitorNoRedisActive {
+		if strings.HasPrefix(fp, fmt.Sprintf("mr%d_", rule.ID)) {
+			tracked = append(tracked, fp)
+		}
+	}
+	s.monitorEvalMu.Unlock()
+	for _, fp := range tracked {
+		if _, ok := current[fp]; ok {
+			continue
+		}
+		labels := buildMonitorRuleLabels(rule, projectID, ds)
+		annotations := buildMonitorRuleAnnotations(rule, labels, "")
+		s.evaluateMonitorRuleNoRedis(ctx, rule, false, labels, annotations, fp, now)
+	}
 }

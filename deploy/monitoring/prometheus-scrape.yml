@@ -1,0 +1,79 @@
+# Prometheus scrape 配置片段（合并进 prometheus.yml 的 scrape_configs）
+# 假设 Consul 在 consul.service.consul:8500，按 meta.exporter_role 分流。
+
+scrape_configs:
+  # ---------- Telegraf（Consul 服务名建议：telegraf）----------
+  - job_name: telegraf
+    scrape_interval: 30s
+    metrics_path: /metrics
+    consul_sd_configs:
+      - server: "consul.service.consul:8500"
+        services: ["telegraf"]
+        tags: ["yunshu-metrics"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_address]
+        target_label: __address__
+        replacement: "${1}:9273" # 与 telegraf prometheus_client 端口一致；若 Consul 已带端口可改用 __meta_consul_service_port
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - source_labels: [__meta_consul_service_metadata_env]
+        target_label: env
+      - source_labels: [__meta_consul_node]
+        target_label: host
+      - target_label: exporter_role
+        replacement: telegraf
+
+  # ---------- Pushgateway（短任务；可用静态或 Consul）----------
+  - job_name: pushgateway
+    scrape_interval: 30s
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]
+        labels:
+          exporter_role: pushgateway
+    # 若用 Consul：services: ["pushgateway"]，meta 同上
+
+  # ---------- blackbox：由 Consul 发现「拨测目标」，Prometheus 访问 blackbox 探针 ----------
+  - job_name: blackbox-http
+    scrape_interval: 60s
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    consul_sd_configs:
+      - server: "consul.service.consul:8500"
+        services: ["blackbox-target"]
+        tags: ["probe-http"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_metadata_probe_url]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - source_labels: [__meta_consul_service_metadata_env]
+        target_label: env
+      - target_label: __address__
+        replacement: blackbox-exporter:9115 # 集群内 blackbox 地址
+      - target_label: exporter_role
+        replacement: blackbox
+
+  - job_name: blackbox-icmp
+    scrape_interval: 60s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    consul_sd_configs:
+      - server: "consul.service.consul:8500"
+        services: ["blackbox-target"]
+        tags: ["probe-icmp"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_metadata_probe_host]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - target_label: exporter_role
+        replacement: blackbox
