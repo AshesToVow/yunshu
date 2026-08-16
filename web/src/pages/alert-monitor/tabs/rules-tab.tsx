@@ -47,14 +47,16 @@ export function RulesTab() {
     }
   }
 
+  const datasources = ctx.dsList ?? [];
+
   useEffect(() => {
     if (!selected) return;
     form.setFieldsValue({
-      datasource_id: ctx.datasources[0]?.id,
+      datasource_id: datasources[0]?.id,
       name: selected.name,
       threshold: selected.default_params?.threshold,
     });
-  }, [selected, ctx.datasources, form]);
+  }, [selected, datasources, form]);
 
   async function submitFromTemplate() {
     if (!selected) return;
@@ -92,7 +94,7 @@ export function RulesTab() {
           onClick={() => {
             importForm.resetFields();
             importForm.setFieldsValue({
-              datasource_id: ctx.datasources[0]?.id,
+              datasource_id: datasources[0]?.id,
               enabled: true,
               dry_run: true,
             });
@@ -193,7 +195,7 @@ export function RulesTab() {
           <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
             <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: "请选择数据源" }]}>
               <Select
-                options={ctx.datasources.map((d: AlertDatasourceItem) => ({
+                options={datasources.map((d: AlertDatasourceItem) => ({
                   value: d.id,
                   label: `${d.name}${d.project_id ? ` (项目 ${d.project_id})` : ""}`,
                 }))}
@@ -275,7 +277,7 @@ export function RulesTab() {
         <Form form={importForm} layout="vertical">
           <Form.Item name="datasource_id" label="目标数据源" rules={[{ required: true }]}>
             <Select
-              options={ctx.datasources.map((d: AlertDatasourceItem) => ({
+              options={datasources.map((d: AlertDatasourceItem) => ({
                 value: d.id,
                 label: d.name,
               }))}
