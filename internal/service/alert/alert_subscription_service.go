@@ -46,6 +46,7 @@ type CachedSubscriptionNode struct {
 	ReceiverGroupIDs []uint
 	SilenceSeconds   int
 	NotifyResolved   bool
+	HasChildrenInDB  bool // 含已停用子节点；用于 continue 时避免「子全停用」误回落用父接收组
 	Children         []*CachedSubscriptionNode
 }
 
@@ -414,11 +415,20 @@ func (s *AlertSubscriptionService) refreshCache(ctx context.Context) error {
 	if err != nil {
 		return bizerrors.Pass(ctx, "alert.subscription", "refreshCache", err)
 	}
+	parentsWithChildren, err := s.repo.ListParentIDsHavingChildren(ctx)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.subscription", "refreshCache", err)
+	}
+	parentHasChild := map[uint]struct{}{}
+	for _, id := range parentsWithChildren {
+		parentHasChild[id] = struct{}{}
+	}
 
 	// 构建缓存节点
 	cachedMap := make(map[uint]*CachedSubscriptionNode)
 	for i := range nodes {
 		hydrateSubscriptionNode(&nodes[i])
+		_, hasKids := parentHasChild[nodes[i].ID]
 		cached := &CachedSubscriptionNode{
 			ID:               nodes[i].ID,
 			ProjectID:        nodes[i].ProjectID,
@@ -434,6 +444,7 @@ func (s *AlertSubscriptionService) refreshCache(ctx context.Context) error {
 			ReceiverGroupIDs: nodes[i].ReceiverGroupIDs,
 			SilenceSeconds:   nodes[i].SilenceSeconds,
 			NotifyResolved:   nodes[i].NotifyResolved,
+			HasChildrenInDB:  hasKids,
 			MatchRegex:       make(map[string]*regexp.Regexp),
 			Children:         []*CachedSubscriptionNode{},
 		}
@@ -635,16 +646,25 @@ func (s *AlertSubscriptionService) matchNodeRecursiveDetailed(node *CachedSubscr
 	if !s.nodeMatches(node, labels, severity, status) {
 		return AlertRouteResult{}, false
 	}
+	displayName := strings.TrimSpace(node.Name)
+	if c := strings.TrimSpace(node.Code); c != "" {
+		displayName = displayName + "[" + c + "]"
+	}
+	if displayName == "" {
+		displayName = fmt.Sprintf("node-%d", node.ID)
+	}
 	res := AlertRouteResult{
 		MatchedPath:      node.Path,
 		MatchedNodeIDs:   []uint{node.ID},
-		MatchedNodeNames: []string{node.Name},
+		MatchedNodeNames: []string{displayName},
 		SilenceSeconds:   node.SilenceSeconds,
 	}
 	if !node.Continue {
 		res.ReceiverGroupIDs = uniqUint(append([]uint{}, node.ReceiverGroupIDs...))
-		return res, true
+		return res, len(res.ReceiverGroupIDs) > 0
 	}
+
+	// continue=true：优先只看子树。若库中确有子节点（含已停用），子树未命中时不得回落用父接收组。
 	var childRGs []uint
 	var childNodeIDs []uint
 	var childNames []string
@@ -661,14 +681,17 @@ func (s *AlertSubscriptionService) matchNodeRecursiveDetailed(node *CachedSubscr
 			maxSilence = cr.SilenceSeconds
 		}
 	}
-	if len(node.Children) > 0 {
-		// 存在子节点且继续向下匹配时：仅采用子树命中的接收组，避免与根重复合并；子节点均未命中时无任何接收组。
+	if node.HasChildrenInDB || len(node.Children) > 0 {
+		if len(childRGs) == 0 {
+			return AlertRouteResult{}, false
+		}
 		res.ReceiverGroupIDs = uniqUint(childRGs)
 		res.MatchedNodeIDs = append(res.MatchedNodeIDs, childNodeIDs...)
 		res.MatchedNodeNames = append(res.MatchedNodeNames, childNames...)
 		res.SilenceSeconds = maxSilence
-	} else {
-		res.ReceiverGroupIDs = uniqUint(append([]uint{}, node.ReceiverGroupIDs...))
+		return res, true
 	}
-	return res, true
+	// 无子节点的 continue 叶子（现网常见）：使用自身接收组
+	res.ReceiverGroupIDs = uniqUint(append([]uint{}, node.ReceiverGroupIDs...))
+	return res, len(res.ReceiverGroupIDs) > 0
 }

@@ -57,6 +57,15 @@ func (r *AlertSubscriptionRepository) ListEnabled(ctx context.Context) ([]model.
 	return list, err
 }
 
+func (r *AlertSubscriptionRepository) ListParentIDsHavingChildren(ctx context.Context) ([]uint, error) {
+	var ids []uint
+	err := r.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).
+		Where("parent_id IS NOT NULL").
+		Distinct().
+		Pluck("parent_id", &ids).Error
+	return ids, err
+}
+
 func (r *AlertSubscriptionRepository) GetByID(ctx context.Context, id uint) (*model.AlertSubscriptionNode, error) {
 	var node model.AlertSubscriptionNode
 	if err := r.db.WithContext(ctx).First(&node, id).Error; err != nil {

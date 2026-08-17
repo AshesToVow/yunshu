@@ -136,22 +136,30 @@ func (s *AlertSubscriptionService) migrateFromPoliciesTx(ctx context.Context, tx
 			return bizerrors.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
 		}
 
-		rg := &model.AlertReceiverGroup{
-			ProjectID:           projectID,
-			Name:                "migrated:" + strings.TrimSpace(p.Name),
-			Description:         strings.TrimSpace(p.Description),
-			ChannelIDsJSON:      strings.TrimSpace(p.ChannelsJSON),
-			EmailRecipientsJSON: "[]",
-			EscalationLevel:     0,
-			Enabled:             p.Enabled,
+		rgName := "migrated:" + strings.TrimSpace(p.Name)
+		var rg model.AlertReceiverGroup
+		rgErr := tx.WithContext(ctx).
+			Where("project_id = ? AND name = ?", projectID, rgName).
+			Order("id DESC").
+			First(&rg).Error
+		if rgErr != nil {
+			rg = model.AlertReceiverGroup{
+				ProjectID:           projectID,
+				Name:                rgName,
+				Description:         strings.TrimSpace(p.Description),
+				ChannelIDsJSON:      strings.TrimSpace(p.ChannelsJSON),
+				EmailRecipientsJSON: "[]",
+				EscalationLevel:     0,
+				Enabled:             p.Enabled,
+			}
+			if strings.TrimSpace(rg.ChannelIDsJSON) == "" {
+				rg.ChannelIDsJSON = "[]"
+			}
+			if err := tx.WithContext(ctx).Create(&rg).Error; err != nil {
+				return bizerrors.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
+			}
+			rep.ReceiverGroupsCreated++
 		}
-		if strings.TrimSpace(rg.ChannelIDsJSON) == "" {
-			rg.ChannelIDsJSON = "[]"
-		}
-		if err := tx.WithContext(ctx).Create(rg).Error; err != nil {
-			return bizerrors.Pass(ctx, "alert.subscription", "MigrateFromPolicies", err)
-		}
-		rep.ReceiverGroupsCreated++
 
 		node := &model.AlertSubscriptionNode{
 			ProjectID:            projectID,

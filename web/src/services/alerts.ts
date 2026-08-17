@@ -113,10 +113,13 @@ export interface AlertRoutingDebugResult {
   receiver_group_ids?: number[];
   silence_seconds?: number;
   channels?: Array<{ id: number; name: string; type: string }>;
+  matched_from_project?: boolean;
+  matched_from_global?: boolean;
   silenced?: boolean;
   silence_id?: number;
   maintenance_suppressed?: boolean;
   maintenance_id?: number;
+  hint?: string;
 }
 
 export function debugAlertRouting(payload: AlertRoutingDebugRequest) {

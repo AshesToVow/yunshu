@@ -89,9 +89,12 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 	}
 
 	err = s.repo.WithTx(ctx, func(tx *gorm.DB) error {
-		if targetCount > 0 && !req.SkipIfTargetHasNodes {
-			if err := tx.Where("project_id = ?", req.TargetProjectID).Delete(&model.AlertSubscriptionNode{}).Error; err != nil {
-				return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+		// 无论目标是否已有订阅节点：未跳过时先清空目标接收组，避免「只有组残留、节点已删」时反复克隆堆出同名多份。
+		if !req.SkipIfTargetHasNodes {
+			if targetCount > 0 {
+				if err := tx.Where("project_id = ?", req.TargetProjectID).Delete(&model.AlertSubscriptionNode{}).Error; err != nil {
+					return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+				}
 			}
 			if err := tx.Where("project_id = ?", req.TargetProjectID).Delete(&model.AlertReceiverGroup{}).Error; err != nil {
 				return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)

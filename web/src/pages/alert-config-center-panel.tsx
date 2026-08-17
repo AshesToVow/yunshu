@@ -410,6 +410,19 @@ export function AlertConfigCenterPanel({
     return Array.from(byNameKey.values()).sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
   }, [receiverGroups]);
 
+  const receiverGroupDuplicateCount = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const g of receiverGroups) {
+      const key = formatReceiverGroupLabel(String(g.name ?? ""), Number(g.id)).toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    let dup = 0;
+    counts.forEach((n) => {
+      if (n > 1) dup += n - 1;
+    });
+    return dup;
+  }, [receiverGroups]);
+
   const subscriptionSeverityOptions = useMemo(
     () =>
       ["critical", "warning", "info", "error", "none"].map((v) => ({
@@ -1455,6 +1468,11 @@ export function AlertConfigCenterPanel({
           </div>
           <Card size="small" title="路由调试器" style={{ marginBottom: 12 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={8}>
+              <Alert
+                type="info"
+                showIcon
+                message="投递会同时匹配「当前项目订阅树」与「全局 project_id=0」。仅在当前项目停用节点时，全局路由仍可能外发。"
+              />
               <Typography.Text type="secondary">
                 模拟标签命中订阅树，查看接收组、通道与静默/维护窗口抑制（项目 ID：{effectiveProjectId || "未选择"}）。
               </Typography.Text>
@@ -1484,11 +1502,22 @@ export function AlertConfigCenterPanel({
               {routingDebugResult ? (
                 <Typography.Paragraph>
                   命中：{routingDebugResult.matched ? "是" : "否"}
+                  {routingDebugResult.matched_from_project ? " · 来自当前项目" : ""}
+                  {routingDebugResult.matched_from_global ? " · 来自全局(project_id=0)" : ""}
                   {routingDebugResult.matched_path ? ` · 路径 ${routingDebugResult.matched_path}` : ""}
+                  {routingDebugResult.matched_node_names?.length
+                    ? ` · 节点 ${routingDebugResult.matched_node_names.join(", ")}`
+                    : ""}
                   {routingDebugResult.silenced ? " · 已抑制" : ""}
                   {routingDebugResult.channels?.length
                     ? ` · 通道 ${routingDebugResult.channels.map((c) => c.name).join("、")}`
                     : ""}
+                  {routingDebugResult.hint ? (
+                    <>
+                      <br />
+                      <Typography.Text type="warning">{routingDebugResult.hint}</Typography.Text>
+                    </>
+                  ) : null}
                 </Typography.Paragraph>
               ) : null}
             </Space>
@@ -1589,6 +1618,15 @@ export function AlertConfigCenterPanel({
         }
       >
         <Alert type="info" showIcon style={{ marginBottom: 12 }} message={ALERT_ROUTING_TERMS.receiverGroupManageHint} />
+        {receiverGroupDuplicateCount > 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={`检测到 ${receiverGroupDuplicateCount} 条同名重复接收组`}
+            description="多半是「从项目复制路由模板」或策略迁移重复执行，且目标只清了订阅节点、残留了接收组。下拉已自动按同名去重；请保留较大 ID 的一组，删掉其余重复项。"
+          />
+        ) : null}
         <Table
           rowKey="id"
           size="small"
@@ -1596,7 +1634,8 @@ export function AlertConfigCenterPanel({
           dataSource={receiverGroups}
           pagination={false}
           columns={[
-            { title: "名称", dataIndex: "name", width: 160, render: (n: string, r: AlertReceiverGroup) => formatReceiverGroupLabel(n, r.id) },
+            { title: "ID", dataIndex: "id", width: 72 },
+            { title: "名称", dataIndex: "name", width: 180, render: (n: string, r: AlertReceiverGroup) => formatReceiverGroupLabel(n, r.id) },
             {
               title: "告警通道",
               render: (_: unknown, r: AlertReceiverGroup) => {
