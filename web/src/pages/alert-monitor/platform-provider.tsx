@@ -2481,6 +2481,7 @@ function useAlertMonitorPlatformState() {
     openDsCreate,
     openHistoryTab,
     openQuickSilence,
+    openSilCreate,
     openRuleCreate,
     projectContextId,
     projectOptions,

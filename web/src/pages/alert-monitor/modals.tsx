@@ -155,7 +155,10 @@ export function AlertMonitorModals() {
             <Input />
           </Form.Item>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-            匹配器：名称通常选 <Typography.Text code>alertname</Typography.Text> / <Typography.Text code>cluster</Typography.Text> 等；值支持精确匹配；勾选「正则」时按 Alertmanager matcher 语义使用正则。
+            匹配器：按告警 labels 全部命中即静默。平台规则可用{" "}
+            <Typography.Text code>monitor_rule_id</Typography.Text>（规则 ID）；也可用{" "}
+            <Typography.Text code>alertname</Typography.Text> / <Typography.Text code>cluster</Typography.Text>{" "}
+            等。勾选「正则」时按 Alertmanager matcher 语义。
           </Typography.Paragraph>
           <Form.List name="matchers">
             {(fields, { add, remove }) => (

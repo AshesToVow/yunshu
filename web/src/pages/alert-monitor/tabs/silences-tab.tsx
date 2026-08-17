@@ -31,13 +31,24 @@ export function SilencesTab() {
                       <span>
                         在规则评测产生事件后、通道投递前按 labels 匹配；命中则不再外发。维护窗与临时静默均在此管理。不再对接 Alertmanager 静默。
                       </span>
+                      <span>
+                        针对平台规则：在「规则中心」点该规则的「静默」，会预填{" "}
+                        <Typography.Text code>monitor_rule_id=&lt;规则ID&gt;</Typography.Text>
+                        （平台评测写入的标签）；也可在本页「新建静默」手动添加同一 matcher。
+                      </span>
                       <Space wrap>
-                        <Button size="small" onClick={ctx.openHistoryTab}>查看静默后的历史记录</Button>
+                        <Button size="small" onClick={ctx.openHistoryTab}>
+                          查看静默后的历史记录
+                        </Button>
                       </Space>
                     </Space>
                   }
                 />
-                <Typography.Title level={5} style={{ margin: 0 }}>
+                <Space wrap>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => ctx.openSilCreate()}>
+                    新建静默
+                  </Button>
+                </Space>                <Typography.Title level={5} style={{ margin: 0 }}>
                   数据源活跃告警（只读快照）
                 </Typography.Title>
                 <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
