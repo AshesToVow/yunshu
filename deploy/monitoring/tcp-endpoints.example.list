@@ -1,0 +1,9 @@
+# TCP 批量清单（与 consul-targets.json 同目录，或写绝对路径）
+# 格式任选其一（# 开头为注释）：
+#   service@ip:port
+#   service ip port
+#   service ip port app component
+#
+mysql@10.10.10.4:3306
+redis 10.10.10.4 6379 yunshu cache
+kafka 10.10.10.5 9092 yunshu mq

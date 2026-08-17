@@ -1,0 +1,17 @@
+{
+  "ID": "pushgateway-localhost-9091",
+  "Name": "pushgateway",
+  "Tags": ["yunshu-metrics"],
+  "Address": "127.0.0.1",
+  "Port": 9091,
+  "Meta": {
+    "yunshu_project": "1",
+    "env": "prod",
+    "exporter_role": "pushgateway"
+  },
+  "Check": {
+    "HTTP": "http://127.0.0.1:9091/metrics",
+    "Interval": "30s",
+    "Timeout": "5s"
+  }
+}

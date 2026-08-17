@@ -120,8 +120,10 @@ export function RulesTab() {
           onChange={(v) => ctx.setRuleEnabledFilter(v as "all" | "enabled" | "disabled")}
         />
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          当前显示 {ctx.ruleDisplayList.length} 条
-          {ctx.ruleEnabledFilter !== "all" ? `（共 ${ctx.ruleEnabledStats.total} 条）` : ""}
+          当前页 {ctx.ruleDisplayList.length} 条
+          {ctx.ruleEnabledFilter !== "all"
+            ? `（筛选共 ${ctx.ruleTotal} 条 / 全库 ${ctx.ruleEnabledStats.total} 条）`
+            : `（共 ${ctx.ruleTotal} 条）`}
           · 告警由本平台规则中心评测数据源产生（Telegraf / blackbox / Pushgateway → Prom/VM）；在此新建、调整、启停规则
         </Typography.Text>
       </Space>
@@ -149,7 +151,22 @@ export function RulesTab() {
           </Space>
         }
       />
-      <Table rowKey="id" columns={ctx.ruleColumns} dataSource={ctx.ruleDisplayList} pagination={{ pageSize: 20, showSizeChanger: true }} scroll={{ x: 1100 }} />
+      <Table
+        rowKey="id"
+        columns={ctx.ruleColumns}
+        dataSource={ctx.ruleDisplayList}
+        loading={ctx.rulesLoading}
+        pagination={{
+          current: ctx.rulePage,
+          pageSize: ctx.rulePageSize,
+          total: ctx.ruleTotal,
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "20", "50", "100"],
+          showTotal: (t: number) => `共 ${t} 条`,
+          onChange: (page: number, pageSize: number) => ctx.onRuleTableChange(page, pageSize),
+        }}
+        scroll={{ x: 1100 }}
+      />
 
       <Modal
         title="从规则模板创建"

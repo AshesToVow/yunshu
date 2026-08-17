@@ -2,16 +2,16 @@
   "ID": "telegraf-HOSTNAME",
   "Name": "telegraf",
   "Tags": ["yunshu-metrics", "exporter"],
-  "Address": "10.0.0.11",
+  "Address": "10.10.10.4",
   "Port": 9273,
   "Meta": {
-    "yunshu_project": "demo",
+    "yunshu_project": "1",
     "env": "prod",
     "exporter_role": "telegraf",
     "metrics_path": "/metrics"
   },
   "Check": {
-    "HTTP": "http://10.0.0.11:9273/metrics",
+    "HTTP": "http://10.10.10.4:9273/metrics",
     "Interval": "30s",
     "Timeout": "5s"
   }

@@ -518,6 +518,17 @@ function useAlertMonitorPlatformState() {
   const [ruleList, setRuleList] = useState<AlertMonitorRuleItem[]>([]);
   /** 监控规则列表：全部 / 仅启用 / 仅停用 */
   const [ruleEnabledFilter, setRuleEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
+  const [rulePage, setRulePage] = useState(1);
+  const [rulePageSize, setRulePageSize] = useState(20);
+  const [ruleTotal, setRuleTotal] = useState(0);
+  const [ruleEnabledStats, setRuleEnabledStats] = useState({ total: 0, enabled: 0, disabled: 0 });
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const ruleQueryRef = useRef({
+    page: 1,
+    pageSize: 20,
+    filter: "all" as "all" | "enabled" | "disabled",
+  });
+  ruleQueryRef.current = { page: rulePage, pageSize: rulePageSize, filter: ruleEnabledFilter };
   const [cloudExpiryList, setCloudExpiryList] = useState<CloudExpiryRuleItem[]>([]);
   const [blockList, setBlockList] = useState<AlertDutyBlockItem[]>([]);
   const [dutyRuleId, setDutyRuleId] = useState<number | null>(null);
@@ -525,6 +536,7 @@ function useAlertMonitorPlatformState() {
   /** 规则值班弹窗：从其他规则复制班次时的来源规则 ID */
   const [copySourceRuleId, setCopySourceRuleId] = useState<number | undefined>();
   const [copyDutyLoading, setCopyDutyLoading] = useState(false);
+  const [dutyCopyRuleOptions, setDutyCopyRuleOptions] = useState<Array<{ label: string; value: number }>>([]);
 
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<Array<{ label: string; value: number }>>([]);
@@ -944,26 +956,55 @@ function useAlertMonitorPlatformState() {
     }
   }, [silenceDatasourceId, projectContextId]);
 
-  const loadRules = useCallback(async (projectID?: number) => {
-    const r = await listAlertMonitorRules({ project_id: projectID, page: 1, page_size: 500 });
-    setRuleList(r.list ?? []);
-  }, []);
+  const loadRules = useCallback(
+    async (
+      projectID?: number,
+      opts?: {
+        page?: number;
+        pageSize?: number;
+        enabledFilter?: "all" | "enabled" | "disabled";
+      },
+    ) => {
+      const q = ruleQueryRef.current;
+      const page = opts?.page ?? q.page;
+      const pageSize = Math.min(Math.max(opts?.pageSize ?? q.pageSize, 1), 100);
+      const filter = opts?.enabledFilter ?? q.filter;
+      const enabled = filter === "all" ? undefined : filter === "enabled";
+      const base = {
+        project_id: projectID && projectID > 0 ? projectID : undefined,
+      };
+      setRulesLoading(true);
+      try {
+        const [r, allR, enR, disR] = await Promise.all([
+          listAlertMonitorRules({ ...base, page, page_size: pageSize, enabled }),
+          listAlertMonitorRules({ ...base, page: 1, page_size: 1 }),
+          listAlertMonitorRules({ ...base, page: 1, page_size: 1, enabled: true }),
+          listAlertMonitorRules({ ...base, page: 1, page_size: 1, enabled: false }),
+        ]);
+        setRuleList(r.list ?? r.items ?? []);
+        setRuleTotal(Number(r.total) || 0);
+        setRulePage(page);
+        setRulePageSize(pageSize);
+        setRuleEnabledStats({
+          total: Number(allR.total) || 0,
+          enabled: Number(enR.total) || 0,
+          disabled: Number(disR.total) || 0,
+        });
+      } finally {
+        setRulesLoading(false);
+      }
+    },
+    [],
+  );
 
-  const ruleEnabledStats = useMemo(() => {
-    let enabled = 0;
-    let disabled = 0;
-    for (const r of ruleList) {
-      if (r.enabled === false) disabled++;
-      else enabled++;
-    }
-    return { total: ruleList.length, enabled, disabled };
-  }, [ruleList]);
+  const onRuleTableChange = useCallback(
+    (page: number, pageSize: number) => {
+      void loadRules(projectContextId, { page, pageSize });
+    },
+    [loadRules, projectContextId],
+  );
 
-  const ruleDisplayList = useMemo(() => {
-    if (ruleEnabledFilter === "enabled") return ruleList.filter((r) => r.enabled !== false);
-    if (ruleEnabledFilter === "disabled") return ruleList.filter((r) => r.enabled === false);
-    return ruleList;
-  }, [ruleList, ruleEnabledFilter]);
+  const ruleDisplayList = ruleList;
   const loadCloudExpiryRules = useCallback(async (projectID?: number, provider?: string, keyword?: string) => {
     const r = await listCloudExpiryRules({
       project_id: projectID,
@@ -1003,7 +1044,11 @@ function useAlertMonitorPlatformState() {
           await Promise.all([loadSilences(), loadDatasources(projectContextId)]);
         }
         if (tab === "rules") {
-          await Promise.all([loadDatasources(projectContextId), loadRules(projectContextId)]);
+          // 项目或启停筛选变化时回到第 1 页；翻页走 onRuleTableChange，避免整卡 loading 打掉表格状态
+          await Promise.all([
+            loadDatasources(projectContextId),
+            loadRules(projectContextId, { page: 1, enabledFilter: ruleEnabledFilter }),
+          ]);
         }
         if (tab === "cloud-expiry") {
           await loadCloudExpiryRules(projectContextId, cloudExpiryProviderFilter, cloudExpiryKeyword);
@@ -1015,7 +1060,17 @@ function useAlertMonitorPlatformState() {
     return () => {
       cancelled = true;
     };
-  }, [tab, projectContextId, loadDatasources, loadSilences, loadRules, loadCloudExpiryRules, cloudExpiryProviderFilter, cloudExpiryKeyword]);
+  }, [
+    tab,
+    projectContextId,
+    ruleEnabledFilter,
+    loadDatasources,
+    loadSilences,
+    loadRules,
+    loadCloudExpiryRules,
+    cloudExpiryProviderFilter,
+    cloudExpiryKeyword,
+  ]);
 
   useEffect(() => {
     if (tab !== "silences") return;
@@ -2146,22 +2201,30 @@ function useAlertMonitorPlatformState() {
     }
   }
 
-  const copyDutyRuleOptions = useMemo(() => {
-    if (!dutyRuleId) return [];
-    return ruleList
-      .filter((r) => r.id !== dutyRuleId)
-      .map((r) => ({ label: r.name, value: r.id }));
-  }, [ruleList, dutyRuleId]);
+  const copyDutyRuleOptions = dutyCopyRuleOptions;
 
   async function openDuty(ruleId: number) {
     setDutyRuleId(ruleId);
     setCopySourceRuleId(undefined);
     setBlockList([]);
     try {
-      const r = await listDutyBlocks({ monitor_rule_id: ruleId, page: 1, page_size: 500 });
-      setBlockList(r.list ?? []);
+      const [blocks, rules] = await Promise.all([
+        listDutyBlocks({ monitor_rule_id: ruleId, page: 1, page_size: 100 }),
+        listAlertMonitorRules({
+          project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
+          page: 1,
+          page_size: 100,
+        }),
+      ]);
+      setBlockList(blocks.list ?? []);
+      setDutyCopyRuleOptions(
+        (rules.list ?? [])
+          .filter((r) => r.id !== ruleId)
+          .map((r) => ({ label: r.name, value: r.id })),
+      );
     } catch {
       setBlockList([]);
+      setDutyCopyRuleOptions([]);
     }
     setDutyModalOpen(true);
   }
@@ -2400,6 +2463,7 @@ function useAlertMonitorPlatformState() {
     loadMetricOptionsForRule,
     loadNativeSilAlerts,
     loadRules,
+    onRuleTableChange,
     loadAmSilences,
     loadSilences,
     loading,
@@ -2444,6 +2508,10 @@ function useAlertMonitorPlatformState() {
     ruleDisplayList,
     ruleEnabledFilter,
     ruleEnabledStats,
+    rulePage,
+    rulePageSize,
+    ruleTotal,
+    rulesLoading,
     ruleForm,
     ruleLogic,
     ruleLogicOptions,

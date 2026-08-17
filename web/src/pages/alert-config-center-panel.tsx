@@ -375,7 +375,7 @@ export function AlertConfigCenterPanel({
       setStats(statsRes);
       setChannels((channelRes.list ?? []).map((c) => ({ id: c.id, name: c.name })));
     } catch {
-      // http 拦截器已 toast
+      // http 拦截器已 toast；保留上次成功的 stats，避免失败时整页变 0
     } finally {
       setBaseLoading(false);
     }
@@ -1871,7 +1871,10 @@ export function AlertConfigCenterPanel({
     return (
       <div className="alert-config-embedded">
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadBase()}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => void loadBase(effectiveProjectId > 0 ? effectiveProjectId : undefined)}
+          >
             刷新统计
           </Button>
         </div>
@@ -1881,7 +1884,18 @@ export function AlertConfigCenterPanel({
   }
 
   return (
-    <Card className="table-card" title="告警配置中心" extra={<Button icon={<ReloadOutlined />} onClick={() => void loadBase()}>刷新统计</Button>}>
+    <Card
+      className="table-card"
+      title="告警配置中心"
+      extra={
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => void loadBase(effectiveProjectId > 0 ? effectiveProjectId : undefined)}
+        >
+          刷新统计
+        </Button>
+      }
+    >
       {body}
     </Card>
   );

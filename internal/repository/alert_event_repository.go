@@ -174,8 +174,13 @@ func (r *AlertEventRepository) ListFiringByGroupKeys(ctx context.Context, groupK
 
 func (r *AlertEventRepository) HistoryStats(ctx context.Context, projectID uint, dayStart, dayEnd time.Time) (*AlertHistoryStatsRow, error) {
 	stats := &AlertHistoryStatsRow{}
-	base := applyAlertEventProjectFilter(r.db.WithContext(ctx).Model(&model.AlertEvent{}), r.db, projectID).
-		Where("deleted_at IS NULL")
+	statsScope := func() *gorm.DB {
+		return applyAlertEventProjectFilter(
+			r.db.WithContext(ctx).Session(&gorm.Session{}).Model(&model.AlertEvent{}),
+			r.db,
+			projectID,
+		)
+	}
 	var agg struct {
 		Total        int64
 		Firing       int64
@@ -184,7 +189,7 @@ func (r *AlertEventRepository) HistoryStats(ctx context.Context, projectID uint,
 		Failed       int64
 		TodayCreated int64
 	}
-	if err := base.Select(`
+	if err := statsScope().Select(`
 COUNT(*) AS total,
 COALESCE(SUM(CASE WHEN status = 'firing' THEN 1 ELSE 0 END), 0) AS firing,
 COALESCE(SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END), 0) AS resolved,
@@ -200,22 +205,17 @@ COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0)
 	stats.Success = agg.Success
 	stats.Failed = agg.Failed
 	stats.TodayCreated = agg.TodayCreated
-	if err := base.Where("TRIM(COALESCE(cluster, '')) != ''").
+	// Facets are best-effort: aggregate cards must still render if DISTINCT/GROUP BY fails.
+	_ = statsScope().Where("TRIM(COALESCE(cluster, '')) != ''").
 		Group("cluster").Order("cluster ASC").Limit(500).
-		Pluck("cluster", &stats.ClusterValues).Error; err != nil {
-		return nil, err
-	}
-	if err := base.Where("TRIM(COALESCE(monitor_pipeline, '')) != ''").
+		Pluck("cluster", &stats.ClusterValues).Error
+	_ = statsScope().Where("TRIM(COALESCE(monitor_pipeline, '')) != ''").
 		Group("monitor_pipeline").Order("monitor_pipeline ASC").Limit(32).
-		Pluck("monitor_pipeline", &stats.MonitorPipelineValues).Error; err != nil {
-		return nil, err
-	}
-	if err := base.Where("datasource_id > ?", 0).
+		Pluck("monitor_pipeline", &stats.MonitorPipelineValues).Error
+	_ = statsScope().Where("datasource_id > ?", 0).
 		Select("datasource_id AS id, MAX(datasource_name) AS name").
 		Group("datasource_id").Order("id DESC").Limit(200).
-		Scan(&stats.DatasourceFilterOptions).Error; err != nil {
-		return nil, err
-	}
+		Scan(&stats.DatasourceFilterOptions).Error
 	return stats, nil
 }
 

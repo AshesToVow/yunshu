@@ -1,7 +1,9 @@
 # 合并进 Yunshu configs/config.yaml 的告警相关建议（夜莺式引擎 / 无 AM）
 #
+# 路径说明（必读）：deploy/monitoring/ALERT-PATH.md
 # 主路径：Prometheus(数据源) ← Telegraf/PGW/blackbox(+Consul SD)
-#          Yunshu 规则中心评测 → 屏蔽 → 通知
+#          Yunshu 规则中心评测 → group_* 节流 → 通知
+# 下列 group_* 仅作用于平台规则；与 alertmanager.yml 无关。
 #
 # K8s Event 转发仍可走内部入站（非 Alertmanager）：
 #   POST /api/v1/alerts/ingress/k8s-events

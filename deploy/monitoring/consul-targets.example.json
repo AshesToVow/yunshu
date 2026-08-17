@@ -1,0 +1,68 @@
+{
+  "consul": {
+    "addr": "http://127.0.0.1:8500",
+    "token_env": "CONSUL_TOKEN",
+    "token": ""
+  },
+  "defaults": {
+    "yunshu_project": "1",
+    "env": "prod"
+  },
+  "targets": [
+    {
+      "type": "telegraf",
+      "enabled": true,
+      "port": 9273,
+      "service": "telegraf",
+      "tags": ["yunshu-metrics", "host"],
+      "check_http": true,
+      "meta": { "service": "telegraf", "app": "host-metrics" }
+    },
+    {
+      "type": "icmp",
+      "enabled": true,
+      "service": "icmp",
+      "tags": ["probe-icmp", "yunshu-metrics"],
+      "hosts": ["10.10.10.4", "10.10.10.5"],
+      "comment": "也可用 hosts_file: icmp-hosts.list（一行一个 IP）"
+    },
+    {
+      "type": "http",
+      "enabled": true,
+      "service": "http",
+      "tags": ["probe-http", "yunshu-metrics"],
+      "module": "http_2xx",
+      "meta": { "app": "web" },
+      "comment": "推荐 probes_file 批量；module 须在 blackbox.yml 已定义",
+      "probes_file": "http-probes.list"
+    },
+    {
+      "type": "tcp",
+      "enabled": true,
+      "service": "tcp",
+      "tags": ["probe-tcp", "yunshu-metrics"],
+      "meta": { "app": "yunshu" },
+      "comment": "批量优先 by_host；或 endpoints_file: tcp-endpoints.list（一行一条）；也可 endpoints 写 mysql@ip:port",
+      "by_host": {
+        "10.10.10.4": [
+          { "service": "mysql", "port": 3306, "component": "db" },
+          { "service": "redis", "port": 6379, "component": "cache" }
+        ],
+        "10.10.10.5": [
+          { "service": "kafka", "port": 9092, "component": "mq" },
+          { "service": "elasticsearch", "port": 9200, "component": "store" },
+          { "service": "minio", "port": 8021, "component": "object" }
+        ]
+      }
+    },
+    {
+      "type": "pushgateway",
+      "enabled": false,
+      "service": "pushgateway",
+      "tags": ["yunshu-metrics"],
+      "address": "127.0.0.1",
+      "port": 9091,
+      "check_http": true
+    }
+  ]
+}

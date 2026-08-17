@@ -2,18 +2,22 @@
 
 本文档说明 `yunshu` 当前已实现的告警能力，覆盖从配置到发送、从聚合到排障的完整流程。
 
+> **运维先读路径说明：** [`deploy/monitoring/ALERT-PATH.md`](../deploy/monitoring/ALERT-PATH.md)  
+> **当前主路径：** Yunshu 规则中心 → 事件台 / 渠道（**不经 Alertmanager**）。  
+> 下文「入口 A / Alertmanager」为**遗留对接说明**，新建规则请走规则中心（入口 B）。
+
 ## 1. 总体流程
 
-两条入口最终汇入 `ReceiveAlertmanager` → `RunIngressPipeline`：
+两条入口最终汇入 ingest → `RunIngressPipeline`（历史函数名仍可能带 Alertmanager 字样，不代表主路径依赖 AM）：
 
-| 入口 | 触发源 | 聚合 / 节流 |
-|------|--------|-------------|
-| **A** | Prometheus → Alertmanager → `POST /api/v1/alerts/webhook/alertmanager` | **AM 原生** `group_wait` / `group_interval` / `repeat_interval`；Yunshu 默认不再二次节流 |
-| **B** | 平台 PromQL 规则 → Redis pending/for → 内部 `ReceiveAlertmanager`（`receiver=platform-monitor`） | **Yunshu** `group_wait_seconds` / `group_interval_seconds` / `repeat_interval_seconds` |
+| 入口 | 触发源 | 聚合 / 节流 | 现状 |
+|------|--------|-------------|------|
+| **B（主）** | 平台 PromQL 规则 → Redis pending/for → `platform-monitor` | **`configs/config.yaml` → `alert.group_*`** | **新建告警用这个** |
+| **A（旧）** | 曾：Prometheus → Alertmanager → Webhook | AM 原生 `group_wait` 等 | 非主路径；平台规则**不会**走 AM |
 
-统一后续步骤：解析 labels → 静默/抑制 → 订阅树匹配 → 通道发送 → `alert_events` 落库。
+统一后续：解析 labels → 静默/抑制 → 订阅树 → 通道 → `alert_events`。
 
-端到端时序图见 [告警路由与投递指南 §0.2](./alert-routing-and-delivery-guide.md#02-双入口时序入口-a-信任-am--入口-b-保留-yunshu-分组节流)。
+端到端时序见 [告警路由与投递指南](./alert-routing-and-delivery-guide.md)。
 
 ---
 
@@ -65,11 +69,12 @@ alert:
 
 ---
 
-## 3. Alertmanager 对接配置
+## 3. Alertmanager 对接配置（遗留）
 
-**推荐**：Alertmanager 作为**第一层**聚合与节流；Yunshu 负责订阅路由与多渠道分发。默认 `webhook_skip_group_timing: true`，不再对 AM 已聚合的 Webhook 做第二层 `group_wait`。
+> **主路径不使用本节。** 平台规则中心告警的 `group_wait` 只看上一节 `alert.group_*`。  
+> 详见 [`ALERT-PATH.md`](../deploy/monitoring/ALERT-PATH.md)。
 
-示例：
+若机房仍保留旧 Prom rules → AM，可参考（与 Yunshu 规则中心**并行、互不同步**）：
 
 ```yaml
 route:

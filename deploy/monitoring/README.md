@@ -1,42 +1,58 @@
-# 监控采集与发现配置样例（Yunshu 告警 P0）
+# 监控采集与发现配置样例（Yunshu 告警）
 
 配套方案：[`docs/requirements/R-alert-platform-remediation-nightingale-consul.md`](../../docs/requirements/R-alert-platform-remediation-nightingale-consul.md)
 
-## 链路
+## 告警路径（先读）
+
+**完整说明：[`ALERT-PATH.md`](./ALERT-PATH.md)**
+
+```text
+采集 → Prometheus（只存指标）
+        → Yunshu 规则中心（唯一告警引擎）→ 事件台 / 钉钉企微邮件
+```
+
+- 平台规则结果看 **Yunshu 事件台**，不看 Prom Alerts。  
+- 投递等待看 **`configs/config.yaml` → `alert.group_*` + 规则评估间隔**，**不看** `alertmanager.yml`。  
+- Prom `rules/*.yml` + Alertmanager 为旧路径，与平台互不同步。
+
+## 采集链路
 
 ```text
 Telegraf / Pushgateway / blackbox（及目标）
   → 注册到 Consul（推荐）或静态 scrape
   → Prometheus / VictoriaMetrics
-  → Yunshu 数据源 + 规则中心（唯一告警引擎）
+  → Yunshu 数据源 + 规则中心
   → 通知渠道
 ```
-
-**不再使用 Alertmanager。** Prometheus 只负责存指标与 scrape；告警规则在 Yunshu 配置。
 
 ## 文件一览
 
 | 文件 | 用途 |
 |------|------|
-| `prometheus-scrape.yml` | Prometheus scrape 片段：Consul SD + Pushgateway + blackbox |
-| `telegraf.conf` | 主机 Telegraf：采集 + prometheus_client 输出 + Consul 服务注册 |
-| `blackbox.yml` | blackbox_exporter 模块配置 |
-| `consul-service-telegraf.json` | 手工注册 Telegraf 到 Consul 的示例 |
-| `consul-service-blackbox-target.json` | 拨测目标注册示例（由 Prom blackbox job 发现） |
-| `yunshu-alert.snippet.yaml` | Yunshu `configs/config.yaml` 告警段建议注释/取值 |
+| **`ALERT-PATH.md`** | **主/旧告警路径、等待时间来源、验收（必读）** |
+| **`CONSUL-ACL-RUNBOOK.md`** | Consul 1.10 + ACL、SD、Token、Telegraf/拨测注册 |
+| `BLACKBOX-MODULES.md` | 自定义 blackbox module + Consul Meta.probe_module |
+| `prometheus-scrape.yml` | Prometheus scrape（无 ACL） |
+| `prometheus-scrape-acl.yml` | 带 token 的多类型 Consul SD |
+| `telegraf.conf` | 主机 Telegraf 样例 |
+| `blackbox.yml` | blackbox 模块样例（生产自定义 module 放机房，勿提交密钥） |
+| `consul_targets_sync.py` + `consul-targets-*.sh/json` | 统一注册（Py2.7+）；telegraf 每台，拨测仅监控机 |
+| `consul_k8s_pods_sync.py` + `K8S-CONSUL-PODS.md` | K8s Pod → Consul（kubectl + cron） |
+| `metrics-register.hcl` | 统一注册 ACL policy |
+| `yunshu-alert.snippet.yaml` | Yunshu `alert` 段建议 |
 
-## 推荐标签（写入时序，供 Yunshu 规则/订阅匹配）
+## 脚本跑在哪
 
-| label | 来源建议 |
-|-------|----------|
-| `yunshu_project` | Consul meta → Prom relabel |
-| `env` | Consul meta |
-| `exporter_role` | `telegraf` / `blackbox` / `pushgateway` / `app` |
-| `host` / `instance` | 机器标识 |
+| 类型 | 执行位置 |
+|------|----------|
+| Telegraf 注册 | **每台** Telegraf 主机（`--type telegraf`） |
+| ICMP/HTTP/TCP 目标 | **仅** Prom/Consul 监控机 |
+| K8s Pod → Consul | **仅** 监控机（`consul-k8s-pods-ctl.sh sync` + kubectl） |
+| 规则与通知 | Yunshu |
 
 ## 快速验收
 
-1. Prometheus targets 中能看到 Consul 发现的 telegraf / blackbox。
-2. Yunshu「数据源」指向该 Prom，`Ping` 成功。
-3. 「规则中心」从模板创建 Telegraf/Blackbox 规则并启用。
-4. 人为打高负载或关闭探测目标，事件台出现通知（钉钉/企微/邮件）。
+1. Prom Targets 中 telegraf/blackbox 为 UP。  
+2. Yunshu 数据源 Ping 成功。  
+3. 规则中心启用规则 → **事件台**出现当前告警与投递流水。  
+4. 不要求 Prometheus Alerts 页有对应项。

@@ -1,0 +1,38 @@
+{
+  "consul": {
+    "addr": "http://127.0.0.1:8500",
+    "token_env": "CONSUL_TOKEN",
+    "token": ""
+  },
+  "defaults": {
+    "yunshu_project": "1",
+    "env": "prod"
+  },
+  "kubectl": {
+    "bin": "kubectl",
+    "kubeconfig": "",
+    "context": ""
+  },
+  "clusters": [
+    {
+      "name": "prodK8s",
+      "enabled": true,
+      "service": "k8s-pod",
+      "tags": ["yunshu-metrics", "k8s"],
+      "namespaces": ["default", "yunshu"],
+      "label_selector": "yunshu.io/consul=true",
+      "field_selector": "status.phase=Running",
+      "only_ready": false,
+      "require_scrape_annotation": false,
+      "default_port": 8080,
+      "metrics_path": "/metrics",
+      "port_annotations": ["yunshu.io/metrics-port", "prometheus.io/port"],
+      "path_annotations": ["yunshu.io/metrics-path", "prometheus.io/path"],
+      "check_http": false,
+      "check_tcp": false,
+      "meta": {
+        "exporter_role": "k8s_pod"
+      }
+    }
+  ]
+}

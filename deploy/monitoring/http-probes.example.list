@@ -1,0 +1,8 @@
+# HTTP 批量清单
+# 格式任选：
+#   id|url|module|service|app
+#   id url [module]
+#   https://example.com/health
+#
+baidu|https://www.baidu.com|http_2xx|baidu|web
+graylog http://10.241.243.177:9000 http_2xx
