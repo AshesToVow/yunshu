@@ -20,6 +20,9 @@ service "blackbox-target" {
 service "k8s-pod" {
   policy = "write"
 }
+service "k8s-pod-metrics" {
+  policy = "write"
+}
 node_prefix "" {
   policy = "read"
 }

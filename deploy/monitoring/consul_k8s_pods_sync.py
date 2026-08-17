@@ -77,12 +77,39 @@ def load_config(path):
         import io
 
         with io.open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            raw = f.read()
     except TypeError:
         import codecs
 
         with codecs.open(path, "r", "utf-8") as f:
-            return json.load(f)
+            raw = f.read()
+    # 去掉整行 # 注释（勿在字符串值里写未转义的 "）
+    lines = []
+    for i, line in enumerate(raw.splitlines(), 1):
+        s = line
+        # 仅去掉行首空白后以 # 开头的整行注释
+        if s.lstrip().startswith("#"):
+            continue
+        lines.append(s)
+    text = u"\n".join(lines)
+    try:
+        return json.loads(text)
+    except ValueError as e:
+        # 帮助定位：打印出错行附近
+        msg = ensure_text(e)
+        print("ERROR: invalid JSON in %s: %s" % (path, msg), file=sys.stderr)
+        print("---- file preview (with line numbers) ----", file=sys.stderr)
+        for i, line in enumerate(text.splitlines(), 1):
+            if i <= 12 or (i >= 1 and abs(i - 5) <= 2):
+                mark = ">>" if i == 5 else "  "
+                print("%s %3d: %s" % (mark, i, line), file=sys.stderr)
+        print(
+            "Hint: JSON 不能写 // 或行尾注释；字符串用双引号；"
+            "属性之间要有逗号；不要多余逗号。token 行常见错误："
+            "\"token\": \"uuid\", 后面又跟了字/注释。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def sanitize_id(s):
@@ -153,7 +180,13 @@ def run_kubectl(cfg, args, cluster_cfg=None):
 
 
 def pick_port(pod, cluster_cfg):
-    """端口：注解 > 名为 metrics 的 containerPort > 第一个 containerPort > default_port。"""
+    """
+    端口（写入 Consul Address 旁的 Port，便于 UI 显示）：
+      1) 注解 prometheus.io/port / yunshu.io/metrics-port（显式配置才算指标口）
+      2) 否则第一个 containerPort（仅展示/拨测，不代表有 /metrics）
+      3) 都没有则 0（仍注册 PodIP）
+    不再默认 8080。
+    """
     meta = (pod.get("metadata") or {})
     ann = meta.get("annotations") or {}
     for key in cluster_cfg.get("port_annotations") or [
@@ -162,9 +195,8 @@ def pick_port(pod, cluster_cfg):
     ]:
         v = ensure_text(ann.get(key) or "").strip()
         if v.isdigit():
-            return int(v)
+            return int(v), True
 
-    named = []
     first = None
     for c in ((pod.get("spec") or {}).get("containers") or []):
         for p in c.get("ports") or []:
@@ -176,15 +208,17 @@ def pick_port(pod, cluster_cfg):
                 first = cp
             name = ensure_text(p.get("name") or "").lower()
             if name in ("metrics", "http-metrics", "prometheus"):
-                named.append(cp)
-    if named:
-        return named[0]
+                return cp, False
     if first is not None:
-        return first
-    return int(cluster_cfg.get("default_port") or 8080)
+        return first, False
+    return 0, False
 
 
 def pick_metrics_path(pod, cluster_cfg):
+    """
+    指标路径：仅当 Pod（或集群配置显式）配置了 path 注解/字段时才返回。
+    不默认 /metrics，避免 nginx 等无指标端点被 Prom 刮挂。
+    """
     ann = ((pod.get("metadata") or {}).get("annotations") or {})
     for key in cluster_cfg.get("path_annotations") or [
         "yunshu.io/metrics-path",
@@ -193,18 +227,32 @@ def pick_metrics_path(pod, cluster_cfg):
         v = ensure_text(ann.get(key) or "").strip()
         if v:
             return v if v.startswith("/") else ("/" + v)
-    return ensure_text(cluster_cfg.get("metrics_path") or "/metrics")
+    # 集群级仅当配置里显式写了非空 metrics_path 才用（不要写默认 /metrics）
+    v = ensure_text(cluster_cfg.get("metrics_path") or "").strip()
+    if v:
+        return v if v.startswith("/") else ("/" + v)
+    return u""
 
 
-def should_scrape(pod, cluster_cfg):
-    """是否注册：注解 prometheus.io/scrape=true 优先；否则看 label_selector 已过滤。"""
+def should_register(pod, cluster_cfg):
+    """是否注册到 Consul：label_selector 已过滤；显式 scrape=false 仍可登记（无 metrics_path）。"""
+    ann = ((pod.get("metadata") or {}).get("annotations") or {})
+    scrape = ensure_text(ann.get("prometheus.io/scrape") or "").lower()
+    # 仅当要求必须带 scrape 注解时才拦截
+    require = cluster_cfg.get("require_scrape_annotation")
+    if require and scrape not in ("true", "1", "yes"):
+        return False
+    return True
+
+
+def wants_metrics_scrape(pod, mpath):
+    """有显式 path 且未声明 scrape=false 时，才视为可被 Prom 抓取。"""
+    if not mpath:
+        return False
     ann = ((pod.get("metadata") or {}).get("annotations") or {})
     scrape = ensure_text(ann.get("prometheus.io/scrape") or "").lower()
     if scrape in ("false", "0", "no"):
         return False
-    require = cluster_cfg.get("require_scrape_annotation")
-    if require:
-        return scrape in ("true", "1", "yes")
     return True
 
 
@@ -229,7 +277,6 @@ def expand_pods(cfg):
         if not cluster_cfg.get("enabled", True):
             continue
         cluster = ensure_text(cluster_cfg.get("name") or "k8s").strip() or "k8s"
-        service_name = ensure_text(cluster_cfg.get("service") or "k8s-pod").strip() or "k8s-pod"
         tags = list(cluster_cfg.get("tags") or ["yunshu-metrics", "k8s"])
         base_meta = meta_defaults(cfg, cluster_cfg)
         base_meta["managed_by"] = MANAGED_BY
@@ -256,7 +303,7 @@ def expand_pods(cfg):
                 args.extend(["--field-selector", field_selector])
             doc = run_kubectl(cfg, args, cluster_cfg)
             for pod in doc.get("items") or []:
-                if not should_scrape(pod, cluster_cfg):
+                if not should_register(pod, cluster_cfg):
                     continue
                 meta_obj = pod.get("metadata") or {}
                 status = pod.get("status") or {}
@@ -276,29 +323,42 @@ def expand_pods(cfg):
                     if not ready:
                         continue
 
-                port = pick_port(pod, cluster_cfg)
+                port, _port_from_ann = pick_port(pod, cluster_cfg)
                 mpath = pick_metrics_path(pod, cluster_cfg)
+                if not wants_metrics_scrape(pod, mpath):
+                    mpath = u""
                 app = pod_app_label(pod)
                 node = ensure_text(status.get("hostIP") or "")
-                sid = "k8s-%s-%s-%s-%s" % (
-                    sanitize_id(cluster),
-                    sanitize_id(namespace),
-                    sanitize_id(pod_name),
-                    int(port),
-                )
-                # Consul ID 长度限制较宽，仍做截断防异常长名
+                if port > 0:
+                    sid = "k8s-%s-%s-%s-%s" % (
+                        sanitize_id(cluster),
+                        sanitize_id(namespace),
+                        sanitize_id(pod_name),
+                        int(port),
+                    )
+                else:
+                    sid = "k8s-%s-%s-%s" % (
+                        sanitize_id(cluster),
+                        sanitize_id(namespace),
+                        sanitize_id(pod_name),
+                    )
                 if len(sid) > 120:
                     sid = "k8s-%s-%s-%s" % (
                         sanitize_id(cluster),
                         sanitize_id(pod_ip),
-                        int(port),
+                        int(port) if port > 0 else 0,
                     )
 
                 meta = dict(base_meta)
                 meta["namespace"] = namespace
                 meta["pod"] = pod_name
                 meta["node"] = node
-                meta["metrics_path"] = mpath
+                meta["pod_ip"] = pod_ip
+                if mpath:
+                    meta["metrics_path"] = mpath
+                    meta["scrape"] = "true"
+                else:
+                    meta["scrape"] = "false"
                 if app:
                     meta["app"] = app
                     meta.setdefault("service", app)
@@ -307,15 +367,33 @@ def expand_pods(cfg):
                     ensure_text(defaults.get("yunshu_project") or "1"),
                 )
 
+                # 无指标路径 → 只进目录服务 k8s-pod（Yunshu/Consul 展示 PodIP）
+                # 有 prometheus.io/path → 进 k8s-pod-metrics，才被 Prom 采集
+                metrics_service = ensure_text(
+                    cluster_cfg.get("metrics_service") or "k8s-pod-metrics"
+                ).strip() or "k8s-pod-metrics"
+                catalog_service = ensure_text(
+                    cluster_cfg.get("service") or "k8s-pod"
+                ).strip() or "k8s-pod"
+                if mpath:
+                    reg_name = metrics_service
+                    svc_tags = list(tags)
+                    if "has-metrics" not in svc_tags:
+                        svc_tags.append("has-metrics")
+                else:
+                    reg_name = catalog_service
+                    svc_tags = list(tags)
+
                 svc = {
                     "ID": sid,
-                    "Name": service_name,
-                    "Tags": tags,
+                    "Name": reg_name,
+                    "Tags": svc_tags,
+                    # 始终写真实 PodIP，供 Consul UI / Yunshu 监控对象展示
                     "Address": pod_ip,
                     "Port": int(port),
                     "Meta": meta,
                 }
-                if cluster_cfg.get("check_http"):
+                if mpath and cluster_cfg.get("check_http"):
                     scheme = ensure_text(cluster_cfg.get("check_scheme") or "http")
                     svc["Check"] = {
                         "HTTP": "%s://%s:%s%s"
@@ -323,7 +401,7 @@ def expand_pods(cfg):
                         "Interval": ensure_text(cluster_cfg.get("check_interval") or "30s"),
                         "Timeout": ensure_text(cluster_cfg.get("check_timeout") or "5s"),
                     }
-                elif cluster_cfg.get("check_tcp"):
+                elif port > 0 and cluster_cfg.get("check_tcp"):
                     svc["Check"] = {
                         "TCP": "%s:%s" % (pod_ip, int(port)),
                         "Interval": ensure_text(cluster_cfg.get("check_interval") or "30s"),

@@ -245,6 +245,7 @@ route:
 |------|----------|
 | Telegraf 注册 | **每台** Telegraf（`--type telegraf`） |
 | ICMP/HTTP/TCP | **仅** 监控机 |
+| K8s Pod → Consul | **仅** 监控机（见 [`K8S-CONSUL-PODS.md`](./K8S-CONSUL-PODS.md)） |
 | 规则与通知 | Yunshu |
 
 ---
@@ -256,6 +257,7 @@ route:
 - [ ] **投递流水** 有成功或「首次见等待」  
 - [ ] 不以 Prom Alerts 判断平台规则  
 - [ ] 不依赖 AM→Yunshu 作为主路径  
+- [ ]（可选）K8s：无 path 的 Pod 仅在 Consul/`k8s-pod`；有 path 的进 `k8s-pod-metrics` 且 Prom 可刮  
 
 ---
 

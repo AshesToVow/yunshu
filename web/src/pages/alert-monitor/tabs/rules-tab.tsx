@@ -3,6 +3,7 @@ import { Alert, Button, Form, Input, InputNumber, Modal, Segmented, Select, Spac
 import { PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useAlertMonitor } from "../context";
+import { tablePagination } from "../../../utils/table-pagination";
 import {
   createAlertMonitorRuleFromTemplate,
   importPrometheusYAML,
@@ -156,15 +157,12 @@ export function RulesTab() {
         columns={ctx.ruleColumns}
         dataSource={ctx.ruleDisplayList}
         loading={ctx.rulesLoading}
-        pagination={{
+        pagination={tablePagination({
           current: ctx.rulePage,
           pageSize: ctx.rulePageSize,
           total: ctx.ruleTotal,
-          showSizeChanger: true,
-          pageSizeOptions: ["10", "20", "50", "100"],
-          showTotal: (t: number) => `共 ${t} 条`,
-          onChange: (page: number, pageSize: number) => ctx.onRuleTableChange(page, pageSize),
-        }}
+          onChange: (page, pageSize) => ctx.onRuleTableChange(page, pageSize),
+        })}
         scroll={{ x: 1100 }}
       />
 
@@ -195,7 +193,7 @@ export function RulesTab() {
           size="small"
           loading={tplLoading}
           dataSource={filtered}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          pagination={tablePagination()}
           rowSelection={{
             type: "radio",
             selectedRowKeys: selected ? [selected.id] : [],

@@ -47,6 +47,7 @@ import type { DepartmentItem } from "../../types/api";
 import { getDepartmentTree } from "../../services/departments";
 import { getProjects, type ProjectItem } from "../../services/projects";
 import { getUsers } from "../../services/users";
+import { DEFAULT_PAGE_SIZE } from "../../utils/table-pagination";
 import {
   createAlertDatasource,
   createAlertMonitorRule,
@@ -519,13 +520,13 @@ function useAlertMonitorPlatformState() {
   /** 监控规则列表：全部 / 仅启用 / 仅停用 */
   const [ruleEnabledFilter, setRuleEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
   const [rulePage, setRulePage] = useState(1);
-  const [rulePageSize, setRulePageSize] = useState(20);
+  const [rulePageSize, setRulePageSize] = useState(DEFAULT_PAGE_SIZE);
   const [ruleTotal, setRuleTotal] = useState(0);
   const [ruleEnabledStats, setRuleEnabledStats] = useState({ total: 0, enabled: 0, disabled: 0 });
   const [rulesLoading, setRulesLoading] = useState(false);
   const ruleQueryRef = useRef({
     page: 1,
-    pageSize: 20,
+    pageSize: DEFAULT_PAGE_SIZE,
     filter: "all" as "all" | "enabled" | "disabled",
   });
   ruleQueryRef.current = { page: rulePage, pageSize: rulePageSize, filter: ruleEnabledFilter };

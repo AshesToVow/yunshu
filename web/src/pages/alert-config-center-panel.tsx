@@ -25,6 +25,7 @@ import {
   CHART_SUCCESS,
 } from "../constants/chart-colors";
 import { formatDateTime } from "../utils/format";
+import { DEFAULT_PAGE_SIZE, tablePagination } from "../utils/table-pagination";
 import {
   ALERT_EVENT_CATEGORY_OPTIONS,
   ALERT_HISTORY_PIPELINE_HELP,
@@ -262,7 +263,7 @@ export function AlertConfigCenterPanel({
   const [groupedEvents, setGroupedEvents] = useState<AlertEventGroupItem[]>([]);
   const [eventHistoryMode, setEventHistoryMode] = useState<"list" | "grouped">("list");
   const [eventsPage, setEventsPage] = useState(1);
-  const [eventsPageSize, setEventsPageSize] = useState(10);
+  const [eventsPageSize, setEventsPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [eventsTotal, setEventsTotal] = useState(0);
   const [eventKeyword, setEventKeyword] = useState("");
   const [eventAlertIP, setEventAlertIP] = useState("");
@@ -1113,15 +1114,12 @@ export function AlertConfigCenterPanel({
               loading={eventsLoading}
               dataSource={groupedEvents}
               scroll={{ x: 1100 }}
-              pagination={{
+              pagination={tablePagination({
                 current: eventsPage,
                 pageSize: eventsPageSize,
                 total: eventsTotal,
-                showSizeChanger: true,
-                pageSizeOptions: [10, 20, 50, 100],
-                showQuickJumper: true,
                 onChange: (p, ps) => void reloadEvents(p, ps),
-              }}
+              })}
               columns={[
                 {
                   title: "GroupKey",
@@ -1164,15 +1162,12 @@ export function AlertConfigCenterPanel({
             loading={eventsLoading}
             dataSource={events}
             scroll={{ x: 2460 }}
-            pagination={{
+            pagination={tablePagination({
               current: eventsPage,
               pageSize: eventsPageSize,
               total: eventsTotal,
-              showSizeChanger: true,
-              pageSizeOptions: [10, 20, 50, 100],
-              showQuickJumper: true,
               onChange: (p, ps) => void reloadEvents(p, ps),
-            }}
+            })}
             columns={[
               { title: "ID", dataIndex: "id", width: 80 },
               {
@@ -1847,7 +1842,7 @@ export function AlertConfigCenterPanel({
             <Card size="small" title="最近留痕（最多 200 条）">
               <Table
                 size="small"
-                pagination={{ pageSize: 8 }}
+                pagination={tablePagination()}
                 rowKey="id"
                 dataSource={fpExplain.events || []}
                 columns={[

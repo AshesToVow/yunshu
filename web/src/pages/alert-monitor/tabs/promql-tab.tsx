@@ -15,6 +15,7 @@ import {
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { lazy, Suspense } from "react";
 import { useAlertMonitor } from "../context";
+import { tablePagination } from "../../../utils/table-pagination";
 
 
 export function PromqlTab() {
@@ -85,7 +86,7 @@ export function PromqlTab() {
                     rowKey="key"
                     size="small"
                     bordered
-                    pagination={{ pageSize: 20, showSizeChanger: true }}
+                    pagination={tablePagination()}
                     scroll={{ x: "max-content", y: 420 }}
                     columns={ctx.promTableView.columns}
                     dataSource={ctx.promTableView.dataSource}

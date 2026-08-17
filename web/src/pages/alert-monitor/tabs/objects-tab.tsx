@@ -1,5 +1,5 @@
 import { extractApiErrorMessage } from "../../../services/http";
-import { Alert, Button, Form, Input, Modal, Popconfirm, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
 import { PlusOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useState } from "react";
 import { useAlertMonitor } from "../context";
@@ -15,6 +15,7 @@ import {
   type AlertMonitorObjectItem,
 } from "../../../services/alert-platform";
 import { formatDateTime } from "../../../utils/format";
+import { DEFAULT_PAGE_SIZE, tablePagination } from "../../../utils/table-pagination";
 
 export function ObjectsTab() {
   const ctx = useAlertMonitor();
@@ -22,6 +23,9 @@ export function ObjectsTab() {
   const [objs, setObjs] = useState<AlertMonitorObjectItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [objLoading, setObjLoading] = useState(false);
+  const [objPage, setObjPage] = useState(1);
+  const [objPageSize, setObjPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [objTotal, setObjTotal] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AlertConsulEndpointItem | null>(null);
   const [form] = Form.useForm();
@@ -42,15 +46,18 @@ export function ObjectsTab() {
     }
   }, [ctx.projectContextId]);
 
-  const loadObjects = useCallback(async () => {
+  const loadObjects = useCallback(async (page: number, pageSize: number) => {
     setObjLoading(true);
     try {
       const r = await listMonitorObjects({
         project_id: ctx.projectContextId || undefined,
-        page: 1,
-        page_size: 200,
+        page,
+        page_size: pageSize,
       });
       setObjs(r.list ?? []);
+      setObjTotal(Number(r.total) || 0);
+      setObjPage(r.page ?? page);
+      setObjPageSize(r.page_size ?? pageSize);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "加载监控对象失败"));
     } finally {
@@ -60,8 +67,11 @@ export function ObjectsTab() {
 
   useEffect(() => {
     void load();
-    void loadObjects();
-  }, [load, loadObjects]);
+  }, [load]);
+
+  useEffect(() => {
+    void loadObjects(1, DEFAULT_PAGE_SIZE);
+  }, [loadObjects]);
 
   function openCreate() {
     setEditing(null);
@@ -135,7 +145,10 @@ export function ObjectsTab() {
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
           新建 Consul 端点
         </Button>
-        <Button icon={<ReloadOutlined />} onClick={() => void Promise.all([load(), loadObjects()])}>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => void Promise.all([load(), loadObjects(objPage, objPageSize)])}
+        >
           刷新
         </Button>
       </Space>
@@ -146,7 +159,7 @@ export function ObjectsTab() {
         rowKey="id"
         loading={loading}
         dataSource={eps}
-        pagination={false}
+        pagination={tablePagination()}
         columns={[
           { title: "名称", dataIndex: "name", width: 140 },
           { title: "地址", dataIndex: "address", ellipsis: true },
@@ -186,7 +199,7 @@ export function ObjectsTab() {
                     try {
                       const res = await syncConsulEndpoint(r.id);
                       message.success(`同步完成：写入 ${res.upserted}，移除 ${res.removed}`);
-                      await Promise.all([load(), loadObjects()]);
+                      await Promise.all([load(), loadObjects(1, objPageSize)]);
                     } catch (e) {
                       message.error(extractApiErrorMessage(e, "同步失败"));
                     }
@@ -203,7 +216,7 @@ export function ObjectsTab() {
                     try {
                       await deleteConsulEndpoint(r.id);
                       message.success("已删除");
-                      await Promise.all([load(), loadObjects()]);
+                      await Promise.all([load(), loadObjects(1, objPageSize)]);
                     } catch (e) {
                       message.error(extractApiErrorMessage(e, "删除失败"));
                     }
@@ -225,7 +238,12 @@ export function ObjectsTab() {
         rowKey="id"
         loading={objLoading}
         dataSource={objs}
-        pagination={{ pageSize: 20, showSizeChanger: true }}
+        pagination={tablePagination({
+          current: objPage,
+          pageSize: objPageSize,
+          total: objTotal,
+          onChange: (page, pageSize) => void loadObjects(page, pageSize),
+        })}
         scroll={{ x: 1100 }}
         columns={[
           { title: "服务", dataIndex: "service_name", width: 120 },
@@ -255,8 +273,13 @@ export function ObjectsTab() {
         width={560}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="project_id" label="项目 ID" rules={[{ required: true, message: "必填" }]}>
-            <Input type="number" placeholder="与顶栏项目一致" />
+          <Form.Item name="project_id" label="项目名称" rules={[{ required: true, message: "请选择项目" }]}>
+            <Select
+              options={ctx.projectOptions}
+              placeholder="请选择项目"
+              showSearch
+              optionFilterProp="label"
+            />
           </Form.Item>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />

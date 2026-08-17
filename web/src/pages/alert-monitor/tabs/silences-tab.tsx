@@ -15,6 +15,7 @@ import {
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { lazy, Suspense } from "react";
 import { useAlertMonitor } from "../context";
+import { tablePagination } from "../../../utils/table-pagination";
 
 
 export function SilencesTab() {
@@ -77,7 +78,7 @@ export function SilencesTab() {
                     selectedRowKeys: ctx.selectedNativeAlertKeys,
                     onChange: (keys) => ctx.setSelectedNativeAlertKeys(keys.map((k) => String(k))),
                   }}
-                  pagination={{ pageSize: 8 }}
+                  pagination={tablePagination()}
                   locale={{
                     emptyText: ctx.silenceDatasourceId
                       ? "暂无数据，请点击「拉取活跃告警」"
@@ -113,7 +114,7 @@ export function SilencesTab() {
                   loading={ctx.amSilencesLoading}
                   columns={ctx.silColumns}
                   dataSource={ctx.silenceDisplayList}
-                  pagination={false}
+                  pagination={tablePagination()}
                   scroll={{ x: 960 }}
                 />
               </Space>

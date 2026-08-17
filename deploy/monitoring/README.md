@@ -18,7 +18,7 @@
 ## 采集链路
 
 ```text
-Telegraf / Pushgateway / blackbox（及目标）
+Telegraf / Pushgateway / blackbox / K8s Pod(可选)
   → 注册到 Consul（推荐）或静态 scrape
   → Prometheus / VictoriaMetrics
   → Yunshu 数据源 + 规则中心
@@ -31,14 +31,16 @@ Telegraf / Pushgateway / blackbox（及目标）
 |------|------|
 | **`ALERT-PATH.md`** | **主/旧告警路径、等待时间来源、验收（必读）** |
 | **`CONSUL-ACL-RUNBOOK.md`** | Consul 1.10 + ACL、SD、Token、Telegraf/拨测注册 |
+| **`K8S-CONSUL-PODS.md`** | **K8s Pod → Consul：标签/注解、目录 vs 采集、ACL、cron** |
 | `BLACKBOX-MODULES.md` | 自定义 blackbox module + Consul Meta.probe_module |
 | `prometheus-scrape.yml` | Prometheus scrape（无 ACL） |
-| `prometheus-scrape-acl.yml` | 带 token 的多类型 Consul SD |
+| `prometheus-scrape-acl.yml` | 带 token 的多类型 Consul SD（含 `k8s-pod-metrics`） |
 | `telegraf.conf` | 主机 Telegraf 样例 |
 | `blackbox.yml` | blackbox 模块样例（生产自定义 module 放机房，勿提交密钥） |
 | `consul_targets_sync.py` + `consul-targets-*.sh/json` | 统一注册（Py2.7+）；telegraf 每台，拨测仅监控机 |
-| `consul_k8s_pods_sync.py` + `K8S-CONSUL-PODS.md` | K8s Pod → Consul（kubectl + cron） |
-| `metrics-register.hcl` | 统一注册 ACL policy |
+| `consul_k8s_pods_sync.py` + `consul-k8s-pods-ctl.sh` | K8s Pod → Consul（kubectl + cron） |
+| `tcp-endpoints.example.list` / `http-probes.example.list` | TCP/HTTP 批量清单样例 |
+| `metrics-register.hcl` | 统一注册 ACL policy（含 k8s-pod / k8s-pod-metrics） |
 | `yunshu-alert.snippet.yaml` | Yunshu `alert` 段建议 |
 
 ## 脚本跑在哪
@@ -52,7 +54,13 @@ Telegraf / Pushgateway / blackbox（及目标）
 
 ## 快速验收
 
-1. Prom Targets 中 telegraf/blackbox 为 UP。  
-2. Yunshu 数据源 Ping 成功。  
+1. Prom Targets 中 telegraf/blackbox 为 UP；`k8s-pod` job 仅含带 `prometheus.io/path` 的实例。  
+2. Yunshu 数据源 Ping 成功；监控对象可见 PodIP（`k8s-pod` / `k8s-pod-metrics`）。  
 3. 规则中心启用规则 → **事件台**出现当前告警与投递流水。  
 4. 不要求 Prometheus Alerts 页有对应项。
+
+## 相关专题
+
+- 拨测批量与标签：[`BLACKBOX-MODULES.md`](./BLACKBOX-MODULES.md)、`consul-targets.example.json`  
+- K8s Pod 登记与采集分流：[`K8S-CONSUL-PODS.md`](./K8S-CONSUL-PODS.md)  
+- Consul ACL：[`CONSUL-ACL-RUNBOOK.md`](./CONSUL-ACL-RUNBOOK.md)  

@@ -210,11 +210,13 @@ python3 consul_targets_sync.py -c consul-targets.json sync
 
 若之前已建过 `telegraf-register`、`icmp-register` 等，可继续用，但建议迁到统一 Token 后废弃旧 Token。
 
-以后若自定义服务名（如 `service: "my-icmp"`），把对应 `service "my-icmp"` 补进此 hcl，再：
+以后若自定义服务名（如 `service: "my-icmp"`）或新增 `k8s-pod-metrics`，把对应 `service "..."` 补进此 hcl，再：
 
 ```bash
 ./consul acl policy update -name metrics-register -rules @/export/server/monitor/consul/metrics-register.hcl
 ```
+
+K8s Pod 注册详见 [`K8S-CONSUL-PODS.md`](./K8S-CONSUL-PODS.md)。
 
 ---
 
@@ -309,7 +311,11 @@ Targets 为 UP 后，在 Yunshu 配规则并人为打挂，事件台应出现 fi
 |------|------|------|
 | `telegraf` | `yunshu-metrics` | `yunshu_project`, `env`, `exporter_role=telegraf` |
 | `pushgateway` | `yunshu-metrics` | `exporter_role=pushgateway` |
-| `blackbox-target` | `probe-http` / `probe-tcp` / `probe-icmp` | `probe_url` 或 `probe_host` |
+| `http` / `tcp` / `icmp` | `probe-*`, `yunshu-metrics` | `probe_url` / `probe_host`，可选 `service`/`app` |
+| `k8s-pod` | `yunshu-metrics`, `k8s` | 仅目录：PodIP，**无** `metrics_path`（不采集） |
+| `k8s-pod-metrics` | `yunshu-metrics`, `k8s`, `has-metrics` | 有 `metrics_path`，供 Prom 采集 |
+
+K8s Pod 同步说明：[`K8S-CONSUL-PODS.md`](./K8S-CONSUL-PODS.md)。
 
 拨测示例：[`consul-service-blackbox-target.json`](./consul-service-blackbox-target.json)、[`consul-service-blackbox-tcp.json`](./consul-service-blackbox-tcp.json)（请求头带对应注册 Token）。
 

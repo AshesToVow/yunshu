@@ -18,6 +18,7 @@ import { useAlertMonitor } from "../context";
 import { listCurEvents, listHisEvents, type AlertCurEventItem, type AlertHisEventItem } from "../../../services/alerts";
 import { analyzeAlertExplainAI, type AIAlertExplainResult } from "../../../services/ai";
 import { formatDateTime } from "../../../utils/format";
+import { DEFAULT_PAGE_SIZE, tablePagination } from "../../../utils/table-pagination";
 
 const AlertConfigCenterPanel = lazy(async () => {
   const mod = await import("../../alert-config-center-panel");
@@ -34,52 +35,68 @@ export function HistoryTab() {
   const [hisRows, setHisRows] = useState<AlertHisEventItem[]>([]);
   const [curTotal, setCurTotal] = useState(0);
   const [hisTotal, setHisTotal] = useState(0);
+  const [curPage, setCurPage] = useState(1);
+  const [curPageSize, setCurPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [hisPage, setHisPage] = useState(1);
+  const [hisPageSize, setHisPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiTarget, setAiTarget] = useState<AlertCurEventItem | null>(null);
   const [aiResult, setAiResult] = useState<AIAlertExplainResult | null>(null);
 
-  const loadCur = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await listCurEvents({
-        project_id: ctx.projectContextId || undefined,
-        keyword: keyword || undefined,
-        page: 1,
-        page_size: 50,
-      });
-      setCurRows(r.list ?? r.items ?? []);
-      setCurTotal(r.total ?? 0);
-    } catch (e) {
-      message.error(extractApiErrorMessage(e, "加载当前告警失败"));
-    } finally {
-      setLoading(false);
-    }
-  }, [ctx.projectContextId, keyword]);
+  const loadCur = useCallback(
+    async (page: number, pageSize: number, kw: string) => {
+      setLoading(true);
+      try {
+        const r = await listCurEvents({
+          project_id: ctx.projectContextId || undefined,
+          keyword: kw || undefined,
+          page,
+          page_size: pageSize,
+        });
+        setCurRows(r.list ?? r.items ?? []);
+        setCurTotal(r.total ?? 0);
+        setCurPage(r.page ?? page);
+        setCurPageSize(r.page_size ?? pageSize);
+      } catch (e) {
+        message.error(extractApiErrorMessage(e, "加载当前告警失败"));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [ctx.projectContextId],
+  );
 
-  const loadHis = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await listHisEvents({
-        project_id: ctx.projectContextId || undefined,
-        keyword: keyword || undefined,
-        page: 1,
-        page_size: 50,
-      });
-      setHisRows(r.list ?? r.items ?? []);
-      setHisTotal(r.total ?? 0);
-    } catch (e) {
-      message.error(extractApiErrorMessage(e, "加载历史告警失败"));
-    } finally {
-      setLoading(false);
-    }
-  }, [ctx.projectContextId, keyword]);
+  const loadHis = useCallback(
+    async (page: number, pageSize: number, kw: string) => {
+      setLoading(true);
+      try {
+        const r = await listHisEvents({
+          project_id: ctx.projectContextId || undefined,
+          keyword: kw || undefined,
+          page,
+          page_size: pageSize,
+        });
+        setHisRows(r.list ?? r.items ?? []);
+        setHisTotal(r.total ?? 0);
+        setHisPage(r.page ?? page);
+        setHisPageSize(r.page_size ?? pageSize);
+      } catch (e) {
+        message.error(extractApiErrorMessage(e, "加载历史告警失败"));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [ctx.projectContextId],
+  );
 
   useEffect(() => {
-    if (view === "current") void loadCur();
-    if (view === "lifecycle") void loadHis();
-  }, [view, loadCur, loadHis]);
+    if (view === "current") void loadCur(1, DEFAULT_PAGE_SIZE, keyword);
+    if (view === "lifecycle") void loadHis(1, DEFAULT_PAGE_SIZE, keyword);
+    // 切换视图 / 项目时从第 1 页加载；keyword 由搜索触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, ctx.projectContextId, loadCur, loadHis]);
 
   async function runAiExplain(row: AlertCurEventItem) {
     if (!row.fingerprint) {
@@ -128,11 +145,19 @@ export function HistoryTab() {
               allowClear
               placeholder="搜索告警名/指纹/摘要"
               style={{ width: 260 }}
-              onSearch={(v) => setKeyword(v)}
+              onSearch={(v) => {
+                setKeyword(v);
+                if (view === "current") void loadCur(1, curPageSize, v);
+                else void loadHis(1, hisPageSize, v);
+              }}
             />
             <Button
               icon={<ReloadOutlined />}
-              onClick={() => void (view === "current" ? loadCur() : loadHis())}
+              onClick={() =>
+                void (view === "current"
+                  ? loadCur(curPage, curPageSize, keyword)
+                  : loadHis(hisPage, hisPageSize, keyword))
+              }
             >
               刷新
             </Button>
@@ -145,7 +170,12 @@ export function HistoryTab() {
           rowKey="id"
           loading={loading}
           dataSource={curRows}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          pagination={tablePagination({
+            current: curPage,
+            pageSize: curPageSize,
+            total: curTotal,
+            onChange: (page, pageSize) => void loadCur(page, pageSize, keyword),
+          })}
           scroll={{ x: 1100 }}
           columns={[
             { title: "告警名", dataIndex: "alertname", width: 180, ellipsis: true },
@@ -187,7 +217,12 @@ export function HistoryTab() {
           rowKey="id"
           loading={loading}
           dataSource={hisRows}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          pagination={tablePagination({
+            current: hisPage,
+            pageSize: hisPageSize,
+            total: hisTotal,
+            onChange: (page, pageSize) => void loadHis(page, pageSize, keyword),
+          })}
           scroll={{ x: 1000 }}
           columns={[
             { title: "告警名", dataIndex: "alertname", width: 180, ellipsis: true },

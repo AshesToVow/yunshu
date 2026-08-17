@@ -171,7 +171,7 @@ scrape_configs:
       - target_label: exporter_role
         replacement: blackbox
 
-  # ---------- 6) K8s Pod（consul_k8s_pods_sync.py → service k8s-pod）----------
+  # ---------- 6) K8s Pod 指标（仅 service=k8s-pod-metrics；无 /metrics 的只进 k8s-pod 目录）----------
   - job_name: k8s-pod
     scrape_interval: 30s
     metrics_path: /metrics
@@ -179,9 +179,12 @@ scrape_configs:
       - server: "127.0.0.1:8500"
         token: "<PROM_TOKEN>"
         datacenter: prod
-        services: ["k8s-pod"]
+        services: ["k8s-pod-metrics"]
         tags: ["yunshu-metrics"]
     relabel_configs:
+      - source_labels: [__meta_consul_service_metadata_metrics_path]
+        regex: "^$|none"
+        action: drop
       - source_labels: [__meta_consul_service_metadata_metrics_path]
         target_label: __metrics_path__
         regex: "(.+)"
@@ -195,6 +198,8 @@ scrape_configs:
         target_label: namespace
       - source_labels: [__meta_consul_service_metadata_pod]
         target_label: pod
+      - source_labels: [__meta_consul_service_metadata_pod_ip]
+        target_label: pod_ip
       - source_labels: [__meta_consul_service_metadata_app]
         target_label: app
       - source_labels: [__meta_consul_service_metadata_service]
