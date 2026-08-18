@@ -221,6 +221,39 @@
   word-break: break-word;
 }
 
+.k8s-table-scroll-host .ant-table-thead > tr > th {
+  position: relative;
+  overflow: visible;
+}
+
+.yunshu-table-col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  z-index: 2;
+}
+
+.yunshu-table-col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 22%;
+  right: 3px;
+  width: 1px;
+  height: 56%;
+  background: currentColor;
+  opacity: 0.22;
+}
+
+.yunshu-table-col-resizer:hover,
+.yunshu-table-col-resizer:active {
+  background: rgba(15, 108, 189, 0.18);
+}
+
 .admin-shell.ops-platform .table-card.ant-card,
 .admin-shell.ops-platform .page-stack > .ant-card {
   border-radius: var(--ops-radius) !important;

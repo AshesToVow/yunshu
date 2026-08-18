@@ -26,6 +26,7 @@ import {
 } from "../constants/chart-colors";
 import { formatDateTime } from "../utils/format";
 import { DEFAULT_PAGE_SIZE, tablePagination } from "../utils/table-pagination";
+import { ResizableTable } from "../components/resizable-table";
 import {
   ALERT_EVENT_CATEGORY_OPTIONS,
   ALERT_HISTORY_PIPELINE_HELP,
@@ -1108,8 +1109,7 @@ export function AlertConfigCenterPanel({
             </Button>
           </Space>
           {eventHistoryMode === "grouped" ? (
-            <div className="k8s-table-scroll-host">
-            <Table
+            <ResizableTable
               rowKey="group_key"
               loading={eventsLoading}
               dataSource={groupedEvents}
@@ -1154,10 +1154,8 @@ export function AlertConfigCenterPanel({
                 { title: "集群", dataIndex: "cluster", width: 140, ellipsis: true, render: (v: string) => v || "-" },
               ]}
             />
-            </div>
           ) : (
-          <div className="k8s-table-scroll-host">
-          <Table
+          <ResizableTable
             rowKey="id"
             loading={eventsLoading}
             dataSource={events}
@@ -1411,7 +1409,6 @@ export function AlertConfigCenterPanel({
               { title: "发送/记录时间", dataIndex: "createdAt", width: 170, render: (v: string) => formatDateTime(v) },
             ]}
           />
-          </div>
           )}
         </>
       ),

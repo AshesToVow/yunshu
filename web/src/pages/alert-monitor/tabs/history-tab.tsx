@@ -7,7 +7,6 @@ import {
   Modal,
   Segmented,
   Space,
-  Table,
   Tag,
   Typography,
   message,
@@ -15,6 +14,7 @@ import {
 import { ReloadOutlined, RobotOutlined } from "@ant-design/icons";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useAlertMonitor } from "../context";
+import { ResizableTable } from "../../../components/resizable-table";
 import { listCurEvents, listHisEvents, type AlertCurEventItem, type AlertHisEventItem } from "../../../services/alerts";
 import { analyzeAlertExplainAI, type AIAlertExplainResult } from "../../../services/ai";
 import { formatDateTime } from "../../../utils/format";
@@ -166,7 +166,7 @@ export function HistoryTab() {
       </Space>
 
       {view === "current" ? (
-        <Table
+        <ResizableTable
           rowKey="id"
           loading={loading}
           dataSource={curRows}
@@ -186,7 +186,7 @@ export function HistoryTab() {
               render: (v: string) => <Tag color={v === "critical" ? "red" : "orange"}>{v}</Tag>,
             },
             { title: "集群", dataIndex: "cluster", width: 120, ellipsis: true },
-            { title: "摘要", dataIndex: "summary", ellipsis: true },
+            { title: "摘要", dataIndex: "summary", width: 280, ellipsis: true },
             { title: "值", dataIndex: "value", width: 90 },
             { title: "开始", dataIndex: "starts_at", width: 170, render: (v) => formatDateTime(v) || "-" },
             { title: "更新", dataIndex: "updated_at", width: 170, render: (v) => formatDateTime(v) || "-" },
@@ -213,7 +213,7 @@ export function HistoryTab() {
       ) : null}
 
       {view === "lifecycle" ? (
-        <Table
+        <ResizableTable
           rowKey="id"
           loading={loading}
           dataSource={hisRows}
@@ -232,7 +232,7 @@ export function HistoryTab() {
               width: 90,
               render: (v: string) => <Tag>{v}</Tag>,
             },
-            { title: "摘要", dataIndex: "summary", ellipsis: true },
+            { title: "摘要", dataIndex: "summary", width: 280, ellipsis: true },
             { title: "开始", dataIndex: "starts_at", width: 170, render: (v) => formatDateTime(v) || "-" },
             { title: "恢复", dataIndex: "resolved_at", width: 170, render: (v) => formatDateTime(v) || "-" },
             { title: "指纹", dataIndex: "fingerprint", width: 160, ellipsis: true },
