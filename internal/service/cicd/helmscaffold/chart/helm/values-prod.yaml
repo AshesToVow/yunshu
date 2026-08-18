@@ -11,6 +11,9 @@ deployment-base:
     rollingUpdate:
       maxUnavailable: 0
       maxSurge: 1
+  consulRegister:
+    enabled: true
+    mode: catalog
   # 生产开启 SkyWalking 时改为 true，并改成你们 Harbor 上的 agent 镜像 / OAP 地址
   skywalking:
     enabled: false

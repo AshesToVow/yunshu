@@ -280,6 +280,13 @@ func (s *AlertService) enrichAssigneeAndDutyEmails(ctx context.Context, outgoing
 		return
 	}
 	status := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", outgoing["status"])))
+	mode := RecipientModeAssigneeAndCC
+	if s.assigneeSvc != nil {
+		if m := s.assigneeSvc.RecipientModeForRule(ctx, rid); m != "" {
+			mode = m
+		}
+	}
+	outgoing["recipient_mode"] = mode
 	var emails []string
 	if s.assigneeSvc != nil && (status != "resolved" || s.assigneeSvc.NotifyOnResolvedEnabled(ctx, rid)) {
 		// 邮件仅「用户」勾选 +「邮箱」额外项；部门子树只参与 IM @（ResolveNotifyPhones）

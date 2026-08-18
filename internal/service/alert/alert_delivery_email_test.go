@@ -6,10 +6,34 @@ func TestMergeAssigneeEmailsStrictPriority(t *testing.T) {
 	t.Parallel()
 	payload := map[string]interface{}{
 		"assignee_emails": []string{"rule@x.com"},
+		"recipient_mode":  RecipientModeAssigneeOnly,
 	}
 	out := mergeAssigneeEmails([]string{"channel@x.com"}, payload)
 	if len(out) != 1 || out[0] != "rule@x.com" {
 		t.Fatalf("assignee only: %v", out)
+	}
+}
+
+func TestMergeAssigneeEmailsDefaultAndCC(t *testing.T) {
+	t.Parallel()
+	payload := map[string]interface{}{
+		"assignee_emails": []string{"rule@x.com"},
+	}
+	out := mergeAssigneeEmails([]string{"channel@x.com"}, payload)
+	if len(out) != 2 {
+		t.Fatalf("default assignee_and_cc: %v", out)
+	}
+}
+
+func TestMergeAssigneeEmailsChannelOnly(t *testing.T) {
+	t.Parallel()
+	payload := map[string]interface{}{
+		"assignee_emails": []string{"rule@x.com"},
+		"recipient_mode":  RecipientModeChannelOnly,
+	}
+	out := mergeAssigneeEmails([]string{"channel@x.com"}, payload)
+	if len(out) != 1 || out[0] != "channel@x.com" {
+		t.Fatalf("channel only: %v", out)
 	}
 }
 
@@ -42,14 +66,22 @@ func TestMergeAssigneeEmailsWithReceiverGroup(t *testing.T) {
 	if len(out) != 2 {
 		t.Fatalf("got %v", out)
 	}
-	// 有 assignee 时不合并接收组抄送
 	payload2 := map[string]interface{}{
 		"assignee_emails":       []string{"rule@x.com"},
 		"receiver_group_emails": []string{"cc@x.com"},
+		"recipient_mode":        RecipientModeAssigneeOnly,
 	}
 	out2 := mergeAssigneeEmailsWithReceiverGroup([]string{"to@x.com"}, payload2)
-	// 有 assignee 时本函数不合并 receiver_group_emails，保持原通道收件人
 	if len(out2) != 1 || out2[0] != "to@x.com" {
-		t.Fatalf("assignee present skips group merge: %v", out2)
+		t.Fatalf("assignee_only skips group merge: %v", out2)
+	}
+	payload3 := map[string]interface{}{
+		"assignee_emails":       []string{"rule@x.com"},
+		"receiver_group_emails": []string{"cc@x.com"},
+		"recipient_mode":        RecipientModeAssigneeAndCC,
+	}
+	out3 := mergeAssigneeEmailsWithReceiverGroup([]string{"rule@x.com", "to@x.com"}, payload3)
+	if len(out3) != 3 {
+		t.Fatalf("assignee_and_cc merges group: %v", out3)
 	}
 }

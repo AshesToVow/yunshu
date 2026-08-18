@@ -22,6 +22,7 @@ import (
 // AlertSubscriptionService 订阅树服务
 type AlertSubscriptionService struct {
 	repo         interfaces.AlertSubscriptionRepository
+	groups       *AlertReceiverGroupService
 	cacheMu      sync.RWMutex
 	rootNodes    map[uint][]*CachedSubscriptionNode // projectID -> root nodes
 	allNodes     map[uint]*CachedSubscriptionNode   // nodeID -> node
@@ -60,6 +61,14 @@ func NewAlertSubscriptionService(repo interfaces.AlertSubscriptionRepository) *A
 	// 启动时预热缓存
 	_ = svc.refreshCache(context.Background())
 	return svc
+}
+
+// AttachReceiverGroups 注入接收组服务，供路由向导创建接收组 + 节点。
+func (s *AlertSubscriptionService) AttachReceiverGroups(groups *AlertReceiverGroupService) {
+	if s == nil {
+		return
+	}
+	s.groups = groups
 }
 
 // AlertSubscriptionNodeUpsertRequest 创建/更新请求

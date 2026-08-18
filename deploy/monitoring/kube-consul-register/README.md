@@ -132,10 +132,11 @@ Yunshu 看地址时用的是 **Address（PodIP）**，不是 Service ID；ID 主
 | `consul.register/enabled` | **必填** `true` 才注册 |
 | `consul.register/service.name` | Yunshu：**必须** `k8s-pod` 或 `k8s-pod-metrics` |
 | `consul.register/pod.container.name` | 只注册列出的容器；省略=全部容器各一份 |
-| `consul.register/pod.container.probe.liveness` | 默认 true；无探针的静态站建议 `false` |
+| `consul.register/liveness.check.enabled` | 默认不启用；无探针的静态站保持 `false` |
+| `consul.register/readiness.check.enabled` | 默认不启用 |
 | `consul.register/service.meta.<key>` | **静态** Meta（`cluster`/`app`/`namespace`/`yunshu_project`/`metrics_path`）；**不能**写运行时 PodIP |
 
-官方注解说明：[kube-consul-register README](https://github.com/tczekajlo/kube-consul-register#annotations)。
+官方注解说明：[AshesToVow/kube-consul-register](https://github.com/AshesToVow/kube-consul-register)（重写版）。CI/CD YAML 片段：[`deploy/cicd-templates/resources/k8s-consul-register.md`](../../cicd-templates/resources/k8s-consul-register.md)。
 
 ---
 

@@ -38,6 +38,7 @@ your-repo/
 | 重启策略 | `deployment-base.restartPolicy` | Always |
 | lifecycle | `deployment-base.lifecycle` | {} |
 | DNS | `deployment-base.dnsPolicy` / `dnsConfig` | ClusterFirst |
+| Consul 注册 | `deployment-base.consulRegister.enabled` | **true**（必填注解 + `yunshu-metrics: "tag"`） |
 | 探活 | `deployment-base.probes.enabled` | false |
 | HPA / PVC | `hpa-base.enabled` / `pvc-base.enabled` | false |
 
@@ -75,6 +76,21 @@ deployment-base:
 ```
 
 会增加 initContainer 拷贝 Agent，并给主容器注入 `JAVA_TOOL_OPTIONS`、`SW_AGENT_*`。
+
+### Consul 注册（kube-consul-register）
+
+默认开启。控制器只认 **Pod 模板**上的注解/标签（[说明](https://github.com/AshesToVow/kube-consul-register)）：
+
+```yaml
+deployment-base:
+  consulRegister:
+    enabled: true
+    mode: catalog          # catalog=k8s-pod；metrics=k8s-pod-metrics + metrics_path
+    # containerName: app   # 有 sidecar 时必填主容器名
+    yunshuProject: "1"
+```
+
+生成的必填项：`consul.register/enabled=true`、`consul.register/service.name`、标签 `yunshu-metrics: "tag"`。
 
 ### 优雅下线示例
 

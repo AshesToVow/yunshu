@@ -24,6 +24,7 @@ type K8sEventForwardRepo interface {
 
 	SaveForwardedEvent(ctx context.Context, ev *model.K8sForwardedEvent) error
 	ListUnprocessedEvents(ctx context.Context, limit int) ([]model.K8sForwardedEvent, error)
+	ClaimUnprocessedEvents(ctx context.Context, limit int) ([]model.K8sForwardedEvent, error)
 	MarkEventProcessed(ctx context.Context, id int64, processed bool) error
 	IncrementEventAttempts(ctx context.Context, id int64) error
 	ListEnabledRules(ctx context.Context) ([]model.K8sEventForwardRule, error)

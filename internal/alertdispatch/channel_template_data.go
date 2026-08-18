@@ -60,6 +60,7 @@ func BuildChannelTemplateData(title, severity, status string, payload map[string
 		"Count":        stringFromPayload(payload, "count"),
 		"Fingerprint":  stringFromPayload(payload, "fingerprint"),
 		"GeneratorURL": stringFromPayload(payload, "generatorURL"),
+		"EventPath":    "/alert-monitor-platform/history?fingerprint=" + stringFromPayload(payload, "fingerprint"),
 		"Labels":       labels,
 		"LabelsText":   labelsText,
 	}

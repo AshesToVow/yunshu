@@ -9,12 +9,14 @@ func eventSeverity(eventType string) string {
 	switch {
 	case strings.EqualFold(t, "Warning"):
 		return "warning"
+	case strings.EqualFold(t, "Error"), strings.EqualFold(t, "Critical"), strings.EqualFold(t, "Fatal"):
+		return "critical"
 	case strings.EqualFold(t, "Normal"):
 		return "info"
 	case t == "":
 		return "info"
 	default:
-		return "info"
+		return "warning"
 	}
 }
 

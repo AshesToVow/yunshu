@@ -19,7 +19,7 @@ spec:
         consul.register/service.name: "k8s-pod-metrics"
         # 单容器可省略；有 sidecar 必须写，否则每个容器各注册一份
         consul.register/pod.container.name: "app"
-        consul.register/pod.container.probe.liveness: "true"
+        consul.register/liveness.check.enabled: "true"
         consul.register/service.meta.cluster: "prodK8s"
         consul.register/service.meta.namespace: "dodo-test"
         consul.register/service.meta.app: "myapp"

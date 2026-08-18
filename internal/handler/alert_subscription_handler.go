@@ -214,3 +214,8 @@ func (h *AlertSubscriptionHandler) MigrateFromPolicies(c *gin.Context) {
 func (h *AlertSubscriptionHandler) CloneProjectRouting(c *gin.Context) {
 	ServeJSON(c, h.svc.CloneProjectRouting)
 }
+
+// ApplyRoutingWizard 按项目 / 级别 / 通道 / 抄送邮箱一键创建全局路由节点与接收组。
+func (h *AlertSubscriptionHandler) ApplyRoutingWizard(c *gin.Context) {
+	ServeJSON(c, h.svc.ApplyRoutingWizard)
+}

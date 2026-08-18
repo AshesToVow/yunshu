@@ -35,6 +35,7 @@ type IngressHost interface {
 	EnrichOutgoingProjectName(ctx context.Context, outgoing map[string]interface{})
 	EnrichAssigneeAndDutyEmails(ctx context.Context, outgoing map[string]interface{}, labels map[string]string)
 	ClearResolvedNotificationSent(ctx context.Context, fingerprint string) error
+	IsAckActive(ctx context.Context, fingerprint string) bool
 	PeekFiringGroupTiming(ctx context.Context, groupKey, labelsDigest string) (bool, string, int64, string, string)
 	LogSuppressedFiringTiming(ctx context.Context, title, severity, status, groupKey, labelsDigest, reason string, outgoing map[string]interface{})
 	ChannelRouteForAlert(ctx context.Context, status string, labels map[string]string) ChannelRoute
@@ -53,6 +54,10 @@ type IngressHost interface {
 	SendToChannel(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, outgoing map[string]interface{}) (int, error)
 	CommitFiringGroupTimingSend(ctx context.Context, groupKey, labelsDigest string)
 	MarkFiringDelivered(ctx context.Context, fingerprint string)
+	TryLockGroupSend(ctx context.Context, groupKey string) bool
+	UnlockGroupSend(ctx context.Context, groupKey string)
+	SaveGroupWaitPending(ctx context.Context, env groupWaitPendingEnvelope, firstSeen string)
+	ClearGroupWaitPending(ctx context.Context, groupKey string)
 	ClearResolvedSentMark(ctx context.Context, fingerprint string) error
 	LogAllChannelsDeliveryFailed(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, outgoing map[string]interface{})
 	OnResolvedComplete(ctx context.Context, fingerprint, groupKey string)

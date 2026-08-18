@@ -1,5 +1,5 @@
-import { CopyOutlined, DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, AutoComplete, Button, Card, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Popover, Radio, Select, Space, Statistic, Switch, Table, Tabs, Tag, Tree, Typography, message } from "antd";
+import { CopyOutlined, DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { Alert, AutoComplete, Button, Card, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Popover, Radio, Select, Space, Statistic, Steps, Switch, Table, Tabs, Tag, Tree, Typography, message } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getAlertHistoryStats,
@@ -25,6 +25,8 @@ import {
   CHART_SUCCESS,
 } from "../constants/chart-colors";
 import { formatDateTime } from "../utils/format";
+import { formatMatchedPolicyNamesDisplay } from "../utils/alert-policy-display";
+import { explainAlertRecipients } from "../utils/alert-recipient-reason";
 import { DEFAULT_PAGE_SIZE, tablePagination } from "../utils/table-pagination";
 import { ResizableTable } from "../components/resizable-table";
 import {
@@ -38,6 +40,7 @@ import { ALERT_ROUTING_TERMS, formatReceiverGroupLabel, formatRouteNodeTreeTitle
 import { listAlertDatasources, type AlertDatasourceItem } from "../services/alert-platform";
 import { getProjects } from "../services/projects";
 import {
+  applyRoutingWizard,
   cloneSubscriptionFromProject,
   createReceiverGroup,
   createSubscriptionNode,
@@ -249,6 +252,16 @@ export function AlertConfigCenterPanel({
     replace_route?: string;
     include_disabled?: boolean;
     skip_if_target_has_nodes?: boolean;
+  }>();
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [wizardSubmitting, setWizardSubmitting] = useState(false);
+  const [wizardForm] = Form.useForm<{
+    project_id?: number;
+    severity?: string;
+    channel_ids?: number[];
+    extra_emails?: string[];
+    name?: string;
   }>();
   const [rgDrawerOpen, setRgDrawerOpen] = useState(false);
   const [rgModalOpen, setRgModalOpen] = useState(false);
@@ -818,6 +831,22 @@ export function AlertConfigCenterPanel({
               {ALERT_ROUTING_TERMS.receiverGroupManage}
             </Button>
             <Button
+              icon={<ThunderboltOutlined />}
+              onClick={() => {
+                wizardForm.setFieldsValue({
+                  project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
+                  severity: "warning",
+                  channel_ids: [],
+                  extra_emails: [],
+                  name: "",
+                });
+                setWizardStep(0);
+                setWizardOpen(true);
+              }}
+            >
+              {ALERT_ROUTING_TERMS.routingWizard}
+            </Button>
+            <Button
               icon={<CopyOutlined />}
               disabled={projects.length < 1}
               onClick={() => {
@@ -1273,11 +1302,18 @@ export function AlertConfigCenterPanel({
                 },
               },
               {
-                title: "命中策略",
+                title: "命中路由",
                 dataIndex: "matchedPolicyNames",
                 width: 200,
                 ellipsis: true,
-                render: (_: string, row: AlertEventItem) => (row.matchedPolicyNameList?.length ? row.matchedPolicyNameList.join(", ") : "-"),
+                render: (_: string, row: AlertEventItem) => {
+                  const d = formatMatchedPolicyNamesDisplay(row.matchedPolicyNameList ?? row.matchedPolicyNames);
+                  return (
+                    <Typography.Text ellipsis={{ tooltip: d.title }} style={{ fontSize: 12 }}>
+                      {d.text}
+                    </Typography.Text>
+                  );
+                },
               },
               { title: "通道", dataIndex: "channelName", width: 160, ellipsis: true },
               {
@@ -1293,6 +1329,20 @@ export function AlertConfigCenterPanel({
                         <Tag key={`${row.id}-${one}`}>{one}</Tag>
                       ))}
                     </Space>
+                  );
+                },
+              },
+              {
+                title: "收件原因",
+                key: "recipient_reason",
+                width: 150,
+                ellipsis: true,
+                render: (_: unknown, row: AlertEventItem) => {
+                  const r = explainAlertRecipients(row.requestPayload);
+                  return (
+                    <Typography.Text ellipsis={{ tooltip: r.detail }} style={{ fontSize: 12 }}>
+                      {r.short}
+                    </Typography.Text>
                   );
                 },
               },
@@ -1699,6 +1749,140 @@ export function AlertConfigCenterPanel({
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={ALERT_ROUTING_TERMS.routingWizard}
+        open={wizardOpen}
+        confirmLoading={wizardSubmitting}
+        onCancel={() => setWizardOpen(false)}
+        footer={
+          <Space>
+            <Button onClick={() => setWizardOpen(false)}>取消</Button>
+            <Button disabled={wizardStep === 0} onClick={() => setWizardStep((s) => Math.max(0, s - 1))}>
+              上一步
+            </Button>
+            {wizardStep < 3 ? (
+              <Button
+                type="primary"
+                onClick={async () => {
+                  if (wizardStep === 0) {
+                    await wizardForm.validateFields(["project_id"]);
+                  } else if (wizardStep === 1) {
+                    await wizardForm.validateFields(["severity"]);
+                  } else if (wizardStep === 2) {
+                    await wizardForm.validateFields(["channel_ids"]);
+                  }
+                  setWizardStep((s) => Math.min(3, s + 1));
+                }}
+              >
+                下一步
+              </Button>
+            ) : (
+              <Button
+                type="primary"
+                loading={wizardSubmitting}
+                onClick={async () => {
+                  const v = await wizardForm.validateFields();
+                  const channelIds = (v.channel_ids ?? []).filter((id) => Number(id) > 0);
+                  if (channelIds.length === 0) {
+                    message.error("请至少选择一个通知通道");
+                    setWizardStep(2);
+                    return;
+                  }
+                  setWizardSubmitting(true);
+                  try {
+                    const res = await applyRoutingWizard({
+                      project_id: v.project_id && v.project_id > 0 ? v.project_id : 0,
+                      severity: v.severity ?? "",
+                      channel_ids: channelIds,
+                      extra_emails: v.extra_emails ?? [],
+                      name: v.name?.trim() || undefined,
+                    });
+                    message.success(
+                      `已创建路由节点「${res.node?.name ?? ""}」与接收组「${res.receiver_group?.name ?? ""}」`,
+                    );
+                    setWizardOpen(false);
+                    await loadSubscriptions();
+                    if (res.node?.id) {
+                      void onSelectSubscriptionNode(res.node.id);
+                    }
+                  } finally {
+                    setWizardSubmitting(false);
+                  }
+                }}
+              >
+                创建
+              </Button>
+            )}
+          </Space>
+        }
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {ALERT_ROUTING_TERMS.routingWizardHint}
+        </Typography.Paragraph>
+        <Steps
+          size="small"
+          current={wizardStep}
+          style={{ marginBottom: 16 }}
+          items={[{ title: "项目" }, { title: "级别" }, { title: "通道" }, { title: "抄送" }]}
+        />
+        <Form form={wizardForm} layout="vertical">
+          <div style={{ display: wizardStep === 0 ? "block" : "none" }}>
+            <Form.Item
+              name="project_id"
+              label="匹配项目"
+              extra="不选表示不按 project_id 过滤（仍可按级别匹配）。写入全局路由树。"
+            >
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="全部项目（不写 project_id）"
+                options={projects.map((p) => ({ label: p.name, value: p.id }))}
+              />
+            </Form.Item>
+            <Form.Item name="name" label="节点名称（可选）">
+              <Input placeholder="留空则自动生成，例如「向导 · 项目 3 · warning」" />
+            </Form.Item>
+          </div>
+          <div style={{ display: wizardStep === 1 ? "block" : "none" }}>
+            <Form.Item name="severity" label={ALERT_ROUTING_TERMS.matchSeverity}>
+              <Radio.Group
+                options={[
+                  { label: "全部级别", value: "" },
+                  { label: "critical", value: "critical" },
+                  { label: "warning", value: "warning" },
+                  { label: "info", value: "info" },
+                  { label: "critical + warning", value: "critical,warning" },
+                ]}
+              />
+            </Form.Item>
+          </div>
+          <div style={{ display: wizardStep === 2 ? "block" : "none" }}>
+            <Form.Item
+              name="channel_ids"
+              label="通知通道"
+              rules={[{ required: true, type: "array", min: 1, message: "请至少选择一个通知通道" }]}
+            >
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="钉钉 / 邮件 / 企微等"
+                options={channels.map((c) => ({ label: c.name, value: c.id }))}
+              />
+            </Form.Item>
+          </div>
+          <div style={{ display: wizardStep === 3 ? "block" : "none" }}>
+            <Form.Item
+              name="extra_emails"
+              label={ALERT_ROUTING_TERMS.receiverGroupStaticCC}
+              extra="可选。规则处理人仍按规则配置投递；此处为接收组静态抄送。"
+            >
+              <Select mode="tags" tokenSeparators={[",", " ", ";"]} placeholder="可选，输入后回车" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
 

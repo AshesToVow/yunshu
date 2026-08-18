@@ -16,12 +16,50 @@ spec:
       {{- include "deployment-base.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
+      {{- $cr := .Values.consulRegister | default dict }}
+      {{- $crEnabled := and $cr (eq (toString $cr.enabled) "true") }}
+      {{- $ann := dict }}
+      {{- if $crEnabled }}
+        {{- $mode := default "catalog" $cr.mode }}
+        {{- $svcName := default "" $cr.serviceName }}
+        {{- if eq $svcName "" }}
+          {{- if eq $mode "metrics" }}
+            {{- $svcName = "k8s-pod-metrics" }}
+          {{- else }}
+            {{- $svcName = "k8s-pod" }}
+          {{- end }}
+        {{- end }}
+        {{- $_ := set $ann "consul.register/enabled" "true" }}
+        {{- $_ := set $ann "consul.register/service.name" $svcName }}
+        {{- if $cr.containerName }}
+          {{- $_ := set $ann "consul.register/pod.container.name" (toString $cr.containerName) }}
+        {{- end }}
+        {{- $_ := set $ann "consul.register/liveness.check.enabled" (ternary "true" "false" $cr.livenessCheck) }}
+        {{- $_ := set $ann "consul.register/readiness.check.enabled" (ternary "true" "false" $cr.readinessCheck) }}
+        {{- if eq $mode "metrics" }}
+          {{- $_ := set $ann "consul.register/service.meta.metrics_path" (default "/metrics" $cr.metricsPath) }}
+        {{- end }}
+        {{- if $cr.cluster }}
+          {{- $_ := set $ann "consul.register/service.meta.cluster" (toString $cr.cluster) }}
+        {{- end }}
+        {{- $_ := set $ann "consul.register/service.meta.namespace" (default .Release.Namespace $cr.namespace) }}
+        {{- $_ := set $ann "consul.register/service.meta.app" (include "deployment-base.fullname" .) }}
+        {{- if $cr.yunshuProject }}
+          {{- $_ := set $ann "consul.register/service.meta.yunshu_project" (toString $cr.yunshuProject) }}
+        {{- end }}
+      {{- end }}
+      {{- range $k, $v := .Values.podAnnotations }}
+        {{- $_ := set $ann $k $v }}
+      {{- end }}
+      {{- if $ann }}
       annotations:
-        {{- toYaml . | nindent 8 }}
+        {{- toYaml $ann | nindent 8 }}
       {{- end }}
       labels:
         {{- include "deployment-base.selectorLabels" . | nindent 8 }}
+        {{- if $crEnabled }}
+        yunshu-metrics: "tag"
+        {{- end }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

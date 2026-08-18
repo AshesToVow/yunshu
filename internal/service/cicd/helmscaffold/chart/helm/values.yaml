@@ -135,6 +135,19 @@ deployment-base:
   extraVolumes: []
   podAnnotations: {}
   podLabels: {}
+
+  # Consul 注册（kube-consul-register）：必填 enabled + 标签 yunshu-metrics: "tag"
+  consulRegister:
+    enabled: true
+    mode: catalog
+    serviceName: ""
+    containerName: ""
+    livenessCheck: false
+    readinessCheck: false
+    metricsPath: /metrics
+    cluster: ""
+    namespace: ""
+    yunshuProject: ""
   hostAliases: []
   nodeSelector: {}
   tolerations: []

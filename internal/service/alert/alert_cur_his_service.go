@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,15 @@ type AlertCurEventListQuery struct {
 	Keyword      string `form:"keyword"`
 	Page         int    `form:"page"`
 	PageSize     int    `form:"page_size"`
+}
+
+// AlertCurEventView 当前告警列表 DTO（含处理人摘要与认领状态）。
+type AlertCurEventView struct {
+	model.AlertCurEvent
+	HandlerSummary string     `json:"handler_summary"`
+	Acked          bool       `json:"acked"`
+	AckBy          string     `json:"ack_by,omitempty"`
+	AckExpiresAt   *time.Time `json:"ack_expires_at,omitempty"`
 }
 
 type AlertHisEventListQuery struct {
@@ -107,7 +117,7 @@ func (s *AlertService) ResolveCurEvent(ctx context.Context, fingerprint string, 
 	})
 }
 
-func (s *AlertService) ListCurEvents(ctx context.Context, q AlertCurEventListQuery) ([]model.AlertCurEvent, int64, int, int, error) {
+func (s *AlertService) ListCurEvents(ctx context.Context, q AlertCurEventListQuery) ([]AlertCurEventView, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	db := s.db.WithContext(ctx).Model(&model.AlertCurEvent{})
 	if q.ProjectID > 0 {
@@ -131,7 +141,92 @@ func (s *AlertService) ListCurEvents(ctx context.Context, q AlertCurEventListQue
 	if err := db.Order("updated_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
 		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.cur", "ListCurEvents", err)
 	}
-	return list, total, page, pageSize, nil
+	return s.enrichCurEventViews(ctx, list), total, page, pageSize, nil
+}
+
+func (s *AlertService) enrichCurEventViews(ctx context.Context, list []model.AlertCurEvent) []AlertCurEventView {
+	out := make([]AlertCurEventView, 0, len(list))
+	if len(list) == 0 {
+		return out
+	}
+	fps := make([]string, 0, len(list))
+	ruleIDs := map[uint]struct{}{}
+	ruleByFP := map[string]uint{}
+	for _, row := range list {
+		fps = append(fps, row.Fingerprint)
+		rid := monitorRuleIDFromLabelsJSON(row.LabelsJSON)
+		if rid > 0 {
+			ruleIDs[rid] = struct{}{}
+			ruleByFP[row.Fingerprint] = rid
+		}
+	}
+	acks, _ := s.ListActiveAcksByFingerprints(ctx, fps)
+	handlerByRule := map[uint]string{}
+	if s.assigneeSvc != nil {
+		for rid := range ruleIDs {
+			handlerByRule[rid] = s.assigneeSvc.ResolveHandlerSummary(ctx, rid)
+		}
+	}
+	dutyByRule := map[uint]string{}
+	if s.dutySvc != nil {
+		for rid := range ruleIDs {
+			emails, _ := s.dutySvc.ResolveNotifyEmailsAtRule(ctx, rid, time.Now())
+			if len(emails) == 0 {
+				continue
+			}
+			if len(emails) <= 2 {
+				dutyByRule[rid] = "值班 " + strings.Join(emails, ", ")
+			} else {
+				dutyByRule[rid] = fmt.Sprintf("值班 %s 等 %d 人", strings.Join(emails[:2], ", "), len(emails))
+			}
+		}
+	}
+	for _, row := range list {
+		v := AlertCurEventView{AlertCurEvent: row}
+		if rid := ruleByFP[row.Fingerprint]; rid > 0 {
+			parts := make([]string, 0, 2)
+			if h := strings.TrimSpace(handlerByRule[rid]); h != "" {
+				parts = append(parts, h)
+			}
+			if d := strings.TrimSpace(dutyByRule[rid]); d != "" {
+				parts = append(parts, d)
+			}
+			v.HandlerSummary = strings.Join(parts, " · ")
+		}
+		if ack, ok := acks[row.Fingerprint]; ok && ack.Acked {
+			v.Acked = true
+			v.AckBy = ack.UserName
+			v.AckExpiresAt = ack.ExpiresAt
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func monitorRuleIDFromLabelsJSON(raw string) uint {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return 0
+	}
+	v, ok := m["monitor_rule_id"]
+	if !ok || v == nil {
+		return 0
+	}
+	switch t := v.(type) {
+	case float64:
+		if t > 0 {
+			return uint(t)
+		}
+	case string:
+		if n, err := strconv.ParseUint(strings.TrimSpace(t), 10, 64); err == nil {
+			return uint(n)
+		}
+	}
+	return 0
 }
 
 func (s *AlertService) ListHisEvents(ctx context.Context, q AlertHisEventListQuery) ([]model.AlertHisEvent, int64, int, int, error) {

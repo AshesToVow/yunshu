@@ -97,9 +97,24 @@ func (r *K8sEventForwardRepository) EnsureDefaultSettings(ctx context.Context, d
 }
 
 func (r *K8sEventForwardRepository) SaveForwardedEvent(ctx context.Context, ev *model.K8sForwardedEvent) error {
+	if ev == nil {
+		return nil
+	}
+	ev.Processed = false
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "evt_key"}},
-		DoNothing: true,
+		Columns: []clause.Column{{Name: "evt_key"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"cluster_id": ev.ClusterID,
+			"namespace":  ev.Namespace,
+			"name":       ev.Name,
+			"type":       ev.Type,
+			"reason":     ev.Reason,
+			"level":      ev.Level,
+			"message":    ev.Message,
+			"timestamp":  ev.Timestamp,
+			"processed":  false,
+			"attempts":   0,
+		}),
 	}).Create(ev).Error
 }
 
@@ -110,6 +125,41 @@ func (r *K8sEventForwardRepository) ListUnprocessedEvents(ctx context.Context, l
 		Order("timestamp ASC").
 		Limit(limit).
 		Find(&list).Error
+	return list, err
+}
+
+// ClaimUnprocessedEvents 在事务内加锁领取待转发事件，降低多实例重复推送。
+// MySQL 5.7 无 SKIP LOCKED：对 settings 行 FOR UPDATE 串行化领取，并先标记 processed。
+func (r *K8sEventForwardRepository) ClaimUnprocessedEvents(ctx context.Context, limit int) ([]model.K8sForwardedEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var list []model.K8sForwardedEvent
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var st model.K8sEventForwardSetting
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&st, 1).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+		if err := tx.Where("processed = ?", false).
+			Order("timestamp ASC").
+			Limit(limit).
+			Find(&list).Error; err != nil {
+			return err
+		}
+		if len(list) == 0 {
+			return nil
+		}
+		ids := make([]int64, 0, len(list))
+		for _, ev := range list {
+			ids = append(ids, ev.ID)
+		}
+		return tx.Model(&model.K8sForwardedEvent{}).
+			Where("id IN ? AND processed = ?", ids, false).
+			Update("processed", true).Error
+	})
 	return list, err
 }
 
@@ -127,7 +177,7 @@ func (r *K8sEventForwardRepository) IncrementEventAttempts(ctx context.Context, 
 
 func (r *K8sEventForwardRepository) ListEnabledRules(ctx context.Context) ([]model.K8sEventForwardRule, error) {
 	var rules []model.K8sEventForwardRule
-	err := r.db.WithContext(ctx).Where("enabled = ?", true).Find(&rules).Error
+	err := r.db.WithContext(ctx).Where("enabled = ?", true).Order("id ASC").Find(&rules).Error
 	return rules, err
 }
 

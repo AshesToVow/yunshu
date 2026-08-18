@@ -12,7 +12,7 @@ func ChannelTemplateFieldList() []string {
 	return []string{
 		"Title", "Severity", "Status", "StatusText", "IsResolved",
 		"Summary", "Description", "ProjectName", "Cluster", "OccurredAt",
-		"StartsAt", "EndsAt", "Current", "Count", "Fingerprint", "GeneratorURL",
+		"StartsAt", "EndsAt", "Current", "Count", "Fingerprint", "GeneratorURL", "EventPath",
 		"Labels", "LabelsText",
 	}
 }
@@ -34,8 +34,9 @@ func ChannelTemplateVariableDocs() []ChannelTemplateVariableDoc {
 		{Name: "EndsAt", Description: "告警结束时间（格式化）。"},
 		{Name: "Current", Description: "当前值/查询结果（如 Prom 增强写入）。"},
 		{Name: "Count", Description: "计数类扩展字段。"},
-		{Name: "Fingerprint", Description: "Alertmanager 指纹。"},
+		{Name: "Fingerprint", Description: "告警指纹。"},
 		{Name: "GeneratorURL", Description: "Prometheus/告警规则跳转链接。"},
+		{Name: "EventPath", Description: "云枢事件台深链路径，如 /alert-monitor-platform/history?fingerprint=...（相对站点根）。"},
 		{Name: "Labels", Description: "标签 map；模板中建议 {{index .Labels \"alertname\"}}。"},
 		{Name: "LabelsText", Description: "紧凑标签展示串，适合直接插入正文。"},
 	}

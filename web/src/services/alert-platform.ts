@@ -64,6 +64,7 @@ export interface AlertRuleAssigneeItem {
   user_ids?: number[];
   department_ids?: number[];
   extra_emails?: string[];
+  recipient_mode?: string;
   notify_on_resolved: boolean;
   remark?: string;
 }

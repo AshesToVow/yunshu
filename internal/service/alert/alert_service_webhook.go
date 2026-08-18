@@ -4,14 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
 	"yunshu/internal/model"
-	"yunshu/internal/repository"
 	"yunshu/internal/pkg/alertnotify"
 	bizerrors "yunshu/internal/pkg/errors"
-
+	"yunshu/internal/repository"
 )
 
 func (s *AlertService) logSilenceSuppressed(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, silenceID uint, payload map[string]interface{}) {
@@ -142,11 +142,41 @@ func (s *AlertService) ValidateWebhookToken(token string) bool {
 	return strings.TrimSpace(token) == expected
 }
 
+// ValidateK8sEventIngressToken 校验 K8s Event 入站令牌。
+// 未配置 webhook_token 时，仅允许本机回环空令牌（供进程内转发器使用）。
+func (s *AlertService) ValidateK8sEventIngressToken(token, clientIP string) bool {
+	expected := strings.TrimSpace(s.cfg.WebhookToken)
+	token = strings.TrimSpace(token)
+	token = strings.TrimPrefix(token, "Bearer ")
+	token = strings.TrimPrefix(token, "bearer ")
+	token = strings.TrimSpace(token)
+	if expected == "" {
+		return token == "" && isLoopbackIP(clientIP)
+	}
+	return token == expected
+}
+
+func isLoopbackIP(raw string) bool {
+	ip := strings.TrimSpace(raw)
+	if ip == "" {
+		return false
+	}
+	// Gin ClientIP may be "127.0.0.1" or "::1"; strip port if present.
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		ip = host
+	}
+	parsed := net.ParseIP(ip)
+	return parsed != nil && parsed.IsLoopback()
+}
+
 // resolveAlertDatasourceMeta 统一解析「数据源」维度：优先标签/规则上的 datasource_id，其次平台规则反查；monitor_pipeline 列写入简短 slug 便于筛选。
 func (s *AlertService) resolveAlertDatasourceMeta(ctx context.Context, labels map[string]string, receiver string) (dsID uint, dsName, dsType, pipelineSlug string) {
 	rcv := strings.TrimSpace(receiver)
 	if rcv == "cloud-expiry" {
 		return 0, "云资源到期", "cloud_expiry", "cloud_expiry"
+	}
+	if rcv == "k8s-events" || (labels != nil && strings.EqualFold(strings.TrimSpace(labels["source"]), "k8s_event")) {
+		return 0, "K8s Event 转发", "k8s_event", "k8s_event"
 	}
 	for _, key := range []string{"yunshu_datasource_id", "datasource_id"} {
 		if labels == nil {

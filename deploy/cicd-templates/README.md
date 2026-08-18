@@ -47,3 +47,15 @@ http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080
 |------|------|
 | `resources/backend-launch-apollo.snippet.sh` | SSH 启动脚本中 Apollo 启动参数片段 |
 | `resources/k8s-apollo.env.snippet.yaml` | K8s Deployment env 片段 |
+| `resources/k8s-consul-register.snippet.yaml` | Pod 模板 Consul 必填标签/注解（同步到 k8s-basic / k8s-skywalking） |
+| `resources/k8s-consul-register.md` | 必填项说明（kube-consul-register） |
+
+## Consul 注册（kube-consul-register）
+
+业务 Pod **必填**（写在 `spec.template.metadata`）：
+
+1. 注解 `consul.register/enabled: "true"`
+2. 注解 `consul.register/service.name: "k8s-pod"`（目录）或 `"k8s-pod-metrics"`（采集）
+3. 标签 `yunshu-metrics: "tag"`（值必须是 `tag`）
+
+Helm 脚手架默认已写入 `deployment-base.consulRegister`。kubectl 模板把 [`resources/k8s-consul-register.snippet.yaml`](./resources/k8s-consul-register.snippet.yaml) 合并进共享库 YAML。详情见同目录 `k8s-consul-register.md`。

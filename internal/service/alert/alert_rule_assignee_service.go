@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/interfaces"
@@ -16,6 +17,7 @@ type AlertRuleAssigneeUpsertRequest struct {
 	UserIDsJSON       string `json:"user_ids_json"`
 	DepartmentIDsJSON string `json:"department_ids_json"`
 	ExtraEmailsJSON   string `json:"extra_emails_json"`
+	RecipientMode     string `json:"recipient_mode"`
 	NotifyOnResolved  *bool  `json:"notify_on_resolved"`
 	Remark            string `json:"remark" binding:"omitempty,max=512"`
 }
@@ -86,6 +88,7 @@ func (s *AlertRuleAssigneeService) UpsertPrimary(ctx context.Context, ruleID uin
 	row.UserIDsJSON = strings.TrimSpace(req.UserIDsJSON)
 	row.DepartmentIDsJSON = strings.TrimSpace(req.DepartmentIDsJSON)
 	row.ExtraEmailsJSON = strings.TrimSpace(req.ExtraEmailsJSON)
+	row.RecipientMode = normalizeRecipientMode(req.RecipientMode)
 	row.Remark = strings.TrimSpace(req.Remark)
 	if req.NotifyOnResolved != nil {
 		row.NotifyOnResolved = *req.NotifyOnResolved
@@ -178,6 +181,27 @@ func (s *AlertRuleAssigneeService) NotifyOnResolvedEnabled(ctx context.Context, 
 		}
 	}
 	return false
+}
+
+// RecipientModeForRule 返回规则收件优先级；无配置时默认 assignee_and_cc。
+func (s *AlertRuleAssigneeService) RecipientModeForRule(ctx context.Context, ruleID uint) string {
+	list, err := s.ListByRule(ctx, ruleID)
+	if err != nil || len(list) == 0 {
+		return RecipientModeAssigneeAndCC
+	}
+	return normalizeRecipientMode(list[0].RecipientMode)
+}
+
+// ResolveHandlerSummary 事件台展示用：处理人邮箱摘要（不含值班展开细节）。
+func (s *AlertRuleAssigneeService) ResolveHandlerSummary(ctx context.Context, ruleID uint) string {
+	emails, err := s.ResolveNotifyEmailsDirectUsers(ctx, ruleID)
+	if err != nil || len(emails) == 0 {
+		return ""
+	}
+	if len(emails) <= 2 {
+		return strings.Join(emails, ", ")
+	}
+	return fmt.Sprintf("%s 等 %d 人", strings.Join(emails[:2], ", "), len(emails))
 }
 
 // ResolveNotifyEmailsDirectUsers 仅解析规则处理人中的「显式用户」与「额外邮箱」，不展开部门子树（用于 critical 邮件兜底，避免误发项目内非处理人）。

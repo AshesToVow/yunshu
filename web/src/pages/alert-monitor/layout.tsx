@@ -1,9 +1,17 @@
-import { Card, Select, Space, Tabs, Typography } from "antd";
-import { Suspense, lazy } from "react";
+import { Card, Segmented, Select, Space, Tabs, Typography } from "antd";
+import { Suspense, lazy, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageTelemetryHeader } from "../../components/page-telemetry-header";
 import { useAlertMonitor } from "./context";
-import { ALERT_MONITOR_TABS, normalizeAlertMonitorTab, tabPathForKey, type AlertMonitorTabKey } from "./tab-config";
+import {
+  ALERT_MONITOR_TAB_GROUPS,
+  groupForTab,
+  normalizeAlertMonitorTab,
+  tabPathForKey,
+  tabsInGroup,
+  type AlertMonitorTabGroup,
+  type AlertMonitorTabKey,
+} from "./tab-config";
 
 const tabLazy: Record<AlertMonitorTabKey, React.LazyExoticComponent<() => JSX.Element>> = {
   datasources: lazy(async () => ({ default: (await import("./tabs/datasources-tab")).DatasourcesTab })),
@@ -24,6 +32,8 @@ export function AlertMonitorLayout() {
   const [searchParams] = useSearchParams();
   const ctx = useAlertMonitor();
   const tab = normalizeAlertMonitorTab(tabParam);
+  const group = groupForTab(tab);
+  const groupTabs = useMemo(() => tabsInGroup(group), [group]);
 
   function goTab(key: AlertMonitorTabKey) {
     const qs = new URLSearchParams(searchParams);
@@ -35,7 +45,14 @@ export function AlertMonitorLayout() {
     navigate(tail ? `${path}?${tail}` : path, { replace: true });
   }
 
+  function goGroup(next: AlertMonitorTabGroup) {
+    if (next === group) return;
+    const first = tabsInGroup(next)[0];
+    if (first) goTab(first.key);
+  }
+
   const ActiveTab = tabLazy[tab];
+  const groupLabel = ALERT_MONITOR_TAB_GROUPS.find((g) => g.key === group)?.label || group;
 
   return (
     <div className="page-stack">
@@ -47,35 +64,44 @@ export function AlertMonitorLayout() {
           tab === "policies"
             ? [
                 "路由 · 平台全局",
-                `页签 · ${ALERT_MONITOR_TABS.find((x) => x.key === tab)?.label || tab}`,
+                `分组 · ${groupLabel}`,
+                `页签 · ${groupTabs.find((x) => x.key === tab)?.label || tab}`,
                 ctx.loading ? "同步中" : "已同步",
               ]
             : [
                 ctx.projectContextId ? `项目 · ${ctx.activeProjectName}` : "项目 · 全部",
-                `页签 · ${ALERT_MONITOR_TABS.find((x) => x.key === tab)?.label || tab}`,
+                `分组 · ${groupLabel}`,
+                `页签 · ${groupTabs.find((x) => x.key === tab)?.label || tab}`,
                 ctx.loading ? "同步中" : "已同步",
               ]
         }
       />
       <Card className="table-card" loading={ctx.loading}>
         {tab !== "policies" ? (
-        <Space className="ops-filter-bar" style={{ marginBottom: 12 }} wrap>
-          <Typography.Text type="secondary">全局项目上下文</Typography.Text>
-          <Select
-            style={{ minWidth: 280 }}
-            allowClear
-            value={ctx.projectContextId}
-            onChange={(v) => ctx.setProjectContext(v)}
-            options={ctx.projectOptions}
-            placeholder="全部项目（可选）"
+          <Space className="ops-filter-bar" style={{ marginBottom: 12 }} wrap>
+            <Typography.Text type="secondary">全局项目上下文</Typography.Text>
+            <Select
+              style={{ minWidth: 280 }}
+              allowClear
+              value={ctx.projectContextId}
+              onChange={(v) => ctx.setProjectContext(v)}
+              options={ctx.projectOptions}
+              placeholder="全部项目（可选）"
+            />
+          </Space>
+        ) : null}
+        <Space direction="vertical" size="small" style={{ width: "100%", marginBottom: 8 }}>
+          <Segmented
+            value={group}
+            onChange={(v) => goGroup(v as AlertMonitorTabGroup)}
+            options={ALERT_MONITOR_TAB_GROUPS.map((g) => ({ label: g.label, value: g.key }))}
+          />
+          <Tabs
+            activeKey={tab}
+            onChange={(k) => goTab(k as AlertMonitorTabKey)}
+            items={groupTabs.map((t) => ({ key: t.key, label: t.label }))}
           />
         </Space>
-        ) : null}
-        <Tabs
-          activeKey={tab}
-          onChange={(k) => goTab(k as AlertMonitorTabKey)}
-          items={ALERT_MONITOR_TABS.map((t) => ({ key: t.key, label: t.label }))}
-        />
         <Suspense fallback={<Card loading style={{ marginTop: 16 }} />}>
           <ActiveTab />
         </Suspense>

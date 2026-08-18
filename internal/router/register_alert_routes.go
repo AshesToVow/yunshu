@@ -24,6 +24,9 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.GET("/events/by-fingerprint", d.alertHandler.ExplainFingerprintDelivery)
 	alerts.GET("/cur-events", d.alertHandler.ListCurEvents)
 	alerts.GET("/his-events", d.alertHandler.ListHisEvents)
+	alerts.POST("/acks", d.alertHandler.AcknowledgeAlert)
+	alerts.DELETE("/acks", d.alertHandler.ClearAlertAck)
+	alerts.GET("/acks", d.alertHandler.GetActiveAck)
 	alerts.GET("/history/stats", d.alertHandler.HistoryStats)
 	alerts.GET("/quality-report", d.alertHandler.QualityReport)
 
@@ -78,6 +81,7 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.PUT("/subscriptions/:id", d.alertSubscriptionHandler.UpdateNode)
 	alerts.DELETE("/subscriptions/:id", d.alertSubscriptionHandler.DeleteNode)
 	alerts.POST("/subscriptions/:id/move", d.alertSubscriptionHandler.MoveNode)
+	alerts.POST("/subscriptions/wizard", d.alertSubscriptionHandler.ApplyRoutingWizard)
 	alerts.POST("/subscriptions/migrate-from-policies", d.alertSubscriptionHandler.MigrateFromPolicies)
 	alerts.POST("/subscriptions/clone-from-project", d.alertSubscriptionHandler.CloneProjectRouting)
 

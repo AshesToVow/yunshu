@@ -8,6 +8,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Radio,
   Select,
   Space,
   Switch,
@@ -732,6 +733,21 @@ export function AlertMonitorModals() {
               多人时邮件按各用户资料邮箱合并；仅选择一名用户时可在此编辑邮箱并写回用户资料。
             </Typography.Paragraph>
           )}
+          <Form.Item
+            name="recipient_mode"
+            label="邮件收件优先级"
+            initialValue="assignee_and_cc"
+            extra="默认：处理人邮箱 + 通道固定收件人一并发送。可改为仅处理人或仅通道。"
+          >
+            <Radio.Group
+              optionType="button"
+              options={[
+                { label: "处理人+抄送通道", value: "assignee_and_cc" },
+                { label: "仅处理人", value: "assignee_only" },
+                { label: "仅通道", value: "channel_only" },
+              ]}
+            />
+          </Form.Item>
           <Form.Item name="notify_on_resolved" label="恢复时通知" valuePropName="checked">
             <Switch />
           </Form.Item>
@@ -757,7 +773,9 @@ export function AlertMonitorModals() {
       >
         <Space direction="vertical" style={{ width: "100%" }} size="small">
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            当前规则 ID：{c.dutyRuleId ?? "-"}。班次命中时会与“处理人”邮箱合并去重后写入 <Typography.Text code>assignee_emails</Typography.Text>，并优先于邮件通道固定收件人。
+            当前规则 ID：{c.dutyRuleId ?? "-"}。班次命中时会与“处理人”邮箱合并去重后写入{" "}
+            <Typography.Text code>assignee_emails</Typography.Text>
+            。最终是否抄送通道固定收件人，由规则处理人里的「邮件收件优先级」决定（默认：处理人+抄送通道）。
           </Typography.Paragraph>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 12 }}>
             若其他规则上已配好相同时间段与值班人，可从该规则「复制班次」到本规则（会新增独立记录，两条规则各自生效、互不影响）。

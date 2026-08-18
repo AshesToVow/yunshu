@@ -73,7 +73,8 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 		}
 
 		// 当前告警：屏蔽之后落库；resolved 迁入历史。与投递流水 alert_events 分离。
-		if status == "firing" {
+		// K8s Event 为瞬时事件流，无 resolved，不进入 alert_cur_events。
+		if status == "firing" && ca.Source != IngressSourceK8sEvent {
 			value := strings.TrimSpace(annotations["value"])
 			_ = host.UpsertCurAlert(ctx, buildCurEventFromIngress(
 				ca.Source, ca.PayloadReceiver, title, severity, status, envLabel, groupKey,
@@ -116,6 +117,12 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 		host.EnrichOutgoingProjectName(ctx, outgoing)
 		host.EnrichAssigneeAndDutyEmails(ctx, outgoing, labels)
 
+		if status == "firing" && host.IsAckActive(ctx, alert.Fingerprint) {
+			outgoing["suppressed_reason"] = "ack_active"
+			host.LogSuppressedFiringTiming(ctx, title, severity, status, groupKey, labelsDigest, "ack_active", outgoing)
+			continue
+		}
+
 		if status == "firing" {
 			_ = host.ClearResolvedNotificationSent(ctx, alert.Fingerprint)
 			var shouldSend bool
@@ -133,6 +140,21 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 			if !shouldSend {
 				outgoing["suppressed_reason"] = reason
 				host.LogSuppressedFiringTiming(ctx, title, severity, status, groupKey, labelsDigest, reason, outgoing)
+				if reason == "group_wait_suppressed" {
+					host.SaveGroupWaitPending(ctx, groupWaitPendingEnvelope{
+						GroupKey:     groupKey,
+						Fingerprint:  alert.Fingerprint,
+						LabelsDigest: labelsDigest,
+						Source:       ca.Source,
+						Title:        title,
+						Severity:     severity,
+						Status:       status,
+						EnvLabel:     envLabel,
+						FirstSeen:    firstSeen,
+						Labels:       labels,
+						Outgoing:     outgoing,
+					}, firstSeen)
+				}
 				continue
 			}
 		}
@@ -156,6 +178,7 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 			_ = host.ClearFingerprintState(ctx, alert.Fingerprint)
 			_ = host.ClearCurrentMetric(ctx, alert.Fingerprint)
 			_ = host.ClearGroupAggregateState(ctx, groupKey)
+			host.ClearGroupWaitPending(ctx, groupKey)
 			continue
 		}
 		if status == "resolved" {
@@ -169,10 +192,19 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 			outgoing["resolved_sent"] = true
 		}
 
+		if status == "firing" {
+			if !host.TryLockGroupSend(ctx, groupKey) {
+				continue
+			}
+		}
 		sentCount, okDeliveries := deliverToChannels(ctx, host, channels, route.ChannelIDs, ca.Source, title, severity, status, labels, outgoing)
+		if status == "firing" {
+			host.UnlockGroupSend(ctx, groupKey)
+		}
 		if status == "firing" && okDeliveries > 0 {
 			host.CommitFiringGroupTimingSend(ctx, groupKey, labelsDigest)
 			host.MarkFiringDelivered(ctx, alert.Fingerprint)
+			host.ClearGroupWaitPending(ctx, groupKey)
 		}
 		if status == "resolved" && okDeliveries == 0 {
 			_ = host.ClearResolvedSentMark(ctx, alert.Fingerprint)

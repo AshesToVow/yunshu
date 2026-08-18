@@ -1,3 +1,5 @@
+import { humanizeMatchedPolicyName } from "../utils/alert-policy-display";
+
 /** 告警路由 / 订阅树等产品术语（界面文案统一） */
 export const ALERT_ROUTING_TERMS = {
   tabRouting: "告警路由",
@@ -10,6 +12,8 @@ export const ALERT_ROUTING_TERMS = {
   receiverGroup: "通知接收组",
   matchSeverity: "匹配级别",
   copyTemplate: "从项目迁入全局树",
+  routingWizard: "路由向导",
+  routingWizardHint: "按项目、级别、通道和抄送邮箱一键创建全局路由节点与接收组。",
   historySourceFilter: "告警来源",
   receiverGroupManage: "通知接收组管理",
   receiverGroupManageHint:
@@ -31,6 +35,7 @@ export function formatRouteNodeTreeTitle(name: string, enabled: boolean): string
   if (n.startsWith("migrated:")) {
     n = n.slice("migrated:".length);
   }
+  n = humanizeMatchedPolicyName(n) || n;
   const suffix = enabled ? "" : "（停用）";
   return `${n || "未命名"}${suffix}`;
 }
