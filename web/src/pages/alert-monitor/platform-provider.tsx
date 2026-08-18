@@ -493,10 +493,27 @@ function useAlertMonitorPlatformState() {
   }, [navigate, searchParams, tabParam]);
 
   function setTab(key: AlertMonitorTabKey) {
-    const qs = searchParams.toString();
+    const qs = new URLSearchParams(searchParams);
+    if (key === "policies") {
+      qs.delete("project_id");
+    }
+    const tail = qs.toString();
     const path = tabPathForKey(key);
-    navigate(qs ? `${path}?${qs}` : path, { replace: true });
+    navigate(tail ? `${path}?${tail}` : path, { replace: true });
   }
+
+  useEffect(() => {
+    if (tab !== "policies") return;
+    if (!searchParams.has("project_id")) return;
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.delete("project_id");
+        return p;
+      },
+      { replace: true },
+    );
+  }, [tab, searchParams, setSearchParams]);
 
   function setProjectContext(projectID?: number) {
     setSearchParams(
