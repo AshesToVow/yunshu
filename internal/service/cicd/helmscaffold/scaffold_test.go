@@ -82,14 +82,14 @@ func TestBuildZipArchitecture(t *testing.T) {
 				if !strings.Contains(s, "replicaCount: 2") || !strings.Contains(s, "containerPort: 9090") {
 					t.Fatalf("values.yaml: %s", s)
 				}
-				for _, key := range []string{"skywalking:", "strategy:", "lifecycle:", "dnsPolicy:", "dnsConfig:", "ports:"} {
+				for _, key := range []string{"skywalking:", "strategy:", "lifecycle:", "dnsPolicy:", "dnsConfig:", "ports:", "consulRegister:"} {
 					if !strings.Contains(s, key) {
 						t.Fatalf("values.yaml missing %s", key)
 					}
 				}
 			}
 			if f.Name == "helm/charts/deployment-base/templates/deployment.yaml" {
-				for _, key := range []string{"skywalking-agent", "lifecycle:", "dnsPolicy:", "strategy:", ".Values.ports"} {
+				for _, key := range []string{"skywalking-agent", "lifecycle:", "dnsPolicy:", "strategy:", ".Values.ports", "consul.register/enabled", "yunshu-metrics"} {
 					if !strings.Contains(s, key) {
 						t.Fatalf("deployment.yaml missing %s", key)
 					}

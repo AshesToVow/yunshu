@@ -1,0 +1,52 @@
+# 同步到共享库 k8s-basic-*.yaml / k8s-skywalking-*.yaml 的
+# spec.template.metadata.labels / annotations。
+#
+# 来源：https://github.com/AshesToVow/kube-consul-register
+# 必须写在 Pod 模板（Deployment/StatefulSet/DaemonSet 的 spec.template），写在顶层 metadata 无效。
+#
+# —— 必填 ——
+# 1) 注解 consul.register/enabled: "true"     否则控制器直接跳过
+# 2) 标签 yunshu-metrics: "tag"               值必须是字面量 tag（变成 Consul tag「yunshu-metrics」）
+# 3) 注解 consul.register/service.name        Yunshu/ACL：k8s-pod 或 k8s-pod-metrics；不写会变成工作负载名，ACL 常 403
+#
+# —— 建议 ——
+# 多容器/sidecar：consul.register/pod.container.name 填主容器名
+# 健康检查默认关闭；有真实探针再开 liveness/readiness.check.enabled
+# 采集：service.name=k8s-pod-metrics 且 meta.metrics_path 必填，否则 Prom 会 drop
+#
+# 标签约定：值为 "tag" 的 label，key 会成为 Consul tag（production: "tag" → tag=production）。
+# 不要给业务 Pod 打 k8s: "tag" 以外去顶替控制器 ConfigMap 的 k8s_tag；k8s_tag 由控制器写入。
+
+# ===== 目录登记（Prom 不刮，Yunshu 监控对象看 PodIP）=====
+# labels:
+#   yunshu-metrics: "tag"
+# annotations:
+#   consul.register/enabled: "true"
+#   consul.register/service.name: "k8s-pod"
+#   consul.register/liveness.check.enabled: "false"
+#   consul.register/readiness.check.enabled: "false"
+#   # 单容器可省略下一行；有 sidecar 必须写主容器名
+#   # consul.register/pod.container.name: "{{projectName}}"
+
+# ===== Prom 采集（job k8s-pod / tag yunshu-metrics）=====
+# labels:
+#   yunshu-metrics: "tag"
+# annotations:
+#   consul.register/enabled: "true"
+#   consul.register/service.name: "k8s-pod-metrics"
+#   consul.register/pod.container.name: "{{projectName}}"
+#   consul.register/liveness.check.enabled: "true"
+#   consul.register/readiness.check.enabled: "false"
+#   consul.register/service.meta.metrics_path: "/metrics"
+
+metadata:
+  labels:
+    yunshu-metrics: "tag"
+  annotations:
+    consul.register/enabled: "true"
+    consul.register/service.name: "k8s-pod"
+    consul.register/liveness.check.enabled: "false"
+    consul.register/readiness.check.enabled: "false"
+    consul.register/service.meta.app: "{{projectName}}"
+    consul.register/service.meta.namespace: "{{k8s_ns}}"
+    consul.register/service.meta.exporter_role: "k8s_pod"

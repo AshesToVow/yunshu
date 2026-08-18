@@ -26,8 +26,8 @@ spec:
         consul.register/service.name: "k8s-pod"
         # 单容器可省略下一行；有 sidecar 时取消注释并写成主容器名
         # consul.register/pod.container.name: "nginx"
-        consul.register/pod.container.probe.liveness: "false"
-        consul.register/pod.container.probe.readiness: "false"
+        consul.register/liveness.check.enabled: "false"
+        consul.register/readiness.check.enabled: "false"
         # 以下 Meta 只能写死；不能用注解填运行时 PodIP / HostIP
         consul.register/service.meta.cluster: "prodK8s"
         consul.register/service.meta.namespace: "dodo-test"

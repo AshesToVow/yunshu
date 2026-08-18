@@ -1122,7 +1122,11 @@ export function CicdServicesPage() {
                       下载 zip 解压到仓库根目录，得到 <Typography.Text code>helm/</Typography.Text>
                       （含 charts/deployment-base 等公共模块、config-files、多环境 values）与可选{" "}
                       <Typography.Text code>setup/</Typography.Text>
-                      。研发只改 values.yaml；Jenkins 使用 <Typography.Text code>helm/Chart.yaml</Typography.Text>。
+                      。研发只改 values.yaml；Jenkins 使用 <Typography.Text code>helm/Chart.yaml</Typography.Text>
+                      。默认写入 Consul 注册：注解 <Typography.Text code>consul.register/enabled=true</Typography.Text>
+                      、<Typography.Text code>consul.register/service.name</Typography.Text>
+                      与标签 <Typography.Text code>yunshu-metrics: tag</Typography.Text>
+                      （不需要时在 values 里关 <Typography.Text code>deployment-base.consulRegister.enabled</Typography.Text>）。
                     </Typography.Text>
                     <Button
                       type="primary"
@@ -1141,7 +1145,7 @@ export function CicdServicesPage() {
                 <Form.Item name="deploy_config_type" label="工作负载类型" rules={[{ required: true }]}>
                   <Select options={K8S_DEPLOY_CONFIG_TYPES.map((o) => ({ label: o.label, value: o.value }))} />
                 </Form.Item>
-                <Form.Item name="deploy_config_template" label="部署模板" rules={[{ required: true }]}>
+                <Form.Item name="deploy_config_template" label="部署模板" rules={[{ required: true }]} extra="共享库 k8s-basic / k8s-skywalking 的 Pod 模板须含 Consul 必填项：consul.register/enabled、service.name、标签 yunshu-metrics=tag">
                   <Select options={K8S_DEPLOY_TEMPLATES.map((o) => ({ label: o.label, value: o.value }))} />
                 </Form.Item>
               </>

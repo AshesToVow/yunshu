@@ -120,6 +120,23 @@ extraVolumes: []
 
 podAnnotations: {}
 podLabels: {}
+
+# kube-consul-register（https://github.com/AshesToVow/kube-consul-register）
+# 注解写在 Pod 模板；未写 consul.register/enabled=true 的 Pod 不会进 Consul。
+# 标签值必须是字面量 tag：yunshu-metrics: "tag" → Consul tag 为 yunshu-metrics（不是 yunshu-metrics:tag）。
+consulRegister:
+  enabled: true
+  # catalog = Consul 目录（k8s-pod，Prom 不刮）；metrics = Prom scrape（k8s-pod-metrics）
+  mode: catalog
+  serviceName: ""
+  # 单容器可空；有 sidecar 必须填主容器名，否则每个容器各注册一份
+  containerName: ""
+  livenessCheck: false
+  readinessCheck: false
+  metricsPath: /metrics
+  cluster: ""
+  namespace: ""
+  yunshuProject: ""
 podSecurityContext: {}
 securityContext: {}
 serviceAccountName: ""
