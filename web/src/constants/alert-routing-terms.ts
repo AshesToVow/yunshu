@@ -9,7 +9,7 @@ export const ALERT_ROUTING_TERMS = {
   continueMatchChildren: "继续匹配子路由",
   receiverGroup: "通知接收组",
   matchSeverity: "匹配级别",
-  copyTemplate: "从项目复制路由模板",
+  copyTemplate: "从项目迁入全局树",
   historySourceFilter: "告警来源",
   receiverGroupManage: "通知接收组管理",
   receiverGroupManageHint:

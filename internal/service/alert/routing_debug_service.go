@@ -11,7 +11,7 @@ import (
 )
 
 type AlertRoutingDebugRequest struct {
-	ProjectID uint              `json:"project_id" binding:"required"`
+	ProjectID uint              `json:"project_id"`
 	Labels    map[string]string `json:"labels" binding:"required"`
 	Severity  string            `json:"severity"`
 	Status    string            `json:"status"`

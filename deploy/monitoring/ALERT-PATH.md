@@ -245,7 +245,7 @@ route:
 |------|----------|
 | Telegraf 注册 | **每台** Telegraf（`--type telegraf`） |
 | ICMP/HTTP/TCP | **仅** 监控机 |
-| K8s Pod → Consul | **仅** 监控机（见 [`K8S-CONSUL-PODS.md`](./K8S-CONSUL-PODS.md)） |
+| K8s Pod → Consul | 集群内 kube-consul-register，或监控机 cron（见 [`K8S-CONSUL-PODS.md`](./K8S-CONSUL-PODS.md)） |
 | 规则与通知 | Yunshu |
 
 ---

@@ -1,0 +1,40 @@
+# 登记为 k8s-pod-metrics，并写入 metrics_path，Prometheus job k8s-pod 才会刮。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  namespace: dodo-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+        yunshu-metrics: "tag"
+      annotations:
+        consul.register/enabled: "true"
+        consul.register/service.name: "k8s-pod-metrics"
+        # 单容器可省略；有 sidecar 必须写，否则每个容器各注册一份
+        consul.register/pod.container.name: "app"
+        consul.register/pod.container.probe.liveness: "true"
+        consul.register/service.meta.cluster: "prodK8s"
+        consul.register/service.meta.namespace: "dodo-test"
+        consul.register/service.meta.app: "myapp"
+        consul.register/service.meta.metrics_path: "/metrics"
+        consul.register/service.meta.exporter_role: "k8s_pod"
+        consul.register/service.meta.yunshu_project: "1"
+    spec:
+      containers:
+        - name: app
+          image: myapp:latest
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10

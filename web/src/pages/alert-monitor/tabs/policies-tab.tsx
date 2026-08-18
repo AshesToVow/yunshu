@@ -3,15 +3,9 @@ import {
   Button,
   Card,
   Collapse,
-  Input,
-  Radio,
-  Segmented,
-  Select,
   Space,
-  Table,
   Typography,
 } from "antd";
-import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { lazy, Suspense } from "react";
 import { useAlertMonitor } from "../context";
 
@@ -31,7 +25,8 @@ export function PoliciesTab() {
                   description={
                     <Space direction="vertical" size={8} style={{ width: "100%" }}>
                       <span>
-                        订阅节点按 labels / regex 命中接收组与通道，并执行节点静默窗口与恢复通知。规则在「规则中心」配置；此处不负责 PromQL 评测。
+                        平台共用一棵路由树（不按项目切换）。按 labels / regex 命中接收组与通道。规则在「规则中心」配置；此处不负责 PromQL 评测。
+                        投递流水若出现 global: 前缀，改的就是本页这棵树。各项目下若还有旧订阅节点，仍可能合并外发，请在本页停用对应节点，并逐步停用项目内旧树。
                       </span>
                       <Space wrap>
                         <Button size="small" onClick={ctx.openHistoryTab}>查看事件台</Button>
@@ -72,7 +67,6 @@ export function PoliciesTab() {
                     hideTabs
                     activeTab="subscriptions"
                     onTabChange={() => undefined}
-                    projectContextId={ctx.projectContextId}
                   />
                 </Suspense>
               </Space>

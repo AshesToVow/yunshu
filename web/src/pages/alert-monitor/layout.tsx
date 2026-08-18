@@ -47,15 +47,21 @@ export function AlertMonitorLayout() {
       />
       <Card className="table-card" loading={ctx.loading}>
         <Space className="ops-filter-bar" style={{ marginBottom: 12 }} wrap>
-          <Typography.Text type="secondary">全局项目上下文</Typography.Text>
-          <Select
-            style={{ minWidth: 280 }}
-            allowClear
-            value={ctx.projectContextId}
-            onChange={(v) => ctx.setProjectContext(v)}
-            options={ctx.projectOptions}
-            placeholder="全部项目（可选）"
-          />
+          {tab !== "policies" ? (
+            <>
+              <Typography.Text type="secondary">全局项目上下文</Typography.Text>
+              <Select
+                style={{ minWidth: 280 }}
+                allowClear
+                value={ctx.projectContextId}
+                onChange={(v) => ctx.setProjectContext(v)}
+                options={ctx.projectOptions}
+                placeholder="全部项目（可选）"
+              />
+            </>
+          ) : (
+            <Typography.Text type="secondary">通知与路由为平台全局一份，不按项目筛选；用标签（cluster / project_id / severity）分流</Typography.Text>
+          )}
         </Space>
         <Tabs
           activeKey={tab}

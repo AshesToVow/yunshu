@@ -64,7 +64,7 @@ func NewAlertSubscriptionService(repo interfaces.AlertSubscriptionRepository) *A
 
 // AlertSubscriptionNodeUpsertRequest 创建/更新请求
 type AlertSubscriptionNodeUpsertRequest struct {
-	ProjectID            uint   `json:"project_id" binding:"required"`
+	ProjectID            uint   `json:"project_id"` // 0=平台全局路由树
 	ParentID             *uint  `json:"parent_id"`
 	Name                 string `json:"name" binding:"required,max=128"`
 	Code                 string `json:"code" binding:"omitempty,max=64"`

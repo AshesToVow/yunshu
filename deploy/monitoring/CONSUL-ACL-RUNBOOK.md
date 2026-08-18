@@ -315,7 +315,7 @@ Targets 为 UP 后，在 Yunshu 配规则并人为打挂，事件台应出现 fi
 | `k8s-pod` | `yunshu-metrics`, `k8s` | 仅目录：PodIP，**无** `metrics_path`（不采集） |
 | `k8s-pod-metrics` | `yunshu-metrics`, `k8s`, `has-metrics` | 有 `metrics_path`，供 Prom 采集 |
 
-K8s Pod 同步说明：[`K8S-CONSUL-PODS.md`](./K8S-CONSUL-PODS.md)。
+K8s Pod 同步：推荐 [`kube-consul-register/README.md`](./kube-consul-register/README.md)，总览 [`K8S-CONSUL-PODS.md`](./K8S-CONSUL-PODS.md)。
 
 拨测示例：[`consul-service-blackbox-target.json`](./consul-service-blackbox-target.json)、[`consul-service-blackbox-tcp.json`](./consul-service-blackbox-tcp.json)（请求头带对应注册 Token）。
 

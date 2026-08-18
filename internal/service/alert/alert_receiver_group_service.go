@@ -48,7 +48,7 @@ func (s *AlertReceiverGroupService) List(ctx context.Context, q AlertReceiverGro
 }
 
 type AlertReceiverGroupUpsertRequest struct {
-	ProjectID   uint   `json:"project_id" binding:"required"`
+	ProjectID   uint   `json:"project_id"` // 0=全局接收组
 	Name        string `json:"name" binding:"required,max=128"`
 	Description string `json:"description"`
 

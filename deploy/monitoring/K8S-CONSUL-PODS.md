@@ -2,11 +2,14 @@
 
 供 **Yunshu 监控对象** 展示 PodIP，以及（可选）**Prometheus** 按注解采集指标。
 
+推荐用集群内控制器 **[kube-consul-register](https://github.com/tczekajlo/kube-consul-register)** 做事件驱动注册（清单与步骤：[`kube-consul-register/README.md`](./kube-consul-register/README.md)）。下文 Python cron 为无控制器时的备选，**二者不要同时跑**。
+
 相关文件：
 
 | 文件 | 说明 |
 |------|------|
-| `consul_k8s_pods_sync.py` | 同步脚本（Py2.7+，标准库 + kubectl） |
+| **`kube-consul-register/`** | **推荐**：K8s 控制器清单 + Pod 注解样例 |
+| `consul_k8s_pods_sync.py` | 备选：同步脚本（Py2.7+，标准库 + kubectl） |
 | `consul-k8s-pods-ctl.sh` | 包装脚本 |
 | `consul-k8s-pods.example.json` | 配置样例 → 机房拷为 `consul-k8s-pods.json` |
 | `metrics-register.hcl` | ACL：需含 `k8s-pod`、`k8s-pod-metrics` |

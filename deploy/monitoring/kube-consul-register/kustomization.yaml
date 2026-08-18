@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: yunshu-monitor
+resources:
+  - 00-namespace.yaml
+  - 01-rbac.yaml
+  - 02-configmap.yaml
+  - 04-deployment.yaml
+# Secret 含 Token，单独 apply：kubectl apply -f 03-secret.example.yaml

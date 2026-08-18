@@ -52,6 +52,9 @@ import {
 
 export type AlertConfigTab = "subscriptions" | "history";
 
+/** 通知与路由只编辑平台全局树。投递仍可能合并各项目旧节点，本页改的是 global: 命中。 */
+const GLOBAL_ROUTING_PROJECT_ID = 0;
+
 export type AlertConfigCenterPanelProps = {
   /** 当前子 Tab（策略 / 历史 / 模板） */
   activeTab: AlertConfigTab;
@@ -388,7 +391,6 @@ export function AlertConfigCenterPanel({
       const list = (res?.list ?? []) as Array<{ id: number; name: string }>;
       const normalized = list.map((it) => ({ id: Number((it as any).id), name: String((it as any).name || "") })).filter((it) => it.id > 0);
       setProjects(normalized);
-      if (!subProjectID && normalized.length) setSubProjectID(normalized[0].id);
     } catch {
       // http 拦截器已 toast
     }
@@ -460,15 +462,13 @@ export function AlertConfigCenterPanel({
     return walk(subTree);
   }, [subTree, subSelectedID]);
 
-  const loadSubscriptions = useCallback(async (overrideProjectId?: number) => {
-    const pid = overrideProjectId ?? (projectContextId && projectContextId > 0 ? projectContextId : subProjectID);
-    if (!pid) return;
+  const loadSubscriptions = useCallback(async (_overrideProjectId?: number) => {
     const seq = ++loadSubscriptionsSeqRef.current;
     setSubLoading(true);
     try {
       const [tree, groups] = await Promise.all([
-        getSubscriptionTree({ project_id: pid }),
-        listReceiverGroups({ project_id: pid, page: 1, page_size: 200 }),
+        getSubscriptionTree({ project_id: GLOBAL_ROUTING_PROJECT_ID }),
+        listReceiverGroups({ page: 1, page_size: 200 }),
       ]);
       if (seq !== loadSubscriptionsSeqRef.current) return;
       setSubTree(tree ?? []);
@@ -478,7 +478,7 @@ export function AlertConfigCenterPanel({
     } finally {
       if (seq === loadSubscriptionsSeqRef.current) setSubLoading(false);
     }
-  }, [subProjectID, projectContextId]);
+  }, []);
 
   function openReceiverGroupCreate() {
     setRgEditingId(null);
@@ -500,11 +500,7 @@ export function AlertConfigCenterPanel({
   }
 
   async function saveReceiverGroup() {
-    const pid = effectiveProjectId;
-    if (!pid) {
-      message.warning("请先选择项目");
-      return;
-    }
+    const pid = GLOBAL_ROUTING_PROJECT_ID;
     const values = await rgForm.validateFields();
     const payload = {
       project_id: pid,
@@ -572,9 +568,8 @@ export function AlertConfigCenterPanel({
   }
 
   async function createSubscription(parentID?: number | null) {
-    if (!effectiveProjectId) return;
     const payload: any = {
-      project_id: effectiveProjectId,
+      project_id: GLOBAL_ROUTING_PROJECT_ID,
       parent_id: parentID ?? null,
       name: !parentID ? ALERT_ROUTING_TERMS.rootPolicyName : "新路由节点",
       code: "",
@@ -597,7 +592,7 @@ export function AlertConfigCenterPanel({
     const v = await subForm.validateFields();
     const id = Number(v.id || 0);
     const payload: any = {
-      project_id: effectiveProjectId,
+      project_id: GLOBAL_ROUTING_PROJECT_ID,
       parent_id: v.parent_id ?? null,
       name: String(v.name || "").trim(),
       code: String(v.code || "").trim(),
@@ -815,34 +810,19 @@ export function AlertConfigCenterPanel({
       children: (
         <>
           <Space className="ops-filter-bar" style={{ width: "100%", marginBottom: 12 }} wrap>
-            {projectContextId ? (
-              <Typography.Text type="secondary">
-                当前项目：{projects.find((p) => p.id === projectContextId)?.name ?? `项目 ${projectContextId}`}（跟随顶栏「全局项目上下文」）
-              </Typography.Text>
-            ) : (
-            <Select
-              style={{ width: 260 }}
-              placeholder="选择项目"
-              value={subProjectID || undefined}
-              options={projects.map((p) => ({ label: p.name, value: p.id }))}
-              onChange={(v) => setSubProjectID(Number(v) || 0)}
-              showSearch
-              filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
-            />
-            )}
             <Button icon={<ReloadOutlined />} loading={subLoading} onClick={() => void loadSubscriptions()}>
               刷新
             </Button>
-            <Button disabled={!effectiveProjectId} onClick={() => setRgDrawerOpen(true)}>
+            <Button onClick={() => setRgDrawerOpen(true)}>
               {ALERT_ROUTING_TERMS.receiverGroupManage}
             </Button>
             <Button
               icon={<CopyOutlined />}
-              disabled={projects.length < 2}
+              disabled={projects.length < 1}
               onClick={() => {
                 cloneForm.setFieldsValue({
-                  source_project_id: effectiveProjectId || projects[0]?.id,
-                  target_project_id: undefined,
+                  source_project_id: projects[0]?.id,
+                  target_project_id: GLOBAL_ROUTING_PROJECT_ID,
                   replace_cluster: "",
                   replace_route: "",
                   include_disabled: false,
@@ -864,10 +844,17 @@ export function AlertConfigCenterPanel({
                 删除
               </Button>
             </Popconfirm>
-            <Button type="primary" disabled={!effectiveProjectId} onClick={() => void saveSubscription()}>
+            <Button type="primary" onClick={() => void saveSubscription()}>
               保存
             </Button>
           </Space>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="本页编辑平台全局路由树（投递流水里的 global: 前缀）"
+            description="不要按项目切树。用匹配级别 / match_labels（cluster、project_id、severity）分流。warning 误发企微邮箱时，在本页停用对应子节点（例如 policy_4），不要只改某个业务项目里的停用开关。"
+          />
           <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 12, alignItems: "start" }}>
             <Card size="small" title={ALERT_ROUTING_TERMS.treeTitle} loading={subLoading} styles={{ body: { padding: 8 } }}>
               <Tree
@@ -1471,19 +1458,17 @@ export function AlertConfigCenterPanel({
               <Alert
                 type="info"
                 showIcon
-                message="投递会同时匹配「当前项目订阅树」与「全局 project_id=0」。仅在当前项目停用节点时，全局路由仍可能外发。"
+                message="调试针对全局路由树（project_id=0）。投递仍可能合并各项目旧订阅树。"
               />
               <Typography.Text type="secondary">
-                模拟标签命中订阅树，查看接收组、通道与静默/维护窗口抑制（项目 ID：{effectiveProjectId || "未选择"}）。
+                模拟标签命中全局订阅树，查看接收组、通道与静默/维护窗口抑制。
               </Typography.Text>
               <Input value={routingSeverity} onChange={(e) => setRoutingSeverity(e.target.value)} placeholder="severity" style={{ width: 160 }} addonBefore="级别" />
               <Input.TextArea rows={4} value={routingLabelsJSON} onChange={(e) => setRoutingLabelsJSON(e.target.value)} placeholder='{"alertname":"..."}' />
               <Button
                 type="primary"
                 loading={routingDebugLoading}
-                disabled={!effectiveProjectId}
                 onClick={() => {
-                  if (!effectiveProjectId) return;
                   let labels: Record<string, string> = {};
                   try {
                     labels = JSON.parse(routingLabelsJSON) as Record<string, string>;
@@ -1492,7 +1477,7 @@ export function AlertConfigCenterPanel({
                     return;
                   }
                   setRoutingDebugLoading(true);
-                  void debugAlertRouting({ project_id: effectiveProjectId, labels, severity: routingSeverity, status: "firing" })
+                  void debugAlertRouting({ project_id: GLOBAL_ROUTING_PROJECT_ID, labels, severity: routingSeverity, status: "firing" })
                     .then(setRoutingDebugResult)
                     .finally(() => setRoutingDebugLoading(false));
                 }}
@@ -1612,7 +1597,7 @@ export function AlertConfigCenterPanel({
         open={rgDrawerOpen}
         onClose={() => setRgDrawerOpen(false)}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} disabled={!effectiveProjectId} onClick={openReceiverGroupCreate}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openReceiverGroupCreate}>
             新建接收组
           </Button>
         }
@@ -1731,7 +1716,7 @@ export function AlertConfigCenterPanel({
           try {
             const rep = await cloneSubscriptionFromProject({
               source_project_id: v.source_project_id,
-              target_project_id: v.target_project_id,
+              target_project_id: GLOBAL_ROUTING_PROJECT_ID,
               replace_cluster: v.replace_cluster?.trim() || undefined,
               replace_route: v.replace_route?.trim() || undefined,
               include_disabled: !!v.include_disabled,
@@ -1745,9 +1730,7 @@ export function AlertConfigCenterPanel({
               );
             }
             setCloneModalOpen(false);
-            if (v.target_project_id === effectiveProjectId) {
-              await loadSubscriptions(v.target_project_id);
-            }
+            await loadSubscriptions();
           } finally {
             setCloneSubmitting(false);
           }
@@ -1757,9 +1740,7 @@ export function AlertConfigCenterPanel({
           <Form.Item name="source_project_id" label="源项目（已调配好的模板）" rules={[{ required: true }]}>
             <Select options={projects.map((p) => ({ label: p.name, value: p.id }))} showSearch />
           </Form.Item>
-          <Form.Item name="target_project_id" label="目标项目" rules={[{ required: true }]}>
-            <Select options={projects.map((p) => ({ label: p.name, value: p.id }))} showSearch />
-          </Form.Item>
+          <Typography.Paragraph type="secondary">将复制到<strong>平台全局路由树</strong>（本页正在编辑的树）。</Typography.Paragraph>
           <Form.Item name="replace_cluster" label="覆盖 cluster（可选，写入 match_labels）">
             <Input placeholder="例如 腾讯云告警链路" />
           </Form.Item>
@@ -1773,7 +1754,7 @@ export function AlertConfigCenterPanel({
             name="skip_if_target_has_nodes"
             label="目标已有订阅树时跳过（推荐）"
             valuePropName="checked"
-            extra="关闭后将清空目标项目已有订阅节点与接收组再复制（慎用）"
+            extra="关闭后将清空全局树已有订阅节点与接收组再复制（慎用）"
           >
             <Switch defaultChecked />
           </Form.Item>
