@@ -14,6 +14,7 @@ import {
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { lazy, Suspense } from "react";
 import { useAlertMonitor } from "../context";
+import { tablePagination } from "../../../utils/table-pagination";
 
 
 export function DatasourcesTab() {
@@ -23,8 +24,8 @@ export function DatasourcesTab() {
                 <Alert
                   type="info"
                   showIcon
-                  message="数据源是告警入口与巡检基础"
-                  description="这里维护 Prometheus / Alertmanager 的访问地址，供平台规则巡检、活跃告警快照与 PromQL 调试复用。"
+                  message="数据源 = 时序库（Prometheus / VictoriaMetrics）"
+                  description="平台规则中心只查询此处配置的 PromQL API。采集由 Telegraf / Pushgateway / blackbox 完成，推荐经 Consul 服务发现由 Prometheus scrape；无需配置 Alertmanager。"
                 />
                 <Space>
                   <Button type="primary" icon={<PlusOutlined />} onClick={ctx.openDsCreate}>
@@ -34,7 +35,7 @@ export function DatasourcesTab() {
                     刷新
                   </Button>
                 </Space>
-                <Table rowKey="id" columns={ctx.dsColumns} dataSource={ctx.dsList} pagination={false} scroll={{ x: 900 }} />
+                <Table rowKey="id" columns={ctx.dsColumns} dataSource={ctx.dsList} pagination={tablePagination()} scroll={{ x: 900 }} />
               </Space>
   );
 }

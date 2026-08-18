@@ -16,7 +16,7 @@ import (
 // CloneProjectRoutingRequest 从源项目复制订阅树 + 接收组到目标项目。
 type CloneProjectRoutingRequest struct {
 	SourceProjectID uint `json:"source_project_id" binding:"required"`
-	TargetProjectID uint `json:"target_project_id" binding:"required"`
+	TargetProjectID uint `json:"target_project_id"` // 0=迁入平台全局树
 	// ReplaceCluster 非空时覆盖 match_labels 中的 cluster（常用于新环境/新数据源）。
 	ReplaceCluster string `json:"replace_cluster"`
 	// ReplaceRoute 非空时覆盖 match_labels 中的 route。
@@ -68,8 +68,8 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 	if s == nil || s.repo == nil {
 		return nil, bizerrors.InternalCtx(ctx, fmt.Errorf("subscription service unavailable"), "alert.subscription.CloneProjectRouting")
 	}
-	if req.SourceProjectID == 0 || req.TargetProjectID == 0 {
-		return nil, constants.ErrBadRequestWithMsg("source_project_id 与 target_project_id 不能为空")
+	if req.SourceProjectID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("source_project_id 不能为空")
 	}
 	if req.SourceProjectID == req.TargetProjectID {
 		return nil, constants.ErrBadRequestWithMsg("源项目与目标项目不能相同")
@@ -89,9 +89,12 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 	}
 
 	err = s.repo.WithTx(ctx, func(tx *gorm.DB) error {
-		if targetCount > 0 && !req.SkipIfTargetHasNodes {
-			if err := tx.Where("project_id = ?", req.TargetProjectID).Delete(&model.AlertSubscriptionNode{}).Error; err != nil {
-				return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+		// 无论目标是否已有订阅节点：未跳过时先清空目标接收组，避免「只有组残留、节点已删」时反复克隆堆出同名多份。
+		if !req.SkipIfTargetHasNodes {
+			if targetCount > 0 {
+				if err := tx.Where("project_id = ?", req.TargetProjectID).Delete(&model.AlertSubscriptionNode{}).Error; err != nil {
+					return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)
+				}
 			}
 			if err := tx.Where("project_id = ?", req.TargetProjectID).Delete(&model.AlertReceiverGroup{}).Error; err != nil {
 				return bizerrors.Pass(ctx, "alert.subscription", "CloneProjectRouting", err)

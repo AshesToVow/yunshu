@@ -72,6 +72,17 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 			continue
 		}
 
+		// 当前告警：屏蔽之后落库；resolved 迁入历史。与投递流水 alert_events 分离。
+		if status == "firing" {
+			value := strings.TrimSpace(annotations["value"])
+			_ = host.UpsertCurAlert(ctx, buildCurEventFromIngress(
+				ca.Source, ca.PayloadReceiver, title, severity, status, envLabel, groupKey,
+				dsID, labels, annotations, alert.Fingerprint, alert.StartsAt, value,
+			))
+		} else if status == "resolved" {
+			_ = host.ResolveCurAlert(ctx, alert.Fingerprint, alert.EndsAt)
+		}
+
 		count, err := host.TouchFingerprint(ctx, alert.Fingerprint, status)
 		if err != nil {
 			return err

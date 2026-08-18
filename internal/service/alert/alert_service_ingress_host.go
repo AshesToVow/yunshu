@@ -195,3 +195,11 @@ func (h alertIngressHost) OnResolvedComplete(ctx context.Context, fingerprint, g
 	_ = h.s.clearGroupAggregateState(ctx, groupKey)
 	h.s.clearAlertFiringDelivered(ctx, fingerprint)
 }
+
+func (h alertIngressHost) UpsertCurAlert(ctx context.Context, row *model.AlertCurEvent) error {
+	return h.s.UpsertCurEvent(ctx, row)
+}
+
+func (h alertIngressHost) ResolveCurAlert(ctx context.Context, fingerprint string, resolvedAt time.Time) error {
+	return h.s.ResolveCurEvent(ctx, fingerprint, resolvedAt)
+}

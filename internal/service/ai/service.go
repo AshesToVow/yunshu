@@ -13,6 +13,7 @@ import (
 
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
@@ -31,6 +32,7 @@ type Service struct {
 	yamlAI        config.AIConfig
 	encryptionKey string
 	dataDir       string
+	memberRepo    interfaces.ProjectMemberRepository
 	clusterSvc    *k8s.K8sClusterService
 	podSvc        *k8s.K8sPodService
 	workloadSvc   *k8s.K8sWorkloadService
@@ -49,6 +51,7 @@ func NewService(
 	db *gorm.DB,
 	yamlAI config.AIConfig,
 	encryptionKey string,
+	memberRepo interfaces.ProjectMemberRepository,
 	clusterSvc *k8s.K8sClusterService,
 	podSvc *k8s.K8sPodService,
 	workloadSvc *k8s.K8sWorkloadService,
@@ -64,6 +67,7 @@ func NewService(
 		yamlAI:        yamlAI,
 		encryptionKey: encryptionKey,
 		dataDir:       filepath.Join("data", "ai"),
+		memberRepo:    memberRepo,
 		clusterSvc:    clusterSvc,
 		podSvc:        podSvc,
 		workloadSvc:   workloadSvc,
@@ -282,6 +286,15 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 	}
 	if err := s.checkRate(userID); err != nil {
 		return nil, err
+	}
+	actor = resolveActor(ctx, actor)
+	if actor == nil && userID > 0 {
+		return nil, constants.ErrUnauthorized
+	}
+	if req.ProjectID > 0 {
+		if err := s.assertProjectMember(ctx, actor, req.ProjectID); err != nil {
+			return nil, err
+		}
 	}
 	if len(req.Messages) == 0 {
 		return nil, constants.ErrBadRequestWithMsg("messages 不能为空")

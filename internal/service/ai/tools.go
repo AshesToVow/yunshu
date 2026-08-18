@@ -334,9 +334,28 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		namespace = tc.Namespace
 	}
 	projectID := getUint("project_id", tc.ProjectID)
-	actor := tc.Actor
-	if actor == nil && userID > 0 {
-		actor = &auth.CurrentUser{ID: userID}
+	actor := resolveActor(ctx, tc.Actor)
+
+	requireActor := func() error {
+		if actor == nil || actor.ID == 0 {
+			return fmt.Errorf("未登录或用户上下文缺失，拒绝执行工具")
+		}
+		return nil
+	}
+	requireProject := func() error {
+		if err := requireActor(); err != nil {
+			return err
+		}
+		return s.assertProjectMember(ctx, actor, projectID)
+	}
+	requireCluster := func() error {
+		if err := requireActor(); err != nil {
+			return err
+		}
+		if clusterID == 0 {
+			return fmt.Errorf("cluster_id 必填")
+		}
+		return nil
 	}
 
 	var (
@@ -347,6 +366,9 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 	case "list_runbooks":
 		out = runbooks.Names()
 	case "list_clusters":
+		if err = requireActor(); err != nil {
+			break
+		}
 		if s.clusterSvc == nil {
 			err = fmt.Errorf("集群服务不可用")
 			break
@@ -366,18 +388,27 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			out = map[string]any{"total": res.Total, "list": list}
 		}
 	case "list_pods":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		if s.podSvc == nil {
 			err = fmt.Errorf("Pod 服务不可用")
 			break
 		}
 		out, err = s.podSvc.List(ctx, k8s.PodListQuery{ClusterID: clusterID, Namespace: namespace, Keyword: getStr("keyword")})
 	case "get_pod_detail":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		if s.podSvc == nil {
 			err = fmt.Errorf("Pod 服务不可用")
 			break
 		}
 		out, err = s.podSvc.Detail(ctx, k8s.PodDetailQuery{ClusterID: clusterID, Namespace: namespace, Name: getStr("name")})
 	case "get_pod_logs":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		if s.podSvc == nil {
 			err = fmt.Errorf("Pod 服务不可用")
 			break
@@ -396,14 +427,23 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		})
 		out = truncateStr(logs, 12_000)
 	case "diagnose_pod":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		if s.podSvc == nil {
 			err = fmt.Errorf("Pod 服务不可用")
 			break
 		}
 		out, err = s.podSvc.Diagnose(ctx, k8s.PodDiagnoseQuery{ClusterID: clusterID, Namespace: namespace, Name: getStr("name")})
 	case "run_diagnose_runbook":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		out, err = s.runDiagnoseRunbook(ctx, clusterID, namespace, getStr("name"), getStr("runbook_name"))
 	case "list_deployments":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		if s.workloadSvc == nil {
 			err = fmt.Errorf("Workload 服务不可用")
 			break
@@ -414,12 +454,18 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			},
 		})
 	case "list_namespaces":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		if s.nsSvc == nil {
 			err = fmt.Errorf("Namespace 服务不可用")
 			break
 		}
 		out, err = s.nsSvc.List(ctx, k8s.NamespaceListQuery{ClusterID: clusterID, Keyword: getStr("keyword")}, nil)
 	case "list_events":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		if s.eventSvc == nil {
 			err = fmt.Errorf("Event 服务不可用")
 			break
@@ -427,6 +473,9 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		limit := int64(getUint("limit", 50))
 		out, err = s.eventSvc.List(ctx, k8s.EventListQuery{ClusterID: clusterID, Namespace: namespace, Keyword: getStr("keyword"), Limit: limit})
 	case "search_logs":
+		if err = requireProject(); err != nil {
+			break
+		}
 		if s.logSearch == nil {
 			err = fmt.Errorf("日志检索服务不可用")
 			break
@@ -449,6 +498,9 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		}
 		out, err = s.logSearch.Search(ctx, q)
 	case "list_cicd_builds":
+		if err = requireProject(); err != nil {
+			break
+		}
 		if s.cicdSvc == nil {
 			err = fmt.Errorf("CI/CD 服务不可用")
 			break
@@ -465,12 +517,18 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			Actor:     actor,
 		})
 	case "get_cicd_build":
+		if err = requireProject(); err != nil {
+			break
+		}
 		if s.cicdSvc == nil {
 			err = fmt.Errorf("CI/CD 服务不可用")
 			break
 		}
 		out, err = s.cicdSvc.GetBuildRun(ctx, projectID, getUint("run_id", 0), actor)
 	case "get_cicd_build_log":
+		if err = requireProject(); err != nil {
+			break
+		}
 		if s.cicdSvc == nil {
 			err = fmt.Errorf("CI/CD 服务不可用")
 			break
@@ -479,6 +537,9 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		logs, err = s.cicdSvc.GetBuildRunLog(ctx, projectID, getUint("run_id", 0), actor)
 		out = truncateStr(logs, 12_000)
 	case "list_alerts":
+		if err = requireProject(); err != nil {
+			break
+		}
 		if s.alertSvc == nil {
 			err = fmt.Errorf("告警服务不可用")
 			break
@@ -500,12 +561,18 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			out = map[string]any{"list": list, "total": total, "page": page, "page_size": pageSize}
 		}
 	case "explain_alert":
+		if err = requireActor(); err != nil {
+			break
+		}
 		if s.alertSvc == nil {
 			err = fmt.Errorf("告警服务不可用")
 			break
 		}
 		out, err = s.alertSvc.ExplainFingerprintDelivery(ctx, getStr("fingerprint"))
 	case "scale_deployment", "restart_deployment", "delete_pod":
+		if err = requireCluster(); err != nil {
+			break
+		}
 		out, err = s.createToolApproval(ctx, userID, name, argsJSON, clusterID, namespace, getStr("name"), getStr("reason"))
 	default:
 		err = fmt.Errorf("未知工具: %s", name)

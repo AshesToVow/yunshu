@@ -360,52 +360,124 @@ func tokenize(q string) []string {
 	return out
 }
 
-// SyncKnowledgeBase 将 DB 文档/案例/SOP 同步到 ES（含 module 字段）。
-func (s *Service) SyncKnowledgeBase(ctx context.Context) (int, error) {
-	// 不要只依赖 seedOnce：首次若目录缺失，需在同步前再尝试导入文件种子
+// KnowledgeSyncReport 知识库 ES 同步结果。
+type KnowledgeSyncReport struct {
+	Indexed int      `json:"indexed"`
+	Failed  int      `json:"failed"`
+	Errors  []string `json:"errors,omitempty"`
+}
+
+// SyncKnowledgeBase 将 DB 文档/案例/SOP 与内嵌 ModuleDocs 同步到 ES（含真实 module 字段）。
+func (s *Service) SyncKnowledgeBase(ctx context.Context) (*KnowledgeSyncReport, error) {
 	_, _ = s.EnsureCenterSeedReport(ctx)
 	if s.esProvider == nil {
-		return 0, constants.ErrBadRequestWithMsg("ES 未配置：无法同步知识库")
+		return nil, constants.ErrBadRequestWithMsg("ES 未配置：无法同步知识库")
 	}
 	cli, _, err := s.esProvider.Client(ctx)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	n := 0
+	rep := &KnowledgeSyncReport{}
+	indexOne := func(id string, body map[string]any) {
+		if err := cli.IndexDoc(ctx, "yunshu-ai-kb-v1", id, body); err != nil {
+			rep.Failed++
+			if len(rep.Errors) < 20 {
+				rep.Errors = append(rep.Errors, id+": "+err.Error())
+			}
+			return
+		}
+		rep.Indexed++
+	}
+
+	kbCodeByID := map[uint]string{}
+	var kbs []model.AiKnowledgeBase
+	_ = s.db.WithContext(ctx).Find(&kbs).Error
+	for _, kb := range kbs {
+		kbCodeByID[kb.ID] = kb.Code
+	}
+
 	var docs []model.AiKbDocument
 	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&docs).Error
 	for i, d := range docs {
+		mod := moduleFromKBCode(kbCodeByID[d.KBID])
+		if mod == "" {
+			mod = moduleFromText(d.Title + " " + d.Source + " " + d.Content)
+		}
+		if mod == "" {
+			mod = "ops"
+		}
 		id := "doc-" + strconv.FormatUint(uint64(d.ID), 10)
-		body := map[string]any{
-			"source": d.Source, "module": "kb", "title": d.Title, "content": d.Content, "seq": i,
-		}
-		if err := cli.IndexDoc(ctx, "yunshu-ai-kb-v1", id, body); err == nil {
-			n++
-		}
+		indexOne(id, map[string]any{
+			"source": d.Source, "module": mod, "title": d.Title, "content": d.Content, "seq": i,
+		})
 	}
 	var cases []model.AiIncidentCase
 	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&cases).Error
 	for i, c := range cases {
+		mod := moduleFromText(c.Category + " " + c.Technology + " " + c.Title + " " + c.CaseID)
+		if mod == "" {
+			mod = "ops"
+		}
 		content := c.Title + "\n" + c.Symptom + "\n" + c.RootCause + "\n" + c.Solution
-		body := map[string]any{
-			"source": "case:" + c.CaseID, "module": "case", "title": c.Title, "content": content, "seq": i,
-		}
-		if err := cli.IndexDoc(ctx, "yunshu-ai-kb-v1", "case-"+c.CaseID, body); err == nil {
-			n++
-		}
+		indexOne("case-"+c.CaseID, map[string]any{
+			"source": "case:" + c.CaseID, "module": mod, "title": c.Title, "content": content, "seq": i,
+		})
 	}
 	var sops []model.AiSOP
 	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&sops).Error
 	for i, sp := range sops {
+		mod := moduleFromText(sp.Code + " " + sp.Title + " " + sp.Scenario)
+		if mod == "" {
+			mod = "ops"
+		}
 		content := sp.Title + "\n" + sp.Scenario + "\n" + sp.CheckSteps + "\n" + sp.ExecSteps
-		body := map[string]any{
-			"source": "sop:" + sp.Code, "module": "sop", "title": sp.Title, "content": content, "seq": i,
-		}
-		if err := cli.IndexDoc(ctx, "yunshu-ai-kb-v1", "sop-"+sp.Code, body); err == nil {
-			n++
-		}
+		indexOne("sop-"+sp.Code, map[string]any{
+			"source": "sop:" + sp.Code, "module": mod, "title": sp.Title, "content": content, "seq": i,
+		})
 	}
-	return n, nil
+	for i, d := range knowledge.ModuleDocs() {
+		id := "module-" + d.Module + "-" + strconv.Itoa(i)
+		indexOne(id, map[string]any{
+			"source": d.Source, "module": d.Module, "title": d.Title, "content": d.Content, "seq": i,
+		})
+	}
+	return rep, nil
+}
+
+func moduleFromKBCode(code string) string {
+	code = strings.ToLower(strings.TrimSpace(code))
+	switch {
+	case strings.Contains(code, "k8s"):
+		return knowledge.ModuleK8s
+	case strings.Contains(code, "cicd"):
+		return knowledge.ModuleCICD
+	case strings.Contains(code, "alert"):
+		return knowledge.ModuleAlert
+	case strings.Contains(code, "log"):
+		return knowledge.ModuleLog
+	case strings.Contains(code, "linux"):
+		return knowledge.ModuleLinux
+	case strings.Contains(code, "esmgmt"), strings.Contains(code, "elastic"):
+		return knowledge.ModuleEsmgmt
+	case strings.Contains(code, "cmdb"):
+		return knowledge.ModuleCMDB
+	case strings.Contains(code, "db"):
+		return knowledge.ModuleDB
+	case strings.Contains(code, "ai"):
+		return knowledge.ModuleAI
+	case strings.Contains(code, "ops"):
+		return "ops"
+	default:
+		return ""
+	}
+}
+
+func moduleFromText(text string) string {
+	mods := knowledge.InferModules(text)
+	if len(mods) > 0 {
+		return mods[0]
+	}
+	return ""
 }
 
 func truncateRunesStr(s string, maxRunes int) string {

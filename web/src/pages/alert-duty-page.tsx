@@ -18,6 +18,7 @@ import { getProjects, type ProjectItem } from "../services/projects";
 import { getUsers } from "../services/users";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { formatDateTime } from "../utils/format";
+import { tablePagination } from "../utils/table-pagination";
 
 export function AlertDutyPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -414,7 +415,7 @@ export function AlertDutyPage() {
         rowKey="id"
         loading={loading}
         dataSource={list}
-        pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50] }}
+        pagination={tablePagination()}
         scroll={{ x: 1500 }}
         columns={[
           { title: "ID", dataIndex: "id", width: 80 },

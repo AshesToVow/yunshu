@@ -6,8 +6,9 @@ import (
 
 // RegisterAlertRoutes 告警平台 HTTP 路由。
 func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
-	alertWebhook := api.Group("/alerts")
-	alertWebhook.POST("/webhook/alertmanager", d.alertHandler.ReceiveAlertmanager)
+	// 内部入站（K8s Event 等）；不再提供 Alertmanager Webhook。
+	alertIngress := api.Group("/alerts")
+	alertIngress.POST("/ingress/k8s-events", d.alertHandler.ReceiveK8sEventIngress)
 
 	alerts := api.Group("/alerts")
 	alerts.Use(d.authMiddleware, d.authorize, d.opAudit)
@@ -21,6 +22,8 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.GET("/events", d.alertHandler.ListEvents)
 	alerts.GET("/events/grouped", d.alertHandler.ListEventsGrouped)
 	alerts.GET("/events/by-fingerprint", d.alertHandler.ExplainFingerprintDelivery)
+	alerts.GET("/cur-events", d.alertHandler.ListCurEvents)
+	alerts.GET("/his-events", d.alertHandler.ListHisEvents)
 	alerts.GET("/history/stats", d.alertHandler.HistoryStats)
 	alerts.GET("/quality-report", d.alertHandler.QualityReport)
 
@@ -28,11 +31,18 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.POST("/datasources", d.alertPlatformHandler.CreateDatasource)
 	alerts.GET("/datasources/:id/ping", d.alertPlatformHandler.PingDatasource)
 	alerts.GET("/datasources/:id/prometheus-alerts", d.alertPlatformHandler.PromActiveAlerts)
-	alerts.GET("/datasources/:id/alertmanager-silences", d.alertPlatformHandler.AlertmanagerSilences)
 	alerts.POST("/datasources/:id/query", d.alertPlatformHandler.PromQuery)
 	alerts.POST("/datasources/:id/query_range", d.alertPlatformHandler.PromQueryRange)
 	alerts.PUT("/datasources/:id", d.alertPlatformHandler.UpdateDatasource)
 	alerts.DELETE("/datasources/:id", d.alertPlatformHandler.DeleteDatasource)
+
+	alerts.GET("/consul-endpoints", d.alertPlatformHandler.ListConsulEndpoints)
+	alerts.POST("/consul-endpoints", d.alertPlatformHandler.CreateConsulEndpoint)
+	alerts.PUT("/consul-endpoints/:id", d.alertPlatformHandler.UpdateConsulEndpoint)
+	alerts.DELETE("/consul-endpoints/:id", d.alertPlatformHandler.DeleteConsulEndpoint)
+	alerts.GET("/consul-endpoints/:id/ping", d.alertPlatformHandler.PingConsulEndpoint)
+	alerts.POST("/consul-endpoints/:id/sync", d.alertPlatformHandler.SyncConsulEndpoint)
+	alerts.GET("/monitor-objects", d.alertPlatformHandler.ListMonitorObjects)
 
 	alerts.GET("/silences", d.alertPlatformHandler.ListSilences)
 	alerts.POST("/silences", d.alertPlatformHandler.CreateSilence)
@@ -47,6 +57,7 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	alerts.GET("/monitor-rules", d.alertPlatformHandler.ListMonitorRules)
 	alerts.POST("/monitor-rules", d.alertPlatformHandler.CreateMonitorRule)
+	alerts.POST("/monitor-rules/import-prometheus-yaml", d.alertPlatformHandler.ImportPrometheusYAML)
 	alerts.GET("/rule-templates", d.alertPlatformHandler.ListRuleTemplates)
 	alerts.POST("/monitor-rules/from-template", d.alertPlatformHandler.CreateMonitorRuleFromTemplate)
 	alerts.PUT("/monitor-rules/:id", d.alertPlatformHandler.UpdateMonitorRule)

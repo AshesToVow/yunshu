@@ -221,6 +221,39 @@
   word-break: break-word;
 }
 
+.k8s-table-scroll-host .ant-table-thead > tr > th {
+  position: relative;
+  overflow: visible;
+}
+
+.yunshu-table-col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  z-index: 2;
+}
+
+.yunshu-table-col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 22%;
+  right: 3px;
+  width: 1px;
+  height: 56%;
+  background: currentColor;
+  opacity: 0.22;
+}
+
+.yunshu-table-col-resizer:hover,
+.yunshu-table-col-resizer:active {
+  background: rgba(15, 108, 189, 0.18);
+}
+
 .admin-shell.ops-platform .table-card.ant-card,
 .admin-shell.ops-platform .page-stack > .ant-card {
   border-radius: var(--ops-radius) !important;
@@ -571,4 +604,91 @@
     max-width: none;
     min-width: 0;
   }
+}
+
+/* ---- 项目巡检 ---- */
+.project-inspect-page__kpis {
+  margin-bottom: 16px;
+}
+
+.project-inspect-page__score-card.ant-card {
+  height: 100%;
+  border-radius: var(--ops-radius, 10px);
+}
+
+.project-inspect-page__score-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 148px;
+}
+
+.project-inspect-page__score-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.project-inspect-page__score-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.project-inspect-page__score-hint {
+  margin: 0 !important;
+  font-size: 12px;
+}
+
+.project-inspect-page__counts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.project-inspect-page__guide {
+  margin-bottom: 20px;
+}
+
+.project-inspect-page__guide-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.project-inspect-page__guide-list code {
+  font-size: 12px;
+}
+
+.project-inspect-page__plan-form {
+  max-width: 960px;
+}
+
+.project-inspect-page__drawer-score {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--admin-border, #e2e8f0);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ys-brand, #0d9488) 6%, transparent);
+}
+
+.project-inspect-page__drawer-score-num {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.project-inspect-page__drawer-score-num span {
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 0.75;
+  margin-left: 4px;
 }

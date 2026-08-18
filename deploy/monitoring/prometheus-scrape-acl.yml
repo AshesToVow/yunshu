@@ -1,0 +1,208 @@
+# 合并进 prometheus.yml → scrape_configs
+# Consul 1.10.x + ACL：每个 consul_sd_configs 填 token / datacenter
+# 替换：CONSUL_ADDR、PROM_TOKEN、BLACKBOX_ADDR
+#
+# 自定义标签约定：在 consul-targets.json 的 meta/labels 写入（值须为字符串），
+# 经 Consul Meta → __meta_consul_service_metadata_<key> → 下面 relabel 成 Prom 标签。
+# 常用 key：service / app / component / team / env / yunshu_project
+
+scrape_configs:
+  # ---------- 1) Telegraf 主机/中间件 ----------
+  - job_name: telegraf
+    scrape_interval: 30s
+    metrics_path: /metrics
+    consul_sd_configs:
+      - server: "127.0.0.1:8500"          # CONSUL_ADDR
+        token: "<PROM_TOKEN>"
+        datacenter: prod
+        services: ["telegraf"]
+        tags: ["yunshu-metrics"]
+    relabel_configs:
+      # Address+Port 已在 Consul 注册时写入，一般无需再拼端口
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - source_labels: [__meta_consul_service_metadata_env]
+        target_label: env
+      - source_labels: [__meta_consul_service_metadata_service]
+        target_label: service
+      - source_labels: [__meta_consul_service_metadata_app]
+        target_label: app
+      - source_labels: [__meta_consul_service_metadata_component]
+        target_label: component
+      - source_labels: [__meta_consul_service_metadata_team]
+        target_label: team
+      - source_labels: [__meta_consul_node]
+        target_label: host
+      - target_label: exporter_role
+        replacement: telegraf
+
+  # ---------- 2) Pushgateway ----------
+  - job_name: pushgateway
+    scrape_interval: 30s
+    honor_labels: true
+    consul_sd_configs:
+      - server: "127.0.0.1:8500"
+        token: "<PROM_TOKEN>"
+        datacenter: prod
+        services: ["pushgateway"]
+        tags: ["yunshu-metrics"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - source_labels: [__meta_consul_service_metadata_env]
+        target_label: env
+      - source_labels: [__meta_consul_service_metadata_service]
+        target_label: service
+      - source_labels: [__meta_consul_service_metadata_app]
+        target_label: app
+      - target_label: exporter_role
+        replacement: pushgateway
+    # 若暂未注册 Consul，可双跑静态：
+    # static_configs:
+    #   - targets: ["127.0.0.1:9091"]
+    #     labels: { exporter_role: pushgateway }
+
+  # ---------- 3) Blackbox HTTP（module 由 Consul Meta.probe_module 指定）----------
+  # blackbox.yml 里可扩展 http_2xx_xihe / http_2xx_risk 等自定义 module；
+  # 每个目标注册时写入 Meta.probe_url + Meta.probe_module（+ 可选 service/app）。
+  - job_name: blackbox-http
+    scrape_interval: 60s
+    metrics_path: /probe
+    # 默认 module；若 Meta 有 probe_module 会被下面 relabel 覆盖
+    params:
+      module: [http_2xx]
+    consul_sd_configs:
+      - server: "127.0.0.1:8500"
+        token: "<PROM_TOKEN>"
+        datacenter: prod
+        services: ["http"]
+        tags: ["probe-http"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_metadata_probe_url]
+        target_label: __param_target
+      - source_labels: [__meta_consul_service_metadata_probe_module]
+        target_label: __param_module
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__param_module]
+        target_label: module
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - source_labels: [__meta_consul_service_metadata_env]
+        target_label: env
+      - source_labels: [__meta_consul_service_metadata_service]
+        target_label: service
+      - source_labels: [__meta_consul_service_metadata_app]
+        target_label: app
+      - source_labels: [__meta_consul_service_metadata_component]
+        target_label: component
+      - source_labels: [__meta_consul_service_metadata_team]
+        target_label: team
+      - target_label: __address__
+        replacement: 127.0.0.1:9115   # BLACKBOX_ADDR
+      - target_label: exporter_role
+        replacement: blackbox
+
+  # ---------- 4) Blackbox TCP ----------
+  - job_name: blackbox-tcp
+    scrape_interval: 60s
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    consul_sd_configs:
+      - server: "127.0.0.1:8500"
+        token: "<PROM_TOKEN>"
+        datacenter: prod
+        services: ["tcp"]
+        tags: ["probe-tcp"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_metadata_probe_host]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - source_labels: [__meta_consul_service_metadata_env]
+        target_label: env
+      - source_labels: [__meta_consul_service_metadata_service]
+        target_label: service
+      - source_labels: [__meta_consul_service_metadata_app]
+        target_label: app
+      - source_labels: [__meta_consul_service_metadata_component]
+        target_label: component
+      - source_labels: [__meta_consul_service_metadata_team]
+        target_label: team
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+      - target_label: exporter_role
+        replacement: blackbox
+
+  # ---------- 5) Blackbox ICMP ----------
+  - job_name: blackbox-icmp
+    scrape_interval: 60s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    consul_sd_configs:
+      - server: "127.0.0.1:8500"
+        token: "<PROM_TOKEN>"
+        datacenter: prod
+        services: ["icmp"]
+        tags: ["probe-icmp"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_metadata_probe_host]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - source_labels: [__meta_consul_service_metadata_env]
+        target_label: env
+      - source_labels: [__meta_consul_service_metadata_service]
+        target_label: service
+      - source_labels: [__meta_consul_service_metadata_app]
+        target_label: app
+      - source_labels: [__meta_consul_service_metadata_component]
+        target_label: component
+      - source_labels: [__meta_consul_service_metadata_team]
+        target_label: team
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+      - target_label: exporter_role
+        replacement: blackbox
+
+  # ---------- 6) K8s Pod 指标（仅 service=k8s-pod-metrics；无 /metrics 的只进 k8s-pod 目录）----------
+  - job_name: k8s-pod
+    scrape_interval: 30s
+    metrics_path: /metrics
+    consul_sd_configs:
+      - server: "127.0.0.1:8500"
+        token: "<PROM_TOKEN>"
+        datacenter: prod
+        services: ["k8s-pod-metrics"]
+        tags: ["yunshu-metrics"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service_metadata_metrics_path]
+        regex: "^$|none"
+        action: drop
+      - source_labels: [__meta_consul_service_metadata_metrics_path]
+        target_label: __metrics_path__
+        regex: "(.+)"
+      - source_labels: [__meta_consul_service_metadata_yunshu_project]
+        target_label: yunshu_project
+      - source_labels: [__meta_consul_service_metadata_env]
+        target_label: env
+      - source_labels: [__meta_consul_service_metadata_cluster]
+        target_label: cluster
+      - source_labels: [__meta_consul_service_metadata_namespace]
+        target_label: namespace
+      - source_labels: [__meta_consul_service_metadata_pod]
+        target_label: pod
+      - source_labels: [__meta_consul_service_metadata_pod_ip]
+        target_label: pod_ip
+      - source_labels: [__meta_consul_service_metadata_app]
+        target_label: app
+      - source_labels: [__meta_consul_service_metadata_service]
+        target_label: service
+      - target_label: exporter_role
+        replacement: k8s_pod

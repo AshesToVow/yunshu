@@ -25,6 +25,8 @@ import {
   CHART_SUCCESS,
 } from "../constants/chart-colors";
 import { formatDateTime } from "../utils/format";
+import { DEFAULT_PAGE_SIZE, tablePagination } from "../utils/table-pagination";
+import { ResizableTable } from "../components/resizable-table";
 import {
   ALERT_EVENT_CATEGORY_OPTIONS,
   ALERT_HISTORY_PIPELINE_HELP,
@@ -50,6 +52,9 @@ import {
 } from "../services/alert-subscriptions";
 
 export type AlertConfigTab = "subscriptions" | "history";
+
+/** 通知与路由只编辑平台全局树。投递仍可能合并各项目旧节点，本页改的是 global: 命中。 */
+const GLOBAL_ROUTING_PROJECT_ID = 0;
 
 export type AlertConfigCenterPanelProps = {
   /** 当前子 Tab（策略 / 历史 / 模板） */
@@ -262,7 +267,7 @@ export function AlertConfigCenterPanel({
   const [groupedEvents, setGroupedEvents] = useState<AlertEventGroupItem[]>([]);
   const [eventHistoryMode, setEventHistoryMode] = useState<"list" | "grouped">("list");
   const [eventsPage, setEventsPage] = useState(1);
-  const [eventsPageSize, setEventsPageSize] = useState(10);
+  const [eventsPageSize, setEventsPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [eventsTotal, setEventsTotal] = useState(0);
   const [eventKeyword, setEventKeyword] = useState("");
   const [eventAlertIP, setEventAlertIP] = useState("");
@@ -375,7 +380,7 @@ export function AlertConfigCenterPanel({
       setStats(statsRes);
       setChannels((channelRes.list ?? []).map((c) => ({ id: c.id, name: c.name })));
     } catch {
-      // http 拦截器已 toast
+      // http 拦截器已 toast；保留上次成功的 stats，避免失败时整页变 0
     } finally {
       setBaseLoading(false);
     }
@@ -387,7 +392,6 @@ export function AlertConfigCenterPanel({
       const list = (res?.list ?? []) as Array<{ id: number; name: string }>;
       const normalized = list.map((it) => ({ id: Number((it as any).id), name: String((it as any).name || "") })).filter((it) => it.id > 0);
       setProjects(normalized);
-      if (!subProjectID && normalized.length) setSubProjectID(normalized[0].id);
     } catch {
       // http 拦截器已 toast
     }
@@ -407,6 +411,19 @@ export function AlertConfigCenterPanel({
       }
     }
     return Array.from(byNameKey.values()).sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
+  }, [receiverGroups]);
+
+  const receiverGroupDuplicateCount = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const g of receiverGroups) {
+      const key = formatReceiverGroupLabel(String(g.name ?? ""), Number(g.id)).toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    let dup = 0;
+    counts.forEach((n) => {
+      if (n > 1) dup += n - 1;
+    });
+    return dup;
   }, [receiverGroups]);
 
   const subscriptionSeverityOptions = useMemo(
@@ -446,15 +463,13 @@ export function AlertConfigCenterPanel({
     return walk(subTree);
   }, [subTree, subSelectedID]);
 
-  const loadSubscriptions = useCallback(async (overrideProjectId?: number) => {
-    const pid = overrideProjectId ?? (projectContextId && projectContextId > 0 ? projectContextId : subProjectID);
-    if (!pid) return;
+  const loadSubscriptions = useCallback(async (_overrideProjectId?: number) => {
     const seq = ++loadSubscriptionsSeqRef.current;
     setSubLoading(true);
     try {
       const [tree, groups] = await Promise.all([
-        getSubscriptionTree({ project_id: pid }),
-        listReceiverGroups({ project_id: pid, page: 1, page_size: 200 }),
+        getSubscriptionTree({ project_id: GLOBAL_ROUTING_PROJECT_ID }),
+        listReceiverGroups({ page: 1, page_size: 200 }),
       ]);
       if (seq !== loadSubscriptionsSeqRef.current) return;
       setSubTree(tree ?? []);
@@ -464,7 +479,7 @@ export function AlertConfigCenterPanel({
     } finally {
       if (seq === loadSubscriptionsSeqRef.current) setSubLoading(false);
     }
-  }, [subProjectID, projectContextId]);
+  }, []);
 
   function openReceiverGroupCreate() {
     setRgEditingId(null);
@@ -486,11 +501,7 @@ export function AlertConfigCenterPanel({
   }
 
   async function saveReceiverGroup() {
-    const pid = effectiveProjectId;
-    if (!pid) {
-      message.warning("请先选择项目");
-      return;
-    }
+    const pid = GLOBAL_ROUTING_PROJECT_ID;
     const values = await rgForm.validateFields();
     const payload = {
       project_id: pid,
@@ -558,9 +569,8 @@ export function AlertConfigCenterPanel({
   }
 
   async function createSubscription(parentID?: number | null) {
-    if (!effectiveProjectId) return;
     const payload: any = {
-      project_id: effectiveProjectId,
+      project_id: GLOBAL_ROUTING_PROJECT_ID,
       parent_id: parentID ?? null,
       name: !parentID ? ALERT_ROUTING_TERMS.rootPolicyName : "新路由节点",
       code: "",
@@ -583,7 +593,7 @@ export function AlertConfigCenterPanel({
     const v = await subForm.validateFields();
     const id = Number(v.id || 0);
     const payload: any = {
-      project_id: effectiveProjectId,
+      project_id: GLOBAL_ROUTING_PROJECT_ID,
       parent_id: v.parent_id ?? null,
       name: String(v.name || "").trim(),
       code: String(v.code || "").trim(),
@@ -801,34 +811,19 @@ export function AlertConfigCenterPanel({
       children: (
         <>
           <Space className="ops-filter-bar" style={{ width: "100%", marginBottom: 12 }} wrap>
-            {projectContextId ? (
-              <Typography.Text type="secondary">
-                当前项目：{projects.find((p) => p.id === projectContextId)?.name ?? `项目 ${projectContextId}`}（跟随顶栏「全局项目上下文」）
-              </Typography.Text>
-            ) : (
-            <Select
-              style={{ width: 260 }}
-              placeholder="选择项目"
-              value={subProjectID || undefined}
-              options={projects.map((p) => ({ label: p.name, value: p.id }))}
-              onChange={(v) => setSubProjectID(Number(v) || 0)}
-              showSearch
-              filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
-            />
-            )}
             <Button icon={<ReloadOutlined />} loading={subLoading} onClick={() => void loadSubscriptions()}>
               刷新
             </Button>
-            <Button disabled={!effectiveProjectId} onClick={() => setRgDrawerOpen(true)}>
+            <Button onClick={() => setRgDrawerOpen(true)}>
               {ALERT_ROUTING_TERMS.receiverGroupManage}
             </Button>
             <Button
               icon={<CopyOutlined />}
-              disabled={projects.length < 2}
+              disabled={projects.length < 1}
               onClick={() => {
                 cloneForm.setFieldsValue({
-                  source_project_id: effectiveProjectId || projects[0]?.id,
-                  target_project_id: undefined,
+                  source_project_id: projects[0]?.id,
+                  target_project_id: GLOBAL_ROUTING_PROJECT_ID,
                   replace_cluster: "",
                   replace_route: "",
                   include_disabled: false,
@@ -850,10 +845,17 @@ export function AlertConfigCenterPanel({
                 删除
               </Button>
             </Popconfirm>
-            <Button type="primary" disabled={!effectiveProjectId} onClick={() => void saveSubscription()}>
+            <Button type="primary" onClick={() => void saveSubscription()}>
               保存
             </Button>
           </Space>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="本页编辑平台全局路由树（投递流水里的 global: 前缀）"
+            description="不要按项目切树。用匹配级别 / match_labels（cluster、project_id、severity）分流。warning 误发企微邮箱时，在本页停用对应子节点（例如 policy_4），不要只改某个业务项目里的停用开关。"
+          />
           <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 12, alignItems: "start" }}>
             <Card size="small" title={ALERT_ROUTING_TERMS.treeTitle} loading={subLoading} styles={{ body: { padding: 8 } }}>
               <Tree
@@ -1107,21 +1109,17 @@ export function AlertConfigCenterPanel({
             </Button>
           </Space>
           {eventHistoryMode === "grouped" ? (
-            <div className="k8s-table-scroll-host">
-            <Table
+            <ResizableTable
               rowKey="group_key"
               loading={eventsLoading}
               dataSource={groupedEvents}
               scroll={{ x: 1100 }}
-              pagination={{
+              pagination={tablePagination({
                 current: eventsPage,
                 pageSize: eventsPageSize,
                 total: eventsTotal,
-                showSizeChanger: true,
-                pageSizeOptions: [10, 20, 50, 100],
-                showQuickJumper: true,
                 onChange: (p, ps) => void reloadEvents(p, ps),
-              }}
+              })}
               columns={[
                 {
                   title: "GroupKey",
@@ -1156,23 +1154,18 @@ export function AlertConfigCenterPanel({
                 { title: "集群", dataIndex: "cluster", width: 140, ellipsis: true, render: (v: string) => v || "-" },
               ]}
             />
-            </div>
           ) : (
-          <div className="k8s-table-scroll-host">
-          <Table
+          <ResizableTable
             rowKey="id"
             loading={eventsLoading}
             dataSource={events}
             scroll={{ x: 2460 }}
-            pagination={{
+            pagination={tablePagination({
               current: eventsPage,
               pageSize: eventsPageSize,
               total: eventsTotal,
-              showSizeChanger: true,
-              pageSizeOptions: [10, 20, 50, 100],
-              showQuickJumper: true,
               onChange: (p, ps) => void reloadEvents(p, ps),
-            }}
+            })}
             columns={[
               { title: "ID", dataIndex: "id", width: 80 },
               {
@@ -1416,7 +1409,6 @@ export function AlertConfigCenterPanel({
               { title: "发送/记录时间", dataIndex: "createdAt", width: 170, render: (v: string) => formatDateTime(v) },
             ]}
           />
-          </div>
           )}
         </>
       ),
@@ -1460,17 +1452,20 @@ export function AlertConfigCenterPanel({
           </div>
           <Card size="small" title="路由调试器" style={{ marginBottom: 12 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={8}>
+              <Alert
+                type="info"
+                showIcon
+                message="调试针对全局路由树（project_id=0）。投递仍可能合并各项目旧订阅树。"
+              />
               <Typography.Text type="secondary">
-                模拟标签命中订阅树，查看接收组、通道与静默/维护窗口抑制（项目 ID：{effectiveProjectId || "未选择"}）。
+                模拟标签命中全局订阅树，查看接收组、通道与静默/维护窗口抑制。
               </Typography.Text>
               <Input value={routingSeverity} onChange={(e) => setRoutingSeverity(e.target.value)} placeholder="severity" style={{ width: 160 }} addonBefore="级别" />
               <Input.TextArea rows={4} value={routingLabelsJSON} onChange={(e) => setRoutingLabelsJSON(e.target.value)} placeholder='{"alertname":"..."}' />
               <Button
                 type="primary"
                 loading={routingDebugLoading}
-                disabled={!effectiveProjectId}
                 onClick={() => {
-                  if (!effectiveProjectId) return;
                   let labels: Record<string, string> = {};
                   try {
                     labels = JSON.parse(routingLabelsJSON) as Record<string, string>;
@@ -1479,7 +1474,7 @@ export function AlertConfigCenterPanel({
                     return;
                   }
                   setRoutingDebugLoading(true);
-                  void debugAlertRouting({ project_id: effectiveProjectId, labels, severity: routingSeverity, status: "firing" })
+                  void debugAlertRouting({ project_id: GLOBAL_ROUTING_PROJECT_ID, labels, severity: routingSeverity, status: "firing" })
                     .then(setRoutingDebugResult)
                     .finally(() => setRoutingDebugLoading(false));
                 }}
@@ -1489,23 +1484,33 @@ export function AlertConfigCenterPanel({
               {routingDebugResult ? (
                 <Typography.Paragraph>
                   命中：{routingDebugResult.matched ? "是" : "否"}
+                  {routingDebugResult.matched_from_project ? " · 来自当前项目" : ""}
+                  {routingDebugResult.matched_from_global ? " · 来自全局(project_id=0)" : ""}
                   {routingDebugResult.matched_path ? ` · 路径 ${routingDebugResult.matched_path}` : ""}
+                  {routingDebugResult.matched_node_names?.length
+                    ? ` · 节点 ${routingDebugResult.matched_node_names.join(", ")}`
+                    : ""}
                   {routingDebugResult.silenced ? " · 已抑制" : ""}
                   {routingDebugResult.channels?.length
                     ? ` · 通道 ${routingDebugResult.channels.map((c) => c.name).join("、")}`
                     : ""}
+                  {routingDebugResult.hint ? (
+                    <>
+                      <br />
+                      <Typography.Text type="warning">{routingDebugResult.hint}</Typography.Text>
+                    </>
+                  ) : null}
                 </Typography.Paragraph>
               ) : null}
             </Space>
           </Card>
-          <Card size="small" title="Webhook 联调（Alertmanager -> 平台）" style={{ marginBottom: 12 }}>
+          <Card size="small" title="内部入站联调（K8s Event）" style={{ marginBottom: 12 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={12}>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                与生产链路一致：Alertmanager 的 <Typography.Text code>webhook_configs</Typography.Text> 指向本平台的{" "}
-                <Typography.Text code>POST /api/v1/alerts/webhook/alertmanager</Typography.Text>，携带与配置一致的 Token（
-                <Typography.Text code>X-Webhook-Token</Typography.Text> / <Typography.Text code>Authorization</Typography.Text> / 查询参数{" "}
-                <Typography.Text code>token</Typography.Text>
-                ）。下方「发送模拟 Webhook」走同一接口，记录出现在「历史告警记录」Tab，并与策略命中、通道分发一致。
+                Alertmanager Webhook 已下线。本面板用于模拟 K8s Event 转发载荷：{" "}
+                <Typography.Text code>POST /api/v1/alerts/ingress/k8s-events</Typography.Text>，携带与配置一致的 Token（
+                <Typography.Text code>X-Alert-Token</Typography.Text> / <Typography.Text code>X-Webhook-Token</Typography.Text>
+                ）。主路径告警请在「规则中心」配置 PromQL。记录出现在「事件台」。
               </Typography.Paragraph>
               <Space wrap>
                 <Input
@@ -1589,12 +1594,21 @@ export function AlertConfigCenterPanel({
         open={rgDrawerOpen}
         onClose={() => setRgDrawerOpen(false)}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} disabled={!effectiveProjectId} onClick={openReceiverGroupCreate}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openReceiverGroupCreate}>
             新建接收组
           </Button>
         }
       >
         <Alert type="info" showIcon style={{ marginBottom: 12 }} message={ALERT_ROUTING_TERMS.receiverGroupManageHint} />
+        {receiverGroupDuplicateCount > 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={`检测到 ${receiverGroupDuplicateCount} 条同名重复接收组`}
+            description="多半是「从项目复制路由模板」或策略迁移重复执行，且目标只清了订阅节点、残留了接收组。下拉已自动按同名去重；请保留较大 ID 的一组，删掉其余重复项。"
+          />
+        ) : null}
         <Table
           rowKey="id"
           size="small"
@@ -1602,7 +1616,8 @@ export function AlertConfigCenterPanel({
           dataSource={receiverGroups}
           pagination={false}
           columns={[
-            { title: "名称", dataIndex: "name", width: 160, render: (n: string, r: AlertReceiverGroup) => formatReceiverGroupLabel(n, r.id) },
+            { title: "ID", dataIndex: "id", width: 72 },
+            { title: "名称", dataIndex: "name", width: 180, render: (n: string, r: AlertReceiverGroup) => formatReceiverGroupLabel(n, r.id) },
             {
               title: "告警通道",
               render: (_: unknown, r: AlertReceiverGroup) => {
@@ -1698,7 +1713,7 @@ export function AlertConfigCenterPanel({
           try {
             const rep = await cloneSubscriptionFromProject({
               source_project_id: v.source_project_id,
-              target_project_id: v.target_project_id,
+              target_project_id: GLOBAL_ROUTING_PROJECT_ID,
               replace_cluster: v.replace_cluster?.trim() || undefined,
               replace_route: v.replace_route?.trim() || undefined,
               include_disabled: !!v.include_disabled,
@@ -1712,9 +1727,7 @@ export function AlertConfigCenterPanel({
               );
             }
             setCloneModalOpen(false);
-            if (v.target_project_id === effectiveProjectId) {
-              await loadSubscriptions(v.target_project_id);
-            }
+            await loadSubscriptions();
           } finally {
             setCloneSubmitting(false);
           }
@@ -1724,9 +1737,7 @@ export function AlertConfigCenterPanel({
           <Form.Item name="source_project_id" label="源项目（已调配好的模板）" rules={[{ required: true }]}>
             <Select options={projects.map((p) => ({ label: p.name, value: p.id }))} showSearch />
           </Form.Item>
-          <Form.Item name="target_project_id" label="目标项目" rules={[{ required: true }]}>
-            <Select options={projects.map((p) => ({ label: p.name, value: p.id }))} showSearch />
-          </Form.Item>
+          <Typography.Paragraph type="secondary">将复制到<strong>平台全局路由树</strong>（本页正在编辑的树）。</Typography.Paragraph>
           <Form.Item name="replace_cluster" label="覆盖 cluster（可选，写入 match_labels）">
             <Input placeholder="例如 腾讯云告警链路" />
           </Form.Item>
@@ -1740,7 +1751,7 @@ export function AlertConfigCenterPanel({
             name="skip_if_target_has_nodes"
             label="目标已有订阅树时跳过（推荐）"
             valuePropName="checked"
-            extra="关闭后将清空目标项目已有订阅节点与接收组再复制（慎用）"
+            extra="关闭后将清空全局树已有订阅节点与接收组再复制（慎用）"
           >
             <Switch defaultChecked />
           </Form.Item>
@@ -1848,7 +1859,7 @@ export function AlertConfigCenterPanel({
             <Card size="small" title="最近留痕（最多 200 条）">
               <Table
                 size="small"
-                pagination={{ pageSize: 8 }}
+                pagination={tablePagination()}
                 rowKey="id"
                 dataSource={fpExplain.events || []}
                 columns={[
@@ -1872,7 +1883,10 @@ export function AlertConfigCenterPanel({
     return (
       <div className="alert-config-embedded">
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadBase()}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => void loadBase(effectiveProjectId > 0 ? effectiveProjectId : undefined)}
+          >
             刷新统计
           </Button>
         </div>
@@ -1882,7 +1896,18 @@ export function AlertConfigCenterPanel({
   }
 
   return (
-    <Card className="table-card" title="告警配置中心" extra={<Button icon={<ReloadOutlined />} onClick={() => void loadBase()}>刷新统计</Button>}>
+    <Card
+      className="table-card"
+      title="告警配置中心"
+      extra={
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => void loadBase(effectiveProjectId > 0 ? effectiveProjectId : undefined)}
+        >
+          刷新统计
+        </Button>
+      }
+    >
       {body}
     </Card>
   );

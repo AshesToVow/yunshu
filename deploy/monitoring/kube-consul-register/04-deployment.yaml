@@ -1,0 +1,48 @@
+# 镜像需自行从 https://github.com/tczekajlo/kube-consul-register 构建并推 Harbor。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-consul-register
+  namespace: yunshu-monitor
+  labels:
+    app: kube-consul-register
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-consul-register
+  template:
+    metadata:
+      labels:
+        app: kube-consul-register
+    spec:
+      serviceAccountName: kube-consul-register
+      containers:
+        - name: kube-consul-register
+          image: harbor.deploy.local/registry/kube-consul-register:go123
+          imagePullPolicy: Always
+          args:
+            - -in-cluster=true
+            - -logtostderr=true
+            - -alsologtostderr=true
+            - -v=2
+            - -configmap=yunshu-monitor/kube-consul-register-config
+            - -consul-secret=yunshu-monitor/consul-token
+            - -sync-interval=2m
+            - -clean-interval=10m
+          ports:
+            - name: metrics
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 30

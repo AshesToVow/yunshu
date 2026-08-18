@@ -44,10 +44,18 @@ func defaultTemplateItems() []model.InspectItem {
 		{"数据库监控", "主从延时(备选名)", "mysqld_exporter 命名差异时启用", `mysql_slave_status_seconds_behind_master`, "greater", "s", 30, 241, false},
 		{"数据库监控", "MySQL 备份检查", "自定义 backup check 指标；无则关闭", `mysqlbackupcheck_status`, "equal", "", 1, 250, false},
 
-		// —— Redis / ES：Telegraf inputs.redis / elasticsearch ——
+		// —— Redis / ES / 中间件：Telegraf inputs.redis / elasticsearch / nginx / kafka ——
 		{"中间件层", "Redis 存活", "Telegraf inputs.redis 或 redis_exporter → redis_up", `redis_up`, "equal", "", 1, 310, true},
-		{"中间件层", "Redis 内存使用", "inputs.redis → redis_used_memory / maxmemory 需按环境改", `redis_mem_fragmentation_ratio`, "greater", "", 3, 315, false},
+		{"中间件层", "Redis 内存碎片率", "inputs.redis → redis_mem_fragmentation_ratio；过高排查碎片", `redis_mem_fragmentation_ratio`, "greater", "", 3, 315, false},
+		{"中间件层", "Redis 已用内存", "单位字节；按实例 maxmemory 自行改阈值或关闭", `redis_used_memory`, "greater", "B", 8e9, 316, false},
 		{"中间件层", "ES 集群红状态", "inputs.elasticsearch；无 ES 请关闭", `elasticsearch_cluster_health_status{color="red"}`, "equal", "", 0, 320, false},
+		{"中间件层", "ES 集群黄状态", "单副本常见黄；按环境决定是否告警", `elasticsearch_cluster_health_status{color="yellow"}`, "equal", "", 0, 321, false},
+		{"中间件层", "Nginx 5xx 率", "inputs.nginx / nginx_exporter；无则关闭", `rate(nginx_http_requests_total{status=~"5.."}[5m])`, "greater", "", 1, 330, false},
+		{"中间件层", "Kafka 消费滞后", "kafka_exporter / JMX；按消费组改过滤", `sum(kafka_consumergroup_lag) by (consumergroup)`, "greater", "", 10000, 340, false},
+
+		// —— 应用 / JVM（可选）——
+		{"应用层", "进程存活(up)", "Prometheus 抓取目标；job/instance 按 scrape 改", `up`, "equal", "", 1, 410, false},
+		{"应用层", "JVM 堆使用率", "jmx_exporter / micrometer；无 JVM 请关闭", `(jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100`, "greater", "%", 85, 420, false},
 	}
 	out := make([]model.InspectItem, 0, len(items))
 	for _, it := range items {

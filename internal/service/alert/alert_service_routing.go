@@ -24,7 +24,7 @@ func (s *AlertService) channelIDSetForAlert(ctx context.Context, status string, 
 	severity := strings.TrimSpace(labels["severity"])
 	var merged AlertRouteResult
 	var anyMatched bool
-	tryMatch := func(pid uint) {
+	tryMatch := func(pid uint, tag string) {
 		route, ok := s.subscriptionSvc.MatchRouteDetailed(ctx, pid, labels, severity, status)
 		if !ok || len(route.ReceiverGroupIDs) == 0 {
 			return
@@ -32,7 +32,9 @@ func (s *AlertService) channelIDSetForAlert(ctx context.Context, status string, 
 		anyMatched = true
 		merged.ReceiverGroupIDs = append(merged.ReceiverGroupIDs, route.ReceiverGroupIDs...)
 		merged.MatchedNodeIDs = append(merged.MatchedNodeIDs, route.MatchedNodeIDs...)
-		merged.MatchedNodeNames = append(merged.MatchedNodeNames, route.MatchedNodeNames...)
+		for _, n := range route.MatchedNodeNames {
+			merged.MatchedNodeNames = append(merged.MatchedNodeNames, tag+":"+n)
+		}
 		if route.SilenceSeconds > merged.SilenceSeconds {
 			merged.SilenceSeconds = route.SilenceSeconds
 		}
@@ -41,9 +43,9 @@ func (s *AlertService) channelIDSetForAlert(ctx context.Context, status string, 
 		}
 	}
 	if projectID > 0 {
-		tryMatch(projectID)
+		tryMatch(projectID, fmt.Sprintf("project=%d", projectID))
 	}
-	tryMatch(0)
+	tryMatch(0, "global")
 	if !anyMatched {
 		return nil, "", "", 0, nil
 	}

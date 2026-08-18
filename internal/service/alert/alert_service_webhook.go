@@ -87,12 +87,13 @@ func (s *AlertService) logAllChannelsDeliveryFailed(ctx context.Context, title, 
 	_ = s.persistAlertEvent(ctx, &event)
 }
 
-// ReceiveAlertmanager 执行对应的业务逻辑。
-// 配置启用且 Redis 可用时，Webhook 先入队异步消费；内置评估路径应调用 receiveCanonicalSync 避免二次入队。
-func (s *AlertService) ReceiveAlertmanager(ctx context.Context, payload AlertManagerPayload) error {
+// ReceiveK8sEventIngress 接收 K8s Event 转发批次（内部入站，非 Alertmanager）。
+// Redis 可用时可异步入队；平台监控规则请走 receiveCanonicalSync。
+func (s *AlertService) ReceiveK8sEventIngress(ctx context.Context, payload AlertManagerPayload) error {
+	normalizeK8sEventIngressPayload(&payload)
 	if s.shouldEnqueueAlertmanagerWebhook() {
 		if err := s.enqueueAlertmanagerWebhook(ctx, payload); err != nil {
-			s.logWebhookWarn("Failed to enqueue alert webhook, processing synchronously",
+			s.logWebhookWarn("Failed to enqueue k8s event ingress, processing synchronously",
 				append(webhookPayloadLogAttrs(payload), "error", err)...)
 			return s.receiveAlertmanagerPayloadSync(ctx, payload)
 		}
@@ -101,13 +102,30 @@ func (s *AlertService) ReceiveAlertmanager(ctx context.Context, payload AlertMan
 	return s.receiveAlertmanagerPayloadSync(ctx, payload)
 }
 
+func normalizeK8sEventIngressPayload(p *AlertManagerPayload) {
+	if p == nil {
+		return
+	}
+	if strings.TrimSpace(p.Receiver) == "" {
+		p.Receiver = "k8s-events"
+	}
+	for i := range p.Alerts {
+		if p.Alerts[i].Labels == nil {
+			p.Alerts[i].Labels = map[string]string{}
+		}
+		if strings.TrimSpace(p.Alerts[i].Labels["source"]) == "" {
+			p.Alerts[i].Labels["source"] = "k8s_event"
+		}
+	}
+}
+
 func alertEventSourceFromPayload(payload map[string]interface{}) string {
 	if payload == nil {
-		return "alertmanager"
+		return "yunshu"
 	}
 	src := strings.TrimSpace(fmt.Sprintf("%v", payload["source"]))
 	if src == "" {
-		return "alertmanager"
+		return "yunshu"
 	}
 	return src
 }

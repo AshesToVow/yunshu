@@ -135,9 +135,9 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
     routes: [
       {
         method: "POST",
-        path: "/api/v1/alerts/webhook/alertmanager",
-        summary: "接收 Alertmanager Webhook",
-        ui: "外部系统推送",
+        path: "/api/v1/alerts/ingress/k8s-events",
+        summary: "接收 K8s Event 内部入站（非 Alertmanager）",
+        ui: "K8s Event 转发",
         auth: false,
       },
       { method: "GET", path: "/api/v1/alerts/channels", summary: "告警通道列表", ui: "告警通道", auth: true },

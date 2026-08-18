@@ -341,6 +341,7 @@ var ServiceSet = wire.NewSet(
 	provideAlertService,
 	service.NewCloudExpiryRuleService,
 	service.NewAlertDatasourceService,
+	service.NewAlertConsulService,
 	service.NewAlertMonitorRuleService,
 	service.NewAlertReceiverGroupService,
 	// k8s

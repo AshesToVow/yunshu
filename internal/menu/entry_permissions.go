@@ -124,10 +124,10 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		{Resource: "/api/v1/projects/:id/services", Action: "GET"},
 		{Resource: "/api/v1/projects/:id/log-sources", Action: "GET"},
 	}
-	// AI 助手：对话 + 会话列表任一权限可进入
-	out["/ai/assistant"] = []EntryPermission{
-		{Resource: "/api/v1/ai/chat", Action: "POST"},
-		{Resource: "/api/v1/ai/sessions", Action: "GET"},
+	// 项目巡检：计划 + 告警数据源列表
+	out["/project-inspect"] = []EntryPermission{
+		{Resource: "/api/v1/projects/:id/inspect/plan", Action: "GET"},
+		{Resource: "/api/v1/alerts/datasources", Action: "GET"},
 	}
 	out["/ai/center"] = []EntryPermission{
 		{Resource: "/api/v1/ai/center/overview", Action: "GET"},

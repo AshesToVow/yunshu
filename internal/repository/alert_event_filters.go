@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"fmt"
 	"strings"
 
 	"yunshu/internal/model"
@@ -14,8 +13,8 @@ func applyAlertEventProjectFilter(tx *gorm.DB, db *gorm.DB, projectID uint) *gor
 		return tx
 	}
 	dsSub := db.Model(&model.AlertDatasource{}).Select("id").Where("project_id = ?", projectID)
-	pid := fmt.Sprintf("%d", projectID)
-	// 优先 project_id 列；兼容历史：数据源归属 / 命中订阅节点 / payload 中的 project_id。
+	// Prefer project_id column (backfilled on read). Avoid LIKE on request_payload longtext —
+	// that full-scans ~10k+ rows and makes /history/stats time out (UI shows all zeros).
 	return tx.Where(
 		`(project_id = ?)
 OR (IFNULL(project_id, 0) = 0 AND datasource_id IN (?))
@@ -23,16 +22,10 @@ OR (IFNULL(project_id, 0) = 0 AND matched_policy_ids <> '' AND EXISTS (
 	SELECT 1 FROM alert_subscription_nodes n
 	WHERE n.project_id = ? AND n.deleted_at IS NULL
 	  AND FIND_IN_SET(n.id, alert_events.matched_policy_ids)
-))
-OR (IFNULL(project_id, 0) = 0 AND (
-	request_payload LIKE ? OR request_payload LIKE ? OR request_payload LIKE ?
 ))`,
 		projectID,
 		dsSub,
 		projectID,
-		`%"project_id":"`+pid+`"%`,
-		`%"project_id":`+pid+`,%`,
-		`%"project_id":`+pid+`}%`,
 	)
 }
 

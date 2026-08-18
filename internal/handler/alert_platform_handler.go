@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AlertPlatformHandler 告警平台：数据源、静默、监控规则、处理人、值班、PromQL。
+// AlertPlatformHandler 告警平台：数据源、静默、监控规则、处理人、值班、PromQL、Consul 目录。
 type AlertPlatformHandler struct {
 	ds          *service.AlertDatasourceService
 	silence     *service.AlertSilenceService
@@ -18,6 +18,7 @@ type AlertPlatformHandler struct {
 	rules       *service.AlertMonitorRuleService
 	assign      *service.AlertRuleAssigneeService
 	duty        *service.AlertDutyService
+	consul      *service.AlertConsulService
 }
 
 func NewAlertPlatformHandler(
@@ -27,8 +28,12 @@ func NewAlertPlatformHandler(
 	rules *service.AlertMonitorRuleService,
 	assign *service.AlertRuleAssigneeService,
 	duty *service.AlertDutyService,
+	consul *service.AlertConsulService,
 ) *AlertPlatformHandler {
-	return &AlertPlatformHandler{ds: ds, silence: silence, maintenance: maintenance, rules: rules, assign: assign, duty: duty}
+	return &AlertPlatformHandler{
+		ds: ds, silence: silence, maintenance: maintenance,
+		rules: rules, assign: assign, duty: duty, consul: consul,
+	}
 }
 
 func alertPlatformUserID(c *gin.Context) uint {
@@ -135,18 +140,79 @@ func (h *AlertPlatformHandler) PromActiveAlerts(c *gin.Context) {
 	response.Success(c, gin.H{"data": raw})
 }
 
-func (h *AlertPlatformHandler) AlertmanagerSilences(c *gin.Context) {
+func (h *AlertPlatformHandler) ListConsulEndpoints(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q service.AlertConsulEndpointListQuery) (gin.H, error) {
+		list, total, page, pageSize, err := h.consul.ListEndpoints(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"items": list, "list": list, "total": total, "page": page, "page_size": pageSize}, nil
+	})
+}
+
+func (h *AlertPlatformHandler) CreateConsulEndpoint(c *gin.Context) {
+	ServeJSON(c, h.consul.CreateEndpoint)
+}
+
+func (h *AlertPlatformHandler) UpdateConsulEndpoint(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
 		abortService(c, err)
 		return
 	}
-	raw, err := h.ds.AlertmanagerSilences(c.Request.Context(), id)
+	ServeJSON(c, func(ctx context.Context, req service.AlertConsulEndpointUpsertRequest) (any, error) {
+		return h.consul.UpdateEndpoint(ctx, id, req)
+	})
+}
+
+func (h *AlertPlatformHandler) DeleteConsulEndpoint(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
 	if err != nil {
 		abortService(c, err)
 		return
 	}
-	response.Success(c, gin.H{"data": raw})
+	if err := h.consul.DeleteEndpoint(c.Request.Context(), id); err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted"})
+}
+
+func (h *AlertPlatformHandler) PingConsulEndpoint(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	if err := h.consul.PingEndpoint(c.Request.Context(), id); err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true, "message": "consul ok"})
+}
+
+func (h *AlertPlatformHandler) SyncConsulEndpoint(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	res, err := h.consul.SyncEndpoint(c.Request.Context(), id)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AlertPlatformHandler) ListMonitorObjects(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q service.AlertMonitorObjectListQuery) (gin.H, error) {
+		list, total, page, pageSize, err := h.consul.ListObjects(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"items": list, "list": list, "total": total, "page": page, "page_size": pageSize}, nil
+	})
 }
 
 func (h *AlertPlatformHandler) ListSilences(c *gin.Context) {
@@ -211,6 +277,10 @@ func (h *AlertPlatformHandler) ListMonitorRules(c *gin.Context) {
 
 func (h *AlertPlatformHandler) CreateMonitorRule(c *gin.Context) {
 	ServeJSON(c, h.rules.Create)
+}
+
+func (h *AlertPlatformHandler) ImportPrometheusYAML(c *gin.Context) {
+	ServeJSON(c, h.rules.ImportPrometheusYAML)
 }
 
 func (h *AlertPlatformHandler) ListRuleTemplates(c *gin.Context) {

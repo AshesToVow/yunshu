@@ -1,0 +1,16 @@
+{
+  "ID": "tcp-mysql-10.10.10.4-3306",
+  "Name": "tcp",
+  "Tags": ["probe-tcp", "yunshu-metrics"],
+  "Address": "10.10.10.4",
+  "Port": 3306,
+  "Meta": {
+    "yunshu_project": "1",
+    "env": "prod",
+    "exporter_role": "blackbox_target",
+    "probe_host": "10.10.10.4:3306",
+    "service": "mysql",
+    "app": "order",
+    "component": "db"
+  }
+}

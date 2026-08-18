@@ -83,7 +83,7 @@ func (h *CMDBHandler) DeleteServer(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, id, actor, "manage"); err != nil {
+	if err := h.svc.AssertServerAccess(auth.RequestContext(c), projectID, id, actor, "manage"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -107,7 +107,7 @@ func (h *CMDBHandler) ServerDetail(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "view"); err != nil {
+	if err := h.svc.AssertServerAccess(auth.RequestContext(c), projectID, serverID, actor, "view"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -136,7 +136,7 @@ func (h *CMDBHandler) ExecServerCommand(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+	if err := h.svc.AssertServerAccess(auth.RequestContext(c), projectID, serverID, actor, "exec"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -429,7 +429,7 @@ func (h *CMDBHandler) ServerTerminalWS(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+	if err := h.svc.AssertServerAccess(auth.RequestContext(c), projectID, serverID, actor, "exec"); err != nil {
 		// WebSocket 必须立刻写响应，避免后续 Upgrade；用 AbortWithError 而非仅挂 c.Error。
 		middleware.AbortWithError(c, err)
 		return
@@ -677,7 +677,7 @@ func (h *CMDBHandler) ListServerFiles(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+	if err := h.svc.AssertServerAccess(auth.RequestContext(c), projectID, serverID, actor, "exec"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -709,7 +709,7 @@ func (h *CMDBHandler) UploadServerFile(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+	if err := h.svc.AssertServerAccess(auth.RequestContext(c), projectID, serverID, actor, "exec"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -748,7 +748,7 @@ func (h *CMDBHandler) DownloadServerFile(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+	if err := h.svc.AssertServerAccess(auth.RequestContext(c), projectID, serverID, actor, "exec"); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -786,7 +786,7 @@ func (h *CMDBHandler) DeleteServerFile(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	if err := h.svc.AssertServerAccess(c.Request.Context(), projectID, serverID, actor, "exec"); err != nil {
+	if err := h.svc.AssertServerAccess(auth.RequestContext(c), projectID, serverID, actor, "exec"); err != nil {
 		response.Error(c, err)
 		return
 	}

@@ -21,6 +21,8 @@ type AlertSubscriptionRepo interface {
 	ListFiltered(ctx context.Context, f AlertSubscriptionListFilter, offset, limit int) ([]model.AlertSubscriptionNode, int64, error)
 	ListByProject(ctx context.Context, projectID uint) ([]model.AlertSubscriptionNode, error)
 	ListEnabled(ctx context.Context) ([]model.AlertSubscriptionNode, error)
+	// ListParentIDsHavingChildren 返回至少有一个子节点（含停用）的父节点 ID，供路由缓存判断 continue 语义。
+	ListParentIDsHavingChildren(ctx context.Context) ([]uint, error)
 	GetByID(ctx context.Context, id uint) (*model.AlertSubscriptionNode, error)
 	Create(ctx context.Context, node *model.AlertSubscriptionNode) error
 	Save(ctx context.Context, node *model.AlertSubscriptionNode) error

@@ -217,8 +217,8 @@ loggie:
 
 # 下列键的常见取值可在「系统 → 数据字典」中按类型选用，便于团队统一录入（如 config_yaml_mysql_host、alert_enrich_prometheus_url、k8s_kubeconfig_template 等）。
 alert:
-  # 以下 3 项已收敛为“数据字典优先，YAML 兜底”：
-  # - alert_webhook_token
+  # 以下项数据字典优先，YAML 兜底：
+  # - alert_webhook_token（现仅用于 K8s Event 等内部入站 POST /api/v1/alerts/ingress/k8s-events，不再对接 Alertmanager）
   # - alert_enrich_prometheus_url
   # - alert_enrich_prometheus_token
   #
@@ -235,14 +235,13 @@ alert:
   group_by: ["alertname", "cluster", "namespace", "severity", "receiver"]
   # 通知合并 digest：在 group_by 之外区分具体对象（内存/CPU/磁盘等不同告警共用 group_by，靠 instance 等区分）
   digest_by: ["instance", "pod", "node", "host", "device", "job"]
-  # group 第一次发送前等待窗口（秒）：用于“先收集后发送”（对齐 Alertmanager/夜莺 group_wait）
+  # group 第一次发送前等待窗口（秒）：用于“先收集后发送”（对齐夜莺 group_wait）
   group_wait_seconds: 15
-  # group 已发送后，若有“新变化”（labelsDigest变化）再次发送的最小间隔（秒）（对齐 group_interval）
+  # group 已发送后，若有“新变化”（labelsDigest变化）再次发送的最小间隔（秒）
   group_interval_seconds: 60
-  # group 持续 firing 且无新变化时的重复提醒间隔（秒）（对齐 repeat_interval）
+  # group 持续 firing 且无新变化时的重复提醒间隔（秒）
   repeat_interval_seconds: 300
-  # 外部 Alertmanager Webhook（入口 A）是否跳过 Yunshu 第二层 group timing（默认 true，信任 AM 原生聚合）
-  # 平台监控规则（入口 B / receiver=platform-monitor）始终使用上述 group_* 配置，不受此项影响
+  # 历史字段：外部 AM 已下线；平台规则与 K8s 入站使用上述 group_*（K8s 批次可按源跳过）
   webhook_skip_group_timing: true
   # group_key 状态在 Redis 中过期时间（秒）
   aggregate_ttl_seconds: 86400
@@ -263,7 +262,7 @@ alert:
   prometheus_enrich_queue_size: 1024
   # Prometheus异步增强worker数量
   prometheus_enrich_workers: 4
-  # Alertmanager Webhook：Redis 存在且未关闭异步时，鉴权通过后先入队由后台 worker 消费（HTTP 快速返回）。
+  # K8s Event 内部入站：Redis 存在且未关闭异步时先入队由后台 worker 消费
   webhook_async_disabled: false
   webhook_queue_max_len: 10000
   # 多副本时仅一个实例跑内置 PromQL 监控规则 tick 的全局锁 TTL（秒）。应大于单轮评估最坏耗时。
@@ -275,8 +274,8 @@ alert:
 # dict_type: k8s_event_forward_enabled | k8s_event_forward_watcher_buffer_size |
 #            k8s_event_forward_worker_interval_seconds | k8s_event_forward_worker_batch_size |
 #            k8s_event_forward_worker_max_retries
-# 入站复用告警平台 POST /api/v1/alerts/webhook/alertmanager（鉴权同 alert_webhook_token）
-k8s_event_forward:
+# 入站：POST /api/v1/alerts/ingress/k8s-events（鉴权同 alert_webhook_token）
+# 采集与 Consul SD 样例见 deploy/monitoring/k8s_event_forward:
   enabled: false
   watcher_buffer_size: 1000
   worker_interval_seconds: 10

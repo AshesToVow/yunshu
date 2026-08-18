@@ -1,0 +1,42 @@
+# 仅登记到 Consul（Yunshu 监控对象看 PodIP），Prometheus 不刮。
+# 必须写在 spec.template.metadata。
+#
+# 上游限制（无 fork 时）：
+# - Service ID 固定为「Pod名-容器名」，无法改成「命名空间-Pod名」
+# - Address 已是 PodIP；Meta 里的 pod_ip/node_ip 无法自动写入
+# - 单容器可省略 pod.container.name；有 sidecar 必须写主容器名
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dodo-web
+  namespace: dodo-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dodo-web
+  template:
+    metadata:
+      labels:
+        app: dodo-web
+        # 值必须是 tag：只把 key 写成 Consul tag，供 Yunshu / Prom 过滤
+        yunshu-metrics: "tag"
+      annotations:
+        consul.register/enabled: "true"
+        consul.register/service.name: "k8s-pod"
+        # 单容器可省略下一行；有 sidecar 时取消注释并写成主容器名
+        # consul.register/pod.container.name: "nginx"
+        consul.register/pod.container.probe.liveness: "false"
+        consul.register/pod.container.probe.readiness: "false"
+        # 以下 Meta 只能写死；不能用注解填运行时 PodIP / HostIP
+        consul.register/service.meta.cluster: "prodK8s"
+        consul.register/service.meta.namespace: "dodo-test"
+        consul.register/service.meta.app: "dodo-web"
+        consul.register/service.meta.exporter_role: "k8s_pod"
+        consul.register/service.meta.yunshu_project: "1"
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80

@@ -9,6 +9,7 @@ import {
   TeamOutlined,
 } from "@ant-design/icons";
 import type { TreeSelectProps } from "antd";
+import { extractApiErrorMessage } from "../../services/http";
 import {
   Alert,
   AutoComplete,
@@ -46,6 +47,7 @@ import type { DepartmentItem } from "../../types/api";
 import { getDepartmentTree } from "../../services/departments";
 import { getProjects, type ProjectItem } from "../../services/projects";
 import { getUsers } from "../../services/users";
+import { DEFAULT_PAGE_SIZE } from "../../utils/table-pagination";
 import {
   createAlertDatasource,
   createAlertMonitorRule,
@@ -66,7 +68,6 @@ import {
   listCloudExpiryRules,
   listDutyBlocks,
   pingAlertDatasource,
-  alertmanagerSilences,
   promActiveAlerts,
   promInstantQuery,
   promRangeQuery,
@@ -492,10 +493,27 @@ function useAlertMonitorPlatformState() {
   }, [navigate, searchParams, tabParam]);
 
   function setTab(key: AlertMonitorTabKey) {
-    const qs = searchParams.toString();
+    const qs = new URLSearchParams(searchParams);
+    if (key === "policies") {
+      qs.delete("project_id");
+    }
+    const tail = qs.toString();
     const path = tabPathForKey(key);
-    navigate(qs ? `${path}?${qs}` : path, { replace: true });
+    navigate(tail ? `${path}?${tail}` : path, { replace: true });
   }
+
+  useEffect(() => {
+    if (tab !== "policies") return;
+    if (!searchParams.has("project_id")) return;
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.delete("project_id");
+        return p;
+      },
+      { replace: true },
+    );
+  }, [tab, searchParams, setSearchParams]);
 
   function setProjectContext(projectID?: number) {
     setSearchParams(
@@ -518,6 +536,17 @@ function useAlertMonitorPlatformState() {
   const [ruleList, setRuleList] = useState<AlertMonitorRuleItem[]>([]);
   /** 监控规则列表：全部 / 仅启用 / 仅停用 */
   const [ruleEnabledFilter, setRuleEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
+  const [rulePage, setRulePage] = useState(1);
+  const [rulePageSize, setRulePageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [ruleTotal, setRuleTotal] = useState(0);
+  const [ruleEnabledStats, setRuleEnabledStats] = useState({ total: 0, enabled: 0, disabled: 0 });
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const ruleQueryRef = useRef({
+    page: 1,
+    pageSize: DEFAULT_PAGE_SIZE,
+    filter: "all" as "all" | "enabled" | "disabled",
+  });
+  ruleQueryRef.current = { page: rulePage, pageSize: rulePageSize, filter: ruleEnabledFilter };
   const [cloudExpiryList, setCloudExpiryList] = useState<CloudExpiryRuleItem[]>([]);
   const [blockList, setBlockList] = useState<AlertDutyBlockItem[]>([]);
   const [dutyRuleId, setDutyRuleId] = useState<number | null>(null);
@@ -525,6 +554,7 @@ function useAlertMonitorPlatformState() {
   /** 规则值班弹窗：从其他规则复制班次时的来源规则 ID */
   const [copySourceRuleId, setCopySourceRuleId] = useState<number | undefined>();
   const [copyDutyLoading, setCopyDutyLoading] = useState(false);
+  const [dutyCopyRuleOptions, setDutyCopyRuleOptions] = useState<Array<{ label: string; value: number }>>([]);
 
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<Array<{ label: string; value: number }>>([]);
@@ -909,20 +939,10 @@ function useAlertMonitorPlatformState() {
   }, [projectContextId]);
 
   const loadAmSilences = useCallback(async () => {
-    if (!silenceDatasourceId) {
-      setAmSilenceRows([]);
-      return;
-    }
-    setAmSilencesLoading(true);
-    try {
-      const raw = await alertmanagerSilences(silenceDatasourceId);
-      setAmSilenceRows(parseAlertmanagerSilences(raw));
-    } catch {
-      setAmSilenceRows([]);
-    } finally {
-      setAmSilencesLoading(false);
-    }
-  }, [silenceDatasourceId]);
+    // Alertmanager 已下线：不再拉取 /api/v2/silences
+    setAmSilenceRows([]);
+    setAmSilencesLoading(false);
+  }, []);
 
   const silenceDisplayList = useMemo((): SilenceDisplayRow[] => {
     const platformRows = (silenceList ?? []).map((r) => ({
@@ -954,26 +974,55 @@ function useAlertMonitorPlatformState() {
     }
   }, [silenceDatasourceId, projectContextId]);
 
-  const loadRules = useCallback(async (projectID?: number) => {
-    const r = await listAlertMonitorRules({ project_id: projectID, page: 1, page_size: 500 });
-    setRuleList(r.list ?? []);
-  }, []);
+  const loadRules = useCallback(
+    async (
+      projectID?: number,
+      opts?: {
+        page?: number;
+        pageSize?: number;
+        enabledFilter?: "all" | "enabled" | "disabled";
+      },
+    ) => {
+      const q = ruleQueryRef.current;
+      const page = opts?.page ?? q.page;
+      const pageSize = Math.min(Math.max(opts?.pageSize ?? q.pageSize, 1), 100);
+      const filter = opts?.enabledFilter ?? q.filter;
+      const enabled = filter === "all" ? undefined : filter === "enabled";
+      const base = {
+        project_id: projectID && projectID > 0 ? projectID : undefined,
+      };
+      setRulesLoading(true);
+      try {
+        const [r, allR, enR, disR] = await Promise.all([
+          listAlertMonitorRules({ ...base, page, page_size: pageSize, enabled }),
+          listAlertMonitorRules({ ...base, page: 1, page_size: 1 }),
+          listAlertMonitorRules({ ...base, page: 1, page_size: 1, enabled: true }),
+          listAlertMonitorRules({ ...base, page: 1, page_size: 1, enabled: false }),
+        ]);
+        setRuleList(r.list ?? r.items ?? []);
+        setRuleTotal(Number(r.total) || 0);
+        setRulePage(page);
+        setRulePageSize(pageSize);
+        setRuleEnabledStats({
+          total: Number(allR.total) || 0,
+          enabled: Number(enR.total) || 0,
+          disabled: Number(disR.total) || 0,
+        });
+      } finally {
+        setRulesLoading(false);
+      }
+    },
+    [],
+  );
 
-  const ruleEnabledStats = useMemo(() => {
-    let enabled = 0;
-    let disabled = 0;
-    for (const r of ruleList) {
-      if (r.enabled === false) disabled++;
-      else enabled++;
-    }
-    return { total: ruleList.length, enabled, disabled };
-  }, [ruleList]);
+  const onRuleTableChange = useCallback(
+    (page: number, pageSize: number) => {
+      void loadRules(projectContextId, { page, pageSize });
+    },
+    [loadRules, projectContextId],
+  );
 
-  const ruleDisplayList = useMemo(() => {
-    if (ruleEnabledFilter === "enabled") return ruleList.filter((r) => r.enabled !== false);
-    if (ruleEnabledFilter === "disabled") return ruleList.filter((r) => r.enabled === false);
-    return ruleList;
-  }, [ruleList, ruleEnabledFilter]);
+  const ruleDisplayList = ruleList;
   const loadCloudExpiryRules = useCallback(async (projectID?: number, provider?: string, keyword?: string) => {
     const r = await listCloudExpiryRules({
       project_id: projectID,
@@ -1013,7 +1062,11 @@ function useAlertMonitorPlatformState() {
           await Promise.all([loadSilences(), loadDatasources(projectContextId)]);
         }
         if (tab === "rules") {
-          await Promise.all([loadDatasources(projectContextId), loadRules(projectContextId)]);
+          // 项目或启停筛选变化时回到第 1 页；翻页走 onRuleTableChange，避免整卡 loading 打掉表格状态
+          await Promise.all([
+            loadDatasources(projectContextId),
+            loadRules(projectContextId, { page: 1, enabledFilter: ruleEnabledFilter }),
+          ]);
         }
         if (tab === "cloud-expiry") {
           await loadCloudExpiryRules(projectContextId, cloudExpiryProviderFilter, cloudExpiryKeyword);
@@ -1025,7 +1078,17 @@ function useAlertMonitorPlatformState() {
     return () => {
       cancelled = true;
     };
-  }, [tab, projectContextId, loadDatasources, loadSilences, loadRules, loadCloudExpiryRules, cloudExpiryProviderFilter, cloudExpiryKeyword]);
+  }, [
+    tab,
+    projectContextId,
+    ruleEnabledFilter,
+    loadDatasources,
+    loadSilences,
+    loadRules,
+    loadCloudExpiryRules,
+    cloudExpiryProviderFilter,
+    cloudExpiryKeyword,
+  ]);
 
   useEffect(() => {
     if (tab !== "silences") return;
@@ -1068,7 +1131,7 @@ function useAlertMonitorPlatformState() {
       }
       setPromViewMode("table");
     } catch (e) {
-      setPromResult(e instanceof Error ? e.message : String(e));
+      setPromResult(extractApiErrorMessage(e, "操作失败"));
       setPromDataInner(null);
     } finally {
       setPromLoading(false);
@@ -1097,7 +1160,7 @@ function useAlertMonitorPlatformState() {
         message.error(res.message || "连通失败");
       }
     } catch (e) {
-      message.error(e instanceof Error ? e.message : String(e));
+      message.error(extractApiErrorMessage(e, "操作失败"));
     } finally {
       setDsPingId(null);
     }
@@ -1107,6 +1170,16 @@ function useAlertMonitorPlatformState() {
     { title: "ID", dataIndex: "id", width: 70 },
     { title: "项目", dataIndex: "project_name", width: 160, render: (v: string, r: AlertDatasourceItem) => v || String(r.project_id || "-") },
     { title: "名称", dataIndex: "name" },
+    {
+      title: "类型",
+      dataIndex: "type",
+      width: 120,
+      render: (v: string) => {
+        const t = (v || "prometheus").toLowerCase();
+        if (t === "victoria" || t === "victoriametrics") return <Tag color="blue">VictoriaMetrics</Tag>;
+        return <Tag>Prometheus</Tag>;
+      },
+    },
     { title: "地址", dataIndex: "base_url", ellipsis: true },
     { title: "启用", dataIndex: "enabled", width: 80, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
     {
@@ -1173,15 +1246,22 @@ function useAlertMonitorPlatformState() {
       }
       setDsModalOpen(false);
       await loadDatasources(projectContextId);
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "保存数据源失败"));
     } finally {
       setDsSubmitting(false);
     }
   }
 
   async function removeDs(id: number) {
-    await deleteAlertDatasource(id);
-    message.success("已删除");
-    await loadDatasources(projectContextId);
+    try {
+      await deleteAlertDatasource(id);
+      message.success("已删除");
+      await loadDatasources(projectContextId);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除数据源失败"));
+    }
   }
 
   const nativeAlertsColumns: ColumnsType<PromNativeAlertRow> = useMemo(
@@ -1198,13 +1278,13 @@ function useAlertMonitorPlatformState() {
           return (
             <Space size={6}>
               <Badge status={firing ? "error" : resolved ? "success" : "default"} />
-              <Typography.Text>{v || "-"}</Typography.Text>
+              <Typography.Text>{firing ? "触发中" : resolved ? "已恢复" : v || "-"}</Typography.Text>
             </Space>
           );
         },
       },
-      { title: "Labels", dataIndex: "labelsShort", ellipsis: true },
-      { title: "activeAt", dataIndex: "activeAt", width: 180, ellipsis: true },
+      { title: "标签", dataIndex: "labelsShort", ellipsis: true },
+      { title: "开始时间", dataIndex: "activeAt", width: 180, ellipsis: true },
       {
         title: "操作",
         width: 110,
@@ -1265,7 +1345,9 @@ function useAlertMonitorPlatformState() {
           const expired = dayjs(r.ends_at).isBefore(dayjs());
           if (expired) return <Tag color="red">已过期</Tag>;
           if (r.source === "alertmanager") {
-            return r.enabled ? <Tag color="green">{r.state || "active"}</Tag> : <Tag>{r.state || "inactive"}</Tag>;
+            const st = String(r.state || "").toLowerCase();
+            const label = st === "active" ? "生效中" : st === "pending" ? "待生效" : st === "expired" ? "已过期" : st || "停用";
+            return r.enabled ? <Tag color="green">{label}</Tag> : <Tag>{label}</Tag>;
           }
           return r.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>;
         },
@@ -1765,7 +1847,7 @@ function useAlertMonitorPlatformState() {
       setMetricOptions(names);
       if (names.length === 0) message.warning("未检索到指标，请调整关键字");
     } catch (e) {
-      message.error(`加载指标失败：${e instanceof Error ? e.message : String(e)}`);
+      message.error(`加载指标失败：${extractApiErrorMessage(e, "操作失败")}`);
     } finally {
       setMetricLoading(false);
     }
@@ -1807,7 +1889,7 @@ function useAlertMonitorPlatformState() {
       setLabelValueOptions(vals);
       if (!vals.length) message.warning("未检索到可用标签值");
     } catch (e) {
-      message.error(`加载标签值失败：${e instanceof Error ? e.message : String(e)}`);
+      message.error(`加载标签值失败：${extractApiErrorMessage(e, "操作失败")}`);
     } finally {
       setLabelValueLoading(false);
     }
@@ -1903,15 +1985,22 @@ function useAlertMonitorPlatformState() {
       }
       setRuleModalOpen(false);
       await loadRules(projectContextId);
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "保存规则失败"));
     } finally {
       setRuleSubmitting(false);
     }
   }
 
   async function removeRule(id: number) {
-    await deleteAlertMonitorRule(id);
-    message.success("已删除");
-    await loadRules(projectContextId);
+    try {
+      await deleteAlertMonitorRule(id);
+      message.success("已删除");
+      await loadRules(projectContextId);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除规则失败"));
+    }
   }
 
   const cloudExpiryColumns: ColumnsType<CloudExpiryRuleItem> = [
@@ -2112,7 +2201,7 @@ function useAlertMonitorPlatformState() {
             await updateUser(userIds[0], patch);
             message.success("已同步更新用户资料中的邮箱或部门");
           } catch (e) {
-            message.warning(`处理人已保存，但写回用户资料失败：${e instanceof Error ? e.message : String(e)}`);
+            message.warning(`处理人已保存，但写回用户资料失败：${extractApiErrorMessage(e, "操作失败")}`);
           }
         }
       }
@@ -2130,22 +2219,30 @@ function useAlertMonitorPlatformState() {
     }
   }
 
-  const copyDutyRuleOptions = useMemo(() => {
-    if (!dutyRuleId) return [];
-    return ruleList
-      .filter((r) => r.id !== dutyRuleId)
-      .map((r) => ({ label: r.name, value: r.id }));
-  }, [ruleList, dutyRuleId]);
+  const copyDutyRuleOptions = dutyCopyRuleOptions;
 
   async function openDuty(ruleId: number) {
     setDutyRuleId(ruleId);
     setCopySourceRuleId(undefined);
     setBlockList([]);
     try {
-      const r = await listDutyBlocks({ monitor_rule_id: ruleId, page: 1, page_size: 500 });
-      setBlockList(r.list ?? []);
+      const [blocks, rules] = await Promise.all([
+        listDutyBlocks({ monitor_rule_id: ruleId, page: 1, page_size: 100 }),
+        listAlertMonitorRules({
+          project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
+          page: 1,
+          page_size: 100,
+        }),
+      ]);
+      setBlockList(blocks.list ?? []);
+      setDutyCopyRuleOptions(
+        (rules.list ?? [])
+          .filter((r) => r.id !== ruleId)
+          .map((r) => ({ label: r.name, value: r.id })),
+      );
     } catch {
       setBlockList([]);
+      setDutyCopyRuleOptions([]);
     }
     setDutyModalOpen(true);
   }
@@ -2184,7 +2281,7 @@ function useAlertMonitorPlatformState() {
       const refreshed = await listDutyBlocks({ monitor_rule_id: dutyRuleId, page: 1, page_size: 500 });
       setBlockList(refreshed.list ?? []);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : String(e));
+      message.error(extractApiErrorMessage(e, "操作失败"));
     } finally {
       setCopyDutyLoading(false);
     }
@@ -2286,7 +2383,7 @@ function useAlertMonitorPlatformState() {
             await updateUser(userIds[0], patch);
             message.success("已同步更新用户资料中的邮箱或部门");
           } catch (e) {
-            message.warning(`班次已保存，但写回用户资料失败：${e instanceof Error ? e.message : String(e)}`);
+            message.warning(`班次已保存，但写回用户资料失败：${extractApiErrorMessage(e, "操作失败")}`);
           }
         }
       }
@@ -2384,6 +2481,7 @@ function useAlertMonitorPlatformState() {
     loadMetricOptionsForRule,
     loadNativeSilAlerts,
     loadRules,
+    onRuleTableChange,
     loadAmSilences,
     loadSilences,
     loading,
@@ -2400,6 +2498,7 @@ function useAlertMonitorPlatformState() {
     openDsCreate,
     openHistoryTab,
     openQuickSilence,
+    openSilCreate,
     openRuleCreate,
     projectContextId,
     projectOptions,
@@ -2428,6 +2527,10 @@ function useAlertMonitorPlatformState() {
     ruleDisplayList,
     ruleEnabledFilter,
     ruleEnabledStats,
+    rulePage,
+    rulePageSize,
+    ruleTotal,
+    rulesLoading,
     ruleForm,
     ruleLogic,
     ruleLogicOptions,

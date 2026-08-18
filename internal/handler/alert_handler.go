@@ -121,6 +121,26 @@ func (h *AlertHandler) ListEvents(c *gin.Context) {
 	})
 }
 
+func (h *AlertHandler) ListCurEvents(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q service.AlertCurEventListQuery) (gin.H, error) {
+		list, total, page, pageSize, err := h.svc.ListCurEvents(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"items": list, "list": list, "total": total, "page": page, "page_size": pageSize}, nil
+	})
+}
+
+func (h *AlertHandler) ListHisEvents(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q service.AlertHisEventListQuery) (gin.H, error) {
+		list, total, page, pageSize, err := h.svc.ListHisEvents(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"items": list, "list": list, "total": total, "page": page, "page_size": pageSize}, nil
+	})
+}
+
 // ExplainFingerprintDelivery 按 fingerprint 查询投递/跳过原因与 firing_delivered 状态。
 func (h *AlertHandler) ExplainFingerprintDelivery(c *gin.Context) {
 	fp := strings.TrimSpace(c.Query("fingerprint"))
@@ -153,19 +173,19 @@ func (h *AlertHandler) HistoryStats(c *gin.Context) {
 	response.Success(c, stats)
 }
 
-// ReceiveAlertmanager godoc
-// @Summary Receive Alertmanager webhook
-// @Description Ingest Alertmanager notifications. Auth via header X-Alert-Token or Authorization Bearer (not query token).
-// @Tags AlertsWebhook
+// ReceiveK8sEventIngress godoc
+// @Summary Ingest K8s forwarded events (internal)
+// @Description Platform-internal ingress for K8s Event forwarder. Not an Alertmanager endpoint. Auth: X-Alert-Token or Bearer.
+// @Tags AlertsIngress
 // @Accept json
 // @Produce json
-// @Param X-Alert-Token header string false "Webhook token (preferred)"
-// @Param payload body service.AlertManagerPayload true "Alertmanager payload"
-// @Success 200 {object} response.Body "success"
-// @Failure 401 {object} response.Body "invalid webhook token"
+// @Param X-Alert-Token header string false "Ingress token (preferred)"
+// @Param payload body service.AlertManagerPayload true "Event batch payload (AM-shaped transport)"
+// @Success 202 {object} response.Body "accepted"
+// @Failure 401 {object} response.Body "invalid token"
 // @Failure 400 {object} response.Body "bad request"
-// @Router /api/v1/alerts/webhook/alertmanager [post]
-func (h *AlertHandler) ReceiveAlertmanager(c *gin.Context) {
+// @Router /api/v1/alerts/ingress/k8s-events [post]
+func (h *AlertHandler) ReceiveK8sEventIngress(c *gin.Context) {
 	token := c.GetHeader("X-Alert-Token")
 	if token == "" {
 		token = c.GetHeader("X-Webhook-Token")
@@ -188,9 +208,7 @@ func (h *AlertHandler) ReceiveAlertmanager(c *gin.Context) {
 		response.Error(c, constants.ErrBadRequestWithMsg(bindErrorMessage(err)))
 		return
 	}
-
-	// Service 内 Redis 入队成功即返回；失败时同步降级处理，避免 handler 再套无界 goroutine。
-	if err := h.svc.ReceiveAlertmanager(c.Request.Context(), payload); err != nil {
+	if err := h.svc.ReceiveK8sEventIngress(c.Request.Context(), payload); err != nil {
 		abortService(c, err)
 		return
 	}

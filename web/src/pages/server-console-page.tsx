@@ -2,6 +2,7 @@ import { PlayCircleOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/
 import { Alert, Button, Card, Form, Input, Space, Table, Tabs, Tag, Typography, Upload, message } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
   deleteProjectServerFile,
   downloadProjectServerFile,
@@ -82,6 +83,9 @@ export function ServerConsolePage() {
       ]);
       setServer(data);
       setCanExec(Boolean(access.can_exec || access.can_manage));
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "加载服务器详情失败"));
+      setServer(null);
     } finally {
       setAccessLoaded(true);
       setLoading(false);
@@ -107,6 +111,8 @@ export function ServerConsolePage() {
       } else {
         message.warning(`命令执行完成，退出码 ${res.exit_code}`);
       }
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "命令执行失败"));
     } finally {
       setRunning(false);
     }
@@ -177,7 +183,7 @@ export function ServerConsolePage() {
       return;
     }
 
-    appendTerminalText("\r\n[connecting]\r\n");
+    appendTerminalText("\r\n[正在连接]\r\n");
     setTerminalConnecting(true);
 
     let ws: WebSocket;
@@ -190,7 +196,7 @@ export function ServerConsolePage() {
     } catch (error) {
       setTerminalConnecting(false);
       const reason = error instanceof Error ? error.message : "unknown error";
-      appendTerminalText(`\r\n[websocket init failed] ${reason}\r\n`);
+      appendTerminalText(`\r\n[WebSocket 初始化失败] ${reason}\r\n`);
       message.error("终端连接初始化失败");
       return;
     }
@@ -200,7 +206,7 @@ export function ServerConsolePage() {
     ws.onopen = () => {
       setTerminalConnecting(false);
       setTerminalConnected(true);
-      appendTerminalText("\r\n[connected]\r\n");
+      appendTerminalText("\r\n[已连接]\r\n");
       fitAddonRef.current?.fit();
       xtermRef.current?.focus();
       const cols = Math.max(80, xtermRef.current?.cols ?? 120);
@@ -232,7 +238,7 @@ export function ServerConsolePage() {
 
     ws.onerror = () => {
       setTerminalConnecting(false);
-      appendTerminalText("\r\n[websocket error]\r\n");
+      appendTerminalText("\r\n[WebSocket 错误]\r\n");
       message.error("终端 WebSocket 连接失败");
     };
 
@@ -345,25 +351,40 @@ export function ServerConsolePage() {
 
   if (!validParams) {
     return (
-      <Card className="table-card" title="服务器控制台">
-        <Alert type="error" showIcon message="参数不完整" description="请从服务器管理页面点击“连接”进入。" />
-      </Card>
+      <div className="page-stack">
+        <OpsPageHeader title="服务器控制台" description="终端、命令执行与文件传输" />
+        <Card className="table-card">
+          <Alert type="error" showIcon message="参数不完整" description="请从服务器管理页面点击“连接”进入。" />
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      <Card className="table-card" loading={loading} title="服务器控制台" extra={<Link to="/project-servers">返回服务器管理</Link>}>
-        <Space wrap>
-          <Tag color="blue">Project #{projectId}</Tag>
-          <Tag>Server #{serverId}</Tag>
-          <Tag>{server?.source_type === "cloud" ? `云 · ${server?.provider || "-"}` : "自建"}</Tag>
-          <Tag>{server?.host || "-"}</Tag>
-          <Tag>{server?.auth_type || "-"}</Tag>
-        </Space>
-      </Card>
+    <div className="page-stack">
+      <OpsPageHeader
+        title="服务器控制台"
+        description="SSH 终端、远程命令与文件传输；需对该服务器具备 SSH/执行授权。"
+        breadcrumbs={[{ title: "项目运维" }, { title: "服务器控制台" }]}
+        meta={
+          <Space wrap size="small">
+            <Tag color="blue">项目 #{projectId}</Tag>
+            <Tag>服务器 #{serverId}</Tag>
+            <Tag>{server?.source_type === "cloud" ? `云 · ${server?.provider || "-"}` : "自建"}</Tag>
+            <Tag>{server?.host || "-"}</Tag>
+            <Tag>
+              {server?.auth_type === "password"
+                ? "密码认证"
+                : server?.auth_type === "key"
+                  ? "密钥认证"
+                  : server?.auth_type || "-"}
+            </Tag>
+          </Space>
+        }
+        extra={<Link to="/project-servers">返回服务器管理</Link>}
+      />
 
-      <Card className="table-card" bodyStyle={{ paddingTop: 8 }}>
+      <Card className="table-card" loading={loading} styles={{ body: { paddingTop: 8 } }}>
         {!accessLoaded ? (
           <Alert type="info" showIcon style={{ marginBottom: 12 }} message="正在校验服务器访问权限…" />
         ) : !canExec ? (
@@ -559,6 +580,6 @@ export function ServerConsolePage() {
           ]}
         />
       </Card>
-    </Space>
+    </div>
   );
 }

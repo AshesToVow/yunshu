@@ -7,6 +7,8 @@ import { ALERT_MONITOR_TABS, normalizeAlertMonitorTab, tabPathForKey, type Alert
 
 const tabLazy: Record<AlertMonitorTabKey, React.LazyExoticComponent<() => JSX.Element>> = {
   datasources: lazy(async () => ({ default: (await import("./tabs/datasources-tab")).DatasourcesTab })),
+  objects: lazy(async () => ({ default: (await import("./tabs/objects-tab")).ObjectsTab })),
+  quality: lazy(async () => ({ default: (await import("./tabs/quality-tab")).QualityTab })),
   policies: lazy(async () => ({ default: (await import("./tabs/policies-tab")).PoliciesTab })),
   history: lazy(async () => ({ default: (await import("./tabs/history-tab")).HistoryTab })),
   inhibition: lazy(async () => ({ default: (await import("./tabs/inhibition-tab")).InhibitionTab })),
@@ -24,9 +26,13 @@ export function AlertMonitorLayout() {
   const tab = normalizeAlertMonitorTab(tabParam);
 
   function goTab(key: AlertMonitorTabKey) {
-    const qs = searchParams.toString();
+    const qs = new URLSearchParams(searchParams);
+    if (key === "policies") {
+      qs.delete("project_id");
+    }
+    const tail = qs.toString();
     const path = tabPathForKey(key);
-    navigate(qs ? `${path}?${qs}` : path, { replace: true });
+    navigate(tail ? `${path}?${tail}` : path, { replace: true });
   }
 
   const ActiveTab = tabLazy[tab];
@@ -34,16 +40,25 @@ export function AlertMonitorLayout() {
   return (
     <div className="page-stack">
       <PageTelemetryHeader
-        label="[ ALERT / MONITOR ]"
-        title="告警监控平台"
-        subtitle="数据源、规则、事件、抑制与 PromQL 查询统一管理"
-        meta={[
-          ctx.projectContextId ? `PROJECT / ${ctx.activeProjectName}` : "PROJECT / ALL",
-          `TAB / ${tab.toUpperCase()}`,
-          ctx.loading ? "SYNC / PENDING" : "SYNC / OK",
-        ]}
+        label="[ ALERT / ENGINE ]"
+        title="告警平台"
+        subtitle="数据源评测 · 规则中心 · 事件与降噪 · 通知（夜莺式引擎，无 Alertmanager）"
+        meta={
+          tab === "policies"
+            ? [
+                "路由 · 平台全局",
+                `页签 · ${ALERT_MONITOR_TABS.find((x) => x.key === tab)?.label || tab}`,
+                ctx.loading ? "同步中" : "已同步",
+              ]
+            : [
+                ctx.projectContextId ? `项目 · ${ctx.activeProjectName}` : "项目 · 全部",
+                `页签 · ${ALERT_MONITOR_TABS.find((x) => x.key === tab)?.label || tab}`,
+                ctx.loading ? "同步中" : "已同步",
+              ]
+        }
       />
       <Card className="table-card" loading={ctx.loading}>
+        {tab !== "policies" ? (
         <Space className="ops-filter-bar" style={{ marginBottom: 12 }} wrap>
           <Typography.Text type="secondary">全局项目上下文</Typography.Text>
           <Select
@@ -55,6 +70,7 @@ export function AlertMonitorLayout() {
             placeholder="全部项目（可选）"
           />
         </Space>
+        ) : null}
         <Tabs
           activeKey={tab}
           onChange={(k) => goTab(k as AlertMonitorTabKey)}

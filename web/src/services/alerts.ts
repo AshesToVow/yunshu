@@ -113,10 +113,13 @@ export interface AlertRoutingDebugResult {
   receiver_group_ids?: number[];
   silence_seconds?: number;
   channels?: Array<{ id: number; name: string; type: string }>;
+  matched_from_project?: boolean;
+  matched_from_global?: boolean;
   silenced?: boolean;
   silence_id?: number;
   maintenance_suppressed?: boolean;
   maintenance_id?: number;
+  hint?: string;
 }
 
 export function debugAlertRouting(payload: AlertRoutingDebugRequest) {
@@ -259,5 +262,61 @@ export function sendAlertmanagerWebhook(payload: Record<string, unknown>, token?
   if ((token || "").trim()) {
     headers["X-Webhook-Token"] = String(token).trim();
   }
-  return getData<{ message: string }>(http.post("/alerts/webhook/alertmanager", payload, { headers }));
+  return getData<{ message: string }>(http.post("/alerts/ingress/k8s-events", payload, { headers }));
+}
+
+export interface AlertCurEventItem {
+  id: number;
+  fingerprint: string;
+  alertname: string;
+  severity: string;
+  status: string;
+  source?: string;
+  cluster?: string;
+  project_id?: number;
+  datasource_id?: number;
+  summary?: string;
+  value?: string;
+  starts_at?: string;
+  updated_at?: string;
+}
+
+export interface AlertHisEventItem {
+  id: number;
+  fingerprint: string;
+  alertname: string;
+  severity: string;
+  status: string;
+  source?: string;
+  cluster?: string;
+  project_id?: number;
+  summary?: string;
+  starts_at?: string;
+  resolved_at?: string;
+}
+
+export function listCurEvents(params?: {
+  project_id?: number;
+  datasource_id?: number;
+  severity?: string;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{ list?: AlertCurEventItem[]; items?: AlertCurEventItem[]; total: number; page: number; page_size: number }>(
+    http.get("/alerts/cur-events", { params }),
+  );
+}
+
+export function listHisEvents(params?: {
+  project_id?: number;
+  datasource_id?: number;
+  severity?: string;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{ list?: AlertHisEventItem[]; items?: AlertHisEventItem[]; total: number; page: number; page_size: number }>(
+    http.get("/alerts/his-events", { params }),
+  );
 }

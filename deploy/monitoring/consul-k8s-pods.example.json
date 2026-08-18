@@ -1,0 +1,38 @@
+{
+  "consul": {
+    "addr": "http://127.0.0.1:8500",
+    "token_env": "CONSUL_TOKEN",
+    "token": ""
+  },
+  "defaults": {
+    "yunshu_project": "1",
+    "env": "prod"
+  },
+  "kubectl": {
+    "bin": "kubectl",
+    "kubeconfig": "",
+    "context": ""
+  },
+  "clusters": [
+    {
+      "name": "prodK8s",
+      "enabled": true,
+      "service": "k8s-pod",
+      "metrics_service": "k8s-pod-metrics",
+      "tags": ["yunshu-metrics", "k8s"],
+      "namespaces": ["default", "yunshu", "dodo-test"],
+      "label_selector": "yunshu.io/consul=true",
+      "field_selector": "status.phase=Running",
+      "only_ready": false,
+      "require_scrape_annotation": false,
+      "comment": "无 prometheus.io/path → 只注册 k8s-pod（目录）；有 path → 注册 k8s-pod-metrics（Prom 才刮）",
+      "port_annotations": ["yunshu.io/metrics-port", "prometheus.io/port"],
+      "path_annotations": ["yunshu.io/metrics-path", "prometheus.io/path"],
+      "check_http": false,
+      "check_tcp": false,
+      "meta": {
+        "exporter_role": "k8s_pod"
+      }
+    }
+  ]
+}

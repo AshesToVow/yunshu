@@ -27,7 +27,7 @@ const alertPlatformElement = (
 export const alertRoutes: RouteObject[] = [
   {
     path: "alert-monitor-platform",
-    element: <Navigate to="/alert-monitor-platform/datasources" replace />,
+    element: <Navigate to="/alert-monitor-platform/history" replace />,
   },
   {
     path: "alert-monitor-platform/:tab",

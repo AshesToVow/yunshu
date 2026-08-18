@@ -82,7 +82,7 @@ func (h *AlertSubscriptionHandler) ListNodes(c *gin.Context) {
 // @Router /api/v1/alerts/subscriptions/tree [get]
 func (h *AlertSubscriptionHandler) GetNodeTree(c *gin.Context) {
 	ServeQuery(c, func(ctx context.Context, q struct {
-		ProjectID uint `form:"project_id" binding:"required"`
+		ProjectID uint `form:"project_id"`
 	}) ([]model.AlertSubscriptionNode, error) {
 		return h.svc.GetNodeTree(ctx, q.ProjectID)
 	})

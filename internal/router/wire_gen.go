@@ -93,6 +93,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v52 := provideAlertService(db, client, sender, alertConfig, v51)
 	v53 := alert.NewCloudExpiryRuleService(v47)
 	v54 := alert.NewAlertDatasourceService(v12)
+	v54c := alert.NewAlertConsulService(db)
 	v55 := alert.NewAlertMonitorRuleService(v11, v12, client)
 	v56, err := provideK8sRuntimeService(v25, v22, v23, v9, securityEncryptionKey)
 	if err != nil {
@@ -164,7 +165,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v102 := k8s.NewK8sSearchService(v56, v25, v9, v20, v22, v23)
 	inspectService := provideInspectService(db, client, v54, v29, sender, appDisplayName)
 	aiConfig := provideAIConfig(app)
-	aiService := ai.NewService(db, aiConfig, string(securityEncryptionKey), v57, v58, v61, v59, v70, v92, v91, service, v52)
+	aiService := ai.NewService(db, aiConfig, string(securityEncryptionKey), v9, v57, v58, v61, v59, v70, v92, v91, service, v52)
 	esmgmtService, err := provideEsmgmtService(db, securityEncryptionKey, v91)
 	if err != nil {
 		return nil, err
@@ -253,7 +254,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	dictEntryHandler := handler.NewDictEntryHandler(v35)
 	adminHandler := handler.NewAdminHandler(client)
 	alertHandler := handler.NewAlertHandler(v52)
-	alertPlatformHandler := handler.NewAlertPlatformHandler(v54, v37, v43, v55, alertRuleAssigneeService, v39)
+	alertPlatformHandler := handler.NewAlertPlatformHandler(v54, v37, v43, v55, alertRuleAssigneeService, v39, v54c)
 	alertSubscriptionHandler := provideAlertSubscriptionHandler(v52)
 	alertInhibitionHandler := provideAlertInhibitionHandler(v52)
 	alertReceiverGroupHandler := handler.NewAlertReceiverGroupHandler(v99)

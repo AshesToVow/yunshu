@@ -106,5 +106,5 @@ export function runAIEval(live = false) {
 }
 
 export function syncAIKnowledge() {
-  return getData<{ indexed: number }>(http.post("/ai/knowledge/sync", {}));
+  return getData<{ indexed: number; failed?: number; errors?: string[] }>(http.post("/ai/knowledge/sync", {}));
 }

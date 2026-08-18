@@ -172,6 +172,10 @@ func (h *pipelineTestHost) LogAllChannelsDeliveryFailed(context.Context, string,
 
 func (h *pipelineTestHost) OnResolvedComplete(context.Context, string, string) {}
 
+func (h *pipelineTestHost) UpsertCurAlert(context.Context, *model.AlertCurEvent) error { return nil }
+
+func (h *pipelineTestHost) ResolveCurAlert(context.Context, string, time.Time) error { return nil }
+
 func testChannel() model.AlertChannel {
 	return model.AlertChannel{
 		ID:      1,

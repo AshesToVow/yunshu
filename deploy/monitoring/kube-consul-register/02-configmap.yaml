@@ -1,0 +1,25 @@
+# 对接 Yunshu：Consul 在机房监控机（single），服务名仍用 k8s-pod / k8s-pod-metrics。
+# 改 consul_address / consul_port / consul_token 后 apply。Token 更推荐放 Secret（见 03）。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kube-consul-register-config
+  namespace: yunshu-monitor
+data:
+  consul_address: "10.10.10.5"
+  consul_port: "8500"
+  consul_scheme: "http"
+  consul_timeout: "5s"
+  consul_insecure_skip_verify: "false"
+  # Clean 会删除「带此 tag、但又不是当前 K8s Pod」的全部服务。
+  # 禁止再用 yunshu-metrics：会把 telegraf/icmp/http/tcp 一并清掉。
+  # Yunshu / Prom 仍要 yunshu-metrics：在业务 Pod 上加 label  yunshu-metrics: "tag"
+  k8s_tag: "k8s"
+  # 机房 Consul 不在每个 Node 上 → 必须 single
+  register_mode: "single"
+  register_source: "pod"
+  # 空=监听全部 ns；只登记带注解的 Pod（consul.register/enabled=true）
+  pod_label_selector: ""
+  consul_container_name: "consul"
+  # 与 consul.hcl datacenter 一致
+  consul_datacenter: "prod"

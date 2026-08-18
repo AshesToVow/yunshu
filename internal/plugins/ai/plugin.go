@@ -20,7 +20,7 @@ func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		MenuPathPrefixes: []string{"/ai"},
 		APIPrefixes:      []string{"/api/v1/ai"},
-		DependsOn:        []string{"k8s"},
+		DependsOn:        []string{},
 	}
 }
 

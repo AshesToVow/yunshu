@@ -56,4 +56,7 @@ type IngressHost interface {
 	ClearResolvedSentMark(ctx context.Context, fingerprint string) error
 	LogAllChannelsDeliveryFailed(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, outgoing map[string]interface{})
 	OnResolvedComplete(ctx context.Context, fingerprint, groupKey string)
+	// UpsertCurAlert / ResolveCurAlert：当前告警生命周期（屏蔽后不调用 Upsert）
+	UpsertCurAlert(ctx context.Context, row *model.AlertCurEvent) error
+	ResolveCurAlert(ctx context.Context, fingerprint string, resolvedAt time.Time) error
 }

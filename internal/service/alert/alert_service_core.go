@@ -39,8 +39,9 @@ type AlertEventListQuery struct {
 	Fingerprint string `form:"fingerprint"`
 	// Category 策略分类：delivery|routing|silence|inhibition|timing|resolved|failure|other
 	Category string `form:"category"`
-	// ProjectID 按项目过滤：匹配数据源归属或 payload 中的 project_id
-	ProjectID uint `form:"projectId"`
+	ProjectID uint `form:"project_id"`
+	// ProjectIDAlias 兼容历史 query projectId
+	ProjectIDAlias uint `form:"projectId"`
 }
 
 type AlertChannelUpsertRequest struct {

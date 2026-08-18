@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"yunshu/internal/dictconfig"
+	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/sshclient"
@@ -82,10 +84,18 @@ func (s *Service) dialServerSSH(ctx context.Context, projectID, serverID uint) (
 	if sv.ProjectID != projectID {
 		return nil, constants.ErrServerNotInCurrentProject
 	}
+	if sv.Status != model.StatusEnabled {
+		return nil, constants.ErrBadRequestWithMsg("服务器已禁用，无法进行文件传输")
+	}
+	if actor, ok := auth.RequestUserFromContext(ctx); ok && actor != nil {
+		if err := s.AssertServerAccess(ctx, projectID, serverID, actor, "exec"); err != nil {
+			return nil, err
+		}
+	}
 	cred, err := s.serverRepo.GetCredentialByServerID(ctx, sv.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgfeb33ee7c48c)
+			return nil, constants.ErrBadRequestWithMsg("服务器凭据未配置")
 		}
 		return nil, bizerrors.Pass(ctx, "cmdb", "dialServerSSH", err)
 	}

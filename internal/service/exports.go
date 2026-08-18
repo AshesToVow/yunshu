@@ -371,6 +371,7 @@ type (
 	AlertRuleAssigneeService  = alert.AlertRuleAssigneeService
 	ReceiverGroupCache        = alert.ReceiverGroupCache
 	AlertDatasourceService    = alert.AlertDatasourceService
+	AlertConsulService        = alert.AlertConsulService
 	AlertMonitorRuleService   = alert.AlertMonitorRuleService
 	AlertRuleTemplate         = alert.AlertRuleTemplate
 	CreateFromTemplateRequest = alert.CreateFromTemplateRequest
@@ -399,6 +400,14 @@ type (
 	AlertInhibitionRuleUpsertRequest = alert.AlertInhibitionRuleUpsertRequest
 	AlertDatasourceListQuery       = alert.AlertDatasourceListQuery
 	AlertDatasourceUpsertRequest     = alert.AlertDatasourceUpsertRequest
+	AlertConsulEndpointListQuery     = alert.AlertConsulEndpointListQuery
+	AlertConsulEndpointUpsertRequest = alert.AlertConsulEndpointUpsertRequest
+	AlertMonitorObjectListQuery      = alert.AlertMonitorObjectListQuery
+	AlertConsulSyncResult            = alert.AlertConsulSyncResult
+	AlertCurEventListQuery           = alert.AlertCurEventListQuery
+	AlertHisEventListQuery           = alert.AlertHisEventListQuery
+	ImportPrometheusRulesRequest     = alert.ImportPrometheusRulesRequest
+	ImportPrometheusRulesResult      = alert.ImportPrometheusRulesResult
 	AlertMonitorRuleListQuery      = alert.AlertMonitorRuleListQuery
 	AlertMonitorRuleUpsertRequest  = alert.AlertMonitorRuleUpsertRequest
 	AlertSilenceListQuery          = alert.AlertSilenceListQuery
@@ -424,6 +433,7 @@ var (
 	NewAlertRuleAssigneeService  = alert.NewAlertRuleAssigneeService
 	NewReceiverGroupCache        = alert.NewReceiverGroupCache
 	NewAlertDatasourceService    = alert.NewAlertDatasourceService
+	NewAlertConsulService        = alert.NewAlertConsulService
 	NewAlertMonitorRuleService   = alert.NewAlertMonitorRuleService
 	NewAlertReceiverGroupService = alert.NewAlertReceiverGroupService
 	NewAlertInhibitionService    = alert.NewAlertInhibitionServiceWithRepo
