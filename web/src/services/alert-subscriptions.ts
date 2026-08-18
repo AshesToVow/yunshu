@@ -74,6 +74,20 @@ export function moveSubscriptionNode(id: number, payload: { new_parent_id?: numb
   return getData<AlertSubscriptionNode>(http.post(`/alerts/subscriptions/${id}/move`, payload));
 }
 
+export function applyRoutingWizard(payload: {
+  project_id?: number;
+  severity?: string;
+  channel_ids: number[];
+  extra_emails?: string[];
+  name?: string;
+}) {
+  return getData<{
+    receiver_group?: AlertReceiverGroup;
+    node?: AlertSubscriptionNode;
+    root_created?: boolean;
+  }>(http.post("/alerts/subscriptions/wizard", payload));
+}
+
 export function cloneSubscriptionFromProject(payload: {
   source_project_id: number;
   target_project_id: number;

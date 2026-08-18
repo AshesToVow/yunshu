@@ -121,7 +121,7 @@ func classifyAlertEventCategory(success bool, errorMessage string, channelID uin
 	switch code {
 	case "silence_suppressed", "subscription_suppressed":
 		return AlertEventCategorySilence
-	case "group_wait_suppressed", "group_interval_suppressed", "repeat_suppressed", "group_throttled":
+	case "group_wait_suppressed", "group_interval_suppressed", "repeat_suppressed", "group_throttled", "ack_active":
 		return AlertEventCategoryTiming
 	case "resolved_aggregate_suppressed", "resolved_no_prior_firing_delivery":
 		return AlertEventCategoryResolved
@@ -157,6 +157,8 @@ func humanReasonForErrorMessage(code string, cfg config.AlertConfig) string {
 		return "命中订阅树静默窗口"
 	case "group_wait_suppressed", "group_interval_suppressed", "repeat_suppressed", "group_throttled":
 		return humanReadableGroupTimingSuppression(code, cfg)
+	case "ack_active":
+		return "值班已认领，认领有效期内同指纹不重复推送"
 	case "resolved_aggregate_suppressed":
 		return "同组恢复通知已合并，本轮未重复推送"
 	case "resolved_no_prior_firing_delivery":

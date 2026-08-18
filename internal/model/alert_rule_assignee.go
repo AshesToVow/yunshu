@@ -14,8 +14,10 @@ type AlertRuleAssignee struct {
 	UserIDsJSON         string `json:"user_ids_json" gorm:"type:text;comment:用户 ID 数组 JSON，如 [1,2]"`
 	DepartmentIDsJSON   string `json:"department_ids_json" gorm:"type:text;comment:部门 ID 数组 JSON，如 [3]"`
 	ExtraEmailsJSON     string `json:"extra_emails_json" gorm:"type:text;comment:额外邮箱 JSON 数组"`
-	NotifyOnResolved    bool   `json:"notify_on_resolved" gorm:"not null;default:false;comment:是否在恢复时通知处理人"`
-	Remark              string `json:"remark" gorm:"size:512;comment:备注"`
+	// RecipientMode：assignee_only | assignee_and_cc | channel_only；空值按 assignee_and_cc。
+	RecipientMode    string `json:"recipient_mode" gorm:"size:32;not null;default:assignee_and_cc;comment:收件优先级"`
+	NotifyOnResolved bool   `json:"notify_on_resolved" gorm:"not null;default:false;comment:是否在恢复时通知处理人"`
+	Remark           string `json:"remark" gorm:"size:512;comment:备注"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

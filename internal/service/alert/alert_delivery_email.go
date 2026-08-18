@@ -13,34 +13,75 @@ import (
 	bizerrors "yunshu/internal/pkg/errors"
 )
 
-func mergeAssigneeEmails(recipients []string, payload map[string]interface{}) []string {
-	// 严格处睆人优先：
-	// - assignee_emails 非空：仅坑 assignee_emails（忽略通靓固定收件人）
-	// - assignee_emails 为空：使用通靓固定收件人兜底
-	var assignee []string
-	if payload != nil {
-		if raw, ok := payload["assignee_emails"]; ok {
-			for _, e := range normalizeRecipientList(raw) {
-				s := strings.TrimSpace(strings.ToLower(e))
-				if s != "" {
-					assignee = append(assignee, s)
-				}
-			}
-		}
-	}
-	if len(assignee) > 0 {
-		seen := map[string]struct{}{}
-		out := make([]string, 0, len(assignee))
-		for _, e := range assignee {
-			if _, ok := seen[e]; ok {
-				continue
-			}
-			seen[e] = struct{}{}
-			out = append(out, e)
-		}
-		return out
-	}
+const (
+	RecipientModeAssigneeOnly  = "assignee_only"
+	RecipientModeAssigneeAndCC = "assignee_and_cc"
+	RecipientModeChannelOnly   = "channel_only"
+)
 
+func normalizeRecipientMode(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case RecipientModeAssigneeOnly:
+		return RecipientModeAssigneeOnly
+	case RecipientModeChannelOnly:
+		return RecipientModeChannelOnly
+	case RecipientModeAssigneeAndCC, "assignee+cc", "handler_and_cc", "", "<nil>":
+		// 空值默认：处理人 + 抄送通道
+		return RecipientModeAssigneeAndCC
+	default:
+		return RecipientModeAssigneeAndCC
+	}
+}
+
+func payloadRecipientMode(payload map[string]interface{}) string {
+	if payload == nil {
+		return RecipientModeAssigneeAndCC
+	}
+	return normalizeRecipientMode(fmt.Sprintf("%v", payload["recipient_mode"]))
+}
+
+func extractPayloadEmails(payload map[string]interface{}, key string) []string {
+	if payload == nil {
+		return nil
+	}
+	raw, ok := payload[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	var out []string
+	seen := map[string]struct{}{}
+	for _, e := range normalizeRecipientList(raw) {
+		s := strings.TrimSpace(strings.ToLower(e))
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func dedupeEmailList(in []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, e := range in {
+		e = strings.TrimSpace(strings.ToLower(e))
+		if e == "" {
+			continue
+		}
+		if _, ok := seen[e]; ok {
+			continue
+		}
+		seen[e] = struct{}{}
+		out = append(out, e)
+	}
+	return out
+}
+
+func mergeEmailLists(parts ...[]string) []string {
 	seen := map[string]struct{}{}
 	var out []string
 	add := func(e string) {
@@ -54,63 +95,51 @@ func mergeAssigneeEmails(recipients []string, payload map[string]interface{}) []
 		seen[e] = struct{}{}
 		out = append(out, e)
 	}
-	for _, r := range recipients {
-		add(r)
+	for _, part := range parts {
+		for _, e := range part {
+			add(e)
+		}
 	}
 	return out
+}
+
+func mergeAssigneeEmails(recipients []string, payload map[string]interface{}) []string {
+	mode := payloadRecipientMode(payload)
+	assignee := extractPayloadEmails(payload, "assignee_emails")
+	channel := dedupeEmailList(recipients)
+
+	switch mode {
+	case RecipientModeChannelOnly:
+		return channel
+	case RecipientModeAssigneeOnly:
+		if len(assignee) > 0 {
+			return assignee
+		}
+		return channel
+	default: // assignee_and_cc
+		if len(assignee) == 0 {
+			return channel
+		}
+		return mergeEmailLists(assignee, channel)
+	}
 }
 
 func payloadHasAssigneeEmails(payload map[string]interface{}) bool {
-	if payload == nil {
-		return false
-	}
-	raw, ok := payload["assignee_emails"]
-	if !ok || raw == nil {
-		return false
-	}
-	for _, e := range normalizeRecipientList(raw) {
-		if strings.TrimSpace(e) != "" {
-			return true
-		}
-	}
-	return false
+	return len(extractPayloadEmails(payload, "assignee_emails")) > 0
 }
 
-// mergeAssigneeEmailsWithReceiverGroup 坈并接收组静思抄逝；已有规则处睆人邮箱时丝坈并（靿兝多人收件）。
+// mergeAssigneeEmailsWithReceiverGroup 合并接收组抄送。
+// assignee_only 且已有处理人时不合并；assignee_and_cc / channel_only 会合并。
 func mergeAssigneeEmailsWithReceiverGroup(recipients []string, payload map[string]interface{}) []string {
-	if payload == nil || payloadHasAssigneeEmails(payload) {
+	mode := payloadRecipientMode(payload)
+	if mode == RecipientModeAssigneeOnly && payloadHasAssigneeEmails(payload) {
 		return recipients
 	}
-	raw, ok := payload["receiver_group_emails"]
-	if !ok || raw == nil {
-		return recipients
-	}
-	var extra []string
-	for _, e := range normalizeRecipientList(raw) {
-		s := strings.TrimSpace(strings.ToLower(e))
-		if s != "" {
-			extra = append(extra, s)
-		}
-	}
+	extra := extractPayloadEmails(payload, "receiver_group_emails")
 	if len(extra) == 0 {
 		return recipients
 	}
-	seen := map[string]struct{}{}
-	var out []string
-	add := func(e string) {
-		if _, ok := seen[e]; ok {
-			return
-		}
-		seen[e] = struct{}{}
-		out = append(out, e)
-	}
-	for _, r := range recipients {
-		add(r)
-	}
-	for _, e := range extra {
-		add(e)
-	}
-	return out
+	return mergeEmailLists(recipients, extra)
 }
 
 func (s *AlertService) sendEmailChannel(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}) (int, string, error) {

@@ -3,6 +3,8 @@ package alert
 import (
 	"context"
 	"crypto/cipher"
+	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -120,6 +122,7 @@ type AlertService struct {
 
 	metrics        *AlertMetrics // Prometheus自监控指标
 	metricsUpdater *AlertMetricsUpdater
+	timingLeaderToken string
 
 	eventRepo          interfaces.AlertEventRepository
 	channelRepo        interfaces.AlertChannelRepository
@@ -235,7 +238,12 @@ func NewAlertService(db *gorm.DB, redisClient *redis.Client, sender mailer.Sende
 		subscriptionSvc:    NewAlertSubscriptionService(subRepo),
 		receiverGroupCache: receiverCache,
 		metrics:            NewAlertMetrics(),
+		timingLeaderToken:  fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano()),
 	}
+	svc.subscriptionSvc.AttachReceiverGroups(NewAlertReceiverGroupService(
+		repository.NewAlertReceiverGroupRepository(db),
+		receiverCache,
+	))
 
 	// 初始化指标更新器并启动
 	svc.metricsUpdater = NewAlertMetricsUpdater(svc.metrics, svc.inhibitionSvc)
@@ -299,6 +307,7 @@ func (s *AlertService) RunBackgroundWorkers(ctx context.Context) {
 	s.monitorEvalCancel = cancel
 	go s.runMonitorRuleEvaluator(evalCtx)
 	go s.runCloudExpiryEvaluator(evalCtx)
+	go s.runAlertTimingWorker(evalCtx)
 	s.runAlertWebhookIngestWorker(evalCtx)
 }
 

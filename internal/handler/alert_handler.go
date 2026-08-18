@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"strings"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/model"
@@ -131,6 +132,48 @@ func (h *AlertHandler) ListCurEvents(c *gin.Context) {
 	})
 }
 
+func (h *AlertHandler) AcknowledgeAlert(c *gin.Context) {
+	userID := uint(0)
+	userName := ""
+	if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
+		userID = u.ID
+		userName = strings.TrimSpace(u.Nickname)
+		if userName == "" {
+			userName = strings.TrimSpace(u.Username)
+		}
+	}
+	ServeJSON(c, func(ctx context.Context, req service.AlertAckRequest) (*model.AlertAck, error) {
+		return h.svc.AcknowledgeAlert(ctx, userID, userName, req)
+	})
+}
+
+func (h *AlertHandler) ClearAlertAck(c *gin.Context) {
+	fp := strings.TrimSpace(c.Query("fingerprint"))
+	if fp == "" {
+		response.Error(c, constants.ErrBadRequestWithMsg("fingerprint required"))
+		return
+	}
+	if err := h.svc.ClearAlertAck(c.Request.Context(), fp); err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "ack cleared"})
+}
+
+func (h *AlertHandler) GetActiveAck(c *gin.Context) {
+	fp := strings.TrimSpace(c.Query("fingerprint"))
+	if fp == "" {
+		response.Error(c, constants.ErrBadRequestWithMsg("fingerprint required"))
+		return
+	}
+	info, err := h.svc.GetActiveAck(c.Request.Context(), fp)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, info)
+}
+
 func (h *AlertHandler) ListHisEvents(c *gin.Context) {
 	ServeQuery(c, func(ctx context.Context, q service.AlertHisEventListQuery) (gin.H, error) {
 		list, total, page, pageSize, err := h.svc.ListHisEvents(ctx, q)
@@ -198,7 +241,7 @@ func (h *AlertHandler) ReceiveK8sEventIngress(c *gin.Context) {
 			token = authHeader
 		}
 	}
-	if !h.svc.ValidateWebhookToken(token) {
+	if !h.svc.ValidateK8sEventIngressToken(token, c.ClientIP()) {
 		response.Error(c, constants.ErrAlertWebhookTokenInvalid)
 		return
 	}

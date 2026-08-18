@@ -87,7 +87,10 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 		rt.DB,
 	)
 	if err != nil {
-		slog.Default().With("component", "k8s.event_forward").Error("Failed to init K8s event forward manager", "error", err)
+		slog.Default().With("component", "k8s.event_forward").Error(
+			"Failed to init K8s event forward manager; event alerting disabled until fix/restart",
+			"error", err,
+		)
 		return nil
 	}
 	mgr.Start()

@@ -82,6 +82,8 @@ func (h *pipelineTestHost) EnrichOutgoingProjectName(context.Context, map[string
 func (h *pipelineTestHost) EnrichAssigneeAndDutyEmails(context.Context, map[string]interface{}, map[string]string) {
 }
 
+func (h *pipelineTestHost) IsAckActive(context.Context, string) bool { return false }
+
 func (h *pipelineTestHost) ClearResolvedNotificationSent(context.Context, string) error { return nil }
 
 func (h *pipelineTestHost) PeekFiringGroupTiming(context.Context, string, string) (bool, string, int64, string, string) {
@@ -158,6 +160,14 @@ func (h *pipelineTestHost) SendToChannel(_ context.Context, ch *model.AlertChann
 }
 
 func (h *pipelineTestHost) CommitFiringGroupTimingSend(context.Context, string, string) {}
+
+func (h *pipelineTestHost) TryLockGroupSend(context.Context, string) bool { return true }
+
+func (h *pipelineTestHost) UnlockGroupSend(context.Context, string) {}
+
+func (h *pipelineTestHost) SaveGroupWaitPending(context.Context, groupWaitPendingEnvelope, string) {}
+
+func (h *pipelineTestHost) ClearGroupWaitPending(context.Context, string) {}
 
 func (h *pipelineTestHost) MarkFiringDelivered(_ context.Context, _ string) {
 	h.mu.Lock()

@@ -224,6 +224,7 @@ func (s *AlertService) commitFiringGroupTimingSend(ctx context.Context, groupKey
 		_ = s.redis.HSet(ctx, key, "last_digest", d).Err()
 	}
 	_ = s.redis.Expire(ctx, key, time.Duration(s.cfg.AggregateTTLSeconds)*time.Second).Err()
+	s.clearGroupWaitPending(ctx, groupKey)
 }
 
 // markAlertFiringDelivered 记录「该指纹已成功外发过至少一次 firing 通知」，
@@ -311,6 +312,8 @@ func humanReadableGroupTimingSuppression(reason string, cfg config.AlertConfig) 
 		return fmt.Sprintf("本次告警在 group_by/digest_by 维度上的摘要与上次成功通知不同（例如实例或告警对象变化）。平台按「同组变化间隔」（当前 %d 秒）控制：未满间隔时本轮不推送；达到间隔后会再评估是否发送。", gi)
 	case "group_wait_suppressed":
 		return fmt.Sprintf("平台按「首次同组等待」（当前 %d 秒）聚合同组告警，等待窗口结束前本轮不推送。", gw)
+	case "ack_active":
+		return "值班已认领该告警实例，认领有效期内同指纹不再重复推送（当前告警仍保留在事件台）。"
 	default:
 		return "本轮根据通知合并策略未向渠道推送，可能与「首次同组等待」「同组变化间隔」或「重复提醒间隔」有关，具体以平台告警配置为准。"
 	}
@@ -318,16 +321,22 @@ func humanReadableGroupTimingSuppression(reason string, cfg config.AlertConfig) 
 
 func (s *AlertService) logSuppressedFiringTiming(ctx context.Context, title, severity, status, groupKey, labelsDigest, reason string, payload map[string]interface{}) {
 	reqBytes, _ := json.Marshal(payload)
+	titleSuffix := "（通知合并：本轮未推送）"
+	channelName := "（未推送·合并降噪）"
+	if strings.TrimSpace(reason) == "ack_active" {
+		titleSuffix = "（已认领：本轮未推送）"
+		channelName = "（未推送·认领抑制）"
+	}
 	event := model.AlertEvent{
 		Source:          alertEventSourceFromPayload(payload),
-		Title:           title + "（通知合并：本轮未推送）",
+		Title:           title + titleSuffix,
 		Severity:        severity,
 		Status:          status,
 		Cluster:         strings.TrimSpace(fmt.Sprintf("%v", payload["cluster"])),
 		MonitorPipeline: strings.TrimSpace(fmt.Sprintf("%v", payload["monitorPipeline"])),
 		GroupKey:        strings.TrimSpace(groupKey),
 		LabelsDigest:    strings.TrimSpace(labelsDigest),
-		ChannelName:     "（未推送·合并降噪）",
+		ChannelName:     channelName,
 		Success:         true,
 		HTTPStatusCode:  200,
 		ErrorMessage:    strings.TrimSpace(reason),

@@ -244,7 +244,7 @@ export function ObjectsTab() {
           total: objTotal,
           onChange: (page, pageSize) => void loadObjects(page, pageSize),
         })}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1240 }}
         columns={[
           { title: "服务", dataIndex: "service_name", width: 120 },
           { title: "实例 ID", dataIndex: "service_id", width: 180, ellipsis: true },
@@ -262,6 +262,29 @@ export function ObjectsTab() {
             },
           },
           { title: "同步时间", dataIndex: "synced_at", width: 170, render: (v) => formatDateTime(v) || "-" },
+          {
+            title: "操作",
+            width: 140,
+            fixed: "right",
+            render: (_: unknown, r: AlertMonitorObjectItem) => (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  const fn = ctx.openRuleCreateFromObject as
+                    | ((obj: AlertMonitorObjectItem) => void)
+                    | undefined;
+                  if (typeof fn === "function") {
+                    fn(r);
+                  } else {
+                    message.warning("无法打开规则创建");
+                  }
+                }}
+              >
+                生成规则
+              </Button>
+            ),
+          },
         ]}
       />
       <Modal

@@ -47,6 +47,7 @@ func (m *module) Models() []any {
 		&model.AlertMonitorObject{},
 		&model.AlertCurEvent{},
 		&model.AlertHisEvent{},
+		&model.AlertAck{},
 	}
 }
 

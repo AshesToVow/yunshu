@@ -19,17 +19,17 @@ import { getProjects, type ProjectItem } from "../services/projects";
 
 type TemplatePreviewStatus = "firing" | "resolved";
 const DEFAULT_FIRING_TEMPLATE =
-  "【{{.StatusText}}】**{{.Title}}**\n\n- 级别：`{{.Severity}}`\n\n- 项目：`{{.ProjectName}}`\n\n- 集群：`{{.Cluster}}`\n\n- 摘要：{{.Summary}}\n\n- 时间：{{.OccurredAt}}\n\n- 标签：{{.LabelsText}}";
+  "【{{.StatusText}}】**{{.Title}}**\n\n- 现象：{{.Summary}}（当前值 {{.Current}}）\n\n- 级别：`{{.Severity}}` · 项目：`{{.ProjectName}}` · 集群：`{{.Cluster}}`\n\n- 时间：{{.OccurredAt}}\n\n- 打开事件：{{.EventPath}}\n\n- 标签：{{.LabelsText}}";
 const DEFAULT_RESOLVED_TEMPLATE =
-  "【{{.StatusText}}】**{{.Title}}**\n\n- 级别：`{{.Severity}}`\n\n- 项目：`{{.ProjectName}}`\n\n- 集群：`{{.Cluster}}`\n\n- 恢复时间：{{.OccurredAt}}\n\n- 开始：{{.StartsAt}}\n\n- 结束：{{.EndsAt}}\n\n- 摘要：{{.Summary}}";
+  "【{{.StatusText}}】**{{.Title}}**\n\n- 摘要：{{.Summary}}\n\n- 级别：`{{.Severity}}` · 项目：`{{.ProjectName}}`\n\n- 开始：{{.StartsAt}} · 恢复：{{.EndsAt}}\n\n- 打开事件：{{.EventPath}}";
 const SIMPLE_FIRING_TEMPLATE =
-  "【告警】{{.Title}}\n级别：{{.Severity}}\n项目：{{.ProjectName}}\n摘要：{{.Summary}}";
+  "【告警】{{.Title}}\n现象：{{.Summary}}（{{.Current}}）\n级别：{{.Severity}} · 项目：{{.ProjectName}}\n打开：{{.EventPath}}";
 const SIMPLE_RESOLVED_TEMPLATE =
-  "【恢复】{{.Title}}\n开始：{{.StartsAt}}\n结束：{{.EndsAt}}\n项目：{{.ProjectName}}";
+  "【恢复】{{.Title}}\n开始：{{.StartsAt}} · 结束：{{.EndsAt}}\n项目：{{.ProjectName}}\n打开：{{.EventPath}}";
 const DETAILED_FIRING_TEMPLATE =
-  "【{{.StatusText}}】{{.Title}}\n级别：{{.Severity}}\n项目：{{.ProjectName}}\n集群：{{.Cluster}}\n摘要：{{.Summary}}\n描述：{{.Description}}\n时间：{{.OccurredAt}}\n标签：{{.LabelsText}}\n链接：{{.GeneratorURL}}";
+  "【{{.StatusText}}】{{.Title}}\n级别：{{.Severity}}\n项目：{{.ProjectName}}\n集群：{{.Cluster}}\n现象：{{.Summary}}\n当前值：{{.Current}}\n描述：{{.Description}}\n时间：{{.OccurredAt}}\n标签：{{.LabelsText}}\n打开事件：{{.EventPath}}\nGenerator：{{.GeneratorURL}}";
 const DETAILED_RESOLVED_TEMPLATE =
-  "【{{.StatusText}}】{{.Title}}\n级别：{{.Severity}}\n项目：{{.ProjectName}}\n集群：{{.Cluster}}\n开始：{{.StartsAt}}\n结束：{{.EndsAt}}\n摘要：{{.Summary}}\n标签：{{.LabelsText}}";
+  "【{{.StatusText}}】{{.Title}}\n级别：{{.Severity}}\n项目：{{.ProjectName}}\n集群：{{.Cluster}}\n开始：{{.StartsAt}}\n结束：{{.EndsAt}}\n摘要：{{.Summary}}\n打开事件：{{.EventPath}}\n标签：{{.LabelsText}}";
 const CHANNEL_PRESET_OPTIONS = [
   { label: "新手简版（推荐）", value: "simple" },
   { label: "标准版（默认）", value: "default" },
@@ -715,7 +715,9 @@ export function AlertChannelsPage() {
                 <Typography.Link href="https://cairry.github.io/docs/" target="_blank" rel="noreferrer">
                   WatchAlert 式通知模板
                 </Typography.Link>{" "}
-                文档化一致）。标签示例：<Typography.Text code>{"{{index .Labels \"alertname\"}}"}</Typography.Text>
+                标签示例：<Typography.Text code>{"{{index .Labels \"alertname\"}}"}</Typography.Text>
+                。事件台深链：<Typography.Text code>{"{{.EventPath}}"}</Typography.Text>
+                （如 /alert-monitor-platform/history?fingerprint=...）。
               </>
             }
           >

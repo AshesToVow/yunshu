@@ -185,6 +185,7 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       { method: "DELETE", path: "/api/v1/alerts/duty-blocks/:id", summary: "删除规则值班班次", ui: "告警监控平台 · 规则与值班绑定", auth: true },
       { method: "GET", path: "/api/v1/alerts/subscriptions/tree", summary: "订阅路由树", ui: "告警配置中心 · 订阅路由", auth: true },
       { method: "POST", path: "/api/v1/alerts/subscriptions", summary: "创建订阅节点", ui: "告警配置中心 · 订阅路由", auth: true },
+      { method: "POST", path: "/api/v1/alerts/subscriptions/wizard", summary: "路由向导创建节点", ui: "告警配置中心 · 订阅路由", auth: true },
       { method: "PUT", path: "/api/v1/alerts/subscriptions/:id", summary: "更新订阅节点", ui: "告警配置中心 · 订阅路由", auth: true },
       { method: "DELETE", path: "/api/v1/alerts/subscriptions/:id", summary: "删除订阅节点", ui: "告警配置中心 · 订阅路由", auth: true },
       { method: "GET", path: "/api/v1/alerts/receiver-groups", summary: "接收组列表", ui: "告警配置中心 · 接收组", auth: true },

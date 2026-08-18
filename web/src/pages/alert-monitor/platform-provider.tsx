@@ -89,6 +89,7 @@ import type { UserUpdatePayload } from "../../types/api";
 import { getUser, updateUser } from "../../services/users";
 import { formatDateTime } from "../../utils/format";
 import type { AlertEventCategory } from "../../utils/alert-event-reasons";
+import { parseLabelMap } from "../../utils/alert-recipient-reason";
 
 dayjs.locale("zh-cn");
 
@@ -1409,6 +1410,34 @@ function useAlertMonitorPlatformState() {
     setSilModalOpen(true);
   }
 
+  /** 事件台：按指纹 + 告警名预填静默（可再改匹配器）。 */
+  function openSilenceForEvent(row: {
+    fingerprint?: string;
+    alertname?: string;
+    labels_json?: string;
+    project_id?: number;
+  }) {
+    setSilCurrent(null);
+    silForm.resetFields();
+    const labels = parseLabelMap(row.labels_json);
+    const alertname = String(labels.alertname || row.alertname || "").trim();
+    const matchers: SilenceMatcherForm[] = [];
+    if (row.fingerprint) matchers.push({ name: "fingerprint", value: row.fingerprint, is_regex: false });
+    if (alertname) matchers.push({ name: "alertname", value: alertname, is_regex: false });
+    if (labels.monitor_rule_id) {
+      matchers.push({ name: "monitor_rule_id", value: labels.monitor_rule_id, is_regex: false });
+    }
+    silForm.setFieldsValue({
+      name: alertname ? `静默 ${alertname}` : `静默 ${row.fingerprint || "告警"}`,
+      matchers: matchers.length ? matchers : [{ name: "fingerprint", value: row.fingerprint || "", is_regex: false }],
+      comment: "事件台自定义静默",
+      enabled: true,
+      starts_at: dayjs(),
+      ends_at: dayjs().add(2, "hour"),
+    });
+    setSilModalOpen(true);
+  }
+
   function toQuickSilenceTarget(row: PromNativeAlertRow): QuickSilenceTarget {
     const now = dayjs();
     const n = String(row.alertname || "").trim() || "未命名告警";
@@ -1641,6 +1670,33 @@ function useAlertMonitorPlatformState() {
     setSelectedPromFunc("none");
     setLabelValueOptions([]);
     setRuleModalOpen(true);
+  }
+
+  function openRuleCreateFromObject(obj: {
+    service_name?: string;
+    service_id?: string;
+    address?: string;
+    port?: number;
+    exporter_role?: string;
+    yunshu_project?: string;
+  }) {
+    openRuleCreate();
+    const instance = obj.address && obj.port ? `${obj.address}:${obj.port}` : obj.address || "";
+    const labels: Record<string, string> = {};
+    if (obj.service_name) labels.job = String(obj.service_name);
+    if (instance) labels.instance = instance;
+    if (obj.exporter_role) labels.exporter_role = String(obj.exporter_role);
+    if (obj.yunshu_project) labels.yunshu_project = String(obj.yunshu_project);
+    const nameHint = [obj.service_name, instance].filter(Boolean).join(" · ") || "监控对象";
+    ruleForm.setFieldsValue({
+      name: `${nameHint} 可用性`,
+      labels_json: JSON.stringify(labels, null, 2),
+      summary_template: `${nameHint}：{{.RuleName}} 触发，当前值 {{$value}}`,
+    });
+    if (instance) {
+      setMetricLabelFilters([{ key: "instance", op: "=", value: instance }]);
+    }
+    setTab("rules");
   }
 
   function detectRulePresetByContext(): string {
@@ -2169,11 +2225,18 @@ function useAlertMonitorPlatformState() {
       assignForm.setFieldsValue({
         user_ids: userIds,
         department_ids: row?.department_ids ?? [],
+        recipient_mode: row?.recipient_mode || "assignee_and_cc",
         notify_on_resolved: row?.notify_on_resolved ?? false,
         remark: row?.remark ?? "",
       });
     } catch {
-      assignForm.setFieldsValue({ user_ids: [], department_ids: [], notify_on_resolved: false, remark: "" });
+      assignForm.setFieldsValue({
+        user_ids: [],
+        department_ids: [],
+        recipient_mode: "assignee_and_cc",
+        notify_on_resolved: false,
+        remark: "",
+      });
     }
     assignSyncedKeyRef.current = userIds.join(",");
     setAssignOpen(true);
@@ -2209,6 +2272,7 @@ function useAlertMonitorPlatformState() {
         user_ids_json: JSON.stringify(userIds),
         department_ids_json: JSON.stringify(deptIds),
         extra_emails_json: "[]",
+        recipient_mode: v.recipient_mode || "assignee_and_cc",
         notify_on_resolved: v.notify_on_resolved,
         remark: v.remark ?? "",
       });
@@ -2499,7 +2563,9 @@ function useAlertMonitorPlatformState() {
     openHistoryTab,
     openQuickSilence,
     openSilCreate,
+    openSilenceForEvent,
     openRuleCreate,
+    openRuleCreateFromObject,
     projectContextId,
     projectOptions,
     promDsId,

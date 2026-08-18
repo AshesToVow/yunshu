@@ -30,8 +30,10 @@ type RuntimeConfig struct {
 type Manager struct {
 	repo     interfaces.K8sEventForwardRepository
 	dictDB   *gorm.DB
+	runtime  *k8s.K8sRuntimeService
 	watcher  *Watcher
 	worker   *Worker
+	client   *WebhookClient
 	enabled  bool
 	yamlBase config.K8sEventForwardConfig
 	appPort  int
@@ -72,13 +74,15 @@ func NewManager(
 	client := NewWebhookClient(alertCfg.WebhookToken, 0)
 	mgr := &Manager{
 		repo:     repo,
-		watcher:  NewWatcher(repo, runtime, rt),
-		worker:   NewWorker(repo, client, rt),
+		runtime:  runtime,
+		client:   client,
 		enabled:  resolved.Enabled,
 		yamlBase: yamlBase,
 		appPort:  appPort,
+		dictDB:   dbForDict,
 	}
-	mgr.dictDB = dbForDict
+	mgr.watcher = NewWatcher(mgr.repo, mgr.runtime, rt)
+	mgr.worker = NewWorker(mgr.repo, mgr.client, rt)
 	mgr.worker.onBeforeBatch = mgr.reloadRuntimeConfig
 	mgr.worker.isEnabled = func() bool { return mgr.enabled }
 	return mgr, nil
@@ -96,8 +100,21 @@ func (m *Manager) reloadRuntimeConfig() {
 		forwardLog().Warn("Failed to reload K8s event forward config", "error", err)
 		return
 	}
-	m.worker.RefreshSettings(rt)
+	if m.worker != nil {
+		m.worker.RefreshSettings(rt)
+	}
+	if !m.enabled {
+		forwardLog().Info("K8s event forward disabled, stopping cluster watches")
+		m.stopClusterWatches()
+		return
+	}
 	m.EnsureRunning()
+}
+
+func (m *Manager) stopClusterWatches() {
+	if m.watcher != nil {
+		m.watcher.StopAllClusters()
+	}
 }
 
 func loadRuntimeConfig(store interfaces.K8sEventForwardRepository, appCfg config.K8sEventForwardConfig, port int) (RuntimeConfig, error) {
@@ -139,6 +156,7 @@ func (m *Manager) ensureRunning(triggerWatch bool) {
 	if m == nil || !m.enabled {
 		if m != nil && !m.enabled {
 			forwardLog().Info("K8s event forward disabled in config")
+			m.stopClusterWatches()
 		}
 		return
 	}
@@ -149,7 +167,8 @@ func (m *Manager) ensureRunning(triggerWatch bool) {
 		return
 	}
 	if !ok {
-		forwardLog().Info("No enabled K8s event forward rules, watcher and worker not started")
+		forwardLog().Info("No enabled K8s event forward rules, cluster watches stopped")
+		m.stopClusterWatches()
 		return
 	}
 	m.runMu.Lock()
@@ -166,10 +185,13 @@ func (m *Manager) ensureRunning(triggerWatch bool) {
 }
 
 func (m *Manager) Stop() {
+	m.runMu.Lock()
+	defer m.runMu.Unlock()
 	if m.watcher != nil {
 		m.watcher.Stop()
 	}
 	if m.worker != nil {
 		m.worker.Stop()
 	}
+	m.running = false
 }

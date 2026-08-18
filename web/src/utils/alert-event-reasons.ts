@@ -68,6 +68,11 @@ const EXACT: Record<string, AlertEventReasonMeta> = {
     hint: "聚合限流（遗留码）",
     detail: "历史聚合限流留痕码；当前 firing 节流以 group_wait / group_interval / repeat 为准。",
   },
+  ack_active: {
+    category: "timing",
+    hint: "已认领抑制",
+    detail: "值班已认领该指纹，有效期内不再重复推送；当前告警仍保留在事件台。取消认领后恢复通知。",
+  },
   resolved_aggregate_suppressed: {
     category: "resolved",
     hint: "重复恢复已抑制",

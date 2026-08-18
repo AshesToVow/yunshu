@@ -90,6 +90,10 @@ func (h alertIngressHost) EnrichAssigneeAndDutyEmails(ctx context.Context, outgo
 	h.s.enrichAssigneeAndDutyEmails(ctx, outgoing, labels)
 }
 
+func (h alertIngressHost) IsAckActive(ctx context.Context, fingerprint string) bool {
+	return h.s.IsAckActive(ctx, fingerprint)
+}
+
 func (h alertIngressHost) ClearResolvedNotificationSent(ctx context.Context, fingerprint string) error {
 	return h.s.clearResolvedNotificationSent(ctx, fingerprint)
 }
@@ -177,6 +181,22 @@ func (h alertIngressHost) CommitFiringGroupTimingSend(ctx context.Context, group
 	h.s.commitFiringGroupTimingSend(ctx, groupKey, labelsDigest)
 }
 
+func (h alertIngressHost) TryLockGroupSend(ctx context.Context, groupKey string) bool {
+	return h.s.tryLockGroupSend(ctx, groupKey)
+}
+
+func (h alertIngressHost) UnlockGroupSend(ctx context.Context, groupKey string) {
+	h.s.unlockGroupSend(ctx, groupKey)
+}
+
+func (h alertIngressHost) SaveGroupWaitPending(ctx context.Context, env groupWaitPendingEnvelope, firstSeen string) {
+	h.s.saveGroupWaitPending(ctx, env, firstSeen)
+}
+
+func (h alertIngressHost) ClearGroupWaitPending(ctx context.Context, groupKey string) {
+	h.s.clearGroupWaitPending(ctx, groupKey)
+}
+
 func (h alertIngressHost) MarkFiringDelivered(ctx context.Context, fingerprint string) {
 	h.s.markAlertFiringDelivered(ctx, fingerprint)
 }
@@ -194,6 +214,7 @@ func (h alertIngressHost) OnResolvedComplete(ctx context.Context, fingerprint, g
 	_ = h.ClearCurrentMetric(ctx, fingerprint)
 	_ = h.s.clearGroupAggregateState(ctx, groupKey)
 	h.s.clearAlertFiringDelivered(ctx, fingerprint)
+	h.s.clearGroupWaitPending(ctx, groupKey)
 }
 
 func (h alertIngressHost) UpsertCurAlert(ctx context.Context, row *model.AlertCurEvent) error {

@@ -34,8 +34,11 @@ func buildAlertManagerPayload(ruleName, clusterID, clusterName string, projectID
 	for _, ev := range events {
 		alertname := defaultAlertname(ev.Type, ev.Reason)
 		severity := eventSeverity(ev.Type)
-		fp := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
-			clusterID, ev.Namespace, ev.Name, ev.Type, ev.Reason, ev.Message, projectID)))
+		fpSeed := strings.TrimSpace(ev.EvtKey)
+		if fpSeed == "" {
+			fpSeed = fmt.Sprintf("%s|%s|%s|%s|%s", clusterID, ev.Namespace, ev.Name, ev.Type, ev.Reason)
+		}
+		fp := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%d", clusterID, fpSeed, projectID)))
 		starts := ev.Timestamp
 		if starts.IsZero() {
 			starts = time.Now()

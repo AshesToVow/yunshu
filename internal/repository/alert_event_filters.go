@@ -41,7 +41,7 @@ func applyAlertEventCategoryFilter(tx *gorm.DB, category string) *gorm.DB {
 		return tx.Where("error_message IN ?", []string{"silence_suppressed", "subscription_suppressed"})
 	case "timing":
 		return tx.Where("error_message IN ?", []string{
-			"group_wait_suppressed", "group_interval_suppressed", "repeat_suppressed", "group_throttled",
+			"group_wait_suppressed", "group_interval_suppressed", "repeat_suppressed", "group_throttled", "ack_active",
 		})
 	case "resolved":
 		return tx.Where("error_message IN ?", []string{
@@ -67,7 +67,7 @@ AND error_message NOT IN ?`,
 			"inhibition_suppressed:%",
 			[]string{
 				"silence_suppressed", "subscription_suppressed",
-				"group_wait_suppressed", "group_interval_suppressed", "repeat_suppressed", "group_throttled",
+				"group_wait_suppressed", "group_interval_suppressed", "repeat_suppressed", "group_throttled", "ack_active",
 				"resolved_aggregate_suppressed", "resolved_no_prior_firing_delivery",
 				"no_policy_matched", "no_enabled_channels", "no_channel_matched", "no_channel_matched_subscription",
 				"all_channel_delivery_failed",

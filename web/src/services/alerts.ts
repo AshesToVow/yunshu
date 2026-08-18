@@ -277,8 +277,15 @@ export interface AlertCurEventItem {
   datasource_id?: number;
   summary?: string;
   value?: string;
+  labels_json?: string;
+  annotations_json?: string;
+  group_key?: string;
   starts_at?: string;
   updated_at?: string;
+  handler_summary?: string;
+  acked?: boolean;
+  ack_by?: string;
+  ack_expires_at?: string;
 }
 
 export interface AlertHisEventItem {
@@ -291,6 +298,8 @@ export interface AlertHisEventItem {
   cluster?: string;
   project_id?: number;
   summary?: string;
+  labels_json?: string;
+  group_key?: string;
   starts_at?: string;
   resolved_at?: string;
 }
@@ -319,4 +328,34 @@ export function listHisEvents(params?: {
   return getData<{ list?: AlertHisEventItem[]; items?: AlertHisEventItem[]; total: number; page: number; page_size: number }>(
     http.get("/alerts/his-events", { params }),
   );
+}
+
+export type AlertAckItem = {
+  id: number;
+  fingerprint: string;
+  user_id: number;
+  user_name: string;
+  expires_at: string;
+  created_at: string;
+};
+
+export type AlertAckActiveInfo = {
+  fingerprint: string;
+  acked: boolean;
+  user_id?: number;
+  user_name?: string;
+  expires_at?: string;
+};
+
+/** 认领告警：TTL 内同指纹抑制重复通知 */
+export function acknowledgeAlert(payload: { fingerprint: string; ttl_minutes?: number }) {
+  return getData<AlertAckItem>(http.post("/alerts/acks", payload));
+}
+
+export function clearAlertAck(fingerprint: string) {
+  return getData<{ message: string }>(http.delete("/alerts/acks", { params: { fingerprint } }));
+}
+
+export function getActiveAlertAck(fingerprint: string) {
+  return getData<AlertAckActiveInfo>(http.get("/alerts/acks", { params: { fingerprint } }));
 }

@@ -12,6 +12,8 @@ import (
 	"yunshu/internal/model"
 )
 
+const unmatchedEventMaxAge = 24 * time.Hour
+
 type Worker struct {
 	repo          interfaces.K8sEventForwardRepository
 	client        *WebhookClient
@@ -19,6 +21,7 @@ type Worker struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+	mu            sync.RWMutex
 	interval      time.Duration
 	batch         int
 	maxRetry      int
@@ -56,6 +59,8 @@ func (w *Worker) Stop() {
 }
 
 func (w *Worker) RefreshSettings(cfg RuntimeConfig) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	w.cfg = cfg
 	if cfg.WorkerIntervalSeconds > 0 {
 		w.interval = time.Duration(cfg.WorkerIntervalSeconds) * time.Second
@@ -68,18 +73,31 @@ func (w *Worker) RefreshSettings(cfg RuntimeConfig) {
 	}
 }
 
+func (w *Worker) currentSettings() (interval time.Duration, batch, maxRetry int, cfg RuntimeConfig) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	interval = w.interval
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	return interval, w.batch, w.maxRetry, w.cfg
+}
+
 func (w *Worker) loop() {
 	defer w.wg.Done()
-	ticker := time.NewTicker(w.interval)
-	defer ticker.Stop()
+	interval, _, _, _ := w.currentSettings()
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
 	for {
 		select {
 		case <-w.ctx.Done():
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			if err := w.processBatch(); err != nil {
 				forwardLog().Warn("Failed to process K8s event forward batch", "error", err)
 			}
+			next, _, _, _ := w.currentSettings()
+			timer.Reset(next)
 		}
 	}
 }
@@ -91,6 +109,7 @@ func (w *Worker) processBatch() error {
 	if w.isEnabled != nil && !w.isEnabled() {
 		return nil
 	}
+	_, batch, maxRetry, cfg := w.currentSettings()
 	ctx, cancel := context.WithTimeout(w.ctx, 2*time.Minute)
 	defer cancel()
 
@@ -102,7 +121,7 @@ func (w *Worker) processBatch() error {
 		return nil
 	}
 
-	events, err := w.repo.ListUnprocessedEvents(ctx, w.batch)
+	events, err := w.repo.ClaimUnprocessedEvents(ctx, batch)
 	if err != nil || len(events) == 0 {
 		return err
 	}
@@ -113,7 +132,7 @@ func (w *Worker) processBatch() error {
 	for _, rule := range rules {
 		clusters := ParseClusterIDSet(rule.ClusterIDs)
 		filter := ParseRuleFilter(rule)
-		webhookURL := w.resolveWebhookURL(rule.WebhookURL, w.cfg.UseInternalAlertWebhook)
+		webhookURL := w.resolveWebhookURL(rule.WebhookURL, cfg.UseInternalAlertWebhook, cfg.AlertWebhookURL)
 
 		grouped := make(map[string][]model.K8sForwardedEvent)
 		for i := range events {
@@ -121,10 +140,9 @@ func (w *Worker) processBatch() error {
 			if processedIDs[ev.ID] {
 				continue
 			}
-			if ev.Attempts >= w.maxRetry {
-				forwardLog().Warn("K8s forwarded event exceeded max retries, marking processed",
+			if ev.Attempts >= maxRetry {
+				forwardLog().Warn("K8s forwarded event exceeded max retries, already claimed",
 					"event_id", ev.ID, "cluster_id", ev.ClusterID, "attempts", ev.Attempts)
-				_ = w.repo.MarkEventProcessed(ctx, ev.ID, true)
 				processedIDs[ev.ID] = true
 				continue
 			}
@@ -138,40 +156,47 @@ func (w *Worker) processBatch() error {
 			grouped[ev.ClusterID] = append(grouped[ev.ClusterID], ev)
 		}
 
-		for clusterID, batch := range grouped {
-			if err := w.push(ctx, webhookURL, rule.Name, clusterID, batch); err != nil {
+		for clusterID, batchEvents := range grouped {
+			if err := w.push(ctx, webhookURL, rule.Name, clusterID, batchEvents); err != nil {
 				forwardLog().Warn("Failed to push K8s event forward webhook",
 					"rule", rule.Name,
 					"cluster_id", clusterID,
 					"error", err)
-				for _, e := range batch {
+				for _, e := range batchEvents {
 					_ = w.repo.IncrementEventAttempts(ctx, e.ID)
+					_ = w.repo.MarkEventProcessed(ctx, e.ID, false)
 				}
 				continue
 			}
-			for _, e := range batch {
-				_ = w.repo.MarkEventProcessed(ctx, e.ID, true)
+			for _, e := range batchEvents {
 				processedIDs[e.ID] = true
 			}
 		}
 	}
 
+	now := time.Now()
 	for _, ev := range events {
 		if processedIDs[ev.ID] || matchedIDs[ev.ID] {
 			continue
 		}
-		forwardLog().Debug("K8s forwarded event matched no rule, marking processed",
+		// 未匹配规则：放回队列，便于后续新增规则命中；过旧事件直接丢弃。
+		if !ev.Timestamp.IsZero() && now.Sub(ev.Timestamp) > unmatchedEventMaxAge {
+			forwardLog().Debug("K8s forwarded event unmatched and stale, keeping processed",
+				"event_id", ev.ID, "cluster_id", ev.ClusterID, "namespace", ev.Namespace)
+			processedIDs[ev.ID] = true
+			continue
+		}
+		forwardLog().Debug("K8s forwarded event matched no rule, requeue",
 			"event_id", ev.ID, "cluster_id", ev.ClusterID, "namespace", ev.Namespace)
-		_ = w.repo.MarkEventProcessed(ctx, ev.ID, true)
-		processedIDs[ev.ID] = true
+		_ = w.repo.MarkEventProcessed(ctx, ev.ID, false)
 	}
 	return nil
 }
 
-func (w *Worker) resolveWebhookURL(ruleURL string, useInternal bool) string {
+func (w *Worker) resolveWebhookURL(ruleURL string, useInternal bool, alertURL string) string {
 	u := strings.TrimSpace(ruleURL)
 	if useInternal && (u == "" || strings.EqualFold(u, "internal") || strings.EqualFold(u, "alertmanager")) {
-		return w.cfg.AlertWebhookURL
+		return alertURL
 	}
 	return u
 }

@@ -405,7 +405,10 @@ type (
 	AlertMonitorObjectListQuery      = alert.AlertMonitorObjectListQuery
 	AlertConsulSyncResult            = alert.AlertConsulSyncResult
 	AlertCurEventListQuery           = alert.AlertCurEventListQuery
+	AlertCurEventView                = alert.AlertCurEventView
 	AlertHisEventListQuery           = alert.AlertHisEventListQuery
+	AlertAckRequest                  = alert.AlertAckRequest
+	AlertAckActiveInfo               = alert.AlertAckActiveInfo
 	ImportPrometheusRulesRequest     = alert.ImportPrometheusRulesRequest
 	ImportPrometheusRulesResult      = alert.ImportPrometheusRulesResult
 	AlertMonitorRuleListQuery      = alert.AlertMonitorRuleListQuery
@@ -421,6 +424,8 @@ type (
 	AlertReceiverGroupListQuery    = alert.AlertReceiverGroupListQuery
 	AlertSubscriptionNodeListQuery = alert.AlertSubscriptionNodeListQuery
 	AlertSubscriptionNodeUpsertRequest = alert.AlertSubscriptionNodeUpsertRequest
+	AlertRoutingWizardRequest      = alert.AlertRoutingWizardRequest
+	AlertRoutingWizardResult       = alert.AlertRoutingWizardResult
 	SubscriptionMigrationReport    = alert.SubscriptionMigrationReport
 	MigrateFromPoliciesOptions     = alert.MigrateFromPoliciesOptions
 )

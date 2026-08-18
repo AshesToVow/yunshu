@@ -290,6 +290,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "移动告警订阅节点", Resource: "/api/v1/alerts/subscriptions/:id/move", Action: "POST", Description: "Move alert subscription node"},
 		{Name: "从策略迁移订阅", Resource: "/api/v1/alerts/subscriptions/migrate-from-policies", Action: "POST", Description: "Migrate subscriptions from policies"},
 		{Name: "克隆项目路由", Resource: "/api/v1/alerts/subscriptions/clone-from-project", Action: "POST", Description: "Clone project routing subscriptions"},
+		{Name: "告警路由向导", Resource: "/api/v1/alerts/subscriptions/wizard", Action: "POST", Description: "Create routing node via wizard"},
 		{Name: "接收组列表", Resource: "/api/v1/alerts/receiver-groups", Action: "GET", Description: "List alert receiver groups"},
 		{Name: "创建接收组", Resource: "/api/v1/alerts/receiver-groups", Action: "POST", Description: "Create alert receiver group"},
 		{Name: "更新接收组", Resource: "/api/v1/alerts/receiver-groups/:id", Action: "PUT", Description: "Update alert receiver group"},

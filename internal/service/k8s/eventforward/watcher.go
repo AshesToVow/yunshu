@@ -19,15 +19,15 @@ import (
 )
 
 type Watcher struct {
-	repo       interfaces.K8sEventForwardRepository
-	runtime    *k8s.K8sRuntimeService
-	cfg        RuntimeConfig
-	eventCh    chan *model.K8sForwardedEvent
-	ctx        context.Context
-	cancel     context.CancelFunc
-	activeMu   sync.Mutex
-	active     map[string]bool // clusterID -> watching
-	startOnce  sync.Once
+	repo      interfaces.K8sEventForwardRepository
+	runtime   *k8s.K8sRuntimeService
+	cfg       RuntimeConfig
+	eventCh   chan *model.K8sForwardedEvent
+	ctx       context.Context
+	cancel    context.CancelFunc
+	activeMu  sync.Mutex
+	active    map[string]context.CancelFunc // clusterID -> cancel watch
+	startOnce sync.Once
 }
 
 func NewWatcher(repo interfaces.K8sEventForwardRepository, runtime *k8s.K8sRuntimeService, cfg RuntimeConfig) *Watcher {
@@ -43,7 +43,7 @@ func NewWatcher(repo interfaces.K8sEventForwardRepository, runtime *k8s.K8sRunti
 		eventCh: make(chan *model.K8sForwardedEvent, buf),
 		ctx:     ctx,
 		cancel:  cancel,
-		active:  make(map[string]bool),
+		active:  make(map[string]context.CancelFunc),
 	}
 }
 
@@ -59,8 +59,22 @@ func (w *Watcher) TriggerEnsure() {
 }
 
 func (w *Watcher) Stop() {
+	w.StopAllClusters()
 	if w.cancel != nil {
 		w.cancel()
+	}
+}
+
+// StopAllClusters 停止各集群 watch，保留 persist/schedule 循环，便于禁用后再次启用。
+func (w *Watcher) StopAllClusters() {
+	if w == nil {
+		return
+	}
+	w.activeMu.Lock()
+	defer w.activeMu.Unlock()
+	for cid, cancel := range w.active {
+		cancel()
+		delete(w.active, cid)
 	}
 }
 
@@ -83,20 +97,33 @@ func (w *Watcher) ensureWatches() {
 		forwardLog().Warn("Failed to list K8s event forward clusters", "error", err)
 		return
 	}
+	wanted := map[string]uint{}
 	for _, id := range ids {
 		cid := strconv.FormatUint(uint64(id), 10)
-		w.activeMu.Lock()
-		if w.active[cid] {
-			w.activeMu.Unlock()
+		wanted[cid] = id
+	}
+
+	w.activeMu.Lock()
+	for cid, stop := range w.active {
+		if _, ok := wanted[cid]; ok {
 			continue
 		}
-		w.active[cid] = true
-		w.activeMu.Unlock()
-		go w.watchCluster(cid, id)
+		stop()
+		delete(w.active, cid)
+		forwardLog().Info("Stopped K8s event watch for removed cluster", "cluster_id", cid)
 	}
+	for cid, id := range wanted {
+		if _, ok := w.active[cid]; ok {
+			continue
+		}
+		clusterCtx, clusterCancel := context.WithCancel(w.ctx)
+		w.active[cid] = clusterCancel
+		go w.watchCluster(clusterCtx, cid, id)
+	}
+	w.activeMu.Unlock()
 }
 
-func (w *Watcher) watchCluster(clusterID string, id uint) {
+func (w *Watcher) watchCluster(ctx context.Context, clusterID string, id uint) {
 	defer func() {
 		w.activeMu.Lock()
 		delete(w.active, clusterID)
@@ -105,12 +132,12 @@ func (w *Watcher) watchCluster(clusterID string, id uint) {
 
 	backoff := time.Second
 	for {
-		if w.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			return
 		}
-		w.runClusterWatch(clusterID, id)
+		w.runClusterWatch(ctx, clusterID, id)
 		select {
-		case <-w.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
 		}
@@ -122,8 +149,7 @@ func (w *Watcher) watchCluster(clusterID string, id uint) {
 	}
 }
 
-func (w *Watcher) runClusterWatch(clusterID string, id uint) {
-	ctx := w.ctx
+func (w *Watcher) runClusterWatch(ctx context.Context, clusterID string, id uint) {
 	if err := w.runtime.EnsureClusterRegistered(ctx, id); err != nil {
 		forwardLog().Warn("Failed to register cluster for event watch", "cluster_id", clusterID, "error", err)
 		return
@@ -243,19 +269,13 @@ func (w *Watcher) fromCoreV1Event(clusterID string, evt *corev1.Event) *model.K8
 func (w *Watcher) enqueue(ev *model.K8sForwardedEvent) error {
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
-	for {
-		select {
-		case <-w.ctx.Done():
-			return fmt.Errorf("watcher stopped")
-		case w.eventCh <- ev:
-			return nil
-		default:
-			select {
-			case <-timer.C:
-			case <-w.ctx.Done():
-				return fmt.Errorf("watcher stopped")
-			}
-		}
+	select {
+	case <-w.ctx.Done():
+		return fmt.Errorf("watcher stopped")
+	case w.eventCh <- ev:
+		return nil
+	case <-timer.C:
+		return fmt.Errorf("enqueue timeout: buffer full")
 	}
 }
 
