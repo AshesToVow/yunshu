@@ -27,8 +27,22 @@ type ReportData struct {
 	Critical       int
 	Warning        int
 	Normal         int
-	Groups         []ReportGroup
+	ContentGroups  []ContentGroup // 巡检内容（全量范围）
+	Groups         []ReportGroup  // 各类巡检结果（受 listMode 过滤）
 	Findings       []Finding
+}
+
+type ContentGroup struct {
+	Type  string
+	Items []ContentItem
+	Stats GroupStats
+}
+
+// ContentItem 某分类下的一条巡检项（去重后的检查名称）。
+type ContentItem struct {
+	Name        string
+	Description string
+	SampleCount int
 }
 
 type ReportGroup struct {
@@ -90,6 +104,7 @@ func buildReportData(projectName, dsName, user, listMode string, collected Colle
 	}
 	score, grade := scorecard(collected)
 	findings := buildFindings(collected.Samples)
+	contentGroups := buildContentGroups(collected.Samples)
 	hint := "展示全部样本"
 	switch mode {
 	case "abnormal_only":
@@ -111,9 +126,58 @@ func buildReportData(projectName, dsName, user, listMode string, collected Colle
 		Critical:       collected.Critical,
 		Warning:        collected.Warning,
 		Normal:         collected.Normal,
+		ContentGroups:  contentGroups,
 		Groups:         groups,
 		Findings:       findings,
 	}
+}
+
+func buildContentGroups(samples []MetricSample) []ContentGroup {
+	byType := map[string]map[string]*ContentItem{}
+	statsByType := map[string]*GroupStats{}
+	for _, s := range samples {
+		t := s.Type
+		if t == "" {
+			t = "未分类"
+		}
+		if byType[t] == nil {
+			byType[t] = map[string]*ContentItem{}
+			statsByType[t] = &GroupStats{}
+		}
+		st := statsByType[t]
+		st.Total++
+		switch s.Status {
+		case "critical":
+			st.Critical++
+		case "warning":
+			st.Warning++
+		default:
+			st.Normal++
+		}
+		key := strings.TrimSpace(s.Name)
+		if key == "" {
+			key = "未命名项"
+		}
+		if byType[t][key] == nil {
+			byType[t][key] = &ContentItem{Name: key, Description: strings.TrimSpace(s.Description)}
+		}
+		byType[t][key].SampleCount++
+	}
+	types := make([]string, 0, len(byType))
+	for t := range byType {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	out := make([]ContentGroup, 0, len(types))
+	for _, t := range types {
+		items := make([]ContentItem, 0, len(byType[t]))
+		for _, it := range byType[t] {
+			items = append(items, *it)
+		}
+		sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
+		out = append(out, ContentGroup{Type: t, Items: items, Stats: *statsByType[t]})
+	}
+	return out
 }
 
 func filterSamples(samples []MetricSample, mode string) []MetricSample {
@@ -194,8 +258,4 @@ func buildFindings(samples []MetricSample) []Finding {
 
 func renderHTML(data ReportData) ([]byte, error) {
 	return renderHTMLWithTemplate("default", "", data)
-}
-
-func renderBinaryPDF(data ReportData) []byte {
-	return renderSimplePDF(data)
 }

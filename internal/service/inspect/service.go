@@ -500,7 +500,10 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 		}
 	}
 	printBytes := htmlBytes
-	pdfBytes := renderBinaryPDF(data)
+	pdfBytes := renderPDFFromHTMLBytes(ctx, htmlBytes)
+	if len(pdfBytes) == 0 {
+		pdfBytes = renderBinaryPDF(data)
+	}
 	excelBytes, excelErr := renderExcel(data)
 
 	store := s.store(ctx)
