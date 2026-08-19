@@ -58,6 +58,19 @@ func TestNeedsApproval_RequireTicketForAllWrites(t *testing.T) {
 	}
 }
 
+func TestNeedsApproval_ProdForceAllWrites(t *testing.T) {
+	t.Parallel()
+	s := &Service{}
+	inst := &model.DbInstance{Env: model.DbEnvProd, RequireTicketForDML: false}
+	a := SQLAssessment{RiskLevel: model.DbRiskLow}
+	if !s.needsApproval(inst, a, configResolved{ProdForceApproval: true}) {
+		t.Fatal("prod + ProdForceApproval must require ticket even for low risk")
+	}
+	if s.needsApproval(inst, a, configResolved{ProdForceApproval: false}) {
+		t.Fatal("prod without force and low risk should not require ticket")
+	}
+}
+
 func modelGrant(db string, tables []string, canQuery bool) model.DbAccessGrant {
 	g := model.DbAccessGrant{DatabaseName: db, CanQuery: canQuery}
 	if tables == nil {

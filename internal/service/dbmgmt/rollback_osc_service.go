@@ -44,8 +44,8 @@ func (s *Service) GetTicketRollback(ctx context.Context, projectID, ticketID uin
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkWritePermission(ctx, projectID, inst, ticket.DatabaseName, true, actor); err != nil {
-		if err2 := s.checkWritePermission(ctx, projectID, inst, ticket.DatabaseName, false, actor); err2 != nil {
+	if err := s.checkWritePermission(ctx, projectID, inst, ticket.DatabaseName, ticket.SqlText, true, actor); err != nil {
+		if err2 := s.checkWritePermission(ctx, projectID, inst, ticket.DatabaseName, ticket.SqlText, false, actor); err2 != nil {
 			if ticket.SubmitterUserID != actorUserID(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
 				if qerr := s.checkQueryPermission(ctx, projectID, inst, ticket.DatabaseName, actor); qerr != nil {
 					return nil, constants.ErrForbidden

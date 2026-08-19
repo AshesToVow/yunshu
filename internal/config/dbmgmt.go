@@ -6,6 +6,7 @@ type DbmgmtConfig struct {
 	MaxResultRows                 int      `mapstructure:"max_result_rows"`
 	MaxImportFileMB               int      `mapstructure:"max_import_file_mb"`
 	ProdForceApproval             bool     `mapstructure:"prod_force_approval"`
+	ForbidSelfApprove             bool     `mapstructure:"forbid_self_approve"`
 	ApprovalSlaHours              int      `mapstructure:"approval_sla_hours"`
 	ApprovalReminderIntervalHours int      `mapstructure:"approval_reminder_interval_hours"`
 	AllowedDrivers                []string `mapstructure:"allowed_drivers"`
@@ -23,6 +24,7 @@ func DefaultDbmgmtConfig() DbmgmtConfig {
 		MaxResultRows:                 1000,
 		MaxImportFileMB:               10,
 		ProdForceApproval:             true,
+		ForbidSelfApprove:             true,
 		ApprovalSlaHours:              24,
 		ApprovalReminderIntervalHours: 4,
 		AllowedDrivers:                []string{"mysql", "postgres"},

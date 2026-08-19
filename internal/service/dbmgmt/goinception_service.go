@@ -77,7 +77,7 @@ func (s *Service) CheckSQL(ctx context.Context, projectID, instanceID uint, req 
 		}
 	}
 	needDDL := reDDL.MatchString(strings.ToUpper(sqlText))
-	if err := s.checkWritePermission(ctx, projectID, inst, req.Database, needDDL, actor); err != nil {
+	if err := s.checkWritePermission(ctx, projectID, inst, req.Database, sqlText, needDDL, actor); err != nil {
 		return nil, err
 	}
 	viaEngine := s.goInceptionAvailable(ctx, inst)

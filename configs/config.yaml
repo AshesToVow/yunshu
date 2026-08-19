@@ -43,6 +43,7 @@ dbmgmt:
   max_result_rows: 1000
   max_import_file_mb: 10
   prod_force_approval: true
+  forbid_self_approve: true
   approval_sla_hours: 24
   approval_reminder_interval_hours: 4
   allowed_drivers: [mysql, postgres]

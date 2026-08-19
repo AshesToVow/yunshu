@@ -48,6 +48,7 @@ dbmgmt:
   max_result_rows: 1000
   max_import_file_mb: 50
   prod_force_approval: true
+  forbid_self_approve: true
   goinception_enabled: true
   goinception_host: 127.0.0.1
   goinception_port: 4000
@@ -62,7 +63,8 @@ dbmgmt:
 | `dbmgmt_query_timeout_seconds` | 查询/执行超时（秒） |
 | `dbmgmt_max_rows` | 查询结果最大行数 |
 | `dbmgmt_max_import_file_mb` | SQL 文件导入大小上限（MB） |
-| `dbmgmt_prod_force_approval` | 生产实例是否强制走审批 |
+| `dbmgmt_prod_force_approval` | 生产实例是否强制走审批（含 low 风险，禁止直执） |
+| `dbmgmt_forbid_self_approve` | 提交人不可审批自己的工单/申请（超管豁免） |
 | `dbmgmt_goinception_enabled` | 是否启用 goInception |
 | `dbmgmt_goinception_host` / `dbmgmt_goinception_port` | goInception 地址 |
 | `dbmgmt_goinception_backup` | 变更是否默认备份 |

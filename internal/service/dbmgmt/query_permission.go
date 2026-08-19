@@ -23,6 +23,7 @@ type queryTableRef struct {
 }
 
 func extractQueryTableRefs(sqlText, defaultDB string) []queryTableRef {
+	sqlText = stripSQLComments(sqlText)
 	if reExplainShow.MatchString(strings.TrimSpace(sqlText)) {
 		return nil
 	}

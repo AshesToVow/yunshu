@@ -322,6 +322,9 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 	if !ok {
 		return constants.ErrForbidden
 	}
+	if err := s.forbidSelfApprove(ctx, actor, req.RequesterUserID); err != nil {
+		return err
+	}
 	now := time.Now()
 	uid := actorUserID(actor)
 	cur.Status = model.DbApprovalStepApproved
