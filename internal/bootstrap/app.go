@@ -271,6 +271,7 @@ func (b *Builder) WithGin() *Builder {
 	engine.Use(middleware.Recovery(b.app.Logger))
 	engine.Use(middleware.RequestLogger(b.app.Logger))
 	engine.Use(middleware.ErrorHandler())
+	middleware.RegisterOpsEndpoints(engine, b.app.DB, b.app.Redis, time.Now())
 	b.app.Engine = engine
 	return b
 }

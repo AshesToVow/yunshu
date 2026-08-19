@@ -9,6 +9,8 @@ import (
 // RegisterCoreRoutes 平台内核：认证、RBAC、菜单、字典、审计日志等。
 func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	api.GET("/health", d.systemHandler.Health)
+	// 兼容旧探活；正式探针见 /livez、/readyz（进程根路径）
+	api.GET("/ready", d.systemHandler.Health)
 
 	authGroup := api.Group("/auth")
 	authGroup.POST("/verification-code", d.authHandler.SendEmailCode)
