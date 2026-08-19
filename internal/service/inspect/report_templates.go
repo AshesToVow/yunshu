@@ -33,7 +33,20 @@ var reportTemplateFuncs = template.FuncMap{
 			return "正常"
 		}
 	},
-	"eq": func(a, b string) bool { return a == b },
+	"gradeClass": func(g string) string {
+		switch strings.ToUpper(strings.TrimSpace(g)) {
+		case "A":
+			return "grade-a"
+		case "B":
+			return "grade-b"
+		case "C":
+			return "grade-c"
+		default:
+			return "grade-d"
+		}
+	},
+	"sampleNote": sampleNoteText,
+	"eq":         func(a, b string) bool { return a == b },
 }
 
 func builtinTemplateFile(code string) string {
