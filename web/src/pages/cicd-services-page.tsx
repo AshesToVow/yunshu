@@ -92,6 +92,17 @@ function ownerEmailPreview(username: string | undefined, users: UserItem[]) {
   return String(u?.email || "").trim();
 }
 
+function cicdAccess(row: CicdServiceItem) {
+  return (
+    row.access ?? {
+      can_view: false,
+      can_build: false,
+      can_release: false,
+      can_manage: false,
+    }
+  );
+}
+
 const FRONTEND_RELEASE_OPS = [
   { value: "frontend_online", label: "服务上线" },
   { value: "frontend_rollback", label: "服务回滚" },
@@ -657,30 +668,53 @@ export function CicdServicesPage() {
         key: "actions",
         fixed: "right",
         width: 340,
-        render: (_, row) => (
+        render: (_, row) => {
+          const access = cicdAccess(row);
+          return (
           <Space size={4} wrap>
-            <Button type="link" size="small" onClick={() => openCiConfig(row)}>
+            <Button
+              type="link"
+              size="small"
+              disabled={!access.can_manage}
+              onClick={() => openCiConfig(row)}
+            >
               {row.has_ci_config ? "编辑CI配置" : "新增CI配置"}
             </Button>
             <Button
               type="link"
               size="small"
               icon={<CloudUploadOutlined />}
+              disabled={!access.can_build}
               onClick={() => void openBuildModal(row)}
             >
               CI打包
             </Button>
-            <Button type="link" size="small" onClick={() => openDeployWizard(row, "regular")}>
+            <Button
+              type="link"
+              size="small"
+              disabled={!access.can_manage}
+              onClick={() => openDeployWizard(row, "regular")}
+            >
               非容器化发布
             </Button>
-            <Button type="link" size="small" onClick={() => openDeployWizard(row, "container")}>
+            <Button
+              type="link"
+              size="small"
+              disabled={!access.can_manage}
+              onClick={() => openDeployWizard(row, "container")}
+            >
               容器化发布
             </Button>
-            <Popconfirm title="确认删除该应用？" onConfirm={() => void deleteCicdService(projectId!, row.id).then(loadServices)}>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            <Popconfirm
+              title="确认删除该应用？"
+              disabled={!access.can_manage}
+              onConfirm={() => void deleteCicdService(projectId!, row.id).then(loadServices)}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!access.can_manage} />
             </Popconfirm>
           </Space>
-        ),
+          );
+        },
       },
     ],
     [projectId, userOptions],
@@ -730,12 +764,15 @@ export function CicdServicesPage() {
           {
             title: "操作",
             width: 200,
-            render: (_, c) => (
+            render: (_, c) => {
+              const access = cicdAccess(row);
+              return (
               <Space size={4}>
                 <Button
                   type="link"
                   size="small"
                   icon={<RocketOutlined />}
+                  disabled={!access.can_release}
                   onClick={() => void openReleaseModal(row, c)}
                 >
                   发布
@@ -744,22 +781,25 @@ export function CicdServicesPage() {
                   type="link"
                   size="small"
                   icon={<EditOutlined />}
+                  disabled={!access.can_manage}
                   onClick={() => void openDeployWizard(row, c.deploy_kind === "container" ? "container" : "regular", c)}
                 >
                   编辑
                 </Button>
                 <Popconfirm
                   title="删除该发布配置？"
+                  disabled={!access.can_manage}
                   onConfirm={() =>
                     void deleteDeployConfig(projectId!, row.id, c.id).then(() => loadDeployConfigs(row.id))
                   }
                 >
-                  <Button type="link" size="small" danger>
+                  <Button type="link" size="small" danger disabled={!access.can_manage}>
                     删除
                   </Button>
                 </Popconfirm>
               </Space>
-            ),
+              );
+            },
           },
         ]}
       />

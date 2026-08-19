@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 
 	"gorm.io/gorm"
@@ -26,8 +27,9 @@ type ApprovalFlowStageItem struct {
 }
 
 type ApprovalFlowResponse struct {
-	ProjectID uint                    `json:"project_id"`
-	Stages    []ApprovalFlowStageItem `json:"stages"`
+	ProjectID  uint                    `json:"project_id"`
+	Stages     []ApprovalFlowStageItem `json:"stages"`
+	Configured bool                    `json:"configured"`
 }
 
 type ApprovalFlowUpsertRequest struct {
@@ -109,10 +111,10 @@ func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*Approva
 				StageKey:  d.Key,
 				StageName: d.Name,
 				SortOrder: d.Sort,
-				Enabled:   true,
+				Enabled:   false,
 			})
 		}
-		return &ApprovalFlowResponse{ProjectID: projectID, Stages: stages}, nil
+		return &ApprovalFlowResponse{ProjectID: projectID, Stages: stages, Configured: false}, nil
 	}
 	groupNames := s.loadUserGroupNameMap(ctx, rows)
 	items := make([]ApprovalFlowStageItem, 0, len(rows))
@@ -129,10 +131,13 @@ func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*Approva
 		}
 		items = append(items, item)
 	}
-	return &ApprovalFlowResponse{ProjectID: projectID, Stages: items}, nil
+	return &ApprovalFlowResponse{ProjectID: projectID, Stages: items, Configured: true}, nil
 }
 
-func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req ApprovalFlowUpsertRequest) (*ApprovalFlowResponse, error) {
+func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req ApprovalFlowUpsertRequest, actor *auth.CurrentUser) (*ApprovalFlowResponse, error) {
+	if err := s.requireProjectAdmin(ctx, projectID, actor); err != nil {
+		return nil, err
+	}
 	type normalizedStage struct {
 		Key         string
 		Name        string
@@ -250,10 +255,7 @@ func (s *Service) initReleaseApprovalSteps(ctx context.Context, release *model.C
 		return err
 	}
 	if len(stages) == 0 {
-		return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
-			"status":            model.CicdRunStatusPendingExecution,
-			"current_stage_key": "",
-		}).Error
+		return constants.ErrBadRequestWithMsg("请先在「审批流配置」中启用至少一级审批后再提交发布")
 	}
 	steps := make([]model.CicdReleaseApprovalStep, 0, len(stages))
 	now := time.Now()
@@ -343,11 +345,12 @@ func (s *Service) nextPendingStepAfter(ctx context.Context, releaseRunID uint, a
 	return &step, nil
 }
 
-func (s *Service) ListReleaseApprovalSteps(ctx context.Context, projectID, runID uint) ([]ReleaseApprovalStepItem, error) {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
-		return nil, constants.ErrNotFound
+func (s *Service) ListReleaseApprovalSteps(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) ([]ReleaseApprovalStepItem, error) {
+	release, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "view")
+	if err != nil {
+		return nil, err
 	}
+	_ = release
 	var steps []model.CicdReleaseApprovalStep
 	if err := s.db.WithContext(ctx).Where("release_run_id = ?", runID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
 		return nil, err

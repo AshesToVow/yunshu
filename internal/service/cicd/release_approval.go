@@ -348,6 +348,11 @@ func (s *Service) approveLegacySingleStep(ctx context.Context, release *model.Ci
 	if err := s.assertLegacyReleaseReviewer(ctx, release.ProjectID, actor); err != nil {
 		return nil, err
 	}
+	if release.SubmitterUserID != nil {
+		if err := s.forbidSelfApprove(ctx, actor, *release.SubmitterUserID); err != nil {
+			return nil, err
+		}
+	}
 	reviewerUserID := &actor.ID
 	reviewerName := strings.TrimSpace(actor.Username)
 	if reviewerName == "" {
@@ -409,6 +414,11 @@ func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, 
 	if !can {
 		return nil, constants.ErrBadRequestWithMsg("您不是当前审批节点的审批人")
 	}
+	if release.SubmitterUserID != nil {
+		if err := s.forbidSelfApprove(ctx, actor, *release.SubmitterUserID); err != nil {
+			return nil, err
+		}
+	}
 	now := time.Now()
 	claimed, err := s.claimApprovalStep(ctx, step.ID, map[string]any{
 		"status":           model.CicdApprovalStepApproved,
@@ -457,6 +467,11 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, a
 		if err := s.assertLegacyReleaseReviewer(ctx, projectID, actor); err != nil {
 			return nil, err
 		}
+		if release.SubmitterUserID != nil {
+			if err := s.forbidSelfApprove(ctx, actor, *release.SubmitterUserID); err != nil {
+				return nil, err
+			}
+		}
 		now := time.Now()
 		updates := map[string]any{
 			"status":           model.CicdRunStatusRejected,
@@ -488,6 +503,11 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, a
 	}
 	if !can {
 		return nil, constants.ErrBadRequestWithMsg("您不是当前审批节点的审批人")
+	}
+	if release.SubmitterUserID != nil {
+		if err := s.forbidSelfApprove(ctx, actor, *release.SubmitterUserID); err != nil {
+			return nil, err
+		}
 	}
 	now := time.Now()
 	claimed, err := s.claimApprovalStep(ctx, step.ID, map[string]any{
@@ -632,12 +652,18 @@ func (s *Service) BatchRejectReleaseRuns(ctx context.Context, projectID uint, id
 
 func (s *Service) BatchExecuteReleaseRuns(ctx context.Context, projectID uint, ids []uint, executorUserID *uint) (int, error) {
 	ok := 0
+	var firstErr error
 	for _, id := range ids {
 		if _, err := s.ExecuteReleaseRun(ctx, projectID, id, executorUserID); err == nil {
 			ok++
+		} else if firstErr == nil {
+			firstErr = err
 		}
 	}
 	if ok == 0 {
+		if firstErr != nil {
+			return 0, firstErr
+		}
 		return 0, constants.ErrBadRequestWithMsg("没有工单执行成功")
 	}
 	return ok, nil
@@ -645,12 +671,18 @@ func (s *Service) BatchExecuteReleaseRuns(ctx context.Context, projectID uint, i
 
 func (s *Service) BatchTerminateReleaseRuns(ctx context.Context, projectID uint, ids []uint, reviewerUserID *uint, reviewerName, comment string) (int, error) {
 	ok := 0
+	var firstErr error
 	for _, id := range ids {
 		if _, err := s.TerminateReleaseRun(ctx, projectID, id, reviewerUserID, reviewerName, comment); err == nil {
 			ok++
+		} else if firstErr == nil {
+			firstErr = err
 		}
 	}
 	if ok == 0 {
+		if firstErr != nil {
+			return 0, firstErr
+		}
 		return 0, constants.ErrBadRequestWithMsg("没有工单终止成功")
 	}
 	return ok, nil

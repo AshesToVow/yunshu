@@ -1,6 +1,13 @@
 import type { ApiResponse, PageData } from "../types/api";
 import { getData, http } from "./http";
 
+export interface CicdAccessPerm {
+  can_view: boolean;
+  can_build: boolean;
+  can_release: boolean;
+  can_manage: boolean;
+}
+
 export interface CicdServiceItem {
   id: number;
   project_id: number;
@@ -16,6 +23,7 @@ export interface CicdServiceItem {
   deploy_config_count: number;
   last_build_result?: string;
   last_build_at?: string;
+  access?: CicdAccessPerm;
 }
 
 export interface CicdCiConfig {
@@ -418,6 +426,7 @@ export interface CicdApprovalFlowStage {
 
 export interface CicdApprovalFlow {
   project_id: number;
+  configured: boolean;
   stages: CicdApprovalFlowStage[];
 }
 

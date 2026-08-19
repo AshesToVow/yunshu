@@ -191,12 +191,14 @@ export function EsmgmtOverviewPage() {
   }
 
   async function onRestore(job: EsmgmtBackupJob, deleteExisting: boolean) {
+    const targetIndex = job.index_name;
     try {
       const r = await createEsmgmtRestore({
         backup_job_id: job.id,
         connection_id: connectionId,
-        target_index: job.index_name,
+        target_index: targetIndex,
         delete_existing: deleteExisting,
+        confirm_target_index: deleteExisting ? targetIndex : undefined,
       });
       message.success(`恢复任务已创建 #${r.id}`);
       await loadJobs();
@@ -408,7 +410,7 @@ export function EsmgmtOverviewPage() {
                     下载
                   </Button>
                   <Popconfirm
-                    title="覆盖同名索引并恢复？"
+                    title={`覆盖恢复将删除索引「${row.index_name}」现有数据，确认继续？`}
                     disabled={row.status !== "success"}
                     onConfirm={() => void onRestore(row, true)}
                   >

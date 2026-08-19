@@ -173,6 +173,7 @@ export function createEsmgmtRestore(payload: {
   connection_id?: number;
   target_index?: string;
   delete_existing?: boolean;
+  confirm_target_index?: string;
 }) {
   return getData<EsmgmtRestoreJob>(http.post("/esmgmt/restores", payload));
 }

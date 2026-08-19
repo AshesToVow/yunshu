@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/pkg/esclient"
@@ -35,7 +36,7 @@ type Service struct {
 	schedRunning map[uint]bool
 }
 
-// NewService 创建 ES 管理服务。encryptionKey 为空时密码明文写入 PasswordEnc（与部分备份链路兜底一致）。
+// NewService 创建 ES 管理服务。encryptionKey 为空时仍可启动，但写入密码会失败。
 func NewService(
 	db *gorm.DB,
 	encryptionKey string,
@@ -187,7 +188,7 @@ func (s *Service) listConnections(ctx context.Context, includeLogPlatform bool) 
 	return list, nil
 }
 
-func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequest) (*model.EsmgmtConnection, error) {
+func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequest, actor *auth.CurrentUser) (*model.EsmgmtConnection, error) {
 	name := strings.TrimSpace(req.Name)
 	addrs := []string(req.Addresses)
 	if name == "" {
@@ -201,12 +202,13 @@ func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequ
 		timeout = 30
 	}
 	row := model.EsmgmtConnection{
-		Name:       name,
-		Addresses:  joinAddresses(addrs),
-		Username:   strings.TrimSpace(req.Username),
-		TimeoutSec: timeout,
-		IsDefault:  req.IsDefault,
-		Remark:     strings.TrimSpace(req.Remark),
+		Name:        name,
+		Addresses:   joinAddresses(addrs),
+		Username:    strings.TrimSpace(req.Username),
+		TimeoutSec:  timeout,
+		IsDefault:   req.IsDefault,
+		OwnerUserID: actorID(actor),
+		Remark:      strings.TrimSpace(req.Remark),
 	}
 	if pw := strings.TrimSpace(req.Password); pw != "" {
 		enc, err := s.encryptPassword(pw)
@@ -233,9 +235,9 @@ func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequ
 	return &row, nil
 }
 
-func (s *Service) UpdateConnection(ctx context.Context, id uint, req ConnectionUpsertRequest) (*model.EsmgmtConnection, error) {
-	if id == 0 {
-		return nil, constants.ErrBadRequestWithMsg("「日志平台 ES」为只读虚拟连接，不可编辑；请在数据字典修改 elasticsearch_*")
+func (s *Service) UpdateConnection(ctx context.Context, id uint, req ConnectionUpsertRequest, actor *auth.CurrentUser) (*model.EsmgmtConnection, error) {
+	if err := s.assertConnectionManage(ctx, id, actor); err != nil {
+		return nil, err
 	}
 	var row model.EsmgmtConnection
 	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
@@ -284,9 +286,9 @@ func (s *Service) UpdateConnection(ctx context.Context, id uint, req ConnectionU
 	return &row, nil
 }
 
-func (s *Service) DeleteConnection(ctx context.Context, id uint) error {
-	if id == 0 {
-		return constants.ErrBadRequestWithMsg("「日志平台 ES」为只读虚拟连接，不可删除；请在数据字典修改 elasticsearch_*")
+func (s *Service) DeleteConnection(ctx context.Context, id uint, actor *auth.CurrentUser) error {
+	if err := s.assertConnectionManage(ctx, id, actor); err != nil {
+		return err
 	}
 	res := s.db.WithContext(ctx).Delete(&model.EsmgmtConnection{}, id)
 	if res.Error != nil {
@@ -513,7 +515,12 @@ func (s *Service) CatNodes(ctx context.Context, connectionID uint) ([]map[string
 	return out, nil
 }
 
-func (s *Service) ProxyREST(ctx context.Context, connectionID uint, req ProxyRequest) (*esclient.ProxyResult, error) {
+func (s *Service) ProxyREST(ctx context.Context, connectionID uint, req ProxyRequest, actor *auth.CurrentUser) (*esclient.ProxyResult, error) {
+	if esclient.ProxyRequiresWriteAuth(req.Method, req.Path) {
+		if err := s.assertConnectionWrite(ctx, connectionID, actor); err != nil {
+			return nil, err
+		}
+	}
 	cli, err := s.resolveClient(ctx, connectionID)
 	if err != nil {
 		return nil, err
@@ -527,8 +534,7 @@ func (s *Service) ProxyREST(ctx context.Context, connectionID uint, req ProxyReq
 
 func (s *Service) encryptPassword(plain string) (string, error) {
 	if s.aead == nil {
-		// encryption_key 未配置时明文落入 password_enc（与部分历史备份兜底一致）。
-		return plain, nil
+		return "", constants.ErrBadRequestWithMsg("未配置 security.encryption_key，拒绝明文存储 ES 密码")
 	}
 	return cryptox.EncryptString(s.aead, plain)
 }
@@ -539,14 +545,9 @@ func (s *Service) decryptPassword(enc string) (string, error) {
 		return "", nil
 	}
 	if s.aead == nil {
-		return enc, nil
+		return "", constants.ErrBadRequestWithMsg("未配置 security.encryption_key，无法解密 ES 密码")
 	}
-	pt, err := cryptox.DecryptString(s.aead, enc)
-	if err != nil {
-		// 兼容 encryption_key 变更前写入的明文。
-		return enc, nil
-	}
-	return pt, nil
+	return cryptox.DecryptString(s.aead, enc)
 }
 
 // resolveClient：connectionID>0 用该连接；0 优先日志平台 ES（与保留/检索同源），再回退默认连接。

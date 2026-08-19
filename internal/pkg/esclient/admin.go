@@ -153,22 +153,78 @@ func encodeProxyBody(raw []byte) json.RawMessage {
 	return json.RawMessage(quoted)
 }
 
-func proxyPathAllowed(method, path string) bool {
-	switch method {
-	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodHead:
+// ProxyMethodIsWrite 判断 HTTP 方法是否为写动词（不含只读 POST 如 _search）。
+func ProxyMethodIsWrite(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodPut, http.MethodDelete, http.MethodPatch:
+		return true
 	default:
 		return false
 	}
-	full := strings.ToLower(path)
-	if proxyPathBlocked(full) {
+}
+
+// ProxyRequiresWriteAuth 代理请求是否需连接写权限（含 _open/_bulk 等 POST 写操作）。
+func ProxyRequiresWriteAuth(method, path string) bool {
+	m := strings.ToUpper(strings.TrimSpace(method))
+	switch m {
+	case http.MethodGet, http.MethodHead:
+		return false
+	case http.MethodPost:
+		return !proxyPostIsReadOnly(path)
+	case http.MethodPut, http.MethodDelete, http.MethodPatch:
+		return true
+	default:
+		return true
+	}
+}
+
+func proxyPathAllowed(method, path string) bool {
+	if proxyPathBlocked(path) {
 		return false
 	}
-	p := full
+	m := strings.ToUpper(strings.TrimSpace(method))
+	switch m {
+	case http.MethodGet, http.MethodHead:
+		return proxyReadPathAllowed(path)
+	case http.MethodPost:
+		if proxyPostIsReadOnly(path) {
+			return proxyReadPathAllowed(path)
+		}
+		return proxyWritePathAllowed(path)
+	case http.MethodPut, http.MethodDelete:
+		return proxyWritePathAllowed(path)
+	default:
+		return false
+	}
+}
+
+func proxyPostIsReadOnly(path string) bool {
+	p := normalizeProxyPath(path)
+	for _, token := range []string{
+		"/_search", "/_msearch", "/_count", "/_explain", "/_validate", "/_mget",
+	} {
+		if strings.Contains(p, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeProxyPath(path string) string {
+	p := strings.ToLower(strings.TrimSpace(path))
 	if i := strings.IndexByte(p, '?'); i >= 0 {
 		p = p[:i]
 	}
-	if p == "/" {
-		return method == http.MethodGet || method == http.MethodHead
+	return p
+}
+
+func proxyReadPathAllowed(path string) bool {
+	if proxyPathBlocked(normalizeProxyPath(path)) {
+		return false
+	}
+	p := normalizeProxyPath(path)
+	if p == "" || p == "/" {
+		return true
 	}
 	for _, pref := range []string{
 		"/_cluster", "/_cat", "/_nodes", "/_stats", "/_aliases", "/_alias",
@@ -183,23 +239,55 @@ func proxyPathAllowed(method, path string) bool {
 		"/_search", "/_msearch", "/_count", "/_explain", "/_validate",
 		"/_mapping", "/_settings", "/_aliases", "/_alias",
 		"/_doc", "/_create", "/_update", "/_source", "/_bulk", "/_mget",
-		"/_delete_by_query", "/_update_by_query", "/_reindex",
-		"/_refresh", "/_flush", "/_forcemerge", "/_open", "/_close",
+	} {
+		if strings.Contains(p, token) {
+			return true
+		}
+	}
+	return isIndexResourcePath(p)
+}
+
+func proxyWritePathAllowed(path string) bool {
+	if proxyPathBlocked(normalizeProxyPath(path)) {
+		return false
+	}
+	p := normalizeProxyPath(path)
+	if p == "" || p == "/" {
+		return false
+	}
+	if strings.HasPrefix(p, "/_cluster") {
+		return false
+	}
+	for _, blocked := range []string{
+		"/_delete_by_query", "/_update_by_query", "/_reindex", "/_forcemerge",
+		"/_scripts", "/_snapshot", "/_slm",
+	} {
+		if strings.Contains(p, blocked) {
+			return false
+		}
+	}
+	if strings.HasPrefix(p, "/_alias") || strings.HasPrefix(p, "/_aliases") {
+		return false
+	}
+	for _, token := range []string{
+		"/_doc", "/_create", "/_update", "/_source", "/_bulk",
+		"/_mapping", "/_settings",
+		"/_refresh", "/_flush", "/_open", "/_close",
 		"/_shrink", "/_split", "/_clone", "/_rollover",
 	} {
 		if strings.Contains(p, token) {
 			return true
 		}
 	}
-	// 索引资源：/my-index、/a,b 等（首段不以 _ 开头）
 	return isIndexResourcePath(p)
 }
 
-func proxyPathBlocked(p string) bool {
-	if strings.Contains(p, "_scripts") || strings.Contains(p, "painless") {
+func proxyPathBlocked(path string) bool {
+	full := strings.ToLower(strings.TrimSpace(path))
+	if strings.Contains(full, "_scripts") || strings.Contains(full, "painless") {
 		return true
 	}
-	if strings.Contains(p, "shutdown") {
+	if strings.Contains(full, "shutdown") {
 		return true
 	}
 	return false

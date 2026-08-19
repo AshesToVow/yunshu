@@ -285,6 +285,9 @@ func (s *Service) applyReleaseCallback(ctx context.Context, rr *model.CicdReleas
 	if st == "" {
 		return nil
 	}
+	if !releaseCallbackStatusAllowed(rr.Status, st) {
+		return constants.ErrBadRequestWithMsg("Jenkins 回调状态不允许: " + rr.Status + " -> " + st)
+	}
 	updates := map[string]any{
 		"status":     st,
 		"updated_at": time.Now(),
@@ -297,6 +300,26 @@ func (s *Service) applyReleaseCallback(ctx context.Context, rr *model.CicdReleas
 		updates["jenkins_build_number"] = req.BuildNumber
 	}
 	return s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).Where("id = ?", rr.ID).Updates(updates).Error
+}
+
+// releaseCallbackStatusAllowed Jenkins run 回调仅允许从执行中/待执行推进到终态或保持 running。
+func releaseCallbackStatusAllowed(current, next string) bool {
+	current = strings.ToLower(strings.TrimSpace(current))
+	next = strings.ToLower(strings.TrimSpace(next))
+	switch current {
+	case model.CicdRunStatusRunning:
+		switch next {
+		case model.CicdRunStatusRunning, model.CicdRunStatusSuccess, model.CicdRunStatusFailure,
+			model.CicdRunStatusAborted, model.CicdRunStatusCancelled:
+			return true
+		default:
+			return false
+		}
+	case model.CicdRunStatusPendingExecution:
+		return next == model.CicdRunStatusRunning
+	default:
+		return false
+	}
 }
 
 func mapStageStatusToQualityGate(status string) string {

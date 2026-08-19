@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 )
 
@@ -27,10 +28,10 @@ func (s *Service) SetK8sRolloutUndo(fn K8sRolloutUndoFn) {
 }
 
 // PlatformRollbackRelease 对容器发布工单执行平台回滚。
-func (s *Service) PlatformRollbackRelease(ctx context.Context, projectID, runID uint, req PlatformRollbackRequest) (map[string]any, error) {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
-		return nil, constants.ErrNotFound
+func (s *Service) PlatformRollbackRelease(ctx context.Context, projectID, runID uint, req PlatformRollbackRequest, actor *auth.CurrentUser) (map[string]any, error) {
+	release, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "release")
+	if err != nil {
+		return nil, err
 	}
 	if !strings.EqualFold(release.ReleaseKind, model.CicdDeployKindContainer) {
 		return nil, constants.ErrBadRequestWithMsg("仅容器化发布支持平台回滚")

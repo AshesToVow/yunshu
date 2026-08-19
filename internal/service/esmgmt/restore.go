@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/esclient"
 )
@@ -18,12 +19,19 @@ import (
 type RestoreIndexRequest struct {
 	BackupJobID    uint   `json:"backup_job_id"`
 	ConnectionID   uint   `json:"connection_id"` // 0 则用备份任务的连接
-	TargetIndex    string `json:"target_index"`  // 空则用源索引名
-	DeleteExisting bool   `json:"delete_existing"`
+	TargetIndex         string `json:"target_index"`  // 空则用源索引名
+	DeleteExisting      bool   `json:"delete_existing"`
+	ConfirmTargetIndex  string `json:"confirm_target_index"`
 }
 
 // CreateIndexRestore 创建恢复任务：分词/settings → mapping → 数据。
-func (s *Service) CreateIndexRestore(ctx context.Context, req RestoreIndexRequest, createdBy uint) (*model.EsmgmtRestoreJob, error) {
+func (s *Service) CreateIndexRestore(ctx context.Context, req RestoreIndexRequest, actor *auth.CurrentUser) (*model.EsmgmtRestoreJob, error) {
+	if err := s.assertDestructiveRestore(ctx, req, actor); err != nil {
+		return nil, err
+	}
+	if err := s.assertConnectionWrite(ctx, req.ConnectionID, actor); err != nil && req.ConnectionID != 0 {
+		return nil, err
+	}
 	if req.BackupJobID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("backup_job_id 无效")
 	}
@@ -46,9 +54,15 @@ func (s *Service) CreateIndexRestore(ctx context.Context, req RestoreIndexReques
 	if strings.HasPrefix(target, ".") {
 		return nil, constants.ErrBadRequestWithMsg("禁止恢复到系统索引")
 	}
+	if strings.HasPrefix(target, "yunshu-") && !isSuperAdmin(actor) {
+		return nil, constants.ErrForbiddenWithMsg("恢复到 yunshu-* 索引须超级管理员")
+	}
 	connID := req.ConnectionID
 	if connID == 0 {
 		connID = backup.ConnectionID
+	}
+	if err := s.assertConnectionWrite(ctx, connID, actor); err != nil {
+		return nil, err
 	}
 	if s.newObjectStore == nil {
 		return nil, constants.ErrBadRequestWithMsg("对象存储未配置")
@@ -64,7 +78,7 @@ func (s *Service) CreateIndexRestore(ctx context.Context, req RestoreIndexReques
 		DeleteExisting: req.DeleteExisting,
 		Status:         "pending",
 		Phase:          "queued",
-		CreatedBy:      createdBy,
+		CreatedBy:      actorID(actor),
 	}
 	if err := s.db.WithContext(ctx).Create(job).Error; err != nil {
 		return nil, err
@@ -103,6 +117,13 @@ func (s *Service) GetRestoreJob(ctx context.Context, id uint) (*model.EsmgmtRest
 }
 
 func (s *Service) runRestoreJob(jobID uint) {
+	defer func() {
+		if r := recover(); r != nil {
+			_ = s.db.WithContext(context.Background()).Model(&model.EsmgmtRestoreJob{}).
+				Where("id = ?", jobID).
+				Updates(map[string]any{"status": "failed", "phase": "panic", "error_message": "job panic"}).Error
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	defer cancel()
 

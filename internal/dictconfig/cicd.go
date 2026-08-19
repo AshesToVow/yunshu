@@ -43,6 +43,8 @@ type CicdDictTypes struct {
 	DefaultArtifactRetain         string
 	ApprovalSlaHours              string
 	ApprovalReminderIntervalHours string
+	ForbidSelfApprove             string
+	ProdForceAudit                string
 	SonarEnabled                  string
 	SonarURL                      string
 	SonarToken                    string
@@ -83,6 +85,8 @@ func DefaultCicdDictTypes() CicdDictTypes {
 		DefaultArtifactRetain:         "cicd_default_artifact_retain_count",
 		ApprovalSlaHours:              "cicd_approval_sla_hours",
 		ApprovalReminderIntervalHours: "cicd_approval_reminder_interval_hours",
+		ForbidSelfApprove:             "cicd_forbid_self_approve",
+		ProdForceAudit:                "cicd_prod_force_audit",
 		SonarEnabled:                  "cicd_sonar_enabled",
 		SonarURL:                      "cicd_sonar_url",
 		SonarToken:                    "cicd_sonar_token",
@@ -198,6 +202,16 @@ func ResolveCicdConfig(ctx context.Context, db *gorm.DB, yamlBase config.CicdCon
 	if v, ok := fetchEnabledDictValue(ctx, db, types.ApprovalReminderIntervalHours); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.ApprovalReminderIntervalHours = n
+		}
+	}
+	if v, ok := fetchEnabledDictValue(ctx, db, types.ForbidSelfApprove); ok {
+		if bv, ok2 := parseBoolLoose(v); ok2 {
+			cfg.ForbidSelfApprove = bv
+		}
+	}
+	if v, ok := fetchEnabledDictValue(ctx, db, types.ProdForceAudit); ok {
+		if bv, ok2 := parseBoolLoose(v); ok2 {
+			cfg.ProdForceAudit = bv
 		}
 	}
 	if v, ok := fetchEnabledDictValue(ctx, db, types.SonarEnabled); ok {

@@ -128,6 +128,7 @@ type ServiceItem struct {
 	DeployConfigCnt int  `json:"deploy_config_count"`
 	LastBuildResult string `json:"last_build_result,omitempty"`
 	LastBuildAt     *time.Time `json:"last_build_at,omitempty"`
+	Access          *CicdAccessPerm `json:"access,omitempty"`
 }
 
 type ServiceUpsertRequest struct {
@@ -187,17 +188,31 @@ func (s *Service) ListServices(ctx context.Context, q ServiceListQuery) (*pagina
 			item.LastBuildResult = lastRun.BuildResult
 			item.LastBuildAt = lastRun.StartedAt
 		}
+		s.attachServiceAccess(ctx, q.ProjectID, q.Actor, &item)
 		items = append(items, item)
 	}
 	return &pagination.Result[ServiceItem]{List: items, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
-func (s *Service) GetService(ctx context.Context, projectID, serviceID uint) (*ServiceItem, error) {
+func (s *Service) attachServiceAccess(ctx context.Context, projectID uint, actor *auth.CurrentUser, item *ServiceItem) {
+	if item == nil {
+		return
+	}
+	perm, err := s.EffectiveCicdAccess(ctx, projectID, item.ID, actor)
+	if err != nil || perm == nil {
+		item.Access = &CicdAccessPerm{}
+		return
+	}
+	p := *perm
+	item.Access = &p
+}
+
+func (s *Service) GetService(ctx context.Context, projectID, serviceID uint, actor *auth.CurrentUser) (*ServiceItem, error) {
 	svc, err := s.loadService(ctx, projectID, serviceID)
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.ListServices(ctx, ServiceListQuery{ProjectID: projectID, Page: 1, PageSize: 1})
+	res, err := s.ListServices(ctx, ServiceListQuery{ProjectID: projectID, Page: 1, PageSize: 1, Actor: actor})
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +223,7 @@ func (s *Service) GetService(ctx context.Context, projectID, serviceID uint) (*S
 			item.DeployConfigCnt = it.DeployConfigCnt
 			item.LastBuildResult = it.LastBuildResult
 			item.LastBuildAt = it.LastBuildAt
+			item.Access = it.Access
 			break
 		}
 	}
@@ -598,6 +614,9 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 		return nil, constants.ErrBadRequestWithMsg("该应用在此环境下已存在同类型发布配置，请编辑已有配置或选择其他环境")
 	}
 	row.AuditEnabled = req.AuditEnabled
+	if s.enforceProdDeployAudit(ctx, row.Tenv, &row.AuditEnabled) {
+		row.AuditEnabled = true
+	}
 	row.Importance = strings.TrimSpace(req.Importance)
 	row.DestPath = strings.TrimSpace(req.DestPath)
 	row.ServerIDsJSON = string(serverJSON)
@@ -816,6 +835,10 @@ func (s *Service) TriggerRelease(ctx context.Context, projectID, serviceID uint,
 		return nil, err
 	}
 	if p.dc.AuditEnabled {
+		return s.createPendingRelease(ctx, projectID, serviceID, p, submitterUserID, submitterName)
+	}
+	auditRequired := s.enforceProdDeployAudit(ctx, p.dc.Tenv, boolPtr(p.dc.AuditEnabled))
+	if auditRequired {
 		return s.createPendingRelease(ctx, projectID, serviceID, p, submitterUserID, submitterName)
 	}
 
@@ -1142,12 +1165,28 @@ func (s *Service) GetReleaseRunLog(ctx context.Context, projectID, runID uint, a
 	return client.GetConsoleLog(ctx, svc.JenkinsJob, row.JenkinsBuildNumber)
 }
 
-func (s *Service) DeleteBuildRun(ctx context.Context, projectID, runID uint) error {
+func (s *Service) DeleteBuildRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) error {
+	var row model.CicdBuildRun
+	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+		return constants.ErrNotFound
+	}
+	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "manage"); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).Delete(&model.CicdBuildRun{}).Error
 }
 
-func (s *Service) DeleteReleaseRun(ctx context.Context, projectID, runID uint) error {
+func (s *Service) DeleteReleaseRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) error {
+	release, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "manage")
+	if err != nil {
+		return err
+	}
+	_ = release
 	return s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).Delete(&model.CicdReleaseRun{}).Error
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 type serviceMeta struct {
