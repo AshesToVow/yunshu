@@ -96,7 +96,7 @@ export function MenusPage() {
   async function loadTree() {
     setLoading(true);
     try {
-      const data = await getMenuTree();
+      const data = await getAdminMenuTree();
       const normalized = normalizeTreeOrder(data);
       setTreeData(normalized);
       setExpandedRowKeys(collectAllIDs(normalized));

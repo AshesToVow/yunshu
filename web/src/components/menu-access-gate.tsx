@@ -26,7 +26,7 @@ export function MenuAccessGate({ children }: MenuAccessGateProps) {
     return <>{children}</>;
   }
 
-  const isSuper = (user?.role_codes || []).some((c) => c === "super-admin");
+  const isSuper = Boolean(user?.roles?.some((r) => r.code === "super-admin"));
   if (isSuper) {
     return <>{children}</>;
   }
