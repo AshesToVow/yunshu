@@ -22,6 +22,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -101,6 +102,17 @@ function cicdAccess(row: CicdServiceItem) {
       can_manage: false,
     }
   );
+}
+
+function isSuperAdminUser(u: UserItem | null | undefined): boolean {
+  return Boolean(u?.roles?.some((r) => r.code === "super-admin"));
+}
+
+/** 与后端 projectacl.FullAccess 一致：超管或项目 owner/admin 可新建应用 */
+function canCreateCicdService(isSuper: boolean, myProjectRole: string | null | undefined): boolean {
+  if (isSuper) return true;
+  const r = String(myProjectRole || "").toLowerCase();
+  return r === "owner" || r === "admin";
 }
 
 const FRONTEND_RELEASE_OPS = [
@@ -218,6 +230,7 @@ function defaultCiFormValues(svc: CicdServiceItem) {
 
 export function CicdServicesPage() {
   const { user: currentUser } = useAuth();
+  const isSuper = useMemo(() => isSuperAdminUser(currentUser), [currentUser]);
   const pipelineTypes = useDictOptions("cicd_pipeline_type");
   const publishModes = useDictOptions("cicd_publish_mode");
   const tenvOpts = useDictOptions("cicd_tenv");
@@ -238,6 +251,15 @@ export function CicdServicesPage() {
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.id === projectId),
+    [projects, projectId],
+  );
+  const canCreateService = useMemo(
+    () => Boolean(projectId && canCreateCicdService(isSuper, selectedProject?.my_project_role)),
+    [projectId, isSuper, selectedProject?.my_project_role],
+  );
 
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<CicdServiceItem | null>(null);
@@ -848,23 +870,29 @@ export function CicdServicesPage() {
           <Button icon={<ReloadOutlined />} onClick={() => void loadServices()}>
             刷新
           </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            disabled={!projectId}
-            onClick={() => {
-              setEditingService(null);
-              serviceForm.resetFields();
-              serviceForm.setFieldsValue({
-                service_type: "backend",
-                status: 1,
-                owner: currentUser?.username ?? undefined,
-              });
-              setServiceModalOpen(true);
-            }}
-          >
-            新建应用
-          </Button>
+          <Tooltip title={canCreateService ? undefined : "仅项目 owner/admin 或超级管理员可新建应用"}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              disabled={!canCreateService}
+              onClick={() => {
+                if (!canCreateService) {
+                  message.error("当前账号无新建应用权限");
+                  return;
+                }
+                setEditingService(null);
+                serviceForm.resetFields();
+                serviceForm.setFieldsValue({
+                  service_type: "backend",
+                  status: 1,
+                  owner: currentUser?.username ?? undefined,
+                });
+                setServiceModalOpen(true);
+              }}
+            >
+              新建应用
+            </Button>
+          </Tooltip>
         </Space>
 
         <div className="k8s-table-scroll-host">
@@ -897,8 +925,16 @@ export function CicdServicesPage() {
           if (!projectId) return;
           const values = await serviceForm.validateFields();
           if (editingService) {
+            if (!cicdAccess(editingService).can_manage) {
+              message.error("当前账号无编辑该应用权限");
+              return;
+            }
             await updateCicdService(projectId, editingService.id, values);
           } else {
+            if (!canCreateService) {
+              message.error("当前账号无新建应用权限");
+              return;
+            }
             await createCicdService(projectId, values);
           }
           message.success("已保存");
