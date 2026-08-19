@@ -68,17 +68,22 @@ func authenticateWSSession(c *gin.Context, redisClient *redis.Client, userRepo i
 
 	groupCodes := make([]string, 0, len(user.Groups))
 	for _, g := range user.Groups {
+		if g.Status == model.StatusDisabled {
+			continue
+		}
 		if code := strings.TrimSpace(g.Code); code != "" {
 			groupCodes = append(groupCodes, code)
 		}
 	}
+	// 与 HTTP Auth 一致：禁用角色/用户组不得参与鉴权（含 super-admin 旁路与 K8s 档位）。
 	currentUser := &auth.CurrentUser{
-		ID:         user.ID,
-		Username:   user.Username,
-		Nickname:   user.Nickname,
-		Status:     user.Status,
-		RoleCodes:  model.ExtractRoleCodes(user.Roles),
-		GroupCodes: groupCodes,
+		ID:           user.ID,
+		Username:     user.Username,
+		Nickname:     user.Nickname,
+		Status:       user.Status,
+		DepartmentID: user.DepartmentID,
+		RoleCodes:    model.ExtractEnabledRoleCodes(user.Roles),
+		GroupCodes:   groupCodes,
 	}
 
 	c.Set(auth.ContextUserKey, currentUser)

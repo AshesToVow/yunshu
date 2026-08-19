@@ -33,6 +33,9 @@ func NewPermissionService(permissionRepo interfaces.PermissionRepository, enforc
 func (s *PermissionService) Create(ctx context.Context, req PermissionCreateRequest) (*PermissionItem, error) {
 	resource := strings.TrimSpace(req.Resource)
 	action := strings.TrimSpace(req.Action)
+	if constants.HasPermissionResourceWildcard(resource) {
+		return nil, constants.ErrBadRequestWithMsg("权限资源不能包含通配符 *")
+	}
 	if existing, err := s.permissionRepo.GetByResourceAction(ctx, resource, action); err == nil && existing != nil {
 		response := NewPermissionItem(*existing)
 		return &response, nil
@@ -74,6 +77,9 @@ func (s *PermissionService) Update(ctx context.Context, id uint, req PermissionU
 	}
 	if req.Resource != nil {
 		permission.Resource = *req.Resource
+	}
+	if constants.HasPermissionResourceWildcard(permission.Resource) {
+		return nil, constants.ErrBadRequestWithMsg("权限资源不能包含通配符 *")
 	}
 	if req.Action != nil {
 		permission.Action = *req.Action

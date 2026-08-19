@@ -89,9 +89,11 @@ yunshu 当前采用 **API 用 Casbin + 集群用数据库档位**：
 
 ### 3.2 读接口兜底
 
-`allowReadByK8sClusterGrant`（`internal/middleware/casbin.go`）：当用户 **无** 对应 API 的 Casbin 允许，但对 **GET** 且路径属于 K8s 资源读路径时，若其在 **`k8s_cluster_access_grants`** 上（按 **PrincipalPack** 匹配）对该请求上下文中的 `cluster_id` 具备 **至少只读档位**（`GET /api/v1/clusters` 则要求「存在任意一条档位记录」），则放行。
+`allowReadByK8sClusterGrant`（`internal/middleware/casbin.go`）：当用户 **无** 对应 API 的 Casbin 允许，但对 **GET** 且路径通过 `IsK8sClusterGrantReadBypassPath` 时，若其在 **`k8s_cluster_access_grants`** 上（按 **PrincipalPack** 匹配）对该请求上下文中的 `cluster_id` 具备 **至少只读档位**（`GET /api/v1/clusters` 则要求「存在任意一条档位记录」），则放行。
 
-例外：`/api/v1/menus/tree` 对 GET 永远放行（登录后需拉菜单）。
+该兜底**排除** `secrets`、`exec`/`file`、`k8s-policies`、Harbor Chart 等敏感面，这些必须显式 Casbin。`IsK8sReadAPIPath` 仍用于 `K8sScopeAuthorize` 的 GET 档位校验，**不可**单独作为 Casbin 放行依据。
+
+例外：`GET /api/v1/menus/tree` 登录即可（不走 Casbin；与菜单管理 `GET /api/v1/menus` 分离）。
 
 ### 3.3 与 API 权限关系
 
@@ -217,7 +219,7 @@ yunshu 当前采用 **API 用 Casbin + 集群用数据库档位**：
 
 **目标**：理解为何「仅有集群档位、未配全 API GET」时仍可能拉通部分 K8s 读接口。
 
-**要点**（见 3.2）：对符合 `IsK8sReadAPIPath` 的 **GET**，若用户在 `k8s_cluster_access_grants` 中有档位，可能通过 `allowReadByK8sClusterGrant` 获得读取能力；**集群列表** 在「存在任意集群档位记录」时亦可列出。
+**要点**（见 3.2）：对符合 `IsK8sClusterGrantReadBypassPath` 的 **GET**，若用户在 `k8s_cluster_access_grants` 中有档位，可能通过 `allowReadByK8sClusterGrant` 获得读取能力；**集群列表** 在「存在任意集群档位记录」时亦可列出。secrets / exec / policies 不走该兜底。
 
 **运维建议**：若希望 **严格禁止** 某读接口，应在 **授权管理** 中取消对应 API GET，而不要仅依赖「未勾选菜单」的单一手段。
 

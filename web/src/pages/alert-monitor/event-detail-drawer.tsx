@@ -1,14 +1,17 @@
-import { BellOutlined, CheckOutlined, ClockCircleOutlined, QuestionCircleOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Drawer, Dropdown, Space, Spin, Steps, Tag, Timeline, Typography, message } from "antd";
+import { BellOutlined, ClockCircleOutlined, QuestionCircleOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { Alert, Button, Descriptions, Drawer, Dropdown, Input, Space, Spin, Steps, Tag, Timeline, Typography, message } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import {
   acknowledgeAlert,
   clearAlertAck,
+  createAlertNote,
   explainAlertByFingerprint,
   getActiveAlertAck,
   listAlertEvents,
+  listAlertNotes,
   type AlertEventItem,
+  type AlertProgressNote,
   type FingerprintDeliveryExplain,
 } from "../../services/alerts";
 import { createAlertSilence } from "../../services/alert-platform";
@@ -17,6 +20,7 @@ import { formatDateTime } from "../../utils/format";
 import { formatMatchedPolicyNamesDisplay } from "../../utils/alert-policy-display";
 import { describeAlertEvent, summarizeAlertEventHint } from "../../utils/alert-event-reasons";
 import { explainAlertRecipients, parseLabelMap } from "../../utils/alert-recipient-reason";
+import { AlertAckActionButton } from "./ack-action";
 
 export type AlertEventDetailTarget = {
   fingerprint: string;
@@ -87,6 +91,9 @@ export function AlertEventDetailDrawer({
   const [ackBy, setAckBy] = useState("");
   const [ackExpires, setAckExpires] = useState("");
   const [whyOpen, setWhyOpen] = useState(false);
+  const [notes, setNotes] = useState<AlertProgressNote[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
 
   useEffect(() => {
     if (!open || !target?.fingerprint) {
@@ -96,13 +103,15 @@ export function AlertEventDetailDrawer({
       setAckBy("");
       setAckExpires("");
       setWhyOpen(false);
+      setNotes([]);
+      setNoteDraft("");
       return;
     }
     let cancelled = false;
     setLoading(true);
     void (async () => {
       try {
-        const [ex, list, ack] = await Promise.all([
+        const [ex, list, ack, noteRes] = await Promise.all([
           explainAlertByFingerprint(target.fingerprint),
           listAlertEvents({
             page: 1,
@@ -111,6 +120,7 @@ export function AlertEventDetailDrawer({
             projectId: projectId || target.project_id || undefined,
           }),
           getActiveAlertAck(target.fingerprint).catch(() => null),
+          listAlertNotes(target.fingerprint).catch(() => ({ list: [] as AlertProgressNote[] })),
         ]);
         if (cancelled) return;
         setExplain(ex);
@@ -118,6 +128,7 @@ export function AlertEventDetailDrawer({
         setAcked(Boolean(ack?.acked));
         setAckBy(ack?.user_name || "");
         setAckExpires(ack?.expires_at || "");
+        setNotes(noteRes.list ?? []);
       } catch (e) {
         if (!cancelled) message.error(extractApiErrorMessage(e, "加载通知记录失败"));
       } finally {
@@ -200,7 +211,7 @@ export function AlertEventDetailDrawer({
     }
   }
 
-  async function toggleAck() {
+  async function toggleAck(minutes?: number) {
     if (!target?.fingerprint) return;
     setAcking(true);
     try {
@@ -211,16 +222,39 @@ export function AlertEventDetailDrawer({
         setAckExpires("");
         message.success("已取消认领");
       } else {
-        const row = await acknowledgeAlert({ fingerprint: target.fingerprint, ttl_minutes: 15 });
+        const row = await acknowledgeAlert({
+          fingerprint: target.fingerprint,
+          ttl_minutes: minutes && minutes > 0 ? minutes : undefined,
+        });
         setAcked(true);
         setAckBy(row.user_name || "");
         setAckExpires(row.expires_at || "");
-        message.success("已认领 15 分钟");
+        message.success(minutes && minutes > 0 ? `已认领 ${minutes} 分钟` : "已认领");
       }
     } catch (e) {
       message.error(extractApiErrorMessage(e, "认领操作失败"));
     } finally {
       setAcking(false);
+    }
+  }
+
+  async function submitNote() {
+    if (!target?.fingerprint) return;
+    const content = noteDraft.trim();
+    if (!content) {
+      message.warning("请填写进展");
+      return;
+    }
+    setNoteSaving(true);
+    try {
+      const row = await createAlertNote({ fingerprint: target.fingerprint, content });
+      setNotes((prev) => [...prev, row]);
+      setNoteDraft("");
+      message.success("已记录进展");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "记录进展失败"));
+    } finally {
+      setNoteSaving(false);
     }
   }
 
@@ -239,9 +273,13 @@ export function AlertEventDetailDrawer({
         target ? (
           <Space wrap>
             {firing ? (
-              <Button icon={<CheckOutlined />} loading={acking} onClick={() => void toggleAck()}>
-                {acked ? "取消认领" : "认领 15 分钟"}
-              </Button>
+              <AlertAckActionButton
+                variant="default"
+                acked={acked}
+                loading={acking}
+                onAck={(minutes) => void toggleAck(minutes)}
+                onClear={() => void toggleAck()}
+              />
             ) : null}
             {firing ? (
               <Dropdown
@@ -309,6 +347,39 @@ export function AlertEventDetailDrawer({
               </Typography.Text>
             </Descriptions.Item>
           </Descriptions>
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            备注 / 进展
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            值班与处理人在此留下排查进度；恢复后仍可查看。不会自动发通知。
+          </Typography.Paragraph>
+          {notes.length === 0 ? (
+            <Typography.Text type="secondary">暂无进展</Typography.Text>
+          ) : (
+            <Timeline
+              items={notes.map((n) => ({
+                children: (
+                  <div>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {formatDateTime(n.created_at) || "-"} · {n.user_name || "用户"}
+                    </Typography.Text>
+                    <div>{n.content}</div>
+                  </div>
+                ),
+              }))}
+            />
+          )}
+          <Input.TextArea
+            rows={3}
+            maxLength={2000}
+            showCount
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            placeholder="例如：已扩容磁盘，观察 10 分钟"
+          />
+          <Button type="primary" loading={noteSaving} onClick={() => void submitNote()}>
+            记录进展
+          </Button>
 
           {whyOpen ? (
             <Alert

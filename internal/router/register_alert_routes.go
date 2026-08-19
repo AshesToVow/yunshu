@@ -27,6 +27,8 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.POST("/acks", d.alertHandler.AcknowledgeAlert)
 	alerts.DELETE("/acks", d.alertHandler.ClearAlertAck)
 	alerts.GET("/acks", d.alertHandler.GetActiveAck)
+	alerts.GET("/notes", d.alertHandler.ListAlertNotes)
+	alerts.POST("/notes", d.alertHandler.CreateAlertNote)
 	alerts.GET("/history/stats", d.alertHandler.HistoryStats)
 	alerts.GET("/quality-report", d.alertHandler.QualityReport)
 

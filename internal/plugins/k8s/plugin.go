@@ -36,15 +36,17 @@ func (m *module) Manifest() plugin.Manifest {
 			"/network-policies", "/k8s/",
 		},
 		APIPrefixes: []string{
+			// 真实路由前缀。勿再写入已下线路径：
+			// /api/v1/k8s-event-forward、/api/v1/component-status、/api/v1/services、/api/v1/ingress-classes
 			"/api/v1/clusters", "/api/v1/pods", "/api/v1/namespaces", "/api/v1/nodes",
 			"/api/v1/deployments", "/api/v1/statefulsets", "/api/v1/daemonsets", "/api/v1/cronjobs",
-			"/api/v1/jobs", "/api/v1/configmaps", "/api/v1/secrets", "/api/v1/k8s-services", "/api/v1/services",
-			"/api/v1/ingresses", "/api/v1/ingress-classes", "/api/v1/events", "/api/v1/persistentvolumes",
+			"/api/v1/jobs", "/api/v1/configmaps", "/api/v1/secrets", "/api/v1/k8s-services",
+			"/api/v1/ingresses", "/api/v1/events", "/api/v1/persistentvolumes",
 			"/api/v1/persistentvolumeclaims", "/api/v1/storageclasses", "/api/v1/crds", "/api/v1/crs",
 			"/api/v1/rbac", "/api/v1/serviceaccounts", "/api/v1/k8s-policies",
 			"/api/v1/k8s-namespace-deny-rules", "/api/v1/k8s-namespace-allow-rules",
 			"/api/v1/network-policies", "/api/v1/k8s/", "/api/v1/horizontal-pod-autoscalers",
-			"/api/v1/helm/", "/api/v1/component-status", "/api/v1/k8s-event-forward",
+			"/api/v1/helm/",
 		},
 		Workers: []string{"k8s_event_forward"},
 	}

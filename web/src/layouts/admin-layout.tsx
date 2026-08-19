@@ -29,6 +29,7 @@ import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BRAND_EN_NAME, BRAND_PRIMARY } from "../constants/brand";
 import { GlobalSearchModal } from "../components/global-search-modal";
+import { MenuAccessGate } from "../components/menu-access-gate";
 import { useAuth } from "../contexts/auth-context";
 import { useMenuTree } from "../hooks/use-menu-tree";
 import { resolveAppLocale } from "../i18n";
@@ -69,32 +70,11 @@ function loadUIPreferences(): UIPreferences {
 }
 
 function buildFallbackMenuItems(t: (key: string, options?: { defaultValue?: string }) => string): MenuProps["items"] {
+  // 菜单树加载失败/为空时禁止回退到完整管理目录，避免无权限账号侧栏越权。
   const label = (path: string, fallback: string) => (
     <Link to={path}>{t(`menu.routes.${path}`, { defaultValue: fallback })}</Link>
   );
-  return [
-    { key: "/", icon: <PieChartOutlined />, label: label("/", "总览页面") },
-    { key: "/clusters", icon: <KubernetesOutlined />, label: label("/clusters", "集群管理") },
-    { key: "/pods", icon: <KubernetesOutlined />, label: label("/pods", "Pod 管理") },
-    { key: "/users", icon: <TeamOutlined />, label: label("/users", "账号管理") },
-    { key: "/roles", icon: <ApartmentOutlined />, label: label("/roles", "角色模板") },
-    { key: "/permissions", icon: <ApiOutlined />, label: label("/permissions", "API管理") },
-    { key: "/policies", icon: <AuditOutlined />, label: label("/policies", "授权管理") },
-    { key: "/registrations", icon: <CheckCircleOutlined />, label: label("/registrations", "注册审核") },
-    { key: "/menus", icon: <MenuOutlined />, label: label("/menus", "菜单管理") },
-    {
-      key: "/system",
-      icon: <MenuOutlined />,
-      label: t("menu.groups./system", { defaultValue: "系统管理" }),
-      children: [
-        { key: "/departments", icon: <ApartmentOutlined />, label: label("/departments", "组织架构") },
-        { key: "/dict-entries", icon: <DatabaseOutlined />, label: label("/dict-entries", "数据字典") },
-        { key: "/login-logs", icon: <LoginOutlined />, label: label("/login-logs", "登录日志") },
-        { key: "/operation-logs", icon: <HistoryOutlined />, label: label("/operation-logs", "操作历史") },
-        { key: "/banned-ips", icon: <ApiOutlined />, label: label("/banned-ips", "封禁 IP 管理") },
-      ],
-    },
-  ];
+  return [{ key: "/", icon: <PieChartOutlined />, label: label("/", "总览页面") }];
 }
 
 function defaultOpenKeysFor(items: AntdMenuItem[]): string[] {
@@ -392,7 +372,9 @@ export function AdminLayout() {
               <Spin size="large" />
             </div>
           ) : (
-            <Outlet />
+            <MenuAccessGate>
+              <Outlet />
+            </MenuAccessGate>
           )}
         </Content>
 

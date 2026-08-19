@@ -94,9 +94,14 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	admin.GET("/banned-ips", d.adminHandler.ListBannedIPs)
 	admin.POST("/banned-ips/unban", d.adminHandler.UnbanIP)
 
+	menusTree := api.Group("/menus")
+	// 侧栏树：登录即可；按用户角色过滤，不要求菜单管理写权限。
+	menusTree.Use(d.authMiddleware, d.opAudit)
+	menusTree.GET("/tree", d.menuHandler.Tree)
+
 	menus := api.Group("/menus")
 	menus.Use(d.authMiddleware, d.authorize, d.opAudit)
-	menus.GET("/tree", d.menuHandler.Tree)
+	menus.GET("", d.menuHandler.List)
 	menus.POST("", d.menuHandler.Create)
 	menus.PUT("/status", d.menuHandler.BatchStatus)
 	menus.GET("/:id/bindings", d.menuHandler.GetBindings)

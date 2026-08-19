@@ -181,7 +181,7 @@ func (s *PolicyGovernanceService) Simulate(ctx context.Context, req PolicySimula
 	})
 	if allowed {
 		resp.Allowed = true
-	} else if s.k8sAccessRepo != nil && method == "GET" && k8s.IsK8sReadAPIPath(path) {
+	} else if s.k8sAccessRepo != nil && method == "GET" && k8s.IsK8sClusterGrantReadBypassPath(path) {
 		pack := k8sauth.PrincipalPack{
 			RoleCodes:  roleCodes,
 			UserID:     user.ID,
@@ -635,16 +635,15 @@ func hasRolePolicy(enforcer *casbin.SyncedEnforcer, roleCode, resource, action s
 }
 
 func roleCodesOf(roles []model.Role) []string {
-	out := make([]string, 0, len(roles))
-	for _, r := range roles {
-		out = append(out, r.Code)
-	}
-	return out
+	return model.ExtractEnabledRoleCodes(roles)
 }
 
 func groupCodesOf(groups []model.UserGroup) []string {
 	out := make([]string, 0, len(groups))
 	for _, g := range groups {
+		if g.Status == model.StatusDisabled {
+			continue
+		}
 		if c := strings.TrimSpace(g.Code); c != "" {
 			out = append(out, c)
 		}

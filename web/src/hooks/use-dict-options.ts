@@ -32,6 +32,13 @@ const fallbackMap: Record<string, Option[]> = {
     { label: "警告", value: "warning" },
     { label: "严重", value: "critical" },
   ],
+  alert_ack_ttl_minutes: [
+    { label: "15 分钟", value: "15" },
+    { label: "30 分钟", value: "30" },
+    { label: "1 小时", value: "60" },
+    { label: "2 小时", value: "120" },
+    { label: "4 小时", value: "240" },
+  ],
   /** 告警监控平台 · 数据源表单「从字典填入」；实际条目以数据字典为准 */
   alert_datasource_base_url: [],
   alert_datasource_basic_user: [],

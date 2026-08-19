@@ -9,6 +9,7 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/menu"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/password"
 	"yunshu/internal/plugingate"
@@ -53,6 +54,14 @@ var seedCmd = &cobra.Command{
 		if removedStale > 0 {
 			slog.Default().With("component", "seed").Info("removed stale permissions", "count", removedStale)
 			fmt.Printf("removed %d stale permission records\n", removedStale)
+		}
+		removedWild, err := removeWildcardPermissions(ctx, app.Enforcer, app.DB)
+		if err != nil {
+			return fmt.Errorf("remove wildcard permissions: %w", err)
+		}
+		if removedWild > 0 {
+			slog.Default().With("component", "seed").Info("removed wildcard permissions", "count", removedWild)
+			fmt.Printf("removed %d wildcard permission records\n", removedWild)
 		}
 
 		permissions := defaultPermissions()
@@ -150,12 +159,16 @@ func seedPermissions(ctx context.Context, db *gorm.DB, permissions []model.Permi
 			continue
 		}
 		seen[key] = struct{}{}
+		if constants.HasPermissionResourceWildcard(p.Resource) {
+			continue
+		}
 		normalized = append(normalized, p)
 	}
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "resource"}, {Name: "action"}},
+		// 不覆盖 k8s_scope_enabled / description：避免 seed 冲掉运营开关与 [k8s-scope=off] 标记。
 		DoUpdates: clause.AssignmentColumns([]string{
-			"name", "description", "k8s_scope_enabled", "updated_at", "deleted_at",
+			"name", "updated_at", "deleted_at",
 		}),
 	}).CreateInBatches(normalized, 200).Error
 }
@@ -219,7 +232,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "K8s 命名空间白名单删除", Resource: "/api/v1/k8s-namespace-allow-rules/:id", Action: "DELETE", Description: "Delete k8s namespace allow rule"},
 		{Name: "注册审核列表", Resource: "/api/v1/registrations", Action: "GET", Description: "View registration requests"},
 		{Name: "审核注册申请", Resource: "/api/v1/registrations/:id/review", Action: "POST", Description: "Review registration request"},
-		{Name: "菜单树", Resource: "/api/v1/menus/tree", Action: "GET", Description: "View menu tree"},
+		{Name: "菜单管理列表", Resource: "/api/v1/menus", Action: "GET", Description: "List all menus for administration"},
 		{Name: "创建菜单", Resource: "/api/v1/menus", Action: "POST", Description: "Create menu"},
 		{Name: "批量更新菜单状态", Resource: "/api/v1/menus/status", Action: "PUT", Description: "Batch update menu status"},
 		{Name: "更新菜单", Resource: "/api/v1/menus/:id", Action: "PUT", Description: "Update menu"},
@@ -243,7 +256,11 @@ func defaultPermissions() []model.Permission {
 		{Name: "告警事件分组列表", Resource: "/api/v1/alerts/events/grouped", Action: "GET", Description: "List alert events grouped"},
 		{Name: "告警指纹投递追溯", Resource: "/api/v1/alerts/events/by-fingerprint", Action: "GET", Description: "Explain alert delivery by fingerprint"},
 		{Name: "告警历史统计", Resource: "/api/v1/alerts/history/stats", Action: "GET", Description: "Alert history stats"},
-		{Name: "接收 Alertmanager Webhook", Resource: "/api/v1/alerts/webhook/alertmanager", Action: "POST", Description: "Receive alertmanager webhook"},
+		{Name: "认领告警", Resource: "/api/v1/alerts/acks", Action: "POST", Description: "Acknowledge alert"},
+		{Name: "取消认领告警", Resource: "/api/v1/alerts/acks", Action: "DELETE", Description: "Clear alert ack"},
+		{Name: "查询告警认领", Resource: "/api/v1/alerts/acks", Action: "GET", Description: "Get active alert ack"},
+		{Name: "告警进展列表", Resource: "/api/v1/alerts/notes", Action: "GET", Description: "List alert progress notes"},
+		{Name: "添加告警进展", Resource: "/api/v1/alerts/notes", Action: "POST", Description: "Create alert progress note"},
 		{Name: "告警数据源列表", Resource: "/api/v1/alerts/datasources", Action: "GET", Description: "List alert datasources"},
 		{Name: "告警数据源连通性检测", Resource: "/api/v1/alerts/datasources/:id/ping", Action: "GET", Description: "Ping Prometheus datasource"},
 		{Name: "创建告警数据源", Resource: "/api/v1/alerts/datasources", Action: "POST", Description: "Create alert datasource"},
@@ -324,7 +341,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "集群命名空间", Resource: "/api/v1/clusters/:id/namespaces", Action: "GET", Description: "List cluster namespaces"},
 		{Name: "组件状态列表", Resource: "/api/v1/clusters/:id/component-statuses", Action: "GET", Description: "List control plane component statuses"},
 		{Name: "集群 API 资源发现", Resource: "/api/v1/clusters/:id/api-resources", Action: "GET", Description: "Discovery API resources like kubectl api-resources"},
-		{Name: "K8s 资源 Watch（SSE）", Resource: "/api/v1/k8s/resource-watch/stream", Action: "GET", Description: "Kubernetes watch streamed as Server-Sent Events [k8s-scope=on]", K8sScopeEnabled: true},
+		{Name: "K8s 资源 Watch（SSE）", Resource: "/api/v1/k8s/resource-watch/stream", Action: "GET", Description: "Kubernetes watch streamed as Server-Sent Events"},
 		{Name: "K8s 全局搜索", Resource: "/api/v1/k8s/search", Action: "GET", Description: "Search k8s resources"},
 		{Name: "K8s 资源拓扑", Resource: "/api/v1/k8s/topology", Action: "GET", Description: "Get k8s resource topology graph"},
 		{Name: "K8s Event 转发规则列表", Resource: "/api/v1/k8s/event-forward/rules", Action: "GET", Description: "List k8s event forward rules"},
@@ -475,10 +492,10 @@ func defaultPermissions() []model.Permission {
 		{Name: "Helm Release 详情", Resource: "/api/v1/helm/releases/detail", Action: "GET", Description: "Get helm release detail"},
 		{Name: "Helm Release 历史", Resource: "/api/v1/helm/releases/history", Action: "GET", Description: "Get helm release history"},
 		{Name: "Helm Release Values", Resource: "/api/v1/helm/releases/values", Action: "GET", Description: "Get helm release values"},
-		{Name: "Helm 安装", Resource: "/api/v1/helm/releases/install", Action: "POST", Description: "Install helm release from Harbor [k8s-scope=on]", K8sScopeEnabled: true},
-		{Name: "Helm 升级", Resource: "/api/v1/helm/releases/upgrade", Action: "POST", Description: "Upgrade helm release [k8s-scope=on]", K8sScopeEnabled: true},
-		{Name: "Helm 回滚", Resource: "/api/v1/helm/releases/rollback", Action: "POST", Description: "Rollback helm release [k8s-scope=on]", K8sScopeEnabled: true},
-		{Name: "Helm 卸载", Resource: "/api/v1/helm/releases", Action: "DELETE", Description: "Uninstall helm release [k8s-scope=on]", K8sScopeEnabled: true},
+		{Name: "Helm 安装", Resource: "/api/v1/helm/releases/install", Action: "POST", Description: "Install helm release from Harbor"},
+		{Name: "Helm 升级", Resource: "/api/v1/helm/releases/upgrade", Action: "POST", Description: "Upgrade helm release"},
+		{Name: "Helm 回滚", Resource: "/api/v1/helm/releases/rollback", Action: "POST", Description: "Rollback helm release"},
+		{Name: "Helm 卸载", Resource: "/api/v1/helm/releases", Action: "DELETE", Description: "Uninstall helm release"},
 		{Name: "网络策略列表", Resource: "/api/v1/network-policies", Action: "GET", Description: "List network policies"},
 		{Name: "网络策略详情", Resource: "/api/v1/network-policies/detail", Action: "GET", Description: "Get network policy detail"},
 		{Name: "网络策略应用 YAML", Resource: "/api/v1/network-policies/apply", Action: "POST", Description: "Apply network policy yaml"},
@@ -555,7 +572,6 @@ func defaultPermissions() []model.Permission {
 		{Name: "项目日志保留查询", Resource: "/api/v1/projects/:id/log-retention", Action: "GET", Description: "Get project log retention policy"},
 		{Name: "项目日志保留保存", Resource: "/api/v1/projects/:id/log-retention", Action: "PUT", Description: "Upsert project log retention policy"},
 		{Name: "项目日志保留删除", Resource: "/api/v1/projects/:id/log-retention", Action: "DELETE", Description: "Delete project log retention override"},
-		{Name: "Loggie 心跳上报", Resource: "/api/v1/loggie/heartbeat/report", Action: "POST", Description: "Loggie agent heartbeat"},
 		{Name: "Loggie 引导", Resource: "/api/v1/projects/:id/loggie/bootstrap", Action: "POST", Description: "Bootstrap loggie agent token"},
 		{Name: "Loggie 状态列表", Resource: "/api/v1/projects/:id/loggie/status", Action: "GET", Description: "List loggie status by server"},
 		{Name: "Loggie 引导日志源预览", Resource: "/api/v1/projects/:id/loggie/bootstrap-sources", Action: "GET", Description: "Preview log sources for loggie bootstrap"},

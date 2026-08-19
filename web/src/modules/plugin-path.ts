@@ -155,7 +155,8 @@ export function resolveAPIResourcePlugin(resource: string): PluginName | null {
       for (const prefix of prefixes) {
         const pref = prefix.trim().toLowerCase();
         if (!pref) continue;
-        if (r === pref || r.startsWith(`${pref}/`) || r.startsWith(pref)) return p.name;
+        const base = pref.replace(/\/+$/, "");
+        if (r === pref || r === base || r.startsWith(`${base}/`)) return p.name;
       }
     }
     return null;

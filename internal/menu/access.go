@@ -85,6 +85,7 @@ func UserCanAccessMenu(enforcer *casbin.SyncedEnforcer, userID uint, bindings []
 }
 
 // FilterMenusByAccess 按 Casbin 入口权限递归过滤菜单树。
+// 纯目录（无 component）：只要仍有可访问子项即保留，不要求目录自身入口绑定。
 func FilterMenusByAccess(items []model.Menu, enforcer *casbin.SyncedEnforcer, userID uint, store BindingStore) []model.Menu {
 	var walk func([]model.Menu) []model.Menu
 	walk = func(nodes []model.Menu) []model.Menu {
@@ -95,14 +96,19 @@ func FilterMenusByAccess(items []model.Menu, enforcer *casbin.SyncedEnforcer, us
 				child.Children = walk(it.Children)
 			}
 			path := normalizeMenuPath(it.Path)
+			hasComponent := strings.TrimSpace(it.Component) != ""
+			if !hasComponent {
+				if len(child.Children) == 0 {
+					continue
+				}
+				out = append(out, child)
+				continue
+			}
 			if path != "" {
 				if !UserCanAccessMenu(enforcer, userID, store.Resolve(it)) {
 					continue
 				}
 			} else if len(child.Children) == 0 {
-				continue
-			}
-			if path == "" && len(child.Children) == 0 {
 				continue
 			}
 			out = append(out, child)

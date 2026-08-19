@@ -25,13 +25,16 @@ type AlertCurEventListQuery struct {
 	PageSize     int    `form:"page_size"`
 }
 
-// AlertCurEventView 当前告警列表 DTO（含处理人摘要与认领状态）。
+// AlertCurEventView 当前告警列表 DTO（含处理人摘要、认领状态、最新进展）。
 type AlertCurEventView struct {
 	model.AlertCurEvent
 	HandlerSummary string     `json:"handler_summary"`
 	Acked          bool       `json:"acked"`
 	AckBy          string     `json:"ack_by,omitempty"`
 	AckExpiresAt   *time.Time `json:"ack_expires_at,omitempty"`
+	LatestNote     string     `json:"latest_note,omitempty"`
+	LatestNoteBy   string     `json:"latest_note_by,omitempty"`
+	LatestNoteAt   *time.Time `json:"latest_note_at,omitempty"`
 }
 
 type AlertHisEventListQuery struct {
@@ -161,6 +164,7 @@ func (s *AlertService) enrichCurEventViews(ctx context.Context, list []model.Ale
 		}
 	}
 	acks, _ := s.ListActiveAcksByFingerprints(ctx, fps)
+	notes, _ := s.ListLatestNotesByFingerprints(ctx, fps)
 	handlerByRule := map[uint]string{}
 	if s.assigneeSvc != nil {
 		for rid := range ruleIDs {
@@ -197,6 +201,12 @@ func (s *AlertService) enrichCurEventViews(ctx context.Context, list []model.Ale
 			v.Acked = true
 			v.AckBy = ack.UserName
 			v.AckExpiresAt = ack.ExpiresAt
+		}
+		if note, ok := notes[row.Fingerprint]; ok {
+			v.LatestNote = note.Content
+			v.LatestNoteBy = note.UserName
+			at := note.CreatedAt
+			v.LatestNoteAt = &at
 		}
 		out = append(out, v)
 	}

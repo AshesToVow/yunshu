@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -24,6 +25,22 @@ func ExtractRoleCodes(roles []Role) []string {
 	codes := make([]string, 0, len(roles))
 	for _, role := range roles {
 		codes = append(codes, role.Code)
+	}
+	return codes
+}
+
+// ExtractEnabledRoleCodes 仅提取启用中的角色编码（禁用角色不得参与鉴权）。
+func ExtractEnabledRoleCodes(roles []Role) []string {
+	codes := make([]string, 0, len(roles))
+	for _, role := range roles {
+		if role.Status == StatusDisabled {
+			continue
+		}
+		code := strings.TrimSpace(role.Code)
+		if code == "" {
+			continue
+		}
+		codes = append(codes, code)
 	}
 	return codes
 }

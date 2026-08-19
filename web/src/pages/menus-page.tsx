@@ -1,7 +1,7 @@
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, PlusSquareOutlined, ExpandOutlined, CompressOutlined, CheckCircleOutlined, StopOutlined, ApiOutlined } from "@ant-design/icons";
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
-import { getMenuTree, createMenu, updateMenu, deleteMenu, batchUpdateMenuStatus, getMenuBindings, replaceMenuBindings, type MenuPermissionBindingItem } from "../services/menus";
+import { getAdminMenuTree, createMenu, updateMenu, deleteMenu, batchUpdateMenuStatus, getMenuBindings, replaceMenuBindings, type MenuPermissionBindingItem } from "../services/menus";
 import type { MenuItem, MenuCreatePayload, MenuUpdatePayload } from "../services/menus";
 import { getAntdIconSelectOptions } from "../utils/antd-icon-options";
 

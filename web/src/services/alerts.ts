@@ -286,6 +286,9 @@ export interface AlertCurEventItem {
   acked?: boolean;
   ack_by?: string;
   ack_expires_at?: string;
+  latest_note?: string;
+  latest_note_by?: string;
+  latest_note_at?: string;
 }
 
 export interface AlertHisEventItem {
@@ -358,4 +361,21 @@ export function clearAlertAck(fingerprint: string) {
 
 export function getActiveAlertAck(fingerprint: string) {
   return getData<AlertAckActiveInfo>(http.get("/alerts/acks", { params: { fingerprint } }));
+}
+
+export type AlertProgressNote = {
+  id: number;
+  fingerprint: string;
+  user_id: number;
+  user_name: string;
+  content: string;
+  created_at: string;
+};
+
+export function listAlertNotes(fingerprint: string) {
+  return getData<{ list?: AlertProgressNote[] }>(http.get("/alerts/notes", { params: { fingerprint } }));
+}
+
+export function createAlertNote(payload: { fingerprint: string; content: string }) {
+  return getData<AlertProgressNote>(http.post("/alerts/notes", payload));
 }

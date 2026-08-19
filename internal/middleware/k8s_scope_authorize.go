@@ -258,17 +258,15 @@ func K8sScopeAuthorize(
 	}
 }
 
-// k8sScopeForceTierCheck Pod Exec / Event 转发变更等为高危：无论 API 管理是否勾选「纳入 K8s 范围校验」，均按集群档位与命名空间策略校验（仍需 Casbin 授权）。
+// k8sScopeForceTierCheck Pod Exec / Ingress-Nginx 重启等为高危：无论 API 管理是否勾选「纳入 K8s 范围校验」，均按集群档位校验（仍需 Casbin 授权）。
+// 注意：/k8s/event-forward 是平台级转发配置（规则用 cluster_ids、Worker 参数无集群），不得强制要求 cluster_id。
 func k8sScopeForceTierCheck(routePath, method string) bool {
 	p := strings.TrimSpace(routePath)
 	m := strings.ToUpper(strings.TrimSpace(method))
 	switch m {
 	case "POST":
 		return strings.HasSuffix(p, "/pods/exec") ||
-			strings.HasSuffix(p, "/ingresses/nginx/restart") ||
-			strings.Contains(p, "/k8s/event-forward")
-	case "PUT", "DELETE":
-		return strings.Contains(p, "/k8s/event-forward")
+			strings.HasSuffix(p, "/ingresses/nginx/restart")
 	case "GET":
 		return strings.HasSuffix(p, "/pods/exec/ws")
 	default:
