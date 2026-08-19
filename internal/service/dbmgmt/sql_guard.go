@@ -27,6 +27,14 @@ var (
 		regexp.MustCompile(`(?i)\bREVOKE\b`),
 		regexp.MustCompile(`(?i)\\!`),
 		regexp.MustCompile(`(?i)\bSOURCE\b`),
+		regexp.MustCompile(`(?i)\bLOAD_FILE\s*\(`),
+		regexp.MustCompile(`(?i)\bINTO\s+DUMPFILE\b`),
+		regexp.MustCompile(`(?i)\bSET\s+GLOBAL\b`),
+		regexp.MustCompile(`(?i)\bFLUSH\s+PRIVILEGES\b`),
+		regexp.MustCompile(`(?i)\bLOAD\s+DATA\b`),
+		regexp.MustCompile(`(?i)\bCOPY\s+.+\s+TO\s+PROGRAM\b`),
+		regexp.MustCompile(`(?i)\bCOPY\s+.+\s+FROM\s+PROGRAM\b`),
+		regexp.MustCompile(`(?i)\bCOPY\s+.+\s+TO\s+['"]`),
 	}
 	reHigh = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)\bDROP\s+TABLE\b`),
@@ -62,18 +70,105 @@ func shouldHideDatabase(name string) bool {
 	return reGoInceptionBackupDB.MatchString(n)
 }
 
+// stripSQLComments 将注释替换为空格，避免 INTO/**/OUTFILE 一类绕过。
+// 字符串/反引号内内容原样保留；MySQL 可执行注释 /*!...*/ 展开为内部 SQL。
+func stripSQLComments(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	inSingle, inDouble, inBacktick := false, false, false
+	i := 0
+	for i < len(s) {
+		ch := s[i]
+		writeEscaped := func(quote byte, flag *bool) bool {
+			if !*flag {
+				return false
+			}
+			b.WriteByte(ch)
+			if quote != '`' && ch == '\\' && i+1 < len(s) {
+				b.WriteByte(s[i+1])
+				i += 2
+				return true
+			}
+			if ch == quote {
+				if i+1 < len(s) && s[i+1] == quote {
+					b.WriteByte(s[i+1])
+					i += 2
+					return true
+				}
+				*flag = false
+			}
+			i++
+			return true
+		}
+		if writeEscaped('\'', &inSingle) || writeEscaped('"', &inDouble) || writeEscaped('`', &inBacktick) {
+			continue
+		}
+		if i+1 < len(s) && ch == '-' && s[i+1] == '-' {
+			b.WriteByte(' ')
+			i += 2
+			for i < len(s) && s[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		if ch == '#' {
+			b.WriteByte(' ')
+			i++
+			for i < len(s) && s[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		if i+1 < len(s) && ch == '/' && s[i+1] == '*' {
+			executable := i+2 < len(s) && s[i+2] == '!'
+			i += 2
+			if executable {
+				i++
+				for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+					i++
+				}
+			} else {
+				b.WriteByte(' ')
+			}
+			for i+1 < len(s) && !(s[i] == '*' && s[i+1] == '/') {
+				if executable {
+					b.WriteByte(s[i])
+				}
+				i++
+			}
+			if i+1 < len(s) {
+				i += 2
+			} else {
+				i = len(s)
+			}
+			continue
+		}
+		switch ch {
+		case '\'':
+			inSingle = true
+		case '"':
+			inDouble = true
+		case '`':
+			inBacktick = true
+		}
+		b.WriteByte(ch)
+		i++
+	}
+	return b.String()
+}
+
 func hasMultipleStatements(sqlText string) bool {
 	return reMultiStmt.MatchString(strings.TrimSpace(sqlText))
 }
 
 // AssessSQL 评估单条或本地规则下的 SQL 风险（查询场景等）。
 func AssessSQL(sqlText string, prodEnv bool) SQLAssessment {
-	return assessSQLSingle(strings.TrimSpace(sqlText), prodEnv)
+	return assessSQLSingle(strings.TrimSpace(stripSQLComments(sqlText)), prodEnv)
 }
 
 // AssessSQLForWrite 写操作风险评估；启用 goInception 时允许多语句批量提交。
 func AssessSQLForWrite(sqlText string, prodEnv, viaGoInception bool) SQLAssessment {
-	text := strings.TrimSpace(sqlText)
+	text := strings.TrimSpace(stripSQLComments(sqlText))
 	if text == "" {
 		return SQLAssessment{RiskLevel: model.DbRiskLow, Ops: []string{"empty"}}
 	}
@@ -133,6 +228,7 @@ func sqlRiskRank(level string) int {
 }
 
 func assessSQLSingle(text string, prodEnv bool) SQLAssessment {
+	text = strings.TrimSpace(stripSQLComments(text))
 	if text == "" {
 		return SQLAssessment{RiskLevel: model.DbRiskLow, Ops: []string{"empty"}}
 	}
@@ -268,22 +364,38 @@ func enforceLimit(sqlText string, maxRows int) string {
 	return text
 }
 
+var reLimitRest = regexp.MustCompile(`(?i)^(\d+)(?:\s*,\s*(\d+))?(?:\s+OFFSET\s+(\d+))?`)
+
 func rewriteLimitClause(text string, maxRows int) string {
 	upper := strings.ToUpper(text)
 	idx := strings.LastIndex(upper, "LIMIT ")
 	if idx < 0 {
 		return text
 	}
+	head := text[:idx]
 	rest := strings.TrimSpace(text[idx+6:])
-	parts := strings.Fields(rest)
-	if len(parts) == 0 {
-		return text
+	m := reLimitRest.FindStringSubmatch(rest)
+	if m == nil {
+		return fmt.Sprintf("SELECT * FROM (%s) _ys_lim LIMIT %d", strings.TrimRight(strings.TrimSpace(text), ";"), maxRows)
 	}
-	var n int
-	if _, err := fmt.Sscanf(parts[0], "%d", &n); err == nil && n > maxRows {
-		return text[:idx] + fmt.Sprintf("LIMIT %d", maxRows)
+	consumed := m[0]
+	tail := rest[len(consumed):]
+	capCount := func(raw string) int {
+		var n int
+		fmt.Sscanf(raw, "%d", &n)
+		if n <= 0 || n > maxRows {
+			return maxRows
+		}
+		return n
 	}
-	return text
+	switch {
+	case m[2] != "":
+		return head + fmt.Sprintf("LIMIT %s, %d", m[1], capCount(m[2])) + tail
+	case m[3] != "":
+		return head + fmt.Sprintf("LIMIT %d OFFSET %s", capCount(m[1]), m[3]) + tail
+	default:
+		return head + fmt.Sprintf("LIMIT %d", capCount(m[1])) + tail
+	}
 }
 
 func scanRows(rows *sql.Rows, maxRows int) ([]string, [][]any, error) {

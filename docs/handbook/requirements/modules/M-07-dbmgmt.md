@@ -63,10 +63,11 @@
 
 ## 6. 验收
 
-- [ ] 无授权不可查库表；元数据树仅展示已授权库/表  
-- [ ] 写操作：`require_ticket_for_dml` 开启时一律走工单；须配置至少一级审批流（不再因空流自动通过）  
-- [ ] 敏感密码不明文返回  
-- [ ] PostgreSQL 无 goInception 依赖，变更走人工审批  
+- [x] 无授权不可查库表；元数据树仅展示已授权库/表；表级 DML/DDL 写路径同步校验  
+- [x] 写操作：生产实例强制 `require_ticket_for_dml`；`prod_force_approval` 时生产变更一律工单；须配置至少一级审批流  
+- [x] 敏感密码不明文返回；探活/授权清单/审计日志按角色收敛  
+- [x] PostgreSQL 无 goInception 依赖，变更走人工审批  
+- [x] 默认可配置 SoD：`forbid_self_approve` 禁止自审自批 
 
 ## 7. 相关文档
 

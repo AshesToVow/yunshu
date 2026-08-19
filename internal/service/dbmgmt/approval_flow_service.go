@@ -251,6 +251,24 @@ func (s *Service) userCanApproveStep(ctx context.Context, actor *auth.CurrentUse
 	return slices.Contains(ids, userID), nil
 }
 
+// forbidSelfApprove 职责分离：提交人不得审批自己的单据（超级管理员可豁免）。
+func (s *Service) forbidSelfApprove(ctx context.Context, actor *auth.CurrentUser, submitterUserID uint) error {
+	cfg := s.resolvedConfig(ctx)
+	if !cfg.ForbidSelfApprove {
+		return nil
+	}
+	if actor != nil && auth.IsSuperAdminRole(actor.RoleCodes) {
+		return nil
+	}
+	if submitterUserID == 0 {
+		return nil
+	}
+	if actorUserID(actor) == submitterUserID {
+		return constants.ErrForbiddenWithMsg("职责分离：提交人不可审批自己的申请/工单")
+	}
+	return nil
+}
+
 func (s *Service) initAccessRequestSteps(ctx context.Context, req *model.DbAccessRequest) error {
 	stages, err := s.loadEnabledFlowStages(ctx, req.ProjectID)
 	if err != nil {

@@ -123,7 +123,8 @@ func (h *DbmgmtHandler) PingInstance(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	res, err := h.svc.PingInstance(c.Request.Context(), projectID, instanceID)
+	actor, _ := auth.CurrentUserFromContext(c)
+	res, err := h.svc.PingInstance(c.Request.Context(), projectID, instanceID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -270,7 +271,8 @@ func (h *DbmgmtHandler) ListGrants(c *gin.Context) {
 		n, _ := strconv.ParseUint(v, 10, 64)
 		instanceID = uint(n)
 	}
-	list, err := h.svc.ListGrants(c.Request.Context(), projectID, instanceID)
+	actor, _ := auth.CurrentUserFromContext(c)
+	list, err := h.svc.ListGrants(c.Request.Context(), projectID, instanceID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -697,7 +699,8 @@ func (h *DbmgmtHandler) ListAuditLogs(c *gin.Context) {
 		instanceID = uint(n)
 	}
 	action := strings.TrimSpace(c.Query("action"))
-	res, err := h.svc.ListAuditLogs(c.Request.Context(), projectID, instanceID, action, page, pageSize)
+	actor, _ := auth.CurrentUserFromContext(c)
+	res, err := h.svc.ListAuditLogs(c.Request.Context(), projectID, instanceID, action, page, pageSize, actor)
 	if err != nil {
 		response.Error(c, err)
 		return

@@ -127,16 +127,33 @@ func (s *Service) toGrantItem(g model.DbAccessGrant) GrantItem {
 	return item
 }
 
-func (s *Service) ListGrants(ctx context.Context, projectID uint, instanceID uint) ([]GrantItem, error) {
+func (s *Service) ListGrants(ctx context.Context, projectID uint, instanceID uint, actor *auth.CurrentUser) ([]GrantItem, error) {
 	list, err := s.repo.ListGrants(ctx, projectID, instanceID)
 	if err != nil {
 		return nil, err
 	}
+	admin, err := s.isProjectAdminOrOwner(ctx, projectID, actor)
+	if err != nil {
+		return nil, err
+	}
+	refs := principalRefs(actor)
 	out := make([]GrantItem, 0, len(list))
 	for _, g := range list {
+		if !admin && !grantMatchesActor(g, refs) {
+			continue
+		}
 		out = append(out, s.toGrantItem(g))
 	}
 	return out, nil
+}
+
+func grantMatchesActor(g model.DbAccessGrant, refs []struct{ kind, ref string }) bool {
+	for _, k := range refs {
+		if strings.EqualFold(g.PrincipalKind, k.kind) && g.PrincipalRef == k.ref {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) CreateGrant(ctx context.Context, projectID uint, req GrantUpsertRequest, actor *auth.CurrentUser) (*GrantItem, error) {
@@ -159,6 +176,14 @@ func (s *Service) CreateGrant(ctx context.Context, projectID uint, req GrantUpse
 	if len(privs) == 0 && !req.CanManage {
 		return nil, constants.ErrBadRequestWithMsg("请至少选择一项权限")
 	}
+	dbName := strings.TrimSpace(req.DatabaseName)
+	if len(req.TableNames) > 0 && dbName == "" {
+		return nil, constants.ErrBadRequestWithMsg("表级授权须指定数据库")
+	}
+	// 写/管理权限禁止空库名整实例授权，防止误授后可改任意库。
+	if dbName == "" && (canDML || canDDL || canImport || req.CanManage) {
+		return nil, constants.ErrBadRequestWithMsg("写权限（DML/DDL/导入/管理）须指定数据库；整实例管理请设为实例 Owner")
+	}
 	queryLimit := req.QueryLimitNum
 	if queryLimit <= 0 {
 		queryLimit = 1000
@@ -170,7 +195,7 @@ func (s *Service) CreateGrant(ctx context.Context, projectID uint, req GrantUpse
 	g := &model.DbAccessGrant{
 		ProjectID: projectID, InstanceID: req.InstanceID,
 		PrincipalKind: req.PrincipalKind, PrincipalRef: req.PrincipalRef,
-		DatabaseName: req.DatabaseName, TableNamesJSON: string(tb),
+		DatabaseName: dbName, TableNamesJSON: string(tb),
 		CanConnect: req.CanConnect, CanQuery: canQuery, CanDML: canDML, CanDDL: canDDL,
 		CanExport: canExport, CanImport: canImport, CanManage: req.CanManage,
 		QueryLimitNum: queryLimit,
@@ -184,7 +209,7 @@ func (s *Service) CreateGrant(ctx context.Context, projectID uint, req GrantUpse
 	iid := req.InstanceID
 	_ = s.writeAudit(ctx, projectID, &iid, actor, "grant_create", map[string]any{
 		"grant_id": g.ID, "principal_kind": req.PrincipalKind, "principal_ref": req.PrincipalRef,
-		"database": req.DatabaseName, "privileges": privs,
+		"database": dbName, "privileges": privs,
 	})
 	item := s.toGrantItem(*g)
 	return &item, nil
@@ -343,7 +368,7 @@ func (s *Service) checkQueryPermission(ctx context.Context, projectID uint, inst
 	return constants.ErrForbiddenWithMsg("你无该库的查询权限，请先申请平台查询权限")
 }
 
-func (s *Service) checkWritePermission(ctx context.Context, projectID uint, inst *model.DbInstance, database string, needDDL bool, actor *auth.CurrentUser) error {
+func (s *Service) checkWritePermission(ctx context.Context, projectID uint, inst *model.DbInstance, database, sqlText string, needDDL bool, actor *auth.CurrentUser) error {
 	perm, err := s.effectivePermissionForDatabase(ctx, projectID, inst.ID, database, actor)
 	if err != nil {
 		return err
@@ -361,7 +386,10 @@ func (s *Service) checkWritePermission(ctx context.Context, projectID uint, inst
 	} else if !perm.CanDML {
 		return constants.ErrForbidden
 	}
-	return nil
+	if strings.TrimSpace(sqlText) == "" {
+		return nil
+	}
+	return s.resolveWriteAccess(ctx, projectID, inst, database, sqlText, needDDL, actor)
 }
 
 func ptrUint(v uint) *uint {

@@ -16,6 +16,7 @@ type DbmgmtDictTypes struct {
 	MaxResultRows                 string
 	MaxImportFileMB               string
 	ProdForceApproval             string
+	ForbidSelfApprove             string
 	ApprovalSlaHours              string
 	ApprovalReminderIntervalHours string
 	PingIntervalSeconds           string
@@ -32,6 +33,7 @@ func DefaultDbmgmtDictTypes() DbmgmtDictTypes {
 		MaxResultRows:                 "dbmgmt_max_rows",
 		MaxImportFileMB:               "dbmgmt_max_import_file_mb",
 		ProdForceApproval:             "dbmgmt_prod_force_approval",
+		ForbidSelfApprove:             "dbmgmt_forbid_self_approve",
 		ApprovalSlaHours:              "dbmgmt_approval_sla_hours",
 		ApprovalReminderIntervalHours: "dbmgmt_approval_reminder_interval_hours",
 		PingIntervalSeconds:           "dbmgmt_ping_interval_seconds",
@@ -66,6 +68,9 @@ func ResolveDbmgmtConfig(ctx context.Context, db *gorm.DB, base config.DbmgmtCon
 	}
 	if v, ok := FetchEnabledDictValue(ctx, db, types.ProdForceApproval); ok {
 		base.ProdForceApproval = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
+	}
+	if v, ok := FetchEnabledDictValue(ctx, db, types.ForbidSelfApprove); ok {
+		base.ForbidSelfApprove = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
 	}
 	if v, ok := FetchEnabledDictValue(ctx, db, types.ApprovalSlaHours); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {

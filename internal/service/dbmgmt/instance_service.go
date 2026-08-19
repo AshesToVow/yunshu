@@ -239,6 +239,10 @@ func (s *Service) UpsertInstance(ctx context.Context, id uint, req InstanceUpser
 	if req.RequireTicketForDML != nil {
 		inst.RequireTicketForDML = *req.RequireTicketForDML
 	}
+	// 生产环境强制写操作走工单，禁止关闭。
+	if inst.Env == model.DbEnvProd {
+		inst.RequireTicketForDML = true
+	}
 	inst.OwnerUserID = req.OwnerUserID
 	inst.Tags = strings.TrimSpace(req.Tags)
 	inst.Remark = strings.TrimSpace(req.Remark)
@@ -296,7 +300,14 @@ type PingResult struct {
 	Message string `json:"message"`
 }
 
-func (s *Service) PingInstance(ctx context.Context, projectID, id uint) (*PingResult, error) {
+func (s *Service) PingInstance(ctx context.Context, projectID, id uint, actor *auth.CurrentUser) (*PingResult, error) {
+	if err := s.requireInstanceManage(ctx, projectID, id, actor); err != nil {
+		return nil, err
+	}
+	return s.pingInstance(ctx, projectID, id)
+}
+
+func (s *Service) pingInstance(ctx context.Context, projectID, id uint) (*PingResult, error) {
 	inst, err := s.repo.GetInstanceInProject(ctx, projectID, id)
 	if err != nil {
 		return nil, err

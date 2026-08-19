@@ -173,8 +173,9 @@ func (s *Service) needsApproval(inst *model.DbInstance, assessment SQLAssessment
 	if inst.RequireTicketForDML {
 		return true
 	}
+	// 生产环境：开启 ProdForceApproval 时一律走工单（含 low 风险），禁止直执。
 	if inst.Env == model.DbEnvProd && cfg.ProdForceApproval {
-		return assessment.RiskLevel != model.DbRiskLow
+		return true
 	}
 	return assessment.RiskLevel == model.DbRiskHigh || assessment.RiskLevel == model.DbRiskMedium
 }
@@ -230,7 +231,7 @@ func (s *Service) ExecuteSQL(ctx context.Context, projectID, instanceID uint, re
 		strings.Contains(strings.ToUpper(sqlText), "ALTER") ||
 		strings.Contains(strings.ToUpper(sqlText), "DROP") ||
 		strings.Contains(strings.ToUpper(sqlText), "TRUNCATE")
-	if err := s.checkWritePermission(ctx, projectID, inst, req.Database, needDDL, actor); err != nil {
+	if err := s.checkWritePermission(ctx, projectID, inst, req.Database, sqlText, needDDL, actor); err != nil {
 		return nil, err
 	}
 	cfg := s.resolvedConfig(ctx)
@@ -297,7 +298,7 @@ func (s *Service) createSqlExecuteTicket(ctx context.Context, projectID uint, in
 		return nil, constants.ErrBadRequestWithMsg(assess.Reason)
 	}
 	needDDL := reDDL.MatchString(strings.ToUpper(sqlText))
-	if err := s.checkWritePermission(ctx, projectID, inst, database, needDDL, actor); err != nil {
+	if err := s.checkWritePermission(ctx, projectID, inst, database, sqlText, needDDL, actor); err != nil {
 		return nil, err
 	}
 	cfg := s.resolvedConfig(ctx)
@@ -345,11 +346,18 @@ func (s *Service) ImportSQL(ctx context.Context, projectID, instanceID uint, req
 	}
 	for _, st := range stmts {
 		needDDL := reDDL.MatchString(st)
-		if err := s.checkWritePermission(ctx, projectID, inst, req.Database, needDDL, actor); err != nil {
+		if err := s.checkWritePermission(ctx, projectID, inst, req.Database, st, needDDL, actor); err != nil {
 			return nil, err
 		}
 	}
 	cfg := s.resolvedConfig(ctx)
+	perm, perr := s.effectivePermissionForDatabase(ctx, projectID, inst.ID, req.Database, actor)
+	if perr != nil {
+		return nil, perr
+	}
+	if !perm.CanManage && !perm.CanImport {
+		return nil, constants.ErrForbiddenWithMsg("你无该库的 SQL 导入权限")
+	}
 	maxBytes := cfg.MaxImportFileMB * 1024 * 1024
 	if maxBytes > 0 && len(req.Sql) > maxBytes {
 		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("SQL 文件超过 %d MB 限制", cfg.MaxImportFileMB))
@@ -582,6 +590,9 @@ func (s *Service) ApproveTicket(ctx context.Context, projectID, ticketID uint, c
 	if err != nil || !ok {
 		return constants.ErrForbidden
 	}
+	if err := s.forbidSelfApprove(ctx, actor, ticket.SubmitterUserID); err != nil {
+		return err
+	}
 	now := time.Now()
 	uid := actorUserID(actor)
 	cur.Status = model.DbApprovalStepApproved
@@ -649,6 +660,23 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if ticket.Status != model.DbTicketStatusPendingExecution && ticket.Status != model.DbTicketStatusApproved {
 		return constants.ErrBadRequestWithMsg("工单状态不允许执行")
 	}
+	if ticket.SubmitterUserID != actorUserID(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
+		perm, permErr := s.GetEffectivePermission(ctx, projectID, ticket.InstanceID, actor)
+		if permErr != nil {
+			return permErr
+		}
+		if perm == nil || !perm.CanManage {
+			return constants.ErrForbidden
+		}
+	}
+	inst, err := s.repo.GetInstanceInProject(ctx, projectID, ticket.InstanceID)
+	if err != nil {
+		return err
+	}
+	needDDL := reDDL.MatchString(strings.ToUpper(stripSQLComments(ticket.SqlText)))
+	if err := s.checkWritePermission(ctx, projectID, inst, ticket.DatabaseName, ticket.SqlText, needDDL, actor); err != nil {
+		return err
+	}
 	claim := s.db.WithContext(ctx).Model(&model.DbSqlTicket{}).
 		Where("id = ? AND project_id = ? AND status IN ?", ticketID, projectID,
 			[]string{model.DbTicketStatusPendingExecution, model.DbTicketStatusApproved}).
@@ -660,16 +688,6 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 		return constants.ErrBadRequestWithMsg("工单状态不允许执行或正在执行中")
 	}
 	ticket, err = s.repo.GetSqlTicketInProject(ctx, projectID, ticketID)
-	if err != nil {
-		return err
-	}
-	if ticket.SubmitterUserID != actorUserID(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
-		perm, _ := s.GetEffectivePermission(ctx, projectID, ticket.InstanceID, actor)
-		if perm == nil || !perm.CanManage {
-			return constants.ErrForbidden
-		}
-	}
-	inst, err := s.repo.GetInstanceInProject(ctx, projectID, ticket.InstanceID)
 	if err != nil {
 		return err
 	}

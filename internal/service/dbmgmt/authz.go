@@ -85,6 +85,16 @@ func grantMatchesDatabase(g model.DbAccessGrant, database string) bool {
 }
 
 func (s *Service) mergeScopedGrant(dst *EffectivePermission, g model.DbAccessGrant) {
+	// 空库名历史写授权不再赋予 DML/DDL/导入/管理，避免整实例写 blast radius。
+	if strings.TrimSpace(g.DatabaseName) == "" {
+		sanitized := g
+		sanitized.CanDML = false
+		sanitized.CanDDL = false
+		sanitized.CanImport = false
+		sanitized.CanManage = false
+		s.mergeGrant(dst, sanitized)
+		return
+	}
 	s.mergeGrant(dst, g)
 }
 

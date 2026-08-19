@@ -141,6 +141,6 @@ func (s *Service) runPeriodicPing(ctx context.Context) {
 		return
 	}
 	for _, inst := range list {
-		_, _ = s.PingInstance(ctx, inst.ProjectID, inst.ID)
+		_, _ = s.pingInstance(ctx, inst.ProjectID, inst.ID)
 	}
 }
