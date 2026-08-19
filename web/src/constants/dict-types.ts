@@ -59,6 +59,7 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "告警数据源账号（alert_datasource_basic_user）", value: "alert_datasource_basic_user", category: "alert" },
   { label: "PromQL 标签键（alert_promql_label_key）", value: "alert_promql_label_key", category: "alert" },
   { label: "阈值单位（alert_threshold_unit）", value: "alert_threshold_unit", category: "alert" },
+  { label: "告警认领时长分钟（alert_ack_ttl_minutes）", value: "alert_ack_ttl_minutes", category: "alert" },
   { label: "告警规则文案预设（alert_rule_template_preset）", value: "alert_rule_template_preset", category: "alert" },
   { label: "告警 Webhook Token（alert_webhook_token）", value: "alert_webhook_token", category: "alert" },
   { label: "告警 Prometheus URL（alert_enrich_prometheus_url）", value: "alert_enrich_prometheus_url", category: "alert" },

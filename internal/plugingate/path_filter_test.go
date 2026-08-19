@@ -82,6 +82,16 @@ func ensurePathFilterStubs() {
 	})
 }
 
+func TestResolveAPIResourcePlugin_K8sPrefixNotGreedy(t *testing.T) {
+	ensurePathFilterStubs()
+	if got := ResolveAPIResourcePlugin("/api/v1/k8s-policies"); got != "" {
+		t.Fatalf("stub k8s prefixes should not swallow /api/v1/k8s-policies, got %q", got)
+	}
+	if got := ResolveAPIResourcePlugin("/api/v1/pods/exec"); got != "k8s" {
+		t.Fatalf("expected pods prefix match, got %q", got)
+	}
+}
+
 func TestResolveCicdAPIResource(t *testing.T) {
 	ensurePathFilterStubs()
 	cases := []struct {

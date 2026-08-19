@@ -133,15 +133,7 @@ func (h *AlertHandler) ListCurEvents(c *gin.Context) {
 }
 
 func (h *AlertHandler) AcknowledgeAlert(c *gin.Context) {
-	userID := uint(0)
-	userName := ""
-	if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
-		userID = u.ID
-		userName = strings.TrimSpace(u.Nickname)
-		if userName == "" {
-			userName = strings.TrimSpace(u.Username)
-		}
-	}
+	userID, userName := currentAlertUser(c)
 	ServeJSON(c, func(ctx context.Context, req service.AlertAckRequest) (*model.AlertAck, error) {
 		return h.svc.AcknowledgeAlert(ctx, userID, userName, req)
 	})
@@ -172,6 +164,36 @@ func (h *AlertHandler) GetActiveAck(c *gin.Context) {
 		return
 	}
 	response.Success(c, info)
+}
+
+func (h *AlertHandler) ListAlertNotes(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q struct {
+		Fingerprint string `form:"fingerprint" binding:"required"`
+	}) (gin.H, error) {
+		list, err := h.svc.ListAlertNotes(ctx, q.Fingerprint)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"list": list}, nil
+	})
+}
+
+func (h *AlertHandler) CreateAlertNote(c *gin.Context) {
+	userID, userName := currentAlertUser(c)
+	ServeJSON(c, func(ctx context.Context, req service.AlertNoteCreateRequest) (*model.AlertProgressNote, error) {
+		return h.svc.CreateAlertNote(ctx, userID, userName, req)
+	})
+}
+
+func currentAlertUser(c *gin.Context) (uint, string) {
+	if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
+		name := strings.TrimSpace(u.Nickname)
+		if name == "" {
+			name = strings.TrimSpace(u.Username)
+		}
+		return u.ID, name
+	}
+	return 0, ""
 }
 
 func (h *AlertHandler) ListHisEvents(c *gin.Context) {

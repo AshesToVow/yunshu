@@ -59,7 +59,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/policies":           {"/api/v1/policies", "GET"},
 		"/k8s-scoped-policies": {"/api/v1/k8s-policies", "GET"},
 		"/registrations":      {"/api/v1/registrations", "GET"},
-		"/menus":              {"/api/v1/menus/tree", "GET"},
+		"/menus":              {"/api/v1/menus", "GET"},
 		"/dict-entries":       {"/api/v1/dict/entries", "GET"},
 		"/login-logs":         {"/api/v1/login-logs", "GET"},
 		"/operation-logs":     {"/api/v1/operation-logs", "GET"},
@@ -106,6 +106,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/cicd/image-browser":   {"/api/v1/registries", "GET"},
 
 		"/ai/approvals": {"/api/v1/ai/approvals", "GET"},
+		"/ai/assistant": {"/api/v1/ai/chat", "POST"},
 
 		"/esmgmt/connections": {"/api/v1/esmgmt/connections", "GET"},
 		"/esmgmt/overview":    {"/api/v1/esmgmt/cluster/health", "GET"},
@@ -118,6 +119,11 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	out := make(map[string][]EntryPermission, len(raw))
 	for path, perm := range raw {
 		out[normalizeMenuPath(path)] = []EntryPermission{perm}
+	}
+	// AI 助手：具备对话或会话列表任一权限即可进入菜单
+	out["/ai/assistant"] = []EntryPermission{
+		{Resource: "/api/v1/ai/chat", Action: "POST"},
+		{Resource: "/api/v1/ai/sessions", Action: "GET"},
 	}
 	// 「服务与日志源」整合页：具备任一列表权限即可进入菜单
 	out["/project-services"] = []EntryPermission{

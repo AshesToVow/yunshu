@@ -2,6 +2,7 @@ package alert
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,7 +13,11 @@ import (
 	"gorm.io/gorm"
 )
 
-const defaultAckTTLMinutes = 15
+const (
+	dictTypeAlertAckTTLMinutes = "alert_ack_ttl_minutes"
+	fallbackAckTTLMinutes      = 15
+	maxAckTTLMinutes           = 24 * 60
+)
 
 type AlertAckRequest struct {
 	Fingerprint string `json:"fingerprint" binding:"required,max=512"`
@@ -20,11 +25,11 @@ type AlertAckRequest struct {
 }
 
 type AlertAckActiveInfo struct {
-	Fingerprint  string     `json:"fingerprint"`
-	Acked        bool       `json:"acked"`
-	UserID       uint       `json:"user_id,omitempty"`
-	UserName     string     `json:"user_name,omitempty"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	Fingerprint string     `json:"fingerprint"`
+	Acked       bool       `json:"acked"`
+	UserID      uint       `json:"user_id,omitempty"`
+	UserName    string     `json:"user_name,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
 // AcknowledgeAlert 认领告警：TTL 内同指纹 firing 通知抑制。
@@ -36,12 +41,9 @@ func (s *AlertService) AcknowledgeAlert(ctx context.Context, userID uint, userNa
 	if fp == "" {
 		return nil, constants.ErrBadRequestWithMsg("fingerprint required")
 	}
-	ttl := req.TTLMinutes
-	if ttl <= 0 {
-		ttl = defaultAckTTLMinutes
-	}
-	if ttl > 24*60 {
-		ttl = 24 * 60
+	ttl, err := parseAckTTLMinutes(s.loadAckTTLAllowed(ctx), req.TTLMinutes)
+	if err != nil {
+		return nil, err
 	}
 	row := &model.AlertAck{
 		Fingerprint: fp,
@@ -53,6 +55,62 @@ func (s *AlertService) AcknowledgeAlert(ctx context.Context, userID uint, userNa
 		return nil, bizerrors.Pass(ctx, "alert.ack", "AcknowledgeAlert", err)
 	}
 	return row, nil
+}
+
+func (s *AlertService) loadAckTTLAllowed(ctx context.Context) []int {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	var rows []model.DictEntry
+	err := s.db.WithContext(ctx).
+		Where("dict_type = ? AND status = ?", dictTypeAlertAckTTLMinutes, 1).
+		Order("sort ASC, id ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil
+	}
+	return parseAckTTLDictValues(rows)
+}
+
+func parseAckTTLDictValues(rows []model.DictEntry) []int {
+	seen := map[int]struct{}{}
+	out := []int{}
+	for _, row := range rows {
+		n, err := strconv.Atoi(strings.TrimSpace(row.Value))
+		if err != nil || n <= 0 {
+			continue
+		}
+		if n > maxAckTTLMinutes {
+			n = maxAckTTLMinutes
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+func parseAckTTLMinutes(allowed []int, requested int) (int, error) {
+	if requested > maxAckTTLMinutes {
+		requested = maxAckTTLMinutes
+	}
+	if len(allowed) == 0 {
+		if requested <= 0 {
+			return fallbackAckTTLMinutes, nil
+		}
+		return requested, nil
+	}
+	if requested <= 0 {
+		return allowed[0], nil
+	}
+	for _, m := range allowed {
+		if m == requested {
+			return m, nil
+		}
+	}
+	return 0, constants.ErrBadRequestWithMsg("认领时长须为数据字典 alert_ack_ttl_minutes 中的启用项")
 }
 
 // ClearAlertAck 提前结束认领（将未过期记录的 expires_at 置为现在）。
@@ -108,19 +166,7 @@ func (s *AlertService) ListActiveAcksByFingerprints(ctx context.Context, fingerp
 	if s == nil || s.db == nil || len(fingerprints) == 0 {
 		return out, nil
 	}
-	uniq := make([]string, 0, len(fingerprints))
-	seen := map[string]struct{}{}
-	for _, fp := range fingerprints {
-		fp = strings.TrimSpace(fp)
-		if fp == "" {
-			continue
-		}
-		if _, ok := seen[fp]; ok {
-			continue
-		}
-		seen[fp] = struct{}{}
-		uniq = append(uniq, fp)
-	}
+	uniq := uniqueNonEmptyStrings(fingerprints)
 	if len(uniq) == 0 {
 		return out, nil
 	}
@@ -146,4 +192,21 @@ func (s *AlertService) ListActiveAcksByFingerprints(ctx context.Context, fingerp
 		}
 	}
 	return out, nil
+}
+
+func uniqueNonEmptyStrings(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := map[string]struct{}{}
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }

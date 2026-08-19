@@ -21,6 +21,8 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getClusters, type ClusterItem } from "../services/clusters";
+import { getDictEntries } from "../services/dict";
+import { extractApiErrorMessage } from "../services/http";
 import {
   createK8sEventForwardRule,
   deleteK8sEventForwardRule,
@@ -34,7 +36,18 @@ import {
 } from "../services/k8s-event-forward";
 import { formatDateTime } from "../utils/format";
 
-const EMPTY_JSON_ARRAY = "[]";
+const REASON_PRESETS = [
+  "Failed",
+  "BackOff",
+  "ErrImagePull",
+  "ImagePullBackOff",
+  "FailedScheduling",
+  "Unhealthy",
+  "FailedMount",
+  "Evicted",
+  "FailedDaemonPod",
+  "FailedToRetrieveImagePullSecret",
+];
 
 type RuleFormValues = {
   name: string;
@@ -42,9 +55,9 @@ type RuleFormValues = {
   cluster_ids: number[];
   webhook_url?: string;
   enabled: boolean;
-  rule_namespaces_json: string;
-  rule_names_json: string;
-  rule_reasons_json: string;
+  rule_namespaces: string[];
+  rule_names: string[];
+  rule_reasons: string[];
   rule_reverse: boolean;
 };
 
@@ -59,6 +72,18 @@ function clusterIdsToString(ids: number[]): string {
   return ids.filter((n) => n > 0).join(",");
 }
 
+function parseJSONStringArray(raw?: string): string[] {
+  const s = raw?.trim();
+  if (!s) return [];
+  try {
+    const v = JSON.parse(s) as unknown;
+    if (!Array.isArray(v)) return [];
+    return v.map((x) => String(x).trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function ruleToForm(row: K8sEventForwardRule): RuleFormValues {
   return {
     name: row.name,
@@ -66,9 +91,9 @@ function ruleToForm(row: K8sEventForwardRule): RuleFormValues {
     cluster_ids: parseClusterIds(row.cluster_ids || ""),
     webhook_url: row.webhook_url || "",
     enabled: row.enabled,
-    rule_namespaces_json: row.rule_namespaces?.trim() || EMPTY_JSON_ARRAY,
-    rule_names_json: row.rule_names?.trim() || EMPTY_JSON_ARRAY,
-    rule_reasons_json: row.rule_reasons?.trim() || EMPTY_JSON_ARRAY,
+    rule_namespaces: parseJSONStringArray(row.rule_namespaces),
+    rule_names: parseJSONStringArray(row.rule_names),
+    rule_reasons: parseJSONStringArray(row.rule_reasons),
     rule_reverse: Boolean(row.rule_reverse),
   };
 }
@@ -80,11 +105,55 @@ function formToPayload(v: RuleFormValues): K8sEventForwardRulePayload {
     cluster_ids: clusterIdsToString(v.cluster_ids),
     webhook_url: v.webhook_url?.trim(),
     enabled: v.enabled,
-    rule_namespaces: v.rule_namespaces_json.trim() || EMPTY_JSON_ARRAY,
-    rule_names: v.rule_names_json.trim() || EMPTY_JSON_ARRAY,
-    rule_reasons: v.rule_reasons_json.trim() || EMPTY_JSON_ARRAY,
+    rule_namespaces: JSON.stringify(v.rule_namespaces || []),
+    rule_names: JSON.stringify(v.rule_names || []),
+    rule_reasons: JSON.stringify(v.rule_reasons || []),
     rule_reverse: v.rule_reverse,
   };
+}
+
+function parseDictBool(value?: string): boolean {
+  return /^(true|1|yes|on)$/i.test((value || "").trim());
+}
+
+function GlobalSwitchBanner() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void getDictEntries({ dict_type: "k8s_event_forward_enabled", page: 1, page_size: 10 })
+      .then((res) => {
+        const list = res.list || [];
+        const active = list.find((x) => x.status === 1);
+        if (active) {
+          setEnabled(parseDictBool(active.value));
+          return;
+        }
+        if (list.length > 0) {
+          setEnabled(false);
+          return;
+        }
+        setEnabled(null);
+      })
+      .catch(() => setEnabled(null));
+  }, []);
+
+  if (enabled !== false) return null;
+  return (
+    <Alert
+      type="warning"
+      showIcon
+      style={{ marginBottom: 12 }}
+      message="全局转发总开关未打开"
+      description={
+        <span>
+          规则保存后也不会真正 Watch/转发。请到{" "}
+          <Link to="/dict-entries?keyword=k8s_event_forward_enabled">数据字典</Link> 将{" "}
+          <Typography.Text code>k8s_event_forward_enabled</Typography.Text> 设为{" "}
+          <Typography.Text code>true</Typography.Text> 并启用该条目。
+        </span>
+      }
+    />
+  );
 }
 
 function RulesPanel() {
@@ -117,7 +186,7 @@ function RulesPanel() {
       setList(res.list || []);
       setTotal(res.total || 0);
     } catch (e) {
-      message.error(String(e));
+      message.error(extractApiErrorMessage(e, "加载规则失败"));
     } finally {
       setLoading(false);
     }
@@ -139,9 +208,9 @@ function RulesPanel() {
       cluster_ids: [],
       webhook_url: "internal",
       enabled: true,
-      rule_namespaces_json: EMPTY_JSON_ARRAY,
-      rule_names_json: EMPTY_JSON_ARRAY,
-      rule_reasons_json: EMPTY_JSON_ARRAY,
+      rule_namespaces: [],
+      rule_names: [],
+      rule_reasons: [],
       rule_reverse: false,
     });
     setDrawerOpen(true);
@@ -168,7 +237,7 @@ function RulesPanel() {
       setDrawerOpen(false);
       void load();
     } catch (e) {
-      message.error(String(e));
+      message.error(extractApiErrorMessage(e, "保存规则失败"));
     } finally {
       setSubmitting(false);
     }
@@ -187,6 +256,28 @@ function RulesPanel() {
             {ids.map((id) => (
               <Tag key={id}>{clusterNameById.get(id) ? `${clusterNameById.get(id)} (#${id})` : `#${id}`}</Tag>
             ))}
+          </Space>
+        );
+      },
+    },
+    {
+      title: "过滤",
+      ellipsis: true,
+      render: (_, row) => {
+        const tags = [
+          ...parseJSONStringArray(row.rule_namespaces).map((x) => `ns:${x}`),
+          ...parseJSONStringArray(row.rule_names).map((x) => `name:${x}`),
+          ...parseJSONStringArray(row.rule_reasons).map((x) => x),
+        ];
+        if (!tags.length) {
+          return <Typography.Text type="secondary">全部 Warning</Typography.Text>;
+        }
+        return (
+          <Space size={[4, 4]} wrap>
+            {tags.slice(0, 6).map((x) => (
+              <Tag key={x}>{x}</Tag>
+            ))}
+            {tags.length > 6 ? <Tag>+{tags.length - 6}</Tag> : null}
           </Space>
         );
       },
@@ -248,7 +339,7 @@ function RulesPanel() {
       message.success("已删除");
       void load();
     } catch (e) {
-      message.error(String(e));
+      message.error(extractApiErrorMessage(e, "删除失败"));
     }
   }
 
@@ -344,17 +435,31 @@ function RulesPanel() {
             <Switch />
           </Form.Item>
           <Form.Item
-            name="rule_namespaces_json"
-            label="命名空间（JSON 数组，精确匹配）"
-            rules={[{ required: true, message: "请输入 JSON" }]}
+            name="rule_namespaces"
+            label="命名空间"
+            extra="留空=全部命名空间；精确匹配。输入后回车，例如 yunshu-logging"
           >
-            <Input.TextArea rows={3} placeholder='["kube-system","default"]' />
+            <Select mode="tags" tokenSeparators={[","]} placeholder="留空表示全部" allowClear />
           </Form.Item>
-          <Form.Item name="rule_names_json" label="资源名（JSON 数组，子串匹配）" rules={[{ required: true }]}>
-            <Input.TextArea rows={3} placeholder='["nginx","api-"]' />
+          <Form.Item
+            name="rule_names"
+            label="资源名"
+            extra="留空=全部资源；子串匹配对象名。输入后回车，例如 yunshu-loggie"
+          >
+            <Select mode="tags" tokenSeparators={[","]} placeholder="留空表示全部" allowClear />
           </Form.Item>
-          <Form.Item name="rule_reasons_json" label="原因/消息（JSON 数组，子串匹配 reason 或 message）" rules={[{ required: true }]}>
-            <Input.TextArea rows={3} placeholder='["Failed","BackOff"]' />
+          <Form.Item
+            name="rule_reasons"
+            label="原因 / 消息"
+            extra="留空=全部 Warning；子串匹配 reason 或 message。可点选常用项，也可自行输入后回车"
+          >
+            <Select
+              mode="tags"
+              tokenSeparators={[","]}
+              placeholder="例如 Failed、ErrImagePull"
+              allowClear
+              options={REASON_PRESETS.map((value) => ({ label: value, value }))}
+            />
           </Form.Item>
         </Form>
       </Drawer>
@@ -373,7 +478,7 @@ function WorkerSettingsPanel() {
       const st = await getK8sEventForwardSettings();
       form.setFieldsValue(st);
     } catch (e) {
-      message.error(String(e));
+      message.error(extractApiErrorMessage(e, "加载 Worker 参数失败"));
     } finally {
       setLoading(false);
     }
@@ -390,7 +495,7 @@ function WorkerSettingsPanel() {
       await updateK8sEventForwardSettings(values);
       message.success("Worker 参数已保存（下一批处理周期内生效）");
     } catch (e) {
-      message.error(String(e));
+      message.error(extractApiErrorMessage(e, "保存 Worker 参数失败"));
     } finally {
       setSaving(false);
     }
@@ -439,6 +544,7 @@ function WorkerSettingsPanel() {
 export function K8sEventForwardPage() {
   return (
     <Card className="table-card" title="K8s Event 多集群转发">
+      <GlobalSwitchBanner />
       <Tabs
         items={[
           { key: "rules", label: "转发规则", children: <RulesPanel /> },

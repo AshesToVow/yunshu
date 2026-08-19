@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"strings"
 
 	"yunshu/internal/model"
 	"yunshu/internal/service"
@@ -34,6 +35,8 @@ func stalePermissions() []permissionPair {
 		{Resource: "/api/v1/admin/banned-ips", Action: "GET"},
 		{Resource: "/api/v1/admin/banned-ips/unban", Action: "POST"},
 		{Resource: "/api/v1/k8s-policies/grant", Action: "POST"},
+		// 侧栏树已改为登录即可，不再走 Casbin
+		{Resource: "/api/v1/menus/tree", Action: "GET"},
 		// 不走 Casbin authorize 的公开/登录接口
 		{Resource: "/api/v1/health", Action: "GET"},
 		{Resource: "/api/v1/auth/verification-code", Action: "POST"},
@@ -61,6 +64,21 @@ func stalePermissions() []permissionPair {
 		{Resource: "/api/v1/projects/:id/agents/discovery", Action: "GET"},
 		{Resource: "/api/v1/projects/:id/agents/heartbeat/batch", Action: "POST"},
 		{Resource: "/api/v1/projects/:id/logs/stream", Action: "GET"},
+		// 已下线 / 改为入站 Token，不走 Casbin
+		{Resource: "/api/v1/alerts/webhook/alertmanager", Action: "POST"},
+		{Resource: "/api/v1/loggie/heartbeat/report", Action: "POST"},
+		// 历史错误路径 / 已改名 API
+		{Resource: "/api/v1/k8s-event-forward", Action: "GET"},
+		{Resource: "/api/v1/k8s-event-forward", Action: "POST"},
+		{Resource: "/api/v1/k8s-event-forward", Action: "PUT"},
+		{Resource: "/api/v1/k8s-event-forward", Action: "DELETE"},
+		{Resource: "/api/v1/k8s-event-forward/rules", Action: "GET"},
+		{Resource: "/api/v1/k8s-event-forward/rules", Action: "POST"},
+		{Resource: "/api/v1/k8s-event-forward/settings", Action: "GET"},
+		{Resource: "/api/v1/k8s-event-forward/settings", Action: "PUT"},
+		{Resource: "/api/v1/component-status", Action: "GET"},
+		{Resource: "/api/v1/services", Action: "GET"},
+		{Resource: "/api/v1/ingress-classes", Action: "GET"},
 	}
 }
 
@@ -77,6 +95,46 @@ func removeStalePermissions(ctx context.Context, enforcer *casbin.SyncedEnforcer
 			return removed, res.Error
 		}
 		removed += int(res.RowsAffected)
+	}
+	return removed, nil
+}
+
+func removeWildcardPermissions(ctx context.Context, enforcer *casbin.SyncedEnforcer, db *gorm.DB) (int, error) {
+	var rows []model.Permission
+	if err := db.WithContext(ctx).Unscoped().
+		Where("resource LIKE ?", "%*%").
+		Find(&rows).Error; err != nil {
+		return 0, err
+	}
+	removed := 0
+	for _, p := range rows {
+		if err := service.RemovePermissionPolicies(enforcer, p.Resource, p.Action); err != nil {
+			return removed, err
+		}
+		res := db.WithContext(ctx).Unscoped().
+			Where("id = ?", p.ID).
+			Delete(&model.Permission{})
+		if res.Error != nil {
+			return removed, res.Error
+		}
+		removed += int(res.RowsAffected)
+	}
+	if enforcer != nil {
+		policies := enforcer.GetPolicy()
+		seen := map[string]struct{}{}
+		for _, p := range policies {
+			if len(p) < 2 || !strings.Contains(p[1], "*") {
+				continue
+			}
+			if _, ok := seen[p[1]]; ok {
+				continue
+			}
+			seen[p[1]] = struct{}{}
+			if _, err := enforcer.RemoveFilteredPolicy(1, p[1]); err != nil {
+				return removed, err
+			}
+			removed++
+		}
 	}
 	return removed, nil
 }

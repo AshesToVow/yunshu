@@ -165,22 +165,18 @@ export function DynamicMenuPage() {
     );
   }
 
-  if (!menuItem && !hasPathFallback) {
+  if (!menuItem) {
     return (
       <Result
-        status="404"
-        title="未找到菜单"
-        subTitle={`当前地址 ${location.pathname} 未在「菜单管理」中配置，或已被隐藏/停用。`}
-        extra={
-          <Link to="/menus">
-            <Typography.Link>前往菜单管理</Typography.Link>
-          </Link>
-        }
+        status="403"
+        title="无访问权限"
+        subTitle={`当前地址 ${location.pathname} 不在已授权菜单中，或已被隐藏/停用。`}
+        extra={<Link to="/">返回总览</Link>}
       />
     );
   }
 
-  if (menuItem && menuItem.children && menuItem.children.length > 0) {
+  if (menuItem.children && menuItem.children.length > 0) {
     return (
       <Card className="table-card" title={menuItem.name}>
         <Typography.Paragraph type="secondary">这是目录菜单，请从左侧选择具体子菜单进入页面。</Typography.Paragraph>

@@ -67,7 +67,8 @@ func allowReadByK8sClusterGrant(c *gin.Context, accessRepo interfaces.K8sCluster
 	if normalizedPath == "" {
 		return false
 	}
-	if !service.IsK8sReadAPIPath(normalizedPath) {
+	// 勿用宽前缀 IsK8sReadAPIPath 直接放行：secrets/exec/策略矩阵等须显式 Casbin。
+	if !service.IsK8sClusterGrantReadBypassPath(normalizedPath) {
 		return false
 	}
 	ctx := c.Request.Context()

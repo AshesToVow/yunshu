@@ -33,6 +33,32 @@ var reportTemplateFuncs = template.FuncMap{
 			return "正常"
 		}
 	},
+	"gradeClass": func(g string) string {
+		switch strings.ToUpper(strings.TrimSpace(g)) {
+		case "A":
+			return "grade-a"
+		case "B":
+			return "grade-b"
+		case "C":
+			return "grade-c"
+		default:
+			return "grade-d"
+		}
+	},
+	"sampleNote": sampleNoteText,
+	"actionHint": func(status, errMsg string) string {
+		if note := sampleNoteText(errMsg); note != "" {
+			return note
+		}
+		switch status {
+		case "critical":
+			return "建议立即排查并处理，必要时扩容或修复故障。"
+		case "warning":
+			return "请核查相关实例指标与阈值配置。"
+		default:
+			return "状态正常，保持例行观察。"
+		}
+	},
 	"eq": func(a, b string) bool { return a == b },
 }
 
@@ -318,6 +344,16 @@ func (s *Service) PreviewReportTemplate(ctx context.Context, projectID uint, req
 				Metrics: []MetricSample{
 					{Type: "基础设施层", Name: "CPU 使用率", Instance: "10.0.0.1", Value: 92, Threshold: 85, Unit: "%", Status: "critical"},
 					{Type: "基础设施层", Name: "内存使用率", Instance: "10.0.0.1", Value: 60, Threshold: 85, Unit: "%", Status: "normal"},
+				},
+			},
+		},
+		ContentGroups: []ContentGroup{
+			{
+				Type:  "基础设施层",
+				Stats: GroupStats{Total: 2, Critical: 1, Normal: 1},
+				Items: []ContentItem{
+					{Name: "CPU 使用率", SampleCount: 1},
+					{Name: "内存使用率", SampleCount: 1},
 				},
 			},
 		},

@@ -1,21 +1,11 @@
 import { extractApiErrorMessage } from "../../../services/http";
-import {
-  Alert,
-  Button,
-  Card,
-  Input,
-  Modal,
-  Segmented,
-  Space,
-  Tag,
-  Typography,
-  message,
-} from "antd";
-import { BellOutlined, CheckOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Input, Modal, Segmented, Space, Tag, Typography, message } from "antd";
+import { BellOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAlertMonitor } from "../context";
 import { AlertEventDetailDrawer, type AlertEventDetailTarget } from "../event-detail-drawer";
+import { AlertAckActionButton } from "../ack-action";
 import { ResizableTable } from "../../../components/resizable-table";
 import {
   acknowledgeAlert,
@@ -197,7 +187,7 @@ export function HistoryTab() {
     }
   }
 
-  async function toggleAck(row: AlertCurEventItem) {
+  async function toggleAck(row: AlertCurEventItem, minutes?: number) {
     if (!row.fingerprint) {
       message.warning("缺少指纹，无法认领");
       return;
@@ -207,8 +197,11 @@ export function HistoryTab() {
         await clearAlertAck(row.fingerprint);
         message.success("已取消认领，将恢复通知");
       } else {
-        await acknowledgeAlert({ fingerprint: row.fingerprint, ttl_minutes: 15 });
-        message.success("已认领 15 分钟：同指纹通知将暂停");
+        await acknowledgeAlert({
+          fingerprint: row.fingerprint,
+          ttl_minutes: minutes && minutes > 0 ? minutes : undefined,
+        });
+        message.success(minutes && minutes > 0 ? `已认领 ${minutes} 分钟：同指纹通知将暂停` : "已认领：同指纹通知将暂停");
       }
       await loadCur(curPage, curPageSize, keyword);
     } catch (e) {
@@ -271,7 +264,7 @@ export function HistoryTab() {
             total: curTotal,
             onChange: (page, pageSize) => void loadCur(page, pageSize, keyword),
           })}
-          scroll={{ x: 1380 }}
+          scroll={{ x: 1560 }}
           onRow={(r) => ({
             onClick: () => openDetail(toDetailFromCur(r)),
             style: { cursor: "pointer" },
@@ -312,6 +305,20 @@ export function HistoryTab() {
                   <Typography.Text type="secondary">-</Typography.Text>
                 ),
             },
+            {
+              title: "进展",
+              dataIndex: "latest_note",
+              width: 180,
+              ellipsis: true,
+              render: (_: unknown, r: AlertCurEventItem) =>
+                r.latest_note ? (
+                  <Typography.Text ellipsis title={`${r.latest_note_by || ""} ${r.latest_note}`}>
+                    {r.latest_note}
+                  </Typography.Text>
+                ) : (
+                  <Typography.Text type="secondary">-</Typography.Text>
+                ),
+            },
             { title: "值", dataIndex: "value", width: 90 },
             { title: "开始", dataIndex: "starts_at", width: 170, render: (v) => formatDateTime(v) || "-" },
             { title: "更新", dataIndex: "updated_at", width: 170, render: (v) => formatDateTime(v) || "-" },
@@ -321,9 +328,11 @@ export function HistoryTab() {
               fixed: "right",
               render: (_: unknown, r: AlertCurEventItem) => (
                 <Space size={0} onClick={(e) => e.stopPropagation()}>
-                  <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => void toggleAck(r)}>
-                    {r.acked ? "取消认领" : "认领"}
-                  </Button>
+                  <AlertAckActionButton
+                    acked={Boolean(r.acked)}
+                    onAck={(minutes) => void toggleAck(r, minutes)}
+                    onClear={() => void toggleAck(r)}
+                  />
                   <Button type="link" size="small" icon={<BellOutlined />} onClick={() => openDetail(toDetailFromCur(r))}>
                     通知
                   </Button>

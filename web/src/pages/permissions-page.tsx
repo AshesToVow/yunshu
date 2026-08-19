@@ -27,7 +27,8 @@ function isK8sScopeNotApplicable(resource: string) {
   return (
     p.startsWith("/api/v1/k8s-policies") ||
     p.startsWith("/api/v1/k8s-namespace-deny-rules") ||
-    p.startsWith("/api/v1/k8s-namespace-allow-rules")
+    p.startsWith("/api/v1/k8s-namespace-allow-rules") ||
+    p.startsWith("/api/v1/k8s/event-forward")
   );
 }
 
@@ -52,7 +53,10 @@ const PERMISSION_SYNC_SKIP = new Set([
   "GET /api/v1/auth/me",
   "PUT /api/v1/auth/me",
   "PUT /api/v1/auth/password",
+  "GET /api/v1/menus/tree",
+  "POST /api/v1/alerts/webhook/alertmanager",
   "POST /api/v1/alerts/ingress/k8s-events",
+  "POST /api/v1/loggie/heartbeat/report",
 ]);
 
 function catalogRouteKey(route: ApiCatalogRow) {
@@ -477,7 +481,19 @@ export function PermissionsPage() {
           <Form.Item label="能力名称" name="name" rules={[{ required: true, message: "请输入能力名称" }]}>
             <Input placeholder="例如：查询主机列表" />
           </Form.Item>
-          <Form.Item label="资源路径" name="resource" rules={[{ required: true, message: "请输入资源路径" }]}>
+          <Form.Item
+            label="资源路径"
+            name="resource"
+            rules={[
+              { required: true, message: "请输入资源路径" },
+              {
+                validator: (_, v: string) =>
+                  String(v || "").includes("*")
+                    ? Promise.reject(new Error("资源路径不能包含通配符 * / /*"))
+                    : Promise.resolve(),
+              },
+            ]}
+          >
             <Input placeholder="须与后端一致，例如 /api/v1/users 或 /api/v1/users/:id；撤销策略为 DELETE /api/v1/policies（勿写 :id）" />
           </Form.Item>
           <Form.Item label="HTTP 动作" name="action" rules={[{ required: true, message: "请选择动作" }]}>
@@ -546,7 +562,19 @@ export function PermissionsPage() {
             <Form.Item label="能力名称" name="name" rules={[{ required: true, message: "请输入能力名称" }]}>
               <Input />
             </Form.Item>
-            <Form.Item label="资源路径" name="resource" rules={[{ required: true, message: "请输入资源路径" }]}>
+            <Form.Item
+              label="资源路径"
+              name="resource"
+              rules={[
+                { required: true, message: "请输入资源路径" },
+                {
+                  validator: (_, v: string) =>
+                    String(v || "").includes("*")
+                      ? Promise.reject(new Error("资源路径不能包含通配符 * / /*"))
+                      : Promise.resolve(),
+                },
+              ]}
+            >
               <Input />
             </Form.Item>
             <Form.Item label="HTTP 动作" name="action" rules={[{ required: true, message: "请选择动作" }]}>

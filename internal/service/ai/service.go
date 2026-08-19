@@ -33,6 +33,9 @@ type Service struct {
 	encryptionKey string
 	dataDir       string
 	memberRepo    interfaces.ProjectMemberRepository
+	accessRepo    interfaces.K8sClusterAccessRepository
+	nsDenyRepo    interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo   interfaces.K8sNamespaceAllowRepository
 	clusterSvc    *k8s.K8sClusterService
 	podSvc        *k8s.K8sPodService
 	workloadSvc   *k8s.K8sWorkloadService
@@ -52,6 +55,9 @@ func NewService(
 	yamlAI config.AIConfig,
 	encryptionKey string,
 	memberRepo interfaces.ProjectMemberRepository,
+	accessRepo interfaces.K8sClusterAccessRepository,
+	nsDenyRepo interfaces.K8sNamespaceDenyRepository,
+	nsAllowRepo interfaces.K8sNamespaceAllowRepository,
 	clusterSvc *k8s.K8sClusterService,
 	podSvc *k8s.K8sPodService,
 	workloadSvc *k8s.K8sWorkloadService,
@@ -68,6 +74,9 @@ func NewService(
 		encryptionKey: encryptionKey,
 		dataDir:       filepath.Join("data", "ai"),
 		memberRepo:    memberRepo,
+		accessRepo:    accessRepo,
+		nsDenyRepo:    nsDenyRepo,
+		nsAllowRepo:   nsAllowRepo,
 		clusterSvc:    clusterSvc,
 		podSvc:        podSvc,
 		workloadSvc:   workloadSvc,
@@ -476,9 +485,18 @@ func (s *Service) AnalyzePodDiagnose(ctx context.Context, userID uint, req PodDi
 	if s.podSvc == nil {
 		return nil, constants.ErrBadRequestWithMsg("K8s Pod 服务不可用")
 	}
+	actor := resolveActor(ctx, nil)
+	if actor == nil || actor.ID == 0 {
+		return nil, constants.ErrUnauthorized
+	}
+	ns := strings.TrimSpace(req.Namespace)
+	if err := s.assertK8sClusterAccess(ctx, actor, req.ClusterID, ns, k8s.K8sAccessRankReadonly); err != nil {
+		return nil, err
+	}
+	ctx = withActorContext(ctx, actor)
 	diag, err := s.podSvc.Diagnose(ctx, k8s.PodDiagnoseQuery{
 		ClusterID: req.ClusterID,
-		Namespace: strings.TrimSpace(req.Namespace),
+		Namespace: ns,
 		Name:      strings.TrimSpace(req.Name),
 	})
 	if err != nil {

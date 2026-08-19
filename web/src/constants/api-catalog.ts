@@ -113,7 +113,8 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
   {
     title: "菜单",
     routes: [
-      { method: "GET", path: "/api/v1/menus/tree", summary: "菜单树", ui: "菜单管理", auth: true },
+      { method: "GET", path: "/api/v1/menus/tree", summary: "侧栏菜单树（登录即可，不走 Casbin）", ui: "侧栏", auth: true },
+      { method: "GET", path: "/api/v1/menus", summary: "菜单管理列表", ui: "菜单管理", auth: true },
       { method: "POST", path: "/api/v1/menus", summary: "创建菜单", ui: "菜单管理", auth: true },
       { method: "PUT", path: "/api/v1/menus/:id", summary: "更新菜单", ui: "菜单管理", auth: true },
       { method: "DELETE", path: "/api/v1/menus/:id", summary: "删除菜单", ui: "菜单管理", auth: true },
@@ -154,6 +155,9 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       },
       { method: "GET", path: "/api/v1/alerts/events", summary: "告警事件列表（支持 category 筛选）", ui: "历史告警记录", auth: true },
       { method: "GET", path: "/api/v1/alerts/history/stats", summary: "告警历史统计", ui: "告警配置中心", auth: true },
+      { method: "POST", path: "/api/v1/alerts/acks", summary: "认领告警", ui: "告警监控平台 · 事件台", auth: true },
+      { method: "GET", path: "/api/v1/alerts/notes", summary: "告警进展列表", ui: "告警监控平台 · 事件台", auth: true },
+      { method: "POST", path: "/api/v1/alerts/notes", summary: "添加告警进展", ui: "告警监控平台 · 事件台", auth: true },
       { method: "GET", path: "/api/v1/alerts/datasources", summary: "告警数据源列表", ui: "告警监控平台 · 数据源", auth: true },
       { method: "POST", path: "/api/v1/alerts/datasources", summary: "创建告警数据源", ui: "告警监控平台 · 数据源", auth: true },
       { method: "PUT", path: "/api/v1/alerts/datasources/:id", summary: "更新告警数据源", ui: "告警监控平台 · 数据源", auth: true },

@@ -177,7 +177,13 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 		name = row.Resource
 	}
 
-	execCtx := auth.WithRequestUser(ctx, actor)
+	if err := s.assertK8sClusterAccess(ctx, actor, clusterID, ns, k8s.K8sAccessRankAdmin); err != nil {
+		_ = s.db.WithContext(ctx).Model(&model.AiToolApproval{}).Where("id = ?", id).
+			Updates(map[string]any{"status": "failed", "result_msg": truncateStr(err.Error(), 1000)})
+		return nil, err
+	}
+
+	execCtx := withActorContext(ctx, actor)
 
 	var execErr error
 	switch row.ToolName {

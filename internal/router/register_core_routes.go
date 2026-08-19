@@ -9,6 +9,8 @@ import (
 // RegisterCoreRoutes 平台内核：认证、RBAC、菜单、字典、审计日志等。
 func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	api.GET("/health", d.systemHandler.Health)
+	// 兼容旧探活；正式探针见 /livez、/readyz（进程根路径）
+	api.GET("/ready", d.systemHandler.Health)
 
 	authGroup := api.Group("/auth")
 	authGroup.POST("/verification-code", d.authHandler.SendEmailCode)
@@ -94,9 +96,14 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	admin.GET("/banned-ips", d.adminHandler.ListBannedIPs)
 	admin.POST("/banned-ips/unban", d.adminHandler.UnbanIP)
 
+	menusTree := api.Group("/menus")
+	// 侧栏树：登录即可；按用户角色过滤，不要求菜单管理写权限。
+	menusTree.Use(d.authMiddleware, d.opAudit)
+	menusTree.GET("/tree", d.menuHandler.Tree)
+
 	menus := api.Group("/menus")
 	menus.Use(d.authMiddleware, d.authorize, d.opAudit)
-	menus.GET("/tree", d.menuHandler.Tree)
+	menus.GET("", d.menuHandler.List)
 	menus.POST("", d.menuHandler.Create)
 	menus.PUT("/status", d.menuHandler.BatchStatus)
 	menus.GET("/:id/bindings", d.menuHandler.GetBindings)

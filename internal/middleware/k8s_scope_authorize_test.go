@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"yunshu/internal/middleware"
@@ -38,6 +39,38 @@ func TestK8sScopeAuthorize_SetsRequestScopeAndNSGate(t *testing.T) {
 	}
 	if !gotOK || gotScope.ClusterID != 7 || gotScope.Namespace != "production" {
 		t.Fatalf("scope=%+v ok=%v", gotScope, gotOK)
+	}
+}
+
+func TestK8sScopeAuthorize_EventForwardSettingsNoClusterID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.PUT("/api/v1/k8s/event-forward/settings", middleware.K8sScopeAuthorize(nil, nil, nil, nil, nil), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	r.POST("/api/v1/k8s/event-forward/rules", middleware.K8sScopeAuthorize(nil, nil, nil, nil, nil), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "put_settings", method: http.MethodPut, path: "/api/v1/k8s/event-forward/settings", body: `{"batch_size":10}`},
+		{name: "post_rules", method: http.MethodPost, path: "/api/v1/k8s/event-forward/rules", body: `{"name":"r1","cluster_ids":"1"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+		})
 	}
 }
 

@@ -53,7 +53,7 @@ func ResolveAPIResourcePlugin(resource string) string {
 			if prefix == "" {
 				continue
 			}
-			if r == prefix || strings.HasPrefix(r, prefix+"/") || strings.HasPrefix(r, prefix) {
+			if r == prefix || strings.HasPrefix(r, strings.TrimRight(prefix, "/")+"/") {
 				return m.Name()
 			}
 		}

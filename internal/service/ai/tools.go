@@ -10,6 +10,8 @@ import (
 	"yunshu/internal/ai/runbooks"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/llm"
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
@@ -285,6 +287,22 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			return step
 		}
 		if strings.EqualFold(reg.Runtime, "script") {
+			actor := resolveActor(ctx, tc.Actor)
+			if actor == nil || actor.ID == 0 {
+				step.OK = false
+				step.Error = "未登录或用户上下文缺失，拒绝执行工具"
+				step.Result = step.Error
+				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
+				return step
+			}
+			if scriptToolRequiresApproval(reg.RiskLevel, reg.Permission) {
+				err := errScriptNeedsApproval(name)
+				step.OK = false
+				step.Error = err.Error()
+				step.Result = step.Error
+				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
+				return step
+			}
 			out, err := s.runScriptTool(ctx, toolDefRow{
 				Name: reg.Name, ScriptLang: reg.ScriptLang, ScriptPath: reg.ScriptPath, TimeoutSec: reg.TimeoutSec,
 			}, argsJSON)
@@ -357,6 +375,18 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		}
 		return nil
 	}
+	requireK8sRead := func() error {
+		if err := requireCluster(); err != nil {
+			return err
+		}
+		return s.assertK8sClusterAccess(ctx, actor, clusterID, namespace, k8s.K8sAccessRankReadonly)
+	}
+	requireK8sAdmin := func() error {
+		if err := requireCluster(); err != nil {
+			return err
+		}
+		return s.assertK8sClusterAccess(ctx, actor, clusterID, namespace, k8s.K8sAccessRankAdmin)
+	}
 
 	var (
 		out any
@@ -383,30 +413,45 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			}
 			list := make([]item, 0, len(res.List))
 			for _, c := range res.List {
+				if !auth.IsSuperAdminRole(actor.RoleCodes) {
+					if s.accessRepo == nil {
+						err = constants.ErrInternal
+						break
+					}
+					rank := s.accessRepo.EffectiveTier(ctx, k8sauth.PackFromCurrentUser(actor), c.ID)
+					if rank < k8s.K8sAccessRankReadonly {
+						continue
+					}
+				}
 				list = append(list, item{ID: c.ID, Name: c.Name, Status: c.Status})
 			}
-			out = map[string]any{"total": res.Total, "list": list}
+			if err != nil {
+				break
+			}
+			out = map[string]any{"total": len(list), "list": list}
 		}
 	case "list_pods":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sRead(); err != nil {
 			break
 		}
 		if s.podSvc == nil {
 			err = fmt.Errorf("Pod 服务不可用")
 			break
 		}
+		ctx = withActorContext(ctx, actor)
 		out, err = s.podSvc.List(ctx, k8s.PodListQuery{ClusterID: clusterID, Namespace: namespace, Keyword: getStr("keyword")})
 	case "get_pod_detail":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sRead(); err != nil {
 			break
 		}
 		if s.podSvc == nil {
 			err = fmt.Errorf("Pod 服务不可用")
 			break
 		}
+		ctx = withActorContext(ctx, actor)
 		out, err = s.podSvc.Detail(ctx, k8s.PodDetailQuery{ClusterID: clusterID, Namespace: namespace, Name: getStr("name")})
 	case "get_pod_logs":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sRead(); err != nil {
 			break
 		}
 		if s.podSvc == nil {
@@ -420,6 +465,7 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		if tail > 1000 {
 			tail = 1000
 		}
+		ctx = withActorContext(ctx, actor)
 		var logs string
 		logs, err = s.podSvc.GetLogs(ctx, k8s.PodLogsQuery{
 			ClusterID: clusterID, Namespace: namespace, Name: getStr("name"),
@@ -427,49 +473,54 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		})
 		out = truncateStr(logs, 12_000)
 	case "diagnose_pod":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sRead(); err != nil {
 			break
 		}
 		if s.podSvc == nil {
 			err = fmt.Errorf("Pod 服务不可用")
 			break
 		}
+		ctx = withActorContext(ctx, actor)
 		out, err = s.podSvc.Diagnose(ctx, k8s.PodDiagnoseQuery{ClusterID: clusterID, Namespace: namespace, Name: getStr("name")})
 	case "run_diagnose_runbook":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sRead(); err != nil {
 			break
 		}
+		ctx = withActorContext(ctx, actor)
 		out, err = s.runDiagnoseRunbook(ctx, clusterID, namespace, getStr("name"), getStr("runbook_name"))
 	case "list_deployments":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sRead(); err != nil {
 			break
 		}
 		if s.workloadSvc == nil {
 			err = fmt.Errorf("Workload 服务不可用")
 			break
 		}
+		ctx = withActorContext(ctx, actor)
 		out, err = s.workloadSvc.ListDeployments(ctx, k8s.NamespacedListQuery{
 			ClusterNamespaceKeywordQuery: k8s.ClusterNamespaceKeywordQuery{
 				ClusterID: clusterID, Namespace: namespace, Keyword: getStr("keyword"),
 			},
 		})
 	case "list_namespaces":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sRead(); err != nil {
 			break
 		}
 		if s.nsSvc == nil {
 			err = fmt.Errorf("Namespace 服务不可用")
 			break
 		}
-		out, err = s.nsSvc.List(ctx, k8s.NamespaceListQuery{ClusterID: clusterID, Keyword: getStr("keyword")}, nil)
+		pack := k8sauth.PackFromCurrentUser(actor)
+		out, err = s.nsSvc.List(ctx, k8s.NamespaceListQuery{ClusterID: clusterID, Keyword: getStr("keyword")}, &pack)
 	case "list_events":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sRead(); err != nil {
 			break
 		}
 		if s.eventSvc == nil {
 			err = fmt.Errorf("Event 服务不可用")
 			break
 		}
+		ctx = withActorContext(ctx, actor)
 		limit := int64(getUint("limit", 50))
 		out, err = s.eventSvc.List(ctx, k8s.EventListQuery{ClusterID: clusterID, Namespace: namespace, Keyword: getStr("keyword"), Limit: limit})
 	case "search_logs":
@@ -570,7 +621,7 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		}
 		out, err = s.alertSvc.ExplainFingerprintDelivery(ctx, getStr("fingerprint"))
 	case "scale_deployment", "restart_deployment", "delete_pod":
-		if err = requireCluster(); err != nil {
+		if err = requireK8sAdmin(); err != nil {
 			break
 		}
 		out, err = s.createToolApproval(ctx, userID, name, argsJSON, clusterID, namespace, getStr("name"), getStr("reason"))

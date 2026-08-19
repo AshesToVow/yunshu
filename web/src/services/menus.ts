@@ -49,6 +49,11 @@ export function getMenuTree() {
   return getData<MenuItem[]>(http.get("/menus/tree"));
 }
 
+/** 菜单管理完整树（需菜单管理权限，不过滤入口）。 */
+export function getAdminMenuTree() {
+  return getData<MenuItem[]>(http.get("/menus"));
+}
+
 export function createMenu(payload: MenuCreatePayload) {
   return getData<MenuItem>(http.post("/menus", payload));
 }

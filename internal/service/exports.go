@@ -271,8 +271,9 @@ var (
 	NewK8sSearchService            = k8s.NewK8sSearchService
 	ResolveWatchTarget           = k8s.ResolveWatchTarget
 	WatchResourceLabel           = k8s.WatchResourceLabel
-	IsK8sReadAPIPath             = k8s.IsK8sReadAPIPath
-	IsK8sNginxRestartRoute       = k8s.IsK8sNginxRestartRoute
+	IsK8sReadAPIPath                   = k8s.IsK8sReadAPIPath
+	IsK8sClusterGrantReadBypassPath    = k8s.IsK8sClusterGrantReadBypassPath
+	IsK8sNginxRestartRoute             = k8s.IsK8sNginxRestartRoute
 	RequiredK8sAccessRank        = k8s.RequiredK8sAccessRank
 	K8sScopeRouteKey             = k8s.K8sScopeRouteKey
 	BuildK8sScopeMappings        = k8s.BuildK8sScopeMappings
@@ -409,6 +410,7 @@ type (
 	AlertHisEventListQuery           = alert.AlertHisEventListQuery
 	AlertAckRequest                  = alert.AlertAckRequest
 	AlertAckActiveInfo               = alert.AlertAckActiveInfo
+	AlertNoteCreateRequest           = alert.AlertNoteCreateRequest
 	ImportPrometheusRulesRequest     = alert.ImportPrometheusRulesRequest
 	ImportPrometheusRulesResult      = alert.ImportPrometheusRulesResult
 	AlertMonitorRuleListQuery      = alert.AlertMonitorRuleListQuery

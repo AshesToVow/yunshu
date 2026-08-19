@@ -175,6 +175,12 @@ func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
 			{DictType: "alert_threshold_unit", Label: "字节(bytes)", Value: "bytes", Sort: intRef(3), Status: 1, Remark: "用于容量类指标"},
 			{DictType: "alert_threshold_unit", Label: "毫秒(ms)", Value: "ms", Sort: intRef(4), Status: 1, Remark: "用于耗时类指标"},
 			{DictType: "alert_threshold_unit", Label: "计数(count)", Value: "count", Sort: intRef(5), Status: 1, Remark: "用于请求数/错误数"},
+			// 告警认领时长（分钟）；排序第一项为默认，前端下拉与后端 TTL 都读此字典
+			{DictType: "alert_ack_ttl_minutes", Label: "15 分钟", Value: "15", Sort: intRef(1), Status: 1, Remark: "认领时长；排序第一项为默认"},
+			{DictType: "alert_ack_ttl_minutes", Label: "30 分钟", Value: "30", Sort: intRef(2), Status: 1, Remark: "认领时长（分钟）"},
+			{DictType: "alert_ack_ttl_minutes", Label: "1 小时", Value: "60", Sort: intRef(3), Status: 1, Remark: "认领时长（分钟）"},
+			{DictType: "alert_ack_ttl_minutes", Label: "2 小时", Value: "120", Sort: intRef(4), Status: 1, Remark: "认领时长（分钟）"},
+			{DictType: "alert_ack_ttl_minutes", Label: "4 小时", Value: "240", Sort: intRef(5), Status: 1, Remark: "认领时长（分钟）"},
 			// 集群 kubeconfig 模板（请替换 server/token）；「集群管理」表单可一键插入
 			{DictType: "k8s_kubeconfig_template", Label: "单集群 kubeconfig 模板", Value: "kubeconfig文件", Sort: intRef(1), Status: 1, Remark: "占位说明：可在字典中维护完整 kubeconfig 供集群管理选择；勿将生产密钥提交到 Git"},
 			// 集群直连配置模板：label 作为配置键，value 存直连 JSON（可在集群管理 direct 模式通过 dict_config_key 引用）

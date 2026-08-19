@@ -18,9 +18,28 @@ export function flattenMenuItems(menus: MenuItem[]): MenuItem[] {
   return out;
 }
 
-/** 按当前 URL 在菜单树中查找节点（含目录节点） */
+/**
+ * 按当前 URL 在已授权菜单树中查找节点。
+ * 先精确匹配；再按「带 component 的叶子」做最长前缀匹配（支持 /page/:id 等子路由）。
+ */
 export function findMenuByPath(menus: MenuItem[], pathname: string): MenuItem | undefined {
   const p = normalizeMenuPath(pathname);
   const flat = flattenMenuItems(menus);
-  return flat.find((m) => normalizeMenuPath(m.path) === p);
+  const exact = flat.find((m) => normalizeMenuPath(m.path) === p);
+  if (exact) return exact;
+
+  let best: MenuItem | undefined;
+  let bestLen = -1;
+  for (const m of flat) {
+    if (!m.component?.trim()) continue;
+    const mp = normalizeMenuPath(m.path);
+    if (mp === "/") continue;
+    if (p === mp || p.startsWith(`${mp}/`)) {
+      if (mp.length > bestLen) {
+        best = m;
+        bestLen = mp.length;
+      }
+    }
+  }
+  return best;
 }

@@ -57,6 +57,16 @@ func (h *MenuHandler) Tree(c *gin.Context) {
 	response.Success(c, filtered)
 }
 
+// List 菜单管理用完整树（需 Casbin）；不做入口权限过滤，否则管理员看不到未授权菜单。
+func (h *MenuHandler) List(c *gin.Context) {
+	list, err := h.service.Tree(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, plugingate.FilterMenusByPlugins(list, h.plugins))
+}
+
 func filterAdminOnlyMenus(items []model.Menu) []model.Menu {
 	var filter func([]model.Menu) []model.Menu
 	filter = func(nodes []model.Menu) []model.Menu {

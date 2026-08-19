@@ -49,7 +49,8 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	clusters.GET("/:id/api-resources", d.k8sDiscoveryHandler.ListAPIResources)
 
 	ef := api.Group("/k8s/event-forward")
-	ef.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
+	// 平台级转发配置（非单集群资源操作），仅 Casbin，不挂 K8sScopeAuthorize。
+	ef.Use(d.authMiddleware, d.authorize, d.opAudit)
 	ef.GET("/rules", d.k8sEventForwardHandler.ListRules)
 	ef.POST("/rules", d.k8sEventForwardHandler.CreateRule)
 	ef.GET("/rules/:id", d.k8sEventForwardHandler.GetRule)

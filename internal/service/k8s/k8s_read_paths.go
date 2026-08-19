@@ -2,7 +2,8 @@ package k8s
 
 import "strings"
 
-// IsK8sReadAPIPath 判断是否为控制台使用的「资源列表/详情」类只读 API（与 Authorize 兜底 allowReadByK8sScopedPolicy 对齐）。
+// IsK8sReadAPIPath 判断是否为控制台使用的「资源列表/详情」类只读 API。
+// 用于 K8sScopeAuthorize 对 GET 强制集群档位；勿单独作为 Casbin 放行依据。
 func IsK8sReadAPIPath(path string) bool {
 	p := strings.TrimSpace(path)
 	k8sPrefixes := []string{
@@ -44,4 +45,26 @@ func IsK8sReadAPIPath(path string) bool {
 		}
 	}
 	return false
+}
+
+// IsK8sClusterGrantReadBypassPath 集群档位可否绕过 Casbin GET。
+// 仅覆盖工作负载/命名空间等资源只读；敏感与运维面 API 必须显式 Casbin。
+func IsK8sClusterGrantReadBypassPath(path string) bool {
+	p := strings.TrimSpace(path)
+	if p == "" || !IsK8sReadAPIPath(p) {
+		return false
+	}
+	if strings.HasPrefix(p, "/api/v1/k8s-policies") {
+		return false
+	}
+	if strings.HasPrefix(p, "/api/v1/secrets") {
+		return false
+	}
+	if strings.HasPrefix(p, "/api/v1/helm/harbor") {
+		return false
+	}
+	if strings.Contains(p, "/exec") || strings.Contains(p, "/file") {
+		return false
+	}
+	return true
 }
