@@ -260,7 +260,7 @@ type CicdReleaseRun struct {
 	ReleaseKind        string         `json:"release_kind" gorm:"size:32;not null;default:'regular'"`
 	ReleaseType        string         `json:"release_type" gorm:"size:32;comment:frontend_online|frontend_rollback|backend_initial|backend_update|pod_update|service_online"`
 	Tenv               string         `json:"tenv" gorm:"size:16"`
-	Status             string         `json:"status" gorm:"size:32;not null;default:'pending'"`
+	Status             string         `json:"status" gorm:"size:32;not null;default:'pending';index:idx_cicd_release_status_finished,priority:1"`
 	CurrentStageKey    string         `json:"current_stage_key" gorm:"size:32;comment:当前待审批节点"`
 	SubmitterUserID    *uint          `json:"submitter_user_id,omitempty"`
 	SubmitterName      string         `json:"submitter_name" gorm:"size:64"`
@@ -280,8 +280,8 @@ type CicdReleaseRun struct {
 	VerifyJSON         string         `json:"verify_json" gorm:"type:text;comment:验证结果 JSON"`
 	VerifiedAt         *time.Time     `json:"verified_at,omitempty"`
 	StartedAt          *time.Time     `json:"started_at,omitempty"`
-	FinishedAt         *time.Time     `json:"finished_at,omitempty"`
-	CreatedAt          time.Time      `json:"created_at"`
+	FinishedAt         *time.Time     `json:"finished_at,omitempty" gorm:"index:idx_cicd_release_status_finished,priority:2"`
+	CreatedAt          time.Time      `json:"created_at" gorm:"index"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 	DeletedAt          gorm.DeletedAt `json:"-" gorm:"index"`
 }

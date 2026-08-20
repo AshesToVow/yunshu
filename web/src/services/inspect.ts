@@ -125,9 +125,7 @@ export function listInspectRuns(projectId: number, params?: { page?: number; pag
 
 export function startInspectRun(projectId: number, datasourceId?: number) {
   return getData<InspectRun>(
-    http.post(`/projects/${projectId}/inspect/runs`, datasourceId ? { datasource_id: datasourceId } : {}, {
-      timeout: 120000,
-    }),
+    http.post(`/projects/${projectId}/inspect/runs`, datasourceId ? { datasource_id: datasourceId } : {}),
   );
 }
 

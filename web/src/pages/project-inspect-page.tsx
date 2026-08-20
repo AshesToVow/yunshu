@@ -475,24 +475,40 @@ export function ProjectInspectPage() {
             type="link"
             size="small"
             icon={<FileTextOutlined />}
+            disabled={r.status !== "success"}
             onClick={() => openAuthorized(inspectReportHtmlUrl(projectId, r.id))}
           >
             HTML
           </Button>
-          <Button type="link" size="small" onClick={() => openAuthorized(inspectReportPrintUrl(projectId, r.id))}>
+          <Button
+            type="link"
+            size="small"
+            disabled={r.status !== "success"}
+            onClick={() => openAuthorized(inspectReportPrintUrl(projectId, r.id))}
+          >
             打印
           </Button>
-          <Button type="link" size="small" onClick={() => openAuthorized(inspectReportPdfUrl(projectId, r.id))}>
+          <Button
+            type="link"
+            size="small"
+            disabled={r.status !== "success"}
+            onClick={() => openAuthorized(inspectReportPdfUrl(projectId, r.id))}
+          >
             PDF
           </Button>
-          <Button type="link" size="small" onClick={() => openAuthorized(inspectReportExcelUrl(projectId, r.id))}>
+          <Button
+            type="link"
+            size="small"
+            disabled={r.status !== "success"}
+            onClick={() => openAuthorized(inspectReportExcelUrl(projectId, r.id))}
+          >
             Excel
           </Button>
           <Button
             type="link"
             size="small"
             icon={<MailOutlined />}
-            disabled={!recipients.length}
+            disabled={!recipients.length || r.status !== "success"}
             onClick={async () => {
               try {
                 await resendInspectEmail(projectId, r.id);
@@ -510,22 +526,37 @@ export function ProjectInspectPage() {
     },
   ];
 
+  // 有排队/执行中任务时轮询历史，完成后自动刷新分数
+  useEffect(() => {
+    if (!projectId) return;
+    const inflight = runs.some((r) => r.status === "pending" || r.status === "running");
+    if (!inflight) return;
+    const timer = window.setInterval(() => {
+      void listInspectRuns(projectId, { page: runPage, page_size: runPageSize })
+        .then((rs) => {
+          setRuns(rs.list || []);
+          setRunTotal(rs.total || 0);
+          const still = (rs.list || []).some((r) => r.status === "pending" || r.status === "running");
+          if (!still) {
+            void refresh(projectId, runPage, runPageSize);
+          }
+        })
+        .catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [projectId, runs, runPage, runPageSize, refresh]);
+
   async function handleImmediateRun() {
     setRunning(true);
     try {
       const dsId = planForm.getFieldValue("datasource_id") || plan?.datasource_id;
       const run = await startInspectRun(projectId, dsId || undefined);
-      const m = statusMeta(run.status);
-      message.success(
-        run.status === "success"
-          ? `巡检完成 · 健康分 ${run.score}${run.grade ? ` (${run.grade})` : ""}`
-          : `巡检结束 · ${m.label}`,
-      );
+      message.success(`巡检已加入队列（#${run.id}），可继续操作，完成后自动刷新`);
       setActiveTab("runs");
       setRunPage(1);
       void refresh(projectId, 1, runPageSize);
     } catch (e: unknown) {
-      message.error(extractApiErrorMessage(e, "执行失败"));
+      message.error(extractApiErrorMessage(e, "提交巡检失败"));
     } finally {
       setRunning(false);
     }

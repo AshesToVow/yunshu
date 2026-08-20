@@ -41,7 +41,8 @@ type InspectRun struct {
 
 	StartedAt  *time.Time `json:"started_at"`
 	FinishedAt *time.Time `json:"finished_at"`
-	CreatedBy  uint       `json:"created_by" gorm:"comment:手动触发用户ID"`
+	CreatedBy    uint   `json:"created_by" gorm:"comment:手动触发用户ID"`
+	OperatorName string `json:"operator_name" gorm:"size:64;comment:触发人显示名"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

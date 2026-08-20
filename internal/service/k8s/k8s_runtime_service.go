@@ -158,7 +158,14 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 	kom.Clusters().RemoveClusterById(clusterID)
 
 	// 使用 kom 原生 RegisterByStringWithID，与 RegisterByPathWithID 等价，避免临时文件在容器/Windows 下的路径问题。
-	_, err := kom.Clusters().RegisterByStringWithID(kubeconfig, clusterID)
+	// RegisterTimeout 防止不可达 APIServer 在 dial/握手阶段无限阻塞（总览等多集群并发时尤甚）。
+	_, err := kom.Clusters().RegisterByStringWithID(
+		kubeconfig,
+		clusterID,
+		kom.RegisterTimeout(defaultKomRegisterTimeout),
+		kom.RegisterQPS(defaultK8sQPS),
+		kom.RegisterBurst(defaultK8sBurst),
+	)
 	if err != nil {
 		_ = bizerrors.Pass(context.Background(), "k8s.runtime", "registerClusterIfNeeded", err, "cluster_id", clusterID)
 		s.komMu.Lock()
@@ -204,6 +211,18 @@ func (s *K8sRuntimeService) DeleteRegisterCache(clusterID uint) {
 		}
 	}
 	s.komMu.Unlock()
+}
+
+// PeekRegisteredKubectl 返回进程内已注册的 kubectl（bare / :ro / :r / :w / :x），不触发冷注册。
+// 供总览等批量只读路径复用既有连接，避免默认 write 意图反复 Register。
+func (s *K8sRuntimeService) PeekRegisteredKubectl(id uint) *kom.Kubectl {
+	base := strconv.FormatUint(uint64(id), 10)
+	for _, key := range []string{base, base + ":ro", base + ":r", base + ":w", base + ":x"} {
+		if k := kom.Cluster(key); k != nil {
+			return k
+		}
+	}
+	return nil
 }
 
 // GetClusterKubectl 按请求 AccessIntent 选择只读/可写凭证（平台侧授权；不使用 Impersonation）。

@@ -18,6 +18,7 @@ import (
 	"yunshu/internal/service/k8s"
 
 	"github.com/redis/go-redis/v9"
+	kom "github.com/weibaohui/kom/kom"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -274,18 +275,15 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 	clusters = s.filterOverviewClusters(ctx, clusters)
 	out.ClustersCount = int64(len(clusters))
 	if len(clusters) == 0 {
-		if s.redis != nil {
-			if b, err := json.Marshal(out); err == nil {
-				_ = s.redis.Set(ctx, cacheKey, string(b), 15*time.Second).Err()
-			}
-		}
+		s.cacheOverview(ctx, cacheKey, out)
 		return out, nil
 	}
 
 	// 产品侧体验优先：总时限内返回“可得数据 + 失败计数”，而不是让首页等待到超时。
-	overallCtx, overallCancel := context.WithTimeout(ctx, 8*time.Second)
+	overallCtx, overallCancel := context.WithTimeout(ctx, overviewK8sBudget)
 	defer overallCancel()
 
+	sem := make(chan struct{}, overviewClusterConcurrency)
 	var (
 		mu sync.Mutex
 		wg sync.WaitGroup
@@ -306,19 +304,28 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 				}
 			}()
 
-			// 连接探测保持短超时，避免不可达集群拖慢全局。
-			cctx, cancel := context.WithTimeout(overallCtx, 2*time.Second)
-			_, k, err := s.runtime.GetClusterKubectl(cctx, cid)
-			cancel()
-			if err != nil {
+			select {
+			case <-overallCtx.Done():
 				mu.Lock()
 				out.PodClusterErrors++
+				out.EventClusterErrors++
+				mu.Unlock()
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+
+			k := s.overviewKubectl(overallCtx, cid)
+			if k == nil {
+				mu.Lock()
+				out.PodClusterErrors++
+				out.EventClusterErrors++
 				mu.Unlock()
 				return
 			}
 
 			// Pod 聚合也限制时长，超时按失败集群处理。
-			pctx, pcancel := context.WithTimeout(overallCtx, 4*time.Second)
+			pctx, pcancel := context.WithTimeout(overallCtx, overviewPodListTimeout)
 			var pods []corev1.Pod
 			podQuery := k.WithContext(pctx)
 			if podQuery == nil {
@@ -328,7 +335,7 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 				mu.Unlock()
 				return
 			}
-			err = podQuery.Resource(&corev1.Pod{}).AllNamespace().List(&pods).Error
+			err := podQuery.Resource(&corev1.Pod{}).AllNamespace().List(&pods).Error
 			pcancel()
 			if err != nil {
 				mu.Lock()
@@ -352,7 +359,7 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 			mu.Unlock()
 
 			// Event 概览仅采样最近 500 条，避免在大集群拖慢首页。
-			ectx, ecancel := context.WithTimeout(overallCtx, 4*time.Second)
+			ectx, ecancel := context.WithTimeout(overallCtx, overviewEventListTimeout)
 			var events []corev1.Event
 			eventQuery := k.WithContext(ectx)
 			if eventQuery == nil {
@@ -385,12 +392,57 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 	}
 	wg.Wait()
 
-	if s.redis != nil {
-		if b, err := json.Marshal(out); err == nil {
-			_ = s.redis.Set(ctx, cacheKey, string(b), 15*time.Second).Err()
-		}
-	}
+	s.cacheOverview(ctx, cacheKey, out)
 	return out, nil
+}
+
+const (
+	overviewMetricsCacheTTL     = 45 * time.Second
+	overviewK8sBudget           = 8 * time.Second
+	overviewClusterConcurrency  = 4
+	overviewRegisterTimeout     = 2 * time.Second
+	overviewPodListTimeout      = 4 * time.Second
+	overviewEventListTimeout    = 3 * time.Second
+)
+
+func (s *OverviewService) cacheOverview(ctx context.Context, cacheKey string, out *OverviewResponse) {
+	if s.redis == nil || out == nil {
+		return
+	}
+	if b, err := json.Marshal(out); err == nil {
+		_ = s.redis.Set(ctx, cacheKey, string(b), overviewMetricsCacheTTL).Err()
+	}
+}
+
+// overviewKubectl 优先复用进程内已注册连接；冷路径用 EnsureClusterRegistered（bare ID + 短超时），
+// 避免 GetClusterKubectl 默认 write 意图触发 :w 重复注册与项目成员 N+1。
+func (s *OverviewService) overviewKubectl(ctx context.Context, clusterID uint) *kom.Kubectl {
+	if s.runtime == nil {
+		return nil
+	}
+	if k := s.runtime.PeekRegisteredKubectl(clusterID); k != nil {
+		return k
+	}
+	rctx, cancel := context.WithTimeout(ctx, overviewRegisterTimeout)
+	defer cancel()
+	type regResult struct {
+		k   *kom.Kubectl
+		err error
+	}
+	ch := make(chan regResult, 1)
+	go func() {
+		k, err := s.runtime.EnsureClusterRegistered(rctx, clusterID)
+		ch <- regResult{k: k, err: err}
+	}()
+	select {
+	case <-rctx.Done():
+		return nil
+	case r := <-ch:
+		if r.err != nil || r.k == nil {
+			return nil
+		}
+		return r.k
+	}
 }
 
 // fillOverviewAlertAndAgents 聚合告警与日志 Agent 指标；表不存在或查询失败时保持 0，不阻断总览。
@@ -430,7 +482,7 @@ func isPodNormal(p corev1.Pod) bool {
 }
 
 func overviewMetricsCacheKey(ctx context.Context) string {
-	base := "overview:metrics:v4"
+	base := "overview:metrics:v5"
 	u, ok := auth.RequestUserFromContext(ctx)
 	if !ok || u == nil {
 		return base + ":anon"

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"yunshu/internal/interfaces"
@@ -29,6 +30,10 @@ type Service struct {
 	mailer    mailer.Sender
 	appName   string
 	reportDir string
+
+	workerOnce sync.Once
+	workerCtx  context.Context
+	jobCh      chan uint
 }
 
 func NewService(
@@ -440,20 +445,15 @@ func (s *Service) StartManualRun(ctx context.Context, projectID, userID uint, op
 	if dsID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("请指定 datasource_id 或在计划中配置数据源")
 	}
-	return s.executeRun(ctx, plan, dsID, "manual", userID, operatorName)
+	return s.enqueueNewRun(ctx, plan, dsID, "manual", userID, operatorName)
 }
 
-func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datasourceID uint, trigger string, userID uint, operatorName string) (*model.InspectRun, error) {
+// enqueueNewRun 创建 pending 记录并入队异步执行，立即返回（不阻塞 HTTP）。
+func (s *Service) enqueueNewRun(ctx context.Context, plan *model.InspectPlan, datasourceID uint, trigger string, userID uint, operatorName string) (*model.InspectRun, error) {
 	if plan == nil || plan.ProjectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("invalid plan")
 	}
-	projectName := fmt.Sprintf("project-%d", plan.ProjectID)
-	if s.projects != nil {
-		if p, err := s.projects.GetByID(ctx, plan.ProjectID); err == nil && p != nil {
-			projectName = p.Name
-		}
-	}
-	cli, ds, err := s.dsSvc.PrometheusClient(ctx, datasourceID)
+	_, ds, err := s.dsSvc.PrometheusClient(ctx, datasourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -461,63 +461,88 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 		return nil, constants.ErrBadRequestWithMsg("数据源不属于当前项目")
 	}
 
-	now := time.Now()
 	run := model.InspectRun{
 		ProjectID:      plan.ProjectID,
 		PlanID:         plan.ID,
-		Status:         "running",
+		Status:         "pending",
 		Trigger:        trigger,
 		DatasourceID:   datasourceID,
 		DatasourceName: ds.Name,
-		StartedAt:      &now,
 		CreatedBy:      userID,
+		OperatorName:   strings.TrimSpace(operatorName),
 	}
 	if err := s.db.WithContext(ctx).Create(&run).Error; err != nil {
 		return nil, err
 	}
+	s.enqueueRun(run.ID)
+	return &run, nil
+}
 
-	items, err := s.effectiveItems(ctx, plan.ProjectID)
+func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datasourceID uint, trigger string, userID uint, operatorName string) (*model.InspectRun, error) {
+	return s.enqueueNewRun(ctx, plan, datasourceID, trigger, userID, operatorName)
+}
+
+// performRun 在 worker 中执行采集与报告生成。状态落库用 Background，避免请求取消导致永远「执行中」。
+func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun) (*model.InspectRun, error) {
+	if plan == nil || run == nil || plan.ProjectID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("invalid plan")
+	}
+	dbCtx := context.Background()
+	projectName := fmt.Sprintf("project-%d", plan.ProjectID)
+	if s.projects != nil {
+		if p, err := s.projects.GetByID(dbCtx, plan.ProjectID); err == nil && p != nil {
+			projectName = p.Name
+		}
+	}
+	cli, ds, err := s.dsSvc.PrometheusClient(ctx, run.DatasourceID)
 	if err != nil {
-		return s.failRun(ctx, &run, err)
+		return s.failRun(dbCtx, run, err)
+	}
+	if ds.ProjectID != plan.ProjectID {
+		return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("数据源不属于当前项目"))
+	}
+
+	items, err := s.effectiveItems(dbCtx, plan.ProjectID)
+	if err != nil {
+		return s.failRun(dbCtx, run, err)
 	}
 	collected := collectItems(ctx, cli, items, 8)
-	user := strings.TrimSpace(operatorName)
-	if user == "" && trigger == "cron" {
-		user = "系统定时"
+	operator := strings.TrimSpace(run.OperatorName)
+	if operator == "" && run.Trigger == "cron" {
+		operator = "系统定时"
 	}
-	data := buildReportData(projectName, ds.Name, user, plan.ReportListMode, collected)
+	data := buildReportData(projectName, ds.Name, operator, plan.ReportListMode, collected)
 
-	tpl, err := s.resolveReportTemplate(ctx, plan.ProjectID, plan.ReportTemplateID)
+	tpl, err := s.resolveReportTemplate(dbCtx, plan.ProjectID, plan.ReportTemplateID)
 	if err != nil {
-		return s.failRun(ctx, &run, err)
+		return s.failRun(dbCtx, run, err)
 	}
 	htmlBytes, err := renderHTMLWithTemplate(tpl.Code, tpl.Body, data)
 	if err != nil {
-		// 自定义模板失败时回退标准版，避免整次巡检失败
 		htmlBytes, err = renderHTML(data)
 		if err != nil {
-			return s.failRun(ctx, &run, err)
+			return s.failRun(dbCtx, run, err)
 		}
 	}
 	printBytes := htmlBytes
 	pdfBytes := renderBinaryPDF(data)
 	excelBytes, excelErr := renderExcel(data)
 
-	store := s.store(ctx)
+	store := s.store(dbCtx)
 	htmlKey := reportObjectKey(plan.ProjectID, run.ID, "html")
 	printKey := reportObjectKey(plan.ProjectID, run.ID, "print.html")
 	pdfKey := reportObjectKey(plan.ProjectID, run.ID, "pdf")
 	excelKey := reportObjectKey(plan.ProjectID, run.ID, "xlsx")
 
-	if err := store.Put(ctx, htmlKey, htmlBytes, "text/html; charset=utf-8"); err != nil {
-		return s.failRun(ctx, &run, err)
+	if err := store.Put(dbCtx, htmlKey, htmlBytes, "text/html; charset=utf-8"); err != nil {
+		return s.failRun(dbCtx, run, err)
 	}
-	if err := store.Put(ctx, printKey, printBytes, "text/html; charset=utf-8"); err != nil {
-		return s.failRun(ctx, &run, err)
+	if err := store.Put(dbCtx, printKey, printBytes, "text/html; charset=utf-8"); err != nil {
+		return s.failRun(dbCtx, run, err)
 	}
-	_ = store.Put(ctx, pdfKey, pdfBytes, "application/pdf")
+	_ = store.Put(dbCtx, pdfKey, pdfBytes, "application/pdf")
 	if excelErr == nil && len(excelBytes) > 0 {
-		_ = store.Put(ctx, excelKey, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		_ = store.Put(dbCtx, excelKey, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 		run.ReportExcelPath = excelKey
 	}
 
@@ -526,6 +551,7 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 	run.Score = data.Score
 	run.Grade = data.Grade
 	run.Summary = data.Summary
+	run.ErrorMessage = ""
 	run.TotalCount = collected.Total
 	run.CriticalCount = collected.Critical
 	run.WarningCount = collected.Warning
@@ -536,14 +562,14 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 	run.ReportTemplateID = tpl.ID
 	run.ReportTemplateCode = tpl.Code
 	run.FinishedAt = &finished
-	if err := s.db.WithContext(ctx).Save(&run).Error; err != nil {
+	if err := s.db.WithContext(dbCtx).Save(run).Error; err != nil {
 		return nil, err
 	}
 	plan.LastRunAt = &finished
-	_ = s.db.WithContext(ctx).Model(plan).Update("last_run_at", finished).Error
+	_ = s.db.WithContext(dbCtx).Model(plan).Update("last_run_at", finished).Error
 
-	_ = s.sendRunEmail(ctx, plan, &run, data, htmlBytes, pdfBytes)
-	return &run, nil
+	_ = s.sendRunEmail(dbCtx, plan, run, data, htmlBytes, pdfBytes)
+	return run, nil
 }
 
 func (s *Service) effectiveItems(ctx context.Context, projectID uint) ([]model.InspectItem, error) {
@@ -562,11 +588,23 @@ func (s *Service) effectiveItems(ctx context.Context, projectID uint) ([]model.I
 }
 
 func (s *Service) failRun(ctx context.Context, run *model.InspectRun, err error) (*model.InspectRun, error) {
+	if run == nil {
+		return nil, err
+	}
 	finished := time.Now()
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	dbCtx := context.Background()
+	_ = s.db.WithContext(dbCtx).Model(&model.InspectRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+		"status":        "failed",
+		"error_message": msg,
+		"finished_at":   finished,
+	}).Error
 	run.Status = "failed"
-	run.ErrorMessage = err.Error()
+	run.ErrorMessage = msg
 	run.FinishedAt = &finished
-	_ = s.db.WithContext(ctx).Save(run).Error
 	return run, err
 }
 
