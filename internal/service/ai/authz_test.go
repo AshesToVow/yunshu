@@ -36,6 +36,18 @@ func (f *fakeClusterAccess) EffectiveTier(_ context.Context, _ k8sauth.Principal
 	}
 	return f.rankByCluster[clusterID]
 }
+func (f *fakeClusterAccess) EffectiveCapabilities(_ context.Context, _ k8sauth.PrincipalPack, clusterID uint) []string {
+	switch f.EffectiveTier(context.Background(), k8sauth.PrincipalPack{}, clusterID) {
+	case k8s.K8sAccessRankAdmin:
+		return []string{"read", "exec", "restart", "scale", "apply", "delete", "secret_reveal", "destructive"}
+	case k8s.K8sAccessRankReadonlyExec:
+		return []string{"read", "exec"}
+	case k8s.K8sAccessRankReadonly:
+		return []string{"read"}
+	default:
+		return nil
+	}
+}
 func (f *fakeClusterAccess) BuildEffectiveTierIndex(context.Context, k8sauth.PrincipalPack) (repository.EffectiveTierIndex, error) {
 	return repository.EffectiveTierIndex{}, nil
 }
