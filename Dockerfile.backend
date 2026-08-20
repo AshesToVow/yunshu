@@ -1,6 +1,8 @@
 # Dockerfile.backend
-# 兼容经典 docker build（无需 BuildKit / RUN --mount）
+# 兼容经典 docker build：所有用于 FROM 的 ARG 必须写在第一个 FROM 之前
 ARG GO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.26.2-alpine
+ARG ALPINE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/alpine:3.19
+
 FROM ${GO_IMAGE} AS builder
 
 RUN apk add --no-cache tzdata ca-certificates git
@@ -18,7 +20,6 @@ RUN go mod download
 COPY . .
 RUN go build -trimpath -ldflags="-s -w" -o /yunshu ./main.go
 
-ARG ALPINE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/alpine:3.19
 FROM ${ALPINE_IMAGE}
 
 # 巡检 PDF 已改为纯 Go 结构化生成，镜像不再安装 Chromium
