@@ -14,6 +14,7 @@ import (
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/k8scaps"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/interfaces"
@@ -257,17 +258,14 @@ func K8sScopeAuthorize(
 		}
 
 		perms := catalog.permissions()
-		required := service.RequiredK8sAccessRank(perms, routePath, method, actionCode)
-		if required <= 0 {
-			required = service.K8sAccessRankAdmin
-		}
-
-		rank := accessRepo.EffectiveTier(c.Request.Context(), pack, clusterID)
-		if rank < required {
-			response.Error(c, constants.ErrForbidden)
+		needCap := service.RequiredK8sCapability(perms, routePath, method, actionCode)
+		haveCaps := accessRepo.EffectiveCapabilities(c.Request.Context(), pack, clusterID)
+		if !k8scaps.Has(haveCaps, needCap) {
+			response.Error(c, constants.ErrForbiddenWithMsg("当前主体缺少集群能力："+needCap+"（请在 K8s 集群访问授权中勾选对应能力包）"))
 			c.Abort()
 			return
 		}
+		rank := k8scaps.Rank(haveCaps)
 		if scope, ok := k8sauth.RequestScopeFromContext(c.Request.Context()); ok {
 			scope.AccessRank = rank
 			c.Request = c.Request.WithContext(k8sauth.WithRequestScope(c.Request.Context(), scope))

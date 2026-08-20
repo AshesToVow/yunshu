@@ -13,6 +13,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/k8scaps"
 
 	"gorm.io/gorm"
 )
@@ -25,12 +26,13 @@ type K8sActionItem struct {
 
 // K8sClusterAccessItem 集群档位（DB），不经 Casbin。
 type K8sClusterAccessItem struct {
-	ID            uint   `json:"id"`
-	PrincipalKind string `json:"principal_kind"`
-	PrincipalRef  string `json:"principal_ref"`
-	RoleCode      string `json:"role_code"` // 兼容：principal_kind=role 时与 principal_ref 相同
-	ClusterID     uint   `json:"cluster_id"`
-	Preset        string `json:"preset"`
+	ID            uint     `json:"id"`
+	PrincipalKind string   `json:"principal_kind"`
+	PrincipalRef  string   `json:"principal_ref"`
+	RoleCode      string   `json:"role_code"` // 兼容：principal_kind=role 时与 principal_ref 相同
+	ClusterID     uint     `json:"cluster_id"`
+	Preset        string   `json:"preset"`
+	Capabilities  []string `json:"capabilities"`
 }
 
 func k8sClusterAccessItemFromGrant(g model.K8sClusterAccessGrant) K8sClusterAccessItem {
@@ -40,6 +42,7 @@ func k8sClusterAccessItemFromGrant(g model.K8sClusterAccessGrant) K8sClusterAcce
 		PrincipalRef:  g.PrincipalRef,
 		ClusterID:     g.ClusterID,
 		Preset:        g.Preset,
+		Capabilities:  k8scaps.FromGrant(g),
 	}
 	if strings.EqualFold(strings.TrimSpace(g.PrincipalKind), model.K8sPrincipalRole) {
 		it.RoleCode = g.PrincipalRef
@@ -47,15 +50,16 @@ func k8sClusterAccessItemFromGrant(g model.K8sClusterAccessGrant) K8sClusterAcce
 	return it
 }
 
-// K8sScopedPolicyGrantPresetRequest 下发档位；兼容仅传 role_id（视为 role 主体）。
+// K8sScopedPolicyGrantPresetRequest 下发档位或自定义能力包；兼容仅传 role_id（视为 role 主体）。
 type K8sScopedPolicyGrantPresetRequest struct {
 	PrincipalKind string `json:"principal_kind"` // role|user|group，可空（由 role_id/user_id/group_id 推断）
 	RoleID        uint   `json:"role_id"`
 	UserID        uint   `json:"user_id"`
 	GroupID       uint   `json:"group_id"`
 	ClusterIDs    []uint `json:"cluster_ids"`
-	Preset        string `json:"preset" binding:"required"` // readonly | readonly_exec | admin
-	// 仅对具体集群 ID 写入；cluster_id=0（全部集群）写入通配规则（cluster_id=0），与 IsDenied 语义一致
+	// Preset 与 Capabilities 二选一优先：传了 capabilities 则按勾选写入并推断 preset；否则按三档展开。
+	Preset          string   `json:"preset"` // readonly | readonly_exec | admin | custom
+	Capabilities    []string `json:"capabilities"`
 	DenyNamespaces  []string `json:"deny_namespaces"`
 	AllowNamespaces []string `json:"allow_namespaces"`
 }
@@ -82,34 +86,36 @@ type K8sScopedPolicyService struct {
 
 // K8sAuthMatrixRow 集群管理「已授权」矩阵行（对齐 k8m：按用户展开角色/组授权）。
 type K8sAuthMatrixRow struct {
-	RowKey          string `json:"row_key"`
-	GrantID         uint   `json:"grant_id"`
-	Username        string `json:"username"`
-	Nickname        string `json:"nickname,omitempty"`
-	PrincipalKind   string `json:"principal_kind"`
-	PrincipalRef    string `json:"principal_ref"`
-	PrincipalShow   string `json:"principal_show"`
-	ClusterID       uint   `json:"cluster_id"`
-	ClusterName     string `json:"cluster_name"`
-	GrantScopeAll   bool   `json:"grant_scope_all"`
-	Preset          string `json:"preset"`
-	PresetLabel     string `json:"preset_label"`
-	AllowNamespaces string `json:"allow_namespaces"`
-	Via             string `json:"via"`
+	RowKey          string   `json:"row_key"`
+	GrantID         uint     `json:"grant_id"`
+	Username        string   `json:"username"`
+	Nickname        string   `json:"nickname,omitempty"`
+	PrincipalKind   string   `json:"principal_kind"`
+	PrincipalRef    string   `json:"principal_ref"`
+	PrincipalShow   string   `json:"principal_show"`
+	ClusterID       uint     `json:"cluster_id"`
+	ClusterName     string   `json:"cluster_name"`
+	GrantScopeAll   bool     `json:"grant_scope_all"`
+	Preset          string   `json:"preset"`
+	PresetLabel     string   `json:"preset_label"`
+	Capabilities    []string `json:"capabilities"`
+	AllowNamespaces string   `json:"allow_namespaces"`
+	Via             string   `json:"via"`
 }
 
 // K8sUserClusterAuthRow 用户管理「已授权集群」行。
 type K8sUserClusterAuthRow struct {
-	RowKey          string `json:"row_key"`
-	GrantID         uint   `json:"grant_id"`
-	Username        string `json:"username"`
-	ClusterID       uint   `json:"cluster_id"`
-	ClusterName     string `json:"cluster_name"`
-	GrantScopeAll   bool   `json:"grant_scope_all"`
-	Preset          string `json:"preset"`
-	PresetLabel     string `json:"preset_label"`
-	AllowNamespaces string `json:"allow_namespaces"`
-	Via             string `json:"via"`
+	RowKey          string   `json:"row_key"`
+	GrantID         uint     `json:"grant_id"`
+	Username        string   `json:"username"`
+	ClusterID       uint     `json:"cluster_id"`
+	ClusterName     string   `json:"cluster_name"`
+	GrantScopeAll   bool     `json:"grant_scope_all"`
+	Preset          string   `json:"preset"`
+	PresetLabel     string   `json:"preset_label"`
+	Capabilities    []string `json:"capabilities"`
+	AllowNamespaces string   `json:"allow_namespaces"`
+	Via             string   `json:"via"`
 }
 
 // NewK8sScopedPolicyService 创建 K8s 集群档位服务（不写 Casbin k8s: 策略）。
@@ -161,13 +167,16 @@ func (s *K8sScopedPolicyService) PathCatalog() []string {
 	return paths
 }
 
+// CapabilityCatalog 能力包勾选目录。
+func (s *K8sScopedPolicyService) CapabilityCatalog() []K8sCapabilityMeta {
+	return CapabilityCatalog()
+}
+
 // GrantPreset 按 k8m 风格写入 k8s_cluster_access_grants（主体可为角色 / 用户 / 组）。
 func (s *K8sScopedPolicyService) GrantPreset(ctx context.Context, req K8sScopedPolicyGrantPresetRequest) (*K8sScopedPolicyGrantPresetResponse, error) {
-	preset := strings.TrimSpace(req.Preset)
-	switch preset {
-	case string(PresetK8sReadonly), string(PresetK8sReadonlyExec), string(PresetK8sAdmin):
-	default:
-		return nil, constants.ErrBadRequestWithMsg("preset 须为 readonly、readonly_exec 或 admin")
+	caps, preset, err := resolveGrantCapabilities(req.Capabilities, req.Preset)
+	if err != nil {
+		return nil, err
 	}
 	if s.accessRepo == nil {
 		return nil, constants.ErrInternal
@@ -232,6 +241,7 @@ func (s *K8sScopedPolicyService) GrantPreset(ctx context.Context, req K8sScopedP
 		clusterIDs = []uint{0}
 	}
 
+	capsJSON := k8scaps.Marshal(caps)
 	added, skipped := 0, 0
 	for _, cid := range clusterIDs {
 		preList, _ := s.accessRepo.ListByPrincipal(ctx, kind, principalRef)
@@ -247,6 +257,7 @@ func (s *K8sScopedPolicyService) GrantPreset(ctx context.Context, req K8sScopedP
 			PrincipalRef:  principalRef,
 			ClusterID:     cid,
 			Preset:        preset,
+			Capabilities:  capsJSON,
 		}
 		if err := s.accessRepo.Upsert(ctx, it); err != nil {
 			return nil, bizerrors.Pass(ctx, "k8s.policy", "GrantPreset", err)
@@ -284,6 +295,28 @@ func (s *K8sScopedPolicyService) GrantPreset(ctx context.Context, req K8sScopedP
 		AllowRulesAdded:   allowAdded,
 		AllowRulesSkipped: allowSkipped,
 	}, nil
+}
+
+// resolveGrantCapabilities 解析下发能力：优先 capabilities 勾选，否则按三档预设展开。
+func resolveGrantCapabilities(rawCaps []string, preset string) (caps []string, outPreset string, err error) {
+	caps = k8scaps.Normalize(rawCaps)
+	preset = strings.TrimSpace(preset)
+	if len(caps) > 0 {
+		caps = k8scaps.EnsureRead(caps)
+		return caps, k8scaps.InferPreset(caps), nil
+	}
+	switch preset {
+	case string(PresetK8sReadonly), string(PresetK8sReadonlyExec), string(PresetK8sAdmin):
+		caps = k8scaps.ForPreset(preset)
+		if len(caps) == 0 {
+			return nil, "", constants.ErrBadRequestWithMsg("preset 无效")
+		}
+		return caps, preset, nil
+	case k8scaps.PresetCustom:
+		return nil, "", constants.ErrBadRequestWithMsg("自定义档位须勾选 capabilities")
+	default:
+		return nil, "", constants.ErrBadRequestWithMsg("请选择档位或勾选能力包（capabilities）")
+	}
 }
 
 func syncDenyNamespaces(ctx context.Context, nsDenyRepo interfaces.K8sNamespaceDenyRepository, principalKind, principalRef string, clusterIDs []uint, denyNS []string) (added, skipped int, err error) {
@@ -486,16 +519,7 @@ func (s *K8sScopedPolicyService) cleanupNSRulesForGrant(ctx context.Context, kin
 }
 
 func presetLabelCN(p string) string {
-	switch strings.ToLower(strings.TrimSpace(p)) {
-	case "admin":
-		return "集群管理员"
-	case "readonly_exec":
-		return "Exec 权限"
-	case "readonly":
-		return "集群只读"
-	default:
-		return strings.TrimSpace(p)
-	}
+	return k8scaps.PresetLabelCN(p)
 }
 
 func viaForPrincipalKind(kind string) string {
@@ -597,6 +621,7 @@ func (s *K8sScopedPolicyService) ListClusterAuthMatrix(ctx context.Context, clus
 			GrantScopeAll:   g.ClusterID == 0,
 			Preset:          g.Preset,
 			PresetLabel:     presetLabelCN(g.Preset),
+			Capabilities:    k8scaps.FromGrant(g),
 			AllowNamespaces: allow,
 			Via:             viaForPrincipalKind(g.PrincipalKind),
 		})
@@ -743,6 +768,7 @@ func (s *K8sScopedPolicyService) ListUserClusterAuth(ctx context.Context, userID
 					GrantScopeAll:   true,
 					Preset:          g.Preset,
 					PresetLabel:     presetLabelCN(g.Preset),
+					Capabilities:    k8scaps.FromGrant(g),
 					AllowNamespaces: allow,
 					Via:             sc.via,
 				})
@@ -763,6 +789,7 @@ func (s *K8sScopedPolicyService) ListUserClusterAuth(ctx context.Context, userID
 				GrantScopeAll:   false,
 				Preset:          g.Preset,
 				PresetLabel:     presetLabelCN(g.Preset),
+				Capabilities:    k8scaps.FromGrant(g),
 				AllowNamespaces: allow,
 				Via:             sc.via,
 			})
@@ -781,11 +808,12 @@ func (s *K8sScopedPolicyService) ListUserClusterAuth(ctx context.Context, userID
 	return out, nil
 }
 
-// K8sMyAccessResult 当前用户在指定集群上的有效档位。
+// K8sMyAccessResult 当前用户在指定集群上的有效档位与能力包。
 type K8sMyAccessResult struct {
-	ClusterID    uint   `json:"cluster_id"`
-	AccessRank   int    `json:"access_rank"`
-	AccessPreset string `json:"access_preset,omitempty"`
+	ClusterID    uint     `json:"cluster_id"`
+	AccessRank   int      `json:"access_rank"`
+	AccessPreset string   `json:"access_preset,omitempty"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // MyAccess 返回当前登录用户对某集群的有效档位（含角色/用户组合并）。
@@ -801,13 +829,19 @@ func (s *K8sScopedPolicyService) MyAccess(ctx context.Context, clusterID uint) (
 	if auth.IsSuperAdminRole(u.RoleCodes) {
 		out.AccessRank = K8sAccessRankAdmin
 		out.AccessPreset = string(PresetK8sAdmin)
+		out.Capabilities = k8scaps.All()
 		return out, nil
 	}
 	if s.accessRepo == nil {
 		return out, nil
 	}
-	rank := s.accessRepo.EffectiveTier(ctx, k8sauth.PackFromCurrentUser(u), clusterID)
-	out.AccessRank = rank
-	out.AccessPreset = accessPresetFromRank(rank)
+	pack := k8sauth.PackFromCurrentUser(u)
+	caps := s.accessRepo.EffectiveCapabilities(ctx, pack, clusterID)
+	out.Capabilities = caps
+	out.AccessRank = k8scaps.Rank(caps)
+	out.AccessPreset = k8scaps.InferPreset(caps)
+	if out.AccessRank == k8scaps.RankNone {
+		out.AccessPreset = ""
+	}
 	return out, nil
 }

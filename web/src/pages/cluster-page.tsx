@@ -229,8 +229,6 @@ export function ClusterPage() {
         kubeconfig: current.kubeconfig || "",
         kubeconfig_readonly: "",
         kubeconfig_dict_label: undefined,
-        impersonate_enabled: Boolean(current.impersonate_enabled),
-        impersonate_user_prefix: current.impersonate_user_prefix || "yunshu:",
         require_destructive_confirm: current.require_destructive_confirm !== false,
         // 已配置时 kubeconfig 不回传，留空表示不修改
         direct_config: {
@@ -332,6 +330,15 @@ export function ClusterPage() {
         message.error("请填写 API Server 地址或选择直连模板");
         return;
       }
+      const caData = (direct.ca_data || "").trim();
+      const skipTLS = Boolean(direct.insecure_skip_tls_verify);
+      if (!skipTLS && !caData && !current?.direct_config?.ca_data) {
+        // 编辑时若后端已有 CA（脱敏不回传完整内容），允许不填；新建必须 CA 或跳过 TLS
+        if (!current) {
+          message.error("请填写集群根 CA，或开启「跳过 TLS 验证」");
+          return;
+        }
+      }
       payload.direct_config = {
         server: server || undefined,
         dict_config_key: dictConfigKey || undefined,
@@ -340,8 +347,8 @@ export function ClusterPage() {
         password: (direct.password || "").trim() || undefined,
         client_cert_data: (direct.client_cert_data || "").trim() || undefined,
         client_key_data: (direct.client_key_data || "").trim() || undefined,
-        ca_data: (direct.ca_data || "").trim() || undefined,
-        insecure_skip_tls_verify: Boolean(direct.insecure_skip_tls_verify),
+        ca_data: caData || undefined,
+        insecure_skip_tls_verify: skipTLS,
       };
       delete (payload as { kubeconfig?: string }).kubeconfig;
     }
@@ -357,9 +364,6 @@ export function ClusterPage() {
       (payload as ClusterCreatePayload).owning_project_id = Number(ownPid);
     }
 
-    payload.impersonate_enabled = Boolean(values.impersonate_enabled);
-    const prefix = String(values.impersonate_user_prefix || "").trim();
-    if (prefix) payload.impersonate_user_prefix = prefix;
     payload.require_destructive_confirm = values.require_destructive_confirm !== false;
 
     setSubmitting(true);
@@ -491,8 +495,15 @@ export function ClusterPage() {
         message.info("集群已停用，未进行连通性检查");
         return;
       }
+      if (st.connection_state === "ready" && st.server_version) {
+        message.success(`连接成功，K8s 版本：${st.server_version}`);
+        return;
+      }
+      if (st.last_error) {
+        message.error(st.last_error);
+        return;
+      }
       if (st.server_version) message.success(`连接成功，K8s 版本：${st.server_version}`);
-      else if (st.last_error) message.error(st.last_error || "连接测试失败");
       else message.warning("已请求状态，但未获取到版本信息");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "连接测试失败";
@@ -514,6 +525,21 @@ export function ClusterPage() {
       ),
     },
     { title: "档位", dataIndex: "preset_label", width: 120 },
+    {
+      title: "能力包",
+      dataIndex: "capabilities",
+      width: 280,
+      render: (caps: string[] | undefined) =>
+        Array.isArray(caps) && caps.length > 0 ? (
+          <Space size={[4, 4]} wrap>
+            {caps.map((c) => (
+              <Tag key={c}>{c}</Tag>
+            ))}
+          </Space>
+        ) : (
+          <span className="inline-muted">—</span>
+        ),
+    },
     {
       title: "限制命名空间",
       dataIndex: "allow_namespaces",
@@ -950,27 +976,20 @@ export function ClusterPage() {
               <Form.Item label="客户端私钥（base64）" name={["direct_config", "client_key_data"]}>
                 <Input.TextArea rows={3} placeholder="client_key_data（可选）" />
               </Form.Item>
-              <Form.Item label="CA 证书（base64）" name={["direct_config", "ca_data"]}>
-                <Input.TextArea rows={3} placeholder="ca_data（可选）" />
+              <Form.Item label="CA 证书（base64）" name={["direct_config", "ca_data"]}
+                extra="填集群根 CA（kubeadm 常见：base64 -w0 /etc/kubernetes/pki/ca.crt）。不要用 ServiceAccount Secret 里的 ca.crt。与下方「跳过 TLS」二选一。"
+              >
+                <Input.TextArea rows={3} placeholder="certificate-authority-data（集群根 CA 的 base64）" />
               </Form.Item>
 
-              <Form.Item label="跳过 TLS 验证" name={["direct_config", "insecure_skip_tls_verify"]} valuePropName="checked">
+              <Form.Item label="跳过 TLS 验证" name={["direct_config", "insecure_skip_tls_verify"]} valuePropName="checked"
+                extra="仅联调时开启；生产请改填正确 CA 并关闭此项"
+              >
                 <Switch />
               </Form.Item>
             </>
           )}
 
-          <Form.Item
-            label="启用 Impersonation"
-            name="impersonate_enabled"
-            valuePropName="checked"
-            extra="长期方案：网关 SA 具备 impersonate 权限后，按 Yunshu 用户伪装访问集群，集群侧做细粒度 RBAC"
-          >
-            <Switch />
-          </Form.Item>
-          <Form.Item label="Impersonate 用户前缀" name="impersonate_user_prefix" initialValue="yunshu:">
-            <Input placeholder="yunshu:" />
-          </Form.Item>
           <Form.Item
             label="高危操作须确认"
             name="require_destructive_confirm"

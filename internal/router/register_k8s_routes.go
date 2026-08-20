@@ -14,6 +14,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	k8sPolicies := api.Group("/k8s-policies")
 	k8sPolicies.Use(d.authMiddleware, d.authorize, d.opAudit)
 	k8sPolicies.GET("/actions", d.k8sScopedPolicyHandler.Actions)
+	k8sPolicies.GET("/capabilities", d.k8sScopedPolicyHandler.Capabilities)
 	k8sPolicies.GET("/paths", d.k8sScopedPolicyHandler.Paths)
 	k8sPolicies.GET("", d.k8sScopedPolicyHandler.ListByRole)
 	k8sPolicies.GET("/cluster-auth-matrix", d.k8sScopedPolicyHandler.ClusterAuthMatrix)

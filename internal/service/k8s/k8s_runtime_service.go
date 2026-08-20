@@ -206,7 +206,7 @@ func (s *K8sRuntimeService) DeleteRegisterCache(clusterID uint) {
 	s.komMu.Unlock()
 }
 
-// GetClusterKubectl 按请求 AccessIntent 选择只读/可写凭证；可选 Impersonation。
+// GetClusterKubectl 按请求 AccessIntent 选择只读/可写凭证（平台侧授权；不使用 Impersonation）。
 func (s *K8sRuntimeService) GetClusterKubectl(ctx context.Context, id uint) (*model.K8sCluster, *kom.Kubectl, error) {
 	cluster, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -223,21 +223,7 @@ func (s *K8sRuntimeService) GetClusterKubectl(ctx context.Context, id uint) (*mo
 	if kerr != nil {
 		return nil, nil, constants.ErrBadRequestWithMsg(kerr.Error())
 	}
-	actor := actorFromContext(ctx)
-	if cluster.ImpersonateEnabled {
-		if actor == nil || actor.ID == 0 {
-			return nil, nil, constants.ErrForbiddenWithMsg("该集群已启用 Impersonation，须登录后访问")
-		}
-		cfg, cerr := restConfigFromKubeconfig(kubeconfig)
-		if cerr != nil {
-			return nil, nil, constants.ErrBadRequestWithMsg(cerr.Error())
-		}
-		applyImpersonation(cfg, cluster, actor)
-		regID = fmt.Sprintf("%s:imp:%d", regID, actor.ID)
-		if err := s.registerClusterByRestConfig(regID, cfg, false); err != nil {
-			return nil, nil, bizerrors.Internalf(ctx, "k8s.runtime", "GetClusterKubectl", err, constants.ErrFmtac130d1176b3, "cluster_id", id)
-		}
-	} else if err := s.registerClusterIfNeeded(regID, kubeconfig, false); err != nil {
+	if err := s.registerClusterIfNeeded(regID, kubeconfig, false); err != nil {
 		return nil, nil, bizerrors.Internalf(ctx, "k8s.runtime", "GetClusterKubectl", err, constants.ErrFmtac130d1176b3, "cluster_id", id)
 	}
 	k := kom.Cluster(regID)
@@ -374,7 +360,7 @@ func (s *K8sRuntimeService) CheckClusterHeartbeat(ctx context.Context, id uint) 
 		if verr != nil || gitVer == "" {
 			errMsg := "server version empty"
 			if verr != nil {
-				errMsg = verr.Error()
+				errMsg = classifyClusterConnectError(verr)
 			}
 			s.komMu.Lock()
 			st := s.connState[clusterID]
@@ -388,7 +374,7 @@ func (s *K8sRuntimeService) CheckClusterHeartbeat(ctx context.Context, id uint) 
 		}
 	}
 	if probeErr := s.probeClusterListNamespacesKom(ctx, id); probeErr != nil {
-		errMsg := probeErr.Error()
+		errMsg := classifyClusterConnectError(probeErr)
 		s.komMu.Lock()
 		st := s.connState[clusterID]
 		st.State = "degraded"
@@ -426,7 +412,7 @@ func (s *K8sRuntimeService) GetClusterConnState(id uint) ClusterConnState {
 	return st
 }
 
-// GetClusterRestConfig 与 GetClusterKubectl 对齐：项目归属校验、凭证意图、QPS、可选 Impersonation。
+// GetClusterRestConfig 与 GetClusterKubectl 对齐：项目归属校验、凭证意图、QPS（不使用 Impersonation）。
 func (s *K8sRuntimeService) GetClusterRestConfig(ctx context.Context, id uint) (*model.K8sCluster, *rest.Config, error) {
 	cluster, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -447,66 +433,5 @@ func (s *K8sRuntimeService) GetClusterRestConfig(ctx context.Context, id uint) (
 	if err != nil {
 		return nil, nil, bizerrors.Internalf(ctx, "k8s.runtime", "api", err, constants.ErrFmtd7f0c3fe8497)
 	}
-	actor := actorFromContext(ctx)
-	if cluster.ImpersonateEnabled {
-		if actor == nil || actor.ID == 0 {
-			return nil, nil, constants.ErrForbiddenWithMsg("该集群已启用 Impersonation，须登录后访问")
-		}
-		applyImpersonation(cfg, cluster, actor)
-	}
 	return cluster, cfg, nil
-}
-
-func (s *K8sRuntimeService) registerClusterByRestConfig(clusterID string, cfg *rest.Config, force bool) error {
-	s.ensureKomInit()
-	if cfg == nil {
-		return fmt.Errorf("rest config nil")
-	}
-	applyRestConfigDefaults(cfg)
-	// 用 Host+Impersonate+Bearer 摘要作为变更检测
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%v|%s", cfg.Host, cfg.Impersonate.UserName, cfg.Impersonate.Groups, cfg.BearerToken)))
-	hash := hex.EncodeToString(sum[:])
-
-	lk := s.getRegLock(clusterID)
-	lk.Lock()
-	defer lk.Unlock()
-
-	s.komMu.Lock()
-	st := s.connState[clusterID]
-	st.LastAttemptAt = time.Now()
-	st.State = "connecting"
-	s.connState[clusterID] = st
-	prev := s.registeredHash[clusterID]
-	if !force && prev != "" && prev == hash {
-		st.State = "ready"
-		st.LastError = ""
-		st.LastSuccessAt = time.Now()
-		st.ConsecutiveFailures = 0
-		s.connState[clusterID] = st
-		s.komMu.Unlock()
-		return nil
-	}
-	s.komMu.Unlock()
-
-	kom.Clusters().RemoveClusterById(clusterID)
-	_, err := kom.Clusters().RegisterByConfigWithID(cfg, clusterID)
-	if err != nil {
-		_ = bizerrors.Pass(context.Background(), "k8s.runtime", "registerClusterByRestConfig", err, "cluster_id", clusterID)
-		s.komMu.Lock()
-		st.State = "degraded"
-		st.LastError = err.Error()
-		st.ConsecutiveFailures++
-		s.connState[clusterID] = st
-		s.komMu.Unlock()
-		return bizerrors.MarkLogged(err)
-	}
-	s.komMu.Lock()
-	s.registeredHash[clusterID] = hash
-	st.State = "ready"
-	st.LastError = ""
-	st.LastSuccessAt = time.Now()
-	st.ConsecutiveFailures = 0
-	s.connState[clusterID] = st
-	s.komMu.Unlock()
-	return nil
 }

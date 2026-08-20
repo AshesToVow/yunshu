@@ -12,7 +12,7 @@ import (
 // 长期凭证策略：
 //   - Kubeconfig：可写/高权限凭证（变更类操作）
 //   - KubeconfigReadonly：可选只读凭证；配置后只读 API 优先使用，实现最小权限
-//   - ImpersonateEnabled：开启后以「网关 SA + Impersonate 用户」访问 apiserver，集群侧按用户/组做 RBAC
+//   - 用户权限：仅 Yunshu 平台集群授权（档位 + NS 黑白名单），不使用 Impersonation
 type K8sCluster struct {
 	ID uint `json:"id" gorm:"primaryKey;comment:主键ID"`
 
@@ -33,11 +33,11 @@ type K8sCluster struct {
 	// DirectConfig 直连配置 JSON（加密），当 ConnectionMode=direct 时使用
 	DirectConfig string `json:"-" gorm:"type:longtext;comment:直连配置JSON(加密)"`
 
-	// ImpersonateEnabled 开启后 Rest/kom 客户端附加 Impersonate（需网关 SA 具备 impersonate 权限）。
-	ImpersonateEnabled bool `json:"impersonate_enabled" gorm:"not null;default:0;comment:是否启用用户伪装"`
+	// ImpersonateEnabled 已废弃：保留列兼容旧库，运行时忽略，一律视为关闭。
+	ImpersonateEnabled bool `json:"impersonate_enabled" gorm:"not null;default:0;comment:已废弃-用户伪装"`
 
-	// ImpersonateUserPrefix 伪装用户名前缀，默认 yunshu:
-	ImpersonateUserPrefix string `json:"impersonate_user_prefix" gorm:"size:64;default:'yunshu:';comment:伪装用户名前缀"`
+	// ImpersonateUserPrefix 已废弃，保留列兼容。
+	ImpersonateUserPrefix string `json:"impersonate_user_prefix" gorm:"size:64;default:'yunshu:';comment:已废弃-伪装前缀"`
 
 	// RequireDestructiveConfirm 高危操作（drain/helm uninstall/rbac apply）须 confirm=true
 	RequireDestructiveConfirm bool `json:"require_destructive_confirm" gorm:"not null;default:1;comment:高危操作须确认"`

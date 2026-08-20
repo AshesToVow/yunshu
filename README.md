@@ -21,7 +21,7 @@ Yunshu 主要能力：
 
 - 多模块后台管理（用户、角色、菜单、组织、字典、审计）
 - **双层 K8s 鉴权**：Casbin API 权限 + 集群档位（`readonly` / `readonly_exec` / `admin`）+ 命名空间黑/白名单
-- **K8s 长期凭证策略**：可写 / 只读双 kubeconfig、可选 Impersonation、高危操作 `confirm` 确认；Secret 默认脱敏
+- **K8s 长期凭证策略**：可写 / 只读双 kubeconfig、高危操作 `confirm` 确认；Secret 默认脱敏；用户权限走平台集群授权
 - 项目维度的 **CMDB**（服务器、云账号、SSH/Web 终端）与服务配置
 - **日志平台**（Loggie Agent + Elasticsearch+kafka）：按服务器按日索引采集、检索、导出、保留策略、Agent 安装/热更/启停
 - **ES 管理（esmgmt）**：连接纳管、集群概览、备份/恢复、REST 控制台（读写拆分与 Owner RBAC）
@@ -136,7 +136,7 @@ flowchart TB
 | **插件** | 同一二进制，`config.yaml` → `plugins.enabled` 控制路由、迁移、Worker；详见 [docs/plugins.md](docs/plugins.md) |
 | **项目维度** | CMDB / 日志 / 备份 / **dbmgmt** / CI/CD API 多在 `/api/v1/projects/:id/...` 下，需项目成员权限 |
 | **日志** | Loggie 在目标机采集并写 ES；Yunshu 经 HTTP 管理 Agent 与代理检索 |
-| **K8s 三元策略** | Casbin API 授权 → 路由 K8s 范围校验 → 集群档位 + NS 黑/白名单；再叠加**凭证意图**（只读/可写 kubeconfig、可选 Impersonation） |
+| **K8s 三元策略** | Casbin API 授权 → 路由 K8s 范围校验 → 集群档位 + NS 黑/白名单；再叠加**凭证意图**（只读/可写 kubeconfig） |
 | **配置优先级** | 数据字典 `dict_entries` 可覆盖 YAML（Jenkins、MinIO、邮件、备份调度、dbmgmt 等） |
 
 ### 分层架构
@@ -168,17 +168,17 @@ flowchart LR
 | `readonly_exec` | 只读 + Pod 日志/终端 Exec |
 | `admin` | 变更类操作（apply/delete/scale、Drain、Helm、RBAC Apply、Secret 揭示等） |
 
-**凭证与 Impersonation（第四层，可选但推荐生产启用）**：
+**凭证与访问控制（运行时）**：
 
 | 能力 | 说明 |
 |------|------|
 | 可写 kubeconfig | 默认变更类 API 使用的凭证（加密落库，API 不回显） |
 | 只读 kubeconfig | 可选；配置后只读意图请求优先走该凭证，实现最小权限 |
-| Impersonation | 开启后以网关 SA + `Impersonate-User/Groups`（前缀默认 `yunshu:`）访问 apiserver，集群侧按用户做 RBAC |
+| 平台集群授权 | 档位 + NS 黑/白名单；**不**再使用 Impersonation（无需在目标集群按用户绑 YAML） |
 | 高危须确认 | 集群开关 `require_destructive_confirm`：Drain / Helm 卸载 / RBAC Apply 等须 `confirm=true` |
 | Secret | 详情默认脱敏；`GET /api/v1/secrets/reveal` 揭示明文（需 admin，审计强制 redact） |
 
-详细设计见：[docs/handbook/permissions/casbin-and-k8s-triple-policy.md](docs/handbook/permissions/casbin-and-k8s-triple-policy.md)、[M-06 Kubernetes](docs/handbook/requirements/modules/M-06-kubernetes.md)
+详细设计见：[docs/handbook/permissions/casbin-and-k8s-triple-policy.md](docs/handbook/permissions/casbin-and-k8s-triple-policy.md)、[M-06 Kubernetes](docs/handbook/requirements/modules/M-06-kubernetes.md)、连接说明 [deploy/k8s/yunshu-cluster-connect.md](deploy/k8s/yunshu-cluster-connect.md)
 
 ---
 
@@ -368,13 +368,13 @@ loggie:
    - 连接方式：`kubeconfig`（粘贴 YAML）或 `direct`（API Server + Token/证书）。
    - **可写 kubeconfig**（必填）：变更类操作使用。
    - **只读 kubeconfig**（可选）：只读 API 优先使用，实现最小权限。
-   - **Impersonation**（可选）：网关 SA 需具备 `impersonate`；开启后按 Yunshu 用户伪装访问。
+   - **直连**：须填**集群根 CA**（勿用 SA Secret 的 ca.crt）或临时「跳过 TLS 验证」；详见 [yunshu-cluster-connect.md](deploy/k8s/yunshu-cluster-connect.md)。
    - **高危操作须确认**（默认开启）：Drain / Helm 卸载 / RBAC Apply 等须 `confirm=true`。
    - 可选 **归属项目**：非 super-admin 仅能看到有项目成员关系的集群。
-2. 保存后查看 **连接状态**；失败时检查 kubeconfig、网络与 API Server 可达性；须配置 `security.encryption_key`（拒绝明文落库）。
+2. 保存后点 **测试**；失败看返回的 `last_error`（TLS / Token / 网络）；须配置 `security.encryption_key`（拒绝明文落库）。
 3. **安全说明**：详情接口**不回显**完整 kubeconfig/密钥，仅显示 `kubeconfig_configured` / `kubeconfig_readonly_configured` 与脱敏后的直连字段；更新凭证需重新粘贴。
 4. **组件状态 / 命名空间**：在集群详情或对应菜单查看。
-5. **生产建议**：为只读与可写拆分 ServiceAccount；开启 Impersonation 并在集群侧为 `yunshu:<username>` 绑定 ClusterRole。
+5. **生产建议**：为只读与可写拆分 ServiceAccount；用户权限只在 Yunshu「集群授权」配置。
 
 ### 日志平台（Loggie + Elasticsearch）
 
@@ -506,7 +506,8 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 | Pod Exec 403 | 需 `readonly_exec`；WS 需 Casbin + 档位；检查 Origin（浏览器带 Sec-Fetch-Site 时须同源）与 token |
 | Drain / Helm 卸载失败「须 confirm」 | 请求体或 Query 携带 `confirm=true`；集群「高危操作须确认」开关 |
 | Secret 仅见 `***` | 预期脱敏；admin 在详情页点「揭示明文」走 `/secrets/reveal` |
-| Impersonation 403 | 集群已开启伪装但未登录，或网关 SA 无 impersonate 权限 / 集群侧无对应用户绑定 |
+| 连接测试 TLS / x509 | 直连须填集群根 CA（`/etc/kubernetes/pki/ca.crt`），勿用 SA Secret 的 ca.crt；或临时跳过 TLS |
+| 连接测试 Token 失败 | Token 须 base64 解码后的 JWT（`eyJ` 开头） |
 | Loggie 无上报 / 离线 | **Agent 管理** 看心跳与探活；目标机 `systemctl status loggie`；监控端口默认 `9196`；确认 Token / `YUNSHU_URL` 指向后端 `:8080` |
 | ES 检索为空 | 确认 `elasticsearch.enabled`；索引 `yunshu-agent-{server_id}-*` 是否有文档；时间范围是否过窄；热更后新日志才按新解析模板入库 |
 | ERROR 堆栈拆成多行 | 确认解析模板为 `elasticsearch` 且 pipeline 使用 `multi.active`；热更 Agent 后再产生日志 |
@@ -893,7 +894,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 组件状态：Node Ready + kube-system 控制平面 Pod
 - [x] Pod 详情改为只读，编辑收口到表单
 - [x] 集群凭证 API 脱敏；kubeconfig 不回显
-- [x] 可写 / 只读双 kubeconfig + 可选 Impersonation
+- [x] 可写 / 只读双 kubeconfig；平台集群授权（Impersonation 已下线）
 - [x] 高危操作 confirm；Secret 默认脱敏 + reveal
 - [x] Node Drain（含 dry-run）/ Ingress-Nginx 重启纳入档位校验
 - [x] Apply 预检：文本 diff + server-side DryRun

@@ -356,17 +356,13 @@ func (s *K8sClusterService) Create(ctx context.Context, req K8sClusterCreateRequ
 		ConnectionMode:            connectionMode,
 		Status:                    1,
 		RequireDestructiveConfirm: true,
+		ImpersonateEnabled:        false,
 		ImpersonateUserPrefix:     "yunshu:",
 	}
 	if req.RequireDestructiveConfirm != nil {
 		c.RequireDestructiveConfirm = *req.RequireDestructiveConfirm
 	}
-	if req.ImpersonateEnabled != nil {
-		c.ImpersonateEnabled = *req.ImpersonateEnabled
-	}
-	if p := strings.TrimSpace(req.ImpersonateUserPrefix); p != "" {
-		c.ImpersonateUserPrefix = p
-	}
+	// Impersonation 已下线：忽略请求中的 impersonate_*，一律关闭。
 
 	// 处理直连配置
 	if connectionMode == "direct" && req.DirectConfig != nil {
@@ -537,16 +533,9 @@ func (s *K8sClusterService) Update(ctx context.Context, id uint, req K8sClusterU
 		}
 		s.runtime.DeleteRegisterCache(cluster.ID)
 	}
-	if req.ImpersonateEnabled != nil {
-		cluster.ImpersonateEnabled = *req.ImpersonateEnabled
-		s.runtime.DeleteRegisterCache(cluster.ID)
-	}
-	if req.ImpersonateUserPrefix != nil {
-		p := strings.TrimSpace(*req.ImpersonateUserPrefix)
-		if p == "" {
-			p = "yunshu:"
-		}
-		cluster.ImpersonateUserPrefix = p
+	// Impersonation 已下线：更新时强制关闭，清理历史开启状态
+	if cluster.ImpersonateEnabled {
+		cluster.ImpersonateEnabled = false
 		s.runtime.DeleteRegisterCache(cluster.ID)
 	}
 	if req.RequireDestructiveConfirm != nil {
@@ -618,8 +607,8 @@ func (s *K8sClusterService) buildClusterItem(c model.K8sCluster, forDetail bool)
 		OwningProjectID:           c.OwningProjectID,
 		ConnectionMode:            c.ConnectionMode,
 		Status:                    c.Status,
-		ImpersonateEnabled:        c.ImpersonateEnabled,
-		ImpersonateUserPrefix:     c.ImpersonateUserPrefix,
+		ImpersonateEnabled:        false,
+		ImpersonateUserPrefix:     "",
 		RequireDestructiveConfirm: c.RequireDestructiveConfirm,
 		CreatedAt:                 c.CreatedAt,
 		UpdatedAt:                 c.UpdatedAt,
@@ -649,7 +638,7 @@ func (s *K8sClusterService) buildClusterItem(c model.K8sCluster, forDetail bool)
 	return item
 }
 
-// Status 执行对应的业务逻辑。
+// Status 探测连通性：失败时仍返回状态体（含 last_error），避免前端只看到笼统 500。
 func (s *K8sClusterService) Status(ctx context.Context, id uint) (*K8sClusterStatusResponse, error) {
 	cl, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -659,17 +648,24 @@ func (s *K8sClusterService) Status(ctx context.Context, id uint) (*K8sClusterSta
 		return nil, err
 	}
 	ver, state, err := s.runtime.CheckClusterHeartbeat(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return &K8sClusterStatusResponse{
+	resp := &K8sClusterStatusResponse{
 		ServerVersion:       ver,
 		ConnectionState:     state.State,
 		LastError:           state.LastError,
 		LastAttemptAt:       state.LastAttemptAt,
 		LastSuccessAt:       state.LastSuccessAt,
 		ConsecutiveFailures: state.ConsecutiveFailures,
-	}, nil
+	}
+	if err != nil {
+		if strings.TrimSpace(resp.LastError) == "" {
+			resp.LastError = classifyClusterConnectError(err)
+		}
+		if resp.ConnectionState == "" || resp.ConnectionState == "unknown" || resp.ConnectionState == "ready" {
+			resp.ConnectionState = "degraded"
+		}
+		return resp, nil
+	}
+	return resp, nil
 }
 
 // ListNamespaces 查询列表相关的业务逻辑；若传入 pack，则按命名空间黑/白名单过滤（与控制台下拉、K8sScopeAuthorize 对齐）。

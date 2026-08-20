@@ -275,6 +275,7 @@ var (
 	IsK8sClusterGrantReadBypassPath    = k8s.IsK8sClusterGrantReadBypassPath
 	IsK8sNginxRestartRoute             = k8s.IsK8sNginxRestartRoute
 	RequiredK8sAccessRank        = k8s.RequiredK8sAccessRank
+	RequiredK8sCapability        = k8s.RequiredK8sCapability
 	K8sScopeRouteKey             = k8s.K8sScopeRouteKey
 	BuildK8sScopeMappings        = k8s.BuildK8sScopeMappings
 )

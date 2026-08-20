@@ -16,9 +16,9 @@
 权限叠加：
 
 1. **Casbin API**
-2. **集群档位**（`readonly` / `readonly_exec` / `admin`）
+2. **集群档位 / 能力包**（快捷三档或勾选 `read`/`exec`/`restart`/…）
 3. **命名空间黑白名单**
-4. **凭证意图**（只读/可写 kubeconfig、可选 Impersonation）
+4. **凭证意图**（只读/可写 kubeconfig；平台集群授权）
 5. **高危确认**（`confirm=true`）与写路径门禁
 
 ## 2. 功能范围（菜单）
@@ -43,7 +43,7 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET/POST/PUT/DELETE | `/api/v1/clusters`、`/:id` | 集群 CRUD；可写/只读 kubeconfig、Impersonation、高危确认开关 |
+| GET/POST/PUT/DELETE | `/api/v1/clusters`、`/:id` | 集群 CRUD；可写/只读 kubeconfig、高危确认开关 |
 | PUT/GET | `/api/v1/clusters/:id/status` | 启停 / 连接状态 |
 | GET | `/api/v1/clusters/:id/namespaces` | 命名空间 |
 | GET | `/api/v1/clusters/:id/component-statuses` | 组件 |
@@ -96,7 +96,7 @@
 | 表 / 字段 | 说明 |
 |-----------|------|
 | `k8s_clusters` | 连接信息；`kubeconfig`（可写）、`kubeconfig_readonly`（可选）、`direct_config` 均 AES-GCM 加密 |
-| `impersonate_enabled` / `impersonate_user_prefix` | 是否伪装用户；前缀默认 `yunshu:` |
+| `impersonate_*` | **已废弃**（列保留兼容，运行时忽略） |
 | `require_destructive_confirm` | 高危操作是否强制 `confirm` |
 | K8s 档位相关授权表 | 与 `/k8s-scoped-policies` 对应 |
 | Event 转发规则/设置表 | Event Forward |
@@ -109,9 +109,9 @@
 2. 集群档位：`readonly` / `readonly_exec` / `admin`  
 3. Namespace 黑/白名单（白名单激活时按允许 NS 分别 List，避免全集群拉取）  
 4. AccessIntent：`read` → 优先只读 kubeconfig；`write`/`exec` → 可写凭证  
-5. Impersonation：`rest.Config.Impersonate` + Kom `RegisterByConfigWithID`  
-6. `assertK8sWritable`：只读意图禁止变更  
+5. `assertK8sWritable`：只读意图禁止变更  
 
+连接与排障：[yunshu-cluster-connect.md](../../../../deploy/k8s/yunshu-cluster-connect.md)。  
 详见 [casbin-and-k8s-triple-policy.md](../../permissions/casbin-and-k8s-triple-policy.md)。
 
 ## 6. 相关文档

@@ -200,6 +200,7 @@ type K8sClusterAccessRepo interface {
 	GetByID(ctx context.Context, id uint) (*model.K8sClusterAccessGrant, error)
 	DeleteByID(ctx context.Context, id uint) (error)
 	EffectiveTier(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) (int)
+	EffectiveCapabilities(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) []string
 	BuildEffectiveTierIndex(ctx context.Context, pack k8sauth.PrincipalPack) (EffectiveTierIndex, error)
 	HasAnyK8sGrant(ctx context.Context, pack k8sauth.PrincipalPack) (bool)
 }

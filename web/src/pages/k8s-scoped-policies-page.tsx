@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Divider,
   Empty,
   Form,
@@ -27,8 +28,10 @@ import {
 import {
   deleteK8sClusterGrant,
   grantK8sScopedPoliciesPreset,
+  listK8sCapabilities,
   listK8sClusterGrants,
   listK8sPoliciesByRole,
+  type K8sCapabilityItem,
   type K8sClusterAccessItem,
 } from "../services/k8s-policies";
 import { getRoleOptions } from "../services/roles";
@@ -38,6 +41,12 @@ import type { RoleItem, UserItem } from "../types/api";
 import type { UserGroupItem } from "../services/user-groups";
 
 type SubjectKind = "role" | "group" | "user";
+
+const PRESET_CAPS: Record<"readonly" | "readonly_exec" | "admin", string[]> = {
+  readonly: ["read"],
+  readonly_exec: ["read", "exec"],
+  admin: ["read", "exec", "restart", "scale", "apply", "delete", "secret_reveal", "destructive"],
+};
 
 type BootstrapPref = {
   kind?: SubjectKind;
@@ -76,10 +85,12 @@ export function K8sScopedPoliciesPage() {
   const [presetForm] = Form.useForm<{
     cluster_ids: number[];
     preset: "readonly" | "readonly_exec" | "admin";
+    capabilities: string[];
     deny_namespaces?: string[];
     allow_namespaces?: string[];
   }>();
   const [denyForm] = Form.useForm<{ cluster_id?: number; namespace?: string }>();
+  const [capCatalog, setCapCatalog] = useState<K8sCapabilityItem[]>([]);
   const [presetNsOptions, setPresetNsOptions] = useState<{ label: string; value: string }[]>([]);
   const [presetNsLoading, setPresetNsLoading] = useState(false);
   const [denyNsOptions, setDenyNsOptions] = useState<{ label: string; value: string }[]>([]);
@@ -87,6 +98,13 @@ export function K8sScopedPoliciesPage() {
 
   const watchedPresetClusterIds = Form.useWatch("cluster_ids", presetForm) ?? [];
   const watchedDenyClusterId = Form.useWatch("cluster_id", denyForm);
+  const watchedCapabilities = Form.useWatch("capabilities", presetForm) ?? [];
+
+  const capNameByCode = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of capCatalog) m.set(c.code, c.name);
+    return m;
+  }, [capCatalog]);
 
   const selectedRole = useMemo(() => roles.find((r) => r.id === selectedRoleId) ?? null, [roles, selectedRoleId]);
   const selectedGroup = useMemo(() => groups.find((g) => g.id === selectedGroupId) ?? null, [groups, selectedGroupId]);
@@ -191,16 +209,22 @@ export function K8sScopedPoliciesPage() {
   async function bootstrap(pref?: BootstrapPref) {
     setLoading(true);
     try {
-      const [roleData, clusterData, groupRes, userRes] = await Promise.all([
+      const [roleData, clusterData, groupRes, userRes, capRes] = await Promise.all([
         getRoleOptions(),
         getClusters({ page: 1, page_size: 200 }),
         listUserGroups({ page: 1, page_size: 500 }),
         getUsers({ page: 1, page_size: 500 }),
+        listK8sCapabilities().catch(() => ({ list: [] as K8sCapabilityItem[] })),
       ]);
       setRoles(roleData.list);
       setGroups(groupRes.list ?? []);
       setUsers(userRes.list ?? []);
       setClusterOptions(clusterData.list.map((c) => ({ id: c.id, name: c.name })));
+      setCapCatalog(capRes.list ?? []);
+      presetForm.setFieldsValue({
+        capabilities: PRESET_CAPS.readonly,
+        preset: "readonly",
+      });
 
       const kind = pref?.kind ?? subjectKind;
       const nextRoleId = pref?.roleId ?? selectedRoleId ?? roleData.list[0]?.id;
@@ -278,9 +302,23 @@ export function K8sScopedPoliciesPage() {
         return "只读+Exec";
       case "admin":
         return "集群管理";
+      case "custom":
+        return "自定义能力包";
       default:
         return p;
     }
+  }
+
+  function renderCapabilityTags(codes?: string[]) {
+    const list = Array.isArray(codes) ? codes : [];
+    if (list.length === 0) return <span className="inline-muted">—</span>;
+    return (
+      <Space size={[4, 4]} wrap>
+        {list.map((code) => (
+          <Tag key={code}>{capNameByCode.get(code) || code}</Tag>
+        ))}
+      </Space>
+    );
   }
 
   return (
@@ -423,12 +461,11 @@ export function K8sScopedPoliciesPage() {
                 message="与 API / Casbin 的关系"
                 description={
                   <span>
-                    此处为<strong>主体</strong>（上方可切换<strong>角色模板</strong>、<strong>用户</strong>或<strong>用户组</strong>）配置<strong>集群维度档位</strong>（只读 / 只读+Exec / 管理），数据在表{" "}
+                    此处为<strong>主体</strong>（角色模板 / 用户 / 用户组）配置<strong>集群能力包</strong>（可快捷三档或自定义勾选），数据在表{" "}
                     <Typography.Text code>k8s_cluster_access_grants</Typography.Text>。
-                    <strong>档位不替代 API 授权</strong>：HTTP 接口能否调用仍由<strong>授权管理</strong>中的 Casbin
-                    API 权限决定；仅下发 admin 档位而没有对应写接口 Casbin 权限时，POST/PUT/DELETE 仍会 403。带{" "}
-                    <Typography.Text code>cluster_id</Typography.Text> 的 K8s 类请求在通过 API 鉴权后，再按此处档位与<strong>命名空间黑/白名单</strong>校验。详见{" "}
-                    <Typography.Text code>docs/handbook/permissions/casbin-and-k8s-triple-policy.md</Typography.Text>。
+                    <strong>能力包不替代 API 授权</strong>：HTTP 接口能否调用仍由<strong>授权管理</strong>中的 Casbin
+                    API 权限决定；仅勾选变更类能力而没有对应写接口 Casbin 权限时，POST/PUT/DELETE 仍会 403。带{" "}
+                    <Typography.Text code>cluster_id</Typography.Text> 的 K8s 类请求在通过 API 鉴权后，再按此处能力包与<strong>命名空间黑/白名单</strong>校验。
                   </span>
                 }
               />
@@ -437,10 +474,10 @@ export function K8sScopedPoliciesPage() {
                 type="info"
                 showIcon
                 style={{ width: "100%" }}
-                message="档位下发（对齐 k8m 语义）"
+                message="能力包下发"
                 description={
                   <span>
-                    按当前选中的<strong>主体</strong> + 集群写入档位；不选集群表示 <Tag>全部集群（ID=0）</Tag>。命名空间黑/白名单可选：须选择<strong>具体集群</strong>（勿仅用「全部集群」），否则无法写入规则。若某主体在某集群存在白名单规则，则仅允许名单内命名空间（黑名单仍优先）。
+                    快捷档位会预填能力勾选；也可自行勾选组合（保存时以勾选为准）。未勾「只读浏览」时后端会自动补上，否则无法列表。命名空间黑/白名单可选：须选择<strong>具体集群</strong>。
                   </span>
                 }
               />
@@ -451,20 +488,24 @@ export function K8sScopedPoliciesPage() {
                 initialValues={{
                   cluster_ids: [],
                   preset: "readonly" as const,
+                  capabilities: PRESET_CAPS.readonly,
                   deny_namespaces: [],
                   allow_namespaces: [],
                 }}
                 style={{ maxWidth: 960 }}
               >
                 <Space wrap style={{ width: "100%", alignItems: "flex-start" }}>
-                  <Form.Item label="档位" name="preset" rules={[{ required: true, message: "请选择档位" }]} style={{ minWidth: 240 }}>
+                  <Form.Item label="快捷档位" name="preset" style={{ minWidth: 240 }}>
                     <Select
                       style={{ minWidth: 220 }}
                       options={[
                         { value: "readonly", label: "只读（控制台资源 GET）" },
                         { value: "readonly_exec", label: "只读 + Pod Exec" },
-                        { value: "admin", label: "集群管理（变更类 + 读）" },
+                        { value: "admin", label: "集群管理（全部能力）" },
                       ]}
+                      onChange={(v: "readonly" | "readonly_exec" | "admin") => {
+                        presetForm.setFieldsValue({ capabilities: PRESET_CAPS[v] });
+                      }}
                     />
                   </Form.Item>
                   <Form.Item label="集群" name="cluster_ids" style={{ minWidth: 260 }}>
@@ -518,7 +559,47 @@ export function K8sScopedPoliciesPage() {
                       options={presetNsOptions}
                     />
                   </Form.Item>
-                  <Form.Item label=" ">
+                </Space>
+                <Form.Item
+                  label="能力包（勾选）"
+                  name="capabilities"
+                  rules={[{ required: true, type: "array", min: 1, message: "请至少勾选一项能力" }]}
+                  extra={
+                    watchedCapabilities.length
+                      ? `已选 ${watchedCapabilities.length} 项`
+                      : "请勾选能力，或先选快捷档位自动填充"
+                  }
+                >
+                  <Checkbox.Group style={{ width: "100%" }}>
+                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                      {(capCatalog.length
+                        ? capCatalog
+                        : [
+                            { code: "read", name: "只读浏览", description: "" },
+                            { code: "exec", name: "Pod 终端", description: "" },
+                            { code: "restart", name: "重启", description: "" },
+                            { code: "scale", name: "扩缩容", description: "" },
+                            { code: "apply", name: "YAML 变更", description: "" },
+                            { code: "delete", name: "删除资源", description: "" },
+                            { code: "secret_reveal", name: "Secret 明文", description: "" },
+                            { code: "destructive", name: "高危运维", description: "" },
+                          ]
+                      ).map((c) => (
+                        <Checkbox key={c.code} value={c.code} disabled={c.code === "read"}>
+                          <Space direction="vertical" size={0}>
+                            <span>{c.name}</span>
+                            {c.description ? (
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                {c.description}
+                              </Typography.Text>
+                            ) : null}
+                          </Space>
+                        </Checkbox>
+                      ))}
+                    </Space>
+                  </Checkbox.Group>
+                </Form.Item>
+                <Form.Item>
                     <Button
                       type="primary"
                       ghost
@@ -536,36 +617,34 @@ export function K8sScopedPoliciesPage() {
                             const denyList = (Array.isArray(denyRaw) ? denyRaw : []).map((s) => String(s).trim()).filter(Boolean);
                             const allowRaw = values.allow_namespaces ?? [];
                             const allowList = (Array.isArray(allowRaw) ? allowRaw : []).map((s) => String(s).trim()).filter(Boolean);
+                            const caps = Array.isArray(values.capabilities) ? values.capabilities : [];
+                            const base = {
+                              cluster_ids: values.cluster_ids ?? [],
+                              capabilities: caps,
+                              deny_namespaces: denyList.length ? denyList : undefined,
+                              allow_namespaces: allowList.length ? allowList : undefined,
+                            };
                             const payload =
                               subjectKind === "role"
                                 ? {
+                                    ...base,
                                     principal_kind: "role" as const,
                                     role_id: selectedRoleId!,
-                                    cluster_ids: values.cluster_ids ?? [],
-                                    preset: values.preset,
-                                    deny_namespaces: denyList.length ? denyList : undefined,
-                                    allow_namespaces: allowList.length ? allowList : undefined,
                                   }
                                 : subjectKind === "user"
                                   ? {
+                                      ...base,
                                       principal_kind: "user" as const,
                                       user_id: selectedUserId!,
-                                      cluster_ids: values.cluster_ids ?? [],
-                                      preset: values.preset,
-                                      deny_namespaces: denyList.length ? denyList : undefined,
-                                      allow_namespaces: allowList.length ? allowList : undefined,
                                     }
                                   : {
+                                      ...base,
                                       principal_kind: "group" as const,
                                       group_id: selectedGroupId!,
-                                      cluster_ids: values.cluster_ids ?? [],
-                                      preset: values.preset,
-                                      deny_namespaces: denyList.length ? denyList : undefined,
-                                      allow_namespaces: allowList.length ? allowList : undefined,
                                     };
                             const resp = await grantK8sScopedPoliciesPreset(payload);
                             message.success(
-                              `档位已保存：新增 ${resp.added}，更新跳过 ${resp.skipped}；黑名单新增 ${resp.deny_rules_added}（跳过 ${resp.deny_rules_skipped}）；白名单新增 ${resp.allow_rules_added}（跳过 ${resp.allow_rules_skipped}）`,
+                              `能力包已保存：新增 ${resp.added}，更新 ${resp.skipped}；黑名单新增 ${resp.deny_rules_added}（跳过 ${resp.deny_rules_skipped}）；白名单新增 ${resp.allow_rules_added}（跳过 ${resp.allow_rules_skipped}）`,
                             );
                             const pref = subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId);
                             await refreshAccessGrants(
@@ -581,14 +660,13 @@ export function K8sScopedPoliciesPage() {
                         })();
                       }}
                     >
-                      按档位保存
+                      保存能力包
                     </Button>
-                  </Form.Item>
-                </Space>
+                </Form.Item>
               </Form>
 
               <Divider style={{ margin: "8px 0" }} />
-              <Typography.Text strong>当前主体的集群档位</Typography.Text>
+              <Typography.Text strong>当前主体的集群能力包</Typography.Text>
               <Table<K8sClusterAccessItem>
                 rowKey="id"
                 dataSource={accessGrants}
@@ -619,7 +697,13 @@ export function K8sScopedPoliciesPage() {
                   {
                     title: "档位",
                     dataIndex: "preset",
+                    width: 120,
                     render: (v: string) => <Tag color="processing">{presetLabel(v)}</Tag>,
+                  },
+                  {
+                    title: "能力包",
+                    dataIndex: "capabilities",
+                    render: (v: string[] | undefined) => renderCapabilityTags(v),
                   },
                   {
                     title: "操作",
@@ -627,7 +711,7 @@ export function K8sScopedPoliciesPage() {
                     width: 100,
                     render: (_, r) => (
                       <Popconfirm
-                        title="确定删除该集群档位？"
+                        title="确定删除该集群授权？"
                         onConfirm={() =>
                           void (async () => {
                             try {

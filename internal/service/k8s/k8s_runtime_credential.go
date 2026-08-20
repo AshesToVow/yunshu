@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/k8sauth"
 
@@ -69,45 +68,11 @@ func applyRestConfigDefaults(cfg *rest.Config) {
 	}
 }
 
-func applyImpersonation(cfg *rest.Config, cluster *model.K8sCluster, actor *auth.CurrentUser) {
-	if cfg == nil || cluster == nil || !cluster.ImpersonateEnabled || actor == nil {
-		return
-	}
-	prefix := strings.TrimSpace(cluster.ImpersonateUserPrefix)
-	if prefix == "" {
-		prefix = "yunshu:"
-	}
-	user := strings.TrimSpace(actor.Username)
-	if user == "" {
-		user = fmt.Sprintf("uid-%d", actor.ID)
-	}
-	groups := make([]string, 0, len(actor.RoleCodes)+1)
-	groups = append(groups, prefix+"authenticated")
-	for _, rc := range actor.RoleCodes {
-		rc = strings.TrimSpace(rc)
-		if rc == "" {
-			continue
-		}
-		groups = append(groups, prefix+"role:"+rc)
-	}
-	cfg.Impersonate = rest.ImpersonationConfig{
-		UserName: prefix + user,
-		Groups:   groups,
-	}
-}
-
 func accessIntentFromContext(ctx context.Context) k8sauth.AccessIntent {
 	if scope, ok := k8sauth.RequestScopeFromContext(ctx); ok {
 		return k8sauth.AccessIntentFromScope(scope)
 	}
 	return k8sauth.AccessIntentWrite
-}
-
-func actorFromContext(ctx context.Context) *auth.CurrentUser {
-	if u, ok := auth.RequestUserFromContext(ctx); ok {
-		return u
-	}
-	return nil
 }
 
 func restConfigFromKubeconfig(kubeconfig string) (*rest.Config, error) {
