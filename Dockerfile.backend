@@ -1,40 +1,36 @@
 # Dockerfile.backend
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/golang:1.25-alpine AS builder
+# 需 Docker BuildKit：DOCKER_BUILDKIT=1 docker compose build
+ARG GO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/golang:1.26-alpine
+FROM ${GO_IMAGE} AS builder
 
-# 安装时区数据和ca证书
-RUN apk add --no-cache tzdata ca-certificates
+RUN apk add --no-cache tzdata ca-certificates git
 
 WORKDIR /app
+
+ENV GOPROXY=https://goproxy.cn,direct \
+    GOSUMDB=off \
+    CGO_ENABLED=0 \
+    GOOS=linux
+
 COPY go.mod go.sum ./
-
-# 国内 Go 代理（解决你之前下载超时）
-ENV GOPROXY=https://goproxy.cn,direct
-ENV GOSUMDB=off
-
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY . .
 
-# 编译二进制
-RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=1 go build -o /yunshu ./main.go
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath -ldflags="-s -w" -o /yunshu ./main.go
 
-# 运行镜像 - 使用 alpine 替代 scratch，包含基础工具和时区数据
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/alpine:3.19
+ARG ALPINE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/alpine:3.19
+FROM ${ALPINE_IMAGE}
 
-# 时区/证书；Chromium 用于巡检报告 HTML→PDF（含样式）；Noto CJK 保证中文渲染
-RUN apk add --no-cache \
-    tzdata ca-certificates \
-    chromium nss freetype harfbuzz ttf-freefont font-noto-cjk \
- && ln -sf /usr/bin/chromium /usr/bin/chromium-browser 2>/dev/null || true
-
-ENV YUNSHU_CHROME_PATH=/usr/bin/chromium
-ENV CHROME_PATH=/usr/bin/chromium
+# 巡检 PDF 已改为纯 Go 结构化生成，镜像不再安装 Chromium
+RUN apk add --no-cache tzdata ca-certificates
 
 COPY --from=builder /yunshu /app/yunshu
 COPY configs/ /app/configs/
-# AI 能力中心种子（Prompt/KB/案例/SOP/脚本工具/Eval）；运行时 CWD=/app
 COPY data/ai/ /app/data/ai/
-# 离线 Loggie 安装包（linux/amd64 ELF），安装 Agent 时由平台 SFTP 上传
 COPY deploy/loggie/binary/loggie /app/deploy/loggie/binary/loggie
 COPY deploy/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
@@ -43,6 +39,5 @@ WORKDIR /app
 ENV YUNSHU_AI_DATA_DIR=/app/data/ai
 EXPOSE 8080
 
-# 启动前可选执行 seed（RUN_SEED=1），再 exec server
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["server"]

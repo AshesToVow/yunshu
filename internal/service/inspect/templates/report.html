@@ -6,128 +6,163 @@
   <title>{{.Project}} — 巡检报告</title>
   <style>
     :root {
-      --bg: #f6f8fa;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
       --surface: #ffffff;
-      --ink: #1f2328;
-      --muted: #656d76;
-      --border: #d0d7de;
-      --border-muted: #eaeef2;
-      --accent: #0969da;
-      --critical: #cf222e;
-      --critical-bg: #ffebe9;
-      --warning: #9a6700;
-      --warning-bg: #fff8c5;
-      --normal: #1a7f37;
-      --normal-bg: #dafbe1;
-      --radius: 8px;
+      --canvas: #f1f5f9;
+      --brand: #0f766e;
+      --brand-deep: #115e59;
+      --critical: #b91c1c;
+      --critical-bg: #fef2f2;
+      --warning: #b45309;
+      --warning-bg: #fffbeb;
+      --normal: #15803d;
+      --normal-bg: #f0fdf4;
+      --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.04);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       color: var(--ink);
-      background: var(--bg);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-        "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      background: var(--canvas);
+      font-family: "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB",
+        "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
       font-size: 14px;
-      line-height: 1.55;
+      line-height: 1.6;
       -webkit-font-smoothing: antialiased;
     }
-    .page { max-width: 920px; margin: 0 auto; padding: 28px 20px 48px; }
-    .masthead {
+    .page { max-width: 960px; margin: 0 auto; padding: 32px 20px 56px; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #0f766e 0%, #0e7490 55%, #164e63 100%);
+      color: #ecfdf5;
+      padding: 28px 28px 24px;
+      margin-bottom: 22px;
+      box-shadow: var(--shadow);
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -40px; top: -40px;
+      width: 180px; height: 180px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+    }
+    .hero-top {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
       gap: 16px;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 2px solid var(--ink);
+      align-items: flex-start;
+      position: relative;
+      z-index: 1;
     }
-    .masthead h1 { margin: 0 0 6px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
-    .meta { color: var(--muted); font-size: 13px; }
-    .brand {
+    .eyebrow {
       font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      padding: 6px 12px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--surface);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
+      opacity: 0.85;
+      margin-bottom: 8px;
+      font-weight: 600;
     }
-    .section { margin-bottom: 28px; }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .hero .meta { opacity: 0.9; font-size: 13px; }
+    .stamp {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.28);
+      background: rgba(255,255,255,0.1);
+      white-space: nowrap;
+    }
+    .kpi-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 14px;
+      margin-top: 20px;
+      position: relative;
+      z-index: 1;
+    }
+    .score-panel {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 12px;
+      text-align: center;
+      padding: 16px 10px;
+    }
+    .score-panel .num {
+      font-size: 44px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+    .score-panel.grade-a .num { color: #bbf7d0; }
+    .score-panel.grade-b .num { color: #a5f3fc; }
+    .score-panel.grade-c .num { color: #fde68a; }
+    .score-panel.grade-d .num { color: #fecaca; }
+    .score-panel .label { margin-top: 6px; font-size: 12px; opacity: 0.9; }
+    .summary-panel {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .summary-panel p { margin: 0 0 10px; font-size: 14px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      font-size: 12px;
+      font-weight: 650;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .section { margin-bottom: 22px; }
     .section-title {
-      margin: 0 0 14px;
-      font-size: 17px;
+      margin: 0 0 12px;
+      font-size: 16px;
       font-weight: 700;
       display: flex;
       align-items: center;
       gap: 10px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
     }
     .section-num {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 26px;
-      height: 26px;
-      border-radius: 6px;
-      background: var(--accent);
+      width: 24px; height: 24px;
+      border-radius: 7px;
+      background: var(--brand);
       color: #fff;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
     }
     .card {
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      border-radius: 12px;
       padding: 16px 18px;
       margin-bottom: 12px;
+      box-shadow: var(--shadow);
     }
-    .overview-grid {
-      display: grid;
-      grid-template-columns: 168px 1fr;
-      gap: 14px;
-    }
-    .score-card {
-      text-align: center;
-      padding: 24px 12px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--surface);
-    }
-    .score-card .num { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
-    .score-card .grade { margin-top: 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
-    .score-card.grade-a .num { color: var(--normal); }
-    .score-card.grade-b .num { color: var(--accent); }
-    .score-card.grade-c .num { color: var(--warning); }
-    .score-card.grade-d .num { color: var(--critical); }
-    .summary { margin: 0 0 12px; font-size: 15px; }
-    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
-    .pill {
-      font-size: 12px;
-      font-weight: 600;
-      padding: 4px 11px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: #f6f8fa;
-    }
-    .pill.critical { background: var(--critical-bg); color: var(--critical); border-color: #ff818266; }
-    .pill.warning { background: var(--warning-bg); color: var(--warning); border-color: #d4a72c66; }
-    .pill.normal { background: var(--normal-bg); color: var(--normal); border-color: #4ac26b66; }
-    .hint { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
-    .content-cat { margin-bottom: 12px; }
-    .content-cat h3 { margin: 0 0 8px; font-size: 14px; font-weight: 650; }
-    .content-cat .cat-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .hint { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+    .content-cat h3 { margin: 0 0 6px; font-size: 14px; font-weight: 650; }
+    .cat-meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
     .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
     .tag {
       font-size: 12px;
-      padding: 3px 9px;
-      border-radius: 6px;
-      border: 1px solid var(--border-muted);
-      background: #f6f8fa;
-      color: var(--ink);
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
     }
     .tag small { color: var(--muted); margin-left: 4px; }
     .group-head {
@@ -139,27 +174,29 @@
     }
     .group-head h3 { margin: 0; font-size: 15px; font-weight: 650; }
     .group-meta { font-size: 12px; color: var(--muted); }
+    .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td {
-      padding: 9px 8px;
+      padding: 10px 8px;
       text-align: left;
-      border-bottom: 1px solid var(--border-muted);
+      border-bottom: 1px solid var(--line);
       vertical-align: top;
     }
     th {
       font-size: 11px;
       font-weight: 700;
       color: var(--muted);
-      background: #f6f8fa;
-      text-transform: uppercase;
+      background: #f8fafc;
       letter-spacing: 0.03em;
     }
-    th:nth-child(3), th:nth-child(4), td:nth-child(3), td:nth-child(4) { white-space: nowrap; }
-    th:nth-child(5), td:nth-child(5) { width: 68px; }
-    tr.row-critical { background: #fff8f8; }
-    tr.row-warning { background: #fffcf0; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
-    .action { color: var(--ink); font-size: 12px; line-height: 1.5; }
+    tr.row-critical { background: #fff7f7; }
+    tr.row-warning { background: #fffbeb; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: #334155;
+    }
+    .action { font-size: 12px; line-height: 1.5; color: #1e293b; }
     .badge {
       display: inline-block;
       font-size: 11px;
@@ -168,33 +205,39 @@
       border-radius: 999px;
       border: 1px solid transparent;
     }
-    .badge.critical { color: var(--critical); background: var(--critical-bg); border-color: #ff818266; }
-    .badge.warning { color: var(--warning); background: var(--warning-bg); border-color: #d4a72c66; }
-    .badge.normal { color: var(--normal); background: var(--normal-bg); border-color: #4ac26b66; }
+    .badge.critical { color: var(--critical); background: var(--critical-bg); border-color: #fecaca; }
+    .badge.warning { color: var(--warning); background: var(--warning-bg); border-color: #fde68a; }
+    .badge.normal { color: var(--normal); background: var(--normal-bg); border-color: #bbf7d0; }
     .finding {
-      border: 1px solid var(--border);
+      border: 1px solid var(--line);
       border-left: 4px solid var(--critical);
-      border-radius: var(--radius);
+      border-radius: 12px;
       padding: 14px 16px;
       margin-bottom: 10px;
       background: var(--surface);
+      box-shadow: var(--shadow);
     }
     .finding.warning { border-left-color: var(--warning); }
-    .finding .f-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .finding .f-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
     .finding .f-title { font-weight: 650; font-size: 14px; }
     .finding .f-fix {
       font-size: 13px;
       padding: 10px 12px;
-      background: #f6f8fa;
-      border-radius: 6px;
-      border: 1px solid var(--border-muted);
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid var(--line);
     }
-    .finding .f-fix strong { color: var(--muted); font-weight: 600; }
     .empty { margin: 0; color: var(--muted); font-size: 13px; }
     footer {
-      margin-top: 32px;
+      margin-top: 28px;
       padding-top: 14px;
-      border-top: 1px solid var(--border);
+      border-top: 1px solid var(--line);
       text-align: center;
       color: var(--muted);
       font-size: 12px;
@@ -202,7 +245,15 @@
     @media print {
       body { background: #fff; }
       .page { max-width: none; padding: 0; }
-      .section, .card, .finding, .score-card { break-inside: avoid; }
+      .hero {
+        box-shadow: none;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .card, .finding, .score-panel, .summary-panel {
+        box-shadow: none;
+        break-inside: avoid;
+      }
       thead { display: table-header-group; }
       @page { margin: 12mm; size: A4; }
     }
@@ -210,61 +261,58 @@
 </head>
 <body>
   <div class="page">
-    <header class="masthead">
-      <div>
-        <h1>{{.Project}} 巡检报告</h1>
-        <div class="meta">
-          {{.Timestamp.Format "2006-01-02 15:04:05"}}
-          {{if .InspectionUser}} · 执行人 {{.InspectionUser}}{{end}}
-          {{if .Datasource}} · 数据源 {{.Datasource}}{{end}}
+    <header class="hero">
+      <div class="hero-top">
+        <div>
+          <div class="eyebrow">Yunshu Inspect</div>
+          <h1>{{.Project}} 巡检报告</h1>
+          <div class="meta">
+            {{.Timestamp.Format "2006-01-02 15:04:05"}}
+            {{if .InspectionUser}} · 执行人 {{.InspectionUser}}{{end}}
+            {{if .Datasource}} · 数据源 {{.Datasource}}{{end}}
+          </div>
         </div>
+        <div class="stamp">自动生成</div>
       </div>
-      <div class="brand">Yunshu Inspect</div>
-    </header>
-
-    <section class="section" id="overview">
-      <h2 class="section-title"><span class="section-num">1</span>巡检概述</h2>
-      <div class="overview-grid">
-        <div class="score-card {{gradeClass .Grade}}">
+      <div class="kpi-row">
+        <div class="score-panel {{gradeClass .Grade}}">
           <div class="num">{{fmtFloat .Score}}</div>
-          <div class="grade">健康等级 {{.Grade}}</div>
+          <div class="label">健康等级 {{.Grade}}</div>
         </div>
-        <div class="card">
-          <p class="summary">{{.Summary}}</p>
+        <div class="summary-panel">
+          <p>{{.Summary}}</p>
           <div class="pills">
             <span class="pill">总计 {{.Total}}</span>
-            <span class="pill critical">严重 {{.Critical}}</span>
-            <span class="pill warning">警告 {{.Warning}}</span>
-            <span class="pill normal">正常 {{.Normal}}</span>
+            <span class="pill">严重 {{.Critical}}</span>
+            <span class="pill">警告 {{.Warning}}</span>
+            <span class="pill">正常 {{.Normal}}</span>
           </div>
-          <p class="hint">{{.ReportListHint}}</p>
+          <p class="hint" style="margin:10px 0 0;opacity:.85;color:#ecfdf5">{{.ReportListHint}}</p>
         </div>
       </div>
-    </section>
+    </header>
 
-    <section class="section" id="scope">
-      <h2 class="section-title"><span class="section-num">2</span>巡检内容</h2>
-      <p class="hint" style="margin:0 0 12px;">以下为本次巡检覆盖的分类与检查项（全量范围）。</p>
-      {{if .ContentGroups}}
-        {{range .ContentGroups}}
-        <div class="card content-cat">
-          <h3>{{.Type}}</h3>
-          <div class="cat-meta">共 {{.Stats.Total}} 条样本 · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}} · 正常 {{.Stats.Normal}}</div>
-          <div class="tag-list">
-            {{range .Items}}
-            <span class="tag">{{.Name}}<small>×{{.SampleCount}}</small></span>
-            {{end}}
+    <section class="section" id="findings">
+      <h2 class="section-title"><span class="section-num">1</span>异常与建议</h2>
+      {{if .Findings}}
+        {{range .Findings}}
+        <article class="finding {{.Severity}}">
+          <div class="f-head">
+            <span class="badge {{.Severity}}">{{statusText .Severity}}</span>
+            <span class="f-title">{{.Type}} / {{.Name}}</span>
+            <span class="hint" style="margin:0">×{{.Count}}</span>
           </div>
-        </div>
+          <div class="f-fix"><strong>建议：</strong>{{.Hint}}</div>
+        </article>
         {{end}}
       {{else}}
-        <div class="card"><p class="empty">暂无巡检项。</p></div>
+        <div class="card"><p class="empty">本期未发现需要特别处理的异常项。</p></div>
       {{end}}
     </section>
 
     <section class="section" id="results">
-      <h2 class="section-title"><span class="section-num">3</span>各类巡检结果（处理方式）</h2>
-      <p class="hint" style="margin:0 0 12px;">按分类展示明细；「处理方式」列给出运维建议或采集异常说明。</p>
+      <h2 class="section-title"><span class="section-num">2</span>各类巡检结果</h2>
+      <p class="hint">按分类展示明细；「处理方式」给出运维建议或采集异常说明。</p>
       {{if .Groups}}
         {{range .Groups}}
         <div class="card">
@@ -273,6 +321,7 @@
             <span class="group-meta">{{.Stats.Total}} 条 · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}}</span>
           </div>
           {{if .Metrics}}
+          <div class="table-wrap">
           <table>
             <thead>
               <tr>
@@ -297,6 +346,7 @@
               {{end}}
             </tbody>
           </table>
+          </div>
           {{else}}
           <p class="empty">当前模式下无明细。</p>
           {{end}}
@@ -307,25 +357,27 @@
       {{end}}
     </section>
 
-    <section class="section" id="findings">
-      <h2 class="section-title"><span class="section-num">4</span>异常与建议</h2>
-      {{if .Findings}}
-        {{range .Findings}}
-        <article class="finding {{.Severity}}">
-          <div class="f-head">
-            <span class="badge {{.Severity}}">{{statusText .Severity}}</span>
-            <span class="f-title">{{.Type}} / {{.Name}}</span>
-            <span class="meta">×{{.Count}}</span>
+    <section class="section" id="scope">
+      <h2 class="section-title"><span class="section-num">3</span>巡检覆盖范围</h2>
+      <p class="hint">本次巡检覆盖的分类与检查项（全量范围）。</p>
+      {{if .ContentGroups}}
+        {{range .ContentGroups}}
+        <div class="card content-cat">
+          <h3>{{.Type}}</h3>
+          <div class="cat-meta">共 {{.Stats.Total}} 条样本 · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}} · 正常 {{.Stats.Normal}}</div>
+          <div class="tag-list">
+            {{range .Items}}
+            <span class="tag">{{.Name}}<small>×{{.SampleCount}}</small></span>
+            {{end}}
           </div>
-          <div class="f-fix"><strong>建议：</strong>{{.Hint}}</div>
-        </article>
+        </div>
         {{end}}
       {{else}}
-        <div class="card"><p class="empty">本期未发现需要特别处理的异常项。</p></div>
+        <div class="card"><p class="empty">暂无巡检项。</p></div>
       {{end}}
     </section>
 
-    <footer>Yunshu 巡检报告 · 由平台自动生成</footer>
+    <footer>Yunshu 巡检报告 · 由平台自动生成 · PDF 为结构化摘要，完整版式请使用 HTML / 浏览器打印</footer>
   </div>
 </body>
 </html>

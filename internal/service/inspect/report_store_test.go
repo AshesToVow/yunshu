@@ -26,7 +26,7 @@ func TestRenderBuiltinTemplates(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := string(b)
-	for _, want := range []string{"demo", "grade-a", "巡检概述", "巡检内容", "各类巡检结果", "异常与建议", "处理方式"} {
+	for _, want := range []string{"demo", "grade-a", "异常与建议", "各类巡检结果", "巡检覆盖范围", "处理方式"} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("default template missing %q", want)
 		}
@@ -88,10 +88,10 @@ func TestRenderExcelAndPDF(t *testing.T) {
 	if strings.Contains(body, "Helvetica") {
 		t.Fatal("pdf still uses Helvetica (Chinese will break)")
 	}
-	// Chromium 打印的 PDF 通常不含 STSong；文本降级路径仍含 CJK Type0。
+	// 结构化 PDF 使用 Adobe 中文 CID 字体 STSong-Light（Type0）。
 	if strings.Contains(body, "STSong-Light") {
 		if !strings.Contains(body, "5DE1") {
-			t.Fatal("text-fallback pdf missing Chinese UTF-16 hex for 巡")
+			t.Fatal("structured pdf missing Chinese UTF-16 hex for 巡")
 		}
 	}
 }

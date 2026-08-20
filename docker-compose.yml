@@ -2,6 +2,11 @@ version: '3.3'
 
 # 默认：MySQL 在宿主机（非容器），仅启动 redis + backend + frontend。
 # 若要用容器 MySQL：docker-compose --profile container-mysql up -d
+#
+# 构建加速建议：
+#   set DOCKER_BUILDKIT=1
+#   set COMPOSE_DOCKER_CLI_BUILD=1
+#   docker compose up -d --build
 services:
   redis:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.4.2-alpine
@@ -44,6 +49,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      args:
+        # 与 go.mod（go 1.26）对齐；镜像拉取失败时可改本地可用的 golang:1.26-alpine
+        GO_IMAGE: ${GO_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/golang:1.26-alpine}
     container_name: yunshu-backend
     restart: unless-stopped
     mem_limit: 384m
@@ -76,6 +84,8 @@ services:
         condition: service_healthy
     networks:
       - yunshu-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     build:

@@ -4,7 +4,8 @@ FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-alpine AS builde
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --registry=https://registry.npmmirror.com
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --registry=https://registry.npmmirror.com
 
 COPY . .
 

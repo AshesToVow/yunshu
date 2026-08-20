@@ -1,0 +1,9 @@
+# web 目录构建上下文排除项
+node_modules/
+dist/
+.git/
+*.md
+.env
+.env.*
+.DS_Store
+coverage/
