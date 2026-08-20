@@ -61,7 +61,15 @@ func k8sMapAPIError(err error) error {
 	case apierrors.IsNotFound(err):
 		return constants.ErrNotFound
 	case apierrors.IsForbidden(err):
-		return constants.ErrForbidden
+		// 区分平台 Casbin 与集群 RBAC：保留 K8s 原文，避免一律落成「当前账号无权执行该操作」。
+		msg := strings.TrimSpace(err.Error())
+		if msg == "" {
+			return constants.ErrForbidden
+		}
+		if len(msg) > 280 {
+			msg = msg[:280] + "…"
+		}
+		return constants.ErrForbiddenWithMsg("Kubernetes 集群拒绝访问（非平台超管权限）：" + msg)
 	case apierrors.IsConflict(err):
 		return constants.ErrConflict
 	case apierrors.IsUnauthorized(err):

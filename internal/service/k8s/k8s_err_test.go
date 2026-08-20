@@ -23,7 +23,7 @@ func TestK8sMapAPIError(t *testing.T) {
 	}{
 		{"nil", nil, ""},
 		{"not found", apierrors.NewNotFound(gr, "x"), "10004"},
-		{"forbidden", apierrors.NewForbidden(gr, "x", errors.New("denied")), "10003"},
+		{"forbidden", apierrors.NewForbidden(gr, "x", errors.New("denied")), "11022"},
 		{"conflict", apierrors.NewConflict(gr, "x", errors.New("exists")), "10005"},
 		{"unauthorized", apierrors.NewUnauthorized("no"), "26002"},
 		{"bad request", apierrors.NewBadRequest("bad"), "11020"},

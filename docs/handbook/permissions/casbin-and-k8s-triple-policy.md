@@ -255,4 +255,7 @@ yunshu 当前采用 **API 用 Casbin + 集群用数据库档位**：
 
 实现：`internal/service/k8s/k8s_runtime_credential.go`、`gate.go`、`k8sauth/access_intent.go`。
 
-**生产建议**：拆分只读/可写 SA；开启 Impersonation，并在集群侧为 `yunshu:<username>` 配置 ClusterRoleBinding。
+**生产建议**：
+
+- **多数客户**：保持 Impersonation 关闭；配置 kubeconfig 后仅在 Yunshu「集群授权」给用户档位即可，无需在目标集群再 apply 用户 YAML。
+- **需要集群侧按人审计时**：开启 Impersonation，并 apply 统一模板 [`deploy/k8s/yunshu-impersonation-rbac.yaml`](../../../deploy/k8s/yunshu-impersonation-rbac.yaml)（说明见同目录 `yunshu-impersonation-rbac.md`）。
