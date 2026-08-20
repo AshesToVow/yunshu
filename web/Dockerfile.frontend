@@ -1,11 +1,10 @@
-# web/Dockerfile.frontend (web 目录下)
+# web/Dockerfile.frontend — 兼容经典 docker build（无 BuildKit mount）
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --registry=https://registry.npmmirror.com
+RUN npm ci --registry=https://registry.npmmirror.com
 
 COPY . .
 

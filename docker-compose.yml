@@ -3,10 +3,9 @@ version: '3.3'
 # 默认：MySQL 在宿主机（非容器），仅启动 redis + backend + frontend。
 # 若要用容器 MySQL：docker-compose --profile container-mysql up -d
 #
-# 构建加速建议：
-#   set DOCKER_BUILDKIT=1
-#   set COMPOSE_DOCKER_CLI_BUILD=1
-#   docker compose up -d --build
+# 构建提示：
+#   1) 确保仓库根目录有 .dockerignore（否则 context 可达数百 MB）
+#   2) 可选开启 BuildKit（非必须）：export DOCKER_BUILDKIT=1
 services:
   redis:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.4.2-alpine
@@ -50,7 +49,6 @@ services:
       context: .
       dockerfile: Dockerfile.backend
       args:
-        # 与 go.mod（go 1.26）对齐；镜像拉取失败时可改本地可用的 golang:1.26-alpine
         GO_IMAGE: ${GO_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/golang:1.26-alpine}
     container_name: yunshu-backend
     restart: unless-stopped
@@ -62,18 +60,15 @@ services:
       - GIN_MODE=release
       - APP_ENV=prod
       - TZ=Asia/Shanghai
-      # 宿主机 MySQL：默认 host.docker.internal；也可在 .env 设 MYSQL_HOST=10.10.10.4
       - MYSQL_HOST=${MYSQL_HOST:-host.docker.internal}
       - MYSQL_PORT=${MYSQL_PORT:-3306}
       - MYSQL_USER=${MYSQL_USER:-root}
-      # 勿用 ${A:-${B:-x}} 嵌套：部分 Compose 会把多余的 } 拼进密码（如 0gvzJr66iNs5}）
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-YunshuDB@2026Secure!}
       - MYSQL_DB_NAME=${MYSQL_DB_NAME:-yunshu}
       - REDIS_ADDR=yunshu-redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-YunshuRedis@2026Secure!}
       - JWT_SECRET=${JWT_SECRET:-YunshuJWTSecretKey2026ChangeInProduction}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-32bytes-base64}
-      # 启动前执行一次 seed（权限/菜单同步）；稳定环境可设 RUN_SEED=0
       - RUN_SEED=${RUN_SEED:-1}
       - WAIT_MYSQL=${WAIT_MYSQL:-1}
     volumes:
@@ -98,7 +93,6 @@ services:
     environment:
       - TZ=Asia/Shanghai
     ports:
-      # 宿主机 80 已被 Harbor 占用，yunshu 前端改用 8083
       - "8083:80"
     depends_on:
       backend:

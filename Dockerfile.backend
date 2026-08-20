@@ -1,5 +1,5 @@
 # Dockerfile.backend
-# 需 Docker BuildKit：DOCKER_BUILDKIT=1 docker compose build
+# 兼容经典 docker build（无需 BuildKit / RUN --mount）
 ARG GO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/golang:1.26-alpine
 FROM ${GO_IMAGE} AS builder
 
@@ -13,14 +13,10 @@ ENV GOPROXY=https://goproxy.cn,direct \
     GOOS=linux
 
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+RUN go mod download
 
 COPY . .
-
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -ldflags="-s -w" -o /yunshu ./main.go
+RUN go build -trimpath -ldflags="-s -w" -o /yunshu ./main.go
 
 ARG ALPINE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/alpine:3.19
 FROM ${ALPINE_IMAGE}
