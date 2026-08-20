@@ -12,7 +12,6 @@ import (
 	"yunshu/internal/service/k8s"
 
 	"github.com/robfig/cron/v3"
-	"github.com/weibaohui/kom/kom"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -150,19 +149,26 @@ func (w *Watcher) watchCluster(ctx context.Context, clusterID string, id uint) {
 }
 
 func (w *Watcher) runClusterWatch(ctx context.Context, clusterID string, id uint) {
-	if err := w.runtime.EnsureClusterRegistered(ctx, id); err != nil {
+	// EnsureClusterRegistered 返回已注册到稳定 bare ID 的 kubectl；
+	// 勿再 kom.Cluster(clusterID)，控制台意图注册用的是 :r/:w 后缀，裸 ID 可能为 nil。
+	kubectl, err := w.runtime.EnsureClusterRegistered(ctx, id)
+	if err != nil {
 		forwardLog().Warn("Failed to register cluster for event watch", "cluster_id", clusterID, "error", err)
+		return
+	}
+	if kubectl == nil {
+		forwardLog().Warn("Failed to register cluster for event watch: kubectl is nil", "cluster_id", clusterID)
 		return
 	}
 
 	var watcher watch.Interface
 	useCoreV1 := false
 	var evtV1 eventsv1.Event
-	if err := kom.Cluster(clusterID).WithContext(ctx).Resource(&evtV1).AllNamespace().Watch(&watcher).Error; err != nil {
+	if err := kubectl.WithContext(ctx).Resource(&evtV1).AllNamespace().Watch(&watcher).Error; err != nil {
 		forwardLog().Warn("events.k8s.io/v1 watch failed, falling back to core/v1 Event",
 			"cluster_id", clusterID, "error", err)
 		var evtCore corev1.Event
-		if err2 := kom.Cluster(clusterID).WithContext(ctx).Resource(&evtCore).AllNamespace().Watch(&watcher).Error; err2 != nil {
+		if err2 := kubectl.WithContext(ctx).Resource(&evtCore).AllNamespace().Watch(&watcher).Error; err2 != nil {
 			forwardLog().Warn("Failed to start K8s event watch", "cluster_id", clusterID, "error", err2)
 			return
 		}
@@ -187,14 +193,14 @@ func (w *Watcher) runClusterWatch(ctx context.Context, clusterID string, id uint
 			var m *model.K8sForwardedEvent
 			if useCoreV1 {
 				var typed corev1.Event
-				if err := kom.Cluster(clusterID).WithContext(ctx).Tools().ConvertRuntimeObjectToTypedObject(e.Object, &typed); err != nil {
+				if err := kubectl.WithContext(ctx).Tools().ConvertRuntimeObjectToTypedObject(e.Object, &typed); err != nil {
 					forwardLog().Warn("Failed to convert core/v1 K8s event", "cluster_id", clusterID, "error", err)
 					continue
 				}
 				m = w.fromCoreV1Event(clusterID, &typed)
 			} else {
 				var typed eventsv1.Event
-				if err := kom.Cluster(clusterID).WithContext(ctx).Tools().ConvertRuntimeObjectToTypedObject(e.Object, &typed); err != nil {
+				if err := kubectl.WithContext(ctx).Tools().ConvertRuntimeObjectToTypedObject(e.Object, &typed); err != nil {
 					forwardLog().Warn("Failed to convert K8s event", "cluster_id", clusterID, "error", err)
 					continue
 				}

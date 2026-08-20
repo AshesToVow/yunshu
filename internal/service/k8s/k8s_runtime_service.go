@@ -273,9 +273,43 @@ func (s *K8sRuntimeService) ensureOwningProjectAccess(ctx context.Context, cl *m
 }
 
 // EnsureClusterRegistered 将集群注册到 kom（供 Event 转发等后台任务使用）。
-func (s *K8sRuntimeService) EnsureClusterRegistered(ctx context.Context, id uint) error {
-	_, _, err := s.GetClusterKubectl(ctx, id)
-	return err
+// 后台任务使用稳定 ID（纯数字 cluster_id），不走 :r/:w 后缀，避免与控制台意图注册冲突。
+func (s *K8sRuntimeService) EnsureClusterRegistered(ctx context.Context, id uint) (*kom.Kubectl, error) {
+	cluster, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, k8sRepoErr(ctx, "k8s.runtime", "EnsureClusterRegistered", err, "cluster_id", id)
+	}
+	if cluster.Status != 1 {
+		return nil, constants.ErrForbiddenWithMsg(constants.ErrMsgb0e556f1ccc5)
+	}
+	kubeconfig, kerr := s.resolveClusterKubeconfig(cluster)
+	if kerr != nil {
+		return nil, constants.ErrBadRequestWithMsg(kerr.Error())
+	}
+	clusterID := strconv.FormatUint(uint64(id), 10)
+	// 优先只读凭证（后台 watch 只需读）
+	if strings.TrimSpace(cluster.KubeconfigReadonly) != "" {
+		if raw, oerr := s.OpenCredential(cluster.KubeconfigReadonly); oerr == nil {
+			if kc, nerr := normalizeKubeconfigForClientGo(strings.TrimSpace(raw)); nerr == nil && kc != "" {
+				kubeconfig = kc
+			}
+		}
+	}
+	if err := s.registerClusterIfNeeded(clusterID, kubeconfig, false); err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.runtime", "EnsureClusterRegistered", err, constants.ErrFmtac130d1176b3, "cluster_id", id)
+	}
+	k := kom.Cluster(clusterID)
+	if k == nil {
+		// hash 命中但 kom 实例已丢失时强制重注册，避免后台 watch 拿到 nil
+		if err := s.registerClusterIfNeeded(clusterID, kubeconfig, true); err != nil {
+			return nil, bizerrors.Internalf(ctx, "k8s.runtime", "EnsureClusterRegistered", err, constants.ErrFmtac130d1176b3, "cluster_id", id)
+		}
+		k = kom.Cluster(clusterID)
+	}
+	if k == nil {
+		return nil, bizerrors.InternalMsg(ctx, "k8s.runtime", "EnsureClusterRegistered", constants.ErrMsg5248c9e19a3f, "cluster_id", id)
+	}
+	return k, nil
 }
 
 // serverGitVersionFromKubeconfig 使用 client-go Discovery 拉取 GitVersion（与 kubectl 一致）。
