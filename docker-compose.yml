@@ -62,7 +62,8 @@ services:
       - GIN_MODE=release
       - APP_ENV=prod
       - TZ=Asia/Shanghai
-      - MYSQL_HOST=${MYSQL_HOST:-host.docker.internal}
+      # 宿主机 MySQL：旧 compose 不支持 host-gateway，默认走 docker0 网关；请在 .env 覆盖为实际 IP
+      - MYSQL_HOST=${MYSQL_HOST:-172.17.0.1}
       - MYSQL_PORT=${MYSQL_PORT:-3306}
       - MYSQL_USER=${MYSQL_USER:-root}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-YunshuDB@2026Secure!}
@@ -81,8 +82,8 @@ services:
         condition: service_healthy
     networks:
       - yunshu-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # 旧版 docker-compose 不支持 extra_hosts: host-gateway。
+    # 连宿主机 MySQL 请在 .env 设 MYSQL_HOST 为宿主机 IP（如 10.10.10.4），不要用 host.docker.internal。
 
   frontend:
     build:
