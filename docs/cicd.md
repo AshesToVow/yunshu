@@ -110,9 +110,16 @@ Header: X-Yunshu-Signature: sha256=<hmac-sha256-hex(body)>
 ## 4. 审批与通知
 
 - 审批阶段定义：`cicd_approval_flow_stages`（项目级 `GET/PUT .../approval-flow`）
+- **空审批流禁止发布**：未配置阶段时 `configured=false`，发布申请被拒绝
 - 工单步骤：`cicd_release_approval_steps`，按阶段顺序推进
+- **职责分离**：`forbid_self_approve`（配置/字典）禁止审批人审批自己提交的工单
+- **生产强制审计**：`prod_force_audit` 要求生产环境发布须走审批留痕
+- 批量审批/驳回/执行：全部失败时返回**首个错误**原因（非静默 `count=0`）
+- Jenkins 回调 `event=run`：状态机校验（如 running → success/failure），拒绝乱序回写
 - 邮件通知：`internal/service/cicd/notify_email.go` 通过 **`UserRepository`** 解析用户邮箱（不直查 DB）
+- 前端「应用服务」：新建应用须项目 owner/admin；操作按钮按 `access.can_build/can_release/can_manage` fail-closed
 
+配置项见 `configs/config.yaml` → `cicd.forbid_self_approve` / `cicd.prod_force_audit`，以及字典 `cicd_*`。
 ---
 
 ## 5. 后台 Worker

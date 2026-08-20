@@ -238,3 +238,21 @@ yunshu 当前采用 **API 用 Casbin + 集群用数据库档位**：
 - 新增 REST 路由后：更新 `defaultPermissions` + 运行 seed + 在「授权管理」给业务角色勾选。  
 - 最小权限原则：生产环境避免给普通用户 `super-admin`；K8s 生产命名空间优先用 **黑名单** 或 **窄命名空间三元** 双重保险。
 - 变更集群档位或 Casbin 规则后，若用户仍报权限异常，可让其 **刷新页面** 或 **重新登录** 以排除前端状态缓存；服务端中间件每次请求会重载用户角色（见 `auth` 中间件）。
+
+## 8. 长期凭证与第四层门禁（AccessIntent）
+
+平台侧 Casbin/档位/NS 策略解决的是「Yunshu 用户能否点这个按钮」；真正打到 apiserver 的仍是入库的集群凭证。为缩小 blast radius，运行时再叠一层：
+
+| 机制 | 实现要点 |
+|------|----------|
+| AccessIntent | 中间件按路由写入 `read` / `write` / `exec`；`GetClusterKubectl` / `GetClusterRestConfig` 按意图选凭证 |
+| 只读 kubeconfig | `k8s_clusters.kubeconfig_readonly`；只读意图优先使用 |
+| Impersonation | `impersonate_enabled`；`rest.Config.Impersonate.UserName = prefix + username`，Groups 含 `prefix+role:<code>` |
+| 写门禁 | `assertK8sWritable`：只读意图禁止变更 |
+| 高危确认 | `require_destructive_confirm` + 请求 `confirm=true`（Drain / Helm 卸载 / RBAC Apply 等） |
+| Secret | `/secrets/detail` 脱敏；`/secrets/reveal` 需 admin，审计 redact |
+| 加密 | 无 `security.encryption_key` 时拒绝密封新凭证（fail-closed） |
+
+实现：`internal/service/k8s/k8s_runtime_credential.go`、`gate.go`、`k8sauth/access_intent.go`。
+
+**生产建议**：拆分只读/可写 SA；开启 Impersonation，并在集群侧为 `yunshu:<username>` 配置 ClusterRoleBinding。

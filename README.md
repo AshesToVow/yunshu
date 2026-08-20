@@ -1,11 +1,11 @@
 # Yunshu
 
-[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat-square&logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-18+-61DAFB?style=flat-square&logo=react)](https://react.dev/)
 [![Ant Design](https://img.shields.io/badge/Ant%20Design-5.x-1677ff?style=flat-square&logo=antdesign)](https://ant.design/)
 [![Status](https://img.shields.io/badge/Project-Active-brightgreen?style=flat-square)](#)
 
-> 基于 Go + React 的 Kubernetes 运维与项目化告警平台，涵盖系统管理、权限管理、项目管理、**数据库管理（dbmgmt）**、K8s 资源管理、告警平台、日志平台、CICD发布。
+> 基于 Go + React 的 Kubernetes 运维与项目化告警平台，涵盖系统管理、权限管理、项目管理、**数据库管理（dbmgmt）**、K8s 资源管理、**ES 管理（esmgmt）**、告警平台、日志平台、CICD 发布。
 
 ---
 
@@ -21,13 +21,15 @@ Yunshu 主要能力：
 
 - 多模块后台管理（用户、角色、菜单、组织、字典、审计）
 - **双层 K8s 鉴权**：Casbin API 权限 + 集群档位（`readonly` / `readonly_exec` / `admin`）+ 命名空间黑/白名单
+- **K8s 长期凭证策略**：可写 / 只读双 kubeconfig、可选 Impersonation、高危操作 `confirm` 确认；Secret 默认脱敏
 - 项目维度的 **CMDB**（服务器、云账号、SSH/Web 终端）与服务配置
 - **日志平台**（Loggie Agent + Elasticsearch+kafka）：按服务器按日索引采集、检索、导出、保留策略、Agent 安装/热更/启停
+- **ES 管理（esmgmt）**：连接纳管、集群概览、备份/恢复、REST 控制台（读写拆分与 Owner RBAC）
 - **MySQL 备份**（mysqldump / xtrabackup / innobackupex，MinIO 存储，Cron 调度）
-- **数据库管理（dbmgmt）**：MySQL/PostgreSQL 实例纳管（主库/从库）、SQL 查询与审核（goInception）、库表级授权、应用用户 GRANT、审批工单与审计
-- **CI/CD**（Jenkins 打包、多级审批发布、制品 MinIO；`cicd` 插件）
+- **数据库管理（dbmgmt）**：MySQL/PostgreSQL 实例纳管（主库/从库）、SQL 查询与审核（goInception）、库表级授权、应用用户 GRANT、审批工单与审计；生产强制审批与职责分离
+- **CI/CD**（Jenkins 打包、多级审批发布、制品 MinIO；`cicd` 插件；空审批流拒绝、禁止自审自批、生产强制审计）
 - 告警数据源、规则、值班、静默、策略、**云到期规则**、多渠道通知（钉钉/邮件等）
-- Kubernetes 资源可视化管理（工作负载、网络、存储、RBAC、CRD、Ingress-Nginx 运维）
+- Kubernetes 资源可视化管理（工作负载、网络、存储、RBAC、CRD、Ingress-Nginx 运维、Drain、Helm）
 
 默认管理员（**首次** `go run . seed` 创建；重复 seed **不会重置**已有 admin 密码）：
 
@@ -134,7 +136,7 @@ flowchart TB
 | **插件** | 同一二进制，`config.yaml` → `plugins.enabled` 控制路由、迁移、Worker；详见 [docs/plugins.md](docs/plugins.md) |
 | **项目维度** | CMDB / 日志 / 备份 / **dbmgmt** / CI/CD API 多在 `/api/v1/projects/:id/...` 下，需项目成员权限 |
 | **日志** | Loggie 在目标机采集并写 ES；Yunshu 经 HTTP 管理 Agent 与代理检索 |
-| **K8s 三元策略** | Casbin API 授权 → 路由 K8s 范围校验 → 集群档位 + NS 黑/白名单（见下文） |
+| **K8s 三元策略** | Casbin API 授权 → 路由 K8s 范围校验 → 集群档位 + NS 黑/白名单；再叠加**凭证意图**（只读/可写 kubeconfig、可选 Impersonation） |
 | **配置优先级** | 数据字典 `dict_entries` 可覆盖 YAML（Jenkins、MinIO、邮件、备份调度、dbmgmt 等） |
 
 ### 分层架构
@@ -162,11 +164,21 @@ flowchart LR
 
 | 档位 | 典型能力 |
 |------|----------|
-| `readonly` | 列表/详情类 GET（资源只读 API） |
+| `readonly` | 列表/详情类 GET（资源只读 API）；优先使用集群**只读 kubeconfig**（若已配置） |
 | `readonly_exec` | 只读 + Pod 日志/终端 Exec |
-| `admin` | 变更类操作（apply/delete/scale、Ingress-Nginx 重启等） |
+| `admin` | 变更类操作（apply/delete/scale、Drain、Helm、RBAC Apply、Secret 揭示等） |
 
-详细设计见：[docs/handbook/permissions/casbin-and-k8s-triple-policy.md](docs/handbook/permissions/casbin-and-k8s-triple-policy.md)
+**凭证与 Impersonation（第四层，可选但推荐生产启用）**：
+
+| 能力 | 说明 |
+|------|------|
+| 可写 kubeconfig | 默认变更类 API 使用的凭证（加密落库，API 不回显） |
+| 只读 kubeconfig | 可选；配置后只读意图请求优先走该凭证，实现最小权限 |
+| Impersonation | 开启后以网关 SA + `Impersonate-User/Groups`（前缀默认 `yunshu:`）访问 apiserver，集群侧按用户做 RBAC |
+| 高危须确认 | 集群开关 `require_destructive_confirm`：Drain / Helm 卸载 / RBAC Apply 等须 `confirm=true` |
+| Secret | 详情默认脱敏；`GET /api/v1/secrets/reveal` 揭示明文（需 admin，审计强制 redact） |
+
+详细设计见：[docs/handbook/permissions/casbin-and-k8s-triple-policy.md](docs/handbook/permissions/casbin-and-k8s-triple-policy.md)、[M-06 Kubernetes](docs/handbook/requirements/modules/M-06-kubernetes.md)
 
 ---
 
@@ -174,7 +186,7 @@ flowchart LR
 
 ### 环境要求
 
-- Go 1.23+
+- Go 1.25+
 - Node.js 18+
 - MySQL
 - Redis
@@ -343,17 +355,26 @@ loggie:
 | 操作 | 要求 |
 |------|------|
 | Pod Exec（HTTP/WS） | `readonly_exec` 及以上 + Casbin 授权 |
-| Ingress-Nginx 重启 `POST /api/v1/ingresses/nginx/restart` | **admin 档位** + 请求体 `confirm: true` + Casbin 授权 |
-| Node 调度/污点 | 已纳入 K8s 范围校验，需 **admin** 档位 |
+| Ingress-Nginx 重启 `POST /api/v1/ingresses/nginx/restart` | **admin** + 请求体 `confirm: true` + Casbin |
+| Node Drain | **admin**；非 dry-run 时 `confirm: true`（集群开启「高危须确认」时） |
+| Helm 卸载 / RBAC Apply | **admin** + `confirm: true` |
+| Secret 揭示明文 | **admin**；`GET /api/v1/secrets/reveal` |
+| Node 调度/污点、YAML Apply | 已纳入 K8s 范围校验，需 **admin**；Apply 经 NS 策略校验 |
+| Preview Apply | 文本 diff + apiserver `DryRun=All`（不落库） |
 
 ### 纳管 Kubernetes 集群
 
-1. **集群管理 → 新建集群**
+1. **集群管理 → 新建 / 编辑集群**
    - 连接方式：`kubeconfig`（粘贴 YAML）或 `direct`（API Server + Token/证书）。
+   - **可写 kubeconfig**（必填）：变更类操作使用。
+   - **只读 kubeconfig**（可选）：只读 API 优先使用，实现最小权限。
+   - **Impersonation**（可选）：网关 SA 需具备 `impersonate`；开启后按 Yunshu 用户伪装访问。
+   - **高危操作须确认**（默认开启）：Drain / Helm 卸载 / RBAC Apply 等须 `confirm=true`。
    - 可选 **归属项目**：非 super-admin 仅能看到有项目成员关系的集群。
-2. 保存后查看 **连接状态**；失败时检查 kubeconfig、网络与 API Server 可达性。
-3. **安全说明**：详情接口**不回显**完整 kubeconfig/密钥，仅显示 `kubeconfig_configured` 与脱敏后的直连字段；更新凭证需重新粘贴。
+2. 保存后查看 **连接状态**；失败时检查 kubeconfig、网络与 API Server 可达性；须配置 `security.encryption_key`（拒绝明文落库）。
+3. **安全说明**：详情接口**不回显**完整 kubeconfig/密钥，仅显示 `kubeconfig_configured` / `kubeconfig_readonly_configured` 与脱敏后的直连字段；更新凭证需重新粘贴。
 4. **组件状态 / 命名空间**：在集群详情或对应菜单查看。
+5. **生产建议**：为只读与可写拆分 ServiceAccount；开启 Impersonation 并在集群侧为 `yunshu:<username>` 绑定 ClusterRole。
 
 ### 日志平台（Loggie + Elasticsearch）
 
@@ -393,9 +414,18 @@ loggie:
 
 1. 在 `plugins.enabled` 中启用 `cicd`（须与 `project` 同时启用），执行 `migrate`。
 2. **数据字典**配置 Jenkins 地址、凭据、`cicd_enabled=true`（见 [docs/cicd.md](docs/cicd.md)）。
-3. **CI/CD → 应用服务**：创建服务、CI/发布配置，触发打包或发布。
-4. **审批管理**：定义项目级审批阶段；发布工单在「待办列表」处理。
-5. 首页 CI 图表依赖 `cicd_release_runs`；禁用插件时图表为空属预期。
+3. **CI/CD → 应用服务**：创建服务（仅项目 owner/admin 或超管）、CI/发布配置，触发打包或发布；按钮按服务 `access.can_*` fail-closed。
+4. **审批管理**：定义项目级审批阶段；**空审批流禁止发布**；发布工单在「待办列表」处理。
+5. **安全开关**（`config.yaml` / 字典）：`forbid_self_approve`（禁止自审自批）、`prod_force_audit`（生产须审批留痕）。
+6. Jenkins 回调按 FSM 更新工单状态；批量审批失败时返回首个错误原因。
+7. 首页 CI 图表依赖 `cicd_release_runs`；禁用插件时图表为空属预期。
+
+### ES 管理要点（`esmgmt`）
+
+1. **连接管理**：密码须 `security.encryption_key` 加密存储（未配置则拒绝明文）。
+2. **集群概览**：健康、索引、备份/恢复；覆盖恢复须手输目标索引名与 `confirm_target_index` 一致。
+3. **REST 控制台**：`POST /api/v1/esmgmt/proxy`；读写拆分，高危路径（如 `_delete_by_query`、`_cluster/settings`）默认禁止。
+4. 写操作按连接 **Owner**（或超管）校验。
 
 ### 数据库管理要点（`dbmgmt` 插件）
 
@@ -472,12 +502,17 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 | 现象 | 排查建议 |
 |------|----------|
 | 登录后菜单为空 | 执行 `seed`；检查角色是否分配；检查菜单 `status` |
-| K8s 操作 403 | 依次检查：授权管理 API → 集群档位 → NS 黑/白名单；请求是否带 `cluster_id` |
-| Pod Exec 403 | 需 `readonly_exec`；WS 需 Casbin + 档位；检查 Origin 与 token |
+| K8s 操作 403 | 依次检查：授权管理 API → 集群档位 → NS 黑/白名单；请求是否带 `cluster_id`；变更是否误用只读凭证 |
+| Pod Exec 403 | 需 `readonly_exec`；WS 需 Casbin + 档位；检查 Origin（浏览器带 Sec-Fetch-Site 时须同源）与 token |
+| Drain / Helm 卸载失败「须 confirm」 | 请求体或 Query 携带 `confirm=true`；集群「高危操作须确认」开关 |
+| Secret 仅见 `***` | 预期脱敏；admin 在详情页点「揭示明文」走 `/secrets/reveal` |
+| Impersonation 403 | 集群已开启伪装但未登录，或网关 SA 无 impersonate 权限 / 集群侧无对应用户绑定 |
 | Loggie 无上报 / 离线 | **Agent 管理** 看心跳与探活；目标机 `systemctl status loggie`；监控端口默认 `9196`；确认 Token / `YUNSHU_URL` 指向后端 `:8080` |
 | ES 检索为空 | 确认 `elasticsearch.enabled`；索引 `yunshu-agent-{server_id}-*` 是否有文档；时间范围是否过窄；热更后新日志才按新解析模板入库 |
 | ERROR 堆栈拆成多行 | 确认解析模板为 `elasticsearch` 且 pipeline 使用 `multi.active`；热更 Agent 后再产生日志 |
-| 集群详情无 kubeconfig | 预期行为（安全脱敏）；更新时重新粘贴 YAML |
+| 集群详情无 kubeconfig | 预期行为（安全脱敏）；更新时重新粘贴 YAML；`encryption_key` 未配置时无法密封新凭证 |
+| CI/CD 无法新建应用 | 须项目 owner/admin 或超管；普通成员仅能操作已授权服务 |
+| 发布被拒「审批流未配置」 | 在「审批管理」配置至少一级阶段；空流禁止直发 |
 | 首页 Pod 统计与预期不符 | 非 super-admin 仅聚合**有项目成员关系且具备 readonly+ 档位**的集群 |
 | Docker 后端连不上库 | 检查 `MYSQL_*` / `REDIS_*` 环境变量与服务名 `yunshu-mysql` |
 | dbmgmt 应用用户审批 1044 | 实例管理员对目标库无 GRANT OPTION；检查 `root@'<平台IP>'` 而非仅 `root@'%'` |
@@ -858,7 +893,10 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 - [x] 组件状态：Node Ready + kube-system 控制平面 Pod
 - [x] Pod 详情改为只读，编辑收口到表单
 - [x] 集群凭证 API 脱敏；kubeconfig 不回显
-- [x] Node / Ingress-Nginx 重启纳入集群档位校验
+- [x] 可写 / 只读双 kubeconfig + 可选 Impersonation
+- [x] 高危操作 confirm；Secret 默认脱敏 + reveal
+- [x] Node Drain（含 dry-run）/ Ingress-Nginx 重启纳入档位校验
+- [x] Apply 预检：文本 diff + server-side DryRun
 - [ ] 多集群统一搜索
 
 #### 工作负载
@@ -872,6 +910,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] 工作负载列表与详情
 - [x] 表单创建与编辑能力
+- [x] Apply 前快照与变更埋点（归属项目时）
 - [ ] 工作负载版本回滚助手
 
 #### 网络与配置
@@ -887,7 +926,7 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] Service/Ingress/NetworkPolicy 管理
-- [x] ConfigMap/Secret 管理
+- [x] ConfigMap/Secret 管理（Secret 脱敏 + 揭示）
 - [x] Ingress 联调诊断向导
 
 #### 存储与扩展资源
@@ -915,12 +954,11 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 
 ![done](https://img.shields.io/badge/状态-已实现-22c55e?style=flat-square)
 - [x] K8s RBAC 资源可视化管理
-
 - [x] 集群访问档位（`k8s_cluster_access_grants`）+ 命名空间黑/白名单
-
 - [x] API 管理「K8s 范围校验」开关
-
 - [x] 权限变更模拟器（预检查）
+- [x] 写路径门禁（`assertK8sWritable`）+ NS 白名单限域 List
+- [x] 凭证意图（read/write/exec）与加密 fail-closed
 
   ------
 
@@ -1011,7 +1049,7 @@ yunshu/
 │   ├── menu/               # 内置菜单 catalog + seed 同步（internal/menu/catalog.go）
 │   ├── middleware/         # Auth、Casbin、K8sScope、ErrorHandler、审计
 │   ├── plugin/             # 插件注册表与 Runtime
-│   ├── plugins/            # 编译期业务插件：core/k8s/alert/project/cmdb/backup/cicd/dbmgmt
+│   ├── plugins/            # 编译期业务插件：core/k8s/alert/project/cmdb/backup/cicd/dbmgmt/esmgmt…
 │   ├── dictconfig/         # 数据字典运行期配置（mail/cicd/minio/parse）
 │   ├── pkg/                # cronutil、sshserver、mysqlbackup、logutil…
 │   ├── interfaces/         # Repository 接口
