@@ -57,7 +57,7 @@ export function getRbacDetail(params: { cluster_id: number; kind: string; name: 
 }
 
 export function applyRbac(clusterId: number, manifest: string) {
-  return getData<boolean>(http.post("/rbac/apply", { cluster_id: clusterId, manifest }));
+  return getData<boolean>(http.post("/rbac/apply", { cluster_id: clusterId, manifest, confirm: true }));
 }
 
 export function deleteRbac(

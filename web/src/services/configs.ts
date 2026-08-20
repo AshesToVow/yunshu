@@ -20,6 +20,7 @@ export interface ConfigDetail {
   yaml: string;
   decoded_data?: Record<string, string>;
   binary_keys?: string[];
+  redacted?: boolean;
 }
 
 export function listConfigMaps(clusterId: number, namespace: string, keyword?: string) {
@@ -42,6 +43,9 @@ export function listSecrets(clusterId: number, namespace: string, keyword?: stri
 }
 export function getSecretDetail(clusterId: number, namespace: string, name: string) {
   return getData<ConfigDetail>(http.get("/secrets/detail", { params: { cluster_id: clusterId, namespace, name } }));
+}
+export function revealSecret(clusterId: number, namespace: string, name: string) {
+  return getData<ConfigDetail>(http.get("/secrets/reveal", { params: { cluster_id: clusterId, namespace, name } }));
 }
 export function applySecret(clusterId: number, manifest: string) {
   return getData<boolean>(http.post("/secrets/apply", { cluster_id: clusterId, manifest }));

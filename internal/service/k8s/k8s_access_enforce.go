@@ -28,6 +28,9 @@ func RequiredK8sAccessRank(perms []model.Permission, routePath, httpMethod, acti
 	path := strings.TrimSpace(routePath)
 	method := strings.ToUpper(strings.TrimSpace(httpMethod))
 	code := strings.TrimSpace(actionCode)
+	if method == "GET" && strings.HasSuffix(path, "/secrets/reveal") {
+		return K8sAccessRankAdmin
+	}
 	key := path + "\x00" + code
 
 	readonly := expandReadonly(perms)

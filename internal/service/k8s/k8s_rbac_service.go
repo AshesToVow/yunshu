@@ -6,7 +6,7 @@ import (
 	"strings"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
-
+	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8sutil"
 
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -34,6 +34,7 @@ type RbacNameQuery struct {
 type RbacApplyRequest struct {
 	ClusterID uint   `json:"cluster_id" binding:"required"`
 	Manifest  string `json:"manifest" binding:"required"`
+	Confirm   bool   `json:"confirm"`
 }
 
 type RbacDeleteRequest struct {
@@ -295,8 +296,17 @@ func (s *K8sRBACService) Detail(ctx context.Context, kind string, query RbacName
 
 // Apply 提交申请相关的业务逻辑。
 func (s *K8sRBACService) Apply(ctx context.Context, req RbacApplyRequest) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	if req.Confirm {
+		ctx = k8sauth.WithDestructiveConfirm(ctx, true)
+	}
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
+		return err
+	}
+	if err := assertK8sWritable(ctx, cluster, "rbac_apply", ""); err != nil {
+		return err
+	}
+	if err := RequireDestructiveConfirm(ctx, cluster); err != nil {
 		return err
 	}
 	if strings.TrimSpace(req.Manifest) == "" {
@@ -315,6 +325,7 @@ func (s *K8sRBACService) Apply(ctx context.Context, req RbacApplyRequest) error 
 	}); err != nil {
 		return k8sFail(ctx, "k8s.rbac", "api", err)
 	}
+	recordK8sChange(ctx, cluster, "rbac_apply", "RBAC", "", "", map[string]any{"manifest_len": len(req.Manifest)})
 	return nil
 }
 

@@ -752,8 +752,11 @@ func (s *K8sPodService) DeleteFile(ctx context.Context, query PodFileQuery) erro
 
 // UploadFile 执行对应的业务逻辑。
 func (s *K8sPodService) UploadFile(ctx context.Context, query PodFileQuery, filename string, r io.Reader) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
 	if err != nil {
+		return err
+	}
+	if err := assertK8sWritable(ctx, cluster, "upload", query.Namespace); err != nil {
 		return err
 	}
 	dest := strings.TrimSpace(query.Path)
@@ -769,8 +772,13 @@ func (s *K8sPodService) UploadFile(ctx context.Context, query PodFileQuery, file
 	}
 	defer os.Remove(tmp.Name())
 	defer tmp.Close()
-	if _, err := io.Copy(tmp, r); err != nil {
+	limited := io.LimitReader(r, maxPodUploadBytes+1)
+	n, err := io.Copy(tmp, limited)
+	if err != nil {
 		return k8sFail(ctx, "k8s.pod", "api", err)
+	}
+	if n > maxPodUploadBytes {
+		return constants.ErrBadRequestWithMsg("上传文件超过 32MiB 上限")
 	}
 	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 		return k8sFail(ctx, "k8s.pod", "api", err)
@@ -789,12 +797,18 @@ func (s *K8sPodService) UploadFile(ctx context.Context, query PodFileQuery, file
 
 // CreateByYAML 创建相关的业务逻辑。
 func (s *K8sPodService) CreateByYAML(ctx context.Context, req PodCreateYAMLRequest) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
 		return err
 	}
-	if msgs := k.WithContext(ctx).Applier().Apply(req.Manifest); len(msgs) > 0 {
-		return constants.ErrInternalWithMsg(strings.Join(msgs, "; "))
+	if err := assertK8sWritable(ctx, cluster, "apply", ""); err != nil {
+		return err
+	}
+	if strings.TrimSpace(req.Manifest) == "" {
+		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
+	}
+	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest, nil); err != nil {
+		return k8sFail(ctx, "k8s.pod", "api", err)
 	}
 	return nil
 }

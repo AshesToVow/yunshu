@@ -227,7 +227,11 @@ export function ClusterPage() {
             : undefined,
         connection_mode: current.connection_mode || "kubeconfig",
         kubeconfig: current.kubeconfig || "",
+        kubeconfig_readonly: "",
         kubeconfig_dict_label: undefined,
+        impersonate_enabled: Boolean(current.impersonate_enabled),
+        impersonate_user_prefix: current.impersonate_user_prefix || "yunshu:",
+        require_destructive_confirm: current.require_destructive_confirm !== false,
         // 已配置时 kubeconfig 不回传，留空表示不修改
         direct_config: {
           server: current.direct_config?.server || "",
@@ -316,6 +320,10 @@ export function ClusterPage() {
         // Update without kubeconfig
         delete (payload as { kubeconfig?: string }).kubeconfig;
       }
+      const kubeconfigReadonly = String(values.kubeconfig_readonly || "").trim();
+      if (kubeconfigReadonly) {
+        payload.kubeconfig_readonly = kubeconfigReadonly;
+      }
     } else {
       const direct = values.direct_config || {};
       const server = (direct.server || "").trim();
@@ -348,6 +356,11 @@ export function ClusterPage() {
     } else if (ownPid !== undefined && ownPid !== null && Number(ownPid) > 0) {
       (payload as ClusterCreatePayload).owning_project_id = Number(ownPid);
     }
+
+    payload.impersonate_enabled = Boolean(values.impersonate_enabled);
+    const prefix = String(values.impersonate_user_prefix || "").trim();
+    if (prefix) payload.impersonate_user_prefix = prefix;
+    payload.require_destructive_confirm = values.require_destructive_confirm !== false;
 
     setSubmitting(true);
     try {
@@ -858,6 +871,21 @@ export function ClusterPage() {
                   style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace" }}
                 />
               </Form.Item>
+              <Form.Item
+                label="只读 kubeconfig（可选）"
+                name="kubeconfig_readonly"
+                extra={
+                  current?.kubeconfig_readonly_configured
+                    ? "已配置只读凭证（不回显）；留空不修改。配置后只读 API 将优先使用该凭证。"
+                    : "长期最小权限：只读操作走此凭证，变更类仍用上方可写 kubeconfig"
+                }
+              >
+                <Input.TextArea
+                  rows={5}
+                  placeholder="可选：粘贴只读 ServiceAccount 的 kubeconfig"
+                  style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace" }}
+                />
+              </Form.Item>
             </>
           ) : (
             <>
@@ -931,6 +959,27 @@ export function ClusterPage() {
               </Form.Item>
             </>
           )}
+
+          <Form.Item
+            label="启用 Impersonation"
+            name="impersonate_enabled"
+            valuePropName="checked"
+            extra="长期方案：网关 SA 具备 impersonate 权限后，按 Yunshu 用户伪装访问集群，集群侧做细粒度 RBAC"
+          >
+            <Switch />
+          </Form.Item>
+          <Form.Item label="Impersonate 用户前缀" name="impersonate_user_prefix" initialValue="yunshu:">
+            <Input placeholder="yunshu:" />
+          </Form.Item>
+          <Form.Item
+            label="高危操作须确认"
+            name="require_destructive_confirm"
+            valuePropName="checked"
+            initialValue={true}
+            extra="Drain / Helm 卸载 / RBAC Apply 等须 confirm=true"
+          >
+            <Switch />
+          </Form.Item>
         </Form>
       </Modal>
     </Card>

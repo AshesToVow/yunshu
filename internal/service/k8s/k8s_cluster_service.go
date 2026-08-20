@@ -28,11 +28,15 @@ type K8sClusterListQuery struct {
 }
 
 type K8sClusterCreateRequest struct {
-	Name            string        `json:"name" binding:"required,max=128"`
-	ConnectionMode  string        `json:"connection_mode,omitempty" binding:"omitempty,oneof=kubeconfig direct"`
-	Kubeconfig      string        `json:"kubeconfig,omitempty"`
-	DirectConfig    *DirectConfig `json:"direct_config,omitempty"`
-	OwningProjectID *uint         `json:"owning_project_id"`
+	Name                      string        `json:"name" binding:"required,max=128"`
+	ConnectionMode            string        `json:"connection_mode,omitempty" binding:"omitempty,oneof=kubeconfig direct"`
+	Kubeconfig                string        `json:"kubeconfig,omitempty"`
+	KubeconfigReadonly        string        `json:"kubeconfig_readonly,omitempty"`
+	DirectConfig              *DirectConfig `json:"direct_config,omitempty"`
+	OwningProjectID           *uint         `json:"owning_project_id"`
+	ImpersonateEnabled        *bool         `json:"impersonate_enabled"`
+	ImpersonateUserPrefix     string        `json:"impersonate_user_prefix"`
+	RequireDestructiveConfirm *bool         `json:"require_destructive_confirm"`
 }
 
 type DirectConfig struct {
@@ -49,11 +53,15 @@ type DirectConfig struct {
 }
 
 type K8sClusterUpdateRequest struct {
-	Name            *string       `json:"name,omitempty" binding:"omitempty,max=128"`
-	ConnectionMode  *string       `json:"connection_mode,omitempty" binding:"omitempty,oneof=kubeconfig direct"`
-	Kubeconfig      *string       `json:"kubeconfig,omitempty"`
-	DirectConfig    *DirectConfig `json:"direct_config,omitempty"`
-	OwningProjectID *uint         `json:"owning_project_id"`
+	Name                      *string       `json:"name,omitempty" binding:"omitempty,max=128"`
+	ConnectionMode            *string       `json:"connection_mode,omitempty" binding:"omitempty,oneof=kubeconfig direct"`
+	Kubeconfig                *string       `json:"kubeconfig,omitempty"`
+	KubeconfigReadonly        *string       `json:"kubeconfig_readonly,omitempty"`
+	DirectConfig              *DirectConfig `json:"direct_config,omitempty"`
+	OwningProjectID           *uint         `json:"owning_project_id"`
+	ImpersonateEnabled        *bool         `json:"impersonate_enabled"`
+	ImpersonateUserPrefix     *string       `json:"impersonate_user_prefix"`
+	RequireDestructiveConfirm *bool         `json:"require_destructive_confirm"`
 }
 
 type K8sClusterSetStatusRequest struct {
@@ -61,18 +69,22 @@ type K8sClusterSetStatusRequest struct {
 }
 
 type K8sClusterItem struct {
-	ID                   uint          `json:"id"`
-	Name                 string        `json:"name"`
-	OwningProjectID      *uint         `json:"owning_project_id,omitempty"`
-	ConnectionMode       string        `json:"connection_mode,omitempty"`
-	Kubeconfig           string        `json:"kubeconfig,omitempty"`
-	KubeconfigConfigured bool          `json:"kubeconfig_configured,omitempty"`
-	DirectConfig         *DirectConfig `json:"direct_config,omitempty"`
-	Status               int           `json:"status"`
-	AccessPreset         string        `json:"access_preset,omitempty"`
-	AccessRank           int           `json:"access_rank,omitempty"`
-	CreatedAt            time.Time     `json:"created_at"`
-	UpdatedAt            time.Time     `json:"updated_at"`
+	ID                        uint          `json:"id"`
+	Name                      string        `json:"name"`
+	OwningProjectID           *uint         `json:"owning_project_id,omitempty"`
+	ConnectionMode            string        `json:"connection_mode,omitempty"`
+	Kubeconfig                string        `json:"kubeconfig,omitempty"`
+	KubeconfigConfigured      bool          `json:"kubeconfig_configured,omitempty"`
+	KubeconfigReadonlyConfigured bool       `json:"kubeconfig_readonly_configured,omitempty"`
+	DirectConfig              *DirectConfig `json:"direct_config,omitempty"`
+	ImpersonateEnabled        bool          `json:"impersonate_enabled"`
+	ImpersonateUserPrefix     string        `json:"impersonate_user_prefix,omitempty"`
+	RequireDestructiveConfirm bool          `json:"require_destructive_confirm"`
+	Status                    int           `json:"status"`
+	AccessPreset              string        `json:"access_preset,omitempty"`
+	AccessRank                int           `json:"access_rank,omitempty"`
+	CreatedAt                 time.Time     `json:"created_at"`
+	UpdatedAt                 time.Time     `json:"updated_at"`
 }
 
 type K8sClusterListResponse struct {
@@ -340,9 +352,20 @@ func (s *K8sClusterService) Create(ctx context.Context, req K8sClusterCreateRequ
 	}
 
 	c := &model.K8sCluster{
-		Name:           req.Name,
-		ConnectionMode: connectionMode,
-		Status:         1,
+		Name:                      req.Name,
+		ConnectionMode:            connectionMode,
+		Status:                    1,
+		RequireDestructiveConfirm: true,
+		ImpersonateUserPrefix:     "yunshu:",
+	}
+	if req.RequireDestructiveConfirm != nil {
+		c.RequireDestructiveConfirm = *req.RequireDestructiveConfirm
+	}
+	if req.ImpersonateEnabled != nil {
+		c.ImpersonateEnabled = *req.ImpersonateEnabled
+	}
+	if p := strings.TrimSpace(req.ImpersonateUserPrefix); p != "" {
+		c.ImpersonateUserPrefix = p
 	}
 
 	// 处理直连配置
@@ -383,6 +406,14 @@ func (s *K8sClusterService) Create(ctx context.Context, req K8sClusterCreateRequ
 			return nil, constants.ErrInternalWithMsg("加密 kubeconfig 失败")
 		}
 		c.Kubeconfig = sealedKC
+	}
+
+	if ro := strings.TrimSpace(req.KubeconfigReadonly); ro != "" {
+		sealedRO, err := s.runtime.SealCredential(ro)
+		if err != nil {
+			return nil, constants.ErrInternalWithMsg("加密只读 kubeconfig 失败")
+		}
+		c.KubeconfigReadonly = sealedRO
 	}
 
 	if req.OwningProjectID != nil && *req.OwningProjectID > 0 {
@@ -493,6 +524,35 @@ func (s *K8sClusterService) Update(ctx context.Context, id uint, req K8sClusterU
 		s.runtime.DeleteRegisterCache(cluster.ID)
 	}
 
+	if req.KubeconfigReadonly != nil {
+		ro := strings.TrimSpace(*req.KubeconfigReadonly)
+		if ro == "" {
+			cluster.KubeconfigReadonly = ""
+		} else {
+			sealedRO, err := s.runtime.SealCredential(ro)
+			if err != nil {
+				return nil, constants.ErrInternalWithMsg("加密只读 kubeconfig 失败")
+			}
+			cluster.KubeconfigReadonly = sealedRO
+		}
+		s.runtime.DeleteRegisterCache(cluster.ID)
+	}
+	if req.ImpersonateEnabled != nil {
+		cluster.ImpersonateEnabled = *req.ImpersonateEnabled
+		s.runtime.DeleteRegisterCache(cluster.ID)
+	}
+	if req.ImpersonateUserPrefix != nil {
+		p := strings.TrimSpace(*req.ImpersonateUserPrefix)
+		if p == "" {
+			p = "yunshu:"
+		}
+		cluster.ImpersonateUserPrefix = p
+		s.runtime.DeleteRegisterCache(cluster.ID)
+	}
+	if req.RequireDestructiveConfirm != nil {
+		cluster.RequireDestructiveConfirm = *req.RequireDestructiveConfirm
+	}
+
 	if req.OwningProjectID != nil {
 		if *req.OwningProjectID == 0 {
 			cluster.OwningProjectID = nil
@@ -553,16 +613,22 @@ func (s *K8sClusterService) SetStatus(ctx context.Context, id uint, status int) 
 
 func (s *K8sClusterService) buildClusterItem(c model.K8sCluster, forDetail bool) K8sClusterItem {
 	item := K8sClusterItem{
-		ID:              c.ID,
-		Name:            c.Name,
-		OwningProjectID: c.OwningProjectID,
-		ConnectionMode:  c.ConnectionMode,
-		Status:          c.Status,
-		CreatedAt:       c.CreatedAt,
-		UpdatedAt:       c.UpdatedAt,
+		ID:                        c.ID,
+		Name:                      c.Name,
+		OwningProjectID:           c.OwningProjectID,
+		ConnectionMode:            c.ConnectionMode,
+		Status:                    c.Status,
+		ImpersonateEnabled:        c.ImpersonateEnabled,
+		ImpersonateUserPrefix:     c.ImpersonateUserPrefix,
+		RequireDestructiveConfirm: c.RequireDestructiveConfirm,
+		CreatedAt:                 c.CreatedAt,
+		UpdatedAt:                 c.UpdatedAt,
 	}
 	if strings.TrimSpace(c.Kubeconfig) != "" {
 		item.KubeconfigConfigured = true
+	}
+	if strings.TrimSpace(c.KubeconfigReadonly) != "" {
+		item.KubeconfigReadonlyConfigured = true
 	}
 	if c.ConnectionMode == "direct" && strings.TrimSpace(c.DirectConfig) != "" {
 		raw := c.DirectConfig

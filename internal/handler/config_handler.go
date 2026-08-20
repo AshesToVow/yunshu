@@ -40,6 +40,11 @@ func (h *ConfigHandler) SecretDetail(c *gin.Context) {
 	ServeQuery(c, h.svc.SecretDetail)
 }
 
+// RevealSecret 返回 Secret 明文（审计脱敏）。
+func (h *ConfigHandler) RevealSecret(c *gin.Context) {
+	ServeQuery(c, h.svc.RevealSecret)
+}
+
 // DeleteSecret 删除对应的 HTTP 接口处理逻辑。
 func (h *ConfigHandler) DeleteSecret(c *gin.Context) {
 	ServeQueryOK(c, true, h.svc.DeleteSecret)

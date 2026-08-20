@@ -112,6 +112,8 @@ export async function rollbackHelmRelease(body: {
 
 export async function uninstallHelmRelease(clusterId: number, namespace: string, releaseName: string) {
   return getData<boolean>(
-    http.delete("/helm/releases", { params: { cluster_id: clusterId, namespace, release_name: releaseName } }),
+    http.delete("/helm/releases", {
+      params: { cluster_id: clusterId, namespace, release_name: releaseName, confirm: true },
+    }),
   );
 }

@@ -175,6 +175,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	secrets.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	secrets.GET("", d.configHandler.ListSecrets)
 	secrets.GET("/detail", d.configHandler.SecretDetail)
+	secrets.GET("/reveal", d.configHandler.RevealSecret)
 	secrets.POST("/apply", d.configHandler.Apply)
 	secrets.DELETE("", d.configHandler.DeleteSecret)
 

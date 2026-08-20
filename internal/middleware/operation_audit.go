@@ -157,6 +157,12 @@ func shouldRedactAuditResponseBody(fullPath string) bool {
 	if strings.Contains(p, "/auth/password") {
 		return true
 	}
+	if strings.Contains(p, "/secrets/detail") || strings.Contains(p, "/secrets/reveal") {
+		return true
+	}
+	if strings.Contains(p, "/clusters") && (strings.Contains(p, "kubeconfig") || strings.HasSuffix(p, "/create") || strings.HasSuffix(p, "/update")) {
+		return true
+	}
 	return false
 }
 

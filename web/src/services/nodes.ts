@@ -117,6 +117,7 @@ export function drainNode(
   opts?: {
     dry_run?: boolean;
     force?: boolean;
+    confirm?: boolean;
     ignore_daemon_sets?: boolean;
     delete_emptydir_data?: boolean;
     grace_period_seconds?: number;
@@ -130,6 +131,7 @@ export function drainNode(
         name,
         dry_run: opts?.dry_run ?? false,
         force: opts?.force ?? false,
+        confirm: opts?.confirm ?? (!opts?.dry_run),
         ignore_daemon_sets: opts?.ignore_daemon_sets ?? true,
         delete_emptydir_data: opts?.delete_emptydir_data ?? true,
         grace_period_seconds: opts?.grace_period_seconds,

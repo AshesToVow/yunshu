@@ -9,6 +9,7 @@ import (
 
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sauth"
 
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -30,6 +31,8 @@ type NodeDrainRequest struct {
 	Force bool `json:"force"`
 	// DryRun 仅列出将驱逐的 Pod，不 cordon / 不 Evict。
 	DryRun bool `json:"dry_run"`
+	// Confirm 高危确认（非 dry_run 时必填，与集群 RequireDestructiveConfirm 联动）。
+	Confirm bool `json:"confirm"`
 }
 
 type NodeDrainPodItem struct {
@@ -75,6 +78,9 @@ func (s *K8sNodeService) DrainNode(ctx context.Context, req NodeDrainRequest) (*
 	if name == "" {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg215d21a8863c)
 	}
+	if req.Confirm {
+		ctx = k8sauth.WithDestructiveConfirm(ctx, true)
+	}
 	ignoreDS := true
 	if req.IgnoreDaemonSets != nil {
 		ignoreDS = *req.IgnoreDaemonSets
@@ -84,9 +90,17 @@ func (s *K8sNodeService) DrainNode(ctx context.Context, req NodeDrainRequest) (*
 		deleteEmptyDir = *req.DeleteEmptyDirData
 	}
 
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
 		return nil, err
+	}
+	if err := assertK8sWritable(ctx, cluster, "drain", ""); err != nil {
+		return nil, err
+	}
+	if !req.DryRun {
+		if err := RequireDestructiveConfirm(ctx, cluster); err != nil {
+			return nil, err
+		}
 	}
 	var node corev1.Node
 	if err := k.WithContext(ctx).Resource(&corev1.Node{}).Name(name).Get(&node).Error; err != nil {
