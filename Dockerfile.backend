@@ -1,6 +1,6 @@
 # Dockerfile.backend
 # 兼容经典 docker build（无需 BuildKit / RUN --mount）
-ARG GO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/golang:1.26-alpine
+ARG GO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.26.2-alpine
 FROM ${GO_IMAGE} AS builder
 
 RUN apk add --no-cache tzdata ca-certificates git

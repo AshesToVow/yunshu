@@ -49,7 +49,8 @@ services:
       context: .
       dockerfile: Dockerfile.backend
       args:
-        GO_IMAGE: ${GO_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/golang:1.26-alpine}
+        # 华为云镜像路径为 docker.io/library/golang（不是 docker.io/golang）
+        GO_IMAGE: ${GO_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.26.2-alpine}
     container_name: yunshu-backend
     restart: unless-stopped
     mem_limit: 384m
