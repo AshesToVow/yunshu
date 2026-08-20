@@ -64,11 +64,11 @@ export function SecretsPage() {
           apply: async ({ clusterId, manifest }) => await applySecret(clusterId, manifest),
           remove: async (args) => await deleteSecret(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
-        createTemplate={`apiVersion: v1
+        createTemplate={({ namespace }) => `apiVersion: v1
 kind: Secret
 metadata:
   name: example-secret
-  namespace: default
+  namespace: ${namespace || "default"}
 type: Opaque
 stringData:
   username: admin
