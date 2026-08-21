@@ -23,10 +23,10 @@ func isSuperAdmin(actor *auth.CurrentUser) bool {
 	return actor != nil && auth.IsSuperAdminRole(actor.RoleCodes)
 }
 
-// assertConnectionManage 连接 CRUD：超管或 Owner。日志平台虚拟连接不可改。
+// assertConnectionManage 连接 CRUD：超管或 Owner。
 func (s *Service) assertConnectionManage(ctx context.Context, connectionID uint, actor *auth.CurrentUser) error {
 	if connectionID == 0 {
-		return constants.ErrBadRequestWithMsg("「日志平台 ES」为只读虚拟连接，不可变更")
+		return constants.ErrBadRequestWithMsg("请指定具体连接")
 	}
 	if isSuperAdmin(actor) {
 		return nil
@@ -50,13 +50,22 @@ func (s *Service) assertConnectionManage(ctx context.Context, connectionID uint,
 	return constants.ErrForbidden
 }
 
-// assertConnectionWrite 备份/恢复/写代理：超管、Owner，或日志平台虚拟连接（id=0，由 Casbin 约束）。
+// assertConnectionWrite 备份/恢复/写代理：超管或连接 Owner；connectionID=0 时校验默认连接。
 func (s *Service) assertConnectionWrite(ctx context.Context, connectionID uint, actor *auth.CurrentUser) error {
 	if connectionID == 0 {
 		if actorID(actor) == 0 {
 			return constants.ErrForbidden
 		}
-		return nil
+		var def model.EsmgmtConnection
+		err := s.db.WithContext(ctx).Select("id").Where("is_default = ?", true).First(&def).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// 无默认连接时仅允许已登录用户走字典回退（只读场景由上层 API 约束）
+				return nil
+			}
+			return err
+		}
+		return s.assertConnectionManage(ctx, def.ID, actor)
 	}
 	return s.assertConnectionManage(ctx, connectionID, actor)
 }

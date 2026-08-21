@@ -102,8 +102,8 @@ export function EsmgmtConnectionsPage() {
     <div className="page-stack">
       <OpsPageHeader
         title="ES 连接管理"
-        description="维护 Elasticsearch 管理连接；密码加密存储。可与集群概览、REST 控制台共用。"
-        breadcrumbs={[{ title: "ES 管理" }, { title: "连接管理" }]}
+        description="在此维护 Elasticsearch 连接（密码加密存储）。集群概览与 REST 控制台共用这些连接，请勿再通过数据字典配置第二套同名连接。"
+        breadcrumbs={[{ title: "ES 管理控制台" }, { title: "连接管理" }]}
         extra={
           <Space>
             <Link to="/esmgmt/overview">集群概览</Link>

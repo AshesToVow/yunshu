@@ -56,12 +56,8 @@ export interface EsmgmtBackupSchedule {
   remark?: string;
 }
 
-export function listEsmgmtConnections(params?: { include_log_platform?: boolean }) {
-  return getData<EsmgmtConnection[]>(
-    http.get("/esmgmt/connections", {
-      params: params?.include_log_platform ? { include_log_platform: true } : undefined,
-    }),
-  );
+export function listEsmgmtConnections() {
+  return getData<EsmgmtConnection[]>(http.get("/esmgmt/connections"));
 }
 
 export function createEsmgmtConnection(payload: Record<string, unknown>) {

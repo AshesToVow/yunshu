@@ -47,11 +47,10 @@ export function EsmgmtConsolePage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    void listEsmgmtConnections({ include_log_platform: true })
+    void listEsmgmtConnections()
       .then((list) => {
         setConnections(list || []);
-        const logPlat = list?.find((c) => c.id === 0);
-        const def = logPlat || list?.find((c) => c.is_default) || list?.[0];
+        const def = list?.find((c) => c.is_default) || list?.[0];
         if (def) setConnectionId(def.id);
       })
       .catch((e) => message.error(extractApiErrorMessage(e, "加载连接失败")));
@@ -87,7 +86,7 @@ export function EsmgmtConsolePage() {
       <OpsPageHeader
         title="ES REST 控制台"
         description="管理员受限代理：支持 GET/POST/PUT/DELETE/HEAD，禁止脚本执行与节点关机。"
-        breadcrumbs={[{ title: "ES 管理" }, { title: "REST 控制台" }]}
+        breadcrumbs={[{ title: "ES 管理控制台" }, { title: "REST 控制台" }]}
         extra={
           <Space>
             <Link to="/esmgmt/overview">集群概览</Link>

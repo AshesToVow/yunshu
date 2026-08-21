@@ -145,15 +145,6 @@ type ProxyRequest struct {
 }
 
 func (s *Service) ListConnections(ctx context.Context) ([]model.EsmgmtConnection, error) {
-	return s.listConnections(ctx, false)
-}
-
-// ListConnectionsForSelect 含「日志平台 ES」虚拟项（id=0），供集群概览下拉；连接管理页勿用。
-func (s *Service) ListConnectionsForSelect(ctx context.Context) ([]model.EsmgmtConnection, error) {
-	return s.listConnections(ctx, true)
-}
-
-func (s *Service) listConnections(ctx context.Context, includeLogPlatform bool) ([]model.EsmgmtConnection, error) {
 	var list []model.EsmgmtConnection
 	if err := s.db.WithContext(ctx).Order("id desc").Find(&list).Error; err != nil {
 		return nil, err
@@ -162,30 +153,12 @@ func (s *Service) listConnections(ctx context.Context, includeLogPlatform bool) 
 		list[i].HasPassword = strings.TrimSpace(list[i].PasswordEnc) != ""
 		list[i].PasswordEnc = ""
 	}
-	if !includeLogPlatform || s.logES == nil {
-		return list, nil
-	}
-	cfg, err := s.logES.Resolve(ctx)
-	if err != nil || !cfg.Enabled || len(cfg.Addresses) == 0 {
-		return list, nil
-	}
-	virtual := model.EsmgmtConnection{
-		ID:          0,
-		Name:        "日志平台 ES",
-		Addresses:   joinAddresses(cfg.Addresses),
-		Username:    cfg.Username,
-		HasPassword: strings.TrimSpace(cfg.Password) != "",
-		TimeoutSec:  cfg.TimeoutSeconds,
-		IsDefault:   true,
-		Remark:      "只读虚拟连接：与保留策略/日志检索同源，请在数据字典改 elasticsearch_*",
-	}
-	list = append([]model.EsmgmtConnection{virtual}, list...)
-	for i := range list {
-		if list[i].ID != 0 {
-			list[i].IsDefault = false
-		}
-	}
 	return list, nil
+}
+
+// ListConnectionsForSelect 与 ListConnections 相同：统一使用 ES 管理控制台中的连接，不再注入「日志平台 ES」虚拟项。
+func (s *Service) ListConnectionsForSelect(ctx context.Context) ([]model.EsmgmtConnection, error) {
+	return s.ListConnections(ctx)
 }
 
 func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequest, actor *auth.CurrentUser) (*model.EsmgmtConnection, error) {
@@ -550,7 +523,7 @@ func (s *Service) decryptPassword(enc string) (string, error) {
 	return cryptox.DecryptString(s.aead, enc)
 }
 
-// resolveClient：connectionID>0 用该连接；0 优先日志平台 ES（与保留/检索同源），再回退默认连接。
+// resolveClient：connectionID>0 用该连接；0 使用默认连接。不再暴露「日志平台 ES」虚拟连接。
 func (s *Service) resolveClient(ctx context.Context, connectionID uint) (*esclient.Client, error) {
 	if connectionID > 0 {
 		cli, err := s.clientFromConnectionID(ctx, connectionID)
@@ -558,12 +531,6 @@ func (s *Service) resolveClient(ctx context.Context, connectionID uint) (*esclie
 			return nil, err
 		}
 		return cli, nil
-	}
-	if s.logES != nil {
-		cli, _, err := s.logES.Client(ctx)
-		if err == nil && cli != nil {
-			return cli, nil
-		}
 	}
 	var def model.EsmgmtConnection
 	err := s.db.WithContext(ctx).Where("is_default = ?", true).First(&def).Error
@@ -577,7 +544,14 @@ func (s *Service) resolveClient(ctx context.Context, connectionID uint) (*esclie
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
-	return nil, constants.ErrBadRequestWithMsg("未配置 Elasticsearch 连接，且日志平台 ES 不可用")
+	// 兼容：尚未在管理台建连接时，回退日志检索用的字典/YAML 配置（不作为独立连接展示）。
+	if s.logES != nil {
+		cli, _, lerr := s.logES.Client(ctx)
+		if lerr == nil && cli != nil {
+			return cli, nil
+		}
+	}
+	return nil, constants.ErrBadRequestWithMsg("请先在「ES 管理控制台 → 连接管理」中配置 Elasticsearch 连接")
 }
 
 func (s *Service) clientFromConnectionID(ctx context.Context, id uint) (*esclient.Client, error) {

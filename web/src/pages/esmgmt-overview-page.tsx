@@ -78,12 +78,10 @@ export function EsmgmtOverviewPage() {
   const [createForm] = Form.useForm();
 
   useEffect(() => {
-    void listEsmgmtConnections({ include_log_platform: true })
+    void listEsmgmtConnections()
       .then((list) => {
         setConnections(list || []);
-        // 优先「日志平台 ES」(id=0)，与保留策略同源
-        const logPlat = list?.find((c) => c.id === 0);
-        const def = logPlat || list?.find((c) => c.is_default) || list?.[0];
+        const def = list?.find((c) => c.is_default) || list?.[0];
         if (def) setConnectionId(def.id);
       })
       .catch((e) => message.error(extractApiErrorMessage(e, "加载连接失败")));
@@ -305,7 +303,7 @@ export function EsmgmtOverviewPage() {
             value={connectionId}
             options={connections.map((c) => ({
               value: c.id,
-              label: c.id === 0 ? `${c.name}（${c.addresses || "日志平台"}）` : `${c.name}（${c.addresses || "-"}）`,
+              label: `${c.name}${c.is_default ? "（默认）" : ""}（${c.addresses || "-"}）`,
             }))}
             onChange={setConnectionId}
           />
@@ -314,14 +312,6 @@ export function EsmgmtOverviewPage() {
           </Button>
           {status ? <Tag color={statusColor}>{statusLabel}</Tag> : null}
         </Space>
-        {connectionId === 0 ? (
-          <Alert
-            style={{ marginTop: 12 }}
-            type="info"
-            showIcon
-            message="当前为「日志平台 ES」，与「日志保留策略」索引列表同源；若仍对不上请核对数据字典 elasticsearch_* 地址。"
-          />
-        ) : null}
       </Card>
       {health ? (
         <Alert
