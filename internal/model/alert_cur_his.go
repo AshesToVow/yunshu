@@ -27,7 +27,7 @@ type AlertCurEvent struct {
 	Value           string `json:"value" gorm:"size:128;comment:触发时指标值快照"`
 
 	StartsAt  time.Time `json:"starts_at" gorm:"index"`
-	UpdatedAt time.Time `json:"updated_at"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"index"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

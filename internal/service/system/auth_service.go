@@ -373,7 +373,7 @@ func (s *AuthService) issueLoginResponse(ctx context.Context, user *model.User) 
 		},
 	})
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "auth", "issueLoginResponse", err)
+		return nil, constants.ErrTokenGenerateFailed
 	}
 
 	if s.redis == nil {

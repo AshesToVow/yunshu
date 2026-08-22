@@ -1,4 +1,4 @@
-﻿package alert
+package alert
 
 import (
 	"context"
@@ -19,6 +19,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/parseutil"
 	"yunshu/internal/pkg/validateutil"
+	"yunshu/internal/alertdispatch"
 )
 
 func validateHeadersJSON(v string) error {
@@ -39,8 +40,18 @@ func validateChannelMessageTemplates(headersJSON string) error {
 		if tplRaw == "" || tplRaw == "<nil>" {
 			return nil
 		}
-		if _, parseErr := template.New(fieldKey).Option("missingkey=zero").Parse(tplRaw); parseErr != nil {
+		tpl, parseErr := template.New(fieldKey).Option("missingkey=zero").Parse(tplRaw)
+		if parseErr != nil {
 			return constants.ErrBadRequestWithMsg(fmt.Sprintf(constants.ErrFmt3664a9ad8a57, fieldLabel, parseErr))
+		}
+		sample := alertdispatch.BuildChannelTemplateData(
+			"preview", "warning", "firing",
+			map[string]interface{}{"summary": "preview", "description": "preview"},
+			"demo",
+		)
+		var buf strings.Builder
+		if execErr := tpl.Execute(&buf, sample); execErr != nil {
+			return constants.ErrBadRequestWithMsg(fmt.Sprintf("%s 执行失败: %v", fieldLabel, execErr))
 		}
 		return nil
 	}

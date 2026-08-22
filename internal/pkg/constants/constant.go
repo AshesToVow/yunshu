@@ -84,7 +84,7 @@ var (
 	ErrUserNotFound            = BizError(http.StatusNotFound, 20001, "用户信息不存在或已停用")
 	ErrPasswordIncorrect       = BizError(http.StatusUnauthorized, 20002, "账号或密码不正确，请检查后重试")
 	ErrEmailAlreadyRegistered  = BizError(http.StatusConflict, 20003, "该邮箱已被占用，请更换后重试")
-	ErrTokenGenerate           = BizError(http.StatusInternalServerError, 20004, "登录凭证签发失败，请稍后重试")
+	ErrTokenGenerateFailed     = BizError(http.StatusInternalServerError, 20004, "登录凭证签发失败，请稍后重试")
 	ErrEmailNotBound           = BizError(http.StatusBadRequest, 20005, "当前账号未绑定邮箱，请先在安全设置中完成绑定")
 	ErrNicknameRequired        = BizError(http.StatusBadRequest, 20006, "昵称不能为空，请填写后保存")
 	ErrCaptchaIPRateLimited    = BizError(http.StatusTooManyRequests, 20007, "验证码请求过于频繁，请稍后再试")
@@ -112,13 +112,12 @@ var (
 	ErrAlertWebhookTokenInvalid = BizError(http.StatusForbidden, 22002, "告警回调令牌无效，请核对告警集成配置")
 )
 
-// —— 项目与日志源 23xxx ——
+// —— 项目与服务器 23xxx ——
 var (
 	ErrProjectNotFound               = BizError(http.StatusNotFound, 23001, "项目不存在或已被删除")
-	// ErrLogSourceServerNotFound 表示 CMDB/项目内服务器记录不存在（历史命名含 LogSource，文案按通用服务器表述）。
-	ErrLogSourceServerNotFound = BizError(http.StatusNotFound, 23002, "服务器不存在或已移除")
+	ErrServerNotFound                = BizError(http.StatusNotFound, 23002, "服务器不存在或已移除")
 	ErrServerNotInCurrentProject     = BizError(http.StatusBadRequest, 23003, "该服务器不属于当前项目，请切换项目后再操作")
-	ErrServerProjectMismatch         = BizError(http.StatusBadRequest, 23004, "项目与日志源归属不一致，请刷新后重试")
+	ErrServerProjectMismatch         = BizError(http.StatusBadRequest, 23004, "项目与服务器归属不一致，请刷新后重试")
 	ErrProjectIDRequired             = BizError(http.StatusBadRequest, 23005, "缺少项目标识（project_id），请补充后重试")
 	ErrNameRequired                  = BizError(http.StatusBadRequest, 23006, "名称不能为空，请填写后提交")
 	ErrUploadFailed                  = BizError(http.StatusBadRequest, 23007, "文件上传失败，请检查网络或文件大小后重试")
@@ -129,6 +128,9 @@ var (
 	ErrProjectReadonlyMember         = BizError(http.StatusForbidden, 23012, "项目只读成员不能执行此修改类操作")
 	ErrK8sClusterProjectAccessDenied = BizError(http.StatusForbidden, 23013, "该集群已绑定到其他业务项目，当前账号不在允许范围内")
 )
+
+// ErrLogSourceServerNotFound 历史别名，与 ErrServerNotFound 同码（23002）；新代码请使用 ErrServerNotFound。
+var ErrLogSourceServerNotFound = ErrServerNotFound
 
 // —— RBAC / 组织 24xxx ——
 var (

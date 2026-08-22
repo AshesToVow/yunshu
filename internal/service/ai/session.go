@@ -97,11 +97,29 @@ func (s *Service) ListSessions(ctx context.Context, userID uint, q SessionListQu
 		Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	sessionIDs := make([]uint, len(rows))
+	for i, row := range rows {
+		sessionIDs[i] = row.ID
+	}
+	msgCnt := map[uint]int64{}
+	if len(sessionIDs) > 0 {
+		type cntRow struct {
+			SessionID uint
+			Cnt       int64
+		}
+		var counts []cntRow
+		_ = s.db.WithContext(ctx).Model(&model.AiChatMessage{}).
+			Select("session_id, COUNT(*) AS cnt").
+			Where("session_id IN ?", sessionIDs).
+			Group("session_id").
+			Scan(&counts).Error
+		for _, c := range counts {
+			msgCnt[c.SessionID] = c.Cnt
+		}
+	}
 	items := make([]SessionListItem, 0, len(rows))
 	for _, row := range rows {
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiChatMessage{}).Where("session_id = ?", row.ID).Count(&cnt).Error
-		items = append(items, SessionListItem{AiChatSession: row, MessageCount: cnt})
+		items = append(items, SessionListItem{AiChatSession: row, MessageCount: msgCnt[row.ID]})
 	}
 	return &pagination.Result[SessionListItem]{List: items, Total: total, Page: page, PageSize: pageSize}, nil
 }

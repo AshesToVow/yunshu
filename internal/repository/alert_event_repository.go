@@ -72,7 +72,7 @@ func (r *AlertEventRepository) listQuery(ctx context.Context, f AlertEventListFi
 		tx = tx.Where("status = ?", v)
 	}
 	if sevs := parseSeverityFilter(f.Severity); len(sevs) > 0 {
-		tx = tx.Where("LOWER(severity) IN ?", sevs)
+		tx = tx.Where("severity IN ?", sevs)
 	}
 	if v := strings.TrimSpace(f.MonitorPipeline); v != "" {
 		tx = tx.Where("monitor_pipeline = ?", v)
@@ -172,14 +172,19 @@ func (r *AlertEventRepository) ListFiringByGroupKeys(ctx context.Context, groupK
 	return list, err
 }
 
+// alertHistoryStatsLookbackDays 仪表盘聚合默认只扫近 N 天，避免 alert_events 全表 COUNT 超时。
+const alertHistoryStatsLookbackDays = 180
+
 func (r *AlertEventRepository) HistoryStats(ctx context.Context, projectID uint, dayStart, dayEnd time.Time) (*AlertHistoryStatsRow, error) {
 	stats := &AlertHistoryStatsRow{}
+	lookbackStart := dayEnd.AddDate(0, 0, -alertHistoryStatsLookbackDays)
 	statsScope := func() *gorm.DB {
-		return applyAlertEventProjectFilter(
+		tx := applyAlertEventProjectFilter(
 			r.db.WithContext(ctx).Session(&gorm.Session{}).Model(&model.AlertEvent{}),
 			r.db,
 			projectID,
 		)
+		return tx.Where("created_at >= ?", lookbackStart)
 	}
 	var agg struct {
 		Total        int64

@@ -725,6 +725,9 @@ func (s *K8sPodService) ReadFile(ctx context.Context, query PodFileQuery) ([]byt
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.pod", "api", err, constants.ErrFmt2b7dfae8ff2c)
 	}
+	if len(data) > maxPodDownloadBytes {
+		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("文件超过 %d MiB 下载上限", maxPodDownloadBytes>>20))
+	}
 	return data, nil
 }
 

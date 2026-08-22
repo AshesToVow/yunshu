@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -71,32 +72,27 @@ func (h *LoggieHandler) DownloadPipeline(c *gin.Context) {
 	kind := c.DefaultQuery("file", "pipeline")
 	switch kind {
 	case "env":
-		c.Header("Content-Disposition", "attachment; filename="+bundle.EnvFilename)
-		c.Data(200, "text/plain; charset=utf-8", []byte(bundle.EnvFile))
+		exportutil.ServeBytes(c, bundle.EnvFilename, "text/plain; charset=utf-8", []byte(bundle.EnvFile))
 	case "heartbeat":
-		c.Header("Content-Disposition", "attachment; filename="+bundle.HeartbeatFilename)
-		c.Data(200, "text/x-sh; charset=utf-8", []byte(bundle.HeartbeatScript))
+		exportutil.ServeBytes(c, bundle.HeartbeatFilename, "text/x-sh; charset=utf-8", []byte(bundle.HeartbeatScript))
 	case "pipelines":
 		name := bundle.PipelinesFilename
 		if name == "" {
 			name = "pipelines.yml"
 		}
-		c.Header("Content-Disposition", "attachment; filename="+name)
 		content := bundle.PipelinesOnlyYAML
 		if content == "" {
 			content = bundle.PipelineYAML
 		}
-		c.Data(200, "application/x-yaml; charset=utf-8", []byte(content))
+		exportutil.ServeBytes(c, name, "application/x-yaml; charset=utf-8", []byte(content))
 	case "start":
 		name := bundle.StartFilename
 		if name == "" {
 			name = "start.sh"
 		}
-		c.Header("Content-Disposition", "attachment; filename="+name)
-		c.Data(200, "text/x-sh; charset=utf-8", []byte(bundle.StartScript))
+		exportutil.ServeBytes(c, name, "text/x-sh; charset=utf-8", []byte(bundle.StartScript))
 	default:
-		c.Header("Content-Disposition", "attachment; filename="+bundle.PipelineFilename)
-		c.Data(200, "application/x-yaml; charset=utf-8", []byte(bundle.PipelineYAML))
+		exportutil.ServeBytes(c, bundle.PipelineFilename, "application/x-yaml; charset=utf-8", []byte(bundle.PipelineYAML))
 	}
 }
 

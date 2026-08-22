@@ -17,6 +17,7 @@ import (
 	"yunshu/internal/middleware"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
@@ -359,12 +360,12 @@ func (h *CMDBHandler) ImportServers(c *gin.Context) {
 		return
 	}
 	defer file.Close()
-	n, err := h.svc.ImportServersFromExcel(c.Request.Context(), projectID, file)
+	result, err := h.svc.ImportServersFromExcel(c.Request.Context(), projectID, exportutil.LimitedImportReader(file))
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, gin.H{"imported": n})
+	response.Success(c, result)
 }
 
 // ExportServers 瀵煎嚭瀵瑰簲鐨?HTTP 鎺ュ彛澶勭悊閫昏緫銆?
@@ -380,14 +381,10 @@ func (h *CMDBHandler) ExportServers(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	buf, err := f.WriteToBuffer()
-	if err != nil {
-		response.Error(c, err)
-		return
-	}
 	filename := fmt.Sprintf("project-%d-servers.xlsx", projectID)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf.Bytes())
+	if err := exportutil.ServeExcel(c, filename, f); err != nil {
+		response.Error(c, err)
+	}
 }
 
 // ServersImportTemplate 澶勭悊瀵瑰簲鐨?HTTP 璇锋眰骞惰繑鍥炵粺涓€鍝嶅簲銆?
@@ -397,14 +394,9 @@ func (h *CMDBHandler) ServersImportTemplate(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	buf, err := f.WriteToBuffer()
-	if err != nil {
+	if err := exportutil.ServeExcel(c, "servers-import-template.xlsx", f); err != nil {
 		response.Error(c, err)
-		return
 	}
-	filename := "servers-import-template.xlsx"
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf.Bytes())
 }
 
 // ServerTerminalWS godoc

@@ -13,6 +13,7 @@ func RegisterInspectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	inspect := projectScoped.Group("/inspect")
 	inspect.GET("/plan", d.inspectHandler.GetPlan)
+	inspect.GET("/storage-info", d.inspectHandler.GetStorageInfo)
 	inspect.PUT("/plan", d.inspectHandler.UpdatePlan)
 	inspect.GET("/items", d.inspectHandler.ListItems)
 	inspect.POST("/items", d.inspectHandler.CreateItem)

@@ -116,6 +116,10 @@ log:
   format: text
   output: both  # console, file, both
   file_path: ./logs  # log file directory path
+  max_size_mb: 100   # 单文件上限（MB），超出后轮转
+  max_age_days: 30   # 保留天数
+  max_backups: 10    # 保留备份文件数
+  compress: true     # 轮转后 gzip 压缩
 
 mysql:
   driver: mysql              # mysql（默认）或 postgres

@@ -202,13 +202,13 @@ type DbAccessRequestStep struct {
 	StageKey        string     `json:"stage_key" gorm:"size:32;not null"`
 	StageName       string     `json:"stage_name" gorm:"size:64;not null"`
 	SortOrder       int        `json:"sort_order" gorm:"not null;default:0"`
-	Status          string     `json:"status" gorm:"size:32;not null;default:'pending'"`
+	Status          string     `json:"status" gorm:"size:32;not null;default:'pending';index:idx_db_access_step_status_activated,priority:1"`
 	UserGroupID     *uint      `json:"user_group_id,omitempty"`
 	ReviewerUserID  *uint      `json:"reviewer_user_id,omitempty"`
 	ReviewerName    string     `json:"reviewer_name" gorm:"size:64"`
 	ReviewComment   string     `json:"review_comment" gorm:"size:512"`
 	ReviewedAt      *time.Time `json:"reviewed_at,omitempty"`
-	ActivatedAt     *time.Time `json:"activated_at,omitempty"`
+	ActivatedAt     *time.Time `json:"activated_at,omitempty" gorm:"index:idx_db_access_step_status_activated,priority:2"`
 	LastRemindedAt  *time.Time `json:"last_reminded_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
@@ -254,13 +254,13 @@ type DbSqlTicketStep struct {
 	StageKey       string     `json:"stage_key" gorm:"size:32;not null"`
 	StageName      string     `json:"stage_name" gorm:"size:64;not null"`
 	SortOrder      int        `json:"sort_order" gorm:"not null;default:0"`
-	Status         string     `json:"status" gorm:"size:32;not null;default:'pending'"`
+	Status         string     `json:"status" gorm:"size:32;not null;default:'pending';index:idx_db_sql_step_status_activated,priority:1"`
 	UserGroupID    *uint      `json:"user_group_id,omitempty"`
 	ReviewerUserID *uint      `json:"reviewer_user_id,omitempty"`
 	ReviewerName   string     `json:"reviewer_name" gorm:"size:64"`
 	ReviewComment  string     `json:"review_comment" gorm:"size:512"`
 	ReviewedAt     *time.Time `json:"reviewed_at,omitempty"`
-	ActivatedAt    *time.Time `json:"activated_at,omitempty"`
+	ActivatedAt    *time.Time `json:"activated_at,omitempty" gorm:"index:idx_db_sql_step_status_activated,priority:2"`
 	LastRemindedAt *time.Time `json:"last_reminded_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`

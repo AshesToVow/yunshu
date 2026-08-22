@@ -174,19 +174,54 @@ func (s *Service) ListServices(ctx context.Context, q ServiceListQuery) (*pagina
 	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	serviceIDs := make([]uint, len(rows))
+	for i, row := range rows {
+		serviceIDs[i] = row.ID
+	}
+	hasCI := map[uint]bool{}
+	deployCnt := map[uint]int{}
+	lastBuild := map[uint]model.CicdBuildRun{}
+	if len(serviceIDs) > 0 {
+		var ciIDs []uint
+		_ = s.db.WithContext(ctx).Model(&model.CicdCiConfig{}).
+			Where("service_id IN ?", serviceIDs).
+			Distinct("service_id").
+			Pluck("service_id", &ciIDs).Error
+		for _, id := range ciIDs {
+			hasCI[id] = true
+		}
+		type deployRow struct {
+			ServiceID uint
+			Cnt       int64
+		}
+		var deployRows []deployRow
+		_ = s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).
+			Select("service_id, COUNT(*) AS cnt").
+			Where("service_id IN ? AND status = 1", serviceIDs).
+			Group("service_id").
+			Scan(&deployRows).Error
+		for _, d := range deployRows {
+			deployCnt[d.ServiceID] = int(d.Cnt)
+		}
+		var builds []model.CicdBuildRun
+		_ = s.db.WithContext(ctx).
+			Where("service_id IN ?", serviceIDs).
+			Order("id DESC").
+			Find(&builds).Error
+		for _, b := range builds {
+			if _, ok := lastBuild[b.ServiceID]; !ok {
+				lastBuild[b.ServiceID] = b
+			}
+		}
+	}
 	items := make([]ServiceItem, 0, len(rows))
 	for _, row := range rows {
 		item := ServiceItem{CicdService: row}
-		var ciCnt int64
-		_ = s.db.WithContext(ctx).Model(&model.CicdCiConfig{}).Where("service_id = ?", row.ID).Count(&ciCnt).Error
-		item.HasCiConfig = ciCnt > 0
-		var deployCnt int64
-		_ = s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).Where("service_id = ? AND status = 1", row.ID).Count(&deployCnt).Error
-		item.DeployConfigCnt = int(deployCnt)
-		var lastRun model.CicdBuildRun
-		if err := s.db.WithContext(ctx).Where("service_id = ?", row.ID).Order("id DESC").First(&lastRun).Error; err == nil {
-			item.LastBuildResult = lastRun.BuildResult
-			item.LastBuildAt = lastRun.StartedAt
+		item.HasCiConfig = hasCI[row.ID]
+		item.DeployConfigCnt = deployCnt[row.ID]
+		if b, ok := lastBuild[row.ID]; ok {
+			item.LastBuildResult = b.BuildResult
+			item.LastBuildAt = b.StartedAt
 		}
 		s.attachServiceAccess(ctx, q.ProjectID, q.Actor, &item)
 		items = append(items, item)

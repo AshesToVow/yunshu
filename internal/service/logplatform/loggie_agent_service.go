@@ -256,7 +256,7 @@ func (s *LoggieAgentService) Bootstrap(ctx context.Context, projectID uint, req 
 	sv, err := s.serverRepo.GetByID(ctx, req.ServerID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrLogSourceServerNotFound
+			return nil, constants.ErrServerNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "loggie", "Bootstrap", err)
 	}
@@ -458,7 +458,7 @@ func (s *LoggieAgentService) InstallLoggie(ctx context.Context, projectID uint, 
 	sv, err := s.serverRepo.GetByID(ctx, req.ServerID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrLogSourceServerNotFound
+			return nil, constants.ErrServerNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "loggie", "InstallLoggie", err)
 	}
@@ -520,7 +520,7 @@ func (s *LoggieAgentService) UninstallLoggie(ctx context.Context, projectID uint
 	sv, err := s.serverRepo.GetByID(ctx, req.ServerID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrLogSourceServerNotFound
+			return nil, constants.ErrServerNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "loggie", "UninstallLoggie", err)
 	}

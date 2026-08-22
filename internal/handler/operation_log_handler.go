@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
-
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -87,12 +87,10 @@ func (h *OperationLogHandler) Export(c *gin.Context) {
 		response.Error(c, constants.ErrBadRequestWithMsg(err.Error()))
 		return
 	}
-	c.Header("Content-Type", "application/octet-stream")
-	c.Header("Content-Disposition", "attachment; filename=operation_logs.xlsx")
-	c.Header("Content-Transfer-Encoding", "binary")
-	c.Status(http.StatusOK)
-	if err := h.svc.Export(c.Request.Context(), q, c.Writer); err != nil {
+	var buf bytes.Buffer
+	if err := h.svc.Export(c.Request.Context(), q, &buf); err != nil {
 		response.Error(c, err)
 		return
 	}
+	exportutil.ServeBytes(c, "operation_logs.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf.Bytes())
 }

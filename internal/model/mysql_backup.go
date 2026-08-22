@@ -93,7 +93,7 @@ type MysqlBackupJob struct {
 	ID         uint   `json:"id" gorm:"primaryKey"`
 	InstanceID uint   `json:"instance_id" gorm:"not null;index"`
 	ProjectID  uint   `json:"project_id" gorm:"not null;index"`
-	Status     string `json:"status" gorm:"size:32;not null;index"` // pending/running/success/failed
+	Status     string `json:"status" gorm:"size:32;not null;index;index:idx_mysql_bak_status_started,priority:1"` // pending/running/success/failed
 	BackupMode string `json:"backup_mode" gorm:"size:32"`
 	TriggerType string `json:"trigger_type" gorm:"size:32;not null;default:'manual'"`
 	BackupScope string `json:"backup_scope,omitempty" gorm:"size:32"`
@@ -108,7 +108,7 @@ type MysqlBackupJob struct {
 	LogExcerpt   string `json:"log_excerpt,omitempty" gorm:"type:text"`
 	ErrorMessage string `json:"error_message,omitempty" gorm:"type:text"`
 
-	StartedAt  *time.Time `json:"started_at,omitempty"`
+	StartedAt  *time.Time `json:"started_at,omitempty" gorm:"index:idx_mysql_bak_status_started,priority:2"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 }

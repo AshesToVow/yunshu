@@ -197,7 +197,7 @@ func (s *Service) UpsertServerGrant(ctx context.Context, req ServerGrantUpsertRe
 	sv, err := s.serverRepo.GetByID(ctx, req.ServerID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, constants.ErrLogSourceServerNotFound
+			return nil, constants.ErrServerNotFound
 		}
 		return nil, err
 	}

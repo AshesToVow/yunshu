@@ -321,6 +321,8 @@ func (s *LogSearchService) Export(ctx context.Context, q LogSearchQuery) (string
 		return "", err
 	}
 	var b strings.Builder
+	fmt.Fprintf(&b, "# 日志导出说明：本文件仅包含当前筛选条件下的前 %d 条（单页导出）。匹配共 %d 条；如需更多请缩小时间范围后分批导出。\n#\n",
+		len(res.List), res.Total)
 	for _, it := range res.List {
 		prefix := it.Timestamp
 		if fp := strings.TrimSpace(it.FilePath); fp != "" {

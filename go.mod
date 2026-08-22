@@ -257,6 +257,7 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gorm.io/driver/sqlserver v1.6.3 // indirect
 	k8s.io/apiserver v0.35.4 // indirect
 	k8s.io/component-base v0.35.4 // indirect

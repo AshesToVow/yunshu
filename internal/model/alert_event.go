@@ -11,8 +11,8 @@ type AlertEvent struct {
 	ID                 uint           `json:"id" gorm:"primaryKey;comment:主键ID"`
 	Source             string         `json:"source" gorm:"size:64;not null;index;comment:告警来源"`
 	Title              string         `json:"title" gorm:"size:255;not null;comment:告警标题"`
-	Severity           string         `json:"severity" gorm:"size:32;not null;default:warning;comment:严重级别"`
-	Status             string         `json:"status" gorm:"size:32;not null;default:firing;comment:告警状态;index:idx_alert_events_status_created,priority:1"`
+	Severity           string         `json:"severity" gorm:"size:32;not null;default:warning;index:idx_alert_events_severity;comment:严重级别"`
+	Status             string         `json:"status" gorm:"size:32;not null;default:firing;comment:告警状态;index:idx_alert_events_status_created,priority:1;index:idx_alert_events_proj_status_created,priority:2;index:idx_alert_events_del_status_created,priority:2"`
 	Cluster            string         `json:"cluster" gorm:"size:128;index;comment:K8s/Prometheus external_labels.cluster 等环境名；平台规则未显式配置时可为空"`
 	Environment        string         `json:"environment,omitempty" gorm:"-"`
 	AlertIP            string         `json:"alertIP,omitempty" gorm:"-"`
@@ -22,7 +22,7 @@ type AlertEvent struct {
 	DatasourceName     string         `json:"datasourceName" gorm:"size:128;index;comment:数据源显示名"`
 	DatasourceType     string         `json:"datasourceType" gorm:"size:32;index;comment:数据源类型如 prometheus、cloud_expiry"`
 	// ProjectID 业务组归属；入站解析后落库，历史统计按项目过滤优先使用本列。
-	ProjectID          uint           `json:"projectId" gorm:"index;comment:业务组ID，0 表示未解析"`
+	ProjectID          uint           `json:"projectId" gorm:"index:idx_alert_events_proj_status_created,priority:1;comment:业务组ID，0 表示未解析"`
 	GroupKey           string         `json:"groupKey" gorm:"size:128;index;comment:聚合分组键"`
 	// Fingerprint 告警实例指纹（AM fingerprint / 平台规则指纹）；用于按指纹追溯投递与跳过原因。
 	Fingerprint        string         `json:"fingerprint" gorm:"size:512;index;comment:告警指纹"`
@@ -43,9 +43,9 @@ type AlertEvent struct {
 	ErrorMessage       string         `json:"errorMessage" gorm:"size:1024;comment:错误信息"`
 	RequestPayload     string         `json:"requestPayload" gorm:"type:longtext;comment:请求载荷"`
 	ResponsePayload    string         `json:"responsePayload" gorm:"type:longtext;comment:响应载荷"`
-	CreatedAt          time.Time      `json:"createdAt" gorm:"comment:创建时间;index;index:idx_alert_events_status_created,priority:2"`
+	CreatedAt          time.Time      `json:"createdAt" gorm:"comment:创建时间;index;index:idx_alert_events_status_created,priority:2;index:idx_alert_events_proj_status_created,priority:3;index:idx_alert_events_del_status_created,priority:3"`
 	UpdatedAt          time.Time      `json:"updatedAt" gorm:"comment:更新时间"`
-	DeletedAt          gorm.DeletedAt `json:"-" gorm:"index;comment:删除时间"`
+	DeletedAt          gorm.DeletedAt `json:"-" gorm:"index;index:idx_alert_events_del_status_created,priority:1;comment:删除时间"`
 }
 
 // TableName 指定 GORM 表名为 alert_events。

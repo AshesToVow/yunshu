@@ -21,6 +21,7 @@ const (
 	// defaultKomRegisterTimeout 限制 kom 注册时对 APIServer 的单次 HTTP 超时，避免不可达集群拖死总览等批量路径。
 	defaultKomRegisterTimeout = 8 * time.Second
 	maxPodUploadBytes         = 32 << 20 // 32 MiB
+	maxPodDownloadBytes       = 32 << 20 // 32 MiB
 	maxPodLogTailLines        = int64(10000)
 )
 

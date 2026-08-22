@@ -46,10 +46,14 @@ type HTTPConfig struct {
 }
 
 type LogConfig struct {
-	Level    string `mapstructure:"level"`
-	Format   string `mapstructure:"format"`
-	Output   string `mapstructure:"output"`    // console, file, both
-	FilePath string `mapstructure:"file_path"` // log file directory path
+	Level      string `mapstructure:"level"`
+	Format     string `mapstructure:"format"`
+	Output     string `mapstructure:"output"`      // console, file, both
+	FilePath   string `mapstructure:"file_path"`   // log file directory path
+	MaxSizeMB  int    `mapstructure:"max_size_mb"` // 单文件上限（MB），超出后轮转
+	MaxAgeDays int    `mapstructure:"max_age_days"` // 保留天数，0 表示不按天清理
+	MaxBackups int    `mapstructure:"max_backups"`  // 保留备份文件数，0 表示不限制数量
+	Compress   bool   `mapstructure:"compress"`     // 轮转后是否 gzip 压缩
 }
 
 // DatabaseConfig 关系型数据库连接（支持 mysql、postgres）。
@@ -198,6 +202,21 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Auth.LoginLockSeconds <= 0 {
 		cfg.Auth.LoginLockSeconds = 900
+	}
+	if strings.TrimSpace(cfg.Log.FilePath) == "" {
+		cfg.Log.FilePath = "./logs"
+	}
+	if cfg.Log.MaxSizeMB <= 0 {
+		cfg.Log.MaxSizeMB = 100
+	}
+	if cfg.Log.MaxAgeDays <= 0 {
+		cfg.Log.MaxAgeDays = 30
+	}
+	if cfg.Log.MaxBackups <= 0 {
+		cfg.Log.MaxBackups = 10
+	}
+	if !v.IsSet("log.compress") {
+		cfg.Log.Compress = true
 	}
 	if cfg.Alert.DefaultTimeoutMS <= 0 {
 		cfg.Alert.DefaultTimeoutMS = 5000
@@ -377,6 +396,10 @@ func bindEnv(v *viper.Viper) error {
 		"log.format":                               nil,
 		"log.output":                               nil,
 		"log.file_path":                            nil,
+		"log.max_size_mb":                          nil,
+		"log.max_age_days":                         nil,
+		"log.max_backups":                          nil,
+		"log.compress":                             nil,
 		"database.driver":                          nil,
 		"database.host":                            nil,
 		"database.port":                            nil,

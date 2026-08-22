@@ -42,8 +42,29 @@ export async function downloadUsersImportTemplate(): Promise<Blob> {
   return (await http.get(`/users/import-template`, { responseType: "blob" })) as unknown as Blob;
 }
 
+export interface UserImportRowError {
+  row: number;
+  username: string;
+  message: string;
+}
+
+export interface UserImportCredential {
+  username: string;
+  password: string;
+}
+
+export interface UserImportResult {
+  created: number;
+  skipped: number;
+  failed: number;
+  errors?: UserImportRowError[];
+  credentials?: UserImportCredential[];
+}
+
 export function importUsers(file: File) {
   const fd = new FormData();
   fd.append("file", file);
-  return http.post(`/users/import`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+  return getData<UserImportResult>(
+    http.post(`/users/import`, fd, { headers: { "Content-Type": "multipart/form-data" } }),
+  );
 }

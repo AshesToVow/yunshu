@@ -3,11 +3,11 @@ package handler
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -190,9 +190,8 @@ func (h *ProjectHandler) ExportLogs(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	filename := fmt.Sprintf("project-%d-logs-%s.txt", projectID, time.Now().Format("20060102-150405"))
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(text))
+	filename := fmt.Sprintf("project-%d-logs-page-%s.txt", projectID, time.Now().Format("20060102-150405"))
+	exportutil.ServeBytes(c, filename, "text/plain; charset=utf-8", []byte(text))
 }
 
 // ListProjectMembers 项目成员列表。

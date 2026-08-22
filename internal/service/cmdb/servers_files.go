@@ -77,7 +77,7 @@ func (s *Service) dialServerSSH(ctx context.Context, projectID, serverID uint) (
 	sv, err := s.serverRepo.GetByID(ctx, serverID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrLogSourceServerNotFound
+			return nil, constants.ErrServerNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "cmdb", "dialServerSSH", err)
 	}

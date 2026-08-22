@@ -352,10 +352,25 @@ export async function exportProjectServers(projectId: number, params?: { keyword
   return (await http.get(`/projects/${projectId}/servers/export`, { params, responseType: "blob" })) as unknown as Blob;
 }
 
+export interface ServerImportRowError {
+  row: number;
+  name: string;
+  host: string;
+  message: string;
+}
+
+export interface ServerImportResult {
+  imported: number;
+  skipped: number;
+  errors?: ServerImportRowError[];
+}
+
 export async function importProjectServers(projectId: number, file: File) {
   const form = new FormData();
   form.append("file", file);
-  return await getData(http.post<any, ApiResponse<{ imported: number }>>(`/projects/${projectId}/servers/import`, form, { headers: { "Content-Type": "multipart/form-data" } }));
+  return await getData<ServerImportResult>(
+    http.post(`/projects/${projectId}/servers/import`, form, { headers: { "Content-Type": "multipart/form-data" } }),
+  );
 }
 
 export async function downloadProjectServersImportTemplate(projectId: number): Promise<Blob> {

@@ -1030,7 +1030,7 @@ func (s *MysqlBackupService) ensureServerInProject(ctx context.Context, projectI
 	sv, err := s.serverRepo.GetByID(ctx, serverID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return constants.ErrLogSourceServerNotFound
+			return constants.ErrServerNotFound
 		}
 		return bizerrors.Pass(ctx, "mysql.backup", "ensureServerInProject", err)
 	}

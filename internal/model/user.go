@@ -14,8 +14,8 @@ type User struct {
 	Phone        string         `json:"phone" gorm:"size:20;not null;default:'';index;comment:手机号，用于钉钉/企微@等告警触达"`
 	Password     string         `json:"-" gorm:"size:255;not null;comment:加密后的登录密码"`
 	Nickname     string         `json:"nickname" gorm:"size:128;not null;comment:昵称"`
-	Status       int            `json:"status" gorm:"not null;default:1;comment:状态 1启用 0禁用"`
-	DepartmentID *uint          `json:"department_id" gorm:"index;comment:所属部门ID"`
+	Status       int            `json:"status" gorm:"not null;default:1;index:idx_users_dept_status,priority:2;comment:状态 1启用 0禁用"`
+	DepartmentID *uint          `json:"department_id" gorm:"index:idx_users_dept_status,priority:1;comment:所属部门ID"`
 	Department   *Department    `json:"department,omitempty" gorm:"foreignKey:DepartmentID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
 	Roles        []Role         `json:"roles,omitempty" gorm:"many2many:user_roles;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	Groups       []UserGroup    `json:"groups,omitempty" gorm:"many2many:user_group_users;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`

@@ -14,7 +14,7 @@ type InspectRun struct {
 	PlanID    uint `json:"plan_id" gorm:"not null;index;comment:计划ID"`
 
 	// Status: pending|running|success|failed
-	Status string `json:"status" gorm:"size:32;not null;default:pending;index;comment:状态"`
+	Status string `json:"status" gorm:"size:32;not null;default:pending;index:idx_inspect_run_status_started,priority:1;comment:状态"`
 	// Trigger: manual|cron
 	Trigger string `json:"trigger" gorm:"size:32;not null;default:manual;comment:触发方式"`
 
@@ -39,7 +39,7 @@ type InspectRun struct {
 	ReportTemplateCode string `json:"report_template_code" gorm:"size:64;comment:所用模板编码快照"`
 	EmailSentAt        *time.Time `json:"email_sent_at" gorm:"comment:邮件发送时间"`
 
-	StartedAt  *time.Time `json:"started_at"`
+	StartedAt  *time.Time `json:"started_at" gorm:"index:idx_inspect_run_status_started,priority:2"`
 	FinishedAt *time.Time `json:"finished_at"`
 	CreatedBy    uint   `json:"created_by" gorm:"comment:手动触发用户ID"`
 	OperatorName string `json:"operator_name" gorm:"size:64;comment:触发人显示名"`

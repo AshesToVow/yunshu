@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +61,14 @@ func NewService(
 
 func (s *Service) store(ctx context.Context) ReportStore {
 	return resolveReportStore(ctx, s.db, s.reportDir)
+}
+
+// ReportStorageInfo 返回当前巡检报告存储后端与 MinIO 就绪状态。
+func (s *Service) ReportStorageInfo(ctx context.Context) ReportStorageInfo {
+	if s == nil {
+		return ReportStorageInfo{Backend: StorageLocal}
+	}
+	return resolveReportStorageInfo(ctx, s.db, s.reportDir)
 }
 
 // SeedGlobalTemplates 幂等写入/刷新全局巡检模板项（按 type+name upsert）。
@@ -519,13 +529,19 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	}
 	htmlBytes, err := renderHTMLWithTemplate(tpl.Code, tpl.Body, data)
 	if err != nil {
+		slog.Default().With("component", "inspect.report", "template", tpl.Code, "error", err).
+			Warn("report template render failed, using builtin default")
+		data.Summary = "（报告模板渲染失败，已使用内置默认模板）" + data.Summary
 		htmlBytes, err = renderHTML(data)
 		if err != nil {
 			return s.failRun(dbCtx, run, err)
 		}
 	}
-	printBytes := htmlBytes
-	pdfBytes := renderBinaryPDF(data)
+	printBytes, err := renderHTMLWithTemplate("print", "", data)
+	if err != nil || len(printBytes) == 0 {
+		printBytes = htmlBytes
+	}
+	pdfBytes := renderBinaryPDF(data, htmlBytes)
 	excelBytes, excelErr := renderExcel(data)
 
 	store := s.store(dbCtx)
@@ -540,10 +556,27 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	if err := store.Put(dbCtx, printKey, printBytes, "text/html; charset=utf-8"); err != nil {
 		return s.failRun(dbCtx, run, err)
 	}
-	_ = store.Put(dbCtx, pdfKey, pdfBytes, "application/pdf")
-	if excelErr == nil && len(excelBytes) > 0 {
-		_ = store.Put(dbCtx, excelKey, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-		run.ReportExcelPath = excelKey
+
+	var writeWarnings []string
+	if err := store.Put(dbCtx, pdfKey, pdfBytes, "application/pdf"); err != nil {
+		slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
+			Warn("inspect pdf report store failed", "error", err, "key", pdfKey)
+		writeWarnings = append(writeWarnings, "PDF: "+err.Error())
+	} else {
+		run.ReportPDFPath = pdfKey
+	}
+	if excelErr != nil {
+		slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
+			Warn("inspect excel report render failed", "error", excelErr)
+		writeWarnings = append(writeWarnings, "Excel 渲染: "+excelErr.Error())
+	} else if len(excelBytes) > 0 {
+		if err := store.Put(dbCtx, excelKey, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
+			slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
+				Warn("inspect excel report store failed", "error", err, "key", excelKey)
+			writeWarnings = append(writeWarnings, "Excel: "+err.Error())
+		} else {
+			run.ReportExcelPath = excelKey
+		}
 	}
 
 	finished := time.Now()
@@ -551,6 +584,14 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	run.Score = data.Score
 	run.Grade = data.Grade
 	run.Summary = data.Summary
+	if len(writeWarnings) > 0 {
+		warn := "部分附件写入失败：" + strings.Join(writeWarnings, "; ")
+		if strings.TrimSpace(run.Summary) != "" {
+			run.Summary += "\n" + warn
+		} else {
+			run.Summary = warn
+		}
+	}
 	run.ErrorMessage = ""
 	run.TotalCount = collected.Total
 	run.CriticalCount = collected.Critical
@@ -558,7 +599,6 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	run.NormalCount = collected.Normal
 	run.Storage = store.Backend()
 	run.ReportHTMLPath = htmlKey
-	run.ReportPDFPath = pdfKey
 	run.ReportTemplateID = tpl.ID
 	run.ReportTemplateCode = tpl.Code
 	run.FinishedAt = &finished
@@ -662,27 +702,21 @@ func (s *Service) readReportBytes(ctx context.Context, run *model.InspectRun, ke
 	if key == "" {
 		return nil, fmt.Errorf("empty key")
 	}
-	// 历史本地绝对/相对路径
-	if strings.Contains(key, string(filepath.Separator)) || strings.HasPrefix(key, "logs") {
-		if b, err := os.ReadFile(key); err == nil {
-			return b, nil
-		}
-	}
 	store := s.store(ctx)
+	if b, err := store.Get(ctx, key); err == nil {
+		return b, nil
+	}
 	if run != nil && run.Storage == StorageLocal {
 		local := newLocalReportStore(s.reportDir)
 		if b, err := local.Get(ctx, key); err == nil {
 			return b, nil
 		}
-		// 兼容旧路径 logs/inspect-reports/{pid}/run-{id}.html
-		if b, err := os.ReadFile(key); err == nil {
+	}
+	if path, ok := resolveLegacyReportPath(s.reportDir, key); ok {
+		if b, err := os.ReadFile(path); err == nil {
 			return b, nil
 		}
 	}
-	if b, err := store.Get(ctx, key); err == nil {
-		return b, nil
-	}
-	// 再试本地（MinIO 降级后的双写场景或历史）
 	return newLocalReportStore(s.reportDir).Get(ctx, key)
 }
 
@@ -749,7 +783,7 @@ func (s *Service) ResendEmail(ctx context.Context, projectID, runID uint) error 
 	return s.sendRunEmail(ctx, plan, run, data, htmlBytes, pdfBytes)
 }
 
-func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun, data ReportData, html, pdf []byte) error {
+func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun, data ReportData, htmlBytes, pdfBytes []byte) error {
 	if s.mailer == nil || !s.mailer.Enabled() || plan == nil {
 		return nil
 	}
@@ -759,12 +793,13 @@ func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run
 	}
 	subject := fmt.Sprintf("[%s] 巡检报告 %s 分数%.0f", s.appNameOrDefault(), data.Project, data.Score)
 	text := data.Summary
-	htmlBody := fmt.Sprintf("<p>%s</p><p>严重 %d / 警告 %d / 正常 %d</p>", data.Summary, run.CriticalCount, run.WarningCount, run.NormalCount)
+	htmlBody := fmt.Sprintf("<p>%s</p><p>严重 %d / 警告 %d / 正常 %d</p>",
+		html.EscapeString(data.Summary), run.CriticalCount, run.WarningCount, run.NormalCount)
 	atts := []mailer.Attachment{
-		{Filename: fmt.Sprintf("inspect-run-%d.html", run.ID), ContentType: "text/html; charset=utf-8", Content: html},
+		{Filename: fmt.Sprintf("inspect-run-%d.html", run.ID), ContentType: "text/html; charset=utf-8", Content: htmlBytes},
 	}
-	if len(pdf) > 0 {
-		atts = append(atts, mailer.Attachment{Filename: fmt.Sprintf("inspect-run-%d.pdf", run.ID), ContentType: "application/pdf", Content: pdf})
+	if len(pdfBytes) > 0 {
+		atts = append(atts, mailer.Attachment{Filename: fmt.Sprintf("inspect-run-%d.pdf", run.ID), ContentType: "application/pdf", Content: pdfBytes})
 	}
 	var lastErr error
 	for _, to := range recipients {

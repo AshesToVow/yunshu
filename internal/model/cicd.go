@@ -148,12 +148,12 @@ func (CicdDeployConfig) TableName() string { return "cicd_deploy_configs" }
 type CicdBuildRun struct {
 	ID                uint           `json:"id" gorm:"primaryKey"`
 	ProjectID         uint           `json:"project_id" gorm:"not null;index:idx_cicd_build_proj"`
-	ServiceID         uint           `json:"service_id" gorm:"not null;index"`
+	ServiceID         uint           `json:"service_id" gorm:"not null;index;index:idx_cicd_build_svc_result,priority:1"`
 	BuildNumber       int            `json:"build_number" gorm:"not null;default:0;index"`
 	BranchName        string         `json:"branch_name" gorm:"size:128"`
 	PublishMode       string         `json:"publish_mode" gorm:"size:32;not null;default:'仅构建'"`
 	Tenv              string         `json:"tenv" gorm:"size:16"`
-	BuildResult       string         `json:"build_result" gorm:"size:32;not null;default:'pending'"`
+	BuildResult       string         `json:"build_result" gorm:"size:32;not null;default:'pending';index:idx_cicd_build_svc_result,priority:2"`
 	BuilderUserID     *uint          `json:"builder_user_id,omitempty"`
 	BuilderName       string         `json:"builder_name" gorm:"size:64"`
 	Version           string         `json:"version" gorm:"size:64"`

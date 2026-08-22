@@ -242,8 +242,15 @@ export function UsersPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      await importUsers(file);
-      message.success("导入完成");
+      const res = await importUsers(file);
+      const parts = [`新建 ${res.created}`, `跳过 ${res.skipped}`, `失败 ${res.failed}`];
+      message.success(`导入完成：${parts.join("，")}`);
+      if (res.credentials?.length) {
+        message.info(`已为 ${res.credentials.length} 个用户生成临时密码，请查看接口响应或导出后分发`);
+      }
+      if (res.errors?.length) {
+        message.warning(`部分行失败：${res.errors.slice(0, 3).map((e) => `第${e.row}行 ${e.message}`).join("；")}`);
+      }
       void loadUsers();
     } catch (err) {
       message.error("导入失败");

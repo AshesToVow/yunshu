@@ -1,15 +1,18 @@
 package system
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/exportutil"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
@@ -508,23 +511,73 @@ func (s *UserService) ListAllByActor(ctx context.Context, actor *auth.CurrentUse
 	return users, nil
 }
 
-// ImportUsers reads an Excel file from reader and creates users.
-func (s *UserService) ImportUsers(ctx context.Context, r io.Reader) error {
-	f, err := excelize.OpenReader(r)
+// UserImportRowError 单行导入失败原因。
+type UserImportRowError struct {
+	Row      int    `json:"row"`
+	Username string `json:"username"`
+	Message  string `json:"message"`
+}
+
+// UserImportCredential 新建用户的临时密码（仅导入成功时返回给操作者）。
+type UserImportCredential struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// UserImportResult 用户批量导入结果。
+type UserImportResult struct {
+	Created     int                    `json:"created"`
+	Skipped     int                    `json:"skipped"`
+	Failed      int                    `json:"failed"`
+	Errors      []UserImportRowError   `json:"errors,omitempty"`
+	Credentials []UserImportCredential `json:"credentials,omitempty"`
+}
+
+// ImportUsersByActor reads an Excel file and creates users within actor scope.
+func (s *UserService) ImportUsersByActor(ctx context.Context, actor *auth.CurrentUser, r io.Reader) (*UserImportResult, error) {
+	if actor == nil {
+		return nil, constants.ErrUnauthorized
+	}
+	limited := exportutil.LimitedImportReader(r)
+	data, err := io.ReadAll(limited)
 	if err != nil {
-		return bizerrors.Pass(ctx, "user", "ImportUsers", err)
+		return nil, bizerrors.Pass(ctx, "user", "ImportUsersByActor", err)
+	}
+	if err := exportutil.CheckImportReadSize(int64(len(data))); err != nil {
+		return nil, err
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "user", "ImportUsersByActor", err)
 	}
 
 	rows, err := f.GetRows("Sheet1")
 	if err != nil {
-		return bizerrors.Pass(ctx, "user", "ImportUsers", err)
+		return nil, bizerrors.Pass(ctx, "user", "ImportUsersByActor", err)
+	}
+	if len(rows) > exportutil.MaxExcelImportRows+1 {
+		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("导入行数超过 %d 行上限", exportutil.MaxExcelImportRows))
 	}
 
-	// Expect header row in first line: ID,Username,Nickname,Email,Status
+	var allowedDeptIDs []uint
+	isSuper := auth.IsSuperAdminRole(actor.RoleCodes)
+	if !isSuper {
+		if actor.DepartmentID == nil || *actor.DepartmentID == 0 {
+			return nil, constants.ErrForbiddenWithMsg(constants.ErrMsgc8caf91c1d57)
+		}
+		allowedDeptIDs, err = s.accessibleDepartmentIDs(ctx, actor)
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "user", "ImportUsersByActor", err)
+		}
+	}
+
+	result := &UserImportResult{}
+	// Expect header: ID,Username,Nickname,Email,Status,DepartmentCode
 	for i, row := range rows {
 		if i == 0 {
 			continue
 		}
+		rowNum := i + 1
 		if len(row) < 2 {
 			continue
 		}
@@ -534,7 +587,7 @@ func (s *UserService) ImportUsers(ctx context.Context, r io.Reader) error {
 		}
 		var nickname string
 		var emailPtr *string
-		var status int = int(model.StatusEnabled)
+		status := int(model.StatusEnabled)
 		if len(row) >= 3 {
 			nickname = strings.TrimSpace(row[2])
 		}
@@ -545,8 +598,8 @@ func (s *UserService) ImportUsers(ctx context.Context, r io.Reader) error {
 			}
 		}
 		if len(row) >= 5 {
-			// try parse status
-			if strings.TrimSpace(row[4]) == "0" {
+			st := strings.TrimSpace(row[4])
+			if st == "0" || strings.EqualFold(st, "disabled") {
 				status = int(model.StatusDisabled)
 			}
 		}
@@ -555,25 +608,43 @@ func (s *UserService) ImportUsers(ctx context.Context, r io.Reader) error {
 		if len(row) >= 6 {
 			deptCode := strings.TrimSpace(row[5])
 			if deptCode != "" {
-				if dept, findErr := s.departmentRepo.GetByCode(ctx, deptCode); findErr == nil {
-					departmentID = &dept.ID
+				dept, findErr := s.departmentRepo.GetByCode(ctx, deptCode)
+				if findErr != nil {
+					result.Failed++
+					result.Errors = append(result.Errors, UserImportRowError{Row: rowNum, Username: username, Message: "部门编码不存在"})
+					continue
 				}
+				if !isSuper && !slices.Contains(allowedDeptIDs, dept.ID) {
+					result.Failed++
+					result.Errors = append(result.Errors, UserImportRowError{Row: rowNum, Username: username, Message: "无权在该部门创建用户"})
+					continue
+				}
+				departmentID = &dept.ID
 			}
 		}
+		if !isSuper && departmentID == nil && actor.DepartmentID != nil {
+			deptID := *actor.DepartmentID
+			departmentID = &deptID
+		}
 
-		// skip if user exists
-		exists, err := s.userRepo.ExistsByUsernameOrEmail(ctx, username, "")
-		if err == nil && exists {
+		exists, existsErr := s.userRepo.ExistsByUsernameOrEmail(ctx, username, "")
+		if existsErr != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, UserImportRowError{Row: rowNum, Username: username, Message: existsErr.Error()})
+			continue
+		}
+		if exists {
+			result.Skipped++
 			continue
 		}
 
-		rawPass, err := randomImportPassword()
-		if err != nil {
-			return bizerrors.Pass(ctx, "user", "ImportUsers", err)
+		rawPass, passErr := randomImportPassword()
+		if passErr != nil {
+			return nil, bizerrors.Pass(ctx, "user", "ImportUsersByActor", passErr)
 		}
-		hashed, err := password.Hash(rawPass)
-		if err != nil {
-			return bizerrors.Pass(ctx, "user", "ImportUsers", err)
+		hashed, hashErr := password.Hash(rawPass)
+		if hashErr != nil {
+			return nil, bizerrors.Pass(ctx, "user", "ImportUsersByActor", hashErr)
 		}
 		user := model.User{
 			Username:     username,
@@ -583,11 +654,15 @@ func (s *UserService) ImportUsers(ctx context.Context, r io.Reader) error {
 			Status:       status,
 			DepartmentID: departmentID,
 		}
-		if err := s.userRepo.Create(ctx, &user); err != nil {
-			return bizerrors.Pass(ctx, "user", "ImportUsers", err)
+		if createErr := s.userRepo.Create(ctx, &user); createErr != nil {
+			result.Failed++
+			result.Errors = append(result.Errors, UserImportRowError{Row: rowNum, Username: username, Message: createErr.Error()})
+			continue
 		}
+		result.Created++
+		result.Credentials = append(result.Credentials, UserImportCredential{Username: username, Password: rawPass})
 	}
-	return nil
+	return result, nil
 }
 
 func randomImportPassword() (string, error) {

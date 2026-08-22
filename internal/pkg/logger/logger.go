@@ -4,7 +4,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -77,9 +76,9 @@ func buildChannelHandler(cfg config.LogConfig, logDir, channel string) slog.Hand
 func outputWriters(cfg config.LogConfig, logDir, channel string) []io.Writer {
 	switch strings.ToLower(cfg.Output) {
 	case "file":
-		return []io.Writer{openLogFile(logDir, channel)}
+		return []io.Writer{openRotatingLogFile(cfg, logDir, channel)}
 	case "both":
-		return []io.Writer{os.Stdout, openLogFile(logDir, channel)}
+		return []io.Writer{os.Stdout, openRotatingLogFile(cfg, logDir, channel)}
 	default:
 		return []io.Writer{os.Stdout}
 	}
@@ -97,15 +96,6 @@ func channelMinLevel(cfg config.LogConfig, channel string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
-}
-
-func openLogFile(logDir, channel string) *os.File {
-	fileName := filepath.Join(logDir, channel+".log")
-	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		panic("failed to open log file: " + err.Error())
-	}
-	return f
 }
 
 // shortenSourceAttr 缩短 source 路径，保留包内相对位置。

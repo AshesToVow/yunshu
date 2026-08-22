@@ -56,11 +56,21 @@ export interface InspectRun {
   warning_count: number;
   normal_count: number;
   storage?: string;
+  report_html_path?: string;
+  report_pdf_path?: string;
+  report_excel_path?: string;
   report_template_code?: string;
   email_sent_at?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
   created_at?: string;
+}
+
+export interface InspectStorageInfo {
+  backend: string;
+  minio_ready: boolean;
+  local_root?: string;
+  minio_reason?: string;
 }
 
 export type InspectPlanUpdate = {
@@ -87,6 +97,10 @@ export type InspectItemPayload = {
 
 export function getInspectPlan(projectId: number) {
   return getData<InspectPlan>(http.get(`/projects/${projectId}/inspect/plan`));
+}
+
+export function getInspectStorageInfo(projectId: number) {
+  return getData<InspectStorageInfo>(http.get(`/projects/${projectId}/inspect/storage-info`));
 }
 
 export function updateInspectPlan(projectId: number, payload: InspectPlanUpdate) {

@@ -3,23 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{.Project}} — 巡检报告</title>
+  <title>{{.Project}} — 运维巡检报告</title>
   <style>
     :root {
       --ink: #0f172a;
       --muted: #64748b;
       --line: #e2e8f0;
+      --line-strong: #cbd5e1;
       --surface: #ffffff;
       --canvas: #f1f5f9;
       --brand: #0f766e;
+      --brand-light: #ccfbf1;
       --brand-deep: #115e59;
-      --critical: #b91c1c;
+      --critical: #dc2626;
       --critical-bg: #fef2f2;
-      --warning: #b45309;
+      --warning: #d97706;
       --warning-bg: #fffbeb;
-      --normal: #15803d;
+      --normal: #16a34a;
       --normal-bg: #f0fdf4;
-      --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.04);
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
     }
     * { box-sizing: border-box; }
     body {
@@ -27,157 +30,342 @@
       color: var(--ink);
       background: var(--canvas);
       font-family: "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB",
-        "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
+        "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.65;
       -webkit-font-smoothing: antialiased;
     }
-    .page { max-width: 960px; margin: 0 auto; padding: 32px 20px 56px; }
-    .hero {
-      position: relative;
-      overflow: hidden;
+    .page { max-width: 960px; margin: 0 auto; padding: 32px 24px 56px; }
+
+    /* ===== 封面 ===== */
+    .cover {
+      display: grid;
+      grid-template-columns: 1fr 200px;
+      gap: 0;
       border-radius: 16px;
-      background: linear-gradient(135deg, #0f766e 0%, #0e7490 55%, #164e63 100%);
+      overflow: hidden;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .cover-main {
+      padding: 28px 32px 24px;
+      background: linear-gradient(160deg, #0f766e 0%, #0e7490 48%, #164e63 100%);
       color: #ecfdf5;
-      padding: 28px 28px 24px;
-      margin-bottom: 22px;
-      box-shadow: var(--shadow);
     }
-    .hero::after {
-      content: "";
-      position: absolute;
-      right: -40px; top: -40px;
-      width: 180px; height: 180px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.08);
-    }
-    .hero-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: flex-start;
-      position: relative;
-      z-index: 1;
-    }
-    .eyebrow {
+    .cover-main .brand {
       font-size: 11px;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
       opacity: 0.85;
-      margin-bottom: 8px;
       font-weight: 600;
+      margin-bottom: 10px;
     }
-    .hero h1 {
+    .cover-main h1 {
       margin: 0 0 8px;
-      font-size: 26px;
+      font-size: 30px;
       font-weight: 700;
       letter-spacing: -0.02em;
+      line-height: 1.25;
     }
-    .hero .meta { opacity: 0.9; font-size: 13px; }
-    .stamp {
-      font-size: 11px;
-      font-weight: 700;
-      padding: 8px 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.28);
-      background: rgba(255,255,255,0.1);
-      white-space: nowrap;
+    .cover-main .doc-type {
+      margin: 0 0 20px;
+      font-size: 14px;
+      opacity: 0.9;
     }
-    .kpi-row {
+    .cover-meta {
       display: grid;
-      grid-template-columns: 160px 1fr;
-      gap: 14px;
-      margin-top: 20px;
-      position: relative;
-      z-index: 1;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 20px;
+      font-size: 13px;
     }
-    .score-panel {
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 12px;
-      text-align: center;
-      padding: 16px 10px;
+    .cover-meta .item .meta-label {
+      display: block;
+      font-size: 11px;
+      opacity: 0.75;
+      margin-bottom: 2px;
+      font-weight: 600;
     }
-    .score-panel .num {
-      font-size: 44px;
-      font-weight: 800;
-      line-height: 1;
-      letter-spacing: -0.03em;
-    }
-    .score-panel.grade-a .num { color: #bbf7d0; }
-    .score-panel.grade-b .num { color: #a5f3fc; }
-    .score-panel.grade-c .num { color: #fde68a; }
-    .score-panel.grade-d .num { color: #fecaca; }
-    .score-panel .label { margin-top: 6px; font-size: 12px; opacity: 0.9; }
-    .summary-panel {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.16);
-      border-radius: 12px;
-      padding: 14px 16px;
-    }
-    .summary-panel p { margin: 0 0 10px; font-size: 14px; }
-    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
-    .pill {
-      font-size: 12px;
-      font-weight: 650;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.14);
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-    .section { margin-bottom: 22px; }
-    .section-title {
-      margin: 0 0 12px;
-      font-size: 16px;
-      font-weight: 700;
+    .cover-meta .item span { font-weight: 500; }
+    .cover-score {
       display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .section-num {
-      display: inline-flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      width: 24px; height: 24px;
-      border-radius: 7px;
-      background: var(--brand);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 700;
+      padding: 24px 16px;
+      background: #f8fafc;
+      border-left: 1px solid var(--line);
+      text-align: center;
     }
-    .card {
+    .score-ring {
+      width: 108px;
+      height: 108px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 5px solid var(--brand);
+      margin-bottom: 12px;
+      background: #fff;
+    }
+    .score-ring.grade-a { border-color: #16a34a; }
+    .score-ring.grade-b { border-color: #2563eb; }
+    .score-ring.grade-c { border-color: #d97706; }
+    .score-ring.grade-d { border-color: #dc2626; }
+    .score-ring .num {
+      font-size: 36px;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--ink);
+      letter-spacing: -0.03em;
+    }
+    .score-ring .unit { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .grade-badge {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 999px;
+      background: var(--brand-light);
+      color: var(--brand-deep);
+    }
+    .grade-badge.grade-a { background: #dcfce7; color: #15803d; }
+    .grade-badge.grade-b { background: #dbeafe; color: #1d4ed8; }
+    .grade-badge.grade-c { background: #ffedd5; color: #c2410c; }
+    .grade-badge.grade-d { background: #fee2e2; color: #b91c1c; }
+    .risk-tag {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    /* ===== 概览三栏 ===== */
+    .overview {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .ov-card {
       background: var(--surface);
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 16px 18px;
-      margin-bottom: 12px;
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-sm);
     }
-    .hint { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
-    .content-cat h3 { margin: 0 0 6px; font-size: 14px; font-weight: 650; }
-    .cat-meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
-    .tag {
+    .ov-card h3 {
+      margin: 0 0 10px;
       font-size: 12px;
-      padding: 4px 10px;
-      border-radius: 8px;
-      background: #f8fafc;
-      border: 1px solid var(--line);
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
-    .tag small { color: var(--muted); margin-left: 4px; }
-    .group-head {
+    .ov-card .big {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--ink);
+      line-height: 1.2;
+    }
+    .ov-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .dist-bar-svg {
+      display: block;
+      width: 100%;
+      height: 10px;
+      margin: 10px 0 8px;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .dist-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .legend-dot.c { background: var(--critical); }
+    .legend-dot.w { background: var(--warning); }
+    .legend-dot.n { background: var(--normal); }
+    .dist-legend .pct { color: var(--muted); font-weight: 500; }
+    .risk-pills { display: flex; gap: 8px; margin-top: 8px; }
+    .risk-pill {
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .risk-pill.critical { background: var(--critical-bg); color: var(--critical); }
+    .risk-pill.warning { background: var(--warning-bg); color: var(--warning); }
+    .ov-sub-note { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+    /* ===== 执行摘要 ===== */
+    .summary-box {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px 22px;
+      margin-bottom: 28px;
+      box-shadow: var(--shadow-sm);
+      border-left: 4px solid var(--brand);
+    }
+    .summary-box.grade-d { border-left-color: var(--critical); }
+    .summary-box.grade-c { border-left-color: var(--warning); }
+    .summary-box h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .summary-box .lead {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: #334155;
+      line-height: 1.75;
+    }
+    .summary-box .action {
+      margin: 0;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: #1e293b;
+    }
+    .summary-box .action strong { color: var(--brand-deep); }
+
+    /* ===== 章节 ===== */
+    .section { margin-bottom: 32px; }
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--line-strong);
+    }
+    .section-num {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: var(--brand);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      flex: 1;
+    }
+    .section-desc {
+      margin: -8px 0 14px 40px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ===== 关注项 ===== */
+    .finding {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow-sm);
+    }
+    .finding.critical { border-left: 4px solid var(--critical); }
+    .finding.warning { border-left: 4px solid var(--warning); }
+    .finding .prio {
+      text-align: center;
+    }
+    .finding .prio .p-label {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    .finding.critical .p-label { background: var(--critical-bg); color: var(--critical); }
+    .finding.warning .p-label { background: var(--warning-bg); color: var(--warning); }
+    .finding .prio .idx {
+      display: block;
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .finding .f-title {
+      font-size: 14px;
+      font-weight: 650;
+      margin-bottom: 4px;
+    }
+    .finding .f-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .finding .f-fix {
+      font-size: 13px;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      line-height: 1.55;
+    }
+
+    /* ===== 分类表格 ===== */
+    .group-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .group-bar {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      gap: 10px;
-      margin-bottom: 10px;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 18px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
     }
-    .group-head h3 { margin: 0; font-size: 15px; font-weight: 650; }
-    .group-meta { font-size: 12px; color: var(--muted); }
+    .group-bar h3 { margin: 0; font-size: 14px; font-weight: 700; }
+    .group-stats {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .group-stats .s-c { color: var(--critical); }
+    .group-stats .s-w { color: var(--warning); }
+    .group-stats .s-n { color: var(--normal); }
+    .group-stats .s-t { color: var(--muted); }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td {
-      padding: 10px 8px;
+      padding: 10px 14px;
       text-align: left;
       border-bottom: 1px solid var(--line);
       vertical-align: top;
@@ -186,198 +374,290 @@
       font-size: 11px;
       font-weight: 700;
       color: var(--muted);
-      background: #f8fafc;
-      letter-spacing: 0.03em;
+      background: #fafbfc;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
     }
-    tr.row-critical { background: #fff7f7; }
-    tr.row-warning { background: #fffbeb; }
+    tbody tr:nth-child(even) { background: #fafbfc; }
+    tbody tr.row-critical { background: #fff5f5 !important; }
+    tbody tr.row-warning { background: #fffbeb !important; }
+    tbody tr:last-child td { border-bottom: none; }
     .mono {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
       font-size: 12px;
-      color: #334155;
+      color: #475569;
+      word-break: break-all;
     }
-    .action { font-size: 12px; line-height: 1.5; color: #1e293b; }
     .badge {
       display: inline-block;
       font-size: 11px;
       font-weight: 700;
-      padding: 2px 8px;
+      padding: 2px 9px;
       border-radius: 999px;
       border: 1px solid transparent;
+      white-space: nowrap;
     }
     .badge.critical { color: var(--critical); background: var(--critical-bg); border-color: #fecaca; }
     .badge.warning { color: var(--warning); background: var(--warning-bg); border-color: #fde68a; }
     .badge.normal { color: var(--normal); background: var(--normal-bg); border-color: #bbf7d0; }
-    .finding {
+    .action-cell { font-size: 12px; line-height: 1.55; color: #334155; max-width: 280px; }
+
+    /* ===== 附录 ===== */
+    .scope-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .scope-card {
+      background: var(--surface);
       border: 1px solid var(--line);
-      border-left: 4px solid var(--critical);
       border-radius: 12px;
       padding: 14px 16px;
-      margin-bottom: 10px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
+      box-shadow: var(--shadow-sm);
     }
-    .finding.warning { border-left-color: var(--warning); }
-    .finding .f-head {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
-    }
-    .finding .f-title { font-weight: 650; font-size: 14px; }
-    .finding .f-fix {
+    .scope-card h4 {
+      margin: 0 0 6px;
       font-size: 13px;
-      padding: 10px 12px;
-      background: #f8fafc;
-      border-radius: 8px;
-      border: 1px solid var(--line);
+      font-weight: 700;
+      color: var(--ink);
     }
-    .empty { margin: 0; color: var(--muted); font-size: 13px; }
+    .scope-card .scope-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      border: 1px solid var(--line);
+      color: #475569;
+    }
+    .tag em {
+      font-style: normal;
+      color: var(--muted);
+      margin-left: 3px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 28px 20px;
+      color: var(--muted);
+      font-size: 13px;
+      background: var(--surface);
+      border: 1px dashed var(--line-strong);
+      border-radius: 12px;
+    }
+
     footer {
-      margin-top: 28px;
-      padding-top: 14px;
+      margin-top: 32px;
+      padding-top: 16px;
       border-top: 1px solid var(--line);
       text-align: center;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
+      line-height: 1.7;
     }
+
     @media print {
       body { background: #fff; }
       .page { max-width: none; padding: 0; }
-      .hero {
-        box-shadow: none;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .card, .finding, .score-panel, .summary-panel {
+      .cover, .ov-card, .group-card, .finding, .summary-box, .scope-card {
         box-shadow: none;
         break-inside: avoid;
       }
+      .cover-main, .score-ring, .dist-bar span {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
       thead { display: table-header-group; }
-      @page { margin: 12mm; size: A4; }
+      tr { break-inside: avoid; }
+      .section { break-before: auto; }
+      @page { margin: 14mm; size: A4; }
+    }
+    @media (max-width: 768px) {
+      .cover { grid-template-columns: 1fr; }
+      .cover-score { border-left: none; border-top: 1px solid var(--line); }
+      .overview { grid-template-columns: 1fr; }
+      .scope-grid { grid-template-columns: 1fr; }
+      .cover-meta { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <div class="page">
-    <header class="hero">
-      <div class="hero-top">
-        <div>
-          <div class="eyebrow">Yunshu Inspect</div>
-          <h1>{{.Project}} 巡检报告</h1>
-          <div class="meta">
-            {{.Timestamp.Format "2006-01-02 15:04:05"}}
-            {{if .InspectionUser}} · 执行人 {{.InspectionUser}}{{end}}
-            {{if .Datasource}} · 数据源 {{.Datasource}}{{end}}
-          </div>
+
+    <!-- 封面 -->
+    <header class="cover">
+      <div class="cover-main">
+        <div class="brand">Yunshu · 智能运维</div>
+        <h1>{{.Project}}</h1>
+        <p class="doc-type">项目运维巡检报告</p>
+        <div class="cover-meta">
+          <div class="item"><span class="meta-label">报告时间</span><span>{{.Timestamp.Format "2006年01月02日 15:04"}}</span></div>
+          <div class="item"><span class="meta-label">执行人</span><span>{{if .InspectionUser}}{{.InspectionUser}}{{else}}系统定时{{end}}</span></div>
+          <div class="item"><span class="meta-label">监控数据源</span><span>{{if .Datasource}}{{.Datasource}}{{else}}Prometheus{{end}}</span></div>
+          <div class="item"><span class="meta-label">明细范围</span><span>{{.ReportListHint}}</span></div>
         </div>
-        <div class="stamp">自动生成</div>
       </div>
-      <div class="kpi-row">
-        <div class="score-panel {{gradeClass .Grade}}">
+      <div class="cover-score">
+        <div class="score-ring {{gradeClass .Grade}}">
           <div class="num">{{fmtFloat .Score}}</div>
-          <div class="label">健康等级 {{.Grade}}</div>
+          <div class="unit">健康分</div>
         </div>
-        <div class="summary-panel">
-          <p>{{.Summary}}</p>
-          <div class="pills">
-            <span class="pill">总计 {{.Total}}</span>
-            <span class="pill">严重 {{.Critical}}</span>
-            <span class="pill">警告 {{.Warning}}</span>
-            <span class="pill">正常 {{.Normal}}</span>
-          </div>
-          <p class="hint" style="margin:10px 0 0;opacity:.85;color:#ecfdf5">{{.ReportListHint}}</p>
-        </div>
+        <span class="grade-badge {{gradeClass .Grade}}">{{.Grade}} · {{.GradeLabel}}</span>
+        <div class="risk-tag">{{.RiskLevel}}</div>
       </div>
     </header>
 
-    <section class="section" id="findings">
-      <h2 class="section-title"><span class="section-num">1</span>异常与建议</h2>
+    <!-- 概览三栏 -->
+    <div class="overview">
+      <div class="ov-card">
+        <h3>巡检覆盖</h3>
+        <div class="big">{{.CategoryCount}} 类</div>
+        <div class="sub">{{.CheckItemCount}} 项检查指标 · {{.Total}} 条样本</div>
+      </div>
+      <div class="ov-card">
+        <h3>结果分布</h3>
+        {{.DistBarSVG}}
+        <div class="dist-legend">
+          <span><span class="legend-dot c"></span>严重 {{.Critical}} <span class="pct">({{.DistCriticalPct}}%)</span></span>
+          <span><span class="legend-dot w"></span>警告 {{.Warning}} <span class="pct">({{.DistWarningPct}}%)</span></span>
+          <span><span class="legend-dot n"></span>正常 {{.Normal}} <span class="pct">({{.DistNormalPct}}%)</span></span>
+        </div>
+      </div>
+      <div class="ov-card">
+        <h3>待处置项</h3>
+        <div class="risk-pills">
+          <div class="risk-pill critical">严重 {{.Critical}}</div>
+          <div class="risk-pill warning">警告 {{.Warning}}</div>
+        </div>
+        <div class="ov-sub-note">异常占比 {{.AbnormalPct}}%</div>
+      </div>
+    </div>
+
+    <!-- 执行摘要 -->
+    <div class="summary-box {{gradeClass .Grade}}">
+      <h2>执行摘要</h2>
+      <p class="lead">{{.Summary}}</p>
+      <p class="action"><strong>建议行动：</strong>{{.Verdict}}</p>
+    </div>
+
+    <!-- 1. 重点关注 -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-num">1</span>
+        <h2>重点关注事项</h2>
+      </div>
+      <p class="section-desc">按优先级（P0 严重 → P1 警告）排列，聚合相同检查项的影响范围，便于汇报与派单。</p>
       {{if .Findings}}
-        {{range .Findings}}
-        <article class="finding {{.Severity}}">
-          <div class="f-head">
-            <span class="badge {{.Severity}}">{{statusText .Severity}}</span>
-            <span class="f-title">{{.Type}} / {{.Name}}</span>
-            <span class="hint" style="margin:0">×{{.Count}}</span>
+        {{range $i, $f := .Findings}}
+        <article class="finding {{$f.Severity}}">
+          <div class="prio">
+            <span class="p-label">{{priorityLabel $f.Severity}}</span>
+            <span class="idx">#{{inc $i}}</span>
           </div>
-          <div class="f-fix"><strong>建议：</strong>{{.Hint}}</div>
+          <div>
+            <div class="f-title">{{$f.Name}}</div>
+            <div class="f-meta">{{$f.Type}} · 影响 {{$f.Count}} 处 · <span class="badge {{$f.Severity}}">{{statusText $f.Severity}}</span></div>
+            <div class="f-fix">{{$f.Hint}}</div>
+          </div>
         </article>
         {{end}}
       {{else}}
-        <div class="card"><p class="empty">本期未发现需要特别处理的异常项。</p></div>
+        <div class="empty-state">本期未发现需要向客户特别说明的风险项，整体运行平稳。</div>
       {{end}}
     </section>
 
-    <section class="section" id="results">
-      <h2 class="section-title"><span class="section-num">2</span>各类巡检结果</h2>
-      <p class="hint">按分类展示明细；「处理方式」给出运维建议或采集异常说明。</p>
+    <!-- 2. 巡检明细 -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-num">2</span>
+        <h2>分类巡检明细</h2>
+      </div>
+      <p class="section-desc">按基础设施 / 中间件 / 应用等分类展示指标结果与处置建议。</p>
       {{if .Groups}}
         {{range .Groups}}
-        <div class="card">
-          <div class="group-head">
+        <div class="group-card">
+          <div class="group-bar">
             <h3>{{.Type}}</h3>
-            <span class="group-meta">{{.Stats.Total}} 条 · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}}</span>
+            <div class="group-stats">
+              <span class="s-t">共 {{.Stats.Total}}</span>
+              <span class="s-c">严重 {{.Stats.Critical}}</span>
+              <span class="s-w">警告 {{.Stats.Warning}}</span>
+              <span class="s-n">正常 {{.Stats.Normal}}</span>
+            </div>
           </div>
           {{if .Metrics}}
           <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>名称</th>
-                <th>实例</th>
-                <th>当前值</th>
-                <th>阈值</th>
-                <th>状态</th>
-                <th>处理方式</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .Metrics}}
-              <tr class="row-{{.Status}}">
-                <td>{{.Name}}</td>
-                <td class="mono">{{if .Instance}}{{.Instance}}{{else}}—{{end}}</td>
-                <td>{{fmtFloat .Value}}{{.Unit}}</td>
-                <td>{{fmtFloat .Threshold}}{{.Unit}}</td>
-                <td><span class="badge {{.Status}}">{{statusText .Status}}</span></td>
-                <td class="action">{{actionHint .Status .Error}}</td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
+            <table>
+              <thead>
+                <tr>
+                  <th>检查项</th>
+                  <th>实例 / 对象</th>
+                  <th>当前值</th>
+                  <th>阈值</th>
+                  <th>状态</th>
+                  <th>处置建议</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .Metrics}}
+                <tr class="row-{{.Status}}">
+                  <td><strong>{{.Name}}</strong></td>
+                  <td class="mono">{{if .Instance}}{{.Instance}}{{else}}—{{end}}</td>
+                  <td>{{fmtFloat .Value}}{{.Unit}}</td>
+                  <td>{{fmtFloat .Threshold}}{{.Unit}}</td>
+                  <td><span class="badge {{.Status}}">{{statusText .Status}}</span></td>
+                  <td class="action-cell">{{actionHint .Status .Error}}</td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
           </div>
           {{else}}
-          <p class="empty">当前模式下无明细。</p>
+          <div class="empty-state" style="border:none;border-radius:0">当前展示模式下无明细。</div>
           {{end}}
         </div>
         {{end}}
       {{else}}
-        <div class="card"><p class="empty">当前过滤模式下无异常明细（可切换为「展示全部样本」）。</p></div>
+        <div class="empty-state">当前过滤模式下无异常明细。可在巡检计划中将「报告列表模式」调整为「展示全部样本」。</div>
       {{end}}
     </section>
 
-    <section class="section" id="scope">
-      <h2 class="section-title"><span class="section-num">3</span>巡检覆盖范围</h2>
-      <p class="hint">本次巡检覆盖的分类与检查项（全量范围）。</p>
+    <!-- 3. 附录 -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-num">3</span>
+        <h2>检查项覆盖范围</h2>
+      </div>
+      <p class="section-desc">本次巡检纳入的全量检查分类与指标项，供客户核对覆盖边界。</p>
       {{if .ContentGroups}}
-        {{range .ContentGroups}}
-        <div class="card content-cat">
-          <h3>{{.Type}}</h3>
-          <div class="cat-meta">共 {{.Stats.Total}} 条样本 · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}} · 正常 {{.Stats.Normal}}</div>
-          <div class="tag-list">
-            {{range .Items}}
-            <span class="tag">{{.Name}}<small>×{{.SampleCount}}</small></span>
-            {{end}}
+        <div class="scope-grid">
+          {{range .ContentGroups}}
+          <div class="scope-card">
+            <h4>{{.Type}}</h4>
+            <div class="scope-meta">样本 {{.Stats.Total}} · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}} · 正常 {{.Stats.Normal}}</div>
+            <div class="tag-list">
+              {{range .Items}}
+              <span class="tag">{{.Name}}<em>×{{.SampleCount}}</em></span>
+              {{end}}
+            </div>
           </div>
+          {{end}}
         </div>
-        {{end}}
       {{else}}
-        <div class="card"><p class="empty">暂无巡检项。</p></div>
+        <div class="empty-state">暂无巡检项配置。</div>
       {{end}}
     </section>
 
-    <footer>Yunshu 巡检报告 · 由平台自动生成 · PDF 为结构化摘要，完整版式请使用 HTML / 浏览器打印</footer>
+    <footer>
+      本报告由 Yunshu 运维平台基于 Prometheus 监控指标自动生成<br />
+      数据来源：{{if .Datasource}}{{.Datasource}}{{else}}Prometheus{{end}} · 报告编号 {{.Timestamp.Format "20060102150405"}} · 生成于 {{.Timestamp.Format "2006-01-02 15:04:05"}}
+    </footer>
   </div>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # 日志与错误码规范
 
-**最后更新**: 2026-06-12
+**最后更新**: 2026-08-22
 
 本文说明 Yunshu 后端 **slog 日志** 与 **统一业务错误码** 的约定，供后端开发与前端联调使用。
 
@@ -10,6 +10,7 @@
 
 - **只用标准库 `log/slog`**，不再使用已删除的 `logutil`、`logger.Biz()` 等二次封装。
 - **三文件分流**：`info.log`（Info/Warn）、`error.log`（Error+）、`sql.log`（GORM SQL）。
+- **生产级轮转**：文件输出使用 [lumberjack](https://github.com/natefinch/lumberjack) 按大小/天数自动轮转与压缩。
 - **错误只打一处**：Service 层 `Pass`/`Reject` 不打日志；HTTP 边界 `LogAPI` 统一记录；真 500 用 `Internal*` 在 Service 打一次。
 - **前端联调看 `error_code`**：HTTP JSON 与日志字段对齐，便于按码做提示与埋点。
 
@@ -27,13 +28,52 @@
 
 ```yaml
 log:
-  level: debug          # debug 时 SQL 更详细
-  format: text          # text | json
+  level: info           # 见下文「级别语义」
+  format: json          # 生产建议 json；text | json
   output: both          # console | file | both
   file_path: ./logs
+  max_size_mb: 100      # 单文件上限（MB），超出后轮转
+  max_age_days: 30      # 保留天数
+  max_backups: 10       # 保留备份文件数
+  compress: true        # 轮转后 gzip 压缩
 ```
 
 启动时 `logger.Init(app.Logger)` 会调用 `slog.SetDefault`，业务代码直接使用 `slog` 即可自动分流。
+
+### 2.1 环境变量（`LOG_*`）
+
+Viper 将 `log.*` 映射为环境变量（`.` → `_`，自动大写）：
+
+| 环境变量 | 配置键 | 说明 | 示例 |
+|----------|--------|------|------|
+| `LOG_LEVEL` | `log.level` | 日志级别语义见下节 | `info` |
+| `LOG_FORMAT` | `log.format` | `text` 或 `json` | `json` |
+| `LOG_OUTPUT` | `log.output` | `console` / `file` / `both` | `both` |
+| `LOG_FILE_PATH` | `log.file_path` | 日志目录 | `./logs` |
+| `LOG_MAX_SIZE_MB` | `log.max_size_mb` | 单文件上限 MB | `100` |
+| `LOG_MAX_AGE_DAYS` | `log.max_age_days` | 保留天数 | `30` |
+| `LOG_MAX_BACKUPS` | `log.max_backups` | 备份文件数 | `10` |
+| `LOG_COMPRESS` | `log.compress` | `true` / `false` | `true` |
+
+容器部署时可在 `.env` 或 Deployment `env` 中覆盖，无需改 `config.yaml`。
+
+### 2.2 `log.level` 级别语义
+
+| 值 | info.log | error.log | sql.log |
+|----|----------|-----------|---------|
+| `debug` | Info+ | Error+ | **Debug+**（输出全部 SQL） |
+| `info`（默认） | Info+ | Error+ | Info+（慢 SQL ≥200ms 等） |
+| `warn` | Info+ | Error+ | Info+ |
+| `error` | Info+ | Error+ | Info+ |
+
+**注意**：`log.level=debug` 主要影响 **GORM SQL 详细程度**；应用业务代码目前以 Info/Warn/Error 为主，几乎无 Debug 级日志。排障访问链路与 API 错误时，重点看 `info.log` 与 `error.log`。
+
+### 2.3 轮转与 retention
+
+- 每个通道独立文件：`info.log`、`error.log`、`sql.log`。
+- 达到 `max_size_mb` 时自动轮转，旧文件命名为 `info-2026-08-22T15-04-05.000.log` 等。
+- 超过 `max_age_days` 或备份数超过 `max_backups` 的旧文件会被删除。
+- `compress: true` 时对已轮转文件执行 gzip，节省磁盘。
 
 ---
 

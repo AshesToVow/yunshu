@@ -46,6 +46,7 @@ import {
   deleteInspectItem,
   deleteInspectReportTemplate,
   getInspectPlan,
+  getInspectStorageInfo,
   inspectReportExcelUrl,
   inspectReportHtmlUrl,
   inspectReportPdfUrl,
@@ -65,6 +66,7 @@ import {
   type InspectPlan,
   type InspectReportTemplate,
   type InspectRun,
+  type InspectStorageInfo,
 } from "../services/inspect";
 import { extractApiErrorMessage, http } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
@@ -170,6 +172,16 @@ function openAuthorized(url: string) {
     .catch((e) => message.error(extractApiErrorMessage(e, "打开报告失败")));
 }
 
+function storageLabel(storage?: string) {
+  const s = (storage || "local").toLowerCase();
+  if (s === "minio") return "MinIO";
+  return "本地";
+}
+
+function storageColor(storage?: string) {
+  return (storage || "local").toLowerCase() === "minio" ? "blue" : "default";
+}
+
 export function ProjectInspectPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -190,6 +202,7 @@ export function ProjectInspectPage() {
   const [tplModalOpen, setTplModalOpen] = useState(false);
   const [editingTpl, setEditingTpl] = useState<InspectReportTemplate | null>(null);
   const [runDetail, setRunDetail] = useState<InspectRun | null>(null);
+  const [storageInfo, setStorageInfo] = useState<InspectStorageInfo | null>(null);
   const [activeTab, setActiveTab] = useState("plan");
   const [planForm] = Form.useForm();
   const [itemForm] = Form.useForm();
@@ -215,17 +228,19 @@ export function ProjectInspectPage() {
       if (!pid) return;
       setLoading(true);
       try {
-        const [p, its, rs, ds, tpls] = await Promise.all([
+        const [p, its, rs, ds, tpls, storage] = await Promise.all([
           getInspectPlan(pid),
           listInspectItems(pid),
           listInspectRuns(pid, { page, page_size: pageSize }),
           listAlertDatasources({ project_id: pid, page: 1, page_size: 200 }),
           listInspectReportTemplates(pid),
+          getInspectStorageInfo(pid),
         ]);
         setPlan(p);
         setItems(its || []);
         setRuns(rs.list || []);
         setRunTotal(rs.total || 0);
+        setStorageInfo(storage);
         setDsList((ds.list || []).filter((d) => d.enabled !== false));
         setReportTemplates(tpls || []);
         planForm.setFieldsValue({
@@ -459,6 +474,13 @@ export function ProjectInspectPage() {
       render: (_, r) => r.datasource_name || (r.datasource_id ? `#${r.datasource_id}` : "-"),
     },
     {
+      title: "存储",
+      width: 72,
+      render: (_, r) => (
+        <Tag color={storageColor(r.storage)}>{storageLabel(r.storage)}</Tag>
+      ),
+    },
+    {
       title: "时间",
       width: 168,
       render: (_, r) => formatDateTime(r.finished_at || r.started_at || r.created_at),
@@ -614,6 +636,30 @@ export function ProjectInspectPage() {
         </Card>
       ) : (
         <>
+          {storageInfo && !storageInfo.minio_ready ? (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="巡检报告当前写入本地目录，容器重启后可能丢失"
+              description={
+                <span>
+                  请在数据字典启用并填写 MinIO 配置（minio_endpoint、minio_access_key、minio_secret_key、minio_bucket），
+                  与 MySQL 备份共用同一套连接。当前路径：
+                  <Typography.Text code copyable>
+                    {storageInfo.local_root || "logs/inspect-reports"}
+                  </Typography.Text>
+                  {storageInfo.minio_reason ? (
+                    <>
+                      {" "}
+                      原因：{storageInfo.minio_reason}
+                    </>
+                  ) : null}
+                </span>
+              }
+            />
+          ) : null}
+
           <Row gutter={[16, 16]} className="project-inspect-page__kpis">
             <Col xs={24} sm={12} lg={6}>
               <Card className="project-inspect-page__score-card" loading={loading} bordered>
@@ -1146,7 +1192,30 @@ export function ProjectInspectPage() {
               <Descriptions.Item label="版式">
                 {runDetail.report_template_code || "default"}
               </Descriptions.Item>
-              <Descriptions.Item label="存储">{runDetail.storage || "local"}</Descriptions.Item>
+              <Descriptions.Item label="存储">
+                <Tag color={storageColor(runDetail.storage)}>{storageLabel(runDetail.storage)}</Tag>
+              </Descriptions.Item>
+              {runDetail.report_html_path ? (
+                <Descriptions.Item label="HTML 路径">
+                  <Typography.Text code copyable style={{ wordBreak: "break-all" }}>
+                    {runDetail.report_html_path}
+                  </Typography.Text>
+                </Descriptions.Item>
+              ) : null}
+              {runDetail.report_pdf_path ? (
+                <Descriptions.Item label="PDF 路径">
+                  <Typography.Text code copyable style={{ wordBreak: "break-all" }}>
+                    {runDetail.report_pdf_path}
+                  </Typography.Text>
+                </Descriptions.Item>
+              ) : null}
+              {runDetail.report_excel_path ? (
+                <Descriptions.Item label="Excel 路径">
+                  <Typography.Text code copyable style={{ wordBreak: "break-all" }}>
+                    {runDetail.report_excel_path}
+                  </Typography.Text>
+                </Descriptions.Item>
+              ) : null}
               <Descriptions.Item label="开始时间">
                 {formatDateTime(runDetail.started_at || runDetail.created_at)}
               </Descriptions.Item>

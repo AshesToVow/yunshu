@@ -91,7 +91,7 @@ func (s *Service) UpsertServer(ctx context.Context, req ServerUpsertRequest) (*S
 		sv, err = s.serverRepo.GetByID(ctx, *req.ID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, constants.ErrLogSourceServerNotFound
+				return nil, constants.ErrServerNotFound
 			}
 			return nil, bizerrors.Pass(ctx, "cmdb", "UpsertServer", err)
 		}
@@ -214,7 +214,7 @@ func (s *Service) GetServer(ctx context.Context, id uint) (*ServerDetailItem, er
 	sv, err := s.serverRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrLogSourceServerNotFound
+			return nil, constants.ErrServerNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "cmdb", "GetServer", err)
 	}
@@ -253,7 +253,7 @@ func (s *Service) ExecServerCommand(ctx context.Context, req ServerExecRequest) 
 	sv, err := s.serverRepo.GetByID(ctx, req.ServerID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrLogSourceServerNotFound
+			return nil, constants.ErrServerNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "cmdb", "ExecServerCommand", err)
 	}
@@ -310,7 +310,7 @@ func (s *Service) StreamServerTerminal(ctx context.Context, projectID, serverID 
 	sv, err := s.serverRepo.GetByID(ctx, serverID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return constants.ErrLogSourceServerNotFound
+			return constants.ErrServerNotFound
 		}
 		return bizerrors.Pass(ctx, "cmdb", "StreamServerTerminal", err)
 	}

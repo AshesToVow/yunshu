@@ -22,8 +22,8 @@ RUN go build -trimpath -ldflags="-s -w" -o /yunshu ./main.go
 
 FROM ${ALPINE_IMAGE}
 
-# 巡检 PDF 已改为纯 Go 结构化生成，镜像不再安装 Chromium
-RUN apk add --no-cache tzdata ca-certificates
+# 巡检 PDF 优先通过 wkhtmltopdf 由 HTML 转换，保证与 HTML 版式一致；未安装时降级纯 Go 结构化 PDF
+RUN apk add --no-cache tzdata ca-certificates wkhtmltopdf ttf-freefont font-wqy-zenhei
 
 COPY --from=builder /yunshu /app/yunshu
 COPY configs/ /app/configs/

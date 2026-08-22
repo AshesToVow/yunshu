@@ -128,10 +128,11 @@ func (r *OverviewRepository) FillAlertAndAgentStats(ctx context.Context, dayStar
 	var scanned row
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT
-			(SELECT COUNT(*) FROM alert_events WHERE deleted_at IS NULL AND status = ?) AS alert_firing_count,
-			(SELECT COUNT(*) FROM alert_events WHERE deleted_at IS NULL AND created_at >= ? AND created_at < ?) AS alert_events_today_count,
+			COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS alert_firing_count,
+			COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS alert_events_today_count,
 			(SELECT COUNT(*) FROM loggie_agents WHERE last_seen_at IS NOT NULL AND last_seen_at >= ?) AS loggie_agents_online_count,
 			(SELECT COUNT(*) FROM loggie_agents) AS loggie_agents_total
+		FROM alert_events WHERE deleted_at IS NULL
 	`, "firing", dayStart, dayEnd, agentCutoff).Scan(&scanned).Error
 	if err != nil {
 		return out, nil

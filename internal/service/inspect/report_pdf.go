@@ -5,8 +5,11 @@ import (
 	"strings"
 )
 
-// renderBinaryPDF 基于 ReportData 生成结构化中文 PDF（纯 Go，不依赖 Chromium）。
-func renderBinaryPDF(data ReportData) []byte {
+// renderBinaryPDF 生成 PDF：优先 HTML→PDF（与报告 HTML 版式一致），失败时降级结构化 PDF。
+func renderBinaryPDF(data ReportData, html []byte) []byte {
+	if pdf := renderPDFFromHTML(html); len(pdf) > 0 {
+		return pdf
+	}
 	return renderStructuredPDF(data)
 }
 
@@ -78,6 +81,19 @@ func renderStructuredPDF(data ReportData) []byte {
 			return "正常"
 		}
 	}
+	pdfActionHint := func(status, errMsg string) string {
+		if note := sampleNoteText(errMsg); note != "" {
+			return note
+		}
+		switch status {
+		case "critical":
+			return "建议立即排查并处理，必要时扩容或修复故障。"
+		case "warning":
+			return "请核查相关实例指标与阈值配置。"
+		default:
+			return "状态正常，保持例行观察。"
+		}
+	}
 
 	newPage()
 
@@ -118,9 +134,9 @@ func renderStructuredPDF(data ReportData) []byte {
 	}
 	y = scoreBottom - 18
 
-	// 一、异常与建议
+	// 一、风险与处置建议
 	ensureSpace(40)
-	textAt(marginL, y, 13, "一、异常与建议")
+	textAt(marginL, y, 13, "一、风险与处置建议")
 	y -= 6
 	drawLine(marginL, y, pageW-marginR, y, 0.85, 0.88, 0.90)
 	y -= 16
@@ -128,22 +144,19 @@ func renderStructuredPDF(data ReportData) []byte {
 		writeWrapped(marginL, 10, 13, 62, "本期未发现需要特别处理的异常项。")
 	} else {
 		for i, f := range data.Findings {
-			if i >= 40 {
-				writeWrapped(marginL, 9, 12, 62, fmt.Sprintf("…其余 %d 条请查看 HTML / Excel 报告", len(data.Findings)-40))
-				break
-			}
 			ensureSpace(42)
-			title := fmt.Sprintf("[%s] %s / %s ×%d", statusCN(f.Severity), f.Type, f.Name, f.Count)
+			title := fmt.Sprintf("[%s] %s · %s（影响 %d 处）", statusCN(f.Severity), f.Type, f.Name, f.Count)
 			writeWrapped(marginL, 10, 13, 58, title)
-			writeWrapped(marginL+8, 9, 12, 60, "建议："+f.Hint)
+			writeWrapped(marginL+8, 9, 12, 60, "建议处置："+f.Hint)
 			y -= 6
+			_ = i
 		}
 	}
 	y -= 10
 
-	// 二、分类结果
+	// 二、巡检明细
 	ensureSpace(40)
-	textAt(marginL, y, 13, "二、分类结果明细")
+	textAt(marginL, y, 13, "二、巡检明细")
 	y -= 6
 	drawLine(marginL, y, pageW-marginR, y, 0.85, 0.88, 0.90)
 	y -= 14
@@ -156,35 +169,29 @@ func renderStructuredPDF(data ReportData) []byte {
 			writeWrapped(marginL, 11, 14, 50, fmt.Sprintf("%s（%d 条 · 严重 %d · 警告 %d · 正常 %d）",
 				g.Type, g.Stats.Total, g.Stats.Critical, g.Stats.Warning, g.Stats.Normal))
 			ensureSpace(16)
-			textAt(marginL, y, 8, "名称")
-			textAt(marginL+150, y, 8, "实例")
-			textAt(marginL+280, y, 8, "当前值")
-			textAt(marginL+340, y, 8, "阈值")
-			textAt(marginL+400, y, 8, "状态")
+			textAt(marginL, y, 8, "检查项")
+			textAt(marginL+120, y, 8, "实例")
+			textAt(marginL+250, y, 8, "当前值")
+			textAt(marginL+310, y, 8, "阈值")
+			textAt(marginL+360, y, 8, "状态")
 			y -= 4
 			drawLine(marginL, y, pageW-marginR, y, 0.88, 0.90, 0.92)
 			y -= 12
 
-			limit := len(g.Metrics)
-			if limit > 25 {
-				limit = 25
-			}
-			for i := 0; i < limit; i++ {
-				m := g.Metrics[i]
-				ensureSpace(14)
+			for _, m := range g.Metrics {
 				inst := m.Instance
 				if inst == "" {
 					inst = "—"
 				}
+				ensureSpace(28)
 				textAt(marginL, y, 8, truncateRunes(m.Name, 14))
-				textAt(marginL+150, y, 8, truncateRunes(inst, 12))
-				textAt(marginL+280, y, 8, fmt.Sprintf("%.2f%s", m.Value, m.Unit))
-				textAt(marginL+340, y, 8, fmt.Sprintf("%.2f%s", m.Threshold, m.Unit))
-				textAt(marginL+400, y, 8, statusCN(m.Status))
-				y -= 12
-			}
-			if len(g.Metrics) > limit {
-				writeWrapped(marginL, 8, 11, 62, fmt.Sprintf("…本组另有 %d 条，详见 HTML / Excel", len(g.Metrics)-limit))
+				textAt(marginL+120, y, 8, truncateRunes(inst, 12))
+				textAt(marginL+250, y, 8, fmt.Sprintf("%.2f%s", m.Value, m.Unit))
+				textAt(marginL+310, y, 8, fmt.Sprintf("%.2f%s", m.Threshold, m.Unit))
+				textAt(marginL+360, y, 8, statusCN(m.Status))
+				y -= 11
+				writeWrapped(marginL+8, 8, 11, 64, "处置："+pdfActionHint(m.Status, m.Error))
+				y -= 4
 			}
 			y -= 8
 		}
@@ -208,7 +215,7 @@ func renderStructuredPDF(data ReportData) []byte {
 
 	total := len(pages)
 	for i, p := range pages {
-		footer := fmt.Sprintf("Yunshu 自动生成 · 第 %d / %d 页 · 完整版式请打开 HTML 报告", i+1, total)
+		footer := fmt.Sprintf("Yunshu 运维巡检报告 · 第 %d / %d 页", i+1, total)
 		p.b.WriteString("BT\n")
 		p.b.WriteString(fmt.Sprintf("/F1 8 Tf\n%.1f %.1f Td\n%s Tj\n", marginL, 24.0, pdfUTF16Hex(footer)))
 		p.b.WriteString("ET\n")

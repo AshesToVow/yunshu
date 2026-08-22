@@ -36,6 +36,14 @@ func (h *InspectHandler) GetPlan(c *gin.Context) {
 	response.Success(c, plan)
 }
 
+func (h *InspectHandler) GetStorageInfo(c *gin.Context) {
+	if _, err := parseUintParam(c, "id"); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, h.svc.ReportStorageInfo(c.Request.Context()))
+}
+
 func (h *InspectHandler) UpdatePlan(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
