@@ -552,7 +552,7 @@ export function ProjectInspectPage() {
           >
             打印
           </Button>
-          <Tooltip title="浏览器端根据 HTML 生成，样式与预览一致">
+          <Tooltip title="html2canvas + jsPDF 按 HTML 样式导出（与 PromAI 相同方案）">
             <Button
               type="link"
               size="small"
@@ -632,7 +632,7 @@ export function ProjectInspectPage() {
     <div className="page-stack project-inspect-page">
       <OpsPageHeader
         title="项目巡检"
-        description="基于 Prometheus 采集指标定时/手动巡检，生成 HTML / Excel 报告；PDF 在浏览器端按 HTML 样式导出（html2pdf.js）。邮件默认附 HTML，可配置 INSPECT_SERVER_PDF=structured 附加简化 PDF。"
+        description="基于 Prometheus 采集指标定时/手动巡检，生成 HTML / Excel 报告；PDF 采用 html2canvas + jsPDF（与 PromAI 相同方案），样式与 HTML 预览一致。邮件默认可仅附 HTML。"
         breadcrumbs={[{ title: "项目运维" }, { title: "项目巡检" }]}
         meta={
           projectId ? (
@@ -1314,7 +1314,7 @@ export function ProjectInspectPage() {
               <Button onClick={() => openAuthorized(inspectReportPrintUrl(projectId, runDetail.id))}>
                 打印版
               </Button>
-              <Tooltip title="浏览器端根据 HTML 生成，样式与预览一致">
+              <Tooltip title="html2canvas + jsPDF 按 HTML 样式导出（与 PromAI 相同方案）">
                 <Button onClick={() => downloadInspectPdf(projectId, runDetail.id)}>PDF</Button>
               </Tooltip>
               <Button onClick={() => openAuthorized(inspectReportExcelUrl(projectId, runDetail.id))}>

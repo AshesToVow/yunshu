@@ -1,5 +1,5 @@
-import html2pdf from "html2pdf.js";
 import { http } from "../services/http";
+import { downloadElementAsPdf } from "./html-to-pdf";
 
 async function fetchReportHtml(apiPath: string): Promise<string> {
   const raw: unknown = await http.get(apiPath, { responseType: "text", timeout: 120_000 });
@@ -13,11 +13,11 @@ async function fetchReportHtml(apiPath: string): Promise<string> {
   throw new Error("无法读取 HTML 报告内容");
 }
 
-function mountHtmlInIframe(html: string): { cleanup: () => void; root: HTMLElement } {
+function mountHtmlInIframe(html: string): { cleanup: () => void; root: HTMLElement; doc: Document } {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
-    "position:fixed;left:-10000px;top:0;width:1100px;height:100%;border:0;visibility:hidden;";
+    "position:fixed;left:0;top:0;width:1200px;height:100%;border:0;z-index:-1;opacity:0;pointer-events:none;";
   document.body.appendChild(iframe);
   const doc = iframe.contentDocument;
   if (!doc) {
@@ -30,63 +30,21 @@ function mountHtmlInIframe(html: string): { cleanup: () => void; root: HTMLEleme
   const root = (doc.querySelector(".page") as HTMLElement | null) ?? doc.body;
   return {
     root,
+    doc,
     cleanup: () => {
       if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
     },
   };
 }
 
-async function waitForRender(doc: Document) {
-  try {
-    await doc.fonts?.ready;
-  } catch {
-    // ignore
-  }
-  const imgs = Array.from(doc.images);
-  await Promise.all(
-    imgs.map(
-      (img) =>
-        new Promise<void>((resolve) => {
-          if (img.complete) resolve();
-          else {
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-          }
-        }),
-    ),
-  );
-  await new Promise((r) => window.setTimeout(r, 320));
-}
-
 /**
- * 在浏览器端用 html2pdf.js（html2canvas + jsPDF）将巡检 HTML 转为 PDF。
- * 不依赖服务端 wkhtmltopdf / Chrome，样式与 HTML 预览一致。
+ * 参考 PromAI：html2canvas + jsPDF 将巡检 HTML 转为 PDF，样式与 HTML 预览一致。
  */
 export async function downloadInspectReportPdf(apiHtmlPath: string, filename: string) {
   const html = await fetchReportHtml(apiHtmlPath);
   const { root, cleanup } = mountHtmlInIframe(html);
   try {
-    const doc = root.ownerDocument;
-    await waitForRender(doc);
-    const width = Math.max(root.scrollWidth, root.clientWidth, 960);
-    await html2pdf()
-      .set({
-        margin: [6, 6, 8, 6],
-        filename,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: "#f1f5f9",
-          windowWidth: width,
-          width,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
-      })
-      .from(root)
-      .save();
+    await downloadElementAsPdf({ filename, target: root, orientation: "landscape", scale: 1.5 });
   } finally {
     cleanup();
   }

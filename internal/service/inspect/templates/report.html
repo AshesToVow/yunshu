@@ -485,6 +485,24 @@
       .scope-grid { grid-template-columns: 1fr; }
       .cover-meta { grid-template-columns: 1fr; }
     }
+
+    .pdf-export-btn {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 9999;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #0f766e, #0e7490);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(15, 118, 110, 0.35);
+    }
+    .pdf-export-btn:disabled { opacity: 0.65; cursor: wait; }
+    @media print { .pdf-export-btn { display: none !important; } }
   </style>
 </head>
 <body>
@@ -659,5 +677,136 @@
       数据来源：{{if .Datasource}}{{.Datasource}}{{else}}Prometheus{{end}} · 报告编号 {{.Timestamp.Format "20060102150405"}} · 生成于 {{.Timestamp.Format "2006-01-02 15:04:05"}}
     </footer>
   </div>
+  <button type="button" class="pdf-export-btn" id="yunshuPdfBtn">下载 PDF</button>
+  <script>
+  (function () {
+    var PDF_LIBS = {
+      html2canvas: [
+        "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+        "https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"
+      ],
+      jspdf: [
+        "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js",
+        "https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"
+      ]
+    };
+
+    function loadScript(urls) {
+      return new Promise(function (resolve, reject) {
+        if (typeof urls[0] === "string" && urls[0].indexOf("html2canvas") >= 0 && typeof html2canvas !== "undefined") return resolve();
+        if (typeof urls[0] === "string" && urls[0].indexOf("jspdf") >= 0 && window.jspdf) return resolve();
+        var i = 0;
+        function next() {
+          if (i >= urls.length) return reject(new Error("PDF 库加载失败"));
+          var s = document.createElement("script");
+          s.src = urls[i++];
+          s.onload = function () { resolve(); };
+          s.onerror = next;
+          document.head.appendChild(s);
+        }
+        next();
+      });
+    }
+
+    function waitReady() {
+      return new Promise(function (resolve) {
+        function go() {
+          var jobs = [document.fonts && document.fonts.ready ? document.fonts.ready.catch(function () {}) : Promise.resolve()];
+          Array.prototype.forEach.call(document.images, function (img) {
+            if (!img.complete) jobs.push(new Promise(function (r) { img.onload = img.onerror = r; }));
+          });
+          Promise.all(jobs).then(function () {
+            setTimeout(function () {
+              requestAnimationFrame(function () { requestAnimationFrame(resolve); });
+            }, 500);
+          });
+        }
+        if (document.readyState === "complete") go();
+        else window.addEventListener("load", go, { once: true });
+      });
+    }
+
+    function captureAndSavePdf(filename) {
+      var target = document.querySelector(".page") || document.body;
+      var width = Math.max(target.scrollWidth, target.clientWidth, 960);
+      var height = Math.max(target.scrollHeight, target.clientHeight, 400);
+      var origBody = document.body.style.cssText;
+      var origHtml = document.documentElement.style.cssText;
+      document.body.style.backgroundColor = "#ffffff";
+      document.documentElement.style.backgroundColor = "#ffffff";
+      return html2canvas(target, {
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+        width: width,
+        height: height,
+        windowWidth: width,
+        windowHeight: height,
+        scrollX: 0,
+        scrollY: 0,
+        foreignObjectRendering: false,
+        onclone: function (doc) {
+          var b = doc.body, h = doc.documentElement, p = doc.querySelector(".page");
+          if (b) { b.style.backgroundColor = "#fff"; b.style.visibility = "visible"; }
+          if (h) { h.style.backgroundColor = "#fff"; }
+          if (p) { p.style.backgroundColor = "#fff"; p.style.maxWidth = "none"; }
+        }
+      }).then(function (canvas) {
+        document.body.style.cssText = origBody;
+        document.documentElement.style.cssText = origHtml;
+        if (!canvas.width || !canvas.height) throw new Error("截图失败");
+        var jsPDF = window.jspdf.jsPDF;
+        var pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+        var pageW = 297, pageH = 210, imgW = pageW;
+        var imgH = (canvas.height * imgW) / canvas.width;
+        var pages = Math.max(1, Math.ceil(imgH / pageH));
+        for (var page = 0; page < pages; page++) {
+          if (page > 0) pdf.addPage();
+          var sy = (canvas.height / pages) * page;
+          var sh = Math.min(canvas.height / pages, canvas.height - sy);
+          var tmp = document.createElement("canvas");
+          tmp.width = canvas.width;
+          tmp.height = sh;
+          tmp.getContext("2d").drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+          var data = tmp.toDataURL("image/jpeg", 0.92);
+          var ph = (sh * imgW) / canvas.width;
+          pdf.addImage(data, "JPEG", 0, 0, imgW, ph);
+        }
+        pdf.save(filename);
+      }).catch(function (e) {
+        document.body.style.cssText = origBody;
+        document.documentElement.style.cssText = origHtml;
+        throw e;
+      });
+    }
+
+    function pdfFileName() {
+      var t = document.title || "inspect-report";
+      var base = t.replace(/\s*[—-]\s*运维巡检报告.*$/i, "").trim() || "inspect-report";
+      return base.replace(/[^\w\u4e00-\u9fa5-]+/g, "_") + "_巡检报告.pdf";
+    }
+
+    function runExport(btn) {
+      if (btn) { btn.disabled = true; btn.textContent = "正在生成 PDF…"; }
+      return Promise.all([loadScript(PDF_LIBS.html2canvas), loadScript(PDF_LIBS.jspdf)])
+        .then(waitReady)
+        .then(function () { return captureAndSavePdf(pdfFileName()); })
+        .finally(function () {
+          if (btn) { btn.disabled = false; btn.textContent = "下载 PDF"; }
+        });
+    }
+
+    var btn = document.getElementById("yunshuPdfBtn");
+    if (btn) btn.addEventListener("click", function () {
+      runExport(btn).catch(function (e) { alert((e && e.message) || "PDF 生成失败"); });
+    });
+
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("generatePDF") === "true" || params.get("autoGenerate") === "true") {
+      runExport(btn).catch(function (e) { console.error("[PDF]", e); });
+    }
+  })();
+  </script>
 </body>
 </html>
