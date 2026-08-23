@@ -161,6 +161,7 @@ func DefaultCatalog() []Spec {
 			Children: []Spec{
 				{Path: "/crds", Name: "CRD 管理", Icon: "BranchesOutlined", Sort: 1, Component: "crds-page", Status: 1},
 				{Path: "/crs", Name: "CR 实例管理", Icon: "DatabaseOutlined", Sort: 2, Component: "crs-page", Status: 1},
+				{Path: "/k8s-cr-templates", Name: "CR 模板库", Icon: "FileTextOutlined", Sort: 3, Component: "k8s-cr-templates-page", Status: 1},
 			},
 		},
 	}

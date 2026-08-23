@@ -550,7 +550,8 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	if err != nil || len(printBytes) == 0 {
 		printBytes = htmlBytes
 	}
-	pdfBytes := renderBinaryPDF(data, htmlBytes)
+	// PDF 优先用可打印 HTML（与 print.html 一致），保证版式与浏览器预览接近
+	pdfBytes := renderBinaryPDF(data, printBytes)
 	excelBytes, excelErr := renderExcel(data)
 
 	store := s.store(dbCtx)

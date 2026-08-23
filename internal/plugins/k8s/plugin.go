@@ -32,7 +32,7 @@ func (m *module) Manifest() plugin.Manifest {
 			"/helm/releases", "/helm/charts",
 			"/configmaps", "/secrets", "/ingresses", "/ingress-classes", "/events",
 			"/k8s-services", "/persistentvolumes", "/persistentvolumeclaims", "/storageclasses",
-			"/crds", "/crs", "/rbac", "/serviceaccounts", "/k8s-scoped-policies",
+			"/crds", "/crs", "/k8s-cr-templates", "/rbac", "/serviceaccounts", "/k8s-scoped-policies",
 			"/network-policies", "/k8s/",
 		},
 		APIPrefixes: []string{
@@ -43,6 +43,7 @@ func (m *module) Manifest() plugin.Manifest {
 			"/api/v1/jobs", "/api/v1/configmaps", "/api/v1/secrets", "/api/v1/k8s-services",
 			"/api/v1/ingresses", "/api/v1/events", "/api/v1/persistentvolumes",
 			"/api/v1/persistentvolumeclaims", "/api/v1/storageclasses", "/api/v1/crds", "/api/v1/crs",
+			"/api/v1/k8s-cr-templates",
 			"/api/v1/rbac", "/api/v1/serviceaccounts", "/api/v1/k8s-policies",
 			"/api/v1/k8s-namespace-deny-rules", "/api/v1/k8s-namespace-allow-rules",
 			"/api/v1/network-policies", "/api/v1/k8s/", "/api/v1/horizontal-pod-autoscalers",

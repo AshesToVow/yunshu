@@ -215,7 +215,7 @@ func renderStructuredPDF(data ReportData) []byte {
 
 	total := len(pages)
 	for i, p := range pages {
-		footer := fmt.Sprintf("Yunshu 运维巡检报告 · 第 %d / %d 页", i+1, total)
+		footer := fmt.Sprintf("Yunshu 运维巡检报告 · 第 %d / %d 页 · 简化版（请查看 HTML 报告获取完整样式）", i+1, total)
 		p.b.WriteString("BT\n")
 		p.b.WriteString(fmt.Sprintf("/F1 8 Tf\n%.1f %.1f Td\n%s Tj\n", marginL, 24.0, pdfUTF16Hex(footer)))
 		p.b.WriteString("ET\n")

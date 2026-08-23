@@ -114,6 +114,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 
 		"/crds": {"/api/v1/crds", "GET"},
 		"/crs":  {"/api/v1/crs", "GET"},
+		"/k8s-cr-templates": {"/api/v1/k8s-cr-templates", "GET"},
 	}
 
 	out := make(map[string][]EntryPermission, len(raw))
@@ -134,6 +135,11 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	out["/project-inspect"] = []EntryPermission{
 		{Resource: "/api/v1/projects/:id/inspect/plan", Action: "GET"},
 		{Resource: "/api/v1/alerts/datasources", Action: "GET"},
+	}
+	// CR 模板库：具备模板列表或 CR 实例列表权限均可进入（与 CR 实例页「从模板创建」联动）
+	out["/k8s-cr-templates"] = []EntryPermission{
+		{Resource: "/api/v1/k8s-cr-templates", Action: "GET"},
+		{Resource: "/api/v1/crs", Action: "GET"},
 	}
 	out["/ai/center"] = []EntryPermission{
 		{Resource: "/api/v1/ai/center/overview", Action: "GET"},

@@ -44,7 +44,7 @@ const FALLBACK_PATH_RULES: { plugin: string; prefixes: string[] }[] = [
       "/cluster-api-resources", "/horizontal-pod-autoscalers", "/helm/releases", "/helm/charts",
       "/k8s-resource-topology", "/deployments", "/statefulsets", "/daemonsets", "/cronjobs", "/jobs",
       "/configmaps", "/secrets", "/ingresses", "/ingress-classes", "/events", "/k8s-services",
-      "/persistentvolumes", "/persistentvolumeclaims", "/storageclasses", "/crds", "/crs", "/rbac",
+      "/persistentvolumes", "/persistentvolumeclaims", "/storageclasses", "/crds", "/crs", "/k8s-cr-templates", "/rbac",
       "/serviceaccounts", "/k8s-scoped-policies", "/network-policies", "/k8s/",
     ],
   },

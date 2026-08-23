@@ -109,6 +109,11 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/server-console": "server-console-page",
 };
 
+/** 辅助页：无独立菜单时继承父级入口权限（如 CR 模板库 ← CR 实例管理） */
+const AUX_MENU_PARENT: Record<string, string> = {
+  "/k8s-cr-templates": "/crs",
+};
+
 function RouteFallback() {
   return (
     <div className="page-loading">
@@ -124,7 +129,14 @@ export function DynamicMenuPage() {
 
   const menuItem = useMemo(() => {
     if (!menus?.length) return undefined;
-    return findMenuByPath(menus, location.pathname);
+    const found = findMenuByPath(menus, location.pathname);
+    if (found) return found;
+    const normalizedPath = normalizeMenuPath(location.pathname);
+    const parentPath = AUX_MENU_PARENT[normalizedPath];
+    if (parentPath && PATH_COMPONENT_FALLBACK[normalizedPath]) {
+      return findMenuByPath(menus, parentPath);
+    }
+    return undefined;
   }, [menus, location.pathname]);
   const loadError = menuError instanceof Error ? menuError.message : menuError ? "加载菜单失败" : null;
 
