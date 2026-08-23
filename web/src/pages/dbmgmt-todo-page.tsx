@@ -1,8 +1,16 @@
 import { CheckOutlined, CloseOutlined, CopyOutlined, EyeOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, Modal, Segmented, Select, Space, Spin, Table, Tabs, Tag, Typography, message } from "antd";
+import { Button, Card, Descriptions, Form, Input, Modal, Segmented, Select, Space, Spin, Table, Tabs, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  GrantValidityCalendarPicker,
+  expiresAtToGrantPeriod,
+  formatGrantPeriodSummary,
+  grantPeriodToExpiresAt,
+  type GrantValidityPeriod,
+} from "../components/dbmgmt/grant-validity-calendar";
 import {
   approveDbAccessRequest,
   approveDbAppUserRequest,
@@ -111,7 +119,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
   const [sqlOpen, setSqlOpen] = useState(false);
   const [sqlLoading, setSqlLoading] = useState(false);
   const [sqlTicket, setSqlTicket] = useState<DbTicket | null>(null);
-  const [form] = Form.useForm<{ comment: string }>();
+  const [reviewAccess, setReviewAccess] = useState<DbAccessRequest | null>(null);
+  const [form] = Form.useForm<{ comment: string; grant_period?: GrantValidityPeriod | null }>();
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
@@ -166,13 +175,17 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
     setPage(1);
   }, [tab, projectId, mineScope, status]);
 
-  const openReview = (type: "access" | "app_user" | "ticket", id: number, isApprove: boolean) => {
+  const openReview = (type: "access" | "app_user" | "ticket", id: number, isApprove: boolean, accessRow?: DbAccessRequest) => {
     setReviewType(type);
     setReviewId(id);
     setApprove(isApprove);
     setReviewTicket(null);
+    setReviewAccess(type === "access" ? accessRow ?? null : null);
     setReviewTicketLoading(type === "ticket");
     form.resetFields();
+    if (type === "access" && isApprove && accessRow) {
+      form.setFieldsValue({ grant_period: expiresAtToGrantPeriod(accessRow.expires_at) });
+    }
     setReviewOpen(true);
     if (type === "ticket" && projectId) {
       void getDbTicket(projectId, id)
@@ -235,12 +248,29 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
     );
   };
 
+  const grantPeriodRules = [
+    {
+      validator: (_: unknown, value: GrantValidityPeriod | null | undefined) => {
+        if (value === null) return Promise.resolve();
+        if (value?.start && value?.end) {
+          if (!value.end.endOf("day").isBefore(dayjs().startOf("day"))) return Promise.resolve();
+          return Promise.reject(new Error("结束日期不能早于今天"));
+        }
+        return Promise.reject(new Error("请在日历上选择授权起止日期，或点选「永久有效」"));
+      },
+    },
+  ];
+
   const submitReview = async () => {
     if (!projectId || !reviewId) return;
-    const { comment } = await form.validateFields();
+    const values = await form.validateFields();
+    const comment = values.comment;
     if (reviewType === "access") {
-      if (approve) await approveDbAccessRequest(projectId, reviewId, comment);
-      else await rejectDbAccessRequest(projectId, reviewId, comment);
+      if (approve) {
+        const period = values.grant_period as GrantValidityPeriod | null | undefined;
+        const expiresAt = period === null ? "" : grantPeriodToExpiresAt(period ?? null) ?? "";
+        await approveDbAccessRequest(projectId, reviewId, { comment, expires_at: expiresAt });
+      } else await rejectDbAccessRequest(projectId, reviewId, comment);
     } else if (reviewType === "app_user") {
       if (approve) await approveDbAppUserRequest(projectId, reviewId, comment);
       else await rejectDbAppUserRequest(projectId, reviewId, comment);
@@ -292,8 +322,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       render: (_, r) =>
         isAccessPending(r) ? (
           <Space>
-            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => openReview("access", r.id, true)} />
-            <Button size="small" danger icon={<CloseOutlined />} onClick={() => openReview("access", r.id, false)} />
+            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => openReview("access", r.id, true, r)} />
+            <Button size="small" danger icon={<CloseOutlined />} onClick={() => openReview("access", r.id, false, r)} />
           </Space>
         ) : (
           <span style={{ color: "#999" }}>—</span>
@@ -520,12 +550,40 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
         open={reviewOpen}
         onCancel={() => setReviewOpen(false)}
         onOk={() => void submitReview()}
-        width={reviewType === "ticket" ? 720 : 520}
+        width={reviewType === "ticket" ? 720 : reviewType === "access" && approve ? 760 : 520}
       >
         {reviewType === "ticket" ? (
           <div style={{ marginBottom: 16 }}>{renderSqlPreview(reviewTicket, reviewTicketLoading)}</div>
         ) : null}
+        {reviewType === "access" && reviewAccess ? (
+          <Descriptions size="small" column={2} bordered style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="实例">{reviewAccess.instance_name || "—"}</Descriptions.Item>
+            <Descriptions.Item label="申请人">{reviewAccess.requester_name}</Descriptions.Item>
+            <Descriptions.Item label="数据库">{reviewAccess.database_name || "—"}</Descriptions.Item>
+            <Descriptions.Item label="表">
+              {reviewAccess.table_names?.length ? reviewAccess.table_names.join(", ") : "整库"}
+            </Descriptions.Item>
+            <Descriptions.Item label="申请理由" span={2}>
+              {reviewAccess.reason || "—"}
+            </Descriptions.Item>
+            {approve ? (
+              <Descriptions.Item label="申请人期望有效期" span={2}>
+                {formatGrantPeriodSummary(expiresAtToGrantPeriod(reviewAccess.expires_at))}
+              </Descriptions.Item>
+            ) : null}
+          </Descriptions>
+        ) : null}
         <Form form={form} layout="vertical">
+          {reviewType === "access" && approve ? (
+            <Form.Item
+              name="grant_period"
+              label="授权有效期"
+              rules={grantPeriodRules}
+              extra="可在申请人期望基础上调整；审批通过后按此处日期生效"
+            >
+              <GrantValidityCalendarPicker />
+            </Form.Item>
+          ) : null}
           <Form.Item name="comment" label="意见">
             <Input.TextArea rows={3} />
           </Form.Item>

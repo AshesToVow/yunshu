@@ -422,9 +422,9 @@ func (h *DbmgmtHandler) ApproveAccessRequest(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.ReviewRequest) error {
+	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.AccessApproveRequest) error {
 		actor, _ := auth.CurrentUserFromContext(c)
-		return h.svc.ApproveAccessRequest(ctx, projectID, requestID, req.Comment, actor)
+		return h.svc.ApproveAccessRequest(ctx, projectID, requestID, req, actor)
 	})
 }
 

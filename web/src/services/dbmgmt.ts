@@ -265,8 +265,12 @@ export async function createDbAccessRequest(projectId: number, payload: DbAccess
   return getData<DbAccessRequest>(http.post(`${base(projectId)}/access-requests`, payload));
 }
 
-export async function approveDbAccessRequest(projectId: number, requestId: number, comment?: string) {
-  return getData<{ ok?: boolean }>(http.post(`${base(projectId)}/access-requests/${requestId}/approve`, { comment }));
+export async function approveDbAccessRequest(
+  projectId: number,
+  requestId: number,
+  payload?: { comment?: string; expires_at?: string | null },
+) {
+  return getData<{ ok?: boolean }>(http.post(`${base(projectId)}/access-requests/${requestId}/approve`, payload ?? {}));
 }
 
 export async function rejectDbAccessRequest(projectId: number, requestId: number, comment?: string) {

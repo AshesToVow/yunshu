@@ -1,10 +1,14 @@
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, message } from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tag, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  GrantValidityCalendarPicker,
+  grantPeriodToExpiresAt,
+  type GrantValidityPeriod,
+} from "../components/dbmgmt/grant-validity-calendar";
 import { DB_PRIVILEGE_OPTIONS, privilegeSummary } from "../components/dbmgmt/dbmgmt-ui-shared";
 import {
   createDbAccessRequest,
@@ -29,13 +33,6 @@ const QUERY_LIMIT_OPTIONS = [
   { value: 10000, label: "10000 行" },
 ];
 
-const QUERY_VALIDITY_OPTIONS = [
-  { value: "1d", label: "1 天" },
-  { value: "7d", label: "1 周" },
-  { value: "30d", label: "1 个月" },
-  { value: "365d", label: "1 年" },
-];
-
 const PRESET_META: Record<
   DbmgmtAccessRequestPreset,
   { title: string; hint?: string; defaultScope: string; defaultPrivileges: string[]; showList?: boolean }
@@ -57,12 +54,9 @@ const PRESET_META: Record<
   },
 };
 
-function validityToExpiresAt(v?: string): string | undefined {
-  if (!v) return undefined;
-  const map: Record<string, number> = { "1d": 1, "7d": 7, "30d": 30, "365d": 365 };
-  const days = map[v];
-  if (!days) return undefined;
-  return dayjs().add(days, "day").toISOString();
+function defaultGrantPeriod(days = 7): GrantValidityPeriod {
+  const start = dayjs().startOf("day");
+  return { start, end: start.add(days - 1, "day").endOf("day") };
 }
 
 function matchesPreset(row: DbAccessRequest, preset: DbmgmtAccessRequestPreset) {
@@ -175,8 +169,7 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
     setSubmitting(true);
     try {
       const values = await form.validateFields();
-      const expiresAt = values.expires_at as Dayjs | undefined;
-      const validity = values.validity as string | undefined;
+      const period = values.grant_period as GrantValidityPeriod | null | undefined;
       await createDbAccessRequest(projectId, {
         instance_id: values.instance_id,
         scope_type: values.scope_type,
@@ -185,7 +178,7 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
         privileges: values.privileges,
         query_limit_num: values.query_limit_num,
         reason: values.reason,
-        expires_at: expiresAt ? expiresAt.toISOString() : validityToExpiresAt(validity),
+        expires_at: grantPeriodToExpiresAt(period ?? null),
       });
       message.success("已提交申请");
       setOpen(false);
@@ -225,11 +218,24 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
     form.setFieldsValue({
       scope_type: meta.defaultScope,
       privileges: meta.defaultPrivileges,
-      validity: preset === "query" ? "7d" : undefined,
+      grant_period: preset === "query" ? defaultGrantPeriod(7) : defaultGrantPeriod(30),
       query_limit_num: preset === "query" ? 1000 : undefined,
     });
     setOpen(true);
   };
+
+  const grantPeriodRules = [
+    {
+      validator: (_: unknown, value: GrantValidityPeriod | null | undefined) => {
+        if (value === null) return Promise.resolve();
+        if (value?.start && value?.end) {
+          if (!value.end.endOf("day").isBefore(dayjs().startOf("day"))) return Promise.resolve();
+          return Promise.reject(new Error("结束日期不能早于今天"));
+        }
+        return Promise.reject(new Error("请在日历上选择授权起止日期，或点选「永久有效」"));
+      },
+    },
+  ];
 
   return (
     <Card
@@ -267,7 +273,7 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
           if (!submitting) setOpen(false);
         }}
         onOk={() => void submit()}
-        width={640}
+        width={preset === "query" ? 760 : 680}
       >
         <Form form={form} layout="vertical" initialValues={{ scope_type: meta.defaultScope, privileges: meta.defaultPrivileges }}>
           <Form.Item name="instance_id" label="实例" rules={[{ required: true }]}>
@@ -323,26 +329,23 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
               <Form.Item name="query_limit_num" label="查询行数上限" rules={[{ required: true, message: "请选择行数上限" }]}>
                 <Select options={QUERY_LIMIT_OPTIONS} placeholder="单次查询最大返回行数" />
               </Form.Item>
-              <Form.Item name="validity" label="授权时间" rules={[{ required: true, message: "请选择授权有效期" }]}>
-                <Select options={QUERY_VALIDITY_OPTIONS} placeholder="到期后需重新申请" />
+              <Form.Item
+                name="grant_period"
+                label="授权有效期"
+                rules={grantPeriodRules}
+                extra="在日历上点选开始与结束日期；快捷标签可一键填充。审批通过后仅在所选日期内可查询。"
+              >
+                <GrantValidityCalendarPicker />
               </Form.Item>
             </>
           ) : (
             <Form.Item
-              name="expires_at"
-              label="权限过期时间"
-              extra="留空表示永久有效；到期后授权自动失效"
-              rules={[
-                {
-                  validator: (_, value: Dayjs | undefined) => {
-                    if (!value) return Promise.resolve();
-                    if (value.isAfter(dayjs())) return Promise.resolve();
-                    return Promise.reject(new Error("过期时间须晚于当前时间"));
-                  },
-                },
-              ]}
+              name="grant_period"
+              label="权限有效期"
+              rules={grantPeriodRules}
+              extra="留空请点选「永久有效」；到期后授权自动失效"
             >
-              <DatePicker showTime style={{ width: "100%" }} placeholder="可选，留空为永久" />
+              <GrantValidityCalendarPicker />
             </Form.Item>
           )}
           <Form.Item name="reason" label={preset === "database_create" ? "备注" : "申请理由"} rules={[{ required: true }]}>
