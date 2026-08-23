@@ -33,6 +33,7 @@ images/
 **/.DS_Store
 *.md
 !deploy/docker/**
+!deploy/wkhtmltopdf/**
 !docs/swagger/**
 
 # 大体积离线包以外的测试数据可按需排除；保留 deploy/loggie/binary

@@ -2,10 +2,6 @@
 # 兼容经典 docker build：所有用于 FROM 的 ARG 必须写在第一个 FROM 之前
 ARG GO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.26.2-alpine
 ARG ALPINE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/alpine:3.19
-# Alpine 3.15+ 官方仓库已移除 wkhtmltopdf，从 surnet 镜像拷贝（与 ALPINE_IMAGE 大版本对齐）
-ARG WKHTMLTOPDF_IMAGE=surnet/alpine-wkhtmltopdf:3.19.1-0.12.6-small
-
-FROM ${WKHTMLTOPDF_IMAGE} AS wkhtmltopdf
 
 FROM ${GO_IMAGE} AS builder
 
@@ -26,13 +22,18 @@ RUN go build -trimpath -ldflags="-s -w" -o /yunshu ./main.go
 
 FROM ${ALPINE_IMAGE}
 
-# 巡检 PDF 优先通过 wkhtmltopdf 由 HTML 转换，保证与 HTML 版式一致；未安装时降级纯 Go 结构化 PDF
+# 巡检 PDF：wkhtmltopdf 离线包 > Alpine 3.14 apk > 跳过（Go 结构化 PDF 降级）
+# 不依赖 Docker Hub 拉取 surnet 镜像，避免内网构建超时
 RUN apk add --no-cache \
     tzdata ca-certificates \
     libstdc++ libx11 libxrender libxext libssl3 \
     fontconfig freetype \
     ttf-freefont font-wqy-zenhei
-COPY --from=wkhtmltopdf /bin/wkhtmltopdf /usr/local/bin/wkhtmltopdf
+COPY deploy/wkhtmltopdf/ /tmp/wkhtmltopdf-bundle/
+COPY deploy/docker/install-wkhtmltopdf.sh /tmp/install-wkhtmltopdf.sh
+RUN chmod +x /tmp/install-wkhtmltopdf.sh \
+    && /tmp/install-wkhtmltopdf.sh /tmp/wkhtmltopdf-bundle \
+    && rm -rf /tmp/wkhtmltopdf-bundle /tmp/install-wkhtmltopdf.sh
 
 COPY --from=builder /yunshu /app/yunshu
 COPY configs/ /app/configs/
