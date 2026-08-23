@@ -1,51 +1,27 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, SendOutlined } from "@ant-design/icons";
-import { Button, Card, Collapse, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { Button, Card, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { AlertNotificationTemplateStudio } from "../components/alert/alert-notification-template-studio";
+import {
+  DEFAULT_FIRING_TEMPLATE,
+  DEFAULT_RESOLVED_TEMPLATE,
+  type TemplatePreviewStatus,
+} from "../components/alert/notification-template-presets";
 import {
   createAlertChannel,
   deleteAlertChannel,
   listAlertChannels,
-  previewAlertChannelTemplate,
   testAlertChannel,
   updateAlertChannel,
   type AlertChannelItem,
-  type AlertTemplatePreviewResult,
+  type AlertChannelTestResult,
 } from "../services/alerts";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { formatDateTime } from "../utils/format";
 import { DictFillSelect } from "../components/dict-fill-select";
 import { getProjects, type ProjectItem } from "../services/projects";
-
-type TemplatePreviewStatus = "firing" | "resolved";
-const DEFAULT_FIRING_TEMPLATE =
-  "【{{.StatusText}}】**{{.Title}}**\n\n- 现象：{{.Summary}}（当前值 {{.Current}}）\n\n- 级别：`{{.Severity}}` · 项目：`{{.ProjectName}}` · 集群：`{{.Cluster}}`\n\n- 时间：{{.OccurredAt}}\n\n- 打开事件：{{.EventPath}}\n\n- 标签：{{.LabelsText}}";
-const DEFAULT_RESOLVED_TEMPLATE =
-  "【{{.StatusText}}】**{{.Title}}**\n\n- 摘要：{{.Summary}}\n\n- 级别：`{{.Severity}}` · 项目：`{{.ProjectName}}`\n\n- 开始：{{.StartsAt}} · 恢复：{{.EndsAt}}\n\n- 打开事件：{{.EventPath}}";
-const SIMPLE_FIRING_TEMPLATE =
-  "【告警】{{.Title}}\n现象：{{.Summary}}（{{.Current}}）\n级别：{{.Severity}} · 项目：{{.ProjectName}}\n打开：{{.EventPath}}";
-const SIMPLE_RESOLVED_TEMPLATE =
-  "【恢复】{{.Title}}\n开始：{{.StartsAt}} · 结束：{{.EndsAt}}\n项目：{{.ProjectName}}\n打开：{{.EventPath}}";
-const DETAILED_FIRING_TEMPLATE =
-  "【{{.StatusText}}】{{.Title}}\n级别：{{.Severity}}\n项目：{{.ProjectName}}\n集群：{{.Cluster}}\n现象：{{.Summary}}\n当前值：{{.Current}}\n描述：{{.Description}}\n时间：{{.OccurredAt}}\n标签：{{.LabelsText}}\n打开事件：{{.EventPath}}\nGenerator：{{.GeneratorURL}}";
-const DETAILED_RESOLVED_TEMPLATE =
-  "【{{.StatusText}}】{{.Title}}\n级别：{{.Severity}}\n项目：{{.ProjectName}}\n集群：{{.Cluster}}\n开始：{{.StartsAt}}\n结束：{{.EndsAt}}\n摘要：{{.Summary}}\n打开事件：{{.EventPath}}\n标签：{{.LabelsText}}";
-const CHANNEL_PRESET_OPTIONS = [
-  { label: "新手简版（推荐）", value: "simple" },
-  { label: "标准版（默认）", value: "default" },
-  { label: "详细排障版", value: "detailed" },
-];
-
-function presetTemplateByMode(mode?: string) {
-  switch (String(mode || "").trim()) {
-    case "simple":
-      return { firing: SIMPLE_FIRING_TEMPLATE, resolved: SIMPLE_RESOLVED_TEMPLATE };
-    case "detailed":
-      return { firing: DETAILED_FIRING_TEMPLATE, resolved: DETAILED_RESOLVED_TEMPLATE };
-    default:
-      return { firing: DEFAULT_FIRING_TEMPLATE, resolved: DEFAULT_RESOLVED_TEMPLATE };
-  }
-}
 
 export function AlertChannelsPage() {
   const [list, setList] = useState<AlertChannelItem[]>([]);
@@ -54,15 +30,12 @@ export function AlertChannelsPage() {
   const [open, setOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testSending, setTestSending] = useState(false);
-  const [testReceipt, setTestReceipt] = useState<import("../services/alerts").AlertChannelTestResult | null>(null);
+  const [testReceipt, setTestReceipt] = useState<AlertChannelTestResult | null>(null);
   const [testRow, setTestRow] = useState<AlertChannelItem | null>(null);
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateChannelID, setTemplateChannelID] = useState<number | undefined>();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState("");
-  const [previewResult, setPreviewResult] = useState<AlertTemplatePreviewResult | null>(null);
   const [editingTemplateTarget, setEditingTemplateTarget] = useState<TemplatePreviewStatus>("firing");
   const [firingPreset, setFiringPreset] = useState<string>("default");
   const [resolvedPreset, setResolvedPreset] = useState<string>("default");
@@ -72,15 +45,9 @@ export function AlertChannelsPage() {
   const [templateForm] = Form.useForm();
   const firingTemplateRef = useRef<any>(null);
   const resolvedTemplateRef = useRef<any>(null);
-  const previewSeqRef = useRef(0);
   const channelType = Form.useWatch("type", form);
   const wecomMode = Form.useWatch("wecom_mode", form);
   const dingMode = Form.useWatch("ding_mode", form);
-  const templateFiring = Form.useWatch("template_firing", templateForm);
-  const templateResolved = Form.useWatch("template_resolved", templateForm);
-  const previewStatus = (Form.useWatch("preview_status", templateForm) || "firing") as TemplatePreviewStatus;
-  const previewProjectID = Form.useWatch("preview_project_id", templateForm) as number | undefined;
-  const previewRawPayloadJSON = Form.useWatch("preview_raw_payload_json", templateForm) as string | undefined;
   const webhookURLDictOptions = useDictOptions("alert_webhook_url");
   const wecomWebhookURLDictOptions = useDictOptions("wecom_webhook_url");
   const dingtalkWebhookURLDictOptions = useDictOptions("dingtalk_webhook_url");
@@ -94,11 +61,12 @@ export function AlertChannelsPage() {
   const dingAppSecretOptions = useDictOptions("dingtalk_app_secret");
   const dingChatIDOptions = useDictOptions("dingtalk_chat_id");
   const dingSignSecretOptions = useDictOptions("dingtalk_sign_secret");
-  const urlFillOptions = channelType === "wechat_work" || channelType === "wechat"
-    ? wecomWebhookURLDictOptions
-    : channelType === "dingding"
-      ? dingtalkWebhookURLDictOptions
-      : webhookURLDictOptions;
+  const urlFillOptions =
+    channelType === "wechat_work" || channelType === "wechat"
+      ? wecomWebhookURLDictOptions
+      : channelType === "dingding"
+        ? dingtalkWebhookURLDictOptions
+        : webhookURLDictOptions;
 
   function parseChannelSettings(raw?: string) {
     if (!raw?.trim()) return {};
@@ -147,35 +115,6 @@ export function AlertChannelsPage() {
     void load();
     void loadProjects();
   }, []);
-
-  useEffect(() => {
-    if (!templateOpen) return;
-    const timer = window.setTimeout(() => {
-      const seq = ++previewSeqRef.current;
-      setPreviewLoading(true);
-      setPreviewError("");
-      void previewAlertChannelTemplate({
-        template_firing: String(templateFiring || ""),
-        template_resolved: String(templateResolved || ""),
-        status: previewStatus,
-        project_id: previewProjectID,
-        raw_payload_json: String(previewRawPayloadJSON || ""),
-      })
-        .then((res) => {
-          if (seq !== previewSeqRef.current) return;
-          setPreviewResult(res);
-        })
-        .catch((err: unknown) => {
-          if (seq !== previewSeqRef.current) return;
-          setPreviewResult(null);
-          setPreviewError(err instanceof Error ? err.message : "模板预览失败");
-        })
-        .finally(() => {
-          if (seq === previewSeqRef.current) setPreviewLoading(false);
-        });
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [templateOpen, templateFiring, templateResolved, previewStatus, previewProjectID, previewRawPayloadJSON]);
 
   function openCreate() {
     setCurrent(null);
@@ -298,27 +237,6 @@ export function AlertChannelsPage() {
     }
   }
 
-  function insertTemplateToken(token: string) {
-    const fieldName = editingTemplateTarget === "resolved" ? "template_resolved" : "template_firing";
-    const currentValue = String(templateForm.getFieldValue(fieldName) || "");
-    const inputRef = editingTemplateTarget === "resolved" ? resolvedTemplateRef.current : firingTemplateRef.current;
-    const textarea = inputRef?.resizableTextArea?.textArea as HTMLTextAreaElement | undefined;
-    if (textarea && Number.isFinite(textarea.selectionStart) && Number.isFinite(textarea.selectionEnd)) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const next = `${currentValue.slice(0, start)}${token}${currentValue.slice(end)}`;
-      templateForm.setFieldValue(fieldName, next);
-      window.setTimeout(() => {
-        textarea.focus();
-        const pos = start + token.length;
-        textarea.setSelectionRange(pos, pos);
-      }, 0);
-      return;
-    }
-    const sep = currentValue.trim() ? "\n" : "";
-    templateForm.setFieldValue(fieldName, `${currentValue}${sep}${token}`);
-  }
-
   function openTemplateConfig(channelID?: number) {
     const targetID = channelID ?? templateChannelID ?? list[0]?.id;
     if (!targetID) {
@@ -381,16 +299,7 @@ export function AlertChannelsPage() {
     }
   }
 
-  function applyTemplatePreset(target: TemplatePreviewStatus, presetMode: string) {
-    const tpl = presetTemplateByMode(presetMode);
-    if (target === "firing") {
-      setFiringPreset(presetMode);
-      templateForm.setFieldValue("template_firing", tpl.firing);
-      return;
-    }
-    setResolvedPreset(presetMode);
-    templateForm.setFieldValue("template_resolved", tpl.resolved);
-  }
+  const templateChannelRow = list.find((it) => it.id === templateChannelID);
 
   function openTest(row: AlertChannelItem) {
     setTestRow(row);
@@ -423,12 +332,6 @@ export function AlertChannelsPage() {
     }
   }
 
-  const projectOptions = projects.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id }));
-  const availableFields = previewResult?.combined_fields ?? [];
-  const fixedFields = previewResult?.available_fields ?? [];
-  const rawPayloadFields = previewResult?.raw_payload_fields ?? [];
-  const suggestedLabelKeys = previewResult?.suggested_label_keys ?? [];
-
   return (
     <div className="page-stack">
       <PageTelemetryHeader
@@ -451,7 +354,9 @@ export function AlertChannelsPage() {
             onChange={(v) => setTemplateChannelID(v)}
             options={list.map((it) => ({ label: `${it.name} (${it.type})`, value: it.id }))}
           />
-          <Button onClick={() => openTemplateConfig()}>告警模板</Button>
+          <Button type="primary" ghost onClick={() => openTemplateConfig()}>
+            通知模板可视化
+          </Button>
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建通道</Button>
       </div>
@@ -686,15 +591,25 @@ export function AlertChannelsPage() {
           </Space>
         </Form>
       </Modal>
-      <Modal
-        title="告警模板配置"
+      <Drawer
+        title="通知模板可视化"
         open={templateOpen}
-        onCancel={() => setTemplateOpen(false)}
-        onOk={() => void submitTemplate()}
-        confirmLoading={templateSaving}
+        onClose={() => setTemplateOpen(false)}
+        width={1120}
         destroyOnClose
-        width={860}
+        extra={
+          <Space>
+            <Button onClick={() => setTemplateOpen(false)}>取消</Button>
+            <Button type="primary" loading={templateSaving} onClick={() => void submitTemplate()}>
+              保存模板
+            </Button>
+          </Space>
+        }
       >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          左侧编辑 Go 模板，右侧模拟钉钉/企微通知气泡实时预览。变量说明与 sample_payload 见下方折叠区。
+          <Link to="/alert-config-center" style={{ marginLeft: 8 }}>策略与联调</Link>
+        </Typography.Paragraph>
         <Form form={templateForm} layout="vertical">
           <Form.Item label="当前通道">
             <Select
@@ -706,174 +621,21 @@ export function AlertChannelsPage() {
               options={list.map((it) => ({ label: `${it.name} (${it.type})`, value: it.id }))}
             />
           </Form.Item>
-          <Form.Item
-            name="template_firing"
-            label="告警触发模板（可视化配置）"
-            extra={
-              <>
-                留空时使用系统默认模板；Go text/template 语法。完整变量含义见下方「模板变量说明」表（与后端{" "}
-                <Typography.Link href="https://cairry.github.io/docs/" target="_blank" rel="noreferrer">
-                  WatchAlert 式通知模板
-                </Typography.Link>{" "}
-                标签示例：<Typography.Text code>{"{{index .Labels \"alertname\"}}"}</Typography.Text>
-                。事件台深链：<Typography.Text code>{"{{.EventPath}}"}</Typography.Text>
-                （如 /alert-monitor-platform/history?fingerprint=...）。
-              </>
-            }
-          >
-            <Input.TextArea ref={firingTemplateRef} rows={6} placeholder="支持 Go Template 语法，例如 {{.Title}}" />
-          </Form.Item>
-          <Form.Item label="触发模板预设（下拉可选）" extra="选择后会自动生成模板示例，你可以继续微调。">
-            <Select
-              value={firingPreset}
-              options={CHANNEL_PRESET_OPTIONS}
-              onChange={(v) => applyTemplatePreset("firing", v)}
-            />
-          </Form.Item>
-          <Form.Item
-            name="template_resolved"
-            label="告警恢复模板（可视化配置）"
-            extra="留空时使用系统默认恢复模板；语法与触发模板一致。"
-          >
-            <Input.TextArea ref={resolvedTemplateRef} rows={6} placeholder="支持 Go Template 语法，例如 {{.StartsAt}} ~ {{.EndsAt}}" />
-          </Form.Item>
-          <Form.Item label="恢复模板预设（下拉可选）" extra="选择后会自动生成恢复模板示例，你可以继续微调。">
-            <Select
-              value={resolvedPreset}
-              options={CHANNEL_PRESET_OPTIONS}
-              onChange={(v) => applyTemplatePreset("resolved", v)}
-            />
-          </Form.Item>
-          <Form.Item label="当前插入目标模板">
-            <Select
-              value={editingTemplateTarget}
-              onChange={(v: TemplatePreviewStatus) => setEditingTemplateTarget(v)}
-              options={[
-                { label: "触发模板", value: "firing" },
-                { label: "恢复模板", value: "resolved" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="preview_status" label="模板预览类型" initialValue="firing">
-            <Select
-              options={[
-                { label: "触发模板预览", value: "firing" },
-                { label: "恢复模板预览", value: "resolved" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="preview_project_id" label="预览项目上下文（可选）" extra="选择后将用该项目填充 ProjectName，并从近期该项目告警提取标签字段建议。">
-            <Select allowClear options={projectOptions} placeholder="不选则使用默认示例项目" />
-          </Form.Item>
-          <Form.Item
-            name="preview_raw_payload_json"
-            label="预览原始 JSON（可选，实时合并）"
-            extra="填写原始告警 JSON 对象后，会与系统示例 payload 合并参与真实后端渲染；同名字段以你填写的 JSON 为准。"
-            rules={[
-              {
-                validator: async (_, value) => {
-                  const s = String(value || "").trim();
-                  if (!s) return;
-                  try {
-                    const obj = JSON.parse(s);
-                    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-                      throw new Error("预览原始 JSON 必须是对象");
-                    }
-                  } catch {
-                    throw new Error("预览原始 JSON 格式不正确");
-                  }
-                },
-              },
-            ]}
-          >
-            <Input.TextArea rows={6} placeholder='例如：{"labels":{"namespace":"prod"},"current":"9"}' />
-          </Form.Item>
-          <Form.Item label="模板预览（示例数据）">
-            <Input.TextArea rows={8} value={previewResult?.rendered || ""} readOnly />
-          </Form.Item>
-          <Form.Item label="预览状态">
-            <Input value={previewLoading ? "渲染中..." : previewError || "渲染成功"} readOnly status={previewError ? "error" : undefined} />
-          </Form.Item>
-          <Form.Item label="渲染上下文（sample_payload）" extra="展示后端本次预览实际使用的 payload，便于核对模板字段来源。">
-            <Collapse
-              size="small"
-              items={[
-                {
-                  key: "sample_payload",
-                  label: "展开查看 sample_payload JSON",
-                  children: (
-                    <Input.TextArea
-                      rows={12}
-                      readOnly
-                      value={JSON.stringify(previewResult?.sample_payload || {}, null, 2)}
-                    />
-                  ),
-                },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item label="可用参考字段（组合）" extra="来自：后端固定模板字段 + 预览原始 JSON 顶层字段；可点击插入 {{.字段名}}">
-            <Space wrap>
-              {availableFields.map((v) => (
-                <Tag
-                  key={v}
-                  color="blue"
-                  style={{ cursor: "pointer", userSelect: "none" }}
-                  onClick={() => insertTemplateToken(`{{.${v}}}`)}
-                >
-                  {v}
-                </Tag>
-              ))}
-            </Space>
-          </Form.Item>
-          <Form.Item label="固定模板字段" extra="后端固定返回，任何预览场景都可用">
-            <Space wrap>
-              {fixedFields.map((v) => (
-                <Tag key={v}>{v}</Tag>
-              ))}
-            </Space>
-          </Form.Item>
-          <Form.Item
-            label="模板变量说明"
-            extra="与预览接口 template_variables 同步；编写 {{.变量名}} 时请与此表一致。"
-          >
-            <Table
-              size="small"
-              pagination={false}
-              rowKey="name"
-              dataSource={previewResult?.template_variables ?? []}
-              columns={[
-                {
-                  title: "变量名（模板内）",
-                  dataIndex: "name",
-                  width: 220,
-                  render: (v: string) => <Typography.Text code>{"{{." + v + "}}"}</Typography.Text>,
-                },
-                { title: "说明", dataIndex: "description" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item label="原始 JSON 字段" extra="来自你填写的预览原始 JSON 顶层 key">
-            <Space wrap>
-              {rawPayloadFields.length === 0 ? <Tag>（暂无）</Tag> : rawPayloadFields.map((v) => <Tag key={v}>{v}</Tag>)}
-            </Space>
-          </Form.Item>
-          <Form.Item label="可用参考标签（近期告警提取）" extra='可直接用于模板：{{index .Labels "标签名"}}'>
-            <Space wrap>
-              {suggestedLabelKeys.map((v) => (
-                <Tag
-                  key={v}
-                  color="purple"
-                  style={{ cursor: "pointer", userSelect: "none" }}
-                  onClick={() => insertTemplateToken(`{{index .Labels "${v}"}}`)}
-                >
-                  {v}
-                </Tag>
-              ))}
-            </Space>
-          </Form.Item>
+          <AlertNotificationTemplateStudio
+            form={templateForm}
+            projects={projects}
+            channelType={templateChannelRow?.type}
+            editingTarget={editingTemplateTarget}
+            onEditingTargetChange={setEditingTemplateTarget}
+            firingPreset={firingPreset}
+            resolvedPreset={resolvedPreset}
+            onFiringPresetChange={setFiringPreset}
+            onResolvedPresetChange={setResolvedPreset}
+            firingTemplateRef={firingTemplateRef}
+            resolvedTemplateRef={resolvedTemplateRef}
+          />
         </Form>
-      </Modal>
+      </Drawer>
       <Modal
         title={testRow ? `测试发送 #${testRow.id} ${testRow.name}` : "测试发送"}
         open={testOpen}
