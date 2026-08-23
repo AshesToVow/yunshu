@@ -50,7 +50,6 @@ import {
   getInspectStorageInfo,
   inspectReportExcelUrl,
   inspectReportHtmlUrl,
-  inspectReportPdfUrl,
   inspectReportPrintUrl,
   listInspectItems,
   listInspectReportTemplates,
@@ -75,6 +74,7 @@ import {
 import { extractApiErrorMessage, http } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
+import { downloadInspectReportPdf } from "../utils/inspect-report-pdf";
 
 const CRON_PRESETS = [
   { label: "每天 09:00", value: "0 0 9 * * *" },
@@ -174,6 +174,14 @@ function openAuthorized(url: string) {
       setTimeout(() => URL.revokeObjectURL(obj), 60_000);
     })
     .catch((e) => message.error(extractApiErrorMessage(e, "打开报告失败")));
+}
+
+function downloadInspectPdf(projectId: number, runId: number) {
+  const key = "inspect-pdf";
+  message.loading({ content: "正在根据 HTML 报告生成 PDF…", key, duration: 0 });
+  void downloadInspectReportPdf(inspectReportHtmlUrl(projectId, runId), `inspect-run-${runId}.pdf`)
+    .then(() => message.success({ content: "PDF 已下载（与 HTML 样式一致）", key }))
+    .catch((e) => message.error({ content: extractApiErrorMessage(e, "生成 PDF 失败"), key }));
 }
 
 function storageLabel(storage?: string) {
@@ -544,14 +552,16 @@ export function ProjectInspectPage() {
           >
             打印
           </Button>
-          <Button
-            type="link"
-            size="small"
-            disabled={r.status !== "success"}
-            onClick={() => openAuthorized(inspectReportPdfUrl(projectId, r.id))}
-          >
-            PDF
-          </Button>
+          <Tooltip title="浏览器端根据 HTML 生成，样式与预览一致">
+            <Button
+              type="link"
+              size="small"
+              disabled={r.status !== "success"}
+              onClick={() => downloadInspectPdf(projectId, r.id)}
+            >
+              PDF
+            </Button>
+          </Tooltip>
           <Button
             type="link"
             size="small"
@@ -622,7 +632,7 @@ export function ProjectInspectPage() {
     <div className="page-stack project-inspect-page">
       <OpsPageHeader
         title="项目巡检"
-        description="基于 Prometheus（Telegraf / Blackbox / kube-state-metrics 等）采集指标，定时或手动巡检项目健康，并生成 HTML / PDF / Excel 报告与邮件通知。"
+        description="基于 Prometheus 采集指标定时/手动巡检，生成 HTML / Excel 报告；PDF 在浏览器端按 HTML 样式导出（html2pdf.js）。邮件默认附 HTML，可配置 INSPECT_SERVER_PDF=structured 附加简化 PDF。"
         breadcrumbs={[{ title: "项目运维" }, { title: "项目巡检" }]}
         meta={
           projectId ? (
@@ -1304,9 +1314,9 @@ export function ProjectInspectPage() {
               <Button onClick={() => openAuthorized(inspectReportPrintUrl(projectId, runDetail.id))}>
                 打印版
               </Button>
-              <Button onClick={() => openAuthorized(inspectReportPdfUrl(projectId, runDetail.id))}>
-                PDF
-              </Button>
+              <Tooltip title="浏览器端根据 HTML 生成，样式与预览一致">
+                <Button onClick={() => downloadInspectPdf(projectId, runDetail.id)}>PDF</Button>
+              </Tooltip>
               <Button onClick={() => openAuthorized(inspectReportExcelUrl(projectId, runDetail.id))}>
                 Excel
               </Button>

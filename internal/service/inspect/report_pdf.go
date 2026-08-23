@@ -2,15 +2,37 @@ package inspect
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
-// renderBinaryPDF 生成 PDF：优先 HTML→PDF（与报告 HTML 版式一致），失败时降级结构化 PDF。
+// renderBinaryPDF 生成服务端 PDF。默认不再调用 wkhtmltopdf（样式差）；邮件附件可仅 HTML。
+// INSPECT_USE_WKHTMLTOPDF=true  启用 wkhtmltopdf
+// INSPECT_SERVER_PDF=structured  降级结构化 PDF（默认）；html_only/off 不生成服务端 PDF
 func renderBinaryPDF(data ReportData, html []byte) []byte {
-	if pdf := renderPDFFromHTML(html); len(pdf) > 0 {
-		return pdf
+	if inspectUseWkhtmltopdf() {
+		if pdf := renderPDFFromHTML(html); len(pdf) > 0 {
+			return pdf
+		}
+	}
+	mode := inspectServerPDFMode()
+	if mode == "off" || mode == "none" || mode == "client" || mode == "html_only" {
+		return nil
 	}
 	return renderStructuredPDF(data)
+}
+
+func inspectUseWkhtmltopdf() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("INSPECT_USE_WKHTMLTOPDF")))
+	return v == "1" || v == "true" || v == "yes"
+}
+
+func inspectServerPDFMode() string {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("INSPECT_SERVER_PDF")))
+	if v == "" {
+		return "structured"
+	}
+	return v
 }
 
 // renderPDFFromHTMLBytes 保留签名兼容；HTML→PDF 已取消，请改用 renderBinaryPDF(data)。
