@@ -196,12 +196,18 @@ export function previewInspectReportTemplate(
   });
 }
 
-export function inspectReportHtmlUrl(projectId: number, runId: number) {
-  return `/projects/${projectId}/inspect/runs/${runId}/report.html`;
-}
-
 export function inspectReportPdfUrl(projectId: number, runId: number) {
   return `/projects/${projectId}/inspect/runs/${runId}/report.pdf`;
+}
+
+export function checkInspectReportPdf(projectId: number, runId: number) {
+  return getData<{ exists: boolean; filename?: string; size?: number }>(
+    http.get(`/projects/${projectId}/inspect/runs/${runId}/report.pdf/check`),
+  );
+}
+
+export function inspectReportHtmlUrl(projectId: number, runId: number) {
+  return `/projects/${projectId}/inspect/runs/${runId}/report.html`;
 }
 
 export function inspectReportExcelUrl(projectId: number, runId: number) {

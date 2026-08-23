@@ -319,6 +319,18 @@ func (s *Service) initSqlTicketSteps(ctx context.Context, ticket *model.DbSqlTic
 	return s.repo.UpdateSqlTicket(ctx, ticket)
 }
 
+func isFinalAccessApprovalStep(steps []model.DbAccessRequestStep, cur *model.DbAccessRequestStep) bool {
+	if cur == nil {
+		return false
+	}
+	for _, st := range steps {
+		if st.SortOrder > cur.SortOrder {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Service) advanceAccessRequestAfterApproval(ctx context.Context, req *model.DbAccessRequest, step *model.DbAccessRequestStep) error {
 	steps, err := s.repo.ListAccessRequestSteps(ctx, req.ID)
 	if err != nil {

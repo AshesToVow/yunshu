@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// renderBinaryPDF 生成服务端 PDF。默认不再调用 wkhtmltopdf（样式差）；邮件附件可仅 HTML。
+// renderBinaryPDF 生成服务端 PDF。默认不生成简化 PDF，由前端 html2canvas 上传高质量版。
 // INSPECT_USE_WKHTMLTOPDF=true  启用 wkhtmltopdf
-// INSPECT_SERVER_PDF=structured  降级结构化 PDF（默认）；html_only/off 不生成服务端 PDF
+// INSPECT_SERVER_PDF=structured  降级结构化 PDF；html_only/off（默认）不生成服务端 PDF
 func renderBinaryPDF(data ReportData, html []byte) []byte {
 	if inspectUseWkhtmltopdf() {
 		if pdf := renderPDFFromHTML(html); len(pdf) > 0 {
@@ -30,7 +30,7 @@ func inspectUseWkhtmltopdf() bool {
 func inspectServerPDFMode() string {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("INSPECT_SERVER_PDF")))
 	if v == "" {
-		return "structured"
+		return "html_only"
 	}
 	return v
 }

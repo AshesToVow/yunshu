@@ -291,6 +291,7 @@ export type DbAccessRequest = {
   status: string;
   current_stage_name?: string;
   mine_status?: string;
+  is_final_approval?: boolean;
   expires_at?: string;
   created_at: string;
   create_meta?: {

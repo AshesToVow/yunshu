@@ -35,6 +35,7 @@ type AccessRequestItem struct {
 	Status           string   `json:"status"`
 	CurrentStageName string   `json:"current_stage_name,omitempty"`
 	MineStatus       string   `json:"mine_status,omitempty"`
+	IsFinalApproval  bool     `json:"is_final_approval,omitempty"`
 	ExpiresAt        *string  `json:"expires_at,omitempty"`
 	QueryLimitNum    int      `json:"query_limit_num"`
 	CreateMeta       *AccessRequestMetaItem `json:"create_meta,omitempty"`
@@ -307,6 +308,20 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 		return constants.ErrBadRequestWithMsg("申请已结束")
 	}
 	if body.ExpiresAt != nil {
+		steps, err := s.repo.ListAccessRequestSteps(ctx, id)
+		if err != nil {
+			return err
+		}
+		var cur *model.DbAccessRequestStep
+		for i := range steps {
+			if steps[i].Status == model.DbApprovalStepPending {
+				cur = &steps[i]
+				break
+			}
+		}
+		if cur != nil && !isFinalAccessApprovalStep(steps, cur) {
+			return constants.ErrBadRequestWithMsg("仅最后一环审批人可调整授权有效期")
+		}
 		expiresAt, err := parseOptionalExpiresAt(body.ExpiresAt)
 		if err != nil {
 			return err

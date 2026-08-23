@@ -66,15 +66,7 @@ function applyCloneStyles(clonedDoc: Document) {
   });
 }
 
-/**
- * PromAI 同款：html2canvas 截图 + jsPDF 分页，保证与 HTML 预览样式一致。
- */
-export async function downloadElementAsPdf({
-  filename,
-  target,
-  orientation = "landscape",
-  scale = 1.5,
-}: HtmlToPdfOptions) {
+async function captureCanvas(target: HTMLElement, orientation: "portrait" | "landscape", scale: number) {
   const doc = target.ownerDocument;
   await waitForPageReady(doc);
 
@@ -88,9 +80,8 @@ export async function downloadElementAsPdf({
   const width = Math.max(target.scrollWidth, target.clientWidth, 960);
   const height = Math.max(target.scrollHeight, target.clientHeight, 400);
 
-  let canvas: HTMLCanvasElement;
   try {
-    canvas = await html2canvas(target, {
+    const canvas = await html2canvas(target, {
       scale,
       useCORS: true,
       logging: false,
@@ -105,15 +96,17 @@ export async function downloadElementAsPdf({
       imageTimeout: 30_000,
       onclone: (clonedDoc) => applyCloneStyles(clonedDoc),
     });
+    if (!canvas.width || !canvas.height) {
+      throw new Error("页面截图失败：内容尺寸为 0");
+    }
+    return canvas;
   } finally {
     doc.body.style.cssText = originalBodyStyle;
     doc.documentElement.style.cssText = originalHtmlStyle;
   }
+}
 
-  if (!canvas.width || !canvas.height) {
-    throw new Error("页面截图失败：内容尺寸为 0");
-  }
-
+function canvasToPdfBlob(canvas: HTMLCanvasElement, orientation: "portrait" | "landscape"): Blob {
   const pageW = orientation === "landscape" ? 297 : 210;
   const pageH = orientation === "landscape" ? 210 : 297;
   const pdf = new jsPDF({ orientation, unit: "mm", format: "a4" });
@@ -138,5 +131,29 @@ export async function downloadElementAsPdf({
     pdf.addImage(imgData, "JPEG", 0, 0, imgWidth, pageImgHeight);
   }
 
-  pdf.save(filename);
+  return pdf.output("blob");
+}
+
+/** PromAI 同款：html2canvas 截图 + jsPDF 分页，返回 PDF Blob。 */
+export async function renderElementAsPdfBlob(
+  target: HTMLElement,
+  orientation: "portrait" | "landscape" = "landscape",
+  scale = 1.5,
+): Promise<Blob> {
+  const canvas = await captureCanvas(target, orientation, scale);
+  return canvasToPdfBlob(canvas, orientation);
+}
+
+export async function downloadElementAsPdf({
+  filename,
+  target,
+  orientation = "landscape",
+  scale = 1.5,
+}: HtmlToPdfOptions) {
+  const blob = await renderElementAsPdfBlob(target, orientation, scale);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }

@@ -49,6 +49,8 @@ import {
   getInspectPlan,
   getInspectStorageInfo,
   inspectReportExcelUrl,
+  checkInspectReportPdf,
+  inspectReportPdfUrl,
   inspectReportHtmlUrl,
   inspectReportPrintUrl,
   listInspectItems,
@@ -74,7 +76,6 @@ import {
 import { extractApiErrorMessage, http } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
-import { downloadInspectReportPdf } from "../utils/inspect-report-pdf";
 
 const CRON_PRESETS = [
   { label: "每天 09:00", value: "0 0 9 * * *" },
@@ -176,12 +177,36 @@ function openAuthorized(url: string) {
     .catch((e) => message.error(extractApiErrorMessage(e, "打开报告失败")));
 }
 
+function downloadBlobFile(blob: Blob, filename: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
 function downloadInspectPdf(projectId: number, runId: number) {
   const key = "inspect-pdf";
-  message.loading({ content: "正在根据 HTML 报告生成 PDF…", key, duration: 0 });
-  void downloadInspectReportPdf(inspectReportHtmlUrl(projectId, runId), `inspect-run-${runId}.pdf`)
-    .then(() => message.success({ content: "PDF 已下载（与 HTML 样式一致）", key }))
-    .catch((e) => message.error({ content: extractApiErrorMessage(e, "生成 PDF 失败"), key }));
+  message.loading({ content: "正在准备 PDF…", key, duration: 0 });
+  void (async () => {
+    try {
+      const st = await checkInspectReportPdf(projectId, runId);
+      if (st.exists) {
+        const raw: unknown = await http.get(inspectReportPdfUrl(projectId, runId), {
+          responseType: "blob",
+          timeout: 120_000,
+        });
+        downloadBlobFile(toReportBlob(raw, "application/pdf"), `inspect-run-${runId}.pdf`);
+        message.success({ content: "PDF 已下载", key });
+        return;
+      }
+      const { downloadInspectReportPdf } = await import("../utils/inspect-report-pdf");
+      await downloadInspectReportPdf(projectId, inspectReportHtmlUrl(projectId, runId), `inspect-run-${runId}.pdf`);
+      message.success({ content: "PDF 已生成并保存（与 HTML 样式一致）", key });
+    } catch (e) {
+      message.error({ content: extractApiErrorMessage(e, "生成 PDF 失败"), key });
+    }
+  })();
 }
 
 function storageLabel(storage?: string) {

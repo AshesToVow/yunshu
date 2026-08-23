@@ -75,6 +75,7 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-32bytes-base64}
       - RUN_SEED=${RUN_SEED:-1}
       - WAIT_MYSQL=${WAIT_MYSQL:-1}
+      - INSPECT_SERVER_PDF=${INSPECT_SERVER_PDF:-html_only}
     volumes:
       - ./configs:/app/configs:ro
       - ./logs:/app/logs

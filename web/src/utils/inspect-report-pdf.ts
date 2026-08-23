@@ -1,5 +1,5 @@
 import { http } from "../services/http";
-import { downloadElementAsPdf } from "./html-to-pdf";
+import { renderElementAsPdfBlob } from "./html-to-pdf";
 
 async function fetchReportHtml(apiPath: string): Promise<string> {
   const raw: unknown = await http.get(apiPath, { responseType: "text", timeout: 120_000 });
@@ -13,7 +13,7 @@ async function fetchReportHtml(apiPath: string): Promise<string> {
   throw new Error("无法读取 HTML 报告内容");
 }
 
-function mountHtmlInIframe(html: string): { cleanup: () => void; root: HTMLElement; doc: Document } {
+function mountHtmlInIframe(html: string): { cleanup: () => void; root: HTMLElement } {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
@@ -30,21 +30,47 @@ function mountHtmlInIframe(html: string): { cleanup: () => void; root: HTMLEleme
   const root = (doc.querySelector(".page") as HTMLElement | null) ?? doc.body;
   return {
     root,
-    doc,
     cleanup: () => {
       if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
     },
   };
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+export async function uploadInspectReportPdf(projectId: number, runId: number, blob: Blob, filename: string) {
+  const fd = new FormData();
+  fd.append("pdf", blob, filename);
+  await http.post(`/projects/${projectId}/inspect/runs/${runId}/report.pdf`, fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 120_000,
+  });
+}
+
 /**
- * 参考 PromAI：html2canvas + jsPDF 将巡检 HTML 转为 PDF，样式与 HTML 预览一致。
+ * html2canvas + jsPDF 生成 PDF，下载并上传到服务端（邮件/API 复用同一份）。
  */
-export async function downloadInspectReportPdf(apiHtmlPath: string, filename: string) {
+export async function downloadInspectReportPdf(
+  projectId: number,
+  apiHtmlPath: string,
+  filename: string,
+) {
   const html = await fetchReportHtml(apiHtmlPath);
   const { root, cleanup } = mountHtmlInIframe(html);
   try {
-    await downloadElementAsPdf({ filename, target: root, orientation: "landscape", scale: 1.5 });
+    const blob = await renderElementAsPdfBlob(root, "landscape", 1.5);
+    downloadBlob(blob, filename);
+    const runMatch = apiHtmlPath.match(/\/runs\/(\d+)\//);
+    const runId = runMatch ? Number(runMatch[1]) : 0;
+    if (projectId > 0 && runId > 0) {
+      await uploadInspectReportPdf(projectId, runId, blob, filename).catch(() => undefined);
+    }
   } finally {
     cleanup();
   }

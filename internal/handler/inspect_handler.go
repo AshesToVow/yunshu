@@ -2,14 +2,17 @@ package handler
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/model"
 	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/gin-gonic/gin"
@@ -247,6 +250,10 @@ func (h *InspectHandler) serveReport(c *gin.Context, kind string) {
 		response.Error(c, err)
 		return
 	}
+	if kind == "html" || kind == "print" {
+		uploadURL := fmt.Sprintf("/api/v1/projects/%d/inspect/runs/%d/report.pdf", projectID, runID)
+		body = inspectsvc.EnhanceReportHTML(body, "/api/v1/inspect/pdf-libs", uploadURL)
+	}
 	if kind == "excel" {
 		c.Header("Content-Disposition", `attachment; filename="inspect-run-`+c.Param("runId")+`.xlsx"`)
 	}
@@ -254,6 +261,74 @@ func (h *InspectHandler) serveReport(c *gin.Context, kind string) {
 		c.Header("Content-Disposition", `attachment; filename="inspect-run-`+c.Param("runId")+`.pdf"`)
 	}
 	c.Data(http.StatusOK, ctype, body)
+}
+
+func (h *InspectHandler) SaveReportPDF(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	runID, err := parseUintParam(c, "runId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	fh, err := c.FormFile("pdf")
+	if err != nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("缺少 PDF 文件"))
+		return
+	}
+	if fh.Size > 30<<20 {
+		response.Error(c, constants.ErrBadRequestWithMsg("PDF 文件过大"))
+		return
+	}
+	f, err := fh.Open()
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	defer f.Close()
+	pdf, err := io.ReadAll(f)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.SaveReportPDF(c.Request.Context(), projectID, runID, pdf); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *InspectHandler) CheckReportPDF(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	runID, err := parseUintParam(c, "runId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	st, err := h.svc.CheckReportPDF(c.Request.Context(), projectID, runID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, st)
+}
+
+func (h *InspectHandler) ServePDFLib(c *gin.Context) {
+	name := c.Param("name")
+	body, err := inspectsvc.ReadPDFLib(name)
+	if err != nil {
+		response.Error(c, constants.ErrNotFoundWithMsg("资源不存在"))
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=86400")
+	c.Data(http.StatusOK, "application/javascript; charset=utf-8", body)
 }
 
 func (h *InspectHandler) ListReportTemplates(c *gin.Context) {

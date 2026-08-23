@@ -568,12 +568,16 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	}
 
 	var writeWarnings []string
-	if err := store.Put(dbCtx, pdfKey, pdfBytes, "application/pdf"); err != nil {
-		slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
-			Warn("inspect pdf report store failed", "error", err, "key", pdfKey)
-		writeWarnings = append(writeWarnings, "PDF: "+err.Error())
+	if len(pdfBytes) >= 4 && string(pdfBytes[:4]) == "%PDF" {
+		if err := store.Put(dbCtx, pdfKey, pdfBytes, "application/pdf"); err != nil {
+			slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
+				Warn("inspect pdf report store failed", "error", err, "key", pdfKey)
+			writeWarnings = append(writeWarnings, "PDF: "+err.Error())
+		} else {
+			run.ReportPDFPath = pdfKey
+		}
 	} else {
-		run.ReportPDFPath = pdfKey
+		run.ReportPDFPath = ""
 	}
 	if excelErr != nil {
 		slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
@@ -715,9 +719,6 @@ func (s *Service) ReadReport(ctx context.Context, projectID, runID uint, kind st
 	switch kind {
 	case "pdf":
 		key = strings.TrimSpace(run.ReportPDFPath)
-		if key == "" {
-			key = strings.TrimSpace(run.ReportHTMLPath)
-		}
 		ctype = "application/pdf"
 	case "excel", "xlsx":
 		key = strings.TrimSpace(run.ReportExcelPath)
@@ -732,24 +733,20 @@ func (s *Service) ReadReport(ctx context.Context, projectID, runID uint, kind st
 		ctype = "text/html; charset=utf-8"
 	}
 	if key == "" {
+		if kind == "pdf" {
+			return nil, "", constants.ErrNotFoundWithMsg("PDF 尚未生成，请在平台点击 PDF 按钮生成")
+		}
 		return nil, "", constants.ErrNotFoundWithMsg("报告文件不存在")
 	}
 
 	body, err := s.readReportBytes(ctx, run, key)
 	if err != nil {
-		// PDF 缺失时回退可打印 HTML（含中文）
-		if kind == "pdf" {
-			alt := strings.TrimSpace(run.ReportHTMLPath)
-			if alt != "" {
-				if b2, err2 := s.readReportBytes(ctx, run, alt); err2 == nil {
-					return b2, "text/html; charset=utf-8", nil
-				}
-			}
-		}
 		return nil, "", constants.ErrNotFoundWithMsg("报告文件不存在")
 	}
-	if kind == "pdf" && len(body) >= 4 && string(body[:4]) != "%PDF" {
-		ctype = "text/html; charset=utf-8"
+	if kind == "pdf" {
+		if len(body) < 4 || string(body[:4]) != "%PDF" {
+			return nil, "", constants.ErrNotFoundWithMsg("PDF 尚未生成，请在平台点击 PDF 按钮生成")
+		}
 	}
 	return body, ctype, nil
 }
