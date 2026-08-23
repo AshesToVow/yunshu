@@ -40,6 +40,10 @@ func (h *K8sScopedPolicyHandler) GrantPreset(c *gin.Context) {
 	ServeJSON(c, h.svc.GrantPreset)
 }
 
+func (h *K8sScopedPolicyHandler) SplitByNamespaces(c *gin.Context) {
+	ServeJSON(c, h.svc.SplitByNamespaces)
+}
+
 // DeleteClusterGrant 删除一条集群档位记录。
 func (h *K8sScopedPolicyHandler) DeleteClusterGrant(c *gin.Context) {
 	id, err := parseUintParam(c, "id")

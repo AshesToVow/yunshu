@@ -380,3 +380,19 @@ type DbInstanceAccount struct {
 }
 
 func (DbInstanceAccount) TableName() string { return "db_instance_accounts" }
+
+// DbColumnMaskRule 列级脱敏规则。
+type DbColumnMaskRule struct {
+	ID         uint   `json:"id" gorm:"primaryKey"`
+	InstanceID uint   `json:"instance_id" gorm:"not null;index:idx_db_mask_inst"`
+	SchemaName string `json:"schema_name" gorm:"size:64;not null;default:'';index:idx_db_mask_inst"`
+	MaskTable  string `json:"table_name" gorm:"column:table_name;size:128;not null;index:idx_db_mask_inst"`
+	ColumnName string `json:"column_name" gorm:"size:128;not null"`
+	MaskType   string `json:"mask_type" gorm:"size:32;not null;default:partial;comment:hash|partial|redact"`
+	Pattern    string `json:"pattern" gorm:"size:64;comment:partial 时保留前后字符数如 3,4"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (DbColumnMaskRule) TableName() string { return "db_column_mask_rules" }

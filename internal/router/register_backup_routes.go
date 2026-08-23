@@ -10,7 +10,7 @@ import (
 func RegisterBackupRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectRoutes := api.Group("/projects")
 	projectRoutes.Use(d.authMiddleware, d.authorize, d.opAudit)
-	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
+	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.projectRepo, d.app.Logger))
 
 	mysqlBackup := projectScoped.Group("/mysql-backup")
 	mysqlBackup.GET("/mysqldump-options", d.mysqlBackupHandler.ListMysqldumpOptions)

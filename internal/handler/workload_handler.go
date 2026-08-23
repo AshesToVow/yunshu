@@ -224,6 +224,10 @@ func (h *WorkloadHandler) DeploymentRolloutUndo(c *gin.Context) {
 	ServeJSON(c, h.svc.DeploymentRolloutUndo)
 }
 
+func (h *WorkloadHandler) ListDeploymentRevisions(c *gin.Context) {
+	ServeQuery(c, h.svc.ListDeploymentRevisions)
+}
+
 func (h *WorkloadHandler) StatefulSetRolloutUndo(c *gin.Context) {
 	ServeJSON(c, h.svc.StatefulSetRolloutUndo)
 }

@@ -127,6 +127,7 @@ var (
 	ErrProjectAdminRequired          = BizError(http.StatusForbidden, 23011, "该操作需要项目管理员或负责人权限")
 	ErrProjectReadonlyMember         = BizError(http.StatusForbidden, 23012, "项目只读成员不能执行此修改类操作")
 	ErrK8sClusterProjectAccessDenied = BizError(http.StatusForbidden, 23013, "该集群已绑定到其他业务项目，当前账号不在允许范围内")
+	ErrProjectArchived               = BizError(http.StatusForbidden, 23014, "项目已归档，仅允许只读访问")
 )
 
 // ErrLogSourceServerNotFound 历史别名，与 ErrServerNotFound 同码（23002）；新代码请使用 ErrServerNotFound。

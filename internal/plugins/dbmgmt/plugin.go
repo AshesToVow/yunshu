@@ -41,6 +41,7 @@ func (m *module) Models() []any {
 		&model.DbAppUserRequest{},
 		&model.DbAppUserRequestStep{},
 		&model.DbInstanceAccount{},
+		&model.DbColumnMaskRule{},
 	}
 }
 

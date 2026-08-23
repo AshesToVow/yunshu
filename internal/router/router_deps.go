@@ -29,6 +29,7 @@ type RouteDeps struct {
 	opAudit           gin.HandlerFunc
 
 	projectMemberRepo interfaces.ProjectMemberRepository
+	projectRepo       interfaces.ProjectRepository
 	clusterRepo       interfaces.K8sClusterRepository
 	k8sRuntimeService *service.K8sRuntimeService
 
@@ -102,6 +103,7 @@ type RouteDeps struct {
 	aiHandler          *handler.AIHandler
 	esmgmtSvc          *esmgmtsvc.Service
 	esmgmtHandler      *handler.EsmgmtHandler
+	platformFeatures   *handler.PlatformFeaturesHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -215,6 +217,7 @@ func assembleRouteDeps(
 		opAudit:           opAudit,
 
 		projectMemberRepo: repos.ProjectMember,
+		projectRepo:       repos.Project,
 		clusterRepo:       repos.Cluster,
 		k8sRuntimeService: svcs.K8sRuntime,
 
@@ -288,6 +291,7 @@ func assembleRouteDeps(
 		aiHandler:          handlers.AI,
 		esmgmtSvc:          svcs.Esmgmt,
 		esmgmtHandler:      handlers.Esmgmt,
+		platformFeatures:   handler.NewPlatformFeaturesHandler(app.DB, svcs.AlertMonitorRule),
 	}
 	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil

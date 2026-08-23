@@ -549,3 +549,39 @@ func (s *ProjectMgmtService) RemoveProjectMember(ctx context.Context, projectID,
 	}
 	return s.memberRepo.DeleteByID(ctx, memberID)
 }
+
+// ArchiveProject 将项目标记为已归档（只读锁定由中间件/业务层约束）。
+func (s *ProjectMgmtService) ArchiveProject(ctx context.Context, id uint) (*ProjectItem, error) {
+	p, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrProjectNotFound
+		}
+		return nil, bizerrors.Pass(ctx, "project", "ArchiveProject", err)
+	}
+	p.LifecycleStatus = model.ProjectLifecycleArchived
+	if err := s.projectRepo.Save(ctx, p); err != nil {
+		return nil, bizerrors.Pass(ctx, "project", "ArchiveProject", err)
+	}
+	item := toProjectItem(*p)
+	s.enrichMyProjectRolesBatch(ctx, []ProjectItem{item})
+	return &item, nil
+}
+
+// RestoreProject 将已归档项目恢复为 active。
+func (s *ProjectMgmtService) RestoreProject(ctx context.Context, id uint) (*ProjectItem, error) {
+	p, err := s.projectRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrProjectNotFound
+		}
+		return nil, bizerrors.Pass(ctx, "project", "RestoreProject", err)
+	}
+	p.LifecycleStatus = model.ProjectLifecycleActive
+	if err := s.projectRepo.Save(ctx, p); err != nil {
+		return nil, bizerrors.Pass(ctx, "project", "RestoreProject", err)
+	}
+	item := toProjectItem(*p)
+	s.enrichMyProjectRolesBatch(ctx, []ProjectItem{item})
+	return &item, nil
+}

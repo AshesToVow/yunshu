@@ -62,6 +62,7 @@ func (m *module) Models() []any {
 		&model.K8sEventForwardRule{},
 		&model.K8sEventForwardSetting{},
 		&model.K8sWorkloadSnapshot{},
+		&model.K8sCrTemplate{},
 	}
 }
 

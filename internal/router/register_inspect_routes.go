@@ -9,7 +9,7 @@ import (
 func RegisterInspectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectRoutes := api.Group("/projects")
 	projectRoutes.Use(d.authMiddleware, d.authorize, d.opAudit)
-	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
+	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.projectRepo, d.app.Logger))
 
 	inspect := projectScoped.Group("/inspect")
 	inspect.GET("/plan", d.inspectHandler.GetPlan)
@@ -22,6 +22,7 @@ func RegisterInspectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	inspect.POST("/items/sync-template", d.inspectHandler.SyncItems)
 	inspect.POST("/items/reset-template", d.inspectHandler.ResetItems)
 	inspect.GET("/runs", d.inspectHandler.ListRuns)
+	inspect.GET("/runs/trends", d.inspectHandler.ListRunTrends)
 	inspect.POST("/runs", d.inspectHandler.CreateRun)
 	inspect.GET("/runs/:runId", d.inspectHandler.GetRun)
 	inspect.GET("/runs/:runId/report.html", d.inspectHandler.ReportHTML)
@@ -29,6 +30,7 @@ func RegisterInspectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	inspect.GET("/runs/:runId/report.xlsx", d.inspectHandler.ReportExcel)
 	inspect.GET("/runs/:runId/report.print.html", d.inspectHandler.ReportPrint)
 	inspect.POST("/runs/:runId/resend-email", d.inspectHandler.ResendEmail)
+	inspect.POST("/migrate-reports-to-minio", d.inspectHandler.MigrateReportsToMinIO)
 
 	inspect.GET("/report-templates", d.inspectHandler.ListReportTemplates)
 	inspect.POST("/report-templates", d.inspectHandler.CreateReportTemplate)

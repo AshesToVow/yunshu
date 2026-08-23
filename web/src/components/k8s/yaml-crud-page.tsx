@@ -78,7 +78,7 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   api: YamlCrudApi<TItem, TDetail>;
   extraRowActions?: (record: TItem, ctx: { clusterId: number; namespace?: string; reload: () => void }) => React.ReactNode;
   onEdit?: (record: TItem, ctx: { clusterId: number; namespace?: string; reload: () => void }) => void;
-  detailExtra?: (detail: TDetail) => React.ReactNode;
+  detailExtra?: (detail: TDetail, yamlCtx?: { yaml: string; setYaml: (v: string) => void }) => React.ReactNode;
   createTemplate?: (ctx: { namespace?: string }) => string;
   /** 点击「创建」打开右侧抽屉后调用（准备表单初始值等，如 prepareCreate） */
   onCreateDrawerOpen?: (ctx: YamlCrudCreateCtx) => void;
@@ -557,7 +557,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
           <Typography.Text type="secondary">加载中...</Typography.Text>
         ) : detail ? (
           <Space direction="vertical" style={{ width: "100%" }} size="middle">
-            {detailExtra?.(detail)}
+            {detailExtra?.(detail, { yaml: detailYaml, setYaml: setDetailYaml })}
             {renderDetail ? renderDetail(detail) : null}
             {!renderDetail && !detailExtra ? (
               <Typography.Paragraph copyable style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>

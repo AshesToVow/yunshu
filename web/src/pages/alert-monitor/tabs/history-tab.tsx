@@ -1,6 +1,6 @@
 import { extractApiErrorMessage } from "../../../services/http";
 import { Alert, Button, Card, Input, Modal, Segmented, Space, Tag, Typography, message } from "antd";
-import { BellOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { BellOutlined, DownloadOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAlertMonitor } from "../context";
@@ -12,6 +12,7 @@ import {
   clearAlertAck,
   listCurEvents,
   listHisEvents,
+  exportHisEventsCSV,
   type AlertCurEventItem,
   type AlertHisEventItem,
 } from "../../../services/alerts";
@@ -47,6 +48,7 @@ export function HistoryTab() {
   const [aiResult, setAiResult] = useState<AIAlertExplainResult | null>(null);
   const [detail, setDetail] = useState<AlertEventDetailTarget | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const deepOpenedRef = useRef(false);
   const deepHisTriedRef = useRef(false);
 
@@ -209,6 +211,27 @@ export function HistoryTab() {
     }
   }
 
+  async function downloadHisCsv() {
+    setExporting(true);
+    try {
+      const blob = await exportHisEventsCSV({
+        project_id: ctx.projectContextId || undefined,
+        keyword: keyword || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "alert-his-events.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success("已导出 CSV");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "导出失败"));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Alert
@@ -249,6 +272,11 @@ export function HistoryTab() {
             >
               刷新
             </Button>
+            {view === "lifecycle" ? (
+              <Button icon={<DownloadOutlined />} loading={exporting} onClick={() => void downloadHisCsv()}>
+                导出 CSV
+              </Button>
+            ) : null}
           </>
         ) : null}
       </Space>

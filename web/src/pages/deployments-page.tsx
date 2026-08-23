@@ -5,10 +5,11 @@ import {
   EyeOutlined,
   FileTextOutlined,
   ReloadOutlined,
+  RollbackOutlined,
   ScissorOutlined,
   TagsOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Dropdown, Form, Input, InputNumber, Modal, Progress, Space, Tag, Typography, message } from "antd";
+import { Button, Card, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Progress, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
@@ -21,6 +22,7 @@ import { useWorkloadProgressOptional } from "../contexts/workload-progress-conte
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
 import { TopologyGraphView } from "../components/k8s/topology-graph-view";
 import { getWorkloadTopology, type TopologyGraph } from "../services/k8s-topology";
+import { formatDateTime } from "../utils/format";
 import {
   applyDeployment,
   buildCpuMemoryResourceMaps,
@@ -29,11 +31,13 @@ import {
   listDeployments,
   getDeploymentRolloutStatus,
   listDeploymentPods,
+  listDeploymentRevisions,
   patchDeploymentContainerResources,
   restartDeployment,
   rolloutUndoDeployment,
   scaleDeployment,
   type DeploymentRolloutStatus,
+  type DeploymentRevisionItem,
   type WorkloadDetail,
   type WorkloadItem,
 } from "../services/workloads";
@@ -162,6 +166,10 @@ export function DeploymentsPage() {
   const [rolloutOpen, setRolloutOpen] = useState(false);
   const [rolloutTarget, setRolloutTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
   const [rolloutStatus, setRolloutStatus] = useState<DeploymentRolloutStatus | null>(null);
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [revisionRows, setRevisionRows] = useState<DeploymentRevisionItem[]>([]);
+  const [revisionLoading, setRevisionLoading] = useState(false);
   const [verticalForm] = Form.useForm<{
     container_name?: string;
     requests_cpu?: string;
@@ -184,6 +192,22 @@ export function DeploymentsPage() {
       setTopoOpen(false);
     } finally {
       setTopoLoading(false);
+    }
+  }
+
+  async function openRevisionRollback(clusterId: number, namespace: string, name: string) {
+    setRevisionTarget({ clusterId, namespace, name });
+    setRevisionOpen(true);
+    setRevisionLoading(true);
+    setRevisionRows([]);
+    try {
+      const rows = await listDeploymentRevisions(clusterId, namespace, name);
+      setRevisionRows(rows || []);
+    } catch {
+      message.error("加载历史版本失败");
+      setRevisionOpen(false);
+    } finally {
+      setRevisionLoading(false);
     }
   }
 
@@ -378,6 +402,11 @@ spec:
           ports:
             - containerPort: 80
 `}
+        detailExtra={(detail, yamlCtx) =>
+          yamlCtx ? (
+            <DeploymentDetailQuickEdit detail={detail} detailYaml={yamlCtx.yaml} setDetailYaml={yamlCtx.setYaml} />
+          ) : null
+        }
         extraRowActions={(record, ctx) => (
           <Space>
             <Dropdown
@@ -465,6 +494,15 @@ spec:
                       })();
                     },
                   },
+                  {
+                    key: "undo-pick",
+                    label: "选择版本回滚",
+                    icon: <RollbackOutlined />,
+                    onClick: () => {
+                      const ns = ctx.namespace ?? "default";
+                      void openRevisionRollback(ctx.clusterId, ns, record.name);
+                    },
+                  },
                 ],
               }}
             >
@@ -512,6 +550,74 @@ spec:
         ) : (
           <Typography.Text type="secondary">加载中…</Typography.Text>
         )}
+      </Modal>
+
+      <Modal
+        title={`选择回滚版本${revisionTarget ? `：${revisionTarget.name}` : ""}`}
+        open={revisionOpen}
+        onCancel={() => setRevisionOpen(false)}
+        footer={null}
+        width={640}
+      >
+        <Table
+          rowKey="revision"
+          size="small"
+          loading={revisionLoading}
+          dataSource={revisionRows}
+          pagination={false}
+          columns={[
+            { title: "Revision", dataIndex: "revision", width: 90 },
+            {
+              title: "状态",
+              key: "current",
+              width: 90,
+              render: (_: unknown, r: DeploymentRevisionItem) => (r.current ? <Tag color="blue">当前</Tag> : null),
+            },
+            { title: "副本", key: "replicas", width: 100, render: (_: unknown, r: DeploymentRevisionItem) => `${r.ready}/${r.replicas}` },
+            {
+              title: "创建时间",
+              dataIndex: "created_at",
+              render: (v?: string) => (v ? formatDateTime(v) : "—"),
+            },
+            {
+              title: "操作",
+              width: 100,
+              render: (_: unknown, r: DeploymentRevisionItem) =>
+                r.current ? (
+                  <Typography.Text type="secondary">—</Typography.Text>
+                ) : (
+                  <Popconfirm
+                    title={`回滚到 revision ${r.revision}？`}
+                    onConfirm={() => {
+                      if (!revisionTarget) return;
+                      void (async () => {
+                        await rolloutUndoDeployment(
+                          revisionTarget.clusterId,
+                          revisionTarget.namespace,
+                          revisionTarget.name,
+                          r.revision,
+                        );
+                        message.success(`已回滚到 revision ${r.revision}`);
+                        setRevisionOpen(false);
+                        progress?.track({
+                          kind: "Deployment",
+                          clusterId: revisionTarget.clusterId,
+                          namespace: revisionTarget.namespace,
+                          name: revisionTarget.name,
+                          title: `回滚 ${revisionTarget.name} → rev ${r.revision}`,
+                        });
+                        listReloadRef.current();
+                      })();
+                    }}
+                  >
+                    <Button size="small" icon={<RollbackOutlined />}>
+                      回滚
+                    </Button>
+                  </Popconfirm>
+                ),
+            },
+          ]}
+        />
       </Modal>
 
       <Modal

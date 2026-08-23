@@ -7,6 +7,8 @@ import {
   Divider,
   Empty,
   Form,
+  Input,
+  Modal,
   Popconfirm,
   Segmented,
   Select,
@@ -31,6 +33,7 @@ import {
   listK8sCapabilities,
   listK8sClusterGrants,
   listK8sPoliciesByRole,
+  splitK8sScopedPoliciesByNamespaces,
   type K8sCapabilityItem,
   type K8sClusterAccessItem,
 } from "../services/k8s-policies";
@@ -95,6 +98,12 @@ export function K8sScopedPoliciesPage() {
   const [presetNsLoading, setPresetNsLoading] = useState(false);
   const [denyNsOptions, setDenyNsOptions] = useState<{ label: string; value: string }[]>([]);
   const [denyNsLoading, setDenyNsLoading] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [splitSubmitting, setSplitSubmitting] = useState(false);
+  const [splitForm] = Form.useForm<{
+    cluster_ids: number[];
+    splits: Array<{ namespace?: string; preset?: "readonly" | "readonly_exec" | "admin" }>;
+  }>();
 
   const watchedPresetClusterIds = Form.useWatch("cluster_ids", presetForm) ?? [];
   const watchedDenyClusterId = Form.useWatch("cluster_id", denyForm);
@@ -600,6 +609,7 @@ export function K8sScopedPoliciesPage() {
                   </Checkbox.Group>
                 </Form.Item>
                 <Form.Item>
+                    <Space>
                     <Button
                       type="primary"
                       ghost
@@ -662,6 +672,20 @@ export function K8sScopedPoliciesPage() {
                     >
                       保存能力包
                     </Button>
+                    <Button
+                      onClick={() => {
+                        splitForm.resetFields();
+                        splitForm.setFieldsValue({
+                          cluster_ids: presetForm.getFieldValue("cluster_ids") ?? [],
+                          splits: [{ namespace: undefined, preset: "readonly" }],
+                        });
+                        setSplitOpen(true);
+                      }}
+                      disabled={!activeSubjectReady}
+                    >
+                      按 NS 拆分档位
+                    </Button>
+                    </Space>
                 </Form.Item>
               </Form>
 
@@ -887,6 +911,111 @@ export function K8sScopedPoliciesPage() {
           <Empty description="请先在上方选择角色模板、用户或用户组" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         )}
       </Card>
+
+      <Modal
+        title="按命名空间拆分档位"
+        open={splitOpen}
+        onCancel={() => setSplitOpen(false)}
+        width={720}
+        onOk={() => {
+          if (!activeSubjectReady) return;
+          void (async () => {
+            const values = await splitForm.validateFields();
+            const clusterIds = values.cluster_ids ?? [];
+            if (!clusterIds.length) {
+              message.warning("请选择至少一个集群");
+              return;
+            }
+            const splits = (values.splits ?? [])
+              .map((s) => ({
+                namespace: String(s.namespace || "").trim(),
+                preset: s.preset || "readonly",
+              }))
+              .filter((s) => s.namespace);
+            if (!splits.length) {
+              message.warning("请至少填写一行命名空间");
+              return;
+            }
+            setSplitSubmitting(true);
+            try {
+              const base =
+                subjectKind === "role"
+                  ? { principal_kind: "role" as const, role_id: selectedRoleId! }
+                  : subjectKind === "user"
+                    ? { principal_kind: "user" as const, user_id: selectedUserId! }
+                    : { principal_kind: "group" as const, group_id: selectedGroupId! };
+              const resp = await splitK8sScopedPoliciesByNamespaces({
+                ...base,
+                cluster_ids: clusterIds,
+                splits,
+              });
+              message.success(`已拆分下发：新增 ${resp.added}，跳过 ${resp.skipped}`);
+              setSplitOpen(false);
+              const pref = subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId);
+              await refreshAccessGrants(subjectKind, selectedRoleId, selectedGroupId, selectedUserId);
+              await refreshDenyRules(subjectKind, pref);
+            } finally {
+              setSplitSubmitting(false);
+            }
+          })();
+        }}
+        confirmLoading={splitSubmitting}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary">
+          为同一主体在不同命名空间下发不同档位（每行一条 NS + preset），须选择具体集群。
+        </Typography.Paragraph>
+        <Form form={splitForm} layout="vertical">
+          <Form.Item label="集群" name="cluster_ids" rules={[{ required: true, type: "array", min: 1, message: "请选择集群" }]}>
+            <Select
+              mode="multiple"
+              options={clusterOptions.map((c) => ({ label: c.name, value: c.id }))}
+              placeholder="选择集群"
+            />
+          </Form.Item>
+          <Form.List name="splits">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map((field) => (
+                  <Space key={field.key} align="baseline" style={{ display: "flex", marginBottom: 8 }}>
+                    <Form.Item
+                      {...field}
+                      name={[field.name, "namespace"]}
+                      rules={[{ required: true, message: "命名空间" }]}
+                      style={{ width: 220 }}
+                    >
+                      <Select
+                        showSearch
+                        placeholder="命名空间"
+                        options={presetNsOptions}
+                        loading={presetNsLoading}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      {...field}
+                      name={[field.name, "preset"]}
+                      initialValue="readonly"
+                      style={{ width: 200 }}
+                    >
+                      <Select
+                        options={[
+                          { value: "readonly", label: "只读" },
+                          { value: "readonly_exec", label: "只读+Exec" },
+                          { value: "admin", label: "管理" },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Button type="link" onClick={() => remove(field.name)}>删除</Button>
+                  </Space>
+                ))}
+                <Button type="dashed" onClick={() => add({ preset: "readonly" })} block>
+                  添加命名空间行
+                </Button>
+              </>
+            )}
+          </Form.List>
+        </Form>
+      </Modal>
     </div>
   );
 }

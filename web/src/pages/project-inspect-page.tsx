@@ -37,6 +37,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DashboardStatCard } from "../components/ops/dashboard-stat-card";
+import { LineChart } from "../components/line-chart";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
 import { CHART_BRAND, CHART_ERROR, CHART_SUCCESS, CHART_WARNING } from "../constants/chart-colors";
 import { listAlertDatasources, type AlertDatasourceItem } from "../services/alert-platform";
@@ -53,7 +54,9 @@ import {
   inspectReportPrintUrl,
   listInspectItems,
   listInspectReportTemplates,
+  listInspectRunTrends,
   listInspectRuns,
+  migrateInspectReportsToMinio,
   previewInspectReportTemplate,
   resendInspectEmail,
   resetInspectItems,
@@ -66,6 +69,7 @@ import {
   type InspectPlan,
   type InspectReportTemplate,
   type InspectRun,
+  type InspectRunTrendItem,
   type InspectStorageInfo,
 } from "../services/inspect";
 import { extractApiErrorMessage, http } from "../services/http";
@@ -203,6 +207,8 @@ export function ProjectInspectPage() {
   const [editingTpl, setEditingTpl] = useState<InspectReportTemplate | null>(null);
   const [runDetail, setRunDetail] = useState<InspectRun | null>(null);
   const [storageInfo, setStorageInfo] = useState<InspectStorageInfo | null>(null);
+  const [runTrends, setRunTrends] = useState<InspectRunTrendItem[]>([]);
+  const [migratingReports, setMigratingReports] = useState(false);
   const [activeTab, setActiveTab] = useState("plan");
   const [planForm] = Form.useForm();
   const [itemForm] = Form.useForm();
@@ -228,19 +234,21 @@ export function ProjectInspectPage() {
       if (!pid) return;
       setLoading(true);
       try {
-        const [p, its, rs, ds, tpls, storage] = await Promise.all([
+        const [p, its, rs, ds, tpls, storage, trends] = await Promise.all([
           getInspectPlan(pid),
           listInspectItems(pid),
           listInspectRuns(pid, { page, page_size: pageSize }),
           listAlertDatasources({ project_id: pid, page: 1, page_size: 200 }),
           listInspectReportTemplates(pid),
           getInspectStorageInfo(pid),
+          listInspectRunTrends(pid, 30),
         ]);
         setPlan(p);
         setItems(its || []);
         setRuns(rs.list || []);
         setRunTotal(rs.total || 0);
         setStorageInfo(storage);
+        setRunTrends(trends || []);
         setDsList((ds.list || []).filter((d) => d.enabled !== false));
         setReportTemplates(tpls || []);
         planForm.setFieldsValue({
@@ -275,6 +283,32 @@ export function ProjectInspectPage() {
       void refresh(projectId, runPage, runPageSize);
     }
   }, [runPage, runPageSize]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const trendChartData = useMemo(() => {
+    const ordered = [...runTrends].reverse();
+    return {
+      labels: ordered.map((t) => {
+        const d = t.finished_at ? new Date(t.finished_at) : null;
+        return d && !Number.isNaN(d.getTime()) ? `${d.getMonth() + 1}/${d.getDate()}` : `#${t.id}`;
+      }),
+      scores: ordered.map((t) => t.score),
+      criticals: ordered.map((t) => t.critical_count),
+    };
+  }, [runTrends]);
+
+  async function handleMigrateReports() {
+    if (!projectId) return;
+    setMigratingReports(true);
+    try {
+      const r = await migrateInspectReportsToMinio(projectId);
+      message.success(`已迁移 ${r.migrated ?? 0} 份报告到 MinIO`);
+      await refresh(projectId);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "迁移失败"));
+    } finally {
+      setMigratingReports(false);
+    }
+  }
 
   const latestRun = runs[0];
   const enabledItems = useMemo(() => items.filter((i) => i.enabled).length, [items]);
@@ -636,16 +670,26 @@ export function ProjectInspectPage() {
         </Card>
       ) : (
         <>
-          {storageInfo && !storageInfo.minio_ready ? (
+          {storageInfo && (!storageInfo.minio_ready || storageInfo.require_minio) ? (
             <Alert
-              type="warning"
+              type={storageInfo.require_minio && !storageInfo.minio_ready ? "error" : "warning"}
               showIcon
               style={{ marginBottom: 16 }}
-              message="巡检报告当前写入本地目录，容器重启后可能丢失"
+              message={
+                storageInfo.require_minio && !storageInfo.minio_ready
+                  ? "巡检报告须写入 MinIO，当前 MinIO 不可用，无法执行巡检"
+                  : "巡检报告当前写入本地目录，容器重启后可能丢失"
+              }
               description={
                 <span>
-                  请在数据字典启用并填写 MinIO 配置（minio_endpoint、minio_access_key、minio_secret_key、minio_bucket），
-                  与 MySQL 备份共用同一套连接。当前路径：
+                  {storageInfo.require_minio ? (
+                    <>
+                      数据字典 <Typography.Text code>inspect_report.require_minio</Typography.Text> 已启用，须配置 MinIO。
+                    </>
+                  ) : (
+                    <>请在数据字典启用并填写 MinIO 配置（minio_endpoint、minio_access_key、minio_secret_key、minio_bucket）。</>
+                  )}
+                  当前路径：
                   <Typography.Text code copyable>
                     {storageInfo.local_root || "logs/inspect-reports"}
                   </Typography.Text>
@@ -654,6 +698,13 @@ export function ProjectInspectPage() {
                       {" "}
                       原因：{storageInfo.minio_reason}
                     </>
+                  ) : null}
+                  {storageInfo.minio_ready ? (
+                    <div style={{ marginTop: 8 }}>
+                      <Button size="small" loading={migratingReports} onClick={() => void handleMigrateReports()}>
+                        将历史本地报告迁移到 MinIO
+                      </Button>
+                    </div>
                   ) : null}
                 </span>
               }
@@ -718,6 +769,20 @@ export function ProjectInspectPage() {
               />
             </Col>
           </Row>
+
+          {runTrends.length > 1 ? (
+            <Card className="table-card" title="巡检趋势（最近 30 次）" style={{ marginBottom: 16 }} loading={loading}>
+              <LineChart
+                yAxisLabel="分数 / 数量"
+                labels={trendChartData.labels}
+                series={[
+                  { name: "健康分", data: trendChartData.scores, color: CHART_BRAND },
+                  { name: "严重项", data: trendChartData.criticals, color: CHART_ERROR },
+                ]}
+                height={240}
+              />
+            </Card>
+          ) : null}
 
           {!dsList.length ? (
             <Alert

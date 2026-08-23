@@ -512,6 +512,15 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 		return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("数据源不属于当前项目"))
 	}
 
+	storInfo := resolveReportStorageInfo(dbCtx, s.db, s.reportDir)
+	if storInfo.RequireMinIO && !storInfo.MinioReady {
+		reason := strings.TrimSpace(storInfo.MinioReason)
+		if reason == "" {
+			reason = "请配置数据字典 MinIO"
+		}
+		return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("巡检报告须写入 MinIO（inspect_report.require_minio=true）："+reason))
+	}
+
 	items, err := s.effectiveItems(dbCtx, plan.ProjectID)
 	if err != nil {
 		return s.failRun(dbCtx, run, err)
@@ -609,6 +618,9 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	_ = s.db.WithContext(dbCtx).Model(plan).Update("last_run_at", finished).Error
 
 	_ = s.sendRunEmail(dbCtx, plan, run, data, htmlBytes, pdfBytes)
+	if run.CriticalCount > 0 || run.Status == "failed" {
+		_ = s.sendInspectAnomalyEmail(dbCtx, plan, run, data)
+	}
 	return run, nil
 }
 
@@ -645,7 +657,51 @@ func (s *Service) failRun(ctx context.Context, run *model.InspectRun, err error)
 	run.Status = "failed"
 	run.ErrorMessage = msg
 	run.FinishedAt = &finished
+	if plan, perr := s.getPlanByRun(dbCtx, run); perr == nil && plan != nil {
+		data := ReportData{Project: fmt.Sprintf("project-%d", run.ProjectID), Score: run.Score, Grade: run.Grade, Summary: msg, Timestamp: finished}
+		_ = s.sendInspectAnomalyEmail(dbCtx, plan, run, data)
+	}
 	return run, err
+}
+
+func (s *Service) getPlanByRun(ctx context.Context, run *model.InspectRun) (*model.InspectPlan, error) {
+	if s == nil || s.db == nil || run == nil || run.PlanID == 0 {
+		return nil, fmt.Errorf("invalid run")
+	}
+	var plan model.InspectPlan
+	if err := s.db.WithContext(ctx).First(&plan, run.PlanID).Error; err != nil {
+		return nil, err
+	}
+	return &plan, nil
+}
+
+func (s *Service) sendInspectAnomalyEmail(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun, data ReportData) error {
+	if s.mailer == nil || !s.mailer.Enabled() || plan == nil || run == nil {
+		return nil
+	}
+	recipients := parseRecipients(plan.RecipientsJSON)
+	if len(recipients) == 0 {
+		return nil
+	}
+	subject := fmt.Sprintf("[%s] 巡检异常告警 %s", s.appNameOrDefault(), data.Project)
+	if run.Status == "failed" {
+		subject += "（执行失败）"
+	} else if run.CriticalCount > 0 {
+		subject += fmt.Sprintf("（严重 %d）", run.CriticalCount)
+	}
+	text := strings.TrimSpace(data.Summary)
+	if text == "" {
+		text = run.ErrorMessage
+	}
+	htmlBody := fmt.Sprintf("<p><strong>巡检异常</strong></p><p>%s</p><p>严重 %d / 警告 %d / 分数 %.0f</p>",
+		html.EscapeString(text), run.CriticalCount, run.WarningCount, data.Score)
+	var lastErr error
+	for _, to := range recipients {
+		if err := s.mailer.SendMultipart(ctx, to, subject, text, htmlBody); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
 }
 
 func (s *Service) ReadReport(ctx context.Context, projectID, runID uint, kind string) ([]byte, string, error) {

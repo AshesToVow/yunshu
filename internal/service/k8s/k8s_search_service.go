@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"yunshu/internal/repository"
 
 	corev1 "k8s.io/api/core/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 )
 
@@ -106,7 +108,7 @@ func (s *K8sSearchService) Search(ctx context.Context, q K8sSearchQuery) ([]K8sS
 func parseSearchTypes(raw string) map[string]bool {
 	raw = strings.ToLower(strings.TrimSpace(raw))
 	if raw == "" {
-		return map[string]bool{"pod": true, "service": true, "ingress": true, "event": true}
+		return map[string]bool{"pod": true, "service": true, "ingress": true, "event": true, "deployment": true, "configmap": true, "namespace": true}
 	}
 	out := map[string]bool{}
 	for _, p := range strings.Split(raw, ",") {
@@ -213,6 +215,33 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 				}
 				add("event", e.Namespace, e.InvolvedObject.Name, e.Reason+" | "+e.Message, e.Type,
 					"/events?cluster_id="+itoa(cl.ID)+"&namespace="+e.Namespace+"&keyword="+e.InvolvedObject.Name)
+			}
+		}
+	}
+	if types["deployment"] {
+		var deps []appsv1.Deployment
+		if err := k.WithContext(ctx).Resource(&appsv1.Deployment{}).AllNamespace().List(&deps).Error; err == nil {
+			for _, d := range deps {
+				add("deployment", d.Namespace, d.Name, fmt.Sprintf("%d/%d", d.Status.ReadyReplicas, d.Status.Replicas), "",
+					"/deployments?cluster_id="+itoa(cl.ID)+"&namespace="+d.Namespace+"&keyword="+d.Name)
+			}
+		}
+	}
+	if types["configmap"] {
+		var cms []corev1.ConfigMap
+		if err := k.WithContext(ctx).Resource(&corev1.ConfigMap{}).AllNamespace().List(&cms).Error; err == nil {
+			for _, cm := range cms {
+				add("configmap", cm.Namespace, cm.Name, "", "",
+					"/configmaps?cluster_id="+itoa(cl.ID)+"&namespace="+cm.Namespace+"&keyword="+cm.Name)
+			}
+		}
+	}
+	if types["namespace"] {
+		var nss []corev1.Namespace
+		if err := k.WithContext(ctx).Resource(&corev1.Namespace{}).List(&nss).Error; err == nil {
+			for _, ns := range nss {
+				add("namespace", ns.Name, ns.Name, string(ns.Status.Phase), string(ns.Status.Phase),
+					"/namespaces?cluster_id="+itoa(cl.ID)+"&keyword="+ns.Name)
 			}
 		}
 	}

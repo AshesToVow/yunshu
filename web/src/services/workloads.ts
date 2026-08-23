@@ -139,6 +139,18 @@ export function rolloutUndoDeployment(
   });
 }
 
+export interface DeploymentRevisionItem {
+  revision: number;
+  replicas: number;
+  ready: number;
+  created_at?: string;
+  current: boolean;
+}
+
+export function listDeploymentRevisions(clusterId: number, namespace: string, name: string) {
+  return deploymentsSvc.get<DeploymentRevisionItem[]>("/revisions", k8sParams(clusterId, { namespace, name }));
+}
+
 export function listDeploymentPods(clusterId: number, namespace: string, name: string) {
   return deploymentsSvc.get<RelatedPodItem[]>("/pods", k8sParams(clusterId, { namespace, name }));
 }

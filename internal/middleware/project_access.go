@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
@@ -18,7 +19,8 @@ import (
 
 // RequireProjectMemberAccess 校验当前用户是否为 URL 中 :id 对应项目的成员；超级管理员跳过。
 // 规则：GET/HEAD 任意成员均可；非 GET 只读成员禁止；项目元数据（PUT/DELETE /projects/:id）与成员管理（/members 且非 GET）需 admin 或 owner。
-func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, logger *logx.Logger) gin.HandlerFunc {
+// 已归档项目仅允许 GET/HEAD，以及 POST /restore 恢复操作。
+func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, projectRepo interfaces.ProjectRepository, logger *logx.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if memberRepo == nil {
 			response.Error(c, constants.ErrInternal)
@@ -48,6 +50,24 @@ func RequireProjectMemberAccess(memberRepo interfaces.ProjectMemberRepository, l
 			return
 		}
 		projectID := uint(pv)
+		if projectRepo != nil {
+			if p, perr := projectRepo.GetByID(c.Request.Context(), projectID); perr == nil && p != nil {
+				if p.LifecycleStatus == model.ProjectLifecycleArchived {
+					method := strings.ToUpper(strings.TrimSpace(c.Request.Method))
+					fullPath := c.FullPath()
+					if fullPath == "" {
+						fullPath = c.Request.URL.Path
+					}
+					if method != http.MethodGet && method != http.MethodHead {
+						if !strings.Contains(fullPath, "/restore") || method != http.MethodPost {
+							response.Error(c, constants.ErrProjectArchived)
+							c.Abort()
+							return
+						}
+					}
+				}
+			}
+		}
 		m, err := memberRepo.GetByProjectAndUser(c.Request.Context(), projectID, user.ID)
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {

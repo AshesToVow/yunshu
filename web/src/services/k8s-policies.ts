@@ -78,6 +78,19 @@ export function grantK8sScopedPoliciesPreset(payload: K8sScopedPolicyGrantPreset
   return getData<K8sScopedPolicyGrantPresetResponse>(http.post("/k8s-policies/grant-preset", payload));
 }
 
+export type K8sSplitByNamespacesPayload = {
+  principal_kind?: "role" | "user" | "group";
+  role_id?: number;
+  user_id?: number;
+  group_id?: number;
+  cluster_ids: number[];
+  splits: Array<{ namespace: string; preset: "readonly" | "readonly_exec" | "admin" }>;
+};
+
+export function splitK8sScopedPoliciesByNamespaces(payload: K8sSplitByNamespacesPayload) {
+  return getData<K8sScopedPolicyGrantPresetResponse>(http.post("/k8s-policies/split-by-namespaces", payload));
+}
+
 export function deleteK8sClusterGrant(id: number) {
   return getData<{ message: string }>(http.delete(`/k8s-policies/cluster-grants/${id}`));
 }

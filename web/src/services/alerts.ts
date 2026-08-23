@@ -333,6 +333,74 @@ export function listHisEvents(params?: {
   );
 }
 
+export async function exportHisEventsCSV(params?: {
+  project_id?: number;
+  datasource_id?: number;
+  severity?: string;
+  keyword?: string;
+}): Promise<Blob> {
+  return (await http.get("/alerts/his-events/export.csv", { params, responseType: "blob" })) as unknown as Blob;
+}
+
+export interface PromqlSavedQueryItem {
+  id: number;
+  name: string;
+  query: string;
+  datasource_id?: number;
+  kind: string;
+  project_id?: number;
+  created_at: string;
+}
+
+export function listPromqlSavedQueries() {
+  return getData<{ list: PromqlSavedQueryItem[] }>(http.get("/alerts/promql-saved-queries")).then((r) => r.list || []);
+}
+
+export function createPromqlSavedQuery(payload: {
+  name: string;
+  query: string;
+  datasource_id?: number;
+  kind?: string;
+  project_id?: number;
+}) {
+  return getData<PromqlSavedQueryItem>(http.post("/alerts/promql-saved-queries", payload));
+}
+
+export function deletePromqlSavedQuery(id: number) {
+  return getData<{ ok?: boolean }>(http.delete(`/alerts/promql-saved-queries/${id}`));
+}
+
+export interface AlertMonitorRuleChangeItem {
+  id: number;
+  rule_id: number;
+  proposer_id: number;
+  reviewer_id?: number;
+  status: string;
+  payload_json: string;
+  comment?: string;
+  created_at: string;
+}
+
+export function listPendingMonitorRuleChanges() {
+  return getData<{ list: AlertMonitorRuleChangeItem[] }>(http.get("/alerts/monitor-rule-changes")).then((r) => r.list || []);
+}
+
+export function proposeMonitorRuleChange(payload: {
+  rule_id: number;
+  payload: Record<string, unknown>;
+  comment?: string;
+}) {
+  return getData<AlertMonitorRuleChangeItem>(http.post("/alerts/monitor-rule-changes", payload));
+}
+
+export function approveMonitorRuleChange(id: number) {
+  return getData<Record<string, unknown>>(http.post(`/alerts/monitor-rule-changes/${id}/approve`, {}));
+}
+
+export function rejectMonitorRuleChange(id: number, comment?: string) {
+  return getData<{ ok?: boolean }>(http.post(`/alerts/monitor-rule-changes/${id}/reject`, { comment }));
+}
+
 export type AlertAckItem = {
   id: number;
   fingerprint: string;

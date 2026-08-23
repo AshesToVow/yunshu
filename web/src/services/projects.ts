@@ -93,6 +93,14 @@ export async function deleteProject(id: number) {
   return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${id}`));
 }
 
+export async function archiveProject(id: number) {
+  return await getData(http.post<any, ApiResponse<ProjectItem>>(`/projects/${id}/archive`, {}));
+}
+
+export async function restoreProject(id: number) {
+  return await getData(http.post<any, ApiResponse<ProjectItem>>(`/projects/${id}/restore`, {}));
+}
+
 /** 项目成员（project_members），与监控规则 project_id、告警通知收件人联动 */
 export interface ProjectMemberItem {
   id: number;

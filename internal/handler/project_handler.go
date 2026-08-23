@@ -53,6 +53,36 @@ func (h *ProjectHandler) Update(c *gin.Context) {
 	})
 }
 
+// Archive 归档项目。
+func (h *ProjectHandler) Archive(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	item, err := h.svc.ArchiveProject(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, item)
+}
+
+// Restore 恢复已归档项目。
+func (h *ProjectHandler) Restore(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	item, err := h.svc.RestoreProject(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, item)
+}
+
 // Delete 删除对应的 HTTP 接口处理逻辑。
 func (h *ProjectHandler) Delete(c *gin.Context) {
 	id, err := parseUintParam(c, "id")

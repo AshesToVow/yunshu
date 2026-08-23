@@ -1,9 +1,15 @@
 import { extractApiErrorMessage } from "../../../services/http";
-import { Alert, Button, Form, Input, InputNumber, Modal, Segmented, Select, Space, Switch, Table, Typography, message } from "antd";
+import { Alert, Button, Card, Form, Input, InputNumber, Modal, Segmented, Select, Space, Switch, Table, Typography, message } from "antd";
 import { PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useAlertMonitor } from "../context";
 import { tablePagination } from "../../../utils/table-pagination";
+import {
+  approveMonitorRuleChange,
+  listPendingMonitorRuleChanges,
+  rejectMonitorRuleChange,
+  type AlertMonitorRuleChangeItem,
+} from "../../../services/alerts";
 import {
   createAlertMonitorRuleFromTemplate,
   importPrometheusYAML,
@@ -25,6 +31,23 @@ export function RulesTab() {
   const [importPreview, setImportPreview] = useState<
     Array<{ group_name: string; name: string; expr: string; for_seconds: number; severity: string }>
   >([]);
+  const [pendingChanges, setPendingChanges] = useState<AlertMonitorRuleChangeItem[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+
+  async function loadPendingChanges() {
+    setPendingLoading(true);
+    try {
+      setPendingChanges(await listPendingMonitorRuleChanges());
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "加载待审批变更失败"));
+    } finally {
+      setPendingLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadPendingChanges();
+  }, []);
 
   const groups = useMemo(() => {
     const set = new Set(templates.map((t) => t.group));
@@ -152,6 +175,77 @@ export function RulesTab() {
           </Space>
         }
       />
+      {pendingChanges.length > 0 ? (
+        <Card
+          size="small"
+          title={`待审批规则变更 (${pendingChanges.length})`}
+          extra={
+            <Button size="small" icon={<ReloadOutlined />} loading={pendingLoading} onClick={() => void loadPendingChanges()}>
+              刷新
+            </Button>
+          }
+        >
+          <Table
+            rowKey="id"
+            size="small"
+            loading={pendingLoading}
+            dataSource={pendingChanges}
+            pagination={false}
+            columns={[
+              { title: "ID", dataIndex: "id", width: 60 },
+              { title: "规则 ID", dataIndex: "rule_id", width: 90 },
+              { title: "提议人", dataIndex: "proposer_id", width: 90 },
+              {
+                title: "变更摘要",
+                key: "payload",
+                ellipsis: true,
+                render: (_: unknown, r: AlertMonitorRuleChangeItem) => {
+                  try {
+                    const p = JSON.parse(r.payload_json || "{}");
+                    return p.name || p.expr || r.payload_json?.slice(0, 80);
+                  } catch {
+                    return r.payload_json?.slice(0, 80);
+                  }
+                },
+              },
+              { title: "备注", dataIndex: "comment", ellipsis: true },
+              {
+                title: "操作",
+                width: 160,
+                render: (_: unknown, r: AlertMonitorRuleChangeItem) => (
+                  <Space>
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={() =>
+                        void approveMonitorRuleChange(r.id).then(async () => {
+                          message.success("已批准并应用");
+                          await loadPendingChanges();
+                          await ctx.loadRules(ctx.projectContextId);
+                        })
+                      }
+                    >
+                      批准
+                    </Button>
+                    <Button
+                      size="small"
+                      danger
+                      onClick={() =>
+                        void rejectMonitorRuleChange(r.id).then(() => {
+                          message.success("已驳回");
+                          void loadPendingChanges();
+                        })
+                      }
+                    >
+                      驳回
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </Card>
+      ) : null}
       <Table
         rowKey="id"
         columns={ctx.ruleColumns}

@@ -102,6 +102,19 @@ func (s *AlertService) ReceiveK8sEventIngress(ctx context.Context, payload Alert
 	return s.receiveAlertmanagerPayloadSync(ctx, payload)
 }
 
+// ReceiveAlertmanagerWebhook 接收 Alertmanager Webhook；Redis 可用时异步入队。
+func (s *AlertService) ReceiveAlertmanagerWebhook(ctx context.Context, payload AlertManagerPayload) error {
+	if s.shouldEnqueueAlertmanagerWebhook() {
+		if err := s.enqueueAlertmanagerWebhook(ctx, payload); err != nil {
+			s.logWebhookWarn("Failed to enqueue alertmanager webhook, processing synchronously",
+				append(webhookPayloadLogAttrs(payload), "error", err)...)
+			return s.receiveAlertmanagerPayloadSync(ctx, payload)
+		}
+		return nil
+	}
+	return s.receiveAlertmanagerPayloadSync(ctx, payload)
+}
+
 func normalizeK8sEventIngressPayload(p *AlertManagerPayload) {
 	if p == nil {
 		return

@@ -69,8 +69,19 @@ export interface InspectRun {
 export interface InspectStorageInfo {
   backend: string;
   minio_ready: boolean;
+  require_minio?: boolean;
   local_root?: string;
   minio_reason?: string;
+}
+
+export interface InspectRunTrendItem {
+  id: number;
+  score: number;
+  grade: string;
+  critical_count: number;
+  warning_count: number;
+  finished_at?: string | null;
+  status: string;
 }
 
 export type InspectPlanUpdate = {
@@ -199,4 +210,14 @@ export function inspectReportExcelUrl(projectId: number, runId: number) {
 
 export function inspectReportPrintUrl(projectId: number, runId: number) {
   return `/projects/${projectId}/inspect/runs/${runId}/report.print.html`;
+}
+
+export function listInspectRunTrends(projectId: number, limit = 30) {
+  return getData<{ list: InspectRunTrendItem[] }>(
+    http.get(`/projects/${projectId}/inspect/runs/trends`, { params: { limit } }),
+  ).then((r) => r.list || []);
+}
+
+export function migrateInspectReportsToMinio(projectId: number) {
+  return getData<{ migrated: number }>(http.post(`/projects/${projectId}/inspect/migrate-reports-to-minio`));
 }

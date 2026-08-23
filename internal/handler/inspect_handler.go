@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"yunshu/internal/pkg/auth"
@@ -382,4 +383,38 @@ func (h *InspectHandler) ResendEmail(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"sent": true})
+}
+
+func (h *InspectHandler) ListRunTrends(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	limit := 30
+	if v := strings.TrimSpace(c.Query("limit")); v != "" {
+		if n, e := strconv.Atoi(v); e == nil && n > 0 {
+			limit = n
+		}
+	}
+	list, err := h.svc.ListRunTrends(c.Request.Context(), projectID, limit)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
+}
+
+func (h *InspectHandler) MigrateReportsToMinIO(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	n, err := h.svc.MigrateReportsToMinIO(c.Request.Context(), projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"migrated": n})
 }

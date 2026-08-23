@@ -1,15 +1,17 @@
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, TeamOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, InboxOutlined, PlusOutlined, ReloadOutlined, TeamOutlined } from "@ant-design/icons";
 import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/auth-context";
 import { ProjectMembersPanel } from "../components/project-members-panel";
 import { getDepartmentTree } from "../services/departments";
 import {
+  archiveProject,
   createProject,
   deleteProject,
   getProjects,
   PROJECT_LIFECYCLE_OPTIONS,
   PROJECT_TYPE_OPTIONS,
+  restoreProject,
   updateProject,
   type ProjectCreatePayload,
   type ProjectItem,
@@ -142,6 +144,26 @@ export function ProjectsPage() {
       /* no binding */
     }
     setEditorOpen(true);
+  }
+
+  async function onArchive(record: ProjectItem) {
+    try {
+      await archiveProject(record.id);
+      message.success("项目已归档");
+      await load();
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : "归档失败");
+    }
+  }
+
+  async function onRestore(record: ProjectItem) {
+    try {
+      await restoreProject(record.id);
+      message.success("项目已恢复");
+      await load();
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : "恢复失败");
+    }
   }
 
   async function onSubmit() {
@@ -339,10 +361,11 @@ export function ProjectsPage() {
           { title: "创建时间", dataIndex: "created_at", width: 200, render: (v: string) => formatDateTime(v) },
           {
             title: "操作",
-            width: 360,
+            width: 440,
             render: (_: unknown, record: ProjectItem) => {
               const canMeta = canEditProjectMeta(isSuper, record.my_project_role);
               const needAdminTip = "需要项目负责人或管理员权限（超级管理员不受限）";
+              const archived = record.lifecycle_status === "archived";
               return (
                 <Space size={6} wrap={false}>
                   <Button type="link" icon={<TeamOutlined />} onClick={() => setMemberProject(record)}>
@@ -350,11 +373,26 @@ export function ProjectsPage() {
                   </Button>
                   <Tooltip title={!canMeta ? needAdminTip : undefined}>
                     <span>
-                      <Button type="link" icon={<EditOutlined />} disabled={!canMeta} onClick={() => canMeta && openEdit(record)}>
+                      <Button type="link" icon={<EditOutlined />} disabled={!canMeta || archived} onClick={() => canMeta && !archived && openEdit(record)}>
                         编辑
                       </Button>
                     </span>
                   </Tooltip>
+                  {canMeta ? (
+                    archived ? (
+                      <Popconfirm title="恢复该项目为进行中？" onConfirm={() => void onRestore(record)}>
+                        <Button type="link" icon={<ReloadOutlined />}>
+                          恢复
+                        </Button>
+                      </Popconfirm>
+                    ) : (
+                      <Popconfirm title="归档后项目将标记为只读，确定归档？" onConfirm={() => void onArchive(record)}>
+                        <Button type="link" icon={<InboxOutlined />}>
+                          归档
+                        </Button>
+                      </Popconfirm>
+                    )
+                  ) : null}
                   <Tooltip title={!canMeta ? needAdminTip : undefined}>
                     <span>
                       <Popconfirm title="确定删除该项目？" disabled={!canMeta} onConfirm={() => void onDelete(record)}>

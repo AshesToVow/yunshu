@@ -20,6 +20,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	k8sPolicies.GET("/cluster-auth-matrix", d.k8sScopedPolicyHandler.ClusterAuthMatrix)
 	k8sPolicies.GET("/user-cluster-auth", d.k8sScopedPolicyHandler.UserClusterAuth)
 	k8sPolicies.POST("/grant-preset", d.k8sScopedPolicyHandler.GrantPreset)
+	k8sPolicies.POST("/split-by-namespaces", d.k8sScopedPolicyHandler.SplitByNamespaces)
 	k8sPolicies.DELETE("/cluster-grants/:id", d.k8sScopedPolicyHandler.DeleteClusterGrant)
 	k8sPolicies.POST("/cluster-grants/batch-delete", d.k8sScopedPolicyHandler.DeleteClusterGrantsBatch)
 
@@ -106,6 +107,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	deployments.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	deployments.GET("", d.workloadHandler.ListDeployments)
 	deployments.GET("/detail", d.workloadHandler.DeploymentDetail)
+	deployments.GET("/revisions", d.workloadHandler.ListDeploymentRevisions)
 	deployments.GET("/rollout-status", d.workloadHandler.DeploymentRolloutStatus)
 	deployments.POST("/rollout-undo", d.workloadHandler.DeploymentRolloutUndo)
 	deployments.POST("/apply", d.workloadHandler.Apply)
@@ -255,6 +257,14 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	k8sTools := api.Group("/k8s")
 	k8sTools.Use(d.authMiddleware, d.authorize, d.k8sScopeAuthorize, d.opAudit)
 	k8sTools.GET("/search", d.k8sSearchHandler.Search)
+	if d.platformFeatures != nil {
+		crTpl := api.Group("/k8s-cr-templates")
+		crTpl.Use(d.authMiddleware, d.authorize, d.opAudit)
+		crTpl.GET("", d.platformFeatures.ListCrTemplates)
+		crTpl.POST("", d.platformFeatures.CreateCrTemplate)
+		crTpl.PUT("/:id", d.platformFeatures.UpdateCrTemplate)
+		crTpl.DELETE("/:id", d.platformFeatures.DeleteCrTemplate)
+	}
 	k8sTools.GET("/topology", d.workloadHandler.Topology)
 
 	k8sResourceWatch := api.Group("/k8s/resource-watch")

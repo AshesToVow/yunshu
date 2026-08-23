@@ -11,10 +11,11 @@ import (
 
 // ReportStorageInfo 巡检报告存储状态（供管理台展示与 MinIO 未配置提示）。
 type ReportStorageInfo struct {
-	Backend     string `json:"backend"`                // minio | local
-	MinioReady  bool   `json:"minio_ready"`            // 数据字典 MinIO 是否可用
-	LocalRoot   string `json:"local_root,omitempty"`   // 本地存储根目录
-	MinioReason string `json:"minio_reason,omitempty"` // MinIO 不可用时原因
+	Backend      string `json:"backend"`                 // minio | local
+	MinioReady   bool   `json:"minio_ready"`             // 数据字典 MinIO 是否可用
+	RequireMinIO bool   `json:"require_minio"`           // 字典 inspect_report.require_minio
+	LocalRoot    string `json:"local_root,omitempty"`    // 本地存储根目录
+	MinioReason  string `json:"minio_reason,omitempty"`  // MinIO 不可用时原因
 }
 
 // resolveReportStorageInfo 判定当前巡检报告会写入 MinIO 还是本地。
@@ -22,6 +23,9 @@ func resolveReportStorageInfo(ctx context.Context, db *gorm.DB, localRoot string
 	info := ReportStorageInfo{
 		Backend:   StorageLocal,
 		LocalRoot: localRoot,
+	}
+	if db != nil {
+		info.RequireMinIO = dictconfig.ResolveInspectReportConfig(ctx, db, dictconfig.DefaultInspectReportDictTypes()).RequireMinIO
 	}
 	if db == nil {
 		info.MinioReason = "数据库不可用"

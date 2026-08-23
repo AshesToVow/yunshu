@@ -303,6 +303,8 @@ type (
 	K8sEventForwardRuleUpsertRequest = eventforward.K8sEventForwardRuleUpsertRequest
 	RolloutUndoRequest         = k8s.RolloutUndoRequest
 	RolloutUndoResult          = k8s.RolloutUndoResult
+	DeploymentRevisionQuery    = k8s.DeploymentRevisionQuery
+	DeploymentRevisionItem     = k8s.DeploymentRevisionItem
 )
 
 // --- logplatform ---
@@ -381,6 +383,7 @@ type (
 	AlertInhibitionService    = alert.AlertInhibitionService
 	AlertSubscriptionService  = alert.AlertSubscriptionService
 	AlertManagerPayload       = alert.AlertManagerPayload
+	PromqlSavedQueryUpsertRequest = alert.PromqlSavedQueryUpsertRequest
 	AlertManagerAlert         = alert.AlertManagerAlert
 	AlertChannelListQuery     = alert.AlertChannelListQuery
 	AlertEventListQuery       = alert.AlertEventListQuery
