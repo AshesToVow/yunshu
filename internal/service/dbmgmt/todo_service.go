@@ -201,6 +201,14 @@ func (s *Service) enrichAccessRequestMineStatus(ctx context.Context, items []Acc
 			for _, st := range sts {
 				if st.Status == model.DbApprovalStepPending {
 					item.CurrentStageName = st.StageName
+					item.IsFinalApproval = isFinalAccessApprovalStep(sts, &st)
+					break
+				}
+			}
+		} else if item.Status == model.DbAccessRequestStatusPending {
+			for j := range sts {
+				if sts[j].Status == model.DbApprovalStepPending {
+					item.IsFinalApproval = isFinalAccessApprovalStep(sts, &sts[j])
 					break
 				}
 			}

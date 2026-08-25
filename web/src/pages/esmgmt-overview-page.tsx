@@ -70,16 +70,18 @@ export function EsmgmtOverviewPage() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreJob, setRestoreJob] = useState<EsmgmtBackupJob | null>(null);
+  const [restoreConfirm, setRestoreConfirm] = useState("");
+  const [restoreSubmitting, setRestoreSubmitting] = useState(false);
   const [scheduleForm] = Form.useForm();
   const [createForm] = Form.useForm();
 
   useEffect(() => {
-    void listEsmgmtConnections({ include_log_platform: true })
+    void listEsmgmtConnections()
       .then((list) => {
         setConnections(list || []);
-        // 优先「日志平台 ES」(id=0)，与保留策略同源
-        const logPlat = list?.find((c) => c.id === 0);
-        const def = logPlat || list?.find((c) => c.is_default) || list?.[0];
+        const def = list?.find((c) => c.is_default) || list?.[0];
         if (def) setConnectionId(def.id);
       })
       .catch((e) => message.error(extractApiErrorMessage(e, "加载连接失败")));
@@ -190,13 +192,57 @@ export function EsmgmtOverviewPage() {
     }
   }
 
+  function openRestoreModal(job: EsmgmtBackupJob) {
+    setRestoreJob(job);
+    setRestoreConfirm("");
+    setRestoreOpen(true);
+  }
+
+  async function submitRestore() {
+    if (!restoreJob) return;
+    const targetIndex = restoreJob.index_name;
+    const confirm = restoreConfirm.trim();
+    if (!confirm) {
+      message.error("请输入目标索引名以确认");
+      return;
+    }
+    if (confirm !== targetIndex) {
+      message.error("输入的索引名与目标不一致");
+      return;
+    }
+    setRestoreSubmitting(true);
+    try {
+      const r = await createEsmgmtRestore({
+        backup_job_id: restoreJob.id,
+        connection_id: connectionId,
+        target_index: targetIndex,
+        delete_existing: true,
+        confirm_target_index: confirm,
+      });
+      message.success(`恢复任务已创建 #${r.id}`);
+      setRestoreOpen(false);
+      setRestoreJob(null);
+      setRestoreConfirm("");
+      await loadJobs();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "创建恢复失败"));
+    } finally {
+      setRestoreSubmitting(false);
+    }
+  }
+
   async function onRestore(job: EsmgmtBackupJob, deleteExisting: boolean) {
+    if (deleteExisting) {
+      openRestoreModal(job);
+      return;
+    }
+    const targetIndex = job.index_name;
     try {
       const r = await createEsmgmtRestore({
         backup_job_id: job.id,
         connection_id: connectionId,
-        target_index: job.index_name,
-        delete_existing: deleteExisting,
+        target_index: targetIndex,
+        delete_existing: false,
       });
       message.success(`恢复任务已创建 #${r.id}`);
       await loadJobs();
@@ -257,7 +303,7 @@ export function EsmgmtOverviewPage() {
             value={connectionId}
             options={connections.map((c) => ({
               value: c.id,
-              label: c.id === 0 ? `${c.name}（${c.addresses || "日志平台"}）` : `${c.name}（${c.addresses || "-"}）`,
+              label: `${c.name}${c.is_default ? "（默认）" : ""}（${c.addresses || "-"}）`,
             }))}
             onChange={setConnectionId}
           />
@@ -266,14 +312,6 @@ export function EsmgmtOverviewPage() {
           </Button>
           {status ? <Tag color={statusColor}>{statusLabel}</Tag> : null}
         </Space>
-        {connectionId === 0 ? (
-          <Alert
-            style={{ marginTop: 12 }}
-            type="info"
-            showIcon
-            message="当前为「日志平台 ES」，与「日志保留策略」索引列表同源；若仍对不上请核对数据字典 elasticsearch_* 地址。"
-          />
-        ) : null}
       </Card>
       {health ? (
         <Alert
@@ -407,15 +445,23 @@ export function EsmgmtOverviewPage() {
                   >
                     下载
                   </Button>
-                  <Popconfirm
-                    title="覆盖同名索引并恢复？"
+                  <Button
+                    type="link"
+                    size="small"
                     disabled={row.status !== "success"}
-                    onConfirm={() => void onRestore(row, true)}
+                    onClick={() => void onRestore(row, false)}
                   >
-                    <Button type="link" size="small" disabled={row.status !== "success"}>
-                      恢复
-                    </Button>
-                  </Popconfirm>
+                    恢复
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    disabled={row.status !== "success"}
+                    onClick={() => openRestoreModal(row)}
+                  >
+                    覆盖恢复
+                  </Button>
                 </Space>
               ),
             },
@@ -598,6 +644,39 @@ export function EsmgmtOverviewPage() {
             <Input.TextArea rows={14} style={{ fontFamily: "monospace" }} />
           </Form.Item>
         </Form>
+      </Modal>
+      <Modal
+        title="覆盖恢复"
+        open={restoreOpen}
+        onCancel={() => {
+          setRestoreOpen(false);
+          setRestoreJob(null);
+          setRestoreConfirm("");
+        }}
+        onOk={() => void submitRestore()}
+        okText="确认覆盖恢复"
+        okButtonProps={{
+          danger: true,
+          disabled: !restoreJob || restoreConfirm.trim() !== restoreJob.index_name,
+        }}
+        confirmLoading={restoreSubmitting}
+        destroyOnClose
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <Typography.Text>
+            将删除索引「{restoreJob?.index_name}」现有数据并从备份 #{restoreJob?.id} 恢复，此操作不可撤销。
+          </Typography.Text>
+          <div>
+            <Typography.Text type="secondary">请输入目标索引名「{restoreJob?.index_name}」以确认：</Typography.Text>
+            <Input
+              value={restoreConfirm}
+              placeholder={restoreJob?.index_name}
+              onChange={(e) => setRestoreConfirm(e.target.value)}
+              onPressEnter={() => void submitRestore()}
+              style={{ marginTop: 8 }}
+            />
+          </div>
+        </Space>
       </Modal>
     </Space>
   );

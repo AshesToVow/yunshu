@@ -21,7 +21,7 @@ type HelmScaffoldQuery struct {
 
 // BuildHelmScaffoldZip 按服务标识与发布配置生成 helm/ 目录 zip。
 func (s *Service) BuildHelmScaffoldZip(ctx context.Context, projectID, serviceID uint, q HelmScaffoldQuery) (filename string, data []byte, err error) {
-	svc, err := s.GetService(ctx, projectID, serviceID)
+	svc, err := s.GetService(ctx, projectID, serviceID, nil)
 	if err != nil {
 		return "", nil, err
 	}

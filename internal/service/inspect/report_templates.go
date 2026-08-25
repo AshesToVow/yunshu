@@ -59,7 +59,11 @@ var reportTemplateFuncs = template.FuncMap{
 			return "状态正常，保持例行观察。"
 		}
 	},
-	"eq": func(a, b string) bool { return a == b },
+	"eq":           func(a, b string) bool { return a == b },
+	"gradeLabel":   gradeLabelCN,
+	"riskLevel":    riskLevelCN,
+	"priorityLabel": findingPriorityLabel,
+	"inc":          func(i int) int { return i + 1 },
 }
 
 func builtinTemplateFile(code string) string {
@@ -68,6 +72,8 @@ func builtinTemplateFile(code string) string {
 		return "templates/compact.html"
 	case "executive":
 		return "templates/executive.html"
+	case "print":
+		return "templates/report.html"
 	default:
 		return "templates/report.html"
 	}
@@ -131,7 +137,7 @@ func (s *Service) resolveReportTemplate(ctx context.Context, projectID, template
 
 func builtinReportTemplateSeeds() []model.InspectReportTemplate {
 	return []model.InspectReportTemplate{
-		{ProjectID: 0, Code: "default", Name: "标准版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "清晰分区，适合日常巡检归档"},
+		{ProjectID: 0, Code: "default", Name: "客户汇报版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "封面+KPI+执行摘要，适合对客户汇报与归档"},
 		{ProjectID: 0, Code: "compact", Name: "紧凑版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "信息密度高，适合邮件快速浏览"},
 		{ProjectID: 0, Code: "executive", Name: "摘要版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "侧重结论与关注项，不含全量明细表"},
 	}

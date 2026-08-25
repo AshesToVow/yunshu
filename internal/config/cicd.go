@@ -22,8 +22,10 @@ type CicdConfig struct {
 	RunSyncIntervalSeconds        int `mapstructure:"run_sync_interval_seconds"`
 	DefaultWaitMins               int `mapstructure:"default_wait_mins"`
 	DefaultArtifactRetain         int `mapstructure:"default_artifact_retain_count"`
-	ApprovalSlaHours              int `mapstructure:"approval_sla_hours"`
-	ApprovalReminderIntervalHours int `mapstructure:"approval_reminder_interval_hours"`
+	ApprovalSlaHours              int  `mapstructure:"approval_sla_hours"`
+	ApprovalReminderIntervalHours int  `mapstructure:"approval_reminder_interval_hours"`
+	ForbidSelfApprove             bool `mapstructure:"forbid_self_approve"`
+	ProdForceAudit                bool `mapstructure:"prod_force_audit"`
 }
 
 // CicdSonarConfig SonarQube 扫描与质量门禁。
@@ -117,5 +119,7 @@ func DefaultCicdConfig() CicdConfig {
 		DefaultArtifactRetain:         10,
 		ApprovalSlaHours:              24,
 		ApprovalReminderIntervalHours: 4,
+		ForbidSelfApprove:             true,
+		ProdForceAudit:                true,
 	}
 }

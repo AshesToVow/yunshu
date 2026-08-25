@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -23,6 +24,7 @@ type RegistrationService struct {
 	regRepo  interfaces.RegistrationRequestRepository
 	userRepo interfaces.UserRepository
 	redis    *redis.Client
+	db       *gorm.DB
 	authCfg  config.AuthConfig
 	mailer   mailer.Sender
 	appName  string
@@ -33,6 +35,7 @@ func NewRegistrationService(
 	regRepo interfaces.RegistrationRequestRepository,
 	userRepo interfaces.UserRepository,
 	redis *redis.Client,
+	db *gorm.DB,
 	authCfg config.AuthConfig,
 	mailer mailer.Sender,
 	appName string,
@@ -41,6 +44,7 @@ func NewRegistrationService(
 		regRepo:  regRepo,
 		userRepo: userRepo,
 		redis:    redis,
+		db:       db,
 		authCfg:  authCfg,
 		mailer:   mailer,
 		appName:  appName,
@@ -51,7 +55,7 @@ type ApplyRegisterRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=64"`
 	Email    string `json:"email" binding:"required,email,max=128"`
 	Nickname string `json:"nickname" binding:"required,max=128"`
-	Password string `json:"password" binding:"required,min=6,max=64"`
+	Password string `json:"password" binding:"required,min=6,max=128"`
 	Code     string `json:"code" binding:"required,len=6,numeric"`
 }
 
@@ -71,6 +75,9 @@ func (s *RegistrationService) Apply(ctx context.Context, req ApplyRegisterReques
 	}
 	if err := s.validateEmailCode(ctx, emailCodeSceneRegister, email, req.Code); err != nil {
 		return bizerrors.Pass(ctx, "registration", "Apply", err)
+	}
+	if err := enforcePasswordComplexity(ctx, s.db, req.Password, username); err != nil {
+		return err
 	}
 
 	hashedPassword, err := password.Hash(req.Password)
@@ -125,13 +132,15 @@ func (s *RegistrationService) Review(ctx context.Context, id uint, reviewerID ui
 	}
 
 	if newStatus == model.RegistrationApproved {
+		now := time.Now()
 		user := model.User{
-			Username: regReq.Username,
-			Email:    &regReq.Email,
-			Password: regReq.Password,
-			Nickname: regReq.Nickname,
-			Status:   model.StatusEnabled,
-			Roles:    []model.Role{},
+			Username:          regReq.Username,
+			Email:             &regReq.Email,
+			Password:          regReq.Password,
+			PasswordChangedAt: &now,
+			Nickname:          regReq.Nickname,
+			Status:            model.StatusEnabled,
+			Roles:             []model.Role{},
 		}
 		if err := s.userRepo.Create(ctx, &user); err != nil {
 			return bizerrors.Pass(ctx, "registration", "Review", err)

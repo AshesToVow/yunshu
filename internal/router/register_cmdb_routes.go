@@ -10,7 +10,7 @@ import (
 func RegisterCMDBRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectRoutes := api.Group("/projects")
 	projectRoutes.Use(d.authMiddleware, d.authorize, d.opAudit)
-	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
+	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.projectRepo, d.app.Logger))
 
 	projectScoped.GET("/servers", d.cmdbHandler.ListServers)
 	projectScoped.POST("/servers", d.cmdbHandler.UpsertServer)
@@ -45,6 +45,6 @@ func RegisterCMDBRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.DELETE("/server-access-grants/:grantId", d.cmdbHandler.DeleteServerGrant)
 
 	projectsWS := api.Group("/projects")
-	projectsWS.Use(d.wsAuthMiddleware, d.authorize, d.opAudit, middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
+	projectsWS.Use(d.wsAuthMiddleware, d.authorize, d.opAudit, middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.projectRepo, d.app.Logger))
 	projectsWS.GET("/:id/servers/:serverId/terminal/ws", d.cmdbHandler.ServerTerminalWS)
 }

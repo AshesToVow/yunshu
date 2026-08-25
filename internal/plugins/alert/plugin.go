@@ -49,6 +49,7 @@ func (m *module) Models() []any {
 		&model.AlertHisEvent{},
 		&model.AlertAck{},
 		&model.AlertProgressNote{},
+		&model.AlertMonitorRuleChangeRequest{},
 	}
 }
 

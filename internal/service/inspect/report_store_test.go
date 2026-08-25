@@ -26,12 +26,12 @@ func TestRenderBuiltinTemplates(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := string(b)
-	for _, want := range []string{"demo", "grade-a", "巡检概述", "巡检内容", "各类巡检结果", "异常与建议", "处理方式"} {
+	for _, want := range []string{"demo", "grade-a", "重点关注事项", "分类巡检明细", "检查项覆盖范围", "处置建议", "执行摘要", "巡检覆盖", "P0"} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("default template missing %q", want)
 		}
 	}
-	for _, code := range []string{"compact", "executive"} {
+	for _, code := range []string{"compact", "executive", "print"} {
 		b, err := renderHTMLWithTemplate(code, "", data)
 		if err != nil {
 			t.Fatalf("%s: %v", code, err)
@@ -76,7 +76,7 @@ func TestRenderExcelAndPDF(t *testing.T) {
 	if len(xlsx) < 100 {
 		t.Fatalf("excel too small: %d", len(xlsx))
 	}
-	pdf := renderBinaryPDF(data)
+	pdf := renderBinaryPDF(data, nil)
 	if len(pdf) < 4 || string(pdf[:4]) != "%PDF" {
 		n := 8
 		if len(pdf) < n {
@@ -88,10 +88,10 @@ func TestRenderExcelAndPDF(t *testing.T) {
 	if strings.Contains(body, "Helvetica") {
 		t.Fatal("pdf still uses Helvetica (Chinese will break)")
 	}
-	// Chromium 打印的 PDF 通常不含 STSong；文本降级路径仍含 CJK Type0。
+	// 结构化 PDF 使用 Adobe 中文 CID 字体 STSong-Light（Type0）。
 	if strings.Contains(body, "STSong-Light") {
 		if !strings.Contains(body, "5DE1") {
-			t.Fatal("text-fallback pdf missing Chinese UTF-16 hex for 巡")
+			t.Fatal("structured pdf missing Chinese UTF-16 hex for 巡")
 		}
 	}
 }
@@ -108,6 +108,30 @@ func TestReportObjectKey(t *testing.T) {
 	t.Parallel()
 	if got := reportObjectKey(3, 9, "html"); got != "inspect/3/run-9.html" {
 		t.Fatalf("got %s", got)
+	}
+}
+
+func TestLocalReportStorePathTraversal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	store := newLocalReportStore(dir)
+	ctx := context.Background()
+	if err := store.Put(ctx, "inspect/1/../../../etc/passwd", []byte("x"), "text/plain"); err == nil {
+		t.Fatal("expected reject for traversal key on put")
+	}
+	if _, err := store.Get(ctx, "../secret"); err == nil {
+		t.Fatal("expected reject for traversal key")
+	}
+}
+
+func TestSafeLocalReportPath(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if _, err := safeLocalReportPath(root, "inspect/1/run-1.html"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := safeLocalReportPath(root, "../evil"); err == nil {
+		t.Fatal("expected error")
 	}
 }
 

@@ -158,7 +158,14 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 	kom.Clusters().RemoveClusterById(clusterID)
 
 	// 使用 kom 原生 RegisterByStringWithID，与 RegisterByPathWithID 等价，避免临时文件在容器/Windows 下的路径问题。
-	_, err := kom.Clusters().RegisterByStringWithID(kubeconfig, clusterID)
+	// RegisterTimeout 防止不可达 APIServer 在 dial/握手阶段无限阻塞（总览等多集群并发时尤甚）。
+	_, err := kom.Clusters().RegisterByStringWithID(
+		kubeconfig,
+		clusterID,
+		kom.RegisterTimeout(defaultKomRegisterTimeout),
+		kom.RegisterQPS(defaultK8sQPS),
+		kom.RegisterBurst(defaultK8sBurst),
+	)
 	if err != nil {
 		_ = bizerrors.Pass(context.Background(), "k8s.runtime", "registerClusterIfNeeded", err, "cluster_id", clusterID)
 		s.komMu.Lock()
@@ -190,18 +197,35 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 	return nil
 }
 
-// DeleteRegisterCache 删除相关的业务逻辑。
+// DeleteRegisterCache 删除相关的业务逻辑（含 :ro/:w/:x 与 impersonation 后缀）。
 func (s *K8sRuntimeService) DeleteRegisterCache(clusterID uint) {
-	key := strconv.FormatUint(uint64(clusterID), 10)
-	kom.Clusters().RemoveClusterById(key)
+	prefix := strconv.FormatUint(uint64(clusterID), 10)
+	kom.Clusters().RemoveClusterById(prefix)
 	s.komMu.Lock()
-	delete(s.registeredHash, key)
-	delete(s.regLocks, key)
-	delete(s.connState, key)
+	for key := range s.registeredHash {
+		if key == prefix || strings.HasPrefix(key, prefix+":") {
+			kom.Clusters().RemoveClusterById(key)
+			delete(s.registeredHash, key)
+			delete(s.regLocks, key)
+			delete(s.connState, key)
+		}
+	}
 	s.komMu.Unlock()
 }
 
-// GetClusterKubectl 获取相关的业务逻辑。
+// PeekRegisteredKubectl 返回进程内已注册的 kubectl（bare / :ro / :r / :w / :x），不触发冷注册。
+// 供总览等批量只读路径复用既有连接，避免默认 write 意图反复 Register。
+func (s *K8sRuntimeService) PeekRegisteredKubectl(id uint) *kom.Kubectl {
+	base := strconv.FormatUint(uint64(id), 10)
+	for _, key := range []string{base, base + ":ro", base + ":r", base + ":w", base + ":x"} {
+		if k := kom.Cluster(key); k != nil {
+			return k
+		}
+	}
+	return nil
+}
+
+// GetClusterKubectl 按请求 AccessIntent 选择只读/可写凭证（平台侧授权；不使用 Impersonation）。
 func (s *K8sRuntimeService) GetClusterKubectl(ctx context.Context, id uint) (*model.K8sCluster, *kom.Kubectl, error) {
 	cluster, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -213,15 +237,15 @@ func (s *K8sRuntimeService) GetClusterKubectl(ctx context.Context, id uint) (*mo
 	if err := s.ensureOwningProjectAccess(ctx, cluster); err != nil {
 		return nil, nil, err
 	}
-	clusterID := strconv.FormatUint(uint64(id), 10)
-	kubeconfig, kerr := s.resolveClusterKubeconfig(cluster)
+	intent := accessIntentFromContext(ctx)
+	kubeconfig, regID, kerr := s.resolveKubeconfigForIntent(cluster, intent)
 	if kerr != nil {
 		return nil, nil, constants.ErrBadRequestWithMsg(kerr.Error())
 	}
-	if err := s.registerClusterIfNeeded(clusterID, kubeconfig, false); err != nil {
+	if err := s.registerClusterIfNeeded(regID, kubeconfig, false); err != nil {
 		return nil, nil, bizerrors.Internalf(ctx, "k8s.runtime", "GetClusterKubectl", err, constants.ErrFmtac130d1176b3, "cluster_id", id)
 	}
-	k := kom.Cluster(clusterID)
+	k := kom.Cluster(regID)
 	if k == nil {
 		return nil, nil, bizerrors.InternalMsg(ctx, "k8s.runtime", "GetClusterKubectl", constants.ErrMsg5248c9e19a3f, "cluster_id", id)
 	}
@@ -254,9 +278,43 @@ func (s *K8sRuntimeService) ensureOwningProjectAccess(ctx context.Context, cl *m
 }
 
 // EnsureClusterRegistered 将集群注册到 kom（供 Event 转发等后台任务使用）。
-func (s *K8sRuntimeService) EnsureClusterRegistered(ctx context.Context, id uint) error {
-	_, _, err := s.GetClusterKubectl(ctx, id)
-	return err
+// 后台任务使用稳定 ID（纯数字 cluster_id），不走 :r/:w 后缀，避免与控制台意图注册冲突。
+func (s *K8sRuntimeService) EnsureClusterRegistered(ctx context.Context, id uint) (*kom.Kubectl, error) {
+	cluster, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, k8sRepoErr(ctx, "k8s.runtime", "EnsureClusterRegistered", err, "cluster_id", id)
+	}
+	if cluster.Status != 1 {
+		return nil, constants.ErrForbiddenWithMsg(constants.ErrMsgb0e556f1ccc5)
+	}
+	kubeconfig, kerr := s.resolveClusterKubeconfig(cluster)
+	if kerr != nil {
+		return nil, constants.ErrBadRequestWithMsg(kerr.Error())
+	}
+	clusterID := strconv.FormatUint(uint64(id), 10)
+	// 优先只读凭证（后台 watch 只需读）
+	if strings.TrimSpace(cluster.KubeconfigReadonly) != "" {
+		if raw, oerr := s.OpenCredential(cluster.KubeconfigReadonly); oerr == nil {
+			if kc, nerr := normalizeKubeconfigForClientGo(strings.TrimSpace(raw)); nerr == nil && kc != "" {
+				kubeconfig = kc
+			}
+		}
+	}
+	if err := s.registerClusterIfNeeded(clusterID, kubeconfig, false); err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.runtime", "EnsureClusterRegistered", err, constants.ErrFmtac130d1176b3, "cluster_id", id)
+	}
+	k := kom.Cluster(clusterID)
+	if k == nil {
+		// hash 命中但 kom 实例已丢失时强制重注册，避免后台 watch 拿到 nil
+		if err := s.registerClusterIfNeeded(clusterID, kubeconfig, true); err != nil {
+			return nil, bizerrors.Internalf(ctx, "k8s.runtime", "EnsureClusterRegistered", err, constants.ErrFmtac130d1176b3, "cluster_id", id)
+		}
+		k = kom.Cluster(clusterID)
+	}
+	if k == nil {
+		return nil, bizerrors.InternalMsg(ctx, "k8s.runtime", "EnsureClusterRegistered", constants.ErrMsg5248c9e19a3f, "cluster_id", id)
+	}
+	return k, nil
 }
 
 // serverGitVersionFromKubeconfig 使用 client-go Discovery 拉取 GitVersion（与 kubectl 一致）。
@@ -321,7 +379,7 @@ func (s *K8sRuntimeService) CheckClusterHeartbeat(ctx context.Context, id uint) 
 		if verr != nil || gitVer == "" {
 			errMsg := "server version empty"
 			if verr != nil {
-				errMsg = verr.Error()
+				errMsg = classifyClusterConnectError(verr)
 			}
 			s.komMu.Lock()
 			st := s.connState[clusterID]
@@ -335,7 +393,7 @@ func (s *K8sRuntimeService) CheckClusterHeartbeat(ctx context.Context, id uint) 
 		}
 	}
 	if probeErr := s.probeClusterListNamespacesKom(ctx, id); probeErr != nil {
-		errMsg := probeErr.Error()
+		errMsg := classifyClusterConnectError(probeErr)
 		s.komMu.Lock()
 		st := s.connState[clusterID]
 		st.State = "degraded"
@@ -373,7 +431,7 @@ func (s *K8sRuntimeService) GetClusterConnState(id uint) ClusterConnState {
 	return st
 }
 
-// GetClusterRestConfig 获取相关的业务逻辑。
+// GetClusterRestConfig 与 GetClusterKubectl 对齐：项目归属校验、凭证意图、QPS（不使用 Impersonation）。
 func (s *K8sRuntimeService) GetClusterRestConfig(ctx context.Context, id uint) (*model.K8sCluster, *rest.Config, error) {
 	cluster, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -382,11 +440,15 @@ func (s *K8sRuntimeService) GetClusterRestConfig(ctx context.Context, id uint) (
 	if cluster.Status != 1 {
 		return nil, nil, constants.ErrForbiddenWithMsg(constants.ErrMsgb0e556f1ccc5)
 	}
-	kubeconfig, kerr := s.resolveClusterKubeconfig(cluster)
+	if err := s.ensureOwningProjectAccess(ctx, cluster); err != nil {
+		return nil, nil, err
+	}
+	intent := accessIntentFromContext(ctx)
+	kubeconfig, _, kerr := s.resolveKubeconfigForIntent(cluster, intent)
 	if kerr != nil {
 		return nil, nil, constants.ErrBadRequestWithMsg(kerr.Error())
 	}
-	cfg, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfig))
+	cfg, err := restConfigFromKubeconfig(kubeconfig)
 	if err != nil {
 		return nil, nil, bizerrors.Internalf(ctx, "k8s.runtime", "api", err, constants.ErrFmtd7f0c3fe8497)
 	}

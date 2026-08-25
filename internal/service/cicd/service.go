@@ -40,6 +40,7 @@ type Service struct {
 	workloadReadyCheck func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string)
 	errorLogSampler    func(ctx context.Context, projectID, cicdServiceID uint, since time.Time) (int, string)
 	k8sRolloutUndo     K8sRolloutUndoFn
+	k8sProgressive     K8sProgressiveFns
 }
 
 func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
@@ -128,6 +129,7 @@ type ServiceItem struct {
 	DeployConfigCnt int  `json:"deploy_config_count"`
 	LastBuildResult string `json:"last_build_result,omitempty"`
 	LastBuildAt     *time.Time `json:"last_build_at,omitempty"`
+	Access          *CicdAccessPerm `json:"access,omitempty"`
 }
 
 type ServiceUpsertRequest struct {
@@ -173,31 +175,80 @@ func (s *Service) ListServices(ctx context.Context, q ServiceListQuery) (*pagina
 	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	serviceIDs := make([]uint, len(rows))
+	for i, row := range rows {
+		serviceIDs[i] = row.ID
+	}
+	hasCI := map[uint]bool{}
+	deployCnt := map[uint]int{}
+	lastBuild := map[uint]model.CicdBuildRun{}
+	if len(serviceIDs) > 0 {
+		var ciIDs []uint
+		_ = s.db.WithContext(ctx).Model(&model.CicdCiConfig{}).
+			Where("service_id IN ?", serviceIDs).
+			Distinct("service_id").
+			Pluck("service_id", &ciIDs).Error
+		for _, id := range ciIDs {
+			hasCI[id] = true
+		}
+		type deployRow struct {
+			ServiceID uint
+			Cnt       int64
+		}
+		var deployRows []deployRow
+		_ = s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).
+			Select("service_id, COUNT(*) AS cnt").
+			Where("service_id IN ? AND status = 1", serviceIDs).
+			Group("service_id").
+			Scan(&deployRows).Error
+		for _, d := range deployRows {
+			deployCnt[d.ServiceID] = int(d.Cnt)
+		}
+		var builds []model.CicdBuildRun
+		_ = s.db.WithContext(ctx).
+			Where("service_id IN ?", serviceIDs).
+			Order("id DESC").
+			Find(&builds).Error
+		for _, b := range builds {
+			if _, ok := lastBuild[b.ServiceID]; !ok {
+				lastBuild[b.ServiceID] = b
+			}
+		}
+	}
 	items := make([]ServiceItem, 0, len(rows))
 	for _, row := range rows {
 		item := ServiceItem{CicdService: row}
-		var ciCnt int64
-		_ = s.db.WithContext(ctx).Model(&model.CicdCiConfig{}).Where("service_id = ?", row.ID).Count(&ciCnt).Error
-		item.HasCiConfig = ciCnt > 0
-		var deployCnt int64
-		_ = s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).Where("service_id = ? AND status = 1", row.ID).Count(&deployCnt).Error
-		item.DeployConfigCnt = int(deployCnt)
-		var lastRun model.CicdBuildRun
-		if err := s.db.WithContext(ctx).Where("service_id = ?", row.ID).Order("id DESC").First(&lastRun).Error; err == nil {
-			item.LastBuildResult = lastRun.BuildResult
-			item.LastBuildAt = lastRun.StartedAt
+		item.HasCiConfig = hasCI[row.ID]
+		item.DeployConfigCnt = deployCnt[row.ID]
+		if b, ok := lastBuild[row.ID]; ok {
+			item.LastBuildResult = b.BuildResult
+			item.LastBuildAt = b.StartedAt
 		}
+		s.attachServiceAccess(ctx, q.ProjectID, q.Actor, &item)
 		items = append(items, item)
 	}
 	return &pagination.Result[ServiceItem]{List: items, Total: total, Page: page, PageSize: pageSize}, nil
 }
 
-func (s *Service) GetService(ctx context.Context, projectID, serviceID uint) (*ServiceItem, error) {
+func (s *Service) attachServiceAccess(ctx context.Context, projectID uint, actor *auth.CurrentUser, item *ServiceItem) {
+	if item == nil {
+		return
+	}
+	perm, err := s.EffectiveCicdAccess(ctx, projectID, item.ID, actor)
+	if err != nil || perm == nil {
+		item.Access = &CicdAccessPerm{}
+		return
+	}
+	p := *perm
+	item.Access = &p
+}
+
+func (s *Service) GetService(ctx context.Context, projectID, serviceID uint, actor *auth.CurrentUser) (*ServiceItem, error) {
 	svc, err := s.loadService(ctx, projectID, serviceID)
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.ListServices(ctx, ServiceListQuery{ProjectID: projectID, Page: 1, PageSize: 1})
+	res, err := s.ListServices(ctx, ServiceListQuery{ProjectID: projectID, Page: 1, PageSize: 1, Actor: actor})
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +259,7 @@ func (s *Service) GetService(ctx context.Context, projectID, serviceID uint) (*S
 			item.DeployConfigCnt = it.DeployConfigCnt
 			item.LastBuildResult = it.LastBuildResult
 			item.LastBuildAt = it.LastBuildAt
+			item.Access = it.Access
 			break
 		}
 	}
@@ -472,6 +524,11 @@ type DeployConfigUpsertRequest struct {
 	ImageTag             string `json:"image_tag" binding:"omitempty,max=128"`
 	Replicas             int    `json:"replicas"`
 	ContainerPort        int    `json:"container_port"`
+	DeployStrategy       string `json:"deploy_strategy" binding:"omitempty,oneof=rolling canary blue_green"`
+	CanaryReplicas       int    `json:"canary_replicas"`
+	CanaryPercent        int    `json:"canary_percent"`
+	CanaryStepsJSON      string `json:"canary_steps_json" binding:"omitempty,max=128"`
+	BlueGreenService     string `json:"blue_green_service" binding:"omitempty,max=128"`
 	Status               *int   `json:"status" binding:"omitempty,oneof=0 1"`
 }
 
@@ -598,6 +655,9 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 		return nil, constants.ErrBadRequestWithMsg("该应用在此环境下已存在同类型发布配置，请编辑已有配置或选择其他环境")
 	}
 	row.AuditEnabled = req.AuditEnabled
+	if s.enforceProdDeployAudit(ctx, row.Tenv, &row.AuditEnabled) {
+		row.AuditEnabled = true
+	}
 	row.Importance = strings.TrimSpace(req.Importance)
 	row.DestPath = strings.TrimSpace(req.DestPath)
 	row.ServerIDsJSON = string(serverJSON)
@@ -656,6 +716,23 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 	if row.ContainerPort <= 0 {
 		row.ContainerPort = 8080
 	}
+	row.DeployStrategy = normalizeDeployStrategy(req.DeployStrategy)
+	row.CanaryReplicas = req.CanaryReplicas
+	if row.CanaryReplicas <= 0 {
+		row.CanaryReplicas = 1
+	}
+	row.CanaryPercent = req.CanaryPercent
+	if row.CanaryPercent <= 0 {
+		row.CanaryPercent = 10
+	}
+	if row.CanaryPercent > 100 {
+		row.CanaryPercent = 100
+	}
+	row.CanaryStepsJSON = strings.TrimSpace(req.CanaryStepsJSON)
+	if row.CanaryStepsJSON == "" {
+		row.CanaryStepsJSON = "10,50,100"
+	}
+	row.BlueGreenService = strings.TrimSpace(req.BlueGreenService)
 	row.Status = status
 	if configID > 0 {
 		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
@@ -816,6 +893,10 @@ func (s *Service) TriggerRelease(ctx context.Context, projectID, serviceID uint,
 		return nil, err
 	}
 	if p.dc.AuditEnabled {
+		return s.createPendingRelease(ctx, projectID, serviceID, p, submitterUserID, submitterName)
+	}
+	auditRequired := s.enforceProdDeployAudit(ctx, p.dc.Tenv, boolPtr(p.dc.AuditEnabled))
+	if auditRequired {
 		return s.createPendingRelease(ctx, projectID, serviceID, p, submitterUserID, submitterName)
 	}
 
@@ -1142,12 +1223,28 @@ func (s *Service) GetReleaseRunLog(ctx context.Context, projectID, runID uint, a
 	return client.GetConsoleLog(ctx, svc.JenkinsJob, row.JenkinsBuildNumber)
 }
 
-func (s *Service) DeleteBuildRun(ctx context.Context, projectID, runID uint) error {
+func (s *Service) DeleteBuildRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) error {
+	var row model.CicdBuildRun
+	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+		return constants.ErrNotFound
+	}
+	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "manage"); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).Delete(&model.CicdBuildRun{}).Error
 }
 
-func (s *Service) DeleteReleaseRun(ctx context.Context, projectID, runID uint) error {
+func (s *Service) DeleteReleaseRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) error {
+	release, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "manage")
+	if err != nil {
+		return err
+	}
+	_ = release
 	return s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).Delete(&model.CicdReleaseRun{}).Error
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 type serviceMeta struct {

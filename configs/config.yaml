@@ -87,6 +87,10 @@ cicd:
   run_sync_interval_seconds: 15
   default_wait_mins: 60
   default_artifact_retain_count: 10
+  # 禁止审批人审批自己提交的发布（职责分离）
+  forbid_self_approve: true
+  # 生产环境发布须留痕审计（无审批流时拒绝直发）
+  prod_force_audit: true
   # 审批超时时间
   approval_sla_hours: 24
   # 审批提醒间隔时间
@@ -112,6 +116,10 @@ log:
   format: text
   output: both  # console, file, both
   file_path: ./logs  # log file directory path
+  max_size_mb: 100   # 单文件上限（MB），超出后轮转
+  max_age_days: 30   # 保留天数
+  max_backups: 10    # 保留备份文件数
+  compress: true     # 轮转后 gzip 压缩
 
 mysql:
   driver: mysql              # mysql（默认）或 postgres

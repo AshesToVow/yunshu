@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/objectstore"
 )
@@ -30,8 +31,11 @@ type BackupIndexRequest struct {
 }
 
 // CreateIndexBackup 创建备份任务并异步执行：分词(settings.analysis) → mapping → 数据 → MinIO。
-func (s *Service) CreateIndexBackup(ctx context.Context, req BackupIndexRequest, createdBy uint) (*model.EsmgmtBackupJob, error) {
-	return s.enqueueBackup(ctx, req, BackupTriggerManual, createdBy)
+func (s *Service) CreateIndexBackup(ctx context.Context, req BackupIndexRequest, actor *auth.CurrentUser) (*model.EsmgmtBackupJob, error) {
+	if err := s.assertConnectionWrite(ctx, req.ConnectionID, actor); err != nil {
+		return nil, err
+	}
+	return s.enqueueBackup(ctx, req, BackupTriggerManual, actorID(actor))
 }
 
 func (s *Service) enqueueBackup(ctx context.Context, req BackupIndexRequest, trigger string, createdBy uint) (*model.EsmgmtBackupJob, error) {
@@ -151,6 +155,13 @@ func (s *Service) PresignBackupDownload(ctx context.Context, jobID uint, artifac
 }
 
 func (s *Service) runBackupJob(jobID uint, maxDocs int) {
+	defer func() {
+		if r := recover(); r != nil {
+			_ = s.db.WithContext(context.Background()).Model(&model.EsmgmtBackupJob{}).
+				Where("id = ?", jobID).
+				Updates(map[string]any{"status": "failed", "phase": "panic", "error_message": "job panic"}).Error
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
@@ -242,13 +253,26 @@ func (s *Service) runBackupJob(jobID uint, maxDocs int) {
 	manifestKey := base + "/manifest.json"
 	zipKey := base + "/backup.zip"
 
+	capDocs := maxDocs
+	if capDocs <= 0 {
+		capDocs = 50000
+	}
+	if capDocs > 200000 {
+		capDocs = 200000
+	}
+	truncated := len(hits) >= capDocs
+	note := "elasticdump-like: analysis/settings first, then mapping, then documents"
+	if truncated {
+		note += fmt.Sprintf("; truncated at %d docs (not a full snapshot)", capDocs)
+	}
 	manifest := map[string]any{
 		"index":         job.IndexName,
 		"connection_id": job.ConnectionID,
 		"created_at":    time.Now().UTC().Format(time.RFC3339),
 		"doc_count":     len(hits),
+		"truncated":     truncated,
 		"order":         []string{"01-analysis.json", "02-mapping.json", "03-data.ndjson"},
-		"note":          "elasticdump-like: analysis/settings first, then mapping, then documents",
+		"note":          note,
 	}
 	manifestBytes, _ := json.MarshalIndent(manifest, "", "  ")
 
@@ -285,6 +309,7 @@ func (s *Service) runBackupJob(jobID uint, maxDocs int) {
 			"status":          "success",
 			"phase":           "done",
 			"doc_count":       len(hits),
+			"truncated":       truncated,
 			"minio_bucket":    store.Bucket(),
 			"minio_object":    zipKey,
 			"analysis_object": analysisKey,

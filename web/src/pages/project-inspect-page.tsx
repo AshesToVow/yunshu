@@ -37,6 +37,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DashboardStatCard } from "../components/ops/dashboard-stat-card";
+import { LineChart } from "../components/line-chart";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
 import { CHART_BRAND, CHART_ERROR, CHART_SUCCESS, CHART_WARNING } from "../constants/chart-colors";
 import { listAlertDatasources, type AlertDatasourceItem } from "../services/alert-platform";
@@ -46,13 +47,17 @@ import {
   deleteInspectItem,
   deleteInspectReportTemplate,
   getInspectPlan,
+  getInspectStorageInfo,
   inspectReportExcelUrl,
-  inspectReportHtmlUrl,
+  checkInspectReportPdf,
   inspectReportPdfUrl,
+  inspectReportHtmlUrl,
   inspectReportPrintUrl,
   listInspectItems,
   listInspectReportTemplates,
+  listInspectRunTrends,
   listInspectRuns,
+  migrateInspectReportsToMinio,
   previewInspectReportTemplate,
   resendInspectEmail,
   resetInspectItems,
@@ -65,6 +70,8 @@ import {
   type InspectPlan,
   type InspectReportTemplate,
   type InspectRun,
+  type InspectRunTrendItem,
+  type InspectStorageInfo,
 } from "../services/inspect";
 import { extractApiErrorMessage, http } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
@@ -170,6 +177,48 @@ function openAuthorized(url: string) {
     .catch((e) => message.error(extractApiErrorMessage(e, "打开报告失败")));
 }
 
+function downloadBlobFile(blob: Blob, filename: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function downloadInspectPdf(projectId: number, runId: number) {
+  const key = "inspect-pdf";
+  message.loading({ content: "正在准备 PDF…", key, duration: 0 });
+  void (async () => {
+    try {
+      const st = await checkInspectReportPdf(projectId, runId);
+      if (st.exists) {
+        const raw: unknown = await http.get(inspectReportPdfUrl(projectId, runId), {
+          responseType: "blob",
+          timeout: 120_000,
+        });
+        downloadBlobFile(toReportBlob(raw, "application/pdf"), `inspect-run-${runId}.pdf`);
+        message.success({ content: "PDF 已下载", key });
+        return;
+      }
+      const { downloadInspectReportPdf } = await import("../utils/inspect-report-pdf");
+      await downloadInspectReportPdf(projectId, inspectReportHtmlUrl(projectId, runId), `inspect-run-${runId}.pdf`);
+      message.success({ content: "PDF 已生成并保存（与 HTML 样式一致）", key });
+    } catch (e) {
+      message.error({ content: extractApiErrorMessage(e, "生成 PDF 失败"), key });
+    }
+  })();
+}
+
+function storageLabel(storage?: string) {
+  const s = (storage || "local").toLowerCase();
+  if (s === "minio") return "MinIO";
+  return "本地";
+}
+
+function storageColor(storage?: string) {
+  return (storage || "local").toLowerCase() === "minio" ? "blue" : "default";
+}
+
 export function ProjectInspectPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -190,6 +239,9 @@ export function ProjectInspectPage() {
   const [tplModalOpen, setTplModalOpen] = useState(false);
   const [editingTpl, setEditingTpl] = useState<InspectReportTemplate | null>(null);
   const [runDetail, setRunDetail] = useState<InspectRun | null>(null);
+  const [storageInfo, setStorageInfo] = useState<InspectStorageInfo | null>(null);
+  const [runTrends, setRunTrends] = useState<InspectRunTrendItem[]>([]);
+  const [migratingReports, setMigratingReports] = useState(false);
   const [activeTab, setActiveTab] = useState("plan");
   const [planForm] = Form.useForm();
   const [itemForm] = Form.useForm();
@@ -215,17 +267,21 @@ export function ProjectInspectPage() {
       if (!pid) return;
       setLoading(true);
       try {
-        const [p, its, rs, ds, tpls] = await Promise.all([
+        const [p, its, rs, ds, tpls, storage, trends] = await Promise.all([
           getInspectPlan(pid),
           listInspectItems(pid),
           listInspectRuns(pid, { page, page_size: pageSize }),
           listAlertDatasources({ project_id: pid, page: 1, page_size: 200 }),
           listInspectReportTemplates(pid),
+          getInspectStorageInfo(pid),
+          listInspectRunTrends(pid, 30),
         ]);
         setPlan(p);
         setItems(its || []);
         setRuns(rs.list || []);
         setRunTotal(rs.total || 0);
+        setStorageInfo(storage);
+        setRunTrends(trends || []);
         setDsList((ds.list || []).filter((d) => d.enabled !== false));
         setReportTemplates(tpls || []);
         planForm.setFieldsValue({
@@ -260,6 +316,32 @@ export function ProjectInspectPage() {
       void refresh(projectId, runPage, runPageSize);
     }
   }, [runPage, runPageSize]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const trendChartData = useMemo(() => {
+    const ordered = [...runTrends].reverse();
+    return {
+      labels: ordered.map((t) => {
+        const d = t.finished_at ? new Date(t.finished_at) : null;
+        return d && !Number.isNaN(d.getTime()) ? `${d.getMonth() + 1}/${d.getDate()}` : `#${t.id}`;
+      }),
+      scores: ordered.map((t) => t.score),
+      criticals: ordered.map((t) => t.critical_count),
+    };
+  }, [runTrends]);
+
+  async function handleMigrateReports() {
+    if (!projectId) return;
+    setMigratingReports(true);
+    try {
+      const r = await migrateInspectReportsToMinio(projectId);
+      message.success(`已迁移 ${r.migrated ?? 0} 份报告到 MinIO`);
+      await refresh(projectId);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "迁移失败"));
+    } finally {
+      setMigratingReports(false);
+    }
+  }
 
   const latestRun = runs[0];
   const enabledItems = useMemo(() => items.filter((i) => i.enabled).length, [items]);
@@ -459,6 +541,13 @@ export function ProjectInspectPage() {
       render: (_, r) => r.datasource_name || (r.datasource_id ? `#${r.datasource_id}` : "-"),
     },
     {
+      title: "存储",
+      width: 72,
+      render: (_, r) => (
+        <Tag color={storageColor(r.storage)}>{storageLabel(r.storage)}</Tag>
+      ),
+    },
+    {
       title: "时间",
       width: 168,
       render: (_, r) => formatDateTime(r.finished_at || r.started_at || r.created_at),
@@ -475,24 +564,42 @@ export function ProjectInspectPage() {
             type="link"
             size="small"
             icon={<FileTextOutlined />}
+            disabled={r.status !== "success"}
             onClick={() => openAuthorized(inspectReportHtmlUrl(projectId, r.id))}
           >
             HTML
           </Button>
-          <Button type="link" size="small" onClick={() => openAuthorized(inspectReportPrintUrl(projectId, r.id))}>
+          <Button
+            type="link"
+            size="small"
+            disabled={r.status !== "success"}
+            onClick={() => openAuthorized(inspectReportPrintUrl(projectId, r.id))}
+          >
             打印
           </Button>
-          <Button type="link" size="small" onClick={() => openAuthorized(inspectReportPdfUrl(projectId, r.id))}>
-            PDF
-          </Button>
-          <Button type="link" size="small" onClick={() => openAuthorized(inspectReportExcelUrl(projectId, r.id))}>
+          <Tooltip title="html2canvas + jsPDF 按 HTML 样式导出（与 PromAI 相同方案）">
+            <Button
+              type="link"
+              size="small"
+              disabled={r.status !== "success"}
+              onClick={() => downloadInspectPdf(projectId, r.id)}
+            >
+              PDF
+            </Button>
+          </Tooltip>
+          <Button
+            type="link"
+            size="small"
+            disabled={r.status !== "success"}
+            onClick={() => openAuthorized(inspectReportExcelUrl(projectId, r.id))}
+          >
             Excel
           </Button>
           <Button
             type="link"
             size="small"
             icon={<MailOutlined />}
-            disabled={!recipients.length}
+            disabled={!recipients.length || r.status !== "success"}
             onClick={async () => {
               try {
                 await resendInspectEmail(projectId, r.id);
@@ -510,22 +617,37 @@ export function ProjectInspectPage() {
     },
   ];
 
+  // 有排队/执行中任务时轮询历史，完成后自动刷新分数
+  useEffect(() => {
+    if (!projectId) return;
+    const inflight = runs.some((r) => r.status === "pending" || r.status === "running");
+    if (!inflight) return;
+    const timer = window.setInterval(() => {
+      void listInspectRuns(projectId, { page: runPage, page_size: runPageSize })
+        .then((rs) => {
+          setRuns(rs.list || []);
+          setRunTotal(rs.total || 0);
+          const still = (rs.list || []).some((r) => r.status === "pending" || r.status === "running");
+          if (!still) {
+            void refresh(projectId, runPage, runPageSize);
+          }
+        })
+        .catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [projectId, runs, runPage, runPageSize, refresh]);
+
   async function handleImmediateRun() {
     setRunning(true);
     try {
       const dsId = planForm.getFieldValue("datasource_id") || plan?.datasource_id;
       const run = await startInspectRun(projectId, dsId || undefined);
-      const m = statusMeta(run.status);
-      message.success(
-        run.status === "success"
-          ? `巡检完成 · 健康分 ${run.score}${run.grade ? ` (${run.grade})` : ""}`
-          : `巡检结束 · ${m.label}`,
-      );
+      message.success(`巡检已加入队列（#${run.id}），可继续操作，完成后自动刷新`);
       setActiveTab("runs");
       setRunPage(1);
       void refresh(projectId, 1, runPageSize);
     } catch (e: unknown) {
-      message.error(extractApiErrorMessage(e, "执行失败"));
+      message.error(extractApiErrorMessage(e, "提交巡检失败"));
     } finally {
       setRunning(false);
     }
@@ -535,7 +657,7 @@ export function ProjectInspectPage() {
     <div className="page-stack project-inspect-page">
       <OpsPageHeader
         title="项目巡检"
-        description="基于 Prometheus（Telegraf / Blackbox / kube-state-metrics 等）采集指标，定时或手动巡检项目健康，并生成 HTML / PDF / Excel 报告与邮件通知。"
+        description="基于 Prometheus 采集指标定时/手动巡检，生成 HTML / Excel 报告；PDF 采用 html2canvas + jsPDF（与 PromAI 相同方案），样式与 HTML 预览一致。邮件默认可仅附 HTML。"
         breadcrumbs={[{ title: "项目运维" }, { title: "项目巡检" }]}
         meta={
           projectId ? (
@@ -583,6 +705,47 @@ export function ProjectInspectPage() {
         </Card>
       ) : (
         <>
+          {storageInfo && (!storageInfo.minio_ready || storageInfo.require_minio) ? (
+            <Alert
+              type={storageInfo.require_minio && !storageInfo.minio_ready ? "error" : "warning"}
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={
+                storageInfo.require_minio && !storageInfo.minio_ready
+                  ? "巡检报告须写入 MinIO，当前 MinIO 不可用，无法执行巡检"
+                  : "巡检报告当前写入本地目录，容器重启后可能丢失"
+              }
+              description={
+                <span>
+                  {storageInfo.require_minio ? (
+                    <>
+                      数据字典 <Typography.Text code>inspect_report.require_minio</Typography.Text> 已启用，须配置 MinIO。
+                    </>
+                  ) : (
+                    <>请在数据字典启用并填写 MinIO 配置（minio_endpoint、minio_access_key、minio_secret_key、minio_bucket）。</>
+                  )}
+                  当前路径：
+                  <Typography.Text code copyable>
+                    {storageInfo.local_root || "logs/inspect-reports"}
+                  </Typography.Text>
+                  {storageInfo.minio_reason ? (
+                    <>
+                      {" "}
+                      原因：{storageInfo.minio_reason}
+                    </>
+                  ) : null}
+                  {storageInfo.minio_ready ? (
+                    <div style={{ marginTop: 8 }}>
+                      <Button size="small" loading={migratingReports} onClick={() => void handleMigrateReports()}>
+                        将历史本地报告迁移到 MinIO
+                      </Button>
+                    </div>
+                  ) : null}
+                </span>
+              }
+            />
+          ) : null}
+
           <Row gutter={[16, 16]} className="project-inspect-page__kpis">
             <Col xs={24} sm={12} lg={6}>
               <Card className="project-inspect-page__score-card" loading={loading} bordered>
@@ -641,6 +804,20 @@ export function ProjectInspectPage() {
               />
             </Col>
           </Row>
+
+          {runTrends.length > 1 ? (
+            <Card className="table-card" title="巡检趋势（最近 30 次）" style={{ marginBottom: 16 }} loading={loading}>
+              <LineChart
+                yAxisLabel="分数 / 数量"
+                labels={trendChartData.labels}
+                series={[
+                  { name: "健康分", data: trendChartData.scores, color: CHART_BRAND },
+                  { name: "严重项", data: trendChartData.criticals, color: CHART_ERROR },
+                ]}
+                height={240}
+              />
+            </Card>
+          ) : null}
 
           {!dsList.length ? (
             <Alert
@@ -1115,7 +1292,30 @@ export function ProjectInspectPage() {
               <Descriptions.Item label="版式">
                 {runDetail.report_template_code || "default"}
               </Descriptions.Item>
-              <Descriptions.Item label="存储">{runDetail.storage || "local"}</Descriptions.Item>
+              <Descriptions.Item label="存储">
+                <Tag color={storageColor(runDetail.storage)}>{storageLabel(runDetail.storage)}</Tag>
+              </Descriptions.Item>
+              {runDetail.report_html_path ? (
+                <Descriptions.Item label="HTML 路径">
+                  <Typography.Text code copyable style={{ wordBreak: "break-all" }}>
+                    {runDetail.report_html_path}
+                  </Typography.Text>
+                </Descriptions.Item>
+              ) : null}
+              {runDetail.report_pdf_path ? (
+                <Descriptions.Item label="PDF 路径">
+                  <Typography.Text code copyable style={{ wordBreak: "break-all" }}>
+                    {runDetail.report_pdf_path}
+                  </Typography.Text>
+                </Descriptions.Item>
+              ) : null}
+              {runDetail.report_excel_path ? (
+                <Descriptions.Item label="Excel 路径">
+                  <Typography.Text code copyable style={{ wordBreak: "break-all" }}>
+                    {runDetail.report_excel_path}
+                  </Typography.Text>
+                </Descriptions.Item>
+              ) : null}
               <Descriptions.Item label="开始时间">
                 {formatDateTime(runDetail.started_at || runDetail.created_at)}
               </Descriptions.Item>
@@ -1139,9 +1339,9 @@ export function ProjectInspectPage() {
               <Button onClick={() => openAuthorized(inspectReportPrintUrl(projectId, runDetail.id))}>
                 打印版
               </Button>
-              <Button onClick={() => openAuthorized(inspectReportPdfUrl(projectId, runDetail.id))}>
-                PDF
-              </Button>
+              <Tooltip title="html2canvas + jsPDF 按 HTML 样式导出（与 PromAI 相同方案）">
+                <Button onClick={() => downloadInspectPdf(projectId, runDetail.id)}>PDF</Button>
+              </Tooltip>
               <Button onClick={() => openAuthorized(inspectReportExcelUrl(projectId, runDetail.id))}>
                 Excel
               </Button>

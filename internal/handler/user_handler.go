@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
-	"net/http"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
@@ -241,11 +241,9 @@ func (h *UserHandler) Export(c *gin.Context) {
 		cell, _ := excelize.CoordinatesToCellName(1, i+2)
 		_ = f.SetSheetRow(sheet, cell, &row)
 	}
-	c.Header("Content-Type", "application/octet-stream")
-	c.Header("Content-Disposition", "attachment; filename=users.xlsx")
-	c.Header("Content-Transfer-Encoding", "binary")
-	c.Status(http.StatusOK)
-	_ = f.Write(c.Writer)
+	if err := exportutil.ServeExcel(c, "users.xlsx", f); err != nil {
+		response.Error(c, err)
+	}
 }
 
 // ImportTemplate godoc
@@ -260,11 +258,9 @@ func (h *UserHandler) ImportTemplate(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	c.Header("Content-Type", "application/octet-stream")
-	c.Header("Content-Disposition", "attachment; filename=users-import-template.xlsx")
-	c.Header("Content-Transfer-Encoding", "binary")
-	c.Status(http.StatusOK)
-	_ = f.Write(c.Writer)
+	if err := exportutil.ServeExcel(c, "users-import-template.xlsx", f); err != nil {
+		response.Error(c, err)
+	}
 }
 
 // Import godoc
@@ -276,15 +272,21 @@ func (h *UserHandler) ImportTemplate(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/users/import [post]
 func (h *UserHandler) Import(c *gin.Context) {
+	user, ok := auth.CurrentUserFromContext(c)
+	if !ok {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
 	file, _, err := c.Request.FormFile("file")
 	if err != nil {
 		response.Error(c, constants.ErrUploadFailed)
 		return
 	}
 	defer file.Close()
-	if err := h.service.ImportUsers(c.Request.Context(), file); err != nil {
+	result, err := h.service.ImportUsersByActor(c.Request.Context(), user, exportutil.LimitedImportReader(file))
+	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, gin.H{"message": "imported"})
+	response.Success(c, result)
 }

@@ -14,6 +14,7 @@ import (
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/k8scaps"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/interfaces"
@@ -148,11 +149,26 @@ func K8sScopeAuthorize(
 			return
 		}
 		pack := k8sauth.PackFromCurrentUser(user)
+		intent := k8sauth.AccessIntentWrite
+		if strings.EqualFold(method, "GET") && service.IsK8sReadAPIPath(routePath) && !forceTier {
+			intent = k8sauth.AccessIntentRead
+		}
+		if forceTier && strings.Contains(strings.TrimSpace(routePath), "exec") {
+			intent = k8sauth.AccessIntentExec
+		}
+		if strings.EqualFold(method, "GET") && !forceTier && !tracked {
+			intent = k8sauth.AccessIntentRead
+		}
 		c.Request = c.Request.WithContext(k8sauth.WithRequestScope(c.Request.Context(), k8sauth.RequestScope{
 			ClusterID: clusterID,
 			Namespace: concreteNS,
 			Pack:      pack,
+			Intent:    intent,
 		}))
+		// 从 body 提取 confirm 供高危操作
+		if m := extractConfirmFromRequest(c); m {
+			c.Request = c.Request.WithContext(k8sauth.WithDestructiveConfirm(c.Request.Context(), true))
+		}
 
 		if clusterID == 0 {
 			if forceTier {
@@ -242,33 +258,77 @@ func K8sScopeAuthorize(
 		}
 
 		perms := catalog.permissions()
-		required := service.RequiredK8sAccessRank(perms, routePath, method, actionCode)
-		if required <= 0 {
-			required = service.K8sAccessRankAdmin
-		}
-
-		rank := accessRepo.EffectiveTier(c.Request.Context(), pack, clusterID)
-		if rank < required {
-			response.Error(c, constants.ErrForbidden)
+		needCap := service.RequiredK8sCapability(perms, routePath, method, actionCode)
+		haveCaps := accessRepo.EffectiveCapabilities(c.Request.Context(), pack, clusterID)
+		if !k8scaps.Has(haveCaps, needCap) {
+			response.Error(c, constants.ErrForbiddenWithMsg("当前主体缺少集群能力："+needCap+"（请在 K8s 集群访问授权中勾选对应能力包）"))
 			c.Abort()
 			return
+		}
+		rank := k8scaps.Rank(haveCaps)
+		if scope, ok := k8sauth.RequestScopeFromContext(c.Request.Context()); ok {
+			scope.AccessRank = rank
+			c.Request = c.Request.WithContext(k8sauth.WithRequestScope(c.Request.Context(), scope))
 		}
 
 		c.Next()
 	}
 }
 
-// k8sScopeForceTierCheck Pod Exec / Ingress-Nginx 重启等为高危：无论 API 管理是否勾选「纳入 K8s 范围校验」，均按集群档位校验（仍需 Casbin 授权）。
-// 注意：/k8s/event-forward 是平台级转发配置（规则用 cluster_ids、Worker 参数无集群），不得强制要求 cluster_id。
+// k8sScopeForceTierCheck 高危写操作强制集群档位校验（仍需 Casbin 授权）。
 func k8sScopeForceTierCheck(routePath, method string) bool {
 	p := strings.TrimSpace(routePath)
 	m := strings.ToUpper(strings.TrimSpace(method))
 	switch m {
 	case "POST":
-		return strings.HasSuffix(p, "/pods/exec") ||
-			strings.HasSuffix(p, "/ingresses/nginx/restart")
+		if strings.HasSuffix(p, "/pods/exec") ||
+			strings.HasSuffix(p, "/ingresses/nginx/restart") ||
+			strings.HasSuffix(p, "/nodes/drain") ||
+			strings.HasSuffix(p, "/rbac/apply") {
+			return true
+		}
+		if strings.Contains(p, "/helm/") && (strings.HasSuffix(p, "/uninstall") || strings.HasSuffix(p, "/install") || strings.HasSuffix(p, "/upgrade")) {
+			return true
+		}
+		if strings.HasSuffix(p, "/pods/file/upload") || strings.HasSuffix(p, "/pods/file/delete") {
+			return true
+		}
+		return false
+	case "DELETE":
+		return strings.Contains(p, "/helm/")
 	case "GET":
-		return strings.HasSuffix(p, "/pods/exec/ws")
+		return strings.HasSuffix(p, "/pods/exec/ws") || strings.HasSuffix(p, "/secrets/reveal")
+	default:
+		return false
+	}
+}
+
+func extractConfirmFromRequest(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(c.Query("confirm")), "true") || strings.TrimSpace(c.Query("confirm")) == "1" {
+		return true
+	}
+	if c.Request.Body == nil {
+		return false
+	}
+	raw, _ := io.ReadAll(c.Request.Body)
+	c.Request.Body = io.NopCloser(bytes.NewReader(raw))
+	if len(raw) == 0 {
+		return false
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return false
+	}
+	switch v := m["confirm"].(type) {
+	case bool:
+		return v
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "true") || strings.TrimSpace(v) == "1"
+	case float64:
+		return v != 0
 	default:
 		return false
 	}

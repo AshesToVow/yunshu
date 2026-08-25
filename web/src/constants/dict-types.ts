@@ -24,7 +24,7 @@ export const DICT_CATEGORY_TABS: { id: DictCategoryId; label: string }[] = [
 ];
 
 export const DICT_CATEGORY_META: Record<Exclude<DictCategoryId, "all">, DictCategoryMeta> = {
-  system: { id: "system", label: "系统", color: "blue", description: "邮件、通用状态等基础配置" },
+  system: { id: "system", label: "系统", color: "blue", description: "邮件、密码策略、通用状态等基础配置" },
   alert: { id: "alert", label: "告警", color: "volcano", description: "告警规则、通道、Prometheus、企微/钉钉" },
   log: { id: "log", label: "日志", color: "cyan", description: "ES / Kafka / Agent、采集源等平台配置" },
   k8s: { id: "k8s", label: "Kubernetes", color: "purple", description: "集群模板、Event 转发等" },
@@ -51,6 +51,14 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "发件邮箱（mail_from_email）", value: "mail_from_email", category: "system" },
   { label: "发件名称（mail_from_name）", value: "mail_from_name", category: "system" },
   { label: "是否启用 TLS（mail_use_tls）", value: "mail_use_tls", category: "system" },
+  { label: "密码最小长度（password_min_length）", value: "password_min_length", category: "system" },
+  { label: "密码最大长度（password_max_length）", value: "password_max_length", category: "system" },
+  { label: "须含大写字母（password_require_upper）", value: "password_require_upper", category: "system" },
+  { label: "须含小写字母（password_require_lower）", value: "password_require_lower", category: "system" },
+  { label: "须含数字（password_require_digit）", value: "password_require_digit", category: "system" },
+  { label: "须含特殊字符（password_require_special）", value: "password_require_special", category: "system" },
+  { label: "密码过期天数（password_expiry_days）", value: "password_expiry_days", category: "system" },
+  { label: "禁止包含用户名（password_forbid_username）", value: "password_forbid_username", category: "system" },
 
   { label: "告警通道类型（alert_channel_type）", value: "alert_channel_type", category: "alert" },
   { label: "告警 Webhook URL（alert_webhook_url）", value: "alert_webhook_url", category: "alert" },
@@ -183,6 +191,7 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "后端构建类型（cicd_build_type_backend）", value: "cicd_build_type_backend", category: "cicd" },
   { label: "npm 安装模式（cicd_npm_install_mode）", value: "cicd_npm_install_mode", category: "cicd" },
   { label: "发布方式（cicd_deploy_kind）", value: "cicd_deploy_kind", category: "cicd" },
+  { label: "发布策略（cicd_deploy_strategy）", value: "cicd_deploy_strategy", category: "cicd" },
   { label: "部署动作（cicd_deploy_action）", value: "cicd_deploy_action", category: "cicd" },
   { label: "启动脚本类型（cicd_start_script_type）", value: "cicd_start_script_type", category: "cicd" },
   { label: "K8s 凭据（cicd_k8s_credential）", value: "cicd_k8s_credential", category: "cicd" },
@@ -222,7 +231,7 @@ export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "
   if (key.startsWith("log_")) return "log";
   if (key.startsWith("k8s_")) return "k8s";
   if (key.startsWith("minio_") || key.startsWith("mysql_backup_")) return "backup";
-  if (key.startsWith("mail_") || key === "common_status") return "system";
+  if (key.startsWith("mail_") || key.startsWith("password_") || key === "common_status") return "system";
   if (key.startsWith("server_") || key.startsWith("cloud_")) return "cmdb";
   if (key.startsWith("wecom_") || key.startsWith("dingtalk_")) return "alert";
   return "other";

@@ -68,7 +68,7 @@ func DialServer(ctx context.Context, aead cipher.AEAD, domain string, repo Crede
 	sv, err := repo.GetByID(ctx, serverID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, constants.ErrLogSourceServerNotFound
+			return nil, nil, constants.ErrServerNotFound
 		}
 		return nil, nil, bizerrors.Pass(ctx, domain, "DialServer", err)
 	}

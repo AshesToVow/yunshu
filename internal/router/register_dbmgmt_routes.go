@@ -10,7 +10,7 @@ import (
 func RegisterDbmgmtRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectRoutes := api.Group("/projects")
 	projectRoutes.Use(d.authMiddleware, d.authorize, d.opAudit)
-	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
+	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.projectRepo, d.app.Logger))
 
 	g := projectScoped.Group("/dbmgmt")
 
@@ -29,6 +29,10 @@ func RegisterDbmgmtRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	g.POST("/instances/:instanceId/check", d.dbmgmtHandler.CheckSQL)
 	g.POST("/instances/:instanceId/execute", d.dbmgmtHandler.Execute)
 	g.POST("/instances/:instanceId/import", d.dbmgmtHandler.Import)
+
+	g.GET("/instances/:instanceId/column-mask-rules", d.dbmgmtHandler.ListColumnMaskRules)
+	g.POST("/instances/:instanceId/column-mask-rules", d.dbmgmtHandler.UpsertColumnMaskRule)
+	g.DELETE("/instances/:instanceId/column-mask-rules/:ruleId", d.dbmgmtHandler.DeleteColumnMaskRule)
 
 	g.GET("/grants", d.dbmgmtHandler.ListGrants)
 	g.POST("/grants", d.dbmgmtHandler.CreateGrant)

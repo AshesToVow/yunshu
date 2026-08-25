@@ -1,40 +1,50 @@
 # Dockerfile.backend
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/golang:1.25-alpine AS builder
+# 兼容经典 docker build：所有用于 FROM 的 ARG 必须写在第一个 FROM 之前
+ARG GO_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.26.2-alpine
+ARG ALPINE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/alpine:3.19
+# surnet 静态/半静态 wkhtmltopdf（勿用 Alpine apk 版，3.14 包在 3.19 上 Qt 冲突会 core dump）
+ARG WKHTMLTOPDF_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/surnet/alpine-wkhtmltopdf:3.23.2-0.12.6-full
 
-# 安装时区数据和ca证书
-RUN apk add --no-cache tzdata ca-certificates
+FROM ${WKHTMLTOPDF_IMAGE} AS wkhtmltopdf
+
+FROM ${GO_IMAGE} AS builder
+
+RUN apk add --no-cache tzdata ca-certificates git
 
 WORKDIR /app
+
+ENV GOPROXY=https://goproxy.cn,direct \
+    GOSUMDB=off \
+    CGO_ENABLED=0 \
+    GOOS=linux
+
 COPY go.mod go.sum ./
-
-# 国内 Go 代理（解决你之前下载超时）
-ENV GOPROXY=https://goproxy.cn,direct
-ENV GOSUMDB=off
-
 RUN go mod download
 
 COPY . .
+RUN go build -trimpath -ldflags="-s -w" -o /yunshu ./main.go
 
-# 编译二进制
-RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=1 go build -o /yunshu ./main.go
+FROM ${ALPINE_IMAGE}
 
-# 运行镜像 - 使用 alpine 替代 scratch，包含基础工具和时区数据
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/alpine:3.19
-
-# 时区/证书；Chromium 用于巡检报告 HTML→PDF（含样式）；Noto CJK 保证中文渲染
+# 巡检 PDF：静态 wkhtmltopdf（surnet 镜像）> 离线包；禁止 apk 混装 Qt
 RUN apk add --no-cache \
     tzdata ca-certificates \
-    chromium nss freetype harfbuzz ttf-freefont font-noto-cjk \
- && ln -sf /usr/bin/chromium /usr/bin/chromium-browser 2>/dev/null || true
-
-ENV YUNSHU_CHROME_PATH=/usr/bin/chromium
-ENV CHROME_PATH=/usr/bin/chromium
+    libstdc++ libx11 libxrender libxext libssl3 \
+    fontconfig freetype \
+    ttf-freefont font-wqy-zenhei
+COPY --from=wkhtmltopdf /bin/wkhtmltopdf /usr/local/bin/wkhtmltopdf
+# full 变体需一并拷贝 libwkhtmltox（small 变体无此目录，构建时加 --build-arg WKHTMLTOPDF_IMAGE=...-small 即可）
+COPY --from=wkhtmltopdf /lib/libwkhtmltox* /usr/local/lib/
+ENV LD_LIBRARY_PATH=/usr/local/lib
+COPY deploy/wkhtmltopdf/ /tmp/wkhtmltopdf-bundle/
+COPY deploy/docker/install-wkhtmltopdf.sh /tmp/install-wkhtmltopdf.sh
+RUN chmod +x /tmp/install-wkhtmltopdf.sh \
+    && /tmp/install-wkhtmltopdf.sh /tmp/wkhtmltopdf-bundle \
+    && rm -rf /tmp/wkhtmltopdf-bundle /tmp/install-wkhtmltopdf.sh
 
 COPY --from=builder /yunshu /app/yunshu
 COPY configs/ /app/configs/
-# AI 能力中心种子（Prompt/KB/案例/SOP/脚本工具/Eval）；运行时 CWD=/app
 COPY data/ai/ /app/data/ai/
-# 离线 Loggie 安装包（linux/amd64 ELF），安装 Agent 时由平台 SFTP 上传
 COPY deploy/loggie/binary/loggie /app/deploy/loggie/binary/loggie
 COPY deploy/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
@@ -43,6 +53,5 @@ WORKDIR /app
 ENV YUNSHU_AI_DATA_DIR=/app/data/ai
 EXPOSE 8080
 
-# 启动前可选执行 seed（RUN_SEED=1），再 exec server
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["server"]

@@ -21,7 +21,7 @@ type LoggieAgent struct {
 	InactiveFdCount int        `json:"inactive_fd_count" gorm:"default:0;comment:不活跃文件句柄数(追平后常见)"`
 	MonitorDetail   string     `json:"monitor_detail" gorm:"type:text;comment:监控快照 JSON"`
 	BootstrapConfig string     `json:"-" gorm:"type:text;comment:引导参数 JSON 便于重新生成 pipeline"`
-	LastSeenAt      *time.Time `json:"last_seen_at" gorm:"comment:最近心跳"`
+	LastSeenAt      *time.Time `json:"last_seen_at" gorm:"index;comment:最近心跳"`
 	LastIngestAt    *time.Time `json:"last_ingest_at" gorm:"comment:最近确认有日志写入 ES"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`

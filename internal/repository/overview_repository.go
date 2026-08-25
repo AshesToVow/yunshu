@@ -104,7 +104,8 @@ func (r *OverviewRepository) LoadMetrics(ctx context.Context, regPendingStatus i
 
 func (r *OverviewRepository) ListEnabledClusters(ctx context.Context, projectIDs []uint, unrestricted bool) ([]model.K8sCluster, error) {
 	var clusters []model.K8sCluster
-	q := r.db.WithContext(ctx).Model(&model.K8sCluster{}).Where("status = ?", 1)
+	// 总览只需集群 ID；避免一次拉出全部 kubeconfig/direct longtext。
+	q := r.db.WithContext(ctx).Model(&model.K8sCluster{}).Select("id").Where("status = ?", 1)
 	if !unrestricted {
 		if len(projectIDs) == 0 {
 			q = q.Where("owning_project_id IS NULL")
@@ -118,19 +119,29 @@ func (r *OverviewRepository) ListEnabledClusters(ctx context.Context, projectIDs
 
 func (r *OverviewRepository) FillAlertAndAgentStats(ctx context.Context, dayStart, dayEnd, agentCutoff time.Time) (*OverviewStats, error) {
 	out := &OverviewStats{}
-	_ = r.db.WithContext(ctx).Model(&model.AlertEvent{}).Where("status = ?", "firing").Count(&out.AlertFiringCount).Error
-	_ = r.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).
-		Count(&out.AlertEventsTodayCount).Error
-	var online int64
-	_ = r.db.WithContext(ctx).Model(&model.LoggieAgent{}).
-		Where("last_seen_at IS NOT NULL AND last_seen_at >= ?", agentCutoff).
-		Count(&online).Error
-	out.LoggieAgentsOnlineCount = online
-	var totalAgents int64
-	_ = r.db.WithContext(ctx).Model(&model.LoggieAgent{}).Count(&totalAgents).Error
-	if totalAgents >= online {
-		out.LoggieAgentsOfflineCount = totalAgents - online
+	type row struct {
+		AlertFiringCount         int64
+		AlertEventsTodayCount    int64
+		LoggieAgentsOnlineCount  int64
+		LoggieAgentsTotal        int64
+	}
+	var scanned row
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT
+			COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS alert_firing_count,
+			COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0) AS alert_events_today_count,
+			(SELECT COUNT(*) FROM loggie_agents WHERE last_seen_at IS NOT NULL AND last_seen_at >= ?) AS loggie_agents_online_count,
+			(SELECT COUNT(*) FROM loggie_agents) AS loggie_agents_total
+		FROM alert_events WHERE deleted_at IS NULL
+	`, "firing", dayStart, dayEnd, agentCutoff).Scan(&scanned).Error
+	if err != nil {
+		return out, nil
+	}
+	out.AlertFiringCount = scanned.AlertFiringCount
+	out.AlertEventsTodayCount = scanned.AlertEventsTodayCount
+	out.LoggieAgentsOnlineCount = scanned.LoggieAgentsOnlineCount
+	if scanned.LoggieAgentsTotal >= scanned.LoggieAgentsOnlineCount {
+		out.LoggieAgentsOfflineCount = scanned.LoggieAgentsTotal - scanned.LoggieAgentsOnlineCount
 	}
 	return out, nil
 }

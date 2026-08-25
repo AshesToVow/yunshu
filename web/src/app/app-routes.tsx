@@ -20,7 +20,7 @@ function RouteFallback() {
 }
 
 function ProtectedLayout() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -31,6 +31,14 @@ function ProtectedLayout() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  if (
+    user?.must_change_password &&
+    location.pathname !== "/personal-settings" &&
+    !location.pathname.startsWith("/personal-settings")
+  ) {
+    return <Navigate to="/personal-settings?force=password" replace />;
+  }
+
   return (
     <Suspense fallback={<RouteFallback />}>
       <AdminLayout />
@@ -39,13 +47,16 @@ function ProtectedLayout() {
 }
 
 function AuthLayout() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
 
   if (loading) {
     return <RouteFallback />;
   }
 
   if (isAuthenticated) {
+    if (user?.must_change_password) {
+      return <Navigate to="/personal-settings?force=password" replace />;
+    }
     return <Navigate to="/" replace />;
   }
 

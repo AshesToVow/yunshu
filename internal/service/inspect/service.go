@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"yunshu/internal/interfaces"
@@ -29,6 +32,10 @@ type Service struct {
 	mailer    mailer.Sender
 	appName   string
 	reportDir string
+
+	workerOnce sync.Once
+	workerCtx  context.Context
+	jobCh      chan uint
 }
 
 func NewService(
@@ -54,6 +61,14 @@ func NewService(
 
 func (s *Service) store(ctx context.Context) ReportStore {
 	return resolveReportStore(ctx, s.db, s.reportDir)
+}
+
+// ReportStorageInfo 返回当前巡检报告存储后端与 MinIO 就绪状态。
+func (s *Service) ReportStorageInfo(ctx context.Context) ReportStorageInfo {
+	if s == nil {
+		return ReportStorageInfo{Backend: StorageLocal}
+	}
+	return resolveReportStorageInfo(ctx, s.db, s.reportDir)
 }
 
 // SeedGlobalTemplates 幂等写入/刷新全局巡检模板项（按 type+name upsert）。
@@ -440,20 +455,15 @@ func (s *Service) StartManualRun(ctx context.Context, projectID, userID uint, op
 	if dsID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("请指定 datasource_id 或在计划中配置数据源")
 	}
-	return s.executeRun(ctx, plan, dsID, "manual", userID, operatorName)
+	return s.enqueueNewRun(ctx, plan, dsID, "manual", userID, operatorName)
 }
 
-func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datasourceID uint, trigger string, userID uint, operatorName string) (*model.InspectRun, error) {
+// enqueueNewRun 创建 pending 记录并入队异步执行，立即返回（不阻塞 HTTP）。
+func (s *Service) enqueueNewRun(ctx context.Context, plan *model.InspectPlan, datasourceID uint, trigger string, userID uint, operatorName string) (*model.InspectRun, error) {
 	if plan == nil || plan.ProjectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("invalid plan")
 	}
-	projectName := fmt.Sprintf("project-%d", plan.ProjectID)
-	if s.projects != nil {
-		if p, err := s.projects.GetByID(ctx, plan.ProjectID); err == nil && p != nil {
-			projectName = p.Name
-		}
-	}
-	cli, ds, err := s.dsSvc.PrometheusClient(ctx, datasourceID)
+	_, ds, err := s.dsSvc.PrometheusClient(ctx, datasourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -461,67 +471,126 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 		return nil, constants.ErrBadRequestWithMsg("数据源不属于当前项目")
 	}
 
-	now := time.Now()
 	run := model.InspectRun{
 		ProjectID:      plan.ProjectID,
 		PlanID:         plan.ID,
-		Status:         "running",
+		Status:         "pending",
 		Trigger:        trigger,
 		DatasourceID:   datasourceID,
 		DatasourceName: ds.Name,
-		StartedAt:      &now,
 		CreatedBy:      userID,
+		OperatorName:   strings.TrimSpace(operatorName),
 	}
 	if err := s.db.WithContext(ctx).Create(&run).Error; err != nil {
 		return nil, err
 	}
+	s.enqueueRun(run.ID)
+	return &run, nil
+}
 
-	items, err := s.effectiveItems(ctx, plan.ProjectID)
+func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datasourceID uint, trigger string, userID uint, operatorName string) (*model.InspectRun, error) {
+	return s.enqueueNewRun(ctx, plan, datasourceID, trigger, userID, operatorName)
+}
+
+// performRun 在 worker 中执行采集与报告生成。状态落库用 Background，避免请求取消导致永远「执行中」。
+func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun) (*model.InspectRun, error) {
+	if plan == nil || run == nil || plan.ProjectID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("invalid plan")
+	}
+	dbCtx := context.Background()
+	projectName := fmt.Sprintf("project-%d", plan.ProjectID)
+	if s.projects != nil {
+		if p, err := s.projects.GetByID(dbCtx, plan.ProjectID); err == nil && p != nil {
+			projectName = p.Name
+		}
+	}
+	cli, ds, err := s.dsSvc.PrometheusClient(ctx, run.DatasourceID)
 	if err != nil {
-		return s.failRun(ctx, &run, err)
+		return s.failRun(dbCtx, run, err)
+	}
+	if ds.ProjectID != plan.ProjectID {
+		return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("数据源不属于当前项目"))
+	}
+
+	storInfo := resolveReportStorageInfo(dbCtx, s.db, s.reportDir)
+	if storInfo.RequireMinIO && !storInfo.MinioReady {
+		reason := strings.TrimSpace(storInfo.MinioReason)
+		if reason == "" {
+			reason = "请配置数据字典 MinIO"
+		}
+		return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("巡检报告须写入 MinIO（inspect_report.require_minio=true）："+reason))
+	}
+
+	items, err := s.effectiveItems(dbCtx, plan.ProjectID)
+	if err != nil {
+		return s.failRun(dbCtx, run, err)
 	}
 	collected := collectItems(ctx, cli, items, 8)
-	user := strings.TrimSpace(operatorName)
-	if user == "" && trigger == "cron" {
-		user = "系统定时"
+	operator := strings.TrimSpace(run.OperatorName)
+	if operator == "" && run.Trigger == "cron" {
+		operator = "系统定时"
 	}
-	data := buildReportData(projectName, ds.Name, user, plan.ReportListMode, collected)
+	data := buildReportData(projectName, ds.Name, operator, plan.ReportListMode, collected)
 
-	tpl, err := s.resolveReportTemplate(ctx, plan.ProjectID, plan.ReportTemplateID)
+	tpl, err := s.resolveReportTemplate(dbCtx, plan.ProjectID, plan.ReportTemplateID)
 	if err != nil {
-		return s.failRun(ctx, &run, err)
+		return s.failRun(dbCtx, run, err)
 	}
 	htmlBytes, err := renderHTMLWithTemplate(tpl.Code, tpl.Body, data)
 	if err != nil {
-		// 自定义模板失败时回退标准版，避免整次巡检失败
+		slog.Default().With("component", "inspect.report", "template", tpl.Code, "error", err).
+			Warn("report template render failed, using builtin default")
+		data.Summary = "（报告模板渲染失败，已使用内置默认模板）" + data.Summary
 		htmlBytes, err = renderHTML(data)
 		if err != nil {
-			return s.failRun(ctx, &run, err)
+			return s.failRun(dbCtx, run, err)
 		}
 	}
-	printBytes := htmlBytes
-	pdfBytes := renderPDFFromHTMLBytes(ctx, htmlBytes)
-	if len(pdfBytes) == 0 {
-		pdfBytes = renderBinaryPDF(data)
+	printBytes, err := renderHTMLWithTemplate("print", "", data)
+	if err != nil || len(printBytes) == 0 {
+		printBytes = htmlBytes
 	}
+	// PDF 优先用可打印 HTML（与 print.html 一致），保证版式与浏览器预览接近
+	pdfBytes := renderBinaryPDF(data, printBytes)
 	excelBytes, excelErr := renderExcel(data)
 
-	store := s.store(ctx)
+	store := s.store(dbCtx)
 	htmlKey := reportObjectKey(plan.ProjectID, run.ID, "html")
 	printKey := reportObjectKey(plan.ProjectID, run.ID, "print.html")
 	pdfKey := reportObjectKey(plan.ProjectID, run.ID, "pdf")
 	excelKey := reportObjectKey(plan.ProjectID, run.ID, "xlsx")
 
-	if err := store.Put(ctx, htmlKey, htmlBytes, "text/html; charset=utf-8"); err != nil {
-		return s.failRun(ctx, &run, err)
+	if err := store.Put(dbCtx, htmlKey, htmlBytes, "text/html; charset=utf-8"); err != nil {
+		return s.failRun(dbCtx, run, err)
 	}
-	if err := store.Put(ctx, printKey, printBytes, "text/html; charset=utf-8"); err != nil {
-		return s.failRun(ctx, &run, err)
+	if err := store.Put(dbCtx, printKey, printBytes, "text/html; charset=utf-8"); err != nil {
+		return s.failRun(dbCtx, run, err)
 	}
-	_ = store.Put(ctx, pdfKey, pdfBytes, "application/pdf")
-	if excelErr == nil && len(excelBytes) > 0 {
-		_ = store.Put(ctx, excelKey, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-		run.ReportExcelPath = excelKey
+
+	var writeWarnings []string
+	if len(pdfBytes) >= 4 && string(pdfBytes[:4]) == "%PDF" {
+		if err := store.Put(dbCtx, pdfKey, pdfBytes, "application/pdf"); err != nil {
+			slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
+				Warn("inspect pdf report store failed", "error", err, "key", pdfKey)
+			writeWarnings = append(writeWarnings, "PDF: "+err.Error())
+		} else {
+			run.ReportPDFPath = pdfKey
+		}
+	} else {
+		run.ReportPDFPath = ""
+	}
+	if excelErr != nil {
+		slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
+			Warn("inspect excel report render failed", "error", excelErr)
+		writeWarnings = append(writeWarnings, "Excel 渲染: "+excelErr.Error())
+	} else if len(excelBytes) > 0 {
+		if err := store.Put(dbCtx, excelKey, excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); err != nil {
+			slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
+				Warn("inspect excel report store failed", "error", err, "key", excelKey)
+			writeWarnings = append(writeWarnings, "Excel: "+err.Error())
+		} else {
+			run.ReportExcelPath = excelKey
+		}
 	}
 
 	finished := time.Now()
@@ -529,24 +598,35 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 	run.Score = data.Score
 	run.Grade = data.Grade
 	run.Summary = data.Summary
+	if len(writeWarnings) > 0 {
+		warn := "部分附件写入失败：" + strings.Join(writeWarnings, "; ")
+		if strings.TrimSpace(run.Summary) != "" {
+			run.Summary += "\n" + warn
+		} else {
+			run.Summary = warn
+		}
+	}
+	run.ErrorMessage = ""
 	run.TotalCount = collected.Total
 	run.CriticalCount = collected.Critical
 	run.WarningCount = collected.Warning
 	run.NormalCount = collected.Normal
 	run.Storage = store.Backend()
 	run.ReportHTMLPath = htmlKey
-	run.ReportPDFPath = pdfKey
 	run.ReportTemplateID = tpl.ID
 	run.ReportTemplateCode = tpl.Code
 	run.FinishedAt = &finished
-	if err := s.db.WithContext(ctx).Save(&run).Error; err != nil {
+	if err := s.db.WithContext(dbCtx).Save(run).Error; err != nil {
 		return nil, err
 	}
 	plan.LastRunAt = &finished
-	_ = s.db.WithContext(ctx).Model(plan).Update("last_run_at", finished).Error
+	_ = s.db.WithContext(dbCtx).Model(plan).Update("last_run_at", finished).Error
 
-	_ = s.sendRunEmail(ctx, plan, &run, data, htmlBytes, pdfBytes)
-	return &run, nil
+	_ = s.sendRunEmail(dbCtx, plan, run, data, htmlBytes, pdfBytes)
+	if run.CriticalCount > 0 || run.Status == "failed" {
+		_ = s.sendInspectAnomalyEmail(dbCtx, plan, run, data)
+	}
+	return run, nil
 }
 
 func (s *Service) effectiveItems(ctx context.Context, projectID uint) ([]model.InspectItem, error) {
@@ -565,12 +645,68 @@ func (s *Service) effectiveItems(ctx context.Context, projectID uint) ([]model.I
 }
 
 func (s *Service) failRun(ctx context.Context, run *model.InspectRun, err error) (*model.InspectRun, error) {
+	if run == nil {
+		return nil, err
+	}
 	finished := time.Now()
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	dbCtx := context.Background()
+	_ = s.db.WithContext(dbCtx).Model(&model.InspectRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+		"status":        "failed",
+		"error_message": msg,
+		"finished_at":   finished,
+	}).Error
 	run.Status = "failed"
-	run.ErrorMessage = err.Error()
+	run.ErrorMessage = msg
 	run.FinishedAt = &finished
-	_ = s.db.WithContext(ctx).Save(run).Error
+	if plan, perr := s.getPlanByRun(dbCtx, run); perr == nil && plan != nil {
+		data := ReportData{Project: fmt.Sprintf("project-%d", run.ProjectID), Score: run.Score, Grade: run.Grade, Summary: msg, Timestamp: finished}
+		_ = s.sendInspectAnomalyEmail(dbCtx, plan, run, data)
+	}
 	return run, err
+}
+
+func (s *Service) getPlanByRun(ctx context.Context, run *model.InspectRun) (*model.InspectPlan, error) {
+	if s == nil || s.db == nil || run == nil || run.PlanID == 0 {
+		return nil, fmt.Errorf("invalid run")
+	}
+	var plan model.InspectPlan
+	if err := s.db.WithContext(ctx).First(&plan, run.PlanID).Error; err != nil {
+		return nil, err
+	}
+	return &plan, nil
+}
+
+func (s *Service) sendInspectAnomalyEmail(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun, data ReportData) error {
+	if s.mailer == nil || !s.mailer.Enabled() || plan == nil || run == nil {
+		return nil
+	}
+	recipients := parseRecipients(plan.RecipientsJSON)
+	if len(recipients) == 0 {
+		return nil
+	}
+	subject := fmt.Sprintf("[%s] 巡检异常告警 %s", s.appNameOrDefault(), data.Project)
+	if run.Status == "failed" {
+		subject += "（执行失败）"
+	} else if run.CriticalCount > 0 {
+		subject += fmt.Sprintf("（严重 %d）", run.CriticalCount)
+	}
+	text := strings.TrimSpace(data.Summary)
+	if text == "" {
+		text = run.ErrorMessage
+	}
+	htmlBody := fmt.Sprintf("<p><strong>巡检异常</strong></p><p>%s</p><p>严重 %d / 警告 %d / 分数 %.0f</p>",
+		html.EscapeString(text), run.CriticalCount, run.WarningCount, data.Score)
+	var lastErr error
+	for _, to := range recipients {
+		if err := s.mailer.SendMultipart(ctx, to, subject, text, htmlBody); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
 }
 
 func (s *Service) ReadReport(ctx context.Context, projectID, runID uint, kind string) ([]byte, string, error) {
@@ -583,9 +719,6 @@ func (s *Service) ReadReport(ctx context.Context, projectID, runID uint, kind st
 	switch kind {
 	case "pdf":
 		key = strings.TrimSpace(run.ReportPDFPath)
-		if key == "" {
-			key = strings.TrimSpace(run.ReportHTMLPath)
-		}
 		ctype = "application/pdf"
 	case "excel", "xlsx":
 		key = strings.TrimSpace(run.ReportExcelPath)
@@ -600,24 +733,20 @@ func (s *Service) ReadReport(ctx context.Context, projectID, runID uint, kind st
 		ctype = "text/html; charset=utf-8"
 	}
 	if key == "" {
+		if kind == "pdf" {
+			return nil, "", constants.ErrNotFoundWithMsg("PDF 尚未生成，请在平台点击 PDF 按钮生成")
+		}
 		return nil, "", constants.ErrNotFoundWithMsg("报告文件不存在")
 	}
 
 	body, err := s.readReportBytes(ctx, run, key)
 	if err != nil {
-		// PDF 缺失时回退可打印 HTML（含中文）
-		if kind == "pdf" {
-			alt := strings.TrimSpace(run.ReportHTMLPath)
-			if alt != "" {
-				if b2, err2 := s.readReportBytes(ctx, run, alt); err2 == nil {
-					return b2, "text/html; charset=utf-8", nil
-				}
-			}
-		}
 		return nil, "", constants.ErrNotFoundWithMsg("报告文件不存在")
 	}
-	if kind == "pdf" && len(body) >= 4 && string(body[:4]) != "%PDF" {
-		ctype = "text/html; charset=utf-8"
+	if kind == "pdf" {
+		if len(body) < 4 || string(body[:4]) != "%PDF" {
+			return nil, "", constants.ErrNotFoundWithMsg("PDF 尚未生成，请在平台点击 PDF 按钮生成")
+		}
 	}
 	return body, ctype, nil
 }
@@ -627,27 +756,21 @@ func (s *Service) readReportBytes(ctx context.Context, run *model.InspectRun, ke
 	if key == "" {
 		return nil, fmt.Errorf("empty key")
 	}
-	// 历史本地绝对/相对路径
-	if strings.Contains(key, string(filepath.Separator)) || strings.HasPrefix(key, "logs") {
-		if b, err := os.ReadFile(key); err == nil {
-			return b, nil
-		}
-	}
 	store := s.store(ctx)
+	if b, err := store.Get(ctx, key); err == nil {
+		return b, nil
+	}
 	if run != nil && run.Storage == StorageLocal {
 		local := newLocalReportStore(s.reportDir)
 		if b, err := local.Get(ctx, key); err == nil {
 			return b, nil
 		}
-		// 兼容旧路径 logs/inspect-reports/{pid}/run-{id}.html
-		if b, err := os.ReadFile(key); err == nil {
+	}
+	if path, ok := resolveLegacyReportPath(s.reportDir, key); ok {
+		if b, err := os.ReadFile(path); err == nil {
 			return b, nil
 		}
 	}
-	if b, err := store.Get(ctx, key); err == nil {
-		return b, nil
-	}
-	// 再试本地（MinIO 降级后的双写场景或历史）
 	return newLocalReportStore(s.reportDir).Get(ctx, key)
 }
 
@@ -714,7 +837,7 @@ func (s *Service) ResendEmail(ctx context.Context, projectID, runID uint) error 
 	return s.sendRunEmail(ctx, plan, run, data, htmlBytes, pdfBytes)
 }
 
-func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun, data ReportData, html, pdf []byte) error {
+func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun, data ReportData, htmlBytes, pdfBytes []byte) error {
 	if s.mailer == nil || !s.mailer.Enabled() || plan == nil {
 		return nil
 	}
@@ -724,12 +847,13 @@ func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run
 	}
 	subject := fmt.Sprintf("[%s] 巡检报告 %s 分数%.0f", s.appNameOrDefault(), data.Project, data.Score)
 	text := data.Summary
-	htmlBody := fmt.Sprintf("<p>%s</p><p>严重 %d / 警告 %d / 正常 %d</p>", data.Summary, run.CriticalCount, run.WarningCount, run.NormalCount)
+	htmlBody := fmt.Sprintf("<p>%s</p><p>严重 %d / 警告 %d / 正常 %d</p>",
+		html.EscapeString(data.Summary), run.CriticalCount, run.WarningCount, run.NormalCount)
 	atts := []mailer.Attachment{
-		{Filename: fmt.Sprintf("inspect-run-%d.html", run.ID), ContentType: "text/html; charset=utf-8", Content: html},
+		{Filename: fmt.Sprintf("inspect-run-%d.html", run.ID), ContentType: "text/html; charset=utf-8", Content: htmlBytes},
 	}
-	if len(pdf) > 0 {
-		atts = append(atts, mailer.Attachment{Filename: fmt.Sprintf("inspect-run-%d.pdf", run.ID), ContentType: "application/pdf", Content: pdf})
+	if len(pdfBytes) > 0 {
+		atts = append(atts, mailer.Attachment{Filename: fmt.Sprintf("inspect-run-%d.pdf", run.ID), ContentType: "application/pdf", Content: pdfBytes})
 	}
 	var lastErr error
 	for _, to := range recipients {

@@ -1,13 +1,17 @@
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Input, Modal, Select, Space, Table, Tabs, Tag, message } from "antd";
+import { Alert, Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, message } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { DbmgmtSectionTitle, formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 import {
   getDbInstance,
   getInstanceAccountPassword,
+  listDbColumnMaskRules,
   listDbDatabases,
   listInstanceMySQLUsers,
+  upsertDbColumnMaskRule,
+  deleteDbColumnMaskRule,
+  type DbColumnMaskRule,
   type DbInstance,
   type DbInstanceMySQLUser,
 } from "../services/dbmgmt";
@@ -41,6 +45,10 @@ export function DbmgmtInstanceDetailPage() {
   const [loading, setLoading] = useState(false);
   const [dbKeyword, setDbKeyword] = useState("");
   const [userKeyword, setUserKeyword] = useState("");
+  const [maskRules, setMaskRules] = useState<DbColumnMaskRule[]>([]);
+  const [maskLoading, setMaskLoading] = useState(false);
+  const [maskOpen, setMaskOpen] = useState(false);
+  const [maskForm] = Form.useForm();
   const tab = searchParams.get("tab") ?? "info";
 
   useEffect(() => {
@@ -86,9 +94,22 @@ export function DbmgmtInstanceDetailPage() {
     }
   }, [projectId, instanceId, instance?.driver]);
 
+  const loadMaskRules = useCallback(async () => {
+    if (!projectId || !instanceId) return;
+    setMaskLoading(true);
+    try {
+      setMaskRules(await listDbColumnMaskRules(projectId, instanceId));
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "加载脱敏规则失败");
+    } finally {
+      setMaskLoading(false);
+    }
+  }, [projectId, instanceId]);
+
   useEffect(() => {
     if (tab === "users" || tab === "databases") void loadUsers();
-  }, [tab, loadUsers]);
+    if (tab === "mask") void loadMaskRules();
+  }, [tab, loadUsers, loadMaskRules]);
 
   const revealPassword = async (row: DbInstanceMySQLUser) => {
     if (!projectId || !instanceId || !row.id) return;
@@ -305,6 +326,92 @@ export function DbmgmtInstanceDetailPage() {
       </div>
     );
 
+  const maskTab = (
+    <div>
+      <Space style={{ marginBottom: 16 }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            maskForm.resetFields();
+            maskForm.setFieldsValue({ mask_type: "partial", pattern: "3,4" });
+            setMaskOpen(true);
+          }}
+        >
+          新增脱敏规则
+        </Button>
+        <Button icon={<ReloadOutlined />} onClick={() => void loadMaskRules()} />
+      </Space>
+      <Table
+        rowKey="id"
+        loading={maskLoading}
+        dataSource={maskRules}
+        pagination={{ pageSize: 10 }}
+        columns={[
+          { title: "库/Schema", dataIndex: "schema_name", width: 120 },
+          { title: "表", dataIndex: "table_name", width: 140 },
+          { title: "列", dataIndex: "column_name", width: 140 },
+          { title: "类型", dataIndex: "mask_type", width: 100 },
+          { title: "模式", dataIndex: "pattern", width: 100 },
+          {
+            title: "操作",
+            width: 80,
+            render: (_: unknown, r: DbColumnMaskRule) => (
+              <Popconfirm
+                title="删除该规则？"
+                onConfirm={() =>
+                  void deleteDbColumnMaskRule(projectId!, instanceId, r.id).then(() => {
+                    message.success("已删除");
+                    void loadMaskRules();
+                  })
+                }
+              >
+                <Button type="link" danger size="small" icon={<DeleteOutlined />} />
+              </Popconfirm>
+            ),
+          },
+        ]}
+      />
+      <Modal
+        title="列级脱敏规则"
+        open={maskOpen}
+        onCancel={() => setMaskOpen(false)}
+        onOk={() =>
+          void maskForm.validateFields().then(async (v) => {
+            await upsertDbColumnMaskRule(projectId!, instanceId, v);
+            message.success("已保存");
+            setMaskOpen(false);
+            await loadMaskRules();
+          })
+        }
+      >
+        <Form form={maskForm} layout="vertical">
+          <Form.Item label="Schema（库名）" name="schema_name">
+            <Input placeholder="可选，MySQL 填库名" />
+          </Form.Item>
+          <Form.Item label="表名" name="table_name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="列名" name="column_name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="脱敏类型" name="mask_type" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { value: "partial", label: "partial（保留前后字符）" },
+                { value: "hash", label: "hash" },
+                { value: "redact", label: "redact（***）" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="partial 模式" name="pattern" extra="如 3,4 表示保留前3后4">
+            <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+
   return (
     <Card
       loading={loading}
@@ -332,6 +439,7 @@ export function DbmgmtInstanceDetailPage() {
             { key: "info", label: "实例详情", children: infoTab },
             { key: "databases", label: "DB管理", children: dbTab },
             { key: "users", label: "用户管理", children: usersTab },
+            { key: "mask", label: "列脱敏", children: maskTab },
           ]}
         />
       ) : null}

@@ -124,7 +124,7 @@ func (r *DictEntryRepository) CleanupDuplicateTypeLabel(ctx context.Context) err
 func (r *DictEntryRepository) List(ctx context.Context, dictType, keyword, category string, status *int, page, pageSize int) ([]model.DictEntry, int64, error) {
 	query := r.db.WithContext(ctx).Model(&model.DictEntry{})
 	if strings.TrimSpace(dictType) != "" {
-		query = query.Where("LOWER(dict_type) = ?", strings.ToLower(strings.TrimSpace(dictType)))
+		query = query.Where("dict_type = ?", strings.ToLower(strings.TrimSpace(dictType)))
 	}
 	if clause, args, ok := dictcategory.ApplyFilter(category); ok {
 		query = query.Where(clause, args...)

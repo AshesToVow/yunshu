@@ -24,6 +24,19 @@ func NewCicdHandler(svc *cicd.Service) *CicdHandler {
 	return &CicdHandler{svc: svc}
 }
 
+func (h *CicdHandler) cicdActor(c *gin.Context) *auth.CurrentUser {
+	actor, _ := auth.CurrentUserFromContext(c)
+	return actor
+}
+
+func (h *CicdHandler) requireCicdServiceAccess(c *gin.Context, projectID, serviceID uint, need string) bool {
+	if err := h.svc.AssertCicdAccess(c.Request.Context(), projectID, serviceID, h.cicdActor(c), need); err != nil {
+		response.Error(c, err)
+		return false
+	}
+	return true
+}
+
 func (h *CicdHandler) ListServices(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
@@ -54,7 +67,7 @@ func (h *CicdHandler) GetService(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	item, err := h.svc.GetService(c.Request.Context(), projectID, serviceID)
+	item, err := h.svc.GetService(c.Request.Context(), projectID, serviceID, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -143,6 +156,9 @@ func (h *CicdHandler) GetCiConfig(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	if !h.requireCicdServiceAccess(c, projectID, serviceID, "view") {
+		return
+	}
 	row, err := h.svc.GetCiConfigView(c.Request.Context(), projectID, serviceID)
 	if err != nil {
 		response.Error(c, err)
@@ -162,6 +178,9 @@ func (h *CicdHandler) UpsertCiConfig(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	if !h.requireCicdServiceAccess(c, projectID, serviceID, "manage") {
+		return
+	}
 	ServeJSON(c, func(ctx context.Context, req cicd.CiConfigUpsertRequest) (*cicd.CiConfigUpsertResult, error) {
 		return h.svc.UpsertCiConfig(ctx, projectID, serviceID, req)
 	})
@@ -176,6 +195,9 @@ func (h *CicdHandler) ListDeployConfigs(c *gin.Context) {
 	serviceID, err := parseUintParam(c, "serviceId")
 	if err != nil {
 		response.Error(c, err)
+		return
+	}
+	if !h.requireCicdServiceAccess(c, projectID, serviceID, "view") {
 		return
 	}
 	rows, err := h.svc.ListDeployConfigs(c.Request.Context(), projectID, serviceID)
@@ -197,6 +219,9 @@ func (h *CicdHandler) CreateDeployConfig(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	if !h.requireCicdServiceAccess(c, projectID, serviceID, "manage") {
+		return
+	}
 	ServeJSON201(c, func(ctx context.Context, req cicd.DeployConfigUpsertRequest) (*cicd.DeployConfigUpsertResult, error) {
 		return h.svc.UpsertDeployConfig(ctx, projectID, serviceID, 0, req)
 	})
@@ -211,6 +236,9 @@ func (h *CicdHandler) UpdateDeployConfig(c *gin.Context) {
 	serviceID, err := parseUintParam(c, "serviceId")
 	if err != nil {
 		response.Error(c, err)
+		return
+	}
+	if !h.requireCicdServiceAccess(c, projectID, serviceID, "manage") {
 		return
 	}
 	configID, err := parseUintParam(c, "configId")
@@ -240,6 +268,9 @@ func (h *CicdHandler) DeleteDeployConfig(c *gin.Context) {
 	serviceID, err := parseUintParam(c, "serviceId")
 	if err != nil {
 		response.Error(c, err)
+		return
+	}
+	if !h.requireCicdServiceAccess(c, projectID, serviceID, "manage") {
 		return
 	}
 	configID, err := parseUintParam(c, "configId")
@@ -339,6 +370,9 @@ func (h *CicdHandler) ListArtifacts(c *gin.Context) {
 	serviceID, err := parseUintParam(c, "serviceId")
 	if err != nil {
 		response.Error(c, err)
+		return
+	}
+	if !h.requireCicdServiceAccess(c, projectID, serviceID, "view") {
 		return
 	}
 	list, err := h.svc.ListArtifacts(c.Request.Context(), projectID, serviceID)
@@ -472,7 +506,7 @@ func (h *CicdHandler) DeleteBuildRun(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.DeleteBuildRun(c.Request.Context(), projectID, runID); err != nil {
+	if err := h.svc.DeleteBuildRun(c.Request.Context(), projectID, runID, h.cicdActor(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -540,7 +574,7 @@ func (h *CicdHandler) DeleteReleaseRun(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.DeleteReleaseRun(c.Request.Context(), projectID, runID); err != nil {
+	if err := h.svc.DeleteReleaseRun(c.Request.Context(), projectID, runID, h.cicdActor(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -647,7 +681,7 @@ func (h *CicdHandler) VerifyReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.svc.VerifyReleaseRun(c.Request.Context(), projectID, runID)
+	result, err := h.svc.VerifyReleaseRun(c.Request.Context(), projectID, runID, h.cicdActor(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -660,8 +694,31 @@ func (h *CicdHandler) PlatformRollbackRelease(c *gin.Context) {
 	if !ok {
 		return
 	}
+	actor := h.cicdActor(c)
 	ServeJSON(c, func(ctx context.Context, req cicd.PlatformRollbackRequest) (map[string]any, error) {
-		return h.svc.PlatformRollbackRelease(ctx, projectID, runID, req)
+		return h.svc.PlatformRollbackRelease(ctx, projectID, runID, req, actor)
+	})
+}
+
+func (h *CicdHandler) PromoteProgressiveRelease(c *gin.Context) {
+	projectID, runID, ok := h.releaseRunIDs(c)
+	if !ok {
+		return
+	}
+	actor := h.cicdActor(c)
+	ServeJSON(c, func(ctx context.Context, req cicd.ProgressivePromoteRequest) (map[string]any, error) {
+		return h.svc.PromoteProgressiveRelease(ctx, projectID, runID, req, actor)
+	})
+}
+
+func (h *CicdHandler) AbortProgressiveRelease(c *gin.Context) {
+	projectID, runID, ok := h.releaseRunIDs(c)
+	if !ok {
+		return
+	}
+	actor := h.cicdActor(c)
+	ServeJSON(c, func(ctx context.Context, req cicd.ProgressiveAbortRequest) (map[string]any, error) {
+		return h.svc.AbortProgressiveRelease(ctx, projectID, runID, req, actor)
 	})
 }
 
@@ -794,8 +851,9 @@ func (h *CicdHandler) UpsertApprovalFlow(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	actor := h.cicdActor(c)
 	ServeJSON(c, func(ctx context.Context, req cicd.ApprovalFlowUpsertRequest) (*cicd.ApprovalFlowResponse, error) {
-		return h.svc.UpsertApprovalFlow(ctx, projectID, req)
+		return h.svc.UpsertApprovalFlow(ctx, projectID, req, actor)
 	})
 }
 
@@ -804,7 +862,7 @@ func (h *CicdHandler) ListReleaseApprovalSteps(c *gin.Context) {
 	if !ok {
 		return
 	}
-	steps, err := h.svc.ListReleaseApprovalSteps(c.Request.Context(), projectID, runID)
+	steps, err := h.svc.ListReleaseApprovalSteps(c.Request.Context(), projectID, runID, h.cicdActor(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -824,6 +882,9 @@ func (h *CicdHandler) DownloadHelmScaffold(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	if !h.requireCicdServiceAccess(c, projectID, serviceID, "view") {
+		return
+	}
 	var q cicd.HelmScaffoldQuery
 	_ = c.ShouldBindQuery(&q)
 	filename, data, err := h.svc.BuildHelmScaffoldZip(c.Request.Context(), projectID, serviceID, q)
@@ -838,7 +899,12 @@ func (h *CicdHandler) DownloadHelmScaffold(c *gin.Context) {
 
 // DownloadHelmScaffoldPreview 未绑定服务时按表单参数预览下载脚手架。
 func (h *CicdHandler) DownloadHelmScaffoldPreview(c *gin.Context) {
-	if _, err := parseUintParam(c, "id"); err != nil {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.RequireProjectAdmin(c.Request.Context(), projectID, h.cicdActor(c)); err != nil {
 		response.Error(c, err)
 		return
 	}

@@ -44,6 +44,78 @@ type ConfigDetail struct {
 	StringData   map[string]string `json:"string_data,omitempty"`
 	DecodedData  map[string]string `json:"decoded_data,omitempty"`
 	BinaryKeySet []string          `json:"binary_keys,omitempty"`
+	// Redacted 为 true 表示 Secret 敏感字段已脱敏，需调用 reveal 接口查看明文。
+	Redacted bool `json:"redacted,omitempty"`
+}
+
+// SecretDetail 默认脱敏：不返回明文 decoded_data，YAML 中 data 值替换为 ***。
+func (s *K8sConfigService) SecretDetail(ctx context.Context, q ConfigDetailQuery) (*ConfigDetail, error) {
+	return s.secretDetail(ctx, q, false)
+}
+
+// RevealSecret 返回明文（需更高档位；审计强制 redact）。
+func (s *K8sConfigService) RevealSecret(ctx context.Context, q ConfigDetailQuery) (*ConfigDetail, error) {
+	return s.secretDetail(ctx, q, true)
+}
+
+func (s *K8sConfigService) secretDetail(ctx context.Context, q ConfigDetailQuery, reveal bool) (*ConfigDetail, error) {
+	_, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
+	if err != nil {
+		return nil, err
+	}
+	u, err := s.dyn.GetByGVK(ctx, k, secretGVK, q.Namespace, q.Name)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg2859a961fa4c)
+		}
+		return nil, bizerrors.Internalf(ctx, "k8s.config", "api", err, constants.ErrFmtb450a71bd00f)
+	}
+	var obj corev1.Secret
+	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &obj)
+	copyObj := obj.DeepCopy()
+	copyObj.APIVersion = "v1"
+	copyObj.Kind = "Secret"
+	copyObj.ManagedFields = nil
+
+	decoded := map[string]string{}
+	binaryKeys := make([]string, 0)
+	for key, v := range copyObj.Data {
+		if len(v) == 0 {
+			decoded[key] = ""
+			continue
+		}
+		if k8sutil.IsLikelyText(v) {
+			decoded[key] = string(v)
+		} else {
+			decoded[key] = base64.StdEncoding.EncodeToString(v)
+			binaryKeys = append(binaryKeys, key)
+		}
+	}
+	sort.Strings(binaryKeys)
+
+	if !reveal {
+		for key := range copyObj.Data {
+			copyObj.Data[key] = []byte("***")
+		}
+		y, _ := yaml.Marshal(copyObj)
+		masked := map[string]string{}
+		for key := range decoded {
+			masked[key] = "***"
+		}
+		return &ConfigDetail{
+			YAML:         string(y),
+			DecodedData:  masked,
+			BinaryKeySet: binaryKeys,
+			Redacted:     true,
+		}, nil
+	}
+	y, _ := yaml.Marshal(copyObj)
+	return &ConfigDetail{
+		YAML:         string(y),
+		DecodedData:  decoded,
+		BinaryKeySet: binaryKeys,
+		Redacted:     false,
+	}, nil
 }
 
 type K8sConfigService struct {
@@ -168,49 +240,6 @@ func (s *K8sConfigService) ListSecrets(ctx context.Context, q ConfigListQuery) (
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
-}
-
-// SecretDetail 执行对应的业务逻辑。
-func (s *K8sConfigService) SecretDetail(ctx context.Context, q ConfigDetailQuery) (*ConfigDetail, error) {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
-	if err != nil {
-		return nil, err
-	}
-	u, err := s.dyn.GetByGVK(ctx, k, secretGVK, q.Namespace, q.Name)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg2859a961fa4c)
-		}
-		return nil, bizerrors.Internalf(ctx, "k8s.config", "api", err, constants.ErrFmtb450a71bd00f)
-	}
-	var obj corev1.Secret
-	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &obj)
-	copyObj := obj.DeepCopy()
-	copyObj.APIVersion = "v1"
-	copyObj.Kind = "Secret"
-	copyObj.ManagedFields = nil
-	y, _ := yaml.Marshal(copyObj)
-	decoded := map[string]string{}
-	binaryKeys := make([]string, 0)
-	for k, v := range copyObj.Data {
-		if len(v) == 0 {
-			decoded[k] = ""
-			continue
-		}
-		// best-effort: try utf-8 string; if not, provide base64
-		if k8sutil.IsLikelyText(v) {
-			decoded[k] = string(v)
-		} else {
-			decoded[k] = base64.StdEncoding.EncodeToString(v)
-			binaryKeys = append(binaryKeys, k)
-		}
-	}
-	sort.Strings(binaryKeys)
-	return &ConfigDetail{
-		YAML:         string(y),
-		DecodedData:  decoded,
-		BinaryKeySet: binaryKeys,
-	}, nil
 }
 
 // DeleteSecret 删除相关的业务逻辑。

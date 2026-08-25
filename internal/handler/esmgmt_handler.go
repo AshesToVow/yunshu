@@ -19,17 +19,13 @@ func NewEsmgmtHandler(svc *esmgmtsvc.Service) *EsmgmtHandler {
 	return &EsmgmtHandler{svc: svc}
 }
 
+func actorFrom(c *gin.Context) *auth.CurrentUser {
+	u, _ := auth.CurrentUserFromContext(c)
+	return u
+}
+
 func (h *EsmgmtHandler) ListConnections(c *gin.Context) {
-	includeLog := strings.EqualFold(c.Query("include_log_platform"), "true") || c.Query("include_log_platform") == "1"
-	var (
-		list any
-		err  error
-	)
-	if includeLog {
-		list, err = h.svc.ListConnectionsForSelect(c.Request.Context())
-	} else {
-		list, err = h.svc.ListConnections(c.Request.Context())
-	}
+	list, err := h.svc.ListConnections(c.Request.Context())
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -43,7 +39,7 @@ func (h *EsmgmtHandler) CreateConnection(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	item, err := h.svc.CreateConnection(c.Request.Context(), req)
+	item, err := h.svc.CreateConnection(c.Request.Context(), req, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -62,7 +58,7 @@ func (h *EsmgmtHandler) UpdateConnection(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	item, err := h.svc.UpdateConnection(c.Request.Context(), id, req)
+	item, err := h.svc.UpdateConnection(c.Request.Context(), id, req, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -76,7 +72,7 @@ func (h *EsmgmtHandler) DeleteConnection(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.DeleteConnection(c.Request.Context(), id); err != nil {
+	if err := h.svc.DeleteConnection(c.Request.Context(), id, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -193,7 +189,7 @@ func (h *EsmgmtHandler) ProxyREST(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	out, err := h.svc.ProxyREST(c.Request.Context(), connID, req)
+	out, err := h.svc.ProxyREST(c.Request.Context(), connID, req, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -207,11 +203,7 @@ func (h *EsmgmtHandler) CreateIndexBackup(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var createdBy uint
-	if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
-		createdBy = u.ID
-	}
-	job, err := h.svc.CreateIndexBackup(c.Request.Context(), req, createdBy)
+	job, err := h.svc.CreateIndexBackup(c.Request.Context(), req, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -270,11 +262,7 @@ func (h *EsmgmtHandler) CreateIndexRestore(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var createdBy uint
-	if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
-		createdBy = u.ID
-	}
-	job, err := h.svc.CreateIndexRestore(c.Request.Context(), req, createdBy)
+	job, err := h.svc.CreateIndexRestore(c.Request.Context(), req, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -328,11 +316,7 @@ func (h *EsmgmtHandler) CreateSchedule(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var createdBy uint
-	if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
-		createdBy = u.ID
-	}
-	row, err := h.svc.CreateSchedule(c.Request.Context(), req, createdBy)
+	row, err := h.svc.CreateSchedule(c.Request.Context(), req, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -351,7 +335,7 @@ func (h *EsmgmtHandler) UpdateSchedule(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	row, err := h.svc.UpdateSchedule(c.Request.Context(), id, req)
+	row, err := h.svc.UpdateSchedule(c.Request.Context(), id, req, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return

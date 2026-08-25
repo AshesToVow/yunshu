@@ -28,4 +28,7 @@ func TestResolveCaseInsensitive(t *testing.T) {
 	if got := Resolve("mail_host"); got != "system" {
 		t.Fatalf("got %q", got)
 	}
+	if got := Resolve("password_expiry_days"); got != "system" {
+		t.Fatalf("got %q", got)
+	}
 }

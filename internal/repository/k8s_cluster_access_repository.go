@@ -7,6 +7,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/k8scaps"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -27,7 +28,7 @@ func (r *K8sClusterAccessRepository) Upsert(ctx context.Context, it *model.K8sCl
 	}
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "principal_kind"}, {Name: "principal_ref"}, {Name: "cluster_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"preset", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"preset", "capabilities", "updated_at"}),
 	}).Create(it).Error
 }
 
@@ -91,14 +92,19 @@ func (r *K8sClusterAccessRepository) DeleteByID(ctx context.Context, id uint) er
 	return r.db.WithContext(ctx).Delete(&model.K8sClusterAccessGrant{}, id).Error
 }
 
-// EffectiveTier 返回主体集合在指定集群上的最高档位。
+// EffectiveTier 返回主体集合在指定集群上的最高档位（由能力包推导，兼容旧 AccessRank）。
 func (r *K8sClusterAccessRepository) EffectiveTier(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) int {
+	return k8scaps.Rank(r.EffectiveCapabilities(ctx, pack, clusterID))
+}
+
+// EffectiveCapabilities 合并主体在指定集群上的全部能力包（含 cluster_id=0）。
+func (r *K8sClusterAccessRepository) EffectiveCapabilities(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) []string {
 	if r == nil || r.db == nil {
-		return 0
+		return nil
 	}
 	rows := pack.PrincipalRows()
 	if len(rows) == 0 {
-		return 0
+		return nil
 	}
 	q := r.db.WithContext(ctx).Model(&model.K8sClusterAccessGrant{})
 	var parts []string
@@ -113,17 +119,15 @@ func (r *K8sClusterAccessRepository) EffectiveTier(ctx context.Context, pack k8s
 	} else {
 		q = q.Where("cluster_id = 0")
 	}
-	var presets []string
-	if err := q.Pluck("preset", &presets).Error; err != nil || len(presets) == 0 {
-		return 0
+	var grants []model.K8sClusterAccessGrant
+	if err := q.Find(&grants).Error; err != nil || len(grants) == 0 {
+		return nil
 	}
-	maxV := 0
-	for _, p := range presets {
-		if v := k8sPresetRank(p); v > maxV {
-			maxV = v
-		}
+	var merged []string
+	for _, g := range grants {
+		merged = append(merged, k8scaps.FromGrant(g)...)
 	}
-	return maxV
+	return k8scaps.Normalize(merged)
 }
 
 // EffectiveTierIndex 主体在各集群上的档位（cluster_id=0 表示全局档位）。
@@ -154,7 +158,7 @@ func (r *K8sClusterAccessRepository) BuildEffectiveTierIndex(ctx context.Context
 		return idx, err
 	}
 	for _, g := range grants {
-		rank := k8sPresetRank(g.Preset)
+		rank := k8scaps.Rank(k8scaps.FromGrant(g))
 		if g.ClusterID == 0 {
 			if rank > idx.GlobalRank {
 				idx.GlobalRank = rank

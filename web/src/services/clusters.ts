@@ -9,7 +9,11 @@ export interface ClusterItem {
   kubeconfig?: string;
   /** 后端不回传明文 kubeconfig，仅标识是否已配置 */
   kubeconfig_configured?: boolean;
+  kubeconfig_readonly_configured?: boolean;
   direct_config?: DirectConfigPayload;
+  impersonate_enabled?: boolean;
+  impersonate_user_prefix?: string;
+  require_destructive_confirm?: boolean;
   status: number;
   /** 当前用户对该集群的有效档位：readonly / readonly_exec / admin */
   access_preset?: string;
@@ -42,7 +46,11 @@ export interface ClusterCreatePayload {
   owning_project_id?: number;
   connection_mode?: "kubeconfig" | "direct";
   kubeconfig?: string;
+  kubeconfig_readonly?: string;
   direct_config?: DirectConfigPayload;
+  impersonate_enabled?: boolean;
+  impersonate_user_prefix?: string;
+  require_destructive_confirm?: boolean;
 }
 
 export interface ClusterUpdatePayload {
@@ -51,7 +59,11 @@ export interface ClusterUpdatePayload {
   owning_project_id?: number;
   connection_mode?: "kubeconfig" | "direct";
   kubeconfig?: string;
+  kubeconfig_readonly?: string;
   direct_config?: DirectConfigPayload;
+  impersonate_enabled?: boolean;
+  impersonate_user_prefix?: string;
+  require_destructive_confirm?: boolean;
 }
 
 export interface ClusterStatusResponse {

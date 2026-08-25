@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/config"
@@ -18,7 +20,6 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"strings"
 )
 
 func init() {
@@ -113,6 +114,8 @@ var seedCmd = &cobra.Command{
 						return err
 					}
 					incoming.Password = hashed
+					now := time.Now()
+					incoming.PasswordChangedAt = &now
 					return nil
 				},
 			); err != nil {
@@ -216,14 +219,16 @@ func defaultPermissions() []model.Permission {
 		{Name: "统一权限树", Resource: "/api/v1/policies/permission-tree", Action: "GET", Description: "Get menu+API permission tree for role"},
 		{Name: "策略模拟", Resource: "/api/v1/policies/simulate", Action: "POST", Description: "Simulate API authorization layers"},
 		{Name: "K8s 动作码目录", Resource: "/api/v1/k8s-policies/actions", Action: "GET", Description: "List k8s scope action codes (reference)"},
+		{Name: "K8s 能力包目录", Resource: "/api/v1/k8s-policies/capabilities", Action: "GET", Description: "List k8s cluster capability catalog"},
 		{Name: "K8s API 路径目录", Resource: "/api/v1/k8s-policies/paths", Action: "GET", Description: "List k8s scope API paths (reference)"},
 		{Name: "K8s 集群档位列表", Resource: "/api/v1/k8s-policies", Action: "GET", Description: "List k8s cluster access grants by role"},
-		{Name: "K8s 集群档位预设下发", Resource: "/api/v1/k8s-policies/grant-preset", Action: "POST", Description: "Upsert k8s cluster access preset per role/cluster"},
+		{Name: "K8s 集群档位预设下发", Resource: "/api/v1/k8s-policies/grant-preset", Action: "POST", Description: "Upsert k8s cluster access preset or capabilities per role/cluster"},
 		{Name: "K8s 集群档位删除", Resource: "/api/v1/k8s-policies/cluster-grants/:id", Action: "DELETE", Description: "Delete one k8s cluster access grant"},
 		{Name: "K8s 集群已授权矩阵", Resource: "/api/v1/k8s-policies/cluster-auth-matrix", Action: "GET", Description: "List cluster auth matrix expanded by user"},
 		{Name: "K8s 用户已授权集群", Resource: "/api/v1/k8s-policies/user-cluster-auth", Action: "GET", Description: "List clusters authorized for a user"},
 		{Name: "K8s 我的集群档位", Resource: "/api/v1/k8s-policies/my-access", Action: "GET", Description: "Get current user effective k8s access tier for a cluster"},
 		{Name: "K8s 集群档位批量删除", Resource: "/api/v1/k8s-policies/cluster-grants/batch-delete", Action: "POST", Description: "Batch delete k8s cluster access grants"},
+		{Name: "K8s 按 NS 拆分档位", Resource: "/api/v1/k8s-policies/split-by-namespaces", Action: "POST", Description: "Split k8s scoped policy presets by namespace"},
 		{Name: "K8s 命名空间黑名单列表", Resource: "/api/v1/k8s-namespace-deny-rules", Action: "GET", Description: "List k8s namespace deny rules"},
 		{Name: "K8s 命名空间黑名单新增", Resource: "/api/v1/k8s-namespace-deny-rules", Action: "POST", Description: "Create k8s namespace deny rule"},
 		{Name: "K8s 命名空间黑名单删除", Resource: "/api/v1/k8s-namespace-deny-rules/:id", Action: "DELETE", Description: "Delete k8s namespace deny rule"},
@@ -292,6 +297,14 @@ func defaultPermissions() []model.Permission {
 		{Name: "删除监控告警规则", Resource: "/api/v1/alerts/monitor-rules/:id", Action: "DELETE", Description: "Delete monitor alert rule"},
 		{Name: "监控规则处理人", Resource: "/api/v1/alerts/monitor-rules/:id/assignees", Action: "GET", Description: "List rule assignees"},
 		{Name: "配置监控规则处理人", Resource: "/api/v1/alerts/monitor-rules/:id/assignees", Action: "PUT", Description: "Upsert rule assignees"},
+		{Name: "监控规则变更待审列表", Resource: "/api/v1/alerts/monitor-rule-changes", Action: "GET", Description: "List pending monitor rule change requests"},
+		{Name: "提交监控规则变更审批", Resource: "/api/v1/alerts/monitor-rule-changes", Action: "POST", Description: "Propose monitor rule change"},
+		{Name: "批准监控规则变更", Resource: "/api/v1/alerts/monitor-rule-changes/:id/approve", Action: "POST", Description: "Approve monitor rule change"},
+		{Name: "驳回监控规则变更", Resource: "/api/v1/alerts/monitor-rule-changes/:id/reject", Action: "POST", Description: "Reject monitor rule change"},
+		{Name: "PromQL 收藏列表", Resource: "/api/v1/alerts/promql-saved-queries", Action: "GET", Description: "List promql saved queries"},
+		{Name: "创建 PromQL 收藏", Resource: "/api/v1/alerts/promql-saved-queries", Action: "POST", Description: "Create promql saved query"},
+		{Name: "删除 PromQL 收藏", Resource: "/api/v1/alerts/promql-saved-queries/:id", Action: "DELETE", Description: "Delete promql saved query"},
+		{Name: "导出历史告警 CSV", Resource: "/api/v1/alerts/his-events/export.csv", Action: "GET", Description: "Export alert history events as CSV"},
 		{Name: "值班班次列表", Resource: "/api/v1/alerts/duty-blocks", Action: "GET", Description: "List alert duty blocks"},
 		{Name: "创建值班班次", Resource: "/api/v1/alerts/duty-blocks", Action: "POST", Description: "Create alert duty block"},
 		{Name: "更新值班班次", Resource: "/api/v1/alerts/duty-blocks/:id", Action: "PUT", Description: "Update alert duty block"},
@@ -400,6 +413,7 @@ func defaultPermissions() []model.Permission {
 		{Name: "Deployment 垂直扩缩", Resource: "/api/v1/deployments/container-resources", Action: "POST", Description: "Patch deployment container resources"},
 		{Name: "Deployment 重启", Resource: "/api/v1/deployments/restart", Action: "POST", Description: "Restart deployment"},
 		{Name: "Deployment 回滚", Resource: "/api/v1/deployments/rollout-undo", Action: "POST", Description: "Undo deployment rollout"},
+		{Name: "Deployment 历史版本", Resource: "/api/v1/deployments/revisions", Action: "GET", Description: "List deployment rollout revisions"},
 		{Name: "Deployment 关联 Pods", Resource: "/api/v1/deployments/pods", Action: "GET", Description: "List deployment related pods"},
 		{Name: "Deployment 发布状态", Resource: "/api/v1/deployments/rollout-status", Action: "GET", Description: "Get deployment rollout status"},
 		{Name: "删除 Deployment", Resource: "/api/v1/deployments", Action: "DELETE", Description: "Delete deployment"},
@@ -505,6 +519,8 @@ func defaultPermissions() []model.Permission {
 		{Name: "创建项目", Resource: "/api/v1/projects", Action: "POST", Description: "Create project"},
 		{Name: "更新项目", Resource: "/api/v1/projects/:id", Action: "PUT", Description: "Update project"},
 		{Name: "删除项目", Resource: "/api/v1/projects/:id", Action: "DELETE", Description: "Delete project"},
+		{Name: "归档项目", Resource: "/api/v1/projects/:id/archive", Action: "POST", Description: "Archive project"},
+		{Name: "恢复项目", Resource: "/api/v1/projects/:id/restore", Action: "POST", Description: "Restore archived project"},
 		{Name: "项目成员列表", Resource: "/api/v1/projects/:id/members", Action: "GET", Description: "List project members"},
 		{Name: "添加项目成员", Resource: "/api/v1/projects/:id/members", Action: "POST", Description: "Add project member"},
 		{Name: "更新项目成员", Resource: "/api/v1/projects/:id/members/:memberId", Action: "PUT", Description: "Update project member"},
@@ -617,10 +633,15 @@ func defaultPermissions() []model.Permission {
 		{Name: "巡检项同步模板", Resource: "/api/v1/projects/:id/inspect/items/sync-template", Action: "POST", Description: "Sync inspect items from global template"},
 		{Name: "巡检项重置模板", Resource: "/api/v1/projects/:id/inspect/items/reset-template", Action: "POST", Description: "Reset inspect items from global template"},
 		{Name: "巡检记录列表", Resource: "/api/v1/projects/:id/inspect/runs", Action: "GET", Description: "List inspect runs"},
+		{Name: "巡检趋势", Resource: "/api/v1/projects/:id/inspect/runs/trends", Action: "GET", Description: "List inspect run trends"},
+		{Name: "巡检报告迁移 MinIO", Resource: "/api/v1/projects/:id/inspect/migrate-reports-to-minio", Action: "POST", Description: "Migrate local inspect reports to MinIO"},
 		{Name: "巡检立即执行", Resource: "/api/v1/projects/:id/inspect/runs", Action: "POST", Description: "Start inspect run"},
 		{Name: "巡检记录详情", Resource: "/api/v1/projects/:id/inspect/runs/:runId", Action: "GET", Description: "Get inspect run"},
 		{Name: "巡检报告HTML", Resource: "/api/v1/projects/:id/inspect/runs/:runId/report.html", Action: "GET", Description: "Download inspect HTML report"},
 		{Name: "巡检报告PDF", Resource: "/api/v1/projects/:id/inspect/runs/:runId/report.pdf", Action: "GET", Description: "Download inspect PDF report"},
+		{Name: "巡检报告PDF上传", Resource: "/api/v1/projects/:id/inspect/runs/:runId/report.pdf", Action: "POST", Description: "Upload inspect PDF from browser"},
+		{Name: "巡检报告PDF检查", Resource: "/api/v1/projects/:id/inspect/runs/:runId/report.pdf/check", Action: "GET", Description: "Check inspect PDF exists"},
+		{Name: "巡检PDF静态库", Resource: "/api/v1/inspect/pdf-libs/:name", Action: "GET", Description: "Serve html2canvas/jspdf for inspect HTML"},
 		{Name: "巡检报告Excel", Resource: "/api/v1/projects/:id/inspect/runs/:runId/report.xlsx", Action: "GET", Description: "Download inspect Excel report"},
 		{Name: "巡检报告打印版", Resource: "/api/v1/projects/:id/inspect/runs/:runId/report.print.html", Action: "GET", Description: "Download inspect print HTML"},
 		{Name: "巡检邮件重发", Resource: "/api/v1/projects/:id/inspect/runs/:runId/resend-email", Action: "POST", Description: "Resend inspect report email"},
@@ -669,6 +690,9 @@ func defaultPermissions() []model.Permission {
 		{Name: "应用用户权限申请拒绝", Resource: "/api/v1/projects/:id/dbmgmt/app-user-requests/:requestId/reject", Action: "POST", Description: "Reject DB app user request"},
 		{Name: "实例 MySQL 用户列表", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/mysql-users", Action: "GET", Description: "List MySQL users on instance"},
 		{Name: "实例 MySQL 用户权限查询", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/mysql-user-privileges", Action: "GET", Description: "Get MySQL user privileges for apply form"},
+		{Name: "列脱敏规则列表", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules", Action: "GET", Description: "List DB column mask rules"},
+		{Name: "列脱敏规则保存", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules", Action: "POST", Description: "Upsert DB column mask rule"},
+		{Name: "列脱敏规则删除", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules/:ruleId", Action: "DELETE", Description: "Delete DB column mask rule"},
 		{Name: "实例账号密码查看", Resource: "/api/v1/projects/:id/dbmgmt/instances/:instanceId/accounts/:accountId/password", Action: "GET", Description: "Reveal platform-managed account password"},
 		{Name: "数据库工单列表", Resource: "/api/v1/projects/:id/dbmgmt/tickets", Action: "GET", Description: "List DB SQL tickets"},
 		{Name: "数据库工单审批通过", Resource: "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/approve", Action: "POST", Description: "Approve DB SQL ticket"},
@@ -720,6 +744,8 @@ func defaultPermissions() []model.Permission {
 		{Name: "CI/CD 构建阶段", Resource: "/api/v1/projects/:id/cicd/build-runs/:runId/stages", Action: "GET", Description: "List CI build stages"},
 		{Name: "CI/CD 构建制品元数据", Resource: "/api/v1/projects/:id/cicd/build-runs/:runId/artifacts-meta", Action: "GET", Description: "List CI build artifacts meta"},
 		{Name: "CI/CD 平台回滚", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/platform-rollback", Action: "POST", Description: "Platform rollback release"},
+		{Name: "CI/CD 渐进式晋级", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/progressive/promote", Action: "POST", Description: "Promote canary or blue-green release"},
+		{Name: "CI/CD 渐进式中止", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/progressive/abort", Action: "POST", Description: "Abort canary or blue-green release"},
 
 		{Name: "镜像仓库列表", Resource: "/api/v1/registries", Action: "GET", Description: "List container registries"},
 		{Name: "镜像仓库创建", Resource: "/api/v1/registries", Action: "POST", Description: "Create container registry"},
@@ -810,6 +836,10 @@ func defaultPermissions() []model.Permission {
 		{Name: "CRD 详情", Resource: "/api/v1/crds/detail", Action: "GET", Description: "Get custom resource definition detail"},
 		{Name: "CRD 应用 YAML", Resource: "/api/v1/crds/apply", Action: "POST", Description: "Apply custom resource definition yaml"},
 		{Name: "删除 CRD", Resource: "/api/v1/crds", Action: "DELETE", Description: "Delete custom resource definition"},
+		{Name: "K8s CR 模板列表", Resource: "/api/v1/k8s-cr-templates", Action: "GET", Description: "List k8s CR/YAML templates"},
+		{Name: "创建 K8s CR 模板", Resource: "/api/v1/k8s-cr-templates", Action: "POST", Description: "Create k8s CR template"},
+		{Name: "更新 K8s CR 模板", Resource: "/api/v1/k8s-cr-templates/:id", Action: "PUT", Description: "Update k8s CR template"},
+		{Name: "删除 K8s CR 模板", Resource: "/api/v1/k8s-cr-templates/:id", Action: "DELETE", Description: "Delete k8s CR template"},
 		{Name: "CR 资源类型列表", Resource: "/api/v1/crs/resources", Action: "GET", Description: "List custom resource types"},
 		{Name: "CR 实例列表", Resource: "/api/v1/crs", Action: "GET", Description: "List custom resources"},
 		{Name: "CR 实例详情", Resource: "/api/v1/crs/detail", Action: "GET", Description: "Get custom resource detail"},

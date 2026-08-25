@@ -265,8 +265,12 @@ export async function createDbAccessRequest(projectId: number, payload: DbAccess
   return getData<DbAccessRequest>(http.post(`${base(projectId)}/access-requests`, payload));
 }
 
-export async function approveDbAccessRequest(projectId: number, requestId: number, comment?: string) {
-  return getData<{ ok?: boolean }>(http.post(`${base(projectId)}/access-requests/${requestId}/approve`, { comment }));
+export async function approveDbAccessRequest(
+  projectId: number,
+  requestId: number,
+  payload?: { comment?: string; expires_at?: string | null },
+) {
+  return getData<{ ok?: boolean }>(http.post(`${base(projectId)}/access-requests/${requestId}/approve`, payload ?? {}));
 }
 
 export async function rejectDbAccessRequest(projectId: number, requestId: number, comment?: string) {
@@ -287,6 +291,7 @@ export type DbAccessRequest = {
   status: string;
   current_stage_name?: string;
   mine_status?: string;
+  is_final_approval?: boolean;
   expires_at?: string;
   created_at: string;
   create_meta?: {
@@ -528,3 +533,36 @@ export type DbAuditLogItem = {
   ip?: string;
   created_at: string;
 };
+
+export type DbColumnMaskRule = {
+  id: number;
+  instance_id: number;
+  schema_name: string;
+  table_name: string;
+  column_name: string;
+  mask_type: string;
+  pattern?: string;
+  created_at?: string;
+};
+
+export async function listDbColumnMaskRules(projectId: number, instanceId: number) {
+  return getData<DbColumnMaskRule[]>(http.get(`${base(projectId)}/instances/${instanceId}/column-mask-rules`));
+}
+
+export async function upsertDbColumnMaskRule(
+  projectId: number,
+  instanceId: number,
+  payload: {
+    schema_name?: string;
+    table_name: string;
+    column_name: string;
+    mask_type: string;
+    pattern?: string;
+  },
+) {
+  return getData<DbColumnMaskRule>(http.post(`${base(projectId)}/instances/${instanceId}/column-mask-rules`, payload));
+}
+
+export async function deleteDbColumnMaskRule(projectId: number, instanceId: number, ruleId: number) {
+  return getData<{ ok?: boolean }>(http.delete(`${base(projectId)}/instances/${instanceId}/column-mask-rules/${ruleId}`));
+}

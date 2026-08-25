@@ -14,6 +14,7 @@
 | 发布配置 | SSH / K8s / MinIO 等多目标发布模板 |
 | CI 打包 | 触发 Jenkins Job，同步构建状态与控制台日志 |
 | CD 发布 | 多级审批流 + 执行发布（SSH 脚本 / K8s apply / MinIO 制品） |
+| 金丝雀 / 蓝绿 | 容器发布配置 `deploy_strategy`；Jenkins 参数 + 平台晋级/中止 API |
 | 待办与批量 | 待审批/待执行工单列表，支持批量通过/驳回/执行 |
 | 总览图表 | 首页「项目上线趋势」「按人发布统计」读 `cicd_release_runs` |
 
@@ -110,9 +111,16 @@ Header: X-Yunshu-Signature: sha256=<hmac-sha256-hex(body)>
 ## 4. 审批与通知
 
 - 审批阶段定义：`cicd_approval_flow_stages`（项目级 `GET/PUT .../approval-flow`）
+- **空审批流禁止发布**：未配置阶段时 `configured=false`，发布申请被拒绝
 - 工单步骤：`cicd_release_approval_steps`，按阶段顺序推进
+- **职责分离**：`forbid_self_approve`（配置/字典）禁止审批人审批自己提交的工单
+- **生产强制审计**：`prod_force_audit` 要求生产环境发布须走审批留痕
+- 批量审批/驳回/执行：全部失败时返回**首个错误**原因（非静默 `count=0`）
+- Jenkins 回调 `event=run`：状态机校验（如 running → success/failure），拒绝乱序回写
 - 邮件通知：`internal/service/cicd/notify_email.go` 通过 **`UserRepository`** 解析用户邮箱（不直查 DB）
+- 前端「应用服务」：新建应用须项目 owner/admin；操作按钮按 `access.can_build/can_release/can_manage` fail-closed
 
+配置项见 `configs/config.yaml` → `cicd.forbid_self_approve` / `cicd.prod_force_audit`，以及字典 `cicd_*`。
 ---
 
 ## 5. 后台 Worker
@@ -151,7 +159,28 @@ Header: X-Yunshu-Signature: sha256=<hmac-sha256-hex(body)>
 
 ---
 
-## 8. 相关文档
+## 8. 金丝雀 / 蓝绿发布
+
+容器发布配置字段（`cicd_deploy_configs`）：
+
+| 字段 | 说明 |
+|------|------|
+| `deploy_strategy` | `rolling`（默认）/ `canary` / `blue_green` |
+| `canary_replicas` / `canary_percent` / `canary_steps_json` | 金丝雀初始副本、占比提示、晋级步骤（如 `10,50,100`） |
+| `blue_green_service` | 蓝绿切换的 Service 名（空则用工作负载名） |
+
+Jenkins 透传参数：`deployStrategy`、`canaryReplicas`、`canaryPercent`、`canarySteps`、`blueGreenService`。
+
+平台晋级 API（发布成功后可在「CD 历史工单」详情操作）：
+
+- `POST .../release-runs/:runId/progressive/promote` — 金丝雀按步骤扩缩 / 蓝绿切到 green
+- `POST .../release-runs/:runId/progressive/abort` — 中止（金丝雀缩 0 / 切回 blue）
+
+K8s 约定标签：`yunshu.io/track=canary`、`yunshu.io/color=blue|green`。
+
+---
+
+## 9. 相关文档
 
 - [plugins.md](./plugins.md) — 插件机制
 - [CONTRIBUTING.md](../CONTRIBUTING.md) §5 — 路径规则

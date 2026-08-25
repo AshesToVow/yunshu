@@ -9,7 +9,9 @@ type K8sClusterAccessGrant struct {
 	PrincipalKind string    `json:"principal_kind" gorm:"size:16;not null;uniqueIndex:uk_k8s_cluster_grant;comment:role|user|group"`
 	PrincipalRef  string    `json:"principal_ref" gorm:"size:128;not null;uniqueIndex:uk_k8s_cluster_grant;comment:角色码/用户ID字符串/组编码"`
 	ClusterID     uint      `json:"cluster_id" gorm:"not null;default:0;uniqueIndex:uk_k8s_cluster_grant;comment:平台集群ID，0=全部集群"`
-	Preset        string    `json:"preset" gorm:"size:32;not null;comment:readonly|readonly_exec|admin"`
+	Preset        string    `json:"preset" gorm:"size:32;not null;comment:readonly|readonly_exec|admin|custom"`
+	// Capabilities JSON 数组，如 ["read","exec"]；空则按 Preset 展开（兼容旧数据）。
+	Capabilities  string    `json:"capabilities" gorm:"type:text;comment:能力包JSON数组"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

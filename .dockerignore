@@ -1,0 +1,42 @@
+# 减小 docker build 上下文，避免把前端/依赖/产物打进后端构建（显著加速）
+.git/
+.github/
+.agents/
+.codegraph/
+.codex/
+.cursor/
+.idea/
+.vscode/
+
+# 前端（backend 镜像不需要）
+web/node_modules/
+web/dist/
+web/
+
+# 本地与产物
+logs/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+
+# 文档与杂项（不参与后端编译）；须保留 docs/swagger（go:generate 产物，被 router 引用）
+docs/handbook/
+docs/architecture-diagrams.md
+docs/backend-architecture-complete.md
+docs/API接口设计说明书.md
+docs/软件需求规格说明书.md
+docs/系统测试报告.md
+images/
+**/*_test.go
+**/.DS_Store
+*.md
+!deploy/docker/**
+!deploy/wkhtmltopdf/**
+!docs/swagger/**
+
+# 大体积离线包以外的测试数据可按需排除；保留 deploy/loggie/binary
+jenkinsfile-new/
+jenkinslib/
+tools/

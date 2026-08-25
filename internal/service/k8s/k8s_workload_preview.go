@@ -57,7 +57,7 @@ type SnapshotRollbackRequest struct {
 	ClusterID  uint `json:"cluster_id" binding:"required"`
 }
 
-// PreviewApply server-side 预检：拉取现网 YAML、做文本 diff、解析引用影响；不落库。
+// PreviewApply：文本 diff + Kubernetes server-side dry-run（DryRun=All）。
 func (s *K8sWorkloadService) PreviewApply(ctx context.Context, req NamespacedApplyRequest) (*WorkloadPreviewResult, error) {
 	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
@@ -95,6 +95,11 @@ func (s *K8sWorkloadService) PreviewApply(ctx context.Context, req NamespacedApp
 		diff.Before = string(y)
 		diff.Unified = unifiedDiff(diff.Before, diff.After, r.Kind+"/"+r.Namespace+"/"+r.Name)
 		out.Diffs = append(out.Diffs, diff)
+	}
+	if err := s.dyn.ServerSideDryRunApply(ctx, req.ClusterID, req.Manifest); err != nil {
+		out.DryRunOK = false
+		out.Message = "server-side dry-run: " + err.Error()
+		return out, nil
 	}
 	_ = cluster
 	return out, nil

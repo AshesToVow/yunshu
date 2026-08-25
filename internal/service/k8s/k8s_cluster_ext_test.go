@@ -69,3 +69,37 @@ users:
 		t.Fatalf("expected CA data preserved for secure kubeconfig")
 	}
 }
+
+func TestBuildKubeconfigFromDirectConfig_RequiresCAOrInsecure(t *testing.T) {
+	t.Parallel()
+	_, err := buildKubeconfigFromDirectConfig(&DirectConfig{
+		Server: "https://10.0.0.1:6443",
+		Token:  "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.x",
+	})
+	if err == nil || !strings.Contains(err.Error(), "未配置 CA") {
+		t.Fatalf("expected CA required error, got %v", err)
+	}
+	out, err := buildKubeconfigFromDirectConfig(&DirectConfig{
+		Server:                "https://10.0.0.1:6443",
+		Token:                 "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.x",
+		InsecureSkipTLSVerify: true,
+	})
+	if err != nil {
+		t.Fatalf("insecure should allow empty CA: %v", err)
+	}
+	if !strings.Contains(out, "insecure-skip-tls-verify: true") {
+		t.Fatalf("expected insecure flag, got %s", out)
+	}
+}
+
+func TestClassifyClusterConnectError_TLS(t *testing.T) {
+	t.Parallel()
+	msg := classifyClusterConnectError(errString("tls: failed to verify certificate: x509: certificate signed by unknown authority"))
+	if !strings.Contains(msg, "TLS") {
+		t.Fatalf("expected TLS hint, got %q", msg)
+	}
+}
+
+type errString string
+
+func (e errString) Error() string { return string(e) }

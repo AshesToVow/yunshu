@@ -37,6 +37,7 @@ type EsmgmtConnection struct {
 	HasPassword  bool           `json:"has_password" gorm:"-"`
 	TimeoutSec   int            `json:"timeout_sec" gorm:"not null;default:30"`
 	IsDefault    bool           `json:"is_default" gorm:"not null;default:false"`
+	OwnerUserID  uint           `json:"owner_user_id,omitempty" gorm:"index"`
 	Remark       string         `json:"remark" gorm:"size:255"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
@@ -54,6 +55,7 @@ type EsmgmtBackupJob struct {
 	Status         string         `json:"status" gorm:"size:32;not null;default:pending;index"` // pending|running|success|failed
 	Phase          string         `json:"phase" gorm:"size:64"`                                  // analysis|mapping|data|upload
 	DocCount       int            `json:"doc_count"`
+	Truncated      bool           `json:"truncated" gorm:"not null;default:false"`
 	MinioBucket    string         `json:"minio_bucket" gorm:"size:128"`
 	MinioObject    string         `json:"minio_object" gorm:"size:512"` // zip 相对对象键
 	AnalysisObject string         `json:"analysis_object" gorm:"size:512"`

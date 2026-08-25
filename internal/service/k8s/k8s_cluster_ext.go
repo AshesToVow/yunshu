@@ -270,10 +270,39 @@ func buildKubeconfigFromDirectConfig(config *DirectConfig) (string, error) {
 	if !hasAuth {
 		return "", fmt.Errorf("直连未配置有效认证：请填写 Token、或用户名+密码、或客户端证书+私钥（部分集群匿名可读版本信息，但无法列举命名空间）")
 	}
+	if !config.InsecureSkipTLSVerify && caRaw == "" {
+		return "", fmt.Errorf("直连未配置 CA：请粘贴集群根 CA（如 /etc/kubernetes/pki/ca.crt 的 base64），或开启「跳过 TLS 验证」；勿使用 ServiceAccount Secret 内 ca.crt（常与 APIServer 证书不匹配）")
+	}
 
 	// 将REST配置转换为kubeconfig格式
 	kubeconfig := generateKubeconfigYAML(restConfig, serverURL.Hostname())
 	return kubeconfig, nil
+}
+
+// classifyClusterConnectError 将 TLS/认证等连通错误转成可读提示（供状态探测展示）。
+func classifyClusterConnectError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.TrimSpace(err.Error())
+	low := strings.ToLower(msg)
+	switch {
+	case strings.Contains(low, "x509") || strings.Contains(low, "certificate signed by unknown authority") || strings.Contains(low, "tls:"):
+		return "TLS 证书校验失败：请填写正确的集群根 CA（kubeadm: /etc/kubernetes/pki/ca.crt），或开启「跳过 TLS 验证」。不要使用 SA Secret 里的 ca.crt。"
+	case strings.Contains(low, "unauthorized") || strings.Contains(low, "401"):
+		return "集群认证失败：请检查 Token 是否为解码后的 JWT（一般以 eyJ 开头），且对应 ServiceAccount 仍有效。"
+	case strings.Contains(low, "forbidden") || strings.Contains(low, "403"):
+		return "集群拒绝访问：入库凭证缺少 list namespaces 等权限，请为该凭证绑定足够 RBAC。"
+	case strings.Contains(low, "timeout") || strings.Contains(low, "i/o timeout") || strings.Contains(low, "deadline exceeded"):
+		return "连接超时：请确认 Yunshu 后端所在网络能访问 API Server 地址与端口。"
+	case strings.Contains(low, "connection refused") || strings.Contains(low, "no such host") || strings.Contains(low, "dial tcp"):
+		return "无法连通 API Server：请检查地址、端口与网络策略。"
+	default:
+		if len(msg) > 300 {
+			return msg[:300] + "…"
+		}
+		return msg
+	}
 }
 
 func compactNoSpace(s string) string {

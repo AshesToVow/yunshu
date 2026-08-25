@@ -8,7 +8,7 @@
 |------------|----------------------|--------|
 | **授权管理**（角色 + 权限树） | `casbin_rule` 里 **`/api/v1/...` + HTTP 方法** 的 `p` 策略 | **能不能调用这个 HTTP 接口**（最外层：没勾对应能力，多数情况直接 403）。 |
 | **API 管理** 里每行能力的 **「K8s 范围校验」开关**（`permissions.k8s_scope_enabled`） | 不单独存一条策略，只决定该路由是否进入 **K8s 三元中间件目录** | **仅开关**：打开后，该接口在带 `cluster_id` 等条件时才会继续做「集群 + 命名空间 + 路径」校验；关闭则三元中间件**不处理**该路由（见 §3.5）。 |
-| **K8s 集群访问档位** 页 + **命名空间黑/白名单** | 表 **`k8s_cluster_access_grants`**（**主体** `role` / `user` / `group` + 集群 + `readonly`/`readonly_exec`/`admin`）；黑名单 **`k8s_namespace_deny_rules`**、白名单 **`k8s_namespace_allow_rules`** | 在已通过 API 鉴权的前提下，按 **集群档位 + 路由所需能力** 再收紧（**不再**写入 Casbin `k8s:cluster:…`）；**黑名单优先**，若某主体在某集群存在白名单规则则仅允许所列 NS（见 §3.5）。 |
+| **K8s 集群访问档位** 页 + **命名空间黑/白名单** | 表 **`k8s_cluster_access_grants`**（主体 `role` / `user` / `group` + 集群 + `preset` + **`capabilities` JSON 能力包**）；黑名单 **`k8s_namespace_deny_rules`**、白名单 **`k8s_namespace_allow_rules`** | 在已通过 API 鉴权的前提下，按 **能力包**（路由映射到 `read`/`exec`/`restart`/…）与 NS 规则收紧；快捷三档会展开为能力包；**黑名单优先**（见 §3.5）。 |
 
 **容易混淆的点**：
 
@@ -55,17 +55,19 @@
 
 种子：`cmd/seed.go` 中 `defaultPermissions()`，运行 `go run . seed` 会 upsert 并给 `super-admin` 加策略。
 
-### 2.3 K8s 集群访问档位挂在谁身上？
+### 2.3 K8s 集群访问档位 / 能力包挂在谁身上？
 
-- **集群侧能力**在表 **`k8s_cluster_access_grants`**：`principal_kind`（`role` / `user` / `group`）+ `principal_ref`（角色码 / 用户 ID 字符串 / 组编码）+ `cluster_id`（`0` = 全部集群）+ `preset`（`readonly` / `readonly_exec` / `admin`）。**不再**使用 Casbin `p` 行存储 `k8s:cluster:…`。
-- 鉴权中间件用 **`k8sauth.PrincipalPack`**（`CurrentUser` 的 `RoleCodes` + 用户 ID + `GroupCodes`，见 `internal/pkg/k8sauth/principal.go`）查询该用户在当前请求 `cluster_id` 上的**有效最高档位**（同时匹配 `cluster_id=0` 与具体集群 ID），再与「该 HTTP 路由所需的最低档位」比较（所需档位由 `permissions` 目录与 `internal/service/k8s_access_enforce.go`、`k8s_cluster_preset.go` 的展开逻辑推导）。
-- **结论**：可对**角色模板、单个用户、用户组**下发集群档位；用户登录后加载其所属组（`user_groups` / `user_group_users`），与 k8m 的「用户组继承集群权限」一致；并配合 **命名空间黑/白名单**。
+- **集群侧能力**在表 **`k8s_cluster_access_grants`**：`principal_kind`（`role` / `user` / `group`）+ `principal_ref` + `cluster_id`（`0` = 全部集群）+ `preset`（`readonly` / `readonly_exec` / `admin` / `custom`）+ **`capabilities`**（JSON 数组，如 `["read","exec","scale"]`）。
+- 空 `capabilities` 时按 `preset` 展开（兼容旧数据）；有勾选时以能力包为准，并自动补 `read`。
+- 鉴权：`K8sScopeAuthorize` 用 `RequiredK8sCapability` 得到路由所需能力码，再与 `EffectiveCapabilities`（合并角色/用户/组在该集群的授权）做包含判断；`access_rank` 由能力包推导供写门禁兼容。
+- 目录：`GET /api/v1/k8s-policies/capabilities`；下发：`POST /api/v1/k8s-policies/grant-preset`（可只传 `capabilities`）。
+- **结论**：可对角色 / 用户 / 用户组下发快捷档位或自定义能力包，并配合命名空间黑/白名单。
 
-## 3. K8s 范围校验（集群档位 + 命名空间 + 路由能力）
+## 3. K8s 范围校验（能力包 + 命名空间）
 
-用于在 **已通过 API 鉴权** 后，按 **k8m 式档位** 收紧对集群的操作：在控制台 **K8s 集群访问档位** 页为角色选择集群与 `readonly` / `readonly_exec` / `admin` 即可。
+通过 API 鉴权后，按 **能力包** 收紧集群操作。控制台 **K8s 集群访问授权** 可勾选能力或使用三档快捷填充。
 
-实现入口：`internal/service/k8s_scoped_policy_service.go`（写入 `k8s_cluster_access_grants`）、`internal/middleware/k8s_scope_authorize.go`（比对档位）、`internal/service/k8s_access_enforce.go`（路由所需最低档位）。
+实现：`k8s_scoped_policy_service.go`、`k8scaps`、`k8s_capabilities.go`、`k8s_scope_authorize.go`。
 
 ### 3.1 与 k8m 多集群权限模型的对照（概念）
 
@@ -80,7 +82,7 @@ yunshu 当前采用 **API 用 Casbin + 集群用数据库档位**：
 
 | k8m 能力 | yunshu 融合方案 |
 |----------|----------------|
-| 集群级粗粒度角色（只读 / 管理员 / Exec） | **预设档位** `POST /api/v1/k8s-policies/grant-preset`：写入 `k8s_cluster_access_grants`；具体路由所需能力仍由 `permissions` + `k8s_access_enforce` 与 preset 展开对齐。 |
+| 集群级粗粒度角色（只读 / 管理员 / Exec） | **能力包**：快捷档位或勾选 `capabilities`；`POST /api/v1/k8s-policies/grant-preset`；运行时按 `RequiredK8sCapability` 校验。 |
 | 用户组绑定集群权限 | 表 **`k8s_cluster_access_grants`** 支持 `principal_kind=group`；组成员通过 JWT 上下文中的组编码参与匹配。 |
 | 命名空间 **黑名单** 优先 | `K8sScopeAuthorize` 内 **先于** 白名单与 `super-admin` 档位旁路执行。 |
 | 命名空间 **白名单** | 表 **`k8s_namespace_allow_rules`**；若某主体在某集群存在任意白名单行，则**仅允许**所列命名空间（`_cluster` 级请求不受白名单限制）。API：`/api/v1/k8s-namespace-allow-rules`。 |
@@ -169,11 +171,12 @@ yunshu 当前采用 **API 用 Casbin + 集群用数据库档位**：
 
 **配置步骤**：
 
-1. 使用预设 **`readonly`** 下发（`POST /api/v1/k8s-policies/grant-preset` 或页面「只读」档位），**不要**选择 `readonly_exec` 或 `admin`（档位语义见 `internal/service/k8s_cluster_preset.go`）。
-2. 若历史上误发了 `readonly_exec` / `admin`，在 **集群档位** 表中 **删除** 对应行或改为 `readonly`。
-3. 在 **授权管理** 中避免为该角色勾选 Pod 删除、Exec 等写类 API（与 3.3 一致）。
+1. 在 **K8s 集群访问授权** 用快捷档位 **只读**，或自定义勾选仅 `只读浏览`（不要勾 Pod 终端 / 删除 / 高危等）。
+2. API：`POST /api/v1/k8s-policies/grant-preset`，传 `capabilities: ["read"]`，或 `preset: "readonly"`。
+3. 若历史上误发了 `readonly_exec` / `admin`，删除对应授权行或改勾能力包后重新保存。
+4. 在 **授权管理** 中避免为该角色勾选 Pod 删除、Exec 等写类 API（与 3.3 一致）。
 
-**验证**：只读列表与详情可用；打开终端或删除 Pod 应失败。
+**验证**：只读列表与详情可用；打开终端或删除 Pod 应失败（缺能力 `exec` / `delete`）。
 
 ---
 
@@ -238,3 +241,25 @@ yunshu 当前采用 **API 用 Casbin + 集群用数据库档位**：
 - 新增 REST 路由后：更新 `defaultPermissions` + 运行 seed + 在「授权管理」给业务角色勾选。  
 - 最小权限原则：生产环境避免给普通用户 `super-admin`；K8s 生产命名空间优先用 **黑名单** 或 **窄命名空间三元** 双重保险。
 - 变更集群档位或 Casbin 规则后，若用户仍报权限异常，可让其 **刷新页面** 或 **重新登录** 以排除前端状态缓存；服务端中间件每次请求会重载用户角色（见 `auth` 中间件）。
+
+## 8. 长期凭证与第四层门禁（AccessIntent）
+
+平台侧 Casbin/档位/NS 策略解决的是「Yunshu 用户能否点这个按钮」；真正打到 apiserver 的仍是入库的集群凭证。为缩小 blast radius，运行时再叠一层：
+
+| 机制 | 实现要点 |
+|------|----------|
+| AccessIntent | 中间件按路由写入 `read` / `write` / `exec`；`GetClusterKubectl` / `GetClusterRestConfig` 按意图选凭证 |
+| 只读 kubeconfig | `k8s_clusters.kubeconfig_readonly`；只读意图优先使用 |
+| Impersonation | **已下线**（字段保留兼容，运行时忽略）；权限仅平台集群授权 |
+| 写门禁 | `assertK8sWritable`：只读意图禁止变更 |
+| 高危确认 | `require_destructive_confirm` + 请求 `confirm=true`（Drain / Helm 卸载 / RBAC Apply 等） |
+| Secret | `/secrets/detail` 脱敏；`/secrets/reveal` 需 admin，审计 redact |
+| 加密 | 无 `security.encryption_key` 时拒绝密封新凭证（fail-closed） |
+
+实现：`internal/service/k8s/k8s_runtime_credential.go`、`gate.go`、`k8sauth/access_intent.go`。
+
+**生产建议**：
+
+- 配置 kubeconfig 或直连凭证后，仅在 Yunshu「集群授权」给用户档位与 NS 策略即可；详见 [`deploy/k8s/yunshu-cluster-connect.md`](../../../deploy/k8s/yunshu-cluster-connect.md)。
+- **Impersonation 已下线**（不再向 apiserver 伪装用户，避免集群侧手工 YAML）。库表字段保留兼容，运行时忽略。
+- 可选：拆分只读/可写 kubeconfig，缩小 blast radius。

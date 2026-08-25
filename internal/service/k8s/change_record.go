@@ -9,12 +9,16 @@ import (
 )
 
 func recordK8sChange(ctx context.Context, cluster *model.K8sCluster, action, kind, namespace, name string, payload any) {
-	if cluster == nil || cluster.OwningProjectID == nil || *cluster.OwningProjectID == 0 {
+	if cluster == nil {
 		return
+	}
+	projectID := uint(0)
+	if cluster.OwningProjectID != nil {
+		projectID = *cluster.OwningProjectID
 	}
 	summary := fmt.Sprintf("K8s %s %s/%s/%s", action, kind, namespace, name)
 	changeevent.Record(ctx, changeevent.Input{
-		ProjectID: *cluster.OwningProjectID,
+		ProjectID: projectID,
 		Source:    model.ChangeSourceK8s,
 		Action:    action,
 		RiskLevel: model.ChangeRiskHigh,

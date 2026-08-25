@@ -43,8 +43,9 @@ var wsUpgrader = websocket.Upgrader{
 	WriteBufferSize: 32 * 1024,
 	CheckOrigin: func(r *http.Request) bool {
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		// 浏览器导航通常带 Sec-Fetch-Site；无 Origin 的非浏览器客户端仍放行。
 		if origin == "" {
-			return true
+			return strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")) == ""
 		}
 		oh, err := url.Parse(origin)
 		if err != nil || oh.Host == "" {
@@ -54,12 +55,9 @@ var wsUpgrader = websocket.Upgrader{
 		if reqHost == "" {
 			return false
 		}
-		// 完整 Host（含端口）一致则放行。
 		if strings.EqualFold(oh.Host, reqHost) {
 			return true
 		}
-		// 反代常见：nginx proxy_set_header Host $host 会丢掉非标准端口，
-		// Origin 仍带 :8083，导致 10.10.10.4:8083 vs 10.10.10.4 被误判跨域。
 		ohName := strings.ToLower(strings.Split(oh.Host, ":")[0])
 		reqName := strings.ToLower(strings.Split(reqHost, ":")[0])
 		return ohName != "" && ohName == reqName

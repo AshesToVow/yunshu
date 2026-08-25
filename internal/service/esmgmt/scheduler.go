@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/cronutil"
 )
@@ -30,12 +31,12 @@ func ValidateEsmgmtBackupCronSpec(spec string) error {
 }
 
 // CreateSchedule 新建定时备份规则。
-func (s *Service) CreateSchedule(ctx context.Context, req ScheduleUpsertRequest, createdBy uint) (*model.EsmgmtBackupSchedule, error) {
+func (s *Service) CreateSchedule(ctx context.Context, req ScheduleUpsertRequest, actor *auth.CurrentUser) (*model.EsmgmtBackupSchedule, error) {
+	if err := s.assertConnectionWrite(ctx, req.ConnectionID, actor); err != nil {
+		return nil, err
+	}
 	index := strings.TrimSpace(req.IndexName)
 	cronSpec := strings.TrimSpace(req.CronSpec)
-	if req.ConnectionID == 0 {
-		return nil, constants.ErrBadRequestWithMsg("connection_id 无效")
-	}
 	if index == "" {
 		return nil, constants.ErrBadRequestWithMsg("索引名不能为空")
 	}
@@ -58,7 +59,7 @@ func (s *Service) CreateSchedule(ctx context.Context, req ScheduleUpsertRequest,
 		Enabled:      enabled,
 		CronSpec:     cronSpec,
 		Remark:       strings.TrimSpace(req.Remark),
-		CreatedBy:    createdBy,
+		CreatedBy:    actorID(actor),
 	}
 	if req.MaxDocs != nil {
 		row.MaxDocs = *req.MaxDocs
@@ -70,7 +71,7 @@ func (s *Service) CreateSchedule(ctx context.Context, req ScheduleUpsertRequest,
 }
 
 // UpdateSchedule 更新定时备份规则。
-func (s *Service) UpdateSchedule(ctx context.Context, id uint, req ScheduleUpsertRequest) (*model.EsmgmtBackupSchedule, error) {
+func (s *Service) UpdateSchedule(ctx context.Context, id uint, req ScheduleUpsertRequest, actor *auth.CurrentUser) (*model.EsmgmtBackupSchedule, error) {
 	if id == 0 {
 		return nil, constants.ErrBadRequestWithMsg("调度 ID 无效")
 	}

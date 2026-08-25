@@ -202,13 +202,13 @@ type DbAccessRequestStep struct {
 	StageKey        string     `json:"stage_key" gorm:"size:32;not null"`
 	StageName       string     `json:"stage_name" gorm:"size:64;not null"`
 	SortOrder       int        `json:"sort_order" gorm:"not null;default:0"`
-	Status          string     `json:"status" gorm:"size:32;not null;default:'pending'"`
+	Status          string     `json:"status" gorm:"size:32;not null;default:'pending';index:idx_db_access_step_status_activated,priority:1"`
 	UserGroupID     *uint      `json:"user_group_id,omitempty"`
 	ReviewerUserID  *uint      `json:"reviewer_user_id,omitempty"`
 	ReviewerName    string     `json:"reviewer_name" gorm:"size:64"`
 	ReviewComment   string     `json:"review_comment" gorm:"size:512"`
 	ReviewedAt      *time.Time `json:"reviewed_at,omitempty"`
-	ActivatedAt     *time.Time `json:"activated_at,omitempty"`
+	ActivatedAt     *time.Time `json:"activated_at,omitempty" gorm:"index:idx_db_access_step_status_activated,priority:2"`
 	LastRemindedAt  *time.Time `json:"last_reminded_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
@@ -254,13 +254,13 @@ type DbSqlTicketStep struct {
 	StageKey       string     `json:"stage_key" gorm:"size:32;not null"`
 	StageName      string     `json:"stage_name" gorm:"size:64;not null"`
 	SortOrder      int        `json:"sort_order" gorm:"not null;default:0"`
-	Status         string     `json:"status" gorm:"size:32;not null;default:'pending'"`
+	Status         string     `json:"status" gorm:"size:32;not null;default:'pending';index:idx_db_sql_step_status_activated,priority:1"`
 	UserGroupID    *uint      `json:"user_group_id,omitempty"`
 	ReviewerUserID *uint      `json:"reviewer_user_id,omitempty"`
 	ReviewerName   string     `json:"reviewer_name" gorm:"size:64"`
 	ReviewComment  string     `json:"review_comment" gorm:"size:512"`
 	ReviewedAt     *time.Time `json:"reviewed_at,omitempty"`
-	ActivatedAt    *time.Time `json:"activated_at,omitempty"`
+	ActivatedAt    *time.Time `json:"activated_at,omitempty" gorm:"index:idx_db_sql_step_status_activated,priority:2"`
 	LastRemindedAt *time.Time `json:"last_reminded_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
@@ -380,3 +380,19 @@ type DbInstanceAccount struct {
 }
 
 func (DbInstanceAccount) TableName() string { return "db_instance_accounts" }
+
+// DbColumnMaskRule 列级脱敏规则。
+type DbColumnMaskRule struct {
+	ID         uint   `json:"id" gorm:"primaryKey"`
+	InstanceID uint   `json:"instance_id" gorm:"not null;index:idx_db_mask_inst"`
+	SchemaName string `json:"schema_name" gorm:"size:64;not null;default:'';index:idx_db_mask_inst"`
+	MaskTable  string `json:"table_name" gorm:"column:table_name;size:128;not null;index:idx_db_mask_inst"`
+	ColumnName string `json:"column_name" gorm:"size:128;not null"`
+	MaskType   string `json:"mask_type" gorm:"size:32;not null;default:partial;comment:hash|partial|redact"`
+	Pattern    string `json:"pattern" gorm:"size:64;comment:partial 时保留前后字符数如 3,4"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (DbColumnMaskRule) TableName() string { return "db_column_mask_rules" }

@@ -15,6 +15,13 @@ export type K8sClusterAccessItem = {
   role_code?: string;
   cluster_id: number;
   preset: string;
+  capabilities?: string[];
+};
+
+export type K8sCapabilityItem = {
+  code: string;
+  name: string;
+  description: string;
 };
 
 export type K8sScopedPolicyGrantPresetPayload = {
@@ -23,7 +30,9 @@ export type K8sScopedPolicyGrantPresetPayload = {
   user_id?: number;
   group_id?: number;
   cluster_ids: number[];
-  preset: "readonly" | "readonly_exec" | "admin";
+  /** 快捷档位；与 capabilities 同时传时以后端优先 capabilities 为准 */
+  preset?: "readonly" | "readonly_exec" | "admin" | "custom";
+  capabilities?: string[];
   /** 可选；须配合明确集群 ID，写入命名空间黑名单 */
   deny_namespaces?: string[];
   /** 可选；须配合明确集群 ID，写入命名空间白名单 */
@@ -41,6 +50,10 @@ export type K8sScopedPolicyGrantPresetResponse = {
 
 export function listK8sPolicyActions() {
   return getData<{ list: K8sActionItem[] }>(http.get("/k8s-policies/actions"));
+}
+
+export function listK8sCapabilities() {
+  return getData<{ list: K8sCapabilityItem[] }>(http.get("/k8s-policies/capabilities"));
 }
 
 export function listK8sPolicyPaths() {
@@ -65,6 +78,19 @@ export function grantK8sScopedPoliciesPreset(payload: K8sScopedPolicyGrantPreset
   return getData<K8sScopedPolicyGrantPresetResponse>(http.post("/k8s-policies/grant-preset", payload));
 }
 
+export type K8sSplitByNamespacesPayload = {
+  principal_kind?: "role" | "user" | "group";
+  role_id?: number;
+  user_id?: number;
+  group_id?: number;
+  cluster_ids: number[];
+  splits: Array<{ namespace: string; preset: "readonly" | "readonly_exec" | "admin" }>;
+};
+
+export function splitK8sScopedPoliciesByNamespaces(payload: K8sSplitByNamespacesPayload) {
+  return getData<K8sScopedPolicyGrantPresetResponse>(http.post("/k8s-policies/split-by-namespaces", payload));
+}
+
 export function deleteK8sClusterGrant(id: number) {
   return getData<{ message: string }>(http.delete(`/k8s-policies/cluster-grants/${id}`));
 }
@@ -83,6 +109,7 @@ export type K8sAuthMatrixRow = {
   grant_scope_all: boolean;
   preset: string;
   preset_label: string;
+  capabilities?: string[];
   allow_namespaces: string;
   via: string;
 };
@@ -97,6 +124,7 @@ export type K8sUserClusterAuthRow = {
   grant_scope_all: boolean;
   preset: string;
   preset_label: string;
+  capabilities?: string[];
   allow_namespaces: string;
   via: string;
 };

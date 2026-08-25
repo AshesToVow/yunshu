@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/service/changeevent"
 )
 
@@ -33,10 +33,10 @@ type ReleaseVerifyResult struct {
 }
 
 // VerifyReleaseRun 执行发布后验证并写回 release.verify_* 与 change_event。
-func (s *Service) VerifyReleaseRun(ctx context.Context, projectID, runID uint) (*ReleaseVerifyResult, error) {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
-		return nil, constants.ErrNotFound
+func (s *Service) VerifyReleaseRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (*ReleaseVerifyResult, error) {
+	release, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "release")
+	if err != nil {
+		return nil, err
 	}
 	out := &ReleaseVerifyResult{
 		ReleaseID: release.ID,

@@ -422,9 +422,9 @@ func (h *DbmgmtHandler) ApproveAccessRequest(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.ReviewRequest) error {
+	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.AccessApproveRequest) error {
 		actor, _ := auth.CurrentUserFromContext(c)
-		return h.svc.ApproveAccessRequest(ctx, projectID, requestID, req.Comment, actor)
+		return h.svc.ApproveAccessRequest(ctx, projectID, requestID, req, actor)
 	})
 }
 
@@ -862,4 +862,47 @@ func (h *DbmgmtHandler) ListTicketSteps(c *gin.Context) {
 		return
 	}
 	response.Success(c, steps)
+}
+
+func (h *DbmgmtHandler) ListColumnMaskRules(c *gin.Context) {
+	instanceID, err := parseUintParam(c, "instanceId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	list, err := h.svc.ListColumnMaskRules(c.Request.Context(), instanceID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
+}
+
+func (h *DbmgmtHandler) UpsertColumnMaskRule(c *gin.Context) {
+	instanceID, err := parseUintParam(c, "instanceId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.ColumnMaskRuleUpsertRequest) (any, error) {
+		return h.svc.UpsertColumnMaskRule(ctx, instanceID, req)
+	})
+}
+
+func (h *DbmgmtHandler) DeleteColumnMaskRule(c *gin.Context) {
+	instanceID, err := parseUintParam(c, "instanceId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ruleID, err := parseUintParam(c, "ruleId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteColumnMaskRule(c.Request.Context(), instanceID, ruleID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"deleted": true})
 }

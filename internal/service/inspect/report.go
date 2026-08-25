@@ -2,7 +2,7 @@ package inspect
 
 import (
 	"embed"
-	"fmt"
+	"html/template"
 	"math"
 	"sort"
 	"strings"
@@ -20,13 +20,23 @@ type ReportData struct {
 	InspectionUser string
 	Score          float64
 	Grade          string
+	GradeLabel     string // 优秀/良好/需关注/高风险
+	RiskLevel      string // 低风险…高风险
 	Summary        string
+	Verdict        string // 面向客户的一句话结论
 	ReportListMode string
 	ReportListHint string
 	Total          int
 	Critical       int
 	Warning        int
 	Normal         int
+	CategoryCount  int // 检查分类数
+	CheckItemCount int // 去重检查项数
+	DistCriticalPct int
+	DistWarningPct  int
+	DistNormalPct   int
+	AbnormalPct     int
+	DistBarSVG      template.HTML // 预渲染分布条，避免模板内联 style 触发 HTML 校验报错
 	ContentGroups  []ContentGroup // 巡检内容（全量范围）
 	Groups         []ReportGroup  // 各类巡检结果（受 listMode 过滤）
 	Findings       []Finding
@@ -105,12 +115,14 @@ func buildReportData(projectName, dsName, user, listMode string, collected Colle
 	score, grade := scorecard(collected)
 	findings := buildFindings(collected.Samples)
 	contentGroups := buildContentGroups(collected.Samples)
+	categoryCount := countCheckCategories(collected.Samples)
+	checkItemCount := countCheckItems(collected.Samples)
 	hint := "展示全部样本"
 	switch mode {
 	case "abnormal_only":
-		hint = "仅展示异常（critical/warning）样本"
+		hint = "明细区仅展示异常样本（严重/警告），便于客户汇报阅读"
 	case "summary":
-		hint = "摘要模式：每类仅展示异常样本"
+		hint = "摘要模式：明细区仅展示需关注的异常样本"
 	}
 	return ReportData{
 		Timestamp:      time.Now(),
@@ -119,13 +131,23 @@ func buildReportData(projectName, dsName, user, listMode string, collected Colle
 		InspectionUser: user,
 		Score:          score,
 		Grade:          grade,
-		Summary:        fmt.Sprintf("共 %d 条样本：严重 %d、警告 %d、正常 %d。健康分 %.0f（%s）。", collected.Total, collected.Critical, collected.Warning, collected.Normal, score, grade),
+		GradeLabel:     gradeLabelCN(grade),
+		RiskLevel:      riskLevelCN(grade),
+		Summary:        buildExecutiveSummary(collected, score, grade, categoryCount, checkItemCount),
+		Verdict:        gradeVerdict(grade, collected.Critical, collected.Warning),
 		ReportListMode: mode,
 		ReportListHint: hint,
 		Total:          collected.Total,
 		Critical:       collected.Critical,
 		Warning:        collected.Warning,
 		Normal:         collected.Normal,
+		CategoryCount:   categoryCount,
+		CheckItemCount:  checkItemCount,
+		DistCriticalPct: percentPart(collected.Critical, collected.Total),
+		DistWarningPct:  percentPart(collected.Warning, collected.Total),
+		DistNormalPct:   percentPart(collected.Normal, collected.Total),
+		AbnormalPct:     percentPart(collected.Critical+collected.Warning, collected.Total),
+		DistBarSVG:      buildDistBarSVG(collected.Critical, collected.Warning, collected.Normal),
 		ContentGroups:  contentGroups,
 		Groups:         groups,
 		Findings:       findings,
@@ -235,20 +257,27 @@ func buildFindings(samples []MetricSample) []Finding {
 	}
 	out := make([]Finding, 0, len(counts))
 	for k, n := range counts {
-		hint := "请核查相关实例指标与阈值配置。"
+		hint := "请核查相关实例指标与阈值配置，并在下次巡检前完成复核。"
 		if k.sev == "critical" {
-			hint = "建议立即排查并处理，必要时扩容或修复故障。"
+			hint = "建议立即组织排查并处理，必要时扩容、切换或修复故障；处理结果请回填至运维台账。"
 		}
 		if noData[k] > 0 && noData[k] >= n {
-			hint = "采集无数据：请核对 Prometheus 指标名 / job 是否与 Telegraf、Blackbox 一致。"
+			hint = "监控数据未采集到有效样本，请核对 Prometheus 指标名、job 标签是否与 Telegraf / Blackbox 配置一致。"
 		}
 		out = append(out, Finding{Type: k.t, Name: k.n, Severity: k.sev, Count: n, Hint: hint})
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].Severity != out[j].Severity {
-			return out[i].Severity < out[j].Severity // critical before warning alphabetically? critical < warning
+		si, sj := severityRank(out[i].Severity), severityRank(out[j].Severity)
+		if si != sj {
+			return si < sj
 		}
-		return out[i].Count > out[j].Count
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].Name < out[j].Name
 	})
 	if len(out) > 30 {
 		out = out[:30]

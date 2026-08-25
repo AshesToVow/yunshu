@@ -4,11 +4,13 @@ import "context"
 
 type scopeCtxKey struct{}
 
-// RequestScope 挂在 HTTP 请求上下文上，供服务层做命名空间策略过滤。
+// RequestScope 挂在 HTTP 请求上下文上，供服务层做命名空间策略过滤与凭证意图选择。
 type RequestScope struct {
-	ClusterID uint
-	Namespace string
-	Pack      PrincipalPack
+	ClusterID  uint
+	Namespace  string
+	Pack       PrincipalPack
+	Intent     AccessIntent
+	AccessRank int
 }
 
 // WithRequestScope 写入请求范围（中间件在解析 cluster_id / namespace 后调用）。

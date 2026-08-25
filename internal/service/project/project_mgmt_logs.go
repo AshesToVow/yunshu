@@ -242,7 +242,7 @@ func (s *ProjectMgmtService) ValidateLogSearchFilters(ctx context.Context, proje
 		sv, err := s.serverRepo.GetByID(ctx, *serverID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return constants.ErrLogSourceServerNotFound
+				return constants.ErrServerNotFound
 			}
 			return bizerrors.Pass(ctx, "project", "ValidateLogSearchFilters", err)
 		}

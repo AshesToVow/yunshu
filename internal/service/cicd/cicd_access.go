@@ -299,11 +299,11 @@ func (s *Service) BootstrapCicdGrantsForMembers(ctx context.Context, req Bootstr
 		for _, svc := range services {
 			row := model.CicdAccessGrant{
 				ProjectID: req.ProjectID, ServiceID: svc.ID, PrincipalKind: kind, PrincipalRef: ref,
-				CanView: true, CanBuild: true, CanRelease: true, CanManage: false, CreatedBy: req.CreatedBy, Remark: "bootstrap",
+				CanView: true, CanBuild: false, CanRelease: false, CanManage: false, CreatedBy: req.CreatedBy, Remark: "bootstrap",
 			}
 			if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "project_id"}, {Name: "service_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-				DoUpdates: clause.AssignmentColumns([]string{"can_view", "can_build", "can_release", "updated_at"}),
+				DoUpdates: clause.AssignmentColumns([]string{"can_view", "updated_at"}),
 			}).Create(&row).Error; err == nil {
 				granted++
 			}

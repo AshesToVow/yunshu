@@ -135,22 +135,24 @@ func provideAlertService(
 func provideAuthService(
 	userRepo interfaces.UserRepository,
 	redisClient *redis.Client,
+	db *gorm.DB,
 	authCfg config.AuthConfig,
 	sender mailer.Sender,
 	appName AppDisplayName,
 ) *service.AuthService {
-	return service.NewAuthService(userRepo, redisClient, authCfg, sender, string(appName))
+	return service.NewAuthService(userRepo, redisClient, db, authCfg, sender, string(appName))
 }
 
 func provideRegistrationService(
 	regRepo interfaces.RegistrationRequestRepository,
 	userRepo interfaces.UserRepository,
 	redisClient *redis.Client,
+	db *gorm.DB,
 	authCfg config.AuthConfig,
 	sender mailer.Sender,
 	appName AppDisplayName,
 ) *service.RegistrationService {
-	return service.NewRegistrationService(regRepo, userRepo, redisClient, authCfg, sender, string(appName))
+	return service.NewRegistrationService(regRepo, userRepo, redisClient, db, authCfg, sender, string(appName))
 }
 
 func provideK8sRuntimeService(

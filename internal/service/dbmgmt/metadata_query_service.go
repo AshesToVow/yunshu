@@ -334,6 +334,8 @@ func (s *Service) ExecuteQuery(ctx context.Context, projectID, instanceID uint, 
 		"sql":      truncateSQL(sqlText, 500),
 	})
 
+	s.applyColumnMasks(ctx, instanceID, req.Database, cols, data)
+
 	return &QueryResult{Columns: nonNilCols(cols), Rows: nonNilRows(data), RowCount: len(data), DurationMs: dur, Truncated: truncated}, nil
 }
 

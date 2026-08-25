@@ -479,6 +479,16 @@ func (s *K8sHelmService) Rollback(ctx context.Context, req HelmRollbackRequest) 
 
 // Uninstall 卸载 Release。
 func (s *K8sHelmService) Uninstall(ctx context.Context, q HelmReleaseNameQuery) error {
+	cluster, _, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
+	if err != nil {
+		return err
+	}
+	if err := assertK8sWritable(ctx, cluster, "helm_uninstall", q.Namespace); err != nil {
+		return err
+	}
+	if err := RequireDestructiveConfirm(ctx, cluster); err != nil {
+		return err
+	}
 	actionConfig, _, err := s.newActionConfig(ctx, q.ClusterID, q.Namespace)
 	if err != nil {
 		return err
@@ -489,6 +499,7 @@ func (s *K8sHelmService) Uninstall(ctx context.Context, q HelmReleaseNameQuery) 
 	if _, err := uninstall.Run(strings.TrimSpace(q.ReleaseName)); err != nil {
 		return bizerrors.Internalf(ctx, "helm", "uninstall", err, "Helm 卸载失败")
 	}
+	recordK8sChange(ctx, cluster, "helm_uninstall", "HelmRelease", q.Namespace, q.ReleaseName, nil)
 	return nil
 }
 

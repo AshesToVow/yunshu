@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
@@ -238,6 +239,36 @@ func (h *AlertHandler) HistoryStats(c *gin.Context) {
 	response.Success(c, stats)
 }
 
+// ReceiveAlertmanagerWebhook 接收 Alertmanager Webhook（Redis 可用时异步入队）。
+func (h *AlertHandler) ReceiveAlertmanagerWebhook(c *gin.Context) {
+	token := c.GetHeader("X-Alert-Token")
+	if token == "" {
+		token = c.GetHeader("X-Webhook-Token")
+	}
+	if token == "" {
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token = strings.TrimSpace(authHeader[7:])
+		} else {
+			token = authHeader
+		}
+	}
+	if !h.svc.ValidateWebhookToken(token) {
+		response.Error(c, constants.ErrAlertWebhookTokenInvalid)
+		return
+	}
+	var payload service.AlertManagerPayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		response.Error(c, constants.ErrBadRequestWithMsg(bindErrorMessage(err)))
+		return
+	}
+	if err := h.svc.ReceiveAlertmanagerWebhook(c.Request.Context(), payload); err != nil {
+		abortService(c, err)
+		return
+	}
+	c.JSON(http.StatusAccepted, gin.H{"message": "accepted"})
+}
+
 // ReceiveK8sEventIngress godoc
 // @Summary Ingest K8s forwarded events (internal)
 // @Description Platform-internal ingress for K8s Event forwarder. Not an Alertmanager endpoint. Auth: X-Alert-Token or Bearer.
@@ -278,7 +309,54 @@ func (h *AlertHandler) ReceiveK8sEventIngress(c *gin.Context) {
 		return
 	}
 
-	c.JSON(202, gin.H{"message": "accepted"})
+	c.JSON(http.StatusAccepted, gin.H{"message": "accepted"})
+}
+
+func (h *AlertHandler) ExportHisEventsCSV(c *gin.Context) {
+	var q service.AlertHisEventListQuery
+	if err := c.ShouldBindQuery(&q); err != nil {
+		response.Error(c, constants.ErrBadRequest)
+		return
+	}
+	data, err := h.svc.ExportHisEventsCSV(c.Request.Context(), q)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="alert-his-events.csv"`)
+	c.Data(http.StatusOK, "text/csv; charset=utf-8", data)
+}
+
+func (h *AlertHandler) ListPromqlSavedQueries(c *gin.Context) {
+	userID, _ := currentAlertUser(c)
+	list, err := h.svc.ListPromqlSavedQueries(c.Request.Context(), userID)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
+}
+
+func (h *AlertHandler) CreatePromqlSavedQuery(c *gin.Context) {
+	userID, _ := currentAlertUser(c)
+	ServeJSON(c, func(ctx context.Context, req service.PromqlSavedQueryUpsertRequest) (any, error) {
+		return h.svc.CreatePromqlSavedQuery(ctx, userID, req)
+	})
+}
+
+func (h *AlertHandler) DeletePromqlSavedQuery(c *gin.Context) {
+	userID, _ := currentAlertUser(c)
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeletePromqlSavedQuery(c.Request.Context(), userID, id); err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{"deleted": true})
 }
 
 // QualityReport 告警质量治理报告。

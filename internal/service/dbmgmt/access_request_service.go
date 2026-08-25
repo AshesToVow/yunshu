@@ -35,6 +35,7 @@ type AccessRequestItem struct {
 	Status           string   `json:"status"`
 	CurrentStageName string   `json:"current_stage_name,omitempty"`
 	MineStatus       string   `json:"mine_status,omitempty"`
+	IsFinalApproval  bool     `json:"is_final_approval,omitempty"`
 	ExpiresAt        *string  `json:"expires_at,omitempty"`
 	QueryLimitNum    int      `json:"query_limit_num"`
 	CreateMeta       *AccessRequestMetaItem `json:"create_meta,omitempty"`
@@ -61,6 +62,11 @@ type AccessRequestCreateRequest struct {
 	DevOwnerUserID uint   `json:"dev_owner_user_id"`
 	DbaUserID    uint     `json:"dba_user_id"`
 	GrantHosts   string   `json:"grant_hosts"`
+}
+
+type AccessApproveRequest struct {
+	Comment   string  `json:"comment"`
+	ExpiresAt *string `json:"expires_at"`
 }
 
 type AccessRequestListQuery struct {
@@ -293,7 +299,7 @@ func (s *Service) grantFromAccessRequest(ctx context.Context, req *model.DbAcces
 	return nil
 }
 
-func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, comment string, actor *auth.CurrentUser) error {
+func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, body AccessApproveRequest, actor *auth.CurrentUser) error {
 	req, err := s.repo.GetAccessRequestInProject(ctx, projectID, id)
 	if err != nil {
 		return err
@@ -301,6 +307,31 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 	if req.Status != model.DbAccessRequestStatusPending {
 		return constants.ErrBadRequestWithMsg("申请已结束")
 	}
+	if body.ExpiresAt != nil {
+		steps, err := s.repo.ListAccessRequestSteps(ctx, id)
+		if err != nil {
+			return err
+		}
+		var cur *model.DbAccessRequestStep
+		for i := range steps {
+			if steps[i].Status == model.DbApprovalStepPending {
+				cur = &steps[i]
+				break
+			}
+		}
+		if cur != nil && !isFinalAccessApprovalStep(steps, cur) {
+			return constants.ErrBadRequestWithMsg("仅最后一环审批人可调整授权有效期")
+		}
+		expiresAt, err := parseOptionalExpiresAt(body.ExpiresAt)
+		if err != nil {
+			return err
+		}
+		req.ExpiresAt = expiresAt
+		if err := s.repo.UpdateAccessRequest(ctx, req); err != nil {
+			return err
+		}
+	}
+	comment := strings.TrimSpace(body.Comment)
 	steps, err := s.repo.ListAccessRequestSteps(ctx, id)
 	if err != nil {
 		return err
@@ -330,7 +361,7 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 	cur.Status = model.DbApprovalStepApproved
 	cur.ReviewerUserID = &uid
 	cur.ReviewerName = actorUsername(actor)
-	cur.ReviewComment = strings.TrimSpace(comment)
+	cur.ReviewComment = comment
 	cur.ReviewedAt = &now
 	if err := s.repo.UpdateAccessRequestStep(ctx, cur); err != nil {
 		return err
@@ -340,7 +371,7 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 	}
 	iid := req.InstanceID
 	_ = s.writeAudit(ctx, projectID, &iid, actor, "access_request_approve", map[string]any{
-		"request_id": req.ID, "database": req.DatabaseName, "comment": strings.TrimSpace(comment),
+		"request_id": req.ID, "database": req.DatabaseName, "comment": comment, "expires_at": formatTimeRFC3339(req.ExpiresAt),
 	})
 	return nil
 }

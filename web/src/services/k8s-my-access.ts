@@ -4,6 +4,7 @@ export type K8sMyAccess = {
   cluster_id: number;
   access_rank: number;
   access_preset?: string;
+  capabilities?: string[];
 };
 
 /** 当前登录用户在指定集群上的有效档位（仅需登录） */

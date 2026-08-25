@@ -275,6 +275,7 @@ var (
 	IsK8sClusterGrantReadBypassPath    = k8s.IsK8sClusterGrantReadBypassPath
 	IsK8sNginxRestartRoute             = k8s.IsK8sNginxRestartRoute
 	RequiredK8sAccessRank        = k8s.RequiredK8sAccessRank
+	RequiredK8sCapability        = k8s.RequiredK8sCapability
 	K8sScopeRouteKey             = k8s.K8sScopeRouteKey
 	BuildK8sScopeMappings        = k8s.BuildK8sScopeMappings
 )
@@ -300,8 +301,15 @@ type (
 	K8sAuthMatrixRow           = k8s.K8sAuthMatrixRow
 	K8sUserClusterAuthRow      = k8s.K8sUserClusterAuthRow
 	K8sEventForwardRuleUpsertRequest = eventforward.K8sEventForwardRuleUpsertRequest
-	RolloutUndoRequest         = k8s.RolloutUndoRequest
-	RolloutUndoResult          = k8s.RolloutUndoResult
+	RolloutUndoRequest              = k8s.RolloutUndoRequest
+	RolloutUndoResult               = k8s.RolloutUndoResult
+	DeploymentRevisionQuery         = k8s.DeploymentRevisionQuery
+	DeploymentRevisionItem          = k8s.DeploymentRevisionItem
+	ProgressiveScaleRequest         = k8s.ProgressiveScaleRequest
+	ProgressivePatchImageRequest    = k8s.ProgressivePatchImageRequest
+	ProgressiveSwitchServiceRequest = k8s.ProgressiveSwitchServiceRequest
+	ProgressiveEnsureCanaryRequest  = k8s.ProgressiveEnsureCanaryRequest
+	PasswordPolicyResponse          = system.PasswordPolicyResponse
 )
 
 // --- logplatform ---
@@ -380,6 +388,7 @@ type (
 	AlertInhibitionService    = alert.AlertInhibitionService
 	AlertSubscriptionService  = alert.AlertSubscriptionService
 	AlertManagerPayload       = alert.AlertManagerPayload
+	PromqlSavedQueryUpsertRequest = alert.PromqlSavedQueryUpsertRequest
 	AlertManagerAlert         = alert.AlertManagerAlert
 	AlertChannelListQuery     = alert.AlertChannelListQuery
 	AlertEventListQuery       = alert.AlertEventListQuery

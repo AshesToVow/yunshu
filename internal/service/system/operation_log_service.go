@@ -6,6 +6,7 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 	bizerrors "yunshu/internal/pkg/errors"
@@ -68,21 +69,22 @@ func (s *OperationLogService) DeleteBatch(ctx context.Context, ids []uint) error
 
 // Export writes operation logs matching query to writer as Excel.
 func (s *OperationLogService) Export(ctx context.Context, query OperationLogListQuery, w io.Writer) error {
-	page := 1
-	pageSize := 1000000
-	list, _, err := s.repo.List(ctx, repository.OperationLogListParams{
+	list, total, err := s.repo.List(ctx, repository.OperationLogListParams{
 		Method:     query.Method,
 		Path:       query.Path,
 		StatusCode: query.StatusCode,
-		Page:       page,
-		PageSize:   pageSize,
+		Page:       1,
+		PageSize:   exportutil.MaxExcelExportRows + 1,
 	})
 	if err != nil {
 		return bizerrors.Pass(ctx, "operation-log", "Export", err)
 	}
+	if total > exportutil.MaxExcelExportRows {
+		return exportutil.ExportRowLimitError(total)
+	}
 	f := excelize.NewFile()
 	sheet := "Sheet1"
-	_ = f.SetSheetRow(sheet, "A1", &[]interface{}{"ID", "Method", "Path", "StatusCode", "LatencyMs", "IP", "RequestHeaders", "RequestBody", "ResponseBody", "CreatedAt", "User"})
+	_ = f.SetSheetRow(sheet, "A1", &[]interface{}{"ID", "Method", "Path", "StatusCode", "LatencyMs", "IP", "CreatedAt", "User"})
 	for i, l := range list {
 		row := []interface{}{
 			l.ID,
@@ -91,9 +93,6 @@ func (s *OperationLogService) Export(ctx context.Context, query OperationLogList
 			l.StatusCode,
 			l.LatencyMs,
 			l.IP,
-			l.RequestHeaders,
-			l.RequestBody,
-			l.ResponseBody,
 			l.CreatedAt,
 			l.Username,
 		}

@@ -55,8 +55,27 @@ func applyListNamespaceScope(q *kom.Kubectl, gvk schema.GroupVersionKind, namesp
 	return q
 }
 
-// ListByGVK 查询列表相关的业务逻辑。
+// ListByGVK 查询列表相关的业务逻辑。白名单激活且未指定 namespace 时按允许 NS 分别 List，避免全集群拉取。
 func (s *DynamicResourceService) ListByGVK(ctx context.Context, k *kom.Kubectl, gvk schema.GroupVersionKind, namespace string) ([]unstructured.Unstructured, error) {
+	if nsList := s.scopedNamespacesForList(ctx, namespace, gvk); len(nsList) > 0 {
+		var all []unstructured.Unstructured
+		for _, ns := range nsList {
+			part, err := s.listByGVKRaw(ctx, k, gvk, ns)
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, part...)
+		}
+		return s.filterUnstructuredByNSPolicy(ctx, gvk, namespace, all)
+	}
+	list, err := s.listByGVKRaw(ctx, k, gvk, namespace)
+	if err != nil {
+		return nil, err
+	}
+	return s.filterUnstructuredByNSPolicy(ctx, gvk, namespace, list)
+}
+
+func (s *DynamicResourceService) listByGVKRaw(ctx context.Context, k *kom.Kubectl, gvk schema.GroupVersionKind, namespace string) ([]unstructured.Unstructured, error) {
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(gvk)
 	var list []unstructured.Unstructured
@@ -64,7 +83,29 @@ func (s *DynamicResourceService) ListByGVK(ctx context.Context, k *kom.Kubectl, 
 	if err := q.List(&list).Error; err != nil {
 		return nil, err
 	}
-	return s.filterUnstructuredByNSPolicy(ctx, gvk, namespace, list)
+	return list, nil
+}
+
+func (s *DynamicResourceService) scopedNamespacesForList(ctx context.Context, namespace string, gvk schema.GroupVersionKind) []string {
+	if strings.TrimSpace(namespace) != "" || gvkClusterScoped(gvk) {
+		return nil
+	}
+	if s.runtime == nil || s.runtime.nsAllow == nil {
+		return nil
+	}
+	scope, ok := k8sauth.RequestScopeFromContext(ctx)
+	if !ok || scope.ClusterID == 0 {
+		return nil
+	}
+	active, err := s.runtime.nsAllow.WhitelistActiveForCluster(ctx, scope.Pack, scope.ClusterID)
+	if err != nil || !active {
+		return nil
+	}
+	nsList, err := s.runtime.nsAllow.WhitelistUnionNamespaces(ctx, scope.Pack, scope.ClusterID)
+	if err != nil || len(nsList) == 0 {
+		return nil
+	}
+	return nsList
 }
 
 // ListByGVKWithSelector 查询列表相关的业务逻辑。

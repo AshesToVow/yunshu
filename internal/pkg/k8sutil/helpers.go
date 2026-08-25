@@ -112,10 +112,8 @@ func FilterLogLines(text, keyword, startStr, endStr string) string {
 	return strings.Join(out, "\n")
 }
 
-// IsLikelySuccessfulApplyError 用于兼容一些 SDK 在 apply 成功时仍返回“非 nil”的场景：
-// - 可能是 error
-// - 也可能是 []string（例如 "[Kind/name updated]"）
-// 该判断仅作为“兜底降噪”，避免出现“提示失败但刷新后就有”的体验。
+// IsLikelySuccessfulApplyError 兼容 kom/kubectl apply 成功仍返回非 nil 的窄场景。
+// 仅当整段输出每行都像「Kind/name created|configured|unchanged」时才视为成功，避免吞掉真实错误。
 func IsLikelySuccessfulApplyError(v any) bool {
 	var s string
 	switch x := v.(type) {
@@ -133,9 +131,23 @@ func IsLikelySuccessfulApplyError(v any) bool {
 	if s == "" {
 		return false
 	}
-	// 通常 kubectl/kom 的输出会包含 "Kind/name ..."
-	if !strings.Contains(s, "/") {
-		return false
+	lower := strings.ToLower(s)
+	for _, bad := range []string{"error", "forbidden", "unauthorized", "denied", "failed", "invalid", "timeout"} {
+		if strings.Contains(lower, bad) {
+			return false
+		}
 	}
-	return applyLooksOkRegexp.MatchString(s)
+	lines := strings.Split(s, "\n")
+	okLine := 0
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, "/") || !applyLooksOkRegexp.MatchString(line) {
+			return false
+		}
+		okLine++
+	}
+	return okLine > 0
 }

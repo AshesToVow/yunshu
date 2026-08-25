@@ -93,6 +93,14 @@ export async function deleteProject(id: number) {
   return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${id}`));
 }
 
+export async function archiveProject(id: number) {
+  return await getData(http.post<any, ApiResponse<ProjectItem>>(`/projects/${id}/archive`, {}));
+}
+
+export async function restoreProject(id: number) {
+  return await getData(http.post<any, ApiResponse<ProjectItem>>(`/projects/${id}/restore`, {}));
+}
+
 /** 项目成员（project_members），与监控规则 project_id、告警通知收件人联动 */
 export interface ProjectMemberItem {
   id: number;
@@ -352,10 +360,25 @@ export async function exportProjectServers(projectId: number, params?: { keyword
   return (await http.get(`/projects/${projectId}/servers/export`, { params, responseType: "blob" })) as unknown as Blob;
 }
 
+export interface ServerImportRowError {
+  row: number;
+  name: string;
+  host: string;
+  message: string;
+}
+
+export interface ServerImportResult {
+  imported: number;
+  skipped: number;
+  errors?: ServerImportRowError[];
+}
+
 export async function importProjectServers(projectId: number, file: File) {
   const form = new FormData();
   form.append("file", file);
-  return await getData(http.post<any, ApiResponse<{ imported: number }>>(`/projects/${projectId}/servers/import`, form, { headers: { "Content-Type": "multipart/form-data" } }));
+  return await getData<ServerImportResult>(
+    http.post(`/projects/${projectId}/servers/import`, form, { headers: { "Content-Type": "multipart/form-data" } }),
+  );
 }
 
 export async function downloadProjectServersImportTemplate(projectId: number): Promise<Blob> {

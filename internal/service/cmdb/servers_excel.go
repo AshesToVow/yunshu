@@ -1,7 +1,9 @@
 package cmdb
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -9,26 +11,53 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/repository"
 
 	"github.com/xuri/excelize/v2"
 )
 
+// ServerImportRowError 服务器导入单行错误。
+type ServerImportRowError struct {
+	Row     int    `json:"row"`
+	Name    string `json:"name"`
+	Host    string `json:"host"`
+	Message string `json:"message"`
+}
+
+// ServerImportResult 服务器批量导入结果。
+type ServerImportResult struct {
+	Imported int                    `json:"imported"`
+	Skipped  int                    `json:"skipped"`
+	Errors   []ServerImportRowError `json:"errors,omitempty"`
+}
+
 // ImportServersFromExcel 从 Excel 批量导入服务器。
-// 首行表头需包含：name,host,port,os_type,tags,auth_type,username,password,private_key,passphrase
-func (s *Service) ImportServersFromExcel(ctx context.Context, projectID uint, r io.Reader) (int, error) {
-	f, err := excelize.OpenReader(r)
+func (s *Service) ImportServersFromExcel(ctx context.Context, projectID uint, r io.Reader) (*ServerImportResult, error) {
+	limited := exportutil.LimitedImportReader(r)
+	data, err := io.ReadAll(limited)
 	if err != nil {
-		return 0, constants.ErrBadRequestWithMsg(constants.ErrMsg04d13e805997)
+		return nil, bizerrors.Pass(ctx, "cmdb", "ImportServersFromExcel", err)
+	}
+	if err := exportutil.CheckImportReadSize(int64(len(data))); err != nil {
+		return nil, err
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg04d13e805997)
 	}
 	sheet := f.GetSheetName(0)
 	rows, err := f.GetRows(sheet)
 	if err != nil {
-		return 0, bizerrors.Pass(ctx, "cmdb", "ImportServersFromExcel", err)
+		return nil, bizerrors.Pass(ctx, "cmdb", "ImportServersFromExcel", err)
 	}
+	result := &ServerImportResult{}
 	if len(rows) <= 1 {
-		return 0, nil
+		return result, nil
+	}
+	if len(rows) > exportutil.MaxExcelImportRows+1 {
+		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("导入行数超过 %d 行上限", exportutil.MaxExcelImportRows))
 	}
 	header := map[string]int{}
 	for i, h := range rows[0] {
@@ -41,14 +70,23 @@ func (s *Service) ImportServersFromExcel(ctx context.Context, projectID uint, r 
 		}
 		return strings.TrimSpace(row[idx])
 	}
-	okCount := 0
-	for _, row := range rows[1:] {
+	for i, row := range rows[1:] {
+		rowNum := i + 2
 		name := get(row, "name")
 		host := get(row, "host")
-		if name == "" || host == "" {
+		if name == "" && host == "" {
 			continue
 		}
-		port, _ := strconv.Atoi(get(row, "port"))
+		if name == "" || host == "" {
+			result.Skipped++
+			continue
+		}
+		portStr := get(row, "port")
+		port, portErr := strconv.Atoi(portStr)
+		if portStr != "" && portErr != nil {
+			result.Errors = append(result.Errors, ServerImportRowError{Row: rowNum, Name: name, Host: host, Message: "port 格式无效"})
+			continue
+		}
 		if port <= 0 {
 			port = 22
 		}
@@ -72,11 +110,13 @@ func (s *Service) ImportServersFromExcel(ctx context.Context, projectID uint, r 
 		if pp := get(row, "passphrase"); pp != "" {
 			upReq.Passphrase = &pp
 		}
-		if _, err := s.UpsertServer(ctx, upReq); err == nil {
-			okCount++
+		if _, upsertErr := s.UpsertServer(ctx, upReq); upsertErr != nil {
+			result.Errors = append(result.Errors, ServerImportRowError{Row: rowNum, Name: name, Host: host, Message: upsertErr.Error()})
+			continue
 		}
+		result.Imported++
 	}
-	return okCount, nil
+	return result, nil
 }
 
 // ExportServersToExcel 导出项目服务器列表为 Excel。
@@ -132,7 +172,7 @@ func (s *Service) ServersImportTemplateExcel() (*excelize.File, error) {
 		"prod,web",
 		"password",
 		"root",
-		"your_password",
+		"",
 		"",
 		"",
 	}
@@ -153,10 +193,10 @@ func (s *Service) ServersImportTemplateExcel() (*excelize.File, error) {
 		{"tags", "标签，逗号分隔", "否", "prod,web"},
 		{"auth_type", "认证方式，默认 password", "否", "password / key"},
 		{"username", "SSH 用户名", "是", "root"},
-		{"password", "SSH 密码（auth_type=password 时填写）", "否", "your_password"},
-		{"private_key", "SSH 私钥（auth_type=key 时填写 PEM 内容）", "否", "-----BEGIN ..."},
+		{"password", "SSH 密码（不推荐在 Excel 中填写，建议导入后在平台录入）", "否", ""},
+		{"private_key", "SSH 私钥（不推荐在 Excel 中填写）", "否", ""},
 		{"passphrase", "私钥口令", "否", ""},
-		{"提示", "导入时会写入当前项目，未分组服务器会自动归入默认自建分组。", "", ""},
+		{"提示", "导入后会写入当前项目；凭证请在平台「服务器详情」中安全配置。", "", ""},
 	}
 	for r, row := range notes {
 		cell, _ := excelize.CoordinatesToCellName(1, r+1)

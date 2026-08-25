@@ -1,9 +1,10 @@
-﻿package alert
+package alert
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"text/template"
@@ -63,10 +64,12 @@ func (s *AlertService) renderChannelMessage(ctx context.Context, title, severity
 	data := alertdispatch.BuildChannelTemplateData(title, severity, status, payload, projectName)
 	tpl, err := template.New("channel_message").Option("missingkey=zero").Parse(tplRaw)
 	if err != nil {
+		slog.Default().With("component", "alert.channel", "error", err).Warn("channel message template parse failed, using default card")
 		return defaultMsg
 	}
 	var out bytes.Buffer
 	if err = tpl.Execute(&out, data); err != nil {
+		slog.Default().With("component", "alert.channel", "error", err).Warn("channel message template execute failed, using default card")
 		return defaultMsg
 	}
 	rendered := strings.TrimSpace(out.String())

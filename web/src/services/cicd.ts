@@ -1,6 +1,13 @@
 import type { ApiResponse, PageData } from "../types/api";
 import { getData, http } from "./http";
 
+export interface CicdAccessPerm {
+  can_view: boolean;
+  can_build: boolean;
+  can_release: boolean;
+  can_manage: boolean;
+}
+
 export interface CicdServiceItem {
   id: number;
   project_id: number;
@@ -16,6 +23,7 @@ export interface CicdServiceItem {
   deploy_config_count: number;
   last_build_result?: string;
   last_build_at?: string;
+  access?: CicdAccessPerm;
 }
 
 export interface CicdCiConfig {
@@ -69,6 +77,11 @@ export interface CicdDeployConfig {
   image_tag?: string;
   replicas: number;
   container_port: number;
+  deploy_strategy?: string;
+  canary_replicas?: number;
+  canary_percent?: number;
+  canary_steps_json?: string;
+  blue_green_service?: string;
   status: number;
   server_count?: number;
   nodes_status?: string;
@@ -121,6 +134,7 @@ export interface CicdReleaseRun {
   jenkins_build_number?: number;
   jenkins_build_url?: string;
   params_json?: string;
+  progressive_json?: string;
   started_at?: string;
   finished_at?: string;
   service_name?: string;
@@ -418,6 +432,7 @@ export interface CicdApprovalFlowStage {
 
 export interface CicdApprovalFlow {
   project_id: number;
+  configured: boolean;
   stages: CicdApprovalFlowStage[];
 }
 
@@ -547,6 +562,42 @@ export async function platformRollbackRelease(
 ) {
   return getData<Record<string, unknown>>(
     http.post(`${projectPath(projectId, "/release-runs")}/${runId}/platform-rollback`, payload || {}) as Promise<
+      ApiResponse<Record<string, unknown>>
+    >,
+  );
+}
+
+export async function promoteProgressiveRelease(
+  projectId: number,
+  runId: number,
+  payload?: {
+    cluster_id?: number;
+    namespace?: string;
+    workload?: string;
+    service_name?: string;
+    target_percent?: number;
+    final?: boolean;
+  },
+) {
+  return getData<Record<string, unknown>>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/progressive/promote`, payload || {}) as Promise<
+      ApiResponse<Record<string, unknown>>
+    >,
+  );
+}
+
+export async function abortProgressiveRelease(
+  projectId: number,
+  runId: number,
+  payload?: {
+    cluster_id?: number;
+    namespace?: string;
+    workload?: string;
+    service_name?: string;
+  },
+) {
+  return getData<Record<string, unknown>>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/progressive/abort`, payload || {}) as Promise<
       ApiResponse<Record<string, unknown>>
     >,
   );

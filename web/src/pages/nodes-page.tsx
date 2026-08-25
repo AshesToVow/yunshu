@@ -184,6 +184,7 @@ export function NodesPage() {
       const result = await drainNode(drainClusterId, drainNodeName, {
         dry_run: false,
         force: drainForce,
+        confirm: true,
       });
       message.success(result.message || "Drain 已执行");
       setDrainOpen(false);

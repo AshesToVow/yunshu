@@ -1,45 +1,50 @@
-import { Card, Form, Input, Menu, Button, message } from "antd";
+import { Alert, Card, Form, Input, Menu, Button, message } from "antd";
 import type { MenuProps } from "antd";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/auth-context";
-import { changePassword, updateProfile } from "../services/auth";
+import { changePassword, getPasswordPolicy, updateProfile } from "../services/auth";
 import { clearAuthStorage } from "../services/storage";
+import type { PasswordPolicy } from "../types/api";
 
 type SettingsTab = "basic" | "password";
 
 export function PersonalSettingsPage() {
   const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<SettingsTab>("basic");
+  const [searchParams] = useSearchParams();
+  const forcePassword = searchParams.get("force") === "password" || Boolean(user?.must_change_password);
+  const [tab, setTab] = useState<SettingsTab>(forcePassword ? "password" : "basic");
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [policy, setPolicy] = useState<PasswordPolicy | null>(null);
   const [profileForm] = Form.useForm<{ nickname: string; email?: string; phone?: string }>();
   const [passwordForm] = Form.useForm<{ old_password: string; new_password: string; confirm_password: string }>();
 
-  // 使用受控组件状态，直接管理输入值
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const isSuperAdmin = useMemo(
-    () => user?.roles?.some((r) => r.code === "super-admin") ?? false,
-    [user?.roles],
-  );
-
   const menuItems = useMemo<MenuProps["items"]>(() => {
-    const items: MenuProps["items"] = [{ key: "basic", label: "基本设置" }];
-    if (isSuperAdmin) {
-      items.push({ key: "password", label: "修改密码" });
+    const items: MenuProps["items"] = [];
+    if (!forcePassword) {
+      items.push({ key: "basic", label: "基本设置" });
     }
+    items.push({ key: "password", label: "修改密码" });
     return items;
-  }, [isSuperAdmin]);
+  }, [forcePassword]);
 
   useEffect(() => {
-    if (tab === "password" && !isSuperAdmin) {
-      setTab("basic");
+    if (forcePassword) {
+      setTab("password");
     }
-  }, [tab, isSuperAdmin]);
+  }, [forcePassword]);
+
+  useEffect(() => {
+    void getPasswordPolicy()
+      .then(setPolicy)
+      .catch(() => setPolicy(null));
+  }, []);
 
   useEffect(() => {
     profileForm.setFieldsValue({
@@ -49,7 +54,6 @@ export function PersonalSettingsPage() {
     });
   }, [profileForm, user?.nickname, user?.email, user?.phone]);
 
-  // 切换到修改密码页面时，清空输入
   useEffect(() => {
     if (tab === "password") {
       setOldPassword("");
@@ -88,32 +92,30 @@ export function PersonalSettingsPage() {
       message.error("两次输入的新密码不一致");
       return;
     }
-    if (newPassword.length < 6) {
-      message.error("新密码至少 6 位");
+    const minLen = policy?.min_length ?? 8;
+    if (newPassword.length < minLen) {
+      message.error(`新密码至少 ${minLen} 位`);
       return;
     }
 
-    const payload = {
-      old_password: oldPassword,
-      new_password: newPassword,
-    };
-
     setPasswordLoading(true);
     try {
-      await changePassword(payload);
+      await changePassword({
+        old_password: oldPassword,
+        new_password: newPassword,
+      });
       message.success("密码修改成功，请重新登录");
-      // 清除登录状态并跳转到登录页
       clearAuthStorage();
       setTimeout(() => {
         navigate("/login");
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
       const errorMessage = err?.response?.data?.message || err?.message || "密码修改失败";
       message.error(errorMessage);
     } finally {
       setPasswordLoading(false);
     }
-  }, [oldPassword, newPassword, confirmPassword, navigate]);
+  }, [oldPassword, newPassword, confirmPassword, navigate, policy?.min_length]);
 
   return (
     <Card className="table-card personal-settings-card">
@@ -123,12 +125,15 @@ export function PersonalSettingsPage() {
             mode="inline"
             selectedKeys={[tab]}
             items={menuItems}
-            onClick={(info) => setTab(info.key as SettingsTab)}
+            onClick={(info) => {
+              if (forcePassword && info.key !== "password") return;
+              setTab(info.key as SettingsTab);
+            }}
             className="personal-settings__menu"
           />
         </aside>
         <section className="personal-settings__content">
-          {tab === "basic" ? (
+          {tab === "basic" && !forcePassword ? (
             <div>
               <h3 className="personal-settings__title">基本设置</h3>
               <Form
@@ -158,6 +163,27 @@ export function PersonalSettingsPage() {
           ) : (
             <div>
               <h3 className="personal-settings__title">修改密码</h3>
+              {forcePassword ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message="密码已过期或需强制修改"
+                  description={
+                    policy
+                      ? `请按策略修改密码后重新登录。要求：${policy.hint}；有效期：${policy.expiry_hint}`
+                      : "请修改密码后重新登录。"
+                  }
+                />
+              ) : null}
+              {policy && !forcePassword ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message={`密码策略：${policy.hint}；过期：${policy.expiry_hint}`}
+                />
+              ) : null}
               <Form form={passwordForm} layout="vertical" className="personal-settings__form" autoComplete="off">
                 <Form.Item label="旧密码" rules={[{ required: true, message: "请输入旧密码" }]}>
                   <Input.Password
@@ -169,7 +195,11 @@ export function PersonalSettingsPage() {
                 </Form.Item>
                 <Form.Item
                   label="新密码"
-                  rules={[{ required: true, message: "请输入新密码" }, { min: 6, message: "新密码至少 6 位" }]}
+                  rules={[
+                    { required: true, message: "请输入新密码" },
+                    { min: policy?.min_length ?? 8, message: `新密码至少 ${policy?.min_length ?? 8} 位` },
+                  ]}
+                  extra={policy?.hint}
                 >
                   <Input.Password
                     value={newPassword}
@@ -186,7 +216,7 @@ export function PersonalSettingsPage() {
                     autoComplete="off"
                   />
                 </Form.Item>
-                <Button type="primary" loading={passwordLoading} onClick={handleSubmitPassword}>
+                <Button type="primary" loading={passwordLoading} onClick={() => void handleSubmitPassword()}>
                   更新密码
                 </Button>
               </Form>

@@ -25,14 +25,23 @@ func (h *K8sScopedPolicyHandler) Actions(c *gin.Context) {
 	response.Success(c, gin.H{"list": h.svc.ActionCatalog()})
 }
 
+// Capabilities 返回可勾选的集群能力包目录。
+func (h *K8sScopedPolicyHandler) Capabilities(c *gin.Context) {
+	response.Success(c, gin.H{"list": h.svc.CapabilityCatalog()})
+}
+
 // Paths 处理对应的 HTTP 请求并返回统一响应。
 func (h *K8sScopedPolicyHandler) Paths(c *gin.Context) {
 	response.Success(c, gin.H{"list": h.svc.PathCatalog()})
 }
 
-// GrantPreset 按 readonly / readonly_exec / admin 档位写入集群授权（DB）。
+// GrantPreset 按档位或自定义能力包写入集群授权（DB）。
 func (h *K8sScopedPolicyHandler) GrantPreset(c *gin.Context) {
 	ServeJSON(c, h.svc.GrantPreset)
+}
+
+func (h *K8sScopedPolicyHandler) SplitByNamespaces(c *gin.Context) {
+	ServeJSON(c, h.svc.SplitByNamespaces)
 }
 
 // DeleteClusterGrant 删除一条集群档位记录。

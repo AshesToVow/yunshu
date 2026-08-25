@@ -2,19 +2,20 @@ package k8s
 
 import (
 	"crypto/cipher"
+	"fmt"
 	"strings"
 
 	cryptox "yunshu/internal/pkg/crypto"
 )
 
-// sealClusterSecret 将明文凭证加密为 base64(AES-GCM)；无密钥时原样返回（开发环境兜底）。
+// sealClusterSecret 将明文凭证加密为 base64(AES-GCM)；未配置 encryption_key 时拒绝落库。
 func sealClusterSecret(aead cipher.AEAD, plain string) (string, error) {
 	plain = strings.TrimSpace(plain)
 	if plain == "" {
 		return "", nil
 	}
 	if aead == nil {
-		return plain, nil
+		return "", fmt.Errorf("未配置 security.encryption_key，拒绝明文存储集群凭证")
 	}
 	return cryptox.EncryptString(aead, plain)
 }
@@ -26,7 +27,10 @@ func openClusterSecret(aead cipher.AEAD, stored string) (string, error) {
 		return "", nil
 	}
 	if aead == nil {
-		return stored, nil
+		if looksLikePlainClusterSecret(stored) {
+			return stored, nil
+		}
+		return "", fmt.Errorf("未配置 security.encryption_key，无法解密集群凭证")
 	}
 	pt, err := cryptox.DecryptString(aead, stored)
 	if err == nil {

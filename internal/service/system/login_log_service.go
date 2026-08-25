@@ -6,6 +6,7 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 	bizerrors "yunshu/internal/pkg/errors"
@@ -68,18 +69,18 @@ func (s *LoginLogService) DeleteBatch(ctx context.Context, ids []uint) error {
 
 // Export writes login logs matching query to writer as Excel.
 func (s *LoginLogService) Export(ctx context.Context, query LoginLogListQuery, w io.Writer) error {
-	// fetch a large page to include all records matching filters
-	page := 1
-	pageSize := 1000000
-	list, _, err := s.repo.List(ctx, repository.LoginLogListParams{
+	list, total, err := s.repo.List(ctx, repository.LoginLogListParams{
 		Username: query.Username,
 		Status:   query.Status,
 		Source:   query.Source,
-		Page:     page,
-		PageSize: pageSize,
+		Page:     1,
+		PageSize: exportutil.MaxExcelExportRows + 1,
 	})
 	if err != nil {
 		return bizerrors.Pass(ctx, "login-log", "Export", err)
+	}
+	if total > exportutil.MaxExcelExportRows {
+		return exportutil.ExportRowLimitError(total)
 	}
 	f := excelize.NewFile()
 	sheet := "Sheet1"

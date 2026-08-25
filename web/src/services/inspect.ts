@@ -56,11 +56,32 @@ export interface InspectRun {
   warning_count: number;
   normal_count: number;
   storage?: string;
+  report_html_path?: string;
+  report_pdf_path?: string;
+  report_excel_path?: string;
   report_template_code?: string;
   email_sent_at?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
   created_at?: string;
+}
+
+export interface InspectStorageInfo {
+  backend: string;
+  minio_ready: boolean;
+  require_minio?: boolean;
+  local_root?: string;
+  minio_reason?: string;
+}
+
+export interface InspectRunTrendItem {
+  id: number;
+  score: number;
+  grade: string;
+  critical_count: number;
+  warning_count: number;
+  finished_at?: string | null;
+  status: string;
 }
 
 export type InspectPlanUpdate = {
@@ -87,6 +108,10 @@ export type InspectItemPayload = {
 
 export function getInspectPlan(projectId: number) {
   return getData<InspectPlan>(http.get(`/projects/${projectId}/inspect/plan`));
+}
+
+export function getInspectStorageInfo(projectId: number) {
+  return getData<InspectStorageInfo>(http.get(`/projects/${projectId}/inspect/storage-info`));
 }
 
 export function updateInspectPlan(projectId: number, payload: InspectPlanUpdate) {
@@ -125,9 +150,7 @@ export function listInspectRuns(projectId: number, params?: { page?: number; pag
 
 export function startInspectRun(projectId: number, datasourceId?: number) {
   return getData<InspectRun>(
-    http.post(`/projects/${projectId}/inspect/runs`, datasourceId ? { datasource_id: datasourceId } : {}, {
-      timeout: 120000,
-    }),
+    http.post(`/projects/${projectId}/inspect/runs`, datasourceId ? { datasource_id: datasourceId } : {}),
   );
 }
 
@@ -173,12 +196,18 @@ export function previewInspectReportTemplate(
   });
 }
 
-export function inspectReportHtmlUrl(projectId: number, runId: number) {
-  return `/projects/${projectId}/inspect/runs/${runId}/report.html`;
-}
-
 export function inspectReportPdfUrl(projectId: number, runId: number) {
   return `/projects/${projectId}/inspect/runs/${runId}/report.pdf`;
+}
+
+export function checkInspectReportPdf(projectId: number, runId: number) {
+  return getData<{ exists: boolean; filename?: string; size?: number }>(
+    http.get(`/projects/${projectId}/inspect/runs/${runId}/report.pdf/check`),
+  );
+}
+
+export function inspectReportHtmlUrl(projectId: number, runId: number) {
+  return `/projects/${projectId}/inspect/runs/${runId}/report.html`;
 }
 
 export function inspectReportExcelUrl(projectId: number, runId: number) {
@@ -187,4 +216,14 @@ export function inspectReportExcelUrl(projectId: number, runId: number) {
 
 export function inspectReportPrintUrl(projectId: number, runId: number) {
   return `/projects/${projectId}/inspect/runs/${runId}/report.print.html`;
+}
+
+export function listInspectRunTrends(projectId: number, limit = 30) {
+  return getData<{ list: InspectRunTrendItem[] }>(
+    http.get(`/projects/${projectId}/inspect/runs/trends`, { params: { limit } }),
+  ).then((r) => r.list || []);
+}
+
+export function migrateInspectReportsToMinio(projectId: number) {
+  return getData<{ migrated: number }>(http.post(`/projects/${projectId}/inspect/migrate-reports-to-minio`));
 }

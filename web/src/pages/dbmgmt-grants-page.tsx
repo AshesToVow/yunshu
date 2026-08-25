@@ -1,9 +1,13 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Card, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, message } from "antd";
-import type { Dayjs } from "dayjs";
-import dayjs from "dayjs";
+import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, message } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  GrantValidityCalendarPicker,
+  expiresAtToGrantPeriod,
+  grantPeriodToExpiresAt,
+  type GrantValidityPeriod,
+} from "../components/dbmgmt/grant-validity-calendar";
 import { formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 import { deleteDbGrant, listDbGrants, listDbInstances, updateDbGrant, type DbGrant, type DbInstance } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
@@ -111,7 +115,7 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
     setEditing(row);
     editForm.setFieldsValue({
       query_limit_num: row.query_limit_num ?? 1000,
-      expires_at: row.expires_at ? dayjs(row.expires_at) : undefined,
+      grant_period: expiresAtToGrantPeriod(row.expires_at),
       remark: row.remark,
     });
     setEditOpen(true);
@@ -120,10 +124,10 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
   const submitEdit = async () => {
     if (!projectId || !editing) return;
     const values = await editForm.validateFields();
-    const expiresAt = values.expires_at as Dayjs | undefined;
+    const period = values.grant_period as GrantValidityPeriod | null | undefined;
     await updateDbGrant(projectId, editing.id, {
       query_limit_num: values.query_limit_num,
-      expires_at: expiresAt ? expiresAt.toISOString() : undefined,
+      expires_at: grantPeriodToExpiresAt(period ?? null),
       remark: values.remark,
     });
     message.success("已更新查询权限");
@@ -187,7 +191,7 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
             },
           ]}
         />
-        <Modal title="编辑查询权限" open={editOpen} onCancel={() => setEditOpen(false)} onOk={() => void submitEdit()} destroyOnClose>
+        <Modal title="编辑查询权限" open={editOpen} onCancel={() => setEditOpen(false)} onOk={() => void submitEdit()} destroyOnClose width={760}>
           {editing ? (
             <Form form={editForm} layout="vertical">
               <Form.Item label="用户">
@@ -202,8 +206,12 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
               <Form.Item name="query_limit_num" label="结果集行数上限" rules={[{ required: true }]}>
                 <InputNumber min={1} max={100000} style={{ width: "100%" }} />
               </Form.Item>
-              <Form.Item name="expires_at" label="有效时间">
-                <DatePicker showTime style={{ width: "100%" }} placeholder="留空为永久" />
+              <Form.Item
+                name="grant_period"
+                label="授权有效期"
+                extra="在日历上调整起止日期；点选「永久有效」表示不过期"
+              >
+                <GrantValidityCalendarPicker />
               </Form.Item>
               <Form.Item name="remark" label="备注">
                 <Input.TextArea rows={2} />

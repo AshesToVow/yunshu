@@ -17,7 +17,7 @@ type module struct {
 }
 
 func (m *module) Name() string        { return "esmgmt" }
-func (m *module) Description() string { return "Elasticsearch 连接管理、集群概览、索引备份与 REST 控制台" }
+func (m *module) Description() string { return "ES 管理控制台：连接管理、集群概览、索引备份与 REST 控制台" }
 
 func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{

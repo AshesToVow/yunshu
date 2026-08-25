@@ -22,6 +22,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -90,6 +91,28 @@ function ownerEmailPreview(username: string | undefined, users: UserItem[]) {
   if (!username) return "";
   const u = users.find((it) => it.username === username);
   return String(u?.email || "").trim();
+}
+
+function cicdAccess(row: CicdServiceItem) {
+  return (
+    row.access ?? {
+      can_view: false,
+      can_build: false,
+      can_release: false,
+      can_manage: false,
+    }
+  );
+}
+
+function isSuperAdminUser(u: UserItem | null | undefined): boolean {
+  return Boolean(u?.roles?.some((r) => r.code === "super-admin"));
+}
+
+/** 与后端 projectacl.FullAccess 一致：超管或项目 owner/admin 可新建应用 */
+function canCreateCicdService(isSuper: boolean, myProjectRole: string | null | undefined): boolean {
+  if (isSuper) return true;
+  const r = String(myProjectRole || "").toLowerCase();
+  return r === "owner" || r === "admin";
 }
 
 const FRONTEND_RELEASE_OPS = [
@@ -207,6 +230,7 @@ function defaultCiFormValues(svc: CicdServiceItem) {
 
 export function CicdServicesPage() {
   const { user: currentUser } = useAuth();
+  const isSuper = useMemo(() => isSuperAdminUser(currentUser), [currentUser]);
   const pipelineTypes = useDictOptions("cicd_pipeline_type");
   const publishModes = useDictOptions("cicd_publish_mode");
   const tenvOpts = useDictOptions("cicd_tenv");
@@ -227,6 +251,15 @@ export function CicdServicesPage() {
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.id === projectId),
+    [projects, projectId],
+  );
+  const canCreateService = useMemo(
+    () => Boolean(projectId && canCreateCicdService(isSuper, selectedProject?.my_project_role)),
+    [projectId, isSuper, selectedProject?.my_project_role],
+  );
 
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<CicdServiceItem | null>(null);
@@ -464,6 +497,11 @@ export function CicdServicesPage() {
       deploy_method: "kubectl",
       deploy_config_type: "使用deployment模板",
       deploy_config_template: "基础模板",
+      deploy_strategy: "rolling",
+      canary_replicas: 1,
+      canary_percent: 10,
+      canary_steps_json: "10,50,100",
+      blue_green_service: "",
       server_port: 8080,
       replicas: 1,
       container_port: 8080,
@@ -531,6 +569,7 @@ export function CicdServicesPage() {
             "deploy_method",
             "deploy_config_type",
             "deploy_config_template",
+            "deploy_strategy",
             "replicas",
             "container_port",
             "image_name",
@@ -657,30 +696,53 @@ export function CicdServicesPage() {
         key: "actions",
         fixed: "right",
         width: 340,
-        render: (_, row) => (
+        render: (_, row) => {
+          const access = cicdAccess(row);
+          return (
           <Space size={4} wrap>
-            <Button type="link" size="small" onClick={() => openCiConfig(row)}>
+            <Button
+              type="link"
+              size="small"
+              disabled={!access.can_manage}
+              onClick={() => openCiConfig(row)}
+            >
               {row.has_ci_config ? "编辑CI配置" : "新增CI配置"}
             </Button>
             <Button
               type="link"
               size="small"
               icon={<CloudUploadOutlined />}
+              disabled={!access.can_build}
               onClick={() => void openBuildModal(row)}
             >
               CI打包
             </Button>
-            <Button type="link" size="small" onClick={() => openDeployWizard(row, "regular")}>
+            <Button
+              type="link"
+              size="small"
+              disabled={!access.can_manage}
+              onClick={() => openDeployWizard(row, "regular")}
+            >
               非容器化发布
             </Button>
-            <Button type="link" size="small" onClick={() => openDeployWizard(row, "container")}>
+            <Button
+              type="link"
+              size="small"
+              disabled={!access.can_manage}
+              onClick={() => openDeployWizard(row, "container")}
+            >
               容器化发布
             </Button>
-            <Popconfirm title="确认删除该应用？" onConfirm={() => void deleteCicdService(projectId!, row.id).then(loadServices)}>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            <Popconfirm
+              title="确认删除该应用？"
+              disabled={!access.can_manage}
+              onConfirm={() => void deleteCicdService(projectId!, row.id).then(loadServices)}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!access.can_manage} />
             </Popconfirm>
           </Space>
-        ),
+          );
+        },
       },
     ],
     [projectId, userOptions],
@@ -730,12 +792,15 @@ export function CicdServicesPage() {
           {
             title: "操作",
             width: 200,
-            render: (_, c) => (
+            render: (_, c) => {
+              const access = cicdAccess(row);
+              return (
               <Space size={4}>
                 <Button
                   type="link"
                   size="small"
                   icon={<RocketOutlined />}
+                  disabled={!access.can_release}
                   onClick={() => void openReleaseModal(row, c)}
                 >
                   发布
@@ -744,22 +809,25 @@ export function CicdServicesPage() {
                   type="link"
                   size="small"
                   icon={<EditOutlined />}
+                  disabled={!access.can_manage}
                   onClick={() => void openDeployWizard(row, c.deploy_kind === "container" ? "container" : "regular", c)}
                 >
                   编辑
                 </Button>
                 <Popconfirm
                   title="删除该发布配置？"
+                  disabled={!access.can_manage}
                   onConfirm={() =>
                     void deleteDeployConfig(projectId!, row.id, c.id).then(() => loadDeployConfigs(row.id))
                   }
                 >
-                  <Button type="link" size="small" danger>
+                  <Button type="link" size="small" danger disabled={!access.can_manage}>
                     删除
                   </Button>
                 </Popconfirm>
               </Space>
-            ),
+              );
+            },
           },
         ]}
       />
@@ -808,23 +876,29 @@ export function CicdServicesPage() {
           <Button icon={<ReloadOutlined />} onClick={() => void loadServices()}>
             刷新
           </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            disabled={!projectId}
-            onClick={() => {
-              setEditingService(null);
-              serviceForm.resetFields();
-              serviceForm.setFieldsValue({
-                service_type: "backend",
-                status: 1,
-                owner: currentUser?.username ?? undefined,
-              });
-              setServiceModalOpen(true);
-            }}
-          >
-            新建应用
-          </Button>
+          <Tooltip title={canCreateService ? undefined : "仅项目 owner/admin 或超级管理员可新建应用"}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              disabled={!canCreateService}
+              onClick={() => {
+                if (!canCreateService) {
+                  message.error("当前账号无新建应用权限");
+                  return;
+                }
+                setEditingService(null);
+                serviceForm.resetFields();
+                serviceForm.setFieldsValue({
+                  service_type: "backend",
+                  status: 1,
+                  owner: currentUser?.username ?? undefined,
+                });
+                setServiceModalOpen(true);
+              }}
+            >
+              新建应用
+            </Button>
+          </Tooltip>
         </Space>
 
         <div className="k8s-table-scroll-host">
@@ -857,8 +931,16 @@ export function CicdServicesPage() {
           if (!projectId) return;
           const values = await serviceForm.validateFields();
           if (editingService) {
+            if (!cicdAccess(editingService).can_manage) {
+              message.error("当前账号无编辑该应用权限");
+              return;
+            }
             await updateCicdService(projectId, editingService.id, values);
           } else {
+            if (!canCreateService) {
+              message.error("当前账号无新建应用权限");
+              return;
+            }
             await createCicdService(projectId, values);
           }
           message.success("已保存");
@@ -1161,6 +1243,57 @@ export function CicdServicesPage() {
             )}
             <Form.Item name="replicas" label="副本数" rules={[{ required: true }]}>
               <InputNumber min={1} max={100} style={{ width: "100%" }} />
+            </Form.Item>
+            <Form.Item
+              name="deploy_strategy"
+              label="发布策略"
+              rules={[{ required: true }]}
+              extra="金丝雀/蓝绿：Jenkins 接收 deployStrategy 等参数；平台侧可在发布详情中晋级/中止"
+            >
+              <Select
+                options={[
+                  { label: "滚动发布", value: "rolling" },
+                  { label: "金丝雀发布", value: "canary" },
+                  { label: "蓝绿发布", value: "blue_green" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.deploy_strategy !== cur.deploy_strategy}>
+              {({ getFieldValue }) => {
+                const strategy = getFieldValue("deploy_strategy");
+                if (strategy === "canary") {
+                  return (
+                    <>
+                      <Form.Item name="canary_replicas" label="金丝雀初始副本" rules={[{ required: true }]}>
+                        <InputNumber min={1} max={100} style={{ width: "100%" }} />
+                      </Form.Item>
+                      <Form.Item name="canary_percent" label="金丝雀流量占比(%)" rules={[{ required: true }]}>
+                        <InputNumber min={1} max={100} style={{ width: "100%" }} />
+                      </Form.Item>
+                      <Form.Item
+                        name="canary_steps_json"
+                        label="晋级步骤(%)"
+                        rules={[{ required: true }]}
+                        extra="逗号分隔，如 10,50,100"
+                      >
+                        <Input placeholder="10,50,100" />
+                      </Form.Item>
+                    </>
+                  );
+                }
+                if (strategy === "blue_green") {
+                  return (
+                    <Form.Item
+                      name="blue_green_service"
+                      label="蓝绿 Service 名"
+                      extra="留空则使用工作负载名；切换 selector 标签 yunshu.io/color"
+                    >
+                      <Input placeholder="可选，默认与工作负载同名" />
+                    </Form.Item>
+                  );
+                }
+                return null;
+              }}
             </Form.Item>
             <Form.Item name="container_port" label="容器端口" rules={[{ required: true }]}>
               <InputNumber min={1} max={65535} style={{ width: "100%" }} />

@@ -149,7 +149,7 @@ func DefaultCatalog() []Spec {
 			},
 		},
 		{
-			Path: "/esmgmt", Name: "Elasticsearch", Icon: "CloudServerOutlined", Sort: 10, Status: 1,
+			Path: "/esmgmt", Name: "ES 管理控制台", Icon: "CloudServerOutlined", Sort: 10, Status: 1,
 			Children: []Spec{
 				{Path: "/esmgmt/connections", Name: "连接管理", Icon: "ApiOutlined", Sort: 1, Component: "esmgmt-connections-page", Status: 1},
 				{Path: "/esmgmt/overview", Name: "集群概览", Icon: "FundOutlined", Sort: 2, Component: "esmgmt-overview-page", Status: 1},
@@ -161,6 +161,7 @@ func DefaultCatalog() []Spec {
 			Children: []Spec{
 				{Path: "/crds", Name: "CRD 管理", Icon: "BranchesOutlined", Sort: 1, Component: "crds-page", Status: 1},
 				{Path: "/crs", Name: "CR 实例管理", Icon: "DatabaseOutlined", Sort: 2, Component: "crs-page", Status: 1},
+				{Path: "/k8s-cr-templates", Name: "CR 模板库", Icon: "FileTextOutlined", Sort: 3, Component: "k8s-cr-templates-page", Status: 1},
 			},
 		},
 	}

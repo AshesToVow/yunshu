@@ -627,7 +627,12 @@ export function ProjectServersPage() {
   async function onImport(file: File) {
     if (!projectId) return;
     const res = await importProjectServers(projectId, file);
-    message.success(`已导入 ${res.imported} 条`);
+    message.success(`已导入 ${res.imported} 条，跳过 ${res.skipped} 条，失败 ${res.errors?.length ?? 0} 条`);
+    if (res.errors?.length) {
+      message.warning(
+        res.errors.slice(0, 3).map((e) => `第${e.row}行 ${e.name}: ${e.message}`).join("；"),
+      );
+    }
     void loadServers();
   }
 

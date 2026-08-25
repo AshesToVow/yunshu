@@ -4,8 +4,8 @@ import "time"
 
 // UserGroupUser 用户与用户组关联（多对多中间表）。
 type UserGroupUser struct {
-	UserID      uint      `gorm:"primaryKey;comment:用户ID"`
-	UserGroupID uint      `gorm:"primaryKey;comment:用户组ID"`
+	UserID      uint      `gorm:"primaryKey;index:idx_ugu_group_user,priority:2;comment:用户ID"`
+	UserGroupID uint      `gorm:"primaryKey;index:idx_ugu_group_user,priority:1;comment:用户组ID"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

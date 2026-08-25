@@ -227,7 +227,9 @@ export function ClusterPage() {
             : undefined,
         connection_mode: current.connection_mode || "kubeconfig",
         kubeconfig: current.kubeconfig || "",
+        kubeconfig_readonly: "",
         kubeconfig_dict_label: undefined,
+        require_destructive_confirm: current.require_destructive_confirm !== false,
         // 已配置时 kubeconfig 不回传，留空表示不修改
         direct_config: {
           server: current.direct_config?.server || "",
@@ -316,6 +318,10 @@ export function ClusterPage() {
         // Update without kubeconfig
         delete (payload as { kubeconfig?: string }).kubeconfig;
       }
+      const kubeconfigReadonly = String(values.kubeconfig_readonly || "").trim();
+      if (kubeconfigReadonly) {
+        payload.kubeconfig_readonly = kubeconfigReadonly;
+      }
     } else {
       const direct = values.direct_config || {};
       const server = (direct.server || "").trim();
@@ -323,6 +329,15 @@ export function ClusterPage() {
       if (!server && !dictConfigKey) {
         message.error("请填写 API Server 地址或选择直连模板");
         return;
+      }
+      const caData = (direct.ca_data || "").trim();
+      const skipTLS = Boolean(direct.insecure_skip_tls_verify);
+      if (!skipTLS && !caData && !current?.direct_config?.ca_data) {
+        // 编辑时若后端已有 CA（脱敏不回传完整内容），允许不填；新建必须 CA 或跳过 TLS
+        if (!current) {
+          message.error("请填写集群根 CA，或开启「跳过 TLS 验证」");
+          return;
+        }
       }
       payload.direct_config = {
         server: server || undefined,
@@ -332,8 +347,8 @@ export function ClusterPage() {
         password: (direct.password || "").trim() || undefined,
         client_cert_data: (direct.client_cert_data || "").trim() || undefined,
         client_key_data: (direct.client_key_data || "").trim() || undefined,
-        ca_data: (direct.ca_data || "").trim() || undefined,
-        insecure_skip_tls_verify: Boolean(direct.insecure_skip_tls_verify),
+        ca_data: caData || undefined,
+        insecure_skip_tls_verify: skipTLS,
       };
       delete (payload as { kubeconfig?: string }).kubeconfig;
     }
@@ -348,6 +363,8 @@ export function ClusterPage() {
     } else if (ownPid !== undefined && ownPid !== null && Number(ownPid) > 0) {
       (payload as ClusterCreatePayload).owning_project_id = Number(ownPid);
     }
+
+    payload.require_destructive_confirm = values.require_destructive_confirm !== false;
 
     setSubmitting(true);
     try {
@@ -478,8 +495,15 @@ export function ClusterPage() {
         message.info("集群已停用，未进行连通性检查");
         return;
       }
+      if (st.connection_state === "ready" && st.server_version) {
+        message.success(`连接成功，K8s 版本：${st.server_version}`);
+        return;
+      }
+      if (st.last_error) {
+        message.error(st.last_error);
+        return;
+      }
       if (st.server_version) message.success(`连接成功，K8s 版本：${st.server_version}`);
-      else if (st.last_error) message.error(st.last_error || "连接测试失败");
       else message.warning("已请求状态，但未获取到版本信息");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "连接测试失败";
@@ -501,6 +525,21 @@ export function ClusterPage() {
       ),
     },
     { title: "档位", dataIndex: "preset_label", width: 120 },
+    {
+      title: "能力包",
+      dataIndex: "capabilities",
+      width: 280,
+      render: (caps: string[] | undefined) =>
+        Array.isArray(caps) && caps.length > 0 ? (
+          <Space size={[4, 4]} wrap>
+            {caps.map((c) => (
+              <Tag key={c}>{c}</Tag>
+            ))}
+          </Space>
+        ) : (
+          <span className="inline-muted">—</span>
+        ),
+    },
     {
       title: "限制命名空间",
       dataIndex: "allow_namespaces",
@@ -858,6 +897,21 @@ export function ClusterPage() {
                   style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace" }}
                 />
               </Form.Item>
+              <Form.Item
+                label="只读 kubeconfig（可选）"
+                name="kubeconfig_readonly"
+                extra={
+                  current?.kubeconfig_readonly_configured
+                    ? "已配置只读凭证（不回显）；留空不修改。配置后只读 API 将优先使用该凭证。"
+                    : "长期最小权限：只读操作走此凭证，变更类仍用上方可写 kubeconfig"
+                }
+              >
+                <Input.TextArea
+                  rows={5}
+                  placeholder="可选：粘贴只读 ServiceAccount 的 kubeconfig"
+                  style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace" }}
+                />
+              </Form.Item>
             </>
           ) : (
             <>
@@ -922,15 +976,29 @@ export function ClusterPage() {
               <Form.Item label="客户端私钥（base64）" name={["direct_config", "client_key_data"]}>
                 <Input.TextArea rows={3} placeholder="client_key_data（可选）" />
               </Form.Item>
-              <Form.Item label="CA 证书（base64）" name={["direct_config", "ca_data"]}>
-                <Input.TextArea rows={3} placeholder="ca_data（可选）" />
+              <Form.Item label="CA 证书（base64）" name={["direct_config", "ca_data"]}
+                extra="填集群根 CA（kubeadm 常见：base64 -w0 /etc/kubernetes/pki/ca.crt）。不要用 ServiceAccount Secret 里的 ca.crt。与下方「跳过 TLS」二选一。"
+              >
+                <Input.TextArea rows={3} placeholder="certificate-authority-data（集群根 CA 的 base64）" />
               </Form.Item>
 
-              <Form.Item label="跳过 TLS 验证" name={["direct_config", "insecure_skip_tls_verify"]} valuePropName="checked">
+              <Form.Item label="跳过 TLS 验证" name={["direct_config", "insecure_skip_tls_verify"]} valuePropName="checked"
+                extra="仅联调时开启；生产请改填正确 CA 并关闭此项"
+              >
                 <Switch />
               </Form.Item>
             </>
           )}
+
+          <Form.Item
+            label="高危操作须确认"
+            name="require_destructive_confirm"
+            valuePropName="checked"
+            initialValue={true}
+            extra="Drain / Helm 卸载 / RBAC Apply 等须 confirm=true"
+          >
+            <Switch />
+          </Form.Item>
         </Form>
       </Modal>
     </Card>

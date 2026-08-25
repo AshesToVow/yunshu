@@ -3,11 +3,11 @@ package handler
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -51,6 +51,36 @@ func (h *ProjectHandler) Update(c *gin.Context) {
 	ServeJSON(c, func(ctx context.Context, req service.ProjectUpdateRequest) (*service.ProjectItem, error) {
 		return h.svc.UpdateProject(ctx, id, req)
 	})
+}
+
+// Archive 归档项目。
+func (h *ProjectHandler) Archive(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	item, err := h.svc.ArchiveProject(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, item)
+}
+
+// Restore 恢复已归档项目。
+func (h *ProjectHandler) Restore(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	item, err := h.svc.RestoreProject(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, item)
 }
 
 // Delete 删除对应的 HTTP 接口处理逻辑。
@@ -190,9 +220,8 @@ func (h *ProjectHandler) ExportLogs(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	filename := fmt.Sprintf("project-%d-logs-%s.txt", projectID, time.Now().Format("20060102-150405"))
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(text))
+	filename := fmt.Sprintf("project-%d-logs-page-%s.txt", projectID, time.Now().Format("20060102-150405"))
+	exportutil.ServeBytes(c, filename, "text/plain; charset=utf-8", []byte(text))
 }
 
 // ListProjectMembers 项目成员列表。

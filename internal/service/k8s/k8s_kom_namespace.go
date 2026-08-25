@@ -4,6 +4,9 @@ import (
 	"context"
 	"strconv"
 
+	"yunshu/internal/pkg/constants"
+
+	"github.com/weibaohui/kom/kom"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -45,8 +48,18 @@ func (s *K8sRuntimeService) listNamespacesKomOnce(ctx context.Context, clusterID
 	return list, nil
 }
 
-// probeClusterListNamespacesKom 心跳：用 kom 校验能否列举命名空间（与业务列表同路径）。
+// probeClusterListNamespacesKom 心跳/「连接测试」：用网关凭证（裸 clusterID，无 Impersonation）列举命名空间。
+// 不可走 ListNamespacesViaKom/GetClusterKubectl：开启 Impersonation 时会伪装为 yunshu:<用户>，
+// 集群侧未授权会 403，前端误显示「当前账号无权执行该操作」（平台超管也会中招）。
 func (s *K8sRuntimeService) probeClusterListNamespacesKom(ctx context.Context, clusterID uint) error {
-	_, err := s.ListNamespacesViaKom(ctx, clusterID)
-	return err
+	cid := strconv.FormatUint(uint64(clusterID), 10)
+	k := kom.Cluster(cid)
+	if k == nil {
+		return constants.ErrInternalWithMsg(constants.ErrMsg5248c9e19a3f)
+	}
+	var list []corev1.Namespace
+	if listErr := k.WithContext(ctx).Resource(&corev1.Namespace{}).List(&list).Error; listErr != nil {
+		return k8sFail(ctx, "k8s.runtime", "probeClusterListNamespacesKom", listErr, "cluster_id", clusterID)
+	}
+	return nil
 }

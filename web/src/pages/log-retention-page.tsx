@@ -223,7 +223,13 @@ export function LogRetentionPage() {
                   type="info"
                   showIcon
                   style={{ marginBottom: 12 }}
-                  message="按保留天数定时清理过期 ES 索引。默认覆盖主机 yunshu-agent-* 与集群 yunshu-k8s-*（兼容旧 yunshu-agent-{server_id}-日期）。Agent 启停与热更请到「Agent 管理」；集群 DaemonSet 请到「服务与日志采集 → 集群采集」。"
+                  message={
+                    <>
+                      按保留天数定时清理过期日志索引（yunshu-agent-* / yunshu-k8s-*）。集群连接与运维请到
+                      <Link to="/esmgmt/connections"> ES 管理控制台</Link>
+                      ；Agent 启停与热更请到「Agent 管理」。
+                    </>
+                  }
                 />
 
                 <Card

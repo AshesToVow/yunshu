@@ -39,7 +39,7 @@ func RegisterCicdRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	projectRoutes := api.Group("/projects")
 	projectRoutes.Use(d.authMiddleware, d.authorize, d.opAudit)
-	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.app.Logger))
+	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.projectRepo, d.app.Logger))
 
 	projectScoped.GET("/registry-binding", d.cicdHandler.GetProjectRegistryBinding)
 	projectScoped.PUT("/registry-binding", d.cicdHandler.UpsertProjectRegistryBinding)
@@ -91,6 +91,8 @@ func RegisterCicdRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	cicdGroup.GET("/release-runs/:runId/log", d.cicdHandler.GetReleaseRunLog)
 	cicdGroup.POST("/release-runs/:runId/verify", d.cicdHandler.VerifyReleaseRun)
 	cicdGroup.POST("/release-runs/:runId/platform-rollback", d.cicdHandler.PlatformRollbackRelease)
+	cicdGroup.POST("/release-runs/:runId/progressive/promote", d.cicdHandler.PromoteProgressiveRelease)
+	cicdGroup.POST("/release-runs/:runId/progressive/abort", d.cicdHandler.AbortProgressiveRelease)
 	cicdGroup.DELETE("/release-runs/:runId", d.cicdHandler.DeleteReleaseRun)
 
 	projectScoped.GET("/cicd-access-grants", d.cicdHandler.ListCicdGrants)

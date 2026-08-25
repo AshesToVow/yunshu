@@ -8,6 +8,7 @@ import (
 func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	// 内部入站（K8s Event 等）；不再提供 Alertmanager Webhook。
 	alertIngress := api.Group("/alerts")
+	alertIngress.POST("/webhook", d.alertHandler.ReceiveAlertmanagerWebhook)
 	alertIngress.POST("/ingress/k8s-events", d.alertHandler.ReceiveK8sEventIngress)
 
 	alerts := api.Group("/alerts")
@@ -24,6 +25,16 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.GET("/events/by-fingerprint", d.alertHandler.ExplainFingerprintDelivery)
 	alerts.GET("/cur-events", d.alertHandler.ListCurEvents)
 	alerts.GET("/his-events", d.alertHandler.ListHisEvents)
+	alerts.GET("/his-events/export.csv", d.alertHandler.ExportHisEventsCSV)
+	alerts.GET("/promql-saved-queries", d.alertHandler.ListPromqlSavedQueries)
+	alerts.POST("/promql-saved-queries", d.alertHandler.CreatePromqlSavedQuery)
+	alerts.DELETE("/promql-saved-queries/:id", d.alertHandler.DeletePromqlSavedQuery)
+	if d.platformFeatures != nil {
+		alerts.GET("/monitor-rule-changes", d.platformFeatures.ListPendingRuleChanges)
+		alerts.POST("/monitor-rule-changes", d.platformFeatures.ProposeRuleChange)
+		alerts.POST("/monitor-rule-changes/:id/approve", d.platformFeatures.ApproveRuleChange)
+		alerts.POST("/monitor-rule-changes/:id/reject", d.platformFeatures.RejectRuleChange)
+	}
 	alerts.POST("/acks", d.alertHandler.AcknowledgeAlert)
 	alerts.DELETE("/acks", d.alertHandler.ClearAlertAck)
 	alerts.GET("/acks", d.alertHandler.GetActiveAck)

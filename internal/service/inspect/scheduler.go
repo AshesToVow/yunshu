@@ -16,6 +16,7 @@ func (s *Service) RunScheduler(ctx context.Context) {
 	if s == nil {
 		return
 	}
+	s.startWorkers(ctx)
 	log := slog.Default().With("component", "inspect.scheduler")
 	log.Info("inspect scheduler started")
 	ticker := time.NewTicker(30 * time.Second)
@@ -26,6 +27,7 @@ func (s *Service) RunScheduler(ctx context.Context) {
 			log.Info("inspect scheduler stopped")
 			return
 		case <-ticker.C:
+			s.reclaimStaleRunning(ctx)
 			s.tickSchedules(ctx)
 			if _, err := s.CleanupExpiredReports(ctx); err != nil {
 				log.Warn("inspect report cleanup failed", "error", err.Error())
@@ -60,13 +62,11 @@ func (s *Service) tickSchedules(ctx context.Context) {
 		}
 		plan.LastRunAt = &claimed
 
-		runCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-		stopHeartbeat := s.renewLeader(runCtx)
+		runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		_, err := s.executeRun(runCtx, plan, plan.DatasourceID, "cron", 0, "")
-		stopHeartbeat()
 		cancel()
 		if err != nil {
-			slog.Default().With("component", "inspect.scheduler").Warn("inspect cron run failed",
+			slog.Default().With("component", "inspect.scheduler").Warn("inspect cron enqueue failed",
 				"project_id", plan.ProjectID, "error", err.Error())
 		}
 	}

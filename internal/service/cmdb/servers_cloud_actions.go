@@ -21,7 +21,7 @@ func (s *Service) RunCloudServerAction(ctx context.Context, projectID, serverID 
 	sv, err := s.serverRepo.GetByID(ctx, serverID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrLogSourceServerNotFound
+			return nil, constants.ErrServerNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "cmdb", "RunCloudServerAction", err)
 	}

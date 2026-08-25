@@ -50,6 +50,7 @@ func (m *module) Models() []any {
 		&model.DictEntry{},
 		&model.UserGroup{},
 		&model.UserGroupUser{},
+		&model.PlatformSavedQuery{},
 	}
 }
 

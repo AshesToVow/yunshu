@@ -45,6 +45,7 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       { method: "GET", path: "/api/v1/auth/me", summary: "当前用户与角色", ui: "全局（进入控制台时拉取）", auth: true },
       { method: "PUT", path: "/api/v1/auth/me", summary: "更新个人资料", ui: "个人设置", auth: true },
       { method: "PUT", path: "/api/v1/auth/password", summary: "修改个人密码", ui: "个人设置", auth: true },
+      { method: "GET", path: "/api/v1/auth/password-policy", summary: "获取密码策略", ui: "登录/个人设置", auth: false },
     ],
   },
   {
@@ -297,6 +298,20 @@ export const API_CATALOG_GROUPS: { title: string; routes: ApiCatalogRow[] }[] = 
       { method: "DELETE", path: "/api/v1/projects/:id/service-catalog/:catalogId/links/:linkId", summary: "解绑服务关联", ui: "服务目录", auth: true },
       { method: "GET", path: "/api/v1/alerts/quality-report", summary: "告警质量报告", ui: "告警质量", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/cicd/release-runs/:runId/verify", summary: "发布后验证", ui: "CI/CD", auth: true },
+      {
+        method: "POST",
+        path: "/api/v1/projects/:id/cicd/release-runs/:runId/progressive/promote",
+        summary: "金丝雀晋级 / 蓝绿切换",
+        ui: "CD 历史工单详情",
+        auth: true,
+      },
+      {
+        method: "POST",
+        path: "/api/v1/projects/:id/cicd/release-runs/:runId/progressive/abort",
+        summary: "中止渐进式发布",
+        ui: "CD 历史工单详情",
+        auth: true,
+      },
       { method: "POST", path: "/api/v1/deployments/preview-apply", summary: "工作负载预检 diff", ui: "K8s", auth: true },
       { method: "GET", path: "/api/v1/projects/:id/log-sources", summary: "日志源列表", ui: "日志源配置", auth: true },
       { method: "POST", path: "/api/v1/projects/:id/log-sources", summary: "创建/更新日志源", ui: "日志源配置", auth: true },

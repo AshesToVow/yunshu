@@ -1,11 +1,50 @@
-import { DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
+import { DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, SnippetsOutlined } from "@ant-design/icons";
+import { Button, Card, Drawer, Empty, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { getClusters, listNamespaces as listClusterNamespaces, type ClusterItem } from "../services/clusters";
 import type { K8sDeleteOptions } from "../services/service-factory";
 import { applyCr, deleteCr, getCrDetail, listCrResources, listCrs, type CrDetail, type CrItem, type CrResourceItem } from "../services/crs";
+import { listK8sCrTemplates, type K8sCrTemplateItem } from "../services/k8s-cr-templates";
+import { Link } from "react-router-dom";
+
+function materializeCrTemplateBody(
+  body: string,
+  opts: {
+    namespace?: string;
+    apiVersion?: string;
+    kind?: string;
+  },
+): string {
+  let out = body.trim();
+  if (opts.apiVersion) {
+    out = out.replace(/^apiVersion:\s*.*$/m, `apiVersion: ${opts.apiVersion}`);
+  }
+  if (opts.kind) {
+    out = out.replace(/^kind:\s*.*$/m, `kind: ${opts.kind}`);
+  }
+  if (opts.namespace) {
+    if (/^\s*namespace:\s*.+$/m.test(out)) {
+      out = out.replace(/^\s*namespace:\s*.*$/m, `  namespace: ${opts.namespace}`);
+    } else if (/^metadata:\s*$/m.test(out)) {
+      out = out.replace(/^metadata:\s*$/m, `metadata:\n  namespace: ${opts.namespace}`);
+    } else if (/^metadata:\s*\n/m.test(out)) {
+      out = out.replace(/^(metadata:\s*\n)/m, `$1  namespace: ${opts.namespace}\n`);
+    }
+  }
+  return out;
+}
+
+function templateMatchesResource(tpl: K8sCrTemplateItem, res?: CrResourceItem): boolean {
+  if (!res) return true;
+  if (!tpl.gvk_kind || !res.kind) return false;
+  if (tpl.gvk_kind.toLowerCase() !== res.kind.toLowerCase()) return false;
+  const g = (tpl.gvk_group || "").trim();
+  const rg = (res.group || "").trim();
+  if (g && rg && g.toLowerCase() !== rg.toLowerCase()) return false;
+  return true;
+}
 
 export function CrsPage() {
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
@@ -32,6 +71,13 @@ export function CrsPage() {
   const [deleteTargetName, setDeleteTargetName] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templates, setTemplates] = useState<K8sCrTemplateItem[]>([]);
+  const [templateKeyword, setTemplateKeyword] = useState("");
+
+  const currentCluster = useMemo(() => clusters.find((c) => c.id === clusterId), [clusters, clusterId]);
+
   const selectedResource = useMemo(
     () => resources.find((r) => r.name === selectedResourceName),
     [resources, selectedResourceName],
@@ -53,6 +99,20 @@ export function CrsPage() {
       })),
     }));
   }, [resources]);
+
+  const filteredTemplates = useMemo(() => {
+    const kw = templateKeyword.trim().toLowerCase();
+    return templates
+      .filter((t) => templateMatchesResource(t, selectedResource))
+      .filter((t) => {
+        if (!kw) return true;
+        return (
+          t.name.toLowerCase().includes(kw) ||
+          t.gvk_kind.toLowerCase().includes(kw) ||
+          (t.gvk_group || "").toLowerCase().includes(kw)
+        );
+      });
+  }, [templates, selectedResource, templateKeyword]);
 
   const columns: ColumnsType<CrItem> = [
     { title: "名称", dataIndex: "name", width: 220 },
@@ -157,6 +217,45 @@ export function CrsPage() {
     }
   }
 
+  async function openTemplatePicker() {
+    setTemplateOpen(true);
+    setTemplateLoading(true);
+    setTemplateKeyword("");
+    try {
+      const pid = currentCluster?.owning_project_id;
+      const list = await listK8sCrTemplates({
+        project_id: pid && pid > 0 ? pid : undefined,
+        kind: selectedResource?.kind || undefined,
+      });
+      setTemplates(list);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "加载模板失败");
+      setTemplates([]);
+    } finally {
+      setTemplateLoading(false);
+    }
+  }
+
+  function useTemplate(tpl: K8sCrTemplateItem) {
+    const apiVersion = selectedResource
+      ? `${selectedResource.group}/${selectedResource.version}`
+      : tpl.gvk_group
+        ? `${tpl.gvk_group}/${tpl.gvk_version || "v1"}`
+        : tpl.gvk_version || "v1";
+    const kind = selectedResource?.kind || tpl.gvk_kind;
+    const ns = selectedResource?.namespaced ? namespace || "default" : undefined;
+    setManifest(
+      materializeCrTemplateBody(tpl.body, {
+        namespace: ns,
+        apiVersion,
+        kind,
+      }),
+    );
+    setTemplateOpen(false);
+    setApplyOpen(true);
+    message.success(`已载入模板「${tpl.name}」，请确认 YAML 后应用`);
+  }
+
   async function openEdit(name: string) {
     if (!clusterId || !selectedResource) return;
     setApplyOpen(true);
@@ -256,6 +355,9 @@ export function CrsPage() {
           />
         </Space>
         <Space>
+          <Button icon={<SnippetsOutlined />} onClick={() => void openTemplatePicker()}>
+            从模板创建
+          </Button>
           <Button
             icon={<FileAddOutlined />}
             onClick={() => {
@@ -431,6 +533,82 @@ ${defaultNs}spec: {}
           }
         }}
       />
+
+      <Modal
+        title="从模板创建 CR"
+        open={templateOpen}
+        onCancel={() => setTemplateOpen(false)}
+        footer={null}
+        width={880}
+        destroyOnClose
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            {selectedResource
+              ? `已按当前类型筛选：${selectedResource.kind}（${selectedResource.group}/${selectedResource.version}）`
+              : "未选择 CR 类型时将展示全部模板；建议先选择左侧 CR 类型"}
+            {currentCluster?.owning_project_id ? (
+              <>
+                {" "}
+                · 含项目 #{currentCluster.owning_project_id} 与全局模板
+              </>
+            ) : (
+              " · 含全局模板"
+            )}
+            <Link to="/k8s-cr-templates" style={{ marginLeft: 8 }}>管理模板库</Link>
+          </Typography.Paragraph>
+          <Input.Search
+            allowClear
+            placeholder="搜索模板名称 / Kind / Group"
+            onSearch={(v) => setTemplateKeyword(v)}
+            onChange={(e) => setTemplateKeyword(e.target.value)}
+          />
+          <Table<K8sCrTemplateItem>
+            rowKey="id"
+            size="small"
+            loading={templateLoading}
+            dataSource={filteredTemplates}
+            pagination={{ pageSize: 8, showSizeChanger: false }}
+            locale={{
+              emptyText: (
+                <Empty description="无匹配模板">
+                  <Link to="/k8s-cr-templates">去模板库新建</Link>
+                </Empty>
+              ),
+            }}
+            columns={[
+              { title: "名称", dataIndex: "name", width: 160, ellipsis: true },
+              { title: "Kind", dataIndex: "gvk_kind", width: 120 },
+              { title: "Group", dataIndex: "gvk_group", width: 160, ellipsis: true, render: (v?: string) => v || "—" },
+              {
+                title: "归属",
+                dataIndex: "project_id",
+                width: 80,
+                render: (v: number) => (v === 0 ? <Tag>全局</Tag> : `项目 ${v}`),
+              },
+              {
+                title: "摘要",
+                key: "body",
+                ellipsis: true,
+                render: (_: unknown, r: K8sCrTemplateItem) => (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {r.body.split("\n").slice(0, 2).join(" · ")}
+                  </Typography.Text>
+                ),
+              },
+              {
+                title: "操作",
+                width: 90,
+                render: (_: unknown, r: K8sCrTemplateItem) => (
+                  <Button type="link" size="small" onClick={() => useTemplate(r)}>
+                    使用
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
     </Card>
   );
 }
