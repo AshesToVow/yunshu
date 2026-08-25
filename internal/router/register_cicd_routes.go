@@ -91,6 +91,8 @@ func RegisterCicdRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	cicdGroup.GET("/release-runs/:runId/log", d.cicdHandler.GetReleaseRunLog)
 	cicdGroup.POST("/release-runs/:runId/verify", d.cicdHandler.VerifyReleaseRun)
 	cicdGroup.POST("/release-runs/:runId/platform-rollback", d.cicdHandler.PlatformRollbackRelease)
+	cicdGroup.POST("/release-runs/:runId/progressive/promote", d.cicdHandler.PromoteProgressiveRelease)
+	cicdGroup.POST("/release-runs/:runId/progressive/abort", d.cicdHandler.AbortProgressiveRelease)
 	cicdGroup.DELETE("/release-runs/:runId", d.cicdHandler.DeleteReleaseRun)
 
 	projectScoped.GET("/cicd-access-grants", d.cicdHandler.ListCicdGrants)

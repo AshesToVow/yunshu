@@ -23,9 +23,11 @@ import type { FormInstance } from "antd/es/form";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  abortProgressiveRelease,
   getReleaseRunDetail,
   getReleaseRunLog,
   platformRollbackRelease,
+  promoteProgressiveRelease,
   verifyReleaseRun,
   type CicdReleaseApprovalStep,
   type CicdReleaseOperationLog,
@@ -84,6 +86,7 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
   const [verifyAlerts, setVerifyAlerts] = useState<AlertEventItem[]>([]);
   const [verifyResult, setVerifyResult] = useState<ReleaseVerifyResult | null>(null);
   const [rollbackLoading, setRollbackLoading] = useState(false);
+  const [progressiveLoading, setProgressiveLoading] = useState(false);
   const logPreRef = useRef<HTMLPreElement>(null);
 
   const loadDetail = useCallback(async () => {
@@ -400,7 +403,7 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
                 description="结果写回 release.verify_status，并记录 change_event。"
               />
               {run.release_kind === "container" ? (
-                <Space style={{ marginBottom: 12 }}>
+                <Space style={{ marginBottom: 12 }} wrap>
                   <Button
                     danger
                     loading={rollbackLoading}
@@ -419,8 +422,83 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
                   >
                     平台回滚（Deployment/STS）
                   </Button>
-                  <Typography.Text type="secondary">优先于 Jenkins container_rollback；成功后自动触发验证</Typography.Text>
+                  {releaseParams.deployStrategy === "canary" || releaseParams.deployStrategy === "blue_green" ? (
+                    <>
+                      <Button
+                        type="primary"
+                        loading={progressiveLoading}
+                        onClick={async () => {
+                          setProgressiveLoading(true);
+                          try {
+                            const out = await promoteProgressiveRelease(projectId, runId);
+                            message.success(
+                              (out?.state as { last_action?: string } | undefined)?.last_action
+                                ? `晋级完成：${(out.state as { last_action: string }).last_action}`
+                                : "渐进式晋级已执行",
+                            );
+                            await loadDetail();
+                          } finally {
+                            setProgressiveLoading(false);
+                          }
+                        }}
+                      >
+                        {releaseParams.deployStrategy === "canary" ? "金丝雀晋级" : "蓝绿切换到 Green"}
+                      </Button>
+                      {releaseParams.deployStrategy === "canary" ? (
+                        <Button
+                          loading={progressiveLoading}
+                          onClick={async () => {
+                            setProgressiveLoading(true);
+                            try {
+                              await promoteProgressiveRelease(projectId, runId, { final: true });
+                              message.success("金丝雀已最终晋级到稳定版");
+                              await loadDetail();
+                            } finally {
+                              setProgressiveLoading(false);
+                            }
+                          }}
+                        >
+                          最终晋级（100%）
+                        </Button>
+                      ) : null}
+                      <Button
+                        danger
+                        loading={progressiveLoading}
+                        onClick={async () => {
+                          setProgressiveLoading(true);
+                          try {
+                            await abortProgressiveRelease(projectId, runId);
+                            message.success("已中止渐进式发布");
+                            await loadDetail();
+                          } finally {
+                            setProgressiveLoading(false);
+                          }
+                        }}
+                      >
+                        中止渐进式发布
+                      </Button>
+                    </>
+                  ) : null}
+                  <Typography.Text type="secondary">
+                    策略：{releaseParams.deployStrategy || "rolling"}；优先平台操作，再 Jenkins 回滚
+                  </Typography.Text>
                 </Space>
+              ) : null}
+              {run.progressive_json ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message="渐进式发布状态"
+                  description={
+                    <Typography.Paragraph
+                      copyable
+                      style={{ marginBottom: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 12 }}
+                    >
+                      {run.progressive_json}
+                    </Typography.Paragraph>
+                  }
+                />
               ) : null}
               {verifyLoading ? (
                 <Typography.Text type="secondary">验证中…</Typography.Text>

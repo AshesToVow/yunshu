@@ -14,6 +14,7 @@
 | 发布配置 | SSH / K8s / MinIO 等多目标发布模板 |
 | CI 打包 | 触发 Jenkins Job，同步构建状态与控制台日志 |
 | CD 发布 | 多级审批流 + 执行发布（SSH 脚本 / K8s apply / MinIO 制品） |
+| 金丝雀 / 蓝绿 | 容器发布配置 `deploy_strategy`；Jenkins 参数 + 平台晋级/中止 API |
 | 待办与批量 | 待审批/待执行工单列表，支持批量通过/驳回/执行 |
 | 总览图表 | 首页「项目上线趋势」「按人发布统计」读 `cicd_release_runs` |
 
@@ -158,7 +159,28 @@ Header: X-Yunshu-Signature: sha256=<hmac-sha256-hex(body)>
 
 ---
 
-## 8. 相关文档
+## 8. 金丝雀 / 蓝绿发布
+
+容器发布配置字段（`cicd_deploy_configs`）：
+
+| 字段 | 说明 |
+|------|------|
+| `deploy_strategy` | `rolling`（默认）/ `canary` / `blue_green` |
+| `canary_replicas` / `canary_percent` / `canary_steps_json` | 金丝雀初始副本、占比提示、晋级步骤（如 `10,50,100`） |
+| `blue_green_service` | 蓝绿切换的 Service 名（空则用工作负载名） |
+
+Jenkins 透传参数：`deployStrategy`、`canaryReplicas`、`canaryPercent`、`canarySteps`、`blueGreenService`。
+
+平台晋级 API（发布成功后可在「CD 历史工单」详情操作）：
+
+- `POST .../release-runs/:runId/progressive/promote` — 金丝雀按步骤扩缩 / 蓝绿切到 green
+- `POST .../release-runs/:runId/progressive/abort` — 中止（金丝雀缩 0 / 切回 blue）
+
+K8s 约定标签：`yunshu.io/track=canary`、`yunshu.io/color=blue|green`。
+
+---
+
+## 9. 相关文档
 
 - [plugins.md](./plugins.md) — 插件机制
 - [CONTRIBUTING.md](../CONTRIBUTING.md) §5 — 路径规则

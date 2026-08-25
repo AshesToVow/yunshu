@@ -59,10 +59,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [token]);
 
   function applyLoginResult(result: LoginResult) {
+    const nextUser = {
+      ...result.user,
+      must_change_password: Boolean(result.must_change_password || result.user?.must_change_password),
+    };
     setToken(result.token);
-    setUser(result.user);
+    setUser(nextUser);
     setTokenState(result.token);
-    setUserState(result.user);
+    setUserState(nextUser);
   }
 
   async function passwordLoginAction(payload: PasswordLoginPayload) {

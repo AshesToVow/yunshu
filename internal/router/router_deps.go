@@ -195,7 +195,7 @@ func assembleRouteDeps(
 		repos = newRouteRepositories(app.DB)
 	}
 
-	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, repos.User, app.Logger)
+	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, repos.User, app.Logger, app.DB)
 	wsAuthMiddleware := middleware.WSAuth(app.Redis, repos.User, app.Logger)
 	authorize := middleware.Authorize(app.Enforcer, app.Logger, repos.K8sClusterAccess)
 	k8sScopeAuthorize := middleware.K8sScopeAuthorize(
@@ -332,5 +332,44 @@ func wireCicdK8sHooks(cicdSvc *cicdsvc.Service, wl *service.K8sWorkloadService) 
 			"to_revision":   res.ToRevision,
 			"message":       res.Message,
 		}, nil
+	})
+	cicdSvc.SetK8sProgressive(cicdsvc.K8sProgressiveFns{
+		EnsureCanary: func(ctx context.Context, clusterID uint, ns, stable, canary, image string, replicas int32) (map[string]any, error) {
+			return wl.ProgressiveEnsureCanaryDeployment(ctx, service.ProgressiveEnsureCanaryRequest{
+				ClusterID:      clusterID,
+				Namespace:      ns,
+				StableName:     stable,
+				CanaryName:     canary,
+				Image:          image,
+				CanaryReplicas: replicas,
+			})
+		},
+		Scale: func(ctx context.Context, clusterID uint, ns, name string, replicas int32) error {
+			return wl.ProgressiveScaleDeployment(ctx, service.ProgressiveScaleRequest{
+				ClusterID: clusterID,
+				Namespace: ns,
+				Name:      name,
+				Replicas:  replicas,
+			})
+		},
+		PatchImage: func(ctx context.Context, clusterID uint, ns, name, image string) (map[string]any, error) {
+			return wl.ProgressivePatchDeploymentImage(ctx, service.ProgressivePatchImageRequest{
+				ClusterID: clusterID,
+				Namespace: ns,
+				Name:      name,
+				Image:     image,
+			})
+		},
+		SwitchColor: func(ctx context.Context, clusterID uint, ns, svcName, color string) (map[string]any, error) {
+			return wl.ProgressiveSwitchServiceColor(ctx, service.ProgressiveSwitchServiceRequest{
+				ClusterID:   clusterID,
+				Namespace:   ns,
+				ServiceName: svcName,
+				Color:       color,
+			})
+		},
+		EnsureColor: func(ctx context.Context, clusterID uint, ns, base, color, image string, replicas int32) (map[string]any, error) {
+			return wl.ProgressiveEnsureColorDeployment(ctx, clusterID, ns, base, color, image, replicas)
+		},
 	})
 }

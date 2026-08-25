@@ -53,6 +53,8 @@ export interface UserItem {
   roles: RoleItem[];
   /** 用户所属用户组（K8s 主体 principal_kind=group 等场景） */
   groups?: UserGroupBrief[];
+  must_change_password?: boolean;
+  password_changed_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -133,6 +135,22 @@ export interface LoginResult {
   token: string;
   expires_at: string;
   user: UserItem;
+  must_change_password?: boolean;
+  password_expired?: boolean;
+  password_policy_hint?: string;
+}
+
+export interface PasswordPolicy {
+  min_length: number;
+  max_length: number;
+  require_upper: boolean;
+  require_lower: boolean;
+  require_digit: boolean;
+  require_special: boolean;
+  expiry_days: number;
+  forbid_username: boolean;
+  hint: string;
+  expiry_hint: string;
 }
 
 export interface UpdateProfilePayload {

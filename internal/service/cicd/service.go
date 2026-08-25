@@ -40,6 +40,7 @@ type Service struct {
 	workloadReadyCheck func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string)
 	errorLogSampler    func(ctx context.Context, projectID, cicdServiceID uint, since time.Time) (int, string)
 	k8sRolloutUndo     K8sRolloutUndoFn
+	k8sProgressive     K8sProgressiveFns
 }
 
 func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
@@ -523,6 +524,11 @@ type DeployConfigUpsertRequest struct {
 	ImageTag             string `json:"image_tag" binding:"omitempty,max=128"`
 	Replicas             int    `json:"replicas"`
 	ContainerPort        int    `json:"container_port"`
+	DeployStrategy       string `json:"deploy_strategy" binding:"omitempty,oneof=rolling canary blue_green"`
+	CanaryReplicas       int    `json:"canary_replicas"`
+	CanaryPercent        int    `json:"canary_percent"`
+	CanaryStepsJSON      string `json:"canary_steps_json" binding:"omitempty,max=128"`
+	BlueGreenService     string `json:"blue_green_service" binding:"omitempty,max=128"`
 	Status               *int   `json:"status" binding:"omitempty,oneof=0 1"`
 }
 
@@ -710,6 +716,23 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 	if row.ContainerPort <= 0 {
 		row.ContainerPort = 8080
 	}
+	row.DeployStrategy = normalizeDeployStrategy(req.DeployStrategy)
+	row.CanaryReplicas = req.CanaryReplicas
+	if row.CanaryReplicas <= 0 {
+		row.CanaryReplicas = 1
+	}
+	row.CanaryPercent = req.CanaryPercent
+	if row.CanaryPercent <= 0 {
+		row.CanaryPercent = 10
+	}
+	if row.CanaryPercent > 100 {
+		row.CanaryPercent = 100
+	}
+	row.CanaryStepsJSON = strings.TrimSpace(req.CanaryStepsJSON)
+	if row.CanaryStepsJSON == "" {
+		row.CanaryStepsJSON = "10,50,100"
+	}
+	row.BlueGreenService = strings.TrimSpace(req.BlueGreenService)
 	row.Status = status
 	if configID > 0 {
 		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {

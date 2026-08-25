@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/config"
@@ -18,7 +20,6 @@ import (
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"strings"
 )
 
 func init() {
@@ -113,6 +114,8 @@ var seedCmd = &cobra.Command{
 						return err
 					}
 					incoming.Password = hashed
+					now := time.Now()
+					incoming.PasswordChangedAt = &now
 					return nil
 				},
 			); err != nil {
@@ -741,6 +744,8 @@ func defaultPermissions() []model.Permission {
 		{Name: "CI/CD 构建阶段", Resource: "/api/v1/projects/:id/cicd/build-runs/:runId/stages", Action: "GET", Description: "List CI build stages"},
 		{Name: "CI/CD 构建制品元数据", Resource: "/api/v1/projects/:id/cicd/build-runs/:runId/artifacts-meta", Action: "GET", Description: "List CI build artifacts meta"},
 		{Name: "CI/CD 平台回滚", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/platform-rollback", Action: "POST", Description: "Platform rollback release"},
+		{Name: "CI/CD 渐进式晋级", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/progressive/promote", Action: "POST", Description: "Promote canary or blue-green release"},
+		{Name: "CI/CD 渐进式中止", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/progressive/abort", Action: "POST", Description: "Abort canary or blue-green release"},
 
 		{Name: "镜像仓库列表", Resource: "/api/v1/registries", Action: "GET", Description: "List container registries"},
 		{Name: "镜像仓库创建", Resource: "/api/v1/registries", Action: "POST", Description: "Create container registry"},

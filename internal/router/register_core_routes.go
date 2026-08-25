@@ -19,6 +19,7 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	authGroup.POST("/login", d.authHandler.Login)
 	authGroup.POST("/email-login", d.authHandler.EmailLogin)
 	authGroup.POST("/register", middleware.RegistrationRateLimit(d.app.Redis), d.regHandler.Apply)
+	authGroup.GET("/password-policy", d.authHandler.GetPasswordPolicy)
 
 	authAuthed := authGroup.Group("")
 	authAuthed.Use(d.authMiddleware, d.opAudit)

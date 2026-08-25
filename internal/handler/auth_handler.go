@@ -270,13 +270,19 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		response.Error(c, constants.ErrUnauthorized)
 		return
 	}
-	if !auth.IsSuperAdminRole(user.RoleCodes) {
-		response.Error(c, constants.ErrForbiddenWithMsg("普通用户无法在个人中心修改登录密码，请由管理员在用户管理中为该账号设置新密码"))
-		return
-	}
 	ServeJSONOK(c, gin.H{"message": "密码修改成功"}, func(ctx context.Context, req service.ChangePasswordRequest) error {
 		return h.service.ChangePassword(ctx, user.ID, req)
 	})
+}
+
+// GetPasswordPolicy godoc
+// @Summary 获取当前密码策略
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} response.Body
+// @Router /api/v1/auth/password-policy [get]
+func (h *AuthHandler) GetPasswordPolicy(c *gin.Context) {
+	response.Success(c, h.service.GetPasswordPolicy(c.Request.Context()))
 }
 
 // CreateWSTicket godoc

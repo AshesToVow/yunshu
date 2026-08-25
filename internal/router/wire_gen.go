@@ -38,7 +38,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	sender := provideMailer(app)
 	routerAppRouteConfig := provideAppRouteConfig(app)
 	appDisplayName := routerAppRouteConfig.AppName
-	v6 := provideAuthService(v5, client, authConfig, sender, appDisplayName)
+	v6 := provideAuthService(v5, client, db, authConfig, sender, appDisplayName)
 	v7 := routerRouteRepositories.Role
 	v8 := routerRouteRepositories.Department
 	syncedEnforcer := provideEnforcer(app)
@@ -47,7 +47,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v11 := routerRouteRepositories.AlertMonitorRule
 	v12 := routerRouteRepositories.AlertDatasource
 	alertRuleAssigneeService := alert.NewAlertRuleAssigneeService(v10, v11, v12, v5, v9, v8)
-	v13 := system.NewUserService(v5, v7, v8, syncedEnforcer, v9, alertRuleAssigneeService)
+	v13 := system.NewUserService(v5, v7, v8, syncedEnforcer, v9, alertRuleAssigneeService, db)
 	v14 := system.NewDepartmentService(v8, v5, alertRuleAssigneeService)
 	v15 := system.NewRoleService(v7, v5, syncedEnforcer)
 	v16 := routerRouteRepositories.Permission
@@ -67,7 +67,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v29 := routerRouteRepositories.Project
 	v30 := system.NewUserGroupService(v24, v5, v9, v29)
 	v31 := routerRouteRepositories.RegRequest
-	v32 := provideRegistrationService(v31, v5, client, authConfig, sender, appDisplayName)
+	v32 := provideRegistrationService(v31, v5, client, db, authConfig, sender, appDisplayName)
 	v33 := system.NewMenuService(v19)
 	v34 := routerRouteRepositories.DictEntry
 	v35 := system.NewDictEntryService(v34)

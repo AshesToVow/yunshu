@@ -12,7 +12,7 @@ type rule struct {
 }
 
 var rules = map[string]rule{
-	"system": {prefixes: []string{"mail_"}, exact: []string{"common_status"}},
+	"system": {prefixes: []string{"mail_", "password_"}, exact: []string{"common_status"}},
 	"alert":  {prefixes: []string{"alert_", "wecom_", "dingtalk_"}},
 	"log":    {prefixes: []string{"log_", "elasticsearch_", "kafka_"}},
 	"k8s":    {prefixes: []string{"k8s_"}},

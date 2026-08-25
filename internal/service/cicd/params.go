@@ -343,6 +343,18 @@ func applyDeployParams(params map[string]string, dc *model.CicdDeployConfig, in 
 		params["k8s_ns"] = dc.K8sNamespace
 		params["replicas"] = strconv.Itoa(maxInt(dc.Replicas, 1))
 		params["ContainerPort"] = strconv.Itoa(maxInt(dc.ContainerPort, 8080))
+		strategy := normalizeDeployStrategy(dc.DeployStrategy)
+		params["deployStrategy"] = strategy
+		params["canaryReplicas"] = strconv.Itoa(maxInt(dc.CanaryReplicas, 1))
+		params["canaryPercent"] = strconv.Itoa(maxInt(dc.CanaryPercent, 10))
+		steps := strings.TrimSpace(dc.CanaryStepsJSON)
+		if steps == "" {
+			steps = "10,50,100"
+		}
+		params["canarySteps"] = steps
+		if v := strings.TrimSpace(dc.BlueGreenService); v != "" {
+			params["blueGreenService"] = v
+		}
 		if dc.ImageName != "" {
 			params["imageName"] = dc.ImageName
 		}

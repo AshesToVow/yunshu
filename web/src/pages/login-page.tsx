@@ -108,26 +108,41 @@ export function LoginPage() {
 
   const fromPath = (location.state as LocationState | null)?.from ?? "/";
 
-  async function handleSendPasswordCode() {
+  async function refreshPasswordCaptcha(options?: { silent?: boolean; requireUsername?: boolean }) {
+    const silent = options?.silent === true;
+    const requireUsername = options?.requireUsername !== false;
+    const zh = langMode === "zh";
     try {
       const username = passwordForm.getFieldValue("username");
       if (!username) {
-        message.warning("请先输入用户名");
-        return;
+        if (requireUsername && !silent) {
+          message.warning(zh ? "请先输入用户名" : "Please enter username first");
+        }
+        return false;
       }
 
       setSendingCode(true);
       const result: SendPasswordLoginCodeResult = await sendPasswordLoginCode({ username });
       setCaptchaKey(result.captcha_key);
       setCaptchaImage(result.image);
-      passwordForm.setFieldValue("captcha_key", result.captcha_key);
-      message.success("验证码已生成");
+      passwordForm.setFieldsValue({ captcha_key: result.captcha_key, code: undefined });
+      if (!silent) {
+        message.success(zh ? "验证码已生成" : "Captcha generated");
+      }
       setPasswordCodeCountdown(60);
+      return true;
     } catch (e) {
-      message.error(extractApiErrorMessage(e, "生成验证码失败"));
+      if (!silent) {
+        message.error(extractApiErrorMessage(e, zh ? "生成验证码失败" : "Failed to generate captcha"));
+      }
+      return false;
     } finally {
       setSendingCode(false);
     }
+  }
+
+  async function handleSendPasswordCode() {
+    await refreshPasswordCaptcha();
   }
 
   async function handleSendEmailCode() {
@@ -171,6 +186,7 @@ export function LoginPage() {
   async function runLogin<TPayload>(
     action: (payload: TPayload) => Promise<unknown>,
     payload: TPayload,
+    onError?: () => void | Promise<void>,
   ) {
     setSubmitting(true);
     setButtonFx("loading");
@@ -183,6 +199,7 @@ export function LoginPage() {
     } catch (e) {
       setButtonFx("idle");
       message.error(extractApiErrorMessage(e, "登录失败"));
+      await onError?.();
     } finally {
       window.setTimeout(() => setButtonFx("idle"), 1200);
       setSubmitting(false);
@@ -194,7 +211,11 @@ export function LoginPage() {
       ...values,
       captcha_key: values.captcha_key || captchaKey,
     };
-    void runLogin(passwordLoginAction as (p: PasswordLoginPayload) => Promise<unknown>, payload);
+    void runLogin(
+      passwordLoginAction as (p: PasswordLoginPayload) => Promise<unknown>,
+      payload,
+      () => refreshPasswordCaptcha({ silent: true, requireUsername: false }),
+    );
   }
 
   async function handleEmailLogin(values: EmailLoginPayload) {

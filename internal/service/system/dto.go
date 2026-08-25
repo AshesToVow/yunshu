@@ -54,7 +54,7 @@ type RegisterRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=64"`
 	Email    string `json:"email" binding:"required,email,max=128"`
 	Nickname string `json:"nickname" binding:"required,max=128"`
-	Password string `json:"password" binding:"required,min=6,max=64"`
+	Password string `json:"password" binding:"required,min=6,max=128"`
 	Code     string `json:"code" binding:"required,len=6,numeric"`
 }
 
@@ -64,9 +64,25 @@ type RegisterResponse struct {
 }
 
 type LoginResponse struct {
-	Token     string             `json:"token"`
-	ExpiresAt time.Time          `json:"expires_at"`
-	User      UserDetailResponse `json:"user"`
+	Token              string             `json:"token"`
+	ExpiresAt          time.Time          `json:"expires_at"`
+	User               UserDetailResponse `json:"user"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordExpired    bool               `json:"password_expired"`
+	PasswordPolicyHint string             `json:"password_policy_hint,omitempty"`
+}
+
+type PasswordPolicyResponse struct {
+	MinLength      int    `json:"min_length"`
+	MaxLength      int    `json:"max_length"`
+	RequireUpper   bool   `json:"require_upper"`
+	RequireLower   bool   `json:"require_lower"`
+	RequireDigit   bool   `json:"require_digit"`
+	RequireSpecial bool   `json:"require_special"`
+	ExpiryDays     int    `json:"expiry_days"`
+	ForbidUsername bool   `json:"forbid_username"`
+	Hint           string `json:"hint"`
+	ExpiryHint     string `json:"expiry_hint"`
 }
 
 // CreateWSTicketRequest 申请 WebSocket 一次性握手票据（避免在 URL 中携带 JWT）。
@@ -86,14 +102,14 @@ type UpdateProfileRequest struct {
 }
 
 type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" binding:"required,min=6,max=64"`
-	NewPassword string `json:"new_password" binding:"required,min=6,max=64"`
+	OldPassword string `json:"old_password" binding:"required,min=6,max=128"`
+	NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
 }
 
 type UserCreateRequest struct {
 	Username     string `json:"username" binding:"required,min=3,max=64"`
 	Email        string `json:"email" binding:"required,email,max=128"`
-	Password     string `json:"password" binding:"required,min=6,max=64"`
+	Password     string `json:"password" binding:"required,min=6,max=128"`
 	Nickname     string `json:"nickname" binding:"required,max=128"`
 	Phone        string `json:"phone" binding:"omitempty,max=20"`
 	Status       int    `json:"status"`
@@ -105,7 +121,7 @@ type UserUpdateRequest struct {
 	Email        *string `json:"email" binding:"omitempty,email,max=128"`
 	Nickname     *string `json:"nickname" binding:"omitempty,max=128"`
 	Phone        *string `json:"phone" binding:"omitempty,max=20"`
-	Password     *string `json:"password" binding:"omitempty,min=6,max=64"`
+	Password     *string `json:"password" binding:"omitempty,min=6,max=128"`
 	Status       *int    `json:"status"`
 	DepartmentID *uint   `json:"department_id"`
 }
@@ -233,18 +249,20 @@ type UserGroupBrief struct {
 }
 
 type UserDetailResponse struct {
-	ID             uint             `json:"id"`
-	Username       string           `json:"username"`
-	Email          string           `json:"email"`
-	Phone          string           `json:"phone"`
-	Nickname       string           `json:"nickname"`
-	Status         int              `json:"status"`
-	DepartmentID   *uint            `json:"department_id,omitempty"`
-	DepartmentName string           `json:"department_name"`
-	Roles          []RoleItem       `json:"roles"`
-	Groups         []UserGroupBrief `json:"groups"`
-	CreatedAt      time.Time        `json:"created_at"`
-	UpdatedAt      time.Time        `json:"updated_at"`
+	ID                   uint             `json:"id"`
+	Username             string           `json:"username"`
+	Email                string           `json:"email"`
+	Phone                string           `json:"phone"`
+	Nickname             string           `json:"nickname"`
+	Status               int              `json:"status"`
+	DepartmentID         *uint            `json:"department_id,omitempty"`
+	DepartmentName       string           `json:"department_name"`
+	Roles                []RoleItem       `json:"roles"`
+	Groups               []UserGroupBrief `json:"groups"`
+	MustChangePassword   bool             `json:"must_change_password"`
+	PasswordChangedAt    *time.Time       `json:"password_changed_at,omitempty"`
+	CreatedAt            time.Time        `json:"created_at"`
+	UpdatedAt            time.Time        `json:"updated_at"`
 }
 
 type PolicyItemResponse struct {
@@ -297,22 +315,24 @@ func NewUserDetailResponse(user model.User) UserDetailResponse {
 	}
 
 	return UserDetailResponse{
-		ID:           user.ID,
-		Username:     user.Username,
-		Email:        email,
-		Phone:        strings.TrimSpace(user.Phone),
-		Nickname:     user.Nickname,
-		Status:       user.Status,
-		DepartmentID: user.DepartmentID,
+		ID:                 user.ID,
+		Username:           user.Username,
+		Email:              email,
+		Phone:              strings.TrimSpace(user.Phone),
+		Nickname:           user.Nickname,
+		Status:             user.Status,
+		DepartmentID:       user.DepartmentID,
 		DepartmentName: func() string {
 			if user.Department != nil {
 				return user.Department.Name
 			}
 			return ""
 		}(),
-		Roles:     roles,
-		Groups:    groups,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
+		Roles:              roles,
+		Groups:             groups,
+		MustChangePassword: user.MustChangePassword,
+		PasswordChangedAt:  user.PasswordChangedAt,
+		CreatedAt:          user.CreatedAt,
+		UpdatedAt:          user.UpdatedAt,
 	}
 }

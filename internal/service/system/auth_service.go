@@ -13,6 +13,7 @@ import (
 	bizerrors "yunshu/internal/pkg/errors"
 
 	"yunshu/internal/config"
+	"yunshu/internal/dictconfig"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/mailer"
@@ -34,6 +35,7 @@ const (
 type AuthService struct {
 	userRepo repositoryAuthReader
 	redis    *redis.Client
+	db       *gorm.DB
 	cfg      config.AuthConfig
 	mailer   mailer.Sender
 	appName  string
@@ -53,6 +55,7 @@ type repositoryAuthReader interface {
 func NewAuthService(
 	userRepo repositoryAuthReader,
 	redisClient *redis.Client,
+	db *gorm.DB,
 	cfg config.AuthConfig,
 	emailSender mailer.Sender,
 	appName string,
@@ -60,6 +63,7 @@ func NewAuthService(
 	return &AuthService{
 		userRepo: userRepo,
 		redis:    redisClient,
+		db:       db,
 		cfg:      cfg,
 		mailer:   emailSender,
 		appName:  appName,
@@ -179,11 +183,14 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 
 	if err = password.Compare(user.Password, req.Password); err != nil {
 		s.recordLoginFailure(ctx, username)
+		// 密码错误即作废当前图形验证码，强制前端重新获取，防止复用。
+		s.clearPasswordLoginCode(ctx, req.CaptchaKey)
 		return nil, bizerrors.Reject(ctx, "auth", "Login", constants.ErrPasswordIncorrect, "reason", "bad_password", "username", username)
 	}
 
 	// Validate password login code
 	if err = s.validatePasswordLoginCode(ctx, req.CaptchaKey, req.Code); err != nil {
+		s.clearPasswordLoginCode(ctx, req.CaptchaKey)
 		return nil, bizerrors.Pass(ctx, "auth", "Login", err)
 	}
 	s.clearPasswordLoginCode(ctx, req.CaptchaKey)
@@ -226,19 +233,24 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest) (*Regis
 	if err := s.validateEmailCode(ctx, emailCodeSceneRegister, email, req.Code); err != nil {
 		return nil, bizerrors.Pass(ctx, "auth", "Register", err)
 	}
+	if err := enforcePasswordComplexity(ctx, s.db, req.Password, username); err != nil {
+		return nil, err
+	}
 
 	hashedPassword, err := password.Hash(req.Password)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "auth", "Register", err)
 	}
 
+	now := time.Now()
 	user := model.User{
-		Username: username,
-		Email:    &email,
-		Password: hashedPassword,
-		Nickname: nickname,
-		Status:   model.StatusEnabled,
-		Roles:    []model.Role{},
+		Username:          username,
+		Email:             &email,
+		Password:          hashedPassword,
+		PasswordChangedAt: &now,
+		Nickname:          nickname,
+		Status:            model.StatusEnabled,
+		Roles:             []model.Role{},
 	}
 	if err = s.userRepo.Create(ctx, &user); err != nil {
 		return nil, bizerrors.Pass(ctx, "auth", "Register", err)
@@ -281,6 +293,9 @@ func (s *AuthService) Me(ctx context.Context, userID uint) (*UserDetailResponse,
 	}
 
 	response := NewUserDetailResponse(*user)
+	if userPasswordExpired(ctx, s.db, user) {
+		response.MustChangePassword = true
+	}
 	return &response, nil
 }
 
@@ -336,12 +351,16 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uint, req Chang
 	if strings.TrimSpace(req.NewPassword) == strings.TrimSpace(req.OldPassword) {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg6ca55409b3c2)
 	}
+	if err := enforcePasswordComplexity(ctx, s.db, req.NewPassword, user.Username); err != nil {
+		return err
+	}
 
 	hashed, err := password.Hash(req.NewPassword)
 	if err != nil {
 		return bizerrors.Pass(ctx, "auth", "ChangePassword", err)
 	}
 	user.Password = hashed
+	touchPasswordChanged(user)
 	if err = s.userRepo.Save(ctx, user); err != nil {
 		return bizerrors.Pass(ctx, "auth", "ChangePassword", err)
 	}
@@ -386,11 +405,26 @@ func (s *AuthService) issueLoginResponse(ctx context.Context, user *model.User) 
 		return nil, bizerrors.Pass(ctx, "auth", "issueLoginResponse", err)
 	}
 
+	expired := userPasswordExpired(ctx, s.db, user)
+	mustChange := user.MustChangePassword || expired
+	hint := ""
+	if mustChange {
+		sum := dictconfig.PasswordPolicySummary(resolvePasswordPolicy(ctx, s.db))
+		hint, _ = sum["hint"].(string)
+	}
 	return &LoginResponse{
-		Token:     token,
-		ExpiresAt: expiresAt,
-		User:      NewUserDetailResponse(*user),
+		Token:              token,
+		ExpiresAt:          expiresAt,
+		User:               NewUserDetailResponse(*user),
+		MustChangePassword: mustChange,
+		PasswordExpired:    expired,
+		PasswordPolicyHint: hint,
 	}, nil
+}
+
+// GetPasswordPolicy 返回当前生效的密码策略（数据字典可调）。
+func (s *AuthService) GetPasswordPolicy(ctx context.Context) PasswordPolicyResponse {
+	return passwordPolicyAPIResponse(ctx, s.db)
 }
 
 const wsTicketTTLSeconds = 30

@@ -497,6 +497,11 @@ export function CicdServicesPage() {
       deploy_method: "kubectl",
       deploy_config_type: "使用deployment模板",
       deploy_config_template: "基础模板",
+      deploy_strategy: "rolling",
+      canary_replicas: 1,
+      canary_percent: 10,
+      canary_steps_json: "10,50,100",
+      blue_green_service: "",
       server_port: 8080,
       replicas: 1,
       container_port: 8080,
@@ -564,6 +569,7 @@ export function CicdServicesPage() {
             "deploy_method",
             "deploy_config_type",
             "deploy_config_template",
+            "deploy_strategy",
             "replicas",
             "container_port",
             "image_name",
@@ -1237,6 +1243,57 @@ export function CicdServicesPage() {
             )}
             <Form.Item name="replicas" label="副本数" rules={[{ required: true }]}>
               <InputNumber min={1} max={100} style={{ width: "100%" }} />
+            </Form.Item>
+            <Form.Item
+              name="deploy_strategy"
+              label="发布策略"
+              rules={[{ required: true }]}
+              extra="金丝雀/蓝绿：Jenkins 接收 deployStrategy 等参数；平台侧可在发布详情中晋级/中止"
+            >
+              <Select
+                options={[
+                  { label: "滚动发布", value: "rolling" },
+                  { label: "金丝雀发布", value: "canary" },
+                  { label: "蓝绿发布", value: "blue_green" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.deploy_strategy !== cur.deploy_strategy}>
+              {({ getFieldValue }) => {
+                const strategy = getFieldValue("deploy_strategy");
+                if (strategy === "canary") {
+                  return (
+                    <>
+                      <Form.Item name="canary_replicas" label="金丝雀初始副本" rules={[{ required: true }]}>
+                        <InputNumber min={1} max={100} style={{ width: "100%" }} />
+                      </Form.Item>
+                      <Form.Item name="canary_percent" label="金丝雀流量占比(%)" rules={[{ required: true }]}>
+                        <InputNumber min={1} max={100} style={{ width: "100%" }} />
+                      </Form.Item>
+                      <Form.Item
+                        name="canary_steps_json"
+                        label="晋级步骤(%)"
+                        rules={[{ required: true }]}
+                        extra="逗号分隔，如 10,50,100"
+                      >
+                        <Input placeholder="10,50,100" />
+                      </Form.Item>
+                    </>
+                  );
+                }
+                if (strategy === "blue_green") {
+                  return (
+                    <Form.Item
+                      name="blue_green_service"
+                      label="蓝绿 Service 名"
+                      extra="留空则使用工作负载名；切换 selector 标签 yunshu.io/color"
+                    >
+                      <Input placeholder="可选，默认与工作负载同名" />
+                    </Form.Item>
+                  );
+                }
+                return null;
+              }}
             </Form.Item>
             <Form.Item name="container_port" label="容器端口" rules={[{ required: true }]}>
               <InputNumber min={1} max={65535} style={{ width: "100%" }} />

@@ -15,6 +15,11 @@ const (
 	CicdDeployKindRegular   = "regular"
 	CicdDeployKindContainer = "container"
 
+	// 容器发布策略（Jenkins + 平台晋级）
+	CicdDeployStrategyRolling   = "rolling"
+	CicdDeployStrategyCanary    = "canary"
+	CicdDeployStrategyBlueGreen = "blue_green"
+
 	CicdRefTypeBranch = "branch"
 	CicdRefTypeTag    = "tag"
 
@@ -136,6 +141,12 @@ type CicdDeployConfig struct {
 	ImageTag            string         `json:"image_tag" gorm:"size:128"`
 	Replicas            int            `json:"replicas" gorm:"default:1"`
 	ContainerPort       int            `json:"container_port" gorm:"default:8080"`
+	// DeployStrategy rolling|canary|blue_green（仅 container 生效）
+	DeployStrategy      string         `json:"deploy_strategy" gorm:"size:32;not null;default:'rolling';comment:rolling|canary|blue_green"`
+	CanaryReplicas      int            `json:"canary_replicas" gorm:"default:1;comment:金丝雀初始副本"`
+	CanaryPercent       int            `json:"canary_percent" gorm:"default:10;comment:金丝雀流量百分比提示（Jenkins/网格）"`
+	CanaryStepsJSON     string         `json:"canary_steps_json" gorm:"size:128;default:'10,50,100';comment:晋级百分比步骤，逗号分隔"`
+	BlueGreenService    string         `json:"blue_green_service" gorm:"size:128;comment:蓝绿切换的 Service 名，空则用工作负载名"`
 	Status              int            `json:"status" gorm:"not null;default:1"`
 	CreatedAt           time.Time      `json:"created_at"`
 	UpdatedAt           time.Time      `json:"updated_at"`
@@ -279,6 +290,7 @@ type CicdReleaseRun struct {
 	VerifyStatus       string         `json:"verify_status" gorm:"size:32;comment:发布后验证状态 passed|failed|partial"`
 	VerifyJSON         string         `json:"verify_json" gorm:"type:text;comment:验证结果 JSON"`
 	VerifiedAt         *time.Time     `json:"verified_at,omitempty"`
+	ProgressiveJSON    string         `json:"progressive_json" gorm:"type:text;comment:金丝雀/蓝绿晋级状态 JSON"`
 	StartedAt          *time.Time     `json:"started_at,omitempty"`
 	FinishedAt         *time.Time     `json:"finished_at,omitempty" gorm:"index:idx_cicd_release_status_finished,priority:2"`
 	CreatedAt          time.Time      `json:"created_at" gorm:"index"`

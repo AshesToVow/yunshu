@@ -3,17 +3,21 @@ package middleware
 import (
 	"errors"
 	"strings"
-	"yunshu/internal/pkg/constants"
+	"time"
 
+	"yunshu/internal/dictconfig"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
+	"yunshu/internal/pkg/password"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/interfaces"
 	"yunshu/internal/store"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9" // redis.Client 由路由注入
+	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 func respondSessionStoreError(c *gin.Context, _ *logx.Logger, err error) {
@@ -28,7 +32,25 @@ func respondSessionStoreError(c *gin.Context, _ *logx.Logger, err error) {
 	}
 }
 
-func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepository, logger *logx.Logger) gin.HandlerFunc {
+func passwordChangeAllowed(method, fullPath string) bool {
+	p := strings.TrimSpace(fullPath)
+	switch {
+	case method == "PUT" && strings.HasSuffix(p, "/auth/password"):
+		return true
+	case method == "GET" && strings.HasSuffix(p, "/auth/me"):
+		return true
+	case method == "GET" && strings.HasSuffix(p, "/auth/password-policy"):
+		return true
+	case method == "POST" && strings.HasSuffix(p, "/auth/logout"):
+		return true
+	case method == "POST" && strings.HasSuffix(p, "/auth/ws-ticket"):
+		return true
+	default:
+		return false
+	}
+}
+
+func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepository, logger *logx.Logger, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
 		if header == "" || !strings.HasPrefix(header, "Bearer ") {
@@ -46,7 +68,6 @@ func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepo
 			return
 		}
 
-		// 会话白名单：redis.Nil=已过期；Redis 故障=500，禁止无 Redis 时放行
 		if err = store.ValidateAccessTokenSession(c.Request.Context(), redisClient, claims.TokenID); err != nil {
 			respondSessionStoreError(c, logger, err)
 			c.Abort()
@@ -70,24 +91,33 @@ func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepo
 			if g.Status == model.StatusDisabled {
 				continue
 			}
-			if c := strings.TrimSpace(g.Code); c != "" {
-				groupCodes = append(groupCodes, c)
+			if code := strings.TrimSpace(g.Code); code != "" {
+				groupCodes = append(groupCodes, code)
 			}
 		}
-		// 仅暴露启用中的角色编码：禁用角色不得参与鉴权与菜单过滤。
+		cfg := dictconfig.ResolvePasswordPolicy(c.Request.Context(), db)
+		expired := password.IsExpired(user.PasswordChangedAt, user.CreatedAt, cfg.ExpiryDays, time.Now())
+		mustChange := user.MustChangePassword || expired
 		currentUser := &auth.CurrentUser{
-			ID:           user.ID,
-			Username:     user.Username,
-			Nickname:     user.Nickname,
-			Status:       user.Status,
-			DepartmentID: user.DepartmentID,
-			RoleCodes:    model.ExtractEnabledRoleCodes(user.Roles),
-			GroupCodes:   groupCodes,
+			ID:                 user.ID,
+			Username:           user.Username,
+			Nickname:           user.Nickname,
+			Status:             user.Status,
+			DepartmentID:       user.DepartmentID,
+			RoleCodes:          model.ExtractEnabledRoleCodes(user.Roles),
+			GroupCodes:         groupCodes,
+			MustChangePassword: mustChange,
 		}
 
 		c.Set(auth.ContextClaimsKey, claims)
 		c.Set(auth.ContextUserKey, currentUser)
 		c.Request = c.Request.WithContext(logx.WithUser(c.Request.Context(), user.ID, user.Username))
+
+		if mustChange && !passwordChangeAllowed(c.Request.Method, c.FullPath()) {
+			response.Error(c, constants.ErrBadRequestWithMsg("密码已过期或需强制修改，请先修改密码后再继续操作"))
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }

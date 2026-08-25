@@ -700,6 +700,28 @@ func (h *CicdHandler) PlatformRollbackRelease(c *gin.Context) {
 	})
 }
 
+func (h *CicdHandler) PromoteProgressiveRelease(c *gin.Context) {
+	projectID, runID, ok := h.releaseRunIDs(c)
+	if !ok {
+		return
+	}
+	actor := h.cicdActor(c)
+	ServeJSON(c, func(ctx context.Context, req cicd.ProgressivePromoteRequest) (map[string]any, error) {
+		return h.svc.PromoteProgressiveRelease(ctx, projectID, runID, req, actor)
+	})
+}
+
+func (h *CicdHandler) AbortProgressiveRelease(c *gin.Context) {
+	projectID, runID, ok := h.releaseRunIDs(c)
+	if !ok {
+		return
+	}
+	actor := h.cicdActor(c)
+	ServeJSON(c, func(ctx context.Context, req cicd.ProgressiveAbortRequest) (map[string]any, error) {
+		return h.svc.AbortProgressiveRelease(ctx, projectID, runID, req, actor)
+	})
+}
+
 func (h *CicdHandler) TerminateReleaseRun(c *gin.Context) {
 	projectID, runID, ok := h.releaseRunIDs(c)
 	if !ok {

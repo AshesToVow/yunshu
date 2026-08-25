@@ -56,6 +56,10 @@ export function changePassword(payload: ChangePasswordPayload) {
   return getData<MessageData>(http.put("/auth/password", payload));
 }
 
+export function getPasswordPolicy() {
+  return getData<import("../types/api").PasswordPolicy>(http.get("/auth/password-policy", { silentErrorToast: true }));
+}
+
 export interface HealthData {
   status: string;
   version: string;

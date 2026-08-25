@@ -10,6 +10,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"time"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/exportutil"
@@ -34,6 +35,7 @@ type UserService struct {
 	projectMemberRepo interfaces.ProjectMemberRepository
 	assigneeSvc       *alert.AlertRuleAssigneeService
 	enforcer          *casbin.SyncedEnforcer
+	db                *gorm.DB
 }
 
 // NewUserService 创建相关逻辑。
@@ -44,6 +46,7 @@ func NewUserService(
 	enforcer *casbin.SyncedEnforcer,
 	projectMemberRepo interfaces.ProjectMemberRepository,
 	assigneeSvc *alert.AlertRuleAssigneeService,
+	db *gorm.DB,
 ) *UserService {
 	return &UserService{
 		userRepo:          userRepo,
@@ -52,6 +55,7 @@ func NewUserService(
 		projectMemberRepo: projectMemberRepo,
 		assigneeSvc:       assigneeSvc,
 		enforcer:          enforcer,
+		db:                db,
 	}
 }
 
@@ -95,6 +99,9 @@ func (s *UserService) Create(ctx context.Context, req UserCreateRequest) (*UserD
 	if len(req.RoleIDs) > 0 && len(roles) != len(req.RoleIDs) {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgbc90b8ad5f29)
 	}
+	if err := enforcePasswordComplexity(ctx, s.db, req.Password, strings.TrimSpace(req.Username)); err != nil {
+		return nil, err
+	}
 
 	hashedPassword, err := password.Hash(req.Password)
 	if err != nil {
@@ -117,15 +124,17 @@ func (s *UserService) Create(ctx context.Context, req UserCreateRequest) (*UserD
 		}
 		departmentID = req.DepartmentID
 	}
+	now := time.Now()
 	user := model.User{
-		Username:     strings.TrimSpace(req.Username),
-		Email:        &email,
-		Phone:        strings.TrimSpace(req.Phone),
-		Password:     hashedPassword,
-		Nickname:     strings.TrimSpace(req.Nickname),
-		Status:       status,
-		DepartmentID: departmentID,
-		Roles:        roles,
+		Username:          strings.TrimSpace(req.Username),
+		Email:             &email,
+		Phone:             strings.TrimSpace(req.Phone),
+		Password:          hashedPassword,
+		PasswordChangedAt: &now,
+		Nickname:          strings.TrimSpace(req.Nickname),
+		Status:            status,
+		DepartmentID:      departmentID,
+		Roles:             roles,
 	}
 	if err = s.userRepo.Create(ctx, &user); err != nil {
 		return nil, bizerrors.Pass(ctx, "user", "Create", err)
@@ -201,10 +210,14 @@ func (s *UserService) Update(ctx context.Context, id uint, req UserUpdateRequest
 		user.Phone = strings.TrimSpace(*req.Phone)
 	}
 	if req.Password != nil && *req.Password != "" {
+		if err := enforcePasswordComplexity(ctx, s.db, *req.Password, user.Username); err != nil {
+			return nil, err
+		}
 		user.Password, err = password.Hash(*req.Password)
 		if err != nil {
 			return nil, bizerrors.Pass(ctx, "user", "Update", err)
 		}
+		touchPasswordChanged(user)
 	}
 
 	if err = s.userRepo.Save(ctx, user); err != nil {
@@ -646,13 +659,16 @@ func (s *UserService) ImportUsersByActor(ctx context.Context, actor *auth.Curren
 		if hashErr != nil {
 			return nil, bizerrors.Pass(ctx, "user", "ImportUsersByActor", hashErr)
 		}
+		now := time.Now()
 		user := model.User{
-			Username:     username,
-			Nickname:     nickname,
-			Email:        emailPtr,
-			Password:     hashed,
-			Status:       status,
-			DepartmentID: departmentID,
+			Username:           username,
+			Nickname:           nickname,
+			Email:              emailPtr,
+			Password:           hashed,
+			PasswordChangedAt:  &now,
+			MustChangePassword: true,
+			Status:             status,
+			DepartmentID:       departmentID,
 		}
 		if createErr := s.userRepo.Create(ctx, &user); createErr != nil {
 			result.Failed++

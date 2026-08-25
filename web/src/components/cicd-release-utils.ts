@@ -101,6 +101,7 @@ export type ReleaseParams = {
   operation?: string;
   branch?: string;
   tenv?: string;
+  deployStrategy?: string;
 };
 
 export function parseReleaseParams(paramsJson?: string): ReleaseParams {
@@ -113,6 +114,7 @@ export function parseReleaseParams(paramsJson?: string): ReleaseParams {
       operation: obj.deployAction,
       branch: obj.branch,
       tenv: obj.Tenv || obj.tenv,
+      deployStrategy: obj.deployStrategy,
     };
   } catch {
     return {};

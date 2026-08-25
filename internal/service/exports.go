@@ -301,10 +301,15 @@ type (
 	K8sAuthMatrixRow           = k8s.K8sAuthMatrixRow
 	K8sUserClusterAuthRow      = k8s.K8sUserClusterAuthRow
 	K8sEventForwardRuleUpsertRequest = eventforward.K8sEventForwardRuleUpsertRequest
-	RolloutUndoRequest         = k8s.RolloutUndoRequest
-	RolloutUndoResult          = k8s.RolloutUndoResult
-	DeploymentRevisionQuery    = k8s.DeploymentRevisionQuery
-	DeploymentRevisionItem     = k8s.DeploymentRevisionItem
+	RolloutUndoRequest              = k8s.RolloutUndoRequest
+	RolloutUndoResult               = k8s.RolloutUndoResult
+	DeploymentRevisionQuery         = k8s.DeploymentRevisionQuery
+	DeploymentRevisionItem          = k8s.DeploymentRevisionItem
+	ProgressiveScaleRequest         = k8s.ProgressiveScaleRequest
+	ProgressivePatchImageRequest    = k8s.ProgressivePatchImageRequest
+	ProgressiveSwitchServiceRequest = k8s.ProgressiveSwitchServiceRequest
+	ProgressiveEnsureCanaryRequest  = k8s.ProgressiveEnsureCanaryRequest
+	PasswordPolicyResponse          = system.PasswordPolicyResponse
 )
 
 // --- logplatform ---
