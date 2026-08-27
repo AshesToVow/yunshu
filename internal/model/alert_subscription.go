@@ -67,9 +67,10 @@ type AlertReceiverGroup struct {
 	ActiveTimeEnd   *string `json:"active_time_end" gorm:"size:8;comment:生效结束时间 HH:mm"`
 	WeekdaysJSON    string  `json:"weekdays_json" gorm:"type:text;comment:生效星期JSON，如[1,2,3,4,5]"`
 
-	// 升级相关
-	EscalationLevel int  `json:"escalation_level" gorm:"not null;default:0;comment:升级层级，0=初始，1=一级升级"`
-	Enabled         bool `json:"enabled" gorm:"not null;default:true;index;comment:是否启用"`
+	// 升级相关：投递仅通知 EscalationLevel==当前层级 的接收组；level>=1 在上一层成功通知（或无可投递层）后等待 EscalationDelaySeconds 再通知。
+	EscalationLevel         int  `json:"escalation_level" gorm:"not null;default:0;comment:升级层级，0=初始通知，1=一级升级…"`
+	EscalationDelaySeconds  int  `json:"escalation_delay_seconds" gorm:"not null;default:0;comment:进入本层前等待秒数（仅 level>=1 生效；0 表示默认 900）"`
+	Enabled                 bool `json:"enabled" gorm:"not null;default:true;index;comment:是否启用"`
 
 	// 非数据库字段
 	ChannelIDs   []uint   `json:"channel_ids,omitempty" gorm:"-"`

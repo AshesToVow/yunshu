@@ -56,9 +56,10 @@ type AlertReceiverGroupUpsertRequest struct {
 	EmailRecipientsJSON string  `json:"email_recipients_json"`
 	ActiveTimeStart     *string `json:"active_time_start"`
 	ActiveTimeEnd       *string `json:"active_time_end"`
-	WeekdaysJSON        string  `json:"weekdays_json"`
-	EscalationLevel     int     `json:"escalation_level"`
-	Enabled             *bool   `json:"enabled"`
+	WeekdaysJSON           string `json:"weekdays_json"`
+	EscalationLevel        int    `json:"escalation_level"`
+	EscalationDelaySeconds int    `json:"escalation_delay_seconds"`
+	Enabled                *bool  `json:"enabled"`
 }
 
 func (s *AlertReceiverGroupService) Create(ctx context.Context, req AlertReceiverGroupUpsertRequest) (*model.AlertReceiverGroup, error) {
@@ -70,16 +71,17 @@ func (s *AlertReceiverGroupService) Create(ctx context.Context, req AlertReceive
 		enabled = *req.Enabled
 	}
 	row := &model.AlertReceiverGroup{
-		ProjectID:           req.ProjectID,
-		Name:                strings.TrimSpace(req.Name),
-		Description:         strings.TrimSpace(req.Description),
-		ChannelIDsJSON:      strings.TrimSpace(req.ChannelIDsJSON),
-		EmailRecipientsJSON: strings.TrimSpace(req.EmailRecipientsJSON),
-		ActiveTimeStart:     req.ActiveTimeStart,
-		ActiveTimeEnd:       req.ActiveTimeEnd,
-		WeekdaysJSON:        strings.TrimSpace(req.WeekdaysJSON),
-		EscalationLevel:     req.EscalationLevel,
-		Enabled:             enabled,
+		ProjectID:              req.ProjectID,
+		Name:                   strings.TrimSpace(req.Name),
+		Description:            strings.TrimSpace(req.Description),
+		ChannelIDsJSON:         strings.TrimSpace(req.ChannelIDsJSON),
+		EmailRecipientsJSON:    strings.TrimSpace(req.EmailRecipientsJSON),
+		ActiveTimeStart:        req.ActiveTimeStart,
+		ActiveTimeEnd:          req.ActiveTimeEnd,
+		WeekdaysJSON:           strings.TrimSpace(req.WeekdaysJSON),
+		EscalationLevel:        normalizeEscalationLevel(req.EscalationLevel),
+		EscalationDelaySeconds: normalizeEscalationDelaySeconds(req.EscalationDelaySeconds),
+		Enabled:                enabled,
 	}
 	if err := s.repo.Create(ctx, row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.receiver", "Create", err)
@@ -111,7 +113,8 @@ func (s *AlertReceiverGroupService) Update(ctx context.Context, id uint, req Ale
 	row.ActiveTimeStart = req.ActiveTimeStart
 	row.ActiveTimeEnd = req.ActiveTimeEnd
 	row.WeekdaysJSON = strings.TrimSpace(req.WeekdaysJSON)
-	row.EscalationLevel = req.EscalationLevel
+	row.EscalationLevel = normalizeEscalationLevel(req.EscalationLevel)
+	row.EscalationDelaySeconds = normalizeEscalationDelaySeconds(req.EscalationDelaySeconds)
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
@@ -146,4 +149,41 @@ func hydrateReceiverGroup(it *model.AlertReceiverGroup) {
 	it.ChannelIDs = parseUintSliceJSON(it.ChannelIDsJSON)
 	it.EmailRecipients = parseStringSliceJSON(it.EmailRecipientsJSON)
 	it.Weekdays = parseIntSliceJSON(it.WeekdaysJSON)
+}
+
+const (
+	maxEscalationLevel         = 10
+	maxEscalationDelaySeconds  = 7 * 24 * 3600
+	defaultEscalationDelaySecs = 900
+)
+
+func normalizeEscalationLevel(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > maxEscalationLevel {
+		return maxEscalationLevel
+	}
+	return v
+}
+
+func normalizeEscalationDelaySeconds(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > maxEscalationDelaySeconds {
+		return maxEscalationDelaySeconds
+	}
+	return v
+}
+
+// effectiveEscalationDelaySeconds level>=1 组的等待秒数；未配置时默认 15 分钟。
+func effectiveEscalationDelaySeconds(level, configured int) int {
+	if level <= 0 {
+		return 0
+	}
+	if configured > 0 {
+		return normalizeEscalationDelaySeconds(configured)
+	}
+	return defaultEscalationDelaySecs
 }

@@ -99,12 +99,16 @@ func (h *pipelineTestHost) PeekFiringGroupTiming(context.Context, string, string
 func (h *pipelineTestHost) LogSuppressedFiringTiming(context.Context, string, string, string, string, string, string, map[string]interface{}) {
 }
 
-func (h *pipelineTestHost) ChannelRouteForAlert(context.Context, string, map[string]string) ChannelRoute {
+func (h *pipelineTestHost) ChannelRouteForAlert(context.Context, string, map[string]string, string) ChannelRoute {
 	return h.route
 }
 
 func (h *pipelineTestHost) ExpandChannelSetForAssigneeNotification(context.Context, map[uint]struct{}, []uint, map[string]interface{}) {
 }
+
+func (h *pipelineTestHost) MaybeScheduleEscalation(context.Context, escalationPendingEnvelope, int) {}
+
+func (h *pipelineTestHost) ClearEscalationState(context.Context, string) {}
 
 func (h *pipelineTestHost) LogNoMatchedChannel(context.Context, string, string, string, string, string, string, map[string]interface{}, string) {
 }

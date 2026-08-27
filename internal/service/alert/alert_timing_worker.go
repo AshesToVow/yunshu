@@ -17,12 +17,14 @@ func (s *AlertService) runAlertTimingWorker(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	s.flushDueGroupWaits(ctx)
+	s.flushDueEscalations(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			s.flushDueGroupWaits(ctx)
+			s.flushDueEscalations(ctx)
 		}
 	}
 }
@@ -122,13 +124,29 @@ func (s *AlertService) flushOneGroupWait(
 		outgoing = map[string]interface{}{}
 	}
 	outgoing["group_wait_flush"] = true
-	route := host.ChannelRouteForAlert(ctx, env.Status, env.Labels)
+	route := host.ChannelRouteForAlert(ctx, env.Status, env.Labels, fp)
 	host.ExpandChannelSetForAssigneeNotification(ctx, route.ChannelIDs, route.ReceiverGroupIDs, outgoing)
 	outgoing["matchedPolicyIds"] = route.MatchedPolicyIDs
 	outgoing["matchedPolicyNames"] = route.MatchedPolicyNames
+	outgoing["escalation_level"] = route.EscalationLevel
+	if len(route.ReceiverGroupEmails) > 0 {
+		outgoing["receiver_group_emails"] = route.ReceiverGroupEmails
+	}
 	if len(route.ChannelIDs) == 0 {
 		host.LogNoMatchedChannel(ctx, env.Title, env.Severity, env.Status, env.EnvLabel, gk, env.LabelsDigest, outgoing, "no_policy_matched")
 		s.clearGroupWaitPending(ctx, gk)
+		host.MaybeScheduleEscalation(ctx, escalationPendingEnvelope{
+			Fingerprint:  fp,
+			GroupKey:     gk,
+			LabelsDigest: env.LabelsDigest,
+			Source:       env.Source,
+			Title:        env.Title,
+			Severity:     env.Severity,
+			Status:       env.Status,
+			EnvLabel:     env.EnvLabel,
+			Labels:       env.Labels,
+			Outgoing:     outgoing,
+		}, route.EscalationLevel)
 		return
 	}
 	if host.ShouldSuppressByRouteSilence(ctx, env.Status, gk, route.MatchedPolicyIDs, route.SilenceSeconds, env.Labels) {
@@ -146,6 +164,18 @@ func (s *AlertService) flushOneGroupWait(
 		if fp != "" {
 			host.MarkFiringDelivered(ctx, fp)
 		}
+		host.MaybeScheduleEscalation(ctx, escalationPendingEnvelope{
+			Fingerprint:  fp,
+			GroupKey:     gk,
+			LabelsDigest: env.LabelsDigest,
+			Source:       env.Source,
+			Title:        env.Title,
+			Severity:     env.Severity,
+			Status:       env.Status,
+			EnvLabel:     env.EnvLabel,
+			Labels:       env.Labels,
+			Outgoing:     outgoing,
+		}, route.EscalationLevel)
 	}
 	s.clearGroupWaitPending(ctx, gk)
 }

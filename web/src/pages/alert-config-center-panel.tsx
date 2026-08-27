@@ -497,7 +497,7 @@ export function AlertConfigCenterPanel({
   function openReceiverGroupCreate() {
     setRgEditingId(null);
     rgForm.resetFields();
-    rgForm.setFieldsValue({ enabled: true, channel_ids: [], email_recipients: [] });
+    rgForm.setFieldsValue({ enabled: true, channel_ids: [], email_recipients: [], escalation_level: 0, escalation_delay_seconds: 900 });
     setRgModalOpen(true);
   }
 
@@ -509,6 +509,8 @@ export function AlertConfigCenterPanel({
       channel_ids: parseReceiverGroupChannelIds(g),
       email_recipients: parseReceiverGroupEmails(g),
       enabled: g.enabled,
+      escalation_level: g.escalation_level ?? 0,
+      escalation_delay_seconds: g.escalation_delay_seconds ?? (g.escalation_level > 0 ? 900 : 0),
     });
     setRgModalOpen(true);
   }
@@ -516,12 +518,15 @@ export function AlertConfigCenterPanel({
   async function saveReceiverGroup() {
     const pid = GLOBAL_ROUTING_PROJECT_ID;
     const values = await rgForm.validateFields();
+    const level = Number(values.escalation_level ?? 0);
     const payload = {
       project_id: pid,
       name: String(values.name ?? "").trim(),
       description: String(values.description ?? "").trim(),
       channel_ids_json: JSON.stringify(values.channel_ids ?? []),
       email_recipients_json: JSON.stringify(values.email_recipients ?? []),
+      escalation_level: Number.isFinite(level) ? Math.max(0, Math.min(10, Math.trunc(level))) : 0,
+      escalation_delay_seconds: Math.max(0, Math.trunc(Number(values.escalation_delay_seconds ?? 0))),
       enabled: values.enabled !== false,
     };
     setRgSaving(true);
@@ -1686,6 +1691,22 @@ export function AlertConfigCenterPanel({
               },
             },
             {
+              title: "升级层级",
+              dataIndex: "escalation_level",
+              width: 88,
+              render: (v: number) => (v > 0 ? `L${v}` : "L0 初始"),
+            },
+            {
+              title: "升级延迟",
+              dataIndex: "escalation_delay_seconds",
+              width: 100,
+              render: (v: number, r: AlertReceiverGroup) => {
+                if (!(r.escalation_level > 0)) return "—";
+                const sec = v > 0 ? v : 900;
+                return sec >= 60 ? `${Math.round(sec / 60)} 分钟` : `${sec} 秒`;
+              },
+            },
+            {
               title: "状态",
               dataIndex: "enabled",
               width: 72,
@@ -1745,6 +1766,27 @@ export function AlertConfigCenterPanel({
             extra="可选：除规则处理人外，额外抄送固定邮箱；不填则仅按处理人与通道投递。"
           >
             <Select mode="tags" tokenSeparators={[",", " ", ";"]} placeholder="可选，输入后回车" />
+          </Form.Item>
+          <Form.Item
+            name="escalation_level"
+            label="升级层级"
+            extra="0=首次 firing 立即通知；1+=未认领且持续 firing 达到延迟后通知。同一订阅节点可绑定多个不同层级的接收组。"
+            rules={[{ required: true, message: "请填写升级层级" }]}
+          >
+            <InputNumber min={0} max={10} precision={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.escalation_level !== cur.escalation_level}>
+            {() =>
+              Number(rgForm.getFieldValue("escalation_level") ?? 0) > 0 ? (
+                <Form.Item
+                  name="escalation_delay_seconds"
+                  label="升级延迟（秒）"
+                  extra="进入本层前等待秒数；填 0 时默认 900 秒（15 分钟）。认领/恢复/静默会取消待升级。"
+                >
+                  <InputNumber min={0} max={604800} precision={0} style={{ width: "100%" }} />
+                </Form.Item>
+              ) : null
+            }
           </Form.Item>
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />

@@ -106,15 +106,25 @@ func (h alertIngressHost) LogSuppressedFiringTiming(ctx context.Context, title, 
 	h.s.logSuppressedFiringTiming(ctx, title, severity, status, groupKey, labelsDigest, reason, outgoing)
 }
 
-func (h alertIngressHost) ChannelRouteForAlert(ctx context.Context, status string, labels map[string]string) ChannelRoute {
-	r := h.s.channelRouteForAlert(ctx, status, labels)
+func (h alertIngressHost) ChannelRouteForAlert(ctx context.Context, status string, labels map[string]string, fingerprint string) ChannelRoute {
+	r := h.s.channelRouteForAlert(ctx, status, labels, fingerprint)
 	return ChannelRoute{
-		ChannelIDs:         r.ChannelIDs,
-		MatchedPolicyIDs:   r.MatchedPolicyIDs,
-		MatchedPolicyNames: r.MatchedPolicyNames,
-		SilenceSeconds:     r.SilenceSeconds,
-		ReceiverGroupIDs:   r.ReceiverGroupIDs,
+		ChannelIDs:          r.ChannelIDs,
+		MatchedPolicyIDs:    r.MatchedPolicyIDs,
+		MatchedPolicyNames:  r.MatchedPolicyNames,
+		SilenceSeconds:      r.SilenceSeconds,
+		ReceiverGroupIDs:    r.ReceiverGroupIDs,
+		ReceiverGroupEmails: r.ReceiverGroupEmails,
+		EscalationLevel:     r.EscalationLevel,
 	}
+}
+
+func (h alertIngressHost) MaybeScheduleEscalation(ctx context.Context, env escalationPendingEnvelope, currentLevel int) {
+	h.s.maybeScheduleEscalation(ctx, env, currentLevel)
+}
+
+func (h alertIngressHost) ClearEscalationState(ctx context.Context, fingerprint string) {
+	h.s.clearEscalationState(ctx, fingerprint)
 }
 
 func (h alertIngressHost) ExpandChannelSetForAssigneeNotification(ctx context.Context, channels map[uint]struct{}, receiverGroupIDs []uint, outgoing map[string]interface{}) {
@@ -215,6 +225,7 @@ func (h alertIngressHost) OnResolvedComplete(ctx context.Context, fingerprint, g
 	_ = h.s.clearGroupAggregateState(ctx, groupKey)
 	h.s.clearAlertFiringDelivered(ctx, fingerprint)
 	h.s.clearGroupWaitPending(ctx, groupKey)
+	h.s.clearEscalationState(ctx, fingerprint)
 }
 
 func (h alertIngressHost) UpsertCurAlert(ctx context.Context, row *model.AlertCurEvent) error {

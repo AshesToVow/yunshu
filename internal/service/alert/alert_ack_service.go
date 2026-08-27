@@ -54,6 +54,7 @@ func (s *AlertService) AcknowledgeAlert(ctx context.Context, userID uint, userNa
 	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.ack", "AcknowledgeAlert", err)
 	}
+	s.clearEscalationState(ctx, fp)
 	return row, nil
 }
 

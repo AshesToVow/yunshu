@@ -9,11 +9,13 @@ import (
 
 // ChannelRoute is the subscription routing outcome for one alert.
 type ChannelRoute struct {
-	ChannelIDs         map[uint]struct{}
-	MatchedPolicyIDs   string
-	MatchedPolicyNames string
-	SilenceSeconds     int
-	ReceiverGroupIDs   []uint
+	ChannelIDs          map[uint]struct{}
+	MatchedPolicyIDs    string
+	MatchedPolicyNames  string
+	SilenceSeconds      int
+	ReceiverGroupIDs    []uint
+	ReceiverGroupEmails []string
+	EscalationLevel     int
 }
 
 // IngressHost implements delivery orchestration hooks (AlertService in parent package).
@@ -38,8 +40,10 @@ type IngressHost interface {
 	IsAckActive(ctx context.Context, fingerprint string) bool
 	PeekFiringGroupTiming(ctx context.Context, groupKey, labelsDigest string) (bool, string, int64, string, string)
 	LogSuppressedFiringTiming(ctx context.Context, title, severity, status, groupKey, labelsDigest, reason string, outgoing map[string]interface{})
-	ChannelRouteForAlert(ctx context.Context, status string, labels map[string]string) ChannelRoute
+	ChannelRouteForAlert(ctx context.Context, status string, labels map[string]string, fingerprint string) ChannelRoute
 	ExpandChannelSetForAssigneeNotification(ctx context.Context, channels map[uint]struct{}, receiverGroupIDs []uint, outgoing map[string]interface{})
+	MaybeScheduleEscalation(ctx context.Context, env escalationPendingEnvelope, currentLevel int)
+	ClearEscalationState(ctx context.Context, fingerprint string)
 	LogNoMatchedChannel(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, outgoing map[string]interface{}, reason string)
 	ShouldSuppressByRouteSilence(ctx context.Context, status, groupKey, matchedNodeIDs string, silenceSeconds int, labels map[string]string) bool
 	LogSuppressedRouteSilence(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, silenceSeconds int, outgoing map[string]interface{})

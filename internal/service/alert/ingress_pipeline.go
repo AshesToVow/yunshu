@@ -159,14 +159,32 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 			}
 		}
 
-		route := host.ChannelRouteForAlert(ctx, status, labels)
+		route := host.ChannelRouteForAlert(ctx, status, labels, alert.Fingerprint)
 		host.ExpandChannelSetForAssigneeNotification(ctx, route.ChannelIDs, route.ReceiverGroupIDs, outgoing)
 		outgoing["matchedPolicyIds"] = route.MatchedPolicyIDs
 		outgoing["matchedPolicyNames"] = route.MatchedPolicyNames
 		outgoing["subscription_silence_seconds"] = route.SilenceSeconds
+		outgoing["escalation_level"] = route.EscalationLevel
+		if len(route.ReceiverGroupEmails) > 0 {
+			outgoing["receiver_group_emails"] = route.ReceiverGroupEmails
+		}
 
 		if len(route.ChannelIDs) == 0 {
 			host.LogNoMatchedChannel(ctx, title, severity, status, envLabel, groupKey, labelsDigest, outgoing, "no_policy_matched")
+			if status == "firing" {
+				host.MaybeScheduleEscalation(ctx, escalationPendingEnvelope{
+					Fingerprint:  alert.Fingerprint,
+					GroupKey:     groupKey,
+					LabelsDigest: labelsDigest,
+					Source:       ca.Source,
+					Title:        title,
+					Severity:     severity,
+					Status:       status,
+					EnvLabel:     envLabel,
+					Labels:       labels,
+					Outgoing:     outgoing,
+				}, route.EscalationLevel)
+			}
 			continue
 		}
 		if host.ShouldSuppressByRouteSilence(ctx, status, groupKey, route.MatchedPolicyIDs, route.SilenceSeconds, labels) {
@@ -205,6 +223,18 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 			host.CommitFiringGroupTimingSend(ctx, groupKey, labelsDigest)
 			host.MarkFiringDelivered(ctx, alert.Fingerprint)
 			host.ClearGroupWaitPending(ctx, groupKey)
+			host.MaybeScheduleEscalation(ctx, escalationPendingEnvelope{
+				Fingerprint:  alert.Fingerprint,
+				GroupKey:     groupKey,
+				LabelsDigest: labelsDigest,
+				Source:       ca.Source,
+				Title:        title,
+				Severity:     severity,
+				Status:       status,
+				EnvLabel:     envLabel,
+				Labels:       labels,
+				Outgoing:     outgoing,
+			}, route.EscalationLevel)
 		}
 		if status == "resolved" && okDeliveries == 0 {
 			_ = host.ClearResolvedSentMark(ctx, alert.Fingerprint)

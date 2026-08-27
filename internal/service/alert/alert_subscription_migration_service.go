@@ -144,13 +144,14 @@ func (s *AlertSubscriptionService) migrateFromPoliciesTx(ctx context.Context, tx
 			First(&rg).Error
 		if rgErr != nil {
 			rg = model.AlertReceiverGroup{
-				ProjectID:           projectID,
-				Name:                rgName,
-				Description:         strings.TrimSpace(p.Description),
-				ChannelIDsJSON:      strings.TrimSpace(p.ChannelsJSON),
-				EmailRecipientsJSON: "[]",
-				EscalationLevel:     0,
-				Enabled:             p.Enabled,
+				ProjectID:              projectID,
+				Name:                   rgName,
+				Description:            strings.TrimSpace(p.Description),
+				ChannelIDsJSON:         strings.TrimSpace(p.ChannelsJSON),
+				EmailRecipientsJSON:    "[]",
+				EscalationLevel:        0,
+				EscalationDelaySeconds: 0,
+				Enabled:                p.Enabled,
 			}
 			if strings.TrimSpace(rg.ChannelIDsJSON) == "" {
 				rg.ChannelIDsJSON = "[]"
