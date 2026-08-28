@@ -70,6 +70,7 @@ var bizReasonByCode = map[int]string{
 	23011: "ProjectAdminRequired",
 	23012: "ProjectReadonlyMember",
 	23013: "K8sClusterProjectAccessDenied",
+	23014: "ProjectArchived",
 	// RBAC / 组织 24xxx
 	24001: "RoleNotFound",
 	24002: "UserGroupNotFound",

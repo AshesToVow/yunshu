@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 )
@@ -16,8 +17,10 @@ type module struct {
 	plugin.Base
 }
 
-func (m *module) Name() string        { return "dbmgmt" }
-func (m *module) Description() string { return "多类型数据库接入、SQL 控制台与审批工单" }
+func (m *module) Name() string { return "dbmgmt" }
+func (m *module) Description() string {
+	return "多类型数据库接入、SQL 控制台与审批工单"
+}
 
 func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
@@ -50,7 +53,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 		return nil
 	}
 	if svc, ok := rt.Dbmgmt.(*dbmgmtsvc.Service); ok && svc != nil {
-		go svc.RunBackgroundWorkers(bgCtx)
+		lifecycle.Go("dbmgmt.background-workers", func() { svc.RunBackgroundWorkers(bgCtx) })
 	}
 	return nil
 }

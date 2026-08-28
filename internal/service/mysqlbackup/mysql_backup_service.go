@@ -17,14 +17,15 @@ import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	cryptox "yunshu/internal/pkg/crypto"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/lifecycle"
+	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/mysqlbackup"
 	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/pkg/pagination"
-	"yunshu/internal/pkg/mailer"
-	"yunshu/internal/pkg/sshserver"
 	"yunshu/internal/pkg/sshclient"
+	"yunshu/internal/pkg/sshserver"
 	"yunshu/internal/repository"
-	bizerrors "yunshu/internal/pkg/errors"
 
 	"crypto/cipher"
 
@@ -38,18 +39,18 @@ type ObjectStoreFactory func(ctx context.Context) (*objectstore.Client, error)
 type SchedulerConfigResolver func(ctx context.Context) dictconfig.MysqlBackupSchedulerConfig
 
 type MysqlBackupService struct {
-	backupRepo   interfaces.MysqlBackupRepository
-	serverRepo   interfaces.ServerRepository
-	projectRepo  interfaces.ProjectRepository
-	userRepo     interfaces.UserRepository
+	backupRepo     interfaces.MysqlBackupRepository
+	serverRepo     interfaces.ServerRepository
+	projectRepo    interfaces.ProjectRepository
+	userRepo       interfaces.UserRepository
 	newObjectStore ObjectStoreFactory
 	resolveSched   SchedulerConfigResolver
-	aead         cipher.AEAD
-	mailer       mailer.Sender
-	appName      string
-	schedMu      sync.Mutex
-	schedRunning map[uint]bool
-	jobCancels   sync.Map // jobID -> context.CancelFunc
+	aead           cipher.AEAD
+	mailer         mailer.Sender
+	appName        string
+	schedMu        sync.Mutex
+	schedRunning   map[uint]bool
+	jobCancels     sync.Map // jobID -> context.CancelFunc
 }
 
 func NewMysqlBackupService(
@@ -92,37 +93,37 @@ func NewMysqlBackupService(
 }
 
 type MysqlBackupInstanceItem struct {
-	ID                 uint     `json:"id"`
-	ProjectID          uint     `json:"project_id"`
-	ServerID           uint     `json:"server_id"`
-	ServerName         string   `json:"server_name,omitempty"`
-	Name               string   `json:"name"`
-	Enabled            bool     `json:"enabled"`
-	MysqlHost          string   `json:"mysql_host"`
-	MysqlPort          int      `json:"mysql_port"`
-	MysqlSocket        string   `json:"mysql_socket"`
-	MysqlUser          string   `json:"mysql_user"`
-	BackupMode         string   `json:"backup_mode"`
-	BackupScope        string   `json:"backup_scope"`
-	DatabaseName       string   `json:"database_name"`
-	TableName          string   `json:"table_name"`
-	DatabaseNames      string   `json:"database_names"`
-	RemoteDataDir      string   `json:"remote_data_dir"`
-	RemoteLogDir       string   `json:"remote_log_dir"`
-	MysqlDataDir       string   `json:"mysql_datadir"`
-	UploadToMinio      bool     `json:"upload_to_minio"`
-	MysqldumpWorkDir   string   `json:"mysqldump_work_dir"`
-	MysqldumpOptions   []string `json:"mysqldump_options"`
-	MysqldumpExtraArgs string   `json:"mysqldump_extra_args"`
-	MysqldumpBin       string   `json:"mysqldump_bin"`
-	XtrabackupTool     string   `json:"xtrabackup_tool"`
-	XtrabackupBin      string   `json:"xtrabackup_bin"`
-	InnobackupexBin    string   `json:"innobackupex_bin"`
-	ScheduleEnabled    bool     `json:"schedule_enabled"`
-	CronSpec           string   `json:"cron_spec"`
-	LastScheduledAt    string   `json:"last_scheduled_at,omitempty"`
-	NotifyEnabled      bool     `json:"notify_enabled"`
-	NotifyUserIDs      []uint   `json:"notify_user_ids"`
+	ID                 uint                        `json:"id"`
+	ProjectID          uint                        `json:"project_id"`
+	ServerID           uint                        `json:"server_id"`
+	ServerName         string                      `json:"server_name,omitempty"`
+	Name               string                      `json:"name"`
+	Enabled            bool                        `json:"enabled"`
+	MysqlHost          string                      `json:"mysql_host"`
+	MysqlPort          int                         `json:"mysql_port"`
+	MysqlSocket        string                      `json:"mysql_socket"`
+	MysqlUser          string                      `json:"mysql_user"`
+	BackupMode         string                      `json:"backup_mode"`
+	BackupScope        string                      `json:"backup_scope"`
+	DatabaseName       string                      `json:"database_name"`
+	TableName          string                      `json:"table_name"`
+	DatabaseNames      string                      `json:"database_names"`
+	RemoteDataDir      string                      `json:"remote_data_dir"`
+	RemoteLogDir       string                      `json:"remote_log_dir"`
+	MysqlDataDir       string                      `json:"mysql_datadir"`
+	UploadToMinio      bool                        `json:"upload_to_minio"`
+	MysqldumpWorkDir   string                      `json:"mysqldump_work_dir"`
+	MysqldumpOptions   []string                    `json:"mysqldump_options"`
+	MysqldumpExtraArgs string                      `json:"mysqldump_extra_args"`
+	MysqldumpBin       string                      `json:"mysqldump_bin"`
+	XtrabackupTool     string                      `json:"xtrabackup_tool"`
+	XtrabackupBin      string                      `json:"xtrabackup_bin"`
+	InnobackupexBin    string                      `json:"innobackupex_bin"`
+	ScheduleEnabled    bool                        `json:"schedule_enabled"`
+	CronSpec           string                      `json:"cron_spec"`
+	LastScheduledAt    string                      `json:"last_scheduled_at,omitempty"`
+	NotifyEnabled      bool                        `json:"notify_enabled"`
+	NotifyUserIDs      []uint                      `json:"notify_user_ids"`
 	NotifyUsers        []MysqlBackupNotifyUserItem `json:"notify_users,omitempty"`
 	// HasMysqlPassword 是否已保存加密密码（不回显明文；编辑表单据此提示「已配置」）。
 	HasMysqlPassword bool   `json:"has_mysql_password"`
@@ -499,7 +500,10 @@ func (s *MysqlBackupService) enqueueBackup(ctx context.Context, projectID, insta
 		return nil, bizerrors.Pass(ctx, "mysql.backup", "enqueueBackup", err)
 	}
 
-	go s.runBackupJobAsync(job.ID, projectID, instanceID, trigger)
+	// 任务级 goroutine：不纳入进程 Wait（备份可能长达数小时），但需 panic 兜底避免整进程崩溃。
+	lifecycle.GoDetached("mysqlbackup.run-job", func() {
+		s.runBackupJobAsync(job.ID, projectID, instanceID, trigger)
+	})
 	return job, nil
 }
 
@@ -977,7 +981,7 @@ func (s *MysqlBackupService) backupArtifactBasename(ctx context.Context, inst *m
 
 func (s *MysqlBackupService) startPollBackupJobLog(ctx context.Context, jobID uint, sshCli *sshclient.Client, logPath, prefix string) context.CancelFunc {
 	pollCtx, cancel := context.WithCancel(ctx)
-	go func() {
+	lifecycle.GoDetached("mysqlbackup.poll-job-log", func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -993,7 +997,7 @@ func (s *MysqlBackupService) startPollBackupJobLog(ctx context.Context, jobID ui
 				_ = s.backupRepo.PatchJob(pollCtx, jobID, map[string]any{"log_excerpt": excerpt})
 			}
 		}
-	}()
+	})
 	return cancel
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/lifecycle"
 )
 
 const (
@@ -47,13 +48,13 @@ func (s *Service) enqueueRun(runID uint) {
 	select {
 	case s.jobCh <- runID:
 	default:
-		go func() {
+		lifecycle.GoDetached("inspect.enqueue-retry", func() {
 			select {
 			case s.jobCh <- runID:
 			case <-time.After(30 * time.Second):
 				_, _ = s.failRun(context.Background(), &model.InspectRun{ID: runID}, fmt.Errorf("巡检队列繁忙，请稍后重试"))
 			}
-		}()
+		})
 	}
 }
 

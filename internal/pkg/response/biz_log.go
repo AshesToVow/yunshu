@@ -19,7 +19,7 @@ func LogHTTPError(c *gin.Context, err error) {
 		return
 	}
 	c.Set(ctxKeyBizErrorLogged, true)
-	biz, ok := bizerrors.As(bizerrors.Ensure(err))
+	biz, ok := bizerrors.As(bizerrors.EnsureCtx(RequestContext(c), err))
 	if !ok {
 		return
 	}
@@ -27,5 +27,5 @@ func LogHTTPError(c *gin.Context, err error) {
 	if biz.HTTPStatus() >= http.StatusInternalServerError {
 		level = "error"
 	}
-	biz.LogAPI(c.Request.Context(), level, c)
+	biz.LogAPI(RequestContext(c), level, c)
 }

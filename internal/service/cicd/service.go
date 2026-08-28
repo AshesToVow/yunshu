@@ -115,20 +115,20 @@ func (s *Service) ensureProject(ctx context.Context, projectID uint) error {
 // --- Service CRUD ---
 
 type ServiceListQuery struct {
-	ProjectID   uint   `form:"project_id"`
-	Keyword     string `form:"keyword"`
-	ServiceType string `form:"service_type"`
-	Page        int    `form:"page"`
-	PageSize    int    `form:"page_size"`
+	ProjectID   uint              `form:"project_id"`
+	Keyword     string            `form:"keyword"`
+	ServiceType string            `form:"service_type"`
+	Page        int               `form:"page"`
+	PageSize    int               `form:"page_size"`
 	Actor       *auth.CurrentUser `form:"-"`
 }
 
 type ServiceItem struct {
 	model.CicdService
-	HasCiConfig     bool `json:"has_ci_config"`
-	DeployConfigCnt int  `json:"deploy_config_count"`
-	LastBuildResult string `json:"last_build_result,omitempty"`
-	LastBuildAt     *time.Time `json:"last_build_at,omitempty"`
+	HasCiConfig     bool            `json:"has_ci_config"`
+	DeployConfigCnt int             `json:"deploy_config_count"`
+	LastBuildResult string          `json:"last_build_result,omitempty"`
+	LastBuildAt     *time.Time      `json:"last_build_at,omitempty"`
 	Access          *CicdAccessPerm `json:"access,omitempty"`
 }
 
@@ -297,9 +297,9 @@ func (s *Service) UpsertService(ctx context.Context, serviceID uint, req Service
 	if serviceID > 0 {
 		if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", serviceID, req.ProjectID).First(&row).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrNotFound
-		}
-		return nil, err
+				return nil, constants.ErrNotFound
+			}
+			return nil, err
 		}
 	} else {
 		var exists int64
@@ -403,7 +403,7 @@ func (s *Service) FindCiConfig(ctx context.Context, projectID, serviceID uint) (
 
 // CiConfigView GET ci-config 响应（未配置时 configured=false，不返回 404）。
 type CiConfigView struct {
-	Configured bool               `json:"configured"`
+	Configured bool                `json:"configured"`
 	Config     *model.CicdCiConfig `json:"config,omitempty"`
 }
 
@@ -773,10 +773,10 @@ func (s *Service) DeleteDeployConfig(ctx context.Context, projectID, serviceID, 
 // --- Trigger Build / Release ---
 
 type TriggerBuildRequest struct {
-	BranchName     string `json:"branch_name" binding:"omitempty,max=128"`
-	PublishMode    string `json:"publish_mode" binding:"omitempty,max=32"`
-	Tenv           string `json:"tenv" binding:"omitempty,max=16"`
-	EmailUser      string `json:"email_user" binding:"omitempty,max=128"`
+	BranchName  string `json:"branch_name" binding:"omitempty,max=128"`
+	PublishMode string `json:"publish_mode" binding:"omitempty,max=32"`
+	Tenv        string `json:"tenv" binding:"omitempty,max=16"`
+	EmailUser   string `json:"email_user" binding:"omitempty,max=128"`
 }
 
 type TriggerReleaseRequest struct {
@@ -981,7 +981,7 @@ type BuildRunListQuery struct {
 
 type BuildRunItem struct {
 	model.CicdBuildRun
-	ServiceName     string `json:"service_name"`
+	ServiceName       string `json:"service_name"`
 	ServiceIdentifier string `json:"service_identifier"`
 }
 
@@ -1032,24 +1032,24 @@ func (s *Service) ListBuildRuns(ctx context.Context, q BuildRunListQuery) (*pagi
 }
 
 type ReleaseRunListQuery struct {
-	ProjectID      uint   `form:"project_id"`
-	ServiceID      uint   `form:"service_id"`
-	Status         string `form:"status"`
-	ReleaseType    string `form:"release_type"`
-	Tenv           string `form:"tenv"`
-	Keyword        string `form:"keyword"`
-	Mine           bool   `form:"mine"`
-	MineScope           string `form:"mine_scope"` // pending | done | all（与 mine 联用）
-	Page                int    `form:"page"`
-	PageSize            int    `form:"page_size"`
-	ApproverUserID      *uint  // 内部：待审核
-	ExecutorUserID      *uint  // 内部：待执行（提交人）
-	ApprovalDoneUserID  *uint  // 内部：我已审批
-	ExecutionDoneUserID *uint  // 内部：我已执行
-	ApprovalMineUserID  *uint  // 内部：审批待办全部
-	ExecutionMineUserID *uint  // 内部：执行待办全部
-	MineTab             string `form:"-"` // approval | execution（mine 待办列表）
-	MineViewerUserID    *uint  `form:"-"`
+	ProjectID           uint              `form:"project_id"`
+	ServiceID           uint              `form:"service_id"`
+	Status              string            `form:"status"`
+	ReleaseType         string            `form:"release_type"`
+	Tenv                string            `form:"tenv"`
+	Keyword             string            `form:"keyword"`
+	Mine                bool              `form:"mine"`
+	MineScope           string            `form:"mine_scope"` // pending | done | all（与 mine 联用）
+	Page                int               `form:"page"`
+	PageSize            int               `form:"page_size"`
+	ApproverUserID      *uint             // 内部：待审核
+	ExecutorUserID      *uint             // 内部：待执行（提交人）
+	ApprovalDoneUserID  *uint             // 内部：我已审批
+	ExecutionDoneUserID *uint             // 内部：我已执行
+	ApprovalMineUserID  *uint             // 内部：审批待办全部
+	ExecutionMineUserID *uint             // 内部：执行待办全部
+	MineTab             string            `form:"-"` // approval | execution（mine 待办列表）
+	MineViewerUserID    *uint             `form:"-"`
 	Actor               *auth.CurrentUser `form:"-"`
 }
 
@@ -1274,6 +1274,9 @@ func (s *Service) loadServiceNameMap(ctx context.Context, runs []model.CicdBuild
 	return out
 }
 
+// cicdSyncTickTimeout 单轮 Jenkins 状态同步的耗时上界，保证优雅关闭可及时收敛。
+const cicdSyncTickTimeout = 2 * time.Minute
+
 // RunSyncWorker 后台同步 Jenkins 构建状态。
 func (s *Service) RunSyncWorker(ctx context.Context) {
 	interval := time.Duration(s.resolvedConfig(ctx).RunSyncIntervalSeconds) * time.Second
@@ -1287,7 +1290,10 @@ func (s *Service) RunSyncWorker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.syncPendingRuns(context.Background())
+			// 单次迭代加上界：避免关闭时被 Jenkins 慢响应挂死，同时响应父 ctx 取消
+			tickCtx, cancel := context.WithTimeout(ctx, cicdSyncTickTimeout)
+			s.syncPendingRuns(tickCtx)
+			cancel()
 		}
 	}
 }

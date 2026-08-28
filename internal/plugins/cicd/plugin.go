@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
 	cicdsvc "yunshu/internal/service/cicd"
 )
@@ -16,8 +17,10 @@ type module struct {
 	plugin.Base
 }
 
-func (m *module) Name() string        { return "cicd" }
-func (m *module) Description() string { return "CI/CD 持续集成与交付：Jenkins 打包、MinIO/SSH 发布、执行记录" }
+func (m *module) Name() string { return "cicd" }
+func (m *module) Description() string {
+	return "CI/CD 持续集成与交付：Jenkins 打包、MinIO/SSH 发布、执行记录"
+}
 
 func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
@@ -58,8 +61,8 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 		return nil
 	}
 	if svc, ok := rt.Cicd.(*cicdsvc.Service); ok && svc != nil {
-		go svc.RunSyncWorker(bgCtx)
-		go svc.RunImageCleanupWorker(bgCtx)
+		lifecycle.Go("cicd.run-sync", func() { svc.RunSyncWorker(bgCtx) })
+		lifecycle.Go("cicd.image-cleanup", func() { svc.RunImageCleanupWorker(bgCtx) })
 	}
 	return nil
 }

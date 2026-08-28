@@ -138,11 +138,29 @@ func SQLDropDictEntriesLegacyCompositeIndex(dialect string) string {
 	}
 }
 
+// sanitizeSQLIdent 白名单过滤标识符：仅保留字母、数字、下划线与 $。
+// 当前调用方传入的都是迁移代码内的常量，这里是纵深防御，
+// 防止后续有人把外部输入接进来造成 DDL 注入。
+func sanitizeSQLIdent(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= '0' && c <= '9', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c == '_', c == '$':
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
 // SQLDropIndexIfExists 生成删除指定表索引的 DDL（存在才删），用于软删除唯一索引重建前的清理。
 func SQLDropIndexIfExists(dialect, table, index string) string {
+	table = sanitizeSQLIdent(table)
+	index = sanitizeSQLIdent(index)
 	switch strings.ToLower(strings.TrimSpace(dialect)) {
 	case "postgres":
-		return fmt.Sprintf(`DROP INDEX IF EXISTS %s`, index)
+		return fmt.Sprintf(`DROP INDEX IF EXISTS "%s"`, index)
 	default:
 		return fmt.Sprintf("ALTER TABLE `%s` DROP INDEX `%s`", table, index)
 	}

@@ -9,6 +9,7 @@ import (
 
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/lifecycle"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -109,7 +110,7 @@ func (s *AlertService) runAlertWebhookIngestWorker(ctx context.Context) {
 		return
 	}
 	s.logWebhookInfo("Started alert webhook async worker")
-	go func() {
+	lifecycle.Go("alert.webhook-ingest", func() {
 		defer func() {
 			if r := recover(); r != nil {
 				s.logWebhookError(errors.New("panic"), "Alert webhook worker panic", "panic", r)
@@ -144,5 +145,5 @@ func (s *AlertService) runAlertWebhookIngestWorker(ctx context.Context) {
 			s.ingestWebhookPayloadWithRetry(procCtx, payload)
 			cancel()
 		}
-	}()
+	})
 }

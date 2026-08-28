@@ -182,7 +182,7 @@ func TestFlushOneGroupWait_skipsWhenAcked(t *testing.T) {
 		Labels:      map[string]string{},
 		Outgoing:    map[string]any{},
 	}, time.Now().UTC().Add(-30*time.Second).Format(time.RFC3339))
-	ackedHost := &ackActiveHost{pipelineTestHost: *host, acked: true}
+	ackedHost := &ackActiveHost{pipelineTestHost: host, acked: true}
 	s.flushOneGroupWait(ctx, ackedHost, nil, *s.loadGroupWaitPending(ctx, "gk-ack"))
 	if s.loadGroupWaitPending(ctx, "gk-ack") == nil {
 		t.Fatal("acked flush should keep pending")
@@ -190,7 +190,7 @@ func TestFlushOneGroupWait_skipsWhenAcked(t *testing.T) {
 }
 
 type ackActiveHost struct {
-	pipelineTestHost
+	*pipelineTestHost
 	acked bool
 }
 

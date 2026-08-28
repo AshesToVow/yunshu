@@ -12,5 +12,5 @@ func abortService(c *gin.Context, err error) {
 	if err == nil || c == nil {
 		return
 	}
-	response.Abort(c, bizerrors.Ensure(err))
+	response.Abort(c, bizerrors.EnsureCtx(response.RequestContext(c), err))
 }

@@ -48,9 +48,9 @@ type HTTPConfig struct {
 type LogConfig struct {
 	Level      string `mapstructure:"level"`
 	Format     string `mapstructure:"format"`
-	Output     string `mapstructure:"output"`      // console, file, both
-	FilePath   string `mapstructure:"file_path"`   // log file directory path
-	MaxSizeMB  int    `mapstructure:"max_size_mb"` // 单文件上限（MB），超出后轮转
+	Output     string `mapstructure:"output"`       // console, file, both
+	FilePath   string `mapstructure:"file_path"`    // log file directory path
+	MaxSizeMB  int    `mapstructure:"max_size_mb"`  // 单文件上限（MB），超出后轮转
 	MaxAgeDays int    `mapstructure:"max_age_days"` // 保留天数，0 表示不按天清理
 	MaxBackups int    `mapstructure:"max_backups"`  // 保留备份文件数，0 表示不限制数量
 	Compress   bool   `mapstructure:"compress"`     // 轮转后是否 gzip 压缩
@@ -71,6 +71,11 @@ type DatabaseConfig struct {
 	MaxIdleConns           int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns           int    `mapstructure:"max_open_conns"`
 	ConnMaxLifetimeSeconds int    `mapstructure:"conn_max_lifetime_seconds"`
+
+	// AutoMigrate 控制进程启动时是否执行 GORM AutoMigrate。
+	// 指针类型用于区分「未配置」与「显式 false」：未配置时按环境推断
+	// （非生产开启、生产关闭），见 Config.AutoMigrateEnabled。
+	AutoMigrate *bool `mapstructure:"auto_migrate"`
 }
 
 // MySQLConfig 为向后兼容保留的类型别名。
@@ -344,6 +349,14 @@ func normalizeDatabaseConfig(cfg *Config) {
 	db := cfg.Database
 	if strings.TrimSpace(db.Host) == "" && strings.TrimSpace(db.DBName) == "" {
 		db = cfg.MySQL
+	}
+	// auto_migrate 允许只写在任一段下（database 优先），归一化后两段一致。
+	if db.AutoMigrate == nil {
+		if cfg.Database.AutoMigrate != nil {
+			db.AutoMigrate = cfg.Database.AutoMigrate
+		} else if cfg.MySQL.AutoMigrate != nil {
+			db.AutoMigrate = cfg.MySQL.AutoMigrate
+		}
 	}
 	if strings.TrimSpace(db.Driver) == "" {
 		db.Driver = "mysql"

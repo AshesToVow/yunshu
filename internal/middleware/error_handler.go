@@ -16,7 +16,7 @@ func ErrorHandler() gin.HandlerFunc {
 		if len(c.Errors) == 0 || c.Writer.Written() {
 			return
 		}
-		err := bizerrors.Ensure(c.Errors.Last().Err)
+		err := bizerrors.EnsureCtx(response.RequestContext(c), c.Errors.Last().Err)
 		response.LogHTTPError(c, err)
 		biz, ok := bizerrors.As(err)
 		if !ok {
@@ -41,7 +41,7 @@ func AbortWithError(c *gin.Context, err error) {
 	if c == nil || err == nil || c.Writer.Written() {
 		return
 	}
-	err = bizerrors.Ensure(err)
+	err = bizerrors.EnsureCtx(response.RequestContext(c), err)
 	response.LogHTTPError(c, err)
 	if biz, ok := bizerrors.As(err); ok {
 		body := biz.ToBody()

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/lifecycle"
 
 	"yunshu/internal/model"
 )
@@ -90,7 +91,7 @@ func (s *AlertService) startInhibitionPruner(ctx context.Context) {
 		return
 	}
 	ticker := time.NewTicker(5 * time.Minute)
-	go func() {
+	lifecycle.Go("alert.inhibition-pruner", func() {
 		defer ticker.Stop()
 		for {
 			select {
@@ -100,5 +101,5 @@ func (s *AlertService) startInhibitionPruner(ctx context.Context) {
 				_ = s.inhibitionSvc.RefreshCache(ctx)
 			}
 		}
-	}()
+	})
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
 	esmgmtsvc "yunshu/internal/service/esmgmt"
 )
@@ -16,8 +17,10 @@ type module struct {
 	plugin.Base
 }
 
-func (m *module) Name() string        { return "esmgmt" }
-func (m *module) Description() string { return "ES 管理控制台：连接管理、集群概览、索引备份与 REST 控制台" }
+func (m *module) Name() string { return "esmgmt" }
+func (m *module) Description() string {
+	return "ES 管理控制台：连接管理、集群概览、索引备份与 REST 控制台"
+}
 
 func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
@@ -41,7 +44,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 		return nil
 	}
 	if svc, ok := rt.Esmgmt.(*esmgmtsvc.Service); ok && svc != nil {
-		go svc.RunBackupScheduler(bgCtx)
+		lifecycle.Go("esmgmt.backup-scheduler", func() { svc.RunBackupScheduler(bgCtx) })
 	}
 	return nil
 }

@@ -14,6 +14,7 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/esclient"
+	"yunshu/internal/pkg/lifecycle"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl"
@@ -176,7 +177,7 @@ func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.Kafk
 	slog.Default().With("component", "kafka-to-es").Info("kafka consumer starting",
 		"group", cfg.ConsumerGroup, "topics", len(topics), "brokers", len(cfg.Brokers))
 
-	go func() {
+	lifecycle.Go("logplatform.kafka-to-es", func() {
 		defer func() {
 			s.runningFlag.Store(false)
 			s.mu.Lock()
@@ -184,7 +185,7 @@ func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.Kafk
 			s.mu.Unlock()
 		}()
 		s.consumeLoop(runCtx, cfg, topics)
-	}()
+	})
 }
 
 func (s *KafkaToESService) stopConsumer() {

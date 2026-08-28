@@ -7,6 +7,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/cronutil"
+	"yunshu/internal/pkg/lifecycle"
 )
 
 const inspectSchedulerLeaderKey = "inspect:scheduler:leader"
@@ -94,7 +95,7 @@ func (s *Service) renewLeader(ctx context.Context) func() {
 		return func() {}
 	}
 	done := make(chan struct{})
-	go func() {
+	lifecycle.GoDetached("inspect.leader-renew", func() {
 		t := time.NewTicker(2 * time.Minute)
 		defer t.Stop()
 		for {
@@ -107,6 +108,6 @@ func (s *Service) renewLeader(ctx context.Context) func() {
 				_ = s.redis.Expire(ctx, inspectSchedulerLeaderKey, 12*time.Minute).Err()
 			}
 		}
-	}()
+	})
 	return func() { close(done) }
 }

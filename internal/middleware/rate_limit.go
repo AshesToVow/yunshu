@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -95,7 +94,8 @@ func RegistrationRateLimit(rdb *redis.Client) gin.HandlerFunc {
 			applyMemoryRegistrationRateLimit(c, defaultMemoryRegisterLimiter)
 			return
 		}
-		ctx := context.Background()
+		// 使用请求链路 ctx，保留 request_id 等字段并随客户端断开自动取消
+		ctx := c.Request.Context()
 
 		// Check if IP is currently banned
 		ip := c.ClientIP()
@@ -170,7 +170,8 @@ func AgentPublicRegisterRateLimit(rdb *redis.Client) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		ctx := context.Background()
+		// 使用请求链路 ctx，保留 request_id 等字段并随客户端断开自动取消
+		ctx := c.Request.Context()
 		ip := c.ClientIP()
 		banKey := fmt.Sprintf("ban:agent-register:ip:%s", ip)
 		if rdb.Exists(ctx, banKey).Val() > 0 {

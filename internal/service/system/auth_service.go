@@ -85,7 +85,7 @@ func (s *AuthService) SendEmailCode(ctx context.Context, req SendEmailCodeReques
 		return nil, bizerrors.Pass(ctx, "auth", "SendEmailCode", err)
 	}
 
-	code, err := generateNumericCode(6)
+	code, err := generateNumericCode(ctx, 6)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "auth", "SendEmailCode", err)
 	}
@@ -746,7 +746,7 @@ func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-func generateNumericCode(length int) (string, error) {
+func generateNumericCode(ctx context.Context, length int) (string, error) {
 	if length <= 0 {
 		return "", constants.ErrBadRequestWithMsg(constants.ErrMsgb77c1b087c0b)
 	}
@@ -758,7 +758,7 @@ func generateNumericCode(length int) (string, error) {
 
 	number, err := rand.Int(rand.Reader, max)
 	if err != nil {
-		return "", bizerrors.Pass(context.Background(), "auth", "generateNumericCode", err)
+		return "", bizerrors.Pass(ctx, "auth", "generateNumericCode", err)
 	}
 
 	return fmt.Sprintf("%0*d", length, number.Int64()), nil

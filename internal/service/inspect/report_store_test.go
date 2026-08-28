@@ -76,7 +76,12 @@ func TestRenderExcelAndPDF(t *testing.T) {
 	if len(xlsx) < 100 {
 		t.Fatalf("excel too small: %d", len(xlsx))
 	}
-	pdf := renderBinaryPDF(data, nil)
+	// 默认 INSPECT_SERVER_PDF=html_only,服务端不生成 PDF(由前端 html2canvas 上传高质量版)。
+	if got := renderBinaryPDF(data, nil); got != nil {
+		t.Fatalf("default mode should not render server-side pdf, got %d bytes", len(got))
+	}
+	// 结构化 PDF 渲染器本身仍需可用(INSPECT_SERVER_PDF=structured 时启用)。
+	pdf := renderStructuredPDF(data)
 	if len(pdf) < 4 || string(pdf[:4]) != "%PDF" {
 		n := min(len(pdf), 8)
 		t.Fatalf("not pdf: %q", string(pdf[:n]))

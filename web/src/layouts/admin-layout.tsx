@@ -197,11 +197,24 @@ export function AdminLayout() {
   }
 
   async function handleClearCacheAndLogout() {
-    const mode = window.localStorage.getItem("admin-theme-mode");
-    const accent = window.localStorage.getItem("admin-theme-accent");
-    window.localStorage.clear();
-    if (mode) window.localStorage.setItem("admin-theme-mode", mode);
-    if (accent) window.localStorage.setItem("admin-theme-accent", accent);
+    // 精确清理业务缓存：只删本应用写入的键，不用 localStorage.clear()。
+    // clear() 会连带清掉同源下第三方/未来新增的持久化键（如 zustand persist、i18n 语言），
+    // 且每加一个需要保留的键都得手动“读出-clear-回填”，极易漏。
+    const preserved = new Set<string>([
+      "admin-theme-mode",
+      "admin-theme-accent",
+      UI_PREFS_KEY,
+    ]);
+    const removable: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key || preserved.has(key)) continue;
+      // 仅清理本应用命名空间下的键，避免影响同源的其它页面。
+      if (key.startsWith("permission-system-") || key.startsWith("admin-")) {
+        removable.push(key);
+      }
+    }
+    removable.forEach((key) => window.localStorage.removeItem(key));
     await handleLogout();
   }
 

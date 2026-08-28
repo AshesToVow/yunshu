@@ -9,13 +9,12 @@ import (
 	logx "yunshu/internal/pkg/logger"
 )
 
+// Internal 构造 500 内部错误。
+//
+// Deprecated: 优先使用 InternalCtx，以便日志携带 request_id / user 等请求链路字段。
+// 保留本函数仅为兼容既有调用方。
 func Internal(err error, operation string) *BizError {
-	b := &BizError{
-		Code: 50001, Message: "internal server error", Reason: "InternalError",
-		ErrorCode: "50001", Cause: err, StatusCode: http.StatusInternalServerError, Operation: operation,
-	}
-	b.logBiz(context.Background(), "error")
-	return b
+	return InternalCtx(context.Background(), err, operation)
 }
 
 func InternalCtx(ctx context.Context, err error, operation string) *BizError {
