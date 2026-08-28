@@ -30,7 +30,7 @@ func (m *module) Manifest() plugin.Manifest {
 			"/api/v1/policies", "/api/v1/registrations", "/api/v1/menus", "/api/v1/login-logs",
 			"/api/v1/operation-logs", "/api/v1/security", "/api/v1/dict/entries", "/api/v1/dict-entries",
 			"/api/v1/user-groups", "/api/v1/plugins", "/api/v1/auth/logout", "/api/v1/auth/me",
-			"/api/v1/auth/password", "/api/v1/auth/ws-ticket", "/api/v1/overview",
+			"/api/v1/auth/password", "/api/v1/auth/ws-ticket", "/api/v1/overview", "/api/v1/workflow",
 		},
 	}
 }
@@ -51,6 +51,10 @@ func (m *module) Models() []any {
 		&model.UserGroup{},
 		&model.UserGroupUser{},
 		&model.PlatformSavedQuery{},
+		&model.WorkflowDefinition{},
+		&model.WorkflowStage{},
+		&model.WorkflowTicket{},
+		&model.WorkflowTicketStep{},
 	}
 }
 

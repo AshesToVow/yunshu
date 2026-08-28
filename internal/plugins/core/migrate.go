@@ -1,10 +1,12 @@
 package core
 
 import (
+	"context"
 	"strings"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/database"
+	workflowsvc "yunshu/internal/service/workflow"
 
 	"gorm.io/gorm"
 )
@@ -102,7 +104,13 @@ func bootstrapPostMigrateCore(db *gorm.DB) error {
 	if err := migrateEnableDingTalkSignSecretDictSeed(db); err != nil {
 		return err
 	}
-	return migrateFixWecomNotifyModeDictTypo(db)
+	if err := migrateFixWecomNotifyModeDictTypo(db); err != nil {
+		return err
+	}
+	if err := workflowsvc.MigrateLegacyDefinitions(context.Background(), db); err != nil {
+		return err
+	}
+	return workflowsvc.MigrateLegacyTickets(context.Background(), db)
 }
 
 func dropDictEntriesLegacyCompositeIndex(db *gorm.DB) error {

@@ -74,6 +74,7 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	permissions.GET("/:id", d.permissionHandler.Detail)
 	permissions.PUT("/:id", d.permissionHandler.Update)
 	permissions.DELETE("/:id", d.permissionHandler.Delete)
+	registerPermissionSyncRoute(permissions, d)
 
 	policies := api.Group("/policies")
 	policies.Use(d.authMiddleware, d.authorize, d.opAudit)
@@ -141,4 +142,6 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	plugins := api.Group("/plugins")
 	plugins.Use(d.authMiddleware, d.authorize, d.opAudit)
 	plugins.GET("", d.pluginHandler.List)
+
+	registerWorkflowRoutes(api, d)
 }

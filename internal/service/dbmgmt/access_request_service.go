@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
+	workflowsvc "yunshu/internal/service/workflow"
 )
 
 type AccessRequestItem struct {
@@ -308,19 +309,25 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 		return constants.ErrBadRequestWithMsg("申请已结束")
 	}
 	if body.ExpiresAt != nil {
-		steps, err := s.repo.ListAccessRequestSteps(ctx, id)
-		if err != nil {
-			return err
-		}
-		var cur *model.DbAccessRequestStep
-		for i := range steps {
-			if steps[i].Status == model.DbApprovalStepPending {
-				cur = &steps[i]
-				break
+		if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, id) {
+			if !s.isFinalWorkflowApproval(ctx, model.WorkflowRefDbAccessRequest, id) {
+				return constants.ErrBadRequestWithMsg("仅最后一环审批人可调整授权有效期")
 			}
-		}
-		if cur != nil && !isFinalAccessApprovalStep(steps, cur) {
-			return constants.ErrBadRequestWithMsg("仅最后一环审批人可调整授权有效期")
+		} else {
+			steps, err := s.repo.ListAccessRequestSteps(ctx, id)
+			if err != nil {
+				return err
+			}
+			var cur *model.DbAccessRequestStep
+			for i := range steps {
+				if steps[i].Status == model.DbApprovalStepPending {
+					cur = &steps[i]
+					break
+				}
+			}
+			if cur != nil && !isFinalAccessApprovalStep(steps, cur) {
+				return constants.ErrBadRequestWithMsg("仅最后一环审批人可调整授权有效期")
+			}
 		}
 		expiresAt, err := parseOptionalExpiresAt(body.ExpiresAt)
 		if err != nil {
@@ -332,6 +339,23 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 		}
 	}
 	comment := strings.TrimSpace(body.Comment)
+	if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, id) {
+		err := s.reviewDbmgmtViaWorkflow(ctx, model.WorkflowRefDbAccessRequest, id, true, comment, actor,
+			func(d *workflowsvc.TicketDetail) error {
+				if d.Status == model.WorkflowTicketStatusApproved {
+					return s.finalizeAccessRequestApproval(ctx, projectID, id)
+				}
+				return nil
+			})
+		if err != nil {
+			return workflowOrLegacyErr(err)
+		}
+		iid := req.InstanceID
+		_ = s.writeAudit(ctx, projectID, &iid, actor, "access_request_approve", map[string]any{
+			"request_id": req.ID, "database": req.DatabaseName, "comment": comment, "expires_at": formatTimeRFC3339(req.ExpiresAt),
+		})
+		return nil
+	}
 	steps, err := s.repo.ListAccessRequestSteps(ctx, id)
 	if err != nil {
 		return err
@@ -383,6 +407,17 @@ func (s *Service) RejectAccessRequest(ctx context.Context, projectID, id uint, c
 	}
 	if req.Status != model.DbAccessRequestStatusPending {
 		return constants.ErrBadRequestWithMsg("申请已结束")
+	}
+	if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, id) {
+		err := s.reviewDbmgmtViaWorkflow(ctx, model.WorkflowRefDbAccessRequest, id, false, comment, actor, nil)
+		if err != nil {
+			return workflowOrLegacyErr(err)
+		}
+		iid := req.InstanceID
+		_ = s.writeAudit(ctx, projectID, &iid, actor, "access_request_reject", map[string]any{
+			"request_id": req.ID, "database": req.DatabaseName, "comment": strings.TrimSpace(comment),
+		})
+		return nil
 	}
 	steps, err := s.repo.ListAccessRequestSteps(ctx, id)
 	if err != nil {

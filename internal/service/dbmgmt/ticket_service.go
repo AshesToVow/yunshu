@@ -17,6 +17,7 @@ import (
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 	"yunshu/internal/service/changeevent"
+	workflowsvc "yunshu/internal/service/workflow"
 )
 
 type ExecuteRequest struct {
@@ -572,6 +573,20 @@ func (s *Service) ApproveTicket(ctx context.Context, projectID, ticketID uint, c
 	if ticket.Status != model.DbTicketStatusPendingApproval {
 		return constants.ErrBadRequestWithMsg("工单已结束，无法审批")
 	}
+	if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticketID) {
+		err := s.reviewDbmgmtViaWorkflow(ctx, model.WorkflowRefDbSqlTicket, ticketID, true, comment, actor,
+			func(d *workflowsvc.TicketDetail) error {
+				if d.Status == model.WorkflowTicketStatusApproved {
+					return s.finalizeSqlTicketApproval(ctx, projectID, ticketID)
+				}
+				return nil
+			})
+		if err != nil {
+			return workflowOrLegacyErr(err)
+		}
+		s.auditTicketEvent(ctx, projectID, ticket.InstanceID, actor, "ticket_approve", ticket, map[string]any{"comment": strings.TrimSpace(comment)})
+		return nil
+	}
 	steps, err := s.repo.ListSqlTicketSteps(ctx, ticketID)
 	if err != nil {
 		return err
@@ -617,6 +632,14 @@ func (s *Service) RejectTicket(ctx context.Context, projectID, ticketID uint, co
 	}
 	if ticket.Status != model.DbTicketStatusPendingApproval {
 		return constants.ErrBadRequestWithMsg("工单已结束，无法驳回")
+	}
+	if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticketID) {
+		err := s.reviewDbmgmtViaWorkflow(ctx, model.WorkflowRefDbSqlTicket, ticketID, false, comment, actor, nil)
+		if err != nil {
+			return workflowOrLegacyErr(err)
+		}
+		s.auditTicketEvent(ctx, projectID, ticket.InstanceID, actor, "ticket_reject", ticket, map[string]any{"comment": strings.TrimSpace(comment)})
+		return nil
 	}
 	steps, err := s.repo.ListSqlTicketSteps(ctx, ticketID)
 	if err != nil {

@@ -17,6 +17,8 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	raw := map[string]EntryPermission{
 		"/": {Resource: "/api/v1/overview", Action: "GET"},
 
+		"/workflow/inbox": {"/api/v1/workflow/tickets/pending", "GET"},
+
 		"/alert-channels":              {"/api/v1/alerts/channels", "GET"},
 		"/alert-monitor-platform":      {"/api/v1/alerts/datasources", "GET"},
 		"/alert-duty":                  {"/api/v1/alerts/duty-blocks", "GET"},

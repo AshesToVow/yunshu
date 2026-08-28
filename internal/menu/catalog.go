@@ -7,7 +7,13 @@ func DefaultCatalog() []Spec {
 			Path: "/", Name: "总览页面", Icon: "PieChartOutlined", Sort: 1, Component: "dashboard-page", Status: 1,
 		},
 		{
-			Path: "/alert-notify", Name: "告警通知", Icon: "BellOutlined", Sort: 2, Status: 1,
+			Path: "/workflow", Name: "工单中心", Icon: "InboxOutlined", Sort: 2, Status: 1,
+			Children: []Spec{
+				{Path: "/workflow/inbox", Name: "我的待办", Icon: "UnorderedListOutlined", Sort: 1, Component: "workflow-inbox-page", Status: 1},
+			},
+		},
+		{
+			Path: "/alert-notify", Name: "告警通知", Icon: "BellOutlined", Sort: 3, Status: 1,
 			Children: []Spec{
 				{Path: "/alert-channels", Name: "Webhook 告警通道", Icon: "NotificationOutlined", Sort: 1, Component: "alert-channels-page", Status: 1},
 				{Path: "/alert-monitor-platform", Name: "告警监控平台", Icon: "MonitorOutlined", Sort: 2, Component: "alert-monitor-platform-page", Status: 1},

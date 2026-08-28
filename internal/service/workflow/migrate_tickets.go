@@ -1,0 +1,143 @@
+package workflow
+
+import (
+	"context"
+
+	"yunshu/internal/model"
+
+	"gorm.io/gorm"
+)
+
+// MigrateLegacyTickets 将仍在 pending 的 dbmgmt/cicd 业务工单 backfill 到 workflow_tickets。
+func MigrateLegacyTickets(ctx context.Context, db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	svc := NewService(db, nil, nil, nil)
+	if err := migratePendingSqlTickets(ctx, svc, db); err != nil {
+		return err
+	}
+	if err := migratePendingAccessRequests(ctx, svc, db); err != nil {
+		return err
+	}
+	if err := migratePendingAppUserRequests(ctx, svc, db); err != nil {
+		return err
+	}
+	return migratePendingReleaseRuns(ctx, svc, db)
+}
+
+func migratePendingSqlTickets(ctx context.Context, svc *Service, db *gorm.DB) error {
+	var rows []model.DbSqlTicket
+	if err := db.WithContext(ctx).Where("status = ?", model.DbTicketStatusPendingApproval).Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if svc.HasLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, row.ID) {
+			continue
+		}
+		title := "SQL 工单"
+		if row.DatabaseName != "" {
+			title += " · " + row.DatabaseName
+		}
+		if _, err := svc.CreateLinkedTicket(ctx, LinkedTicketInput{
+			Domain: model.WorkflowDomainDbmgmt, TicketType: model.WorkflowTicketTypeSql,
+			ProjectID: row.ProjectID, Title: title, SubmitterUserID: row.SubmitterUserID,
+			RefType: model.WorkflowRefDbSqlTicket, RefID: row.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migratePendingAccessRequests(ctx context.Context, svc *Service, db *gorm.DB) error {
+	var rows []model.DbAccessRequest
+	if err := db.WithContext(ctx).Where("status = ?", model.DbAccessRequestStatusPending).Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if svc.HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, row.ID) {
+			continue
+		}
+		title := "权限申请"
+		if row.DatabaseName != "" {
+			title += " · " + row.DatabaseName
+		}
+		if _, err := svc.CreateLinkedTicket(ctx, LinkedTicketInput{
+			Domain: model.WorkflowDomainDbmgmt, TicketType: model.WorkflowTicketTypeAccess,
+			ProjectID: row.ProjectID, Title: title, SubmitterUserID: row.RequesterUserID,
+			RefType: model.WorkflowRefDbAccessRequest, RefID: row.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migratePendingAppUserRequests(ctx context.Context, svc *Service, db *gorm.DB) error {
+	var rows []model.DbAppUserRequest
+	if err := db.WithContext(ctx).Where("status = ?", model.DbAccessRequestStatusPending).Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if svc.HasLinkedTicket(ctx, model.WorkflowRefDbAppUserRequest, row.ID) {
+			continue
+		}
+		title := "应用用户申请"
+		if row.MySQLUser != "" {
+			title += " · " + row.MySQLUser
+		}
+		if _, err := svc.CreateLinkedTicket(ctx, LinkedTicketInput{
+			Domain: model.WorkflowDomainDbmgmt, TicketType: model.WorkflowTicketTypeAppUser,
+			ProjectID: row.ProjectID, Title: title, SubmitterUserID: row.RequesterUserID,
+			RefType: model.WorkflowRefDbAppUserRequest, RefID: row.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migratePendingReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB) error {
+	var rows []model.CicdReleaseRun
+	if err := db.WithContext(ctx).Where("status = ? AND audit_enabled = ?", model.CicdRunStatusPendingApproval, true).Find(&rows).Error; err != nil {
+		return err
+	}
+	for i := range rows {
+		row := rows[i]
+		if svc.HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, row.ID, model.WorkflowTicketTypeRelease) {
+			continue
+		}
+		submitter := uint(0)
+		if row.SubmitterUserID != nil {
+			submitter = *row.SubmitterUserID
+		}
+		releaseTicket, err := svc.CreateLinkedTicket(ctx, LinkedTicketInput{
+			Domain: model.WorkflowDomainCicd, TicketType: model.WorkflowTicketTypeRelease,
+			ProjectID: row.ProjectID, Title: row.Title, SubmitterUserID: submitter,
+			RefType: model.WorkflowRefCicdReleaseRun, RefID: row.ID,
+		})
+		if err != nil {
+			return err
+		}
+		changeID := row.ChangeWorkflowTicketID
+		if changeID == nil || *changeID == 0 {
+			changeTicket, err := svc.CreateInfoTicket(ctx, LinkedTicketInput{
+				Domain: model.WorkflowDomainOps, TicketType: model.WorkflowTicketTypeChange,
+				ProjectID: row.ProjectID, Title: "变更单 · " + row.Title, SubmitterUserID: submitter,
+				RefType: model.WorkflowRefCicdReleaseChange, RefID: row.ID,
+				Payload: map[string]any{"release_run_id": row.ID, "release_ticket_id": releaseTicket.ID},
+			}, model.WorkflowTicketStatusApproved)
+			if err != nil {
+				return err
+			}
+			changeID = &changeTicket.ID
+		}
+		if err := db.WithContext(ctx).Model(&row).Updates(map[string]any{
+			"workflow_ticket_id": releaseTicket.ID, "change_workflow_ticket_id": changeID,
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}

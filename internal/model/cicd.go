@@ -293,6 +293,8 @@ type CicdReleaseRun struct {
 	ProgressiveJSON    string         `json:"progressive_json" gorm:"type:text;comment:金丝雀/蓝绿晋级状态 JSON"`
 	StartedAt          *time.Time     `json:"started_at,omitempty"`
 	FinishedAt         *time.Time     `json:"finished_at,omitempty" gorm:"index:idx_cicd_release_status_finished,priority:2"`
+	WorkflowTicketID       *uint          `json:"workflow_ticket_id,omitempty" gorm:"index;comment:统一工单引擎发布审批单"`
+	ChangeWorkflowTicketID *uint          `json:"change_workflow_ticket_id,omitempty" gorm:"index;comment:关联运维变更单"`
 	CreatedAt          time.Time      `json:"created_at" gorm:"index"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 	DeletedAt          gorm.DeletedAt `json:"-" gorm:"index"`

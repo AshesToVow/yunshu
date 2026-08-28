@@ -8,11 +8,11 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	workflowsvc "yunshu/internal/service/workflow"
 
 	"gorm.io/gorm"
 )
@@ -99,136 +99,42 @@ func normalizeStageKey(raw string) (string, error) {
 	return key, nil
 }
 
+func (s *Service) workflowEngine() *workflowsvc.Service {
+	return workflowsvc.NewService(s.db, s.userGroupRepo, nil, s.userRepo)
+}
+
 func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*ApprovalFlowResponse, error) {
-	var rows []model.CicdApprovalFlowStage
-	if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).Order("sort_order ASC, id ASC").Find(&rows).Error; err != nil {
+	def, err := s.workflowEngine().GetDefinition(ctx, workflowsvc.DefinitionKey{
+		Domain: model.WorkflowDomainCicd, ProjectID: projectID,
+	}, workflowsvc.DefaultCicdStages())
+	if err != nil {
 		return nil, err
 	}
-	if len(rows) == 0 {
-		stages := make([]ApprovalFlowStageItem, 0, len(defaultApprovalFlowStages))
-		for _, d := range defaultApprovalFlowStages {
-			stages = append(stages, ApprovalFlowStageItem{
-				StageKey:  d.Key,
-				StageName: d.Name,
-				SortOrder: d.Sort,
-				Enabled:   false,
-			})
-		}
-		return &ApprovalFlowResponse{ProjectID: projectID, Stages: stages, Configured: false}, nil
+	items := make([]ApprovalFlowStageItem, 0, len(def.Stages))
+	for _, st := range def.Stages {
+		items = append(items, ApprovalFlowStageItem{
+			StageKey: st.StageKey, StageName: st.StageName, SortOrder: st.SortOrder,
+			Enabled: st.Enabled, UserGroupID: st.UserGroupID, UserGroupName: st.UserGroupName,
+		})
 	}
-	groupNames := s.loadUserGroupNameMap(ctx, rows)
-	items := make([]ApprovalFlowStageItem, 0, len(rows))
-	for _, row := range rows {
-		item := ApprovalFlowStageItem{
-			StageKey:    row.StageKey,
-			StageName:   row.StageName,
-			SortOrder:   row.SortOrder,
-			Enabled:     row.Enabled,
-			UserGroupID: row.UserGroupID,
-		}
-		if row.UserGroupID != nil {
-			item.UserGroupName = groupNames[*row.UserGroupID]
-		}
-		items = append(items, item)
-	}
-	return &ApprovalFlowResponse{ProjectID: projectID, Stages: items, Configured: true}, nil
+	return &ApprovalFlowResponse{ProjectID: projectID, Stages: items, Configured: def.Configured}, nil
 }
 
 func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req ApprovalFlowUpsertRequest, actor *auth.CurrentUser) (*ApprovalFlowResponse, error) {
 	if err := s.requireProjectAdmin(ctx, projectID, actor); err != nil {
 		return nil, err
 	}
-	type normalizedStage struct {
-		Key         string
-		Name        string
-		Sort        int
-		Enabled     bool
-		UserGroupID *uint
-	}
-	normalized := make([]normalizedStage, 0, len(req.Stages))
-	seen := map[string]struct{}{}
-	for i, st := range req.Stages {
-		key, err := normalizeStageKey(st.StageKey)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := seen[key]; ok {
-			return nil, constants.ErrBadRequestWithMsg("审批节点 Key 重复: " + key)
-		}
-		seen[key] = struct{}{}
-
-		name := strings.TrimSpace(st.StageName)
-		if name == "" {
-			name = stageNameByKey(key)
-		}
-		if utf8.RuneCountInString(name) > 64 {
-			return nil, constants.ErrBadRequestWithMsg("审批节点名称过长: " + name)
-		}
-		if st.Enabled && (st.UserGroupID == nil || *st.UserGroupID == 0) {
-			return nil, constants.ErrBadRequestWithMsg("启用的审批节点须绑定用户组: " + name)
-		}
-		if st.UserGroupID != nil && *st.UserGroupID > 0 {
-			if _, err := s.userGroupRepo.GetByID(ctx, *st.UserGroupID); err != nil {
-				return nil, constants.ErrBadRequestWithMsg("用户组不存在")
-			}
-		}
-		sortOrder := st.SortOrder
-		if sortOrder <= 0 {
-			sortOrder = i + 1
-		}
-		var groupID *uint
-		if st.UserGroupID != nil && *st.UserGroupID > 0 {
-			groupID = st.UserGroupID
-		}
-		normalized = append(normalized, normalizedStage{
-			Key: key, Name: name, Sort: sortOrder, Enabled: st.Enabled, UserGroupID: groupID,
+	stages := make([]workflowsvc.StageUpsertItem, 0, len(req.Stages))
+	for _, st := range req.Stages {
+		stages = append(stages, workflowsvc.StageUpsertItem{
+			StageKey: st.StageKey, StageName: st.StageName, SortOrder: st.SortOrder,
+			Enabled: st.Enabled, AssigneeRuleType: model.WorkflowAssigneeUserGroup,
+			UserGroupID: st.UserGroupID,
 		})
 	}
-	if len(normalized) == 0 {
-		return nil, constants.ErrBadRequestWithMsg("至少保留一个审批节点")
-	}
-
-	keys := make([]string, 0, len(normalized))
-	for _, st := range normalized {
-		keys = append(keys, st.Key)
-	}
-
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, st := range normalized {
-			var row model.CicdApprovalFlowStage
-			err := tx.Where("project_id = ? AND stage_key = ?", projectID, st.Key).First(&row).Error
-			if err == gorm.ErrRecordNotFound {
-				row = model.CicdApprovalFlowStage{
-					ProjectID:   projectID,
-					StageKey:    st.Key,
-					StageName:   st.Name,
-					SortOrder:   st.Sort,
-					Enabled:     st.Enabled,
-					UserGroupID: st.UserGroupID,
-				}
-				if err := tx.Create(&row).Error; err != nil {
-					return err
-				}
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			if err := tx.Model(&row).Updates(map[string]any{
-				"stage_name":    st.Name,
-				"sort_order":    st.Sort,
-				"enabled":       st.Enabled,
-				"user_group_id": st.UserGroupID,
-			}).Error; err != nil {
-				return err
-			}
-		}
-		q := tx.Where("project_id = ?", projectID)
-		if len(keys) > 0 {
-			q = q.Where("stage_key NOT IN ?", keys)
-		}
-		return q.Delete(&model.CicdApprovalFlowStage{}).Error
-	})
+	_, err := s.workflowEngine().UpsertDefinition(ctx, workflowsvc.DefinitionKey{
+		Domain: model.WorkflowDomainCicd, ProjectID: projectID,
+	}, workflowsvc.DefinitionUpsertRequest{Stages: stages})
 	if err != nil {
 		return nil, err
 	}
@@ -236,14 +142,7 @@ func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req Ap
 }
 
 func (s *Service) loadEnabledFlowStages(ctx context.Context, projectID uint) ([]model.CicdApprovalFlowStage, error) {
-	var rows []model.CicdApprovalFlowStage
-	if err := s.db.WithContext(ctx).
-		Where("project_id = ? AND enabled = ?", projectID, true).
-		Order("sort_order ASC, id ASC").
-		Find(&rows).Error; err != nil {
-		return nil, err
-	}
-	return rows, nil
+	return workflowsvc.EnabledLegacyCicdStages(ctx, s.db, s.userGroupRepo, projectID)
 }
 
 func (s *Service) initReleaseApprovalSteps(ctx context.Context, release *model.CicdReleaseRun) error {
