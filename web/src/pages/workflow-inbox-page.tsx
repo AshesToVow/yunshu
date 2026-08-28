@@ -2,9 +2,8 @@ import { CheckOutlined, CloseOutlined, LinkOutlined, ReloadOutlined } from "@ant
 import { Button, Card, Form, Input, Modal, Segmented, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
-import { listPendingWorkflowTickets, type PendingTicketItem } from "../services/workflow";
 import {
   approveDbAccessRequest,
   approveDbAppUserRequest,
@@ -14,7 +13,11 @@ import {
   rejectDbTicket,
 } from "../services/dbmgmt";
 import { approveReleaseRun, rejectReleaseRun } from "../services/cicd";
-import { reviewWorkflowStep } from "../services/workflow";
+import {
+  listPendingWorkflowTickets,
+  reviewWorkflowStep,
+  type PendingTicketItem,
+} from "../services/workflow";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
@@ -78,9 +81,13 @@ function ticketTypeLabel(row: PendingTicketItem) {
 }
 
 export function WorkflowInboxPage() {
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [projectId, setProjectId] = useState<number>();
-  const [domains, setDomains] = useState("");
+  const [projectId, setProjectId] = useState<number | undefined>(() => {
+    const n = Number(searchParams.get("project") || 0);
+    return n > 0 ? n : undefined;
+  });
+  const [domains, setDomains] = useState(() => searchParams.get("domain") || "");
   const [mineScope, setMineScope] = useState<MineScope>("pending");
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<PendingTicketItem[]>([]);
@@ -98,6 +105,13 @@ export function WorkflowInboxPage() {
       setProjects(res.list ?? []);
     });
   }, []);
+
+  useEffect(() => {
+    const d = searchParams.get("domain");
+    if (d !== null) setDomains(d);
+    const p = Number(searchParams.get("project") || 0);
+    if (p > 0) setProjectId(p);
+  }, [searchParams]);
 
   const projectNameMap = useMemo(() => {
     const m = new Map<number, string>();
@@ -221,7 +235,11 @@ export function WorkflowInboxPage() {
 
   return (
     <div>
-      <PageTelemetryHeader label="Workflow" title="工单中心" subtitle="跨域待办：数据库 / 发布 / 故障 / 变更" />
+      <PageTelemetryHeader
+        label="Workflow"
+        title="我的待办"
+        subtitle="统一审批入口：数据库 / 发布 / 故障 / 变更（各业务模块待办已收敛至此）"
+      />
       <Card>
         <Space wrap style={{ marginBottom: 16 }}>
           <Select

@@ -10,6 +10,8 @@ func DefaultCatalog() []Spec {
 			Path: "/workflow", Name: "工单中心", Icon: "InboxOutlined", Sort: 2, Status: 1,
 			Children: []Spec{
 				{Path: "/workflow/inbox", Name: "我的待办", Icon: "UnorderedListOutlined", Sort: 1, Component: "workflow-inbox-page", Status: 1},
+				{Path: "/workflow/tickets", Name: "工单列表", Icon: "FileTextOutlined", Sort: 2, Component: "workflow-tickets-page", Status: 1},
+				{Path: "/workflow/definitions", Name: "审批流配置", Icon: "SettingOutlined", Sort: 3, Component: "workflow-definitions-page", Status: 1},
 			},
 		},
 		{
@@ -70,9 +72,7 @@ func DefaultCatalog() []Spec {
 				{
 					Path: "/dbmgmt/workflow", Name: "工单管理", Icon: "FileTextOutlined", Sort: 4, Status: 1,
 					Children: []Spec{
-						{Path: "/dbmgmt/workflow/pending", Name: "待审核", Icon: "UnorderedListOutlined", Sort: 1, Component: "dbmgmt-workflow-pending-page", Status: 1},
-						{Path: "/dbmgmt/workflow/history", Name: "历史工单", Icon: "HistoryOutlined", Sort: 2, Component: "dbmgmt-workflow-history-page", Status: 1},
-						{Path: "/dbmgmt/approval-flow", Name: "审批流配置", Icon: "SettingOutlined", Sort: 3, Component: "dbmgmt-approval-flow-page", Status: 1},
+						{Path: "/dbmgmt/workflow/history", Name: "历史工单", Icon: "HistoryOutlined", Sort: 1, Component: "dbmgmt-workflow-history-page", Status: 1},
 					},
 				},
 				{Path: "/dbmgmt/audit", Name: "审计日志", Icon: "HistoryOutlined", Sort: 5, Component: "dbmgmt-audit-page", Status: 1},
@@ -139,12 +139,10 @@ func DefaultCatalog() []Spec {
 			Path: "/cicd", Name: "CI/CD", Icon: "RocketOutlined", Sort: 8, Status: 1,
 			Children: []Spec{
 				{Path: "/cicd/services", Name: "应用服务", Icon: "AppstoreOutlined", Sort: 1, Component: "cicd-services-page", Status: 1},
-				{Path: "/cicd/todo", Name: "待办列表", Icon: "UnorderedListOutlined", Sort: 2, Component: "cicd-todo-page", Status: 1},
-				{Path: "/cicd/approval-flow", Name: "审批管理", Icon: "AuditOutlined", Sort: 3, Component: "cicd-approval-flow-page", Status: 1},
-				{Path: "/cicd/build-records", Name: "CI 打包记录", Icon: "CloudUploadOutlined", Sort: 4, Component: "cicd-build-records-page", Status: 1},
-				{Path: "/cicd/release-records", Name: "CD 历史工单", Icon: "DeploymentUnitOutlined", Sort: 5, Component: "cicd-release-records-page", Status: 1},
-				{Path: "/cicd/registries", Name: "镜像仓库", Icon: "DatabaseOutlined", Sort: 6, Component: "cicd-registries-page", Status: 1},
-				{Path: "/cicd/image-browser", Name: "镜像浏览", Icon: "CloudServerOutlined", Sort: 7, Component: "cicd-image-browser-page", Status: 1},
+				{Path: "/cicd/build-records", Name: "CI 打包记录", Icon: "CloudUploadOutlined", Sort: 2, Component: "cicd-build-records-page", Status: 1},
+				{Path: "/cicd/release-records", Name: "CD 历史工单", Icon: "DeploymentUnitOutlined", Sort: 3, Component: "cicd-release-records-page", Status: 1},
+				{Path: "/cicd/registries", Name: "镜像仓库", Icon: "DatabaseOutlined", Sort: 4, Component: "cicd-registries-page", Status: 1},
+				{Path: "/cicd/image-browser", Name: "镜像浏览", Icon: "CloudServerOutlined", Sort: 5, Component: "cicd-image-browser-page", Status: 1},
 			},
 		},
 		{

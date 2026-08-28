@@ -207,19 +207,21 @@ export function PlatformTemplatesPage() {
         title: "状态",
         dataIndex: "status",
         width: 80,
-        render: (v: number, row) => (
-          <Space size={4}>
-            <Tag color={v === 1 ? "green" : "default"}>{v === 1 ? "启用" : "停用"}</Tag>
-            {row.is_builtin ? <Tag>内置</Tag> : null}
-            {row.has_minio_mirror ? <Tag color="blue">MinIO</Tag> : null}
-          </Space>
+        render: (v: number) => (
+          <Tag color={v === 1 ? "green" : "default"}>{v === 1 ? "启用" : "停用"}</Tag>
         ),
       },
       {
         title: "更新",
         dataIndex: "updated_at",
-        width: 168,
-        render: (v: string) => formatDateTime(v),
+        width: 220,
+        render: (v: string, row) => (
+          <Space size={8} wrap>
+            {row.is_builtin ? <Tag>内置</Tag> : <Tag>自定义</Tag>}
+            {row.has_minio_mirror ? <Tag color="blue">MinIO</Tag> : null}
+            <Typography.Text type="secondary">{formatDateTime(v)}</Typography.Text>
+          </Space>
+        ),
       },
       {
         title: "操作",

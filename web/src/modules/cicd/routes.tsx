@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import type { RouteObject } from "react-router-dom";
+import { Navigate, type RouteObject } from "react-router-dom";
 
 const CicdServicesPage = lazy(() =>
   import("../../pages/cicd-services-page").then((m) => ({ default: m.CicdServicesPage })),
@@ -9,12 +9,6 @@ const CicdBuildRecordsPage = lazy(() =>
 );
 const CicdReleaseRecordsPage = lazy(() =>
   import("../../pages/cicd-release-records-page").then((m) => ({ default: m.CicdReleaseRecordsPage })),
-);
-const CicdTodoPage = lazy(() =>
-  import("../../pages/cicd-todo-page").then((m) => ({ default: m.CicdTodoPage })),
-);
-const CicdApprovalFlowPage = lazy(() =>
-  import("../../pages/cicd-approval-flow-page").then((m) => ({ default: m.CicdApprovalFlowPage })),
 );
 const CicdRegistriesPage = lazy(() =>
   import("../../pages/cicd-registries-page").then((m) => ({ default: m.CicdRegistriesPage })),
@@ -27,8 +21,8 @@ export const CICD_PLUGIN = "cicd";
 
 export const cicdRoutes: RouteObject[] = [
   { path: "cicd/services", element: <CicdServicesPage /> },
-  { path: "cicd/todo", element: <CicdTodoPage /> },
-  { path: "cicd/approval-flow", element: <CicdApprovalFlowPage /> },
+  { path: "cicd/todo", element: <Navigate to="/workflow/inbox?domain=cicd" replace /> },
+  { path: "cicd/approval-flow", element: <Navigate to="/workflow/definitions?domain=cicd" replace /> },
   { path: "cicd/build-records", element: <CicdBuildRecordsPage /> },
   { path: "cicd/release-records", element: <CicdReleaseRecordsPage /> },
   { path: "cicd/registries", element: <CicdRegistriesPage /> },

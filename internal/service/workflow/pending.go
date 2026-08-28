@@ -187,7 +187,7 @@ func buildDeepLink(domain, ticketType string, projectID uint, refType string, re
 	case model.WorkflowRefDbAppUserRequest:
 		return fmt.Sprintf("/dbmgmt/apply/app-user?project=%d&highlight=%d", projectID, refID)
 	case model.WorkflowRefCicdReleaseRun:
-		return fmt.Sprintf("/cicd/todo?project=%d&release=%d", projectID, refID)
+		return fmt.Sprintf("/cicd/release-records?project=%d&release=%d", projectID, refID)
 	case model.WorkflowRefAlertEvent:
 		return fmt.Sprintf("/alert-events?highlight=%d", refID)
 	}
