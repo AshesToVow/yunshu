@@ -14,6 +14,7 @@ import (
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 	esmgmtsvc "yunshu/internal/service/esmgmt"
 	inspectsvc "yunshu/internal/service/inspect"
+	"yunshu/internal/service/platformtpl"
 	workflowsvc "yunshu/internal/service/workflow"
 
 	"github.com/gin-gonic/gin"
@@ -106,6 +107,7 @@ type RouteDeps struct {
 	esmgmtHandler      *handler.EsmgmtHandler
 	platformFeatures   *handler.PlatformFeaturesHandler
 	workflowHandler    *handler.WorkflowHandler
+	platformTplHandler *handler.PlatformTemplateHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -297,6 +299,7 @@ func assembleRouteDeps(
 		workflowHandler: handler.NewWorkflowHandler(workflowsvc.NewService(
 			app.DB, repos.UserGroup, repos.AlertDuty, repos.User,
 		)),
+		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(app.DB)),
 	}
 	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil

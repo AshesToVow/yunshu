@@ -144,4 +144,5 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	plugins.GET("", d.pluginHandler.List)
 
 	registerWorkflowRoutes(api, d)
+	registerPlatformTemplateRoutes(api, d)
 }

@@ -43,6 +43,14 @@ http://10.241.243.21:8080,http://10.241.243.20:8080,http://10.241.243.19:8080
 
 本目录片段便于对照；改共享库以仓库内真实文件为准。
 
+> **Yunshu 模板中心（P1）**：平台菜单「系统管理 → 模板中心」已纳管下列引用键（MySQL 权威 + 可选 MinIO 镜像）。业务解析优先已发布版本，未发布回退内置种子；**不改变** Jenkins 共享库 SCM 权威源，可在此编辑后人工同步回 Gitee。
+>
+> | template_key | 对应本目录文件 |
+> |--------------|----------------|
+> | `cicd.apollo.backend-launch` | `resources/backend-launch-apollo.snippet.sh` |
+> | `cicd.apollo.k8s-env` | `resources/k8s-apollo.env.snippet.yaml` |
+> | `cicd.consul.register` | `resources/k8s-consul-register.snippet.yaml` |
+
 | 文件 | 用途 |
 |------|------|
 | `resources/backend-launch-apollo.snippet.sh` | SSH 启动脚本中 Apollo 启动参数片段 |

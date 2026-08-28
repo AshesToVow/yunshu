@@ -273,6 +273,8 @@ export function AlertConfigCenterPanel({
     channel_ids?: number[];
     email_recipients?: string[];
     enabled?: boolean;
+    escalation_level?: number;
+    escalation_delay_seconds?: number;
   }>();
 
   const [eventsLoading, setEventsLoading] = useState(false);

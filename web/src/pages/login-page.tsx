@@ -214,7 +214,9 @@ export function LoginPage() {
     void runLogin(
       passwordLoginAction as (p: PasswordLoginPayload) => Promise<unknown>,
       payload,
-      () => refreshPasswordCaptcha({ silent: true, requireUsername: false }),
+      async () => {
+        await refreshPasswordCaptcha({ silent: true, requireUsername: false });
+      },
     );
   }
 

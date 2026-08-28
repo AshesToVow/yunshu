@@ -221,7 +221,7 @@ export function WorkflowInboxPage() {
 
   return (
     <div>
-      <PageTelemetryHeader title="工单中心" subtitle="跨域待办：数据库 / 发布 / 故障 / 变更" />
+      <PageTelemetryHeader label="Workflow" title="工单中心" subtitle="跨域待办：数据库 / 发布 / 故障 / 变更" />
       <Card>
         <Space wrap style={{ marginBottom: 16 }}>
           <Select

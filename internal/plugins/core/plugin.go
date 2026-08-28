@@ -23,7 +23,7 @@ func (m *module) Manifest() plugin.Manifest {
 		MenuPathPrefixes: []string{
 			"/users", "/departments", "/roles", "/permissions", "/policies", "/registrations",
 			"/menus", "/login-logs", "/operation-logs", "/banned-ips", "/dict-entries",
-			"/personal-settings", "/user-groups", "/plugins",
+			"/personal-settings", "/user-groups", "/plugins", "/platform-templates", "/workflow",
 		},
 		APIPrefixes: []string{
 			"/api/v1/users", "/api/v1/departments", "/api/v1/roles", "/api/v1/permissions",
@@ -31,6 +31,7 @@ func (m *module) Manifest() plugin.Manifest {
 			"/api/v1/operation-logs", "/api/v1/security", "/api/v1/dict/entries", "/api/v1/dict-entries",
 			"/api/v1/user-groups", "/api/v1/plugins", "/api/v1/auth/logout", "/api/v1/auth/me",
 			"/api/v1/auth/password", "/api/v1/auth/ws-ticket", "/api/v1/overview", "/api/v1/workflow",
+			"/api/v1/platform-templates",
 		},
 	}
 }
@@ -55,6 +56,8 @@ func (m *module) Models() []any {
 		&model.WorkflowStage{},
 		&model.WorkflowTicket{},
 		&model.WorkflowTicketStep{},
+		&model.PlatformTemplate{},
+		&model.PlatformTemplateVersion{},
 	}
 }
 

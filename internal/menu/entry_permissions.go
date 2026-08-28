@@ -59,6 +59,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/roles":              {"/api/v1/roles", "GET"},
 		"/permissions":        {"/api/v1/permissions", "GET"},
 		"/policies":           {"/api/v1/policies", "GET"},
+		"/platform-templates": {"/api/v1/platform-templates", "GET"},
 		"/k8s-scoped-policies": {"/api/v1/k8s-policies", "GET"},
 		"/registrations":      {"/api/v1/registrations", "GET"},
 		"/menus":              {"/api/v1/menus", "GET"},

@@ -19,6 +19,7 @@ import (
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/service/alert"
+	"yunshu/internal/service/platformtpl"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -536,7 +537,7 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	if err != nil {
 		return s.failRun(dbCtx, run, err)
 	}
-	htmlBytes, err := renderHTMLWithTemplate(tpl.Code, tpl.Body, data)
+	htmlBytes, err := s.renderReportHTML(dbCtx, tpl.Code, tpl.Body, data)
 	if err != nil {
 		slog.Default().With("component", "inspect.report", "template", tpl.Code, "error", err).
 			Warn("report template render failed, using builtin default")
@@ -546,7 +547,7 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 			return s.failRun(dbCtx, run, err)
 		}
 	}
-	printBytes, err := renderHTMLWithTemplate("print", "", data)
+	printBytes, err := s.renderReportHTML(dbCtx, "print", "", data)
 	if err != nil || len(printBytes) == 0 {
 		printBytes = htmlBytes
 	}
@@ -900,4 +901,37 @@ func uniqEmails(in []string) []string {
 		out = append(out, e)
 	}
 	return out
+}
+
+func (s *Service) renderReportHTML(ctx context.Context, code, body string, data ReportData) ([]byte, error) {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		if overlay := s.platformReportOverlay(ctx, code); overlay != "" {
+			body = overlay
+		}
+	}
+	return renderHTMLWithTemplate(code, body, data)
+}
+
+// platformReportOverlay 平台模板中心已发布正文；未发布则空串，继续用 embed。
+func (s *Service) platformReportOverlay(ctx context.Context, code string) string {
+	if s == nil || s.db == nil {
+		return ""
+	}
+	key := "inspect.report.default"
+	switch strings.TrimSpace(code) {
+	case "executive":
+		key = "inspect.report.executive"
+	case "compact":
+		return ""
+	case "print", "default", "":
+		key = "inspect.report.default"
+	default:
+		key = "inspect.report." + strings.TrimSpace(code)
+	}
+	res, err := platformtpl.NewService(s.db).ResolvePublished(ctx, key)
+	if err != nil || res == nil || res.Source != "published" {
+		return ""
+	}
+	return strings.TrimSpace(res.Content)
 }

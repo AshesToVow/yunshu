@@ -1,4 +1,5 @@
 import { getData, http } from "./http";
+import type { ApiResponse } from "../types/api";
 
 export type PendingTicketItem = {
   workflow_ticket_id: number;
@@ -27,9 +28,16 @@ export type PendingListQuery = {
   page_size?: number;
 };
 
+type PendingListResult = {
+  list: PendingTicketItem[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
 export async function listPendingWorkflowTickets(query: PendingListQuery = {}) {
-  return getData<{ list: PendingTicketItem[]; total: number; page: number; page_size: number }>(
-    http.get("/workflow/tickets/pending", { params: query }),
+  return getData<PendingListResult>(
+    http.get("/workflow/tickets/pending", { params: query }) as unknown as Promise<ApiResponse<PendingListResult>>,
   );
 }
 
@@ -38,10 +46,10 @@ export async function reviewWorkflowStep(ticketId: number, stepId: number, appro
     http.post(`/workflow/tickets/${ticketId}/steps/${stepId}/review`, {
       approve,
       comment: comment ?? "",
-    }),
+    }) as unknown as Promise<ApiResponse<unknown>>,
   );
 }
 
 export async function getWorkflowTicket(id: number) {
-  return getData(http.get(`/workflow/tickets/${id}`));
+  return getData(http.get(`/workflow/tickets/${id}`) as unknown as Promise<ApiResponse<unknown>>);
 }
