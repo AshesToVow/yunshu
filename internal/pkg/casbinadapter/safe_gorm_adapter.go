@@ -64,7 +64,7 @@ func (a *SafeGormAdapter) LoadPolicy(m model.Model) error {
 			continue
 		}
 		rule := make([]string, 0, last+1)
-		for i := 0; i <= last; i++ {
+		for i := range last + 1 {
 			rule = append(rule, strings.TrimSpace(vs[i]))
 		}
 
@@ -116,7 +116,8 @@ func (a *SafeGormAdapter) RemoveFilteredPolicy(sec string, ptype string, fieldIn
 func toCasbinRule(ptype string, rule []string) CasbinRule {
 	out := CasbinRule{PType: ptype}
 	vs := []string{"", "", "", "", "", ""}
-	for i := 0; i < len(rule) && i < 6; i++ {
+	n := min(len(rule), 6)
+	for i := range n {
 		vs[i] = rule[i]
 	}
 	out.V0, out.V1, out.V2, out.V3, out.V4, out.V5 = vs[0], vs[1], vs[2], vs[3], vs[4], vs[5]

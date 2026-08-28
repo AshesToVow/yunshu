@@ -17,7 +17,6 @@ func TestWizardNodeName(t *testing.T) {
 		{name: "project warning", projectID: 12, severity: "warning", want: "向导 · 项目 12 · warning"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := wizardNodeName(tc.projectID, tc.severity); got != tc.want {
@@ -41,7 +40,6 @@ func TestNormalizeWizardSeverity(t *testing.T) {
 		{in: "p1", want: "p1"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.in, func(t *testing.T) {
 			t.Parallel()
 			if got := normalizeWizardSeverity(tc.in); got != tc.want {

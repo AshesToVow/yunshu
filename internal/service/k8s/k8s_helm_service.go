@@ -46,35 +46,35 @@ type HelmReleaseItem struct {
 }
 
 type HelmReleaseHistoryItem struct {
-	Revision   int    `json:"revision"`
-	Status     string `json:"status"`
-	Chart      string `json:"chart"`
-	AppVersion string `json:"app_version,omitempty"`
-	Updated    string `json:"updated,omitempty"`
+	Revision    int    `json:"revision"`
+	Status      string `json:"status"`
+	Chart       string `json:"chart"`
+	AppVersion  string `json:"app_version,omitempty"`
+	Updated     string `json:"updated,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
 type HelmReleaseValuesResponse struct {
-	Values map[string]interface{} `json:"values"`
+	Values map[string]any `json:"values"`
 }
 
 type HelmInstallRequest struct {
-	ClusterID       uint                   `json:"cluster_id" binding:"required"`
-	Namespace       string                 `json:"namespace" binding:"required"`
-	ReleaseName     string                 `json:"release_name" binding:"required"`
-	ChartName       string                 `json:"chart_name" binding:"required"`
-	ChartVersion    string                 `json:"chart_version"`
-	Values          map[string]interface{} `json:"values"`
-	CreateNamespace bool                   `json:"create_namespace"`
+	ClusterID       uint           `json:"cluster_id" binding:"required"`
+	Namespace       string         `json:"namespace" binding:"required"`
+	ReleaseName     string         `json:"release_name" binding:"required"`
+	ChartName       string         `json:"chart_name" binding:"required"`
+	ChartVersion    string         `json:"chart_version"`
+	Values          map[string]any `json:"values"`
+	CreateNamespace bool           `json:"create_namespace"`
 }
 
 type HelmUpgradeRequest struct {
-	ClusterID    uint                   `json:"cluster_id" binding:"required"`
-	Namespace    string                 `json:"namespace" binding:"required"`
-	ReleaseName  string                 `json:"release_name" binding:"required"`
-	ChartName    string                 `json:"chart_name"`
-	ChartVersion string                 `json:"chart_version"`
-	Values       map[string]interface{} `json:"values"`
+	ClusterID    uint           `json:"cluster_id" binding:"required"`
+	Namespace    string         `json:"namespace" binding:"required"`
+	ReleaseName  string         `json:"release_name" binding:"required"`
+	ChartName    string         `json:"chart_name"`
+	ChartVersion string         `json:"chart_version"`
+	Values       map[string]any `json:"values"`
 }
 
 type HelmRollbackRequest struct {
@@ -117,7 +117,7 @@ func (s *K8sHelmService) newActionConfig(ctx context.Context, clusterID uint, na
 	settings.SetNamespace(ns)
 	actionConfig := new(action.Configuration)
 	getter := newHelmRESTClientGetter(restCfg)
-	if err := actionConfig.Init(getter, ns, "secrets", func(format string, v ...interface{}) {}); err != nil {
+	if err := actionConfig.Init(getter, ns, "secrets", func(format string, v ...any) {}); err != nil {
 		return nil, nil, bizerrors.Internalf(ctx, "helm", "init", err, constants.ErrFmt559cb56d5b9d)
 	}
 	return actionConfig, settings, nil
@@ -392,7 +392,7 @@ func (s *K8sHelmService) Install(ctx context.Context, req HelmInstallRequest) (*
 	}
 	vals := req.Values
 	if vals == nil {
-		vals = map[string]interface{}{}
+		vals = map[string]any{}
 	}
 	rel, err := install.Run(chartRequested, vals)
 	if err != nil {
@@ -502,4 +502,3 @@ func (s *K8sHelmService) Uninstall(ctx context.Context, q HelmReleaseNameQuery) 
 	recordK8sChange(ctx, cluster, "helm_uninstall", "HelmRelease", q.Namespace, q.ReleaseName, nil)
 	return nil
 }
-

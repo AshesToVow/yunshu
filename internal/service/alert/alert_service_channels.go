@@ -31,7 +31,7 @@ func (s *AlertService) startPrometheusEnrichWorkers() {
 		workers = 4
 	}
 	s.enrichQueue = make(chan promEnrichTask, size)
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go func() {
 			for task := range s.enrichQueue {
 				if strings.TrimSpace(task.GeneratorURL) == "" || strings.TrimSpace(task.Fingerprint) == "" {
@@ -48,22 +48,22 @@ func (s *AlertService) startPrometheusEnrichWorkers() {
 }
 
 type AlertChannelPreviewRequest struct {
-	Settings         map[string]interface{} `json:"settings"`
-	Payload          map[string]interface{} `json:"payload"`
-	Firing           bool                   `json:"firing"`
-	TemplateFiring   string                 `json:"template_firing"`
-	TemplateResolved string                 `json:"template_resolved"`
-	Status           string                 `json:"status"`
-	Title            string                 `json:"title"`
-	Content          string                 `json:"content"`
-	Severity         string                 `json:"severity"`
-	ProjectID        uint                   `json:"project_id"`
-	RawPayloadJSON   string                 `json:"raw_payload_json"`
+	Settings         map[string]any `json:"settings"`
+	Payload          map[string]any `json:"payload"`
+	Firing           bool           `json:"firing"`
+	TemplateFiring   string         `json:"template_firing"`
+	TemplateResolved string         `json:"template_resolved"`
+	Status           string         `json:"status"`
+	Title            string         `json:"title"`
+	Content          string         `json:"content"`
+	Severity         string         `json:"severity"`
+	ProjectID        uint           `json:"project_id"`
+	RawPayloadJSON   string         `json:"raw_payload_json"`
 }
 
 type AlertChannelPreviewResponse struct {
 	Rendered           string                                     `json:"rendered"`
-	SamplePayload      map[string]interface{}                     `json:"sample_payload"`
+	SamplePayload      map[string]any                             `json:"sample_payload"`
 	AvailableFields    []string                                   `json:"available_fields"`
 	RawPayloadFields   []string                                   `json:"raw_payload_fields"`
 	CombinedFields     []string                                   `json:"combined_fields"`
@@ -75,19 +75,19 @@ type AlertChannelPreviewResponse struct {
 func (s *AlertService) PreviewChannelTemplate(ctx context.Context, req AlertChannelPreviewRequest) (*AlertChannelPreviewResponse, error) {
 	settings := req.Settings
 	if settings == nil {
-		settings = map[string]interface{}{}
+		settings = map[string]any{}
 	}
 	payload := req.Payload
 	if payload == nil {
-		payload = map[string]interface{}{}
+		payload = map[string]any{}
 	}
 	if raw := strings.TrimSpace(req.RawPayloadJSON); raw != "" {
 		_ = json.Unmarshal([]byte(raw), &payload)
 	}
 	if labelsAny, ok := payload["labels"]; !ok || labelsAny == nil {
-		payload["labels"] = map[string]interface{}{}
+		payload["labels"] = map[string]any{}
 	}
-	if labels, ok := payload["labels"].(map[string]interface{}); ok {
+	if labels, ok := payload["labels"].(map[string]any); ok {
 		if req.ProjectID > 0 {
 			labels["project_id"] = req.ProjectID
 		}
@@ -268,7 +268,7 @@ func (s *AlertService) TestChannel(ctx context.Context, id uint, req AlertTestRe
 	if severity == "" {
 		severity = "info"
 	}
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"source":     "manual-test",
 		"title":      title,
 		"content":    content,

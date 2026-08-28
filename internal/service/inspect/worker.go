@@ -29,7 +29,7 @@ func (s *Service) startWorkers(ctx context.Context) {
 		s.jobCh = make(chan uint, inspectJobQueueSize)
 		log := slog.Default().With("component", "inspect.worker")
 		log.Info("inspect workers started", "count", inspectWorkerCount)
-		for i := 0; i < inspectWorkerCount; i++ {
+		for i := range inspectWorkerCount {
 			go s.inspectWorkerLoop(i)
 		}
 		s.reclaimOrphanRuns(context.Background())

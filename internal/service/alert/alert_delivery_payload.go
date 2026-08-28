@@ -10,7 +10,7 @@ import (
 	"yunshu/internal/model"
 )
 
-func payloadMetaValueMeaningful(v interface{}) bool {
+func payloadMetaValueMeaningful(v any) bool {
 	if v == nil {
 		return false
 	}
@@ -18,9 +18,9 @@ func payloadMetaValueMeaningful(v interface{}) bool {
 	case string:
 		s := strings.TrimSpace(x)
 		return s != "" && strings.EqualFold(s, "null") == false
-	case map[string]interface{}:
+	case map[string]any:
 		return len(x) > 0
-	case []interface{}:
+	case []any:
 		return len(x) > 0
 	default:
 		s := strings.TrimSpace(fmt.Sprintf("%v", v))
@@ -28,7 +28,7 @@ func payloadMetaValueMeaningful(v interface{}) bool {
 	}
 }
 
-func enrichRequestMapWithAlertPayload(reqMap map[string]interface{}, alertPayload map[string]interface{}) {
+func enrichRequestMapWithAlertPayload(reqMap map[string]any, alertPayload map[string]any) {
 	if reqMap == nil {
 		return
 	}
@@ -55,41 +55,32 @@ func enrichRequestMapWithAlertPayload(reqMap map[string]interface{}, alertPayloa
 }
 
 // shrinkLargestNotifyStrings 缩短钉钉/企微等大段 markdown，避免 json.Marshal 后按字节截断时丢掉排在后面的 startsAt 等字段。
-func shrinkLargestNotifyStrings(m map[string]interface{}) bool {
-	if md, ok := m["markdown"].(map[string]interface{}); ok {
+func shrinkLargestNotifyStrings(m map[string]any) bool {
+	if md, ok := m["markdown"].(map[string]any); ok {
 		for _, key := range []string{"text", "content"} {
 			s, ok := md[key].(string)
 			if !ok || len(s) <= 512 {
 				continue
 			}
-			cut := len(s) / 2
-			if cut < 256 {
-				cut = 256
-			}
+			cut := max(len(s)/2, 256)
 			md[key] = s[:cut] + "\n…(truncated)…"
 			return true
 		}
 	}
-	if tx, ok := m["text"].(map[string]interface{}); ok {
+	if tx, ok := m["text"].(map[string]any); ok {
 		s, ok := tx["content"].(string)
 		if !ok || len(s) <= 512 {
 			return false
 		}
-		cut := len(s) / 2
-		if cut < 256 {
-			cut = 256
-		}
+		cut := max(len(s)/2, 256)
 		tx["content"] = s[:cut] + "\n…(truncated)…"
 		return true
 	}
 	// 钉钉应用会话：msg.markdown.text
-	if msg, ok := m["msg"].(map[string]interface{}); ok {
-		if md, ok := msg["markdown"].(map[string]interface{}); ok {
+	if msg, ok := m["msg"].(map[string]any); ok {
+		if md, ok := msg["markdown"].(map[string]any); ok {
 			if s, ok := md["text"].(string); ok && len(s) > 512 {
-				cut := len(s) / 2
-				if cut < 256 {
-					cut = 256
-				}
+				cut := max(len(s)/2, 256)
 				md["text"] = s[:cut] + "\n…(truncated)…"
 				return true
 			}
@@ -98,11 +89,11 @@ func shrinkLargestNotifyStrings(m map[string]interface{}) bool {
 	return false
 }
 
-func trimWebhookBodyForMaxJSON(m map[string]interface{}, maxBytes int) {
+func trimWebhookBodyForMaxJSON(m map[string]any, maxBytes int) {
 	if maxBytes <= 0 || m == nil {
 		return
 	}
-	for iter := 0; iter < 64; iter++ {
+	for range 64 {
 		bs, err := json.Marshal(m)
 		if err != nil || len(bs) <= maxBytes {
 			return
@@ -110,21 +101,21 @@ func trimWebhookBodyForMaxJSON(m map[string]interface{}, maxBytes int) {
 		if shrinkLargestNotifyStrings(m) {
 			continue
 		}
-		if md, ok := m["markdown"].(map[string]interface{}); ok {
+		if md, ok := m["markdown"].(map[string]any); ok {
 			title := md["title"]
-			m["markdown"] = map[string]interface{}{
+			m["markdown"] = map[string]any{
 				"title": title,
 				"text":  "[内容过长已省略，历史记录保留告警时间等字段]",
 			}
 			continue
 		}
-		if tx, ok := m["text"].(map[string]interface{}); ok {
+		if tx, ok := m["text"].(map[string]any); ok {
 			tx["content"] = "[内容过长已省略，历史记录保留告警时间等字段]"
 			m["text"] = tx
 			continue
 		}
-		if msg, ok := m["msg"].(map[string]interface{}); ok {
-			if md, ok := msg["markdown"].(map[string]interface{}); ok {
+		if msg, ok := m["msg"].(map[string]any); ok {
+			if md, ok := msg["markdown"].(map[string]any); ok {
 				md["text"] = "[内容过长已省略，历史记录保留告警时间等字段]"
 				msg["markdown"] = md
 				m["msg"] = msg
@@ -135,18 +126,18 @@ func trimWebhookBodyForMaxJSON(m map[string]interface{}, maxBytes int) {
 	}
 }
 
-func buildEventPayloadBytes(reqBytes []byte, alertPayload map[string]interface{}, maxChars int) []byte {
+func buildEventPayloadBytes(reqBytes []byte, alertPayload map[string]any, maxChars int) []byte {
 	// 历史记录展示需要 startsAt 等原始告警上下文（钉钉/企微下发体默认不包含），
 	// 这里仅扩充入库 payload，不影响实际发往通道的请求体。
 	if len(reqBytes) == 0 {
 		return reqBytes
 	}
-	var reqMap map[string]interface{}
+	var reqMap map[string]any
 	if err := json.Unmarshal(reqBytes, &reqMap); err != nil {
 		return reqBytes
 	}
 	if reqMap == nil {
-		reqMap = map[string]interface{}{}
+		reqMap = map[string]any{}
 	}
 	enrichRequestMapWithAlertPayload(reqMap, alertPayload)
 	trimWebhookBodyForMaxJSON(reqMap, maxChars)

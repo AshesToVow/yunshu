@@ -12,8 +12,8 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
@@ -54,7 +54,7 @@ type CachedSubscriptionNode struct {
 // NewAlertSubscriptionService 创建订阅服务。
 func NewAlertSubscriptionService(repo interfaces.AlertSubscriptionRepository) *AlertSubscriptionService {
 	svc := &AlertSubscriptionService{
-		repo: repo,
+		repo:      repo,
 		rootNodes: make(map[uint][]*CachedSubscriptionNode),
 		allNodes:  make(map[uint]*CachedSubscriptionNode),
 	}
@@ -521,7 +521,7 @@ func (s *AlertSubscriptionService) updateDescendantsPath(ctx context.Context, pa
 
 	for _, child := range children {
 		newPath := fmt.Sprintf("%s/%d", parentPath, child.ID)
-		updates := map[string]interface{}{
+		updates := map[string]any{
 			"path":  newPath,
 			"level": len(strings.Split(newPath, "/")) - 1,
 		}

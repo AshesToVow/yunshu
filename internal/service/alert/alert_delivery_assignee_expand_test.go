@@ -5,7 +5,7 @@ import (
 )
 
 func TestMonitorRuleIDFromPayload(t *testing.T) {
-	id, ok := monitorRuleIDFromPayload(map[string]interface{}{
+	id, ok := monitorRuleIDFromPayload(map[string]any{
 		"labels": map[string]string{"monitor_rule_id": "42"},
 	})
 	if !ok || id != 42 {

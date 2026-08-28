@@ -13,7 +13,7 @@ func BenchmarkWorkloadContainerIndex(b *testing.B) {
 		{Name: "c1"}, {Name: "c2"}, {Name: "c3"},
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		workloadContainerIndex(containers, "c2")
 	}
 }
@@ -34,7 +34,7 @@ func BenchmarkDeploymentResourceSummary(b *testing.B) {
 		},
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		deploymentResourceSummary(d)
 	}
 }

@@ -7,7 +7,7 @@ import (
 
 func TestBuildUnifiedNotifyTitleDutyPrefix(t *testing.T) {
 	s := &AlertService{}
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"labels": map[string]string{
 			"alertname":       "磁盘inode使用率",
 			"monitor_rule_id": "1",

@@ -161,7 +161,7 @@ func (s *AlertService) shouldSuppressByRouteSilence(ctx context.Context, status,
 	return !ok
 }
 
-func (s *AlertService) logSuppressedRouteSilence(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, silenceSeconds int, payload map[string]interface{}) {
+func (s *AlertService) logSuppressedRouteSilence(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, silenceSeconds int, payload map[string]any) {
 	reqBytes, _ := json.Marshal(payload)
 	event := model.AlertEvent{
 		Source:          alertEventSourceFromPayload(payload),
@@ -196,7 +196,7 @@ func (s *AlertService) computeGroupKey(receiver, status, severity, alertname str
 	return "gk_" + hex.EncodeToString(sum[:8])
 }
 
-func channelMatchesAlert(settings map[string]interface{}, labels map[string]string, dims alertnotify.Dims) bool {
+func channelMatchesAlert(settings map[string]any, labels map[string]string, dims alertnotify.Dims) bool {
 	if settings == nil {
 		return true
 	}
@@ -216,7 +216,7 @@ func channelMatchesAlert(settings map[string]interface{}, labels map[string]stri
 
 	// matchLabels: {"cluster":"prod-1","namespace":"kube-system"}
 	if raw, ok := settings["matchLabels"]; ok {
-		if m, ok := raw.(map[string]interface{}); ok {
+		if m, ok := raw.(map[string]any); ok {
 			for k, v := range m {
 				expected := strings.TrimSpace(fmt.Sprintf("%v", v))
 				if expected == "" {
@@ -231,7 +231,7 @@ func channelMatchesAlert(settings map[string]interface{}, labels map[string]stri
 	}
 	// matchRegex: {"namespace":"^(kube-system|monitoring)$"}
 	if raw, ok := settings["matchRegex"]; ok {
-		if m, ok := raw.(map[string]interface{}); ok {
+		if m, ok := raw.(map[string]any); ok {
 			for k, v := range m {
 				pat := strings.TrimSpace(fmt.Sprintf("%v", v))
 				if pat == "" {
@@ -296,7 +296,7 @@ func mergeNotifyPhonesUnique(phones []string) []string {
 	return out
 }
 
-func (s *AlertService) enrichAssigneeAndDutyEmails(ctx context.Context, outgoing map[string]interface{}, labels map[string]string) {
+func (s *AlertService) enrichAssigneeAndDutyEmails(ctx context.Context, outgoing map[string]any, labels map[string]string) {
 	rid, ok := parseLabelUint(labels["monitor_rule_id"])
 	if !ok {
 		return

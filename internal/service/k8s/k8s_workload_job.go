@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/k8sutil"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sutil"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -59,10 +59,7 @@ func (s *K8sWorkloadService) ListJobs(ctx context.Context, q NamespacedListQuery
 			completion = j.Status.CompletionTime.Time.Format("2006-01-02 15:04:05")
 		}
 
-		scale := int64(j.Status.Active)
-		if scale < 1 {
-			scale = 1
-		}
+		scale := max(int64(j.Status.Active), 1)
 		cpuUse, memUse, cr, cl, mr, ml := workloadUsagePercents(jobUsage[j.Name], j.Spec.Template.Spec, scale)
 
 		out = append(out, WorkloadItem{

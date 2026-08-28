@@ -6,7 +6,7 @@ import (
 
 func TestPayloadString(t *testing.T) {
 	t.Parallel()
-	m := map[string]interface{}{"title": "  hello  "}
+	m := map[string]any{"title": "  hello  "}
 	if got := payloadString(m, "title"); got != "hello" {
 		t.Fatalf("got %q", got)
 	}
@@ -17,7 +17,7 @@ func TestPayloadString(t *testing.T) {
 
 func TestResolveNotifyAlertName(t *testing.T) {
 	t.Parallel()
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"labels": map[string]string{"alertname": "DiskFull"},
 	}
 	if got := resolveNotifyAlertName("", payload); got != "DiskFull" {
@@ -30,8 +30,8 @@ func TestResolveNotifyAlertName(t *testing.T) {
 
 func TestProjectNameFromLabelsPayload(t *testing.T) {
 	t.Parallel()
-	payload := map[string]interface{}{
-		"group_labels": map[string]interface{}{"project_name": "云枢"},
+	payload := map[string]any{
+		"group_labels": map[string]any{"project_name": "云枢"},
 	}
 	if got := projectNameFromLabelsPayload(payload); got != "云枢" {
 		t.Fatalf("got %q", got)
@@ -40,13 +40,13 @@ func TestProjectNameFromLabelsPayload(t *testing.T) {
 
 func TestProjectIDFromPayload(t *testing.T) {
 	t.Parallel()
-	payload := map[string]interface{}{
-		"labels": map[string]interface{}{"project_id": float64(99)},
+	payload := map[string]any{
+		"labels": map[string]any{"project_id": float64(99)},
 	}
 	if got := projectIDFromPayload(payload); got != 99 {
 		t.Fatalf("got %d", got)
 	}
-	payload2 := map[string]interface{}{"project_id": uint(5)}
+	payload2 := map[string]any{"project_id": uint(5)}
 	if got := projectIDFromPayload(payload2); got != 5 {
 		t.Fatalf("top-level: got %d", got)
 	}
@@ -55,7 +55,7 @@ func TestProjectIDFromPayload(t *testing.T) {
 func TestParseUintAny(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		in   interface{}
+		in   any
 		want uint
 	}{
 		{uint(3), 3},
@@ -75,7 +75,7 @@ func TestParseUintAny(t *testing.T) {
 
 func TestAppendAssigneePhonesToAtMobiles(t *testing.T) {
 	t.Parallel()
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"assignee_phones": []string{"13800138000"},
 	}
 	out := appendAssigneePhonesToAtMobiles([]string{"13900139000"}, payload)
@@ -90,7 +90,7 @@ func TestResolveNotifyProjectNameFallback(t *testing.T) {
 	if got := s.resolveNotifyProjectName(nil, nil); got != "未绑定项目" {
 		t.Fatalf("got %q", got)
 	}
-	payload := map[string]interface{}{"project_name": "P1"}
+	payload := map[string]any{"project_name": "P1"}
 	if got := s.resolveNotifyProjectName(nil, payload); got != "P1" {
 		t.Fatalf("got %q", got)
 	}

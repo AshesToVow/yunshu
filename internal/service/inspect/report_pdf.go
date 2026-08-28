@@ -36,7 +36,7 @@ func inspectServerPDFMode() string {
 }
 
 // renderPDFFromHTMLBytes 保留签名兼容；HTML→PDF 已取消，请改用 renderBinaryPDF(data)。
-func renderPDFFromHTMLBytes(_ interface{}, _ []byte) []byte {
+func renderPDFFromHTMLBytes(_ any, _ []byte) []byte {
 	return nil
 }
 

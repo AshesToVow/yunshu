@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/k8sutil"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sutil"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -50,10 +50,7 @@ func (s *K8sWorkloadService) ListDaemonSets(ctx context.Context, q NamespacedLis
 		if ds.Status.DesiredNumberScheduled > 0 {
 			readyPercent = int((float64(ds.Status.NumberReady) / float64(ds.Status.DesiredNumberScheduled)) * 100)
 		}
-		scale := int64(ds.Status.CurrentNumberScheduled)
-		if scale < 1 {
-			scale = 1
-		}
+		scale := max(int64(ds.Status.CurrentNumberScheduled), 1)
 		cpuUse, memUse, cr, cl, mr, ml := workloadUsagePercents(dsUsage[ds.Name], ds.Spec.Template.Spec, scale)
 		out = append(out, WorkloadItem{
 			Name:           ds.Name,

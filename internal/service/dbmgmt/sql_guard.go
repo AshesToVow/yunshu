@@ -324,7 +324,7 @@ func splitSQLStatements(content string) []string {
 	var buf strings.Builder
 	inSingle := false
 	inDouble := false
-	for i := 0; i < len(content); i++ {
+	for i := range len(content) {
 		ch := content[i]
 		if ch == '\'' && !inDouble {
 			inSingle = !inSingle

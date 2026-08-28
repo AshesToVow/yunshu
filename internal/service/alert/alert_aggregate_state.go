@@ -28,7 +28,7 @@ func (s *AlertService) clearGroupAggregateStateBySpec(ctx context.Context, spec 
 	return s.redis.Del(ctx, spec.keyPrefix+strings.TrimSpace(groupKey)).Err()
 }
 
-func (s *AlertService) logSuppressedGroupAggregateBySpec(ctx context.Context, spec groupAggregateSpec, title, severity, status, groupKey string, payload map[string]interface{}) {
+func (s *AlertService) logSuppressedGroupAggregateBySpec(ctx context.Context, spec groupAggregateSpec, title, severity, status, groupKey string, payload map[string]any) {
 	reqBytes, _ := json.Marshal(payload)
 	event := model.AlertEvent{
 		Source:          alertEventSourceFromPayload(payload),
@@ -74,7 +74,7 @@ func (s *AlertService) clearGroupResolvedState(ctx context.Context, groupKey str
 	return s.clearGroupAggregateStateBySpec(ctx, s.resolvedGroupAggregateSpec(), groupKey)
 }
 
-func (s *AlertService) logSuppressedResolvedAggregate(ctx context.Context, title, severity, status, groupKey string, payload map[string]interface{}) {
+func (s *AlertService) logSuppressedResolvedAggregate(ctx context.Context, title, severity, status, groupKey string, payload map[string]any) {
 	s.logSuppressedGroupAggregateBySpec(ctx, s.resolvedGroupAggregateSpec(), title, severity, status, groupKey, payload)
 }
 
@@ -267,7 +267,7 @@ func (s *AlertService) clearAlertFiringDelivered(ctx context.Context, fingerprin
 	_ = s.firingDeliveryRepo.Delete(ctx, fp)
 }
 
-func (s *AlertService) logResolvedSuppressedNoPriorFiringDelivery(ctx context.Context, title, severity, status, groupKey, labelsDigest string, payload map[string]interface{}) {
+func (s *AlertService) logResolvedSuppressedNoPriorFiringDelivery(ctx context.Context, title, severity, status, groupKey, labelsDigest string, payload map[string]any) {
 	reqBytes, _ := json.Marshal(payload)
 	event := model.AlertEvent{
 		Source:             alertEventSourceFromPayload(payload),
@@ -293,14 +293,8 @@ func (s *AlertService) logResolvedSuppressedNoPriorFiringDelivery(ctx context.Co
 }
 
 func humanReadableGroupTimingSuppression(reason string, cfg config.AlertConfig) string {
-	gw := cfg.GroupWaitSeconds
-	if gw < 0 {
-		gw = 0
-	}
-	gi := cfg.GroupIntervalSeconds
-	if gi < 0 {
-		gi = 0
-	}
+	gw := max(cfg.GroupWaitSeconds, 0)
+	gi := max(cfg.GroupIntervalSeconds, 0)
 	ri := cfg.RepeatIntervalSeconds
 	if ri <= 0 {
 		ri = 300
@@ -319,7 +313,7 @@ func humanReadableGroupTimingSuppression(reason string, cfg config.AlertConfig) 
 	}
 }
 
-func (s *AlertService) logSuppressedFiringTiming(ctx context.Context, title, severity, status, groupKey, labelsDigest, reason string, payload map[string]interface{}) {
+func (s *AlertService) logSuppressedFiringTiming(ctx context.Context, title, severity, status, groupKey, labelsDigest, reason string, payload map[string]any) {
 	reqBytes, _ := json.Marshal(payload)
 	titleSuffix := "（通知合并：本轮未推送）"
 	channelName := "（未推送·合并降噪）"

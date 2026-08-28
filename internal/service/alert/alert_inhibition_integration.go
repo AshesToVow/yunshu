@@ -62,7 +62,7 @@ func (s *AlertService) ClearSourceInhibition(ctx context.Context, labels map[str
 	return nil
 }
 
-func (s *AlertService) logInhibitionEvent(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, event *model.AlertInhibitionEvent, payload map[string]interface{}) {
+func (s *AlertService) logInhibitionEvent(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, event *model.AlertInhibitionEvent, payload map[string]any) {
 	reqBytes, _ := json.Marshal(payload)
 	e := model.AlertEvent{
 		Source:          alertEventSourceFromPayload(payload),

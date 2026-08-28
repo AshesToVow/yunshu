@@ -1,9 +1,10 @@
-﻿package alert
+package alert
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"yunshu/internal/alertdispatch"
@@ -33,14 +34,14 @@ func normalizeRecipientMode(raw string) string {
 	}
 }
 
-func payloadRecipientMode(payload map[string]interface{}) string {
+func payloadRecipientMode(payload map[string]any) string {
 	if payload == nil {
 		return RecipientModeAssigneeAndCC
 	}
 	return normalizeRecipientMode(fmt.Sprintf("%v", payload["recipient_mode"]))
 }
 
-func extractPayloadEmails(payload map[string]interface{}, key string) []string {
+func extractPayloadEmails(payload map[string]any, key string) []string {
 	if payload == nil {
 		return nil
 	}
@@ -103,7 +104,7 @@ func mergeEmailLists(parts ...[]string) []string {
 	return out
 }
 
-func mergeAssigneeEmails(recipients []string, payload map[string]interface{}) []string {
+func mergeAssigneeEmails(recipients []string, payload map[string]any) []string {
 	mode := payloadRecipientMode(payload)
 	assignee := extractPayloadEmails(payload, "assignee_emails")
 	channel := dedupeEmailList(recipients)
@@ -124,13 +125,13 @@ func mergeAssigneeEmails(recipients []string, payload map[string]interface{}) []
 	}
 }
 
-func payloadHasAssigneeEmails(payload map[string]interface{}) bool {
+func payloadHasAssigneeEmails(payload map[string]any) bool {
 	return len(extractPayloadEmails(payload, "assignee_emails")) > 0
 }
 
 // mergeAssigneeEmailsWithReceiverGroup 合并接收组抄送。
 // assignee_only 且已有处理人时不合并；assignee_and_cc / channel_only 会合并。
-func mergeAssigneeEmailsWithReceiverGroup(recipients []string, payload map[string]interface{}) []string {
+func mergeAssigneeEmailsWithReceiverGroup(recipients []string, payload map[string]any) []string {
 	mode := payloadRecipientMode(payload)
 	if mode == RecipientModeAssigneeOnly && payloadHasAssigneeEmails(payload) {
 		return recipients
@@ -142,7 +143,7 @@ func mergeAssigneeEmailsWithReceiverGroup(recipients []string, payload map[strin
 	return mergeEmailLists(recipients, extra)
 }
 
-func (s *AlertService) sendEmailChannel(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}) (int, string, error) {
+func (s *AlertService) sendEmailChannel(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]any) (int, string, error) {
 	recipients, err := parseEmailRecipients(channel.HeadersJSON)
 	if err != nil {
 		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "sendEmailChannel", err)
@@ -178,10 +179,8 @@ func (s *AlertService) sendEmailChannel(ctx context.Context, channel *model.Aler
 	} else if len(failMsgs) > 0 {
 		sendErr = fmt.Errorf("partial failure: %s", strings.Join(failMsgs, "; "))
 	}
-	storeMap := make(map[string]interface{}, len(payload)+4)
-	for k, v := range payload {
-		storeMap[k] = v
-	}
+	storeMap := make(map[string]any, len(payload)+4)
+	maps.Copy(storeMap, payload)
 	storeMap["to"] = recipients
 	alertdispatch.SlimOutgoingPayloadForHistory(storeMap, s.cfg.MaxPayloadChars)
 	reqBytes, _ := json.Marshal(storeMap)

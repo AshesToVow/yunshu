@@ -1,7 +1,6 @@
 package eventforward
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -59,8 +58,7 @@ func TestBuildAlertManagerPayload_FingerprintIgnoresMessage(t *testing.T) {
 }
 
 func TestWatcherEnqueueTimeout(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	w := &Watcher{
 		ctx:     ctx,
 		eventCh: make(chan *model.K8sForwardedEvent), // unbuffered + no consumer => timeout
@@ -70,4 +68,3 @@ func TestWatcherEnqueueTimeout(t *testing.T) {
 		t.Fatalf("expected timeout error, got %v", err)
 	}
 }
-

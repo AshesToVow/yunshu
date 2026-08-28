@@ -37,7 +37,6 @@ func TestParseAckTTLMinutes(t *testing.T) {
 		{name: "dict mismatch", allowed: []int{30, 60}, requested: 15, wantErr: true},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := parseAckTTLMinutes(tc.allowed, tc.requested)

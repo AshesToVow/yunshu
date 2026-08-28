@@ -526,7 +526,7 @@ func cleanupDuplicateRootMenu(ctx context.Context, db *gorm.DB, spec rootMenuDed
 		}
 	}
 
-	return db.WithContext(ctx).Model(&model.Menu{}).Where("id = ?", keepID).Updates(map[string]interface{}{
+	return db.WithContext(ctx).Model(&model.Menu{}).Where("id = ?", keepID).Updates(map[string]any{
 		"name": spec.keepName,
 		"icon": spec.keepIcon,
 		"sort": spec.keepSort,

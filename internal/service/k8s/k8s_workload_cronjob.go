@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/k8sutil"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sutil"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -109,10 +109,7 @@ func (s *K8sWorkloadService) ListCronJobsV2(ctx context.Context, q NamespacedLis
 		}
 
 		activeCount := fmt.Sprintf("%d", len(cj.Status.Active))
-		scale := int64(len(cj.Status.Active))
-		if scale < 1 {
-			scale = 1
-		}
+		scale := max(int64(len(cj.Status.Active)), 1)
 		tpl := cj.Spec.JobTemplate.Spec.Template.Spec
 		cpuUse, memUse, cr, cl, mr, ml := workloadUsagePercents(cjUsage[cj.Name], tpl, scale)
 

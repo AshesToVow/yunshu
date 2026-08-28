@@ -39,11 +39,11 @@ func parseUnstructuredPodMetrics(u *unstructured.Unstructured) (namespace, podNa
 		return ns, name, cpu, mem, true
 	}
 	for _, c := range containers {
-		cm, okm := c.(map[string]interface{})
+		cm, okm := c.(map[string]any)
 		if !okm {
 			continue
 		}
-		usage, _ := cm["usage"].(map[string]interface{})
+		usage, _ := cm["usage"].(map[string]any)
 		if usage == nil {
 			continue
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -25,18 +26,18 @@ type ImportPrometheusRulesRequest struct {
 }
 
 type ImportPrometheusRulePreview struct {
-	GroupName string `json:"group_name"`
-	Name      string `json:"name"`
-	Expr      string `json:"expr"`
-	ForSeconds int   `json:"for_seconds"`
-	Severity  string `json:"severity"`
+	GroupName  string `json:"group_name"`
+	Name       string `json:"name"`
+	Expr       string `json:"expr"`
+	ForSeconds int    `json:"for_seconds"`
+	Severity   string `json:"severity"`
 }
 
 type ImportPrometheusRulesResult struct {
-	Created int                          `json:"created"`
-	Skipped int                          `json:"skipped"`
+	Created int                           `json:"created"`
+	Skipped int                           `json:"skipped"`
 	Preview []ImportPrometheusRulePreview `json:"preview,omitempty"`
-	Errors  []string                     `json:"errors,omitempty"`
+	Errors  []string                      `json:"errors,omitempty"`
 }
 
 type promRuleFile struct {
@@ -125,9 +126,7 @@ func (s *AlertMonitorRuleService) ImportPrometheusYAML(ctx context.Context, req 
 				continue
 			}
 			labels := map[string]string{}
-			for k, v := range r.Labels {
-				labels[k] = v
-			}
+			maps.Copy(labels, r.Labels)
 			if g.Name != "" {
 				labels["rule_group"] = g.Name
 			}

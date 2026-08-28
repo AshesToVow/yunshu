@@ -17,15 +17,15 @@ func TestPayloadMetaValueMeaningful(t *testing.T) {
 	if payloadMetaValueMeaningful("null") || payloadMetaValueMeaningful("  ") {
 		t.Fatal("null/space not meaningful")
 	}
-	if !payloadMetaValueMeaningful(map[string]interface{}{"a": 1}) {
+	if !payloadMetaValueMeaningful(map[string]any{"a": 1}) {
 		t.Fatal("map meaningful")
 	}
 }
 
 func TestEnrichRequestMapWithAlertPayload(t *testing.T) {
 	t.Parallel()
-	req := map[string]interface{}{"title": "t"}
-	alert := map[string]interface{}{
+	req := map[string]any{"title": "t"}
+	alert := map[string]any{
 		"groupKey": "gk1",
 		"labels":   map[string]string{"k": "v"},
 	}
@@ -41,13 +41,13 @@ func TestEnrichRequestMapWithAlertPayload(t *testing.T) {
 func TestShrinkLargestNotifyStrings(t *testing.T) {
 	t.Parallel()
 	long := strings.Repeat("x", 600)
-	m := map[string]interface{}{
-		"markdown": map[string]interface{}{"text": long},
+	m := map[string]any{
+		"markdown": map[string]any{"text": long},
 	}
 	if !shrinkLargestNotifyStrings(m) {
 		t.Fatal("expected shrink")
 	}
-	md := m["markdown"].(map[string]interface{})
+	md := m["markdown"].(map[string]any)
 	text := md["text"].(string)
 	if len(text) >= len(long) {
 		t.Fatalf("not shrunk: len=%d", len(text))
@@ -56,8 +56,8 @@ func TestShrinkLargestNotifyStrings(t *testing.T) {
 
 func TestTrimWebhookBodyForMaxJSON(t *testing.T) {
 	t.Parallel()
-	m := map[string]interface{}{
-		"markdown": map[string]interface{}{
+	m := map[string]any{
+		"markdown": map[string]any{
 			"title": "t",
 			"text":  strings.Repeat("a", 8000),
 		},
@@ -90,12 +90,12 @@ func TestMaskWebhookURL(t *testing.T) {
 func TestBuildEventPayloadBytes(t *testing.T) {
 	t.Parallel()
 	req := []byte(`{"a":1}`)
-	alert := map[string]interface{}{"startsAt": "t0"}
+	alert := map[string]any{"startsAt": "t0"}
 	out := buildEventPayloadBytes(req, alert, 4096)
 	if len(out) == 0 {
 		t.Fatal("empty output")
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(out, &m); err != nil {
 		t.Fatal(err)
 	}

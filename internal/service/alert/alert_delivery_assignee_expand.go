@@ -9,7 +9,7 @@ import (
 	"yunshu/internal/alertdispatch"
 )
 
-func monitorRuleIDFromPayload(payload map[string]interface{}) (uint, bool) {
+func monitorRuleIDFromPayload(payload map[string]any) (uint, bool) {
 	if payload == nil {
 		return 0, false
 	}
@@ -18,7 +18,7 @@ func monitorRuleIDFromPayload(payload map[string]interface{}) (uint, bool) {
 			return id, true
 		}
 	}
-	if raw, ok := payload["labels"].(map[string]interface{}); ok && raw != nil {
+	if raw, ok := payload["labels"].(map[string]any); ok && raw != nil {
 		if id, ok2 := parseLabelUint(fmt.Sprintf("%v", raw["monitor_rule_id"])); ok2 {
 			return id, true
 		}
@@ -61,7 +61,7 @@ func (s *AlertService) channelKindFlagsForSet(ctx context.Context, channelSet ma
 	return f
 }
 
-func collectAssigneePhonesFromPayload(payload map[string]interface{}) []string {
+func collectAssigneePhonesFromPayload(payload map[string]any) []string {
 	raw, ok := payload["assignee_phones"]
 	if !ok || raw == nil {
 		return nil
@@ -132,7 +132,7 @@ func (s *AlertService) anyAssigneePhoneNeedsMailFallback(ctx context.Context, ch
 // - wechat 等：始终补邮件；
 // - 钉钉/企微：处理人无手机号，或手机号无法在企业通讯录解析（通常不在群内无法 @）时补邮件；
 // - 接收组已含邮件通道：不重复补启通道，但仍写入 assignee_emails 供邮件投递。
-func (s *AlertService) assigneeShouldReceiveSupplementalEmail(ctx context.Context, channelSet map[uint]struct{}, payload map[string]interface{}) bool {
+func (s *AlertService) assigneeShouldReceiveSupplementalEmail(ctx context.Context, channelSet map[uint]struct{}, payload map[string]any) bool {
 	flags := s.channelKindFlagsForSet(ctx, channelSet)
 	if flags.hasEmail && !flags.hasDingding && !flags.hasWeCom && !flags.hasWechat {
 		return false
@@ -165,7 +165,7 @@ func (s *AlertService) expandChannelSetForAssigneeNotification(
 	ctx context.Context,
 	channelSet map[uint]struct{},
 	receiverGroupIDs []uint,
-	payload map[string]interface{},
+	payload map[string]any,
 ) {
 	if s == nil || len(channelSet) == 0 || len(receiverGroupIDs) == 0 || payload == nil {
 		return

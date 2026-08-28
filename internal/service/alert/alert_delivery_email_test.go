@@ -4,7 +4,7 @@ import "testing"
 
 func TestMergeAssigneeEmailsStrictPriority(t *testing.T) {
 	t.Parallel()
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"assignee_emails": []string{"rule@x.com"},
 		"recipient_mode":  RecipientModeAssigneeOnly,
 	}
@@ -16,7 +16,7 @@ func TestMergeAssigneeEmailsStrictPriority(t *testing.T) {
 
 func TestMergeAssigneeEmailsDefaultAndCC(t *testing.T) {
 	t.Parallel()
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"assignee_emails": []string{"rule@x.com"},
 	}
 	out := mergeAssigneeEmails([]string{"channel@x.com"}, payload)
@@ -27,7 +27,7 @@ func TestMergeAssigneeEmailsDefaultAndCC(t *testing.T) {
 
 func TestMergeAssigneeEmailsChannelOnly(t *testing.T) {
 	t.Parallel()
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"assignee_emails": []string{"rule@x.com"},
 		"recipient_mode":  RecipientModeChannelOnly,
 	}
@@ -39,7 +39,7 @@ func TestMergeAssigneeEmailsChannelOnly(t *testing.T) {
 
 func TestMergeAssigneeEmailsChannelFallback(t *testing.T) {
 	t.Parallel()
-	out := mergeAssigneeEmails([]string{"A@x.com", "a@x.com"}, map[string]interface{}{})
+	out := mergeAssigneeEmails([]string{"A@x.com", "a@x.com"}, map[string]any{})
 	if len(out) != 1 || out[0] != "a@x.com" {
 		t.Fatalf("got %v", out)
 	}
@@ -50,7 +50,7 @@ func TestPayloadHasAssigneeEmails(t *testing.T) {
 	if payloadHasAssigneeEmails(nil) {
 		t.Fatal("nil payload")
 	}
-	if !payloadHasAssigneeEmails(map[string]interface{}{
+	if !payloadHasAssigneeEmails(map[string]any{
 		"assignee_emails": []string{"a@x.com"},
 	}) {
 		t.Fatal("expected true")
@@ -59,14 +59,14 @@ func TestPayloadHasAssigneeEmails(t *testing.T) {
 
 func TestMergeAssigneeEmailsWithReceiverGroup(t *testing.T) {
 	t.Parallel()
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"receiver_group_emails": []string{"cc@x.com"},
 	}
 	out := mergeAssigneeEmailsWithReceiverGroup([]string{"to@x.com"}, payload)
 	if len(out) != 2 {
 		t.Fatalf("got %v", out)
 	}
-	payload2 := map[string]interface{}{
+	payload2 := map[string]any{
 		"assignee_emails":       []string{"rule@x.com"},
 		"receiver_group_emails": []string{"cc@x.com"},
 		"recipient_mode":        RecipientModeAssigneeOnly,
@@ -75,7 +75,7 @@ func TestMergeAssigneeEmailsWithReceiverGroup(t *testing.T) {
 	if len(out2) != 1 || out2[0] != "to@x.com" {
 		t.Fatalf("assignee_only skips group merge: %v", out2)
 	}
-	payload3 := map[string]interface{}{
+	payload3 := map[string]any{
 		"assignee_emails":       []string{"rule@x.com"},
 		"receiver_group_emails": []string{"cc@x.com"},
 		"recipient_mode":        RecipientModeAssigneeAndCC,

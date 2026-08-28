@@ -45,8 +45,8 @@ type K8sRuntimeService struct {
 type ClusterConnState struct {
 	State               string    `json:"state"`
 	LastError           string    `json:"last_error,omitempty"`
-	LastAttemptAt       time.Time `json:"last_attempt_at,omitempty"`
-	LastSuccessAt       time.Time `json:"last_success_at,omitempty"`
+	LastAttemptAt       time.Time `json:"last_attempt_at"`
+	LastSuccessAt       time.Time `json:"last_success_at"`
 	ConsecutiveFailures int       `json:"consecutive_failures"`
 }
 

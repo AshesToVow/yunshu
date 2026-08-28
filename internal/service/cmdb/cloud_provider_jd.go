@@ -25,7 +25,7 @@ func (p *JdCloudProvider) ListInstances(ctx context.Context, ak, sk, regionScope
 		return nil, bizerrors.Pass(ctx, "project.cloud", "ListInstances", err)
 	}
 	regions := make([]string, 0)
-	for _, it := range strings.Split(regionScope, ",") {
+	for it := range strings.SplitSeq(regionScope, ",") {
 		v := strings.TrimSpace(it)
 		if v != "" {
 			regions = append(regions, v)
@@ -253,10 +253,7 @@ func (p *JdCloudProvider) SyncInstanceTags(ctx context.Context, ak, sk, region, 
 }
 
 func formatJdDiskInfo(systemDisk jdvmmodels.InstanceDiskAttachment, dataDisks []jdvmmodels.InstanceDiskAttachment) string {
-	systemSize := 0
-	if systemDisk.CloudDisk.DiskSizeGB > 0 {
-		systemSize = systemDisk.CloudDisk.DiskSizeGB
-	}
+	systemSize := max(systemDisk.CloudDisk.DiskSizeGB, 0)
 	dataCount := 0
 	dataTotal := 0
 	for _, d := range dataDisks {

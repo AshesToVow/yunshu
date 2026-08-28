@@ -2,6 +2,7 @@ package alert
 
 import (
 	"context"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -60,12 +61,12 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 		envLabel := host.ResolveEnvironmentLabel(labels, ca.PayloadReceiver, alert.Labels)
 
 		if sid, muted, err := host.FirstMatchingSilenceID(ctx, labels, time.Now()); err == nil && muted {
-			minPayload := map[string]interface{}{
+			minPayload := map[string]any{
 				"labels": labels, "annotations": annotations, "severity": severity, "status": status,
 				"receiver": ca.PayloadReceiver, "fingerprint": alert.Fingerprint,
 				"groupKey": groupKey, "cluster": envLabel, "labelsDigest": labelsDigest,
 				"monitorPipeline": monitorPipeline,
-				"datasourceId": dsID, "datasourceName": dsName, "datasourceType": dsType,
+				"datasourceId":    dsID, "datasourceName": dsName, "datasourceType": dsType,
 				"source": ca.Source,
 			}
 			host.LogSilenceSuppressed(ctx, title, severity, status, envLabel, groupKey, labelsDigest, sid, minPayload)
@@ -265,7 +266,7 @@ func deliverToChannels(
 	subscriptionChannels map[uint]struct{},
 	source, title, severity, status string,
 	labels map[string]string,
-	outgoing map[string]interface{},
+	outgoing map[string]any,
 ) (sentCount, okDeliveries int) {
 	_ = labels
 	for i := range channels {
@@ -292,8 +293,8 @@ func buildOutgoingPayload(
 	envLabel, monitorPipeline string,
 	dsID uint, dsName, dsType, groupKey, labelsDigest string,
 	count int64,
-) map[string]interface{} {
-	out := map[string]interface{}{
+) map[string]any {
+	out := map[string]any{
 		"source": ca.Source, "title": title, "summary": summary, "severity": severity, "status": status,
 		"receiver": ca.PayloadReceiver, "fingerprint": alert.Fingerprint, "count": count,
 		"labels": labels, "annotations": annotations, "group_labels": ca.GroupLabels,
@@ -309,7 +310,7 @@ func buildOutgoingPayload(
 		out["project_id"] = ca.Cloud.ProjectID
 	}
 	if ca.Cloud != nil {
-		cloud := map[string]interface{}{
+		cloud := map[string]any{
 			"provider":      ca.Cloud.Provider,
 			"account_id":    ca.Cloud.AccountID,
 			"instance_id":   ca.Cloud.InstanceID,
@@ -371,11 +372,7 @@ func pickSeverity(labels, common map[string]string) string {
 
 func mergeStringMaps(base, overlay map[string]string) map[string]string {
 	out := make(map[string]string)
-	for k, v := range base {
-		out[k] = v
-	}
-	for k, v := range overlay {
-		out[k] = v
-	}
+	maps.Copy(out, base)
+	maps.Copy(out, overlay)
 	return out
 }

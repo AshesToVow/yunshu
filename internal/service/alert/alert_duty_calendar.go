@@ -78,7 +78,7 @@ func (s *AlertDutyService) ValidateBlocks(ctx context.Context, req AlertDutyVali
 	var conflicts []string
 	blocks := req.Blocks
 	sort.Slice(blocks, func(i, j int) bool { return blocks[i].StartsAt.Before(blocks[j].StartsAt) })
-	for i := 0; i < len(blocks); i++ {
+	for i := range blocks {
 		if !blocks[i].EndsAt.After(blocks[i].StartsAt) {
 			conflicts = append(conflicts, fmt.Sprintf("块 %d: 结束时间须晚于开始时间", i+1))
 		}

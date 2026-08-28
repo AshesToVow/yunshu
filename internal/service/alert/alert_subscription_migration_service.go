@@ -201,7 +201,7 @@ func safeJSONObj(raw string) string {
 	if raw == "{}" {
 		return raw
 	}
-	var obj map[string]interface{}
+	var obj map[string]any
 	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
 		return "{}"
 	}
@@ -214,7 +214,7 @@ func extractProjectIDFromPolicyMatchLabels(raw string) uint {
 	if raw == "" || raw == "{}" {
 		return 0
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal([]byte(raw), &m); err != nil {
 		return 0
 	}

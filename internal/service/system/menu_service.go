@@ -173,10 +173,10 @@ func (s *MenuService) ensureMenuParentChainByPath(ctx context.Context, fullPath 
 	}
 
 	var parentID *uint
-	currentPath := ""
-	for i := 0; i < len(segs)-1; i++ {
-		currentPath += "/" + segs[i]
-		if found, ok := pathMap[currentPath]; ok {
+	var currentPath strings.Builder
+	for i := range len(segs) - 1 {
+		currentPath.WriteString("/" + segs[i])
+		if found, ok := pathMap[currentPath.String()]; ok {
 			id := found.ID
 			parentID = &id
 			continue
@@ -188,7 +188,7 @@ func (s *MenuService) ensureMenuParentChainByPath(ctx context.Context, fullPath 
 		}
 		m := model.Menu{
 			ParentID:  parentID,
-			Path:      currentPath,
+			Path:      currentPath.String(),
 			Name:      name,
 			Icon:      "",
 			AdminOnly: false,

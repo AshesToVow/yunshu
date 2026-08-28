@@ -1,14 +1,14 @@
 package alert
 
 import (
-	bizerrors "yunshu/internal/pkg/errors"
-	"yunshu/internal/repository"
 	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/repository"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/cronutil"
@@ -47,10 +47,7 @@ func (s *AlertService) tickMonitorRules(ctx context.Context) error {
 			if !s.shouldEvalRuleRedis(ctx, rule.ID, rule.EvalIntervalSeconds, now) {
 				continue
 			}
-			lockSec := rule.EvalIntervalSeconds
-			if lockSec > 120 {
-				lockSec = 120
-			}
+			lockSec := min(rule.EvalIntervalSeconds, 120)
 			if lockSec < 15 {
 				lockSec = 15
 			}
@@ -98,7 +95,7 @@ func buildMonitorRuleLabels(rule *model.AlertMonitorRule, projectID uint, ds *mo
 	}
 	raw := strings.TrimSpace(rule.LabelsJSON)
 	if raw != "" && raw != "{}" {
-		var obj map[string]interface{}
+		var obj map[string]any
 		if err := json.Unmarshal([]byte(raw), &obj); err == nil {
 			for k, v := range obj {
 				labels[k] = strings.TrimSpace(fmt.Sprintf("%v", v))
@@ -138,7 +135,7 @@ func buildMonitorRuleAnnotations(rule *model.AlertMonitorRule, labels map[string
 	}
 	raw := strings.TrimSpace(rule.AnnotationsJSON)
 	if raw != "" && raw != "{}" {
-		var obj map[string]interface{}
+		var obj map[string]any
 		if err := json.Unmarshal([]byte(raw), &obj); err == nil {
 			for k, v := range obj {
 				ann[k] = strings.TrimSpace(fmt.Sprintf("%v", v))
@@ -166,7 +163,7 @@ func parsePromVectorSamples(body []byte) []struct {
 			ResultType string `json:"resultType"`
 			Result     []struct {
 				Metric map[string]string `json:"metric"`
-				Value  []interface{}     `json:"value"`
+				Value  []any             `json:"value"`
 			} `json:"result"`
 		} `json:"data"`
 	}

@@ -65,7 +65,7 @@ func TestEscalationScheduleAndClear(t *testing.T) {
 		TargetLevel: 1,
 		Status:      "firing",
 		Labels:      map[string]string{},
-		Outgoing:    map[string]interface{}{},
+		Outgoing:    map[string]any{},
 	})
 	due := time.Now().UTC().Add(-time.Second).Unix()
 	_ = s.redis.Set(ctx, escalationPendingKey(fp), raw, time.Hour).Err()

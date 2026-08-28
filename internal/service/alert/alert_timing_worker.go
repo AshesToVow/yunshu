@@ -121,7 +121,7 @@ func (s *AlertService) flushOneGroupWait(
 
 	outgoing := env.Outgoing
 	if outgoing == nil {
-		outgoing = map[string]interface{}{}
+		outgoing = map[string]any{}
 	}
 	outgoing["group_wait_flush"] = true
 	route := host.ChannelRouteForAlert(ctx, env.Status, env.Labels, fp)

@@ -1,11 +1,11 @@
-﻿package alert
+package alert
 
 import (
-	bizerrors "yunshu/internal/pkg/errors"
 	"context"
 	"fmt"
 	neturl "net/url"
 	"strings"
+	bizerrors "yunshu/internal/pkg/errors"
 
 	"yunshu/internal/pkg/parseutil"
 )
@@ -61,7 +61,7 @@ func (s *AlertService) getDingTalkUserIDByMobile(ctx context.Context, accessToke
 	return strings.TrimSpace(result.Result.UserID), nil
 }
 
-func (s *AlertService) resolveWeComUserIDsByMobiles(ctx context.Context, settings map[string]interface{}, mobiles []string) ([]string, error) {
+func (s *AlertService) resolveWeComUserIDsByMobiles(ctx context.Context, settings map[string]any, mobiles []string) ([]string, error) {
 	corpID := strings.TrimSpace(fmt.Sprintf("%v", settings["corpID"]))
 	corpSecret := strings.TrimSpace(fmt.Sprintf("%v", settings["corpSecret"]))
 	if corpID == "" || corpSecret == "" || len(mobiles) == 0 {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"yunshu/internal/model"
@@ -40,54 +41,54 @@ func BuiltinAlertRuleTemplates() []AlertRuleTemplate {
 		// ----- node_exporter -----
 		{
 			ID: "cpu-high", Group: "node_exporter", Name: "CPU 使用率过高（node_exporter）",
-			Description: "节点 CPU 使用率超过阈值（默认 85%）持续 5 分钟",
+			Description:  "节点 CPU 使用率超过阈值（默认 85%）持续 5 分钟",
 			ExprTemplate: `100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > {{threshold}}`,
-			ForSeconds: 300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
+			ForSeconds:   300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
 			DefaultParams: map[string]string{"threshold": "85"},
 			Labels:        map[string]string{"category": "cpu", "collector": "node_exporter"},
 			Annotations:   map[string]string{"summary": "CPU 使用率过高", "description": "instance {{ $labels.instance }} CPU > {{threshold}}%"},
 		},
 		{
 			ID: "memory-high", Group: "node_exporter", Name: "内存使用率过高（node_exporter）",
-			Description: "节点内存使用率超过阈值（默认 90%）",
+			Description:  "节点内存使用率超过阈值（默认 90%）",
 			ExprTemplate: `(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > {{threshold}}`,
-			ForSeconds: 300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
+			ForSeconds:   300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
 			DefaultParams: map[string]string{"threshold": "90"},
 			Labels:        map[string]string{"category": "memory", "collector": "node_exporter"},
 			Annotations:   map[string]string{"summary": "内存使用率过高"},
 		},
 		{
 			ID: "disk-high", Group: "node_exporter", Name: "磁盘使用率过高（node_exporter）",
-			Description: "挂载点磁盘使用率超过阈值（默认 85%）",
+			Description:  "挂载点磁盘使用率超过阈值（默认 85%）",
 			ExprTemplate: `(1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > {{threshold}}`,
-			ForSeconds: 600, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "percent",
+			ForSeconds:   600, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "percent",
 			DefaultParams: map[string]string{"threshold": "85"},
 			Labels:        map[string]string{"category": "disk", "collector": "node_exporter"},
 			Annotations:   map[string]string{"summary": "磁盘使用率过高"},
 		},
 		{
 			ID: "disk-inode-high", Group: "node_exporter", Name: "磁盘 inode 过高（node_exporter）",
-			Description: "文件系统 inode 使用率超过阈值（默认 90%）",
+			Description:  "文件系统 inode 使用率超过阈值（默认 90%）",
 			ExprTemplate: `(1 - (node_filesystem_files_free{fstype!~"tmpfs|overlay"} / node_filesystem_files{fstype!~"tmpfs|overlay"})) * 100 > {{threshold}}`,
-			ForSeconds: 600, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "percent",
+			ForSeconds:   600, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "percent",
 			DefaultParams: map[string]string{"threshold": "90"},
 			Labels:        map[string]string{"category": "disk", "collector": "node_exporter"},
 			Annotations:   map[string]string{"summary": "磁盘 inode 使用率过高"},
 		},
 		{
 			ID: "instance-down", Group: "availability", Name: "Exporter 不可达（up==0）",
-			Description: "Prometheus scrape 目标 up==0 持续 2 分钟（拉模式）",
+			Description:  "Prometheus scrape 目标 up==0 持续 2 分钟（拉模式）",
 			ExprTemplate: `up == 0`,
-			ForSeconds: 120, EvalIntervalSec: 30, Severity: "critical", ThresholdUnit: "raw",
+			ForSeconds:   120, EvalIntervalSec: 30, Severity: "critical", ThresholdUnit: "raw",
 			DefaultParams: map[string]string{},
 			Labels:        map[string]string{"category": "availability"},
 			Annotations:   map[string]string{"summary": "采集目标不可达"},
 		},
 		{
 			ID: "http-error-rate", Group: "availability", Name: "HTTP 5xx 错误率过高",
-			Description: "5xx 占比超过阈值（需 http 请求指标）",
+			Description:  "5xx 占比超过阈值（需 http 请求指标）",
 			ExprTemplate: `sum(rate(http_requests_total{code=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100 > {{threshold}}`,
-			ForSeconds: 300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
+			ForSeconds:   300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
 			DefaultParams: map[string]string{"threshold": "5"},
 			Labels:        map[string]string{"category": "availability"},
 			Annotations:   map[string]string{"summary": "HTTP 5xx 错误率过高"},
@@ -95,27 +96,27 @@ func BuiltinAlertRuleTemplates() []AlertRuleTemplate {
 		// ----- Telegraf（metric_version=2 / prometheus_client）-----
 		{
 			ID: "telegraf-cpu-high", Group: "telegraf", Name: "CPU 使用率过高（Telegraf）",
-			Description: "基于 cpu_usage_idle；默认阈值 85%，持续 5 分钟",
+			Description:  "基于 cpu_usage_idle；默认阈值 85%，持续 5 分钟",
 			ExprTemplate: `100 - avg by(host, instance) (cpu_usage_idle{cpu="cpu-total"}) > {{threshold}}`,
-			ForSeconds: 300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
+			ForSeconds:   300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
 			DefaultParams: map[string]string{"threshold": "85"},
 			Labels:        map[string]string{"category": "cpu", "collector": "telegraf"},
 			Annotations:   map[string]string{"summary": "Telegraf CPU 过高"},
 		},
 		{
 			ID: "telegraf-mem-high", Group: "telegraf", Name: "内存使用率过高（Telegraf）",
-			Description: "基于 mem_used_percent；默认 90%",
+			Description:  "基于 mem_used_percent；默认 90%",
 			ExprTemplate: `avg by(host, instance) (mem_used_percent) > {{threshold}}`,
-			ForSeconds: 300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
+			ForSeconds:   300, EvalIntervalSec: 30, Severity: "warning", ThresholdUnit: "percent",
 			DefaultParams: map[string]string{"threshold": "90"},
 			Labels:        map[string]string{"category": "memory", "collector": "telegraf"},
 			Annotations:   map[string]string{"summary": "Telegraf 内存过高"},
 		},
 		{
 			ID: "telegraf-disk-high", Group: "telegraf", Name: "磁盘使用率过高（Telegraf）",
-			Description: "基于 disk_used_percent；默认 85%",
+			Description:  "基于 disk_used_percent；默认 85%",
 			ExprTemplate: `avg by(host, instance, path, device) (disk_used_percent) > {{threshold}}`,
-			ForSeconds: 600, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "percent",
+			ForSeconds:   600, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "percent",
 			DefaultParams: map[string]string{"threshold": "85"},
 			Labels:        map[string]string{"category": "disk", "collector": "telegraf"},
 			Annotations:   map[string]string{"summary": "Telegraf 磁盘过高"},
@@ -123,18 +124,18 @@ func BuiltinAlertRuleTemplates() []AlertRuleTemplate {
 		// ----- blackbox_exporter -----
 		{
 			ID: "blackbox-probe-fail", Group: "blackbox", Name: "拨测失败（probe_success）",
-			Description: "blackbox probe_success == 0 持续 2 分钟",
+			Description:  "blackbox probe_success == 0 持续 2 分钟",
 			ExprTemplate: `probe_success == 0`,
-			ForSeconds: 120, EvalIntervalSec: 30, Severity: "critical", ThresholdUnit: "raw",
+			ForSeconds:   120, EvalIntervalSec: 30, Severity: "critical", ThresholdUnit: "raw",
 			DefaultParams: map[string]string{},
 			Labels:        map[string]string{"category": "probe", "collector": "blackbox"},
 			Annotations:   map[string]string{"summary": "拨测失败"},
 		},
 		{
 			ID: "blackbox-probe-slow", Group: "blackbox", Name: "拨测过慢（probe_duration）",
-			Description: "probe_duration_seconds 超过阈值（默认 2s）",
+			Description:  "probe_duration_seconds 超过阈值（默认 2s）",
 			ExprTemplate: `probe_duration_seconds > {{threshold}}`,
-			ForSeconds: 300, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "seconds",
+			ForSeconds:   300, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "seconds",
 			DefaultParams: map[string]string{"threshold": "2"},
 			Labels:        map[string]string{"category": "probe", "collector": "blackbox"},
 			Annotations:   map[string]string{"summary": "拨测耗时过高"},
@@ -142,9 +143,9 @@ func BuiltinAlertRuleTemplates() []AlertRuleTemplate {
 		// ----- Pushgateway -----
 		{
 			ID: "pushgateway-job-stale", Group: "pushgateway", Name: "Pushgateway 任务指标过期",
-			Description: "推送时间超过阈值秒数未更新（默认 3600）；按 job/instance 调整",
+			Description:  "推送时间超过阈值秒数未更新（默认 3600）；按 job/instance 调整",
 			ExprTemplate: `time() - push_time_seconds > {{threshold}}`,
-			ForSeconds: 300, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "seconds",
+			ForSeconds:   300, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "seconds",
 			DefaultParams: map[string]string{"threshold": "3600"},
 			Labels:        map[string]string{"category": "batch", "collector": "pushgateway"},
 			Annotations:   map[string]string{"summary": "批任务指标过久未推送"},
@@ -192,9 +193,7 @@ func (s *AlertMonitorRuleService) CreateFromTemplate(ctx context.Context, req Cr
 		return nil, constants.ErrBadRequestWithMsg("未知规则模板: " + req.TemplateID)
 	}
 	params := map[string]string{}
-	for k, v := range tpl.DefaultParams {
-		params[k] = v
-	}
+	maps.Copy(params, tpl.DefaultParams)
 	for k, v := range req.Params {
 		if strings.TrimSpace(v) != "" {
 			params[k] = strings.TrimSpace(v)
@@ -209,9 +208,7 @@ func (s *AlertMonitorRuleService) CreateFromTemplate(ctx context.Context, req Cr
 		}
 	}
 	labels := map[string]string{}
-	for k, v := range tpl.Labels {
-		labels[k] = v
-	}
+	maps.Copy(labels, tpl.Labels)
 	labels["template_id"] = tpl.ID
 	ann := map[string]string{}
 	for k, v := range tpl.Annotations {

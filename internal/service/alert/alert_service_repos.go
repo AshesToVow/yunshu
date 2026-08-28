@@ -135,7 +135,7 @@ func projectIDFromRequestPayload(raw string) uint {
 	if raw == "" {
 		return 0
 	}
-	var payload map[string]interface{}
+	var payload map[string]any
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
 		return 0
 	}
@@ -145,12 +145,12 @@ func projectIDFromRequestPayload(raw string) uint {
 	if id := payloadUintAny(payload["projectId"]); id > 0 {
 		return id
 	}
-	if labels, ok := payload["labels"].(map[string]interface{}); ok {
+	if labels, ok := payload["labels"].(map[string]any); ok {
 		if id := payloadUintAny(labels["project_id"]); id > 0 {
 			return id
 		}
 	}
-	if cloud, ok := payload["cloud"].(map[string]interface{}); ok {
+	if cloud, ok := payload["cloud"].(map[string]any); ok {
 		if id := payloadUintAny(cloud["project_id"]); id > 0 {
 			return id
 		}

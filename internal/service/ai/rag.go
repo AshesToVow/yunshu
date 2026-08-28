@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -125,10 +126,7 @@ func filterWeakHits(hits []ragHit, minScore float64) []ragHit {
 	if len(out) == 0 && len(hits) > 0 {
 		// 保底取最高分 1～2 条，避免完全无 RAG
 		sortRagHits(hits)
-		n := 2
-		if len(hits) < n {
-			n = len(hits)
-		}
+		n := min(len(hits), 2)
 		return hits[:n]
 	}
 	return out
@@ -185,11 +183,8 @@ func (s *Service) retrieveFromES(ctx context.Context, query string, modules []st
 		score, _ := m["_score"].(float64)
 		mod := strAny(src["module"])
 		if len(modules) > 0 && mod != "" {
-			for _, want := range modules {
-				if want == mod {
-					score += 5
-					break
-				}
+			if slices.Contains(modules, mod) {
+				score += 5
 			}
 		}
 		out = append(out, ragHit{
@@ -245,7 +240,7 @@ func retrieveFromEmbed(query string, modules []string, topK int) []ragHit {
 			})
 		}
 	}
-	for i := 0; i < len(ranked); i++ {
+	for i := range ranked {
 		for j := i + 1; j < len(ranked); j++ {
 			if ranked[j].score > ranked[i].score {
 				ranked[i], ranked[j] = ranked[j], ranked[i]
@@ -263,7 +258,7 @@ func retrieveFromEmbed(query string, modules []string, topK int) []ragHit {
 }
 
 func sortRagHits(hits []ragHit) {
-	for i := 0; i < len(hits); i++ {
+	for i := range hits {
 		for j := i + 1; j < len(hits); j++ {
 			if hits[j].Score > hits[i].Score {
 				hits[i], hits[j] = hits[j], hits[i]
@@ -330,7 +325,7 @@ func tokenize(q string) []string {
 		if len(cjk) == 1 {
 			add(string(cjk[0]))
 		} else {
-			for i := 0; i < len(cjk); i++ {
+			for i := range cjk {
 				add(string(cjk[i]))
 				if i+1 < len(cjk) {
 					add(string(cjk[i : i+2]))

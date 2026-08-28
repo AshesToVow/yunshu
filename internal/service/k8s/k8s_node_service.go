@@ -3,11 +3,11 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
-	"log/slog"
 
 	"yunshu/internal/pkg/k8sutil"
 
@@ -367,8 +367,8 @@ type nodeMetrics struct {
 func extractNodeRoles(labels map[string]string) []string {
 	out := make([]string, 0, 2)
 	for k := range labels {
-		if strings.HasPrefix(k, "node-role.kubernetes.io/") {
-			role := strings.TrimPrefix(k, "node-role.kubernetes.io/")
+		if after, ok := strings.CutPrefix(k, "node-role.kubernetes.io/"); ok {
+			role := after
 			role = strings.TrimSpace(role)
 			if role == "" {
 				role = "master"

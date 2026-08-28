@@ -21,17 +21,17 @@ const (
 
 // escalationPendingEnvelope 待升级投递信封（到期后按 TargetLevel 通知对应接收组）。
 type escalationPendingEnvelope struct {
-	Fingerprint  string                 `json:"fingerprint"`
-	TargetLevel  int                    `json:"target_level"`
-	GroupKey     string                 `json:"group_key"`
-	LabelsDigest string                 `json:"labels_digest"`
-	Source       string                 `json:"source"`
-	Title        string                 `json:"title"`
-	Severity     string                 `json:"severity"`
-	Status       string                 `json:"status"`
-	EnvLabel     string                 `json:"env_label"`
-	Labels       map[string]string      `json:"labels"`
-	Outgoing     map[string]interface{} `json:"outgoing"`
+	Fingerprint  string            `json:"fingerprint"`
+	TargetLevel  int               `json:"target_level"`
+	GroupKey     string            `json:"group_key"`
+	LabelsDigest string            `json:"labels_digest"`
+	Source       string            `json:"source"`
+	Title        string            `json:"title"`
+	Severity     string            `json:"severity"`
+	Status       string            `json:"status"`
+	EnvLabel     string            `json:"env_label"`
+	Labels       map[string]string `json:"labels"`
+	Outgoing     map[string]any    `json:"outgoing"`
 }
 
 func escalationLevelKey(fingerprint string) string {
@@ -170,7 +170,7 @@ func (s *AlertService) maybeScheduleEscalation(ctx context.Context, env escalati
 		env.Labels = map[string]string{}
 	}
 	if env.Outgoing == nil {
-		env.Outgoing = map[string]interface{}{}
+		env.Outgoing = map[string]any{}
 	}
 	env.Labels = cloneStringMap(env.Labels)
 	env.Outgoing = cloneInterfaceMap(env.Outgoing)
@@ -220,7 +220,7 @@ func (s *AlertService) loadEscalationPending(ctx context.Context, fingerprint st
 		env.Labels = map[string]string{}
 	}
 	if env.Outgoing == nil {
-		env.Outgoing = map[string]interface{}{}
+		env.Outgoing = map[string]any{}
 	}
 	return &env
 }
@@ -349,7 +349,7 @@ func (s *AlertService) flushOneEscalation(
 
 	outgoing := env.Outgoing
 	if outgoing == nil {
-		outgoing = map[string]interface{}{}
+		outgoing = map[string]any{}
 	}
 	outgoing["escalation_flush"] = true
 	outgoing["escalation_level"] = target

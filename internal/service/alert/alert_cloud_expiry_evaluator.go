@@ -10,8 +10,8 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	bizerrors "yunshu/internal/pkg/errors"
 	cryptox "yunshu/internal/pkg/crypto"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/service/cmdb"
 )
 
@@ -21,7 +21,7 @@ func (s *AlertService) tickCloudExpiryRules(ctx context.Context) error {
 
 // cloudExpiryEvalLeaderKey 云到期定时评估的集群单实例锁。与内置监控规则的 alert:monitor:eval:leader 同理：
 // 多副本部署时若无此锁，每个副本都会各自扫描同一规则、调用云 API 并推送告警，导致重复通知
-//（云到期告警 SkipGroupTiming=true，会绕过分组节流，重复无法在下游被抑制）。
+// （云到期告警 SkipGroupTiming=true，会绕过分组节流，重复无法在下游被抑制）。
 const cloudExpiryEvalLeaderKey = "alert:cloud-expiry:eval:leader"
 
 // acquireCloudExpiryLeader 尝试成为本轮定时评估的唯一执行者。无 Redis（单机）时恒为 true。
@@ -190,7 +190,7 @@ func (s *AlertService) evaluateOneCloudExpiryRule(ctx context.Context, rule *mod
 				labels["severity"] = "warning"
 			}
 			if raw := strings.TrimSpace(rule.LabelsJSON); raw != "" && raw != "{}" {
-				var obj map[string]interface{}
+				var obj map[string]any
 				if err := json.Unmarshal([]byte(raw), &obj); err == nil {
 					for k, v := range obj {
 						labels[strings.TrimSpace(k)] = strings.TrimSpace(fmt.Sprintf("%v", v))
@@ -261,11 +261,11 @@ func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firi
 		labels,
 		IngressAlertDetail{
 			Status:      "resolved",
-			Labels:       labels,
-			Annotations:  annotations,
-			StartsAt:     now.Add(-time.Minute),
-			EndsAt:       now,
-			Fingerprint:  fp,
+			Labels:      labels,
+			Annotations: annotations,
+			StartsAt:    now.Add(-time.Minute),
+			EndsAt:      now,
+			Fingerprint: fp,
 		},
 	)
 	item.Cloud = cloud
@@ -274,7 +274,7 @@ func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firi
 
 func parseRegionSet(scope string) map[string]struct{} {
 	out := map[string]struct{}{}
-	for _, it := range strings.Split(scope, ",") {
+	for it := range strings.SplitSeq(scope, ",") {
 		v := strings.TrimSpace(it)
 		if v != "" {
 			out[v] = struct{}{}

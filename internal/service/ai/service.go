@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -267,25 +268,25 @@ type ChatMessage struct {
 }
 
 type ChatRequest struct {
-	Provider      string        `json:"provider"`
-	Messages      []ChatMessage `json:"messages" binding:"required"`
-	SessionID     uint          `json:"session_id"`
-	ProjectID     uint          `json:"project_id"`
-	ClusterID     uint          `json:"cluster_id"`
-	Namespace     string        `json:"namespace"`
-	EnableTools   *bool         `json:"enable_tools"`
-	EnableWrite   bool          `json:"enable_write_tools"`
-	DisableRAG    bool          `json:"disable_rag"`
+	Provider    string        `json:"provider"`
+	Messages    []ChatMessage `json:"messages" binding:"required"`
+	SessionID   uint          `json:"session_id"`
+	ProjectID   uint          `json:"project_id"`
+	ClusterID   uint          `json:"cluster_id"`
+	Namespace   string        `json:"namespace"`
+	EnableTools *bool         `json:"enable_tools"`
+	EnableWrite bool          `json:"enable_write_tools"`
+	DisableRAG  bool          `json:"disable_rag"`
 }
 
 type ChatResponse struct {
-	Reply      string     `json:"reply"`
-	Provider   string     `json:"provider"`
-	Model      string     `json:"model"`
-	Usage      llm.Usage  `json:"usage"`
-	SessionID  uint       `json:"session_id,omitempty"`
-	ToolSteps  []toolStep `json:"tool_steps,omitempty"`
-	RAGHits    []ragHit   `json:"rag_hits,omitempty"`
+	Reply     string     `json:"reply"`
+	Provider  string     `json:"provider"`
+	Model     string     `json:"model"`
+	Usage     llm.Usage  `json:"usage"`
+	SessionID uint       `json:"session_id,omitempty"`
+	ToolSteps []toolStep `json:"tool_steps,omitempty"`
+	RAGHits   []ragHit   `json:"rag_hits,omitempty"`
 }
 
 func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser, req ChatRequest) (*ChatResponse, error) {
@@ -325,9 +326,9 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 	}
 
 	lastUser := ""
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if strings.EqualFold(req.Messages[i].Role, "user") {
-			lastUser = req.Messages[i].Content
+	for _, v := range slices.Backward(req.Messages) {
+		if strings.EqualFold(v.Role, "user") {
+			lastUser = v.Content
 			break
 		}
 	}
@@ -414,7 +415,7 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 	}
 
 	const maxRounds = 6
-	for round := 0; round < maxRounds; round++ {
+	for range maxRounds {
 		resp, err := cli.Chat(ctx, llm.ChatRequest{
 			Model:     pcfg.Model,
 			Messages:  msgs,

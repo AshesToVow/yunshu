@@ -227,7 +227,7 @@ func (h *UserHandler) Export(c *gin.Context) {
 	f := excelize.NewFile()
 	sheet := "Sheet1"
 	// header
-	_ = f.SetSheetRow(sheet, "A1", &[]interface{}{"ID", "Username", "Nickname", "Email", "Status", "Department"})
+	_ = f.SetSheetRow(sheet, "A1", &[]any{"ID", "Username", "Nickname", "Email", "Status", "Department"})
 	for i, u := range users {
 		email := ""
 		departmentName := ""
@@ -237,7 +237,7 @@ func (h *UserHandler) Export(c *gin.Context) {
 		if u.Department != nil {
 			departmentName = u.Department.Name
 		}
-		row := []interface{}{u.ID, u.Username, u.Nickname, email, int(u.Status), departmentName}
+		row := []any{u.ID, u.Username, u.Nickname, email, int(u.Status), departmentName}
 		cell, _ := excelize.CoordinatesToCellName(1, i+2)
 		_ = f.SetSheetRow(sheet, cell, &row)
 	}

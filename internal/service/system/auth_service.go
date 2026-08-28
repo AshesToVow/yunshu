@@ -752,7 +752,7 @@ func generateNumericCode(length int) (string, error) {
 	}
 
 	max := big.NewInt(1)
-	for i := 0; i < length; i++ {
+	for range length {
 		max.Mul(max, big.NewInt(10))
 	}
 

@@ -19,7 +19,7 @@ func (p *AlibabaCloudProvider) ListInstances(ctx context.Context, ak, sk, region
 		return nil, bizerrors.Pass(ctx, "project.cloud", "ListInstances", err)
 	}
 	regions := make([]string, 0)
-	for _, it := range strings.Split(regionScope, ",") {
+	for it := range strings.SplitSeq(regionScope, ",") {
 		v := strings.TrimSpace(it)
 		if v != "" {
 			regions = append(regions, v)

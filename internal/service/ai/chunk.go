@@ -105,7 +105,7 @@ func tokenizeQuery(q string) []string {
 		if len(cjk) == 0 {
 			return
 		}
-		for i := 0; i < len(cjk); i++ {
+		for i := range cjk {
 			add(string(cjk[i]))
 			if i+1 < len(cjk) {
 				add(string(cjk[i : i+2]))

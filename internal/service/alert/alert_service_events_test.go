@@ -9,8 +9,8 @@ import (
 
 func TestExtractAlertIPFromPayload(t *testing.T) {
 	t.Parallel()
-	payload, _ := json.Marshal(map[string]interface{}{
-		"labels": map[string]interface{}{"instance": "10.0.0.5:9100"},
+	payload, _ := json.Marshal(map[string]any{
+		"labels": map[string]any{"instance": "10.0.0.5:9100"},
 	})
 	if got := extractAlertIPFromPayload(string(payload), "fallback"); got != "10.0.0.5:9100" {
 		t.Fatalf("got %q", got)
@@ -22,7 +22,7 @@ func TestExtractAlertIPFromPayload(t *testing.T) {
 
 func TestExtractAlertStartedAtFromPayload(t *testing.T) {
 	t.Parallel()
-	raw, _ := json.Marshal(map[string]interface{}{"startsAt": "2026-05-16T08:00:00Z"})
+	raw, _ := json.Marshal(map[string]any{"startsAt": "2026-05-16T08:00:00Z"})
 	if got := extractAlertStartedAtFromPayload(string(raw)); got != "2026-05-16T08:00:00Z" {
 		t.Fatalf("got %q", got)
 	}
@@ -44,13 +44,13 @@ func TestParseUintCSV(t *testing.T) {
 
 func TestPayloadValueByPath(t *testing.T) {
 	t.Parallel()
-	m := map[string]interface{}{
-		"at": map[string]interface{}{
-			"atMobiles": []interface{}{"13800138000"},
+	m := map[string]any{
+		"at": map[string]any{
+			"atMobiles": []any{"13800138000"},
 		},
 	}
 	v := payloadValueByPath(m, "at.atMobiles")
-	list, ok := v.([]interface{})
+	list, ok := v.([]any)
 	if !ok || len(list) != 1 {
 		t.Fatalf("got %v", v)
 	}
@@ -58,7 +58,7 @@ func TestPayloadValueByPath(t *testing.T) {
 
 func TestExtractEventReceiversEmail(t *testing.T) {
 	t.Parallel()
-	raw, _ := json.Marshal(map[string]interface{}{
+	raw, _ := json.Marshal(map[string]any{
 		"assignee_emails": []string{"a@x.com", "B@x.com"},
 	})
 	out := extractEventReceivers(string(raw), "email-channel")
@@ -69,8 +69,8 @@ func TestExtractEventReceiversEmail(t *testing.T) {
 
 func TestHydrateAlertEvent(t *testing.T) {
 	t.Parallel()
-	raw, _ := json.Marshal(map[string]interface{}{
-		"labels":  map[string]interface{}{"cluster": "prod", "instance": "1.2.3.4"},
+	raw, _ := json.Marshal(map[string]any{
+		"labels":  map[string]any{"cluster": "prod", "instance": "1.2.3.4"},
 		"current": "85%",
 	})
 	ev := &model.AlertEvent{
@@ -97,7 +97,7 @@ func TestHydrateAlertEvent(t *testing.T) {
 
 func TestFillMetricFieldsFromRequestPayload(t *testing.T) {
 	t.Parallel()
-	raw, _ := json.Marshal(map[string]interface{}{
+	raw, _ := json.Marshal(map[string]any{
 		"current":          "1",
 		"current_resolved": "0",
 	})

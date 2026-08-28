@@ -42,7 +42,7 @@ func TestMergeStringMap(t *testing.T) {
 
 func TestAlertEventSourceFromPayload(t *testing.T) {
 	t.Parallel()
-	if got := alertEventSourceFromPayload(map[string]interface{}{"source": "cloud_expiry"}); got != "cloud_expiry" {
+	if got := alertEventSourceFromPayload(map[string]any{"source": "cloud_expiry"}); got != "cloud_expiry" {
 		t.Fatalf("got %q", got)
 	}
 	if got := alertEventSourceFromPayload(nil); got != "yunshu" {
@@ -52,10 +52,10 @@ func TestAlertEventSourceFromPayload(t *testing.T) {
 
 func TestMonitorPipelineFromPayload(t *testing.T) {
 	t.Parallel()
-	if got := monitorPipelineFromPayload(map[string]interface{}{"monitorPipeline": "ds:1"}); got != "ds:1" {
+	if got := monitorPipelineFromPayload(map[string]any{"monitorPipeline": "ds:1"}); got != "ds:1" {
 		t.Fatalf("got %q", got)
 	}
-	if got := monitorPipelineFromPayload(map[string]interface{}{}); got != "" {
+	if got := monitorPipelineFromPayload(map[string]any{}); got != "" {
 		t.Fatalf("got %q", got)
 	}
 }

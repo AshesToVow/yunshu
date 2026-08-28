@@ -98,7 +98,7 @@ func TestBuildOutgoingPayloadIncludesCloudExtension(t *testing.T) {
 	out := buildOutgoingPayload(ca, ca.Alert, "t", "s", "warning", "firing",
 		map[string]string{}, map[string]string{}, "prod", "cloud_expiry",
 		0, "", "", "gk", "digest", 1)
-	cloud, ok := out["cloud"].(map[string]interface{})
+	cloud, ok := out["cloud"].(map[string]any)
 	if !ok {
 		t.Fatalf("missing cloud extension: %#v", out)
 	}

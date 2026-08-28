@@ -33,8 +33,8 @@ type MetricSample struct {
 
 // CollectResult 一次采集结果。
 type CollectResult struct {
-	Samples []MetricSample
-	Total   int
+	Samples  []MetricSample
+	Total    int
 	Critical int
 	Warning  int
 	Normal   int
@@ -58,9 +58,7 @@ func collectItems(ctx context.Context, cli *promapi.Client, items []model.Inspec
 			continue
 		}
 		it := it
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			select {
 			case <-ctx.Done():
 				return
@@ -72,7 +70,7 @@ func collectItems(ctx context.Context, cli *promapi.Client, items []model.Inspec
 			mu.Lock()
 			out.Samples = append(out.Samples, samples...)
 			mu.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -166,7 +164,7 @@ func parsePromVector(body json.RawMessage) ([]promSample, error) {
 			ResultType string `json:"resultType"`
 			Result     []struct {
 				Metric map[string]string `json:"metric"`
-				Value  []interface{}     `json:"value"`
+				Value  []any             `json:"value"`
 			} `json:"result"`
 		} `json:"data"`
 	}

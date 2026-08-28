@@ -164,10 +164,7 @@ func (s *AlertMonitorRuleService) Update(ctx context.Context, id uint, req Alert
 	}
 	row.ForSeconds = req.ForSeconds
 	if req.EvalIntervalSeconds > 0 {
-		row.EvalIntervalSeconds = req.EvalIntervalSeconds
-		if row.EvalIntervalSeconds < 5 {
-			row.EvalIntervalSeconds = 5
-		}
+		row.EvalIntervalSeconds = max(req.EvalIntervalSeconds, 5)
 	}
 	if strings.TrimSpace(req.Severity) != "" {
 		row.Severity = strings.TrimSpace(req.Severity)

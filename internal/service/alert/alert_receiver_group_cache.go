@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -39,13 +40,7 @@ func (g *CachedReceiverGroup) IsActiveNow() bool {
 
 	if len(g.Weekdays) > 0 {
 		weekday := int(now.Weekday())
-		found := false
-		for _, w := range g.Weekdays {
-			if w == weekday {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(g.Weekdays, weekday)
 		if !found {
 			return false
 		}
