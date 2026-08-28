@@ -242,19 +242,48 @@ func normalizeStages(items []StageUpsertItem) ([]normalizedStage, error) {
 }
 
 // EnabledStages 返回项目下已启用的流程节点（供 dbmgmt/cicd 初始化审批步骤）。
+// 指定 ticket_type 无启用节点时，回退到同域同项目的 default 流程（与审批流配置页一致）。
 func (s *Service) EnabledStages(ctx context.Context, key DefinitionKey) ([]model.WorkflowStage, error) {
+	_, stages, err := s.resolveFlow(ctx, key)
+	return stages, err
+}
+
+// resolveFlow 解析流程定义与启用节点；特定类型未配置时回退 default。
+func (s *Service) resolveFlow(ctx context.Context, key DefinitionKey) (*model.WorkflowDefinition, []model.WorkflowStage, error) {
 	key = key.normalize()
-	_, stages, err := s.loadDefinition(ctx, key)
+	def, stages, err := s.loadDefinition(ctx, key)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	enabled := filterEnabledStages(stages)
+	if len(enabled) > 0 && def != nil {
+		return def, enabled, nil
+	}
+	if key.TicketType != model.WorkflowTicketTypeDefault {
+		fallback := DefinitionKey{Domain: key.Domain, ProjectID: key.ProjectID, TicketType: model.WorkflowTicketTypeDefault}
+		def2, stages2, err2 := s.loadDefinition(ctx, fallback)
+		if err2 != nil {
+			return nil, nil, err2
+		}
+		enabled2 := filterEnabledStages(stages2)
+		if len(enabled2) > 0 && def2 != nil {
+			return def2, enabled2, nil
+		}
+	}
+	if def != nil {
+		return def, enabled, nil
+	}
+	return nil, nil, nil
+}
+
+func filterEnabledStages(stages []model.WorkflowStage) []model.WorkflowStage {
 	out := make([]model.WorkflowStage, 0, len(stages))
 	for _, st := range stages {
 		if st.Enabled {
 			out = append(out, st)
 		}
 	}
-	return out, nil
+	return out
 }
 
 type CreateTicketRequest struct {
@@ -297,16 +326,12 @@ func (s *Service) CreateTicket(ctx context.Context, req CreateTicketRequest, act
 	if submitter == 0 && actor != nil {
 		submitter = actor.ID
 	}
-	stages, err := s.EnabledStages(ctx, key)
+	def, stages, err := s.resolveFlow(ctx, key)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "CreateTicket", err)
 	}
-	if len(stages) == 0 {
+	if def == nil || len(stages) == 0 {
 		return nil, constants.ErrBadRequestWithMsg("流程未配置或未启用审批节点")
-	}
-	def, _, err := s.loadDefinition(ctx, key)
-	if err != nil || def == nil {
-		return nil, constants.ErrBadRequestWithMsg("流程定义不存在")
 	}
 	payloadJSON := ""
 	if len(req.Payload) > 0 {

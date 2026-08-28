@@ -2,6 +2,8 @@ package workflow
 
 import (
 	"context"
+	"log/slog"
+	"strings"
 
 	"yunshu/internal/model"
 
@@ -9,24 +11,34 @@ import (
 )
 
 // MigrateLegacyTickets 将仍在 pending 的 dbmgmt/cicd 业务工单 backfill 到 workflow_tickets。
+// 项目未配置审批流时跳过该条（不阻断 migrate/seed）。
 func MigrateLegacyTickets(ctx context.Context, db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
 	svc := NewService(db, nil, nil, nil)
-	if err := migratePendingSqlTickets(ctx, svc, db); err != nil {
+	log := slog.Default().With("component", "workflow.migrate_tickets")
+	if err := migratePendingSqlTickets(ctx, svc, db, log); err != nil {
 		return err
 	}
-	if err := migratePendingAccessRequests(ctx, svc, db); err != nil {
+	if err := migratePendingAccessRequests(ctx, svc, db, log); err != nil {
 		return err
 	}
-	if err := migratePendingAppUserRequests(ctx, svc, db); err != nil {
+	if err := migratePendingAppUserRequests(ctx, svc, db, log); err != nil {
 		return err
 	}
-	return migratePendingReleaseRuns(ctx, svc, db)
+	return migratePendingReleaseRuns(ctx, svc, db, log)
 }
 
-func migratePendingSqlTickets(ctx context.Context, svc *Service, db *gorm.DB) error {
+func isFlowNotConfigured(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "流程未配置") || strings.Contains(msg, "流程定义不存在")
+}
+
+func migratePendingSqlTickets(ctx context.Context, svc *Service, db *gorm.DB, log *slog.Logger) error {
 	var rows []model.DbSqlTicket
 	if err := db.WithContext(ctx).Where("status = ?", model.DbTicketStatusPendingApproval).Find(&rows).Error; err != nil {
 		return err
@@ -44,13 +56,17 @@ func migratePendingSqlTickets(ctx context.Context, svc *Service, db *gorm.DB) er
 			ProjectID: row.ProjectID, Title: title, SubmitterUserID: row.SubmitterUserID,
 			RefType: model.WorkflowRefDbSqlTicket, RefID: row.ID,
 		}); err != nil {
+			if isFlowNotConfigured(err) {
+				log.Warn("skip sql ticket migration: approval flow not configured", "ticket_id", row.ID, "project_id", row.ProjectID)
+				continue
+			}
 			return err
 		}
 	}
 	return nil
 }
 
-func migratePendingAccessRequests(ctx context.Context, svc *Service, db *gorm.DB) error {
+func migratePendingAccessRequests(ctx context.Context, svc *Service, db *gorm.DB, log *slog.Logger) error {
 	var rows []model.DbAccessRequest
 	if err := db.WithContext(ctx).Where("status = ?", model.DbAccessRequestStatusPending).Find(&rows).Error; err != nil {
 		return err
@@ -68,13 +84,17 @@ func migratePendingAccessRequests(ctx context.Context, svc *Service, db *gorm.DB
 			ProjectID: row.ProjectID, Title: title, SubmitterUserID: row.RequesterUserID,
 			RefType: model.WorkflowRefDbAccessRequest, RefID: row.ID,
 		}); err != nil {
+			if isFlowNotConfigured(err) {
+				log.Warn("skip access request migration: approval flow not configured", "request_id", row.ID, "project_id", row.ProjectID)
+				continue
+			}
 			return err
 		}
 	}
 	return nil
 }
 
-func migratePendingAppUserRequests(ctx context.Context, svc *Service, db *gorm.DB) error {
+func migratePendingAppUserRequests(ctx context.Context, svc *Service, db *gorm.DB, log *slog.Logger) error {
 	var rows []model.DbAppUserRequest
 	if err := db.WithContext(ctx).Where("status = ?", model.DbAccessRequestStatusPending).Find(&rows).Error; err != nil {
 		return err
@@ -92,13 +112,17 @@ func migratePendingAppUserRequests(ctx context.Context, svc *Service, db *gorm.D
 			ProjectID: row.ProjectID, Title: title, SubmitterUserID: row.RequesterUserID,
 			RefType: model.WorkflowRefDbAppUserRequest, RefID: row.ID,
 		}); err != nil {
+			if isFlowNotConfigured(err) {
+				log.Warn("skip app user request migration: approval flow not configured", "request_id", row.ID, "project_id", row.ProjectID)
+				continue
+			}
 			return err
 		}
 	}
 	return nil
 }
 
-func migratePendingReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB) error {
+func migratePendingReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB, log *slog.Logger) error {
 	var rows []model.CicdReleaseRun
 	if err := db.WithContext(ctx).Where("status = ? AND audit_enabled = ?", model.CicdRunStatusPendingApproval, true).Find(&rows).Error; err != nil {
 		return err
@@ -118,6 +142,10 @@ func migratePendingReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB) e
 			RefType: model.WorkflowRefCicdReleaseRun, RefID: row.ID,
 		})
 		if err != nil {
+			if isFlowNotConfigured(err) {
+				log.Warn("skip release run migration: approval flow not configured", "run_id", row.ID, "project_id", row.ProjectID)
+				continue
+			}
 			return err
 		}
 		changeID := row.ChangeWorkflowTicketID

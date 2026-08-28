@@ -53,19 +53,12 @@ func (s *Service) GetTicketByRefType(ctx context.Context, refType string, refID 
 // CreateLinkedTicket 基于流程定义创建关联工单（dbmgmt/cicd 等业务写入 workflow_tickets）。
 func (s *Service) CreateLinkedTicket(ctx context.Context, in LinkedTicketInput) (*model.WorkflowTicket, error) {
 	key := DefinitionKey{Domain: in.Domain, ProjectID: in.ProjectID, TicketType: in.TicketType}.normalize()
-	stages, err := s.EnabledStages(ctx, key)
+	def, stages, err := s.resolveFlow(ctx, key)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "CreateLinkedTicket", err)
 	}
-	if len(stages) == 0 {
+	if def == nil || len(stages) == 0 {
 		return nil, constants.ErrBadRequestWithMsg("流程未配置或未启用审批节点")
-	}
-	def, _, err := s.loadDefinition(ctx, key)
-	if err != nil {
-		return nil, bizerrors.Pass(ctx, "workflow", "CreateLinkedTicket", err)
-	}
-	if def == nil {
-		return nil, constants.ErrBadRequestWithMsg("流程定义不存在")
 	}
 	payloadJSON := ""
 	if len(in.Payload) > 0 {
@@ -76,10 +69,12 @@ func (s *Service) CreateLinkedTicket(ctx context.Context, in LinkedTicketInput) 
 	if title == "" {
 		title = in.RefType + " #" + itoa(in.RefID)
 	}
+	// 工单 ticket_type 保留业务类型；definition 可能来自 default 回退
+	ticketType := key.TicketType
 	var ticket model.WorkflowTicket
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		ticket = model.WorkflowTicket{
-			DefinitionID: def.ID, Domain: key.Domain, TicketType: key.TicketType,
+			DefinitionID: def.ID, Domain: key.Domain, TicketType: ticketType,
 			ProjectID: in.ProjectID, Title: title, Status: model.WorkflowTicketStatusPending,
 			SubmitterUserID: in.SubmitterUserID, RefType: strings.TrimSpace(in.RefType), RefID: in.RefID,
 			PayloadJSON: payloadJSON,

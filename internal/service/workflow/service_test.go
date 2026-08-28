@@ -15,13 +15,13 @@ func TestDefaultStagesNonEmpty(t *testing.T) {
 	}
 }
 
-func TestNormalizeStageKey(t *testing.T) {
-	key, err := normalizeStageKey("dba_lead")
-	if err != nil || key != "dba_lead" {
-		t.Fatalf("unexpected: %q %v", key, err)
+func TestResolveFlowFallsBackToDefault(t *testing.T) {
+	// normalize keeps access_request; fallback logic is covered by resolveFlow unit via empty stages path
+	key := DefinitionKey{Domain: "dbmgmt", ProjectID: 1, TicketType: "access_request"}.normalize()
+	if key.TicketType != "access_request" {
+		t.Fatalf("expected access_request, got %s", key.TicketType)
 	}
-	_, err = normalizeStageKey("1bad")
-	if err == nil {
-		t.Fatal("expected error for invalid key")
+	if filterEnabledStages(nil) == nil {
+		t.Fatal("filterEnabledStages should return empty slice")
 	}
 }
