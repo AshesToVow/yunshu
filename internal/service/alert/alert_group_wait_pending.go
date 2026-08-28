@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -19,17 +20,17 @@ const (
 
 // groupWaitPendingEnvelope 首次同组等待期间缓存的待发信封，到期由 alert_timing 补发。
 type groupWaitPendingEnvelope struct {
-	GroupKey     string                 `json:"group_key"`
-	Fingerprint  string                 `json:"fingerprint"`
-	LabelsDigest string                 `json:"labels_digest"`
-	Source       string                 `json:"source"`
-	Title        string                 `json:"title"`
-	Severity     string                 `json:"severity"`
-	Status       string                 `json:"status"`
-	EnvLabel     string                 `json:"env_label"`
-	FirstSeen    string                 `json:"first_seen"`
-	Labels       map[string]string      `json:"labels"`
-	Outgoing     map[string]interface{} `json:"outgoing"`
+	GroupKey     string            `json:"group_key"`
+	Fingerprint  string            `json:"fingerprint"`
+	LabelsDigest string            `json:"labels_digest"`
+	Source       string            `json:"source"`
+	Title        string            `json:"title"`
+	Severity     string            `json:"severity"`
+	Status       string            `json:"status"`
+	EnvLabel     string            `json:"env_label"`
+	FirstSeen    string            `json:"first_seen"`
+	Labels       map[string]string `json:"labels"`
+	Outgoing     map[string]any    `json:"outgoing"`
 }
 
 func groupSendLockKey(groupKey string) string {
@@ -56,7 +57,7 @@ func (s *AlertService) saveGroupWaitPending(ctx context.Context, env groupWaitPe
 		env.Labels = map[string]string{}
 	}
 	if env.Outgoing == nil {
-		env.Outgoing = map[string]interface{}{}
+		env.Outgoing = map[string]any{}
 	}
 	env.FirstSeen = strings.TrimSpace(firstSeen)
 	env.Labels = cloneStringMap(env.Labels)
@@ -99,7 +100,7 @@ func (s *AlertService) loadGroupWaitPending(ctx context.Context, groupKey string
 		env.Labels = map[string]string{}
 	}
 	if env.Outgoing == nil {
-		env.Outgoing = map[string]interface{}{}
+		env.Outgoing = map[string]any{}
 	}
 	return &env
 }
@@ -152,17 +153,13 @@ func (s *AlertService) listDueGroupWaitKeys(ctx context.Context, now time.Time) 
 
 func cloneStringMap(in map[string]string) map[string]string {
 	out := map[string]string{}
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 
-func cloneInterfaceMap(in map[string]interface{}) map[string]interface{} {
-	out := map[string]interface{}{}
-	for k, v := range in {
-		out[k] = v
-	}
+func cloneInterfaceMap(in map[string]any) map[string]any {
+	out := map[string]any{}
+	maps.Copy(out, in)
 	return out
 }
 

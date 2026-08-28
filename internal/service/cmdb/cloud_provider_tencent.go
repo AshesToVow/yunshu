@@ -22,7 +22,7 @@ func (p *TencentCloudProvider) ListInstances(ctx context.Context, ak, sk, region
 		return nil, bizerrors.Pass(ctx, "project.cloud", "ListInstances", err)
 	}
 	regions := make([]string, 0)
-	for _, it := range strings.Split(regionScope, ",") {
+	for it := range strings.SplitSeq(regionScope, ",") {
 		v := strings.TrimSpace(it)
 		if v == "" {
 			continue
@@ -63,8 +63,8 @@ func (p *TencentCloudProvider) ListInstances(ctx context.Context, ak, sk, region
 				return nil, bizerrors.Pass(ctx, "project.cloud", "ListInstances", err)
 			}
 			req := cvm.NewDescribeInstancesRequest()
-			req.Limit = common.Int64Ptr(limit)
-			req.Offset = common.Int64Ptr(offset)
+			req.Limit = new(limit)
+			req.Offset = new(offset)
 			resp, err := client.DescribeInstances(req)
 			if err != nil {
 				return nil, bizerrors.Pass(ctx, "project.cloud", "ListInstances", err)
@@ -237,9 +237,9 @@ func (p *TencentCloudProvider) ResetInstancePassword(ctx context.Context, ak, sk
 		return bizerrors.Pass(ctx, "project.cloud", "ResetInstancePassword", err)
 	}
 	req := cvm.NewResetInstancesPasswordRequest()
-	req.InstanceIds = []*string{common.StringPtr(strings.TrimSpace(instanceID))}
-	req.Password = common.StringPtr(newPassword)
-	req.ForceStop = common.BoolPtr(true)
+	req.InstanceIds = []*string{new(strings.TrimSpace(instanceID))}
+	req.Password = new(newPassword)
+	req.ForceStop = new(true)
 	_, err = client.ResetInstancesPassword(req)
 	return bizerrors.Pass(ctx, "project.cloud", "ResetInstancePassword", err)
 }
@@ -256,8 +256,8 @@ func (p *TencentCloudProvider) RebootInstance(ctx context.Context, ak, sk, regio
 		return bizerrors.Pass(ctx, "project.cloud", "RebootInstance", err)
 	}
 	req := cvm.NewRebootInstancesRequest()
-	req.InstanceIds = []*string{common.StringPtr(strings.TrimSpace(instanceID))}
-	req.StopType = common.StringPtr("SOFT_FIRST")
+	req.InstanceIds = []*string{new(strings.TrimSpace(instanceID))}
+	req.StopType = new("SOFT_FIRST")
 	_, err = client.RebootInstances(req)
 	return bizerrors.Pass(ctx, "project.cloud", "RebootInstance", err)
 }
@@ -274,8 +274,8 @@ func (p *TencentCloudProvider) ShutdownInstance(ctx context.Context, ak, sk, reg
 		return bizerrors.Pass(ctx, "project.cloud", "ShutdownInstance", err)
 	}
 	req := cvm.NewStopInstancesRequest()
-	req.InstanceIds = []*string{common.StringPtr(strings.TrimSpace(instanceID))}
-	req.StopType = common.StringPtr("SOFT_FIRST")
+	req.InstanceIds = []*string{new(strings.TrimSpace(instanceID))}
+	req.StopType = new("SOFT_FIRST")
 	_, err = client.StopInstances(req)
 	return bizerrors.Pass(ctx, "project.cloud", "ShutdownInstance", err)
 }
@@ -295,8 +295,8 @@ func (p *TencentCloudProvider) QueryInstanceExpireAt(ctx context.Context, ak, sk
 	req.Limit = common.Int64Ptr(1)
 	req.Filters = []*cvm.Filter{
 		{
-			Name:   common.StringPtr("instance-id"),
-			Values: []*string{common.StringPtr(strings.TrimSpace(instanceID))},
+			Name:   new("instance-id"),
+			Values: []*string{new(strings.TrimSpace(instanceID))},
 		},
 	}
 	resp, err := client.DescribeInstances(req)
@@ -365,13 +365,13 @@ func (p *TencentCloudProvider) SyncInstanceTags(ctx context.Context, ak, sk, reg
 		if !ok || strings.TrimSpace(nv) != strings.TrimSpace(oldV) {
 			key := strings.TrimSpace(k)
 			if key != "" {
-				toUnbind = append(toUnbind, common.StringPtr(key))
+				toUnbind = append(toUnbind, new(key))
 			}
 		}
 	}
 	if len(toUnbind) > 0 {
 		req := tag.NewUnTagResourcesRequest()
-		req.ResourceList = []*string{common.StringPtr(resource)}
+		req.ResourceList = []*string{new(resource)}
 		req.TagKeys = toUnbind
 		if _, err := tagClient.UnTagResources(req); err != nil {
 			return bizerrors.Pass(ctx, "project.cloud", "SyncInstanceTags", err)
@@ -388,13 +388,13 @@ func (p *TencentCloudProvider) SyncInstanceTags(ctx context.Context, ak, sk, reg
 			continue
 		}
 		toBind = append(toBind, &tag.Tag{
-			TagKey:   common.StringPtr(key),
-			TagValue: common.StringPtr(nv),
+			TagKey:   new(key),
+			TagValue: new(nv),
 		})
 	}
 	if len(toBind) > 0 {
 		req := tag.NewTagResourcesRequest()
-		req.ResourceList = []*string{common.StringPtr(resource)}
+		req.ResourceList = []*string{new(resource)}
 		req.Tags = toBind
 		if _, err := tagClient.TagResources(req); err != nil {
 			return bizerrors.Pass(ctx, "project.cloud", "SyncInstanceTags", err)

@@ -17,6 +17,10 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	raw := map[string]EntryPermission{
 		"/": {Resource: "/api/v1/overview", Action: "GET"},
 
+		"/workflow/inbox":       {"/api/v1/workflow/tickets/pending", "GET"},
+		"/workflow/tickets":     {"/api/v1/workflow/tickets", "GET"},
+		"/workflow/definitions": {"/api/v1/workflow/definitions/:domain/projects/:project_id", "GET"},
+
 		"/alert-channels":              {"/api/v1/alerts/channels", "GET"},
 		"/alert-monitor-platform":      {"/api/v1/alerts/datasources", "GET"},
 		"/alert-duty":                  {"/api/v1/alerts/duty-blocks", "GET"},
@@ -43,9 +47,9 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/dbmgmt/instances":            {"/api/v1/projects/:id/dbmgmt/instances", "GET"},
 		"/dbmgmt/sql/query":            {"/api/v1/projects/:id/dbmgmt/instances", "GET"},
 		"/dbmgmt/sql/audit":            {"/api/v1/projects/:id/dbmgmt/tickets", "GET"},
-		"/dbmgmt/workflow/pending":     {"/api/v1/projects/:id/dbmgmt/tickets", "GET"},
+		"/dbmgmt/workflow/pending":     {"/api/v1/workflow/tickets/pending", "GET"},
 		"/dbmgmt/workflow/history":     {"/api/v1/projects/:id/dbmgmt/tickets", "GET"},
-		"/dbmgmt/approval-flow":        {"/api/v1/projects/:id/dbmgmt/approval-flow", "GET"},
+		"/dbmgmt/approval-flow":        {"/api/v1/workflow/definitions/:domain/projects/:project_id", "GET"},
 		"/dbmgmt/audit":                {"/api/v1/projects/:id/dbmgmt/audit-logs", "GET"},
 		"/dbmgmt/grants":               {"/api/v1/projects/:id/dbmgmt/grants", "GET"},
 
@@ -57,6 +61,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/roles":              {"/api/v1/roles", "GET"},
 		"/permissions":        {"/api/v1/permissions", "GET"},
 		"/policies":           {"/api/v1/policies", "GET"},
+		"/platform-templates": {"/api/v1/platform-templates", "GET"},
 		"/k8s-scoped-policies": {"/api/v1/k8s-policies", "GET"},
 		"/registrations":      {"/api/v1/registrations", "GET"},
 		"/menus":              {"/api/v1/menus", "GET"},
@@ -98,8 +103,8 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/k8s-resource-topology":       {"/api/v1/k8s/topology", "GET"},
 
 		"/cicd/services":        {"/api/v1/projects/:id/cicd/services", "GET"},
-		"/cicd/todo":            {"/api/v1/projects/:id/cicd/release-runs", "GET"},
-		"/cicd/approval-flow":   {"/api/v1/projects/:id/cicd/approval-flow", "GET"},
+		"/cicd/todo":            {"/api/v1/workflow/tickets/pending", "GET"},
+		"/cicd/approval-flow":   {"/api/v1/workflow/definitions/:domain/projects/:project_id", "GET"},
 		"/cicd/build-records":   {"/api/v1/projects/:id/cicd/build-runs", "GET"},
 		"/cicd/release-records": {"/api/v1/projects/:id/cicd/release-runs", "GET"},
 		"/cicd/registries":      {"/api/v1/registries", "GET"},

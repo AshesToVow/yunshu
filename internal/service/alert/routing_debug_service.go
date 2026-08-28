@@ -130,6 +130,10 @@ func (s *AlertService) DebugRouting(ctx context.Context, req AlertRoutingDebugRe
 				if err != nil || g == nil || !g.IsActiveNow() {
 					continue
 				}
+				// 调试默认按 level=0（初始层）；升级层需真实 firing 后由 timing worker 推进
+				if normalizeEscalationLevel(g.EscalationLevel) != 0 {
+					continue
+				}
 				for _, cid := range g.ChannelIDs {
 					if cid == 0 {
 						continue
@@ -143,6 +147,9 @@ func (s *AlertService) DebugRouting(ctx context.Context, req AlertRoutingDebugRe
 					}
 				}
 			}
+		}
+		if out.Hint == "" {
+			out.Hint = "通道列表仅含升级层级=0 的接收组；层级≥1 的组在未认领且持续 firing 达到延迟后由升级任务投递。"
 		}
 	}
 	return out, nil

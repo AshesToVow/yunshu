@@ -10,8 +10,8 @@ import (
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/k8sauth"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sauth"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
@@ -53,10 +53,10 @@ type OverviewResponse struct {
 }
 
 type OverviewProjectLaunchSeries struct {
-	ProjectID   uint     `json:"project_id"`
-	ProjectName string   `json:"project_name"`
-	Data        []int64  `json:"data"`
-	Color       string   `json:"color,omitempty"`
+	ProjectID   uint    `json:"project_id"`
+	ProjectName string  `json:"project_name"`
+	Data        []int64 `json:"data"`
+	Color       string  `json:"color,omitempty"`
 }
 
 type OverviewProjectLaunchesResponse struct {
@@ -74,12 +74,12 @@ type OverviewReleaseByPersonResponse struct {
 }
 
 type OverviewService struct {
-	repo            interfaces.OverviewRepository
-	runtime         *k8s.K8sRuntimeService
-	redis           *redis.Client
-	memberRepo      interfaces.ProjectMemberRepository
-	accessRepo      interfaces.K8sClusterAccessRepository
-	pluginsEnabled  map[string]bool
+	repo           interfaces.OverviewRepository
+	runtime        *k8s.K8sRuntimeService
+	redis          *redis.Client
+	memberRepo     interfaces.ProjectMemberRepository
+	accessRepo     interfaces.K8sClusterAccessRepository
+	pluginsEnabled map[string]bool
 }
 
 // NewOverviewService 创建相关逻辑。
@@ -136,7 +136,7 @@ func overviewMonthRange(now time.Time) (start, end time.Time, dayLabels []string
 	start = end.AddDate(0, 0, -overviewChartDays)
 	dayLabels = make([]string, 0, overviewChartDays)
 	dayIndex = make(map[string]int, overviewChartDays)
-	for i := 0; i < overviewChartDays; i++ {
+	for i := range overviewChartDays {
 		d := start.AddDate(0, 0, i)
 		key := d.Format("2006-01-02")
 		dayLabels = append(dayLabels, d.Format("01-02"))
@@ -179,15 +179,12 @@ func (s *OverviewService) ProjectLaunches(ctx context.Context) (*OverviewProject
 	sort.Slice(rankedList, func(i, j int) bool {
 		return rankedList[i].total > rankedList[j].total
 	})
-	limit := 10
-	if len(rankedList) < limit {
-		limit = len(rankedList)
-	}
+	limit := min(len(rankedList), 10)
 	out := &OverviewProjectLaunchesResponse{
 		Days:   dayLabels,
 		Series: make([]OverviewProjectLaunchSeries, 0, limit),
 	}
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		pid := rankedList[i].id
 		data := make([]int64, overviewChartDays)
 		for _, row := range rows {
@@ -290,9 +287,7 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 	)
 	for _, c := range clusters {
 		cid := c.ID
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			// Guard against unexpected panics from 3rd-party k8s wrapper (kom),
 			// so one cluster failure won't crash the whole backend process.
 			defer func() {
@@ -388,7 +383,7 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 			out.EventTotalCount += total
 			out.EventWarningCount += warnings
 			mu.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -397,12 +392,12 @@ func (s *OverviewService) Get(ctx context.Context) (*OverviewResponse, error) {
 }
 
 const (
-	overviewMetricsCacheTTL     = 45 * time.Second
-	overviewK8sBudget           = 8 * time.Second
-	overviewClusterConcurrency  = 4
-	overviewRegisterTimeout     = 2 * time.Second
-	overviewPodListTimeout      = 4 * time.Second
-	overviewEventListTimeout    = 3 * time.Second
+	overviewMetricsCacheTTL    = 45 * time.Second
+	overviewK8sBudget          = 8 * time.Second
+	overviewClusterConcurrency = 4
+	overviewRegisterTimeout    = 2 * time.Second
+	overviewPodListTimeout     = 4 * time.Second
+	overviewEventListTimeout   = 3 * time.Second
 )
 
 func (s *OverviewService) cacheOverview(ctx context.Context, cacheKey string, out *OverviewResponse) {

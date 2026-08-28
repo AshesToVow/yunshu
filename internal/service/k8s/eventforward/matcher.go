@@ -25,7 +25,7 @@ func ParseRuleFilter(rule model.K8sEventForwardRule) RuleFilter {
 
 func ParseClusterIDSet(clusterIDs string) map[string]struct{} {
 	out := make(map[string]struct{})
-	for _, p := range strings.Split(clusterIDs, ",") {
+	for p := range strings.SplitSeq(clusterIDs, ",") {
 		c := strings.TrimSpace(p)
 		if c != "" {
 			out[c] = struct{}{}

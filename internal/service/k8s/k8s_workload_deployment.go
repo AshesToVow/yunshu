@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/k8sutil"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sutil"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -52,10 +52,7 @@ func (s *K8sWorkloadService) ListDeployments(ctx context.Context, q NamespacedLi
 		if d.Status.Replicas > 0 {
 			readyPercent = int((float64(d.Status.ReadyReplicas) / float64(d.Status.Replicas)) * 100)
 		}
-		scale := int64(d.Status.Replicas)
-		if scale < 1 {
-			scale = 1
-		}
+		scale := max(int64(d.Status.Replicas), 1)
 		cpuUse, memUse, cr, cl, mr, ml := workloadUsagePercents(deployUsage[d.Name], d.Spec.Template.Spec, scale)
 		out = append(out, WorkloadItem{
 			Name:           d.Name,

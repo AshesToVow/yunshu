@@ -1,12 +1,12 @@
-﻿package alert
+package alert
 
 import (
-	bizerrors "yunshu/internal/pkg/errors"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+	bizerrors "yunshu/internal/pkg/errors"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/alertnotify"
@@ -199,7 +199,7 @@ func (s *AlertService) saveMonitorSeriesPayload(ctx context.Context, ruleID uint
 	}
 	lb, _ := json.Marshal(labels)
 	ab, _ := json.Marshal(annotations)
-	_ = s.redis.HSet(ctx, monitorEvalSeriesStateKey(ruleID, fp), map[string]interface{}{
+	_ = s.redis.HSet(ctx, monitorEvalSeriesStateKey(ruleID, fp), map[string]any{
 		"labels_json":      string(lb),
 		"annotations_json": string(ab),
 	}).Err()
@@ -254,7 +254,7 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 		}
 		if pendingSince == nil {
 			if rule.ForSeconds <= 0 {
-				_ = s.redis.HSet(ctx, key, map[string]interface{}{
+				_ = s.redis.HSet(ctx, key, map[string]any{
 					"active_firing": "1",
 					"pending_since": "",
 				}).Err()
@@ -267,12 +267,9 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 			_ = s.redis.Expire(ctx, key, 7*24*time.Hour).Err()
 			return
 		}
-		forDur := time.Duration(rule.ForSeconds) * time.Second
-		if forDur < 0 {
-			forDur = 0
-		}
+		forDur := max(time.Duration(rule.ForSeconds)*time.Second, 0)
 		if now.Sub(*pendingSince) >= forDur {
-			_ = s.redis.HSet(ctx, key, map[string]interface{}{
+			_ = s.redis.HSet(ctx, key, map[string]any{
 				"active_firing": "1",
 				"pending_since": "",
 			}).Err()
@@ -284,7 +281,7 @@ func (s *AlertService) evaluateMonitorRuleWithRedis(ctx context.Context, rule *m
 	}
 
 	if active {
-		_ = s.redis.HSet(ctx, key, map[string]interface{}{
+		_ = s.redis.HSet(ctx, key, map[string]any{
 			"active_firing": "0",
 			"pending_since": "",
 		}).Err()

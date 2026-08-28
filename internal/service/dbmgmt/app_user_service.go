@@ -14,6 +14,7 @@ import (
 	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
+	workflowsvc "yunshu/internal/service/workflow"
 )
 
 type AppUserRequestItem struct {
@@ -193,6 +194,24 @@ func (s *Service) ApproveAppUserRequest(ctx context.Context, projectID, id uint,
 	if req.Status != model.DbAccessRequestStatusPending {
 		return constants.ErrBadRequestWithMsg("申请已结束")
 	}
+	if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAppUserRequest, id) {
+		err := s.reviewDbmgmtViaWorkflow(ctx, model.WorkflowRefDbAppUserRequest, id, true, comment, actor,
+			func(d *workflowsvc.TicketDetail) error {
+				if d.Status == model.WorkflowTicketStatusApproved {
+					return s.finalizeAppUserRequestApproval(ctx, projectID, id)
+				}
+				return nil
+			})
+		if err != nil {
+			return workflowOrLegacyErr(err)
+		}
+		iid := req.InstanceID
+		_ = s.writeAudit(ctx, projectID, &iid, actor, "app_user_request_approve", map[string]any{
+			"request_id": req.ID, "apply_type": req.ApplyType, "mysql_user": req.MySQLUser,
+			"comment": strings.TrimSpace(comment),
+		})
+		return nil
+	}
 	steps, err := s.repo.ListAppUserRequestSteps(ctx, id)
 	if err != nil {
 		return err
@@ -246,6 +265,18 @@ func (s *Service) RejectAppUserRequest(ctx context.Context, projectID, id uint, 
 	if req.Status != model.DbAccessRequestStatusPending {
 		return constants.ErrBadRequestWithMsg("申请已结束")
 	}
+	if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAppUserRequest, id) {
+		err := s.reviewDbmgmtViaWorkflow(ctx, model.WorkflowRefDbAppUserRequest, id, false, comment, actor, nil)
+		if err != nil {
+			return workflowOrLegacyErr(err)
+		}
+		iid := req.InstanceID
+		_ = s.writeAudit(ctx, projectID, &iid, actor, "app_user_request_reject", map[string]any{
+			"request_id": req.ID, "apply_type": req.ApplyType, "mysql_user": req.MySQLUser,
+			"comment": strings.TrimSpace(comment),
+		})
+		return nil
+	}
 	steps, _ := s.repo.ListAppUserRequestSteps(ctx, id)
 	var cur *model.DbAppUserRequestStep
 	for i := range steps {
@@ -281,25 +312,9 @@ func (s *Service) RejectAppUserRequest(ctx context.Context, projectID, id uint, 
 }
 
 func (s *Service) initAppUserRequestSteps(ctx context.Context, req *model.DbAppUserRequest) error {
-	stages, err := s.loadEnabledFlowStages(ctx, req.ProjectID)
-	if err != nil {
+	if err := s.createDbmgmtWorkflowTicket(ctx, model.WorkflowTicketTypeAppUser, model.WorkflowRefDbAppUserRequest,
+		appUserRequestWorkflowTitle(req), req.ProjectID, req.ID, req.RequesterUserID); err != nil {
 		return err
-	}
-	if len(stages) == 0 {
-		return constants.ErrBadRequestWithMsg("请先在「审批流配置」中启用至少一级审批后再提交应用用户申请")
-	}
-	now := time.Now()
-	for i, st := range stages {
-		step := &model.DbAppUserRequestStep{
-			AppUserRequestID: req.ID, StageKey: st.StageKey, StageName: st.StageName,
-			SortOrder: st.SortOrder, Status: model.DbApprovalStepPending, UserGroupID: st.UserGroupID,
-		}
-		if i == 0 {
-			step.ActivatedAt = &now
-		}
-		if err := s.repo.CreateAppUserRequestStep(ctx, step); err != nil {
-			return err
-		}
 	}
 	req.Status = model.DbAccessRequestStatusPending
 	return s.repo.UpdateAppUserRequest(ctx, req)

@@ -16,10 +16,10 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
+	"yunshu/internal/alertdispatch"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/parseutil"
 	"yunshu/internal/pkg/validateutil"
-	"yunshu/internal/alertdispatch"
 )
 
 func validateHeadersJSON(v string) error {
@@ -46,7 +46,7 @@ func validateChannelMessageTemplates(headersJSON string) error {
 		}
 		sample := alertdispatch.BuildChannelTemplateData(
 			"preview", "warning", "firing",
-			map[string]interface{}{"summary": "preview", "description": "preview"},
+			map[string]any{"summary": "preview", "description": "preview"},
 			"demo",
 		)
 		var buf strings.Builder
@@ -81,19 +81,19 @@ func requiresWebhookURL(channelType, headersJSON string) bool {
 	return true
 }
 
-func parseChannelSettings(v string) (map[string]interface{}, error) {
+func parseChannelSettings(v string) (map[string]any, error) {
 	v = strings.TrimSpace(v)
 	if v == "" {
-		return map[string]interface{}{}, nil
+		return map[string]any{}, nil
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal([]byte(v), &m); err != nil {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg2a14724b02d9)
 	}
 	return m, nil
 }
 
-func parseRequestHeaders(settings map[string]interface{}) map[string]string {
+func parseRequestHeaders(settings map[string]any) map[string]string {
 	out := map[string]string{}
 	if settings == nil {
 		return out
@@ -111,7 +111,7 @@ func parseRequestHeaders(settings map[string]interface{}) map[string]string {
 		}
 	}
 	if hv, ok := settings["headers"]; ok {
-		if hm, ok := hv.(map[string]interface{}); ok {
+		if hm, ok := hv.(map[string]any); ok {
 			for k, v := range hm {
 				s := strings.TrimSpace(fmt.Sprintf("%v", v))
 				if s != "" {
@@ -154,7 +154,7 @@ func splitEmailRecipientString(s string) []string {
 	return validateutil.SplitRecipientString(s)
 }
 
-func normalizeRecipientList(v interface{}) []string {
+func normalizeRecipientList(v any) []string {
 	return validateutil.NormalizeRecipientList(v)
 }
 
@@ -164,7 +164,7 @@ func parseEmailRecipients(headersJSON string) ([]string, error) {
 	if headersJSON == "" {
 		return nil, nil
 	}
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal([]byte(headersJSON), &raw); err != nil {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg5b6514e2f558)
 	}
@@ -188,7 +188,7 @@ func parseEmailRecipients(headersJSON string) ([]string, error) {
 	return out, nil
 }
 
-func buildWebhookURL(channel *model.AlertChannel, settings map[string]interface{}, body []byte) string {
+func buildWebhookURL(channel *model.AlertChannel, settings map[string]any, body []byte) string {
 	base := strings.TrimSpace(channel.URL)
 	if !strings.EqualFold(channel.Type, "dingding") {
 		return base
@@ -225,11 +225,11 @@ func buildWebhookURL(channel *model.AlertChannel, settings map[string]interface{
 	return parsed.String()
 }
 
-func parseStringList(v interface{}) []string {
+func parseStringList(v any) []string {
 	return parseutil.ParseStringList(v)
 }
 
-func parseBool(v interface{}) bool {
+func parseBool(v any) bool {
 	return parseutil.ParseBool(v)
 }
 

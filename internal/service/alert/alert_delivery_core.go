@@ -18,7 +18,7 @@ import (
 
 func (s *AlertService) sendToChannel(ctx context.Context, channel *model.AlertChannel, env *alertdispatch.Envelope) (int, string, error) {
 	if env == nil {
-		env = alertdispatch.NewEnvelope("", "", "", "", map[string]interface{}{})
+		env = alertdispatch.NewEnvelope("", "", "", "", map[string]any{})
 	}
 	payload := env.PayloadOrEmpty()
 	source := env.Source
@@ -43,11 +43,11 @@ func (s *AlertService) sendToChannel(ctx context.Context, channel *model.AlertCh
 	return notifyFn(ctx, channel, source, title, severity, status, payload, settings)
 }
 
-func payloadString(payload map[string]interface{}, key string) string {
+func payloadString(payload map[string]any, key string) string {
 	return strings.TrimSpace(alertnotify.StringFromPayload(payload, key))
 }
 
-func (s *AlertService) renderChannelMessage(ctx context.Context, title, severity, status string, payload map[string]interface{}, settings map[string]interface{}) string {
+func (s *AlertService) renderChannelMessage(ctx context.Context, title, severity, status string, payload map[string]any, settings map[string]any) string {
 	defaultMsg := alertnotify.RenderMarkdownCard(title, payload)
 	if settings == nil {
 		return defaultMsg
@@ -79,7 +79,7 @@ func (s *AlertService) renderChannelMessage(ctx context.Context, title, severity
 	return rendered
 }
 
-func appendAssigneePhonesToAtMobiles(atMobiles []string, payload map[string]interface{}) []string {
+func appendAssigneePhonesToAtMobiles(atMobiles []string, payload map[string]any) []string {
 	if payload == nil {
 		return atMobiles
 	}
@@ -96,7 +96,7 @@ func appendAssigneePhonesToAtMobiles(atMobiles []string, payload map[string]inte
 	return atMobiles
 }
 
-func (s *AlertService) buildUnifiedNotifyTitle(ctx context.Context, rawTitle, severity, status string, payload map[string]interface{}) string {
+func (s *AlertService) buildUnifiedNotifyTitle(ctx context.Context, rawTitle, severity, status string, payload map[string]any) string {
 	statusNorm := strings.ToLower(strings.TrimSpace(status))
 	prefix := "告警通知"
 	level := strings.ToUpper(strings.TrimSpace(severity))
@@ -119,7 +119,7 @@ func (s *AlertService) buildUnifiedNotifyTitle(ctx context.Context, rawTitle, se
 	return title
 }
 
-func (s *AlertService) shouldPrefixDutyOnNotifyTitle(ctx context.Context, payload map[string]interface{}) bool {
+func (s *AlertService) shouldPrefixDutyOnNotifyTitle(ctx context.Context, payload map[string]any) bool {
 	rid, ok := monitorRuleIDFromPayload(payload)
 	if !ok || rid == 0 || s.dutySvc == nil {
 		return false
@@ -128,7 +128,7 @@ func (s *AlertService) shouldPrefixDutyOnNotifyTitle(ctx context.Context, payloa
 	return err == nil && active
 }
 
-func resolveNotifyAlertName(rawTitle string, payload map[string]interface{}) string {
+func resolveNotifyAlertName(rawTitle string, payload map[string]any) string {
 	if payload != nil {
 		if labelsAny, ok := payload["labels"]; ok {
 			switch labels := labelsAny.(type) {
@@ -136,7 +136,7 @@ func resolveNotifyAlertName(rawTitle string, payload map[string]interface{}) str
 				if v := strings.TrimSpace(labels["alertname"]); v != "" {
 					return v
 				}
-			case map[string]interface{}:
+			case map[string]any:
 				if v := strings.TrimSpace(fmt.Sprintf("%v", labels["alertname"])); v != "" && v != "<nil>" {
 					return v
 				}
@@ -150,11 +150,11 @@ func resolveNotifyAlertName(rawTitle string, payload map[string]interface{}) str
 	return name
 }
 
-func projectNameFromLabelMap(labelsAny interface{}) string {
+func projectNameFromLabelMap(labelsAny any) string {
 	switch labels := labelsAny.(type) {
 	case map[string]string:
 		return strings.TrimSpace(labels["project_name"])
-	case map[string]interface{}:
+	case map[string]any:
 		s := strings.TrimSpace(fmt.Sprintf("%v", labels["project_name"]))
 		if s == "" || s == "<nil>" {
 			return ""
@@ -165,7 +165,7 @@ func projectNameFromLabelMap(labelsAny interface{}) string {
 	}
 }
 
-func projectNameFromLabelsPayload(payload map[string]interface{}) string {
+func projectNameFromLabelsPayload(payload map[string]any) string {
 	if payload == nil {
 		return ""
 	}
@@ -180,7 +180,7 @@ func projectNameFromLabelsPayload(payload map[string]interface{}) string {
 }
 
 // projectIDFromPayload 从 payload 顶层、labels 或 group_labels 中解析 project_id（Alertmanager 有时只在 group 级别带标签）。
-func projectIDFromPayload(payload map[string]interface{}) uint {
+func projectIDFromPayload(payload map[string]any) uint {
 	if payload == nil {
 		return 0
 	}
@@ -194,7 +194,7 @@ func projectIDFromPayload(payload map[string]interface{}) uint {
 				if id := parseUintAny(labels["project_id"]); id > 0 {
 					return id
 				}
-			case map[string]interface{}:
+			case map[string]any:
 				if id := parseUintAny(labels["project_id"]); id > 0 {
 					return id
 				}
@@ -216,7 +216,7 @@ func (s *AlertService) lookupProjectNameByID(ctx context.Context, id uint) strin
 }
 
 // enrichOutgoingProjectName 在发送前根据 project_id 写入 project_name，便于多渠道共用一次解析结果，并与告警历史 payload 一致。
-func (s *AlertService) enrichOutgoingProjectName(ctx context.Context, payload map[string]interface{}) {
+func (s *AlertService) enrichOutgoingProjectName(ctx context.Context, payload map[string]any) {
 	if payload == nil {
 		return
 	}
@@ -236,7 +236,7 @@ func (s *AlertService) enrichOutgoingProjectName(ctx context.Context, payload ma
 	}
 }
 
-func (s *AlertService) resolveNotifyProjectName(ctx context.Context, payload map[string]interface{}) string {
+func (s *AlertService) resolveNotifyProjectName(ctx context.Context, payload map[string]any) string {
 	const fallback = "未绑定项目"
 	if payload == nil {
 		return fallback
@@ -255,7 +255,7 @@ func (s *AlertService) resolveNotifyProjectName(ctx context.Context, payload map
 	return fallback
 }
 
-func parseUintAny(v interface{}) uint {
+func parseUintAny(v any) uint {
 	switch vv := v.(type) {
 	case uint:
 		return vv
@@ -287,4 +287,3 @@ func parseUintAny(v interface{}) uint {
 	}
 	return uint(n)
 }
-

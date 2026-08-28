@@ -20,7 +20,7 @@ func bindErrorMessage(err error) string {
 	var verr validator.ValidationErrors
 	if errors.As(err, &verr) && len(verr) > 0 {
 		field := fieldLabel(verr[0].Field())
-		return fmt.Sprintf("%s", validationMessage(field, verr[0]))
+		return validationMessage(field, verr[0])
 	}
 	var typeErr *json.UnmarshalTypeError
 	if errors.As(err, &typeErr) {
@@ -29,8 +29,8 @@ func bindErrorMessage(err error) string {
 		}
 		return fmt.Sprintf("JSON 字段 %s 类型不正确", typeErr.Field)
 	}
-	var syn *json.SyntaxError
-	if errors.As(err, &syn) {
+	var synErr *json.SyntaxError
+	if errors.As(err, &synErr) {
 		return "请求体 JSON 语法错误，请检查是否截断或未转义字符"
 	}
 	return "请求参数格式错误，请检查后重试"

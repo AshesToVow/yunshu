@@ -80,8 +80,8 @@ func resolveLegacyReportPath(reportDir, key string) (string, bool) {
 	// 旧格式 logs/inspect-reports/{pid}/run-{id}.html
 	const legacyPrefix = "logs/inspect-reports/"
 	slash := filepath.ToSlash(key)
-	if strings.HasPrefix(slash, legacyPrefix) {
-		rel := strings.TrimPrefix(slash, legacyPrefix)
+	if after, ok := strings.CutPrefix(slash, legacyPrefix); ok {
+		rel := after
 		if safe, err := safeLocalReportPath(reportDir, "inspect/"+rel); err == nil {
 			return safe, true
 		}

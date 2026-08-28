@@ -78,10 +78,7 @@ func TestRenderExcelAndPDF(t *testing.T) {
 	}
 	pdf := renderBinaryPDF(data, nil)
 	if len(pdf) < 4 || string(pdf[:4]) != "%PDF" {
-		n := 8
-		if len(pdf) < n {
-			n = len(pdf)
-		}
+		n := min(len(pdf), 8)
 		t.Fatalf("not pdf: %q", string(pdf[:n]))
 	}
 	body := string(pdf)

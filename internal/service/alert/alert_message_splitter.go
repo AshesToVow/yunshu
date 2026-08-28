@@ -3,6 +3,7 @@ package alert
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"unicode/utf8"
 )
@@ -79,8 +80,8 @@ func splitTextByBytes(s string, limitBytes int) []string {
 			continue
 		}
 
-		lines := strings.Split(p, "\n")
-		for _, ln := range lines {
+		lines := strings.SplitSeq(p, "\n")
+		for ln := range lines {
 			ln = strings.TrimSpace(ln)
 			if ln == "" {
 				continue
@@ -122,7 +123,7 @@ func splitTextByBytes(s string, limitBytes int) []string {
 	return out
 }
 
-func jsonSizeBytes(v map[string]interface{}) int {
+func jsonSizeBytes(v map[string]any) int {
 	bs, _ := json.Marshal(v)
 	return len(bs)
 }
@@ -162,44 +163,40 @@ func reduceMarkdownForBytes(text string, limitBytes int) string {
 	return strings.TrimSpace(clampUTF8ByBytes(text, limitBytes))
 }
 
-func splitBodyByJSONLimit(base map[string]interface{}, setText func(dst map[string]interface{}, text string), getText func(src map[string]interface{}) string, limitBytes int) []map[string]interface{} {
+func splitBodyByJSONLimit(base map[string]any, setText func(dst map[string]any, text string), getText func(src map[string]any) string, limitBytes int) []map[string]any {
 	if base == nil {
 		return nil
 	}
 	if limitBytes <= 0 {
-		return []map[string]interface{}{base}
+		return []map[string]any{base}
 	}
 	if jsonSizeBytes(base) <= limitBytes {
-		return []map[string]interface{}{base}
+		return []map[string]any{base}
 	}
 
 	overhead := 0
 	{
-		tmp := map[string]interface{}{}
-		for k, v := range base {
-			tmp[k] = v
-		}
+		tmp := map[string]any{}
+		maps.Copy(tmp, base)
 		setText(tmp, "")
 		overhead = jsonSizeBytes(tmp)
 	}
 	allowTextBytes := limitBytes - overhead
 	if allowTextBytes <= 32 {
-		return []map[string]interface{}{base}
+		return []map[string]any{base}
 	}
 
 	origText := strings.TrimSpace(getText(base))
 	origText = reduceMarkdownForBytes(origText, allowTextBytes)
 	parts := splitTextByBytes(origText, allowTextBytes)
 	if len(parts) == 0 {
-		return []map[string]interface{}{base}
+		return []map[string]any{base}
 	}
 
-	out := make([]map[string]interface{}, 0, len(parts))
+	out := make([]map[string]any, 0, len(parts))
 	for _, p := range parts {
-		cp := map[string]interface{}{}
-		for k, v := range base {
-			cp[k] = v
-		}
+		cp := map[string]any{}
+		maps.Copy(cp, base)
 		setText(cp, p)
 		if jsonSizeBytes(cp) > limitBytes {
 			p2 := clampUTF8ByBytes(p, maxInt(16, allowTextBytes-64))
@@ -210,34 +207,30 @@ func splitBodyByJSONLimit(base map[string]interface{}, setText func(dst map[stri
 	return out
 }
 
-func splitDingTalkBody(body map[string]interface{}, limit int) []map[string]interface{} {
+func splitDingTalkBody(body map[string]any, limit int) []map[string]any {
 	return splitBodyByJSONLimit(
 		body,
-		func(dst map[string]interface{}, text string) {
+		func(dst map[string]any, text string) {
 			if mm, ok := dst["markdown"].(map[string]string); ok {
 				nm := map[string]string{}
-				for k, v := range mm {
-					nm[k] = v
-				}
+				maps.Copy(nm, mm)
 				nm["text"] = text
 				dst["markdown"] = nm
 				return
 			}
-			if mm, ok := dst["markdown"].(map[string]interface{}); ok {
-				nm := map[string]interface{}{}
-				for k, v := range mm {
-					nm[k] = v
-				}
+			if mm, ok := dst["markdown"].(map[string]any); ok {
+				nm := map[string]any{}
+				maps.Copy(nm, mm)
 				nm["text"] = text
 				dst["markdown"] = nm
 				return
 			}
 		},
-		func(src map[string]interface{}) string {
+		func(src map[string]any) string {
 			if mm, ok := src["markdown"].(map[string]string); ok {
 				return fmt.Sprintf("%v", mm["text"])
 			}
-			if mm, ok := src["markdown"].(map[string]interface{}); ok {
+			if mm, ok := src["markdown"].(map[string]any); ok {
 				return fmt.Sprintf("%v", mm["text"])
 			}
 			return ""
@@ -246,7 +239,7 @@ func splitDingTalkBody(body map[string]interface{}, limit int) []map[string]inte
 	)
 }
 
-func splitWeComBody(body map[string]interface{}, limit int) []map[string]interface{} {
+func splitWeComBody(body map[string]any, limit int) []map[string]any {
 	if body == nil {
 		return nil
 	}
@@ -254,20 +247,18 @@ func splitWeComBody(body map[string]interface{}, limit int) []map[string]interfa
 	if msgType == "text" {
 		return splitBodyByJSONLimit(
 			body,
-			func(dst map[string]interface{}, text string) {
-				tm, ok := dst["text"].(map[string]interface{})
+			func(dst map[string]any, text string) {
+				tm, ok := dst["text"].(map[string]any)
 				if !ok {
 					return
 				}
-				nt := map[string]interface{}{}
-				for k, v := range tm {
-					nt[k] = v
-				}
+				nt := map[string]any{}
+				maps.Copy(nt, tm)
 				nt["content"] = text
 				dst["text"] = nt
 			},
-			func(src map[string]interface{}) string {
-				if tm, ok := src["text"].(map[string]interface{}); ok {
+			func(src map[string]any) string {
+				if tm, ok := src["text"].(map[string]any); ok {
 					return fmt.Sprintf("%v", tm["content"])
 				}
 				return ""
@@ -278,31 +269,27 @@ func splitWeComBody(body map[string]interface{}, limit int) []map[string]interfa
 
 	return splitBodyByJSONLimit(
 		body,
-		func(dst map[string]interface{}, text string) {
+		func(dst map[string]any, text string) {
 			if mm, ok := dst["markdown"].(map[string]string); ok {
 				nm := map[string]string{}
-				for k, v := range mm {
-					nm[k] = v
-				}
+				maps.Copy(nm, mm)
 				nm["content"] = text
 				dst["markdown"] = nm
 				return
 			}
-			if mm, ok := dst["markdown"].(map[string]interface{}); ok {
-				nm := map[string]interface{}{}
-				for k, v := range mm {
-					nm[k] = v
-				}
+			if mm, ok := dst["markdown"].(map[string]any); ok {
+				nm := map[string]any{}
+				maps.Copy(nm, mm)
 				nm["content"] = text
 				dst["markdown"] = nm
 				return
 			}
 		},
-		func(src map[string]interface{}) string {
+		func(src map[string]any) string {
 			if mm, ok := src["markdown"].(map[string]string); ok {
 				return fmt.Sprintf("%v", mm["content"])
 			}
-			if mm, ok := src["markdown"].(map[string]interface{}); ok {
+			if mm, ok := src["markdown"].(map[string]any); ok {
 				return fmt.Sprintf("%v", mm["content"])
 			}
 			return ""

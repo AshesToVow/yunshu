@@ -30,9 +30,7 @@ func (s *wsSession) Cancel() {
 
 // Go 启动带 WaitGroup 与 panic 恢复的 goroutine；panic 时会 cancel 会话上下文。
 func (s *wsSession) Go(name string, fn func()) {
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
+	s.wg.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				if s.log != nil {
@@ -42,7 +40,7 @@ func (s *wsSession) Go(name string, fn func()) {
 			}
 		}()
 		fn()
-	}()
+	})
 }
 
 // Wait 阻塞直到所有通过 Go 启动的 goroutine 退出。

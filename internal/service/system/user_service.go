@@ -694,7 +694,7 @@ func randomImportPassword() (string, error) {
 func (s *UserService) UsersImportTemplateExcel() (*excelize.File, error) {
 	f := excelize.NewFile()
 	sheet := "Sheet1"
-	_ = f.SetSheetRow(sheet, "A1", &[]interface{}{"ID(可留空)", "Username(必填)", "Nickname", "Email", "Status(1启用/0停用)", "DepartmentCode(可选)"})
-	_ = f.SetSheetRow(sheet, "A2", &[]interface{}{"", "demo.user", "示例用户", "demo@example.com", 1, "RND-PLATFORM"})
+	_ = f.SetSheetRow(sheet, "A1", &[]any{"ID(可留空)", "Username(必填)", "Nickname", "Email", "Status(1启用/0停用)", "DepartmentCode(可选)"})
+	_ = f.SetSheetRow(sheet, "A2", &[]any{"", "demo.user", "示例用户", "demo@example.com", 1, "RND-PLATFORM"})
 	return f, nil
 }

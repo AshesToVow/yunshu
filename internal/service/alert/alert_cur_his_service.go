@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/pagination"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -218,7 +218,7 @@ func monitorRuleIDFromLabelsJSON(raw string) uint {
 	if raw == "" {
 		return 0
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal([]byte(raw), &m); err != nil {
 		return 0
 	}

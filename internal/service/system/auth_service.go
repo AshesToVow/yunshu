@@ -183,14 +183,14 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 
 	if err = password.Compare(user.Password, req.Password); err != nil {
 		s.recordLoginFailure(ctx, username)
-		// 密码错误即作废当前图形验证码，强制前端重新获取，防止复用。
-		s.clearPasswordLoginCode(ctx, req.CaptchaKey)
+		// 密码错误即作废验证码并解除刷新冷却，便于前端立刻换新图。
+		s.invalidatePasswordLoginCaptcha(ctx, username, req.CaptchaKey)
 		return nil, bizerrors.Reject(ctx, "auth", "Login", constants.ErrPasswordIncorrect, "reason", "bad_password", "username", username)
 	}
 
 	// Validate password login code
 	if err = s.validatePasswordLoginCode(ctx, req.CaptchaKey, req.Code); err != nil {
-		s.clearPasswordLoginCode(ctx, req.CaptchaKey)
+		s.invalidatePasswordLoginCaptcha(ctx, username, req.CaptchaKey)
 		return nil, bizerrors.Pass(ctx, "auth", "Login", err)
 	}
 	s.clearPasswordLoginCode(ctx, req.CaptchaKey)
@@ -546,6 +546,17 @@ func (s *AuthService) clearPasswordLoginCode(ctx context.Context, captchaKey str
 	_ = s.redis.Del(ctx, store.PasswordLoginCodeKey(captchaKey)).Err()
 }
 
+// invalidatePasswordLoginCaptcha 登录失败时作废验证码，并清除用户名维度的刷新冷却，
+// 避免前端因 ErrCaptchaCoolingDown 仍展示已失效图片。
+func (s *AuthService) invalidatePasswordLoginCaptcha(ctx context.Context, username, captchaKey string) {
+	s.clearPasswordLoginCode(ctx, captchaKey)
+	username = strings.TrimSpace(username)
+	if s.redis == nil || username == "" {
+		return
+	}
+	_ = s.redis.Del(ctx, store.PasswordLoginCodeCooldownKey(username)).Err()
+}
+
 func (s *AuthService) ensureEmailCodeDependencies(ctx context.Context) error {
 	if s.redis == nil {
 		return bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
@@ -741,7 +752,7 @@ func generateNumericCode(length int) (string, error) {
 	}
 
 	max := big.NewInt(1)
-	for i := 0; i < length; i++ {
+	for range length {
 		max.Mul(max, big.NewInt(10))
 	}
 

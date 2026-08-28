@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/constants"
+	bizerrors "yunshu/internal/pkg/errors"
 
 	"gorm.io/gorm"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,7 +30,6 @@ func TestK8sMapAPIError(t *testing.T) {
 		{"generic", errors.New("network"), ""},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := k8sMapAPIError(tc.in)

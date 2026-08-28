@@ -135,17 +135,15 @@ func (s *Service) runServerConnectivityTests(ctx context.Context, serverIDs []ui
 		}
 	}
 	var wg sync.WaitGroup
-	for i := 0; i < parallel; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range parallel {
+		wg.Go(func() {
 			defer func() {
 				if r := recover(); r != nil {
 					slog.Default().With("component", "cmdb").Error("connectivity test worker panic", "recover", r)
 				}
 			}()
 			worker()
-		}()
+		})
 	}
 	for _, id := range serverIDs {
 		jobs <- job{id: id}

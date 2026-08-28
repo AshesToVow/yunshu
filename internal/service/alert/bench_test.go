@@ -9,14 +9,14 @@ import (
 )
 
 func BenchmarkChannelMatchesAlert(b *testing.B) {
-	settings := map[string]interface{}{
-		"matchLabels": map[string]interface{}{"cluster": "prod"},
-		"matchRegex":  map[string]interface{}{"namespace": "^kube-"},
+	settings := map[string]any{
+		"matchLabels": map[string]any{"cluster": "prod"},
+		"matchRegex":  map[string]any{"namespace": "^kube-"},
 	}
 	labels := map[string]string{"env": "prod", "team": "sre"}
 	dims := alertnotify.Dims{Cluster: "prod", Namespace: "kube-system"}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		channelMatchesAlert(settings, labels, dims)
 	}
 }
@@ -31,7 +31,7 @@ func BenchmarkComputeGroupKey(b *testing.B) {
 	}
 	dims := alertnotify.Dims{Cluster: "prod", Namespace: "app"}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		s.computeGroupKey("webhook", "firing", "warning", "HighCPU", labels, dims)
 	}
 }
@@ -39,9 +39,9 @@ func BenchmarkComputeGroupKey(b *testing.B) {
 func BenchmarkShrinkLargestNotifyStrings(b *testing.B) {
 	long := strings.Repeat("x", 4000)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		body := map[string]interface{}{
-			"markdown": map[string]interface{}{"text": long},
+	for b.Loop() {
+		body := map[string]any{
+			"markdown": map[string]any{"text": long},
 		}
 		shrinkLargestNotifyStrings(body)
 	}
@@ -50,7 +50,7 @@ func BenchmarkShrinkLargestNotifyStrings(b *testing.B) {
 func BenchmarkParseUintCSV(b *testing.B) {
 	raw := "1,2,3,4,5,6,7,8,9,10"
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		parseUintCSV(raw)
 	}
 }

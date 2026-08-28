@@ -8,20 +8,20 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sutil"
 	"yunshu/internal/pkg/pagination"
-	bizerrors "yunshu/internal/pkg/errors"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/yaml"
 )
 
 type WorkloadPreviewResult struct {
-	DryRunOK  bool                  `json:"dry_run_ok"`
-	Message   string                `json:"message,omitempty"`
-	Diffs     []WorkloadYAMLDiff    `json:"diffs"`
-	Impact    WorkloadImpactSummary `json:"impact"`
-	Refs      []workloadRef         `json:"refs"`
+	DryRunOK bool                  `json:"dry_run_ok"`
+	Message  string                `json:"message,omitempty"`
+	Diffs    []WorkloadYAMLDiff    `json:"diffs"`
+	Impact   WorkloadImpactSummary `json:"impact"`
+	Refs     []workloadRef         `json:"refs"`
 }
 
 type WorkloadYAMLDiff struct {
@@ -35,11 +35,11 @@ type WorkloadYAMLDiff struct {
 }
 
 type WorkloadImpactSummary struct {
-	Secrets       []string `json:"secrets,omitempty"`
-	ConfigMaps    []string `json:"config_maps,omitempty"`
-	PVCs          []string `json:"pvcs,omitempty"`
+	Secrets         []string `json:"secrets,omitempty"`
+	ConfigMaps      []string `json:"config_maps,omitempty"`
+	PVCs            []string `json:"pvcs,omitempty"`
 	ServiceAccounts []string `json:"service_accounts,omitempty"`
-	ReplicaHint   string   `json:"replica_hint,omitempty"`
+	ReplicaHint     string   `json:"replica_hint,omitempty"`
 }
 
 type SnapshotListQuery struct {
@@ -225,11 +225,11 @@ func (s *K8sWorkloadService) deleteWorkloadByKind(ctx context.Context, req Names
 			YAML: string(y), ActorID: actorID, Reason: "before_delete",
 		}
 		if s.db != nil {
-		if s.db != nil {
-			if err := s.db.WithContext(ctx).Create(&row).Error; err == nil {
-				snapID = row.ID
+			if s.db != nil {
+				if err := s.db.WithContext(ctx).Create(&row).Error; err == nil {
+					snapID = row.ID
+				}
 			}
-		}
 		}
 	}
 	if err := s.dyn.DeleteByGVK(ctx, k, gvk, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
@@ -433,11 +433,8 @@ func unifiedDiff(before, after, title string) string {
 	if len(aLines) > max {
 		max = len(aLines)
 	}
-	limit := max
-	if limit > 200 {
-		limit = 200
-	}
-	for i := 0; i < limit; i++ {
+	limit := min(max, 200)
+	for i := range limit {
 		var bl, al string
 		if i < len(bLines) {
 			bl = bLines[i]

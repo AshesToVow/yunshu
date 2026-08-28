@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
 	"yunshu/internal/alertdispatch"
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 )
 
@@ -111,7 +112,7 @@ func extractAlertStartedAtFromPayload(requestPayload string) string {
 	if raw == "" {
 		return ""
 	}
-	var payload map[string]interface{}
+	var payload map[string]any
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
 		return ""
 	}
@@ -124,13 +125,13 @@ func extractAlertStartedAtFromPayload(requestPayload string) string {
 	return ""
 }
 
-func extractAlertPayloadLabels(requestPayload string) (map[string]string, map[string]interface{}) {
+func extractAlertPayloadLabels(requestPayload string) (map[string]string, map[string]any) {
 	raw := strings.TrimSpace(requestPayload)
 	if raw != "" {
-		var payload map[string]interface{}
+		var payload map[string]any
 		if err := json.Unmarshal([]byte(raw), &payload); err == nil {
 			if labelsAny, ok := payload["labels"]; ok {
-				if labels, ok := labelsAny.(map[string]interface{}); ok {
+				if labels, ok := labelsAny.(map[string]any); ok {
 					out := make(map[string]string, len(labels))
 					for key, value := range labels {
 						v := strings.TrimSpace(fmt.Sprintf("%v", value))
@@ -151,7 +152,7 @@ func extractAlertPayloadLabels(requestPayload string) (map[string]string, map[st
 
 func parseUintCSV(raw string) []uint {
 	var out []uint
-	for _, part := range strings.Split(strings.TrimSpace(raw), ",") {
+	for part := range strings.SplitSeq(strings.TrimSpace(raw), ",") {
 		n, ok := parseLabelUint(part)
 		if ok && n > 0 {
 			out = append(out, n)
@@ -162,7 +163,7 @@ func parseUintCSV(raw string) []uint {
 
 func parseTrimmedCSV(raw string) []string {
 	var out []string
-	for _, part := range strings.Split(strings.TrimSpace(raw), ",") {
+	for part := range strings.SplitSeq(strings.TrimSpace(raw), ",") {
 		v := strings.TrimSpace(part)
 		if v != "" {
 			out = append(out, v)
@@ -171,7 +172,7 @@ func parseTrimmedCSV(raw string) []string {
 	return out
 }
 
-func parseStringListAny(v interface{}) []string {
+func parseStringListAny(v any) []string {
 	raw := normalizeRecipientList(v)
 	var out []string
 	for _, one := range raw {
@@ -183,17 +184,17 @@ func parseStringListAny(v interface{}) []string {
 	return out
 }
 
-func payloadValueByPath(payload map[string]interface{}, path string) interface{} {
+func payloadValueByPath(payload map[string]any, path string) any {
 	if payload == nil {
 		return nil
 	}
-	cur := interface{}(payload)
-	for _, part := range strings.Split(strings.TrimSpace(path), ".") {
+	cur := any(payload)
+	for part := range strings.SplitSeq(strings.TrimSpace(path), ".") {
 		key := strings.TrimSpace(part)
 		if key == "" {
 			continue
 		}
-		obj, ok := cur.(map[string]interface{})
+		obj, ok := cur.(map[string]any)
 		if !ok {
 			return nil
 		}
@@ -256,11 +257,11 @@ func fillMetricFieldsFromRequestPayload(ev *model.AlertEvent) {
 	if raw == "" {
 		return
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal([]byte(raw), &m); err != nil {
 		return
 	}
-	norm := func(v interface{}) string {
+	norm := func(v any) string {
 		s := strings.TrimSpace(fmt.Sprintf("%v", v))
 		if s == "" || s == "<nil>" {
 			return ""
@@ -294,7 +295,7 @@ func hydrateAlertEvent(it *model.AlertEvent) {
 	fillMetricFieldsFromRequestPayload(it)
 }
 
-func previewPayloadFieldCatalog(payload map[string]interface{}) ([]string, []string, []string) {
+func previewPayloadFieldCatalog(payload map[string]any) ([]string, []string, []string) {
 	rawFields := make([]string, 0)
 	labelKeys := make([]string, 0)
 	for key := range payload {
@@ -302,7 +303,7 @@ func previewPayloadFieldCatalog(payload map[string]interface{}) ([]string, []str
 	}
 	sort.Strings(rawFields)
 	if labelsAny, ok := payload["labels"]; ok {
-		if labels, ok := labelsAny.(map[string]interface{}); ok {
+		if labels, ok := labelsAny.(map[string]any); ok {
 			for key := range labels {
 				labelKeys = append(labelKeys, key)
 			}
@@ -339,24 +340,20 @@ func atNotifyPlainMentionsFooter(atMobiles, atUserIds []string, isAtAll bool) st
 	return "\n\n" + strings.Join(parts, " ")
 }
 
-func appendDingTalkMarkdownText(body map[string]interface{}, extra string) {
+func appendDingTalkMarkdownText(body map[string]any, extra string) {
 	if body == nil || strings.TrimSpace(extra) == "" {
 		return
 	}
 	if mm, ok := body["markdown"].(map[string]string); ok {
 		nm := map[string]string{}
-		for k, v := range mm {
-			nm[k] = v
-		}
+		maps.Copy(nm, mm)
 		nm["text"] = nm["text"] + extra
 		body["markdown"] = nm
 		return
 	}
-	if mm, ok := body["markdown"].(map[string]interface{}); ok {
-		nm := map[string]interface{}{}
-		for k, v := range mm {
-			nm[k] = v
-		}
+	if mm, ok := body["markdown"].(map[string]any); ok {
+		nm := map[string]any{}
+		maps.Copy(nm, mm)
 		prev := strings.TrimSpace(fmt.Sprintf("%v", nm["text"]))
 		nm["text"] = prev + extra
 		body["markdown"] = nm

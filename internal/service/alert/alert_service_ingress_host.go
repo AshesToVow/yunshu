@@ -49,7 +49,7 @@ func (h alertIngressHost) FirstMatchingSilenceID(ctx context.Context, labels map
 	return h.s.silenceSvc.FirstMatchingSilenceID(ctx, labels, now)
 }
 
-func (h alertIngressHost) LogSilenceSuppressed(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, silenceID uint, payload map[string]interface{}) {
+func (h alertIngressHost) LogSilenceSuppressed(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, silenceID uint, payload map[string]any) {
 	h.s.logSilenceSuppressed(ctx, title, severity, status, envLabel, groupKey, labelsDigest, silenceID, payload)
 }
 
@@ -69,7 +69,7 @@ func (h alertIngressHost) ClearSourceInhibition(ctx context.Context, labels map[
 	return h.s.ClearSourceInhibition(ctx, labels)
 }
 
-func (h alertIngressHost) LogInhibitionEvent(ctx context.Context, title string, severity string, status string, envLabel string, groupKey string, labelsDigest string, inhEvent *model.AlertInhibitionEvent, outgoing map[string]interface{}) {
+func (h alertIngressHost) LogInhibitionEvent(ctx context.Context, title string, severity string, status string, envLabel string, groupKey string, labelsDigest string, inhEvent *model.AlertInhibitionEvent, outgoing map[string]any) {
 	h.s.logInhibitionEvent(ctx, title, severity, status, envLabel, groupKey, labelsDigest, inhEvent, outgoing)
 }
 
@@ -82,11 +82,11 @@ func (h alertIngressHost) EnqueuePrometheusEnrich(fingerprint, generatorURL stri
 	h.s.enqueuePrometheusEnrich(promEnrichTask{Fingerprint: fingerprint, GeneratorURL: generatorURL})
 }
 
-func (h alertIngressHost) EnrichOutgoingProjectName(ctx context.Context, outgoing map[string]interface{}) {
+func (h alertIngressHost) EnrichOutgoingProjectName(ctx context.Context, outgoing map[string]any) {
 	h.s.enrichOutgoingProjectName(ctx, outgoing)
 }
 
-func (h alertIngressHost) EnrichAssigneeAndDutyEmails(ctx context.Context, outgoing map[string]interface{}, labels map[string]string) {
+func (h alertIngressHost) EnrichAssigneeAndDutyEmails(ctx context.Context, outgoing map[string]any, labels map[string]string) {
 	h.s.enrichAssigneeAndDutyEmails(ctx, outgoing, labels)
 }
 
@@ -102,26 +102,36 @@ func (h alertIngressHost) PeekFiringGroupTiming(ctx context.Context, groupKey, l
 	return h.s.peekFiringGroupTiming(ctx, groupKey, labelsDigest)
 }
 
-func (h alertIngressHost) LogSuppressedFiringTiming(ctx context.Context, title, severity, status, groupKey, labelsDigest, reason string, outgoing map[string]interface{}) {
+func (h alertIngressHost) LogSuppressedFiringTiming(ctx context.Context, title, severity, status, groupKey, labelsDigest, reason string, outgoing map[string]any) {
 	h.s.logSuppressedFiringTiming(ctx, title, severity, status, groupKey, labelsDigest, reason, outgoing)
 }
 
-func (h alertIngressHost) ChannelRouteForAlert(ctx context.Context, status string, labels map[string]string) ChannelRoute {
-	r := h.s.channelRouteForAlert(ctx, status, labels)
+func (h alertIngressHost) ChannelRouteForAlert(ctx context.Context, status string, labels map[string]string, fingerprint string) ChannelRoute {
+	r := h.s.channelRouteForAlert(ctx, status, labels, fingerprint)
 	return ChannelRoute{
-		ChannelIDs:         r.ChannelIDs,
-		MatchedPolicyIDs:   r.MatchedPolicyIDs,
-		MatchedPolicyNames: r.MatchedPolicyNames,
-		SilenceSeconds:     r.SilenceSeconds,
-		ReceiverGroupIDs:   r.ReceiverGroupIDs,
+		ChannelIDs:          r.ChannelIDs,
+		MatchedPolicyIDs:    r.MatchedPolicyIDs,
+		MatchedPolicyNames:  r.MatchedPolicyNames,
+		SilenceSeconds:      r.SilenceSeconds,
+		ReceiverGroupIDs:    r.ReceiverGroupIDs,
+		ReceiverGroupEmails: r.ReceiverGroupEmails,
+		EscalationLevel:     r.EscalationLevel,
 	}
 }
 
-func (h alertIngressHost) ExpandChannelSetForAssigneeNotification(ctx context.Context, channels map[uint]struct{}, receiverGroupIDs []uint, outgoing map[string]interface{}) {
+func (h alertIngressHost) MaybeScheduleEscalation(ctx context.Context, env escalationPendingEnvelope, currentLevel int) {
+	h.s.maybeScheduleEscalation(ctx, env, currentLevel)
+}
+
+func (h alertIngressHost) ClearEscalationState(ctx context.Context, fingerprint string) {
+	h.s.clearEscalationState(ctx, fingerprint)
+}
+
+func (h alertIngressHost) ExpandChannelSetForAssigneeNotification(ctx context.Context, channels map[uint]struct{}, receiverGroupIDs []uint, outgoing map[string]any) {
 	h.s.expandChannelSetForAssigneeNotification(ctx, channels, receiverGroupIDs, outgoing)
 }
 
-func (h alertIngressHost) LogNoMatchedChannel(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, outgoing map[string]interface{}, reason string) {
+func (h alertIngressHost) LogNoMatchedChannel(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, outgoing map[string]any, reason string) {
 	h.s.logNoMatchedChannel(ctx, title, severity, status, envLabel, groupKey, labelsDigest, outgoing, reason)
 }
 
@@ -129,7 +139,7 @@ func (h alertIngressHost) ShouldSuppressByRouteSilence(ctx context.Context, stat
 	return h.s.shouldSuppressByRouteSilence(ctx, status, groupKey, matchedNodeIDs, silenceSeconds, labels)
 }
 
-func (h alertIngressHost) LogSuppressedRouteSilence(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, silenceSeconds int, outgoing map[string]interface{}) {
+func (h alertIngressHost) LogSuppressedRouteSilence(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, silenceSeconds int, outgoing map[string]any) {
 	h.s.logSuppressedRouteSilence(ctx, title, severity, status, envLabel, groupKey, labelsDigest, silenceSeconds, outgoing)
 }
 
@@ -137,7 +147,7 @@ func (h alertIngressHost) WasFiringDelivered(ctx context.Context, fingerprint st
 	return h.s.alertFiringWasDelivered(ctx, fingerprint)
 }
 
-func (h alertIngressHost) LogResolvedSuppressedNoPriorFiringDelivery(ctx context.Context, title, severity, status, groupKey, labelsDigest string, outgoing map[string]interface{}) {
+func (h alertIngressHost) LogResolvedSuppressedNoPriorFiringDelivery(ctx context.Context, title, severity, status, groupKey, labelsDigest string, outgoing map[string]any) {
 	h.s.logResolvedSuppressedNoPriorFiringDelivery(ctx, title, severity, status, groupKey, labelsDigest, outgoing)
 }
 
@@ -163,7 +173,7 @@ func (h alertIngressHost) MarkResolvedNotificationSent(ctx context.Context, fing
 	return h.s.markResolvedNotificationSent(ctx, fingerprint)
 }
 
-func (h alertIngressHost) LogSuppressedResolvedAggregate(ctx context.Context, title, severity, status, groupKey string, outgoing map[string]interface{}) {
+func (h alertIngressHost) LogSuppressedResolvedAggregate(ctx context.Context, title, severity, status, groupKey string, outgoing map[string]any) {
 	h.s.logSuppressedResolvedAggregate(ctx, title, severity, status, groupKey, outgoing)
 }
 
@@ -172,7 +182,7 @@ func (h alertIngressHost) ChannelMatchesAlert(channel model.AlertChannel, labels
 	return channelMatchesAlert(settings, labels, alertnotify.ExtractDims(labels))
 }
 
-func (h alertIngressHost) SendToChannel(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, outgoing map[string]interface{}) (int, error) {
+func (h alertIngressHost) SendToChannel(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, outgoing map[string]any) (int, error) {
 	code, _, err := h.s.sendToChannel(ctx, channel, alertdispatch.NewEnvelope(source, title, severity, status, outgoing))
 	return code, err
 }
@@ -205,7 +215,7 @@ func (h alertIngressHost) ClearResolvedSentMark(ctx context.Context, fingerprint
 	return h.s.clearResolvedNotificationSent(ctx, fingerprint)
 }
 
-func (h alertIngressHost) LogAllChannelsDeliveryFailed(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, outgoing map[string]interface{}) {
+func (h alertIngressHost) LogAllChannelsDeliveryFailed(ctx context.Context, title, severity, status, envLabel, groupKey, labelsDigest string, outgoing map[string]any) {
 	h.s.logAllChannelsDeliveryFailed(ctx, title, severity, status, envLabel, groupKey, labelsDigest, outgoing)
 }
 
@@ -215,6 +225,7 @@ func (h alertIngressHost) OnResolvedComplete(ctx context.Context, fingerprint, g
 	_ = h.s.clearGroupAggregateState(ctx, groupKey)
 	h.s.clearAlertFiringDelivered(ctx, fingerprint)
 	h.s.clearGroupWaitPending(ctx, groupKey)
+	h.s.clearEscalationState(ctx, fingerprint)
 }
 
 func (h alertIngressHost) UpsertCurAlert(ctx context.Context, row *model.AlertCurEvent) error {

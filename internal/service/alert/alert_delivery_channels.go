@@ -1,4 +1,4 @@
-﻿package alert
+package alert
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	neturl "net/url"
 	"strings"
@@ -15,18 +16,16 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/alertnotify"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/parseutil"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/parseutil"
 )
 
-func (s *AlertService) notifyGenericWebhook(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}, settings map[string]interface{}) (int, string, error) {
+func (s *AlertService) notifyGenericWebhook(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]any, settings map[string]any) (int, string, error) {
 	clamped := payload
 	if s.cfg.PlatformLimits.GenericMaxChars > 0 {
 		if m, ok := payload["summary"].(string); ok && runeLen(m) > s.cfg.PlatformLimits.GenericMaxChars {
-			cp := map[string]interface{}{}
-			for k, v := range payload {
-				cp[k] = v
-			}
+			cp := map[string]any{}
+			maps.Copy(cp, payload)
 			cp["summary"] = clampByRunes(m, s.cfg.PlatformLimits.GenericMaxChars)
 			clamped = cp
 		}
@@ -34,9 +33,9 @@ func (s *AlertService) notifyGenericWebhook(ctx context.Context, channel *model.
 	return s.postWebhookWithPayload(ctx, channel, source, title, severity, status, clamped, settings, payload)
 }
 
-func (s *AlertService) postWebhookWithPayloadMulti(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, bodies []map[string]interface{}, settings map[string]interface{}, alertPayload map[string]interface{}) (int, string, error) {
+func (s *AlertService) postWebhookWithPayloadMulti(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, bodies []map[string]any, settings map[string]any, alertPayload map[string]any) (int, string, error) {
 	if len(bodies) == 0 {
-		return s.postWebhookWithPayload(ctx, channel, source, title, severity, status, map[string]interface{}{}, settings, alertPayload)
+		return s.postWebhookWithPayload(ctx, channel, source, title, severity, status, map[string]any{}, settings, alertPayload)
 	}
 	lastCode := 0
 	lastResp := ""
@@ -50,7 +49,7 @@ func (s *AlertService) postWebhookWithPayloadMulti(ctx context.Context, channel 
 	return lastCode, lastResp, nil
 }
 
-func (s *AlertService) notifyWeComWebhook(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}, settings map[string]interface{}) (int, string, error) {
+func (s *AlertService) notifyWeComWebhook(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]any, settings map[string]any) (int, string, error) {
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", settings["wecomMode"])))
 	if mode == "" {
 		mode = "robot"
@@ -75,7 +74,7 @@ func (s *AlertService) notifyWeComWebhook(ctx context.Context, channel *model.Al
 	return s.postWebhookWithPayloadMulti(ctx, channel, source, title, severity, status, bodies, settings, payload)
 }
 
-func (s *AlertService) notifyDingTalkWebhook(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}, settings map[string]interface{}) (int, string, error) {
+func (s *AlertService) notifyDingTalkWebhook(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]any, settings map[string]any) (int, string, error) {
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", settings["dingMode"])))
 	if mode == "" {
 		mode = "robot"
@@ -97,7 +96,7 @@ func (s *AlertService) notifyDingTalkWebhook(ctx context.Context, channel *model
 	return s.postWebhookWithPayloadMulti(ctx, channel, source, title, severity, status, bodies, settings, payload)
 }
 
-func (s *AlertService) notifyWeComApp(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}, settings map[string]interface{}) (int, string, error) {
+func (s *AlertService) notifyWeComApp(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]any, settings map[string]any) (int, string, error) {
 	corpID := strings.TrimSpace(fmt.Sprintf("%v", settings["corpID"]))
 	corpSecret := strings.TrimSpace(fmt.Sprintf("%v", settings["corpSecret"]))
 	agentID := strings.TrimSpace(fmt.Sprintf("%v", settings["agentId"]))
@@ -124,7 +123,7 @@ func (s *AlertService) notifyWeComApp(ctx context.Context, channel *model.AlertC
 	if err != nil {
 		return 0, "", bizerrors.Pass(ctx, "alert.delivery", "notifyWeComApp", err)
 	}
-	body := map[string]interface{}{
+	body := map[string]any{
 		"touser":  strings.Join(atUsers, "|"),
 		"msgtype": "markdown",
 		"agentid": agentID,
@@ -137,7 +136,7 @@ func (s *AlertService) notifyWeComApp(ctx context.Context, channel *model.AlertC
 	return s.postDirect(ctx, source, title, severity, status, channel, u, body, map[string]string{}, payload)
 }
 
-func (s *AlertService) notifyDingTalkAppChat(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}, settings map[string]interface{}) (int, string, error) {
+func (s *AlertService) notifyDingTalkAppChat(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]any, settings map[string]any) (int, string, error) {
 	appKey := strings.TrimSpace(fmt.Sprintf("%v", settings["appKey"]))
 	appSecret := strings.TrimSpace(fmt.Sprintf("%v", settings["appSecret"]))
 	chatID := strings.TrimSpace(fmt.Sprintf("%v", settings["chatId"]))
@@ -157,16 +156,16 @@ func (s *AlertService) notifyDingTalkAppChat(ctx context.Context, channel *model
 			atUsers = append(atUsers, resolved...)
 		}
 	}
-	body := map[string]interface{}{
+	body := map[string]any{
 		"chatid": chatID,
-		"msg": map[string]interface{}{
+		"msg": map[string]any{
 			"msgtype": "markdown",
 			"markdown": map[string]string{
 				"title": title,
 				"text":  s.renderChannelMessage(ctx, title, severity, status, payload, settings),
 			},
 		},
-		"at": map[string]interface{}{
+		"at": map[string]any{
 			"atMobiles": parseutil.UniqueStrings(atMobiles),
 			"atUserIds": parseutil.UniqueStrings(atUsers),
 			"isAtAll":   parseutil.ParseBool(settings["isAtAll"]),
@@ -176,7 +175,7 @@ func (s *AlertService) notifyDingTalkAppChat(ctx context.Context, channel *model
 	return s.postDirect(ctx, source, title, severity, status, channel, u, body, map[string]string{}, payload)
 }
 
-func (s *AlertService) postWebhookWithPayload(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, outBody map[string]interface{}, settings map[string]interface{}, alertPayload map[string]interface{}) (int, string, error) {
+func (s *AlertService) postWebhookWithPayload(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, outBody map[string]any, settings map[string]any, alertPayload map[string]any) (int, string, error) {
 	reqBytes, _ := json.Marshal(outBody)
 	headers := parseRequestHeaders(settings)
 	url := buildWebhookURL(channel, settings, reqBytes)
@@ -195,7 +194,7 @@ func (s *AlertService) postWebhookWithPayload(ctx context.Context, channel *mode
 	return s.executeAndLogHTTP(ctx, source, title, severity, status, channel, outBody, alertPayload, reqBytes, httpReq)
 }
 
-func (s *AlertService) postDirect(ctx context.Context, source, title, severity, status string, channel *model.AlertChannel, url string, body map[string]interface{}, headers map[string]string, alertPayload map[string]interface{}) (int, string, error) {
+func (s *AlertService) postDirect(ctx context.Context, source, title, severity, status string, channel *model.AlertChannel, url string, body map[string]any, headers map[string]string, alertPayload map[string]any) (int, string, error) {
 	reqBytes, _ := json.Marshal(body)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBytes))
 	if err != nil {
@@ -208,7 +207,7 @@ func (s *AlertService) postDirect(ctx context.Context, source, title, severity, 
 	return s.executeAndLogHTTP(ctx, source, title, severity, status, channel, body, alertPayload, reqBytes, httpReq)
 }
 
-func (s *AlertService) executeAndLogHTTP(ctx context.Context, source, title, severity, status string, channel *model.AlertChannel, body map[string]interface{}, alertPayload map[string]interface{}, reqBytes []byte, req *http.Request) (int, string, error) {
+func (s *AlertService) executeAndLogHTTP(ctx context.Context, source, title, severity, status string, channel *model.AlertChannel, body map[string]any, alertPayload map[string]any, reqBytes []byte, req *http.Request) (int, string, error) {
 	if req != nil && req.URL != nil {
 		if err := assertSafeOutboundURL(req.URL.String()); err != nil {
 			return 0, "", constants.ErrBadRequestWithMsg(err.Error())

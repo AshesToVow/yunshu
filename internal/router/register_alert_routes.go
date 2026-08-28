@@ -116,4 +116,8 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.PUT("/cloud-expiry-rules/:id", d.cloudExpiryRuleHandler.Update)
 	alerts.DELETE("/cloud-expiry-rules/:id", d.cloudExpiryRuleHandler.Delete)
 	alerts.POST("/cloud-expiry-rules/evaluate-now", d.cloudExpiryRuleHandler.EvaluateNow)
+
+	if d.workflowHandler != nil {
+		alerts.POST("/events/:alert_event_id/to-ticket", d.workflowHandler.CreateIncidentFromAlert)
+	}
 }

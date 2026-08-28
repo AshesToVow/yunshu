@@ -45,7 +45,7 @@ func TestGroupWaitPending_saveDueAndClear(t *testing.T) {
 		Severity:     "warning",
 		Status:       "firing",
 		Labels:       map[string]string{"alertname": "Disk"},
-		Outgoing:     map[string]interface{}{"summary": "full"},
+		Outgoing:     map[string]any{"summary": "full"},
 	}, firstSeen)
 
 	got := s.loadGroupWaitPending(ctx, "gk-disk")
@@ -77,7 +77,7 @@ func TestGroupWaitPending_notDueYet(t *testing.T) {
 		Title:       "Port",
 		Status:      "firing",
 		Labels:      map[string]string{},
-		Outgoing:    map[string]interface{}{},
+		Outgoing:    map[string]any{},
 	}, firstSeen)
 	if keys := s.listDueGroupWaitKeys(ctx, time.Now().UTC()); len(keys) != 0 {
 		t.Fatalf("should not be due yet: %v", keys)
@@ -142,7 +142,7 @@ func TestFlushOneGroupWait_skipsWhenLastSent(t *testing.T) {
 		Title:       "Disk",
 		Status:      "firing",
 		Labels:      map[string]string{},
-		Outgoing:    map[string]interface{}{},
+		Outgoing:    map[string]any{},
 	}, time.Now().UTC().Add(-30*time.Second).Format(time.RFC3339))
 	if err := s.redis.HSet(ctx, firingGroupTimingRedisKey("gk-sent"), "last_sent", "2026-01-01T00:00:00Z").Err(); err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestFlushOneGroupWait_skipsWhenAcked(t *testing.T) {
 		Title:       "Disk",
 		Status:      "firing",
 		Labels:      map[string]string{},
-		Outgoing:    map[string]interface{}{},
+		Outgoing:    map[string]any{},
 	}, time.Now().UTC().Add(-30*time.Second).Format(time.RFC3339))
 	ackedHost := &ackActiveHost{pipelineTestHost: *host, acked: true}
 	s.flushOneGroupWait(ctx, ackedHost, nil, *s.loadGroupWaitPending(ctx, "gk-ack"))
@@ -195,4 +195,3 @@ type ackActiveHost struct {
 }
 
 func (h *ackActiveHost) IsAckActive(context.Context, string) bool { return h.acked }
-

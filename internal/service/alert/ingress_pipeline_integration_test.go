@@ -50,7 +50,7 @@ func (h *pipelineTestHost) FirstMatchingSilenceID(context.Context, map[string]st
 	return 0, false, nil
 }
 
-func (h *pipelineTestHost) LogSilenceSuppressed(context.Context, string, string, string, string, string, string, uint, map[string]interface{}) {
+func (h *pipelineTestHost) LogSilenceSuppressed(context.Context, string, string, string, string, string, string, uint, map[string]any) {
 }
 
 func (h *pipelineTestHost) TouchFingerprint(_ context.Context, _, _ string) (int64, error) {
@@ -64,11 +64,15 @@ func (h *pipelineTestHost) CheckInhibition(context.Context, map[string]string) (
 	return false, nil
 }
 
-func (h *pipelineTestHost) RecordSourceInhibition(context.Context, map[string]string) error { return nil }
+func (h *pipelineTestHost) RecordSourceInhibition(context.Context, map[string]string) error {
+	return nil
+}
 
-func (h *pipelineTestHost) ClearSourceInhibition(context.Context, map[string]string) error { return nil }
+func (h *pipelineTestHost) ClearSourceInhibition(context.Context, map[string]string) error {
+	return nil
+}
 
-func (h *pipelineTestHost) LogInhibitionEvent(context.Context, string, string, string, string, string, string, *model.AlertInhibitionEvent, map[string]interface{}) {
+func (h *pipelineTestHost) LogInhibitionEvent(context.Context, string, string, string, string, string, string, *model.AlertInhibitionEvent, map[string]any) {
 }
 
 func (h *pipelineTestHost) ResolveMetricValues(context.Context, string, string, map[string]string, map[string]string, time.Time, time.Time, string) (string, string) {
@@ -77,9 +81,9 @@ func (h *pipelineTestHost) ResolveMetricValues(context.Context, string, string, 
 
 func (h *pipelineTestHost) EnqueuePrometheusEnrich(string, string) {}
 
-func (h *pipelineTestHost) EnrichOutgoingProjectName(context.Context, map[string]interface{}) {}
+func (h *pipelineTestHost) EnrichOutgoingProjectName(context.Context, map[string]any) {}
 
-func (h *pipelineTestHost) EnrichAssigneeAndDutyEmails(context.Context, map[string]interface{}, map[string]string) {
+func (h *pipelineTestHost) EnrichAssigneeAndDutyEmails(context.Context, map[string]any, map[string]string) {
 }
 
 func (h *pipelineTestHost) IsAckActive(context.Context, string) bool { return false }
@@ -96,24 +100,28 @@ func (h *pipelineTestHost) PeekFiringGroupTiming(context.Context, string, string
 	return false, "suppressed_timing", 1, "", ""
 }
 
-func (h *pipelineTestHost) LogSuppressedFiringTiming(context.Context, string, string, string, string, string, string, map[string]interface{}) {
+func (h *pipelineTestHost) LogSuppressedFiringTiming(context.Context, string, string, string, string, string, string, map[string]any) {
 }
 
-func (h *pipelineTestHost) ChannelRouteForAlert(context.Context, string, map[string]string) ChannelRoute {
+func (h *pipelineTestHost) ChannelRouteForAlert(context.Context, string, map[string]string, string) ChannelRoute {
 	return h.route
 }
 
-func (h *pipelineTestHost) ExpandChannelSetForAssigneeNotification(context.Context, map[uint]struct{}, []uint, map[string]interface{}) {
+func (h *pipelineTestHost) ExpandChannelSetForAssigneeNotification(context.Context, map[uint]struct{}, []uint, map[string]any) {
 }
 
-func (h *pipelineTestHost) LogNoMatchedChannel(context.Context, string, string, string, string, string, string, map[string]interface{}, string) {
+func (h *pipelineTestHost) MaybeScheduleEscalation(context.Context, escalationPendingEnvelope, int) {}
+
+func (h *pipelineTestHost) ClearEscalationState(context.Context, string) {}
+
+func (h *pipelineTestHost) LogNoMatchedChannel(context.Context, string, string, string, string, string, string, map[string]any, string) {
 }
 
 func (h *pipelineTestHost) ShouldSuppressByRouteSilence(context.Context, string, string, string, int, map[string]string) bool {
 	return false
 }
 
-func (h *pipelineTestHost) LogSuppressedRouteSilence(context.Context, string, string, string, string, string, string, int, map[string]interface{}) {
+func (h *pipelineTestHost) LogSuppressedRouteSilence(context.Context, string, string, string, string, string, string, int, map[string]any) {
 }
 
 func (h *pipelineTestHost) WasFiringDelivered(_ context.Context, _ string) bool {
@@ -122,7 +130,7 @@ func (h *pipelineTestHost) WasFiringDelivered(_ context.Context, _ string) bool 
 	return h.firingDelivered
 }
 
-func (h *pipelineTestHost) LogResolvedSuppressedNoPriorFiringDelivery(context.Context, string, string, string, string, string, map[string]interface{}) {
+func (h *pipelineTestHost) LogResolvedSuppressedNoPriorFiringDelivery(context.Context, string, string, string, string, string, map[string]any) {
 }
 
 func (h *pipelineTestHost) ClearFingerprintState(context.Context, string) error { return nil }
@@ -141,14 +149,14 @@ func (h *pipelineTestHost) MarkResolvedNotificationSent(_ context.Context, _ str
 	return true, nil
 }
 
-func (h *pipelineTestHost) LogSuppressedResolvedAggregate(context.Context, string, string, string, string, map[string]interface{}) {
+func (h *pipelineTestHost) LogSuppressedResolvedAggregate(context.Context, string, string, string, string, map[string]any) {
 }
 
 func (h *pipelineTestHost) ChannelMatchesAlert(_ model.AlertChannel, _ map[string]string) bool {
 	return true
 }
 
-func (h *pipelineTestHost) SendToChannel(_ context.Context, ch *model.AlertChannel, _, _, _, _ string, _ map[string]interface{}) (int, error) {
+func (h *pipelineTestHost) SendToChannel(_ context.Context, ch *model.AlertChannel, _, _, _, _ string, _ map[string]any) (int, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.sends = append(h.sends, ch.Name+"|"+ch.Type)
@@ -177,7 +185,7 @@ func (h *pipelineTestHost) MarkFiringDelivered(_ context.Context, _ string) {
 
 func (h *pipelineTestHost) ClearResolvedSentMark(context.Context, string) error { return nil }
 
-func (h *pipelineTestHost) LogAllChannelsDeliveryFailed(context.Context, string, string, string, string, string, string, map[string]interface{}) {
+func (h *pipelineTestHost) LogAllChannelsDeliveryFailed(context.Context, string, string, string, string, string, string, map[string]any) {
 }
 
 func (h *pipelineTestHost) OnResolvedComplete(context.Context, string, string) {}

@@ -29,14 +29,14 @@ type ServerGrantItem struct {
 }
 
 type ServerGrantUpsertRequest struct {
-	ProjectID     uint   `json:"-"`
-	ServerID      uint   `json:"server_id" binding:"required"`
-	UserID        uint   `json:"user_id" binding:"required"`
-	CanView       *bool  `json:"can_view"`
-	CanExec       bool   `json:"can_exec"`
-	CanManage     bool   `json:"can_manage"`
-	Remark        string `json:"remark"`
-	CreatedBy     *uint  `json:"-"`
+	ProjectID uint   `json:"-"`
+	ServerID  uint   `json:"server_id" binding:"required"`
+	UserID    uint   `json:"user_id" binding:"required"`
+	CanView   *bool  `json:"can_view"`
+	CanExec   bool   `json:"can_exec"`
+	CanManage bool   `json:"can_manage"`
+	Remark    string `json:"remark"`
+	CreatedBy *uint  `json:"-"`
 }
 
 type ServerGrantBulkRequest struct {
@@ -229,7 +229,7 @@ func (s *Service) UpsertServerGrant(ctx context.Context, req ServerGrantUpsertRe
 	// Assignments(map) 强制写入 false，避免冲突更新吞掉 bool 零值。
 	err = s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-		DoUpdates: clause.Assignments(map[string]interface{}{
+		DoUpdates: clause.Assignments(map[string]any{
 			"can_view": canView, "can_exec": canExec, "can_manage": canManage,
 			"remark": strings.TrimSpace(req.Remark), "updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
 		}),
@@ -271,7 +271,7 @@ func (s *Service) BulkUpsertServerGrants(ctx context.Context, req ServerGrantBul
 		}
 		if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-			DoUpdates: clause.Assignments(map[string]interface{}{
+			DoUpdates: clause.Assignments(map[string]any{
 				"can_view": canView, "can_exec": canExec, "can_manage": canManage,
 				"updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
 			}),
@@ -324,7 +324,7 @@ func (s *Service) BootstrapServerGrantsForMembers(ctx context.Context, req Boots
 			}
 			if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 				Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-				DoUpdates: clause.Assignments(map[string]interface{}{
+				DoUpdates: clause.Assignments(map[string]any{
 					"can_view": true, "can_exec": true, "updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
 				}),
 			}).Create(&row).Error; err == nil {

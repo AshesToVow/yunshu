@@ -6,10 +6,10 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
-	bizerrors "yunshu/internal/pkg/errors"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -84,9 +84,9 @@ func (s *OperationLogService) Export(ctx context.Context, query OperationLogList
 	}
 	f := excelize.NewFile()
 	sheet := "Sheet1"
-	_ = f.SetSheetRow(sheet, "A1", &[]interface{}{"ID", "Method", "Path", "StatusCode", "LatencyMs", "IP", "CreatedAt", "User"})
+	_ = f.SetSheetRow(sheet, "A1", &[]any{"ID", "Method", "Path", "StatusCode", "LatencyMs", "IP", "CreatedAt", "User"})
 	for i, l := range list {
-		row := []interface{}{
+		row := []any{
 			l.ID,
 			l.Method,
 			l.Path,

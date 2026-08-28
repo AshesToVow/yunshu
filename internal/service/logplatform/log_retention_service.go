@@ -482,7 +482,7 @@ func planIndexDeletions(indices []esclient.IndexInfo, cutoff time.Time, maxIndex
 	// 2) 最大索引数
 	if maxIndexCount > 0 && len(remaining) > maxIndexCount {
 		excess := len(remaining) - maxIndexCount
-		for i := 0; i < excess; i++ {
+		for i := range excess {
 			drop(remaining[i].Name)
 		}
 		remaining = remaining[excess:]

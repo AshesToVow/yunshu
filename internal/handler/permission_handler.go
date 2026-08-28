@@ -138,14 +138,8 @@ func (h *PermissionHandler) List(c *gin.Context) {
 			}
 			page, pageSize := pagination.Normalize(query.Page, query.PageSize)
 			total := int64(len(filtered))
-			start := (page - 1) * pageSize
-			if start > len(filtered) {
-				start = len(filtered)
-			}
-			end := start + pageSize
-			if end > len(filtered) {
-				end = len(filtered)
-			}
+			start := min((page-1)*pageSize, len(filtered))
+			end := min(start+pageSize, len(filtered))
 			return &pagination.Result[service.PermissionItem]{
 				List:     filtered[start:end],
 				Total:    total,

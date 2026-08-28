@@ -15,10 +15,10 @@ import (
 	"yunshu/internal/pkg/alertnotify"
 )
 
-func (s *AlertService) channelIDSetForAlert(ctx context.Context, status string, labels map[string]string) (map[uint]struct{}, string, string, int, []uint) {
+func (s *AlertService) channelIDSetForAlert(ctx context.Context, status string, labels map[string]string, fingerprint string) (map[uint]struct{}, string, string, int, []uint, []string, int) {
 	// 彻底弃用旧策略：仅使用订阅树路由（订阅节点 -> 接收组 -> 通道）
 	if s.subscriptionSvc == nil || s.receiverGroupCache == nil {
-		return nil, "", "", 0, nil
+		return nil, "", "", 0, nil, nil, 0
 	}
 	projectID := s.resolveProjectIDForAlertRouting(ctx, labels)
 	severity := strings.TrimSpace(labels["severity"])
@@ -47,10 +47,14 @@ func (s *AlertService) channelIDSetForAlert(ctx context.Context, status string, 
 	}
 	tryMatch(0, "global")
 	if !anyMatched {
-		return nil, "", "", 0, nil
+		return nil, "", "", 0, nil, nil, 0
 	}
+	statusNorm := strings.ToLower(strings.TrimSpace(status))
+	curLevel := s.currentEscalationLevel(ctx, fingerprint)
 	out := map[uint]struct{}{}
-	for _, gid := range merged.ReceiverGroupIDs {
+	selectedGroups := make([]uint, 0, len(merged.ReceiverGroupIDs))
+	emails := []string{}
+	for _, gid := range uniqUint(merged.ReceiverGroupIDs) {
 		g, err := s.receiverGroupCache.Get(gid)
 		if err != nil || g == nil {
 			continue
@@ -58,36 +62,54 @@ func (s *AlertService) channelIDSetForAlert(ctx context.Context, status string, 
 		if !g.IsActiveNow() {
 			continue
 		}
+		gLevel := normalizeEscalationLevel(g.EscalationLevel)
+		if statusNorm == "resolved" {
+			// 恢复通知：已到达层级及以下均通知
+			if gLevel > curLevel {
+				continue
+			}
+		} else {
+			// firing：仅当前层级
+			if gLevel != curLevel {
+				continue
+			}
+		}
+		selectedGroups = append(selectedGroups, gid)
 		for _, cid := range g.ChannelIDs {
 			if cid > 0 {
 				out[cid] = struct{}{}
 			}
 		}
+		emails = append(emails, g.EmailRecipients...)
 	}
 	ids := make([]string, 0, len(merged.MatchedNodeIDs))
 	for _, id := range merged.MatchedNodeIDs {
 		ids = append(ids, fmt.Sprintf("%d", id))
 	}
-	return out, strings.Join(ids, ","), strings.Join(merged.MatchedNodeNames, ","), merged.SilenceSeconds, uniqUint(merged.ReceiverGroupIDs)
+	return out, strings.Join(ids, ","), strings.Join(merged.MatchedNodeNames, ","), merged.SilenceSeconds, selectedGroups, mergeNotifyEmailsUnique(emails), curLevel
 }
 
 // ChannelRouteForAlert 订阅匹配后的通道与接收组信息。
 type ChannelRouteForAlert struct {
-	ChannelIDs         map[uint]struct{}
-	MatchedPolicyIDs   string
-	MatchedPolicyNames string
-	SilenceSeconds     int
-	ReceiverGroupIDs   []uint
+	ChannelIDs          map[uint]struct{}
+	MatchedPolicyIDs    string
+	MatchedPolicyNames  string
+	SilenceSeconds      int
+	ReceiverGroupIDs    []uint
+	ReceiverGroupEmails []string
+	EscalationLevel     int
 }
 
-func (s *AlertService) channelRouteForAlert(ctx context.Context, status string, labels map[string]string) ChannelRouteForAlert {
-	ch, ids, names, silence, rgs := s.channelIDSetForAlert(ctx, status, labels)
+func (s *AlertService) channelRouteForAlert(ctx context.Context, status string, labels map[string]string, fingerprint string) ChannelRouteForAlert {
+	ch, ids, names, silence, rgs, emails, level := s.channelIDSetForAlert(ctx, status, labels, fingerprint)
 	return ChannelRouteForAlert{
-		ChannelIDs:         ch,
-		MatchedPolicyIDs:   ids,
-		MatchedPolicyNames: names,
-		SilenceSeconds:     silence,
-		ReceiverGroupIDs:   rgs,
+		ChannelIDs:          ch,
+		MatchedPolicyIDs:    ids,
+		MatchedPolicyNames:  names,
+		SilenceSeconds:      silence,
+		ReceiverGroupIDs:    rgs,
+		ReceiverGroupEmails: emails,
+		EscalationLevel:     level,
 	}
 }
 
@@ -139,7 +161,7 @@ func (s *AlertService) shouldSuppressByRouteSilence(ctx context.Context, status,
 	return !ok
 }
 
-func (s *AlertService) logSuppressedRouteSilence(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, silenceSeconds int, payload map[string]interface{}) {
+func (s *AlertService) logSuppressedRouteSilence(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, silenceSeconds int, payload map[string]any) {
 	reqBytes, _ := json.Marshal(payload)
 	event := model.AlertEvent{
 		Source:          alertEventSourceFromPayload(payload),
@@ -174,7 +196,7 @@ func (s *AlertService) computeGroupKey(receiver, status, severity, alertname str
 	return "gk_" + hex.EncodeToString(sum[:8])
 }
 
-func channelMatchesAlert(settings map[string]interface{}, labels map[string]string, dims alertnotify.Dims) bool {
+func channelMatchesAlert(settings map[string]any, labels map[string]string, dims alertnotify.Dims) bool {
 	if settings == nil {
 		return true
 	}
@@ -194,7 +216,7 @@ func channelMatchesAlert(settings map[string]interface{}, labels map[string]stri
 
 	// matchLabels: {"cluster":"prod-1","namespace":"kube-system"}
 	if raw, ok := settings["matchLabels"]; ok {
-		if m, ok := raw.(map[string]interface{}); ok {
+		if m, ok := raw.(map[string]any); ok {
 			for k, v := range m {
 				expected := strings.TrimSpace(fmt.Sprintf("%v", v))
 				if expected == "" {
@@ -209,7 +231,7 @@ func channelMatchesAlert(settings map[string]interface{}, labels map[string]stri
 	}
 	// matchRegex: {"namespace":"^(kube-system|monitoring)$"}
 	if raw, ok := settings["matchRegex"]; ok {
-		if m, ok := raw.(map[string]interface{}); ok {
+		if m, ok := raw.(map[string]any); ok {
 			for k, v := range m {
 				pat := strings.TrimSpace(fmt.Sprintf("%v", v))
 				if pat == "" {
@@ -274,7 +296,7 @@ func mergeNotifyPhonesUnique(phones []string) []string {
 	return out
 }
 
-func (s *AlertService) enrichAssigneeAndDutyEmails(ctx context.Context, outgoing map[string]interface{}, labels map[string]string) {
+func (s *AlertService) enrichAssigneeAndDutyEmails(ctx context.Context, outgoing map[string]any, labels map[string]string) {
 	rid, ok := parseLabelUint(labels["monitor_rule_id"])
 	if !ok {
 		return

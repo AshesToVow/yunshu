@@ -14,28 +14,27 @@ func TestChannelMatchesAlert(t *testing.T) {
 	dims := alertnotify.Dims{Cluster: "c1", Namespace: "kube-system"}
 	cases := []struct {
 		name     string
-		settings map[string]interface{}
+		settings map[string]any
 		want     bool
 	}{
 		{"nil settings", nil, true},
-		{"match labels ok", map[string]interface{}{
-			"matchLabels": map[string]interface{}{"cluster": "c1", "env": "prod"},
+		{"match labels ok", map[string]any{
+			"matchLabels": map[string]any{"cluster": "c1", "env": "prod"},
 		}, true},
-		{"match labels fail", map[string]interface{}{
-			"matchLabels": map[string]interface{}{"env": "staging"},
+		{"match labels fail", map[string]any{
+			"matchLabels": map[string]any{"env": "staging"},
 		}, false},
-		{"match regex ok", map[string]interface{}{
-			"matchRegex": map[string]interface{}{"namespace": "^kube-"},
+		{"match regex ok", map[string]any{
+			"matchRegex": map[string]any{"namespace": "^kube-"},
 		}, true},
-		{"match regex fail", map[string]interface{}{
-			"matchRegex": map[string]interface{}{"namespace": "^default$"},
+		{"match regex fail", map[string]any{
+			"matchRegex": map[string]any{"namespace": "^default$"},
 		}, false},
-		{"invalid regex", map[string]interface{}{
-			"matchRegex": map[string]interface{}{"env": "[invalid"},
+		{"invalid regex", map[string]any{
+			"matchRegex": map[string]any{"env": "[invalid"},
 		}, false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := channelMatchesAlert(tc.settings, labels, dims); got != tc.want {

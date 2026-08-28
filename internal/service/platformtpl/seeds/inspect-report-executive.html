@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{.Project}} — 巡检摘要</title>
+  <style>
+    body {
+      margin: 0;
+      color: #1f2937;
+      background: #fff;
+      font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 28px 20px 40px; }
+    .title { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
+    .meta { color: #6b7280; font-size: 13px; margin-bottom: 24px; }
+    .score-line {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 16px 0;
+      border-top: 1px solid #e5e7eb;
+      border-bottom: 1px solid #e5e7eb;
+      margin-bottom: 20px;
+    }
+    .score-line .num { font-size: 36px; font-weight: 700; }
+    .score-line.grade-a .num { color: #15803d; }
+    .score-line.grade-b .num { color: #2563eb; }
+    .score-line.grade-c .num { color: #c2410c; }
+    .score-line.grade-d .num { color: #b91c1c; }
+    .score-line .side { color: #6b7280; font-size: 13px; }
+    h2 { font-size: 15px; margin: 0 0 10px; font-weight: 650; }
+    .block { margin-bottom: 22px; }
+    .kv { margin: 0; padding: 0; list-style: none; }
+    .kv li { padding: 6px 0; border-bottom: 1px solid #f3f4f6; }
+    .kv .label { color: #6b7280; display: inline-block; min-width: 72px; }
+    .findings { margin: 0; padding-left: 18px; }
+    .findings li { margin-bottom: 10px; }
+    .crit { color: #b91c1c; font-weight: 650; }
+    .warn { color: #c2410c; font-weight: 650; }
+    .note { color: #6b7280; font-size: 13px; }
+    footer { margin-top: 28px; font-size: 12px; color: #9ca3af; }
+    @media print {
+      .wrap { padding: 0; }
+      @page { margin: 14mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="title">{{.Project}}</p>
+    <p class="meta">巡检摘要 · {{.Timestamp.Format "2006-01-02 15:04"}}{{if .InspectionUser}} · {{.InspectionUser}}{{end}}{{if .Datasource}} · {{.Datasource}}{{end}}</p>
+
+    <div class="score-line {{gradeClass .Grade}}">
+      <span class="num">{{fmtFloat .Score}}</span>
+      <span class="side">等级 {{.Grade}} · 严重 {{.Critical}} · 警告 {{.Warning}} · 正常 {{.Normal}}</span>
+    </div>
+
+    <div class="block">
+      <h2>结论</h2>
+      <p>{{.Summary}}</p>
+      <p class="note">{{.ReportListHint}}</p>
+    </div>
+
+    <div class="block">
+      <h2>关注项</h2>
+      {{if .Findings}}
+      <ol class="findings">
+        {{range .Findings}}
+        <li>
+          <span class="{{if eq .Severity "critical"}}crit{{else}}warn{{end}}">{{statusText .Severity}}</span>
+          — {{.Type}} / {{.Name}}（{{.Count}}）
+          <div class="note">{{.Hint}}</div>
+        </li>
+        {{end}}
+      </ol>
+      {{else}}
+      <p class="note">本期无需要特别关注的异常项。</p>
+      {{end}}
+    </div>
+
+    <div class="block">
+      <h2>分类统计</h2>
+      <ul class="kv">
+        {{range .Groups}}
+        <li>
+          <span class="label">{{.Type}}</span>
+          共 {{.Stats.Total}} · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}}
+        </li>
+        {{end}}
+      </ul>
+    </div>
+
+    <footer>Yunshu · 管理层摘要（不含全量明细表）</footer>
+  </div>
+</body>
+</html>

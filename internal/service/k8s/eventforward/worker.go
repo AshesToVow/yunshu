@@ -46,8 +46,7 @@ func NewWorker(repo interfaces.K8sEventForwardRepository, client *WebhookClient,
 
 func (w *Worker) Start() {
 	w.startOnce.Do(func() {
-		w.wg.Add(1)
-		go w.loop()
+		w.wg.Go(w.loop)
 	})
 }
 
@@ -84,7 +83,6 @@ func (w *Worker) currentSettings() (interval time.Duration, batch, maxRetry int,
 }
 
 func (w *Worker) loop() {
-	defer w.wg.Done()
 	interval, _, _, _ := w.currentSettings()
 	timer := time.NewTimer(interval)
 	defer timer.Stop()

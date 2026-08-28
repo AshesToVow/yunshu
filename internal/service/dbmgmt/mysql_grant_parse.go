@@ -98,7 +98,7 @@ func parseGrantPrivPart(part string) []string {
 
 func sortedMySQLPrivNamesByLen() []string {
 	out := append([]string(nil), allMySQLPrivNames...)
-	for i := 0; i < len(out); i++ {
+	for i := range out {
 		for j := i + 1; j < len(out); j++ {
 			if len(out[j]) > len(out[i]) {
 				out[i], out[j] = out[j], out[i]

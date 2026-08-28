@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"yunshu/internal/pkg/constants"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
 	"gorm.io/gorm"
@@ -447,7 +447,7 @@ func (s *AlertRuleAssigneeService) PruneUserFromAllAssignees(ctx context.Context
 		if len(filtered) == len(ids) {
 			continue
 		}
-		if err := s.repo.UpdateFields(ctx, rows[i].ID, map[string]interface{}{
+		if err := s.repo.UpdateFields(ctx, rows[i].ID, map[string]any{
 			"user_ids_json": marshalUintSliceJSON(filtered),
 		}); err != nil {
 			return bizerrors.Pass(ctx, "alert.assignee", "PruneUserFromAllAssignees", err)
@@ -479,7 +479,7 @@ func (s *AlertRuleAssigneeService) PruneDepartmentFromAllAssignees(ctx context.C
 		if len(filtered) == len(ids) {
 			continue
 		}
-		if err := s.repo.UpdateFields(ctx, rows[i].ID, map[string]interface{}{
+		if err := s.repo.UpdateFields(ctx, rows[i].ID, map[string]any{
 			"department_ids_json": marshalUintSliceJSON(filtered),
 		}); err != nil {
 			return bizerrors.Pass(ctx, "alert.assignee", "PruneDepartmentFromAllAssignees", err)

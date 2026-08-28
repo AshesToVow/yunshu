@@ -7,7 +7,7 @@ import (
 	"yunshu/internal/pkg/parseutil"
 )
 
-func buildWechatPayload(title string, message string, payload map[string]interface{}, settings map[string]interface{}, atMobiles []string, atUsers []string) map[string]interface{} {
+func buildWechatPayload(title string, message string, payload map[string]any, settings map[string]any, atMobiles []string, atUsers []string) map[string]any {
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", settings["wecomMode"])))
 	if mode == "" {
 		mode = "robot"
@@ -19,9 +19,9 @@ func buildWechatPayload(title string, message string, payload map[string]interfa
 	isAtAll := parseutil.ParseBool(settings["isAtAll"])
 
 	if mode == "robot" && (len(atMobiles) > 0 || len(atUsers) > 0 || isAtAll) {
-		return map[string]interface{}{
+		return map[string]any{
 			"msgtype": "text",
-			"text": map[string]interface{}{
+			"text": map[string]any{
 				"content":               content,
 				"mentioned_list":        atUsers,
 				"mentioned_mobile_list": atMobiles,
@@ -29,7 +29,7 @@ func buildWechatPayload(title string, message string, payload map[string]interfa
 		}
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"msgtype": "markdown",
 		"markdown": map[string]string{
 			"content": content,
@@ -37,16 +37,16 @@ func buildWechatPayload(title string, message string, payload map[string]interfa
 	}
 }
 
-func buildDingTalkPayload(title string, message string, payload map[string]interface{}, settings map[string]interface{}, atMobiles []string, atUsers []string) map[string]interface{} {
+func buildDingTalkPayload(title string, message string, payload map[string]any, settings map[string]any, atMobiles []string, atUsers []string) map[string]any {
 	text := message
 	isAtAll := parseutil.ParseBool(settings["isAtAll"])
-	return map[string]interface{}{
+	return map[string]any{
 		"msgtype": "markdown",
 		"markdown": map[string]string{
 			"title": title,
 			"text":  text,
 		},
-		"at": map[string]interface{}{
+		"at": map[string]any{
 			"atMobiles": parseutil.UniqueStrings(atMobiles),
 			"atUserIds": parseutil.UniqueStrings(atUsers),
 			"isAtAll":   isAtAll,

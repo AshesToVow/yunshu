@@ -185,6 +185,9 @@ func (s *Service) createPendingRelease(
 	if err := s.initReleaseApprovalSteps(ctx, &release); err != nil {
 		return nil, err
 	}
+	if err := s.createReleaseWorkflowTickets(ctx, &release); err != nil {
+		return nil, err
+	}
 	if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
 		return nil, err
 	}
@@ -388,6 +391,15 @@ func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, 
 	if release.Status != model.CicdRunStatusPendingApproval {
 		return nil, constants.ErrBadRequestWithMsg("仅待审核工单可审批通过")
 	}
+	if s.workflowEngine().HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, runID, model.WorkflowTicketTypeRelease) {
+		if err := s.reviewReleaseViaWorkflow(ctx, &release, true, comment, actor); err != nil {
+			return nil, err
+		}
+		if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+			return nil, err
+		}
+		return &release, nil
+	}
 	hasSteps, err := s.hasApprovalSteps(ctx, runID)
 	if err != nil {
 		return nil, err
@@ -450,6 +462,15 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, a
 	}
 	if release.Status != model.CicdRunStatusPendingApproval {
 		return nil, constants.ErrBadRequestWithMsg("仅待审核工单可驳回")
+	}
+	if s.workflowEngine().HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, runID, model.WorkflowTicketTypeRelease) {
+		if err := s.reviewReleaseViaWorkflow(ctx, &release, false, comment, actor); err != nil {
+			return nil, err
+		}
+		if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+			return nil, err
+		}
+		return &release, nil
 	}
 	hasSteps, err := s.hasApprovalSteps(ctx, runID)
 	if err != nil {

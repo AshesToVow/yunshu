@@ -128,7 +128,7 @@ func assembleCJKPDFPages(pageStreams []string, pageW, pageH float64) []byte {
 	const fixedObjs = 5
 	nPages := len(pageStreams)
 	kids := make([]string, 0, nPages)
-	for i := 0; i < nPages; i++ {
+	for i := range nPages {
 		pageObj := fixedObjs + 1 + i*2
 		kids = append(kids, fmt.Sprintf("%d 0 R", pageObj))
 	}

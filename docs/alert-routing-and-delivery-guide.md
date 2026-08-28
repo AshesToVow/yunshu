@@ -238,7 +238,9 @@ sequenceDiagram
 
 [订阅路由]
   project_id → 选根 → 各节点：匹配级别 AND match_labels AND match_regex
-  → 接收组（在生效时间内）→ 通道 ID 集合
+  → 接收组（在生效时间内）→ 按 EscalationLevel 过滤 → 通道 ID 集合
+  → firing 成功投递后：若存在更高层级接收组，按 EscalationDelaySeconds 排队升级
+  → 认领 / 恢复 / 静默：取消待升级任务
 
 [通道发送]
   按通道类型发钉钉/企微/邮件等；邮件通道对「处理人邮箱」有特殊合并逻辑（见第 5 节）
@@ -246,6 +248,20 @@ sequenceDiagram
 [落库]
   alert_events 记录每次外发或抑制原因
 ```
+
+### 4.1 告警升级（EscalationLevel）
+
+| 字段 | 含义 |
+|------|------|
+| `escalation_level` | `0`=首次 firing 立即通知；`1+`=升级层 |
+| `escalation_delay_seconds` | 进入该层前等待秒数（仅 `level≥1`；`0` 表示默认 900 秒） |
+
+行为要点：
+
+1. 首次投递只通知 **当前层级**（初始为 0）的接收组，不再把所有层级一并外发。  
+2. 投递成功（或本层无通道）后，若匹配结果中存在 `level=当前+1` 的接收组，则写入 Redis 升级队列。  
+3. timing worker 到期后：若仍 firing、未认领、未静默，则将该指纹层级提升并只通知该层接收组。  
+4. 恢复通知通知 **已到达层级及以下** 的接收组。
 
 ---
 

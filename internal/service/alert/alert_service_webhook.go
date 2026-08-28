@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"yunshu/internal/repository"
 )
 
-func (s *AlertService) logSilenceSuppressed(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, silenceID uint, payload map[string]interface{}) {
+func (s *AlertService) logSilenceSuppressed(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, silenceID uint, payload map[string]any) {
 	reqBytes, _ := json.Marshal(payload)
 	event := model.AlertEvent{
 		Source:          alertEventSourceFromPayload(payload),
@@ -37,7 +38,7 @@ func (s *AlertService) logSilenceSuppressed(ctx context.Context, title, severity
 	_ = s.persistAlertEvent(ctx, &event)
 }
 
-func (s *AlertService) logNoMatchedChannel(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, payload map[string]interface{}, reason string) {
+func (s *AlertService) logNoMatchedChannel(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, payload map[string]any, reason string) {
 	reqBytes, _ := json.Marshal(payload)
 	event := model.AlertEvent{
 		Source:             alertEventSourceFromPayload(payload),
@@ -62,7 +63,7 @@ func (s *AlertService) logNoMatchedChannel(ctx context.Context, title, severity,
 	_ = s.persistAlertEvent(ctx, &event)
 }
 
-func (s *AlertService) logAllChannelsDeliveryFailed(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, payload map[string]interface{}) {
+func (s *AlertService) logAllChannelsDeliveryFailed(ctx context.Context, title, severity, status, cluster, groupKey, labelsDigest string, payload map[string]any) {
 	reqBytes, _ := json.Marshal(payload)
 	event := model.AlertEvent{
 		Source:             alertEventSourceFromPayload(payload),
@@ -132,7 +133,7 @@ func normalizeK8sEventIngressPayload(p *AlertManagerPayload) {
 	}
 }
 
-func alertEventSourceFromPayload(payload map[string]interface{}) string {
+func alertEventSourceFromPayload(payload map[string]any) string {
 	if payload == nil {
 		return "yunshu"
 	}
@@ -237,7 +238,7 @@ func (s *AlertService) resolveAlertDatasourceMeta(ctx context.Context, labels ma
 	return 0, dsName, dsType, "alertmanager"
 }
 
-func fillAlertEventDatasourceFromPayload(ev *model.AlertEvent, payload map[string]interface{}) {
+func fillAlertEventDatasourceFromPayload(ev *model.AlertEvent, payload map[string]any) {
 	if ev == nil || payload == nil {
 		return
 	}
@@ -255,7 +256,7 @@ func fillAlertEventDatasourceFromPayload(ev *model.AlertEvent, payload map[strin
 			ev.ProjectID = id
 		} else if id := payloadUintAny(payload["projectId"]); id > 0 {
 			ev.ProjectID = id
-		} else if labels, ok := payload["labels"].(map[string]interface{}); ok {
+		} else if labels, ok := payload["labels"].(map[string]any); ok {
 			if id := payloadUintAny(labels["project_id"]); id > 0 {
 				ev.ProjectID = id
 			}
@@ -265,7 +266,7 @@ func fillAlertEventDatasourceFromPayload(ev *model.AlertEvent, payload map[strin
 			}
 		}
 		if ev.ProjectID == 0 {
-			if cloud, ok := payload["cloud"].(map[string]interface{}); ok {
+			if cloud, ok := payload["cloud"].(map[string]any); ok {
 				if id := payloadUintAny(cloud["project_id"]); id > 0 {
 					ev.ProjectID = id
 				}
@@ -275,7 +276,7 @@ func fillAlertEventDatasourceFromPayload(ev *model.AlertEvent, payload map[strin
 	fillAlertEventFingerprintFromPayload(ev, payload)
 }
 
-func fillAlertEventFingerprintFromPayload(ev *model.AlertEvent, payload map[string]interface{}) {
+func fillAlertEventFingerprintFromPayload(ev *model.AlertEvent, payload map[string]any) {
 	if ev == nil || strings.TrimSpace(ev.Fingerprint) != "" {
 		return
 	}
@@ -284,7 +285,7 @@ func fillAlertEventFingerprintFromPayload(ev *model.AlertEvent, payload map[stri
 			ev.Fingerprint = truncateText(s, 512)
 			return
 		}
-		if labels, ok := payload["labels"].(map[string]interface{}); ok {
+		if labels, ok := payload["labels"].(map[string]any); ok {
 			if s := strings.TrimSpace(fmt.Sprintf("%v", labels["fingerprint"])); s != "" && s != "<nil>" {
 				ev.Fingerprint = truncateText(s, 512)
 				return
@@ -302,7 +303,7 @@ func fillAlertEventFingerprintFromPayload(ev *model.AlertEvent, payload map[stri
 	}
 }
 
-func payloadUintAny(v interface{}) uint {
+func payloadUintAny(v any) uint {
 	if v == nil {
 		return 0
 	}
@@ -364,7 +365,7 @@ func (s *AlertService) resolveAlertEnvironmentLabel(labels map[string]string, re
 	return envLabel
 }
 
-func monitorPipelineFromPayload(payload map[string]interface{}) string {
+func monitorPipelineFromPayload(payload map[string]any) string {
 	if payload == nil {
 		return ""
 	}
@@ -380,12 +381,8 @@ func mergeStringMap(base, override map[string]string) map[string]string {
 		return map[string]string{}
 	}
 	out := make(map[string]string, len(base)+len(override))
-	for k, v := range base {
-		out[k] = v
-	}
-	for k, v := range override {
-		out[k] = v
-	}
+	maps.Copy(out, base)
+	maps.Copy(out, override)
 	return out
 }
 

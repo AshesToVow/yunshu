@@ -53,7 +53,7 @@ func NormalizeRecipientList(v any) []string {
 		rv := reflect.ValueOf(v)
 		if rv.Kind() == reflect.Slice {
 			var out []string
-			for i := 0; i < rv.Len(); i++ {
+			for i := range rv.Len() {
 				out = append(out, NormalizeRecipientList(rv.Index(i).Interface())...)
 			}
 			return out

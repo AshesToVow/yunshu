@@ -7,9 +7,6 @@ const DbmgmtInstancesPage = lazy(() =>
 const DbmgmtInstanceDetailPage = lazy(() =>
   import("../../pages/dbmgmt-instance-detail-page").then((m) => ({ default: m.DbmgmtInstanceDetailPage })),
 );
-const DbmgmtConsolePage = lazy(() =>
-  import("../../pages/dbmgmt-console-page").then((m) => ({ default: m.DbmgmtConsolePage })),
-);
 const DbmgmtSqlQueryPage = lazy(() =>
   import("../../pages/dbmgmt-console-page").then((m) => ({ default: m.DbmgmtSqlQueryPage })),
 );
@@ -24,18 +21,6 @@ const DbmgmtDatabaseApplyPage = lazy(() =>
 );
 const DbmgmtAppUserApplyPage = lazy(() =>
   import("../../pages/dbmgmt-app-user-apply-page").then((m) => ({ default: m.DbmgmtAppUserApplyPage })),
-);
-const DbmgmtTodoPage = lazy(() =>
-  import("../../pages/dbmgmt-todo-page").then((m) => ({ default: m.DbmgmtTodoPage })),
-);
-const DbmgmtWorkflowPendingPage = lazy(() =>
-  import("../../pages/dbmgmt-todo-page").then((m) => ({ default: m.DbmgmtWorkflowPendingPage })),
-);
-const DbmgmtApprovalFlowPage = lazy(() =>
-  import("../../pages/dbmgmt-approval-flow-page").then((m) => ({ default: m.DbmgmtApprovalFlowPage })),
-);
-const DbmgmtTicketsPage = lazy(() =>
-  import("../../pages/dbmgmt-tickets-page").then((m) => ({ default: m.DbmgmtTicketsPage })),
 );
 const DbmgmtWorkflowHistoryPage = lazy(() =>
   import("../../pages/dbmgmt-tickets-page").then((m) => ({ default: m.DbmgmtWorkflowHistoryPage })),
@@ -64,10 +49,10 @@ export const dbmgmtRoutes: RouteObject[] = [
   { path: "dbmgmt/apply/query-grants", element: <DbmgmtQueryGrantsPage /> },
   { path: "dbmgmt/sql/query", element: <DbmgmtSqlQueryPage /> },
   { path: "dbmgmt/sql/audit", element: <DbmgmtSqlAuditPage /> },
-  { path: "dbmgmt/workflow/pending", element: <DbmgmtWorkflowPendingPage /> },
+  { path: "dbmgmt/workflow/pending", element: <Navigate to="/workflow/inbox?domain=dbmgmt" replace /> },
   { path: "dbmgmt/workflow/history", element: <DbmgmtWorkflowHistoryPage /> },
   { path: "dbmgmt/workflow/tickets/:ticketId", element: <DbmgmtTicketDetailPage /> },
-  { path: "dbmgmt/approval-flow", element: <DbmgmtApprovalFlowPage /> },
+  { path: "dbmgmt/approval-flow", element: <Navigate to="/workflow/definitions?domain=dbmgmt" replace /> },
   { path: "dbmgmt/audit", element: <DbmgmtAuditPage /> },
   { path: "dbmgmt/grants", element: <DbmgmtGrantsPage /> },
   // 旧路径兼容
@@ -75,6 +60,6 @@ export const dbmgmtRoutes: RouteObject[] = [
   { path: "dbmgmt/access-requests", element: <Navigate to="/dbmgmt/apply/query" replace /> },
   { path: "dbmgmt/access-request", element: <Navigate to="/dbmgmt/apply/query" replace /> },
   { path: "dbmgmt/access-requests/all", element: <Navigate to="/dbmgmt/apply/query" replace /> },
-  { path: "dbmgmt/todo", element: <Navigate to="/dbmgmt/workflow/pending" replace /> },
+  { path: "dbmgmt/todo", element: <Navigate to="/workflow/inbox?domain=dbmgmt" replace /> },
   { path: "dbmgmt/tickets", element: <Navigate to="/dbmgmt/workflow/history" replace /> },
 ];

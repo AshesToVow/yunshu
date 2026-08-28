@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -196,7 +197,7 @@ func pickReplicaSetForUndo(dep *appsv1.Deployment, items []appsv1.ReplicaSet, re
 }
 
 func sortReplicaSetsByRevisionDesc(items []appsv1.ReplicaSet) {
-	for i := 0; i < len(items); i++ {
+	for i := range items {
 		for j := i + 1; j < len(items); j++ {
 			ri, _ := strconv.ParseInt(items[i].Annotations["deployment.kubernetes.io/revision"], 10, 64)
 			rj, _ := strconv.ParseInt(items[j].Annotations["deployment.kubernetes.io/revision"], 10, 64)
@@ -221,7 +222,7 @@ func pickControllerRevision(items []appsv1.ControllerRevision, revision int64) (
 	if len(items) == 0 {
 		return nil, fmt.Errorf("无 ControllerRevision")
 	}
-	for i := 0; i < len(items); i++ {
+	for i := range items {
 		for j := i + 1; j < len(items); j++ {
 			if items[j].Revision > items[i].Revision {
 				items[i], items[j] = items[j], items[i]
@@ -247,8 +248,6 @@ func copyStrMap(in map[string]string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }

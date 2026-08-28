@@ -285,13 +285,11 @@ func StartSSHTunnel(sshClient *ssh.Client, localHost string, localPort int, remo
 		listener:   ln,
 		closed:     make(chan struct{}),
 	}
-	t.wg.Add(1)
-	go t.acceptLoop()
+	t.wg.Go(t.acceptLoop)
 	return t, nil
 }
 
 func (t *SSHTunnel) acceptLoop() {
-	defer t.wg.Done()
 	for {
 		conn, err := t.listener.Accept()
 		if err != nil {
@@ -302,13 +300,11 @@ func (t *SSHTunnel) acceptLoop() {
 			}
 			return
 		}
-		t.wg.Add(1)
-		go t.handleConn(conn)
+		t.wg.Go(func() { t.handleConn(conn) })
 	}
 }
 
 func (t *SSHTunnel) handleConn(local net.Conn) {
-	defer t.wg.Done()
 	defer local.Close()
 	remote, err := t.SSHClient.Dial("tcp", fmt.Sprintf("%s:%d", t.RemoteHost, t.RemotePort))
 	if err != nil {

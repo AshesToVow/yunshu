@@ -27,6 +27,9 @@ func Sync(ctx context.Context, db *gorm.DB) error {
 	if err := removeChangeGovernanceMenus(ctx, db); err != nil {
 		return err
 	}
+	if err := removeScatteredWorkflowMenus(ctx, db); err != nil {
+		return err
+	}
 	if err := reparentExtractedMenus(ctx, db); err != nil {
 		return err
 	}
@@ -347,6 +350,22 @@ func removeApplicationTopologyMenus(ctx context.Context, db *gorm.DB) error {
 // removeChangeGovernanceMenus 移除已下线的变更事件 / 变更中心 / 故障工作台菜单。
 func removeChangeGovernanceMenus(ctx context.Context, db *gorm.DB) error {
 	paths := []string{"/change-events", "/change-center", "/incident-workbench"}
+	return deleteMenusByPaths(ctx, db, paths)
+}
+
+// removeScatteredWorkflowMenus 各业务域待办/审批流已统一到工单中心，删除分散入口。
+func removeScatteredWorkflowMenus(ctx context.Context, db *gorm.DB) error {
+	paths := []string{
+		"/dbmgmt/workflow/pending",
+		"/dbmgmt/approval-flow",
+		"/dbmgmt/todo",
+		"/cicd/todo",
+		"/cicd/approval-flow",
+	}
+	return deleteMenusByPaths(ctx, db, paths)
+}
+
+func deleteMenusByPaths(ctx context.Context, db *gorm.DB, paths []string) error {
 	var obsolete []model.Menu
 	if err := db.WithContext(ctx).Where("path IN ?", paths).Find(&obsolete).Error; err != nil {
 		return err
@@ -507,7 +526,7 @@ func cleanupDuplicateRootMenu(ctx context.Context, db *gorm.DB, spec rootMenuDed
 		}
 	}
 
-	return db.WithContext(ctx).Model(&model.Menu{}).Where("id = ?", keepID).Updates(map[string]interface{}{
+	return db.WithContext(ctx).Model(&model.Menu{}).Where("id = ?", keepID).Updates(map[string]any{
 		"name": spec.keepName,
 		"icon": spec.keepIcon,
 		"sort": spec.keepSort,

@@ -8,13 +8,11 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-
-	"gorm.io/gorm"
+	workflowsvc "yunshu/internal/service/workflow"
 )
 
 type ApprovalFlowStageItem struct {
@@ -83,31 +81,23 @@ func normalizeDbStageKey(raw string) (string, error) {
 	return key, nil
 }
 
+func (s *Service) workflowEngine() *workflowsvc.Service {
+	return workflowsvc.NewService(s.db, s.userGroupRepo, nil, s.userRepo)
+}
+
 func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*ApprovalFlowResponse, error) {
-	rows, err := s.repo.ListApprovalFlowStages(ctx, projectID)
+	def, err := s.workflowEngine().GetDefinition(ctx, workflowsvc.DefinitionKey{
+		Domain: model.WorkflowDomainDbmgmt, ProjectID: projectID,
+	}, workflowsvc.DefaultDbmgmtStages())
 	if err != nil {
 		return nil, err
 	}
-	if len(rows) == 0 {
-		items := make([]ApprovalFlowStageItem, 0, len(defaultDbApprovalStages))
-		for _, d := range defaultDbApprovalStages {
-			items = append(items, ApprovalFlowStageItem{
-				StageKey: d.Key, StageName: d.Name, SortOrder: d.Sort, Enabled: false,
-			})
-		}
-		return &ApprovalFlowResponse{ProjectID: projectID, Stages: items}, nil
-	}
-	groupNames := s.loadUserGroupNameMap(ctx, rows)
-	items := make([]ApprovalFlowStageItem, 0, len(rows))
-	for _, row := range rows {
-		item := ApprovalFlowStageItem{
-			StageKey: row.StageKey, StageName: row.StageName, SortOrder: row.SortOrder,
-			Enabled: row.Enabled, UserGroupID: row.UserGroupID,
-		}
-		if row.UserGroupID != nil {
-			item.UserGroupName = groupNames[*row.UserGroupID]
-		}
-		items = append(items, item)
+	items := make([]ApprovalFlowStageItem, 0, len(def.Stages))
+	for _, st := range def.Stages {
+		items = append(items, ApprovalFlowStageItem{
+			StageKey: st.StageKey, StageName: st.StageName, SortOrder: st.SortOrder,
+			Enabled: st.Enabled, UserGroupID: st.UserGroupID, UserGroupName: st.UserGroupName,
+		})
 	}
 	return &ApprovalFlowResponse{ProjectID: projectID, Stages: items}, nil
 }
@@ -116,90 +106,17 @@ func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req Ap
 	if err := s.requireProjectAdminOrOwner(ctx, projectID, actor); err != nil {
 		return nil, err
 	}
-	type normalizedStage struct {
-		Key         string
-		Name        string
-		Sort        int
-		Enabled     bool
-		UserGroupID *uint
-	}
-	normalized := make([]normalizedStage, 0, len(req.Stages))
-	seen := map[string]struct{}{}
-	for i, st := range req.Stages {
-		key, err := normalizeDbStageKey(st.StageKey)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := seen[key]; ok {
-			return nil, constants.ErrBadRequestWithMsg("审批节点 Key 重复: " + key)
-		}
-		seen[key] = struct{}{}
-		name := strings.TrimSpace(st.StageName)
-		if name == "" {
-			name = dbStageNameByKey(key)
-		}
-		if utf8.RuneCountInString(name) > 64 {
-			return nil, constants.ErrBadRequestWithMsg("审批节点名称过长: " + name)
-		}
-		if st.Enabled && (st.UserGroupID == nil || *st.UserGroupID == 0) {
-			return nil, constants.ErrBadRequestWithMsg("启用的审批节点须绑定用户组: " + name)
-		}
-		if st.UserGroupID != nil && *st.UserGroupID > 0 {
-			if _, err := s.userGroupRepo.GetByID(ctx, *st.UserGroupID); err != nil {
-				return nil, constants.ErrBadRequestWithMsg("用户组不存在")
-			}
-		}
-		sortOrder := st.SortOrder
-		if sortOrder <= 0 {
-			sortOrder = i + 1
-		}
-		var groupID *uint
-		if st.UserGroupID != nil && *st.UserGroupID > 0 {
-			groupID = st.UserGroupID
-		}
-		normalized = append(normalized, normalizedStage{
-			Key: key, Name: name, Sort: sortOrder, Enabled: st.Enabled, UserGroupID: groupID,
+	stages := make([]workflowsvc.StageUpsertItem, 0, len(req.Stages))
+	for _, st := range req.Stages {
+		stages = append(stages, workflowsvc.StageUpsertItem{
+			StageKey: st.StageKey, StageName: st.StageName, SortOrder: st.SortOrder,
+			Enabled: st.Enabled, AssigneeRuleType: model.WorkflowAssigneeUserGroup,
+			UserGroupID: st.UserGroupID,
 		})
 	}
-	if len(normalized) == 0 {
-		return nil, constants.ErrBadRequestWithMsg("至少保留一个审批节点")
-	}
-	keys := make([]string, 0, len(normalized))
-	for _, st := range normalized {
-		keys = append(keys, st.Key)
-	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, st := range normalized {
-			var existing model.DbApprovalFlowStage
-			err := tx.Where("project_id = ? AND stage_key = ?", projectID, st.Key).First(&existing).Error
-			if err == gorm.ErrRecordNotFound {
-				row := model.DbApprovalFlowStage{
-					ProjectID: projectID, StageKey: st.Key, StageName: st.Name, SortOrder: st.Sort,
-					Enabled: st.Enabled, UserGroupID: st.UserGroupID,
-				}
-				if err := tx.Create(&row).Error; err != nil {
-					return err
-				}
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			if err := tx.Model(&existing).Updates(map[string]any{
-				"stage_name":    st.Name,
-				"sort_order":    st.Sort,
-				"enabled":       st.Enabled,
-				"user_group_id": st.UserGroupID,
-			}).Error; err != nil {
-				return err
-			}
-		}
-		q := tx.Where("project_id = ?", projectID)
-		if len(keys) > 0 {
-			q = q.Where("stage_key NOT IN ?", keys)
-		}
-		return q.Delete(&model.DbApprovalFlowStage{}).Error
-	})
+	_, err := s.workflowEngine().UpsertDefinition(ctx, workflowsvc.DefinitionKey{
+		Domain: model.WorkflowDomainDbmgmt, ProjectID: projectID,
+	}, workflowsvc.DefinitionUpsertRequest{Stages: stages})
 	if err != nil {
 		return nil, err
 	}
@@ -207,10 +124,7 @@ func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req Ap
 }
 
 func (s *Service) loadEnabledFlowStages(ctx context.Context, projectID uint) ([]model.DbApprovalFlowStage, error) {
-	var rows []model.DbApprovalFlowStage
-	err := s.db.WithContext(ctx).Where("project_id = ? AND enabled = ?", projectID, true).
-		Order("sort_order ASC, id ASC").Find(&rows).Error
-	return rows, err
+	return workflowsvc.EnabledLegacyDbmgmtStages(ctx, s.db, s.userGroupRepo, projectID)
 }
 
 func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.DbApprovalFlowStage) map[uint]string {
@@ -270,50 +184,18 @@ func (s *Service) forbidSelfApprove(ctx context.Context, actor *auth.CurrentUser
 }
 
 func (s *Service) initAccessRequestSteps(ctx context.Context, req *model.DbAccessRequest) error {
-	stages, err := s.loadEnabledFlowStages(ctx, req.ProjectID)
-	if err != nil {
+	if err := s.createDbmgmtWorkflowTicket(ctx, model.WorkflowTicketTypeAccess, model.WorkflowRefDbAccessRequest,
+		accessRequestWorkflowTitle(req), req.ProjectID, req.ID, req.RequesterUserID); err != nil {
 		return err
-	}
-	if len(stages) == 0 {
-		return constants.ErrBadRequestWithMsg("请先在「审批流配置」中启用至少一级审批后再提交权限申请")
-	}
-	now := time.Now()
-	for i, st := range stages {
-		step := &model.DbAccessRequestStep{
-			AccessRequestID: req.ID, StageKey: st.StageKey, StageName: st.StageName,
-			SortOrder: st.SortOrder, Status: model.DbApprovalStepPending, UserGroupID: st.UserGroupID,
-		}
-		if i == 0 {
-			step.ActivatedAt = &now
-		}
-		if err := s.repo.CreateAccessRequestStep(ctx, step); err != nil {
-			return err
-		}
 	}
 	req.Status = model.DbAccessRequestStatusPending
 	return s.repo.UpdateAccessRequest(ctx, req)
 }
 
 func (s *Service) initSqlTicketSteps(ctx context.Context, ticket *model.DbSqlTicket) error {
-	stages, err := s.loadEnabledFlowStages(ctx, ticket.ProjectID)
-	if err != nil {
+	if err := s.createDbmgmtWorkflowTicket(ctx, model.WorkflowTicketTypeSql, model.WorkflowRefDbSqlTicket,
+		sqlTicketWorkflowTitle(ticket), ticket.ProjectID, ticket.ID, ticket.SubmitterUserID); err != nil {
 		return err
-	}
-	if len(stages) == 0 {
-		return constants.ErrBadRequestWithMsg("请先在「审批流配置」中启用至少一级审批后再提交 SQL 工单")
-	}
-	now := time.Now()
-	for i, st := range stages {
-		step := &model.DbSqlTicketStep{
-			TicketID: ticket.ID, StageKey: st.StageKey, StageName: st.StageName,
-			SortOrder: st.SortOrder, Status: model.DbApprovalStepPending, UserGroupID: st.UserGroupID,
-		}
-		if i == 0 {
-			step.ActivatedAt = &now
-		}
-		if err := s.repo.CreateSqlTicketStep(ctx, step); err != nil {
-			return err
-		}
 	}
 	ticket.Status = model.DbTicketStatusPendingApproval
 	return s.repo.UpdateSqlTicket(ctx, ticket)

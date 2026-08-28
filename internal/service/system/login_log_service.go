@@ -6,10 +6,10 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
-	bizerrors "yunshu/internal/pkg/errors"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -84,9 +84,9 @@ func (s *LoginLogService) Export(ctx context.Context, query LoginLogListQuery, w
 	}
 	f := excelize.NewFile()
 	sheet := "Sheet1"
-	_ = f.SetSheetRow(sheet, "A1", &[]interface{}{"ID", "Username", "IP", "Source", "Status", "Detail", "UserAgent", "CreatedAt"})
+	_ = f.SetSheetRow(sheet, "A1", &[]any{"ID", "Username", "IP", "Source", "Status", "Detail", "UserAgent", "CreatedAt"})
 	for i, l := range list {
-		row := []interface{}{l.ID, l.Username, l.IP, l.Source, l.Status, l.Detail, l.UserAgent, l.CreatedAt}
+		row := []any{l.ID, l.Username, l.IP, l.Source, l.Status, l.Detail, l.UserAgent, l.CreatedAt}
 		cell, _ := excelize.CoordinatesToCellName(1, i+2)
 		_ = f.SetSheetRow(sheet, cell, &row)
 	}

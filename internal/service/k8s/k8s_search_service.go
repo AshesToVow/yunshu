@@ -11,12 +11,12 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
-	"yunshu/internal/pkg/k8sauth"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/repository"
 
-	corev1 "k8s.io/api/core/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 )
 
@@ -75,16 +75,13 @@ func (s *K8sSearchService) Search(ctx context.Context, q K8sSearchQuery) ([]K8sS
 		return nil, err
 	}
 	var (
-		mu    sync.Mutex
-		wg    sync.WaitGroup
-		out   []K8sSearchItem
-		sem   = make(chan struct{}, 5)
+		mu  sync.Mutex
+		wg  sync.WaitGroup
+		out []K8sSearchItem
+		sem = make(chan struct{}, 5)
 	)
 	for _, cl := range clusters {
-		cl := cl
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -96,7 +93,7 @@ func (s *K8sSearchService) Search(ctx context.Context, q K8sSearchQuery) ([]K8sS
 			mu.Lock()
 			out = append(out, items...)
 			mu.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 	if len(out) > limit*4 {
@@ -111,7 +108,7 @@ func parseSearchTypes(raw string) map[string]bool {
 		return map[string]bool{"pod": true, "service": true, "ingress": true, "event": true, "deployment": true, "configmap": true, "namespace": true}
 	}
 	out := map[string]bool{}
-	for _, p := range strings.Split(raw, ",") {
+	for p := range strings.SplitSeq(raw, ",") {
 		p = strings.TrimSpace(p)
 		if p != "" {
 			out[p] = true

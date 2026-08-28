@@ -108,9 +108,15 @@ export function LoginPage() {
 
   const fromPath = (location.state as LocationState | null)?.from ?? "/";
 
-  async function refreshPasswordCaptcha(options?: { silent?: boolean; requireUsername?: boolean }) {
+  async function refreshPasswordCaptcha(options?: {
+    silent?: boolean;
+    requireUsername?: boolean;
+    /** 登录失败后强制换新图：先清空旧图，避免冷却失败时仍展示已作废验证码 */
+    afterLoginFailure?: boolean;
+  }) {
     const silent = options?.silent === true;
     const requireUsername = options?.requireUsername !== false;
+    const afterLoginFailure = options?.afterLoginFailure === true;
     const zh = langMode === "zh";
     try {
       const username = passwordForm.getFieldValue("username");
@@ -121,6 +127,12 @@ export function LoginPage() {
         return false;
       }
 
+      if (afterLoginFailure) {
+        setCaptchaKey("");
+        setCaptchaImage(null);
+        passwordForm.setFieldsValue({ captcha_key: undefined, code: undefined });
+      }
+
       setSendingCode(true);
       const result: SendPasswordLoginCodeResult = await sendPasswordLoginCode({ username });
       setCaptchaKey(result.captcha_key);
@@ -129,11 +141,18 @@ export function LoginPage() {
       if (!silent) {
         message.success(zh ? "验证码已生成" : "Captcha generated");
       }
-      setPasswordCodeCountdown(60);
+      if (!afterLoginFailure) {
+        setPasswordCodeCountdown(60);
+      }
       return true;
     } catch (e) {
       if (!silent) {
         message.error(extractApiErrorMessage(e, zh ? "生成验证码失败" : "Failed to generate captcha"));
+      }
+      if (afterLoginFailure) {
+        setCaptchaKey("");
+        setCaptchaImage(null);
+        passwordForm.setFieldsValue({ captcha_key: undefined, code: undefined });
       }
       return false;
     } finally {
@@ -214,7 +233,9 @@ export function LoginPage() {
     void runLogin(
       passwordLoginAction as (p: PasswordLoginPayload) => Promise<unknown>,
       payload,
-      () => refreshPasswordCaptcha({ silent: true, requireUsername: false }),
+      async () => {
+        await refreshPasswordCaptcha({ silent: true, requireUsername: false, afterLoginFailure: true });
+      },
     );
   }
 

@@ -33,6 +33,8 @@ export interface AlertReceiverGroup {
   active_time_end?: string | null;
   weekdays_json?: string;
   escalation_level: number;
+  /** 进入本层前等待秒数（仅 level≥1；0 表示默认 900） */
+  escalation_delay_seconds?: number;
   enabled: boolean;
   channel_ids?: number[];
   email_recipients?: string[];

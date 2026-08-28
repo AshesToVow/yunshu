@@ -8,7 +8,7 @@ import (
 )
 
 // channelNotifyFunc 单类 Webhook 通道投递（钉钉/企微/通用 Webhook）；邮件走独立 sendEmailChannel。
-type channelNotifyFunc func(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]interface{}, settings map[string]interface{}) (int, string, error)
+type channelNotifyFunc func(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]any, settings map[string]any) (int, string, error)
 
 func (s *AlertService) buildNotifierRegistry() map[string]channelNotifyFunc {
 	return map[string]channelNotifyFunc{

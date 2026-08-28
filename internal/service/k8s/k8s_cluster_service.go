@@ -11,11 +11,11 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/projectaccess"
 	"yunshu/internal/repository"
-	bizerrors "yunshu/internal/pkg/errors"
 
 	"gorm.io/gorm"
 	corev1 "k8s.io/api/core/v1"
@@ -69,22 +69,22 @@ type K8sClusterSetStatusRequest struct {
 }
 
 type K8sClusterItem struct {
-	ID                        uint          `json:"id"`
-	Name                      string        `json:"name"`
-	OwningProjectID           *uint         `json:"owning_project_id,omitempty"`
-	ConnectionMode            string        `json:"connection_mode,omitempty"`
-	Kubeconfig                string        `json:"kubeconfig,omitempty"`
-	KubeconfigConfigured      bool          `json:"kubeconfig_configured,omitempty"`
-	KubeconfigReadonlyConfigured bool       `json:"kubeconfig_readonly_configured,omitempty"`
-	DirectConfig              *DirectConfig `json:"direct_config,omitempty"`
-	ImpersonateEnabled        bool          `json:"impersonate_enabled"`
-	ImpersonateUserPrefix     string        `json:"impersonate_user_prefix,omitempty"`
-	RequireDestructiveConfirm bool          `json:"require_destructive_confirm"`
-	Status                    int           `json:"status"`
-	AccessPreset              string        `json:"access_preset,omitempty"`
-	AccessRank                int           `json:"access_rank,omitempty"`
-	CreatedAt                 time.Time     `json:"created_at"`
-	UpdatedAt                 time.Time     `json:"updated_at"`
+	ID                           uint          `json:"id"`
+	Name                         string        `json:"name"`
+	OwningProjectID              *uint         `json:"owning_project_id,omitempty"`
+	ConnectionMode               string        `json:"connection_mode,omitempty"`
+	Kubeconfig                   string        `json:"kubeconfig,omitempty"`
+	KubeconfigConfigured         bool          `json:"kubeconfig_configured,omitempty"`
+	KubeconfigReadonlyConfigured bool          `json:"kubeconfig_readonly_configured,omitempty"`
+	DirectConfig                 *DirectConfig `json:"direct_config,omitempty"`
+	ImpersonateEnabled           bool          `json:"impersonate_enabled"`
+	ImpersonateUserPrefix        string        `json:"impersonate_user_prefix,omitempty"`
+	RequireDestructiveConfirm    bool          `json:"require_destructive_confirm"`
+	Status                       int           `json:"status"`
+	AccessPreset                 string        `json:"access_preset,omitempty"`
+	AccessRank                   int           `json:"access_rank,omitempty"`
+	CreatedAt                    time.Time     `json:"created_at"`
+	UpdatedAt                    time.Time     `json:"updated_at"`
 }
 
 type K8sClusterListResponse struct {
@@ -98,8 +98,8 @@ type K8sClusterStatusResponse struct {
 	ServerVersion       string    `json:"server_version"`
 	ConnectionState     string    `json:"connection_state"`
 	LastError           string    `json:"last_error,omitempty"`
-	LastAttemptAt       time.Time `json:"last_attempt_at,omitempty"`
-	LastSuccessAt       time.Time `json:"last_success_at,omitempty"`
+	LastAttemptAt       time.Time `json:"last_attempt_at"`
+	LastSuccessAt       time.Time `json:"last_success_at"`
 	ConsecutiveFailures int       `json:"consecutive_failures"`
 }
 
@@ -295,14 +295,8 @@ func (s *K8sClusterService) List(ctx context.Context, query K8sClusterListQuery)
 		}
 		clusters = filtered
 		total = int64(len(clusters))
-		start := (page - 1) * pageSize
-		if start > len(clusters) {
-			start = len(clusters)
-		}
-		end := start + pageSize
-		if end > len(clusters) {
-			end = len(clusters)
-		}
+		start := min((page-1)*pageSize, len(clusters))
+		end := min(start+pageSize, len(clusters))
 		clusters = clusters[start:end]
 	}
 

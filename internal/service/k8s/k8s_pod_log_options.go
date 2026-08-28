@@ -33,10 +33,7 @@ func buildPodLogOptions(query PodLogsQuery, follow bool) (*corev1.PodLogOptions,
 		opts.SinceTime = &meta
 	}
 	if query.TailLines > 0 {
-		tail := query.TailLines
-		if tail > maxPodLogTailLines {
-			tail = maxPodLogTailLines
-		}
+		tail := min(query.TailLines, maxPodLogTailLines)
 		opts.TailLines = &tail
 	} else if !follow && query.SinceSeconds <= 0 && strings.TrimSpace(query.SinceTime) == "" {
 		tail := int64(300)

@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -21,14 +22,16 @@ type ReceiverGroupCache struct {
 
 // CachedReceiverGroup 缓存的接收组
 type CachedReceiverGroup struct {
-	ID              uint
-	ProjectID       uint
-	Name            string
-	ChannelIDs      []uint
-	EmailRecipients []string
-	ActiveTimeStart *string
-	ActiveTimeEnd   *string
-	Weekdays        []int
+	ID                     uint
+	ProjectID              uint
+	Name                   string
+	ChannelIDs             []uint
+	EmailRecipients        []string
+	ActiveTimeStart        *string
+	ActiveTimeEnd          *string
+	Weekdays               []int
+	EscalationLevel        int
+	EscalationDelaySeconds int
 }
 
 // IsActiveNow 检查接收组当前是否生效
@@ -37,13 +40,7 @@ func (g *CachedReceiverGroup) IsActiveNow() bool {
 
 	if len(g.Weekdays) > 0 {
 		weekday := int(now.Weekday())
-		found := false
-		for _, w := range g.Weekdays {
-			if w == weekday {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(g.Weekdays, weekday)
 		if !found {
 			return false
 		}
@@ -107,14 +104,16 @@ func (c *ReceiverGroupCache) Refresh() error {
 	newGroups := make(map[uint]*CachedReceiverGroup, len(groups))
 	for _, g := range groups {
 		cached := &CachedReceiverGroup{
-			ID:              g.ID,
-			ProjectID:       g.ProjectID,
-			Name:            g.Name,
-			ChannelIDs:      parseUintSliceJSON(g.ChannelIDsJSON),
-			EmailRecipients: parseStringSliceJSON(g.EmailRecipientsJSON),
-			ActiveTimeStart: g.ActiveTimeStart,
-			ActiveTimeEnd:   g.ActiveTimeEnd,
-			Weekdays:        parseIntSliceJSON(g.WeekdaysJSON),
+			ID:                     g.ID,
+			ProjectID:              g.ProjectID,
+			Name:                   g.Name,
+			ChannelIDs:             parseUintSliceJSON(g.ChannelIDsJSON),
+			EmailRecipients:        parseStringSliceJSON(g.EmailRecipientsJSON),
+			ActiveTimeStart:        g.ActiveTimeStart,
+			ActiveTimeEnd:          g.ActiveTimeEnd,
+			Weekdays:               parseIntSliceJSON(g.WeekdaysJSON),
+			EscalationLevel:        g.EscalationLevel,
+			EscalationDelaySeconds: g.EscalationDelaySeconds,
 		}
 		newGroups[g.ID] = cached
 	}

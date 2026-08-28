@@ -113,16 +113,17 @@ func (s *AlertSubscriptionService) CloneProjectRouting(ctx context.Context, req 
 		for i := range srcGroups {
 			g := srcGroups[i]
 			row := model.AlertReceiverGroup{
-				ProjectID:           req.TargetProjectID,
-				Name:                strings.TrimSpace(g.Name),
-				Description:         strings.TrimSpace(g.Description),
-				ChannelIDsJSON:      strings.TrimSpace(g.ChannelIDsJSON),
-				EmailRecipientsJSON: strings.TrimSpace(g.EmailRecipientsJSON),
-				ActiveTimeStart:     g.ActiveTimeStart,
-				ActiveTimeEnd:       g.ActiveTimeEnd,
-				WeekdaysJSON:        strings.TrimSpace(g.WeekdaysJSON),
-				EscalationLevel:     g.EscalationLevel,
-				Enabled:             g.Enabled,
+				ProjectID:              req.TargetProjectID,
+				Name:                   strings.TrimSpace(g.Name),
+				Description:            strings.TrimSpace(g.Description),
+				ChannelIDsJSON:         strings.TrimSpace(g.ChannelIDsJSON),
+				EmailRecipientsJSON:    strings.TrimSpace(g.EmailRecipientsJSON),
+				ActiveTimeStart:        g.ActiveTimeStart,
+				ActiveTimeEnd:          g.ActiveTimeEnd,
+				WeekdaysJSON:           strings.TrimSpace(g.WeekdaysJSON),
+				EscalationLevel:        g.EscalationLevel,
+				EscalationDelaySeconds: g.EscalationDelaySeconds,
+				Enabled:                g.Enabled,
 			}
 			if row.ChannelIDsJSON == "" {
 				row.ChannelIDsJSON = "[]"

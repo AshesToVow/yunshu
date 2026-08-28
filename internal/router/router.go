@@ -44,6 +44,7 @@ func Register(app *bootstrap.App, bgCtx context.Context) (*eventforward.Manager,
 	if err := plugin.RegisterRoutes(api, rt, &app.Config.Plugins); err != nil {
 		return nil, fmt.Errorf("register plugin routes: %w", err)
 	}
+	syncAPIPermissionsOnBoot(d, &app.Config.Plugins)
 	if err := plugin.StartWorkers(bgCtx, rt, &app.Config.Plugins); err != nil {
 		return nil, fmt.Errorf("start plugin workers: %w", err)
 	}

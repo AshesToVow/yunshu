@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 
 	"yunshu/internal/pkg/constants"
@@ -111,10 +112,7 @@ func (s *K8sWorkloadService) ProgressiveEnsureCanaryDeployment(ctx context.Conte
 		}
 		return nil, k8sFail(ctx, "k8s.progressive", "get_stable", err)
 	}
-	replicas := req.CanaryReplicas
-	if replicas < 1 {
-		replicas = 1
-	}
+	replicas := max(req.CanaryReplicas, 1)
 	image := strings.TrimSpace(req.Image)
 
 	var existing appsv1.Deployment
@@ -285,8 +283,6 @@ func cloneStringMap(in map[string]string) map[string]string {
 		return map[string]string{}
 	}
 	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
