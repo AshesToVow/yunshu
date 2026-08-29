@@ -59,7 +59,13 @@ function nextRequestId(): string {
   }
 }
 
+/** 登录态相关 401：用于清本地并跳转登录（含「缺少凭证」）。 */
 const sessionExpiredCodes = new Set(["10002", "10008", "10009", "10010", "10011", "10014"]);
+/**
+ * 可尝试 Cookie refresh 的码。
+ * 不含 10008（缺少登录凭证）——匿名访问 /auth/me 不应误打 /auth/refresh。
+ */
+const refreshableSessionCodes = new Set(["10002", "10009", "10010", "10011", "10014"]);
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -112,7 +118,7 @@ http.interceptors.response.use(
     const silentErrorToast = Boolean(cfg?.silentErrorToast);
     const errorCode = rawData?.error_code ?? "";
 
-    if (status === 401 && sessionExpiredCodes.has(errorCode) && cfg && !cfg.skipAuthRefresh) {
+    if (status === 401 && refreshableSessionCodes.has(errorCode) && cfg && !cfg.skipAuthRefresh) {
       const url = String(cfg.url ?? "");
       if (!url.includes("/auth/login") && !url.includes("/auth/email-login") && !url.includes("/auth/refresh")) {
         const ok = await tryRefreshSession();

@@ -1,1 +1,0 @@
-- [web 前端工具链在本机不可用](project_frontend_toolchain_blocked.md) — 本机 node/npm 不在 PATH 且 web/node_modules 缺失，前端 lint/build/test 命令无法执行（2026-08-29 实测）

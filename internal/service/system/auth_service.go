@@ -468,12 +468,23 @@ func (s *AuthService) issueSession(ctx context.Context, user *model.User, family
 }
 
 // RefreshSession 轮换 refresh token 并签发新的 access/refresh（旧 refresh 一次性消费）。
+// 若检测到已消费 refresh 被再次使用，吊销整条 family（含攻击者已轮换出的新 token）。
 func (s *AuthService) RefreshSession(ctx context.Context, refreshToken string) (*RefreshResponse, error) {
 	if s.redis == nil {
 		return nil, bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
 	}
 	sess, err := store.ConsumeRefreshToken(ctx, s.redis, refreshToken)
 	if err != nil {
+		var reuse *store.RefreshReuseError
+		if errors.As(err, &reuse) {
+			_ = store.InvalidateRefreshFamily(ctx, s.redis, reuse.FamilyID)
+			if reuse.UserID != 0 {
+				_ = store.InvalidateAllUserAccessTokens(ctx, s.redis, reuse.UserID)
+			}
+			bizerrors.Warn(ctx, "auth", "RefreshSession", "refresh token reuse detected; family revoked",
+				"family_id", reuse.FamilyID, "user_id", reuse.UserID)
+			return nil, constants.ErrLoginSessionExpired
+		}
 		if errors.Is(err, store.ErrSessionNotFound) {
 			return nil, constants.ErrLoginSessionExpired
 		}
