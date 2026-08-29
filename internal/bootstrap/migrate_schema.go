@@ -25,5 +25,8 @@ func AutoMigrateModels(db *gorm.DB, pluginsCfg *config.PluginsConfig) error {
 	if err := menu.Sync(ctx, db); err != nil {
 		return err
 	}
-	return plugingate.SyncMenuVisibility(ctx, db, pluginsCfg)
+	if err := plugingate.SyncMenuVisibility(ctx, db, pluginsCfg); err != nil {
+		return err
+	}
+	return RecordSchemaVersion(db)
 }

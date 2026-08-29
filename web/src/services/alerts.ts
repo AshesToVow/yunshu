@@ -143,9 +143,13 @@ export function listAlertEventsGrouped(params: {
   cluster?: string;
   projectId?: number;
 }) {
-  return getData<{ list?: AlertEventGroupItem[]; items?: AlertEventGroupItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/events/grouped", { params }),
-  ).then((payload) => normalizePagedPayload(payload));
+  return getData<{
+    list?: AlertEventGroupItem[];
+    items?: AlertEventGroupItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/events/grouped", { params })).then((payload) => normalizePagedPayload(payload));
 }
 
 /** 与后端 alertdispatch 模板变量说明一致（通道 Go template {{.Name}}） */
@@ -252,9 +256,7 @@ export type FingerprintDeliveryExplain = {
 
 /** 按 fingerprint 追溯投递成功/跳过原因 */
 export function explainAlertByFingerprint(fingerprint: string) {
-  return getData<FingerprintDeliveryExplain>(
-    http.get("/alerts/events/by-fingerprint", { params: { fingerprint } }),
-  );
+  return getData<FingerprintDeliveryExplain>(http.get("/alerts/events/by-fingerprint", { params: { fingerprint } }));
 }
 
 export function sendAlertmanagerWebhook(payload: Record<string, unknown>, token?: string) {
@@ -315,9 +317,13 @@ export function listCurEvents(params?: {
   page?: number;
   page_size?: number;
 }) {
-  return getData<{ list?: AlertCurEventItem[]; items?: AlertCurEventItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/cur-events", { params }),
-  );
+  return getData<{
+    list?: AlertCurEventItem[];
+    items?: AlertCurEventItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/cur-events", { params }));
 }
 
 export function listHisEvents(params?: {
@@ -328,9 +334,13 @@ export function listHisEvents(params?: {
   page?: number;
   page_size?: number;
 }) {
-  return getData<{ list?: AlertHisEventItem[]; items?: AlertHisEventItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/his-events", { params }),
-  );
+  return getData<{
+    list?: AlertHisEventItem[];
+    items?: AlertHisEventItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/his-events", { params }));
 }
 
 export async function exportHisEventsCSV(params?: {
@@ -382,7 +392,9 @@ export interface AlertMonitorRuleChangeItem {
 }
 
 export function listPendingMonitorRuleChanges() {
-  return getData<{ list: AlertMonitorRuleChangeItem[] }>(http.get("/alerts/monitor-rule-changes")).then((r) => r.list || []);
+  return getData<{ list: AlertMonitorRuleChangeItem[] }>(http.get("/alerts/monitor-rule-changes")).then(
+    (r) => r.list || [],
+  );
 }
 
 export function proposeMonitorRuleChange(payload: {

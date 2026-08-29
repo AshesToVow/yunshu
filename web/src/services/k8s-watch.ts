@@ -1,5 +1,3 @@
-import { getToken } from "./storage";
-
 export type K8sWatchEvent = {
   type: string;
   object?: Record<string, unknown>;
@@ -27,9 +25,8 @@ export async function streamK8sResourceWatch(
   if (query.label_selector) params.set("label_selector", query.label_selector);
   if (query.timeout_seconds) params.set("timeout_seconds", String(query.timeout_seconds));
 
-  const token = getToken();
   const res = await fetch(`/api/v1/k8s/resource-watch/stream?${params.toString()}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
     signal,
   });
   if (!res.ok || !res.body) {

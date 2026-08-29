@@ -2,9 +2,6 @@ import { CodeOutlined, DeleteOutlined, DownOutlined, DownloadOutlined, EditOutli
 import type { MenuProps } from "antd";
 import { Alert, Button, Card, Checkbox, Divider, Drawer, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Tooltip, Typography, message } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
-import "xterm/css/xterm.css";
 import { K8sPageToolbar } from "../components/ops/k8s-page-toolbar";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
 import { PhaseTag } from "../components/ops/phase-tag";
@@ -21,19 +18,10 @@ import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
 import { createPodByYAML, createPodSimple, deletePod, deletePodFile, downloadPodFile, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, readPodFile, restartPod, updatePodSimple, uploadPodFile, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
 import { analyzePodDiagnoseAI, type AIPodDiagnoseResult } from "../services/ai";
-import { getToken } from "../services/storage";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
-
-const POD_CREATE_YAML_TEMPLATE = `apiVersion: v1
-kind: Pod
-metadata:
-  name: demo-pod
-spec:
-  containers:
-  - name: main
-    image: nginx:latest
-`;
+import { POD_CREATE_YAML_TEMPLATE } from "./pod/pod-create-template";
+import { usePodExec } from "./pod/use-pod-exec";
 
 export function PodPage() {
   const rfc1123Subdomain = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/;
@@ -92,15 +80,18 @@ export function PodPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [execCommand, setExecCommand] = useState("sh");
-  const execCommandRef = useRef(execCommand);
-  execCommandRef.current = execCommand;
   const filterRef = useRef({ clusterId, namespace, keyword });
   filterRef.current = { clusterId, namespace, keyword };
   const [watchLive, setWatchLive] = useState(false);
   const execTermHostRef = useRef<HTMLDivElement | null>(null);
-  const execTermRef = useRef<Terminal | null>(null);
-  const execFitRef = useRef<FitAddon | null>(null);
-  const execWsRef = useRef<WebSocket | null>(null);
+  const { closeExecSocket, execTermRef } = usePodExec({
+    execOpen,
+    clusterId,
+    selected,
+    detail,
+    execCommand,
+    execTermHostRef,
+  });
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [simpleMode, setSimpleMode] = useState<"create" | "edit">("create");
@@ -358,7 +349,6 @@ export function PodPage() {
     const aborter = new AbortController();
     streamAbortRef.current = aborter;
     setStreaming(true);
-    const token = getToken();
     const q = buildPodLogsQuery(selected, 50);
     const params = new URLSearchParams({
       cluster_id: String(clusterId),
@@ -373,7 +363,7 @@ export function PodPage() {
     if (q.since_time) params.set("since_time", q.since_time);
     try {
       const resp = await fetch(`/api/v1/pods/logs/stream?${params.toString()}`, {
-        headers: { Authorization: token ? `Bearer ${token}` : "" },
+        credentials: "include",
         signal: aborter.signal,
       });
       if (!resp.ok || !resp.body) throw new Error("日志流连接失败");
@@ -440,162 +430,6 @@ export function PodPage() {
     }
   }
 
-  function closeExecSocket() {
-    try {
-      execWsRef.current?.close();
-    } catch {
-      // ignore
-    }
-    execWsRef.current = null;
-  }
-
-  useEffect(() => {
-    if (!execOpen) return;
-    if (!clusterId || !selected) return;
-    const host = execTermHostRef.current;
-    if (!host) return;
-
-    let disposed = false;
-    let removeWindowResize: (() => void) | undefined;
-    let onDataDispose: { dispose: () => void } | undefined;
-    let onResizeDispose: { dispose: () => void } | undefined;
-
-    host.innerHTML = "";
-
-    const term = new Terminal({
-      cursorBlink: true,
-      fontFamily:
-        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-      fontSize: 12,
-      theme: { background: "#141414" },
-      scrollback: 5000,
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(host);
-    fit.fit();
-    term.focus();
-
-    execTermRef.current = term;
-    execFitRef.current = fit;
-
-    void (async () => {
-      let container: string | undefined;
-      if (detail?.namespace === selected.namespace && detail.name === selected.name) {
-        container = detail.containers?.[0]?.name;
-      } else {
-        try {
-          const d = await getPodDetail({
-            cluster_id: clusterId,
-            namespace: selected.namespace,
-            name: selected.name,
-          });
-          container = d.containers?.[0]?.name;
-        } catch {
-          // 后端会解析默认容器；此处失败时不阻塞 Exec 连接
-        }
-      }
-
-      let ws: WebSocket;
-      try {
-        ws = await openAuthenticatedWebSocket(
-          "/api/v1/pods/exec/ws",
-          {
-            cluster_id: clusterId,
-            namespace: selected.namespace,
-            name: selected.name,
-            ...(container ? { container } : {}),
-          },
-          "pod-exec",
-        );
-      } catch {
-        if (!disposed) term.writeln("\r\n[connection error: ticket failed]\r\n");
-        return;
-      }
-      if (disposed) {
-        ws.close();
-        return;
-      }
-      execWsRef.current = ws;
-
-      const sendResize = () => {
-        try {
-          const cols = term.cols;
-          const rows = term.rows;
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "resize", cols, rows }));
-          }
-        } catch {
-          // ignore
-        }
-      };
-
-      onDataDispose = term.onData((data) => {
-        if (ws.readyState !== WebSocket.OPEN) return;
-        ws.send(JSON.stringify({ type: "input", data }));
-      });
-      onResizeDispose = term.onResize(({ cols, rows }) => {
-        if (ws.readyState !== WebSocket.OPEN) return;
-        ws.send(JSON.stringify({ type: "resize", cols, rows }));
-      });
-
-      ws.onopen = () => {
-        term.writeln(`Connected: ${selected.namespace}/${selected.name}`);
-        sendResize();
-        ws.send(JSON.stringify({ type: "input", data: `${execCommandRef.current}\n` }));
-      };
-      ws.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(String(ev.data));
-          if (msg.type === "stdout" && typeof msg.data === "string") {
-            term.write(msg.data);
-          } else if (msg.type === "error") {
-            term.writeln(`\r\n[error] ${msg.data || "unknown"}`);
-          } else if (msg.type === "exit") {
-            term.writeln("\r\n[disconnected]");
-          }
-        } catch {
-          term.write(String(ev.data));
-        }
-      };
-      ws.onclose = () => {
-        term.writeln("\r\n[connection closed]");
-      };
-      ws.onerror = () => {
-        term.writeln("\r\n[connection error]");
-      };
-
-      const onWindowResize = () => {
-        try {
-          fit.fit();
-          sendResize();
-        } catch {
-          // ignore
-        }
-      };
-      window.addEventListener("resize", onWindowResize);
-      removeWindowResize = () => window.removeEventListener("resize", onWindowResize);
-    })();
-
-    return () => {
-      disposed = true;
-      removeWindowResize?.();
-      try {
-        onDataDispose?.dispose();
-        onResizeDispose?.dispose();
-      } catch {
-        // ignore
-      }
-      closeExecSocket();
-      try {
-        term.dispose();
-      } catch {
-        // ignore
-      }
-      execTermRef.current = null;
-      execFitRef.current = null;
-    };
-  }, [execOpen, clusterId, selected?.namespace, selected?.name, detail?.namespace, detail?.name, detail?.containers]);
 
   async function handleRestartPod(record: PodItem) {
     if (!clusterId) return;

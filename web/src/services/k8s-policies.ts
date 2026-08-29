@@ -61,9 +61,7 @@ export function listK8sPolicyPaths() {
 }
 
 export function listK8sPoliciesByRole(roleId: number) {
-  return getData<{ list: K8sClusterAccessItem[] }>(
-    http.get("/k8s-policies", { params: { role_id: String(roleId) } }),
-  );
+  return getData<{ list: K8sClusterAccessItem[] }>(http.get("/k8s-policies", { params: { role_id: String(roleId) } }));
 }
 
 export function listK8sClusterGrants(params: { role_id?: number; user_id?: number; group_id?: number }) {

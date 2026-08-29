@@ -177,7 +177,11 @@ redis:
 
 auth:
   jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"  # 生产环境务必修改，至少32字节；勿使用仓库默认值上线
-  access_token_ttl_minutes: 120
+  access_token_ttl_minutes: 15   # 短 access；浏览器 HttpOnly Cookie（ys_at）
+  refresh_token_ttl_hours: 168   # 7 天 refresh（ys_rt）；Redis 一次性轮换
+  cookie_secure: false           # 本地 http；生产 HTTPS 改为 true（或依赖 env=prod 默认）
+  # cookie_domain: ""            # 同域反代留空
+  csp_enabled: true
   email_code_ttl_seconds: 600
   email_code_cooldown_seconds: 60
 

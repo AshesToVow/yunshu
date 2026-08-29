@@ -62,7 +62,7 @@ var (
 	ErrConflict                 = BizError(http.StatusConflict, 10005, "资源状态冲突，请刷新后重试")
 	ErrInternal                 = BizError(http.StatusInternalServerError, 10006, "平台服务异常，请稍后重试或联系管理员")
 	ErrTooManyRequests          = BizError(http.StatusTooManyRequests, 10007, "操作过于频繁，请稍后再试")
-	ErrMissingAuthHeader        = BizError(http.StatusUnauthorized, 10008, "缺少或非法的鉴权请求头，请先登录或检查客户端配置")
+	ErrMissingAuthHeader        = BizError(http.StatusUnauthorized, 10008, "缺少登录凭证，请先登录")
 	ErrAccessTokenInvalid       = BizError(http.StatusUnauthorized, 10009, "访问令牌无效，请重新登录")
 	ErrLoginSessionExpired      = BizError(http.StatusUnauthorized, 10010, "登录会话已过期，请重新登录")
 	ErrAccountPrincipalNotFound = BizError(http.StatusUnauthorized, 10011, "账号不存在或已删除，请检查登录信息")

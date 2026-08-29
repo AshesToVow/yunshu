@@ -27,7 +27,7 @@ import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Select, Space, Spin, Sw
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { BRAND_EN_NAME, BRAND_PRIMARY } from "../constants/brand";
+import { BRAND_EN_NAME } from "../constants/brand";
 import { GlobalSearchModal } from "../components/global-search-modal";
 import { MenuAccessGate } from "../components/menu-access-gate";
 import { useAuth } from "../contexts/auth-context";
@@ -36,6 +36,7 @@ import { resolveAppLocale } from "../i18n";
 import { buildSiderMenuItems, matchMenuSelectedKey, type AntdMenuItem } from "../utils/admin-menu";
 import { usePlugins } from "../contexts/plugin-context";
 import { filterAntdMenuItems } from "../modules/filter-menu";
+import { useAdminThemeStore } from "../stores/admin-theme-store";
 
 const { Content, Header, Sider } = Layout;
 const UI_PREFS_KEY = "admin-ui-preferences";
@@ -103,13 +104,11 @@ export function AdminLayout() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("appearance");
   const [uiPreferences, setUIPreferences] = useState<UIPreferences>(() => loadUIPreferences());
-  const [themeMode, setThemeMode] = useState<"dark" | "light">(() => {
-    const saved = window.localStorage.getItem("admin-theme-mode");
-    return saved === "light" ? "light" : "dark";
-  });
-  const [accent, setAccent] = useState<string>(() => {
-    return window.localStorage.getItem("admin-theme-accent") ?? BRAND_PRIMARY;
-  });
+  const themeMode = useAdminThemeStore((s) => s.mode);
+  const accent = useAdminThemeStore((s) => s.accent);
+  const setThemeMode = useAdminThemeStore((s) => s.setMode);
+  const setAccent = useAdminThemeStore((s) => s.setAccent);
+  const toggleThemeMode = useAdminThemeStore((s) => s.toggleMode);
 
   const activeLocale = resolveAppLocale(i18n.language);
 
@@ -173,19 +172,14 @@ export function AdminLayout() {
 
   function applyThemeMode(mode: "dark" | "light") {
     setThemeMode(mode);
-    window.localStorage.setItem("admin-theme-mode", mode);
-    window.dispatchEvent(new CustomEvent("admin-theme-mode-change", { detail: { mode } }));
   }
 
   function handleToggleMode() {
-    applyThemeMode(themeMode === "dark" ? "light" : "dark");
+    toggleThemeMode();
   }
 
   function applyAccent(next: string) {
     setAccent(next);
-    window.localStorage.setItem("admin-theme-accent", next);
-    document.documentElement.style.setProperty("--admin-accent", next);
-    window.dispatchEvent(new CustomEvent("admin-theme-accent-change", { detail: { accent: next } }));
   }
 
   function patchUIPreferences(patch: Partial<UIPreferences>) {
@@ -200,17 +194,15 @@ export function AdminLayout() {
     // 精确清理业务缓存：只删本应用写入的键，不用 localStorage.clear()。
     // clear() 会连带清掉同源下第三方/未来新增的持久化键（如 zustand persist、i18n 语言），
     // 且每加一个需要保留的键都得手动“读出-clear-回填”，极易漏。
-    const preserved = new Set<string>([
-      "admin-theme-mode",
-      "admin-theme-accent",
-      UI_PREFS_KEY,
-    ]);
+    // 精确按前缀删除业务缓存；保留主题（zustand persist）、UI 偏好、语言。
+    const preservedExact = new Set<string>(["admin-theme", UI_PREFS_KEY, "app-locale"]);
+    const preservedPrefixes = ["admin-theme"]; // 含 legacy admin-theme-mode / admin-theme-accent
     const removable: string[] = [];
     for (let i = 0; i < window.localStorage.length; i += 1) {
       const key = window.localStorage.key(i);
-      if (!key || preserved.has(key)) continue;
-      // 仅清理本应用命名空间下的键，避免影响同源的其它页面。
-      if (key.startsWith("permission-system-") || key.startsWith("admin-")) {
+      if (!key || preservedExact.has(key)) continue;
+      if (preservedPrefixes.some((p) => key === p || key.startsWith(`${p}-`))) continue;
+      if (key.startsWith("permission-system-") || key.startsWith("admin-") || key.startsWith("yunshu-")) {
         removable.push(key);
       }
     }

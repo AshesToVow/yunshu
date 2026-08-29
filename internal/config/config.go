@@ -101,12 +101,19 @@ type MailConfig struct {
 type AuthConfig struct {
 	JWTSecret                string `mapstructure:"jwt_secret"`
 	AccessTokenTTLMinutes    int    `mapstructure:"access_token_ttl_minutes"`
+	RefreshTokenTTLHours     int    `mapstructure:"refresh_token_ttl_hours"`
 	EmailCodeTTLSeconds      int    `mapstructure:"email_code_ttl_seconds"`
 	EmailCodeCooldownSeconds int    `mapstructure:"email_code_cooldown_seconds"`
 	// LoginMaxFailAttempts 连续密码错误次数上限，达到后临时锁定账号；<=0 时用默认值。
 	LoginMaxFailAttempts int `mapstructure:"login_max_fail_attempts"`
 	// LoginLockSeconds 触发锁定后的锁定时长（秒）；<=0 时用默认值。
 	LoginLockSeconds int `mapstructure:"login_lock_seconds"`
+	// CookieSecure HttpOnly Cookie 的 Secure 标志；nil 时生产环境默认 true，其它环境 false。
+	CookieSecure *bool `mapstructure:"cookie_secure"`
+	// CookieDomain 可选；空表示 host-only（同域 nginx/vite 代理推荐留空）。
+	CookieDomain string `mapstructure:"cookie_domain"`
+	// CSPEnabled 是否下发 Content-Security-Policy；默认 true。
+	CSPEnabled *bool `mapstructure:"csp_enabled"`
 }
 
 type CasbinConfig struct {
@@ -194,7 +201,10 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	if cfg.Auth.AccessTokenTTLMinutes <= 0 {
-		cfg.Auth.AccessTokenTTLMinutes = 120
+		cfg.Auth.AccessTokenTTLMinutes = 15
+	}
+	if cfg.Auth.RefreshTokenTTLHours <= 0 {
+		cfg.Auth.RefreshTokenTTLHours = 168 // 7d
 	}
 	if cfg.Auth.EmailCodeTTLSeconds <= 0 {
 		cfg.Auth.EmailCodeTTLSeconds = 600
@@ -207,6 +217,15 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Auth.LoginLockSeconds <= 0 {
 		cfg.Auth.LoginLockSeconds = 900
+	}
+	if cfg.Auth.CSPEnabled == nil {
+		v := true
+		cfg.Auth.CSPEnabled = &v
+	}
+	if cfg.Auth.CookieSecure == nil {
+		e := strings.ToLower(strings.TrimSpace(cfg.App.Env))
+		v := e == "prod" || e == "production"
+		cfg.Auth.CookieSecure = &v
 	}
 	if strings.TrimSpace(cfg.Log.FilePath) == "" {
 		cfg.Log.FilePath = "./logs"
@@ -452,6 +471,10 @@ func bindEnv(v *viper.Viper) error {
 		"mail.use_tls":                             nil,
 		"auth.jwt_secret":                          {"JWT_SECRET"},
 		"auth.access_token_ttl_minutes":            nil,
+		"auth.refresh_token_ttl_hours":             nil,
+		"auth.cookie_secure":                       nil,
+		"auth.cookie_domain":                       nil,
+		"auth.csp_enabled":                         nil,
 		"auth.email_code_ttl_seconds":              nil,
 		"auth.email_code_cooldown_seconds":         nil,
 		"casbin.model_path":                        nil,

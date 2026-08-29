@@ -25,6 +25,7 @@ import { useAuth } from "../contexts/auth-context";
 import { BRAND_DESCRIPTION } from "../constants/brand";
 import { resolveEmailFromForm } from "../utils/form-email";
 import loginHeroImage from "../assets/login-hero.svg";
+import { useAdminThemeStore } from "../stores/admin-theme-store";
 
 type LoginAccent = "blue" | "violet" | "emerald" | "amber";
 
@@ -34,6 +35,11 @@ const LOGIN_ACCENT_COLORS: Record<LoginAccent, string> = {
   emerald: "#0d9488",
   amber: "#d97706",
 };
+
+function accentKeyFromHex(hex: string): LoginAccent {
+  const hit = (Object.entries(LOGIN_ACCENT_COLORS) as [LoginAccent, string][]).find(([, v]) => v === hex);
+  return hit?.[0] ?? "emerald";
+}
 
 type AuthTabKey = "account" | "email";
 type ButtonFxState = "idle" | "loading" | "success";
@@ -69,10 +75,14 @@ export function LoginPage() {
   const [captchaImage, setCaptchaImage] = useState<string | null>(null);
 
   const [buttonFx, setButtonFx] = useState<ButtonFxState>("idle");
-  const [darkMode, setDarkMode] = useState<boolean>(() => window.localStorage.getItem("admin-theme-mode") !== "light");
+  const themeMode = useAdminThemeStore((s) => s.mode);
+  const setThemeMode = useAdminThemeStore((s) => s.setMode);
+  const storeAccent = useAdminThemeStore((s) => s.accent);
+  const setStoreAccent = useAdminThemeStore((s) => s.setAccent);
+  const darkMode = themeMode !== "light";
   const [langMode, setLangMode] = useState<"zh" | "en">("zh");
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [accent, setAccent] = useState<LoginAccent>("emerald");
+  const accent = accentKeyFromHex(storeAccent);
 
   const [passwordForm] = Form.useForm<PasswordLoginPayload>();
   const [emailForm] = Form.useForm<EmailLoginPayload>();
@@ -87,24 +97,6 @@ export function LoginPage() {
   useEffect(() => {
     document.documentElement.style.setProperty("--login-accent", LOGIN_ACCENT_COLORS[accent]);
   }, [accent]);
-
-  useEffect(() => {
-    const mode = darkMode ? "dark" : "light";
-    window.localStorage.setItem("admin-theme-mode", mode);
-    window.dispatchEvent(new CustomEvent("admin-theme-mode-change", { detail: { mode } }));
-  }, [darkMode]);
-
-  useEffect(() => {
-    const onModeChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ mode?: "dark" | "light" }>).detail;
-      if (!detail?.mode) return;
-      setDarkMode(detail.mode !== "light");
-    };
-    window.addEventListener("admin-theme-mode-change", onModeChange as EventListener);
-    return () => {
-      window.removeEventListener("admin-theme-mode-change", onModeChange as EventListener);
-    };
-  }, []);
 
   const fromPath = (location.state as LocationState | null)?.from ?? "/";
 
@@ -230,13 +222,9 @@ export function LoginPage() {
       ...values,
       captcha_key: values.captcha_key || captchaKey,
     };
-    void runLogin(
-      passwordLoginAction as (p: PasswordLoginPayload) => Promise<unknown>,
-      payload,
-      async () => {
-        await refreshPasswordCaptcha({ silent: true, requireUsername: false, afterLoginFailure: true });
-      },
-    );
+    void runLogin(passwordLoginAction as (p: PasswordLoginPayload) => Promise<unknown>, payload, async () => {
+      await refreshPasswordCaptcha({ silent: true, requireUsername: false, afterLoginFailure: true });
+    });
   }
 
   async function handleEmailLogin(values: EmailLoginPayload) {
@@ -248,7 +236,9 @@ export function LoginPage() {
     try {
       const payload: RegisterPayload = {
         ...values,
-        code: String(values.code ?? "").trim().replace(/[^\d]/g, ""),
+        code: String(values.code ?? "")
+          .trim()
+          .replace(/[^\d]/g, ""),
       };
       const result = await registerByEmail(payload);
       message.success(result?.message || "注册申请已提交，请等待管理员审核");
@@ -264,12 +254,12 @@ export function LoginPage() {
   const isZh = langMode === "zh";
   const submitButtonLabel = isZh ? "登录" : "Login";
   const cardTitle = isZh ? "欢迎回来" : "Welcome back";
-  const cardSubTitle = isZh ? "登录云枢运维平台，继续你的值班与发布工作" : "Sign in to Yunshu Ops to continue on-call and release work.";
+  const cardSubTitle = isZh
+    ? "登录云枢运维平台，继续你的值班与发布工作"
+    : "Sign in to Yunshu Ops to continue on-call and release work.";
   const appTitle = isZh ? "云枢运维平台" : "Yunshu Ops Platform";
   const introTitle = isZh ? "云原生运维，一站治理" : "Cloud-native ops, unified control";
-  const introDesc = isZh
-    ? "权限、资源编排、发布与告警在同一平台完成，为值班与变更而设计。"
-    : BRAND_DESCRIPTION;
+  const introDesc = isZh ? "权限、资源编排、发布与告警在同一平台完成，为值班与变更而设计。" : BRAND_DESCRIPTION;
   const introFeatures = isZh
     ? ["Kubernetes 资源编排", "项目管理", "CI/CD 发布流水线", "日志平台", "CMDB 资产治理", "告警与值班联动"]
     : [
@@ -328,12 +318,28 @@ export function LoginPage() {
 
         {tab === "account" ? (
           <Form<PasswordLoginPayload> form={passwordForm} layout="vertical" onFinish={handlePasswordLogin} size="large">
-            <Form.Item label={isZh ? "用户名" : "Username"} name="username" rules={[{ required: true, message: isZh ? "请输入用户名" : "Please enter username" }]}>
-              <Input prefix={<UserOutlined />} placeholder={isZh ? "请输入用户名" : "Please enter username"} autoComplete="off" />
+            <Form.Item
+              label={isZh ? "用户名" : "Username"}
+              name="username"
+              rules={[{ required: true, message: isZh ? "请输入用户名" : "Please enter username" }]}
+            >
+              <Input
+                prefix={<UserOutlined />}
+                placeholder={isZh ? "请输入用户名" : "Please enter username"}
+                autoComplete="off"
+              />
             </Form.Item>
 
-            <Form.Item label={isZh ? "密码" : "Password"} name="password" rules={[{ required: true, message: isZh ? "请输入密码" : "Please enter password" }]}>
-              <Input.Password prefix={<LockOutlined />} placeholder={isZh ? "请输入密码" : "Please enter password"} autoComplete="new-password" />
+            <Form.Item
+              label={isZh ? "密码" : "Password"}
+              name="password"
+              rules={[{ required: true, message: isZh ? "请输入密码" : "Please enter password" }]}
+            >
+              <Input.Password
+                prefix={<LockOutlined />}
+                placeholder={isZh ? "请输入密码" : "Please enter password"}
+                autoComplete="new-password"
+              />
             </Form.Item>
 
             <Form.Item label={isZh ? "验证码" : "Code"}>
@@ -358,7 +364,11 @@ export function LoginPage() {
                   aria-label={isZh ? "点击刷新验证码" : "Refresh captcha"}
                 >
                   {captchaImage ? (
-                    <img className="login-captchaWave__img" src={`data:image/png;base64,${captchaImage}`} alt={isZh ? "验证码图片" : "Captcha image"} />
+                    <img
+                      className="login-captchaWave__img"
+                      src={`data:image/png;base64,${captchaImage}`}
+                      alt={isZh ? "验证码图片" : "Captcha image"}
+                    />
                   ) : (
                     <span className="login-captchaWave__placeholder">{isZh ? "生成验证码" : "Generate"}</span>
                   )}
@@ -375,7 +385,12 @@ export function LoginPage() {
             </Form.Item>
 
             <div className="login-submitRow">
-              <Button htmlType="submit" className="login-submitBtn" disabled={submitting || !captchaKey} data-fx={buttonFx}>
+              <Button
+                htmlType="submit"
+                className="login-submitBtn"
+                disabled={submitting || !captchaKey}
+                data-fx={buttonFx}
+              >
                 <span className="login-submitBtn__label">{submitButtonLabel}</span>
                 <span className="login-submitBtn__spinner" aria-hidden="true" />
               </Button>
@@ -383,11 +398,26 @@ export function LoginPage() {
           </Form>
         ) : (
           <Form<EmailLoginPayload> form={emailForm} layout="vertical" onFinish={handleEmailLogin} size="large">
-            <Form.Item label={isZh ? "邮箱" : "Email"} name="email" rules={[{ required: true, type: "email", message: isZh ? "请输入正确的邮箱地址" : "Please enter valid email" }]}>
-              <Input ref={emailInputRef} prefix={<MailOutlined />} placeholder={isZh ? "请输入邮箱地址" : "Please enter email"} autoComplete="email" />
+            <Form.Item
+              label={isZh ? "邮箱" : "Email"}
+              name="email"
+              rules={[
+                { required: true, type: "email", message: isZh ? "请输入正确的邮箱地址" : "Please enter valid email" },
+              ]}
+            >
+              <Input
+                ref={emailInputRef}
+                prefix={<MailOutlined />}
+                placeholder={isZh ? "请输入邮箱地址" : "Please enter email"}
+                autoComplete="email"
+              />
             </Form.Item>
 
-            <Form.Item label={isZh ? "验证码" : "Code"} name="code" rules={[{ required: true, message: isZh ? "请输入验证码" : "Please enter code" }]}>
+            <Form.Item
+              label={isZh ? "验证码" : "Code"}
+              name="code"
+              rules={[{ required: true, message: isZh ? "请输入验证码" : "Please enter code" }]}
+            >
               <Input prefix={<SafetyCertificateOutlined />} placeholder={isZh ? "邮箱验证码" : "Email code"} />
             </Form.Item>
 
@@ -399,7 +429,11 @@ export function LoginPage() {
                 loading={sendingCode}
                 disabled={emailCodeCountdown > 0}
               >
-                {emailCodeCountdown > 0 ? `${emailCodeCountdown}s ${isZh ? "后重发" : "to resend"}` : isZh ? "发送邮箱验证码" : "Send Email Code"}
+                {emailCodeCountdown > 0
+                  ? `${emailCodeCountdown}s ${isZh ? "后重发" : "to resend"}`
+                  : isZh
+                    ? "发送邮箱验证码"
+                    : "Send Email Code"}
               </Button>
             </div>
 
@@ -451,16 +485,24 @@ export function LoginPage() {
                 type="button"
                 className={`gw-auth-dot ${accent === key ? "is-active" : ""}`}
                 style={{ background: LOGIN_ACCENT_COLORS[key] }}
-                onClick={() => setAccent(key)}
+                onClick={() => setStoreAccent(LOGIN_ACCENT_COLORS[key])}
                 aria-label={key}
               />
             ))}
           </div>
         ) : null}
-        <button type="button" className="gw-auth-toolbar__btn" onClick={() => setLangMode((v) => (v === "zh" ? "en" : "zh"))}>
+        <button
+          type="button"
+          className="gw-auth-toolbar__btn"
+          onClick={() => setLangMode((v) => (v === "zh" ? "en" : "zh"))}
+        >
           <TranslationOutlined />
         </button>
-        <button type="button" className="gw-auth-toolbar__btn" onClick={() => setDarkMode((v) => !v)}>
+        <button
+          type="button"
+          className="gw-auth-toolbar__btn"
+          onClick={() => setThemeMode(darkMode ? "light" : "dark")}
+        >
           {darkMode ? <BulbOutlined /> : <BulbFilled />}
         </button>
       </div>
@@ -468,7 +510,11 @@ export function LoginPage() {
       <div className="gw-auth-main">
         <div className="gw-auth-frame">
           <aside className="gw-auth-story" aria-label={isZh ? "平台介绍" : "Platform intro"}>
-            <img className="gw-auth-story__hero" src={loginHeroImage} alt={isZh ? "云枢运维平台插画" : "Yunshu Ops illustration"} />
+            <img
+              className="gw-auth-story__hero"
+              src={loginHeroImage}
+              alt={isZh ? "云枢运维平台插画" : "Yunshu Ops illustration"}
+            />
             <h1 className="gw-auth-story__title">{introTitle}</h1>
             <p className="gw-auth-story__desc">{introDesc}</p>
             <ul className="gw-auth-story__points" aria-label={isZh ? "平台能力" : "Platform capabilities"}>
@@ -491,24 +537,69 @@ export function LoginPage() {
         width={520}
         className="login-registerModal"
       >
-        <Form<RegisterPayload> form={registerForm} layout="vertical" onFinish={handleRegister} size="large" autoComplete="off">
-          <Form.Item label={isZh ? "用户名" : "Username"} name="username" rules={[{ required: true, min: 3, max: 64, message: isZh ? "用户名长度为3-64个字符" : "3-64 characters" }]}>
-            <Input prefix={<UserOutlined />} placeholder={isZh ? "请输入用户名" : "Please enter username"} autoComplete="off" />
+        <Form<RegisterPayload>
+          form={registerForm}
+          layout="vertical"
+          onFinish={handleRegister}
+          size="large"
+          autoComplete="off"
+        >
+          <Form.Item
+            label={isZh ? "用户名" : "Username"}
+            name="username"
+            rules={[{ required: true, min: 3, max: 64, message: isZh ? "用户名长度为3-64个字符" : "3-64 characters" }]}
+          >
+            <Input
+              prefix={<UserOutlined />}
+              placeholder={isZh ? "请输入用户名" : "Please enter username"}
+              autoComplete="off"
+            />
           </Form.Item>
-          <Form.Item label={isZh ? "邮箱" : "Email"} name="email" rules={[{ required: true, type: "email", message: isZh ? "请输入正确的邮箱地址" : "Please enter valid email" }]}>
-            <Input ref={registerEmailInputRef} prefix={<MailOutlined />} placeholder={isZh ? "请输入邮箱地址" : "Please enter email"} autoComplete="email" />
+          <Form.Item
+            label={isZh ? "邮箱" : "Email"}
+            name="email"
+            rules={[
+              { required: true, type: "email", message: isZh ? "请输入正确的邮箱地址" : "Please enter valid email" },
+            ]}
+          >
+            <Input
+              ref={registerEmailInputRef}
+              prefix={<MailOutlined />}
+              placeholder={isZh ? "请输入邮箱地址" : "Please enter email"}
+              autoComplete="email"
+            />
           </Form.Item>
-          <Form.Item label={isZh ? "昵称" : "Nickname"} name="nickname" rules={[{ required: true, max: 128, message: isZh ? "请输入昵称" : "Please enter nickname" }]}>
-            <Input prefix={<UserOutlined />} placeholder={isZh ? "请输入昵称" : "Please enter nickname"} autoComplete="off" />
+          <Form.Item
+            label={isZh ? "昵称" : "Nickname"}
+            name="nickname"
+            rules={[{ required: true, max: 128, message: isZh ? "请输入昵称" : "Please enter nickname" }]}
+          >
+            <Input
+              prefix={<UserOutlined />}
+              placeholder={isZh ? "请输入昵称" : "Please enter nickname"}
+              autoComplete="off"
+            />
           </Form.Item>
-          <Form.Item label={isZh ? "密码" : "Password"} name="password" rules={[{ required: true, min: 6, max: 64, message: isZh ? "密码长度为6-64个字符" : "6-64 characters" }]}>
-            <Input.Password prefix={<LockOutlined />} placeholder={isZh ? "请输入密码" : "Please enter password"} autoComplete="new-password" />
+          <Form.Item
+            label={isZh ? "密码" : "Password"}
+            name="password"
+            rules={[{ required: true, min: 6, max: 64, message: isZh ? "密码长度为6-64个字符" : "6-64 characters" }]}
+          >
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder={isZh ? "请输入密码" : "Please enter password"}
+              autoComplete="new-password"
+            />
           </Form.Item>
 
           <Form.Item
             label={isZh ? "验证码" : "Code"}
             name="code"
-            getValueFromEvent={(event) => String(event?.target?.value ?? "").replace(/[^\d]/g, "").slice(0, 6)}
+            getValueFromEvent={(event) =>
+              String(event?.target?.value ?? "")
+                .replace(/[^\d]/g, "")
+                .slice(0, 6)
+            }
             rules={[
               { required: true, message: isZh ? "请输入验证码" : "Please enter code" },
               { pattern: /^\d{6}$/, message: isZh ? "验证码为6位数字" : "Code must be 6 digits" },
@@ -541,4 +632,3 @@ export function LoginPage() {
     </div>
   );
 }
-

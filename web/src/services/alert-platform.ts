@@ -151,10 +151,19 @@ function mapDutyBlock(item: AlertDutyBlockItem): AlertDutyBlockItem {
   };
 }
 
-export function listAlertDatasources(params?: { project_id?: number; keyword?: string; page?: number; page_size?: number }) {
-  return getData<{ list?: AlertDatasourceItem[]; items?: AlertDatasourceItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/datasources", { params }),
-  ).then((payload) => normalizePagedPayload(payload));
+export function listAlertDatasources(params?: {
+  project_id?: number;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{
+    list?: AlertDatasourceItem[];
+    items?: AlertDatasourceItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/datasources", { params })).then((payload) => normalizePagedPayload(payload));
 }
 
 export function createAlertDatasource(payload: Record<string, unknown>) {
@@ -224,10 +233,19 @@ export interface AlertMonitorObjectItem {
   synced_at?: string;
 }
 
-export function listConsulEndpoints(params?: { project_id?: number; keyword?: string; page?: number; page_size?: number }) {
-  return getData<{ list?: AlertConsulEndpointItem[]; items?: AlertConsulEndpointItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/consul-endpoints", { params }),
-  ).then((payload) => normalizePagedPayload(payload));
+export function listConsulEndpoints(params?: {
+  project_id?: number;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{
+    list?: AlertConsulEndpointItem[];
+    items?: AlertConsulEndpointItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/consul-endpoints", { params })).then((payload) => normalizePagedPayload(payload));
 }
 
 export function createConsulEndpoint(payload: Record<string, unknown>) {
@@ -260,9 +278,13 @@ export function listMonitorObjects(params?: {
   page?: number;
   page_size?: number;
 }) {
-  return getData<{ list?: AlertMonitorObjectItem[]; items?: AlertMonitorObjectItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/monitor-objects", { params }),
-  ).then((payload) => normalizePagedPayload(payload));
+  return getData<{
+    list?: AlertMonitorObjectItem[];
+    items?: AlertMonitorObjectItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/monitor-objects", { params })).then((payload) => normalizePagedPayload(payload));
 }
 
 export function promInstantQuery(id: number, payload: { query: string; time?: string }) {
@@ -273,10 +295,19 @@ export function promRangeQuery(id: number, payload: { query: string; start: stri
   return getData<{ data: unknown }>(http.post(`/alerts/datasources/${id}/query_range`, payload));
 }
 
-export function listAlertSilences(params?: { project_id?: number; keyword?: string; page?: number; page_size?: number }) {
-  return getData<{ list?: AlertSilenceItem[]; items?: AlertSilenceItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/silences", { params }),
-  ).then((payload) =>
+export function listAlertSilences(params?: {
+  project_id?: number;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{
+    list?: AlertSilenceItem[];
+    items?: AlertSilenceItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/silences", { params })).then((payload) =>
     normalizePagedPayload(payload, (item) => ({
       ...item,
       matchers: parseSilenceMatchers(item.matchers_json),
@@ -317,9 +348,13 @@ export function listAlertMonitorRules(params?: {
   page?: number;
   page_size?: number;
 }) {
-  return getData<{ list?: AlertMonitorRuleItem[]; items?: AlertMonitorRuleItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/monitor-rules", { params }),
-  ).then((payload) => normalizePagedPayload(payload, mapMonitorRule));
+  return getData<{
+    list?: AlertMonitorRuleItem[];
+    items?: AlertMonitorRuleItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/monitor-rules", { params })).then((payload) => normalizePagedPayload(payload, mapMonitorRule));
 }
 
 export function createAlertMonitorRule(payload: Record<string, unknown>) {
@@ -381,10 +416,20 @@ export function deleteAlertMonitorRule(id: number) {
   return getData<void>(http.delete(`/alerts/monitor-rules/${id}`));
 }
 
-export function listCloudExpiryRules(params?: { project_id?: number; provider?: string; keyword?: string; page?: number; page_size?: number }) {
-  return getData<{ list?: CloudExpiryRuleItem[]; items?: CloudExpiryRuleItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/cloud-expiry-rules", { params }),
-  ).then((payload) =>
+export function listCloudExpiryRules(params?: {
+  project_id?: number;
+  provider?: string;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{
+    list?: CloudExpiryRuleItem[];
+    items?: CloudExpiryRuleItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/cloud-expiry-rules", { params })).then((payload) =>
     normalizePagedPayload(payload, (item) => ({
       ...item,
       labels: parseStringMap(item.labels_json),
@@ -409,7 +454,9 @@ export function evaluateCloudExpiryRulesNow() {
 }
 
 export function getMonitorRuleAssignees(ruleId: number) {
-  return getData<{ list?: AlertRuleAssigneeItem[]; items?: AlertRuleAssigneeItem[] }>(http.get(`/alerts/monitor-rules/${ruleId}/assignees`)).then((payload) => {
+  return getData<{ list?: AlertRuleAssigneeItem[]; items?: AlertRuleAssigneeItem[] }>(
+    http.get(`/alerts/monitor-rules/${ruleId}/assignees`),
+  ).then((payload) => {
     const source = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.list) ? payload.list : [];
     const items = source.map(mapAssignee);
     return { items, list: items };
@@ -420,10 +467,19 @@ export function upsertMonitorRuleAssignees(ruleId: number, payload: Record<strin
   return getData<AlertRuleAssigneeItem>(http.put(`/alerts/monitor-rules/${ruleId}/assignees`, payload));
 }
 
-export function listDutyBlocks(params?: { monitor_rule_id?: number; project_id?: number; page?: number; page_size?: number }) {
-  return getData<{ list?: AlertDutyBlockItem[]; items?: AlertDutyBlockItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/duty-blocks", { params }),
-  ).then((payload) => normalizePagedPayload(payload, mapDutyBlock));
+export function listDutyBlocks(params?: {
+  monitor_rule_id?: number;
+  project_id?: number;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{
+    list?: AlertDutyBlockItem[];
+    items?: AlertDutyBlockItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/duty-blocks", { params })).then((payload) => normalizePagedPayload(payload, mapDutyBlock));
 }
 
 export function createDutyBlock(payload: Record<string, unknown>) {

@@ -16,9 +16,9 @@ import {
 import { getMyServerAccess } from "../services/project-resource-grants";
 import { extractApiErrorMessage } from "../services/http";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
-import "xterm/css/xterm.css";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
 
 type ExecForm = {
   command: string;

@@ -26,9 +26,7 @@ export async function listServiceCatalog(
   projectId: number,
   params?: { keyword?: string; status?: number; page?: number; page_size?: number },
 ) {
-  return getData<PageData<ServiceCatalogItem>>(
-    http.get(`/projects/${projectId}/service-catalog`, { params }),
-  );
+  return getData<PageData<ServiceCatalogItem>>(http.get(`/projects/${projectId}/service-catalog`, { params }));
 }
 
 export async function upsertServiceCatalog(
@@ -49,15 +47,11 @@ export async function addServiceCatalogLink(
   catalogId: number,
   payload: { link_type: string; ref_id?: number; ref_key?: string },
 ) {
-  return getData<ServiceLinkItem>(
-    http.post(`/projects/${projectId}/service-catalog/${catalogId}/links`, payload),
-  );
+  return getData<ServiceLinkItem>(http.post(`/projects/${projectId}/service-catalog/${catalogId}/links`, payload));
 }
 
 export async function deleteServiceCatalogLink(projectId: number, catalogId: number, linkId: number) {
   return getData(
-    http.delete(`/projects/${projectId}/service-catalog/${catalogId}/links/${linkId}`) as Promise<
-      ApiResponse<unknown>
-    >,
+    http.delete(`/projects/${projectId}/service-catalog/${catalogId}/links/${linkId}`) as Promise<ApiResponse<unknown>>,
   );
 }

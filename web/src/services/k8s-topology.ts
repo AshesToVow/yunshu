@@ -19,11 +19,6 @@ export interface TopologyGraph {
   edges: TopologyEdge[];
 }
 
-export function getWorkloadTopology(params: {
-  cluster_id: number;
-  namespace: string;
-  kind: string;
-  name: string;
-}) {
+export function getWorkloadTopology(params: { cluster_id: number; namespace: string; kind: string; name: string }) {
   return getData<TopologyGraph>(http.get("/k8s/topology", { params }));
 }

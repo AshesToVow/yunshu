@@ -53,11 +53,15 @@ var serverCmd = &cobra.Command{
 			if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
 				return fmt.Errorf("auto migrate: %w", err)
 			}
-			bootLog.Info("Database schema migrated")
+			bootLog.Info("Database schema migrated", "schema_version", bootstrap.ExpectedSchemaVersion)
 		} else {
-			bootLog.Info("AutoMigrate disabled; skipping schema migration",
+			if err := bootstrap.CheckSchemaVersion(app.DB); err != nil {
+				return fmt.Errorf("schema version check failed: %w", err)
+			}
+			bootLog.Info("AutoMigrate disabled; schema version OK",
 				"env", app.Config.App.Env,
-				"hint", "run `yunshu migrate` explicitly, or set database.auto_migrate=true to override")
+				"schema_version", bootstrap.ExpectedSchemaVersion,
+				"hint", "run `yunshu migrate` before rolling upgrade")
 		}
 		if err := app.Enforcer.LoadPolicy(); err != nil {
 			return fmt.Errorf("reload casbin policy: %w", err)

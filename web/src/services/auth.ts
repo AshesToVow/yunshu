@@ -24,7 +24,9 @@ export function sendLoginCodeByUsername(username: string) {
 }
 
 export function sendPasswordLoginCode(payload: SendPasswordLoginCodePayload) {
-  return getData<SendPasswordLoginCodeResult>(http.post("/auth/password-login-code", payload, { silentErrorToast: true }));
+  return getData<SendPasswordLoginCodeResult>(
+    http.post("/auth/password-login-code", payload, { silentErrorToast: true }),
+  );
 }
 
 export function passwordLogin(payload: PasswordLoginPayload) {
@@ -41,11 +43,11 @@ export function registerByEmail(payload: RegisterPayload) {
 }
 
 export function logout() {
-  return getData<MessageData>(http.post("/auth/logout"));
+  return getData<MessageData>(http.post("/auth/logout", null, { skipAuthRefresh: true, silentErrorToast: true }));
 }
 
 export function getCurrentUser() {
-  return getData<UserItem>(http.get("/auth/me"));
+  return getData<UserItem>(http.get("/auth/me", { silentErrorToast: true }));
 }
 
 export function updateProfile(payload: UpdateProfilePayload) {

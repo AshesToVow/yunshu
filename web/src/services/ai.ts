@@ -127,9 +127,7 @@ export function chatAI(payload: {
   enable_write_tools?: boolean;
   disable_rag?: boolean;
 }) {
-  return getData<AIChatResult>(
-    http.post("/ai/chat", payload, { timeout: 120000 }),
-  );
+  return getData<AIChatResult>(http.post("/ai/chat", payload, { timeout: 120000 }));
 }
 
 export function listAISessions(params?: { page?: number; page_size?: number }) {
@@ -181,19 +179,11 @@ export function analyzePodDiagnoseAI(payload: {
   namespace: string;
   name: string;
 }) {
-  return getData<AIPodDiagnoseResult>(
-    http.post("/ai/k8s/pod-diagnose", payload, { timeout: 120000 }),
-  );
+  return getData<AIPodDiagnoseResult>(http.post("/ai/k8s/pod-diagnose", payload, { timeout: 120000 }));
 }
 
-export function analyzeCicdBuildFailAI(payload: {
-  provider?: string;
-  project_id: number;
-  run_id: number;
-}) {
-  return getData<AICicdBuildFailResult>(
-    http.post("/ai/cicd/build-fail", payload, { timeout: 120000 }),
-  );
+export function analyzeCicdBuildFailAI(payload: { provider?: string; project_id: number; run_id: number }) {
+  return getData<AICicdBuildFailResult>(http.post("/ai/cicd/build-fail", payload, { timeout: 120000 }));
 }
 
 export function analyzeAlertExplainAI(payload: {
@@ -202,9 +192,7 @@ export function analyzeAlertExplainAI(payload: {
   project_id?: number;
   window_hours?: number;
 }) {
-  return getData<AIAlertExplainResult>(
-    http.post("/ai/alert/explain", payload, { timeout: 120000 }),
-  );
+  return getData<AIAlertExplainResult>(http.post("/ai/alert/explain", payload, { timeout: 120000 }));
 }
 
 export interface AIApprovalItem {
@@ -223,15 +211,10 @@ export interface AIApprovalItem {
 }
 
 export function listAIApprovals(params?: { status?: string; page?: number; page_size?: number }) {
-  return getData<{ list: AIApprovalItem[]; total: number }>(
-    http.get("/ai/approvals", { params }),
-  );
+  return getData<{ list: AIApprovalItem[]; total: number }>(http.get("/ai/approvals", { params }));
 }
 
-export function reviewAIApproval(
-  id: number,
-  payload: { approve: boolean; execute?: boolean; note?: string },
-) {
+export function reviewAIApproval(id: number, payload: { approve: boolean; execute?: boolean; note?: string }) {
   return getData<AIApprovalItem>(http.post(`/ai/approvals/${id}/review`, payload));
 }
 

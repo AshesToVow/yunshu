@@ -37,19 +37,27 @@ export type RbacDetail = {
 };
 
 export function listRoles(clusterId: number, namespace: string, keyword?: string) {
-  return getData<{ list: RbacRoleItem[] }>(http.get("/rbac/roles", { params: { cluster_id: clusterId, namespace, keyword } }));
+  return getData<{ list: RbacRoleItem[] }>(
+    http.get("/rbac/roles", { params: { cluster_id: clusterId, namespace, keyword } }),
+  );
 }
 
 export function listRoleBindings(clusterId: number, namespace: string, keyword?: string) {
-  return getData<{ list: RbacRoleBindingItem[] }>(http.get("/rbac/rolebindings", { params: { cluster_id: clusterId, namespace, keyword } }));
+  return getData<{ list: RbacRoleBindingItem[] }>(
+    http.get("/rbac/rolebindings", { params: { cluster_id: clusterId, namespace, keyword } }),
+  );
 }
 
 export function listClusterRoles(clusterId: number, keyword?: string) {
-  return getData<{ list: RbacClusterRoleItem[] }>(http.get("/rbac/clusterroles", { params: { cluster_id: clusterId, keyword } }));
+  return getData<{ list: RbacClusterRoleItem[] }>(
+    http.get("/rbac/clusterroles", { params: { cluster_id: clusterId, keyword } }),
+  );
 }
 
 export function listClusterRoleBindings(clusterId: number, keyword?: string) {
-  return getData<{ list: RbacClusterRoleBindingItem[] }>(http.get("/rbac/clusterrolebindings", { params: { cluster_id: clusterId, keyword } }));
+  return getData<{ list: RbacClusterRoleBindingItem[] }>(
+    http.get("/rbac/clusterrolebindings", { params: { cluster_id: clusterId, keyword } }),
+  );
 }
 
 export function getRbacDetail(params: { cluster_id: number; kind: string; name: string; namespace?: string }) {
@@ -76,4 +84,3 @@ export function deleteRbac(
     }),
   );
 }
-

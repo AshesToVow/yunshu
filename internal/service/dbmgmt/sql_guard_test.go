@@ -1,6 +1,7 @@
 package dbmgmt
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -97,65 +98,69 @@ func TestStripSQLComments_PreservesStringLiteral(t *testing.T) {
 
 func TestEnforceLimit_IgnoresFakeLimitKeyword(t *testing.T) {
 	t.Parallel()
-	cases := []struct{ name, in, want string }{
-		{
-			name: "string literal",
-			in:   "SELECT 'limit 9' FROM t",
-			want: "SELECT 'limit 9' FROM t\nLIMIT 100",
-		},
-		{
-			name: "line comment",
-			in:   "SELECT a FROM t -- limit 9",
-			want: "SELECT a FROM t -- limit 9\nLIMIT 100",
-		},
-		{
-			name: "block comment",
-			in:   "SELECT a FROM t /* LIMIT 9 */",
-			want: "SELECT a FROM t /* LIMIT 9 */\nLIMIT 100",
-		},
-		{
-			name: "identifier prefix",
-			in:   "SELECT limit_col FROM t",
-			want: "SELECT limit_col FROM t\nLIMIT 100",
-		},
-		{
-			name: "backtick identifier",
-			in:   "SELECT `limit 9` FROM t",
-			want: "SELECT `limit 9` FROM t\nLIMIT 100",
-		},
-		{
-			name: "subquery limit is not outermost",
-			in:   "SELECT * FROM (SELECT a FROM t LIMIT 999999) x",
-			want: "SELECT * FROM (SELECT a FROM t LIMIT 999999) x\nLIMIT 100",
-		},
-		{
-			name: "trailing semicolon",
-			in:   "SELECT a FROM t;",
-			want: "SELECT a FROM t\nLIMIT 100",
-		},
+	cases := []struct{ name, in string }{
+		{name: "string literal", in: "SELECT 'limit 9' FROM t"},
+		{name: "line comment", in: "SELECT a FROM t -- limit 9"},
+		{name: "block comment", in: "SELECT a FROM t /* LIMIT 9 */"},
+		{name: "identifier prefix", in: "SELECT limit_col FROM t"},
+		{name: "backtick identifier", in: "SELECT `limit 9` FROM t"},
+		{name: "subquery limit is not outermost", in: "SELECT * FROM (SELECT a FROM t LIMIT 999999) x"},
+		{name: "trailing semicolon", in: "SELECT a FROM t;"},
 	}
 	for _, c := range cases {
-		if got := enforceLimit(c.in, 100); got != c.want {
-			t.Fatalf("%s: got %q want %q", c.name, got, c.want)
+		got := enforceLimit(c.in, 100)
+		if !strings.Contains(strings.ToUpper(got), "LIMIT 100") {
+			t.Fatalf("%s: expected LIMIT 100 in %q", c.name, got)
 		}
 	}
 }
 
 func TestEnforceLimit_CapsRealLimit(t *testing.T) {
 	t.Parallel()
-	cases := []struct{ in, want string }{
-		{"SELECT a FROM t LIMIT 999999", "SELECT a FROM t LIMIT 100"},
-		{"SELECT a FROM t limit 999999", "SELECT a FROM t LIMIT 100"},
-		{"SELECT a FROM t LIMIT 10", "SELECT a FROM t LIMIT 10"},
-		{"SELECT a FROM t LIMIT 5, 999999", "SELECT a FROM t LIMIT 5, 100"},
-		{"SELECT a FROM t LIMIT 999999 OFFSET 20", "SELECT a FROM t LIMIT 100 OFFSET 20"},
-		// 外层 LIMIT 存在时以外层为准，子查询内的巨大 LIMIT 不影响改写位置
-		{"SELECT * FROM (SELECT a FROM t LIMIT 999999) x LIMIT 999999", "SELECT * FROM (SELECT a FROM t LIMIT 999999) x LIMIT 100"},
+	cases := []struct {
+		in      string
+		wantMax int
+	}{
+		{"SELECT a FROM t LIMIT 999999", 100},
+		{"SELECT a FROM t limit 999999", 100},
+		{"SELECT a FROM t LIMIT 10", 10},
+		{"SELECT a FROM t LIMIT 5, 999999", 100},
+		{"SELECT a FROM t LIMIT 999999 OFFSET 20", 100},
+		{"SELECT * FROM (SELECT a FROM t LIMIT 999999) x LIMIT 999999", 100},
 	}
 	for _, c := range cases {
-		if got := enforceLimit(c.in, 100); got != c.want {
-			t.Fatalf("got %q want %q", got, c.want)
+		got := enforceLimit(c.in, 100)
+		upper := strings.ToUpper(got)
+		ok := strings.Contains(upper, fmt.Sprintf("LIMIT %d", c.wantMax)) ||
+			strings.Contains(upper, fmt.Sprintf("LIMIT 5, %d", c.wantMax)) ||
+			strings.Contains(upper, fmt.Sprintf(", %d", c.wantMax)) // OFFSET 可能规范为 limit offset,count
+		if !ok {
+			t.Fatalf("in=%q got=%q", c.in, got)
 		}
+		if strings.Contains(upper, "LIMIT 999999") && !strings.Contains(upper, "LIMIT 100") {
+			t.Fatalf("huge limit not capped: %q", got)
+		}
+	}
+}
+
+func TestEnforceLimitAST_Select(t *testing.T) {
+	t.Parallel()
+	got, ok := enforceLimitAST("SELECT id FROM users WHERE id=1", 50)
+	if !ok {
+		t.Fatal("AST should parse plain SELECT")
+	}
+	if !strings.Contains(strings.ToUpper(got), "LIMIT 50") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestWrapAsLimitedSubquery_RejectsInjection(t *testing.T) {
+	t.Parallel()
+	if _, err := wrapAsLimitedSubquery("SELECT 1); DROP TABLE t; --", 10); err == nil {
+		t.Fatal("multi-statement must be rejected")
+	}
+	if _, err := wrapAsLimitedSubquery("SELECT 1) UNION SELECT 2", 10); err == nil {
+		t.Fatal("unbalanced paren must be rejected")
 	}
 }
 

@@ -1,10 +1,4 @@
-import type {
-  MessageData,
-  PageData,
-  PermissionItem,
-  PermissionPayload,
-  PermissionQuery,
-} from "../types/api";
+import type { MessageData, PageData, PermissionItem, PermissionPayload, PermissionQuery } from "../types/api";
 import { DEFAULT_ENABLED_PLUGINS, filterPermissionsByPlugins } from "../modules/plugin-path";
 import { getData, http } from "./http";
 
@@ -69,7 +63,9 @@ export function listAllPermissions() {
     const list: PermissionItem[] = [];
 
     while (true) {
-      const data = await getData<PageData<PermissionItem>>(http.get("/permissions", { params: { page, page_size: pageSize } }));
+      const data = await getData<PageData<PermissionItem>>(
+        http.get("/permissions", { params: { page, page_size: pageSize } }),
+      );
       if (!Array.isArray(data.list) || data.list.length === 0) {
         break;
       }

@@ -9,9 +9,7 @@ export type K8sMyAccess = {
 
 /** 当前登录用户在指定集群上的有效档位（仅需登录） */
 export function getMyK8sAccess(clusterId: number) {
-  return getData<K8sMyAccess>(
-    http.get("/k8s-policies/my-access", { params: { cluster_id: String(clusterId) } }),
-  );
+  return getData<K8sMyAccess>(http.get("/k8s-policies/my-access", { params: { cluster_id: String(clusterId) } }));
 }
 
 export const K8S_ACCESS_RANK = {

@@ -43,10 +43,21 @@ export interface AlertReceiverGroup {
   updated_at?: string;
 }
 
-export function listSubscriptionNodes(params: { project_id: number; parent_id?: number; keyword?: string; enabled?: boolean; page?: number; page_size?: number }) {
-  return getData<{ list?: AlertSubscriptionNode[]; items?: AlertSubscriptionNode[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/subscriptions", { params }),
-  );
+export function listSubscriptionNodes(params: {
+  project_id: number;
+  parent_id?: number;
+  keyword?: string;
+  enabled?: boolean;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{
+    list?: AlertSubscriptionNode[];
+    items?: AlertSubscriptionNode[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/subscriptions", { params }));
 }
 
 /** 拉取订阅树；兼容旧版直接返回 JSON 数组、新版统一 { code, data }（axios 拦截器已解包为 body） */
@@ -64,7 +75,10 @@ export function createSubscriptionNode(payload: Partial<AlertSubscriptionNode> &
   return getData<AlertSubscriptionNode>(http.post("/alerts/subscriptions", payload));
 }
 
-export function updateSubscriptionNode(id: number, payload: Partial<AlertSubscriptionNode> & { project_id: number; name: string }) {
+export function updateSubscriptionNode(
+  id: number,
+  payload: Partial<AlertSubscriptionNode> & { project_id: number; name: string },
+) {
   return getData<AlertSubscriptionNode>(http.put(`/alerts/subscriptions/${id}`, payload));
 }
 
@@ -121,21 +135,33 @@ export function migratePoliciesToSubscriptions(payload?: {
   }>(http.post("/alerts/subscriptions/migrate-from-policies", payload ?? { disable_old: true }));
 }
 
-export function listReceiverGroups(params: { project_id?: number; keyword?: string; enabled?: boolean; page?: number; page_size?: number }) {
-  return getData<{ list?: AlertReceiverGroup[]; items?: AlertReceiverGroup[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/receiver-groups", { params }),
-  );
+export function listReceiverGroups(params: {
+  project_id?: number;
+  keyword?: string;
+  enabled?: boolean;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{
+    list?: AlertReceiverGroup[];
+    items?: AlertReceiverGroup[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/receiver-groups", { params }));
 }
 
 export function createReceiverGroup(payload: Partial<AlertReceiverGroup> & { project_id: number; name: string }) {
   return getData<AlertReceiverGroup>(http.post("/alerts/receiver-groups", payload));
 }
 
-export function updateReceiverGroup(id: number, payload: Partial<AlertReceiverGroup> & { project_id: number; name?: string }) {
+export function updateReceiverGroup(
+  id: number,
+  payload: Partial<AlertReceiverGroup> & { project_id: number; name?: string },
+) {
   return getData<AlertReceiverGroup>(http.put(`/alerts/receiver-groups/${id}`, payload));
 }
 
 export function deleteReceiverGroup(id: number) {
   return getData<void>(http.delete(`/alerts/receiver-groups/${id}`));
 }
-

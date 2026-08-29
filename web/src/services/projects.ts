@@ -211,10 +211,20 @@ export interface ServerDetailItem extends ServerItem {
 
 export async function getProjectServers(
   projectId: number,
-  params: { keyword?: string; page?: number; page_size?: number; group_id?: number; source_type?: string; provider?: string; cloud_account_id?: number },
+  params: {
+    keyword?: string;
+    page?: number;
+    page_size?: number;
+    group_id?: number;
+    source_type?: string;
+    provider?: string;
+    cloud_account_id?: number;
+  },
 ) {
   return await getData(
-    http.get<any, ApiResponse<PageData<ServerItem>>>(`/projects/${projectId}/servers`, { params: { ...params, project_id: projectId } }),
+    http.get<any, ApiResponse<PageData<ServerItem>>>(`/projects/${projectId}/servers`, {
+      params: { ...params, project_id: projectId },
+    }),
   );
 }
 
@@ -223,7 +233,9 @@ export async function upsertProjectServer(projectId: number, payload: ServerUpse
 }
 
 export async function deleteProjectServer(projectId: number, serverId: number) {
-  return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/servers/${serverId}`));
+  return await getData(
+    http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/servers/${serverId}`),
+  );
 }
 
 export async function getProjectServerDetail(
@@ -297,7 +309,11 @@ export async function deleteProjectServerFile(projectId: number, serverId: numbe
 }
 
 export async function testProjectServer(projectId: number, serverId: number) {
-  return await getData(http.post<any, ApiResponse<{ ok: boolean; message: string }>>(`/projects/${projectId}/servers/test`, { server_id: serverId }));
+  return await getData(
+    http.post<any, ApiResponse<{ ok: boolean; message: string }>>(`/projects/${projectId}/servers/test`, {
+      server_id: serverId,
+    }),
+  );
 }
 
 export interface CloudServerActionPayload {
@@ -311,8 +327,14 @@ export interface CloudServerActionResult {
   message: string;
 }
 
-export async function runProjectCloudServerAction(projectId: number, serverId: number, payload: CloudServerActionPayload) {
-  return await getData<CloudServerActionResult>(http.post(`/projects/${projectId}/servers/${serverId}/cloud-actions`, payload));
+export async function runProjectCloudServerAction(
+  projectId: number,
+  serverId: number,
+  payload: CloudServerActionPayload,
+) {
+  return await getData<CloudServerActionResult>(
+    http.post(`/projects/${projectId}/servers/${serverId}/cloud-actions`, payload),
+  );
 }
 
 export interface BatchServerTestResult {
@@ -382,7 +404,9 @@ export async function importProjectServers(projectId: number, file: File) {
 }
 
 export async function downloadProjectServersImportTemplate(projectId: number): Promise<Blob> {
-  return (await http.get(`/projects/${projectId}/servers/import-template`, { responseType: "blob" })) as unknown as Blob;
+  return (await http.get(`/projects/${projectId}/servers/import-template`, {
+    responseType: "blob",
+  })) as unknown as Blob;
 }
 
 export interface ServerGroupItem {
@@ -409,7 +433,9 @@ export interface ServerGroupUpsertPayload {
 }
 
 export async function getProjectServerGroupTree(projectId: number) {
-  return await getData<ServerGroupItem[]>(http.get(`/projects/${projectId}/server-groups/tree`, { params: { project_id: projectId } }));
+  return await getData<ServerGroupItem[]>(
+    http.get(`/projects/${projectId}/server-groups/tree`, { params: { project_id: projectId } }),
+  );
 }
 
 export async function upsertProjectServerGroup(projectId: number, payload: ServerGroupUpsertPayload) {
@@ -472,7 +498,9 @@ export async function syncProjectCloudAccount(projectId: number, accountId: numb
 }
 
 export async function deleteProjectCloudAccount(projectId: number, accountId: number) {
-  return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/cloud-accounts/${accountId}`));
+  return await getData(
+    http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/cloud-accounts/${accountId}`),
+  );
 }
 
 export interface ServiceItem {
@@ -486,18 +514,36 @@ export interface ServiceItem {
   created_at: string;
 }
 
-export async function getProjectServices(projectId: number, params: { server_id?: number; keyword?: string; page?: number; page_size?: number }) {
+export async function getProjectServices(
+  projectId: number,
+  params: { server_id?: number; keyword?: string; page?: number; page_size?: number },
+) {
   return await getData(
-    http.get<any, ApiResponse<PageData<ServiceItem>>>(`/projects/${projectId}/services`, { params: { ...params, project_id: projectId } }),
+    http.get<any, ApiResponse<PageData<ServiceItem>>>(`/projects/${projectId}/services`, {
+      params: { ...params, project_id: projectId },
+    }),
   );
 }
 
-export async function upsertProjectService(projectId: number, payload: { id?: number; server_id: number; name: string; env?: string; labels?: string; remark?: string; status: number }) {
+export async function upsertProjectService(
+  projectId: number,
+  payload: {
+    id?: number;
+    server_id: number;
+    name: string;
+    env?: string;
+    labels?: string;
+    remark?: string;
+    status: number;
+  },
+) {
   return await getData(http.post<any, ApiResponse<ServiceItem>>(`/projects/${projectId}/services`, payload));
 }
 
 export async function deleteProjectService(projectId: number, serviceId: number) {
-  return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/services/${serviceId}`));
+  return await getData(
+    http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/services/${serviceId}`),
+  );
 }
 
 export interface LogSourceItem {
@@ -514,21 +560,39 @@ export interface LogSourceItem {
   created_at: string;
 }
 
-export async function getProjectLogSources(projectId: number, params: { service_id?: number; page?: number; page_size?: number }) {
+export async function getProjectLogSources(
+  projectId: number,
+  params: { service_id?: number; page?: number; page_size?: number },
+) {
   return await getData(
-    http.get<any, ApiResponse<PageData<LogSourceItem>>>(`/projects/${projectId}/log-sources`, { params: { ...params, project_id: projectId } }),
+    http.get<any, ApiResponse<PageData<LogSourceItem>>>(`/projects/${projectId}/log-sources`, {
+      params: { ...params, project_id: projectId },
+    }),
   );
 }
 
 export async function upsertProjectLogSource(
   projectId: number,
-  payload: { id?: number; service_id: number; log_type?: string; path: string; encoding?: string; timezone?: string; multiline_rule?: string; include_regex?: string; exclude_regex?: string; status: number },
+  payload: {
+    id?: number;
+    service_id: number;
+    log_type?: string;
+    path: string;
+    encoding?: string;
+    timezone?: string;
+    multiline_rule?: string;
+    include_regex?: string;
+    exclude_regex?: string;
+    status: number;
+  },
 ) {
   return await getData(http.post<any, ApiResponse<LogSourceItem>>(`/projects/${projectId}/log-sources`, payload));
 }
 
 export async function deleteProjectLogSource(projectId: number, logSourceId: number) {
-  return await getData(http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/log-sources/${logSourceId}`));
+  return await getData(
+    http.delete<any, ApiResponse<{ message: string }>>(`/projects/${projectId}/log-sources/${logSourceId}`),
+  );
 }
 
 export interface LogSearchItem {

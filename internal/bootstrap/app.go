@@ -268,6 +268,11 @@ func (b *Builder) WithGin() *Builder {
 
 	engine := gin.New()
 	engine.Use(middleware.Recovery(b.app.Logger))
+	cspOn := true
+	if b.app.Config.Auth.CSPEnabled != nil {
+		cspOn = *b.app.Config.Auth.CSPEnabled
+	}
+	engine.Use(middleware.SecurityHeaders(cspOn))
 	engine.Use(middleware.RequestLogger(b.app.Logger))
 	engine.Use(middleware.ErrorHandler())
 	middleware.RegisterOpsEndpoints(engine, b.app.DB, b.app.Redis, time.Now())

@@ -198,7 +198,9 @@ export async function upsertCiConfig(projectId: number, serviceId: number, paylo
 
 export async function listDeployConfigs(projectId: number, serviceId: number) {
   return getData<CicdDeployConfig[]>(
-    http.get(`${projectPath(projectId, "/services")}/${serviceId}/deploy-configs`) as Promise<ApiResponse<CicdDeployConfig[]>>,
+    http.get(`${projectPath(projectId, "/services")}/${serviceId}/deploy-configs`) as Promise<
+      ApiResponse<CicdDeployConfig[]>
+    >,
   );
 }
 
@@ -211,7 +213,9 @@ export interface CicdArtifactItem {
 
 export async function listCicdArtifacts(projectId: number, serviceId: number) {
   return getData<CicdArtifactItem[]>(
-    http.get(`${projectPath(projectId, "/services")}/${serviceId}/artifacts`) as Promise<ApiResponse<CicdArtifactItem[]>>,
+    http.get(`${projectPath(projectId, "/services")}/${serviceId}/artifacts`) as Promise<
+      ApiResponse<CicdArtifactItem[]>
+    >,
   );
 }
 
@@ -281,7 +285,9 @@ export async function deleteDeployConfig(projectId: number, serviceId: number, c
 
 export async function triggerBuild(projectId: number, serviceId: number, payload: Record<string, unknown>) {
   return getData<CicdBuildRun>(
-    http.post(`${projectPath(projectId, "/services")}/${serviceId}/builds`, payload) as Promise<ApiResponse<CicdBuildRun>>,
+    http.post(`${projectPath(projectId, "/services")}/${serviceId}/builds`, payload) as Promise<
+      ApiResponse<CicdBuildRun>
+    >,
   );
 }
 
@@ -349,7 +355,9 @@ export interface ReleaseVerifyResult {
 
 export async function verifyReleaseRun(projectId: number, runId: number) {
   return getData<ReleaseVerifyResult>(
-    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/verify`, {}) as Promise<ApiResponse<ReleaseVerifyResult>>,
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/verify`, {}) as Promise<
+      ApiResponse<ReleaseVerifyResult>
+    >,
   );
 }
 
@@ -683,15 +691,11 @@ export async function createRegistry(payload: Record<string, unknown>) {
 }
 
 export async function updateRegistry(id: number, payload: Record<string, unknown>) {
-  return getData<ImageRegistryItem>(
-    http.put(`/registries/${id}`, payload) as Promise<ApiResponse<ImageRegistryItem>>,
-  );
+  return getData<ImageRegistryItem>(http.put(`/registries/${id}`, payload) as Promise<ApiResponse<ImageRegistryItem>>);
 }
 
 export async function deleteRegistry(id: number) {
-  return getData<{ deleted: boolean }>(
-    http.delete(`/registries/${id}`) as Promise<ApiResponse<{ deleted: boolean }>>,
-  );
+  return getData<{ deleted: boolean }>(http.delete(`/registries/${id}`) as Promise<ApiResponse<{ deleted: boolean }>>);
 }
 
 export async function pingRegistry(id: number) {

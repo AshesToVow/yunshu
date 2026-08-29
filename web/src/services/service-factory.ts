@@ -31,4 +31,3 @@ export function createK8sResourceService<Item, Detail>(basePath: string) {
     post: <T>(subPath: string, body: Record<string, any>) => getData<T>(http.post(`${basePath}${subPath}`, body)),
   };
 }
-

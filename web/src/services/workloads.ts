@@ -125,12 +125,7 @@ export function restartDeployment(clusterId: number, namespace: string, name: st
   return deploymentsSvc.post<boolean>("/restart", { cluster_id: clusterId, namespace, name });
 }
 
-export function rolloutUndoDeployment(
-  clusterId: number,
-  namespace: string,
-  name: string,
-  revision?: number,
-) {
+export function rolloutUndoDeployment(clusterId: number, namespace: string, name: string, revision?: number) {
   return deploymentsSvc.post<Record<string, unknown>>("/rollout-undo", {
     cluster_id: clusterId,
     namespace,
@@ -213,12 +208,7 @@ export function restartStatefulSet(clusterId: number, namespace: string, name: s
   return statefulsetsSvc.post<boolean>("/restart", { cluster_id: clusterId, namespace, name });
 }
 
-export function rolloutUndoStatefulSet(
-  clusterId: number,
-  namespace: string,
-  name: string,
-  revision?: number,
-) {
+export function rolloutUndoStatefulSet(clusterId: number, namespace: string, name: string, revision?: number) {
   return statefulsetsSvc.post<Record<string, unknown>>("/rollout-undo", {
     cluster_id: clusterId,
     namespace,
@@ -347,4 +337,3 @@ export function patchCronJobContainerResources(
 export function listCronJobPods(clusterId: number, namespace: string, name: string) {
   return cronjobsSvc.get<RelatedPodItem[]>("/pods", k8sParams(clusterId, { namespace, name }));
 }
-

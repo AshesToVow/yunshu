@@ -64,12 +64,26 @@ type RegisterResponse struct {
 }
 
 type LoginResponse struct {
-	Token              string             `json:"token"`
+	// Token 已弃用：浏览器走 HttpOnly Cookie，响应体不再回传 JWT，避免落入 JS/localStorage。
+	Token              string             `json:"token,omitempty"`
 	ExpiresAt          time.Time          `json:"expires_at"`
+	RefreshExpiresAt   time.Time          `json:"refresh_expires_at,omitempty"`
 	User               UserDetailResponse `json:"user"`
 	MustChangePassword bool               `json:"must_change_password"`
 	PasswordExpired    bool               `json:"password_expired"`
 	PasswordPolicyHint string             `json:"password_policy_hint,omitempty"`
+
+	// 仅服务端写 Cookie 用，不进入 JSON。
+	AccessToken  string `json:"-"`
+	RefreshToken string `json:"-"`
+}
+
+// RefreshResponse 刷新会话后的公开字段。
+type RefreshResponse struct {
+	ExpiresAt        time.Time `json:"expires_at"`
+	RefreshExpiresAt time.Time `json:"refresh_expires_at"`
+	AccessToken      string    `json:"-"`
+	RefreshToken     string    `json:"-"`
 }
 
 type PasswordPolicyResponse struct {

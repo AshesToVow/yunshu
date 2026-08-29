@@ -261,7 +261,11 @@ function downloadText(content: string, filename: string, mime = "text/plain;char
 export function downloadLoggieBundle(bundle: LoggieBootstrapResult) {
   downloadText(bundle.pipeline_yaml, bundle.pipeline_filename || "pipeline.yml", "application/x-yaml;charset=utf-8");
   if (bundle.pipelines_only_yaml) {
-    downloadText(bundle.pipelines_only_yaml, bundle.pipelines_filename || "pipelines.yml", "application/x-yaml;charset=utf-8");
+    downloadText(
+      bundle.pipelines_only_yaml,
+      bundle.pipelines_filename || "pipelines.yml",
+      "application/x-yaml;charset=utf-8",
+    );
   }
   if (bundle.env_file) {
     downloadText(bundle.env_file, bundle.env_filename || "loggie-heartbeat.env");
@@ -298,23 +302,32 @@ export async function getESConfigPreview() {
 }
 
 export async function getLoggieStatus(projectId: number) {
-  return await getData(http.get<any, ApiResponse<{ list: LoggieStatusItem[] }>>(`/projects/${projectId}/loggie/status`));
+  return await getData(
+    http.get<any, ApiResponse<{ list: LoggieStatusItem[] }>>(`/projects/${projectId}/loggie/status`),
+  );
 }
 
 export async function getLoggieBootstrapSources(projectId: number, serverId: number) {
   return await getData(
-    http.get<any, ApiResponse<{ list: LoggieBootstrapSourcePreview[] }>>(`/projects/${projectId}/loggie/bootstrap-sources`, {
-      params: { server_id: serverId },
-    }),
+    http.get<any, ApiResponse<{ list: LoggieBootstrapSourcePreview[] }>>(
+      `/projects/${projectId}/loggie/bootstrap-sources`,
+      {
+        params: { server_id: serverId },
+      },
+    ),
   );
 }
 
 export async function bootstrapLoggie(projectId: number, payload: LoggieBootstrapPayload) {
-  return await getData(http.post<any, ApiResponse<LoggieBootstrapResult>>(`/projects/${projectId}/loggie/bootstrap`, payload));
+  return await getData(
+    http.post<any, ApiResponse<LoggieBootstrapResult>>(`/projects/${projectId}/loggie/bootstrap`, payload),
+  );
 }
 
 export async function deployLoggieConfig(projectId: number, payload: LoggieDeployPayload) {
-  return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/deploy`, payload));
+  return await getData(
+    http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/deploy`, payload),
+  );
 }
 
 export async function installLoggie(
@@ -348,7 +361,9 @@ export async function stopLoggie(projectId: number, payload: LoggieDeployPayload
 }
 
 export async function restartLoggie(projectId: number, payload: LoggieDeployPayload) {
-  return await getData(http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/restart`, payload));
+  return await getData(
+    http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/restart`, payload),
+  );
 }
 
 export async function syncLoggieFromLogSources(projectId: number, payload: LoggieDeployPayload) {

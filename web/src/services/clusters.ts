@@ -137,4 +137,3 @@ export function listPods(id: number, namespace: string) {
 export function listComponentStatuses(id: number) {
   return getData<{ list: ComponentStatusItem[] }>(http.get(`/clusters/${id}/component-statuses`));
 }
-

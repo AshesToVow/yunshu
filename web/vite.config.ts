@@ -53,7 +53,8 @@ export default defineConfig({
         },
       },
     },
-    chunkSizeWarningLimit: 1600,
+    // 路由级 lazy + monaco/xterm 已拆 vendor；阈值回到接近默认以暴露真实膨胀
+    chunkSizeWarningLimit: 700,
   },
   server: {
     host: "0.0.0.0",

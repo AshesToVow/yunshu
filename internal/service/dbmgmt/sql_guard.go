@@ -357,23 +357,19 @@ func enforceLimit(sqlText string, maxRows int) string {
 	if maxRows <= 0 {
 		maxRows = 1000
 	}
-	// 必须用引号/注释感知扫描定位真实 LIMIT 子句：
-	// 字面量（SELECT 'limit 9'）、注释（/* LIMIT 9 */）、标识符（limit_col）中的
-	// "LIMIT " 若被误判为已有上限，会直接跳过限制造成全表扫描。
+	if rewritten, ok := enforceLimitAST(text, maxRows); ok {
+		return rewritten
+	}
+	// AST 失败时回退到引号/注释感知扫描器。
 	if idx := findTrailingLimit(text); idx >= 0 {
-		// 已有 LIMIT：若数值超过上限则追加子查询包装（简单场景直接截断重写）
 		return rewriteLimitClauseAt(text, idx, maxRows)
 	}
 	if reLimitAppendable.MatchString(text) {
-		// 用换行分隔：若原语句以 -- / # 行注释结尾，同行追加会让 LIMIT 落进注释里失效。
 		return fmt.Sprintf("%s\nLIMIT %d", strings.TrimRight(text, "; \t\r\n"), maxRows)
 	}
-	// 其余只读语句（DESCRIBE/DESC/EXPLAIN）不可追加 LIMIT，
-	// 行数上限由 scanRows 的二次截断兜底。
 	return text
 }
 
-// isSQLIdentByte 判断字节能否构成 SQL 标识符，用于 LIMIT 关键字的词边界判定。
 func isSQLIdentByte(c byte) bool {
 	switch {
 	case c >= '0' && c <= '9', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
@@ -478,7 +474,12 @@ func rewriteLimitClauseAt(text string, idx, maxRows int) string {
 	rest := strings.TrimSpace(text[idx+5:])
 	m := reLimitRest.FindStringSubmatch(rest)
 	if m == nil {
-		return fmt.Sprintf("SELECT * FROM (%s) _ys_lim LIMIT %d", strings.TrimRight(strings.TrimSpace(text), ";"), maxRows)
+		// 无法安全解析 LIMIT 尾部：禁止把用户原文直接拼进子查询（注入面）。
+		if wrapped, err := wrapAsLimitedSubquery(text, maxRows); err == nil {
+			return wrapped
+		}
+		// 最后兜底：追加硬 LIMIT（可能产生语法错误，由上层执行失败拒绝）
+		return fmt.Sprintf("%s\nLIMIT %d", strings.TrimRight(strings.TrimSpace(text), ";"), maxRows)
 	}
 	consumed := m[0]
 	tail := rest[len(consumed):]

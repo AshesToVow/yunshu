@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"time"
+
 	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/model"
@@ -121,16 +123,21 @@ func (h *AuthHandler) SendPasswordLoginCode(c *gin.Context) {
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
-	ServeJSON(c, func(ctx context.Context, req service.LoginRequest) (*service.LoginResponse, error) {
-		data, err := h.service.Login(ctx, req)
-		if err != nil {
-			h.recordLogin(c, req.Username, model.LoginSourcePassword, false, loginErrMessage(err), nil)
-			return nil, err
-		}
-		uid := data.User.ID
-		h.recordLogin(c, data.User.Username, model.LoginSourcePassword, true, "登录成功", &uid)
-		return data, nil
-	})
+	var req service.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, constants.ErrBadRequest)
+		return
+	}
+	data, err := h.service.Login(c.Request.Context(), req)
+	if err != nil {
+		h.recordLogin(c, req.Username, model.LoginSourcePassword, false, loginErrMessage(err), nil)
+		response.Error(c, err)
+		return
+	}
+	uid := data.User.ID
+	h.recordLogin(c, data.User.Username, model.LoginSourcePassword, true, "登录成功", &uid)
+	h.applySessionCookies(c, data.AccessToken, data.RefreshToken, data.ExpiresAt, data.RefreshExpiresAt)
+	response.Success(c, publicLoginResponse(data))
 }
 
 // EmailLogin godoc
@@ -147,16 +154,21 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/auth/email-login [post]
 func (h *AuthHandler) EmailLogin(c *gin.Context) {
-	ServeJSON(c, func(ctx context.Context, req service.EmailLoginRequest) (*service.LoginResponse, error) {
-		data, err := h.service.EmailLogin(ctx, req)
-		if err != nil {
-			h.recordLogin(c, req.Email, model.LoginSourceEmail, false, loginErrMessage(err), nil)
-			return nil, err
-		}
-		uid := data.User.ID
-		h.recordLogin(c, data.User.Username, model.LoginSourceEmail, true, "登录成功", &uid)
-		return data, nil
-	})
+	var req service.EmailLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, constants.ErrBadRequest)
+		return
+	}
+	data, err := h.service.EmailLogin(c.Request.Context(), req)
+	if err != nil {
+		h.recordLogin(c, req.Email, model.LoginSourceEmail, false, loginErrMessage(err), nil)
+		response.Error(c, err)
+		return
+	}
+	uid := data.User.ID
+	h.recordLogin(c, data.User.Username, model.LoginSourceEmail, true, "登录成功", &uid)
+	h.applySessionCookies(c, data.AccessToken, data.RefreshToken, data.ExpiresAt, data.RefreshExpiresAt)
+	response.Success(c, publicLoginResponse(data))
 }
 
 // Register godoc
@@ -177,26 +189,83 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 // Logout godoc
 // @Summary Logout
-// @Description Logout the current user by invalidating the current token.
+// @Description Logout the current user by invalidating the current token and clearing auth cookies.
 // @Tags Auth
 // @Produce json
-// @Security BearerAuth
 // @Success 200 {object} response.Body{data=MessageData} "success"
-// @Failure 401 {object} response.Body "未登录或登录已失效"
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
-	claims, ok := auth.ClaimsFromContext(c)
-	if !ok {
-		response.Error(c, constants.ErrUnauthorized)
-		return
+	tokenID := ""
+	if claims, ok := auth.ClaimsFromContext(c); ok {
+		tokenID = claims.TokenID
+	} else if raw := auth.ExtractAccessToken(c); raw != "" {
+		if claims, err := auth.ParseToken(h.service.JWTSecret(), raw); err == nil {
+			tokenID = claims.TokenID
+		}
 	}
-
-	if err := h.service.Logout(c.Request.Context(), claims.TokenID); err != nil {
+	refreshToken := auth.ExtractRefreshToken(c)
+	if err := h.service.Logout(c.Request.Context(), tokenID, refreshToken); err != nil {
+		// 仍清 Cookie，避免客户端卡死在半失效态
+		h.clearSessionCookies(c)
 		response.Error(c, err)
 		return
 	}
+	h.clearSessionCookies(c)
 	response.Success(c, gin.H{"message": "退出登录成功"})
+}
+
+// Refresh godoc
+// @Summary Refresh session cookies
+// @Description Rotate refresh token (Redis one-time) and issue new HttpOnly access/refresh cookies.
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} response.Body{data=service.RefreshResponse} "success"
+// @Failure 401 {object} response.Body "未登录或登录已失效"
+// @Router /api/v1/auth/refresh [post]
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	rt := auth.ExtractRefreshToken(c)
+	if rt == "" {
+		response.Error(c, constants.ErrLoginSessionExpired)
+		return
+	}
+	data, err := h.service.RefreshSession(c.Request.Context(), rt)
+	if err != nil {
+		h.clearSessionCookies(c)
+		response.Error(c, err)
+		return
+	}
+	h.applySessionCookies(c, data.AccessToken, data.RefreshToken, data.ExpiresAt, data.RefreshExpiresAt)
+	response.Success(c, service.RefreshResponse{
+		ExpiresAt:        data.ExpiresAt,
+		RefreshExpiresAt: data.RefreshExpiresAt,
+	})
+}
+
+func publicLoginResponse(data *service.LoginResponse) service.LoginResponse {
+	if data == nil {
+		return service.LoginResponse{}
+	}
+	out := *data
+	out.Token = ""
+	out.AccessToken = ""
+	out.RefreshToken = ""
+	return out
+}
+
+func (h *AuthHandler) applySessionCookies(c *gin.Context, access, refresh string, accessExp, refreshExp time.Time) {
+	auth.WriteSessionCookies(c, auth.SessionCookies{
+		AccessToken:      access,
+		RefreshToken:     refresh,
+		AccessExpiresAt:  accessExp,
+		RefreshExpiresAt: refreshExp,
+		Secure:           h.service.CookieSecure(),
+		Domain:           h.service.CookieDomain(),
+	})
+}
+
+func (h *AuthHandler) clearSessionCookies(c *gin.Context) {
+	auth.ClearSessionCookies(c, h.service.CookieSecure(), 0, h.service.CookieDomain())
 }
 
 // Me godoc

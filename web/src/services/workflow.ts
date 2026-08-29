@@ -98,9 +98,13 @@ export async function saveWorkflowDefinition(
   ticketType = "default",
 ) {
   return getData<WorkflowDefinition>(
-    http.put(`/workflow/definitions/${domain}/projects/${projectId}`, { stages }, {
-      params: { ticket_type: ticketType },
-    }) as unknown as Promise<ApiResponse<WorkflowDefinition>>,
+    http.put(
+      `/workflow/definitions/${domain}/projects/${projectId}`,
+      { stages },
+      {
+        params: { ticket_type: ticketType },
+      },
+    ) as unknown as Promise<ApiResponse<WorkflowDefinition>>,
   );
 }
 
@@ -123,14 +127,16 @@ type TicketListResult = {
   page_size: number;
 };
 
-export async function listWorkflowTickets(query: {
-  domain?: string;
-  ticket_type?: string;
-  project_id?: number;
-  status?: string;
-  page?: number;
-  page_size?: number;
-} = {}) {
+export async function listWorkflowTickets(
+  query: {
+    domain?: string;
+    ticket_type?: string;
+    project_id?: number;
+    status?: string;
+    page?: number;
+    page_size?: number;
+  } = {},
+) {
   return getData<TicketListResult>(
     http.get("/workflow/tickets", { params: query }) as unknown as Promise<ApiResponse<TicketListResult>>,
   );
