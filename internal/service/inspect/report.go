@@ -229,23 +229,24 @@ func filterSamples(samples []MetricSample, mode string) []MetricSample {
 	}
 }
 
+// scorecard 计算健康分与等级。扣分权重与等级阈值统一取 report_criteria.go 的常量，
+// 避免这里改了权重而报告「判定依据」章节仍展示旧规则（两处曾各自硬编码 8/3/100）。
 func scorecard(c CollectResult) (float64, string) {
 	if c.Total == 0 {
-		return 100, "A"
+		return scoreBase, "A"
 	}
-	// 严重扣 8 分、警告扣 3 分，下限 0
-	score := 100.0 - float64(c.Critical)*8 - float64(c.Warning)*3
+	score := scoreBase - float64(c.Critical)*scoreCriticalDeduct - float64(c.Warning)*scoreWarningDeduct
 	if score < 0 {
 		score = 0
 	}
 	score = math.Round(score*10) / 10
 	grade := "A"
 	switch {
-	case score < 60:
+	case score < gradeThresholdD:
 		grade = "D"
-	case score < 75:
+	case score < gradeThresholdC:
 		grade = "C"
-	case score < 90:
+	case score < gradeThresholdB:
 		grade = "B"
 	}
 	return score, grade

@@ -15,6 +15,11 @@ const (
 	inspectJobQueueSize      = 128
 	inspectRunTimeout        = 10 * time.Minute
 	inspectStaleRunningAfter = 30 * time.Minute
+	// inspectDBCtxTimeout 兜底巡检落库/发信用的后台 context：
+	// 它必须比 inspectRunTimeout 长，否则采集刚好跑满超时的那次巡检会连「标记失败」都写不进去。
+	inspectDBCtxTimeout = inspectRunTimeout + 2*time.Minute
+	// inspectFailRunTimeout 单次失败落库 + 告警邮件的上限。
+	inspectFailRunTimeout = 30 * time.Second
 )
 
 // startWorkers 启动巡检异步队列（幂等）。HTTP 入队后由 worker 执行，避免阻塞「立即巡检」。
@@ -134,7 +139,9 @@ func (s *Service) reclaimOrphanRuns(ctx context.Context) {
 	}
 	log := slog.Default().With("component", "inspect.worker")
 	finished := time.Now()
-	staleBefore := finished.Add(-5 * time.Minute)
+	// 阈值必须 >= inspectRunTimeout：否则一次仍在正常执行（未超时）的巡检会被误判为「重启遗留」而标记失败。
+	// 进程重启场景下 started_at 本就早于此刻，用 inspectRunTimeout 作阈值不会漏收。
+	staleBefore := finished.Add(-inspectRunTimeout)
 	res := s.db.WithContext(ctx).Model(&model.InspectRun{}).
 		Where("status = ? AND (started_at IS NULL OR started_at < ?)", "running", staleBefore).
 		Updates(map[string]any{

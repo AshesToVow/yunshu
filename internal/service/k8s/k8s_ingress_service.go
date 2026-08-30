@@ -18,6 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
+
+	kom "github.com/weibaohui/kom/kom"
 )
 
 type IngressListQuery = ClusterNamespaceKeywordQuery
@@ -92,13 +94,29 @@ func NewK8sIngressService(runtime *K8sRuntimeService, accessRepo interfaces.K8sC
 var ingressGVK = schema.GroupVersionKind{Group: "networking.k8s.io", Version: "v1", Kind: "Ingress"}
 var ingressClassGVK = schema.GroupVersionKind{Group: "networking.k8s.io", Version: "v1", Kind: "IngressClass"}
 
+// resolveIngressGVK 解析集群实际提供的 Ingress 版本（networking.k8s.io/v1 → v1beta1 → extensions/v1beta1）。
+// 注意：v1beta1 的 spec.backend 字段与 v1 不同，转换为 networkingv1.Ingress 时后端信息可能缺失，
+// 但名称/命名空间/规则主机等列表展示字段仍可用。
+func (s *K8sIngressService) resolveIngressGVK(k *kom.Kubectl) (schema.GroupVersionKind, error) {
+	return resolveGVKForCluster(k, ingressGVK)
+}
+
+// resolveIngressClassGVK 解析集群实际提供的 IngressClass 版本。
+func (s *K8sIngressService) resolveIngressClassGVK(k *kom.Kubectl) (schema.GroupVersionKind, error) {
+	return resolveGVKForCluster(k, ingressClassGVK)
+}
+
 // List 查询列表相关的业务逻辑。
 func (s *K8sIngressService) List(ctx context.Context, q IngressListQuery) ([]IngressItem, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
 	if err != nil {
 		return nil, err
 	}
-	listU, err := s.dyn.ListByGVK(ctx, k, ingressGVK, q.Namespace)
+	ingGVK, err := s.resolveIngressGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	listU, err := s.dyn.ListByGVK(ctx, k, ingGVK, q.Namespace)
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.ingress", "api", err, constants.ErrFmt7f0818fd6f52)
 	}
@@ -128,7 +146,11 @@ func (s *K8sIngressService) Detail(ctx context.Context, q IngressDetailQuery) (*
 	if err != nil {
 		return nil, err
 	}
-	u, err := s.dyn.GetByGVK(ctx, k, ingressGVK, q.Namespace, q.Name)
+	ingGVK, err := s.resolveIngressGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	u, err := s.dyn.GetByGVK(ctx, k, ingGVK, q.Namespace, q.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg82a55c47e927)
@@ -138,8 +160,9 @@ func (s *K8sIngressService) Detail(ctx context.Context, q IngressDetailQuery) (*
 	var obj networkingv1.Ingress
 	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &obj)
 	copyObj := obj.DeepCopy()
-	copyObj.APIVersion = "networking.k8s.io/v1"
-	copyObj.Kind = "Ingress"
+	// 回填集群实际版本，避免把 v1beta1 对象标成 networking.k8s.io/v1 误导用户编辑。
+	copyObj.APIVersion = ingGVK.GroupVersion().String()
+	copyObj.Kind = ingGVK.Kind
 	copyObj.ManagedFields = nil
 	y, _ := yaml.Marshal(copyObj)
 	return &IngressDetail{Item: ingressToItem(copyObj), YAML: string(y)}, nil
@@ -155,8 +178,10 @@ func (s *K8sIngressService) Apply(ctx context.Context, req IngressApplyRequest) 
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
 	refs := extractIngressRefs(req.Manifest)
+	// Apply 本身以 manifest 内声明的 apiVersion 为准；此处仅为「就绪回读」解析集群实际版本。
+	ingGVK, gvkErr := s.resolveIngressGVK(k)
 	err = s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		if len(refs) == 0 {
+		if len(refs) == 0 || gvkErr != nil {
 			return false
 		}
 		for _, r := range refs {
@@ -167,7 +192,7 @@ func (s *K8sIngressService) Apply(ctx context.Context, req IngressApplyRequest) 
 			if ns == "" {
 				ns = "default"
 			}
-			if _, e := s.dyn.GetByGVK(c, k, ingressGVK, ns, r.Name); e != nil {
+			if _, e := s.dyn.GetByGVK(c, k, ingGVK, ns, r.Name); e != nil {
 				return false
 			}
 		}
@@ -185,7 +210,11 @@ func (s *K8sIngressService) Delete(ctx context.Context, req IngressDeleteRequest
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, ingressGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
+	ingGVK, err := s.resolveIngressGVK(k)
+	if err != nil {
+		return err
+	}
+	if err := s.dyn.DeleteByGVK(ctx, k, ingGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -200,11 +229,19 @@ func (s *K8sIngressService) ListClasses(ctx context.Context, q IngressClassListQ
 	if err != nil {
 		return nil, err
 	}
-	listU, err := s.dyn.ListByGVK(ctx, k, ingressClassGVK, "")
+	clsGVK, err := s.resolveIngressClassGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	listU, err := s.dyn.ListByGVK(ctx, k, clsGVK, "")
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.ingress", "api", err, constants.ErrFmt6c250f47f18b)
 	}
-	ingsU, err := s.dyn.ListByGVK(ctx, k, ingressGVK, "")
+	ingGVK, err := s.resolveIngressGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	ingsU, err := s.dyn.ListByGVK(ctx, k, ingGVK, "")
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.ingress", "api", err, constants.ErrFmt7f0818fd6f52)
 	}
@@ -245,7 +282,11 @@ func (s *K8sIngressService) DetailClass(ctx context.Context, q IngressClassDetai
 	if err != nil {
 		return nil, err
 	}
-	u, err := s.dyn.GetByGVK(ctx, k, ingressClassGVK, "", q.Name)
+	clsGVK, err := s.resolveIngressClassGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	u, err := s.dyn.GetByGVK(ctx, k, clsGVK, "", q.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgeb6e8490034b)
@@ -255,8 +296,8 @@ func (s *K8sIngressService) DetailClass(ctx context.Context, q IngressClassDetai
 	var obj networkingv1.IngressClass
 	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &obj)
 	copyObj := obj.DeepCopy()
-	copyObj.APIVersion = "networking.k8s.io/v1"
-	copyObj.Kind = "IngressClass"
+	copyObj.APIVersion = clsGVK.GroupVersion().String()
+	copyObj.Kind = clsGVK.Kind
 	copyObj.ManagedFields = nil
 	y, _ := yaml.Marshal(copyObj)
 	return &IngressClassDetail{Item: ingressClassToItem(copyObj, 0), YAML: string(y)}, nil
@@ -272,15 +313,17 @@ func (s *K8sIngressService) ApplyClass(ctx context.Context, req IngressClassAppl
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
 	refs := extractIngressClassRefs(req.Manifest)
+	// 同 Apply：仅用于就绪回读。
+	clsGVK, gvkErr := s.resolveIngressClassGVK(k)
 	err = s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		if len(refs) == 0 {
+		if len(refs) == 0 || gvkErr != nil {
 			return false
 		}
 		for _, name := range refs {
 			if strings.TrimSpace(name) == "" {
 				continue
 			}
-			if _, e := s.dyn.GetByGVK(c, k, ingressClassGVK, "", name); e != nil {
+			if _, e := s.dyn.GetByGVK(c, k, clsGVK, "", name); e != nil {
 				return false
 			}
 		}
@@ -298,7 +341,11 @@ func (s *K8sIngressService) DeleteClass(ctx context.Context, req IngressClassDel
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, ingressClassGVK, "", req.Name, req.K8sDeleteOptions); err != nil {
+	clsGVK, err := s.resolveIngressClassGVK(k)
+	if err != nil {
+		return err
+	}
+	if err := s.dyn.DeleteByGVK(ctx, k, clsGVK, "", req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

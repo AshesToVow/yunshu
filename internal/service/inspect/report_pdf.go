@@ -41,7 +41,7 @@ func renderBinaryPDF(data ReportData, html []byte) []byte {
 			return pdf
 		}
 	}
-	if inspectStructuredFallbackDisabled() {
+	if !inspectStructuredFallbackEnabled() {
 		return nil
 	}
 	return renderStructuredPDF(data)
@@ -52,11 +52,12 @@ func inspectUseWkhtmltopdf() bool {
 	return v == "1" || v == "true" || v == "yes"
 }
 
-// inspectStructuredFallbackDisabled 关闭最后的结构化兜底（INSPECT_PDF_STRUCTURED_FALLBACK=false）。
-// 关闭后若 Chromium 不可用，PDF 由前端导出生成，避免用户下到低保真版本。
-func inspectStructuredFallbackDisabled() bool {
+// inspectStructuredFallbackEnabled 是否启用最后的结构化兜底（INSPECT_PDF_STRUCTURED_FALLBACK=true）。
+// 默认关闭：一旦服务端写入低保真 PDF，前端「PDF」按钮会直接下载它，用户再也拿不到
+// html2canvas 生成的高保真版本，所以宁可不产出、让前端补位。
+func inspectStructuredFallbackEnabled() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("INSPECT_PDF_STRUCTURED_FALLBACK")))
-	return v == "0" || v == "false" || v == "no"
+	return v == "1" || v == "true" || v == "yes"
 }
 
 func inspectServerPDFMode() string {

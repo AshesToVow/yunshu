@@ -15,6 +15,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
+
+	kom "github.com/weibaohui/kom/kom"
 )
 
 type HPAListQuery = ClusterNamespaceKeywordQuery
@@ -50,12 +52,21 @@ func NewK8sHPAService(runtime *K8sRuntimeService) *K8sHPAService {
 
 var hpaGVK = schema.GroupVersionKind{Group: "autoscaling", Version: "v2", Kind: "HorizontalPodAutoscaler"}
 
+// resolveHPAGVK 解析集群实际提供的 HPA 版本（v2 → v2beta2 → v2beta1 → v1）。
+func (s *K8sHPAService) resolveHPAGVK(k *kom.Kubectl) (schema.GroupVersionKind, error) {
+	return resolveGVKForCluster(k, hpaGVK)
+}
+
 func (s *K8sHPAService) List(ctx context.Context, q HPAListQuery) ([]HPAItem, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
 	if err != nil {
 		return nil, err
 	}
-	listU, err := s.dyn.ListByGVK(ctx, k, hpaGVK, q.Namespace)
+	gvk, err := s.resolveHPAGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	listU, err := s.dyn.ListByGVK(ctx, k, gvk, q.Namespace)
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.hpa", "api", err, constants.ErrFmte5f4df2bc9c2)
 	}
@@ -80,7 +91,11 @@ func (s *K8sHPAService) Detail(ctx context.Context, q HPADetailQuery) (*HPADetai
 	if err != nil {
 		return nil, err
 	}
-	u, err := s.dyn.GetByGVK(ctx, k, hpaGVK, q.Namespace, q.Name)
+	gvk, err := s.resolveHPAGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	u, err := s.dyn.GetByGVK(ctx, k, gvk, q.Namespace, q.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsge64b05879667)
@@ -90,8 +105,9 @@ func (s *K8sHPAService) Detail(ctx context.Context, q HPADetailQuery) (*HPADetai
 	var obj autoscalingv2.HorizontalPodAutoscaler
 	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &obj)
 	copyObj := obj.DeepCopy()
-	copyObj.APIVersion = "autoscaling/v2"
-	copyObj.Kind = "HorizontalPodAutoscaler"
+	// 回填集群实际版本，避免把 v2beta1/v1 的对象标成 autoscaling/v2 误导用户编辑。
+	copyObj.APIVersion = gvk.GroupVersion().String()
+	copyObj.Kind = gvk.Kind
 	copyObj.ManagedFields = nil
 	y, _ := yaml.Marshal(copyObj)
 	return &HPADetail{YAML: string(y)}, nil
@@ -116,7 +132,11 @@ func (s *K8sHPAService) Delete(ctx context.Context, req HPADeleteRequest) error 
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, hpaGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
+	gvk, err := s.resolveHPAGVK(k)
+	if err != nil {
+		return err
+	}
+	if err := s.dyn.DeleteByGVK(ctx, k, gvk, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

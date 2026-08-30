@@ -7,10 +7,14 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/cronutil"
-	"yunshu/internal/pkg/lifecycle"
 )
 
-const inspectSchedulerLeaderKey = "inspect:scheduler:leader"
+const (
+	inspectSchedulerLeaderKey = "inspect:scheduler:leader"
+	// inspectLeaderTTL 崩溃兜底：持锁副本非正常退出时最多阻塞其他副本这么久。
+	// 取值需大于单次 tick 的最坏耗时（清理 + 入队），远小于原先的 12m，避免故障后长时间无人调度。
+	inspectLeaderTTL = 2 * time.Minute
+)
 
 // RunScheduler 定时轮询启用中的巡检计划（阻塞至 ctx 取消）。
 func (s *Service) RunScheduler(ctx context.Context) {
@@ -28,22 +32,30 @@ func (s *Service) RunScheduler(ctx context.Context) {
 			log.Info("inspect scheduler stopped")
 			return
 		case <-ticker.C:
-			s.reclaimStaleRunning(ctx)
-			s.tickSchedules(ctx)
-			if _, err := s.CleanupExpiredReports(ctx); err != nil {
-				log.Warn("inspect report cleanup failed", "error", err.Error())
-			}
+			s.tick(ctx, log)
 		}
 	}
 }
 
-func (s *Service) tickSchedules(ctx context.Context) {
+// tick 单次调度周期。整周期都在 leader 锁内：reclaimStaleRunning 与 CleanupExpiredReports
+// 同样是全局写操作（改 run 状态、删报告文件），多副本并发执行会互相踩，
+// 因此不能只把锁加在 tickSchedules 上。
+func (s *Service) tick(ctx context.Context, log *slog.Logger) {
 	ok, release := s.acquireLeader(ctx)
 	if !ok {
 		return
 	}
 	defer release()
 
+	s.reclaimStaleRunning(ctx)
+	s.tickSchedules(ctx)
+	if _, err := s.CleanupExpiredReports(ctx); err != nil {
+		log.Warn("inspect report cleanup failed", "error", err.Error())
+	}
+}
+
+// tickSchedules 由 tick 在持有 leader 锁时调用。
+func (s *Service) tickSchedules(ctx context.Context) {
 	var plans []model.InspectPlan
 	if err := s.db.WithContext(ctx).
 		Where("enabled = ? AND datasource_id > 0 AND cron_spec <> ''", true).
@@ -77,8 +89,9 @@ func (s *Service) acquireLeader(ctx context.Context) (bool, func()) {
 	if s.redis == nil {
 		return true, func() {}
 	}
-	// TTL 覆盖最长巡检窗口，配合 renewLeader 心跳续期
-	ok, err := s.redis.SetNX(ctx, inspectSchedulerLeaderKey, "1", 12*time.Minute).Result()
+	// TTL 只作为持锁进程崩溃时的兜底释放：正常路径在 tick 结束时 Del。
+	// 巡检本体在 worker 中异步执行，不在锁内，因此 TTL 只需覆盖单次 tick 的最坏耗时。
+	ok, err := s.redis.SetNX(ctx, inspectSchedulerLeaderKey, "1", inspectLeaderTTL).Result()
 	if err != nil || !ok {
 		return false, func() {}
 	}
@@ -87,27 +100,4 @@ func (s *Service) acquireLeader(ctx context.Context) (bool, func()) {
 		defer cancel()
 		_ = s.redis.Del(relCtx, inspectSchedulerLeaderKey).Err()
 	}
-}
-
-// renewLeader 在长任务期间周期性续期 leader 锁。
-func (s *Service) renewLeader(ctx context.Context) func() {
-	if s.redis == nil {
-		return func() {}
-	}
-	done := make(chan struct{})
-	lifecycle.GoDetached("inspect.leader-renew", func() {
-		t := time.NewTicker(2 * time.Minute)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			case <-t.C:
-				_ = s.redis.Expire(ctx, inspectSchedulerLeaderKey, 12*time.Minute).Err()
-			}
-		}
-	})
-	return func() { close(done) }
 }

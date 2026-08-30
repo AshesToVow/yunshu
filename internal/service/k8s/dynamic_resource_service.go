@@ -29,7 +29,8 @@ func NewDynamicResourceService(runtime *K8sRuntimeService) *DynamicResourceServi
 	return &DynamicResourceService{runtime: runtime}
 }
 
-// gvkClusterScoped 常见集群级 GVK；空 namespace 时不应调用 AllNamespace。
+// gvkClusterScoped 集群级 GVK 兜底表：仅在集群 discovery 尚未就绪（kom 未缓存 APIResources）时使用。
+// 正常路径请用 namespacedForGVK，以集群实际返回的 APIResource.Namespaced 为准。
 func gvkClusterScoped(gvk schema.GroupVersionKind) bool {
 	switch strings.TrimSpace(gvk.Kind) {
 	case "Namespace", "Node", "PersistentVolume", "StorageClass",
@@ -49,7 +50,7 @@ func applyListNamespaceScope(q *kom.Kubectl, gvk schema.GroupVersionKind, namesp
 	if ns != "" {
 		return q.Namespace(ns)
 	}
-	if !gvkClusterScoped(gvk) {
+	if namespacedForGVK(q, gvk) {
 		return q.AllNamespace()
 	}
 	return q
@@ -57,7 +58,7 @@ func applyListNamespaceScope(q *kom.Kubectl, gvk schema.GroupVersionKind, namesp
 
 // ListByGVK 查询列表相关的业务逻辑。白名单激活且未指定 namespace 时按允许 NS 分别 List，避免全集群拉取。
 func (s *DynamicResourceService) ListByGVK(ctx context.Context, k *kom.Kubectl, gvk schema.GroupVersionKind, namespace string) ([]unstructured.Unstructured, error) {
-	if nsList := s.scopedNamespacesForList(ctx, namespace, gvk); len(nsList) > 0 {
+	if nsList := s.scopedNamespacesForList(ctx, k, namespace, gvk); len(nsList) > 0 {
 		var all []unstructured.Unstructured
 		for _, ns := range nsList {
 			part, err := s.listByGVKRaw(ctx, k, gvk, ns)
@@ -66,13 +67,13 @@ func (s *DynamicResourceService) ListByGVK(ctx context.Context, k *kom.Kubectl, 
 			}
 			all = append(all, part...)
 		}
-		return s.filterUnstructuredByNSPolicy(ctx, gvk, namespace, all)
+		return s.filterUnstructuredByNSPolicy(ctx, k, gvk, namespace, all)
 	}
 	list, err := s.listByGVKRaw(ctx, k, gvk, namespace)
 	if err != nil {
 		return nil, err
 	}
-	return s.filterUnstructuredByNSPolicy(ctx, gvk, namespace, list)
+	return s.filterUnstructuredByNSPolicy(ctx, k, gvk, namespace, list)
 }
 
 func (s *DynamicResourceService) listByGVKRaw(ctx context.Context, k *kom.Kubectl, gvk schema.GroupVersionKind, namespace string) ([]unstructured.Unstructured, error) {
@@ -86,8 +87,8 @@ func (s *DynamicResourceService) listByGVKRaw(ctx context.Context, k *kom.Kubect
 	return list, nil
 }
 
-func (s *DynamicResourceService) scopedNamespacesForList(ctx context.Context, namespace string, gvk schema.GroupVersionKind) []string {
-	if strings.TrimSpace(namespace) != "" || gvkClusterScoped(gvk) {
+func (s *DynamicResourceService) scopedNamespacesForList(ctx context.Context, k *kom.Kubectl, namespace string, gvk schema.GroupVersionKind) []string {
+	if strings.TrimSpace(namespace) != "" || !namespacedForGVK(k, gvk) {
 		return nil
 	}
 	if s.runtime == nil || s.runtime.nsAllow == nil {
@@ -120,7 +121,7 @@ func (s *DynamicResourceService) ListByGVKWithSelector(ctx context.Context, k *k
 	if err := q.List(&list).Error; err != nil {
 		return nil, err
 	}
-	return s.filterUnstructuredByNSPolicy(ctx, gvk, namespace, list)
+	return s.filterUnstructuredByNSPolicy(ctx, k, gvk, namespace, list)
 }
 
 // GetByGVK 获取相关的业务逻辑。
@@ -177,11 +178,12 @@ func (s *DynamicResourceService) ensureNamespaceAllowed(ctx context.Context, nam
 
 func (s *DynamicResourceService) filterUnstructuredByNSPolicy(
 	ctx context.Context,
+	k *kom.Kubectl,
 	gvk schema.GroupVersionKind,
 	namespace string,
 	list []unstructured.Unstructured,
 ) ([]unstructured.Unstructured, error) {
-	if gvkClusterScoped(gvk) || len(list) == 0 {
+	if !namespacedForGVK(k, gvk) || len(list) == 0 {
 		return list, nil
 	}
 	ns := strings.TrimSpace(namespace)
@@ -248,9 +250,31 @@ func (s *DynamicResourceService) DeleteByGVK(ctx context.Context, k *kom.Kubectl
 	if err != nil {
 		return err
 	}
-	gvr, namespaced, ok := k.Tools().GetGVRByGVK(gvk)
-	if !ok || gvr.Empty() {
-		gvr, namespaced = k.Tools().GetGVRByKind(gvk.Kind)
+	// 先按集群 discovery 解析真实存在的 GVK/GVR，再退回 kom Tools；
+	// 避免同 Kind 多版本时 GetGVRByKind 任意挑选一个版本。
+	// 仅对登记了降级表的 Kind 做严格解析（见 hasVersionCandidates 注释）。
+	var (
+		gvr        schema.GroupVersionResource
+		namespaced bool
+		resolveErr error
+	)
+	if hasVersionCandidates(gvk) {
+		var capability resourceCapability
+		capability, resolveErr = resolveClusterResource(k, gvk)
+		if resolveErr == nil && capability.Discovered && !capability.GVR.Empty() {
+			gvr = capability.GVR
+			namespaced = capability.Namespaced
+		}
+	}
+	if gvr.Empty() {
+		var ok bool
+		gvr, namespaced, ok = k.Tools().GetGVRByGVK(gvk)
+		if !ok || gvr.Empty() {
+			if resolveErr != nil {
+				return resolveErr
+			}
+			gvr, namespaced = k.Tools().GetGVRByKind(gvk.Kind)
+		}
 	}
 	if gvr.Empty() {
 		return fmt.Errorf("unknown GVK: %v", gvk)
@@ -338,7 +362,7 @@ func (s *DynamicResourceService) ListCR(ctx context.Context, k *kom.Kubectl, gro
 		return list, nil
 	}
 	gvk := schema.GroupVersionKind{Group: strings.TrimSpace(group), Version: strings.TrimSpace(version), Kind: kind}
-	return s.filterUnstructuredByNSPolicy(ctx, gvk, ns, list)
+	return s.filterUnstructuredByNSPolicy(ctx, k, gvk, ns, list)
 }
 
 // GetCR 获取相关的业务逻辑。

@@ -98,12 +98,15 @@ func (s *Service) executeRun(ctx context.Context, plan *model.InspectPlan, datas
 	return s.enqueueNewRun(ctx, plan, datasourceID, trigger, userID, operatorName)
 }
 
-// performRun 在 worker 中执行采集与报告生成。状态落库用 Background，避免请求取消导致永远「执行中」。
+// performRun 在 worker 中执行采集与报告生成。状态落库用独立于 ctx 的后台 context，
+// 避免请求取消/采集超时导致记录永远停在「执行中」；但该 context 仍带 inspectDBCtxTimeout，
+// 不能是裸 Background——否则 DB/MinIO/SMTP 挂死时 worker goroutine 会永久泄漏。
 func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *model.InspectRun) (*model.InspectRun, error) {
 	if plan == nil || run == nil || plan.ProjectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("invalid plan")
 	}
-	dbCtx := context.Background()
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), inspectDBCtxTimeout)
+	defer dbCancel()
 	projectName := fmt.Sprintf("project-%d", plan.ProjectID)
 	if s.projects != nil {
 		if p, err := s.projects.GetByID(dbCtx, plan.ProjectID); err == nil && p != nil {
@@ -252,7 +255,10 @@ func (s *Service) failRun(ctx context.Context, run *model.InspectRun, err error)
 	if err != nil {
 		msg = err.Error()
 	}
-	dbCtx := context.Background()
+	// 刻意不复用入参 ctx：调用方 ctx 往往已因超时/取消失效，失败状态必须落库。
+	// 但仍加超时上限，避免 DB/SMTP 挂死时 worker 卡住。
+	dbCtx, cancel := context.WithTimeout(context.Background(), inspectFailRunTimeout)
+	defer cancel()
 	_ = s.db.WithContext(dbCtx).Model(&model.InspectRun{}).Where("id = ?", run.ID).Updates(map[string]any{
 		"status":        "failed",
 		"error_message": msg,

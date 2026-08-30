@@ -9,6 +9,7 @@ import (
 
 	"yunshu/internal/pkg/k8sutil"
 
+	kom "github.com/weibaohui/kom/kom"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,12 +50,21 @@ func NewK8sNetworkPolicyService(runtime *K8sRuntimeService) *K8sNetworkPolicySer
 
 var networkPolicyGVK = schema.GroupVersionKind{Group: "networking.k8s.io", Version: "v1", Kind: "NetworkPolicy"}
 
+// resolveNetworkPolicyGVK 解析集群实际提供的 NetworkPolicy 版本（networking.k8s.io/v1 → extensions/v1beta1）。
+func (s *K8sNetworkPolicyService) resolveNetworkPolicyGVK(k *kom.Kubectl) (schema.GroupVersionKind, error) {
+	return resolveGVKForCluster(k, networkPolicyGVK)
+}
+
 func (s *K8sNetworkPolicyService) List(ctx context.Context, q NetworkPolicyListQuery) ([]NetworkPolicyItem, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, q.ClusterID)
 	if err != nil {
 		return nil, err
 	}
-	listU, err := s.dyn.ListByGVK(ctx, k, networkPolicyGVK, q.Namespace)
+	npGVK, err := s.resolveNetworkPolicyGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	listU, err := s.dyn.ListByGVK(ctx, k, npGVK, q.Namespace)
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.network.policy", "api", err, constants.ErrFmte5f4df2bc9c2)
 	}
@@ -80,7 +90,11 @@ func (s *K8sNetworkPolicyService) Detail(ctx context.Context, q NetworkPolicyDet
 	if err != nil {
 		return nil, err
 	}
-	u, err := s.dyn.GetByGVK(ctx, k, networkPolicyGVK, q.Namespace, q.Name)
+	npGVK, err := s.resolveNetworkPolicyGVK(k)
+	if err != nil {
+		return nil, err
+	}
+	u, err := s.dyn.GetByGVK(ctx, k, npGVK, q.Namespace, q.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsge64b05879667)
@@ -90,8 +104,9 @@ func (s *K8sNetworkPolicyService) Detail(ctx context.Context, q NetworkPolicyDet
 	var obj networkingv1.NetworkPolicy
 	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &obj)
 	copyObj := obj.DeepCopy()
-	copyObj.APIVersion = "networking.k8s.io/v1"
-	copyObj.Kind = "NetworkPolicy"
+	// 回填集群实际版本，避免把 extensions/v1beta1 的对象标成 networking.k8s.io/v1 误导用户编辑。
+	copyObj.APIVersion = npGVK.GroupVersion().String()
+	copyObj.Kind = npGVK.Kind
 	copyObj.ManagedFields = nil
 	y, _ := yaml.Marshal(copyObj)
 	return &NetworkPolicyDetail{YAML: string(y)}, nil
@@ -116,7 +131,11 @@ func (s *K8sNetworkPolicyService) Delete(ctx context.Context, req NetworkPolicyD
 	if err != nil {
 		return err
 	}
-	if err := s.dyn.DeleteByGVK(ctx, k, networkPolicyGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
+	npGVK, err := s.resolveNetworkPolicyGVK(k)
+	if err != nil {
+		return err
+	}
+	if err := s.dyn.DeleteByGVK(ctx, k, npGVK, req.Namespace, req.Name, req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}

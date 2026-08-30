@@ -13,8 +13,10 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -137,6 +139,7 @@ func (s *K8sNodeService) DrainNode(ctx context.Context, req NodeDrainRequest) (*
 		out.Cordoned = node.Spec.Unschedulable
 	}
 
+	evictionGV := evictionPolicyGroupVersion(cs)
 	for _, p := range pods {
 		item, skip := classifyDrainPod(p, ignoreDS, deleteEmptyDir, req.Force)
 		if skip {
@@ -151,7 +154,7 @@ func (s *K8sNodeService) DrainNode(ctx context.Context, req NodeDrainRequest) (*
 			out.Pods = append(out.Pods, item)
 			continue
 		}
-		if err := evictPod(ctx, cs, p, req.GracePeriodSeconds); err != nil {
+		if err := evictPod(ctx, cs, p, req.GracePeriodSeconds, evictionGV); err != nil {
 			item.Action = "failed"
 			item.Reason = err.Error()
 			out.Failed++
@@ -319,24 +322,83 @@ func hasEmptyDir(p corev1.Pod) bool {
 	return false
 }
 
-func evictPod(ctx context.Context, cs *kubernetes.Clientset, p corev1.Pod, grace *int64) error {
-	eviction := &policyv1.Eviction{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      p.Name,
-			Namespace: p.Namespace,
-		},
-		DeleteOptions: &metav1.DeleteOptions{},
+// evictionPolicyGroupVersion 参照 kubectl drain 的 CheckEvictionSupport：
+// 从 core/v1 discovery 中读取 pods/eviction 子资源上声明的 Group/Version，
+// 判定集群提供的是 policy/v1 还是 policy/v1beta1。
+// 注意：不能用 kom 缓存的 APIResources —— kom initializeAPIResources 会把
+// 每个 APIResource 的 Group/Version 覆写为所属 APIResourceList 的 GroupVersion（core/v1），
+// 子资源上的 policy/v1 标注会因此丢失。
+func evictionPolicyGroupVersion(cs *kubernetes.Clientset) schema.GroupVersion {
+	fallback := schema.GroupVersion{Group: "policy", Version: "v1beta1"}
+	if cs == nil {
+		return policyv1GroupVersion
 	}
+	list, err := cs.Discovery().ServerResourcesForGroupVersion("v1")
+	if err != nil || list == nil {
+		// discovery 不可用时按新版本尝试，失败后由 evictPod 兜底降级。
+		return policyv1GroupVersion
+	}
+	for i := range list.APIResources {
+		r := list.APIResources[i]
+		if r.Name != "pods/eviction" {
+			continue
+		}
+		gv := schema.GroupVersion{Group: strings.TrimSpace(r.Group), Version: strings.TrimSpace(r.Version)}
+		if gv.Version == "" {
+			return policyv1GroupVersion
+		}
+		if gv.Group == "" {
+			gv.Group = "policy"
+		}
+		return gv
+	}
+	return fallback
+}
+
+var policyv1GroupVersion = schema.GroupVersion{Group: "policy", Version: "v1"}
+
+// evictPod 按集群支持的 Eviction 版本驱逐 Pod；policy/v1 不可用时降级 policy/v1beta1。
+func evictPod(ctx context.Context, cs *kubernetes.Clientset, p corev1.Pod, grace *int64, evictionGV schema.GroupVersion) error {
+	deleteOptions := &metav1.DeleteOptions{}
 	if grace != nil {
-		eviction.DeleteOptions.GracePeriodSeconds = grace
+		deleteOptions.GracePeriodSeconds = grace
 	}
-	err := cs.CoreV1().Pods(p.Namespace).EvictV1(ctx, eviction)
+	meta := metav1.ObjectMeta{Name: p.Name, Namespace: p.Namespace}
+
+	evictV1 := func() error {
+		return cs.CoreV1().Pods(p.Namespace).EvictV1(ctx, &policyv1.Eviction{
+			ObjectMeta:    meta,
+			DeleteOptions: deleteOptions,
+		})
+	}
+	evictV1beta1 := func() error {
+		return cs.CoreV1().Pods(p.Namespace).EvictV1beta1(ctx, &policyv1beta1.Eviction{
+			ObjectMeta:    meta,
+			DeleteOptions: deleteOptions,
+		})
+	}
+
+	var err error
+	if evictionGV.Version == "v1beta1" {
+		err = evictV1beta1()
+	} else {
+		err = evictV1()
+		// 集群未提供 policy/v1 Eviction（404 / 405）时降级到 v1beta1；
+		// Pod 本身不存在也会是 404，但降级请求同样会返回 404，最终按「已消失」处理。
+		if err != nil && (apierrors.IsNotFound(err) || apierrors.IsMethodNotSupported(err)) {
+			if beErr := evictV1beta1(); beErr == nil {
+				return nil
+			} else if !apierrors.IsNotFound(beErr) && !apierrors.IsMethodNotSupported(beErr) {
+				err = beErr
+			}
+		}
+	}
 	if err == nil {
 		return nil
 	}
 	if apierrors.IsNotFound(err) {
+		// Pod 已消失，视为驱逐成功
 		return nil
 	}
-	// 部分集群仅有 policy/v1beta1
 	return fmt.Errorf("驱逐 %s/%s: %w", p.Namespace, p.Name, err)
 }
