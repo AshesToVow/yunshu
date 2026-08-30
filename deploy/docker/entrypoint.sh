@@ -25,6 +25,12 @@ wait_mysql() {
 
 wait_mysql
 
+# RUN_MIGRATE=1 时先执行 migrate（生产推荐；与 AutoMigrate 关闭配合）
+if [ "${RUN_MIGRATE:-0}" = "1" ]; then
+  echo "running: /app/yunshu migrate"
+  /app/yunshu migrate
+fi
+
 # RUN_SEED=1（默认）时先执行 seed；设为 0 可跳过
 if [ "${RUN_SEED:-1}" = "1" ]; then
   echo "running: /app/yunshu seed"

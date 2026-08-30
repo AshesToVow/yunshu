@@ -1,5 +1,4 @@
 import {
-  CloudDownloadOutlined,
   CloudUploadOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -11,15 +10,12 @@ import {
   Alert,
   Button,
   Card,
-  Drawer,
   Form,
   Input,
-  InputNumber,
   Modal,
   Popconfirm,
   Select,
   Space,
-  Switch,
   Table,
   Tag,
   Tooltip,
@@ -55,7 +51,6 @@ import {
   type CicdServiceItem,
 } from "../services/cicd";
 import {
-  getProjectServerDetail,
   getProjectServers,
   getProjects,
   type ProjectItem,
@@ -66,167 +61,22 @@ import { getUsers } from "../services/users";
 import type { UserItem } from "../types/api";
 import { useAuth } from "../contexts/auth-context";
 import { formatDateTime } from "../utils/format";
-
-function serviceTypeLabel(v: string) {
-  if (v === "frontend") return "前端服务";
-  if (v === "backend") return "后端服务";
-  return "容器化服务";
-}
-
-function buildResultColor(r?: string) {
-  if (r === "success") return "success";
-  if (r === "failure") return "error";
-  if (r === "running") return "processing";
-  return "default";
-}
-
-function ownerLabel(username: string | undefined, users: UserItem[]) {
-  if (!username) return "—";
-  const u = users.find((it) => it.username === username);
-  if (!u) return username;
-  return u.nickname ? `${u.nickname} (${u.username})` : u.username;
-}
-
-function ownerEmailPreview(username: string | undefined, users: UserItem[]) {
-  if (!username) return "";
-  const u = users.find((it) => it.username === username);
-  return String(u?.email || "").trim();
-}
-
-function cicdAccess(row: CicdServiceItem) {
-  return (
-    row.access ?? {
-      can_view: false,
-      can_build: false,
-      can_release: false,
-      can_manage: false,
-    }
-  );
-}
-
-function isSuperAdminUser(u: UserItem | null | undefined): boolean {
-  return Boolean(u?.roles?.some((r) => r.code === "super-admin"));
-}
-
-/** 与后端 projectacl.FullAccess 一致：超管或项目 owner/admin 可新建应用 */
-function canCreateCicdService(isSuper: boolean, myProjectRole: string | null | undefined): boolean {
-  if (isSuper) return true;
-  const r = String(myProjectRole || "").toLowerCase();
-  return r === "owner" || r === "admin";
-}
-
-const FRONTEND_RELEASE_OPS = [
-  { value: "frontend_online", label: "服务上线" },
-  { value: "frontend_rollback", label: "服务回滚" },
-] as const;
-
-const BACKEND_RELEASE_OPS = [
-  { value: "backend_initial", label: "服务初次部署" },
-  { value: "backend_update", label: "服务更新" },
-] as const;
-
-const CONTAINER_RELEASE_OPS = [
-  { value: "service_online", label: "服务上线" },
-  { value: "pod_update", label: "POD 更新" },
-  { value: "container_rollback", label: "回滚" },
-] as const;
-
-const K8S_DEPLOY_CONFIG_TYPES = [
-  { value: "使用deployment模板", label: "Deployment" },
-  { value: "使用statefulset模板", label: "StatefulSet" },
-  { value: "使用daemonset模板", label: "DaemonSet" },
-] as const;
-
-const K8S_DEPLOY_TEMPLATES = [
-  { value: "基础模板", label: "基础模板" },
-  { value: "通用微服务含skywalking", label: "通用微服务含 SkyWalking" },
-] as const;
-
-function releaseOpLabel(op: string) {
-  return [...FRONTEND_RELEASE_OPS, ...BACKEND_RELEASE_OPS, ...CONTAINER_RELEASE_OPS].find((o) => o.value === op)?.label ?? op;
-}
-
-function parseServerIds(json?: string): number[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json) as unknown;
-    return Array.isArray(parsed) ? parsed.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0) : [];
-  } catch {
-    return [];
-  }
-}
-
-function serverOptionLabel(s: Pick<ServerItem, "name" | "host">) {
-  return `${s.name} (${s.host})`;
-}
-
-async function mergeServersWithSelected(
-  projectId: number,
-  list: ServerItem[],
-  selectedIds: number[],
-): Promise<{ servers: ServerItem[]; unresolvedIds: number[] }> {
-  const byId = new Map<number, ServerItem>();
-  for (const s of list) {
-    byId.set(Number(s.id), s);
-  }
-  const missing = selectedIds.filter((id) => !byId.has(id));
-  if (missing.length === 0) {
-    return { servers: list, unresolvedIds: [] };
-  }
-  // 探测请求不弹全局 toast，由调用方汇总成「发布主机」场景提示，避免重复弹窗
-  const details = await Promise.all(
-    missing.map((id) =>
-      getProjectServerDetail(projectId, id, { silentErrorToast: true }).catch(() => null),
-    ),
-  );
-  for (const d of details) {
-    if (d) {
-      byId.set(Number(d.id), d);
-    }
-  }
-  // 保持列表接口顺序，缺失的已选主机追加在末尾，便于回显名称
-  const merged = [...list];
-  const unresolvedIds: number[] = [];
-  for (const id of missing) {
-    const s = byId.get(id);
-    if (s && !merged.some((it) => Number(it.id) === id)) {
-      merged.push(s);
-    } else if (!s) {
-      unresolvedIds.push(id);
-    }
-  }
-  return { servers: merged, unresolvedIds };
-}
-
-function nodesStatusTag(status?: string) {
-  const s = status || "—";
-  const color =
-    s === "正常" || s === "启用"
-      ? "success"
-      : s === "部分异常"
-        ? "warning"
-        : s === "异常" || s === "已停用"
-          ? "error"
-          : "default";
-  return <Tag color={color}>{s}</Tag>;
-}
-
-function defaultCiFormValues(svc: CicdServiceItem) {
-  const isFront = svc.service_type === "frontend";
-  return {
-    ref_type: "branch",
-    ref_name: "main",
-    language_type: isFront ? "frontend" : "custom",
-    build_type: isFront ? "npm" : "mvn",
-    build_shell: isFront ? "run build" : "clean package -DskipTests",
-    build_path: isFront ? "dist" : "target",
-    npm_install_mode: "install",
-    node_version: "node24",
-    java_tool_name: "jdk8",
-    project_name: svc.identifier,
-    description: svc.name,
-  };
-}
+// RF-09 拆分：常量/权限/展示/主机/表单默认值已下沉到 ./cicd 下同名模块，本文件只保留页面编排
+import { canCreateCicdService, cicdAccess, isSuperAdminUser } from "./cicd/access";
+import { releaseOpLabel } from "./cicd/release-ops";
+import { ServiceFormDrawer } from "./cicd/service-form-drawer";
+import { CiConfigDrawer } from "./cicd/ci-config-drawer";
+import { DeployConfigModal } from "./cicd/deploy-config-modal";
+import { ReleaseDrawer } from "./cicd/release-drawer";
+import {
+  buildResultColor,
+  nodesStatusTag,
+  ownerEmailPreview,
+  ownerLabel,
+  serviceTypeLabel,
+} from "./cicd/display";
+import { mergeServersWithSelected, parseServerIds, serverOptionLabel } from "./cicd/servers";
+import { defaultCiFormValues } from "./cicd/form-defaults";
 
 export function CicdServicesPage() {
   const { user: currentUser } = useAuth();
@@ -268,8 +118,6 @@ export function CicdServicesPage() {
   const [ciDrawerOpen, setCiDrawerOpen] = useState(false);
   const [ciService, setCiService] = useState<CicdServiceItem | null>(null);
   const [ciForm] = Form.useForm();
-  const selectedLanguageType = Form.useWatch("language_type", ciForm) as string | undefined;
-  const selectedTemplate = pipelineTemplates.find((t) => t.language_type === selectedLanguageType);
 
   const [deployWizardOpen, setDeployWizardOpen] = useState(false);
   const [deployStep, setDeployStep] = useState(0);
@@ -834,8 +682,6 @@ export function CicdServicesPage() {
     );
   };
 
-  const isFrontend = ciService?.service_type === "frontend" || deployService?.service_type === "frontend";
-
   return (
     <div className="page-stack">
       <PageTelemetryHeader
@@ -923,9 +769,12 @@ export function CicdServicesPage() {
         </div>
       </Card>
 
-      <Modal
-        title={editingService ? "编辑应用" : "新建应用"}
+      <ServiceFormDrawer
         open={serviceModalOpen}
+        editingService={editingService}
+        form={serviceForm}
+        pipelineTypes={pipelineTypes}
+        userOptions={userOptions}
         onCancel={() => setServiceModalOpen(false)}
         onOk={async () => {
           if (!projectId) return;
@@ -947,438 +796,46 @@ export function CicdServicesPage() {
           setServiceModalOpen(false);
           void loadServices();
         }}
-      >
-        <Form form={serviceForm} layout="vertical">
-          <Form.Item name="identifier" label="唯一标识符" rules={[{ required: true }]}>
-            <Input placeholder="cityos-account" disabled={!!editingService} />
-          </Form.Item>
-          <Form.Item name="name" label="应用名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="service_type" label="应用类型" rules={[{ required: true }]}>
-            <Select options={pipelineTypes.map((o) => ({ label: o.label, value: o.value }))} />
-          </Form.Item>
-          <Form.Item name="owner" label="Owner" extra="从平台用户列表选择，保存为用户名">
-            <Select
-              showSearch
-              allowClear
-              placeholder="选择负责人"
-              optionFilterProp="label"
-              options={userOptions.map((u) => ({
-                value: u.username,
-                label: `${u.nickname || u.username} (${u.username})`,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="product_line" label="产品线">
-            <Input />
-          </Form.Item>
-          <Form.Item name="jenkins_job" label="Jenkins Job 名" extra="留空则自动生成 cicd-p{projectId}-{identifier}">
-            <Input />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-        </Form>
-      </Modal>
+      />
 
-      <Drawer
-        title={`编辑 CI 配置 — ${ciService?.name ?? ""}`}
-        width={560}
+      <CiConfigDrawer
         open={ciDrawerOpen}
+        ciService={ciService}
+        form={ciForm}
+        pipelineTemplates={pipelineTemplates}
+        frontBuildTypes={frontBuildTypes}
+        backBuildTypes={backBuildTypes}
+        npmInstallModes={npmInstallModes}
         onClose={() => setCiDrawerOpen(false)}
-        extra={
-          <Button type="primary" onClick={() => void saveCiConfig()}>
-            确认
-          </Button>
-        }
-      >
-        <Alert
-          type="warning"
-          showIcon
-          message="提示：填写业务仓库与构建参数后保存；Yunshu 将自动在 Jenkins 创建 Pipeline Job（Pipeline script from SCM），并引用数据字典中的 jenkinsfile-new。"
-          style={{ marginBottom: 16 }}
-        />
-        <Form form={ciForm} layout="vertical">
-          <Form.Item name="git_url" label="仓库地址" rules={[{ required: true }]}>
-            <Input placeholder="git@gitee.com:org/repo.git" />
-          </Form.Item>
-          <Form.Item name="ref_type" label="分支或 TAG">
-            <Select options={[{ label: "branch", value: "branch" }, { label: "tag", value: "tag" }]} />
-          </Form.Item>
-          <Form.Item
-            name="ref_name"
-            label="分支或 TAG 名称"
-            rules={[{ required: true }]}
-            extra="须与远端仓库实际分支一致（Gitee 常见默认分支为 master，勿填 main 除非仓库确有 main）"
-          >
-            <Input placeholder="master" />
-          </Form.Item>
-          <Form.Item
-            name="language_type"
-            label="流水线语言模板"
-            rules={[{ required: true }]}
-            extra={
-              selectedTemplate?.script_path
-                ? `将使用 Script Path：${selectedTemplate.script_path}`
-                : selectedLanguageType === "custom"
-                  ? "自定义：按服务类型选择 front/backend/k8s Jenkinsfile"
-                  : selectedTemplate?.description
-            }
-          >
-            <Select
-              options={(pipelineTemplates.length
-                ? pipelineTemplates
-                : [
-                    { language_type: "go", name: "Go" },
-                    { language_type: "java", name: "Java" },
-                    { language_type: "frontend", name: "前端" },
-                    { language_type: "python", name: "Python" },
-                    { language_type: "custom", name: "自定义" },
-                  ]
-              ).map((t) => ({
-                label: t.name,
-                value: t.language_type,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="build_type" label="打包模板类型" rules={[{ required: true }]}>
-            <Select
-              options={(isFrontend ? frontBuildTypes : backBuildTypes).map((o) => ({
-                label: o.label,
-                value: o.value,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item
-            name="build_shell"
-            label="打包参数"
-            extra={isFrontend ? "如 run build:prod（不要写 npm/yarn 前缀）" : "如 clean package -DskipTests"}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="build_path"
-            label={isFrontend ? "静态资源目录路径" : "服务包路径"}
-            extra={isFrontend ? "前端构建输出目录，如 dist / build" : "JAR 搜索目录，默认 target"}
-          >
-            <Input />
-          </Form.Item>
-          {!isFrontend && (
-            <>
-              <Form.Item name="project_name" label="项目名(projectName)">
-                <Input />
-              </Form.Item>
-              <Form.Item name="java_tool_name" label="JDK 工具名">
-                <Input placeholder="jdk8" />
-              </Form.Item>
-              <Form.Item name="server_port" label="服务端口">
-                <Input />
-              </Form.Item>
-            </>
-          )}
-          {isFrontend && (
-            <>
-              <Form.Item
-                name="node_version"
-                label="Node.js 工具"
-                extra="与 Jenkins → Global Tool Configuration 中 Node 安装名称一致（如 node24、node20、node18）"
-              >
-                <Select
-                  options={[
-                    { label: "Node 24 (node24)", value: "node24" },
-                    { label: "Node 20 LTS (node20)", value: "node20" },
-                    { label: "Node 18 LTS (node18)", value: "node18" },
-                  ]}
-                />
-              </Form.Item>
-              <Form.Item name="npm_install_mode" label="依赖安装">
-                <Select options={npmInstallModes.map((o) => ({ label: o.label, value: o.value }))} />
-              </Form.Item>
-              <Form.Item name="clean_npm_cache" label="清理缓存" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-              <Form.Item name="clean_node_modules" label="删除 node_modules" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </>
-          )}
-          <Form.Item name="version" label="版本号">
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label="描述信息" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-        </Form>
-      </Drawer>
+        onSave={saveCiConfig}
+      />
 
-      <Modal
-        title={
-          editingDeployConfig
-            ? `编辑${deployKind === "regular" ? "常规" : "容器化"}发布配置`
-            : deployKind === "regular"
-              ? "新增常规发布配置"
-              : "容器化发布配置"
-        }
+      <DeployConfigModal
         open={deployWizardOpen}
-        width={640}
+        deployKind={deployKind}
+        deployStep={deployStep}
+        editingDeployConfig={editingDeployConfig}
+        deployService={deployService}
+        form={deployForm}
+        tenvOpts={tenvOpts}
+        usedTenvSet={usedTenvSet}
+        importanceLevels={importanceLevels}
+        deployActions={deployActions}
+        deployMethodWatch={deployMethodWatch}
+        clusters={clusters}
+        helmScaffoldLoading={helmScaffoldLoading}
+        serverOptions={serverOptions}
+        serverLabelById={serverLabelById}
+        startScriptTypes={startScriptTypes}
         onCancel={() => {
           setDeployWizardOpen(false);
           setEditingDeployConfig(null);
         }}
-        footer={
-          <Space>
-            <Button onClick={() => setDeployWizardOpen(false)}>取消</Button>
-            {deployStep > 0 && <Button onClick={() => setDeployStep((s) => s - 1)}>上一步</Button>}
-            {deployStep < (deployKind === "regular" ? 1 : 1) ? (
-              <Button type="primary" onClick={() => void goDeployNextStep()}>
-                下一步
-              </Button>
-            ) : (
-              <Button type="primary" onClick={() => void submitDeployConfig()}>
-                {editingDeployConfig ? "保存" : "确认"}
-              </Button>
-            )}
-          </Space>
-        }
-      >
-        <Form form={deployForm} layout="vertical">
-        <div style={{ display: deployStep === 0 ? "block" : "none" }}>
-            <Alert type="warning" showIcon message="新建发布配置将按已录入的应用生成新的发布配置信息！" style={{ marginBottom: 16 }} />
-            <Form.Item name="name" label="配置名称" rules={[{ required: true, message: "请填写配置名称" }]}>
-              <Input placeholder="如 k8s-demo-生产环境" />
-            </Form.Item>
-            <Form.Item name="tenv" label="发布环境" rules={[{ required: true }]} extra="同一应用下同类型发布配置每个环境仅允许一条">
-              <Select
-                options={tenvOpts.map((o) => ({
-                  label: usedTenvSet.has(String(o.value)) ? `${o.label}（已配置）` : o.label,
-                  value: o.value,
-                  disabled: usedTenvSet.has(String(o.value)),
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="audit_enabled" label="发布审核" valuePropName="checked">
-              <Switch checkedChildren="开启" unCheckedChildren="关闭" />
-            </Form.Item>
-            <Form.Item name="importance" label="重要级别">
-              <Select allowClear options={importanceLevels.map((o) => ({ label: o.label, value: o.value }))} />
-            </Form.Item>
-            {deployKind === "regular" ? (
-              <Form.Item name="server_port" label="服务端口">
-                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-              </Form.Item>
-            ) : (
-              <>
-                <Form.Item name="deploy_action" label="默认操作类型" extra="发布时可覆盖">
-                  <Select options={deployActions.map((o) => ({ label: o.label, value: o.value }))} />
-                </Form.Item>
-              </>
-            )}
-        </div>
-        {deployKind === "container" && (
-        <div style={{ display: deployStep === 1 ? "block" : "none" }}>
-            <Alert type="info" showIcon message="配置 K8s 集群、命名空间与镜像信息" style={{ marginBottom: 16 }} />
-            <Form.Item name="k8s_cluster_id" label="K8s 集群" rules={[{ required: true, message: "请选择集群" }]}>
-              <Select
-                showSearch
-                optionFilterProp="label"
-                options={clusters.map((c) => ({ label: c.name, value: c.id }))}
-                placeholder="选择已接入的 K8s 集群"
-              />
-            </Form.Item>
-            <Form.Item name="k8s_namespace" label="Namespace" rules={[{ required: true, message: "请填写命名空间" }]}>
-              <Input placeholder="default" />
-            </Form.Item>
-            <Form.Item name="deploy_method" label="部署方式" rules={[{ required: true }]}>
-              <Select options={[{ label: "kubectl", value: "kubectl" }, { label: "helm", value: "helm" }]} />
-            </Form.Item>
-            {deployMethodWatch === "helm" ? (
-              <Alert
-                type="success"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message="Helm 部署：已对齐「Application + base charts」目录架构"
-                description={
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Typography.Text type="secondary">
-                      下载 zip 解压到仓库根目录，得到 <Typography.Text code>helm/</Typography.Text>
-                      （含 charts/deployment-base 等公共模块、config-files、多环境 values）与可选{" "}
-                      <Typography.Text code>setup/</Typography.Text>
-                      。研发只改 values.yaml；Jenkins 使用 <Typography.Text code>helm/Chart.yaml</Typography.Text>
-                      。默认写入 Consul 注册：注解 <Typography.Text code>consul.register/enabled=true</Typography.Text>
-                      、<Typography.Text code>consul.register/service.name</Typography.Text>
-                      与标签 <Typography.Text code>yunshu-metrics: tag</Typography.Text>
-                      （不需要时在 values 里关 <Typography.Text code>deployment-base.consulRegister.enabled</Typography.Text>）。
-                    </Typography.Text>
-                    <Button
-                      type="primary"
-                      icon={<CloudDownloadOutlined />}
-                      loading={helmScaffoldLoading}
-                      onClick={() => void handleDownloadHelmScaffold()}
-                    >
-                      下载 Helm 脚手架
-                    </Button>
-                  </Space>
-                }
-              />
-            ) : null}
-            {deployMethodWatch !== "helm" ? (
-              <>
-                <Form.Item name="deploy_config_type" label="工作负载类型" rules={[{ required: true }]}>
-                  <Select options={K8S_DEPLOY_CONFIG_TYPES.map((o) => ({ label: o.label, value: o.value }))} />
-                </Form.Item>
-                <Form.Item name="deploy_config_template" label="部署模板" rules={[{ required: true }]} extra="共享库 k8s-basic / k8s-skywalking 的 Pod 模板须含 Consul 必填项：consul.register/enabled、service.name、标签 yunshu-metrics=tag">
-                  <Select options={K8S_DEPLOY_TEMPLATES.map((o) => ({ label: o.label, value: o.value }))} />
-                </Form.Item>
-              </>
-            ) : (
-              <>
-                <Form.Item name="deploy_config_type" hidden>
-                  <Input />
-                </Form.Item>
-                <Form.Item name="deploy_config_template" hidden>
-                  <Input />
-                </Form.Item>
-              </>
-            )}
-            <Form.Item name="replicas" label="副本数" rules={[{ required: true }]}>
-              <InputNumber min={1} max={100} style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item
-              name="deploy_strategy"
-              label="发布策略"
-              rules={[{ required: true }]}
-              extra="金丝雀/蓝绿：Jenkins 接收 deployStrategy 等参数；平台侧可在发布详情中晋级/中止"
-            >
-              <Select
-                options={[
-                  { label: "滚动发布", value: "rolling" },
-                  { label: "金丝雀发布", value: "canary" },
-                  { label: "蓝绿发布", value: "blue_green" },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.deploy_strategy !== cur.deploy_strategy}>
-              {({ getFieldValue }) => {
-                const strategy = getFieldValue("deploy_strategy");
-                if (strategy === "canary") {
-                  return (
-                    <>
-                      <Form.Item name="canary_replicas" label="金丝雀初始副本" rules={[{ required: true }]}>
-                        <InputNumber min={1} max={100} style={{ width: "100%" }} />
-                      </Form.Item>
-                      <Form.Item name="canary_percent" label="金丝雀流量占比(%)" rules={[{ required: true }]}>
-                        <InputNumber min={1} max={100} style={{ width: "100%" }} />
-                      </Form.Item>
-                      <Form.Item
-                        name="canary_steps_json"
-                        label="晋级步骤(%)"
-                        rules={[{ required: true }]}
-                        extra="逗号分隔，如 10,50,100"
-                      >
-                        <Input placeholder="10,50,100" />
-                      </Form.Item>
-                    </>
-                  );
-                }
-                if (strategy === "blue_green") {
-                  return (
-                    <Form.Item
-                      name="blue_green_service"
-                      label="蓝绿 Service 名"
-                      extra="留空则使用工作负载名；切换 selector 标签 yunshu.io/color"
-                    >
-                      <Input placeholder="可选，默认与工作负载同名" />
-                    </Form.Item>
-                  );
-                }
-                return null;
-              }}
-            </Form.Item>
-            <Form.Item name="container_port" label="容器端口" rules={[{ required: true }]}>
-              <InputNumber min={1} max={65535} style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item name="image_name" label="镜像名" rules={[{ required: true }]} extra="Harbor 仓库中的镜像名称">
-              <Input />
-            </Form.Item>
-            <Form.Item name="image_tag" label="默认镜像 Tag">
-              <Input placeholder="latest（CI 构建时会追加时间戳）" />
-            </Form.Item>
-        </div>
-        )}
-        {deployKind === "regular" && (
-        <div style={{ display: deployStep === 1 ? "block" : "none" }}>
-            <Alert type="warning" showIcon message="需要选择部署的目标主机及部署路径" style={{ marginBottom: 16 }} />
-            <Form.Item name="dest_path" label="部署路径" rules={[{ required: true }]}>
-              <Input placeholder="/export/icity/app-name" />
-            </Form.Item>
-            <Form.Item name="server_ids" label="发布主机" rules={[{ required: true, message: "请选择发布主机" }]}>
-              <Select
-                mode="multiple"
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                options={serverOptions}
-                placeholder="请选择发布主机"
-                tagRender={(props) => {
-                  const { value, closable, onClose } = props;
-                  const text = serverLabelById.get(Number(value)) ?? serverOptions.find((o) => o.value === Number(value))?.label;
-                  return (
-                    <Tag closable={closable} onClose={onClose} style={{ marginInlineEnd: 4 }}>
-                      {text || String(value)}
-                    </Tag>
-                  );
-                }}
-              />
-            </Form.Item>
-            <Form.Item name="artifact_retain_count" label="历史版本数量">
-              <InputNumber min={1} max={100} style={{ width: "100%" }} />
-            </Form.Item>
-            <Form.Item name="deploy_user" label="部署用户">
-              <Input />
-            </Form.Item>
-            <Form.Item name="deploy_group" label="部署属组" hidden>
-              <Input />
-            </Form.Item>
-            {!isFrontend && (
-              <>
-                <Form.Item name="run_user" label="运行用户" extra="后端 JAR/进程的运行用户">
-                  <Input />
-                </Form.Item>
-                <Form.Item name="start_script_type" label="启动脚本类型" extra="后端部署时在目标机生成 bin/launch.sh">
-                  <Select options={startScriptTypes.map((o) => ({ label: o.label, value: o.value }))} />
-                </Form.Item>
-                <Form.Item noStyle shouldUpdate={(p, c) => p.start_script_type !== c.start_script_type}>
-                  {({ getFieldValue }) =>
-                    getFieldValue("start_script_type") === "自定义脚本" ? (
-                      <Form.Item
-                        name="custom_script_content"
-                        label="自定义 launch.sh 内容"
-                        rules={[{ required: true, message: "请填写自定义启动脚本" }]}
-                        extra="整段 bash 脚本，将写入目标机 destPath/bin/launch.sh"
-                      >
-                        <Input.TextArea rows={6} placeholder="#!/bin/bash&#10;..." />
-                      </Form.Item>
-                    ) : null
-                  }
-                </Form.Item>
-              </>
-            )}
-            {isFrontend && (
-              <Alert
-                type="info"
-                showIcon
-                message="前端静态资源部署：制品解压到部署路径即可，由 Nginx 等 Web 服务器提供访问，无需 launch.sh 启动脚本。"
-                style={{ marginBottom: 8 }}
-              />
-            )}
-            <Form.Item name="clean_deploy_dir" label="部署前清空目录" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-        </div>
-        )}
-        </Form>
-      </Modal>
+        onPrevStep={() => setDeployStep((s) => s - 1)}
+        onNextStep={goDeployNextStep}
+        onSubmit={submitDeployConfig}
+        onDownloadHelmScaffold={handleDownloadHelmScaffold}
+      />
 
       <Modal title={`CI 打包 — ${buildService?.name}`} open={buildModalOpen} onCancel={() => setBuildModalOpen(false)} onOk={() => void doTriggerBuild()}>
         <Alert
@@ -1408,149 +865,20 @@ export function CicdServicesPage() {
         />
       </Modal>
 
-      <Modal title={`发布 — ${releaseService?.name}`} open={releaseModalOpen} onCancel={() => setReleaseModalOpen(false)} onOk={() => void doTriggerRelease()}>
-        <Form form={releaseForm} layout="vertical">
-          {releaseDeployConfig?.audit_enabled ? (
-            <Alert
-              type="warning"
-              showIcon
-              message="该环境已开启发布审核"
-              description="提交后将进入「待办列表 → 待审核」，审批通过后再进入「待执行」由审核人/运维执行 Jenkins 发布。"
-              style={{ marginBottom: 16 }}
-            />
-          ) : null}
-          <Form.Item name="deploy_kind" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="title" label="任务名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="deploy_config_id" label="发布配置" rules={[{ required: true }]}>
-            <Select
-              options={(expandedDeploys[releaseService?.id ?? 0] ?? []).map((c) => ({
-                label: `${c.name} (${c.tenv})`,
-                value: c.id,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.deploy_kind !== cur.deploy_kind}>
-            {({ getFieldValue, setFieldsValue }) => {
-              const kind = getFieldValue("deploy_kind");
-              const svcType = releaseService?.service_type;
-              if (kind === "container") {
-                const op = getFieldValue("release_operation");
-                const isRollback = op === "container_rollback";
-                return (
-                  <>
-                    <Form.Item
-                      name="release_operation"
-                      label="操作类型"
-                      rules={[{ required: true, message: "请选择操作类型" }]}
-                    >
-                      <Select
-                        options={CONTAINER_RELEASE_OPS.map((o) => ({ label: o.label, value: o.value }))}
-                        onChange={(v) => {
-                          const name = releaseService?.name ?? "应用";
-                          setFieldsValue({
-                            title: `${name}-${releaseOpLabel(String(v))}`,
-                            publish_mode: v === "container_rollback" ? "回滚" : "制品发布",
-                          });
-                        }}
-                      />
-                    </Form.Item>
-                    {!isRollback ? (
-                      <>
-                        <Form.Item name="publish_mode" hidden initialValue="制品发布">
-                          <Input />
-                        </Form.Item>
-                        <Form.Item
-                          name="build_run_id"
-                          label="CI 构建镜像"
-                          rules={[{ required: true, message: "请选择已成功构建的镜像" }]}
-                          extra="须先执行 CI 打包并成功推送 Harbor"
-                        >
-                          <Select
-                            showSearch
-                            loading={releaseBuildRunsLoading}
-                            placeholder={releaseBuildRunsLoading ? "加载构建记录…" : releaseBuildRuns.length ? "选择镜像" : "暂无可用镜像，请先 CI 打包"}
-                            options={releaseBuildRuns.map((r) => ({
-                              value: r.id,
-                              label: `#${r.build_number} ${r.image_address}${r.branch_name ? ` · ${r.branch_name}` : ""}`,
-                            }))}
-                            onChange={(id) => {
-                              const run = releaseBuildRuns.find((r) => r.id === id);
-                              setFieldsValue({ image_address: run?.image_address });
-                            }}
-                          />
-                        </Form.Item>
-                        <Form.Item name="image_address" hidden>
-                          <Input />
-                        </Form.Item>
-                      </>
-                    ) : (
-                      <Alert type="warning" showIcon message="将回滚到 K8s 上一版本（Helm/kubectl）" />
-                    )}
-                  </>
-                );
-              }
-              const opOptions = svcType === "frontend" ? FRONTEND_RELEASE_OPS : BACKEND_RELEASE_OPS;
-              const op = getFieldValue("release_operation");
-              const opExtra =
-                op === "frontend_rollback"
-                  ? "选择 MinIO 中的历史制品包进行回滚"
-                  : op === "backend_update"
-                    ? "部署所选制品；选最新包为上线，选历史包即为回滚"
-                    : op === "backend_initial"
-                      ? "首次部署将清空目标目录后解压制品"
-                      : "部署所选 MinIO 制品到目标服务器";
-              return (
-                <>
-                  <Form.Item
-                    name="release_operation"
-                    label="操作类型"
-                    rules={[{ required: true, message: "请选择操作类型" }]}
-                  >
-                    <Select
-                      options={opOptions.map((o) => ({ label: o.label, value: o.value }))}
-                      onChange={(v) => {
-                        const name = releaseService?.name ?? "应用";
-                        setFieldsValue({ title: `${name}-${releaseOpLabel(String(v))}` });
-                      }}
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    name="artifact_name"
-                    label="MinIO 制品包"
-                    rules={[{ required: true, message: "请选择要部署的制品" }]}
-                    extra={opExtra}
-                  >
-                    <Select
-                      showSearch
-                      loading={releaseArtifactsLoading}
-                      placeholder={releaseArtifactsLoading ? "加载制品列表…" : releaseArtifacts.length ? "选择制品" : "暂无制品，请先 CI 打包"}
-                      options={releaseArtifacts.map((a) => ({
-                        value: a.name,
-                        label: `${a.name}${a.last_modified ? ` · ${a.last_modified}` : ""}`,
-                      }))}
-                      filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
-                    />
-                  </Form.Item>
-                </>
-              );
-            }}
-          </Form.Item>
-          <Alert
-            type="info"
-            showIcon
-            message="构建通知邮件"
-            description={
-              ownerEmailPreview(releaseService?.owner, userOptions)
-                ? `Jenkins 构建/部署结果将发送至 Owner 邮箱：${ownerEmailPreview(releaseService?.owner, userOptions)}（可在用户管理维护 email；须配置 Jenkins 邮件扩展与 SMTP）`
-                : "未找到 Owner 邮箱：请在用户管理为应用 Owner 填写 email，并在数据字典配置 mail_* 与 Jenkins 邮件插件"
-            }
-          />
-        </Form>
-      </Modal>
+      <ReleaseDrawer
+        open={releaseModalOpen}
+        releaseService={releaseService}
+        releaseDeployConfig={releaseDeployConfig}
+        releaseArtifacts={releaseArtifacts}
+        releaseArtifactsLoading={releaseArtifactsLoading}
+        releaseBuildRuns={releaseBuildRuns}
+        releaseBuildRunsLoading={releaseBuildRunsLoading}
+        expandedDeploys={expandedDeploys}
+        form={releaseForm}
+        userOptions={userOptions}
+        onCancel={() => setReleaseModalOpen(false)}
+        onOk={doTriggerRelease}
+      />
     </div>
   );
 }

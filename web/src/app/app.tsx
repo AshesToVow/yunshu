@@ -1,58 +1,24 @@
 import { App as AntdApp, ConfigProvider, theme } from "antd";
 import zhCN from "antd/locale/zh_CN";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { AppRoutes } from "./app-routes";
 import { ErrorBoundary } from "../components/error-boundary";
-import { BRAND_PRIMARY } from "../constants/brand";
 import { AuthProvider } from "../contexts/auth-context";
 import { PluginProvider } from "../contexts/plugin-context";
 import { WorkloadProgressProvider } from "../contexts/workload-progress-context";
 import { WorkloadProgressFloat } from "../components/workload-progress-float";
+import { useAdminThemeStore } from "../stores/admin-theme-store";
 
 export function App() {
-  const [mode, setMode] = useState<"dark" | "light">(() => {
-    const saved = window.localStorage.getItem("admin-theme-mode");
-    return saved === "light" ? "light" : "dark";
-  });
-  const [accent, setAccent] = useState<string>(() => {
-    return window.localStorage.getItem("admin-theme-accent") ?? BRAND_PRIMARY;
-  });
+  const mode = useAdminThemeStore((s) => s.mode);
+  const accent = useAdminThemeStore((s) => s.accent);
 
   useEffect(() => {
     document.documentElement.dataset.theme = mode;
     document.documentElement.style.setProperty("--ys-brand", accent);
     document.documentElement.style.setProperty("--admin-accent", accent);
   }, [mode, accent]);
-
-  useEffect(() => {
-    const onModeChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ mode?: "dark" | "light" }>).detail;
-      const next = detail?.mode === "light" ? "light" : "dark";
-      setMode(next);
-    };
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === "admin-theme-mode") {
-        setMode(event.newValue === "light" ? "light" : "dark");
-      }
-      if (event.key === "admin-theme-accent" && event.newValue) {
-        setAccent(event.newValue);
-      }
-    };
-    const onAccentChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ accent?: string }>).detail;
-      if (!detail?.accent) return;
-      setAccent(detail.accent);
-    };
-    window.addEventListener("admin-theme-mode-change", onModeChange as EventListener);
-    window.addEventListener("admin-theme-accent-change", onAccentChange as EventListener);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener("admin-theme-mode-change", onModeChange as EventListener);
-      window.removeEventListener("admin-theme-accent-change", onAccentChange as EventListener);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
 
   const isDark = mode === "dark";
   const algorithm = useMemo(() => (isDark ? theme.darkAlgorithm : theme.defaultAlgorithm), [isDark]);
@@ -69,8 +35,7 @@ export function App() {
           colorError: "#cf1322",
           colorInfo: "#0958d9",
           borderRadius: 8,
-          fontFamily:
-            '"IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+          fontFamily: '"IBM Plex Sans", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
           fontFamilyCode: '"JetBrains Mono", "IBM Plex Mono", "Consolas", monospace',
           colorBgLayout: isDark ? "#141414" : "#f4f6f8",
           colorText: isDark ? "rgba(255,255,255,0.88)" : "#0f172a",

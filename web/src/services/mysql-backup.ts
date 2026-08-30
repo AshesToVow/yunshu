@@ -126,7 +126,9 @@ export function deleteMysqlBackupInstance(projectId: number, instanceId: number)
 }
 
 export function pingMysqlBackupInstance(projectId: number, instanceId: number) {
-  return getData<{ ok: boolean; message: string }>(http.post(`/projects/${projectId}/mysql-backup/instances/${instanceId}/ping`));
+  return getData<{ ok: boolean; message: string }>(
+    http.post(`/projects/${projectId}/mysql-backup/instances/${instanceId}/ping`),
+  );
 }
 
 export function checkMysqlRemoteBackup(projectId: number, instanceId: number) {
@@ -139,7 +141,10 @@ export function runMysqlBackup(projectId: number, instanceId: number) {
   return getData<MysqlBackupJob>(http.post(`/projects/${projectId}/mysql-backup/instances/${instanceId}/run`));
 }
 
-export function listMysqlBackupJobs(projectId: number, params?: { instance_id?: number; page?: number; page_size?: number }) {
+export function listMysqlBackupJobs(
+  projectId: number,
+  params?: { instance_id?: number; page?: number; page_size?: number },
+) {
   return getData<{ list: MysqlBackupJob[]; total: number; page: number; page_size: number }>(
     http.get(`/projects/${projectId}/mysql-backup/jobs`, { params }),
   );

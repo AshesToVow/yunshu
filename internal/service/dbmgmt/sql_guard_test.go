@@ -1,6 +1,7 @@
 package dbmgmt
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -92,5 +93,104 @@ func TestStripSQLComments_PreservesStringLiteral(t *testing.T) {
 	}
 	if strings.Contains(got, "/*c*/") {
 		t.Fatalf("block comment must be stripped, got %q", got)
+	}
+}
+
+func TestEnforceLimit_IgnoresFakeLimitKeyword(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, in string }{
+		{name: "string literal", in: "SELECT 'limit 9' FROM t"},
+		{name: "line comment", in: "SELECT a FROM t -- limit 9"},
+		{name: "block comment", in: "SELECT a FROM t /* LIMIT 9 */"},
+		{name: "identifier prefix", in: "SELECT limit_col FROM t"},
+		{name: "backtick identifier", in: "SELECT `limit 9` FROM t"},
+		{name: "subquery limit is not outermost", in: "SELECT * FROM (SELECT a FROM t LIMIT 999999) x"},
+		{name: "trailing semicolon", in: "SELECT a FROM t;"},
+	}
+	for _, c := range cases {
+		got := enforceLimit(c.in, 100)
+		if !strings.Contains(strings.ToUpper(got), "LIMIT 100") {
+			t.Fatalf("%s: expected LIMIT 100 in %q", c.name, got)
+		}
+	}
+}
+
+func TestEnforceLimit_CapsRealLimit(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in      string
+		wantMax int
+	}{
+		{"SELECT a FROM t LIMIT 999999", 100},
+		{"SELECT a FROM t limit 999999", 100},
+		{"SELECT a FROM t LIMIT 10", 10},
+		{"SELECT a FROM t LIMIT 5, 999999", 100},
+		{"SELECT a FROM t LIMIT 999999 OFFSET 20", 100},
+		{"SELECT * FROM (SELECT a FROM t LIMIT 999999) x LIMIT 999999", 100},
+	}
+	for _, c := range cases {
+		got := enforceLimit(c.in, 100)
+		upper := strings.ToUpper(got)
+		ok := strings.Contains(upper, fmt.Sprintf("LIMIT %d", c.wantMax)) ||
+			strings.Contains(upper, fmt.Sprintf("LIMIT 5, %d", c.wantMax)) ||
+			strings.Contains(upper, fmt.Sprintf(", %d", c.wantMax)) // OFFSET 可能规范为 limit offset,count
+		if !ok {
+			t.Fatalf("in=%q got=%q", c.in, got)
+		}
+		if strings.Contains(upper, "LIMIT 999999") && !strings.Contains(upper, "LIMIT 100") {
+			t.Fatalf("huge limit not capped: %q", got)
+		}
+	}
+}
+
+func TestEnforceLimitAST_Select(t *testing.T) {
+	t.Parallel()
+	got, ok := enforceLimitAST("SELECT id FROM users WHERE id=1", 50)
+	if !ok {
+		t.Fatal("AST should parse plain SELECT")
+	}
+	if !strings.Contains(strings.ToUpper(got), "LIMIT 50") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestWrapAsLimitedSubquery_RejectsInjection(t *testing.T) {
+	t.Parallel()
+	if _, err := wrapAsLimitedSubquery("SELECT 1); DROP TABLE t; --", 10); err == nil {
+		t.Fatal("multi-statement must be rejected")
+	}
+	if _, err := wrapAsLimitedSubquery("SELECT 1) UNION SELECT 2", 10); err == nil {
+		t.Fatal("unbalanced paren must be rejected")
+	}
+}
+
+func TestEnforceLimit_NonAppendableKeptIntact(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{
+		"DESCRIBE users",
+		"DESC users",
+		"EXPLAIN SELECT a FROM t",
+	} {
+		if got := enforceLimit(in, 100); got != in {
+			t.Fatalf("%q must stay intact, got %q", in, got)
+		}
+	}
+}
+
+func TestFindTrailingLimit(t *testing.T) {
+	t.Parallel()
+	if idx := findTrailingLimit("SELECT 'LIMIT 1' FROM t"); idx != -1 {
+		t.Fatalf("literal LIMIT must be ignored, got %d", idx)
+	}
+	if idx := findTrailingLimit("SELECT limitless FROM t"); idx != -1 {
+		t.Fatalf("identifier LIMIT must be ignored, got %d", idx)
+	}
+	// MySQL 可执行注释内的 LIMIT 会真实生效，必须被识别
+	if idx := findTrailingLimit("SELECT a FROM t /*!40001 LIMIT 5 */"); idx < 0 {
+		t.Fatalf("executable comment LIMIT must be detected")
+	}
+	got := findTrailingLimit("SELECT a FROM t LIMIT 5")
+	if got != strings.LastIndex("SELECT a FROM t LIMIT 5", "LIMIT") {
+		t.Fatalf("unexpected index %d", got)
 	}
 }

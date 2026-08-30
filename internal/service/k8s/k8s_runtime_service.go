@@ -153,8 +153,34 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 	}
 	s.komMu.Unlock()
 
+	markDegraded := func(cause error) {
+		s.komMu.Lock()
+		st.State = "degraded"
+		st.LastError = cause.Error()
+		st.ConsecutiveFailures++
+		s.connState[clusterID] = st
+		s.komMu.Unlock()
+	}
+
 	// kom RegisterByConfigWithID 在 clusterID 已存在且 Kubectl 非空时会直接返回旧实例，不更新 server/凭据。
 	// 切换 kubeconfig/direct 或修改 API 地址后必须先 Remove，否则仍会连到旧地址（如 10.10.10.103）。
+	//
+	// 但 Remove 是破坏性的：若紧随其后的 Register 失败（APIServer 不可达、凭据失效…），
+	// 进程内将不再有任何可用实例，原本仍能工作的连接被连带打掉。kom 未暴露「换键」接口，
+	// 无法先注册到临时 ID 再原子改名，因此在 Remove 前对新凭据做一次轻量连通性预检：
+	// 预检不通过就保留旧实例并直接返回错误。冷启动（无旧实例）时跳过预检，避免多一次往返。
+	if kom.Cluster(clusterID) != nil {
+		if perr := preflightClusterKubeconfig(kubeconfig); perr != nil {
+			_ = bizerrors.Pass(context.Background(), "k8s.runtime", "registerClusterIfNeeded.preflight", perr, "cluster_id", clusterID)
+			markDegraded(perr)
+			extension.NotifyKomRegister(clusterID, false, perr.Error())
+			eventbus.Default().Publish(eventbus.Event{
+				Type:    eventbus.ClusterKomRegisterFail,
+				Payload: map[string]any{"cluster_id": clusterID, "error": perr.Error()},
+			})
+			return bizerrors.MarkLogged(perr)
+		}
+	}
 	kom.Clusters().RemoveClusterById(clusterID)
 
 	// 使用 kom 原生 RegisterByStringWithID，与 RegisterByPathWithID 等价，避免临时文件在容器/Windows 下的路径问题。
@@ -168,12 +194,7 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 	)
 	if err != nil {
 		_ = bizerrors.Pass(context.Background(), "k8s.runtime", "registerClusterIfNeeded", err, "cluster_id", clusterID)
-		s.komMu.Lock()
-		st.State = "degraded"
-		st.LastError = err.Error()
-		st.ConsecutiveFailures++
-		s.connState[clusterID] = st
-		s.komMu.Unlock()
+		markDegraded(err)
 		extension.NotifyKomRegister(clusterID, false, err.Error())
 		eventbus.Default().Publish(eventbus.Event{
 			Type:    eventbus.ClusterKomRegisterFail,
@@ -213,11 +234,12 @@ func (s *K8sRuntimeService) DeleteRegisterCache(clusterID uint) {
 	s.komMu.Unlock()
 }
 
-// PeekRegisteredKubectl 返回进程内已注册的 kubectl（bare / :ro / :r / :w / :x），不触发冷注册。
+// PeekRegisteredKubectl 返回进程内已注册的 kubectl（bare / :ro / :w），不触发冷注册。
 // 供总览等批量只读路径复用既有连接，避免默认 write 意图反复 Register。
+// :r/:w/:x 三档已合并为 :w（见 resolveKubeconfigForIntent），此处保留 :r/:x 仅为兼容灰度期内的存量注册。
 func (s *K8sRuntimeService) PeekRegisteredKubectl(id uint) *kom.Kubectl {
 	base := strconv.FormatUint(uint64(id), 10)
-	for _, key := range []string{base, base + ":ro", base + ":r", base + ":w", base + ":x"} {
+	for _, key := range []string{base, base + ":ro", base + ":w", base + ":r", base + ":x"} {
 		if k := kom.Cluster(key); k != nil {
 			return k
 		}
@@ -336,6 +358,25 @@ func serverGitVersionFromKubeconfig(kubeconfig string) (string, error) {
 		return "", fmt.Errorf("APIServer 返回的版本信息为空")
 	}
 	return strings.TrimSpace(sv.GitVersion), nil
+}
+
+// preflightClusterKubeconfig 在 RemoveClusterById 之前对新凭据做一次轻量连通性预检。
+// 只用 client-go 直接建连并访问 /version，不触碰 kom 的注册表，因此失败时旧实例保持可用。
+// 超时复用 defaultKomRegisterTimeout，避免不可达 APIServer 把调用方拖死。
+func preflightClusterKubeconfig(kubeconfig string) error {
+	cfg, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfig))
+	if err != nil {
+		return err
+	}
+	cfg.Timeout = defaultKomRegisterTimeout
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return err
+	}
+	if _, err := clientset.Discovery().ServerVersion(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // CheckClusterHeartbeat 执行对应的业务逻辑。

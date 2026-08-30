@@ -68,8 +68,14 @@ alert:
 	if cfg.Auth.JWTSecret != "env-jwt" {
 		t.Fatalf("expected JWT_SECRET alias override, got %q", cfg.Auth.JWTSecret)
 	}
-	if cfg.Auth.AccessTokenTTLMinutes != 120 || cfg.Auth.EmailCodeTTLSeconds != 600 || cfg.Auth.EmailCodeCooldownSeconds != 60 {
+	if cfg.Auth.AccessTokenTTLMinutes != 15 || cfg.Auth.RefreshTokenTTLHours != 168 || cfg.Auth.EmailCodeTTLSeconds != 600 || cfg.Auth.EmailCodeCooldownSeconds != 60 {
 		t.Fatalf("auth defaults not applied: %+v", cfg.Auth)
+	}
+	if cfg.Auth.CookieSecure == nil || *cfg.Auth.CookieSecure {
+		t.Fatalf("expected CookieSecure=false for non-prod env, got %+v", cfg.Auth.CookieSecure)
+	}
+	if cfg.Auth.CSPEnabled == nil || !*cfg.Auth.CSPEnabled {
+		t.Fatalf("expected CSPEnabled=true by default")
 	}
 	if cfg.Security.EncryptionKey != "env-encryption" {
 		t.Fatalf("expected ENCRYPTION_KEY alias override, got %q", cfg.Security.EncryptionKey)

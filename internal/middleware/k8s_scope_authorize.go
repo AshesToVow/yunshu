@@ -12,16 +12,19 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8scaps"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/interfaces"
 	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
+
+// k8sScopeCatalogLoadTimeout 限定权限目录刷新的单次查询上界，避免慢 DB 拖垮请求链路。
+const k8sScopeCatalogLoadTimeout = 5 * time.Second
 
 type k8sScopeCatalogCache struct {
 	repo        interfaces.PermissionRepository
@@ -41,7 +44,7 @@ func newK8sScopeCatalogCache(repo interfaces.PermissionRepository) *k8sScopeCata
 	}
 }
 
-func (c *k8sScopeCatalogCache) get(routePath, method string) (string, bool) {
+func (c *k8sScopeCatalogCache) get(ctx context.Context, routePath, method string) (string, bool) {
 	if c == nil {
 		return "", false
 	}
@@ -52,7 +55,7 @@ func (c *k8sScopeCatalogCache) get(routePath, method string) (string, bool) {
 	scopedKeys := c.scopedKeys
 	c.mu.RUnlock()
 	if !ready {
-		c.refresh()
+		c.refresh(ctx)
 		c.mu.RLock()
 		actionByKey = c.actionByKey
 		scopedKeys = c.scopedKeys
@@ -85,7 +88,7 @@ func (c *k8sScopeCatalogCache) unavailable() bool {
 	return c.loadedAt.IsZero() && c.loadErr != nil
 }
 
-func (c *k8sScopeCatalogCache) refresh() {
+func (c *k8sScopeCatalogCache) refresh(ctx context.Context) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -96,10 +99,16 @@ func (c *k8sScopeCatalogCache) refresh() {
 		c.loadedAt = time.Now()
 		return
 	}
-	perms, err := c.repo.ListAll(context.Background())
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// 目录刷新走请求链路 ctx（保留 request_id / user 等日志字段），并加超时上界避免拖垮请求
+	loadCtx, cancel := context.WithTimeout(ctx, k8sScopeCatalogLoadTimeout)
+	defer cancel()
+	perms, err := c.repo.ListAll(loadCtx)
 	if err != nil {
 		c.loadErr = err
-		logx.With(context.Background(), "component", "http.k8s_scope").Error("permission catalog refresh failed", "error", err)
+		logx.With(loadCtx, "component", "http.k8s_scope").Error("permission catalog refresh failed", "error", err)
 		return
 	}
 	c.loadErr = nil
@@ -128,7 +137,7 @@ func K8sScopeAuthorize(
 			routePath = c.Request.URL.Path
 		}
 		method := c.Request.Method
-		actionCode, tracked := catalog.get(routePath, method)
+		actionCode, tracked := catalog.get(c.Request.Context(), routePath, method)
 		forceTier := k8sScopeForceTierCheck(routePath, method)
 		needTier := tracked || forceTier ||
 			(strings.EqualFold(method, "GET") && service.IsK8sReadAPIPath(routePath))

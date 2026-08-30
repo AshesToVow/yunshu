@@ -2,10 +2,11 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { PropsWithChildren } from "react";
 import type { EmailLoginPayload, LoginResult, PasswordLoginPayload, UserItem } from "../types/api";
 import { emailLogin, getCurrentUser, logout as logoutRequest, passwordLogin } from "../services/auth";
-import { clearAuthStorage, getToken, getUser, setToken, setUser } from "../services/storage";
+import { clearAuthStorage, clearToken, getUser, setUser } from "../services/storage";
 
 interface AuthContextValue {
   user: UserItem | null;
+  /** @deprecated Cookie 会话下恒为空；保留字段避免调用方编译失败 */
   token: string;
   loading: boolean;
   isAuthenticated: boolean;
@@ -17,56 +18,60 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const SESSION_FLAG = "yunshu-session";
+
+function markSession() {
+  window.sessionStorage.setItem(SESSION_FLAG, "1");
+}
+
+function clearSessionMark() {
+  window.sessionStorage.removeItem(SESSION_FLAG);
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUserState] = useState<UserItem | null>(() => getUser());
-  const [token, setTokenState] = useState<string>(() => getToken());
-  const [loading, setLoading] = useState<boolean>(() => Boolean(getToken()));
+  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
 
     async function bootstrap() {
+      // 迁移：清历史 localStorage JWT；用户资料仍以 /auth/me 为准
+      clearToken();
       try {
         const profile = await getCurrentUser();
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         setUser(profile);
         setUserState(profile);
+        setAuthenticated(true);
+        markSession();
       } catch {
         if (!cancelled) {
-          clearAuthStorage();
-          setTokenState("");
+          clearSessionMark();
           setUserState(null);
+          setAuthenticated(false);
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
     void bootstrap();
-
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, []);
 
   function applyLoginResult(result: LoginResult) {
     const nextUser = {
       ...result.user,
       must_change_password: Boolean(result.must_change_password || result.user?.must_change_password),
     };
-    setToken(result.token);
     setUser(nextUser);
-    setTokenState(result.token);
     setUserState(nextUser);
+    setAuthenticated(true);
+    markSession();
   }
 
   async function passwordLoginAction(payload: PasswordLoginPayload) {
@@ -81,22 +86,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   async function logoutAction() {
     try {
-      if (token) {
-        await logoutRequest();
-      }
+      await logoutRequest();
     } catch {
       // keep local cleanup even if the backend token has already expired
     } finally {
       clearAuthStorage();
-      setTokenState("");
+      clearSessionMark();
       setUserState(null);
+      setAuthenticated(false);
     }
   }
 
   async function refreshUser() {
-    if (!token) {
-      return;
-    }
+    if (!isAuthenticated) return;
     const profile = await getCurrentUser();
     setUser(profile);
     setUserState(profile);
@@ -106,9 +108,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     <AuthContext.Provider
       value={{
         user,
-        token,
+        token: "",
         loading,
-        isAuthenticated: Boolean(token),
+        isAuthenticated,
         passwordLoginAction,
         emailLoginAction,
         logoutAction,

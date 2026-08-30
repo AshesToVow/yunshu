@@ -38,4 +38,3 @@ export function applyK8sService(clusterId: number, manifest: string) {
 export function deleteK8sService(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return svc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
-

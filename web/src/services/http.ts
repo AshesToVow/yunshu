@@ -1,16 +1,19 @@
-import axios from "axios";
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { message } from "antd";
 import type { ApiResponse } from "../types/api";
-import { clearAuthStorage, getToken } from "./storage";
+import { clearAuthStorage } from "./storage";
 import { resolveApiErrorDisplayMessage } from "../utils/api-error-messages";
 
 declare module "axios" {
-  interface AxiosRequestConfig<D = any> {
+  interface AxiosRequestConfig {
     silentErrorToast?: boolean;
+    /** 跳过 401→refresh 重试（避免 refresh 自身死循环） */
+    skipAuthRefresh?: boolean;
   }
 
-  interface InternalAxiosRequestConfig<D = any> {
+  interface InternalAxiosRequestConfig {
     silentErrorToast?: boolean;
+    skipAuthRefresh?: boolean;
   }
 }
 
@@ -23,6 +26,7 @@ export const HTTP_TIMEOUT_LOGGIE_INSTALL = 300000;
 export const http = axios.create({
   baseURL: "/api/v1",
   timeout: HTTP_TIMEOUT_DEFAULT,
+  withCredentials: true,
 });
 
 /** 与 K8s API 代理相关的慢路径（自动延长 axios 超时） */
@@ -34,7 +38,6 @@ const LOGGIE_INSTALL_PATH = /\/projects\/\d+\/loggie\/install/;
 
 function resolveRequestTimeout(url: string, configured?: number): number | undefined {
   const path = url.split("?")[0] ?? url;
-  // 路径慢请求优先于 axios 默认 timeout
   if (LOGGIE_INSTALL_PATH.test(path)) {
     return HTTP_TIMEOUT_LOGGIE_INSTALL;
   }
@@ -56,12 +59,40 @@ function nextRequestId(): string {
   }
 }
 
-http.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+/** 登录态相关 401：用于清本地并跳转登录（含「缺少凭证」）。 */
+const sessionExpiredCodes = new Set(["10002", "10008", "10009", "10010", "10011", "10014"]);
+/**
+ * 可尝试 Cookie refresh 的码。
+ * 不含 10008（缺少登录凭证）——匿名访问 /auth/me 不应误打 /auth/refresh。
+ */
+const refreshableSessionCodes = new Set(["10002", "10009", "10010", "10011", "10014"]);
+
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshSession(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = http
+      .post("/auth/refresh", null, { skipAuthRefresh: true, silentErrorToast: true })
+      .then(() => true)
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null;
+      });
   }
-  // 与后端 RequestLogger 的 X-Request-ID 对齐，便于日志关联与排障
+  return refreshPromise;
+}
+
+function forceLoginRedirect() {
+  clearAuthStorage();
+  window.sessionStorage.removeItem("yunshu-session");
+  if (window.location.pathname !== "/login") {
+    toastOnce("auth-expired", "登录已失效，请重新登录");
+    window.location.href = "/login";
+  }
+}
+
+http.interceptors.request.use((config) => {
+  // Cookie 会话：不再附加 Authorization Bearer（HttpOnly，JS 不可读）
   if (!config.headers["X-Request-ID"]) {
     config.headers["X-Request-ID"] = nextRequestId();
   }
@@ -75,43 +106,44 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
   (response) => response.data,
-  (error) => {
+  async (error: AxiosError<{ message?: string; error_code?: string }>) => {
     const status = error.response?.status;
-    const rawData = error.response?.data as { message?: string; error_code?: string } | undefined;
+    const rawData = error.response?.data;
     const resolved = resolveApiErrorDisplayMessage(rawData?.error_code, rawData?.message);
-    const isTimeout =
-      error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
+    const isTimeout = error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
     const errorMessage = isTimeout
       ? "请求超时：Agent 安装较慢，请确认离线包 deploy/loggie/binary/loggie 存在且目标机 SSH 可达后重试"
       : resolved || error.message || "请求失败";
-    const silentErrorToast = Boolean(error.config?.silentErrorToast);
+    const cfg = error.config as InternalAxiosRequestConfig | undefined;
+    const silentErrorToast = Boolean(cfg?.silentErrorToast);
+    const errorCode = rawData?.error_code ?? "";
+
+    if (status === 401 && refreshableSessionCodes.has(errorCode) && cfg && !cfg.skipAuthRefresh) {
+      const url = String(cfg.url ?? "");
+      if (!url.includes("/auth/login") && !url.includes("/auth/email-login") && !url.includes("/auth/refresh")) {
+        const ok = await tryRefreshSession();
+        if (ok) {
+          return http.request(cfg);
+        }
+        forceLoginRedirect();
+        return Promise.reject(error);
+      }
+    }
 
     if (silentErrorToast) {
       return Promise.reject(error);
     }
 
-    // 仅平台登录态失效时清 Token；K8s 集群凭证等问题返回 403/其它码，不应误登出。
-    const sessionExpiredCodes = new Set(["10002", "10008", "10009", "10010", "10011", "10014"]);
-    const errorCode = rawData?.error_code ?? "";
     if (status === 401 && sessionExpiredCodes.has(errorCode)) {
-      clearAuthStorage();
-      if (window.location.pathname !== "/login") {
-        toastOnce("auth-expired", "登录已失效，请重新登录");
-        window.location.href = "/login";
-      } else {
-        toastOnce("http-error", errorMessage);
-      }
+      forceLoginRedirect();
     } else if (status === 401) {
       toastOnce("http-error", errorMessage);
     } else if (status === 403) {
-      // 统一 403 提示：用固定 key，避免与页面内提示重复弹出
       toastOnce("forbidden", typeof errorMessage === "string" ? errorMessage : "无访问权限");
     } else if (isTimeout) {
       toastOnce("http-timeout", errorMessage);
     } else {
-      // 用于“同名探测/存在性检查”场景：先调用 detail 接口判断是否存在，
-      // 若不存在会返回类似“xxx 不存在”的业务错误，但不应该弹 toast 干扰用户操作。
-      const requestUrl = String(error.config?.url ?? "");
+      const requestUrl = String(cfg?.url ?? "");
       const isExistenceProbe =
         typeof errorMessage === "string" &&
         errorMessage.includes("不存在") &&

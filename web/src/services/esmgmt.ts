@@ -91,9 +91,7 @@ function connParams(connectionId?: number) {
 }
 
 export function getEsmgmtClusterHealth(connectionId?: number) {
-  return getData<Record<string, unknown>>(
-    http.get("/esmgmt/cluster/health", { params: connParams(connectionId) }),
-  );
+  return getData<Record<string, unknown>>(http.get("/esmgmt/cluster/health", { params: connParams(connectionId) }));
 }
 
 export function listEsmgmtIndices(params?: { connection_id?: number; pattern?: string }) {
@@ -132,17 +130,10 @@ export function closeEsmgmtIndex(name: string, connectionId?: number) {
 }
 
 export function listEsmgmtNodes(connectionId?: number) {
-  return getData<Record<string, unknown>[]>(
-    http.get("/esmgmt/nodes", { params: connParams(connectionId) }),
-  );
+  return getData<Record<string, unknown>[]>(http.get("/esmgmt/nodes", { params: connParams(connectionId) }));
 }
 
-export function proxyEsmgmtREST(payload: {
-  connection_id?: number;
-  method: string;
-  path: string;
-  body?: string;
-}) {
+export function proxyEsmgmtREST(payload: { connection_id?: number; method: string; path: string; body?: string }) {
   return getData<{ status: number; body: unknown }>(http.post("/esmgmt/proxy", payload));
 }
 
@@ -179,9 +170,7 @@ export function listEsmgmtRestores(params?: { connection_id?: number; limit?: nu
 }
 
 export function listEsmgmtSchedules(connectionId?: number) {
-  return getData<EsmgmtBackupSchedule[]>(
-    http.get("/esmgmt/schedules", { params: connParams(connectionId) }),
-  );
+  return getData<EsmgmtBackupSchedule[]>(http.get("/esmgmt/schedules", { params: connParams(connectionId) }));
 }
 
 export function createEsmgmtSchedule(payload: Record<string, unknown>) {

@@ -15,6 +15,7 @@ import (
 	"yunshu/internal/handler"
 	"yunshu/internal/model"
 
+	"yunshu/internal/pkg/lifecycle"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/password"
 	"yunshu/internal/repository"
@@ -43,11 +44,25 @@ var serverCmd = &cobra.Command{
 		logx.Init(app.Logger)
 		handler.SetLogger(app.Logger)
 
-		if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
-			return fmt.Errorf("auto migrate: %w", err)
-		}
 		bootLog := slog.Default().With("component", "bootstrap")
-		bootLog.Info("Database schema migrated")
+
+		// 表结构变更闸门：生产环境默认不在服务进程内改表。
+		// 滚动发布期多副本会并发执行 DDL，且 AutoMigrate 无法回滚、
+		// 不会删除废弃列/索引，线上应走独立的 `yunshu migrate` 命令。
+		if app.Config.AutoMigrateEnabled() {
+			if err := bootstrap.AutoMigrateModels(app.DB, &app.Config.Plugins); err != nil {
+				return fmt.Errorf("auto migrate: %w", err)
+			}
+			bootLog.Info("Database schema migrated", "schema_version", bootstrap.ExpectedSchemaVersion)
+		} else {
+			if err := bootstrap.CheckSchemaVersion(app.DB); err != nil {
+				return fmt.Errorf("schema version check failed: %w", err)
+			}
+			bootLog.Info("AutoMigrate disabled; schema version OK",
+				"env", app.Config.App.Env,
+				"schema_version", bootstrap.ExpectedSchemaVersion,
+				"hint", "run `yunshu migrate` before rolling upgrade")
+		}
 		if err := app.Enforcer.LoadPolicy(); err != nil {
 			return fmt.Errorf("reload casbin policy: %w", err)
 		}
@@ -99,11 +114,32 @@ var serverCmd = &cobra.Command{
 		if httpShutdown <= 0 {
 			httpShutdown = 10 * time.Second
 		}
+		defer logx.Sync()
 
+		shutdownLog := slog.Default().With("component", "server")
+
+		// 关闭顺序：先停止接收新请求（HTTP），再通知后台 worker 退出并等待收敛。
+		// 反过来会让仍在处理中的请求访问到已停止的后台组件。
 		ctxHTTP, cancelHTTP := context.WithTimeout(context.Background(), httpShutdown)
 		defer cancelHTTP()
-		defer logx.Sync()
-		return server.Shutdown(ctxHTTP)
+		httpErr := server.Shutdown(ctxHTTP)
+		if httpErr != nil {
+			shutdownLog.Error("HTTP server shutdown error", "error", httpErr)
+		} else {
+			shutdownLog.Info("HTTP server stopped")
+		}
+
+		// 显式停止 K8s 事件转发管理器（原先挂在 defer，无法保证在 worker 等待之前完成）。
+		if k8sEventForwardMgr != nil {
+			k8sEventForwardMgr.Stop()
+		}
+
+		// 通知所有后台 worker 退出，并带超时等待其收敛，
+		// 避免 Kafka 消费位点、告警投递、备份任务在写入中途被强杀。
+		bgWorkersCancel()
+		lifecycle.WaitAndLog(shutdownLog, httpShutdown)
+
+		return httpErr
 	},
 }
 

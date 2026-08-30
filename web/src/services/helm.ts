@@ -56,7 +56,9 @@ export async function listHarborChartVersions(chartName: string) {
 
 export async function listHelmReleases(clusterId: number, namespace?: string, keyword?: string) {
   return getData<HelmReleaseItem[]>(
-    http.get("/helm/releases", { params: { cluster_id: clusterId, namespace: namespace || undefined, keyword: keyword || undefined } }),
+    http.get("/helm/releases", {
+      params: { cluster_id: clusterId, namespace: namespace || undefined, keyword: keyword || undefined },
+    }),
   );
 }
 

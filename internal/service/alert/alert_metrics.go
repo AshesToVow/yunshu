@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"yunshu/internal/pkg/lifecycle"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -367,7 +369,7 @@ func NewAlertMetricsUpdater(metrics *AlertMetrics, inhibitionSvc *AlertInhibitio
 // Start 启动定期更新
 func (u *AlertMetricsUpdater) Start() {
 	ticker := time.NewTicker(30 * time.Second)
-	go func() {
+	lifecycle.Go("alert.metrics-updater", func() {
 		defer ticker.Stop()
 		for {
 			select {
@@ -377,7 +379,7 @@ func (u *AlertMetricsUpdater) Start() {
 				u.update()
 			}
 		}
-	}()
+	})
 }
 
 // Stop 停止更新器

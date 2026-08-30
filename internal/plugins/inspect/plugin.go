@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
 	inspectsvc "yunshu/internal/service/inspect"
 )
@@ -34,6 +35,7 @@ func (m *module) Models() []any {
 		&model.InspectItem{},
 		&model.InspectRun{},
 		&model.InspectReportTemplate{},
+		&model.InspectFinding{},
 	}
 }
 
@@ -44,7 +46,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if svc, ok := rt.Inspect.(*inspectsvc.Service); ok && svc != nil {
 		_ = svc.SeedGlobalTemplates(bgCtx)
 		_ = svc.SeedReportTemplates(bgCtx)
-		go svc.RunScheduler(bgCtx)
+		lifecycle.Go("inspect.scheduler", func() { svc.RunScheduler(bgCtx) })
 	}
 	return nil
 }

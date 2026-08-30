@@ -132,8 +132,9 @@ export interface RegisterResult {
 }
 
 export interface LoginResult {
-  token: string;
+  token?: string;
   expires_at: string;
+  refresh_expires_at?: string;
   user: UserItem;
   must_change_password?: boolean;
   password_expired?: boolean;

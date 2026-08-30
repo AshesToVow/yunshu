@@ -36,7 +36,9 @@ export type StorageClassItem = {
 export type StorageDetail = { yaml: string };
 
 export function listPersistentVolumes(clusterId: number, keyword?: string) {
-  return getData<PersistentVolumeItem[]>(http.get("/persistentvolumes", { params: { cluster_id: clusterId, keyword } }));
+  return getData<PersistentVolumeItem[]>(
+    http.get("/persistentvolumes", { params: { cluster_id: clusterId, keyword } }),
+  );
 }
 
 export function getPersistentVolumeDetail(clusterId: number, name: string) {
@@ -67,7 +69,12 @@ export function getPersistentVolumeClaimDetail(clusterId: number, namespace: str
   );
 }
 
-export function deletePersistentVolumeClaim(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+export function deletePersistentVolumeClaim(
+  clusterId: number,
+  namespace: string,
+  name: string,
+  deleteOpts?: K8sDeleteOptions,
+) {
   return getData<boolean>(
     http.delete("/persistentvolumeclaims", {
       params: {
@@ -114,12 +121,14 @@ export function applyStorageClass(clusterId: number, manifest: string) {
 const TOKEN_KEY = "permission-system-token";
 const USER_KEY = "permission-system-user";
 
+/** @deprecated JWT 已迁至 HttpOnly Cookie；保留空实现兼容旧调用。 */
 export function getToken() {
-  return window.localStorage.getItem(TOKEN_KEY) ?? "";
+  return "";
 }
 
-export function setToken(token: string) {
-  window.localStorage.setItem(TOKEN_KEY, token);
+/** @deprecated no-op：不再把 JWT 写入 localStorage。 */
+export function setToken(_token: string) {
+  window.localStorage.removeItem(TOKEN_KEY);
 }
 
 export function clearToken() {

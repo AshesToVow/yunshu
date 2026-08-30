@@ -107,7 +107,9 @@ export type DbTicketStep = {
 };
 
 export async function listDbTables(projectId: number, instanceId: number, database: string) {
-  return getData<{ name: string }[]>(http.get(`${base(projectId)}/instances/${instanceId}/metadata/tables`, { params: { database } }));
+  return getData<{ name: string }[]>(
+    http.get(`${base(projectId)}/instances/${instanceId}/metadata/tables`, { params: { database } }),
+  );
 }
 
 export async function queryDb(projectId: number, instanceId: number, body: { database?: string; sql: string }) {
@@ -163,7 +165,9 @@ export async function importDbSql(projectId: number, instanceId: number, body: D
 }
 
 export async function listDbGrants(projectId: number, instanceId?: number) {
-  return getData<DbGrant[]>(http.get(`${base(projectId)}/grants`, { params: instanceId ? { instance_id: instanceId } : undefined }));
+  return getData<DbGrant[]>(
+    http.get(`${base(projectId)}/grants`, { params: instanceId ? { instance_id: instanceId } : undefined }),
+  );
 }
 
 export async function createDbGrant(projectId: number, payload: DbGrantPayload) {
@@ -174,12 +178,18 @@ export async function deleteDbGrant(projectId: number, grantId: number) {
   return getData<{ ok?: boolean }>(http.delete(`${base(projectId)}/grants/${grantId}`));
 }
 
-export async function updateDbGrant(projectId: number, grantId: number, payload: { query_limit_num?: number; expires_at?: string; remark?: string }) {
+export async function updateDbGrant(
+  projectId: number,
+  grantId: number,
+  payload: { query_limit_num?: number; expires_at?: string; remark?: string },
+) {
   return getData<DbGrant>(http.put(`${base(projectId)}/grants/${grantId}`, payload));
 }
 
 export async function getEffectiveDbPermission(projectId: number, instanceId: number) {
-  return getData<DbEffectivePermission>(http.get(`${base(projectId)}/grants/effective`, { params: { instance_id: instanceId } }));
+  return getData<DbEffectivePermission>(
+    http.get(`${base(projectId)}/grants/effective`, { params: { instance_id: instanceId } }),
+  );
 }
 
 export type DbGrant = {
@@ -245,7 +255,9 @@ export async function saveDbApprovalFlow(
     user_group_id?: number;
   }[],
 ) {
-  return getData<{ project_id: number; stages: DbApprovalStage[] }>(http.put(`${base(projectId)}/approval-flow`, { stages }));
+  return getData<{ project_id: number; stages: DbApprovalStage[] }>(
+    http.put(`${base(projectId)}/approval-flow`, { stages }),
+  );
 }
 
 export type DbApprovalStage = {
@@ -258,7 +270,9 @@ export type DbApprovalStage = {
 };
 
 export async function listDbAccessRequests(projectId: number, params?: Record<string, string | number>) {
-  return getData<{ list: DbAccessRequest[]; total: number }>(http.get(`${base(projectId)}/access-requests`, { params }));
+  return getData<{ list: DbAccessRequest[]; total: number }>(
+    http.get(`${base(projectId)}/access-requests`, { params }),
+  );
 }
 
 export async function createDbAccessRequest(projectId: number, payload: DbAccessRequestPayload) {
@@ -380,11 +394,20 @@ export async function listDbTicketOscJobs(projectId: number, ticketId: number) {
 }
 
 export async function getDbTicketOscPercent(projectId: number, ticketId: number, sqlsha1: string) {
-  return getData<DbOscPercentResult>(http.get(`${base(projectId)}/tickets/${ticketId}/osc/${encodeURIComponent(sqlsha1)}`));
+  return getData<DbOscPercentResult>(
+    http.get(`${base(projectId)}/tickets/${ticketId}/osc/${encodeURIComponent(sqlsha1)}`),
+  );
 }
 
-export async function controlDbTicketOsc(projectId: number, ticketId: number, sqlsha1: string, command: "kill" | "pause" | "resume") {
-  return getData<DbOscPercentResult>(http.post(`${base(projectId)}/tickets/${ticketId}/osc/${encodeURIComponent(sqlsha1)}/control`, { command }));
+export async function controlDbTicketOsc(
+  projectId: number,
+  ticketId: number,
+  sqlsha1: string,
+  command: "kill" | "pause" | "resume",
+) {
+  return getData<DbOscPercentResult>(
+    http.post(`${base(projectId)}/tickets/${ticketId}/osc/${encodeURIComponent(sqlsha1)}/control`, { command }),
+  );
 }
 
 export async function approveDbTicket(projectId: number, ticketId: number, comment?: string) {
@@ -443,7 +466,9 @@ export type DbSqlExecution = {
 };
 
 export async function listDbAppUserRequests(projectId: number, params?: Record<string, string | number>) {
-  return getData<{ list: DbAppUserRequest[]; total: number }>(http.get(`${base(projectId)}/app-user-requests`, { params }));
+  return getData<{ list: DbAppUserRequest[]; total: number }>(
+    http.get(`${base(projectId)}/app-user-requests`, { params }),
+  );
 }
 
 export async function createDbAppUserRequest(projectId: number, payload: DbAppUserRequestPayload) {
@@ -509,11 +534,15 @@ export async function getInstanceMySQLUserPrivileges(
   instanceId: number,
   params: { mysql_user: string; mysql_host?: string; priv_level: string; database?: string },
 ) {
-  return getData<{ privileges: string[] }>(http.get(`${base(projectId)}/instances/${instanceId}/mysql-user-privileges`, { params }));
+  return getData<{ privileges: string[] }>(
+    http.get(`${base(projectId)}/instances/${instanceId}/mysql-user-privileges`, { params }),
+  );
 }
 
 export async function getInstanceAccountPassword(projectId: number, instanceId: number, accountId: number) {
-  return getData<{ password: string }>(http.get(`${base(projectId)}/instances/${instanceId}/accounts/${accountId}/password`));
+  return getData<{ password: string }>(
+    http.get(`${base(projectId)}/instances/${instanceId}/accounts/${accountId}/password`),
+  );
 }
 
 export async function listDbAuditLogs(projectId: number, params?: Record<string, string | number>) {
@@ -564,5 +593,7 @@ export async function upsertDbColumnMaskRule(
 }
 
 export async function deleteDbColumnMaskRule(projectId: number, instanceId: number, ruleId: number) {
-  return getData<{ ok?: boolean }>(http.delete(`${base(projectId)}/instances/${instanceId}/column-mask-rules/${ruleId}`));
+  return getData<{ ok?: boolean }>(
+    http.delete(`${base(projectId)}/instances/${instanceId}/column-mask-rules/${ruleId}`),
+  );
 }

@@ -17,9 +17,6 @@ import {
   Drawer,
   Empty,
   Form,
-  Input,
-  InputNumber,
-  Modal,
   Popconfirm,
   Progress,
   Row,
@@ -39,18 +36,15 @@ import { Link, useSearchParams } from "react-router-dom";
 import { DashboardStatCard } from "../components/ops/dashboard-stat-card";
 import { LineChart } from "../components/line-chart";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
-import { CHART_BRAND, CHART_ERROR, CHART_SUCCESS, CHART_WARNING } from "../constants/chart-colors";
+import { CHART_BRAND, CHART_ERROR, CHART_SUCCESS } from "../constants/chart-colors";
 import { listAlertDatasources, type AlertDatasourceItem } from "../services/alert-platform";
 import {
-  createInspectItem,
   copyInspectReportTemplate,
   deleteInspectItem,
   deleteInspectReportTemplate,
   getInspectPlan,
   getInspectStorageInfo,
   inspectReportExcelUrl,
-  checkInspectReportPdf,
-  inspectReportPdfUrl,
   inspectReportHtmlUrl,
   inspectReportPrintUrl,
   listInspectItems,
@@ -64,8 +58,6 @@ import {
   startInspectRun,
   syncInspectItems,
   updateInspectItem,
-  updateInspectPlan,
-  updateInspectReportTemplate,
   type InspectItem,
   type InspectPlan,
   type InspectReportTemplate,
@@ -73,151 +65,25 @@ import {
   type InspectRunTrendItem,
   type InspectStorageInfo,
 } from "../services/inspect";
-import { extractApiErrorMessage, http } from "../services/http";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
-
-const CRON_PRESETS = [
-  { label: "每天 09:00", value: "0 0 9 * * *" },
-  { label: "每天 02:00", value: "0 0 2 * * *" },
-  { label: "每天 18:00", value: "0 0 18 * * *" },
-  { label: "每 6 小时", value: "0 0 */6 * * *" },
-  { label: "每周一 09:00", value: "0 0 9 * * 1" },
-  { label: "每周一 02:00", value: "0 0 2 * * 1" },
-];
-
-const THRESHOLD_TYPE_OPTIONS = [
-  { label: "大于 (>)", value: "greater" },
-  { label: "大于等于 (≥)", value: "greater_equal" },
-  { label: "小于 (<)", value: "less" },
-  { label: "小于等于 (≤)", value: "less_equal" },
-  { label: "等于 (=)", value: "equal" },
-  { label: "不等于 (≠)", value: "not_equal" },
-];
-
-const THRESHOLD_TYPE_LABEL: Record<string, string> = Object.fromEntries(
-  THRESHOLD_TYPE_OPTIONS.map((o) => [o.value, o.label]),
-);
-
-function statusMeta(status?: string): { color: string; label: string } {
-  switch (status) {
-    case "success":
-      return { color: "success", label: "成功" };
-    case "failed":
-      return { color: "error", label: "失败" };
-    case "running":
-      return { color: "processing", label: "执行中" };
-    case "pending":
-      return { color: "default", label: "排队中" };
-    default:
-      return { color: "default", label: status || "-" };
-  }
-}
-
-function triggerLabel(trigger?: string) {
-  if (trigger === "cron") return "定时";
-  if (trigger === "manual") return "手动";
-  return trigger || "-";
-}
-
-function gradeColor(grade?: string) {
-  switch (grade) {
-    case "A":
-      return CHART_SUCCESS;
-    case "B":
-      return CHART_BRAND;
-    case "C":
-      return CHART_WARNING;
-    case "D":
-      return CHART_ERROR;
-    default:
-      return CHART_BRAND;
-  }
-}
-
-function parseRecipients(raw?: string): string[] {
-  if (!raw) return [];
-  try {
-    const v = JSON.parse(raw);
-    return Array.isArray(v) ? v.map(String) : [];
-  } catch {
-    return raw.split(",").map((s) => s.trim()).filter(Boolean);
-  }
-}
-
-function toReportBlob(raw: unknown, type: string): Blob {
-  if (raw instanceof Blob) return raw;
-  if (raw && typeof raw === "object" && "data" in raw) {
-    const inner = (raw as { data: unknown }).data;
-    if (inner instanceof Blob) return inner;
-    if (typeof inner === "string" || inner instanceof ArrayBuffer || ArrayBuffer.isView(inner)) {
-      return new Blob([inner as BlobPart], { type });
-    }
-  }
-  if (typeof raw === "string" || raw instanceof ArrayBuffer || ArrayBuffer.isView(raw)) {
-    return new Blob([raw as BlobPart], { type });
-  }
-  return new Blob([], { type });
-}
-
-function openAuthorized(url: string) {
-  void http
-    .get(url, { responseType: "blob" })
-    .then((raw: unknown) => {
-      const type = url.endsWith(".pdf")
-        ? "application/pdf"
-        : url.endsWith(".xlsx")
-          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          : "text/html;charset=utf-8";
-      const blob = toReportBlob(raw, type);
-      const obj = URL.createObjectURL(blob);
-      window.open(obj, "_blank");
-      setTimeout(() => URL.revokeObjectURL(obj), 60_000);
-    })
-    .catch((e) => message.error(extractApiErrorMessage(e, "打开报告失败")));
-}
-
-function downloadBlobFile(blob: Blob, filename: string) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-}
-
-function downloadInspectPdf(projectId: number, runId: number) {
-  const key = "inspect-pdf";
-  message.loading({ content: "正在准备 PDF…", key, duration: 0 });
-  void (async () => {
-    try {
-      const st = await checkInspectReportPdf(projectId, runId);
-      if (st.exists) {
-        const raw: unknown = await http.get(inspectReportPdfUrl(projectId, runId), {
-          responseType: "blob",
-          timeout: 120_000,
-        });
-        downloadBlobFile(toReportBlob(raw, "application/pdf"), `inspect-run-${runId}.pdf`);
-        message.success({ content: "PDF 已下载", key });
-        return;
-      }
-      const { downloadInspectReportPdf } = await import("../utils/inspect-report-pdf");
-      await downloadInspectReportPdf(projectId, inspectReportHtmlUrl(projectId, runId), `inspect-run-${runId}.pdf`);
-      message.success({ content: "PDF 已生成并保存（与 HTML 样式一致）", key });
-    } catch (e) {
-      message.error({ content: extractApiErrorMessage(e, "生成 PDF 失败"), key });
-    }
-  })();
-}
-
-function storageLabel(storage?: string) {
-  const s = (storage || "local").toLowerCase();
-  if (s === "minio") return "MinIO";
-  return "本地";
-}
-
-function storageColor(storage?: string) {
-  return (storage || "local").toLowerCase() === "minio" ? "blue" : "default";
-}
+// RF-10 拆分：常量/展示映射与报告下载已下沉，本文件只保留页面编排
+import {
+  THRESHOLD_TYPE_LABEL,
+  gradeColor,
+  parseRecipients,
+  statusMeta,
+  storageColor,
+  storageLabel,
+  triggerLabel,
+} from "./inspect/display";
+import {
+  InspectItemFormModal,
+  InspectPlanFormSection,
+  InspectReportTemplateFormModal,
+} from "./inspect/plan-form-drawer";
+import { downloadInspectPdf, openAuthorized, toReportBlob } from "../utils/inspect-report-download";
 
 export function ProjectInspectPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -844,146 +710,15 @@ export function ProjectInspectPage() {
                 label: "计划配置",
                 children: (
                   <Card className="table-card" loading={loading}>
-                    <Alert
-                      type="info"
-                      showIcon
-                      className="project-inspect-page__guide"
-                      message="适配 Prometheus + Telegraf + Blackbox + Pushgateway"
-                      description={
-                        <ol className="project-inspect-page__guide-list">
-                          <li>
-                            在「告警监控平台」为本项目配置 Prometheus 数据源（指向你们的 Prometheus）。
-                          </li>
-                          <li>
-                            主机/中间件指标：在对应服务器 <code>telegraf.conf</code> 配置 <code>inputs.*</code>
-                            ，由 Prometheus 拉取后再启用巡检项。
-                          </li>
-                          <li>
-                            连通性/端口：使用 Blackbox 的 <code>probe_success</code>
-                            （ICMP/TCP/HTTP 的 job 名按 scrape 配置调整 PromQL）。
-                          </li>
-                          <li>批次任务：Pushgateway 推送后，按 job 名改「Pushgateway」相关巡检项。</li>
-                          <li>已有旧模板时，可在「巡检项」页签点击「重置为 Telegraf 模板」一键重建。</li>
-                        </ol>
-                      }
+                    <InspectPlanFormSection
+                      planForm={planForm}
+                      projectId={projectId}
+                      dsList={dsList}
+                      reportTemplates={reportTemplates}
+                      onSaved={() => void refresh(projectId)}
+                      onGoToItems={() => setActiveTab("items")}
+                      onGoToRuns={() => setActiveTab("runs")}
                     />
-                    <Form
-                      form={planForm}
-                      layout="vertical"
-                      className="project-inspect-page__plan-form"
-                      onFinish={async (values) => {
-                        try {
-                          const list = String(values.recipients || "")
-                            .split(/[,;\s]+/)
-                            .map((s: string) => s.trim())
-                            .filter(Boolean);
-                          await updateInspectPlan(projectId, {
-                            enabled: values.enabled,
-                            cron_spec: values.cron_spec,
-                            datasource_id: values.datasource_id,
-                            report_list_mode: values.report_list_mode,
-                            report_template_id: values.report_template_id || 0,
-                            retain_days: values.retain_days,
-                            recipients: list,
-                          });
-                          message.success("计划已保存");
-                          void refresh(projectId);
-                        } catch (e) {
-                          message.error(extractApiErrorMessage(e, "保存失败"));
-                        }
-                      }}
-                    >
-                      <Row gutter={16}>
-                        <Col xs={24} md={12}>
-                          <Form.Item name="enabled" label="启用定时巡检" valuePropName="checked">
-                            <Switch checkedChildren="开" unCheckedChildren="关" />
-                          </Form.Item>
-                          <Form.Item
-                            name="datasource_id"
-                            label="Prometheus 数据源"
-                            rules={[{ required: true, message: "请选择数据源" }]}
-                            extra={
-                              <Link to={`/alert-monitor-platform/datasources?project_id=${projectId}`}>管理数据源</Link>
-                            }
-                          >
-                            <Select
-                              allowClear
-                              options={dsList.map((d) => ({
-                                label: `${d.name} (#${d.id})`,
-                                value: d.id,
-                              }))}
-                              placeholder="选择项目内数据源"
-                            />
-                          </Form.Item>
-                          <Form.Item
-                            name="cron_spec"
-                            label="Cron 表达式"
-                            extra="秒 分 时 日 月 周；可选手动输入自定义表达式"
-                          >
-                            <Select
-                              showSearch
-                              allowClear
-                              options={CRON_PRESETS}
-                              placeholder="选择或输入 Cron"
-                              dropdownRender={(menu) => (
-                                <>
-                                  {menu}
-                                  <div style={{ padding: 8 }}>
-                                    <Input
-                                      placeholder="自定义 Cron，回车填入"
-                                      onPressEnter={(e) =>
-                                        planForm.setFieldValue(
-                                          "cron_spec",
-                                          (e.target as HTMLInputElement).value,
-                                        )
-                                      }
-                                    />
-                                  </div>
-                                </>
-                              )}
-                            />
-                          </Form.Item>
-                        </Col>
-                        <Col xs={24} md={12}>
-                          <Form.Item name="report_list_mode" label="报告明细模式">
-                            <Select
-                              options={[
-                                { label: "仅异常（推荐日常）", value: "abnormal_only" },
-                                { label: "摘要（按项汇总）", value: "summary" },
-                                { label: "全部样本", value: "all" },
-                              ]}
-                            />
-                          </Form.Item>
-                          <Form.Item name="report_template_id" label="报告版式">
-                            <Select
-                              allowClear
-                              placeholder="默认标准版"
-                              options={reportTemplates.map((t) => ({
-                                label: `${t.name}${t.project_id === 0 ? "（全局）" : ""}`,
-                                value: t.id,
-                              }))}
-                            />
-                          </Form.Item>
-                          <Form.Item name="retain_days" label="报告保留天数（0=不清理）">
-                            <InputNumber min={0} max={3650} style={{ width: "100%" }} />
-                          </Form.Item>
-                          <Form.Item
-                            name="recipients"
-                            label="邮件收件人"
-                            extra="多个地址用逗号或空格分隔；需平台已配置发信"
-                          >
-                            <Input.TextArea rows={2} placeholder="ops@example.com, oncall@example.com" />
-                          </Form.Item>
-                        </Col>
-                      </Row>
-                      <Space wrap>
-                        <Button type="primary" htmlType="submit">
-                          保存计划
-                        </Button>
-                        <Button onClick={() => setActiveTab("items")}>去配置巡检项</Button>
-                        <Button onClick={() => setActiveTab("runs")}>查看历史</Button>
-                      </Space>
-                    </Form>
                   </Card>
                 ),
               },
@@ -1365,148 +1100,23 @@ export function ProjectInspectPage() {
         ) : null}
       </Drawer>
 
-      <Modal
-        title="编辑项目报告版式"
+      <InspectReportTemplateFormModal
         open={tplModalOpen}
-        onCancel={() => setTplModalOpen(false)}
-        width={880}
-        destroyOnClose
-        footer={[
-          <Button
-            key="preview"
-            onClick={async () => {
-              try {
-                const values = await tplForm.validateFields();
-                const resp = await previewInspectReportTemplate(projectId, {
-                  code: editingTpl?.code,
-                  body: values.body,
-                });
-                const blob = toReportBlob(resp, "text/html;charset=utf-8");
-                const url = URL.createObjectURL(blob);
-                window.open(url, "_blank", "noopener,noreferrer");
-                setTimeout(() => URL.revokeObjectURL(url), 60_000);
-              } catch (e) {
-                message.error(extractApiErrorMessage(e, "预览失败"));
-              }
-            }}
-          >
-            预览
-          </Button>,
-          <Button key="cancel" onClick={() => setTplModalOpen(false)}>
-            取消
-          </Button>,
-          <Button
-            key="ok"
-            type="primary"
-            onClick={async () => {
-              if (!editingTpl) return;
-              try {
-                const values = await tplForm.validateFields();
-                await updateInspectReportTemplate(projectId, editingTpl.id, values);
-                message.success("已保存");
-                setTplModalOpen(false);
-                void refresh(projectId);
-              } catch (e) {
-                message.error(extractApiErrorMessage(e, "保存失败"));
-              }
-            }}
-          >
-            保存
-          </Button>,
-        ]}
-      >
-        <Form form={tplForm} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="remark" label="说明">
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="body"
-            label="HTML 模板"
-            rules={[{ required: true, message: "请填写模板正文" }]}
-            extra="Go html/template 语法；可用字段：Project、Score、Grade、Summary、Groups、Findings 等。"
-          >
-            <Input.TextArea
-              rows={18}
-              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
+        onClose={() => setTplModalOpen(false)}
+        tplForm={tplForm}
+        editingTpl={editingTpl}
+        projectId={projectId}
+        onSaved={() => void refresh(projectId)}
+      />
 
-      <Modal
-        title={editingItem ? "编辑巡检项" : "新增巡检项"}
+      <InspectItemFormModal
         open={itemModalOpen}
-        onCancel={() => setItemModalOpen(false)}
-        onOk={async () => {
-          try {
-            const values = await itemForm.validateFields();
-            if (editingItem) {
-              await updateInspectItem(projectId, editingItem.id, values);
-            } else {
-              await createInspectItem(projectId, values);
-            }
-            message.success("已保存");
-            setItemModalOpen(false);
-            void refresh(projectId);
-          } catch (e) {
-            if (e && typeof e === "object" && "errorFields" in e) return;
-            message.error(extractApiErrorMessage(e, "保存失败"));
-          }
-        }}
-        destroyOnClose
-        width={720}
-      >
-        <Form form={itemForm} layout="vertical">
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="type" label="分类" rules={[{ required: true }]}>
-                <Input placeholder="如：基础设施层 / 数据库监控" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="description" label="说明">
-            <Input.TextArea rows={2} placeholder="指标来源、标签约定、何时启用等" />
-          </Form.Item>
-          <Form.Item
-            name="query"
-            label="PromQL"
-            rules={[{ required: true }]}
-            extra="即时向量查询；无数据时该项会记为异常。"
-          >
-            <Input.TextArea rows={3} style={{ fontFamily: "ui-monospace, Menlo, Consolas, monospace" }} />
-          </Form.Item>
-          <Row gutter={16}>
-            <Col xs={24} sm={8}>
-              <Form.Item name="threshold_type" label="比较方式" rules={[{ required: true }]}>
-                <Select options={THRESHOLD_TYPE_OPTIONS} />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={6}>
-              <Form.Item name="threshold" label="阈值" rules={[{ required: true }]}>
-                <InputNumber style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={4}>
-              <Form.Item name="unit" label="单位">
-                <Input placeholder="%" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={6}>
-              <Form.Item name="enabled" label="启用" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
+        onClose={() => setItemModalOpen(false)}
+        itemForm={itemForm}
+        editingItem={editingItem}
+        projectId={projectId}
+        onSaved={() => void refresh(projectId)}
+      />
     </div>
   );
 }

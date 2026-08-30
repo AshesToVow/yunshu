@@ -1,0 +1,41 @@
+# 生产滚动发布前/中执行：独立 Job 跑 yunshu migrate，避免多副本并发 AutoMigrate。
+# 用法：kubectl apply -f deploy/k8s/yunshu-migrate-job.yaml
+# 镜像/库连接通过环境变量或 Secret 注入（与 Deployment 一致）。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: yunshu-migrate
+  labels:
+    app: yunshu
+    component: migrate
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: yunshu
+        component: migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: harbor.example.com/yunshu/yunshu:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/app/yunshu", "migrate"]
+          envFrom:
+            - secretRef:
+                name: yunshu-db
+                optional: true
+            - configMapRef:
+                name: yunshu-config
+                optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /app/configs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: yunshu-config
+            optional: true

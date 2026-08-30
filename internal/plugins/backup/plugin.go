@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
 	"yunshu/internal/service"
 )
@@ -40,7 +41,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 		return nil
 	}
 	if svc, ok := rt.MysqlBackup.(*service.MysqlBackupService); ok && svc != nil {
-		go svc.RunMysqlBackupScheduler(bgCtx)
+		lifecycle.Go("backup.mysql-scheduler", func() { svc.RunMysqlBackupScheduler(bgCtx) })
 	}
 	return nil
 }

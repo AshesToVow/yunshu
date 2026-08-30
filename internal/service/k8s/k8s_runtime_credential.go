@@ -26,6 +26,10 @@ const (
 )
 
 // resolveKubeconfigForIntent 按访问意图选择只读或可写凭证。
+// 注册 ID 只按「最终使用的凭证」分档：只读 kubeconfig -> :ro，主 kubeconfig -> :w。
+// 早期按 intent 分出 :r/:w/:x 三档，但 read/exec/write 在没有只读凭证时用的是同一份主 kubeconfig，
+// 会让同一集群在 kom 内注册三个完全等价的实例（各自一套 discovery / CRD watch / ristretto 缓存），
+// 既浪费 APIServer 请求也浪费内存。
 func (s *K8sRuntimeService) resolveKubeconfigForIntent(cluster *model.K8sCluster, intent k8sauth.AccessIntent) (string, string, error) {
 	if cluster == nil {
 		return "", "", fmt.Errorf("cluster is nil")
@@ -48,16 +52,8 @@ func (s *K8sRuntimeService) resolveKubeconfigForIntent(cluster *model.K8sCluster
 			return kc, regID + ":ro", nil
 		}
 	}
-	suffix := ""
-	switch intent {
-	case k8sauth.AccessIntentRead:
-		suffix = ":r"
-	case k8sauth.AccessIntentExec:
-		suffix = ":x"
-	default:
-		suffix = ":w"
-	}
-	return primary, regID + suffix, nil
+	// 走到这里说明使用主凭证（无只读 kubeconfig，或意图本身需要写/exec 权限）。
+	return primary, regID + ":w", nil
 }
 
 func applyRestConfigDefaults(cfg *rest.Config) {

@@ -16,7 +16,6 @@ import {
 } from "../services/alerts";
 import { analyzeAlertExplainAI, type AIAlertExplainResult } from "../services/ai";
 import { extractApiErrorMessage } from "../services/http";
-import { stringifyPrettyJSON } from "../services/alert-mappers";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { revealDictEntryValue } from "../services/dict";
 import {
@@ -53,11 +52,20 @@ import {
   type AlertReceiverGroup,
   type AlertSubscriptionNode,
 } from "../services/alert-subscriptions";
+import {
+  parseLabelsFromAlertEventRequestPayload,
+  parseReceiverGroupChannelIds,
+  parseReceiverGroupEmails,
+  prettifyAlertRequestPayload,
+} from "./alert-config/payload-parse";
+import { webhookPayloadTemplates } from "./alert-config/webhook-templates";
+import { GLOBAL_ROUTING_PROJECT_ID } from "./alert-config/routing-tree-editor";
+import { SubscriptionsTab } from "./alert-config/subscriptions-tab";
+import { HistoryTab } from "./alert-config/history-tab";
 
 export type AlertConfigTab = "subscriptions" | "history";
 
 /** 通知与路由只编辑平台全局树。投递仍可能合并各项目旧节点，本页改的是 global: 命中。 */
-const GLOBAL_ROUTING_PROJECT_ID = 0;
 
 export type AlertConfigCenterPanelProps = {
   /** 当前子 Tab（策略 / 历史 / 模板） */
@@ -72,144 +80,6 @@ export type AlertConfigCenterPanelProps = {
   /** 告警监控平台顶栏「全局项目上下文」；有值时同步订阅/历史筛选 */
   projectContextId?: number;
 };
-
-const webhookPayloadTemplates: Record<string, Record<string, unknown>> = {
-  warning_prod: {
-    receiver: "yunshu-webhook",
-    status: "firing",
-    alerts: [
-      {
-        status: "firing",
-        labels: {
-          alertname: "KubernetesPodUnhealthy",
-          severity: "warning",
-          cluster: "prodK8s",
-          namespace: "default",
-          pod: "demo-pod-1",
-        },
-        annotations: {
-          summary: "Pod 异常（warning）",
-          description: "演示告警：warning 路由",
-        },
-        startsAt: "2026-04-18T09:20:00Z",
-        endsAt: "0001-01-01T00:00:00Z",
-        generatorURL: "http://prometheus.example/graph?g0.expr=up",
-        fingerprint: "demo-warning-prod-001",
-      },
-    ],
-  },
-  critical_prod: {
-    receiver: "yunshu-webhook",
-    status: "firing",
-    alerts: [
-      {
-        status: "firing",
-        labels: {
-          alertname: "KubernetesNodeNotReady",
-          severity: "critical",
-          cluster: "prodK8s",
-          namespace: "kube-system",
-          node: "worker-1",
-        },
-        annotations: {
-          summary: "节点不可用（critical）",
-          description: "演示告警：critical 路由",
-        },
-        startsAt: "2026-04-18T09:21:00Z",
-        endsAt: "0001-01-01T00:00:00Z",
-        generatorURL: "http://prometheus.example/graph?g0.expr=node_ready",
-        fingerprint: "demo-critical-prod-001",
-      },
-    ],
-  },
-  resolved_prod: {
-    receiver: "yunshu-webhook",
-    status: "resolved",
-    alerts: [
-      {
-        status: "resolved",
-        labels: {
-          alertname: "KubernetesNodeNotReady",
-          severity: "critical",
-          cluster: "prodK8s",
-          namespace: "kube-system",
-          node: "worker-1",
-        },
-        annotations: {
-          summary: "节点恢复（resolved）",
-          description: "演示恢复通知",
-        },
-        startsAt: "2026-04-18T09:21:00Z",
-        endsAt: "2026-04-18T09:25:00Z",
-        generatorURL: "http://prometheus.example/graph?g0.expr=node_ready",
-        fingerprint: "demo-critical-prod-001",
-      },
-    ],
-  },
-};
-
-/** 从告警历史入库体中解析顶层 `labels`（与后端 hydrate 逻辑一致）。 */
-function parseLabelsFromAlertEventRequestPayload(raw?: string): Record<string, string> {
-  const s = String(raw || "").trim();
-  if (!s) return {};
-  try {
-    const payload = JSON.parse(s) as Record<string, unknown>;
-    const labels = payload?.labels;
-    if (labels && typeof labels === "object" && !Array.isArray(labels)) {
-      const out: Record<string, string> = {};
-      for (const [k, v] of Object.entries(labels as Record<string, unknown>)) {
-        const vs = String(v ?? "").trim();
-        if (vs && vs !== "<nil>") {
-          out[String(k).trim()] = vs;
-        }
-      }
-      return out;
-    }
-  } catch {
-    /* ignore */
-  }
-  return {};
-}
-
-function parseReceiverGroupChannelIds(g: AlertReceiverGroup): number[] {
-  if (Array.isArray(g.channel_ids) && g.channel_ids.length) {
-    return g.channel_ids.map((id) => Number(id)).filter((id) => id > 0);
-  }
-  try {
-    const parsed = JSON.parse(String(g.channel_ids_json || "[]")) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.map((id) => Number(id)).filter((id) => id > 0);
-    }
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function parseReceiverGroupEmails(g: AlertReceiverGroup): string[] {
-  if (Array.isArray(g.email_recipients) && g.email_recipients.length) {
-    return g.email_recipients.map((e) => String(e).trim()).filter(Boolean);
-  }
-  try {
-    const parsed = JSON.parse(String(g.email_recipients_json || "[]")) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.map((e) => String(e).trim()).filter(Boolean);
-    }
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function prettifyAlertRequestPayload(raw?: string): string {
-  const s = String(raw || "").trim();
-  if (!s) return "";
-  try {
-    return stringifyPrettyJSON(JSON.parse(s) as unknown, s);
-  } catch {
-    return s;
-  }
-}
 
 export function AlertConfigCenterPanel({
   activeTab: tab,
@@ -829,645 +699,68 @@ export function AlertConfigCenterPanel({
       key: "subscriptions",
       label: ALERT_ROUTING_TERMS.tabRouting,
       children: (
-        <>
-          <Space className="ops-filter-bar" style={{ width: "100%", marginBottom: 12 }} wrap>
-            <Button icon={<ReloadOutlined />} loading={subLoading} onClick={() => void loadSubscriptions()}>
-              刷新
-            </Button>
-            <Button onClick={() => setRgDrawerOpen(true)}>
-              {ALERT_ROUTING_TERMS.receiverGroupManage}
-            </Button>
-            <Button
-              icon={<ThunderboltOutlined />}
-              onClick={() => {
-                wizardForm.setFieldsValue({
-                  project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
-                  severity: "warning",
-                  channel_ids: [],
-                  extra_emails: [],
-                  name: "",
-                });
-                setWizardStep(0);
-                setWizardOpen(true);
-              }}
-            >
-              {ALERT_ROUTING_TERMS.routingWizard}
-            </Button>
-            <Button
-              icon={<CopyOutlined />}
-              disabled={projects.length < 1}
-              onClick={() => {
-                cloneForm.setFieldsValue({
-                  source_project_id: projects[0]?.id,
-                  target_project_id: GLOBAL_ROUTING_PROJECT_ID,
-                  replace_cluster: "",
-                  replace_route: "",
-                  include_disabled: false,
-                  skip_if_target_has_nodes: true,
-                });
-                setCloneModalOpen(true);
-              }}
-            >
-              {ALERT_ROUTING_TERMS.copyTemplate}
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => void createSubscription(null)}>
-              新增根节点
-            </Button>
-            <Button disabled={!subSelectedID} icon={<PlusOutlined />} onClick={() => void createSubscription(subSelectedID)}>
-              新增子节点
-            </Button>
-            <Popconfirm title="确认删除节点？（有子节点会失败）" onConfirm={() => void removeSubscription()}>
-              <Button danger disabled={!subSelectedID} icon={<DeleteOutlined />}>
-                删除
-              </Button>
-            </Popconfirm>
-            <Button type="primary" onClick={() => void saveSubscription()}>
-              保存
-            </Button>
-          </Space>
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="本页编辑平台全局路由树（投递流水里的 global: 前缀）"
-            description="不要按项目切树。用匹配级别 / match_labels（cluster、project_id、severity）分流。warning 误发企微邮箱时，在本页停用对应子节点（例如 policy_4），不要只改某个业务项目里的停用开关。"
-          />
-          <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 12, alignItems: "start" }}>
-            <Card size="small" title={ALERT_ROUTING_TERMS.treeTitle} loading={subLoading} styles={{ body: { padding: 8 } }}>
-              <Tree
-                treeData={subscriptionTreeData}
-                selectedKeys={subSelectedID ? [String(subSelectedID)] : []}
-                onSelect={(keys) => {
-                  const id = Number(keys?.[0] ?? 0);
-                  if (id > 0) void onSelectSubscriptionNode(id);
-                }}
-                defaultExpandAll
-              />
-            </Card>
-            <Card
-              size="small"
-              title={
-                selectedSubscriptionNode
-                  ? `编辑路由节点：${formatRouteNodeTreeTitle(selectedSubscriptionNode.name, true)}`
-                  : ALERT_ROUTING_TERMS.selectNodeHint
-              }
-            >
-              <Form form={subForm} layout="vertical">
-                <Form.Item name="id" hidden>
-                  <Input />
-                </Form.Item>
-                <Form.Item name="parent_id" hidden>
-                  <Input />
-                </Form.Item>
-                <Form.Item name="name" label={ALERT_ROUTING_TERMS.nodeName} rules={[{ required: true }]}>
-                  <Input />
-                </Form.Item>
-                <Form.Item name="code" label={ALERT_ROUTING_TERMS.nodeCode}>
-                  <Input />
-                </Form.Item>
-                <Space wrap style={{ width: "100%" }}>
-                  <Form.Item name="enabled" label="启用" valuePropName="checked" style={{ marginBottom: 0 }}>
-                    <Switch />
-                  </Form.Item>
-                  <Form.Item name="continue" label={ALERT_ROUTING_TERMS.continueMatchChildren} valuePropName="checked" style={{ marginBottom: 0 }}>
-                    <Switch />
-                  </Form.Item>
-                  <Form.Item name="notify_resolved" label="恢复通知" valuePropName="checked" style={{ marginBottom: 0 }}>
-                    <Switch />
-                  </Form.Item>
-                  <Form.Item name="silence_seconds" label="静默(s)" style={{ marginBottom: 0 }}>
-                    <InputNumber min={0} />
-                  </Form.Item>
-                </Space>
-                <Form.Item
-                  name="match_severity"
-                  label={`${ALERT_ROUTING_TERMS.matchSeverity}（可选，多选）`}
-                  extra="告警 labels.severity 命中任一即通过；不选表示不按级别过滤。"
-                >
-                  <Select
-                    mode="multiple"
-                    allowClear
-                    placeholder="不选则不限级别"
-                    options={subscriptionSeverityOptions}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="receiver_group_ids"
-                  label={ALERT_ROUTING_TERMS.receiverGroup}
-                  dependencies={["parent_id"]}
-                  rules={[
-                    {
-                      validator: async (_, value) => {
-                        const pid = subForm.getFieldValue("parent_id");
-                        const isRoot = pid === null || pid === undefined || pid === "";
-                        if (isRoot) return;
-                        const ids = Array.isArray(value) ? value : [];
-                        if (ids.length === 0) {
-                          throw new Error("非根节点须至少选择一个接收组");
-                        }
-                      },
-                    },
-                  ]}
-                  extra={
-                    <>
-                      根节点可留空：仅作路由分流，通知由子节点上的接收组发出。处理人邮件：wechat 等补发；钉钉/企微在无法 @ 时补发。请先点击上方「
-                      {ALERT_ROUTING_TERMS.receiverGroupManage}」创建接收组并绑定通道。
-                    </>
-                  }
-                >
-                  <Select mode="multiple" options={receiverGroupOptions} placeholder="选择通知接收组" allowClear />
-                </Form.Item>
-                <Form.Item name="match_labels_json" label="match_labels_json（精确匹配 JSON）">
-                  <Input.TextArea rows={4} />
-                </Form.Item>
-                <Form.Item name="match_regex_json" label="match_regex_json（正则匹配 JSON）">
-                  <Input.TextArea rows={4} />
-                </Form.Item>
-              </Form>
-            </Card>
-          </div>
-        </>
+        <SubscriptionsTab
+          subLoading={subLoading}
+          loadSubscriptions={loadSubscriptions}
+          setRgDrawerOpen={setRgDrawerOpen}
+          wizardForm={wizardForm}
+          projectContextId={projectContextId}
+          setWizardStep={setWizardStep}
+          setWizardOpen={setWizardOpen}
+          projects={projects}
+          cloneForm={cloneForm}
+          setCloneModalOpen={setCloneModalOpen}
+          createSubscription={createSubscription}
+          subSelectedID={subSelectedID}
+          removeSubscription={removeSubscription}
+          saveSubscription={saveSubscription}
+          subscriptionTreeData={subscriptionTreeData}
+          onSelectSubscriptionNode={onSelectSubscriptionNode}
+          selectedSubscriptionNode={selectedSubscriptionNode}
+          subForm={subForm}
+          subscriptionSeverityOptions={subscriptionSeverityOptions}
+          receiverGroupOptions={receiverGroupOptions}
+        />
       ),
     },
     {
       key: "history",
       label: "历史告警记录",
       children: (
-        <>
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="历史告警：通知投递审计与抑制原因码"
-            description={
-              <>
-                <p style={{ marginBottom: 8 }}>
-                  每一行对应一次<strong>外发尝试或策略留痕</strong>（<Typography.Text code>alert_events</Typography.Text>
-                  ）。<Typography.Text code>success=true</Typography.Text> 且带 <Typography.Text code>error_message</Typography.Text>{" "}
-                  时，通常表示「未外发但已记录原因」，并非通道 HTTP 失败。
-                </p>
-                <ul style={{ marginBottom: 8, paddingLeft: 18 }}>
-                  {ALERT_HISTORY_PIPELINE_HELP.map((item) => (
-                    <li key={item.title}>
-                      <strong>{item.title}</strong>：{item.body}
-                    </li>
-                  ))}
-                </ul>
-                <p style={{ marginBottom: 0 }}>
-                  <strong>Prometheus 活跃告警</strong>（/api/v1/alerts）请在「告警监控平台 → PromQL / 平台静默」查看；与本表「是否已进 Webhook
-                  链路」不是同一数据源。抑制规则配置见「告警监控平台 → 告警抑制」。
-                </p>
-              </>
-            }
-          />
-          {embedded && projectContextId ? (
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 12 }}
-              message={`已按顶栏项目筛选历史记录（项目 #${projectContextId}）`}
-            />
-          ) : null}
-          <Space className="ops-filter-bar" style={{ width: "100%", marginBottom: 12 }} wrap>
-            <Radio.Group
-              value={eventHistoryMode}
-              onChange={(e) => setEventHistoryMode(e.target.value as "list" | "grouped")}
-              optionType="button"
-              buttonStyle="solid"
-              options={[
-                { label: "明细列表", value: "list" },
-                { label: "按 GroupKey 聚合", value: "grouped" },
-              ]}
-            />
-            <Input
-              style={{ width: 260 }}
-              placeholder="关键词（标题/错误/通道）"
-              value={eventKeyword}
-              onChange={(e) => setEventKeyword(e.target.value)}
-              allowClear
-            />
-            <Select
-              style={{ width: 220 }}
-              placeholder="告警IP（labels.instance / pod_ip）"
-              value={eventAlertIP || undefined}
-              options={alertIPOptions}
-              showSearch
-              allowClear
-              onSearch={(v) => setEventAlertIP(v)}
-              onChange={(v) => setEventAlertIP((v as string) || "")}
-              filterOption={(input, option) => String(option?.value ?? "").toLowerCase().includes(input.toLowerCase())}
-            />
-            <Select
-              style={{ width: 280 }}
-              placeholder={ALERT_ROUTING_TERMS.historySourceFilter}
-              value={eventSourceFilter || undefined}
-              options={sourceFilterOptions}
-              showSearch
-              allowClear
-              onChange={(v) => setEventSourceFilter((v as string) || "")}
-              filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
-            />
-            <Select
-              style={{ width: 160 }}
-              placeholder="状态"
-              value={eventStatus || undefined}
-              options={[
-                { label: "firing", value: "firing" },
-                { label: "resolved", value: "resolved" },
-              ]}
-              allowClear
-              onChange={(v) => setEventStatus((v as string) || "")}
-            />
-            <Select
-              style={{ width: 160 }}
-              placeholder="策略分类"
-              value={eventCategory || undefined}
-              options={ALERT_EVENT_CATEGORY_OPTIONS}
-              allowClear
-              onChange={(v) => setEventCategory((v as AlertEventCategory) || "")}
-            />
-            <Input
-              style={{ width: 220 }}
-              placeholder="groupKey"
-              value={eventGroupKey}
-              onChange={(e) => setEventGroupKey(e.target.value)}
-              allowClear
-            />
-            <Input
-              style={{ width: 240 }}
-              placeholder="fingerprint"
-              value={eventFingerprint}
-              onChange={(e) => setEventFingerprint(e.target.value)}
-              allowClear
-              onPressEnter={() => {
-                const fp = eventFingerprint.trim();
-                if (!fp) return;
-                void (async () => {
-                  setFpExplainLoading(true);
-                  try {
-                    const r = await explainAlertByFingerprint(fp);
-                    setFpExplain(r);
-                    setFpAiResult(null);
-                    setFpExplainOpen(true);
-                  } catch {
-                    message.error("指纹追溯失败");
-                  } finally {
-                    setFpExplainLoading(false);
-                  }
-                })();
-              }}
-            />
-            <Button
-              loading={fpExplainLoading}
-              disabled={!eventFingerprint.trim()}
-              onClick={() => {
-                const fp = eventFingerprint.trim();
-                if (!fp) return;
-                void (async () => {
-                  setFpExplainLoading(true);
-                  try {
-                    const r = await explainAlertByFingerprint(fp);
-                    setFpExplain(r);
-                    setFpAiResult(null);
-                    setFpExplainOpen(true);
-                  } catch {
-                    message.error("指纹追溯失败");
-                  } finally {
-                    setFpExplainLoading(false);
-                  }
-                })();
-              }}
-            >
-              指纹追溯
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => void reloadEvents(eventsPage, eventsPageSize)}>
-              刷新
-            </Button>
-          </Space>
-          {eventHistoryMode === "grouped" ? (
-            <ResizableTable
-              rowKey="group_key"
-              loading={eventsLoading}
-              dataSource={groupedEvents}
-              scroll={{ x: 1100 }}
-              pagination={tablePagination({
-                current: eventsPage,
-                pageSize: eventsPageSize,
-                total: eventsTotal,
-                onChange: (p, ps) => void reloadEvents(p, ps),
-              })}
-              columns={[
-                {
-                  title: "GroupKey",
-                  dataIndex: "group_key",
-                  width: 200,
-                  ellipsis: true,
-                  render: (v: string) => (
-                    <Button
-                      type="link"
-                      size="small"
-                      onClick={() => {
-                        setEventGroupKey(v);
-                        setEventHistoryMode("list");
-                      }}
-                    >
-                      {v || "-"}
-                    </Button>
-                  ),
-                },
-                { title: "标题", dataIndex: "title", width: 320, ellipsis: true },
-                { title: "次数", dataIndex: "count", width: 80 },
-                { title: "最近时间", dataIndex: "last_at", width: 170, render: (v: string) => formatDateTime(v) },
-                {
-                  title: "级别",
-                  dataIndex: "severity",
-                  width: 100,
-                  render: (v: string) => (
-                    <Tag color={v === "critical" ? "red" : v === "warning" ? "orange" : "blue"}>{v || "-"}</Tag>
-                  ),
-                },
-                { title: "状态", dataIndex: "status", width: 90, render: (v: string) => <Tag>{v || "-"}</Tag> },
-                { title: "集群", dataIndex: "cluster", width: 140, ellipsis: true, render: (v: string) => v || "-" },
-              ]}
-            />
-          ) : (
-          <ResizableTable
-            rowKey="id"
-            loading={eventsLoading}
-            dataSource={events}
-            scroll={{ x: 2460 }}
-            pagination={tablePagination({
-              current: eventsPage,
-              pageSize: eventsPageSize,
-              total: eventsTotal,
-              onChange: (p, ps) => void reloadEvents(p, ps),
-            })}
-            columns={[
-              { title: "ID", dataIndex: "id", width: 80 },
-              {
-                title: "标题",
-                dataIndex: "title",
-                width: 360,
-                render: (v: string) => (
-                  <Typography.Text style={{ whiteSpace: "normal", wordBreak: "break-word" }}>
-                    {v || "-"}
-                  </Typography.Text>
-                ),
-              },
-              { title: "告警IP", dataIndex: "alertIP", width: 160, ellipsis: true, render: (v: string) => v || "-" },
-              {
-                title: "数据源 / 来源",
-                key: "datasourceDisplay",
-                width: 200,
-                render: (_: unknown, row: AlertEventItem) => {
-                  const name = String(row.datasourceName ?? "").trim();
-                  const typ = String(row.datasourceType ?? "").trim();
-                  const slug = String(row.monitorPipeline ?? "").trim();
-                  if (name) {
-                    return (
-                      <Space align="start" size={4} wrap>
-                        <Typography.Text style={{ maxWidth: 160 }} ellipsis={{ tooltip: name }}>
-                          {name}
-                        </Typography.Text>
-                        {typ ? <Tag>{typ}</Tag> : null}
-                      </Space>
-                    );
-                  }
-                  if (slug === "alertmanager") return <Tag color="blue">Alertmanager</Tag>;
-                  if (slug === "cloud_expiry") return <Tag color="volcano">云到期</Tag>;
-                  if (slug === "platform_monitor") return <Tag color="purple">平台规则</Tag>;
-                  if (slug === "platform") return <Tag color="purple">platform（历史）</Tag>;
-                  if (slug === "prometheus") return <Tag color="blue">prometheus（历史）</Tag>;
-                  if (slug.startsWith("ds:")) return <Tag>{slug}</Tag>;
-                  return slug ? <Tag>{slug}</Tag> : <span>-</span>;
-                },
-              },
-              { title: "GroupKey", dataIndex: "groupKey", width: 140, ellipsis: true, render: (v: string) => v || "-" },
-              {
-                title: "Fingerprint",
-                dataIndex: "fingerprint",
-                width: 160,
-                ellipsis: true,
-                render: (v: string) =>
-                  v ? (
-                    <Button
-                      type="link"
-                      size="small"
-                      onClick={() => {
-                        setEventFingerprint(v);
-                        void (async () => {
-                          setFpExplainLoading(true);
-                          try {
-                            const r = await explainAlertByFingerprint(v);
-                            setFpExplain(r);
-                            setFpAiResult(null);
-                            setFpExplainOpen(true);
-                          } catch {
-                            message.error("指纹追溯失败");
-                          } finally {
-                            setFpExplainLoading(false);
-                          }
-                        })();
-                      }}
-                    >
-                      {v}
-                    </Button>
-                  ) : (
-                    "-"
-                  ),
-              },
-              {
-                title: "级别",
-                dataIndex: "severity",
-                width: 100,
-                render: (v: string) => (
-                  <Tag color={v === "critical" ? "red" : v === "warning" ? "orange" : "blue"}>{v || "-"}</Tag>
-                ),
-              },
-              { title: "状态", dataIndex: "status", width: 90, render: (v: string) => <Tag>{v || "-"}</Tag> },
-              {
-                title: "告警值 / 恢复时值",
-                key: "metric_values",
-                width: 200,
-                ellipsis: true,
-                render: (_: unknown, row: AlertEventItem) => {
-                  const a = String(row.metricCurrent ?? "").trim();
-                  const b = String(row.metricResolved ?? "").trim();
-                  if (!a && !b) return <span className="inline-muted">-</span>;
-                  if (String(row.status).toLowerCase() === "resolved" && b) {
-                    return (
-                      <Typography.Text ellipsis={{ tooltip: `触发侧快照: ${a || "—"}\n恢复时再查: ${b}` }} style={{ fontSize: 12 }}>
-                        触发: {a || "—"} / 恢复: {b}
-                      </Typography.Text>
-                    );
-                  }
-                  return (
-                    <Typography.Text ellipsis={{ tooltip: a }} style={{ fontSize: 12 }}>
-                      {a || "—"}
-                    </Typography.Text>
-                  );
-                },
-              },
-              {
-                title: "命中路由",
-                dataIndex: "matchedPolicyNames",
-                width: 200,
-                ellipsis: true,
-                render: (_: string, row: AlertEventItem) => {
-                  const d = formatMatchedPolicyNamesDisplay(row.matchedPolicyNameList ?? row.matchedPolicyNames);
-                  return (
-                    <Typography.Text ellipsis={{ tooltip: d.title }} style={{ fontSize: 12 }}>
-                      {d.text}
-                    </Typography.Text>
-                  );
-                },
-              },
-              { title: "通道", dataIndex: "channelName", width: 160, ellipsis: true },
-              {
-                title: "接收人",
-                dataIndex: "receiverList",
-                width: 220,
-                ellipsis: true,
-                render: (_: unknown, row: AlertEventItem) => {
-                  if (!row.receiverList?.length) return "-";
-                  return (
-                    <Space size={[4, 4]} wrap>
-                      {row.receiverList.map((one) => (
-                        <Tag key={`${row.id}-${one}`}>{one}</Tag>
-                      ))}
-                    </Space>
-                  );
-                },
-              },
-              {
-                title: "收件原因",
-                key: "recipient_reason",
-                width: 150,
-                ellipsis: true,
-                render: (_: unknown, row: AlertEventItem) => {
-                  const r = explainAlertRecipients(row.requestPayload);
-                  return (
-                    <Typography.Text ellipsis={{ tooltip: r.detail }} style={{ fontSize: 12 }}>
-                      {r.short}
-                    </Typography.Text>
-                  );
-                },
-              },
-              {
-                title: "发送结果",
-                dataIndex: "success",
-                width: 100,
-                render: (v: boolean, row: AlertEventItem) => {
-                  const reason = String(row.errorMessage || "").trim();
-                  if (v && reason) {
-                    return <Tag color="default">留痕</Tag>;
-                  }
-                  return v ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>;
-                },
-              },
-              {
-                title: "策略摘要",
-                key: "reason_hint",
-                width: 120,
-                render: (_: unknown, row: AlertEventItem) => {
-                  const hint = summarizeAlertEventHint(row);
-                  if (hint === "-") return <span>-</span>;
-                  return (
-                    <Typography.Text ellipsis={{ tooltip: describeAlertEvent(row) }} style={{ fontSize: 12 }}>
-                      {hint}
-                    </Typography.Text>
-                  );
-                },
-              },
-              {
-                title: "标签组",
-                key: "labels_group",
-                width: 110,
-                render: (_: unknown, row: AlertEventItem) => {
-                  const labels = parseLabelsFromAlertEventRequestPayload(row.requestPayload);
-                  const entries = Object.entries(labels);
-                  if (!entries.length) return <span>-</span>;
-                  return (
-                    <Popover
-                      title="标签组（labels）"
-                      trigger={["click"]}
-                      overlayStyle={{ maxWidth: 560 }}
-                      content={
-                        <div style={{ maxHeight: 400, overflow: "auto" }}>
-                          <Space size={[4, 8]} wrap>
-                            {entries.map(([k, v]) => (
-                              <Tag key={`${row.id}-${k}`} style={{ marginInlineEnd: 0 }}>
-                                {k}={v}
-                              </Tag>
-                            ))}
-                          </Space>
-                        </div>
-                      }
-                    >
-                      <Button size="small">查看标签</Button>
-                    </Popover>
-                  );
-                },
-              },
-              {
-                title: "告警数据原始 JSON",
-                key: "raw_request_payload",
-                width: 110,
-                render: (_: unknown, row: AlertEventItem) => {
-                  const raw = String(row.requestPayload || "").trim();
-                  if (!raw) return <span>-</span>;
-                  const pretty = prettifyAlertRequestPayload(raw);
-                  const http = row.httpStatusCode;
-                  return (
-                    <Popover
-                      title={`入库 requestPayload · HTTP ${http ?? "-"}`}
-                      trigger={["click"]}
-                      overlayStyle={{ maxWidth: 760 }}
-                      content={
-                        <pre
-                          style={{
-                            maxHeight: 480,
-                            overflow: "auto",
-                            margin: 0,
-                            fontSize: 12,
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {pretty}
-                        </pre>
-                      }
-                    >
-                      <Button size="small">查看 JSON</Button>
-                    </Popover>
-                  );
-                },
-              },
-              {
-                title: "告警产生时间",
-                dataIndex: "alertStartedAt",
-                width: 170,
-                render: (v: string) => (v ? formatDateTime(v) : "-"),
-              },
-              {
-                title: "链路说明",
-                key: "flow_explain",
-                width: 340,
-                ellipsis: true,
-                render: (_: unknown, row: AlertEventItem) => {
-                  const msg = describeAlertEvent(row);
-                  return (
-                    <Typography.Text type="secondary" ellipsis={{ tooltip: msg }}>
-                      {msg}
-                    </Typography.Text>
-                  );
-                },
-              },
-              { title: "发送/记录时间", dataIndex: "createdAt", width: 170, render: (v: string) => formatDateTime(v) },
-            ]}
-          />
-          )}
-        </>
+        <HistoryTab
+          embedded={embedded}
+          projectContextId={projectContextId}
+          eventHistoryMode={eventHistoryMode}
+          setEventHistoryMode={setEventHistoryMode}
+          eventKeyword={eventKeyword}
+          setEventKeyword={setEventKeyword}
+          eventAlertIP={eventAlertIP}
+          setEventAlertIP={setEventAlertIP}
+          alertIPOptions={alertIPOptions}
+          eventSourceFilter={eventSourceFilter}
+          setEventSourceFilter={setEventSourceFilter}
+          sourceFilterOptions={sourceFilterOptions}
+          eventStatus={eventStatus}
+          setEventStatus={setEventStatus}
+          eventCategory={eventCategory}
+          setEventCategory={setEventCategory}
+          eventGroupKey={eventGroupKey}
+          setEventGroupKey={setEventGroupKey}
+          eventFingerprint={eventFingerprint}
+          setEventFingerprint={setEventFingerprint}
+          eventsLoading={eventsLoading}
+          events={events}
+          groupedEvents={groupedEvents}
+          eventsPage={eventsPage}
+          eventsPageSize={eventsPageSize}
+          eventsTotal={eventsTotal}
+          reloadEvents={reloadEvents}
+          fpExplainLoading={fpExplainLoading}
+          setFpExplainLoading={setFpExplainLoading}
+          setFpExplain={setFpExplain}
+          setFpAiResult={setFpAiResult}
+          setFpExplainOpen={setFpExplainOpen}
+        />
       ),
     },
   ] as const;

@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/lifecycle"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
@@ -425,10 +426,10 @@ func (s *OverviewService) overviewKubectl(ctx context.Context, clusterID uint) *
 		err error
 	}
 	ch := make(chan regResult, 1)
-	go func() {
+	lifecycle.GoDetached("overview.cluster-register", func() {
 		k, err := s.runtime.EnsureClusterRegistered(rctx, clusterID)
 		ch <- regResult{k: k, err: err}
-	}()
+	})
 	select {
 	case <-rctx.Done():
 		return nil

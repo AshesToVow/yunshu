@@ -133,6 +133,11 @@ mysql:
   max_idle_conns: 5          # 降低以节省内存
   max_open_conns: 20         # 降低以节省内存
   conn_max_lifetime_seconds: 3600
+  # auto_migrate: 是否在启动时执行 GORM AutoMigrate 自动改表。
+  #   未配置时按环境推断：app.env 为 prod/production 则关闭，其他环境开启。
+  #   生产环境请保持关闭（滚动发布多副本并发 DDL 不可回滚），改用版本化 migration。
+  #   显式配置优先级：database.auto_migrate > mysql.auto_migrate > 环境推断。
+  # auto_migrate: false
 
 # PostgreSQL 示例（与 mysql 二选一；也可用 database: 键，见 .codegraph/kite-comparison.md）
 # database:
@@ -147,6 +152,11 @@ mysql:
 #   max_idle_conns: 5
 #   max_open_conns: 20
 #   conn_max_lifetime_seconds: 3600
+  # auto_migrate: 是否在启动时执行 GORM AutoMigrate 自动改表。
+  #   未配置时按环境推断：app.env 为 prod/production 则关闭，其他环境开启。
+  #   生产环境请保持关闭（滚动发布多副本并发 DDL 不可回滚），改用版本化 migration。
+  #   显式配置优先级：database.auto_migrate > mysql.auto_migrate > 环境推断。
+  # auto_migrate: false
 
 redis:
   addr: 10.10.10.103:6379    # Docker 服务名，容器内部通信
@@ -167,7 +177,11 @@ redis:
 
 auth:
   jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"  # 生产环境务必修改，至少32字节；勿使用仓库默认值上线
-  access_token_ttl_minutes: 120
+  access_token_ttl_minutes: 15   # 短 access；浏览器 HttpOnly Cookie（ys_at）
+  refresh_token_ttl_hours: 168   # 7 天 refresh（ys_rt）；Redis 一次性轮换
+  cookie_secure: false           # 本地 http；生产 HTTPS 改为 true（或依赖 env=prod 默认）
+  # cookie_domain: ""            # 同域反代留空
+  csp_enabled: true
   email_code_ttl_seconds: 600
   email_code_cooldown_seconds: 60
 

@@ -74,9 +74,7 @@ export function getNodeDetail(clusterId: number, name: string) {
 export type NodeTaintInput = { key: string; value?: string; effect?: string };
 
 export function setNodeSchedulability(clusterId: number, name: string, unschedulable: boolean) {
-  return getData<{ ok: boolean }>(
-    http.post("/nodes/schedulability", { cluster_id: clusterId, name, unschedulable }),
-  );
+  return getData<{ ok: boolean }>(http.post("/nodes/schedulability", { cluster_id: clusterId, name, unschedulable }));
 }
 
 export type NodeDrainPodItem = {
@@ -131,7 +129,7 @@ export function drainNode(
         name,
         dry_run: opts?.dry_run ?? false,
         force: opts?.force ?? false,
-        confirm: opts?.confirm ?? (!opts?.dry_run),
+        confirm: opts?.confirm ?? !opts?.dry_run,
         ignore_daemon_sets: opts?.ignore_daemon_sets ?? true,
         delete_emptydir_data: opts?.delete_emptydir_data ?? true,
         grace_period_seconds: opts?.grace_period_seconds,
@@ -142,12 +140,9 @@ export function drainNode(
 }
 
 export function getNodeDrainStatus(clusterId: number, name: string) {
-  return getData<NodeDrainStatus>(
-    http.get("/nodes/drain-status", { params: { cluster_id: clusterId, name } }),
-  );
+  return getData<NodeDrainStatus>(http.get("/nodes/drain-status", { params: { cluster_id: clusterId, name } }));
 }
 
 export function replaceNodeTaints(clusterId: number, name: string, taints: NodeTaintInput[]) {
   return getData<{ ok: boolean }>(http.put("/nodes/taints", { cluster_id: clusterId, name, taints }));
 }
-

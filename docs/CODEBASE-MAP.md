@@ -1,7 +1,7 @@
 # Yunshu 后端代码地图（与源码同步）
 
-**文档版本**: v1.5  
-**最后更新**: 2026-07-12  
+**文档版本**: v1.6  
+**最后更新**: 2026-08-29  
 **适用分支**: 插件化 + 目录拆分 + 仓储化 + `bizerrors` 统一之后  
 
 本文是阅读后端源码的**入口索引**。若与代码冲突，以 `internal/` 源码为准。
@@ -15,9 +15,9 @@ HTTP/gRPC 请求
   → internal/middleware/     Auth / Casbin / K8sScope / ErrorHandler / Audit
   → internal/handler/        参数绑定、调用 Service、abortService 出错
   → internal/service/        领域逻辑（按域子包，见 §2）
-  → internal/interfaces/     Repository 接口
-  → internal/repository/     GORM 实现
-  → internal/model/          表结构与实体
+  → internal/repository/*_repo_iface.go   Repository 接口（按域拆分；同包实现）
+  → internal/repository/                    GORM 实现
+  → internal/model/                         表结构与实体
 ```
 
 **装配入口**（谁创建 Service/Repository）：
@@ -158,14 +158,14 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 
 ## 6. 仓储化现状（摘要）
 
-告警、系统、项目、K8s 策略、总览、事件转发等 **主路径已走 `interfaces.*Repository`**。  
+告警、系统、项目、K8s 策略、总览、事件转发等 **主路径已走 `repository` 包内接口**（定义于 `internal/repository/*_repo_iface.go`，实现同包拆分文件）。  
 仍直接持有 `*gorm.DB` 的少数点：
 
 - `mysqlbackup.MysqlBackupService` — MinIO 配置、`dictconfig` 解析  
 - `system.DepartmentService` — 部分事务经 `repo.DB()`  
 - `k8s/eventforward.Manager` — 字典热加载  
 
-新功能：**禁止在 Service 中新增裸 SQL**；通过 Repository 或现有 `interfaces` 扩展。
+新功能：**禁止在 Service 中新增裸 SQL**；通过按域的 `*_repo_iface.go` 扩展接口。
 
 ---
 
@@ -175,7 +175,7 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 |----|------|------|
 | 内置菜单定义 | `internal/menu/catalog.go` | `DefaultCatalog()`，支持任意层级 `Children` |
 | 菜单 DB 同步 | `internal/menu/sync.go` | `menu.Sync`：按 `(parent_id, path)` upsert + 历史补丁 |
-| seed 入口 | `cmd/seed.go` | 事务：Permission 批量 OnConflict、Casbin `AddPolicies`；admin 密码**仅首次创建** |
+| seed 入口 | `cmd/seed.go` + `cmd/seed_permissions_*.go` | 权限按域拆分；事务：Permission OnConflict、Casbin；admin 密码仅首次创建 |
 | 菜单树 API | `internal/repository/menu_repository.go` | 单次 `ListAll` + O(n) 建树；Service 侧 60s 缓存 |
 
 ---

@@ -126,14 +126,25 @@ func (s *Service) tickImageCleanup(ctx context.Context, lastByPolicy map[uint]ti
 		msg := s.runOneCleanupPolicy(ctx, &p)
 		lastByPolicy[p.ID] = now
 		_ = s.db.WithContext(ctx).Model(&model.ImageCleanupPolicy{}).Where("id = ?", p.ID).Updates(map[string]any{
-			"last_run_at":  now,
-			"last_result":  truncate(msg, 1000),
-			"updated_at":   now,
+			"last_run_at": now,
+			"last_result": truncate(msg, 1000),
+			"updated_at":  now,
 		}).Error
 	}
 }
 
+// cleanupMaxDeletePerRun 单次策略执行允许删除的最大 Tag 数（熔断）。
+// 触及上限即停止并在 last_result 中标注，避免规则配置失误造成大批量误删。
+const cleanupMaxDeletePerRun = 200
+
 func (s *Service) runOneCleanupPolicy(ctx context.Context, p *model.ImageCleanupPolicy) string {
+	return s.executeCleanupPolicy(ctx, p, false)
+}
+
+// executeCleanupPolicy 执行一条清理策略。dryRun=true 时只统计不删除。
+// 任一层级的列举失败都会中止整条策略：镜像列表不完整会让 keep_last_n 的排序判定失真，
+// 继续执行等于按残缺数据删除本应保留的镜像。
+func (s *Service) executeCleanupPolicy(ctx context.Context, p *model.ImageCleanupPolicy, dryRun bool) string {
 	reg, err := s.getRegistry(ctx, p.RegistryID)
 	if err != nil {
 		return "registry not found"
@@ -145,7 +156,7 @@ func (s *Service) runOneCleanupPolicy(ctx context.Context, p *model.ImageCleanup
 	} else if resolved.Type == model.ImageRegistryTypeHarbor {
 		items, err := s.ListHarborProjects(ctx, p.RegistryID, 0)
 		if err != nil {
-			return "list projects: " + err.Error()
+			return "aborted: list projects: " + err.Error()
 		}
 		for _, it := range items {
 			projects = append(projects, it.Name)
@@ -159,17 +170,17 @@ func (s *Service) runOneCleanupPolicy(ctx context.Context, p *model.ImageCleanup
 	for _, proj := range projects {
 		repos, err := s.ListHarborRepositories(ctx, p.RegistryID, 0, proj)
 		if err != nil {
-			continue
+			return fmt.Sprintf("aborted: list repositories(%s): %s (deleted=%d skipped_or_kept=%d)", proj, err.Error(), deleted, skipped)
 		}
 		for _, repo := range repos {
 			arts, err := s.ListHarborArtifacts(ctx, p.RegistryID, 0, proj, repo.Name)
 			if err != nil {
-				continue
+				return fmt.Sprintf("aborted: list artifacts(%s/%s): %s (deleted=%d skipped_or_kept=%d)", proj, repo.Name, err.Error(), deleted, skipped)
 			}
 			type ranked struct {
-				art   HarborTagItem
-				t     time.Time
-				ref   string
+				art HarborTagItem
+				t   time.Time
+				ref string
 			}
 			rankedList := make([]ranked, 0, len(arts))
 			for _, a := range arts {
@@ -189,7 +200,6 @@ func (s *Service) runOneCleanupPolicy(ctx context.Context, p *model.ImageCleanup
 			sort.Slice(rankedList, func(i, j int) bool {
 				return rankedList[i].t.After(rankedList[j].t)
 			})
-			keep := map[string]struct{}{}
 			for i, it := range rankedList {
 				protect := false
 				if len(it.art.Linked) > 0 {
@@ -202,8 +212,14 @@ func (s *Service) runOneCleanupPolicy(ctx context.Context, p *model.ImageCleanup
 					protect = true
 				}
 				if protect {
-					keep[it.ref] = struct{}{}
 					skipped++
+					continue
+				}
+				if deleted >= cleanupMaxDeletePerRun {
+					return fmt.Sprintf("aborted: 单次删除上限 %d 已触发，请核对策略后再执行 (deleted=%d skipped_or_kept=%d)", cleanupMaxDeletePerRun, deleted, skipped)
+				}
+				if dryRun {
+					deleted++
 					continue
 				}
 				if err := s.DeleteHarborArtifact(ctx, p.RegistryID, 0, proj, repo.Name, it.ref); err != nil {
@@ -211,19 +227,25 @@ func (s *Service) runOneCleanupPolicy(ctx context.Context, p *model.ImageCleanup
 				}
 				deleted++
 			}
-			_ = keep
 		}
+	}
+	if dryRun {
+		return fmt.Sprintf("dry_run=true would_delete=%d skipped_or_kept=%d", deleted, skipped)
 	}
 	return fmt.Sprintf("deleted=%d skipped_or_kept=%d", deleted, skipped)
 }
 
-// RunCleanupPolicyNow 手动触发一条策略。
-func (s *Service) RunCleanupPolicyNow(ctx context.Context, id uint) (string, error) {
+// RunCleanupPolicyNow 手动触发一条策略。dryRun=true 时只预演不删除，且不刷新 last_run_at。
+// 注意：本接口的访问控制目前完全依赖路由层 Casbin（/api/v1/registries 组），service 层未再做平台管理员断言。
+func (s *Service) RunCleanupPolicyNow(ctx context.Context, id uint, dryRun bool) (string, error) {
 	var p model.ImageCleanupPolicy
 	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&p).Error; err != nil {
 		return "", constants.ErrNotFound
 	}
-	msg := s.runOneCleanupPolicy(ctx, &p)
+	msg := s.executeCleanupPolicy(ctx, &p, dryRun)
+	if dryRun {
+		return msg, nil
+	}
 	now := time.Now()
 	_ = s.db.WithContext(ctx).Model(&p).Updates(map[string]any{
 		"last_run_at": now,

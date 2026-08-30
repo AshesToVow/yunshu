@@ -59,11 +59,11 @@ var reportTemplateFuncs = template.FuncMap{
 			return "状态正常，保持例行观察。"
 		}
 	},
-	"eq":           func(a, b string) bool { return a == b },
-	"gradeLabel":   gradeLabelCN,
-	"riskLevel":    riskLevelCN,
+	"eq":            func(a, b string) bool { return a == b },
+	"gradeLabel":    gradeLabelCN,
+	"riskLevel":     riskLevelCN,
 	"priorityLabel": findingPriorityLabel,
-	"inc":          func(i int) int { return i + 1 },
+	"inc":           func(i int) int { return i + 1 },
 }
 
 func builtinTemplateFile(code string) string {
@@ -364,5 +364,79 @@ func (s *Service) PreviewReportTemplate(ctx context.Context, projectID uint, req
 			},
 		},
 	}
+	// 台账/对比/判定依据同样填充样例，否则自定义模板在预览时看不到这三段的排版效果
+	data.Ledger = previewLedgerEntries()
+	data.Diff = previewPeriodDiff(data.Timestamp)
+	data.Criteria = buildScoreCriteria(
+		CollectResult{Total: 12, Critical: 1, Warning: 2, Normal: 9},
+		data.Score, data.Grade, 2, 4,
+	)
 	return renderHTMLWithTemplate(code, body, data)
+}
+
+func previewLedgerEntries() []LedgerEntry {
+	due := time.Now().AddDate(0, 0, 7)
+	return []LedgerEntry{
+		{
+			Seq:             1,
+			Fingerprint:     findingFingerprint("基础设施层", "CPU 使用率"),
+			Type:            "基础设施层",
+			Name:            "CPU 使用率",
+			Severity:        "critical",
+			Priority:        findingPriorityLabel("critical"),
+			Count:           1,
+			AffectedService: "order-service",
+			Instances:       "10.0.0.1",
+			Phenomenon:      "峰值 92%，阈值 85%（共 1 个目标越线）。",
+			Impact:          "基础资源承载能力已进入高风险区间，可能造成请求超时、处理能力下降或服务不可用。",
+			Suggestion:      "本周内组织排查，按需扩容、限流或修复故障，并在下次巡检前回填处理结论。",
+			State:           "persisting",
+			StateLabel:      ledgerStateLabel("persisting"),
+			Owner:           "张三",
+			DueDate:         &due,
+			DueDateText:     formatDueDate(&due),
+			DurationDays:    7,
+		},
+		{
+			Seq:             2,
+			Fingerprint:     findingFingerprint("数据库监控", "连接数"),
+			Type:            "数据库监控",
+			Name:            "连接数",
+			Severity:        "warning",
+			Priority:        findingPriorityLabel("warning"),
+			Count:           1,
+			AffectedService: "mysql-primary",
+			Instances:       "10.0.0.9",
+			Phenomenon:      "峰值 420，阈值 400（共 1 个目标越线）。",
+			Impact:          "数据层读写能力指标已偏离健康区间，当前尚可承载，但存在继续恶化的趋势。",
+			Suggestion:      "纳入观察清单，核查阈值配置合理性与近期变更，两周内反馈复核结果。",
+			State:           "new",
+			StateLabel:      ledgerStateLabel("new"),
+		},
+	}
+}
+
+func previewPeriodDiff(now time.Time) PeriodDiff {
+	baseline := now.AddDate(0, 0, -7)
+	d := PeriodDiff{
+		HasBaseline:    true,
+		BaselineRunID:  1,
+		BaselineAt:     baseline,
+		BaselineText:   baseline.Format("2006-01-02 15:04"),
+		NewCount:       1,
+		PersistCount:   1,
+		RecoveredCount: 1,
+		Recovered: []LedgerEntry{{
+			Seq:        1,
+			Type:       "中间件层",
+			Name:       "Kafka 消费延迟",
+			Severity:   "warning",
+			Priority:   findingPriorityLabel("warning"),
+			State:      "recovered",
+			StateLabel: ledgerStateLabel("recovered"),
+			Owner:      "李四",
+		}},
+	}
+	d.Summary = buildDiffSummary(d)
+	return d
 }

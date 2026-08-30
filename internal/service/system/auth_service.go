@@ -85,7 +85,7 @@ func (s *AuthService) SendEmailCode(ctx context.Context, req SendEmailCodeReques
 		return nil, bizerrors.Pass(ctx, "auth", "SendEmailCode", err)
 	}
 
-	code, err := generateNumericCode(6)
+	code, err := generateNumericCode(ctx, 6)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "auth", "SendEmailCode", err)
 	}
@@ -264,22 +264,25 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest) (*Regis
 	}, nil
 }
 
-// Logout 退出登录相关的业务逻辑。
-func (s *AuthService) Logout(ctx context.Context, tokenID string) error {
+// Logout 退出登录：吊销 access 会话；refreshToken 非空时一并吊销。
+func (s *AuthService) Logout(ctx context.Context, tokenID, refreshToken string) error {
 	if s.redis == nil {
 		return bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
 	}
 	tokenID = strings.TrimSpace(tokenID)
-	if tokenID == "" {
-		return nil
-	}
-	userIDStr, err := s.redis.Get(ctx, store.AccessTokenKey(tokenID)).Result()
-	if err == nil {
-		if uid, parseErr := parseUintUserID(userIDStr); parseErr == nil {
-			_ = store.UnregisterUserAccessToken(ctx, s.redis, uid, tokenID)
+	if tokenID != "" {
+		userIDStr, err := s.redis.Get(ctx, store.AccessTokenKey(tokenID)).Result()
+		if err == nil {
+			if uid, parseErr := parseUintUserID(userIDStr); parseErr == nil {
+				_ = store.UnregisterUserAccessToken(ctx, s.redis, uid, tokenID)
+			}
 		}
+		_ = s.redis.Del(ctx, store.AccessTokenKey(tokenID)).Err()
 	}
-	return s.redis.Del(ctx, store.AccessTokenKey(tokenID)).Err()
+	if rt := strings.TrimSpace(refreshToken); rt != "" {
+		_ = store.DeleteRefreshToken(ctx, s.redis, rt)
+	}
+	return nil
 }
 
 // Me 执行对应的业务逻辑。
@@ -370,15 +373,59 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uint, req Chang
 		if err := store.InvalidateAllUserAccessTokens(ctx, s.redis, userID); err != nil {
 			return bizerrors.Pass(ctx, "auth", "ChangePassword", err)
 		}
+		if err := store.InvalidateAllUserRefreshTokens(ctx, s.redis, userID); err != nil {
+			return bizerrors.Pass(ctx, "auth", "ChangePassword", err)
+		}
 	}
 
 	return nil
 }
 
 func (s *AuthService) issueLoginResponse(ctx context.Context, user *model.User) (*LoginResponse, error) {
+	issued, err := s.issueSession(ctx, user, "")
+	if err != nil {
+		return nil, err
+	}
+	expired := userPasswordExpired(ctx, s.db, user)
+	mustChange := user.MustChangePassword || expired
+	hint := ""
+	if mustChange {
+		sum := dictconfig.PasswordPolicySummary(resolvePasswordPolicy(ctx, s.db))
+		hint, _ = sum["hint"].(string)
+	}
+	return &LoginResponse{
+		ExpiresAt:          issued.AccessExpiresAt,
+		RefreshExpiresAt:   issued.RefreshExpiresAt,
+		User:               NewUserDetailResponse(*user),
+		MustChangePassword: mustChange,
+		PasswordExpired:    expired,
+		PasswordPolicyHint: hint,
+		AccessToken:        issued.AccessToken,
+		RefreshToken:       issued.RefreshToken,
+	}, nil
+}
+
+type issuedSession struct {
+	AccessToken        string
+	RefreshToken       string
+	AccessExpiresAt    time.Time
+	RefreshExpiresAt   time.Time
+	AccessTokenID      string
+}
+
+func (s *AuthService) issueSession(ctx context.Context, user *model.User, familyID string) (*issuedSession, error) {
+	if s.redis == nil {
+		return nil, bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
+	}
 	now := time.Now()
-	expiresAt := now.Add(time.Duration(s.cfg.AccessTokenTTLMinutes) * time.Minute)
+	accessTTL := time.Duration(s.cfg.AccessTokenTTLMinutes) * time.Minute
+	refreshTTL := time.Duration(s.cfg.RefreshTokenTTLHours) * time.Hour
+	expiresAt := now.Add(accessTTL)
+	refreshExpiresAt := now.Add(refreshTTL)
 	tokenID := uuid.NewString()
+	if familyID == "" {
+		familyID = uuid.NewString()
+	}
 
 	token, err := auth.GenerateToken(s.cfg.JWTSecret, auth.Claims{
 		UserID:   user.ID,
@@ -395,31 +442,96 @@ func (s *AuthService) issueLoginResponse(ctx context.Context, user *model.User) 
 		return nil, constants.ErrTokenGenerateFailed
 	}
 
+	if err = s.redis.Set(ctx, store.AccessTokenKey(tokenID), user.ID, time.Until(expiresAt)).Err(); err != nil {
+		return nil, bizerrors.Pass(ctx, "auth", "issueSession", err)
+	}
+	if err = store.RegisterUserAccessToken(ctx, s.redis, user.ID, tokenID, time.Until(expiresAt)); err != nil {
+		return nil, bizerrors.Pass(ctx, "auth", "issueSession", err)
+	}
+
+	refreshToken := uuid.NewString()
+	if err = store.SaveRefreshToken(ctx, s.redis, refreshToken, store.RefreshSession{
+		UserID:        user.ID,
+		AccessTokenID: tokenID,
+		FamilyID:      familyID,
+	}, refreshTTL); err != nil {
+		return nil, bizerrors.Pass(ctx, "auth", "issueSession", err)
+	}
+
+	return &issuedSession{
+		AccessToken:      token,
+		RefreshToken:     refreshToken,
+		AccessExpiresAt:  expiresAt,
+		RefreshExpiresAt: refreshExpiresAt,
+		AccessTokenID:    tokenID,
+	}, nil
+}
+
+// RefreshSession 轮换 refresh token 并签发新的 access/refresh（旧 refresh 一次性消费）。
+// 若检测到已消费 refresh 被再次使用，吊销整条 family（含攻击者已轮换出的新 token）。
+func (s *AuthService) RefreshSession(ctx context.Context, refreshToken string) (*RefreshResponse, error) {
 	if s.redis == nil {
 		return nil, bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
 	}
-	if err = s.redis.Set(ctx, store.AccessTokenKey(tokenID), user.ID, time.Until(expiresAt)).Err(); err != nil {
-		return nil, bizerrors.Pass(ctx, "auth", "issueLoginResponse", err)
+	sess, err := store.ConsumeRefreshToken(ctx, s.redis, refreshToken)
+	if err != nil {
+		var reuse *store.RefreshReuseError
+		if errors.As(err, &reuse) {
+			_ = store.InvalidateRefreshFamily(ctx, s.redis, reuse.FamilyID)
+			if reuse.UserID != 0 {
+				_ = store.InvalidateAllUserAccessTokens(ctx, s.redis, reuse.UserID)
+			}
+			bizerrors.Warn(ctx, "auth", "RefreshSession", "refresh token reuse detected; family revoked",
+				"family_id", reuse.FamilyID, "user_id", reuse.UserID)
+			return nil, constants.ErrLoginSessionExpired
+		}
+		if errors.Is(err, store.ErrSessionNotFound) {
+			return nil, constants.ErrLoginSessionExpired
+		}
+		return nil, bizerrors.Pass(ctx, "auth", "RefreshSession", err)
 	}
-	if err = store.RegisterUserAccessToken(ctx, s.redis, user.ID, tokenID, time.Until(expiresAt)); err != nil {
-		return nil, bizerrors.Pass(ctx, "auth", "issueLoginResponse", err)
+	// 旧 access 一并作废，缩短失窃窗口
+	if sess.AccessTokenID != "" {
+		_ = s.Logout(ctx, sess.AccessTokenID, "")
 	}
-
-	expired := userPasswordExpired(ctx, s.db, user)
-	mustChange := user.MustChangePassword || expired
-	hint := ""
-	if mustChange {
-		sum := dictconfig.PasswordPolicySummary(resolvePasswordPolicy(ctx, s.db))
-		hint, _ = sum["hint"].(string)
+	user, err := s.userRepo.GetByID(ctx, sess.UserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrUserNotFound
+		}
+		return nil, bizerrors.Pass(ctx, "auth", "RefreshSession", err)
 	}
-	return &LoginResponse{
-		Token:              token,
-		ExpiresAt:          expiresAt,
-		User:               NewUserDetailResponse(*user),
-		MustChangePassword: mustChange,
-		PasswordExpired:    expired,
-		PasswordPolicyHint: hint,
+	if user.Status != model.StatusEnabled {
+		return nil, constants.ErrAccountDisabled
+	}
+	issued, err := s.issueSession(ctx, user, sess.FamilyID)
+	if err != nil {
+		return nil, err
+	}
+	return &RefreshResponse{
+		ExpiresAt:        issued.AccessExpiresAt,
+		RefreshExpiresAt: issued.RefreshExpiresAt,
+		AccessToken:      issued.AccessToken,
+		RefreshToken:     issued.RefreshToken,
 	}, nil
+}
+
+// CookieSecure reports whether auth cookies should set Secure.
+func (s *AuthService) CookieSecure() bool {
+	if s.cfg.CookieSecure != nil {
+		return *s.cfg.CookieSecure
+	}
+	return false
+}
+
+// CookieDomain returns optional cookie domain.
+func (s *AuthService) CookieDomain() string {
+	return strings.TrimSpace(s.cfg.CookieDomain)
+}
+
+// JWTSecret exposes signing secret for best-effort logout token parse.
+func (s *AuthService) JWTSecret() string {
+	return s.cfg.JWTSecret
 }
 
 // GetPasswordPolicy 返回当前生效的密码策略（数据字典可调）。
@@ -746,7 +858,7 @@ func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-func generateNumericCode(length int) (string, error) {
+func generateNumericCode(ctx context.Context, length int) (string, error) {
 	if length <= 0 {
 		return "", constants.ErrBadRequestWithMsg(constants.ErrMsgb77c1b087c0b)
 	}
@@ -758,7 +870,7 @@ func generateNumericCode(length int) (string, error) {
 
 	number, err := rand.Int(rand.Reader, max)
 	if err != nil {
-		return "", bizerrors.Pass(context.Background(), "auth", "generateNumericCode", err)
+		return "", bizerrors.Pass(ctx, "auth", "generateNumericCode", err)
 	}
 
 	return fmt.Sprintf("%0*d", length, number.Int64()), nil

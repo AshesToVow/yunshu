@@ -452,6 +452,70 @@
       border-radius: 12px;
     }
 
+    /* ===== 风险台账 / 期次对比 / 判定依据 ===== */
+    .ledger-table td { vertical-align: top; }
+    .ledger-table .l-name { font-weight: 600; }
+    .ledger-table .l-type { color: var(--muted); font-size: 11px; }
+    .ledger-table .l-inst {
+      color: var(--muted);
+      font-size: 11px;
+      word-break: break-all;
+      margin-top: 3px;
+    }
+    .state-chip {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      border: 1px solid var(--line-strong);
+      white-space: nowrap;
+    }
+    .state-chip.new { background: var(--critical-bg); border-color: #fecaca; color: var(--critical); }
+    .state-chip.persisting { background: var(--warning-bg); border-color: #fde68a; color: var(--warning); }
+    .state-chip.recovered { background: var(--normal-bg); border-color: #bbf7d0; color: var(--normal); }
+    .owner-todo { color: var(--muted); font-style: normal; }
+
+    .diff-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 12px 0 14px;
+    }
+    .diff-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .diff-card .n { font-size: 24px; font-weight: 700; line-height: 1.2; }
+    .diff-card .k { font-size: 12px; color: var(--muted); }
+    .diff-card.new .n { color: var(--critical); }
+    .diff-card.persisting .n { color: var(--warning); }
+    .diff-card.recovered .n { color: var(--normal); }
+
+    .criteria-note {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--brand);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .criteria-formula {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      background: var(--canvas);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+    }
+    .band-row.is-current { background: var(--brand-light); }
+    .band-row.is-current td { font-weight: 600; }
+
+
     footer {
       margin-top: 32px;
       padding-top: 16px;
@@ -465,19 +529,37 @@
     @media print {
       body { background: #fff; }
       .page { max-width: none; padding: 0; }
-      .cover, .ov-card, .group-card, .finding, .summary-box, .scope-card {
+      .group-card { box-shadow: none; }
+      /* 卡片类元素高度可控，整块保留；group-card 含长表格，允许跨页 */
+      .cover, .ov-card, .finding, .summary-box, .scope-card,
+      .diff-card, .criteria-note, .criteria-formula, .empty-state {
         box-shadow: none;
         break-inside: avoid;
       }
-      .cover-main, .score-ring, .dist-bar span {
+      /* 渐变封面、健康分环、状态徽标都靠背景色表达语义，默认打印会被浏览器去色 */
+      .cover-main, .cover-score, .score-ring, .grade-badge, .risk-pill,
+      .badge, .state-chip, .tag, .legend-dot, .band-row.is-current,
+      tbody tr.row-critical, tbody tr.row-warning {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
+      /* 长表格跨页时每页重复表头，否则第二页起看不懂列含义 */
       thead { display: table-header-group; }
       tr { break-inside: avoid; }
       .section { break-before: auto; }
+      /* 标题不能落在页底成为孤行，否则下一页表格失去上下文 */
+      .section-head, .group-bar, .scope-card h4, .summary-box h2 { break-after: avoid; }
+      .section-desc { break-before: avoid; }
+      p, li { orphans: 3; widows: 3; }
+      /* 交互元素（PDF 导出按钮等）不进入纸面 */
+      .pdf-export-btn, button, .no-print { display: none !important; }
+      a { color: inherit; text-decoration: none; }
+      /* 表格横向滚动容器在纸面上必须放开，否则右侧列被裁掉 */
+      .table-wrap { overflow: visible !important; }
       @page { margin: 14mm; size: A4; }
+
     }
+
     @media (max-width: 768px) {
       .cover { grid-template-columns: 1fr; }
       .cover-score { border-left: none; border-top: 1px solid var(--line); }
@@ -572,10 +654,115 @@
       {{end}}
     </section>
 
-    <!-- 2. 巡检明细 -->
+    <!-- 2. 风险台账 -->
     <section class="section">
       <div class="section-head">
         <span class="section-num">2</span>
+        <h2>风险台账与整改跟踪</h2>
+      </div>
+      <p class="section-desc">每条风险对应一个可派单、可验收的整改单元：受影响服务用于定人，现象与业务影响用于定级，责任人与整改期限用于闭环。责任人/期限留空表示尚未认领，将在下期报告中继续跟踪。</p>
+      {{if .Ledger}}
+      <div class="group-card">
+        <div class="table-wrap">
+          <table class="ledger-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>风险项</th>
+                <th>受影响服务 / 实例</th>
+                <th>现象</th>
+                <th>业务影响</th>
+                <th>整改建议</th>
+                <th>期次</th>
+                <th>责任人</th>
+                <th>整改期限</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Ledger}}
+              <tr class="row-{{.Severity}}">
+                <td class="mono">{{.Seq}}</td>
+                <td>
+                  <div class="l-name">{{.Name}}</div>
+                  <div class="l-type">{{.Type}} · <span class="badge {{.Severity}}">{{.Priority}} {{statusText .Severity}}</span> · 影响 {{.Count}} 处</div>
+                </td>
+                <td>
+                  <div>{{.AffectedService}}</div>
+                  {{if .Instances}}<div class="l-inst">{{.Instances}}</div>{{end}}
+                </td>
+                <td class="action-cell">{{.Phenomenon}}</td>
+                <td class="action-cell">{{.Impact}}</td>
+                <td class="action-cell">{{.Suggestion}}</td>
+                <td>
+                  <span class="state-chip {{.State}}">{{.StateLabel}}</span>
+                  {{if gt .DurationDays 0}}<div class="l-type">已持续 {{.DurationDays}} 天</div>{{end}}
+                </td>
+                <td>{{if .Owner}}{{.Owner}}{{else}}<span class="owner-todo">待认领</span>{{end}}</td>
+                <td>{{if .DueDateText}}{{.DueDateText}}{{else}}<span class="owner-todo">待定</span>{{end}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {{else}}
+      <div class="empty-state">本期未产生需要整改的风险项，台账为空。</div>
+      {{end}}
+    </section>
+
+    <!-- 3. 与上期对比 -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-num">3</span>
+        <h2>与上期对比</h2>
+      </div>
+      {{if .Diff.HasBaseline}}
+      <p class="section-desc">对比基线：{{.Diff.BaselineText}}。风险按「分类 + 检查项」指纹跨期次匹配，因此同一检查项换实例仍视为同一条风险。</p>
+      <div class="diff-cards">
+        <div class="diff-card new"><div class="n">{{.Diff.NewCount}}</div><div class="k">本期新增</div></div>
+        <div class="diff-card persisting"><div class="n">{{.Diff.PersistCount}}</div><div class="k">持续未闭环</div></div>
+        <div class="diff-card recovered"><div class="n">{{.Diff.RecoveredCount}}</div><div class="k">已恢复</div></div>
+      </div>
+      <div class="criteria-note">{{.Diff.Summary}}</div>
+      {{if .Diff.Recovered}}
+      <div class="group-card">
+        <div class="group-bar">
+          <h3>本期已恢复项</h3>
+          <div class="group-stats"><span class="s-n">共 {{.Diff.RecoveredCount}}</span></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>风险项</th>
+                <th>分类</th>
+                <th>上期严重度</th>
+                <th>上期责任人</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Diff.Recovered}}
+              <tr>
+                <td><strong>{{.Name}}</strong></td>
+                <td>{{.Type}}</td>
+                <td><span class="badge {{.Severity}}">{{statusText .Severity}}</span></td>
+                <td>{{if .Owner}}{{.Owner}}{{else}}—{{end}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {{end}}
+      {{else}}
+      <div class="empty-state">{{.Diff.Summary}}</div>
+      {{end}}
+    </section>
+
+    <!-- 4. 巡检明细 -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-num">4</span>
         <h2>分类巡检明细</h2>
       </div>
       <p class="section-desc">按基础设施 / 中间件 / 应用等分类展示指标结果与处置建议。</p>
@@ -628,10 +815,86 @@
       {{end}}
     </section>
 
-    <!-- 3. 附录 -->
+    <!-- 5. 判定依据 -->
     <section class="section">
       <div class="section-head">
-        <span class="section-num">3</span>
+        <span class="section-num">5</span>
+        <h2>评分与等级判定依据</h2>
+      </div>
+      <p class="section-desc">公开评分算法与等级区间，便于客户复核本期结论，并按同一标准比较历史期次。</p>
+      <div class="criteria-formula">{{.Criteria.Formula}}</div>
+      {{if .Criteria.Steps}}
+      <div class="group-card">
+        <div class="group-bar">
+          <h3>扣分明细</h3>
+          <div class="group-stats"><span class="s-t">基础分 {{fmtFloat .Criteria.Base}}</span></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>扣分项</th>
+                <th>数量</th>
+                <th>单项扣分</th>
+                <th>小计</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Criteria.Steps}}
+              <tr>
+                <td><strong>{{.Item}}</strong></td>
+                <td>{{.Count}}</td>
+                <td>−{{fmtFloat .Unit}}</td>
+                <td>−{{fmtFloat .Deduct}}</td>
+              </tr>
+              {{end}}
+              <tr>
+                <td colspan="3"><strong>最终得分</strong>{{if .Criteria.Floored}}（原始分 {{fmtFloat .Criteria.RawScore}}，低于下限按 0 计）{{end}}</td>
+                <td><strong>{{fmtFloat .Criteria.FinalScore}}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {{end}}
+      <div class="group-card">
+        <div class="group-bar">
+          <h3>等级对照</h3>
+          <div class="group-stats"><span class="s-t">本期 {{.Grade}}</span></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>等级</th>
+                <th>分数区间</th>
+                <th>评价</th>
+                <th>风险级别</th>
+                <th>建议动作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Criteria.Bands}}
+              <tr class="band-row{{if .Current}} is-current{{end}}">
+                <td><strong>{{.Grade}}</strong></td>
+                <td class="mono">{{.Range}}</td>
+                <td>{{.Label}}</td>
+                <td>{{.RiskLevel}}</td>
+                <td class="action-cell">{{.Action}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="criteria-note">{{.Criteria.SeverityNote}}</div>
+      <div class="criteria-note">{{.Criteria.ScopeNote}}</div>
+    </section>
+
+    <!-- 6. 附录 -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-num">6</span>
         <h2>检查项覆盖范围</h2>
       </div>
       <p class="section-desc">本次巡检纳入的全量检查分类与指标项，供客户核对覆盖边界。</p>

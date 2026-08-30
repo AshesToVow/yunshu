@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	kom "github.com/weibaohui/kom/kom"
@@ -15,6 +16,23 @@ import (
 )
 
 var podMetricsGVK = schema.GroupVersionKind{Group: "metrics.k8s.io", Version: "v1beta1", Kind: "PodMetrics"}
+
+// nodeMetricsGVK metrics-server 提供的节点级用量，与 podMetricsGVK 同属 metrics.k8s.io。
+var nodeMetricsGVK = schema.GroupVersionKind{Group: "metrics.k8s.io", Version: "v1beta1", Kind: "NodeMetrics"}
+
+// warnMetricsUnavailable 区分「metrics-server 未安装」与「查询真的失败」。
+// 两种情况调用方都只能返回空用量，但语义完全不同：前者是集群能力缺失，属于预期状态，
+// 只记 Info 免得每次列表刷新都刷一条 Warn；后者（RBAC 不足、metrics-server 不健康等）需要排查，记 Warn。
+// 该函数只负责记录，不改变调用方「返回空 map / 用量列显示 -」的行为。
+func warnMetricsUnavailable(k *kom.Kubectl, gvk schema.GroupVersionKind, component string, cause error, attrs ...any) {
+	log := slog.Default().With("component", component)
+	fields := append([]any{"error", cause, "gvk", gvk.String()}, attrs...)
+	if !clusterResourceExists(k, gvk) {
+		log.Info("metrics api not served by cluster, usage will be empty", fields...)
+		return
+	}
+	log.Warn("query metrics failed", fields...)
+}
 
 // podCPUMemUsage 单 Pod 内各容器 usage 之和。
 type podCPUMemUsage struct {
@@ -70,6 +88,7 @@ func listPodCPUMemUsageByNamespace(ctx context.Context, dyn *DynamicResourceServ
 	}
 	items, err := dyn.ListByGVK(ctx, k, podMetricsGVK, ns)
 	if err != nil {
+		warnMetricsUnavailable(k, podMetricsGVK, "k8s.pod.metrics", err, "namespace", ns)
 		return out
 	}
 	for i := range items {
@@ -92,6 +111,7 @@ func listAllPodCPUMemUsage(ctx context.Context, dyn *DynamicResourceService, k *
 	u.SetGroupVersionKind(podMetricsGVK)
 	var list []unstructured.Unstructured
 	if err := k.WithContext(ctx).Resource(u).AllNamespace().List(&list).Error; err != nil {
+		warnMetricsUnavailable(k, podMetricsGVK, "k8s.pod.metrics", err)
 		return out
 	}
 	for i := range list {
@@ -131,6 +151,7 @@ func aggregatePodMetricsUsageByNamespace(ctx context.Context, k *kom.Kubectl) ma
 	u.SetGroupVersionKind(podMetricsGVK)
 	var list []unstructured.Unstructured
 	if err := k.WithContext(ctx).Resource(u).AllNamespace().List(&list).Error; err != nil {
+		warnMetricsUnavailable(k, podMetricsGVK, "k8s.namespace.metrics", err)
 		return out
 	}
 	for i := range list {

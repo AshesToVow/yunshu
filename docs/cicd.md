@@ -83,8 +83,13 @@ Jenkins 回调（**无登录**，HMAC 鉴权）：
 
 ```text
 POST /api/v1/cicd/jenkins/callback
-Header: X-Yunshu-Signature: sha256=<hmac-sha256-hex(body)>
+Header: X-Yunshu-Timestamp: <unix 秒>
+Header: X-Yunshu-Signature: sha256=<hmac-sha256-hex("<timestamp>.<body>")>
 ```
+
+- 带 `X-Yunshu-Timestamp` 时：签名内容为 `"<timestamp>.<body>"`，且时间戳与服务端时间偏差超过 5 分钟即拒绝（抗重放）。
+- 不带该 Header 时退化为旧行为（仅对 body 签名，无重放保护），仅用于兼容尚未升级的共享库，建议尽快升级。
+- run 事件的状态推进受状态机守卫：终态（`success`/`failure`/`aborted`/`cancelled`）不可回退或改判，同值重复回调按幂等放行。
 
 完整列表见 `internal/router/register_cicd_routes.go` 或 OpenAPI。
 

@@ -52,14 +52,13 @@ func passwordChangeAllowed(method, fullPath string) bool {
 
 func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepository, logger *logx.Logger, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		header := c.GetHeader("Authorization")
-		if header == "" || !strings.HasPrefix(header, "Bearer ") {
+		tokenString := auth.ExtractAccessToken(c)
+		if tokenString == "" {
 			response.Error(c, constants.ErrMissingAuthHeader)
 			c.Abort()
 			return
 		}
 
-		tokenString := strings.TrimPrefix(header, "Bearer ")
 		claims, err := auth.ParseToken(secret, tokenString)
 		if err != nil {
 			logx.With(c.Request.Context(), "component", "http.auth").Warn("parse token failed", "error", err)

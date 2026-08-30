@@ -51,7 +51,7 @@ var (
 	reHasWhere   = regexp.MustCompile(`(?i)\bWHERE\b`)
 	reReadPrefix = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b`)
 	// 文件导出 / 危险副作用：即使以 SELECT/WITH 开头也不得视为只读。
-	reFileExport = regexp.MustCompile(`(?i)\bINTO\s+(OUTFILE|DUMPFILE)\b`)
+	reFileExport  = regexp.MustCompile(`(?i)\bINTO\s+(OUTFILE|DUMPFILE)\b`)
 	reWriteInBody = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|RENAME|CALL|LOAD\s+DATA|LOCK\s+TABLES)\b`)
 	// goInception 备份库命名：host(点改下划线)_port_原库名，如 10_10_10_103_3306_test
 	reGoInceptionBackupDB = regexp.MustCompile(`^\d{1,3}(?:_\d{1,3}){3}_\d+_.+`)
@@ -348,35 +348,138 @@ func splitSQLStatements(content string) []string {
 	return stmts
 }
 
+// reLimitAppendable 只有这些语句可以安全追加 LIMIT 子句；
+// DESCRIBE/DESC/EXPLAIN 不支持 LIMIT，追加会造成语法错误，且其结果集天然有限。
+var reLimitAppendable = regexp.MustCompile(`(?i)^\s*(SELECT|WITH|SHOW|TABLE)\b`)
+
 func enforceLimit(sqlText string, maxRows int) string {
 	text := strings.TrimSpace(sqlText)
 	if maxRows <= 0 {
 		maxRows = 1000
 	}
-	upper := strings.ToUpper(text)
-	if idx := strings.LastIndex(upper, "LIMIT "); idx >= 0 {
-		// 已有 LIMIT：若数值超过上限则追加子查询包装（简单场景直接截断重写）
-		return rewriteLimitClause(text, maxRows)
+	if rewritten, ok := enforceLimitAST(text, maxRows); ok {
+		return rewritten
 	}
-	if reReadPrefix.MatchString(text) {
-		return fmt.Sprintf("%s LIMIT %d", text, maxRows)
+	// AST 失败时回退到引号/注释感知扫描器。
+	if idx := findTrailingLimit(text); idx >= 0 {
+		return rewriteLimitClauseAt(text, idx, maxRows)
+	}
+	if reLimitAppendable.MatchString(text) {
+		return fmt.Sprintf("%s\nLIMIT %d", strings.TrimRight(text, "; \t\r\n"), maxRows)
 	}
 	return text
+}
+
+func isSQLIdentByte(c byte) bool {
+	switch {
+	case c >= '0' && c <= '9', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
+		return true
+	case c == '_' || c == '$' || c >= 0x80:
+		return true
+	}
+	return false
+}
+
+// findTrailingLimit 定位语句最外层（括号深度 0）最后一个真实 LIMIT 关键字的起始下标，
+// 返回 -1 表示不存在可改写的 LIMIT 子句。
+// 跳过字符串字面量、反引号标识符与注释；MySQL 可执行注释 /*!12345 ... */ 的内容
+// 会被真实执行，故其内部同样参与判定（与 stripSQLComments 语义保持一致）。
+func findTrailingLimit(s string) int {
+	found, depth, i := -1, 0, 0
+	for i < len(s) {
+		ch := s[i]
+		switch {
+		case ch == '\'' || ch == '"' || ch == '`':
+			quote := ch
+			i++
+			for i < len(s) {
+				if quote != '`' && s[i] == '\\' {
+					i += 2
+					continue
+				}
+				if s[i] == quote {
+					if i+1 < len(s) && s[i+1] == quote { // '' 双写转义
+						i += 2
+						continue
+					}
+					i++
+					break
+				}
+				i++
+			}
+			continue
+		case ch == '-' && i+1 < len(s) && s[i+1] == '-', ch == '#':
+			for i < len(s) && s[i] != '\n' {
+				i++
+			}
+			continue
+		case ch == '/' && i+1 < len(s) && s[i+1] == '*':
+			if i+2 < len(s) && s[i+2] == '!' { // 可执行注释：跳过 /*! 与版本号，内容继续扫描
+				i += 3
+				for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+					i++
+				}
+				continue
+			}
+			i += 2
+			for i+1 < len(s) && !(s[i] == '*' && s[i+1] == '/') {
+				i++
+			}
+			if i+1 < len(s) {
+				i += 2
+			} else {
+				i = len(s)
+			}
+			continue
+		case ch == '(':
+			depth++
+		case ch == ')':
+			if depth > 0 {
+				depth--
+			}
+		case (ch == 'L' || ch == 'l') && depth == 0 &&
+			i+5 <= len(s) && strings.EqualFold(s[i:i+5], "LIMIT"):
+			prevOK := i == 0 || !isSQLIdentByte(s[i-1])
+			nextOK := i+5 >= len(s) || !isSQLIdentByte(s[i+5])
+			if prevOK && nextOK {
+				found = i
+				i += 5
+				continue
+			}
+		}
+		i++
+	}
+	return found
 }
 
 var reLimitRest = regexp.MustCompile(`(?i)^(\d+)(?:\s*,\s*(\d+))?(?:\s+OFFSET\s+(\d+))?`)
 
 func rewriteLimitClause(text string, maxRows int) string {
-	upper := strings.ToUpper(text)
-	idx := strings.LastIndex(upper, "LIMIT ")
+	idx := findTrailingLimit(text)
 	if idx < 0 {
 		return text
 	}
+	return rewriteLimitClauseAt(text, idx, maxRows)
+}
+
+// rewriteLimitClauseAt 在已定位的 LIMIT 关键字处收敛行数上限。
+func rewriteLimitClauseAt(text string, idx, maxRows int) string {
+	if maxRows <= 0 {
+		maxRows = 1000
+	}
+	if idx < 0 || idx+5 > len(text) {
+		return text
+	}
 	head := text[:idx]
-	rest := strings.TrimSpace(text[idx+6:])
+	rest := strings.TrimSpace(text[idx+5:])
 	m := reLimitRest.FindStringSubmatch(rest)
 	if m == nil {
-		return fmt.Sprintf("SELECT * FROM (%s) _ys_lim LIMIT %d", strings.TrimRight(strings.TrimSpace(text), ";"), maxRows)
+		// 无法安全解析 LIMIT 尾部：禁止把用户原文直接拼进子查询（注入面）。
+		if wrapped, err := wrapAsLimitedSubquery(text, maxRows); err == nil {
+			return wrapped
+		}
+		// 最后兜底：追加硬 LIMIT（可能产生语法错误，由上层执行失败拒绝）
+		return fmt.Sprintf("%s\nLIMIT %d", strings.TrimRight(strings.TrimSpace(text), ";"), maxRows)
 	}
 	consumed := m[0]
 	tail := rest[len(consumed):]
@@ -424,7 +527,7 @@ func scanRows(rows *sql.Rows, maxRows int) ([]string, [][]any, error) {
 		}
 		data = append(data, vals)
 	}
-  return cols, data, rows.Err()
+	return cols, data, rows.Err()
 }
 
 func nonNilRows(data [][]any) [][]any {

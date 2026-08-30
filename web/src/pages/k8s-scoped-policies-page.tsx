@@ -1,13 +1,11 @@
-import { DeleteOutlined, GiftOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DeleteOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
   Alert,
   Button,
   Card,
-  Checkbox,
   Divider,
   Empty,
   Form,
-  Input,
   Modal,
   Popconfirm,
   Segmented,
@@ -42,32 +40,16 @@ import { getUsers } from "../services/users";
 import { listUserGroups } from "../services/user-groups";
 import type { RoleItem, UserItem } from "../types/api";
 import type { UserGroupItem } from "../services/user-groups";
-
-type SubjectKind = "role" | "group" | "user";
-
-const PRESET_CAPS: Record<"readonly" | "readonly_exec" | "admin", string[]> = {
-  readonly: ["read"],
-  readonly_exec: ["read", "exec"],
-  admin: ["read", "exec", "restart", "scale", "apply", "delete", "secret_reveal", "destructive"],
-};
-
-type BootstrapPref = {
-  kind?: SubjectKind;
-  roleId?: number;
-  groupId?: number;
-  userId?: number;
-};
-
-function subjectPrincipalRef(
-  kind: SubjectKind,
-  role: RoleItem | null,
-  group: UserGroupItem | null,
-  userId?: number,
-): string {
-  if (kind === "role") return role?.code ?? "";
-  if (kind === "group") return group?.code ?? "";
-  return userId != null && userId > 0 ? String(userId) : "";
-}
+import { DenyRulesCard } from "./k8s-policies/deny-rules-card";
+import { PresetForm } from "./k8s-policies/preset-form";
+import {
+  PRESET_CAPS,
+  presetLabel,
+  renderCapabilityTags,
+  subjectPrincipalRef,
+  type BootstrapPref,
+  type SubjectKind,
+} from "./k8s-policies/scoped-subject";
 
 export function K8sScopedPoliciesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -303,31 +285,101 @@ export function K8sScopedPoliciesPage() {
     }
   }
 
-  function presetLabel(p: string) {
-    switch (p) {
-      case "readonly":
-        return "只读";
-      case "readonly_exec":
-        return "只读+Exec";
-      case "admin":
-        return "集群管理";
-      case "custom":
-        return "自定义能力包";
-      default:
-        return p;
+  function handleSavePreset() {
+    if (subjectKind === "role" && !selectedRoleId) return;
+    if (subjectKind === "group" && !selectedGroupId) return;
+    if (subjectKind === "user" && !selectedUserId) return;
+    void (async () => {
+      const values = await presetForm.validateFields();
+      setPresetSubmitting(true);
+      try {
+        const denyRaw = values.deny_namespaces ?? [];
+        const denyList = (Array.isArray(denyRaw) ? denyRaw : []).map((s) => String(s).trim()).filter(Boolean);
+        const allowRaw = values.allow_namespaces ?? [];
+        const allowList = (Array.isArray(allowRaw) ? allowRaw : []).map((s) => String(s).trim()).filter(Boolean);
+        const caps = Array.isArray(values.capabilities) ? values.capabilities : [];
+        const base = {
+          cluster_ids: values.cluster_ids ?? [],
+          capabilities: caps,
+          deny_namespaces: denyList.length ? denyList : undefined,
+          allow_namespaces: allowList.length ? allowList : undefined,
+        };
+        const payload =
+          subjectKind === "role"
+            ? {
+                ...base,
+                principal_kind: "role" as const,
+                role_id: selectedRoleId!,
+              }
+            : subjectKind === "user"
+              ? {
+                  ...base,
+                  principal_kind: "user" as const,
+                  user_id: selectedUserId!,
+                }
+              : {
+                  ...base,
+                  principal_kind: "group" as const,
+                  group_id: selectedGroupId!,
+                };
+        const resp = await grantK8sScopedPoliciesPreset(payload);
+        message.success(
+          `能力包已保存：新增 ${resp.added}，更新 ${resp.skipped}；黑名单新增 ${resp.deny_rules_added}（跳过 ${resp.deny_rules_skipped}）；白名单新增 ${resp.allow_rules_added}（跳过 ${resp.allow_rules_skipped}）`,
+        );
+        const pref = subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId);
+        await refreshAccessGrants(subjectKind, selectedRoleId, selectedGroupId, selectedUserId);
+        await refreshDenyRules(subjectKind, pref);
+      } finally {
+        setPresetSubmitting(false);
+      }
+    })();
+  }
+
+  function handleOpenSplit() {
+    splitForm.resetFields();
+    splitForm.setFieldsValue({
+      cluster_ids: presetForm.getFieldValue("cluster_ids") ?? [],
+      splits: [{ namespace: undefined, preset: "readonly" }],
+    });
+    setSplitOpen(true);
+  }
+
+  async function handleDenyFinish(v: { cluster_id?: number; namespace?: string }) {
+    const cid = v.cluster_id;
+    const ns = String(v.namespace ?? "").trim();
+    if (!cid || !ns) {
+      message.warning("请选择集群并填写命名空间");
+      return;
+    }
+    const pk = subjectKind;
+    const pref = subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId);
+    setDenySubmitting(true);
+    try {
+      await createK8sNamespaceDenyRule({
+        principal_kind: pk,
+        principal_ref: pref,
+        cluster_id: cid,
+        namespace: ns,
+      });
+      message.success("已添加黑名单规则");
+      denyForm.resetFields();
+      await refreshDenyRules(pk, pref);
+    } finally {
+      setDenySubmitting(false);
     }
   }
 
-  function renderCapabilityTags(codes?: string[]) {
-    const list = Array.isArray(codes) ? codes : [];
-    if (list.length === 0) return <span className="inline-muted">—</span>;
-    return (
-      <Space size={[4, 4]} wrap>
-        {list.map((code) => (
-          <Tag key={code}>{capNameByCode.get(code) || code}</Tag>
-        ))}
-      </Space>
-    );
+  async function handleDeleteDenyRule(r: K8sNamespaceDenyRule) {
+    try {
+      await deleteK8sNamespaceDenyRule(r.id);
+      message.success("已删除");
+      await refreshDenyRules(
+        subjectKind,
+        subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId),
+      );
+    } catch {
+      /* http 拦截器已提示 */
+    }
   }
 
   return (
@@ -491,203 +543,19 @@ export function K8sScopedPoliciesPage() {
                 }
               />
 
-              <Form
+              <PresetForm
                 form={presetForm}
-                layout="vertical"
-                initialValues={{
-                  cluster_ids: [],
-                  preset: "readonly" as const,
-                  capabilities: PRESET_CAPS.readonly,
-                  deny_namespaces: [],
-                  allow_namespaces: [],
-                }}
-                style={{ maxWidth: 960 }}
-              >
-                <Space wrap style={{ width: "100%", alignItems: "flex-start" }}>
-                  <Form.Item label="快捷档位" name="preset" style={{ minWidth: 240 }}>
-                    <Select
-                      style={{ minWidth: 220 }}
-                      options={[
-                        { value: "readonly", label: "只读（控制台资源 GET）" },
-                        { value: "readonly_exec", label: "只读 + Pod Exec" },
-                        { value: "admin", label: "集群管理（全部能力）" },
-                      ]}
-                      onChange={(v: "readonly" | "readonly_exec" | "admin") => {
-                        presetForm.setFieldsValue({ capabilities: PRESET_CAPS[v] });
-                      }}
-                    />
-                  </Form.Item>
-                  <Form.Item label="集群" name="cluster_ids" style={{ minWidth: 260 }}>
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      style={{ minWidth: 260 }}
-                      placeholder="不选 = 全部集群"
-                      options={clusterOptions.map((c) => ({ label: c.name, value: c.id }))}
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    label="同步命名空间黑名单（可选）"
-                    name="deny_namespaces"
-                    tooltip="须在「集群」中选择至少一个具体集群；命名空间列表为所选集群的合并结果（同名去重）；保存时对每个所选集群写入禁止规则"
-                  >
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      loading={presetNsLoading}
-                      disabled={presetClusterIds.length === 0}
-                      style={{ minWidth: 320 }}
-                      placeholder={
-                        presetClusterIds.length > 0
-                          ? "从下拉选择命名空间（可多选）"
-                          : "请先在「集群」中选择至少一个集群以加载列表"
-                      }
-                      options={presetNsOptions}
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    label="同步命名空间白名单（可选）"
-                    name="allow_namespaces"
-                    tooltip="须选择至少一个具体集群；写入后该主体在各所选集群仅允许访问所列命名空间（黑名单优先）；列表为所选集群命名空间合并去重"
-                  >
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      loading={presetNsLoading}
-                      disabled={presetClusterIds.length === 0}
-                      style={{ minWidth: 320 }}
-                      placeholder={
-                        presetClusterIds.length > 0
-                          ? "从下拉选择命名空间（可多选）"
-                          : "请先在「集群」中选择至少一个集群以加载列表"
-                      }
-                      options={presetNsOptions}
-                    />
-                  </Form.Item>
-                </Space>
-                <Form.Item
-                  label="能力包（勾选）"
-                  name="capabilities"
-                  rules={[{ required: true, type: "array", min: 1, message: "请至少勾选一项能力" }]}
-                  extra={
-                    watchedCapabilities.length
-                      ? `已选 ${watchedCapabilities.length} 项`
-                      : "请勾选能力，或先选快捷档位自动填充"
-                  }
-                >
-                  <Checkbox.Group style={{ width: "100%" }}>
-                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                      {(capCatalog.length
-                        ? capCatalog
-                        : [
-                            { code: "read", name: "只读浏览", description: "" },
-                            { code: "exec", name: "Pod 终端", description: "" },
-                            { code: "restart", name: "重启", description: "" },
-                            { code: "scale", name: "扩缩容", description: "" },
-                            { code: "apply", name: "YAML 变更", description: "" },
-                            { code: "delete", name: "删除资源", description: "" },
-                            { code: "secret_reveal", name: "Secret 明文", description: "" },
-                            { code: "destructive", name: "高危运维", description: "" },
-                          ]
-                      ).map((c) => (
-                        <Checkbox key={c.code} value={c.code} disabled={c.code === "read"}>
-                          <Space direction="vertical" size={0}>
-                            <span>{c.name}</span>
-                            {c.description ? (
-                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                                {c.description}
-                              </Typography.Text>
-                            ) : null}
-                          </Space>
-                        </Checkbox>
-                      ))}
-                    </Space>
-                  </Checkbox.Group>
-                </Form.Item>
-                <Form.Item>
-                    <Space>
-                    <Button
-                      type="primary"
-                      ghost
-                      icon={<GiftOutlined />}
-                      loading={presetSubmitting}
-                      onClick={() => {
-                        if (subjectKind === "role" && !selectedRoleId) return;
-                        if (subjectKind === "group" && !selectedGroupId) return;
-                        if (subjectKind === "user" && !selectedUserId) return;
-                        void (async () => {
-                          const values = await presetForm.validateFields();
-                          setPresetSubmitting(true);
-                          try {
-                            const denyRaw = values.deny_namespaces ?? [];
-                            const denyList = (Array.isArray(denyRaw) ? denyRaw : []).map((s) => String(s).trim()).filter(Boolean);
-                            const allowRaw = values.allow_namespaces ?? [];
-                            const allowList = (Array.isArray(allowRaw) ? allowRaw : []).map((s) => String(s).trim()).filter(Boolean);
-                            const caps = Array.isArray(values.capabilities) ? values.capabilities : [];
-                            const base = {
-                              cluster_ids: values.cluster_ids ?? [],
-                              capabilities: caps,
-                              deny_namespaces: denyList.length ? denyList : undefined,
-                              allow_namespaces: allowList.length ? allowList : undefined,
-                            };
-                            const payload =
-                              subjectKind === "role"
-                                ? {
-                                    ...base,
-                                    principal_kind: "role" as const,
-                                    role_id: selectedRoleId!,
-                                  }
-                                : subjectKind === "user"
-                                  ? {
-                                      ...base,
-                                      principal_kind: "user" as const,
-                                      user_id: selectedUserId!,
-                                    }
-                                  : {
-                                      ...base,
-                                      principal_kind: "group" as const,
-                                      group_id: selectedGroupId!,
-                                    };
-                            const resp = await grantK8sScopedPoliciesPreset(payload);
-                            message.success(
-                              `能力包已保存：新增 ${resp.added}，更新 ${resp.skipped}；黑名单新增 ${resp.deny_rules_added}（跳过 ${resp.deny_rules_skipped}）；白名单新增 ${resp.allow_rules_added}（跳过 ${resp.allow_rules_skipped}）`,
-                            );
-                            const pref = subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId);
-                            await refreshAccessGrants(
-                              subjectKind,
-                              selectedRoleId,
-                              selectedGroupId,
-                              selectedUserId,
-                            );
-                            await refreshDenyRules(subjectKind, pref);
-                          } finally {
-                            setPresetSubmitting(false);
-                          }
-                        })();
-                      }}
-                    >
-                      保存能力包
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        splitForm.resetFields();
-                        splitForm.setFieldsValue({
-                          cluster_ids: presetForm.getFieldValue("cluster_ids") ?? [],
-                          splits: [{ namespace: undefined, preset: "readonly" }],
-                        });
-                        setSplitOpen(true);
-                      }}
-                      disabled={!activeSubjectReady}
-                    >
-                      按 NS 拆分档位
-                    </Button>
-                    </Space>
-                </Form.Item>
-              </Form>
+                watchedCapabilities={watchedCapabilities}
+                capCatalog={capCatalog}
+                clusterOptions={clusterOptions}
+                presetClusterIds={presetClusterIds}
+                presetNsLoading={presetNsLoading}
+                presetNsOptions={presetNsOptions}
+                presetSubmitting={presetSubmitting}
+                activeSubjectReady={activeSubjectReady}
+                onSave={handleSavePreset}
+                onOpenSplit={handleOpenSplit}
+              />
 
               <Divider style={{ margin: "8px 0" }} />
               <Typography.Text strong>当前主体的集群能力包</Typography.Text>
@@ -727,7 +595,7 @@ export function K8sScopedPoliciesPage() {
                   {
                     title: "能力包",
                     dataIndex: "capabilities",
-                    render: (v: string[] | undefined) => renderCapabilityTags(v),
+                    render: (v: string[] | undefined) => renderCapabilityTags(v, capNameByCode),
                   },
                   {
                     title: "操作",
@@ -778,139 +646,24 @@ export function K8sScopedPoliciesPage() {
         </Space>
       </Card>
 
-      <Card
-        className="table-card"
-        style={{ marginTop: 16 }}
-        title="命名空间黑名单（对齐 k8m：黑名单优先于白名单与档位）"
-        loading={denyLoading}
-      >
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          若某<strong>主体</strong>（角色 / 用户 / 组）在指定集群下配置了禁止的命名空间，则即使用户拥有该集群档位，也会在请求进入集群前被拒绝。对已纳入 K8s 范围校验的接口，含
-          super-admin 也会被拦截。白名单规则见接口 <Typography.Text code>/api/v1/k8s-namespace-allow-rules</Typography.Text>。
-        </Typography.Paragraph>
-        {activeSubjectReady ? (
-          <Space direction="vertical" size={16} style={{ width: "100%" }}>
-            <Form
-              form={denyForm}
-              layout="inline"
-              onFinish={async (v) => {
-                const cid = v.cluster_id;
-                const ns = String(v.namespace ?? "").trim();
-                if (!cid || !ns) {
-                  message.warning("请选择集群并填写命名空间");
-                  return;
-                }
-                const pk = subjectKind;
-                const pref = subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId);
-                setDenySubmitting(true);
-                try {
-                  await createK8sNamespaceDenyRule({
-                    principal_kind: pk,
-                    principal_ref: pref,
-                    cluster_id: cid,
-                    namespace: ns,
-                  });
-                  message.success("已添加黑名单规则");
-                  denyForm.resetFields();
-                  await refreshDenyRules(pk, pref);
-                } finally {
-                  setDenySubmitting(false);
-                }
-              }}
-            >
-              <Typography.Text>主体：</Typography.Text>
-              <Tag>
-                {subjectKind === "role"
-                  ? selectedRole?.code
-                  : subjectKind === "user"
-                    ? selectedUser?.username
-                    : selectedGroup?.code}
-              </Tag>
-              <Form.Item name="cluster_id" rules={[{ required: true, message: "请选择集群" }]}>
-                <Select
-                  style={{ minWidth: 220 }}
-                  placeholder="集群"
-                  allowClear
-                  options={clusterOptions.map((c) => ({ label: c.name, value: c.id }))}
-                />
-              </Form.Item>
-              <Form.Item name="namespace" rules={[{ required: true, message: "请选择命名空间" }]}>
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  allowClear
-                  loading={denyNsLoading}
-                  disabled={!watchedDenyClusterId}
-                  style={{ minWidth: 220 }}
-                  placeholder={watchedDenyClusterId ? "选择命名空间" : "请先选择集群"}
-                  options={denyNsOptions}
-                />
-              </Form.Item>
-              <Form.Item>
-                <Button type="primary" htmlType="submit" loading={denySubmitting}>
-                  添加禁止规则
-                </Button>
-              </Form.Item>
-            </Form>
-            <Table<K8sNamespaceDenyRule>
-              rowKey="id"
-              size="small"
-              dataSource={denyRules}
-              pagination={{ pageSize: 8 }}
-              columns={[
-                { title: "ID", dataIndex: "id", width: 70 },
-                {
-                  title: "主体",
-                  key: "p",
-                  width: 160,
-                  render: (_: unknown, r: K8sNamespaceDenyRule) => (
-                    <span>
-                      <Tag>{r.principal_kind}</Tag> <Typography.Text code>{r.principal_ref}</Typography.Text>
-                    </span>
-                  ),
-                },
-                {
-                  title: "集群",
-                  dataIndex: "cluster_id",
-                  width: 140,
-                  render: (v: number) => (v === 0 ? <Tag color="blue">全部</Tag> : clusterNameById.get(v) ?? `#${v}`),
-                },
-                { title: "命名空间", dataIndex: "namespace" },
-                {
-                  title: "操作",
-                  key: "op",
-                  width: 100,
-                  render: (_, r) => (
-                    <Popconfirm
-                      title="确定删除该黑名单规则？"
-                      onConfirm={() =>
-                        void (async () => {
-                          try {
-                            await deleteK8sNamespaceDenyRule(r.id);
-                            message.success("已删除");
-                            await refreshDenyRules(
-                              subjectKind,
-                              subjectPrincipalRef(subjectKind, selectedRole, selectedGroup, selectedUserId),
-                            );
-                          } catch {
-                            /* http 拦截器已提示 */
-                          }
-                        })()
-                      }
-                    >
-                      <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                        删除
-                      </Button>
-                    </Popconfirm>
-                  ),
-                },
-              ]}
-            />
-          </Space>
-        ) : (
-          <Empty description="请先在上方选择角色模板、用户或用户组" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        )}
-      </Card>
+      <DenyRulesCard
+        denyLoading={denyLoading}
+        activeSubjectReady={activeSubjectReady}
+        denyForm={denyForm}
+        denySubmitting={denySubmitting}
+        subjectKind={subjectKind}
+        selectedRole={selectedRole}
+        selectedGroup={selectedGroup}
+        selectedUser={selectedUser}
+        clusterOptions={clusterOptions}
+        watchedDenyClusterId={typeof watchedDenyClusterId === "number" ? watchedDenyClusterId : undefined}
+        denyNsLoading={denyNsLoading}
+        denyNsOptions={denyNsOptions}
+        denyRules={denyRules}
+        clusterNameById={clusterNameById}
+        onDenyFinish={handleDenyFinish}
+        onDeleteDenyRule={handleDeleteDenyRule}
+      />
 
       <Modal
         title="按命名空间拆分档位"

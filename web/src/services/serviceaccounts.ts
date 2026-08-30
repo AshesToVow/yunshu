@@ -24,19 +24,30 @@ export type ServiceAccountDetail = {
 };
 
 export function listServiceAccounts(clusterId: number, namespace: string, keyword?: string) {
-  return getData<ServiceAccountItem[]>(http.get("/serviceaccounts", { params: { cluster_id: clusterId, namespace, keyword } }));
+  return getData<ServiceAccountItem[]>(
+    http.get("/serviceaccounts", { params: { cluster_id: clusterId, namespace, keyword } }),
+  );
 }
 
 export function getServiceAccountDetail(clusterId: number, namespace: string, name: string) {
-  return getData<ServiceAccountDetail>(http.get("/serviceaccounts/detail", { params: { cluster_id: clusterId, namespace, name } }));
+  return getData<ServiceAccountDetail>(
+    http.get("/serviceaccounts/detail", { params: { cluster_id: clusterId, namespace, name } }),
+  );
 }
 
 export function applyServiceAccount(clusterId: number, manifest: string) {
   return getData<boolean>(http.post("/serviceaccounts/apply", { cluster_id: clusterId, manifest }));
 }
 
-export function deleteServiceAccount(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
+export function deleteServiceAccount(
+  clusterId: number,
+  namespace: string,
+  name: string,
+  deleteOpts?: K8sDeleteOptions,
+) {
   return getData<boolean>(
-    http.delete("/serviceaccounts", { params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) } }),
+    http.delete("/serviceaccounts", {
+      params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) },
+    }),
   );
 }

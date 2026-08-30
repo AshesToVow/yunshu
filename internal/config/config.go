@@ -48,9 +48,9 @@ type HTTPConfig struct {
 type LogConfig struct {
 	Level      string `mapstructure:"level"`
 	Format     string `mapstructure:"format"`
-	Output     string `mapstructure:"output"`      // console, file, both
-	FilePath   string `mapstructure:"file_path"`   // log file directory path
-	MaxSizeMB  int    `mapstructure:"max_size_mb"` // 单文件上限（MB），超出后轮转
+	Output     string `mapstructure:"output"`       // console, file, both
+	FilePath   string `mapstructure:"file_path"`    // log file directory path
+	MaxSizeMB  int    `mapstructure:"max_size_mb"`  // 单文件上限（MB），超出后轮转
 	MaxAgeDays int    `mapstructure:"max_age_days"` // 保留天数，0 表示不按天清理
 	MaxBackups int    `mapstructure:"max_backups"`  // 保留备份文件数，0 表示不限制数量
 	Compress   bool   `mapstructure:"compress"`     // 轮转后是否 gzip 压缩
@@ -71,6 +71,11 @@ type DatabaseConfig struct {
 	MaxIdleConns           int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns           int    `mapstructure:"max_open_conns"`
 	ConnMaxLifetimeSeconds int    `mapstructure:"conn_max_lifetime_seconds"`
+
+	// AutoMigrate 控制进程启动时是否执行 GORM AutoMigrate。
+	// 指针类型用于区分「未配置」与「显式 false」：未配置时按环境推断
+	// （非生产开启、生产关闭），见 Config.AutoMigrateEnabled。
+	AutoMigrate *bool `mapstructure:"auto_migrate"`
 }
 
 // MySQLConfig 为向后兼容保留的类型别名。
@@ -96,12 +101,19 @@ type MailConfig struct {
 type AuthConfig struct {
 	JWTSecret                string `mapstructure:"jwt_secret"`
 	AccessTokenTTLMinutes    int    `mapstructure:"access_token_ttl_minutes"`
+	RefreshTokenTTLHours     int    `mapstructure:"refresh_token_ttl_hours"`
 	EmailCodeTTLSeconds      int    `mapstructure:"email_code_ttl_seconds"`
 	EmailCodeCooldownSeconds int    `mapstructure:"email_code_cooldown_seconds"`
 	// LoginMaxFailAttempts 连续密码错误次数上限，达到后临时锁定账号；<=0 时用默认值。
 	LoginMaxFailAttempts int `mapstructure:"login_max_fail_attempts"`
 	// LoginLockSeconds 触发锁定后的锁定时长（秒）；<=0 时用默认值。
 	LoginLockSeconds int `mapstructure:"login_lock_seconds"`
+	// CookieSecure HttpOnly Cookie 的 Secure 标志；nil 时生产环境默认 true，其它环境 false。
+	CookieSecure *bool `mapstructure:"cookie_secure"`
+	// CookieDomain 可选；空表示 host-only（同域 nginx/vite 代理推荐留空）。
+	CookieDomain string `mapstructure:"cookie_domain"`
+	// CSPEnabled 是否下发 Content-Security-Policy；默认 true。
+	CSPEnabled *bool `mapstructure:"csp_enabled"`
 }
 
 type CasbinConfig struct {
@@ -189,7 +201,10 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	if cfg.Auth.AccessTokenTTLMinutes <= 0 {
-		cfg.Auth.AccessTokenTTLMinutes = 120
+		cfg.Auth.AccessTokenTTLMinutes = 15
+	}
+	if cfg.Auth.RefreshTokenTTLHours <= 0 {
+		cfg.Auth.RefreshTokenTTLHours = 168 // 7d
 	}
 	if cfg.Auth.EmailCodeTTLSeconds <= 0 {
 		cfg.Auth.EmailCodeTTLSeconds = 600
@@ -202,6 +217,15 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Auth.LoginLockSeconds <= 0 {
 		cfg.Auth.LoginLockSeconds = 900
+	}
+	if cfg.Auth.CSPEnabled == nil {
+		v := true
+		cfg.Auth.CSPEnabled = &v
+	}
+	if cfg.Auth.CookieSecure == nil {
+		e := strings.ToLower(strings.TrimSpace(cfg.App.Env))
+		v := e == "prod" || e == "production"
+		cfg.Auth.CookieSecure = &v
 	}
 	if strings.TrimSpace(cfg.Log.FilePath) == "" {
 		cfg.Log.FilePath = "./logs"
@@ -345,6 +369,14 @@ func normalizeDatabaseConfig(cfg *Config) {
 	if strings.TrimSpace(db.Host) == "" && strings.TrimSpace(db.DBName) == "" {
 		db = cfg.MySQL
 	}
+	// auto_migrate 允许只写在任一段下（database 优先），归一化后两段一致。
+	if db.AutoMigrate == nil {
+		if cfg.Database.AutoMigrate != nil {
+			db.AutoMigrate = cfg.Database.AutoMigrate
+		} else if cfg.MySQL.AutoMigrate != nil {
+			db.AutoMigrate = cfg.MySQL.AutoMigrate
+		}
+	}
 	if strings.TrimSpace(db.Driver) == "" {
 		db.Driver = "mysql"
 	}
@@ -439,6 +471,10 @@ func bindEnv(v *viper.Viper) error {
 		"mail.use_tls":                             nil,
 		"auth.jwt_secret":                          {"JWT_SECRET"},
 		"auth.access_token_ttl_minutes":            nil,
+		"auth.refresh_token_ttl_hours":             nil,
+		"auth.cookie_secure":                       nil,
+		"auth.cookie_domain":                       nil,
+		"auth.csp_enabled":                         nil,
 		"auth.email_code_ttl_seconds":              nil,
 		"auth.email_code_cooldown_seconds":         nil,
 		"casbin.model_path":                        nil,

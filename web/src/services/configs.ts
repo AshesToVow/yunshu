@@ -34,7 +34,9 @@ export function applyConfigMap(clusterId: number, manifest: string) {
 }
 export function deleteConfigMap(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return getData<boolean>(
-    http.delete("/configmaps", { params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) } }),
+    http.delete("/configmaps", {
+      params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) },
+    }),
   );
 }
 
@@ -52,7 +54,8 @@ export function applySecret(clusterId: number, manifest: string) {
 }
 export function deleteSecret(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return getData<boolean>(
-    http.delete("/secrets", { params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) } }),
+    http.delete("/secrets", {
+      params: { cluster_id: clusterId, namespace, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) },
+    }),
   );
 }
-

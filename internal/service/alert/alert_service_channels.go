@@ -12,15 +12,22 @@ import (
 	"yunshu/internal/pkg/alertnotify"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/repository"
 )
 
-func (s *AlertService) startPrometheusEnrichWorkers() {
+// startPrometheusEnrichWorkers 启动 Prometheus 当前值富化 worker 池。
+// worker 通过 ctx.Done() 退出（原先仅依赖 close(enrichQueue)，而无人关闭该 channel，
+// 会导致进程退出时 lifecycle.Wait 必然超时）。
+func (s *AlertService) startPrometheusEnrichWorkers(ctx context.Context) {
 	if !s.cfg.PrometheusEnrichEnabled {
 		return
 	}
 	if strings.TrimSpace(s.cfg.PrometheusURL) == "" {
 		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	size := s.cfg.PrometheusEnrichQueueSize
 	if size <= 0 {
@@ -32,19 +39,34 @@ func (s *AlertService) startPrometheusEnrichWorkers() {
 	}
 	s.enrichQueue = make(chan promEnrichTask, size)
 	for range workers {
-		go func() {
-			for task := range s.enrichQueue {
-				if strings.TrimSpace(task.GeneratorURL) == "" || strings.TrimSpace(task.Fingerprint) == "" {
-					continue
+		lifecycle.Go("alert.prom-enrich", func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case task, ok := <-s.enrichQueue:
+					if !ok {
+						return
+					}
+					s.handlePromEnrichTask(ctx, task)
 				}
-				val, err := s.queryCurrentValueByGeneratorURL(context.Background(), task.GeneratorURL)
-				if err != nil || strings.TrimSpace(val) == "" {
-					continue
-				}
-				s.setCachedCurrentValue(context.Background(), task.Fingerprint, strings.TrimSpace(val))
 			}
-		}()
+		})
 	}
+}
+
+// handlePromEnrichTask 处理单个富化任务；单任务超时独立，避免慢查询拖住 worker 退出。
+func (s *AlertService) handlePromEnrichTask(ctx context.Context, task promEnrichTask) {
+	if strings.TrimSpace(task.GeneratorURL) == "" || strings.TrimSpace(task.Fingerprint) == "" {
+		return
+	}
+	taskCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	val, err := s.queryCurrentValueByGeneratorURL(taskCtx, task.GeneratorURL)
+	if err != nil || strings.TrimSpace(val) == "" {
+		return
+	}
+	s.setCachedCurrentValue(taskCtx, task.Fingerprint, strings.TrimSpace(val))
 }
 
 type AlertChannelPreviewRequest struct {

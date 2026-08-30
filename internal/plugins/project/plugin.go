@@ -5,6 +5,7 @@ import (
 
 	"yunshu/internal/config"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
 	"yunshu/internal/service"
 
@@ -19,8 +20,10 @@ type module struct {
 	plugin.Base
 }
 
-func (m *module) Name() string        { return "project" }
-func (m *module) Description() string { return "多租户项目、成员、服务配置与 ES 日志检索" }
+func (m *module) Name() string { return "project" }
+func (m *module) Description() string {
+	return "多租户项目、成员、服务配置与 ES 日志检索"
+}
 
 func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
@@ -58,10 +61,14 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 		return nil
 	}
 	if svc, ok := rt.LogRetention.(*service.LogRetentionService); ok && svc != nil && rt.Config != nil {
-		go service.RunLogRetentionScheduler(bgCtx, svc, config.ElasticsearchConfig{})
+		lifecycle.Go("project.log-retention", func() {
+			service.RunLogRetentionScheduler(bgCtx, svc, config.ElasticsearchConfig{})
+		})
 	}
 	if kafkaSvc, ok := rt.KafkaToES.(*service.KafkaToESService); ok && kafkaSvc != nil {
-		go kafkaSvc.Run(bgCtx)
+		lifecycle.Go("project.kafka-to-es-reconcile", func() {
+			kafkaSvc.Run(bgCtx)
+		})
 	}
 	return nil
 }

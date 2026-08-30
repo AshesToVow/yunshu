@@ -20,10 +20,11 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	authGroup.POST("/email-login", d.authHandler.EmailLogin)
 	authGroup.POST("/register", middleware.RegistrationRateLimit(d.app.Redis), d.regHandler.Apply)
 	authGroup.GET("/password-policy", d.authHandler.GetPasswordPolicy)
+	authGroup.POST("/refresh", d.authHandler.Refresh)
+	authGroup.POST("/logout", d.authHandler.Logout)
 
 	authAuthed := authGroup.Group("")
 	authAuthed.Use(d.authMiddleware, d.opAudit)
-	authAuthed.POST("/logout", d.authHandler.Logout)
 	authAuthed.POST("/ws-ticket", d.authHandler.CreateWSTicket)
 	authAuthed.GET("/me", d.authHandler.Me)
 	authAuthed.PUT("/me", d.authHandler.UpdateProfile)

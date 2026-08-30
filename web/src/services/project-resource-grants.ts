@@ -47,7 +47,14 @@ export async function listServerAccessGrants(projectId: number, params?: { user_
 
 export async function upsertServerAccessGrant(
   projectId: number,
-  body: { server_id: number; user_id: number; can_view?: boolean; can_exec?: boolean; can_manage?: boolean; remark?: string },
+  body: {
+    server_id: number;
+    user_id: number;
+    can_view?: boolean;
+    can_exec?: boolean;
+    can_manage?: boolean;
+    remark?: string;
+  },
 ) {
   return getData<ServerAccessGrantItem>(http.post(`/projects/${projectId}/server-access-grants`, body));
 }

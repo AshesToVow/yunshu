@@ -52,6 +52,23 @@ func TestSQLDropIndexIfExists(t *testing.T) {
 	}
 }
 
+func TestSQLDropIndexIfExists_SanitizesIdent(t *testing.T) {
+	// 标识符白名单：反引号/双引号/分号/空格等破坏引号闭合的字符必须被剔除
+	got := SQLDropIndexIfExists("mysql", "roles`; DROP TABLE users; --", "idx`x")
+	for _, bad := range []string{"DROP TABLE", ";", "--", " users"} {
+		if strings.Contains(got, bad) {
+			t.Fatalf("mysql drop index SQL not sanitized: %q (contains %q)", got, bad)
+		}
+	}
+	if got != "ALTER TABLE `rolesDROPTABLEusers` DROP INDEX `idxx`" {
+		t.Fatalf("unexpected sanitized mysql SQL: %q", got)
+	}
+	pg := SQLDropIndexIfExists("postgres", "roles", `idx"; DROP TABLE users; --`)
+	if strings.Contains(pg, "DROP TABLE") || strings.Contains(pg, ";") {
+		t.Fatalf("postgres drop index SQL not sanitized: %q", pg)
+	}
+}
+
 func containsAll(s string, parts ...string) bool {
 	for _, p := range parts {
 		if !strings.Contains(s, p) {

@@ -31,10 +31,19 @@ function parseMatchers(raw?: string) {
   }
 }
 
-export function listMaintenanceWindows(params?: { projectId?: number; keyword?: string; page?: number; page_size?: number }) {
-  return getData<{ list?: AlertMaintenanceWindowItem[]; items?: AlertMaintenanceWindowItem[]; total: number; page: number; page_size: number }>(
-    http.get("/alerts/maintenance-windows", { params }),
-  ).then((payload) =>
+export function listMaintenanceWindows(params?: {
+  projectId?: number;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  return getData<{
+    list?: AlertMaintenanceWindowItem[];
+    items?: AlertMaintenanceWindowItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(http.get("/alerts/maintenance-windows", { params })).then((payload) =>
     normalizePagedPayload(payload, (item) => ({
       ...item,
       matchers: parseMatchers(item.matchers_json),

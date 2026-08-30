@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,16 +20,16 @@ import (
 
 // JenkinsCallbackRequest Jenkins 共享库回调载荷。
 type JenkinsCallbackRequest struct {
-	Event       string                    `json:"event"` // stage|artifact|sonar|run
-	RunKind     string                    `json:"run_kind"`
-	RunID       uint                      `json:"run_id"`
-	JenkinsJob  string                    `json:"jenkins_job"`
-	BuildNumber int                       `json:"build_number"`
-	GitCommit   string                    `json:"git_commit"`
-	Stage       *JenkinsCallbackStage     `json:"stage,omitempty"`
-	Sonar       *JenkinsCallbackSonar     `json:"sonar,omitempty"`
-	Artifact    *JenkinsCallbackArtifact  `json:"artifact,omitempty"`
-	RunStatus   string                    `json:"run_status,omitempty"`
+	Event       string                   `json:"event"` // stage|artifact|sonar|run
+	RunKind     string                   `json:"run_kind"`
+	RunID       uint                     `json:"run_id"`
+	JenkinsJob  string                   `json:"jenkins_job"`
+	BuildNumber int                      `json:"build_number"`
+	GitCommit   string                   `json:"git_commit"`
+	Stage       *JenkinsCallbackStage    `json:"stage,omitempty"`
+	Sonar       *JenkinsCallbackSonar    `json:"sonar,omitempty"`
+	Artifact    *JenkinsCallbackArtifact `json:"artifact,omitempty"`
+	RunStatus   string                   `json:"run_status,omitempty"`
 }
 
 type JenkinsCallbackStage struct {
@@ -42,14 +43,14 @@ type JenkinsCallbackStage struct {
 }
 
 type JenkinsCallbackSonar struct {
-	ProjectKey     string  `json:"project_key"`
-	QualityGate    string  `json:"quality_gate"`
-	DashboardURL   string  `json:"dashboard_url"`
-	Bugs           int     `json:"bugs"`
-	Vulnerabilities int    `json:"vulnerabilities"`
-	CodeSmells     int     `json:"code_smells"`
-	Coverage       float64 `json:"coverage"`
-	Duplications   float64 `json:"duplications"`
+	ProjectKey      string  `json:"project_key"`
+	QualityGate     string  `json:"quality_gate"`
+	DashboardURL    string  `json:"dashboard_url"`
+	Bugs            int     `json:"bugs"`
+	Vulnerabilities int     `json:"vulnerabilities"`
+	CodeSmells      int     `json:"code_smells"`
+	Coverage        float64 `json:"coverage"`
+	Duplications    float64 `json:"duplications"`
 }
 
 type JenkinsCallbackArtifact struct {
@@ -61,8 +62,54 @@ type JenkinsCallbackArtifact struct {
 	SizeBytes   int64  `json:"size_bytes"`
 }
 
+// callbackTimestampSkew Jenkins 回调时间戳允许的最大偏差（前后各 5 分钟）。
+// 超窗即拒：只有签名没有时间戳时，抓到一次请求即可无限重放。
+const callbackTimestampSkew = 5 * time.Minute
+
 // VerifyJenkinsCallbackHMAC 校验 X-Yunshu-Signature（sha256=<hex>）或 X-Hub-Signature-256。
+// 签名内容为原始 body。仅在回调未携带 X-Yunshu-Timestamp 时使用（兼容存量共享库）。
 func VerifyJenkinsCallbackHMAC(secret string, body []byte, signatureHeader string) bool {
+	return verifyCallbackSignature(secret, body, signatureHeader)
+}
+
+// VerifyJenkinsCallbackSigned 校验带时间戳的回调签名，抵御重放。
+// timestampHeader 为 X-Yunshu-Timestamp（Unix 秒）。签名内容为 "<timestamp>.<body>"。
+// timestampHeader 为空时退化为 body-only 校验，保持与旧版 Jenkins 共享库兼容。
+func VerifyJenkinsCallbackSigned(secret string, body []byte, signatureHeader, timestampHeader string, now time.Time) error {
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return constants.ErrBadRequestWithMsg("未配置 cicd_jenkins_callback_hmac_secret，拒绝回调")
+	}
+	ts := strings.TrimSpace(timestampHeader)
+	if ts == "" {
+		// 存量共享库未升级：仅校验 body 签名（无重放保护）。
+		if !verifyCallbackSignature(secret, body, signatureHeader) {
+			return constants.ErrUnauthorizedWithMsg("Jenkins 回调签名校验失败")
+		}
+		return nil
+	}
+	sec, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return constants.ErrBadRequestWithMsg("X-Yunshu-Timestamp 必须是 Unix 秒")
+	}
+	diff := now.Sub(time.Unix(sec, 0))
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > callbackTimestampSkew {
+		return constants.ErrUnauthorizedWithMsg("Jenkins 回调时间戳超出允许窗口，疑似重放")
+	}
+	signed := make([]byte, 0, len(ts)+1+len(body))
+	signed = append(signed, ts...)
+	signed = append(signed, '.')
+	signed = append(signed, body...)
+	if !verifyCallbackSignature(secret, signed, signatureHeader) {
+		return constants.ErrUnauthorizedWithMsg("Jenkins 回调签名校验失败")
+	}
+	return nil
+}
+
+func verifyCallbackSignature(secret string, payload []byte, signatureHeader string) bool {
 	secret = strings.TrimSpace(secret)
 	if secret == "" {
 		return false
@@ -74,20 +121,20 @@ func VerifyJenkinsCallbackHMAC(secret string, body []byte, signatureHeader strin
 		return false
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
-	_, _ = mac.Write(body)
+	_, _ = mac.Write(payload)
 	expected := hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(strings.ToLower(expected)), []byte(strings.ToLower(sig)))
 }
 
 // HandleJenkinsCallbackRaw 供 handler 读取 body 后调用。
-func (s *Service) HandleJenkinsCallbackRaw(ctx context.Context, body []byte, signatureHeader string) error {
+func (s *Service) HandleJenkinsCallbackRaw(ctx context.Context, body []byte, signatureHeader, timestampHeader string) error {
 	cfg := s.resolvedConfig(ctx)
 	secret := strings.TrimSpace(cfg.Callback.HMACSecret)
 	if secret == "" {
 		return constants.ErrBadRequestWithMsg("未配置 cicd_jenkins_callback_hmac_secret，拒绝回调")
 	}
-	if !VerifyJenkinsCallbackHMAC(secret, body, signatureHeader) {
-		return constants.ErrUnauthorizedWithMsg("Jenkins 回调签名校验失败")
+	if err := VerifyJenkinsCallbackSigned(secret, body, signatureHeader, timestampHeader, time.Now()); err != nil {
+		return err
 	}
 	var req JenkinsCallbackRequest
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -206,11 +253,6 @@ func (s *Service) applyBuildCallback(ctx context.Context, br *model.CicdBuildRun
 		updates["git_commit"] = v
 	}
 	sonar := req.Sonar
-	if sonar == nil && req.Stage != nil &&
-		(strings.EqualFold(req.Stage.Type, model.CicdStageTypeQualityGate) ||
-			strings.EqualFold(req.Stage.Type, model.CicdStageTypeSonar)) {
-		// stage 事件可只带 status；门禁状态从 stage.status 映射
-	}
 	if sonar != nil {
 		qg := strings.ToUpper(strings.TrimSpace(sonar.QualityGate))
 		if qg != "" {
@@ -227,7 +269,11 @@ func (s *Service) applyBuildCallback(ctx context.Context, br *model.CicdBuildRun
 		if b, err := json.Marshal(sonar); err == nil {
 			updates["sonar_summary_json"] = string(b)
 		}
-	} else if req.Stage != nil && strings.EqualFold(req.Stage.Type, model.CicdStageTypeQualityGate) {
+	} else if req.Stage != nil &&
+		(strings.EqualFold(req.Stage.Type, model.CicdStageTypeQualityGate) ||
+			strings.EqualFold(req.Stage.Type, model.CicdStageTypeSonar)) {
+		// stage 事件可只带 status（无 sonar 明细）：门禁状态从 stage.status 映射。
+		// sonar 与 quality_gate 两种 stage 类型都要覆盖，否则 sonar 类型阶段的门禁结果会丢失。
 		qg := mapStageStatusToQualityGate(req.Stage.Status)
 		updates["quality_gate_status"] = qg
 		pass := qg == model.CicdQualityGateOK || qg == model.CicdQualityGateWarn
@@ -256,6 +302,9 @@ func (s *Service) applyBuildCallback(ctx context.Context, br *model.CicdBuildRun
 	if event == "run" {
 		st := strings.ToLower(strings.TrimSpace(req.RunStatus))
 		if st != "" {
+			if !buildCallbackStatusAllowed(br.BuildResult, st) {
+				return constants.ErrBadRequestWithMsg("Jenkins 回调状态不允许: " + br.BuildResult + " -> " + st)
+			}
 			updates["build_result"] = st
 			if st != model.CicdRunStatusRunning && st != model.CicdRunStatusPending {
 				now := time.Now()
@@ -265,11 +314,46 @@ func (s *Service) applyBuildCallback(ctx context.Context, br *model.CicdBuildRun
 	}
 	if len(updates) > 0 {
 		updates["updated_at"] = time.Now()
-		if err := s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", br.ID).Updates(updates).Error; err != nil {
-			return err
+		// 带 build_result 条件更新：与 run_sync 轮询并发时，避免用过期回调覆盖已落地的终态。
+		q := s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", br.ID)
+		if _, ok := updates["build_result"]; ok {
+			q = q.Where("build_result = ?", br.BuildResult)
+		}
+		res := q.Updates(updates)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			if _, ok := updates["build_result"]; ok {
+				// 状态已被他人（轮询/并发回调）推进，本次回调按幂等处理，不报错。
+				return nil
+			}
 		}
 	}
 	return nil
+}
+
+// buildCallbackStatusAllowed CI 回调仅允许 pending/running 向前推进，终态不可回退。
+// 与 releaseCallbackStatusAllowed 对称：防止重复回调或乱序回调把已完成的构建改回 running。
+func buildCallbackStatusAllowed(current, next string) bool {
+	current = strings.ToLower(strings.TrimSpace(current))
+	next = strings.ToLower(strings.TrimSpace(next))
+	if next == "" {
+		return false
+	}
+	switch current {
+	case "", model.CicdRunStatusPending, model.CicdRunStatusRunning:
+		switch next {
+		case model.CicdRunStatusPending, model.CicdRunStatusRunning, model.CicdRunStatusSuccess,
+			model.CicdRunStatusFailure, model.CicdRunStatusAborted, model.CicdRunStatusCancelled:
+			return true
+		default:
+			return false
+		}
+	default:
+		// 已是终态：只允许同值重复回调（幂等），不允许改成别的状态。
+		return current == next
+	}
 }
 
 func (s *Service) applyReleaseCallback(ctx context.Context, rr *model.CicdReleaseRun, event string, req JenkinsCallbackRequest) error {

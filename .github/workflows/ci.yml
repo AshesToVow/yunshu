@@ -1,4 +1,4 @@
-# Minimal CI quality gate (audit T-H1)
+# CI quality gate
 name: ci
 
 on:
@@ -34,5 +34,11 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install
         run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Format check
+        run: npm run format:check
+      - name: Unit tests
+        run: npm test
       - name: Build
         run: npm run build

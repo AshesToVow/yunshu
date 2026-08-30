@@ -72,7 +72,16 @@ func (e *BizError) HTTPStatus() int {
 }
 
 // Ensure normalizes any error to *BizError.
+//
+// Deprecated: 优先使用 EnsureCtx，以便兜底的 internal error 日志能携带
+// request_id / user 等请求链路字段。保留本函数仅为兼容既有调用方。
 func Ensure(err error) error {
+	return EnsureCtx(context.Background(), err)
+}
+
+// EnsureCtx normalizes any error to *BizError, 并在兜底为 internal error 时
+// 使用请求链路 ctx 打日志（保留 request_id / user 等字段）。
+func EnsureCtx(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -85,7 +94,10 @@ func Ensure(err error) error {
 			return b
 		}
 	}
-	return Internal(err, "handler")
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return InternalCtx(ctx, err, "handler")
 }
 
 type loggedMarker struct{ cause error }

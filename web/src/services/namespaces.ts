@@ -91,4 +91,3 @@ export function deleteNamespace(clusterId: number, name: string, deleteOpts?: K8
     http.delete("/namespaces", { params: { cluster_id: clusterId, name, ...pickK8sDeleteOpts(deleteOpts ?? {}) } }),
   );
 }
-

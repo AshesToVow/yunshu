@@ -469,10 +469,58 @@ func ParseServerIDs(raw string) ([]uint, error) {
 	return ids, nil
 }
 
+// maskedParamValue 敏感参数落库时的占位值。
+const maskedParamValue = "***"
+
+// sensitiveParamKeys 精确匹配的敏感参数名（Jenkins Job 参数）。
+var sensitiveParamKeys = map[string]struct{}{
+	"SONAR_TOKEN":                 {},
+	"YUNSHU_CALLBACK_HMAC_SECRET": {},
+	"harborPassword":              {},
+	"HARBOR_PASSWORD":             {},
+	"gitPassword":                 {},
+	"GIT_PASSWORD":                {},
+}
+
+// sensitiveParamSubstrings 子串匹配（大写后比较），覆盖后续新增的凭据类参数。
+var sensitiveParamSubstrings = []string{
+	"PASSWORD", "SECRET", "TOKEN", "PRIVATE_KEY", "PRIVATEKEY", "CREDENTIAL", "PASSPHRASE", "APIKEY", "API_KEY",
+}
+
+// IsSensitiveParamKey 判断 Jenkins 参数名是否属于凭据类，需在落库/回显前脱敏。
+func IsSensitiveParamKey(key string) bool {
+	k := strings.TrimSpace(key)
+	if k == "" {
+		return false
+	}
+	if _, ok := sensitiveParamKeys[k]; ok {
+		return true
+	}
+	upper := strings.ToUpper(k)
+	for _, frag := range sensitiveParamSubstrings {
+		if strings.Contains(upper, frag) {
+			return true
+		}
+	}
+	return false
+}
+
+// ParamsJSON 序列化 Jenkins 参数用于落库。
+// 凭据类参数（SONAR_TOKEN / YUNSHU_CALLBACK_HMAC_SECRET / *PASSWORD* 等）一律替换为 "***"：
+// params_json 会随工单详情接口回传前端，明文落库等于把回调签名密钥和扫描令牌长期暴露。
+// 注意：脱敏只影响持久化副本，传给 Jenkins 的 params map 不变。
 func ParamsJSON(params map[string]string) string {
 	if len(params) == 0 {
 		return ""
 	}
-	b, _ := json.Marshal(params)
+	safe := make(map[string]string, len(params))
+	for k, v := range params {
+		if IsSensitiveParamKey(k) && strings.TrimSpace(v) != "" {
+			safe[k] = maskedParamValue
+			continue
+		}
+		safe[k] = v
+	}
+	b, _ := json.Marshal(safe)
 	return string(b)
 }

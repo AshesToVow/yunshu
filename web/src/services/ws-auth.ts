@@ -5,7 +5,7 @@ export type WSTicketResult = {
   expires_in: number;
 };
 
-/** 用当前 Bearer 会话换取一次性 WebSocket 握手 ticket（30s 有效，单次使用；URL 仅允许 ?ticket=）。 */
+/** 用当前 Cookie 会话换取一次性 WebSocket 握手 ticket（30s 有效，单次使用；URL 仅允许 ?ticket=）。 */
 export async function fetchWSTicket(scope?: string): Promise<string> {
   const res = await getData<WSTicketResult>(
     http.post("/auth/ws-ticket", scope ? { scope } : {}, { silentErrorToast: true }),

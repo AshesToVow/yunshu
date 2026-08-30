@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"yunshu/internal/config"
@@ -269,6 +268,11 @@ func (b *Builder) WithGin() *Builder {
 
 	engine := gin.New()
 	engine.Use(middleware.Recovery(b.app.Logger))
+	cspOn := true
+	if b.app.Config.Auth.CSPEnabled != nil {
+		cspOn = *b.app.Config.Auth.CSPEnabled
+	}
+	engine.Use(middleware.SecurityHeaders(cspOn))
 	engine.Use(middleware.RequestLogger(b.app.Logger))
 	engine.Use(middleware.ErrorHandler())
 	middleware.RegisterOpsEndpoints(engine, b.app.DB, b.app.Redis, time.Now())
@@ -281,9 +285,18 @@ func (b *Builder) Build() (*App, error) {
 		return nil, b.err
 	}
 
-	// 安全性检查：EncryptionKey必须配置
-	if strings.TrimSpace(b.app.Config.Security.EncryptionKey) == "" {
-		return nil, fmt.Errorf("security.encryption_key is required but not configured. please configure a base64-encoded 32-byte key")
+	// 启动期安全闸门：不仅校验密钥存在，还要校验其强度。
+	// 生产环境下弱密钥/占位值直接终止启动；非生产仅告警，避免阻断本地开发。
+	warnings, err := b.app.Config.Validate()
+	for _, w := range warnings {
+		if b.app.Logger != nil && b.app.Logger.Info != nil {
+			b.app.Logger.Info.Warn("insecure configuration detected", "detail", w)
+		} else {
+			slog.Warn("insecure configuration detected", "detail", w)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
 	return b.app, b.err

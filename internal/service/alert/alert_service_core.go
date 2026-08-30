@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/interfaces"
 	cryptox "yunshu/internal/pkg/crypto"
+	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/repository"
 
@@ -26,12 +27,12 @@ type AlertChannelListQuery struct {
 }
 
 type AlertEventListQuery struct {
-	Page            int    `form:"page"`
-	PageSize        int    `form:"page_size"`
-	Keyword         string `form:"keyword"`
-	Cluster         string `form:"cluster"`
-	AlertIP         string `form:"alertIP"`
-	Status          string `form:"status"`
+	Page     int    `form:"page"`
+	PageSize int    `form:"page_size"`
+	Keyword  string `form:"keyword"`
+	Cluster  string `form:"cluster"`
+	AlertIP  string `form:"alertIP"`
+	Status   string `form:"status"`
 	// Severity 单值或逗号分隔；支持 critical/warning/info 以及别名 p1/p2/p3
 	Severity        string `form:"severity"`
 	MonitorPipeline string `form:"monitorPipeline"`
@@ -40,8 +41,8 @@ type AlertEventListQuery struct {
 	// Fingerprint 按告警指纹筛选投递/跳过留痕（兼容旧数据：group_key 或 payload 内 fingerprint）
 	Fingerprint string `form:"fingerprint"`
 	// Category 策略分类：delivery|routing|silence|inhibition|timing|resolved|failure|other
-	Category string `form:"category"`
-	ProjectID uint `form:"project_id"`
+	Category  string `form:"category"`
+	ProjectID uint   `form:"project_id"`
 	// ProjectIDAlias 兼容历史 query projectId
 	ProjectIDAlias uint `form:"projectId"`
 }
@@ -120,8 +121,8 @@ type AlertService struct {
 	subscriptionSvc    *AlertSubscriptionService // 订阅树服务
 	receiverGroupCache *ReceiverGroupCache       // 接收组缓存
 
-	metrics        *AlertMetrics // Prometheus自监控指标
-	metricsUpdater *AlertMetricsUpdater
+	metrics           *AlertMetrics // Prometheus自监控指标
+	metricsUpdater    *AlertMetricsUpdater
 	timingLeaderToken string
 
 	eventRepo          interfaces.AlertEventRepository
@@ -145,7 +146,7 @@ type AlertServiceOptions struct {
 	// ReceiverGroupCache 与 AlertReceiverGroupService 共用，避免 CRUD 失效与投递缓存不一致。
 	ReceiverGroupCache *ReceiverGroupCache
 	// EncryptionKey 与项目/云账号凭据加密一致；非空时用于云到期规则解密云账号 AK/SK。
-	EncryptionKey string
+	EncryptionKey      string
 	EventRepo          interfaces.AlertEventRepository
 	ChannelRepo        interfaces.AlertChannelRepository
 	MonitorRuleRepo    interfaces.AlertMonitorRuleRepository
@@ -301,13 +302,13 @@ func (s *AlertService) RunBackgroundWorkers(ctx context.Context) {
 	if s == nil {
 		return
 	}
-	s.startPrometheusEnrichWorkers()
-	s.startInhibitionPruner(context.Background())
+	s.startPrometheusEnrichWorkers(ctx)
+	s.startInhibitionPruner(ctx)
 	evalCtx, cancel := context.WithCancel(ctx)
 	s.monitorEvalCancel = cancel
-	go s.runMonitorRuleEvaluator(evalCtx)
-	go s.runCloudExpiryEvaluator(evalCtx)
-	go s.runAlertTimingWorker(evalCtx)
+	lifecycle.Go("alert.monitor-rule-evaluator", func() { s.runMonitorRuleEvaluator(evalCtx) })
+	lifecycle.Go("alert.cloud-expiry-evaluator", func() { s.runCloudExpiryEvaluator(evalCtx) })
+	lifecycle.Go("alert.timing-worker", func() { s.runAlertTimingWorker(evalCtx) })
 	s.runAlertWebhookIngestWorker(evalCtx)
 }
 

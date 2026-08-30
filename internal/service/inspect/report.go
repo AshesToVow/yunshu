@@ -14,32 +14,40 @@ var reportFS embed.FS
 
 // ReportData HTML 报告数据。
 type ReportData struct {
-	Timestamp      time.Time
-	Project        string
-	Datasource     string
-	InspectionUser string
-	Score          float64
-	Grade          string
-	GradeLabel     string // 优秀/良好/需关注/高风险
-	RiskLevel      string // 低风险…高风险
-	Summary        string
-	Verdict        string // 面向客户的一句话结论
-	ReportListMode string
-	ReportListHint string
-	Total          int
-	Critical       int
-	Warning        int
-	Normal         int
-	CategoryCount  int // 检查分类数
-	CheckItemCount int // 去重检查项数
+	Timestamp       time.Time
+	Project         string
+	Datasource      string
+	InspectionUser  string
+	Score           float64
+	Grade           string
+	GradeLabel      string // 优秀/良好/需关注/高风险
+	RiskLevel       string // 低风险…高风险
+	Summary         string
+	Verdict         string // 面向客户的一句话结论
+	ReportListMode  string
+	ReportListHint  string
+	Total           int
+	Critical        int
+	Warning         int
+	Normal          int
+	CategoryCount   int // 检查分类数
+	CheckItemCount  int // 去重检查项数
 	DistCriticalPct int
 	DistWarningPct  int
 	DistNormalPct   int
 	AbnormalPct     int
-	DistBarSVG      template.HTML // 预渲染分布条，避免模板内联 style 触发 HTML 校验报错
-	ContentGroups  []ContentGroup // 巡检内容（全量范围）
-	Groups         []ReportGroup  // 各类巡检结果（受 listMode 过滤）
-	Findings       []Finding
+	DistBarSVG      template.HTML  // 预渲染分布条，避免模板内联 style 触发 HTML 校验报错
+	ContentGroups   []ContentGroup // 巡检内容（全量范围）
+	Groups          []ReportGroup  // 各类巡检结果（受 listMode 过滤）
+	Findings        []Finding
+
+	// Criteria 评分与等级的判定依据，回答客户「这个分怎么来的」。
+	Criteria ScoreCriteria
+	// Ledger 风险台账（含责任人/期限/期次状态），报告的整改闭环载体。
+	// buildReportData 阶段 State 全为 new，由 performRun 调 applyPeriodDiff 回填。
+	Ledger []LedgerEntry
+	// Diff 与上期的对比结论。HasBaseline=false 时模板不渲染该章节。
+	Diff PeriodDiff
 }
 
 type ContentGroup struct {
@@ -125,22 +133,22 @@ func buildReportData(projectName, dsName, user, listMode string, collected Colle
 		hint = "摘要模式：明细区仅展示需关注的异常样本"
 	}
 	return ReportData{
-		Timestamp:      time.Now(),
-		Project:        projectName,
-		Datasource:     dsName,
-		InspectionUser: user,
-		Score:          score,
-		Grade:          grade,
-		GradeLabel:     gradeLabelCN(grade),
-		RiskLevel:      riskLevelCN(grade),
-		Summary:        buildExecutiveSummary(collected, score, grade, categoryCount, checkItemCount),
-		Verdict:        gradeVerdict(grade, collected.Critical, collected.Warning),
-		ReportListMode: mode,
-		ReportListHint: hint,
-		Total:          collected.Total,
-		Critical:       collected.Critical,
-		Warning:        collected.Warning,
-		Normal:         collected.Normal,
+		Timestamp:       time.Now(),
+		Project:         projectName,
+		Datasource:      dsName,
+		InspectionUser:  user,
+		Score:           score,
+		Grade:           grade,
+		GradeLabel:      gradeLabelCN(grade),
+		RiskLevel:       riskLevelCN(grade),
+		Summary:         buildExecutiveSummary(collected, score, grade, categoryCount, checkItemCount),
+		Verdict:         gradeVerdict(grade, collected.Critical, collected.Warning),
+		ReportListMode:  mode,
+		ReportListHint:  hint,
+		Total:           collected.Total,
+		Critical:        collected.Critical,
+		Warning:         collected.Warning,
+		Normal:          collected.Normal,
 		CategoryCount:   categoryCount,
 		CheckItemCount:  checkItemCount,
 		DistCriticalPct: percentPart(collected.Critical, collected.Total),
@@ -148,9 +156,11 @@ func buildReportData(projectName, dsName, user, listMode string, collected Colle
 		DistNormalPct:   percentPart(collected.Normal, collected.Total),
 		AbnormalPct:     percentPart(collected.Critical+collected.Warning, collected.Total),
 		DistBarSVG:      buildDistBarSVG(collected.Critical, collected.Warning, collected.Normal),
-		ContentGroups:  contentGroups,
-		Groups:         groups,
-		Findings:       findings,
+		ContentGroups:   contentGroups,
+		Groups:          groups,
+		Findings:        findings,
+		Criteria:        buildScoreCriteria(collected, score, grade, categoryCount, checkItemCount),
+		Ledger:          buildLedgerEntries(collected.Samples),
 	}
 }
 
@@ -219,23 +229,24 @@ func filterSamples(samples []MetricSample, mode string) []MetricSample {
 	}
 }
 
+// scorecard 计算健康分与等级。扣分权重与等级阈值统一取 report_criteria.go 的常量，
+// 避免这里改了权重而报告「判定依据」章节仍展示旧规则（两处曾各自硬编码 8/3/100）。
 func scorecard(c CollectResult) (float64, string) {
 	if c.Total == 0 {
-		return 100, "A"
+		return scoreBase, "A"
 	}
-	// 严重扣 8 分、警告扣 3 分，下限 0
-	score := 100.0 - float64(c.Critical)*8 - float64(c.Warning)*3
+	score := scoreBase - float64(c.Critical)*scoreCriticalDeduct - float64(c.Warning)*scoreWarningDeduct
 	if score < 0 {
 		score = 0
 	}
 	score = math.Round(score*10) / 10
 	grade := "A"
 	switch {
-	case score < 60:
+	case score < gradeThresholdD:
 		grade = "D"
-	case score < 75:
+	case score < gradeThresholdC:
 		grade = "C"
-	case score < 90:
+	case score < gradeThresholdB:
 		grade = "B"
 	}
 	return score, grade

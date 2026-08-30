@@ -1,0 +1,44 @@
+package cmd
+
+import "yunshu/internal/model"
+
+func seedPermissionsLog() []model.Permission {
+	return []model.Permission{
+		{Name: "日志保留策略查询", Resource: "/api/v1/log-platform/retention", Action: "GET", Description: "Get global log retention policy"},
+		{Name: "日志保留策略保存", Resource: "/api/v1/log-platform/retention", Action: "PUT", Description: "Upsert global log retention policy"},
+		{Name: "日志保留策略列表", Resource: "/api/v1/log-platform/retention/list", Action: "GET", Description: "List log retention policies"},
+		{Name: "ES 存储概览", Resource: "/api/v1/log-platform/es-storage", Action: "GET", Description: "Elasticsearch storage stats"},
+		{Name: "ES 索引删除", Resource: "/api/v1/log-platform/es-indices/:index", Action: "DELETE", Description: "Delete elasticsearch index"},
+		{Name: "Kafka 队列观测", Resource: "/api/v1/log-platform/kafka-stats", Action: "GET", Description: "Kafka lag and consumer stats"},
+		{Name: "Kafka 配置预览", Resource: "/api/v1/log-platform/kafka-config", Action: "GET", Description: "Preview kafka config from dict"},
+		{Name: "Kafka Topic 删除", Resource: "/api/v1/log-platform/kafka-topics/:topic", Action: "DELETE", Description: "Delete agent kafka topic"},
+		{Name: "日志保留手动清理", Resource: "/api/v1/log-platform/retention/cleanup", Action: "POST", Description: "Run log retention cleanup"},
+		{Name: "ES 配置预览", Resource: "/api/v1/log-platform/es-config", Action: "GET", Description: "Preview elasticsearch config from dict"},
+		{Name: "ES 连接列表", Resource: "/api/v1/esmgmt/connections", Action: "GET", Description: "List Elasticsearch connections"},
+		{Name: "ES 创建连接", Resource: "/api/v1/esmgmt/connections", Action: "POST", Description: "Create Elasticsearch connection"},
+		{Name: "ES 更新连接", Resource: "/api/v1/esmgmt/connections/:id", Action: "PUT", Description: "Update Elasticsearch connection"},
+		{Name: "ES 删除连接", Resource: "/api/v1/esmgmt/connections/:id", Action: "DELETE", Description: "Delete Elasticsearch connection"},
+		{Name: "ES 连接探测", Resource: "/api/v1/esmgmt/connections/:id/ping", Action: "POST", Description: "Ping Elasticsearch connection"},
+		{Name: "ES 连通测试", Resource: "/api/v1/esmgmt/connections/test", Action: "POST", Description: "Test Elasticsearch credentials without saving"},
+		{Name: "ES 集群健康", Resource: "/api/v1/esmgmt/cluster/health", Action: "GET", Description: "Get Elasticsearch cluster health"},
+		{Name: "ES 索引列表", Resource: "/api/v1/esmgmt/indices", Action: "GET", Description: "List Elasticsearch indices"},
+		{Name: "ES 创建索引", Resource: "/api/v1/esmgmt/indices", Action: "POST", Description: "Create Elasticsearch index"},
+		{Name: "ES 删除索引", Resource: "/api/v1/esmgmt/indices/:name", Action: "DELETE", Description: "Delete Elasticsearch index"},
+		{Name: "ES 打开索引", Resource: "/api/v1/esmgmt/indices/:name/open", Action: "POST", Description: "Open Elasticsearch index"},
+		{Name: "ES 关闭索引", Resource: "/api/v1/esmgmt/indices/:name/close", Action: "POST", Description: "Close Elasticsearch index"},
+		{Name: "ES 节点列表", Resource: "/api/v1/esmgmt/nodes", Action: "GET", Description: "List Elasticsearch nodes"},
+		{Name: "ES REST 代理", Resource: "/api/v1/esmgmt/proxy", Action: "POST", Description: "Proxy safe Elasticsearch REST calls"},
+		{Name: "ES 索引备份", Resource: "/api/v1/esmgmt/backups", Action: "POST", Description: "Backup Elasticsearch index to MinIO"},
+		{Name: "ES 备份列表", Resource: "/api/v1/esmgmt/backups", Action: "GET", Description: "List Elasticsearch backup jobs"},
+		{Name: "ES 备份详情", Resource: "/api/v1/esmgmt/backups/:id", Action: "GET", Description: "Get Elasticsearch backup job"},
+		{Name: "ES 备份下载", Resource: "/api/v1/esmgmt/backups/:id/download", Action: "GET", Description: "Presign Elasticsearch backup download"},
+		{Name: "ES 索引恢复", Resource: "/api/v1/esmgmt/restores", Action: "POST", Description: "Restore Elasticsearch index from MinIO backup"},
+		{Name: "ES 恢复列表", Resource: "/api/v1/esmgmt/restores", Action: "GET", Description: "List Elasticsearch restore jobs"},
+		{Name: "ES 恢复详情", Resource: "/api/v1/esmgmt/restores/:id", Action: "GET", Description: "Get Elasticsearch restore job"},
+		{Name: "ES 备份调度列表", Resource: "/api/v1/esmgmt/schedules", Action: "GET", Description: "List Elasticsearch backup schedules"},
+		{Name: "ES 创建备份调度", Resource: "/api/v1/esmgmt/schedules", Action: "POST", Description: "Create Elasticsearch backup schedule"},
+		{Name: "ES 更新备份调度", Resource: "/api/v1/esmgmt/schedules/:id", Action: "PUT", Description: "Update Elasticsearch backup schedule"},
+		{Name: "ES 删除备份调度", Resource: "/api/v1/esmgmt/schedules/:id", Action: "DELETE", Description: "Delete Elasticsearch backup schedule"},
+	}
+}
+
