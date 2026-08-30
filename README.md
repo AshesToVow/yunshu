@@ -234,18 +234,35 @@ npm run dev
 - `backend`（Go API）
 - `frontend`（Nginx + 前端静态资源）
 
-#### 1) 启动
+#### 1) 编辑 `configs/config.yaml`（唯一配置入口）
+
+不需要 `.env` / `.env.example`。Compose 把 `./configs` 只读挂进容器，backend 直接读 YAML。
+
+启动前按文件顶部「场景速查」至少改这些：
+
+| 项 | Docker Compose 建议 |
+|----|---------------------|
+| `mysql.host` | 宿主机 IP（如 `172.17.0.1`，勿用 `host.docker.internal`） |
+| `mysql.password` | 与宿主机 MySQL 一致 |
+| `redis.addr` | `yunshu-redis:6379` |
+| `redis.password` | 与 `docker-compose.yml` 里 redis `--requirepass` 一致（默认 `1234`） |
+| `auth.jwt_secret` | `openssl rand -base64 48 \| tr -d '+/='` |
+| `security.encryption_key` | `openssl rand -base64 32`（解码后须 32 字节；换密钥后历史密文永久不可解） |
+| `app.env` | 联调可 `dev`；上线改 `prod`（prod 拒绝占位/弱密钥） |
+
+可选能力（AI / ES / Kafka / CI/CD / Swagger 等）何时打开，见该文件顶部注释表。
+
+#### 2) 启动
 
 ```bash
 git clone https://github.com/AshesToVow/yunshu.git
-
 cd yunshu
 git checkout prod_yunsh_20260712
-# 首次或镜像更新时建议带 --build
+# 先改 configs/config.yaml，再构建启动
 docker-compose up -d --build
 ```
 
-#### 2) 查看状态与日志
+#### 3) 查看状态与日志
 
 ```bash
 docker-compose ps
@@ -253,7 +270,7 @@ docker-compose logs -f backend
 docker-compose logs -f frontend
 ```
 
-#### 3) 停止与清理
+#### 4) 停止与清理
 
 ```bash
 docker-compose down
@@ -262,12 +279,12 @@ docker-compose down
 docker-compose down -v
 ```
 
-#### 4) 访问入口
+#### 5) 访问入口
 
-- 前端：`http://<host>:80`
+- 前端：`http://<host>:8083`
 - 后端 API：`http://<host>:8080`
 
-> 说明：`docker-compose.yml` 默认读取项目内 `configs`、`logs`，并映射 MySQL/Redis 端口。生产环境请替换默认密码、JWT/加密密钥，并按需调整挂载路径与资源限制。
+> 说明：生产请替换 MySQL/Redis 密码与 JWT/加密密钥，并按需调整挂载路径与资源限制。
 
 ### 分支切换（git checkout）
 
@@ -294,19 +311,18 @@ git checkout main
 
 ## 配置说明
 
-主配置文件：`configs/config.yaml`（可通过 `--config` 指定路径）。
+主配置文件：**`configs/config.yaml`（唯一纳管入口）**，可通过 `--config` 指定路径。  
+文件顶部有 Docker / 裸机场景速查，以及 AI、ES、Kafka、CI/CD、Swagger 等开关何时打开。环境变量仅作临时覆盖，不再提供 `.env.example`。
 
 | 配置块 | 说明 |
 |--------|------|
-| `app` / `http` | 服务端口、超时（仅 HTTP，默认 `:8080`） |
-| `mysql` / `redis` | 业务库与缓存 |
-| `elasticsearch` | Loggie 写入 / 控制台检索后端（索引模式、保留天数、清理 Cron；部分项可在**数据字典**覆盖） |
-| `loggie` | 离线二进制路径、systemd 单元名、远端部署目录（见下方示例） |
-| `auth` | JWT 密钥、Token 有效期、邮箱验证码 TTL |
-| `security.encryption_key` | 服务器 SSH / 云账号等敏感字段加密 |
-| `alert` | Webhook、Prometheus 富化、聚合窗口等（部分项可在**数据字典**覆盖） |
-| `dbmgmt` | 查询超时、结果行数、goInception 地址、生产强制审批等（部分项可在**数据字典**覆盖，见 [docs/dbmgmt.md](docs/dbmgmt.md)） |
-| `plugins.enabled` | 编译期插件启停：`core` / `project` / `cmdb` / `k8s` / `alert` / `backup` / `cicd` / `dbmgmt` |
+| `app` / `http` | 环境（`dev`/`prod`）、端口、超时 |
+| `mysql` / `redis` | 业务库与缓存（Compose 时改 host/addr，见 YAML 顶部） |
+| `elasticsearch` / `kafka` / `loggie` | 日志平台；按需 `enabled` |
+| `auth` / `security` | JWT 与凭据加密密钥（上线前 openssl 生成） |
+| `alert` / `k8s_event_forward` | 告警聚合与 Event 转发 |
+| `dbmgmt` / `cicd` / `ai` | 对应业务；部分项可被数据字典覆盖 |
+| `plugins.enabled` | 模块启停：`core` / `project` / `cmdb` / `k8s` / `alert` / `backup` / `cicd` / `dbmgmt` / … |
 
 日志平台相关示例：
 
@@ -324,7 +340,7 @@ loggie:
   deploy_dir: "/export/loggie"
 ```
 
-生产环境务必修改：MySQL/Redis 密码、`auth.jwt_secret`、`security.encryption_key`。
+生产环境务必修改：MySQL/Redis 密码、`auth.jwt_secret`、`security.encryption_key`（在 `configs/config.yaml` 中修改；`app.env=prod` 时占位密钥会拒绝启动）。
 
 ---
 
@@ -515,7 +531,8 @@ OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明�
 | CI/CD 无法新建应用 | 须项目 owner/admin 或超管；普通成员仅能操作已授权服务 |
 | 发布被拒「审批流未配置」 | 在「审批管理」配置至少一级阶段；空流禁止直发 |
 | 首页 Pod 统计与预期不符 | 非 super-admin 仅聚合**有项目成员关系且具备 readonly+ 档位**的集群 |
-| Docker 后端连不上库 | 检查 `MYSQL_*` / `REDIS_*` 环境变量与服务名 `yunshu-mysql` |
+| Docker 后端连不上库 | 检查 `configs/config.yaml`：`mysql.host`（宿主机 IP）、`redis.addr=yunshu-redis:6379`、密码与 compose `--requirepass` 一致 |
+| 后端启动即退出 `config validation failed: security.encryption_key ...` | 在 `configs/config.yaml` 写入 `openssl rand -base64 32` 生成的密钥；`app.env=prod` 时拒绝占位/弱密钥，`dev` 仅告警 |
 | dbmgmt 应用用户审批 1044 | 实例管理员对目标库无 GRANT OPTION；检查 `root@'<平台IP>'` 而非仅 `root@'%'` |
 | SQL 审核报「禁止多语句」 | 启用 `dbmgmt_goinception_enabled` 并确认 goInception 可达 |
 | dbmgmt 菜单不可见 | 确认 `plugins.enabled` 含 `dbmgmt` + `project`；执行 `seed`；角色勾选 dbmgmt API |
