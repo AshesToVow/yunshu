@@ -488,7 +488,9 @@ func (h *CicdHandler) JenkinsCallback(c *gin.Context) {
 	if sig == "" {
 		sig = c.GetHeader("X-Hub-Signature-256")
 	}
-	if err := h.svc.HandleJenkinsCallbackRaw(c.Request.Context(), body, sig); err != nil {
+	// X-Yunshu-Timestamp 存在时纳入签名并做时间窗校验，抵御回调重放；缺失则兼容旧共享库。
+	ts := c.GetHeader("X-Yunshu-Timestamp")
+	if err := h.svc.HandleJenkinsCallbackRaw(c.Request.Context(), body, sig, ts); err != nil {
 		response.Error(c, err)
 		return
 	}

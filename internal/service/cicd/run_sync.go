@@ -51,8 +51,10 @@ func (s *Service) syncPendingRuns(ctx context.Context) {
 		s.syncOneReleaseRun(ctx, client, run)
 	}
 	var backfillBuilds []model.CicdBuildRun
+	// 覆盖 package_path 或 image_address 任一为空的成功构建：
+	// 列表接口不再做同步补偿（避免每行拉 Jenkins 控制台日志），补偿职责全部收敛到此后台 worker。
 	_ = s.db.WithContext(ctx).
-		Where("build_result = ? AND (package_path = '' OR package_path IS NULL)", model.CicdRunStatusSuccess).
+		Where("build_result = ? AND (package_path = '' OR package_path IS NULL OR image_address = '' OR image_address IS NULL)", model.CicdRunStatusSuccess).
 		Order("id DESC").
 		Limit(30).
 		Find(&backfillBuilds).Error
@@ -142,7 +144,10 @@ func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, r
 	if run.FinishedAt == nil {
 		updates["finished_at"] = now
 	}
-	_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Updates(updates).Error
+	// 条件更新：仅当 DB 内仍是非终态时才写终态，避免与 Jenkins HMAC 回调并发时覆盖已落地结果。
+	_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).
+		Where("id = ? AND build_result IN ?", run.ID, []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}).
+		Updates(updates).Error
 }
 
 // releaseStuckTimeout 发布工单在 running 且构建号仍未落库时，允许的最长补偿窗口。
@@ -177,7 +182,10 @@ func (s *Service) syncOneReleaseRun(ctx context.Context, client *jenkins.Client,
 	if run.FinishedAt == nil {
 		updates["finished_at"] = now
 	}
-	_ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).Where("id = ?", run.ID).Updates(updates).Error
+	// 条件更新：仅当 DB 内仍是非终态时才写终态，避免覆盖回调或人工终止已落地的状态。
+	_ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+		Where("id = ? AND status IN ?", run.ID, []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}).
+		Updates(updates).Error
 }
 
 // recoverReleaseBuildNumber 针对构建号未落库的 running 工单做补偿：

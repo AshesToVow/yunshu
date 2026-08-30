@@ -59,7 +59,6 @@ func (s *Service) ListBuildRuns(ctx context.Context, q BuildRunListQuery) (*pagi
 	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	s.enrichBuildRunPackagePaths(ctx, rows)
 	svcNames := s.loadServiceNameMap(ctx, rows)
 	items := make([]BuildRunItem, 0, len(rows))
 	for _, row := range rows {
@@ -310,25 +309,4 @@ func (s *Service) loadServiceNameMap(ctx context.Context, runs []model.CicdBuild
 		out[svc.ID] = serviceMeta{Name: svc.Name, Identifier: svc.Identifier}
 	}
 	return out
-}
-
-func (s *Service) enrichBuildRunPackagePaths(ctx context.Context, rows []model.CicdBuildRun) {
-	client, _, err := s.jenkinsClient(ctx)
-	if err != nil {
-		return
-	}
-	for i := range rows {
-		if rows[i].BuildResult != model.CicdRunStatusSuccess {
-			continue
-		}
-		if strings.TrimSpace(rows[i].PackagePath) != "" && strings.TrimSpace(rows[i].ImageAddress) != "" {
-			continue
-		}
-		s.backfillBuildArtifacts(ctx, client, rows[i])
-		var updated model.CicdBuildRun
-		if err := s.db.WithContext(ctx).Select("package_path", "image_address").Where("id = ?", rows[i].ID).First(&updated).Error; err == nil {
-			rows[i].PackagePath = updated.PackagePath
-			rows[i].ImageAddress = updated.ImageAddress
-		}
-	}
 }

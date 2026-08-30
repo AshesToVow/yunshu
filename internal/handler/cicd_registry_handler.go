@@ -224,12 +224,14 @@ func (h *CicdHandler) RunCleanupPolicy(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	msg, err := h.svc.RunCleanupPolicyNow(c.Request.Context(), id)
+	// dry_run=true 只预演统计，不实际删除，也不刷新策略的 last_run_at。
+	dryRun := strings.EqualFold(strings.TrimSpace(c.Query("dry_run")), "true")
+	msg, err := h.svc.RunCleanupPolicyNow(c.Request.Context(), id, dryRun)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	response.Success(c, gin.H{"result": msg})
+	response.Success(c, gin.H{"result": msg, "dry_run": dryRun})
 }
 
 func (h *CicdHandler) ListPipelineTemplates(c *gin.Context) {
