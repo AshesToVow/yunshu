@@ -35,6 +35,7 @@ func (m *module) Models() []any {
 		&model.InspectItem{},
 		&model.InspectRun{},
 		&model.InspectReportTemplate{},
+		&model.InspectFinding{},
 	}
 }
 

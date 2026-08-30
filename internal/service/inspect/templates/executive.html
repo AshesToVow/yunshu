@@ -82,6 +82,43 @@
     </div>
 
     <div class="block">
+      <h2>与上期对比</h2>
+      {{if .Diff.HasBaseline}}
+      <ul class="kv">
+        <li><span class="label">新增</span><span class="crit">{{.Diff.NewCount}}</span> 项</li>
+        <li><span class="label">持续</span><span class="warn">{{.Diff.PersistCount}}</span> 项（上期未闭环）</li>
+        <li><span class="label">已恢复</span>{{.Diff.RecoveredCount}} 项</li>
+      </ul>
+      <p class="note">{{.Diff.Summary}}</p>
+      {{else}}
+      <p class="note">{{.Diff.Summary}}</p>
+      {{end}}
+    </div>
+
+    <div class="block">
+      <h2>整改责任</h2>
+      {{if .Ledger}}
+      <ul class="kv">
+        {{range .Ledger}}
+        <li>
+          <span class="label">{{.Priority}}</span>
+          {{.Name}} — {{.AffectedService}}
+          <div class="note">责任人 {{if .Owner}}{{.Owner}}{{else}}待认领{{end}} · 期限 {{if .DueDateText}}{{.DueDateText}}{{else}}待定{{end}} · {{.StateLabel}}</div>
+        </li>
+        {{end}}
+      </ul>
+      {{else}}
+      <p class="note">本期无需整改事项。</p>
+      {{end}}
+    </div>
+
+    <div class="block">
+      <h2>评分依据</h2>
+      <p class="note">{{.Criteria.Formula}}</p>
+      <p class="note">{{.Criteria.ScopeNote}}</p>
+    </div>
+
+    <div class="block">
       <h2>分类统计</h2>
       <ul class="kv">
         {{range .Groups}}

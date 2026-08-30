@@ -6,17 +6,42 @@ import (
 	"strings"
 )
 
-// renderBinaryPDF 生成服务端 PDF。默认不生成简化 PDF，由前端 html2canvas 上传高质量版。
-// INSPECT_USE_WKHTMLTOPDF=true  启用 wkhtmltopdf
-// INSPECT_SERVER_PDF=structured  降级结构化 PDF；html_only/off（默认）不生成服务端 PDF
+// renderBinaryPDF 生成服务端 PDF，按「保真度」从高到低降级：
+//
+//  1. headless Chromium（矢量、可搜索、与浏览器打印一致）——推荐，容器已内置时零配置生效
+//  2. wkhtmltopdf（仅在显式开启 INSPECT_USE_WKHTMLTOPDF 时尝试；Qt WebKit 不支持 CSS Grid，版式会退化）
+//  3. 结构化 PDF（纯 Go 逐行绘制，需显式开启 INSPECT_PDF_STRUCTURED_FALLBACK=true）
+//
+// 结构化兜底默认关闭：一旦写入低保真 PDF，前端「PDF」按钮会直接下载它而不再生成高保真版本。
+//
+// INSPECT_SERVER_PDF 取值：
+//
+//	auto（默认）  按上面顺序降级，全部不可用时返回 nil，由前端导出补位
+//	chromium      仅用 Chromium，失败即返回 nil
+//	structured    跳过 HTML 渲染，直接输出结构化 PDF
+//	off/none/client/html_only  不生成服务端 PDF
 func renderBinaryPDF(data ReportData, html []byte) []byte {
+	mode := inspectServerPDFMode()
+
+	switch mode {
+	case "off", "none", "client", "html_only":
+		return nil
+	case "structured":
+		return renderStructuredPDF(data)
+	}
+
+	if pdf := renderPDFWithChromium(html); len(pdf) > 0 {
+		return pdf
+	}
+	if mode == "chromium" {
+		return nil
+	}
 	if inspectUseWkhtmltopdf() {
 		if pdf := renderPDFFromHTML(html); len(pdf) > 0 {
 			return pdf
 		}
 	}
-	mode := inspectServerPDFMode()
-	if mode == "off" || mode == "none" || mode == "client" || mode == "html_only" {
+	if inspectStructuredFallbackDisabled() {
 		return nil
 	}
 	return renderStructuredPDF(data)
@@ -27,10 +52,17 @@ func inspectUseWkhtmltopdf() bool {
 	return v == "1" || v == "true" || v == "yes"
 }
 
+// inspectStructuredFallbackDisabled 关闭最后的结构化兜底（INSPECT_PDF_STRUCTURED_FALLBACK=false）。
+// 关闭后若 Chromium 不可用，PDF 由前端导出生成，避免用户下到低保真版本。
+func inspectStructuredFallbackDisabled() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("INSPECT_PDF_STRUCTURED_FALLBACK")))
+	return v == "0" || v == "false" || v == "no"
+}
+
 func inspectServerPDFMode() string {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("INSPECT_SERVER_PDF")))
 	if v == "" {
-		return "html_only"
+		return "auto"
 	}
 	return v
 }

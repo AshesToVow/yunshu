@@ -71,6 +71,45 @@
     <p class="muted">无异常。</p>
     {{end}}
 
+    <h2>风险台账</h2>
+    {{if .Ledger}}
+    <table>
+      <thead><tr><th>#</th><th>风险项</th><th>受影响服务</th><th>现象</th><th>期次</th><th>责任人</th><th>期限</th></tr></thead>
+      <tbody>
+        {{range .Ledger}}
+        <tr>
+          <td>{{.Seq}}</td>
+          <td>
+            {{.Name}}
+            <div class="hint">{{.Type}} · {{.Priority}}</div>
+          </td>
+          <td>{{.AffectedService}}</td>
+          <td>{{.Phenomenon}}</td>
+          <td>{{.StateLabel}}</td>
+          <td>{{if .Owner}}{{.Owner}}{{else}}待认领{{end}}</td>
+          <td>{{if .DueDateText}}{{.DueDateText}}{{else}}待定{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="muted">本期无需整改事项。</p>
+    {{end}}
+
+    <h2>与上期对比</h2>
+    {{if .Diff.HasBaseline}}
+    <div class="row">
+      <span class="crit">新增 {{.Diff.NewCount}}</span>
+      <span class="warn">持续 {{.Diff.PersistCount}}</span>
+      <span class="ok">已恢复 {{.Diff.RecoveredCount}}</span>
+    </div>
+    {{end}}
+    <p class="muted">{{.Diff.Summary}}</p>
+
+    <h2>评分依据</h2>
+    <p class="muted">{{.Criteria.Formula}}</p>
+    <p class="muted">{{.Criteria.ScopeNote}}</p>
+
     {{range .Groups}}
     <h2>{{.Type}} <span class="muted">({{.Stats.Total}} · 严重 {{.Stats.Critical}} · 警告 {{.Stats.Warning}})</span></h2>
     {{if .Metrics}}
