@@ -16,7 +16,6 @@ import {
 } from "../services/alerts";
 import { analyzeAlertExplainAI, type AIAlertExplainResult } from "../services/ai";
 import { extractApiErrorMessage } from "../services/http";
-import { stringifyPrettyJSON } from "../services/alert-mappers";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { revealDictEntryValue } from "../services/dict";
 import {
@@ -53,6 +52,13 @@ import {
   type AlertReceiverGroup,
   type AlertSubscriptionNode,
 } from "../services/alert-subscriptions";
+import {
+  parseLabelsFromAlertEventRequestPayload,
+  parseReceiverGroupChannelIds,
+  parseReceiverGroupEmails,
+  prettifyAlertRequestPayload,
+} from "./alert-config/payload-parse";
+import { webhookPayloadTemplates } from "./alert-config/webhook-templates";
 
 export type AlertConfigTab = "subscriptions" | "history";
 
@@ -72,144 +78,6 @@ export type AlertConfigCenterPanelProps = {
   /** 告警监控平台顶栏「全局项目上下文」；有值时同步订阅/历史筛选 */
   projectContextId?: number;
 };
-
-const webhookPayloadTemplates: Record<string, Record<string, unknown>> = {
-  warning_prod: {
-    receiver: "yunshu-webhook",
-    status: "firing",
-    alerts: [
-      {
-        status: "firing",
-        labels: {
-          alertname: "KubernetesPodUnhealthy",
-          severity: "warning",
-          cluster: "prodK8s",
-          namespace: "default",
-          pod: "demo-pod-1",
-        },
-        annotations: {
-          summary: "Pod 异常（warning）",
-          description: "演示告警：warning 路由",
-        },
-        startsAt: "2026-04-18T09:20:00Z",
-        endsAt: "0001-01-01T00:00:00Z",
-        generatorURL: "http://prometheus.example/graph?g0.expr=up",
-        fingerprint: "demo-warning-prod-001",
-      },
-    ],
-  },
-  critical_prod: {
-    receiver: "yunshu-webhook",
-    status: "firing",
-    alerts: [
-      {
-        status: "firing",
-        labels: {
-          alertname: "KubernetesNodeNotReady",
-          severity: "critical",
-          cluster: "prodK8s",
-          namespace: "kube-system",
-          node: "worker-1",
-        },
-        annotations: {
-          summary: "节点不可用（critical）",
-          description: "演示告警：critical 路由",
-        },
-        startsAt: "2026-04-18T09:21:00Z",
-        endsAt: "0001-01-01T00:00:00Z",
-        generatorURL: "http://prometheus.example/graph?g0.expr=node_ready",
-        fingerprint: "demo-critical-prod-001",
-      },
-    ],
-  },
-  resolved_prod: {
-    receiver: "yunshu-webhook",
-    status: "resolved",
-    alerts: [
-      {
-        status: "resolved",
-        labels: {
-          alertname: "KubernetesNodeNotReady",
-          severity: "critical",
-          cluster: "prodK8s",
-          namespace: "kube-system",
-          node: "worker-1",
-        },
-        annotations: {
-          summary: "节点恢复（resolved）",
-          description: "演示恢复通知",
-        },
-        startsAt: "2026-04-18T09:21:00Z",
-        endsAt: "2026-04-18T09:25:00Z",
-        generatorURL: "http://prometheus.example/graph?g0.expr=node_ready",
-        fingerprint: "demo-critical-prod-001",
-      },
-    ],
-  },
-};
-
-/** 从告警历史入库体中解析顶层 `labels`（与后端 hydrate 逻辑一致）。 */
-function parseLabelsFromAlertEventRequestPayload(raw?: string): Record<string, string> {
-  const s = String(raw || "").trim();
-  if (!s) return {};
-  try {
-    const payload = JSON.parse(s) as Record<string, unknown>;
-    const labels = payload?.labels;
-    if (labels && typeof labels === "object" && !Array.isArray(labels)) {
-      const out: Record<string, string> = {};
-      for (const [k, v] of Object.entries(labels as Record<string, unknown>)) {
-        const vs = String(v ?? "").trim();
-        if (vs && vs !== "<nil>") {
-          out[String(k).trim()] = vs;
-        }
-      }
-      return out;
-    }
-  } catch {
-    /* ignore */
-  }
-  return {};
-}
-
-function parseReceiverGroupChannelIds(g: AlertReceiverGroup): number[] {
-  if (Array.isArray(g.channel_ids) && g.channel_ids.length) {
-    return g.channel_ids.map((id) => Number(id)).filter((id) => id > 0);
-  }
-  try {
-    const parsed = JSON.parse(String(g.channel_ids_json || "[]")) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.map((id) => Number(id)).filter((id) => id > 0);
-    }
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function parseReceiverGroupEmails(g: AlertReceiverGroup): string[] {
-  if (Array.isArray(g.email_recipients) && g.email_recipients.length) {
-    return g.email_recipients.map((e) => String(e).trim()).filter(Boolean);
-  }
-  try {
-    const parsed = JSON.parse(String(g.email_recipients_json || "[]")) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.map((e) => String(e).trim()).filter(Boolean);
-    }
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function prettifyAlertRequestPayload(raw?: string): string {
-  const s = String(raw || "").trim();
-  if (!s) return "";
-  try {
-    return stringifyPrettyJSON(JSON.parse(s) as unknown, s);
-  } catch {
-    return s;
-  }
-}
 
 export function AlertConfigCenterPanel({
   activeTab: tab,

@@ -55,7 +55,6 @@ import {
   type CicdServiceItem,
 } from "../services/cicd";
 import {
-  getProjectServerDetail,
   getProjectServers,
   getProjects,
   type ProjectItem,
@@ -66,167 +65,25 @@ import { getUsers } from "../services/users";
 import type { UserItem } from "../types/api";
 import { useAuth } from "../contexts/auth-context";
 import { formatDateTime } from "../utils/format";
-
-function serviceTypeLabel(v: string) {
-  if (v === "frontend") return "前端服务";
-  if (v === "backend") return "后端服务";
-  return "容器化服务";
-}
-
-function buildResultColor(r?: string) {
-  if (r === "success") return "success";
-  if (r === "failure") return "error";
-  if (r === "running") return "processing";
-  return "default";
-}
-
-function ownerLabel(username: string | undefined, users: UserItem[]) {
-  if (!username) return "—";
-  const u = users.find((it) => it.username === username);
-  if (!u) return username;
-  return u.nickname ? `${u.nickname} (${u.username})` : u.username;
-}
-
-function ownerEmailPreview(username: string | undefined, users: UserItem[]) {
-  if (!username) return "";
-  const u = users.find((it) => it.username === username);
-  return String(u?.email || "").trim();
-}
-
-function cicdAccess(row: CicdServiceItem) {
-  return (
-    row.access ?? {
-      can_view: false,
-      can_build: false,
-      can_release: false,
-      can_manage: false,
-    }
-  );
-}
-
-function isSuperAdminUser(u: UserItem | null | undefined): boolean {
-  return Boolean(u?.roles?.some((r) => r.code === "super-admin"));
-}
-
-/** 与后端 projectacl.FullAccess 一致：超管或项目 owner/admin 可新建应用 */
-function canCreateCicdService(isSuper: boolean, myProjectRole: string | null | undefined): boolean {
-  if (isSuper) return true;
-  const r = String(myProjectRole || "").toLowerCase();
-  return r === "owner" || r === "admin";
-}
-
-const FRONTEND_RELEASE_OPS = [
-  { value: "frontend_online", label: "服务上线" },
-  { value: "frontend_rollback", label: "服务回滚" },
-] as const;
-
-const BACKEND_RELEASE_OPS = [
-  { value: "backend_initial", label: "服务初次部署" },
-  { value: "backend_update", label: "服务更新" },
-] as const;
-
-const CONTAINER_RELEASE_OPS = [
-  { value: "service_online", label: "服务上线" },
-  { value: "pod_update", label: "POD 更新" },
-  { value: "container_rollback", label: "回滚" },
-] as const;
-
-const K8S_DEPLOY_CONFIG_TYPES = [
-  { value: "使用deployment模板", label: "Deployment" },
-  { value: "使用statefulset模板", label: "StatefulSet" },
-  { value: "使用daemonset模板", label: "DaemonSet" },
-] as const;
-
-const K8S_DEPLOY_TEMPLATES = [
-  { value: "基础模板", label: "基础模板" },
-  { value: "通用微服务含skywalking", label: "通用微服务含 SkyWalking" },
-] as const;
-
-function releaseOpLabel(op: string) {
-  return [...FRONTEND_RELEASE_OPS, ...BACKEND_RELEASE_OPS, ...CONTAINER_RELEASE_OPS].find((o) => o.value === op)?.label ?? op;
-}
-
-function parseServerIds(json?: string): number[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json) as unknown;
-    return Array.isArray(parsed) ? parsed.map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0) : [];
-  } catch {
-    return [];
-  }
-}
-
-function serverOptionLabel(s: Pick<ServerItem, "name" | "host">) {
-  return `${s.name} (${s.host})`;
-}
-
-async function mergeServersWithSelected(
-  projectId: number,
-  list: ServerItem[],
-  selectedIds: number[],
-): Promise<{ servers: ServerItem[]; unresolvedIds: number[] }> {
-  const byId = new Map<number, ServerItem>();
-  for (const s of list) {
-    byId.set(Number(s.id), s);
-  }
-  const missing = selectedIds.filter((id) => !byId.has(id));
-  if (missing.length === 0) {
-    return { servers: list, unresolvedIds: [] };
-  }
-  // 探测请求不弹全局 toast，由调用方汇总成「发布主机」场景提示，避免重复弹窗
-  const details = await Promise.all(
-    missing.map((id) =>
-      getProjectServerDetail(projectId, id, { silentErrorToast: true }).catch(() => null),
-    ),
-  );
-  for (const d of details) {
-    if (d) {
-      byId.set(Number(d.id), d);
-    }
-  }
-  // 保持列表接口顺序，缺失的已选主机追加在末尾，便于回显名称
-  const merged = [...list];
-  const unresolvedIds: number[] = [];
-  for (const id of missing) {
-    const s = byId.get(id);
-    if (s && !merged.some((it) => Number(it.id) === id)) {
-      merged.push(s);
-    } else if (!s) {
-      unresolvedIds.push(id);
-    }
-  }
-  return { servers: merged, unresolvedIds };
-}
-
-function nodesStatusTag(status?: string) {
-  const s = status || "—";
-  const color =
-    s === "正常" || s === "启用"
-      ? "success"
-      : s === "部分异常"
-        ? "warning"
-        : s === "异常" || s === "已停用"
-          ? "error"
-          : "default";
-  return <Tag color={color}>{s}</Tag>;
-}
-
-function defaultCiFormValues(svc: CicdServiceItem) {
-  const isFront = svc.service_type === "frontend";
-  return {
-    ref_type: "branch",
-    ref_name: "main",
-    language_type: isFront ? "frontend" : "custom",
-    build_type: isFront ? "npm" : "mvn",
-    build_shell: isFront ? "run build" : "clean package -DskipTests",
-    build_path: isFront ? "dist" : "target",
-    npm_install_mode: "install",
-    node_version: "node24",
-    java_tool_name: "jdk8",
-    project_name: svc.identifier,
-    description: svc.name,
-  };
-}
+// RF-09 拆分：常量/权限/展示/主机/表单默认值已下沉到 ./cicd 下同名模块，本文件只保留页面编排
+import { canCreateCicdService, cicdAccess, isSuperAdminUser } from "./cicd/access";
+import {
+  BACKEND_RELEASE_OPS,
+  CONTAINER_RELEASE_OPS,
+  FRONTEND_RELEASE_OPS,
+  K8S_DEPLOY_CONFIG_TYPES,
+  K8S_DEPLOY_TEMPLATES,
+  releaseOpLabel,
+} from "./cicd/release-ops";
+import {
+  buildResultColor,
+  nodesStatusTag,
+  ownerEmailPreview,
+  ownerLabel,
+  serviceTypeLabel,
+} from "./cicd/display";
+import { mergeServersWithSelected, parseServerIds, serverOptionLabel } from "./cicd/servers";
+import { defaultCiFormValues } from "./cicd/form-defaults";
 
 export function CicdServicesPage() {
   const { user: currentUser } = useAuth();

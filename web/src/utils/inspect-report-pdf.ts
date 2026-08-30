@@ -13,11 +13,18 @@ async function fetchReportHtml(apiPath: string): Promise<string> {
   throw new Error("无法读取 HTML 报告内容");
 }
 
+/**
+ * 离屏 iframe 的渲染宽度（px）。
+ * 报告模板按 960px 主栏设计，A4 竖版按此宽度缩放后正文约 10.5pt，
+ * 用 1200px 渲染再压到 194mm 会让字号偏小、表格更容易挤在一起。
+ */
+const RENDER_WIDTH_PX = 960;
+
 function mountHtmlInIframe(html: string): { cleanup: () => void; root: HTMLElement } {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
-    "position:fixed;left:0;top:0;width:1200px;height:100%;border:0;z-index:-1;opacity:0;pointer-events:none;";
+    `position:fixed;left:0;top:0;width:${RENDER_WIDTH_PX}px;height:100%;border:0;z-index:-1;opacity:0;pointer-events:none;`;
   document.body.appendChild(iframe);
   const doc = iframe.contentDocument;
   if (!doc) {
@@ -64,8 +71,11 @@ export async function downloadInspectReportPdf(
   const html = await fetchReportHtml(apiHtmlPath);
   const { root, cleanup } = mountHtmlInIframe(html);
   try {
-    const blob = await renderElementAsPdfBlob(root, "landscape", 1.5);
+    // 竖版 + scale 2：巡检报告是纵向长文档，横版会让每页只剩两三行表格；
+    // scale 2 让 300 dpi 打印下的中文不发虚。
+    const blob = await renderElementAsPdfBlob(root, "portrait", 2);
     downloadBlob(blob, filename);
+
     const runMatch = apiHtmlPath.match(/\/runs\/(\d+)\//);
     const runId = runMatch ? Number(runMatch[1]) : 0;
     if (projectId > 0 && runId > 0) {

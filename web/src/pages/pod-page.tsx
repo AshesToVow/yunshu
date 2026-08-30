@@ -21,6 +21,13 @@ import { analyzePodDiagnoseAI, type AIPodDiagnoseResult } from "../services/ai";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
 import { POD_CREATE_YAML_TEMPLATE } from "./pod/pod-create-template";
+import {
+  buildPodAffinityPayload,
+  buildPodPairs,
+  buildPodTolerationsPayload,
+  podAffinityToForm,
+  type PodSimpleFormValues,
+} from "./pod/pod-form-payload";
 import { usePodExec } from "./pod/use-pod-exec";
 
 export function PodPage() {
@@ -96,71 +103,7 @@ export function PodPage() {
   const [creating, setCreating] = useState(false);
   const [simpleMode, setSimpleMode] = useState<"create" | "edit">("create");
   const [editTarget, setEditTarget] = useState<PodItem | null>(null);
-  const [simpleForm] = Form.useForm<{
-    name: string;
-    image: string;
-    command?: string;
-    container_name?: string;
-    image_pull_policy?: "Always" | "IfNotPresent" | "Never";
-    restart_policy?: "Always" | "OnFailure" | "Never";
-    port?: number;
-    env_pairs?: Array<{ key?: string; value?: string }>;
-    label_pairs?: Array<{ key?: string; value?: string }>;
-    requests_cpu?: string;
-    requests_memory?: string;
-    limits_cpu?: string;
-    limits_memory?: string;
-    tolerations?: Array<{
-      key?: string;
-      operator?: "Equal" | "Exists";
-      value?: string;
-      effect?: "NoSchedule" | "PreferNoSchedule" | "NoExecute";
-      toleration_seconds?: number;
-    }>;
-    node_selector_pairs?: Array<{ key?: string; value?: string }>;
-    priority_class_name?: string;
-    affinity?: {
-      node?: {
-        required?: Array<{
-          match_expressions?: Array<{
-            key?: string;
-            operator?: "In" | "NotIn" | "Exists" | "DoesNotExist" | "Gt" | "Lt";
-            values?: string[];
-          }>;
-        }>;
-        preferred?: Array<{
-          weight?: number;
-          match_expressions?: Array<{
-            key?: string;
-            operator?: "In" | "NotIn" | "Exists" | "DoesNotExist" | "Gt" | "Lt";
-            values?: string[];
-          }>;
-        }>;
-      };
-      pod?: {
-        required?: Array<{
-          match_labels?: Array<{ key?: string; value?: string }>;
-          topology_key?: string;
-        }>;
-        preferred?: Array<{
-          weight?: number;
-          match_labels?: Array<{ key?: string; value?: string }>;
-          topology_key?: string;
-        }>;
-      };
-      pod_anti?: {
-        required?: Array<{
-          match_labels?: Array<{ key?: string; value?: string }>;
-          topology_key?: string;
-        }>;
-        preferred?: Array<{
-          weight?: number;
-          match_labels?: Array<{ key?: string; value?: string }>;
-          topology_key?: string;
-        }>;
-      };
-    };
-  }>();
+  const [simpleForm] = Form.useForm<PodSimpleFormValues>();
   const [yamlForm] = Form.useForm<{ manifest: string }>();
 
   const loadPods = useCallback(async (overrideKeyword?: string) => {
@@ -458,130 +401,10 @@ export function PodPage() {
   async function submitCreateSimple() {
     if (!clusterId) return;
     const values = await simpleForm.validateFields();
-    const env: Record<string, string> = {};
-    const labels: Record<string, string> = {};
-    const nodeSelector: Record<string, string> = {};
-    (values.env_pairs || []).forEach((item) => {
-      const k = (item?.key || "").trim();
-      const v = (item?.value || "").trim();
-      if (k) env[k] = v;
-    });
-    (values.label_pairs || []).forEach((item) => {
-      const k = (item?.key || "").trim();
-      const v = (item?.value || "").trim();
-      if (k) labels[k] = v;
-    });
-    (values.node_selector_pairs || []).forEach((item) => {
-      const k = (item?.key || "").trim();
-      const v = (item?.value || "").trim();
-      if (k) nodeSelector[k] = v;
-    });
-    let affinityObj: Record<string, unknown> | undefined;
-    if (values.affinity) {
-      const a = values.affinity;
-      const nodeRequiredTerms =
-        a.node?.required
-          ?.map((t) => ({
-            matchExpressions: (t.match_expressions || [])
-              .map((e) => ({
-                key: (e.key || "").trim(),
-                operator: e.operator,
-                values: (e.values || []).map((v) => String(v).trim()).filter(Boolean),
-              }))
-              .filter((e) => e.key && e.operator),
-          }))
-          .filter((t) => t.matchExpressions.length > 0) || [];
-
-      const nodePreferred =
-        a.node?.preferred
-          ?.map((p) => ({
-            weight: Math.min(100, Math.max(1, Number(p.weight || 1))),
-            preference: {
-              matchExpressions: (p.match_expressions || [])
-                .map((e) => ({
-                  key: (e.key || "").trim(),
-                  operator: e.operator,
-                  values: (e.values || []).map((v) => String(v).trim()).filter(Boolean),
-                }))
-                .filter((e) => e.key && e.operator),
-            },
-          }))
-          .filter((p) => p.preference.matchExpressions.length > 0) || [];
-
-      const buildPodAffinityTerms = (
-        list?: Array<{ match_labels?: Array<{ key?: string; value?: string }>; topology_key?: string }>,
-      ) =>
-        (list || [])
-          .map((it) => {
-            const labels = (it.match_labels || [])
-              .map((kv) => ({ key: (kv.key || "").trim(), value: (kv.value || "").trim() }))
-              .filter((kv) => kv.key);
-            const matchLabels: Record<string, string> = {};
-            labels.forEach((kv) => {
-              matchLabels[kv.key] = kv.value;
-            });
-            const topologyKey = (it.topology_key || "").trim();
-            if (!topologyKey || Object.keys(matchLabels).length === 0) return null;
-            return {
-              labelSelector: { matchLabels },
-              topologyKey,
-            };
-          })
-          .filter(Boolean);
-
-      const buildPodPreferredTerms = (
-        list?: Array<{ weight?: number; match_labels?: Array<{ key?: string; value?: string }>; topology_key?: string }>,
-      ) =>
-        (list || [])
-          .map((it) => {
-            const labels = (it.match_labels || [])
-              .map((kv) => ({ key: (kv.key || "").trim(), value: (kv.value || "").trim() }))
-              .filter((kv) => kv.key);
-            const matchLabels: Record<string, string> = {};
-            labels.forEach((kv) => {
-              matchLabels[kv.key] = kv.value;
-            });
-            const topologyKey = (it.topology_key || "").trim();
-            if (!topologyKey || Object.keys(matchLabels).length === 0) return null;
-            return {
-              weight: Math.min(100, Math.max(1, Number(it.weight || 1))),
-              podAffinityTerm: {
-                labelSelector: { matchLabels },
-                topologyKey,
-              },
-            };
-          })
-          .filter(Boolean);
-
-      const podRequired = buildPodAffinityTerms(a.pod?.required);
-      const podPreferred = buildPodPreferredTerms(a.pod?.preferred);
-      const podAntiRequired = buildPodAffinityTerms(a.pod_anti?.required);
-      const podAntiPreferred = buildPodPreferredTerms(a.pod_anti?.preferred);
-
-      const affinity: any = {};
-      if (nodeRequiredTerms.length > 0 || nodePreferred.length > 0) {
-        affinity.nodeAffinity = {};
-        if (nodeRequiredTerms.length > 0) {
-          affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution = {
-            nodeSelectorTerms: nodeRequiredTerms,
-          };
-        }
-        if (nodePreferred.length > 0) {
-          affinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution = nodePreferred;
-        }
-      }
-      if ((podRequired as any[]).length > 0 || (podPreferred as any[]).length > 0) {
-        affinity.podAffinity = {};
-        if ((podRequired as any[]).length > 0) affinity.podAffinity.requiredDuringSchedulingIgnoredDuringExecution = podRequired;
-        if ((podPreferred as any[]).length > 0) affinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution = podPreferred;
-      }
-      if ((podAntiRequired as any[]).length > 0 || (podAntiPreferred as any[]).length > 0) {
-        affinity.podAntiAffinity = {};
-        if ((podAntiRequired as any[]).length > 0) affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution = podAntiRequired;
-        if ((podAntiPreferred as any[]).length > 0) affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution = podAntiPreferred;
-      }
-      if (Object.keys(affinity).length > 0) affinityObj = affinity;
-    }
+    const env = buildPodPairs(values.env_pairs);
+    const labels = buildPodPairs(values.label_pairs);
+    const nodeSelector = buildPodPairs(values.node_selector_pairs);
+    const affinityObj = buildPodAffinityPayload(values.affinity);
     setCreating(true);
     try {
       const payload = {
@@ -603,15 +426,7 @@ export function PodPage() {
         node_selector: Object.keys(nodeSelector).length > 0 ? nodeSelector : undefined,
         priority_class_name: values.priority_class_name,
         affinity: affinityObj,
-        tolerations: (values.tolerations || [])
-          .filter((item) => (item.key || "").trim() !== "")
-          .map((item) => ({
-            key: (item.key || "").trim(),
-            operator: item.operator || "Equal",
-            value: (item.value || "").trim(),
-            effect: item.effect,
-            toleration_seconds: item.toleration_seconds,
-          })),
+        tolerations: buildPodTolerationsPayload(values.tolerations),
       };
       if (simpleMode === "edit") {
         await updatePodSimple(payload);
@@ -644,64 +459,7 @@ export function PodPage() {
       label_pairs: Object.entries(d.labels || {}).map(([key, value]) => ({ key, value })),
       node_selector_pairs: Object.entries(d.node_selector || {}).map(([key, value]) => ({ key, value })),
       priority_class_name: d.priority_class_name || "",
-      affinity: (() => {
-        const a: any = d.affinity || {};
-        const out: any = {};
-        if (a.nodeAffinity) {
-          const na: any = {};
-          const reqTerms = a.nodeAffinity?.requiredDuringSchedulingIgnoredDuringExecution?.nodeSelectorTerms || [];
-          na.required = reqTerms.map((t: any) => ({
-            match_expressions: (t.matchExpressions || []).map((e: any) => ({
-              key: e.key,
-              operator: e.operator,
-              values: e.values || [],
-            })),
-          }));
-          const pref = a.nodeAffinity?.preferredDuringSchedulingIgnoredDuringExecution || [];
-          na.preferred = pref.map((p: any) => ({
-            weight: p.weight,
-            match_expressions: (p.preference?.matchExpressions || []).map((e: any) => ({
-              key: e.key,
-              operator: e.operator,
-              values: e.values || [],
-            })),
-          }));
-          out.node = na;
-        }
-        function parsePodTerms(list: any[]) {
-          return (list || []).map((t: any) => {
-            const ml = t.labelSelector?.matchLabels || {};
-            return {
-              topology_key: t.topologyKey,
-              match_labels: Object.entries(ml).map(([key, value]) => ({ key, value })),
-            };
-          });
-        }
-        function parsePodPreferred(list: any[]) {
-          return (list || []).map((p: any) => {
-            const term = p.podAffinityTerm || {};
-            const ml = term.labelSelector?.matchLabels || {};
-            return {
-              weight: p.weight,
-              topology_key: term.topologyKey,
-              match_labels: Object.entries(ml).map(([key, value]) => ({ key, value })),
-            };
-          });
-        }
-        if (a.podAffinity) {
-          out.pod = {
-            required: parsePodTerms(a.podAffinity.requiredDuringSchedulingIgnoredDuringExecution || []),
-            preferred: parsePodPreferred(a.podAffinity.preferredDuringSchedulingIgnoredDuringExecution || []),
-          };
-        }
-        if (a.podAntiAffinity) {
-          out.pod_anti = {
-            required: parsePodTerms(a.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution || []),
-            preferred: parsePodPreferred(a.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution || []),
-          };
-        }
-        return out;
-      })(),
+      affinity: podAffinityToForm(d.affinity),
       tolerations: (d.tolerations || []).map((t) => ({
         key: t.key,
         operator: t.operator,

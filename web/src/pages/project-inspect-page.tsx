@@ -39,7 +39,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { DashboardStatCard } from "../components/ops/dashboard-stat-card";
 import { LineChart } from "../components/line-chart";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
-import { CHART_BRAND, CHART_ERROR, CHART_SUCCESS, CHART_WARNING } from "../constants/chart-colors";
+import { CHART_BRAND, CHART_ERROR, CHART_SUCCESS } from "../constants/chart-colors";
 import { listAlertDatasources, type AlertDatasourceItem } from "../services/alert-platform";
 import {
   createInspectItem,
@@ -49,8 +49,6 @@ import {
   getInspectPlan,
   getInspectStorageInfo,
   inspectReportExcelUrl,
-  checkInspectReportPdf,
-  inspectReportPdfUrl,
   inspectReportHtmlUrl,
   inspectReportPrintUrl,
   listInspectItems,
@@ -73,151 +71,22 @@ import {
   type InspectRunTrendItem,
   type InspectStorageInfo,
 } from "../services/inspect";
-import { extractApiErrorMessage, http } from "../services/http";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
-
-const CRON_PRESETS = [
-  { label: "每天 09:00", value: "0 0 9 * * *" },
-  { label: "每天 02:00", value: "0 0 2 * * *" },
-  { label: "每天 18:00", value: "0 0 18 * * *" },
-  { label: "每 6 小时", value: "0 0 */6 * * *" },
-  { label: "每周一 09:00", value: "0 0 9 * * 1" },
-  { label: "每周一 02:00", value: "0 0 2 * * 1" },
-];
-
-const THRESHOLD_TYPE_OPTIONS = [
-  { label: "大于 (>)", value: "greater" },
-  { label: "大于等于 (≥)", value: "greater_equal" },
-  { label: "小于 (<)", value: "less" },
-  { label: "小于等于 (≤)", value: "less_equal" },
-  { label: "等于 (=)", value: "equal" },
-  { label: "不等于 (≠)", value: "not_equal" },
-];
-
-const THRESHOLD_TYPE_LABEL: Record<string, string> = Object.fromEntries(
-  THRESHOLD_TYPE_OPTIONS.map((o) => [o.value, o.label]),
-);
-
-function statusMeta(status?: string): { color: string; label: string } {
-  switch (status) {
-    case "success":
-      return { color: "success", label: "成功" };
-    case "failed":
-      return { color: "error", label: "失败" };
-    case "running":
-      return { color: "processing", label: "执行中" };
-    case "pending":
-      return { color: "default", label: "排队中" };
-    default:
-      return { color: "default", label: status || "-" };
-  }
-}
-
-function triggerLabel(trigger?: string) {
-  if (trigger === "cron") return "定时";
-  if (trigger === "manual") return "手动";
-  return trigger || "-";
-}
-
-function gradeColor(grade?: string) {
-  switch (grade) {
-    case "A":
-      return CHART_SUCCESS;
-    case "B":
-      return CHART_BRAND;
-    case "C":
-      return CHART_WARNING;
-    case "D":
-      return CHART_ERROR;
-    default:
-      return CHART_BRAND;
-  }
-}
-
-function parseRecipients(raw?: string): string[] {
-  if (!raw) return [];
-  try {
-    const v = JSON.parse(raw);
-    return Array.isArray(v) ? v.map(String) : [];
-  } catch {
-    return raw.split(",").map((s) => s.trim()).filter(Boolean);
-  }
-}
-
-function toReportBlob(raw: unknown, type: string): Blob {
-  if (raw instanceof Blob) return raw;
-  if (raw && typeof raw === "object" && "data" in raw) {
-    const inner = (raw as { data: unknown }).data;
-    if (inner instanceof Blob) return inner;
-    if (typeof inner === "string" || inner instanceof ArrayBuffer || ArrayBuffer.isView(inner)) {
-      return new Blob([inner as BlobPart], { type });
-    }
-  }
-  if (typeof raw === "string" || raw instanceof ArrayBuffer || ArrayBuffer.isView(raw)) {
-    return new Blob([raw as BlobPart], { type });
-  }
-  return new Blob([], { type });
-}
-
-function openAuthorized(url: string) {
-  void http
-    .get(url, { responseType: "blob" })
-    .then((raw: unknown) => {
-      const type = url.endsWith(".pdf")
-        ? "application/pdf"
-        : url.endsWith(".xlsx")
-          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          : "text/html;charset=utf-8";
-      const blob = toReportBlob(raw, type);
-      const obj = URL.createObjectURL(blob);
-      window.open(obj, "_blank");
-      setTimeout(() => URL.revokeObjectURL(obj), 60_000);
-    })
-    .catch((e) => message.error(extractApiErrorMessage(e, "打开报告失败")));
-}
-
-function downloadBlobFile(blob: Blob, filename: string) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-}
-
-function downloadInspectPdf(projectId: number, runId: number) {
-  const key = "inspect-pdf";
-  message.loading({ content: "正在准备 PDF…", key, duration: 0 });
-  void (async () => {
-    try {
-      const st = await checkInspectReportPdf(projectId, runId);
-      if (st.exists) {
-        const raw: unknown = await http.get(inspectReportPdfUrl(projectId, runId), {
-          responseType: "blob",
-          timeout: 120_000,
-        });
-        downloadBlobFile(toReportBlob(raw, "application/pdf"), `inspect-run-${runId}.pdf`);
-        message.success({ content: "PDF 已下载", key });
-        return;
-      }
-      const { downloadInspectReportPdf } = await import("../utils/inspect-report-pdf");
-      await downloadInspectReportPdf(projectId, inspectReportHtmlUrl(projectId, runId), `inspect-run-${runId}.pdf`);
-      message.success({ content: "PDF 已生成并保存（与 HTML 样式一致）", key });
-    } catch (e) {
-      message.error({ content: extractApiErrorMessage(e, "生成 PDF 失败"), key });
-    }
-  })();
-}
-
-function storageLabel(storage?: string) {
-  const s = (storage || "local").toLowerCase();
-  if (s === "minio") return "MinIO";
-  return "本地";
-}
-
-function storageColor(storage?: string) {
-  return (storage || "local").toLowerCase() === "minio" ? "blue" : "default";
-}
+// RF-10 拆分：常量/展示映射与报告下载已下沉，本文件只保留页面编排
+import {
+  CRON_PRESETS,
+  THRESHOLD_TYPE_LABEL,
+  THRESHOLD_TYPE_OPTIONS,
+  gradeColor,
+  parseRecipients,
+  statusMeta,
+  storageColor,
+  storageLabel,
+  triggerLabel,
+} from "./inspect/display";
+import { downloadInspectPdf, openAuthorized, toReportBlob } from "../utils/inspect-report-download";
 
 export function ProjectInspectPage() {
   const [searchParams, setSearchParams] = useSearchParams();

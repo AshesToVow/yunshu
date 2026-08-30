@@ -7,7 +7,6 @@ import {
   Divider,
   Empty,
   Form,
-  Input,
   Modal,
   Popconfirm,
   Segmented,
@@ -42,32 +41,14 @@ import { getUsers } from "../services/users";
 import { listUserGroups } from "../services/user-groups";
 import type { RoleItem, UserItem } from "../types/api";
 import type { UserGroupItem } from "../services/user-groups";
-
-type SubjectKind = "role" | "group" | "user";
-
-const PRESET_CAPS: Record<"readonly" | "readonly_exec" | "admin", string[]> = {
-  readonly: ["read"],
-  readonly_exec: ["read", "exec"],
-  admin: ["read", "exec", "restart", "scale", "apply", "delete", "secret_reveal", "destructive"],
-};
-
-type BootstrapPref = {
-  kind?: SubjectKind;
-  roleId?: number;
-  groupId?: number;
-  userId?: number;
-};
-
-function subjectPrincipalRef(
-  kind: SubjectKind,
-  role: RoleItem | null,
-  group: UserGroupItem | null,
-  userId?: number,
-): string {
-  if (kind === "role") return role?.code ?? "";
-  if (kind === "group") return group?.code ?? "";
-  return userId != null && userId > 0 ? String(userId) : "";
-}
+import {
+  PRESET_CAPS,
+  presetLabel,
+  renderCapabilityTags,
+  subjectPrincipalRef,
+  type BootstrapPref,
+  type SubjectKind,
+} from "./k8s-policies/scoped-subject";
 
 export function K8sScopedPoliciesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -301,33 +282,6 @@ export function K8sScopedPoliciesPage() {
     } finally {
       setDenyLoading(false);
     }
-  }
-
-  function presetLabel(p: string) {
-    switch (p) {
-      case "readonly":
-        return "只读";
-      case "readonly_exec":
-        return "只读+Exec";
-      case "admin":
-        return "集群管理";
-      case "custom":
-        return "自定义能力包";
-      default:
-        return p;
-    }
-  }
-
-  function renderCapabilityTags(codes?: string[]) {
-    const list = Array.isArray(codes) ? codes : [];
-    if (list.length === 0) return <span className="inline-muted">—</span>;
-    return (
-      <Space size={[4, 4]} wrap>
-        {list.map((code) => (
-          <Tag key={code}>{capNameByCode.get(code) || code}</Tag>
-        ))}
-      </Space>
-    );
   }
 
   return (
@@ -727,7 +681,7 @@ export function K8sScopedPoliciesPage() {
                   {
                     title: "能力包",
                     dataIndex: "capabilities",
-                    render: (v: string[] | undefined) => renderCapabilityTags(v),
+                    render: (v: string[] | undefined) => renderCapabilityTags(v, capNameByCode),
                   },
                   {
                     title: "操作",

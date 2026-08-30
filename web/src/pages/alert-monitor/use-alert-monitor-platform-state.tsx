@@ -1,212 +1,95 @@
 import {
-  ApiOutlined,
   DeleteOutlined,
   EditOutlined,
   CalendarOutlined,
-  MinusCircleOutlined,
-  PlusOutlined,
-  ReloadOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import type { TreeSelectProps } from "antd";
 import { extractApiErrorMessage } from "../../services/http";
 import {
-  Alert,
-  AutoComplete,
-  Badge,
   Button,
-  Calendar,
-  Card,
-  Col,
-  Collapse,
-  DatePicker,
-  Drawer,
   Form,
-  Input,
-  InputNumber,
   Popconfirm,
-  Radio,
-  Row,
-  Segmented,
-  Select,
   Space,
-  Switch,
-  Table,
-  Tabs,
   Tag,
-  TreeSelect,
-  Typography,
   message,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { getDepartmentTree } from "../../services/departments";
 import { getProjects, type ProjectItem } from "../../services/projects";
 import { getUsers } from "../../services/users";
 import { DEFAULT_PAGE_SIZE } from "../../utils/table-pagination";
 import {
-  createAlertDatasource,
   createAlertMonitorRule,
-  createAlertSilence,
-  createAlertSilencesBatch,
-  createCloudExpiryRule,
   createDutyBlock,
-  deleteAlertDatasource,
   deleteAlertMonitorRule,
-  deleteAlertSilence,
-  deleteCloudExpiryRule,
   deleteDutyBlock,
-  evaluateCloudExpiryRulesNow,
   getMonitorRuleAssignees,
-  listAlertDatasources,
   listAlertMonitorRules,
-  listAlertSilences,
-  listCloudExpiryRules,
   listDutyBlocks,
-  pingAlertDatasource,
-  promActiveAlerts,
   promInstantQuery,
-  promRangeQuery,
-  updateAlertDatasource,
   updateAlertMonitorRule,
-  updateAlertSilence,
-  updateCloudExpiryRule,
   updateDutyBlock,
   upsertMonitorRuleAssignees,
-  type AlertDatasourceItem,
   type AlertDutyBlockItem,
   type AlertMonitorRuleItem,
-  type AlertSilenceItem,
-  type CloudExpiryRuleItem,
 } from "../../services/alert-platform";
 import { stringifyPrettyJSON } from "../../services/alert-mappers";
 import { useDictOptions } from "../../hooks/use-dict-options";
 import type { UserUpdatePayload } from "../../types/api";
 import { getUser, updateUser } from "../../services/users";
 import { formatDateTime } from "../../utils/format";
-import type { AlertEventCategory } from "../../utils/alert-event-reasons";
-import { parseLabelMap } from "../../utils/alert-recipient-reason";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { normalizeAlertMonitorTab, tabPathForKey, type AlertMonitorTabKey } from "./tab-config";
+
+import { useAlertMonitorUrlState } from "./state/use-alert-monitor-url-state";
+import { useAlertMonitorCloudExpiryState } from "./state/use-cloud-expiry-state";
+import { useAlertMonitorDatasourceState } from "./state/use-datasource-state";
+import { useAlertMonitorPromqlConsoleState } from "./state/use-promql-console-state";
+import { useAlertMonitorSilenceState } from "./state/use-silence-state";
 import { deptToTreeData, normalizeCloudExpiryLabelsJSON } from "./platform-helpers";
+
 import type {
-  AlertmanagerSilenceRow,
   MetricLabelFilter,
-  PromNativeAlertRow,
-  QuickSilenceTarget,
   RuleBuilderCondition,
   RuleBuilderLogic,
   RuleComparator,
-  SilenceDisplayRow,
-  SilenceMatcherForm,
 } from "./platform-provider-types";
 import {
   buildPromSelectorExpr,
-  buildPromTableView,
   detectPromFunctionKeyFromExpr,
-  formatPromScalarSummary,
   isValidPromLabelKey,
-  parsePrometheusActiveAlertsTable,
   parsePromSelectorExpr,
   unwrapPrometheusQueryData,
 } from "./prom-parse";
 import { buildRuleExprByConditions, parseRuleBuilderExpr, parseTemplatePresetPair } from "./rule-parse";
-import {
-  buildMatchersByLabels,
-  parseSilenceMatchersForForm,
-  toQuickSilenceTarget,
-} from "./silence-parse";
 
 dayjs.locale("zh-cn");
 
 
 export function useAlertMonitorPlatformState() {
-  const navigate = useNavigate();
-  const { tab: tabParam } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const projectContextId = useMemo(() => {
-    const raw = String(searchParams.get("project_id") || "").trim();
-    if (!raw) return undefined;
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) return undefined;
-    return n;
-  }, [searchParams]);
-  const historyEventCategory = useMemo((): AlertEventCategory | undefined => {
-    const raw = String(searchParams.get("event_category") || "").trim().toLowerCase();
-    const allowed: AlertEventCategory[] = [
-      "delivery",
-      "routing",
-      "silence",
-      "inhibition",
-      "timing",
-      "resolved",
-      "failure",
-      "other",
-    ];
-    return (allowed as string[]).includes(raw) ? (raw as AlertEventCategory) : undefined;
-  }, [searchParams]);
+  // URL/路由派生状态（Tab、项目上下文、历史事件分类、历史 URL 兼容）
+  // 已抽到 state/use-alert-monitor-url-state.ts，返回字段名保持不变
+  const {
+    tab,
+    setTab,
+    projectContextId,
+    setProjectContext,
+    historyEventCategory,
+    openHistoryTab,
+  } = useAlertMonitorUrlState();
 
-  const tab: AlertMonitorTabKey = useMemo(() => normalizeAlertMonitorTab(tabParam), [tabParam]);
 
-  useEffect(() => {
-    const legacyTab = searchParams.get("tab");
-    if (!legacyTab || tabParam) return;
-    let next = normalizeAlertMonitorTab(legacyTab);
-    if (legacyTab === "config" && searchParams.get("cfg") === "history") {
-      next = "history";
-    }
-    const qs = new URLSearchParams(searchParams);
-    qs.delete("tab");
-    qs.delete("cfg");
-    const tail = qs.toString();
-    const path = tabPathForKey(next);
-    navigate(tail ? `${path}?${tail}` : path, { replace: true });
-  }, [navigate, searchParams, tabParam]);
+  // 数据源 Hook 与 PromQL 控制台 Hook 互为依赖（前者加载完要为控制台预选数据源，
+  // 后者又要按 dsList 做「当前选中项已失效」兜底），用 ref 转发 setter 打破 Hook
+  // 调用顺序上的环；行为与拆分前主 Hook 内直接调用 setPromDsId 完全一致。
+  const setPromDsIdRef = useRef<Dispatch<SetStateAction<number | undefined>> | null>(null);
+  const applyDefaultPromDatasource = useCallback((firstDatasourceId?: number) => {
+    setPromDsIdRef.current?.((prev) => prev ?? firstDatasourceId);
+  }, []);
 
-  function setTab(key: AlertMonitorTabKey) {
-    const qs = new URLSearchParams(searchParams);
-    if (key === "policies") {
-      qs.delete("project_id");
-    }
-    const tail = qs.toString();
-    const path = tabPathForKey(key);
-    navigate(tail ? `${path}?${tail}` : path, { replace: true });
-  }
-
-  useEffect(() => {
-    if (tab !== "policies") return;
-    if (!searchParams.has("project_id")) return;
-    setSearchParams(
-      (prev) => {
-        const p = new URLSearchParams(prev);
-        p.delete("project_id");
-        return p;
-      },
-      { replace: true },
-    );
-  }, [tab, searchParams, setSearchParams]);
-
-  function setProjectContext(projectID?: number) {
-    setSearchParams(
-      (prev) => {
-        const p = new URLSearchParams(prev);
-        if (projectID && Number.isFinite(projectID) && projectID > 0) p.set("project_id", String(projectID));
-        else p.delete("project_id");
-        return p;
-      },
-      { replace: true },
-    );
-  }
-
-  function openHistoryTab() {
-    setTab("history");
-  }
-
-  const [dsList, setDsList] = useState<AlertDatasourceItem[]>([]);
-  const [silenceList, setSilenceList] = useState<AlertSilenceItem[]>([]);
   const [ruleList, setRuleList] = useState<AlertMonitorRuleItem[]>([]);
   /** 监控规则列表：全部 / 仅启用 / 仅停用 */
   const [ruleEnabledFilter, setRuleEnabledFilter] = useState<"all" | "enabled" | "disabled">("all");
@@ -221,7 +104,6 @@ export function useAlertMonitorPlatformState() {
     filter: "all" as "all" | "enabled" | "disabled",
   });
   ruleQueryRef.current = { page: rulePage, pageSize: rulePageSize, filter: ruleEnabledFilter };
-  const [cloudExpiryList, setCloudExpiryList] = useState<CloudExpiryRuleItem[]>([]);
   const [blockList, setBlockList] = useState<AlertDutyBlockItem[]>([]);
   const [dutyRuleId, setDutyRuleId] = useState<number | null>(null);
   const [dutyModalOpen, setDutyModalOpen] = useState(false);
@@ -234,17 +116,6 @@ export function useAlertMonitorPlatformState() {
   const [users, setUsers] = useState<Array<{ label: string; value: number }>>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [deptTree, setDeptTree] = useState<TreeSelectProps["treeData"]>([]);
-
-  const [dsModalOpen, setDsModalOpen] = useState(false);
-  const [dsCurrent, setDsCurrent] = useState<AlertDatasourceItem | null>(null);
-  const [dsForm] = Form.useForm();
-  const [dsSubmitting, setDsSubmitting] = useState(false);
-  const [dsPingId, setDsPingId] = useState<number | null>(null);
-
-  const [silModalOpen, setSilModalOpen] = useState(false);
-  const [silCurrent, setSilCurrent] = useState<AlertSilenceItem | null>(null);
-  const [silForm] = Form.useForm();
-  const [silSubmitting, setSilSubmitting] = useState(false);
 
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [ruleCurrent, setRuleCurrent] = useState<AlertMonitorRuleItem | null>(null);
@@ -271,51 +142,90 @@ export function useAlertMonitorPlatformState() {
   const [dutyProfileOriginal, setDutyProfileOriginal] = useState<{ email: string; department_id?: number } | null>(null);
   const [dutyUsersHint, setDutyUsersHint] = useState<string>("");
 
-  const [cloudExpiryModalOpen, setCloudExpiryModalOpen] = useState(false);
-  const [cloudExpiryCurrent, setCloudExpiryCurrent] = useState<CloudExpiryRuleItem | null>(null);
-  const [cloudExpiryForm] = Form.useForm();
-  const [cloudExpirySubmitting, setCloudExpirySubmitting] = useState(false);
-  const [cloudExpiryEvaluating, setCloudExpiryEvaluating] = useState(false);
-  const [cloudExpiryProviderFilter, setCloudExpiryProviderFilter] = useState<string>("");
-  const [cloudExpiryKeyword, setCloudExpiryKeyword] = useState<string>("");
+  // 云资源到期规则（cloud-expiry Tab）：状态与操作已下沉到 state/use-cloud-expiry-state.tsx
+  // 返回字段名保持不变，`loadCloudExpiryRules` 仍由本文件的 Tab 副作用统一调用
+  const {
+    cloudExpiryColumns,
+    cloudExpiryCurrent,
+    cloudExpiryEvaluating,
+    cloudExpiryForm,
+    cloudExpiryKeyword,
+    cloudExpiryList,
+    cloudExpiryModalOpen,
+    cloudExpiryProviderFilter,
+    cloudExpirySubmitting,
+    loadCloudExpiryRules,
+    openCloudExpiryCreate,
+    runCloudExpiryEvalNow,
+    setCloudExpiryKeyword,
+    setCloudExpiryModalOpen,
+    setCloudExpiryProviderFilter,
+    submitCloudExpiryRule,
+  } = useAlertMonitorCloudExpiryState({ projectContextId, projects });
 
   const alertSeverityOpts = useDictOptions("alert_severity");
-  const dsUrlDictOpts = useDictOptions("alert_datasource_base_url");
-  const dsBasicUserDictOpts = useDictOptions("alert_datasource_basic_user");
   const promqlLabelKeyOpts = useDictOptions("alert_promql_label_key");
   const thresholdUnitDictOpts = useDictOptions("alert_threshold_unit");
   const ruleTemplatePresetDictOpts = useDictOptions("alert_rule_template_preset");
-  const dsUrlAutoOpts = useMemo(
-    () => dsUrlDictOpts.map((o) => ({ label: o.label, value: String(o.value) })),
-    [dsUrlDictOpts],
-  );
-  const dsBasicUserAutoOpts = useMemo(
-    () => dsBasicUserDictOpts.map((o) => ({ label: o.label, value: String(o.value) })),
-    [dsBasicUserDictOpts],
-  );
-  const silenceMatcherNameOptions = useMemo(() => {
-    const platformKeys = [
-      { label: "monitor_rule_id（平台监控规则 ID）", value: "monitor_rule_id" },
-      { label: "alertname（规则/告警名）", value: "alertname" },
-      { label: "project_id（项目）", value: "project_id" },
-      { label: "source（来源，如 prometheus_monitor）", value: "source" },
-    ];
-    const fromProm = promqlLabelKeyOpts
-      .map((o) => {
-        const value = String(o.value || "").trim();
-        const label = String(o.label || "").trim() || value;
-        return { label: `${label} (${value})`, value };
-      })
-      .filter((o) => o.value);
-    const seen = new Set<string>();
-    const out = [...platformKeys, ...fromProm].filter((o) => {
-      if (seen.has(o.value)) return false;
-      seen.add(o.value);
-      return true;
-    });
-    out.sort((a, b) => a.value.localeCompare(b.value, "zh-CN"));
-    return out;
-  }, [promqlLabelKeyOpts]);
+
+  // 数据源（datasources Tab）：状态与操作已下沉到 state/use-datasource-state.tsx
+  // 返回字段名保持不变；`loadDatasources` 仍由本文件的 Tab 副作用统一调用
+  const {
+    dsBasicUserAutoOpts,
+    dsColumns,
+    dsCurrent,
+    dsForm,
+    dsList,
+    dsModalOpen,
+    dsSubmitting,
+    dsUrlAutoOpts,
+    loadDatasources,
+    openDsCreate,
+    setDsModalOpen,
+    submitDs,
+  } = useAlertMonitorDatasourceState({ projectContextId, projects, applyDefaultPromDatasource });
+
+  // 静默（silences Tab）：状态与操作已下沉到 state/use-silence-state.tsx
+  // 返回字段名保持不变；`loadSilences` / `loadAmSilences` 仍由本文件的 Tab 副作用调用
+  const {
+    amSilencesLoading,
+    loadAmSilences,
+    loadNativeSilAlerts,
+    loadSilences,
+    nativeAlertsColumns,
+    nativeAlertsLoading,
+    nativeAlertsRows,
+    openQuickSilence,
+    openSilCreate,
+    openSilenceForEvent,
+    openSilenceForMonitorRule,
+    quickSilenceComment,
+    quickSilenceOpen,
+    quickSilenceSubmitting,
+    quickSilenceTargets,
+    releaseSelectedSilences,
+    selectedNativeAlertKeys,
+    selectedSilenceIds,
+    setQuickSilenceComment,
+    setQuickSilenceOpen,
+    setQuickSilenceTargets,
+    setSelectedNativeAlertKeys,
+    setSelectedSilenceIds,
+    setSilModalOpen,
+    silColumns,
+    silCurrent,
+    silForm,
+    silModalOpen,
+    silSubmitting,
+    silenceDatasource,
+    silenceDatasourceId,
+    silenceDisplayList,
+    silenceList,
+    silenceMatcherNameOptions,
+    submitQuickSilence,
+    submitSil,
+  } = useAlertMonitorSilenceState({ projectContextId, dsList, promqlLabelKeyOpts });
+
   const ruleComparatorOptions = useMemo(
     () => [
       { label: "大于 (>)", value: ">" },
@@ -335,17 +245,36 @@ export function useAlertMonitorPlatformState() {
     [],
   );
 
-  const [promDsId, setPromDsId] = useState<number | undefined>();
-  const [promMode, setPromMode] = useState<"instant" | "range">("instant");
-  const [promQuery, setPromQuery] = useState("up");
-  const [promTime, setPromTime] = useState("");
-  const [promStart, setPromStart] = useState("");
-  const [promEnd, setPromEnd] = useState("");
-  const [promStep, setPromStep] = useState("30s");
-  const [promResult, setPromResult] = useState<string>("");
-  const [promDataInner, setPromDataInner] = useState<unknown>(null);
-  const [promViewMode, setPromViewMode] = useState<"table" | "json">("table");
-  const [promLoading, setPromLoading] = useState(false);
+  // PromQL 查询控制台（promql Tab）：状态与操作已下沉到 state/use-promql-console-state.ts
+  // 返回字段名保持不变；数据源兜底 effect 也随之搬迁（依赖 tab + dsList）
+  const {
+    fillPromRangeLastHour,
+    fillPromTimeNow,
+    promDsId,
+    promEnd,
+    promLoading,
+    promMode,
+    promQuery,
+    promResult,
+    promScalarText,
+    promStart,
+    promStep,
+    promTableView,
+    promTime,
+    promViewMode,
+    runProm,
+    setPromDsId,
+    setPromEnd,
+    setPromMode,
+    setPromQuery,
+    setPromStart,
+    setPromStep,
+    setPromTime,
+    setPromViewMode,
+  } = useAlertMonitorPromqlConsoleState({ tab, dsList });
+  // 转发给数据源 Hook 用于「首次加载预选第一条」，见上方 applyDefaultPromDatasource 注释
+  setPromDsIdRef.current = setPromDsId;
+
   const [metricKeyword, setMetricKeyword] = useState("");
   const [metricLoading, setMetricLoading] = useState(false);
   const [metricOptions, setMetricOptions] = useState<string[]>([]);
@@ -355,17 +284,6 @@ export function useAlertMonitorPlatformState() {
   const [labelValueOptions, setLabelValueOptions] = useState<string[]>([]);
   const [selectedPromFunc, setSelectedPromFunc] = useState<string>("none");
 
-  const [nativeAlertsLoading, setNativeAlertsLoading] = useState(false);
-  const [nativeAlertsRows, setNativeAlertsRows] = useState<PromNativeAlertRow[]>([]);
-  const [selectedNativeAlertKeys, setSelectedNativeAlertKeys] = useState<string[]>([]);
-  const [selectedSilenceIds, setSelectedSilenceIds] = useState<number[]>([]);
-  const [amSilenceRows, setAmSilenceRows] = useState<AlertmanagerSilenceRow[]>([]);
-  const [amSilencesLoading, setAmSilencesLoading] = useState(false);
-  const [quickSilenceOpen, setQuickSilenceOpen] = useState(false);
-  const [quickSilenceSubmitting, setQuickSilenceSubmitting] = useState(false);
-  const [quickSilenceTargets, setQuickSilenceTargets] = useState<QuickSilenceTarget[]>([]);
-  /** 批量静默（从活跃告警勾选）时共用的说明，写入每条 alert_silences.comment */
-  const [quickSilenceComment, setQuickSilenceComment] = useState("");
   const projectOptions = useMemo(() => projects.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id })), [projects]);
   const activeProjectName = useMemo(() => {
     if (!projectContextId) return "";
@@ -373,15 +291,6 @@ export function useAlertMonitorPlatformState() {
     return p ? `${p.name} (${p.code})` : `项目 ${projectContextId}`;
   }, [projects, projectContextId]);
 
-  /** 平台静默：Prometheus 活跃告警跟随顶栏项目，默认取首个已启用数据源 */
-  const silenceDatasource = useMemo(() => {
-    const enabled = dsList.filter((d) => d.enabled !== false);
-    return (enabled.length ? enabled : dsList)[0];
-  }, [dsList]);
-  const silenceDatasourceId = silenceDatasource?.id;
-
-  const promTableView = useMemo(() => buildPromTableView(promDataInner), [promDataInner]);
-  const promScalarText = useMemo(() => formatPromScalarSummary(promDataInner), [promDataInner]);
   const ruleSeverityOptions = useMemo(() => {
     const s = ruleCurrent?.severity?.trim();
     const base = alertSeverityOpts;
@@ -558,57 +467,6 @@ export function useAlertMonitorPlatformState() {
     void fillDutyFromUserIds(blkUserIds);
   }, [blkModalOpen, blkUserIds, fillDutyFromUserIds]);
 
-  const loadDatasources = useCallback(async (projectID?: number) => {
-    const r = await listAlertDatasources({ project_id: projectID, page: 1, page_size: 200 });
-    setDsList(r.list ?? []);
-    setPromDsId((prev) => prev ?? r.list?.[0]?.id);
-  }, []);
-
-  const loadSilences = useCallback(async () => {
-    const r = await listAlertSilences({
-      page: 1,
-      page_size: 200,
-      project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
-    });
-    setSilenceList(r.list ?? []);
-  }, [projectContextId]);
-
-  const loadAmSilences = useCallback(async () => {
-    // Alertmanager 已下线：不再拉取 /api/v2/silences
-    setAmSilenceRows([]);
-    setAmSilencesLoading(false);
-  }, []);
-
-  const silenceDisplayList = useMemo((): SilenceDisplayRow[] => {
-    const platformRows = (silenceList ?? []).map((r) => ({
-      ...r,
-      source: "platform" as const,
-      rowKey: String(r.id),
-    }));
-    return [...platformRows, ...amSilenceRows];
-  }, [silenceList, amSilenceRows]);
-
-  const loadNativeSilAlerts = useCallback(async () => {
-    if (!silenceDatasourceId) {
-      message.warning(
-        projectContextId ? "当前项目下暂无 Prometheus 数据源，请先在「数据源」Tab 创建并启用" : "请先在顶栏选择项目",
-      );
-      return;
-    }
-    setNativeAlertsLoading(true);
-    try {
-      const raw = await promActiveAlerts(silenceDatasourceId);
-      const rows = parsePrometheusActiveAlertsTable(raw);
-      setNativeAlertsRows(rows);
-      setSelectedNativeAlertKeys((prev) => prev.filter((k) => rows.some((r) => r.key === k)));
-    } catch {
-      setNativeAlertsRows([]);
-      setSelectedNativeAlertKeys([]);
-    } finally {
-      setNativeAlertsLoading(false);
-    }
-  }, [silenceDatasourceId, projectContextId]);
-
   const loadRules = useCallback(
     async (
       projectID?: number,
@@ -658,16 +516,6 @@ export function useAlertMonitorPlatformState() {
   );
 
   const ruleDisplayList = ruleList;
-  const loadCloudExpiryRules = useCallback(async (projectID?: number, provider?: string, keyword?: string) => {
-    const r = await listCloudExpiryRules({
-      project_id: projectID,
-      provider: String(provider || "").trim() || undefined,
-      keyword: String(keyword || "").trim() || undefined,
-      page: 1,
-      page_size: 200,
-    });
-    setCloudExpiryList(r.list ?? []);
-  }, []);
   useEffect(() => {
     void (async () => {
       try {
@@ -729,480 +577,6 @@ export function useAlertMonitorPlatformState() {
     if (tab !== "silences") return;
     void loadAmSilences();
   }, [tab, silenceDatasourceId, loadAmSilences]);
-
-  useEffect(() => {
-    if (tab !== "promql") return;
-    if (promDsId != null && dsList.some((d) => d.id === promDsId)) return;
-    const first = dsList.find((d) => d.enabled)?.id ?? dsList[0]?.id;
-    setPromDsId(first);
-  }, [tab, dsList, promDsId]);
-
-  async function runProm() {
-    if (!promDsId) {
-      message.warning("请选择数据源");
-      return;
-    }
-    setPromLoading(true);
-    setPromResult("");
-    setPromDataInner(null);
-    try {
-      if (promMode === "instant") {
-        const r = await promInstantQuery(promDsId, { query: promQuery, time: promTime.trim() || undefined });
-        const outer = (r as { data?: unknown }).data ?? r;
-        const inner = unwrapPrometheusQueryData(outer);
-        setPromDataInner(inner);
-        setPromResult(JSON.stringify(outer, null, 2));
-      } else {
-        const r = await promRangeQuery(promDsId, {
-          query: promQuery,
-          start: promStart.trim(),
-          end: promEnd.trim(),
-          step: promStep.trim() || "30s",
-        });
-        const outer = (r as { data?: unknown }).data ?? r;
-        const inner = unwrapPrometheusQueryData(outer);
-        setPromDataInner(inner);
-        setPromResult(JSON.stringify(outer, null, 2));
-      }
-      setPromViewMode("table");
-    } catch (e) {
-      setPromResult(extractApiErrorMessage(e, "操作失败"));
-      setPromDataInner(null);
-    } finally {
-      setPromLoading(false);
-    }
-  }
-
-  function fillPromTimeNow() {
-    setPromTime(dayjs().toISOString());
-  }
-
-  function fillPromRangeLastHour() {
-    const end = dayjs();
-    const start = end.subtract(1, "hour");
-    setPromStart(start.toISOString());
-    setPromEnd(end.toISOString());
-    setPromStep("30s");
-  }
-
-  async function runDsPing(id: number) {
-    setDsPingId(id);
-    try {
-      const res = await pingAlertDatasource(id);
-      if (res.ok) {
-        message.success(`连通正常，耗时 ${res.latency_ms} ms`);
-      } else {
-        message.error(res.message || "连通失败");
-      }
-    } catch (e) {
-      message.error(extractApiErrorMessage(e, "操作失败"));
-    } finally {
-      setDsPingId(null);
-    }
-  }
-
-  const dsColumns = [
-    { title: "ID", dataIndex: "id", width: 70 },
-    { title: "项目", dataIndex: "project_name", width: 160, render: (v: string, r: AlertDatasourceItem) => v || String(r.project_id || "-") },
-    { title: "名称", dataIndex: "name" },
-    {
-      title: "类型",
-      dataIndex: "type",
-      width: 120,
-      render: (v: string) => {
-        const t = (v || "prometheus").toLowerCase();
-        if (t === "victoria" || t === "victoriametrics") return <Tag color="blue">VictoriaMetrics</Tag>;
-        return <Tag>Prometheus</Tag>;
-      },
-    },
-    { title: "地址", dataIndex: "base_url", ellipsis: true },
-    { title: "启用", dataIndex: "enabled", width: 80, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
-    {
-      title: "操作",
-      width: 240,
-      render: (_: unknown, r: AlertDatasourceItem) => (
-        <Space wrap>
-          <Button
-            type="link"
-            size="small"
-            icon={<ApiOutlined />}
-            loading={dsPingId === r.id}
-            onClick={() => void runDsPing(r.id)}
-          >
-            连通检测
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openDsEdit(r)}>
-            编辑
-          </Button>
-          <Popconfirm title="删除数据源？" onConfirm={() => void removeDs(r.id)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
-  function openDsCreate() {
-    setDsCurrent(null);
-    dsForm.resetFields();
-    const fallbackProjectID = projectContextId ?? projects[0]?.id;
-    dsForm.setFieldsValue({ project_id: fallbackProjectID, type: "prometheus", skip_tls_verify: false, enabled: true });
-    setDsModalOpen(true);
-  }
-
-  function openDsEdit(r: AlertDatasourceItem) {
-    setDsCurrent(r);
-    dsForm.setFieldsValue({
-      project_id: r.project_id,
-      name: r.name,
-      type: r.type,
-      base_url: r.base_url,
-      alertmanager_url: r.alertmanager_url ?? "",
-      basic_user: r.basic_user ?? "",
-      skip_tls_verify: r.skip_tls_verify,
-      enabled: r.enabled,
-      remark: r.remark,
-    });
-    setDsModalOpen(true);
-  }
-
-  async function submitDs() {
-    setDsSubmitting(true);
-    try {
-      const v = await dsForm.validateFields();
-      if (dsCurrent) {
-        await updateAlertDatasource(dsCurrent.id, v);
-        message.success("已更新");
-      } else {
-        await createAlertDatasource(v);
-        message.success("已创建");
-      }
-      setDsModalOpen(false);
-      await loadDatasources(projectContextId);
-    } catch (e) {
-      if (e && typeof e === "object" && "errorFields" in e) return;
-      message.error(extractApiErrorMessage(e, "保存数据源失败"));
-    } finally {
-      setDsSubmitting(false);
-    }
-  }
-
-  async function removeDs(id: number) {
-    try {
-      await deleteAlertDatasource(id);
-      message.success("已删除");
-      await loadDatasources(projectContextId);
-    } catch (e) {
-      message.error(extractApiErrorMessage(e, "删除数据源失败"));
-    }
-  }
-
-  const nativeAlertsColumns: ColumnsType<PromNativeAlertRow> = useMemo(
-    () => [
-      { title: "告警名", dataIndex: "alertname", width: 160, ellipsis: true },
-      {
-        title: "状态",
-        dataIndex: "state",
-        width: 120,
-        render: (v: string) => {
-          const s = String(v || "").toLowerCase();
-          const firing = s === "firing";
-          const resolved = s === "resolved";
-          return (
-            <Space size={6}>
-              <Badge status={firing ? "error" : resolved ? "success" : "default"} />
-              <Typography.Text>{firing ? "触发中" : resolved ? "已恢复" : v || "-"}</Typography.Text>
-            </Space>
-          );
-        },
-      },
-      { title: "标签", dataIndex: "labelsShort", ellipsis: true },
-      { title: "开始时间", dataIndex: "activeAt", width: 180, ellipsis: true },
-      {
-        title: "操作",
-        width: 110,
-        render: (_: unknown, r: PromNativeAlertRow) => (
-          <Button type="link" size="small" onClick={() => openQuickSilence([r])}>
-            静默
-          </Button>
-        ),
-      },
-    ],
-    [],
-  );
-
-  const silColumns = [
-      {
-        title: "来源",
-        key: "source",
-        width: 120,
-        render: (_: unknown, r: SilenceDisplayRow) =>
-          r.source === "alertmanager" ? <Tag color="blue">Alertmanager</Tag> : <Tag color="green">平台</Tag>,
-      },
-      {
-        title: "ID",
-        key: "id",
-        width: 120,
-        render: (_: unknown, r: SilenceDisplayRow) => (r.source === "alertmanager" ? r.amId : r.id),
-      },
-      { title: "名称", dataIndex: "name" },
-      {
-        title: "说明",
-        dataIndex: "comment",
-        width: 140,
-        ellipsis: true,
-        render: (c: string) => (c && String(c).trim() ? c : "—"),
-      },
-      {
-        title: "匹配摘要",
-        key: "m",
-        width: 200,
-        ellipsis: true,
-        render: (_: unknown, r: SilenceDisplayRow) => {
-          if (r.matchers?.length) {
-            return r.matchers.map((x) => `${x.name ?? ""}=${x.value ?? ""}`).join(", ");
-          }
-          if (r.source === "platform") {
-            return r.matchers_json?.slice(0, 80) ?? "—";
-          }
-          return "—";
-        },
-      },
-      { title: "开始", dataIndex: "starts_at", width: 170, render: (t: string) => formatDateTime(t) },
-      { title: "结束", dataIndex: "ends_at", width: 170, render: (t: string) => formatDateTime(t) },
-      {
-        title: "状态",
-        key: "status",
-        width: 100,
-        render: (_: unknown, r: SilenceDisplayRow) => {
-          const expired = dayjs(r.ends_at).isBefore(dayjs());
-          if (expired) return <Tag color="red">已过期</Tag>;
-          if (r.source === "alertmanager") {
-            const st = String(r.state || "").toLowerCase();
-            const label = st === "active" ? "生效中" : st === "pending" ? "待生效" : st === "expired" ? "已过期" : st || "停用";
-            return r.enabled ? <Tag color="green">{label}</Tag> : <Tag>{label}</Tag>;
-          }
-          return r.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>;
-        },
-      },
-      {
-        title: "操作",
-        width: 230,
-        render: (_: unknown, r: SilenceDisplayRow) =>
-          r.source === "alertmanager" ? (
-            <Typography.Text type="secondary">在 Alertmanager UI 管理</Typography.Text>
-          ) : (
-            <Space>
-              <Button type="link" size="small" disabled={!r.enabled} onClick={() => void releaseSingleSilence(r)}>
-                解除静默
-              </Button>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openSilEdit(r)}>
-                编辑
-              </Button>
-              <Popconfirm title="删除静默？" onConfirm={() => void removeSil(r.id)}>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  删除
-                </Button>
-              </Popconfirm>
-            </Space>
-          ),
-      },
-    ];
-
-  function openSilCreate() {
-    setSilCurrent(null);
-    silForm.resetFields();
-    silForm.setFieldsValue({
-      name: "",
-      matchers: [{ name: "alertname", value: "", is_regex: false }],
-      comment: "",
-      enabled: true,
-      starts_at: dayjs(),
-      ends_at: dayjs().add(2, "hour"),
-    });
-    setSilModalOpen(true);
-  }
-
-  /** 为平台内置监控规则预填静默（monitor_rule_id + alertname），与 Prometheus 活跃告警列表无关。 */
-  function openSilenceForMonitorRule(r: AlertMonitorRuleItem) {
-    setSilCurrent(null);
-    silForm.resetFields();
-    const ruleName = String(r.name || "").trim();
-    silForm.setFieldsValue({
-      name: ruleName ? `静默规则 ${ruleName}` : `静默 monitor_rule ${r.id}`,
-      matchers: [
-        { name: "monitor_rule_id", value: String(r.id), is_regex: false },
-        ...(ruleName ? [{ name: "alertname", value: ruleName, is_regex: false }] : []),
-      ],
-      comment: "平台监控规则一键静默",
-      enabled: true,
-      starts_at: dayjs(),
-      ends_at: dayjs().add(2, "hour"),
-    });
-    setSilModalOpen(true);
-  }
-
-  /** 事件台：按指纹 + 告警名预填静默（可再改匹配器）。 */
-  function openSilenceForEvent(row: {
-    fingerprint?: string;
-    alertname?: string;
-    labels_json?: string;
-    project_id?: number;
-  }) {
-    setSilCurrent(null);
-    silForm.resetFields();
-    const labels = parseLabelMap(row.labels_json);
-    const alertname = String(labels.alertname || row.alertname || "").trim();
-    const matchers: SilenceMatcherForm[] = [];
-    if (row.fingerprint) matchers.push({ name: "fingerprint", value: row.fingerprint, is_regex: false });
-    if (alertname) matchers.push({ name: "alertname", value: alertname, is_regex: false });
-    if (labels.monitor_rule_id) {
-      matchers.push({ name: "monitor_rule_id", value: labels.monitor_rule_id, is_regex: false });
-    }
-    silForm.setFieldsValue({
-      name: alertname ? `静默 ${alertname}` : `静默 ${row.fingerprint || "告警"}`,
-      matchers: matchers.length ? matchers : [{ name: "fingerprint", value: row.fingerprint || "", is_regex: false }],
-      comment: "事件台自定义静默",
-      enabled: true,
-      starts_at: dayjs(),
-      ends_at: dayjs().add(2, "hour"),
-    });
-    setSilModalOpen(true);
-  }
-
-  function openQuickSilence(rows: PromNativeAlertRow[]) {
-    setQuickSilenceComment("");
-    const targets = rows.map(toQuickSilenceTarget);
-    if (!targets.length) {
-      message.warning("请先选择需要静默的告警");
-      return;
-    }
-    setQuickSilenceTargets(targets);
-    setQuickSilenceOpen(true);
-  }
-
-  async function submitQuickSilence() {
-    if (!quickSilenceTargets.length) {
-      setQuickSilenceOpen(false);
-      return;
-    }
-    for (const it of quickSilenceTargets) {
-      if (!it.endsAt.isAfter(it.startsAt)) {
-        message.error(`「${it.name}」结束时间必须晚于开始时间`);
-        return;
-      }
-    }
-    setQuickSilenceSubmitting(true);
-    try {
-      const comment = quickSilenceComment.trim();
-      const items = quickSilenceTargets.map((it) => ({
-        name: it.name,
-        matchers_json: JSON.stringify(buildMatchersByLabels(it.labels)),
-        comment,
-        enabled: true,
-        starts_at: it.startsAt.toISOString(),
-        ends_at: it.endsAt.toISOString(),
-      }));
-      const { created } = await createAlertSilencesBatch(items);
-      message.success(`已创建 ${created} 条静默`);
-      setQuickSilenceOpen(false);
-      await loadSilences();
-    } finally {
-      setQuickSilenceSubmitting(false);
-    }
-  }
-
-  function openSilEdit(r: AlertSilenceItem) {
-    setSilCurrent(r);
-    silForm.setFieldsValue({
-      name: r.name,
-      matchers: r.matchers?.length ? r.matchers : parseSilenceMatchersForForm(r.matchers_json),
-      comment: r.comment,
-      enabled: r.enabled,
-      starts_at: dayjs(r.starts_at),
-      ends_at: dayjs(r.ends_at),
-    });
-    setSilModalOpen(true);
-  }
-
-  async function submitSil() {
-    setSilSubmitting(true);
-    try {
-      const v = await silForm.validateFields();
-      const rawMatchers = (v.matchers ?? []) as SilenceMatcherForm[];
-      const matchers = rawMatchers
-        .map((m) => ({
-          name: String(m?.name ?? "").trim(),
-          value: String(m?.value ?? "").trim(),
-          is_regex: Boolean(m?.is_regex),
-        }))
-        .filter((m) => m.name !== "");
-      if (matchers.length === 0) {
-        message.error("至少添加一条匹配器，并填写名称（如 alertname）");
-        return;
-      }
-      const payload = {
-        name: v.name,
-        matchers_json: JSON.stringify(matchers),
-        comment: v.comment,
-        enabled: v.enabled,
-        starts_at: (v.starts_at as Dayjs).toISOString(),
-        ends_at: (v.ends_at as Dayjs).toISOString(),
-        project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
-      };
-      if (silCurrent) {
-        await updateAlertSilence(silCurrent.id, payload);
-        message.success("已更新");
-      } else {
-        await createAlertSilence(payload);
-        message.success("已创建");
-      }
-      setSilModalOpen(false);
-      await loadSilences();
-    } finally {
-      setSilSubmitting(false);
-    }
-  }
-
-  async function removeSil(id: number) {
-    await deleteAlertSilence(id);
-    message.success("已删除");
-    await loadSilences();
-  }
-
-  async function releaseSilenceNow(row: AlertSilenceItem) {
-    await updateAlertSilence(row.id, {
-      name: row.name,
-      matchers_json: row.matchers_json,
-      comment: row.comment ?? "",
-      enabled: false,
-      starts_at: row.starts_at,
-      ends_at: row.ends_at,
-    });
-  }
-
-  async function releaseSingleSilence(row: AlertSilenceItem) {
-    await releaseSilenceNow(row);
-    message.success("已解除静默");
-    await loadSilences();
-  }
-
-  async function releaseSelectedSilences() {
-    const rows = silenceList.filter((it) => selectedSilenceIds.includes(it.id) && it.enabled);
-    if (!rows.length) {
-      message.warning("请选择需要解除的启用静默");
-      return;
-    }
-    const results = await Promise.allSettled(rows.map((r) => releaseSilenceNow(r)));
-    const ok = results.filter((r) => r.status === "fulfilled").length;
-    const fail = rows.length - ok;
-    if (ok > 0) message.success(`已解除 ${ok} 条静默`);
-    if (fail > 0) message.warning(`${fail} 条静默解除失败`);
-    setSelectedSilenceIds([]);
-    await loadSilences();
-  }
 
   const ruleColumns = [
     { title: "ID", dataIndex: "id", width: 70 },
@@ -1672,149 +1046,6 @@ export function useAlertMonitorPlatformState() {
       await loadRules(projectContextId);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "删除规则失败"));
-    }
-  }
-
-  const cloudExpiryColumns: ColumnsType<CloudExpiryRuleItem> = [
-    { title: "ID", dataIndex: "id", width: 70 },
-    {
-      title: "项目",
-      dataIndex: "project_name",
-      width: 180,
-      ellipsis: true,
-      render: (v: string, r: CloudExpiryRuleItem) => {
-        const name = String(v || "").trim();
-        if (name) return name;
-        const p = projects.find((it) => it.id === r.project_id);
-        return p ? `${p.name} (${p.code})` : String(r.project_id || "-");
-      },
-    },
-    { title: "规则名", dataIndex: "name", width: 180 },
-    {
-      title: "厂商",
-      dataIndex: "provider",
-      width: 110,
-      render: (v: string) => {
-        const p = String(v || "").trim();
-        if (!p) return "全部";
-        if (p === "alibaba") return "阿里云";
-        if (p === "tencent") return "腾讯云";
-        if (p === "jd") return "京东云";
-        return p;
-      },
-    },
-    { title: "地域范围", dataIndex: "region_scope", width: 180, render: (v: string) => String(v || "").trim() || "全部" },
-    { title: "提前天数", dataIndex: "advance_days", width: 100 },
-    { title: "级别", dataIndex: "severity", width: 90 },
-    { title: "定时", dataIndex: "schedule_enabled", width: 80, render: (v: boolean) => (v !== false ? <Tag color="blue">开</Tag> : <Tag>关</Tag>) },
-    {
-      title: "Cron",
-      dataIndex: "eval_cron_spec",
-      width: 160,
-      ellipsis: true,
-      render: (v: string) => {
-        const s = String(v || "").trim();
-        return s ? <span title={s}>{s}</span> : <span style={{ color: "#999" }}>—</span>;
-      },
-    },
-    { title: "启用", dataIndex: "enabled", width: 80, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
-    { title: "创建时间", dataIndex: "created_at", width: 170, render: (v: string) => (v ? formatDateTime(v) : "-") },
-    { title: "更新时间", dataIndex: "updated_at", width: 170, render: (v: string) => (v ? formatDateTime(v) : "-") },
-    {
-      title: "操作",
-      width: 180,
-      fixed: "right",
-      render: (_: unknown, r: CloudExpiryRuleItem) => (
-        <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openCloudExpiryEdit(r)}>
-            编辑
-          </Button>
-          <Popconfirm title="删除云到期规则？" onConfirm={() => void removeCloudExpiryRule(r.id)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
-  function openCloudExpiryCreate() {
-    setCloudExpiryCurrent(null);
-    cloudExpiryForm.resetFields();
-    cloudExpiryForm.setFieldsValue({
-      project_id: projectContextId,
-      provider: "",
-      region_scope: "",
-      advance_days: 7,
-      severity: "warning",
-      eval_cron_spec: "0 9 * * *",
-      schedule_enabled: true,
-      labels_json: "{}",
-      enabled: true,
-    });
-    setCloudExpiryModalOpen(true);
-  }
-
-  function openCloudExpiryEdit(row: CloudExpiryRuleItem) {
-    setCloudExpiryCurrent(row);
-    cloudExpiryForm.setFieldsValue({
-      project_id: row.project_id,
-      name: row.name,
-      provider: row.provider || "",
-      region_scope: row.region_scope || "",
-      advance_days: row.advance_days,
-      severity: row.severity || "warning",
-      eval_cron_spec: row.eval_cron_spec ?? "",
-      schedule_enabled: row.schedule_enabled !== false,
-      labels_json: stringifyPrettyJSON(row.labels ?? {}, "{}"),
-      enabled: row.enabled,
-    });
-    setCloudExpiryModalOpen(true);
-  }
-
-  async function submitCloudExpiryRule() {
-    setCloudExpirySubmitting(true);
-    try {
-      const v = await cloudExpiryForm.validateFields();
-      const payload = {
-        ...v,
-        provider: String(v.provider || "").trim(),
-        region_scope: String(v.region_scope || "").trim(),
-        labels_json: String(v.labels_json || "{}").trim() || "{}",
-        eval_cron_spec: String(v.eval_cron_spec ?? "").trim(),
-      };
-      if (cloudExpiryCurrent) {
-        await updateCloudExpiryRule(cloudExpiryCurrent.id, payload);
-        message.success("已更新云到期规则");
-      } else {
-        await createCloudExpiryRule(payload);
-        message.success("已创建云到期规则");
-      }
-      setCloudExpiryModalOpen(false);
-      await loadCloudExpiryRules(projectContextId, cloudExpiryProviderFilter, cloudExpiryKeyword);
-    } finally {
-      setCloudExpirySubmitting(false);
-    }
-  }
-
-  async function removeCloudExpiryRule(id: number) {
-    await deleteCloudExpiryRule(id);
-    message.success("已删除");
-    await loadCloudExpiryRules(projectContextId, cloudExpiryProviderFilter, cloudExpiryKeyword);
-  }
-
-  async function runCloudExpiryEvalNow() {
-    setCloudExpiryEvaluating(true);
-    try {
-      await evaluateCloudExpiryRulesNow();
-      message.success({
-        content:
-          "评估已完成。历史记录仅在存在「剩余天数 ≤ 提前天数」的实例时产生 firing；无到期实例则不会有新记录。请在历史记录中搜索规则名，或数据源选「云资源到期」；未配置 encryption_key 时接口会报错。",
-        duration: 9,
-      });
-    } finally {
-      setCloudExpiryEvaluating(false);
     }
   }
 
