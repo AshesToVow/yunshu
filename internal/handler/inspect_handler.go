@@ -11,6 +11,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
 	inspectsvc "yunshu/internal/service/inspect"
@@ -254,11 +255,12 @@ func (h *InspectHandler) serveReport(c *gin.Context, kind string) {
 		uploadURL := fmt.Sprintf("/api/v1/projects/%d/inspect/runs/%d/report.pdf", projectID, runID)
 		body = inspectsvc.EnhanceReportHTML(body, "/api/v1/inspect/pdf-libs", uploadURL)
 	}
+	downloadName := h.svc.ReportDownloadFilename(c.Request.Context(), projectID, runID, kind)
 	if kind == "excel" {
-		c.Header("Content-Disposition", `attachment; filename="inspect-run-`+c.Param("runId")+`.xlsx"`)
+		c.Header("Content-Disposition", exportutil.ContentDispositionAttachment(downloadName))
 	}
 	if kind == "pdf" && strings.HasPrefix(ctype, "application/pdf") {
-		c.Header("Content-Disposition", `attachment; filename="inspect-run-`+c.Param("runId")+`.pdf"`)
+		c.Header("Content-Disposition", exportutil.ContentDispositionAttachment(downloadName))
 	}
 	c.Data(http.StatusOK, ctype, body)
 }

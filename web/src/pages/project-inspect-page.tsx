@@ -100,6 +100,8 @@ export function ProjectInspectPage() {
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [itemTypeFilter, setItemTypeFilter] = useState<string | undefined>();
+  const [itemPage, setItemPage] = useState(1);
+  const [itemPageSize, setItemPageSize] = useState(20);
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InspectItem | null>(null);
   const [tplModalOpen, setTplModalOpen] = useState(false);
@@ -219,6 +221,11 @@ export function ProjectInspectPage() {
     () => (itemTypeFilter ? items.filter((i) => i.type === itemTypeFilter) : items),
     [items, itemTypeFilter],
   );
+
+  useEffect(() => {
+    setItemPage(1);
+  }, [itemTypeFilter, projectId]);
+
   const projectName = projects.find((p) => p.id === projectId)?.name;
   const recipients = parseRecipients(plan?.recipients_json);
   const dsName =
@@ -448,7 +455,7 @@ export function ProjectInspectPage() {
               type="link"
               size="small"
               disabled={r.status !== "success"}
-              onClick={() => downloadInspectPdf(projectId, r.id)}
+              onClick={() => downloadInspectPdf(projectId, r.id, projectName)}
             >
               PDF
             </Button>
@@ -716,7 +723,10 @@ export function ProjectInspectPage() {
                       dsList={dsList}
                       reportTemplates={reportTemplates}
                       onSaved={() => void refresh(projectId)}
-                      onGoToItems={() => setActiveTab("items")}
+                      onGoToItems={() => {
+                        setActiveTab("items");
+                        setItemPage(1);
+                      }}
                       onGoToRuns={() => setActiveTab("runs")}
                     />
                   </Card>
@@ -728,7 +738,6 @@ export function ProjectInspectPage() {
                 children: (
                   <Card
                     className="table-card"
-                    loading={loading}
                     extra={
                       <Space wrap>
                         <Select
@@ -791,9 +800,27 @@ export function ProjectInspectPage() {
                     <Table
                       rowKey="id"
                       size="small"
+                      loading={loading}
                       columns={itemColumns}
                       dataSource={filteredItems}
-                      pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 项` }}
+                      pagination={{
+                        current: itemPage,
+                        pageSize: itemPageSize,
+                        total: filteredItems.length,
+                        showSizeChanger: true,
+                        pageSizeOptions: ["10", "20", "50", "100"],
+                        showTotal: (t) => `共 ${t} 项`,
+                      }}
+                      onChange={(pag) => {
+                        const nextSize = Number(pag.pageSize) || itemPageSize;
+                        const nextPage = Number(pag.current) || 1;
+                        if (nextSize !== itemPageSize) {
+                          setItemPageSize(nextSize);
+                          setItemPage(1);
+                          return;
+                        }
+                        setItemPage(nextPage);
+                      }}
                       locale={{
                         emptyText: (
                           <Empty
@@ -810,10 +837,11 @@ export function ProjectInspectPage() {
                 key: "runs",
                 label: `历史 (${runTotal})`,
                 children: (
-                  <Card className="table-card" loading={loading}>
+                  <Card className="table-card">
                     <Table
                       rowKey="id"
                       size="small"
+                      loading={loading}
                       columns={runColumns}
                       dataSource={runs}
                       onRow={(r) => ({
@@ -829,11 +857,18 @@ export function ProjectInspectPage() {
                         pageSize: runPageSize,
                         total: runTotal,
                         showSizeChanger: true,
+                        pageSizeOptions: ["10", "20", "50", "100"],
                         showTotal: (t) => `共 ${t} 次`,
-                        onChange: (page, size) => {
-                          setRunPage(page);
-                          setRunPageSize(size);
-                        },
+                      }}
+                      onChange={(pag) => {
+                        const nextSize = Number(pag.pageSize) || runPageSize;
+                        const nextPage = Number(pag.current) || 1;
+                        if (nextSize !== runPageSize) {
+                          setRunPageSize(nextSize);
+                          setRunPage(1);
+                          return;
+                        }
+                        setRunPage(nextPage);
                       }}
                       locale={{
                         emptyText: (
@@ -1075,7 +1110,7 @@ export function ProjectInspectPage() {
                 打印版
               </Button>
               <Tooltip title="html2canvas + jsPDF 按 HTML 样式导出（与 PromAI 相同方案）">
-                <Button onClick={() => downloadInspectPdf(projectId, runDetail.id)}>PDF</Button>
+                <Button onClick={() => downloadInspectPdf(projectId, runDetail.id, projectName)}>PDF</Button>
               </Tooltip>
               <Button onClick={() => openAuthorized(inspectReportExcelUrl(projectId, runDetail.id))}>
                 Excel

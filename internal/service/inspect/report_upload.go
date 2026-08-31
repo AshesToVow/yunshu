@@ -2,7 +2,6 @@ package inspect
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"yunshu/internal/pkg/constants"
@@ -20,19 +19,45 @@ func (s *Service) CheckReportPDF(ctx context.Context, projectID, runID uint) (*R
 	if err != nil {
 		return nil, err
 	}
+	filename := reportDownloadFilename(s.projectName(ctx, projectID), runID, "pdf")
 	key := strings.TrimSpace(run.ReportPDFPath)
 	if key == "" {
-		return &ReportPDFStatus{Exists: false, Filename: fmt.Sprintf("inspect-run-%d.pdf", runID)}, nil
+		return &ReportPDFStatus{Exists: false, Filename: filename}, nil
 	}
 	body, err := s.readReportBytes(ctx, run, key)
 	if err != nil || len(body) < 4 || string(body[:4]) != "%PDF" {
-		return &ReportPDFStatus{Exists: false, Filename: fmt.Sprintf("inspect-run-%d.pdf", runID)}, nil
+		return &ReportPDFStatus{Exists: false, Filename: filename}, nil
 	}
 	return &ReportPDFStatus{
 		Exists:   true,
 		Size:     len(body),
-		Filename: fmt.Sprintf("inspect-run-%d.pdf", runID),
+		Filename: filename,
 	}, nil
+}
+
+func (s *Service) projectName(ctx context.Context, projectID uint) string {
+	if s == nil || s.projects == nil || projectID == 0 {
+		return ""
+	}
+	p, err := s.projects.GetByID(ctx, projectID)
+	if err != nil || p == nil {
+		return ""
+	}
+	return strings.TrimSpace(p.Name)
+}
+
+// ReportDownloadFilename 对外提供报告下载文件名（含项目名）。
+func (s *Service) ReportDownloadFilename(ctx context.Context, projectID, runID uint, kind string) string {
+	ext := "bin"
+	switch kind {
+	case "pdf":
+		ext = "pdf"
+	case "excel":
+		ext = "xlsx"
+	case "html", "print":
+		ext = "html"
+	}
+	return reportDownloadFilename(s.projectName(ctx, projectID), runID, ext)
 }
 
 // SaveReportPDF 保存前端 html2canvas 生成的高质量 PDF。

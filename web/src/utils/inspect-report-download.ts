@@ -48,26 +48,41 @@ export function downloadBlobFile(blob: Blob, filename: string) {
 }
 
 /** 优先下载后端已生成的 PDF，不存在时回落到前端 HTML → PDF 渲染 */
-export function downloadInspectPdf(projectId: number, runId: number) {
+export function downloadInspectPdf(projectId: number, runId: number, projectName?: string) {
   const key = "inspect-pdf";
   message.loading({ content: "正在准备 PDF…", key, duration: 0 });
   void (async () => {
     try {
       const st = await checkInspectReportPdf(projectId, runId);
+      const filename =
+        (st.filename && st.filename.trim()) ||
+        buildInspectReportFilename(projectName, runId, "pdf");
       if (st.exists) {
         const raw: unknown = await http.get(inspectReportPdfUrl(projectId, runId), {
           responseType: "blob",
           timeout: 120_000,
         });
-        downloadBlobFile(toReportBlob(raw, "application/pdf"), `inspect-run-${runId}.pdf`);
+        downloadBlobFile(toReportBlob(raw, "application/pdf"), filename);
         message.success({ content: "PDF 已下载", key });
         return;
       }
       const { downloadInspectReportPdf } = await import("./inspect-report-pdf");
-      await downloadInspectReportPdf(projectId, inspectReportHtmlUrl(projectId, runId), `inspect-run-${runId}.pdf`);
+      await downloadInspectReportPdf(projectId, inspectReportHtmlUrl(projectId, runId), filename);
       message.success({ content: "PDF 已生成并保存（与 HTML 样式一致）", key });
     } catch (e) {
       message.error({ content: extractApiErrorMessage(e, "生成 PDF 失败"), key });
     }
   })();
+}
+
+/** 生成可读报告文件名：项目名-巡检-{runId}.ext */
+export function buildInspectReportFilename(projectName: string | undefined, runId: number, ext: string) {
+  const safeExt = (ext || "bin").replace(/^\./, "");
+  let base = (projectName || "").trim().replace(/[\\/:*?"<>|]/g, "_").replace(/[.\s]+$/g, "");
+  if (!base) {
+    base = `inspect-run-${runId}`;
+  } else if (runId > 0) {
+    base = `${base}-巡检-${runId}`;
+  }
+  return `${base}.${safeExt}`;
 }
