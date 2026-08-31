@@ -15,6 +15,7 @@ import type { DataNode } from "antd/es/tree";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { extractApiErrorMessage } from "../services/http";
+import { createDictEntry } from "../services/dict";
 import {
   batchTestProjectServers,
   syncProjectServers,
@@ -128,6 +129,10 @@ export function ProjectServersPage() {
   const [groupEditorOpen, setGroupEditorOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<ServerGroupItem | null>(null);
   const [groupForm] = Form.useForm<{ name: string; category: string; provider: string }>();
+  const [categoryTypeModalOpen, setCategoryTypeModalOpen] = useState(false);
+  const [categoryTypeSubmitting, setCategoryTypeSubmitting] = useState(false);
+  const [categoryDictRefreshKey, setCategoryDictRefreshKey] = useState(0);
+  const [categoryTypeForm] = Form.useForm<{ label: string; value: string; remark?: string }>();
 
   const [cloudAccounts, setCloudAccounts] = useState<CloudAccountItem[]>([]);
   const [syncResultByAccount, setSyncResultByAccount] = useState<Record<number, { added: number; updated: number; disabled: number; unchanged: number }>>({});
@@ -183,7 +188,7 @@ export function ProjectServersPage() {
   const regionOptions = CLOUD_REGION_OPTIONS[(selectedGroup?.provider || "").trim()] || [];
 
   const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
-  const serverGroupCategoryOptions = useDictOptions("server_group_category");
+  const serverGroupCategoryOptions = useDictOptions("server_group_category", true, categoryDictRefreshKey);
   const serverOsOptions = useDictOptions("server_os_type");
   const serverAuthOptions = useDictOptions("server_auth_type");
   const serverPortDict = useDictOptions("server_port");
@@ -567,12 +572,16 @@ export function ProjectServersPage() {
   async function onSaveGroup() {
     if (!projectId) return;
     const values = await groupForm.validateFields();
+    const category = String(values.category || "").trim();
     await upsertProjectServerGroup(projectId, {
       id: editingGroup?.id,
       name: values.name,
-      category: values.category,
-      provider: values.provider,
-      parent_id: editingGroup?.parent_id ?? (values.category === "cloud" && selectedGroup ? selectedGroup.id : undefined),
+      category,
+      provider: category === "cloud" ? values.provider : values.provider || "custom",
+      // 云类型挂到当前选中节点下；自建/自定义类型默认作为根分组
+      parent_id:
+        editingGroup?.parent_id ??
+        (category === "cloud" && selectedGroup ? selectedGroup.id : undefined),
       sort: editingGroup?.sort,
       status: editingGroup?.status ?? 1,
     });
@@ -580,6 +589,36 @@ export function ProjectServersPage() {
     setEditingGroup(null);
     setGroupEditorOpen(false);
     await loadGroups();
+  }
+
+  async function onCreateCategoryType() {
+    const values = await categoryTypeForm.validateFields();
+    const label = String(values.label || "").trim();
+    const value = String(values.value || "").trim().toLowerCase();
+    if (value === "self_hosted" || value === "cloud") {
+      message.error("不能占用内置标识 self_hosted / cloud");
+      return;
+    }
+    setCategoryTypeSubmitting(true);
+    try {
+      await createDictEntry({
+        dict_type: "server_group_category",
+        label,
+        value,
+        sort: 100,
+        status: 1,
+        remark: values.remark?.trim() || "自定义服务器分组类型",
+      });
+      message.success("分组类型已新增");
+      setCategoryDictRefreshKey((k) => k + 1);
+      groupForm.setFieldsValue({ category: value, provider: "custom" });
+      setCategoryTypeModalOpen(false);
+      categoryTypeForm.resetFields();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "新增类型失败"));
+    } finally {
+      setCategoryTypeSubmitting(false);
+    }
   }
 
   async function onDeleteGroup() {
@@ -1099,11 +1138,100 @@ export function ProjectServersPage() {
           <Form.Item label="名称" name="name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item label="类型" name="category" rules={[{ required: true }]}>
-            <Select options={serverGroupCategoryOptions} />
+          <Form.Item
+            label="类型"
+            required
+            extra="内置：自建 / 云。自定义类型按自建语义管理服务器，不走云账号同步。"
+          >
+            <Space.Compact style={{ width: "100%" }}>
+              <Form.Item name="category" noStyle rules={[{ required: true, message: "请选择类型" }]}>
+                <Select
+                  style={{ width: "100%" }}
+                  options={serverGroupCategoryOptions}
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="选择分组类型"
+                />
+              </Form.Item>
+              <Button
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  categoryTypeForm.setFieldsValue({ label: "", value: "", remark: "" });
+                  setCategoryTypeModalOpen(true);
+                }}
+              >
+                新增类型
+              </Button>
+            </Space.Compact>
           </Form.Item>
-          <Form.Item label="厂商标识" name="provider">
-            <Input placeholder="custom / alibaba / tencent / jd" />
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.category !== cur.category}>
+            {() =>
+              groupForm.getFieldValue("category") === "cloud" ? (
+                <Form.Item label="厂商标识" name="provider" extra="cloud 类型用于云同步：alibaba / tencent / jd">
+                  <Input placeholder="alibaba / tencent / jd" />
+                </Form.Item>
+              ) : (
+                <Form.Item name="provider" hidden>
+                  <Input />
+                </Form.Item>
+              )
+            }
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="新增分组类型"
+        open={categoryTypeModalOpen}
+        onCancel={() => {
+          setCategoryTypeModalOpen(false);
+          categoryTypeForm.resetFields();
+        }}
+        onOk={() => void onCreateCategoryType()}
+        confirmLoading={categoryTypeSubmitting}
+        destroyOnClose
+      >
+        <Form form={categoryTypeForm} layout="vertical">
+          <Form.Item
+            label="显示名称"
+            name="label"
+            rules={[{ required: true, message: "请输入显示名称" }]}
+            extra="例如：托管机房、边缘节点"
+          >
+            <Input
+              placeholder="托管机房"
+              onChange={(e) => {
+                const label = e.target.value;
+                const cur = categoryTypeForm.getFieldValue("value");
+                if (cur) return;
+                const slug = label
+                  .trim()
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "_")
+                  .replace(/^_+|_+$/g, "")
+                  .slice(0, 32);
+                if (slug && /^[a-z]/.test(slug)) {
+                  categoryTypeForm.setFieldsValue({ value: slug });
+                }
+              }}
+            />
+          </Form.Item>
+          <Form.Item
+            label="类型标识"
+            name="value"
+            rules={[
+              { required: true, message: "请输入类型标识" },
+              {
+                pattern: /^[a-z][a-z0-9_]{0,31}$/,
+                message: "须以小写字母开头，仅含 a-z / 0-9 / _，最长 32",
+              },
+            ]}
+            extra="写入数据字典 server_group_category；不可用 self_hosted、cloud"
+          >
+            <Input placeholder="idc" />
+          </Form.Item>
+          <Form.Item label="备注" name="remark">
+            <Input.TextArea rows={2} placeholder="可选" />
           </Form.Item>
         </Form>
       </Modal>
