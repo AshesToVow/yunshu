@@ -1,4 +1,4 @@
-import { CheckOutlined, CloseOutlined, LinkOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, LinkOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Card, Form, Input, Modal, Segmented, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -12,7 +12,7 @@ import {
   rejectDbAppUserRequest,
   rejectDbTicket,
 } from "../services/dbmgmt";
-import { approveReleaseRun, rejectReleaseRun } from "../services/cicd";
+import { approveReleaseRun, executeReleaseRun, rejectReleaseRun } from "../services/cicd";
 import {
   listPendingWorkflowTickets,
   reviewWorkflowStep,
@@ -206,6 +206,7 @@ export function WorkflowInboxPage() {
       fixed: "right",
       render: (_, row) => {
         const pending = row.mine_status === "mine_pending";
+        const isExecute = row.action === "execute";
         return (
           <Space size="small">
             {row.deep_link ? (
@@ -215,7 +216,21 @@ export function WorkflowInboxPage() {
                 </Button>
               </Link>
             ) : null}
-            {pending ? (
+            {pending && isExecute ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<PlayCircleOutlined />}
+                onClick={() => {
+                  void executeReleaseRun(row.project_id, row.ref_id).then(() => {
+                    message.success("已触发发布执行");
+                    void load();
+                  });
+                }}
+              >
+                执行发布
+              </Button>
+            ) : pending ? (
               <>
                 <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => openReview(row, true)}>
                   通过
@@ -238,7 +253,7 @@ export function WorkflowInboxPage() {
       <PageTelemetryHeader
         label="Workflow"
         title="我的待办"
-        subtitle="统一审批入口：数据库 / 发布 / 故障 / 变更（各业务模块待办已收敛至此）"
+        subtitle="统一入口：审批 + 发布执行（审批完成后，提交人可在此执行发布）"
       />
       <Card>
         <Space wrap style={{ marginBottom: 16 }}>

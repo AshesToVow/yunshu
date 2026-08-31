@@ -24,6 +24,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   abortProgressiveRelease,
+  executeReleaseRun,
   getReleaseRunDetail,
   getReleaseRunLog,
   platformRollbackRelease,
@@ -35,6 +36,7 @@ import {
   type ReleaseVerifyResult,
 } from "../services/cicd";
 import { listAlertEvents, type AlertEventItem } from "../services/alerts";
+import { useAuth } from "../contexts/auth-context";
 import { formatDateTime } from "../utils/format";
 import {
   cicdReleaseKindLabel,
@@ -52,6 +54,8 @@ type Props = {
   runId: number;
   reviewMode?: boolean;
   reviewForm?: FormInstance<{ comment: string }>;
+  /** 执行成功后回调（例如关闭弹窗并刷新列表） */
+  onExecuted?: () => void;
 };
 
 function stepStatus(st: CicdReleaseApprovalStep): "finish" | "error" | "process" | "wait" {
@@ -76,7 +80,8 @@ function stepDescription(st: CicdReleaseApprovalStep) {
   return "待审批";
 }
 
-export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewForm }: Props) {
+export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewForm, onExecuted }: Props) {
+  const { user } = useAuth();
   const [detail, setDetail] = useState<CicdReleaseRunDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("info");
@@ -87,6 +92,7 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
   const [verifyResult, setVerifyResult] = useState<ReleaseVerifyResult | null>(null);
   const [rollbackLoading, setRollbackLoading] = useState(false);
   const [progressiveLoading, setProgressiveLoading] = useState(false);
+  const [executeLoading, setExecuteLoading] = useState(false);
   const logPreRef = useRef<HTMLPreElement>(null);
 
   const loadDetail = useCallback(async () => {
@@ -161,6 +167,12 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
   const releaseParams = run ? parseReleaseParams(run.params_json) : {};
   const artifactName = run?.artifact_name || releaseParams.artifact || "—";
   const currentPending = run?.approval_steps?.find((s) => s.status === "pending");
+  const canExecute =
+    !!run &&
+    run.status === "pending_execution" &&
+    !!user?.id &&
+    !!run.submitter_user_id &&
+    user.id === run.submitter_user_id;
 
   const logColumns = useMemo<ColumnsType<CicdReleaseOperationLog>>(
     () => [
@@ -172,6 +184,18 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
     [],
   );
 
+  const handleExecute = async () => {
+    setExecuteLoading(true);
+    try {
+      await executeReleaseRun(projectId, runId);
+      message.success("已触发发布执行");
+      await loadDetail();
+      onExecuted?.();
+    } finally {
+      setExecuteLoading(false);
+    }
+  };
+
   if (loading && !run) {
     return <Typography.Text type="secondary">加载中…</Typography.Text>;
   }
@@ -180,7 +204,22 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
   }
 
   return (
-    <Tabs
+    <div>
+      {canExecute ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="审批已全部通过，等待你执行发布"
+          description="统一待办只处理审批；执行发布需由提交人确认后触发 Jenkins。"
+          action={
+            <Button type="primary" loading={executeLoading} onClick={() => void handleExecute()}>
+              执行发布
+            </Button>
+          }
+        />
+      ) : null}
+      <Tabs
       activeKey={tab}
       onChange={setTab}
       items={[
@@ -542,5 +581,6 @@ export function CicdReleaseDetailPanel({ projectId, runId, reviewMode, reviewFor
         },
       ]}
     />
+    </div>
   );
 }
