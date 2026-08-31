@@ -1,0 +1,18 @@
+case_id: CASE-ES-CONN-UNREACHABLE-001
+title: ES 连接不可达/认证失败典型案例
+category: esmgmt
+technology: elasticsearch
+symptom: ES 管理台连不上、索引列表失败、认证错误
+environment: Yunshu ES 管理
+diagnosis: |
+  1. list_es_connections 查看已配置连接（不含密码）
+  2. 核对 addresses / username / 是否默认连接
+  3. 结合网络与证书排查
+root_cause: 地址错误、账号密码失效、集群宕机或网络隔离
+solution: 修正连接地址与认证；切换可用默认连接；确认集群健康
+verification: list_es_connections 可用且索引浏览成功
+risk: 错误默认连接可能写到错误集群
+related_tools: '["list_es_connections"]'
+related_sop: '["sop-esmgmt-conn-fail"]'
+source: seed
+confidence: 0.84

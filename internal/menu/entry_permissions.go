@@ -112,6 +112,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 
 		"/ai/approvals": {"/api/v1/ai/approvals", "GET"},
 		"/ai/assistant": {"/api/v1/ai/chat", "POST"},
+		"/ai/investigations": {"/api/v1/ai/investigations", "GET"},
 
 		"/esmgmt/connections": {"/api/v1/esmgmt/connections", "GET"},
 		"/esmgmt/overview":    {"/api/v1/esmgmt/cluster/health", "GET"},
@@ -148,6 +149,10 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	}
 	out["/ai/center"] = []EntryPermission{
 		{Resource: "/api/v1/ai/center/overview", Action: "GET"},
+	}
+	out["/ai/investigations"] = []EntryPermission{
+		{Resource: "/api/v1/ai/investigations", Action: "GET"},
+		{Resource: "/api/v1/ai/investigations", Action: "POST"},
 	}
 	return out
 }

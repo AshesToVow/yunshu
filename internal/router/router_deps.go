@@ -301,6 +301,9 @@ func assembleRouteDeps(
 		)),
 		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(app.DB)),
 	}
+	if svcs.AI != nil {
+		svcs.AI.SetPlatformDeps(repos.Server, svcs.CMDB, svcs.Dbmgmt, svcs.Esmgmt)
+	}
 	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil
 }

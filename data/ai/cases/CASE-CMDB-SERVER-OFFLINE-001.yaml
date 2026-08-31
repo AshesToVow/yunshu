@@ -1,0 +1,18 @@
+case_id: CASE-CMDB-SERVER-OFFLINE-001
+title: CMDB 服务器离线/连通失败典型案例
+category: cmdb
+technology: ssh
+symptom: 终端连不上、主机探测失败、服务器状态异常
+environment: Yunshu CMDB
+diagnosis: |
+  1. 确认 project_id
+  2. list_servers 定位主机
+  3. get_server 查看连通摘要与标签
+root_cause: 网络不通、SSH 凭据失效、安全组/防火墙拦截或主机宕机
+solution: 校验网络与安全组；更新凭据；确认主机运行状态后重试连通测试
+verification: list_servers/get_server 显示在线且 SSH 探测成功
+risk: 错误重置密码可能影响业务登录
+related_tools: '["list_servers","get_server"]'
+related_sop: '["sop-cmdb-server-offline"]'
+source: seed
+confidence: 0.85

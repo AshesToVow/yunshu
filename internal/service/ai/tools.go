@@ -228,6 +228,7 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 				"required": []string{"fingerprint"},
 			}),
 	}
+	defs = append(defs, s.platformToolDefinitions()...)
 	if includeWrite {
 		defs = append(defs,
 			llm.NewFunctionTool("scale_deployment",
@@ -620,8 +621,13 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			break
 		}
 		out, err = s.alertSvc.ExplainFingerprintDelivery(ctx, getStr("fingerprint"))
+	case "list_servers", "get_server", "list_db_instances", "list_es_connections":
+		out, err = s.executePlatformTool(ctx, name, getUint, getStr, projectID, actor, requireProject, requireActor)
 	case "scale_deployment", "restart_deployment", "delete_pod":
 		if err = requireK8sAdmin(); err != nil {
+			break
+		}
+		if err = checkWriteToolPolicy(name, argsJSON, namespace, getStr("reason")); err != nil {
 			break
 		}
 		out, err = s.createToolApproval(ctx, userID, name, argsJSON, clusterID, namespace, getStr("name"), getStr("reason"))

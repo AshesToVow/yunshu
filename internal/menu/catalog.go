@@ -149,8 +149,9 @@ func DefaultCatalog() []Spec {
 			Path: "/ai", Name: "AI", Icon: "RobotOutlined", Sort: 9, Status: 1,
 			Children: []Spec{
 				{Path: "/ai/assistant", Name: "AI 运维助手", Icon: "CommentOutlined", Sort: 1, Component: "ai-assistant-page", Status: 1},
-				{Path: "/ai/approvals", Name: "AI 操作审批", Icon: "AuditOutlined", Sort: 2, Component: "ai-approvals-page", Status: 1},
-				{Path: "/ai/center", Name: "AI 能力中心", Icon: "AppstoreOutlined", Sort: 3, Component: "ai-center-page", Status: 1},
+				{Path: "/ai/investigations", Name: "AI 调查", Icon: "ExperimentOutlined", Sort: 2, Component: "ai-investigations-page", Status: 1},
+				{Path: "/ai/approvals", Name: "AI 操作审批", Icon: "AuditOutlined", Sort: 3, Component: "ai-approvals-page", Status: 1},
+				{Path: "/ai/center", Name: "AI 能力中心", Icon: "AppstoreOutlined", Sort: 4, Component: "ai-center-page", Status: 1},
 			},
 		},
 		{

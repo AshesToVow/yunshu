@@ -38,6 +38,7 @@ import {
   updateAICenterModel,
   updateAICenterTool,
 } from "../services/ai-center";
+import { embedAIKnowledge } from "../services/ai";
 import { extractApiErrorMessage } from "../services/http";
 
 const PROVIDER_OPTIONS = [
@@ -178,6 +179,19 @@ export function AiCenterPage() {
     }
   }
 
+  async function handleEmbed() {
+    setLoading(true);
+    try {
+      const r = await embedAIKnowledge({ limit: 200 });
+      message.success(r?.message || `向量化完成：updated=${r?.updated ?? 0} skipped=${r?.skipped ?? 0}`);
+      await refreshOverview();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "向量化失败"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleEval(live: boolean) {
     setLoading(true);
     try {
@@ -200,11 +214,15 @@ export function AiCenterPage() {
         extra={
           <Space wrap>
             <Link to="/ai/assistant">打开助手</Link>
+            <Link to="/ai/investigations">调查记录</Link>
             <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void handleReseed()}>
               重载 data/ai 种子
             </Button>
             <Button icon={<SyncOutlined />} loading={loading} onClick={() => void handleSync()}>
               同步知识库到 ES
+            </Button>
+            <Button loading={loading} onClick={() => void handleEmbed()}>
+              向量化 KB Chunks
             </Button>
             <Button loading={loading} onClick={() => void handleEval(false)}>
               离线 Evaluation

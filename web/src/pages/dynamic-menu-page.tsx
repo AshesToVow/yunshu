@@ -79,6 +79,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/ai/assistant": "ai-assistant-page",
   "/ai/approvals": "ai-approvals-page",
   "/ai/center": "ai-center-page",
+  "/ai/investigations": "ai-investigations-page",
   "/esmgmt/connections": "esmgmt-connections-page",
   "/esmgmt/overview": "esmgmt-overview-page",
   "/esmgmt/console": "esmgmt-console-page",

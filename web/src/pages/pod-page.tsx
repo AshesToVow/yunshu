@@ -17,7 +17,8 @@ import { validateYaml } from "../components/k8s/monaco-yaml-editor";
 import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
 import { createPodByYAML, createPodSimple, deletePod, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, restartPod, updatePodSimple, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
-import { analyzePodDiagnoseAI, type AIPodDiagnoseResult } from "../services/ai";
+import { analyzePodDiagnoseAI, startAIInvestigation, type AIPodDiagnoseResult } from "../services/ai";
+import { useNavigate } from "react-router-dom";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
 import {
@@ -78,6 +79,8 @@ export function PodPage() {
   const [diagnoseResult, setDiagnoseResult] = useState<PodDiagnoseResult | null>(null);
   const [aiDiagnoseLoading, setAiDiagnoseLoading] = useState(false);
   const [aiDiagnoseResult, setAiDiagnoseResult] = useState<AIPodDiagnoseResult | null>(null);
+  const [aiInvestigateLoading, setAiInvestigateLoading] = useState(false);
+  const navigate = useNavigate();
   const streamAbortRef = useRef<AbortController | null>(null);
   const prevPodKeyRef = useRef("");
   const [streaming, setStreaming] = useState(false);
@@ -262,6 +265,26 @@ export function PodPage() {
       message.error(extractApiErrorMessage(e, "AI 分析失败"));
     } finally {
       setAiDiagnoseLoading(false);
+    }
+  }
+
+  async function handleAIInvestigate() {
+    if (!clusterId || !selected || aiInvestigateLoading) return;
+    setAiInvestigateLoading(true);
+    try {
+      const inv = await startAIInvestigation({
+        kind: "pod",
+        title: `Pod 调查 ${selected.namespace}/${selected.name}`,
+        cluster_id: clusterId,
+        namespace: selected.namespace,
+        resource: selected.name,
+      });
+      message.success(`调查已完成 #${inv.id}`);
+      navigate(`/ai/investigations?id=${inv.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 调查失败"));
+    } finally {
+      setAiInvestigateLoading(false);
     }
   }
 
@@ -775,6 +798,8 @@ export function PodPage() {
         aiDiagnoseLoading={aiDiagnoseLoading}
         aiDiagnoseResult={aiDiagnoseResult}
         handleAIDiagnose={handleAIDiagnose}
+        aiInvestigateLoading={aiInvestigateLoading}
+        handleAIInvestigate={handleAIInvestigate}
       />
 
       <PodFilesDrawer

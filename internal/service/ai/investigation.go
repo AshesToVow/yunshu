@@ -1,0 +1,436 @@
+package ai
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"time"
+
+	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/llm"
+	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/service/k8s"
+)
+
+// InvestigationReport 结构化调查报告。
+type InvestigationReport struct {
+	Summary    string           `json:"summary"`
+	RootCauses []map[string]any `json:"root_causes"`
+	Actions    []map[string]any `json:"actions"`
+	Evidence   []map[string]any `json:"evidence,omitempty"`
+	Provider   string           `json:"provider,omitempty"`
+	Model      string           `json:"model,omitempty"`
+	RawReply   string           `json:"raw_reply,omitempty"`
+}
+
+type StartInvestigationRequest struct {
+	Kind        string `json:"kind" binding:"required"` // alert|pod|cicd|chat
+	Title       string `json:"title"`
+	Provider    string `json:"provider"`
+	ProjectID   uint   `json:"project_id"`
+	ClusterID   uint   `json:"cluster_id"`
+	Namespace   string `json:"namespace"`
+	Resource    string `json:"resource"` // pod name / run id as string
+	Fingerprint string `json:"fingerprint"`
+	RunID       uint   `json:"run_id"`
+	SessionID   *uint  `json:"session_id"`
+	Query       string `json:"query"` // chat kind
+}
+
+type InvestigationListQuery struct {
+	Kind     string `form:"kind"`
+	Status   string `form:"status"`
+	Page     int    `form:"page"`
+	PageSize int    `form:"page_size"`
+}
+
+func (s *Service) StartInvestigation(
+	ctx context.Context,
+	userID uint,
+	actor *auth.CurrentUser,
+	req StartInvestigationRequest,
+) (*model.AiInvestigation, error) {
+	if _, err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+	if err := s.checkRate(userID); err != nil {
+		return nil, err
+	}
+	actor = resolveActor(ctx, actor)
+	if actor == nil || actor.ID == 0 {
+		return nil, constants.ErrUnauthorized
+	}
+	kind := strings.ToLower(strings.TrimSpace(req.Kind))
+	switch kind {
+	case "alert", "pod", "cicd", "chat":
+	default:
+		return nil, constants.ErrBadRequestWithMsg("kind 须为 alert|pod|cicd|chat")
+	}
+	if req.ProjectID > 0 {
+		if err := s.assertProjectMember(ctx, actor, req.ProjectID); err != nil {
+			return nil, err
+		}
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = defaultInvestigationTitle(kind, req)
+	}
+	input, _ := json.Marshal(req)
+	row := model.AiInvestigation{
+		UserID:      userID,
+		Kind:        kind,
+		Title:       truncateStr(title, 250),
+		Status:      "collecting",
+		ProjectID:   req.ProjectID,
+		ClusterID:   req.ClusterID,
+		Namespace:   strings.TrimSpace(req.Namespace),
+		Resource:    strings.TrimSpace(req.Resource),
+		Fingerprint: strings.TrimSpace(req.Fingerprint),
+		InputJSON:   string(input),
+		SessionID:   req.SessionID,
+	}
+	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		return nil, err
+	}
+
+	fail := func(msg string) (*model.AiInvestigation, error) {
+		row.Status = "failed"
+		row.ErrorMsg = truncateStr(msg, 1000)
+		_ = s.db.WithContext(ctx).Save(&row).Error
+		return &row, constants.ErrBadRequestWithMsg(msg)
+	}
+
+	collect, evidence, err := s.collectInvestigation(ctx, userID, actor, kind, req)
+	if err != nil {
+		return fail("采集失败: " + err.Error())
+	}
+	collectRaw, _ := json.Marshal(collect)
+	row.CollectJSON = string(truncateBytes(collectRaw, 500_000))
+	row.Status = "analyzing"
+	_ = s.db.WithContext(ctx).Save(&row).Error
+
+	query := investigationQuery(kind, req, collect)
+	ragHits := s.retrieveKnowledge(ctx, query, 8)
+	ragEvidence := make([]map[string]any, 0, len(ragHits))
+	for _, h := range ragHits {
+		ragEvidence = append(ragEvidence, map[string]any{
+			"source": h.Source, "module": h.Module, "score": h.Score,
+			"content": truncateStr(h.Content, 400),
+		})
+	}
+	evidence = append(evidence, ragEvidence...)
+
+	report, err := s.analyzeInvestigation(ctx, userID, actor, kind, req, collect, ragHits)
+	if err != nil {
+		return fail("分析失败: " + err.Error())
+	}
+	report.Evidence = evidence
+	analysisRaw, _ := json.Marshal(map[string]any{
+		"summary":     report.Summary,
+		"root_causes": report.RootCauses,
+		"actions":     report.Actions,
+		"provider":    report.Provider,
+		"model":       report.Model,
+	})
+	reportRaw, _ := json.Marshal(report)
+	row.AnalysisJSON = string(analysisRaw)
+	row.ReportJSON = string(reportRaw)
+	row.Status = "done"
+	row.UpdatedAt = time.Now()
+	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		return fail("保存报告失败: " + err.Error())
+	}
+	return &row, nil
+}
+
+func (s *Service) ListInvestigations(
+	ctx context.Context,
+	userID uint,
+	q InvestigationListQuery,
+) (*pagination.Result[model.AiInvestigation], error) {
+	if userID == 0 {
+		return nil, constants.ErrUnauthorized
+	}
+	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
+	db := s.db.WithContext(ctx).Model(&model.AiInvestigation{}).Where("user_id = ?", userID)
+	if k := strings.TrimSpace(q.Kind); k != "" {
+		db = db.Where("kind = ?", k)
+	}
+	if st := strings.TrimSpace(q.Status); st != "" {
+		db = db.Where("status = ?", st)
+	}
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	var list []model.AiInvestigation
+	if err := db.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return &pagination.Result[model.AiInvestigation]{List: list, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+func (s *Service) GetInvestigation(ctx context.Context, userID, id uint) (*model.AiInvestigation, error) {
+	if userID == 0 {
+		return nil, constants.ErrUnauthorized
+	}
+	var row model.AiInvestigation
+	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&row).Error; err != nil {
+		return nil, constants.ErrNotFound
+	}
+	return &row, nil
+}
+
+func defaultInvestigationTitle(kind string, req StartInvestigationRequest) string {
+	switch kind {
+	case "alert":
+		return "告警调查 " + strings.TrimSpace(req.Fingerprint)
+	case "pod":
+		return "Pod 调查 " + strings.TrimSpace(req.Namespace) + "/" + strings.TrimSpace(req.Resource)
+	case "cicd":
+		return "CI 构建调查"
+	default:
+		q := strings.TrimSpace(req.Query)
+		if q == "" {
+			return "对话调查"
+		}
+		return "对话调查: " + truncateStr(q, 80)
+	}
+}
+
+func investigationQuery(kind string, req StartInvestigationRequest, collect map[string]any) string {
+	parts := []string{kind, req.Title, req.Fingerprint, req.Namespace, req.Resource, req.Query}
+	if collect != nil {
+		if v, ok := collect["summary"].(string); ok {
+			parts = append(parts, v)
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, " "))
+}
+
+func (s *Service) collectInvestigation(
+	ctx context.Context,
+	userID uint,
+	actor *auth.CurrentUser,
+	kind string,
+	req StartInvestigationRequest,
+) (map[string]any, []map[string]any, error) {
+	evidence := []map[string]any{}
+	switch kind {
+	case "alert":
+		fp := strings.TrimSpace(req.Fingerprint)
+		if fp == "" {
+			return nil, nil, constants.ErrBadRequestWithMsg("alert 调查需要 fingerprint")
+		}
+		if s.alertSvc == nil {
+			return nil, nil, constants.ErrBadRequestWithMsg("告警服务不可用")
+		}
+		explain, err := s.alertSvc.ExplainFingerprintDelivery(ctx, fp)
+		if err != nil {
+			return nil, nil, err
+		}
+		bundle := map[string]any{
+			"fingerprint":             explain.Fingerprint,
+			"firing_delivered":        explain.FiringDelivered,
+			"firing_delivered_source": explain.FiringDeliveredSource,
+			"skip_summary":            explain.SkipSummary,
+			"events_count":            len(explain.Events),
+		}
+		evidence = append(evidence, map[string]any{
+			"type": "alert_explain", "fingerprint": fp, "firing_delivered": explain.FiringDelivered,
+		})
+		return bundle, evidence, nil
+	case "pod":
+		ns := strings.TrimSpace(req.Namespace)
+		name := strings.TrimSpace(req.Resource)
+		if req.ClusterID == 0 || ns == "" || name == "" {
+			return nil, nil, constants.ErrBadRequestWithMsg("pod 调查需要 cluster_id/namespace/resource")
+		}
+		if s.podSvc == nil {
+			return nil, nil, constants.ErrBadRequestWithMsg("K8s Pod 服务不可用")
+		}
+		if err := s.assertK8sClusterAccess(ctx, actor, req.ClusterID, ns, k8s.K8sAccessRankReadonly); err != nil {
+			return nil, nil, err
+		}
+		ctx = withActorContext(ctx, actor)
+		diag, err := s.podSvc.Diagnose(ctx, k8s.PodDiagnoseQuery{
+			ClusterID: req.ClusterID, Namespace: ns, Name: name,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		bundle := map[string]any{"diagnose": diag, "summary": diag.Summary}
+		evidence = append(evidence, map[string]any{
+			"type": "pod_diagnose", "cluster_id": req.ClusterID, "namespace": ns, "name": name, "summary": diag.Summary,
+		})
+		return bundle, evidence, nil
+	case "cicd":
+		if req.ProjectID == 0 || req.RunID == 0 {
+			return nil, nil, constants.ErrBadRequestWithMsg("cicd 调查需要 project_id/run_id")
+		}
+		if s.cicdSvc == nil {
+			return nil, nil, constants.ErrBadRequestWithMsg("CI/CD 服务不可用")
+		}
+		run, err := s.cicdSvc.GetBuildRun(ctx, req.ProjectID, req.RunID, actor)
+		if err != nil {
+			return nil, nil, err
+		}
+		stages, _ := s.cicdSvc.ListBuildRunStages(ctx, req.ProjectID, req.RunID, actor)
+		logTail, _ := s.cicdSvc.GetBuildRunLog(ctx, req.ProjectID, req.RunID, actor)
+		bundle := map[string]any{
+			"build":            run,
+			"stages":           stages,
+			"console_log_tail": truncateTail(logTail, 20_000),
+			"summary":          "构建结果: " + strings.TrimSpace(run.BuildResult),
+		}
+		evidence = append(evidence, map[string]any{
+			"type": "cicd_build", "project_id": req.ProjectID, "run_id": req.RunID, "result": run.BuildResult,
+		})
+		_ = userID
+		return bundle, evidence, nil
+	default: // chat
+		q := strings.TrimSpace(req.Query)
+		if q == "" {
+			q = strings.TrimSpace(req.Title)
+		}
+		bundle := map[string]any{
+			"query":      q,
+			"project_id": req.ProjectID,
+			"cluster_id": req.ClusterID,
+			"namespace":  req.Namespace,
+			"summary":    q,
+		}
+		evidence = append(evidence, map[string]any{"type": "chat_query", "query": truncateStr(q, 200)})
+		return bundle, evidence, nil
+	}
+}
+
+func (s *Service) analyzeInvestigation(
+	ctx context.Context,
+	userID uint,
+	_ *auth.CurrentUser,
+	kind string,
+	req StartInvestigationRequest,
+	collect map[string]any,
+	ragHits []ragHit,
+) (*InvestigationReport, error) {
+	cfg, err := s.requireEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+	promptCode := ""
+	summaryFallback := ""
+	var ctxPayload any
+	switch kind {
+	case "alert":
+		promptCode = "diagnosis/alert-explain"
+		summaryFallback = "指纹投递追溯"
+		ctxPayload = collect
+	case "pod":
+		promptCode = "diagnosis/k8s-pod"
+		if d, ok := collect["diagnose"]; ok {
+			ctxPayload = d
+		} else {
+			ctxPayload = collect
+		}
+		if v, ok := collect["summary"].(string); ok {
+			summaryFallback = v
+		}
+	case "cicd":
+		promptCode = "diagnosis/cicd-build-fail"
+		ctxPayload = collect
+		if v, ok := collect["summary"].(string); ok {
+			summaryFallback = v
+		}
+	default:
+		return s.analyzeChatInvestigation(ctx, userID, req, collect, ragHits)
+	}
+	ctxJSON, _ := json.Marshal(ctxPayload)
+	ctxJSON = truncateBytes(ctxJSON, 60_000)
+	if len(ragHits) > 0 {
+		var b strings.Builder
+		b.Write(ctxJSON)
+		b.WriteString("\n\n## RAG\n")
+		for _, h := range ragHits {
+			b.WriteString("- ")
+			b.WriteString(truncateStr(h.Content, 400))
+			b.WriteString("\n")
+		}
+		ctxJSON = truncateBytes([]byte(b.String()), 60_000)
+	}
+	prompt, err := s.loadPromptContent(ctx, promptCode, map[string]string{"context_json": string(ctxJSON)})
+	if err != nil {
+		return nil, err
+	}
+	cli, name, pcfg, err := s.clientFor(ctx, &cfg, req.Provider)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := cli.Chat(ctx, llm.ChatRequest{
+		Model: pcfg.Model,
+		Messages: []llm.Message{
+			{Role: "user", Content: prompt},
+		},
+		MaxTokens: cfg.MaxTokens,
+	})
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg("AI 调用失败: " + err.Error())
+	}
+	s.logUsage(userID, "investigation_"+kind, name, resp)
+	out := &InvestigationReport{
+		Summary:  summaryFallback,
+		Provider: name,
+		Model:    resp.Model,
+		RawReply: resp.Content,
+	}
+	applyParsedAnalysis(&out.Summary, &out.RootCauses, &out.Actions, resp.Content)
+	return out, nil
+}
+
+func (s *Service) analyzeChatInvestigation(
+	ctx context.Context,
+	userID uint,
+	req StartInvestigationRequest,
+	collect map[string]any,
+	ragHits []ragHit,
+) (*InvestigationReport, error) {
+	cfg, err := s.requireEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bundle := map[string]any{"collect": collect, "rag": ragHits}
+	ctxJSON, _ := json.Marshal(bundle)
+	ctxJSON = truncateBytes(ctxJSON, 60_000)
+	prompt := "你是运维助手。根据以下采集与知识检索，输出 JSON：" +
+		`{"ai_summary":"...","root_causes":[{"cause":"...","confidence":0.8}],"actions":[{"action":"...","priority":"high"}]}` +
+		"\n\n" + string(ctxJSON)
+	cli, name, pcfg, err := s.clientFor(ctx, &cfg, req.Provider)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := cli.Chat(ctx, llm.ChatRequest{
+		Model: pcfg.Model,
+		Messages: []llm.Message{
+			{Role: "user", Content: prompt},
+		},
+		MaxTokens: cfg.MaxTokens,
+	})
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg("AI 调用失败: " + err.Error())
+	}
+	s.logUsage(userID, "investigation_chat", name, resp)
+	summary := "对话调查完成"
+	if v, ok := collect["summary"].(string); ok && v != "" {
+		summary = truncateStr(v, 200)
+	}
+	out := &InvestigationReport{
+		Summary:  summary,
+		Provider: name,
+		Model:    resp.Model,
+		RawReply: resp.Content,
+	}
+	applyParsedAnalysis(&out.Summary, &out.RootCauses, &out.Actions, resp.Content)
+	return out, nil
+}
