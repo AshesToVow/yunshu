@@ -112,13 +112,14 @@ export function PodPage() {
   const [simpleForm] = Form.useForm<PodSimpleFormValues>();
   const [yamlForm] = Form.useForm<{ manifest: string }>();
 
-  const loadPods = useCallback(async (overrideKeyword?: string) => {
+  const loadPods = useCallback(async (overrideKeyword?: string, opts?: { silent?: boolean }) => {
     const { clusterId: cid, namespace: ns, keyword: kw } = filterRef.current;
     if (!cid) {
       setPods([]);
       return;
     }
-    setLoading(true);
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoading(true);
     try {
       const effectiveKeyword = (overrideKeyword ?? kw).trim();
       const res = await getPods({ cluster_id: cid, namespace: ns, keyword: effectiveKeyword || undefined });
@@ -126,7 +127,7 @@ export function PodPage() {
     } catch {
       // http 拦截器已 toast
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -139,7 +140,7 @@ export function PodPage() {
     clusterId,
     namespace,
     resource: "pods",
-    onRefresh: loadPods,
+    onRefresh: () => void loadPods(undefined, { silent: true }),
     onDisabled: () => setWatchLive(false),
   });
 

@@ -17,7 +17,7 @@
   2. `list_pods` 或直接 `diagnose_pod`
   3. 需要细节：`get_pod_detail` / `get_pod_logs` / `list_events`
   4. 对典型原因：`run_diagnose_runbook`
-- **日志检索**：需要 `project_id` + keyword；可加 namespace/pod/cluster；工具 `search_logs`
+- **日志检索/分析**：需 `project_id`；报错整理优先 `analyze_logs`；原文用 `search_logs`；为空查 `list_log_sources` / `list_loggie_status` / `list_cluster_log_rules`
 - **构建失败**：`list_cicd_builds` → `get_cicd_build` → `get_cicd_build_log`（需 `project_id`）
 - **告警投递**：`list_alerts` 拿 fingerprint → `explain_alert`
 - **平台能力/怎么用**：结合知识库片段说明菜单路径与工具能力；无实时数据需求时可不调工具

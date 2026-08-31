@@ -26,6 +26,7 @@ import (
 	esmgmtsvc "yunshu/internal/service/esmgmt"
 	"yunshu/internal/service/k8s"
 	"yunshu/internal/service/logplatform"
+	projectsvc "yunshu/internal/service/project"
 
 	"gorm.io/gorm"
 )
@@ -53,6 +54,9 @@ type Service struct {
 	cmdbSvc       *cmdbsvc.Service
 	dbmgmtSvc     *dbmgmtsvc.Service
 	esmgmtSvc     *esmgmtsvc.Service
+	projectMgmt   *projectsvc.ProjectMgmtService
+	loggieAgent   *logplatform.LoggieAgentService
+	clusterLog    *logplatform.ClusterLogService
 	rateMu        sync.Mutex
 	rateMap       map[uint]time.Time // 简易限流：每用户最短间隔
 	seedOnce      sync.Once
@@ -72,6 +76,20 @@ func (s *Service) SetPlatformDeps(
 	s.cmdbSvc = cmdbSvc
 	s.dbmgmtSvc = dbmgmtSvc
 	s.esmgmtSvc = esmgmtSvc
+}
+
+// SetLogPlatformDeps 注入日志平台只读诊断依赖（日志源 / Loggie / 集群采集规则）。
+func (s *Service) SetLogPlatformDeps(
+	projectMgmt *projectsvc.ProjectMgmtService,
+	loggieAgent *logplatform.LoggieAgentService,
+	clusterLog *logplatform.ClusterLogService,
+) {
+	if s == nil {
+		return
+	}
+	s.projectMgmt = projectMgmt
+	s.loggieAgent = loggieAgent
+	s.clusterLog = clusterLog
 }
 
 func NewService(

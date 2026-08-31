@@ -61,10 +61,19 @@
 
 ## Tool 运行时
 
-- `builtin`：K8s / 日志 / CI / 告警 / **CMDB 服务器** / **DB 实例** / **ES 连接**
+- `builtin`：K8s / **日志（检索+分析+采集诊断）** / CI / 告警 / **CMDB 服务器** / **DB 实例** / **ES 连接**
 - `script`：沙箱 `data/ai/tools`；写操作走审批
 - **Policy**：扩缩容 replicas>50 需 reason 含 `emergency`；禁止删 `kube-system`/`kube-public`/`yunshu-logging` Pod；写操作须有 namespace
 
+## 日志分析（助手）
+
+在运维助手选择项目后可对话触发：
+
+1. `analyze_logs`：级别/服务/Pod 统计 + 高频错误签名 + 样例（快速整理）
+2. `search_logs`：原始命中（支持 level/from/to/service_name 等）
+3. 为空时：`list_log_sources` → `list_loggie_status`（主机）/ `list_cluster_log_rules`（K8s）
+
+知识：`data/ai/kb/kb_log/`；SOP：`sop-log-error-analysis`、`sop-log-empty`。
 ## RAG
 
 1. DB 案例 + chunks + SOP（词法；有 Embedding 时混合语义）
@@ -80,7 +89,7 @@
 | k8s | CrashLoop/ImagePull/Pending/OOM | ✓ | kb_k8s | — | 强 |
 | cicd | 构建失败 | ✓ | kb_cicd | — | list/get/log |
 | alert | 未收到 | ✓ | kb_alert | — | list/explain |
-| log | 检索为空 | ✓ | kb_log | — | search_logs |
+| log | 检索为空 + 错误整理 | ✓ | kb_log | — | search_logs / **analyze_logs** / list_log_sources / list_loggie_status / list_cluster_log_rules |
 | linux | 磁盘打满 | ✓ | kb_linux | disk/mem/load | — |
 | cmdb | 服务器离线 | ✓ | kb_cmdb | — | list_servers/get_server |
 | dbmgmt | 连接失败 | ✓ | — | — | list_db_instances |
@@ -91,7 +100,8 @@
 1. 重启服务 AutoMigrate（含 `ai_investigations`）；启动 PostMigrate 会将 AI 文本表转为 **utf8mb4**（修复调查存 emoji 报 1366）
 2. 重新 seed 权限（含 chat/stream、investigations、knowledge/embed、**k8s/generate-yaml**）
 3. 菜单同步后可见「AI 调查」
-4. **必须保证运行时可读取 `data/ai`**；能力中心 **reseed** 以加载 `generation/k8s-yaml` Prompt
+4. **必须保证运行时可读取 `data/ai`**；能力中心 **reseed** 以加载新 Prompt/KB/SOP/Tool（含 `generation/k8s-yaml`、`diagnosis/log-analyze`、日志分析工具定义）
 5. 先 reseed → sync ES →（可选）向量化
 6. 调查为同步阻塞调用，耗时受 LLM/采集影响，前端超时约 180s
 7. 若库表仍为 utf8，也可手动：`ALTER TABLE ai_investigations CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+8. 系统 Prompt（`system/ops-agent`）若库中已有版本，reseed **不会**覆盖；需在能力中心发布新版本，或删版本后 reseed

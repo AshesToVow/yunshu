@@ -1,0 +1,19 @@
+code: sop-log-error-analysis
+title: 应用日志错误分析 SOP
+scenario: 业务报错、Exception、ERROR 激增、快速整理日志
+preconditions: 已知 project_id；可选 namespace/service_name/时间窗
+input_params: project_id, keyword, level, from, to, namespace, service_name
+check_steps: |
+  1. analyze_logs（keyword 或 level=ERROR，必要时加 from/to、namespace、service_name）
+  2. 查看 top_error_signatures 与 level_counts
+  3. 需要原文时 search_logs 同条件复核
+  4. 无命中则 list_log_sources → list_loggie_status / list_cluster_log_rules
+exec_steps: |
+  1. 按高频签名归纳根因假设（配置/依赖超时/空指针等）
+  2. 关联对应服务与 Pod，必要时 get_pod_logs / diagnose_pod
+  3. 给出可验证的下一步（改配置、扩容、查下游、补采集）
+verify_steps: 能指出主要错误签名与受影响服务/Pod，并给出可执行下一步
+exception_handle: 缺 project_id 先请用户选择项目；工具失败如实说明
+rollback: 无
+risk: 禁止建议删除生产索引；勿泄露密钥与明文密码
+approval_needed: false

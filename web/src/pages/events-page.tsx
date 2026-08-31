@@ -51,11 +51,12 @@ export function EventsPage() {
   const filterRef = useRef({ clusterId, namespace, keyword, viewMode });
   filterRef.current = { clusterId, namespace, keyword, viewMode };
 
-  const reload = useCallback(async (overrideKeyword?: string) => {
+  const reload = useCallback(async (overrideKeyword?: string, opts?: { silent?: boolean }) => {
     const { clusterId: cid, namespace: ns, keyword: kw, viewMode: mode } = filterRef.current;
     if (!cid) return;
     const effectiveKeyword = (overrideKeyword ?? kw).trim();
-    setLoading(true);
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoading(true);
     try {
       const params = {
         cluster_id: cid,
@@ -71,7 +72,7 @@ export function EventsPage() {
     } catch {
       // http 拦截器已 toast
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -84,7 +85,7 @@ export function EventsPage() {
     clusterId,
     namespace,
     resource: "events",
-    onRefresh: reload,
+    onRefresh: () => void reload(undefined, { silent: true }),
     onDisabled: () => setWatchLive(false),
   });
 

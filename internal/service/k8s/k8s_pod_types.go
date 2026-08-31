@@ -57,11 +57,11 @@ type PodDiagnoseResult struct {
 }
 
 type PodFileQuery struct {
-	ClusterID uint   `form:"cluster_id" binding:"required"`
-	Namespace string `form:"namespace" binding:"required"`
-	Name      string `form:"name" binding:"required"`
-	Container string `form:"container"`
-	Path      string `form:"path"`
+	ClusterID uint   `json:"cluster_id" form:"cluster_id" binding:"required"`
+	Namespace string `json:"namespace" form:"namespace" binding:"required"`
+	Name      string `json:"name" form:"name" binding:"required"`
+	Container string `json:"container" form:"container"`
+	Path      string `json:"path" form:"path"`
 }
 
 type PodExecRequest struct {

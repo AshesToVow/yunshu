@@ -16,7 +16,6 @@ import (
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
 	"yunshu/internal/service/k8s"
-	"yunshu/internal/service/logplatform"
 )
 
 type toolContext struct {
@@ -160,18 +159,27 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 			map[string]any{"type": "object", "properties": map[string]any{}}),
 		// --- log ---
 		llm.NewFunctionTool("search_logs",
-			"检索项目日志平台（ES）。必须有 project_id；用于应用日志/错误关键字，与 get_pod_logs（kubectl 实时日志）互补。",
+			"检索项目日志平台（ES）原始命中列表。需要 project_id；keyword 建议填写。支持 level/from/to/service_name/namespace/pod 等过滤。复杂排障优先 analyze_logs；与 get_pod_logs（kubectl 实时日志）互补。",
 			map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"project_id": map[string]any{"type": "integer", "description": "必填；来自助手页所选项目或用户提供"},
-					"keyword":    map[string]any{"type": "string", "description": "检索关键字，如 error、Exception"},
-					"namespace":  map[string]any{"type": "string"},
-					"pod":        map[string]any{"type": "string"},
-					"cluster_id": map[string]any{"type": "integer"},
-					"page_size":  map[string]any{"type": "integer", "description": "默认 20，最大 50"},
+					"project_id":     map[string]any{"type": "integer", "description": "必填；来自助手页所选项目或用户提供"},
+					"keyword":        map[string]any{"type": "string", "description": "检索关键字，如 error、Exception"},
+					"level":          map[string]any{"type": "string", "description": "ERROR/WARN/INFO 等"},
+					"service_name":   map[string]any{"type": "string"},
+					"namespace":      map[string]any{"type": "string"},
+					"pod":            map[string]any{"type": "string"},
+					"container":      map[string]any{"type": "string"},
+					"collector_mode": map[string]any{"type": "string", "description": "host|k8s"},
+					"cluster_id":     map[string]any{"type": "integer"},
+					"server_id":      map[string]any{"type": "integer"},
+					"log_source_id":  map[string]any{"type": "integer"},
+					"file_path":      map[string]any{"type": "string"},
+					"from":           map[string]any{"type": "string"},
+					"to":             map[string]any{"type": "string"},
+					"page_size":      map[string]any{"type": "integer", "description": "默认 20，最大 50"},
 				},
-				"required": []string{"project_id", "keyword"},
+				"required": []string{"project_id"},
 			}),
 		// --- cicd ---
 		llm.NewFunctionTool("list_cicd_builds",
@@ -229,6 +237,7 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 			}),
 	}
 	defs = append(defs, s.platformToolDefinitions()...)
+	defs = append(defs, s.logToolDefinitions()...)
 	if includeWrite {
 		defs = append(defs,
 			llm.NewFunctionTool("scale_deployment",
@@ -532,23 +541,10 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			err = fmt.Errorf("日志检索服务不可用")
 			break
 		}
-		ps := int(getUint("page_size", 20))
-		if ps <= 0 || ps > 50 {
-			ps = 20
-		}
-		q := logplatform.LogSearchQuery{
-			ProjectID: projectID,
-			Keyword:   getStr("keyword"),
-			Namespace: getStr("namespace"),
-			Pod:       getStr("pod"),
-			Page:      1,
-			PageSize:  ps,
-		}
-		if clusterID > 0 {
-			cid := clusterID
-			q.ClusterID = &cid
-		}
+		q := s.buildLogSearchQuery(getUint, getStr, projectID, clusterID)
 		out, err = s.logSearch.Search(ctx, q)
+	case "analyze_logs", "list_log_sources", "list_loggie_status", "list_cluster_log_rules":
+		out, err = s.executeLogTool(ctx, name, getUint, getStr, projectID, clusterID, requireProject, actor)
 	case "list_cicd_builds":
 		if err = requireProject(); err != nil {
 			break

@@ -170,11 +170,13 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
   const closeCreateDrawer = useCallback(() => setCreateDrawerOpen(false), []);
   const reloadSeqRef = useRef(0);
 
-  async function reload(overrideKeyword?: string) {
+  /** silent=true：Watch 触发的后台刷新，不亮 Table loading，避免闪烁 */
+  async function reload(overrideKeyword?: string, opts?: { silent?: boolean }) {
     if (!clusterId) return;
     if (needNamespace && !namespace) return;
     const seq = ++reloadSeqRef.current;
-    setLoading(true);
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoading(true);
     try {
       const effectiveKeyword = (overrideKeyword ?? keyword).trim();
       const list = await api.list({ clusterId, namespace, keyword: effectiveKeyword || undefined });
@@ -184,7 +186,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
       if (seq !== reloadSeqRef.current) return;
       setData([]);
     } finally {
-      if (seq === reloadSeqRef.current) setLoading(false);
+      if (!silent && seq === reloadSeqRef.current) setLoading(false);
     }
   }
 
@@ -212,7 +214,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     clusterId,
     namespace,
     resource: watchResource,
-    onRefresh: () => void reload(),
+    onRefresh: () => void reload(undefined, { silent: true }),
     onDisabled: () => setWatchLive(false),
   });
 

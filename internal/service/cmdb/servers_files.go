@@ -32,9 +32,9 @@ type ServerFileListQuery struct {
 
 // ServerFilePathQuery 远端文件路径。
 type ServerFilePathQuery struct {
-	ProjectID uint   `form:"-"`
-	ServerID  uint   `form:"-"`
-	Path      string `form:"path" binding:"required"`
+	ProjectID uint   `json:"-" form:"-"`
+	ServerID  uint   `json:"-" form:"-"`
+	Path      string `json:"path" form:"path" binding:"required"`
 }
 
 func (s *Service) maxTransferBytes(ctx context.Context) int64 {
