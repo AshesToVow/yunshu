@@ -35,7 +35,7 @@ func (s *Service) goInceptionClient(ctx context.Context) *goinception.Client {
 func (s *Service) instanceGoInceptionTarget(inst *model.DbInstance) (goinception.Target, error) {
 	pw, err := cryptox.DecryptString(s.aead, inst.EncPassword)
 	if err != nil {
-		return goinception.Target{}, err
+		return goinception.Target{}, constants.ErrBadRequestWithMsg(constants.ErrMsgDbInstancePasswordDecryptFailed)
 	}
 	return goinception.Target{
 		Host:     inst.Host,

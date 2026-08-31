@@ -552,5 +552,9 @@ func (s *Service) RevealInstanceAccountPassword(ctx context.Context, projectID, 
 	if acc.EncPassword == "" {
 		return "", constants.ErrBadRequestWithMsg("该账号无平台托管密码")
 	}
-	return cryptox.DecryptString(s.aead, acc.EncPassword)
+	pw, err := cryptox.DecryptString(s.aead, acc.EncPassword)
+	if err != nil {
+		return "", constants.ErrBadRequestWithMsg(constants.ErrMsgDbInstancePasswordDecryptFailed)
+	}
+	return pw, nil
 }

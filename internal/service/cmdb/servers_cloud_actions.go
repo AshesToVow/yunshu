@@ -59,11 +59,11 @@ func (s *Service) RunCloudServerAction(ctx context.Context, projectID, serverID 
 	}
 	ak, err := cryptox.DecryptString(s.aead, *account.EncAK)
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "cmdb", "RunCloudServerAction", err)
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgCloudCredentialDecryptFailed)
 	}
 	sk, err := cryptox.DecryptString(s.aead, *account.EncSK)
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "cmdb", "RunCloudServerAction", err)
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgCloudCredentialDecryptFailed)
 	}
 	provider, err := s.providerFor(account.Provider)
 	if err != nil {

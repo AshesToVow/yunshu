@@ -231,11 +231,11 @@ func (s *Service) testCloudServerConnectivityBySDK(ctx context.Context, sv *mode
 
 	ak, err := cryptox.DecryptString(s.aead, *account.EncAK)
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "cmdb", "testCloudServerConnectivityBySDK", err)
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgCloudCredentialDecryptFailed)
 	}
 	sk, err := cryptox.DecryptString(s.aead, *account.EncSK)
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "cmdb", "testCloudServerConnectivityBySDK", err)
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgCloudCredentialDecryptFailed)
 	}
 	provider, err := s.providerFor(account.Provider)
 	if err != nil {

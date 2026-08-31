@@ -33,7 +33,7 @@
 #
 # ---------- 配置优先级 ----------
 # 启动必需：app / http / log / mysql|database / redis / auth / security（本文件）
-# 运行期运营：mail / alert.webhook_token / prometheus / k8s_event_forward → 数据字典优先
+# 运行期运营：mail / auth / alert.webhook_token / prometheus / k8s_event_forward → 数据字典优先
 # =============================================================================
 
 app:
@@ -209,6 +209,11 @@ redis:
 #   use_tls: true
 
 auth:
+  # 数据字典 auth_* 优先，下列 YAML 仅作兜底（改字典后需重启进程生效）
+  # 字典项：auth_jwt_secret / auth_access_token_ttl_minutes / auth_refresh_token_ttl_hours /
+  #         auth_cookie_secure / auth_cookie_domain / auth_csp_enabled /
+  #         auth_email_code_ttl_seconds / auth_email_code_cooldown_seconds /
+  #         auth_login_max_fail_attempts / auth_login_lock_seconds
   # 生成：openssl rand -base64 48 | tr -d '+/='；app.env=prod 时禁止使用下方仓库占位值
   jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"
   access_token_ttl_minutes: 15   # 短 access；浏览器 HttpOnly Cookie（ys_at）
@@ -218,6 +223,8 @@ auth:
   csp_enabled: true
   email_code_ttl_seconds: 600
   email_code_cooldown_seconds: 60
+  # login_max_fail_attempts: 5
+  # login_lock_seconds: 900
 
 casbin:
   model_path: configs/casbin_model.conf

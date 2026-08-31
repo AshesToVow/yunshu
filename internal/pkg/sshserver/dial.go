@@ -2,10 +2,9 @@ package sshserver
 
 import (
 	"context"
+	"crypto/cipher"
 	"errors"
 	"strings"
-
-	"crypto/cipher"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
@@ -36,7 +35,7 @@ func DecryptCredentialToSSHConfig(ctx context.Context, aead cipher.AEAD, domain 
 		}
 		pw, err := cryptox.DecryptString(aead, *cred.EncPassword)
 		if err != nil {
-			return sshclient.Config{}, bizerrors.Pass(ctx, domain, "DecryptCredentialToSSHConfig", err)
+			return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsgSSHCredentialDecryptFailed)
 		}
 		cfg.AuthType = sshclient.AuthPassword
 		cfg.Password = pw
@@ -46,14 +45,14 @@ func DecryptCredentialToSSHConfig(ctx context.Context, aead cipher.AEAD, domain 
 		}
 		pk, err := cryptox.DecryptString(aead, *cred.EncPrivateKey)
 		if err != nil {
-			return sshclient.Config{}, bizerrors.Pass(ctx, domain, "DecryptCredentialToSSHConfig", err)
+			return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsgSSHCredentialDecryptFailed)
 		}
 		cfg.AuthType = sshclient.AuthKey
 		cfg.PrivateKey = pk
 		if cred.EncPassphrase != nil {
 			pp, err := cryptox.DecryptString(aead, *cred.EncPassphrase)
 			if err != nil {
-				return sshclient.Config{}, bizerrors.Pass(ctx, domain, "DecryptCredentialToSSHConfig", err)
+				return sshclient.Config{}, constants.ErrBadRequestWithMsg(constants.ErrMsgSSHCredentialDecryptFailed)
 			}
 			cfg.Passphrase = pp
 		}

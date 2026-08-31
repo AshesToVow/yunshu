@@ -24,7 +24,7 @@ export const DICT_CATEGORY_TABS: { id: DictCategoryId; label: string }[] = [
 ];
 
 export const DICT_CATEGORY_META: Record<Exclude<DictCategoryId, "all">, DictCategoryMeta> = {
-  system: { id: "system", label: "系统", color: "blue", description: "邮件、密码策略、通用状态等基础配置" },
+  system: { id: "system", label: "系统", color: "blue", description: "邮件、认证会话、密码策略、通用状态等基础配置" },
   alert: { id: "alert", label: "告警", color: "volcano", description: "告警规则、通道、Prometheus、企微/钉钉" },
   log: { id: "log", label: "日志", color: "cyan", description: "ES / Kafka / Agent、采集源等平台配置" },
   k8s: { id: "k8s", label: "Kubernetes", color: "purple", description: "集群模板、Event 转发等" },
@@ -59,6 +59,16 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "须含特殊字符（password_require_special）", value: "password_require_special", category: "system" },
   { label: "密码过期天数（password_expiry_days）", value: "password_expiry_days", category: "system" },
   { label: "禁止包含用户名（password_forbid_username）", value: "password_forbid_username", category: "system" },
+  { label: "JWT 签名密钥（auth_jwt_secret）", value: "auth_jwt_secret", category: "system" },
+  { label: "Access Token 有效期分钟（auth_access_token_ttl_minutes）", value: "auth_access_token_ttl_minutes", category: "system" },
+  { label: "Refresh Token 有效期小时（auth_refresh_token_ttl_hours）", value: "auth_refresh_token_ttl_hours", category: "system" },
+  { label: "Cookie Secure（auth_cookie_secure）", value: "auth_cookie_secure", category: "system" },
+  { label: "Cookie Domain（auth_cookie_domain）", value: "auth_cookie_domain", category: "system" },
+  { label: "启用 CSP（auth_csp_enabled）", value: "auth_csp_enabled", category: "system" },
+  { label: "邮箱验证码有效期秒（auth_email_code_ttl_seconds）", value: "auth_email_code_ttl_seconds", category: "system" },
+  { label: "邮箱验证码冷却秒（auth_email_code_cooldown_seconds）", value: "auth_email_code_cooldown_seconds", category: "system" },
+  { label: "登录失败锁定次数（auth_login_max_fail_attempts）", value: "auth_login_max_fail_attempts", category: "system" },
+  { label: "登录锁定时长秒（auth_login_lock_seconds）", value: "auth_login_lock_seconds", category: "system" },
 
   { label: "告警通道类型（alert_channel_type）", value: "alert_channel_type", category: "alert" },
   { label: "告警 Webhook URL（alert_webhook_url）", value: "alert_webhook_url", category: "alert" },
@@ -96,6 +106,14 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "Kafka Topic（kafka_topic）", value: "kafka_topic", category: "log" },
   { label: "Kafka 消费组（kafka_consumer_group）", value: "kafka_consumer_group", category: "log" },
   { label: "Kafka 密码（kafka_password）", value: "kafka_password", category: "log" },
+  { label: "Kafka 用户名（kafka_username）", value: "kafka_username", category: "log" },
+  { label: "Kafka SASL 机制（kafka_sasl_mechanism）", value: "kafka_sasl_mechanism", category: "log" },
+  { label: "Kafka 消费批大小（kafka_batch_size）", value: "kafka_batch_size", category: "log" },
+  { label: "Kafka 消费并发（kafka_workers）", value: "kafka_workers", category: "log" },
+  { label: "ES 用户名（elasticsearch_username）", value: "elasticsearch_username", category: "log" },
+  { label: "ES 密码（elasticsearch_password）", value: "elasticsearch_password", category: "log" },
+  { label: "ES 默认保留天数（elasticsearch_default_retention_days）", value: "elasticsearch_default_retention_days", category: "log" },
+  { label: "ES 清理 Cron（elasticsearch_cleanup_cron_spec）", value: "elasticsearch_cleanup_cron_spec", category: "log" },
 
   { label: "K8s Event 转发开关（k8s_event_forward_enabled）", value: "k8s_event_forward_enabled", category: "k8s" },
   { label: "K8s Event 缓冲（k8s_event_forward_watcher_buffer_size）", value: "k8s_event_forward_watcher_buffer_size", category: "k8s" },
@@ -140,11 +158,14 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "MinIO 备份前缀（minio_backup_prefix）", value: "minio_backup_prefix", category: "backup" },
   { label: "MySQL 备份 Worker 开关（mysql_backup_scheduler_enabled）", value: "mysql_backup_scheduler_enabled", category: "backup" },
   { label: "MySQL 备份调度 Cron（mysql_backup_scheduler_tick_spec）", value: "mysql_backup_scheduler_tick_spec", category: "backup" },
+  { label: "ES 备份调度开关（esmgmt_backup_scheduler_enabled）", value: "esmgmt_backup_scheduler_enabled", category: "backup" },
+  { label: "ES 备份调度 Cron（esmgmt_backup_scheduler_tick_spec）", value: "esmgmt_backup_scheduler_tick_spec", category: "backup" },
 
   { label: "SQL 查询超时秒（dbmgmt_query_timeout_seconds）", value: "dbmgmt_query_timeout_seconds", category: "dbmgmt" },
   { label: "查询最大行数（dbmgmt_max_rows）", value: "dbmgmt_max_rows", category: "dbmgmt" },
   { label: "SQL 导入上限 MB（dbmgmt_max_import_file_mb）", value: "dbmgmt_max_import_file_mb", category: "dbmgmt" },
   { label: "生产强制审批（dbmgmt_prod_force_approval）", value: "dbmgmt_prod_force_approval", category: "dbmgmt" },
+  { label: "禁止自审自批（dbmgmt_forbid_self_approve）", value: "dbmgmt_forbid_self_approve", category: "dbmgmt" },
   { label: "审批超时小时（dbmgmt_approval_sla_hours）", value: "dbmgmt_approval_sla_hours", category: "dbmgmt" },
   { label: "审批提醒间隔小时（dbmgmt_approval_reminder_interval_hours）", value: "dbmgmt_approval_reminder_interval_hours", category: "dbmgmt" },
   { label: "实例探活间隔秒（dbmgmt_ping_interval_seconds）", value: "dbmgmt_ping_interval_seconds", category: "dbmgmt" },
@@ -184,9 +205,21 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "Run 同步间隔（cicd_run_sync_interval_seconds）", value: "cicd_run_sync_interval_seconds", category: "cicd" },
   { label: "审批超时阈值（cicd_approval_sla_hours）", value: "cicd_approval_sla_hours", category: "cicd" },
   { label: "审批提醒间隔（cicd_approval_reminder_interval_hours）", value: "cicd_approval_reminder_interval_hours", category: "cicd" },
+  { label: "禁止自审自批（cicd_forbid_self_approve）", value: "cicd_forbid_self_approve", category: "cicd" },
+  { label: "生产强制审批（cicd_prod_force_audit）", value: "cicd_prod_force_audit", category: "cicd" },
+  { label: "启用 SonarQube（cicd_sonar_enabled）", value: "cicd_sonar_enabled", category: "cicd" },
+  { label: "SonarQube 地址（cicd_sonar_url）", value: "cicd_sonar_url", category: "cicd" },
+  { label: "SonarQube Token（cicd_sonar_token）", value: "cicd_sonar_token", category: "cicd" },
+  { label: "门禁失败拦截（cicd_sonar_gate_block）", value: "cicd_sonar_gate_block", category: "cicd" },
+  { label: "Jenkins 回调 HMAC（cicd_jenkins_callback_hmac_secret）", value: "cicd_jenkins_callback_hmac_secret", category: "cicd" },
+  { label: "Jenkins 回调 URL（cicd_jenkins_callback_url）", value: "cicd_jenkins_callback_url", category: "cicd" },
+  { label: "MinIO AccessKey Yunshu（cicd_minio_access_key）", value: "cicd_minio_access_key", category: "cicd" },
+  { label: "MinIO SecretKey Yunshu（cicd_minio_secret_key）", value: "cicd_minio_secret_key", category: "cicd" },
   { label: "发布模式（cicd_publish_mode）", value: "cicd_publish_mode", category: "cicd" },
   { label: "CI/CD 环境（cicd_tenv）", value: "cicd_tenv", category: "cicd" },
   { label: "应用类型（cicd_pipeline_type）", value: "cicd_pipeline_type", category: "cicd" },
+  { label: "前端发布操作（cicd_release_op_frontend）", value: "cicd_release_op_frontend", category: "cicd" },
+  { label: "后端发布操作（cicd_release_op_backend）", value: "cicd_release_op_backend", category: "cicd" },
   { label: "前端构建类型（cicd_build_type_frontend）", value: "cicd_build_type_frontend", category: "cicd" },
   { label: "后端构建类型（cicd_build_type_backend）", value: "cicd_build_type_backend", category: "cicd" },
   { label: "npm 安装模式（cicd_npm_install_mode）", value: "cicd_npm_install_mode", category: "cicd" },
@@ -224,16 +257,37 @@ export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "
   if (!key) return "other";
   const registered = DICT_TYPE_CATEGORY_MAP.get(key);
   if (registered) return registered;
+
+  // 前缀规则（与插件 / 业务域对齐；顺序：更具体前缀优先）
   if (key.startsWith("cicd_")) return "cicd";
   if (key.startsWith("ai_")) return "ai";
   if (key.startsWith("dbmgmt_")) return "dbmgmt";
-  if (key.startsWith("alert_")) return "alert";
-  if (key.startsWith("log_")) return "log";
+  if (key.startsWith("cmdb_") || key.startsWith("server_") || key.startsWith("cloud_")) return "cmdb";
+  if (key.startsWith("alert_") || key.startsWith("wecom_") || key.startsWith("dingtalk_")) return "alert";
+  if (
+    key.startsWith("log_") ||
+    key.startsWith("loggie_") ||
+    key.startsWith("elasticsearch_") ||
+    key.startsWith("kafka_")
+  ) {
+    return "log";
+  }
   if (key.startsWith("k8s_")) return "k8s";
-  if (key.startsWith("minio_") || key.startsWith("mysql_backup_")) return "backup";
-  if (key.startsWith("mail_") || key.startsWith("password_") || key === "common_status") return "system";
-  if (key.startsWith("server_") || key.startsWith("cloud_")) return "cmdb";
-  if (key.startsWith("wecom_") || key.startsWith("dingtalk_")) return "alert";
+  if (
+    key.startsWith("minio_") ||
+    key.startsWith("mysql_backup_") ||
+    key.startsWith("esmgmt_")
+  ) {
+    return "backup";
+  }
+  if (
+    key.startsWith("mail_") ||
+    key.startsWith("password_") ||
+    key.startsWith("auth_") ||
+    key === "common_status"
+  ) {
+    return "system";
+  }
   return "other";
 }
 
@@ -273,7 +327,18 @@ export function buildGroupedDictTypeSelectOptions(
     grouped.set(cat, list);
   }
 
-  const order: Exclude<DictCategoryId, "all">[] = ["system", "alert", "log", "k8s", "cmdb", "backup", "dbmgmt", "cicd", "other"];
+  const order: Exclude<DictCategoryId, "all">[] = [
+    "system",
+    "alert",
+    "log",
+    "k8s",
+    "cmdb",
+    "backup",
+    "dbmgmt",
+    "cicd",
+    "ai",
+    "other",
+  ];
   return order
     .filter((id) => grouped.has(id))
     .map((id) => ({

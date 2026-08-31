@@ -112,7 +112,43 @@ func (s *RegistrationService) List(ctx context.Context, keyword string, status *
 	if err != nil {
 		return nil, 0, bizerrors.Pass(ctx, "registration", "List", err)
 	}
+	s.enrichReviewerUsernames(ctx, list)
 	return list, total, nil
+}
+
+func (s *RegistrationService) enrichReviewerUsernames(ctx context.Context, list []model.RegistrationRequest) {
+	ids := make([]uint, 0, len(list))
+	seen := make(map[uint]struct{}, len(list))
+	for _, item := range list {
+		if item.ReviewerID == nil || *item.ReviewerID == 0 {
+			continue
+		}
+		id := *item.ReviewerID
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	users, err := s.userRepo.ListByIDs(ctx, ids)
+	if err != nil {
+		return
+	}
+	names := make(map[uint]string, len(users))
+	for _, u := range users {
+		names[u.ID] = u.Username
+	}
+	for i := range list {
+		if list[i].ReviewerID == nil {
+			continue
+		}
+		if name, ok := names[*list[i].ReviewerID]; ok {
+			list[i].ReviewerUsername = name
+		}
+	}
 }
 
 // Review 执行对应的业务逻辑。

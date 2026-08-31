@@ -123,7 +123,11 @@ export function RegistrationsPage() {
             { title: "昵称", dataIndex: "nickname" },
             { title: "状态", dataIndex: "status", render: statusTag },
             { title: "申请时间", dataIndex: "created_at" },
-            { title: "审核人ID", dataIndex: "reviewer_id", render: (v?: number) => v || "-" },
+            {
+              title: "审核人",
+              dataIndex: "reviewer_username",
+              render: (v?: string) => v || "-",
+            },
             { title: "审核备注", dataIndex: "review_comment", render: (v?: string) => v || "-" },
             {
               title: "操作",

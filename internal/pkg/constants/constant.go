@@ -184,4 +184,8 @@ const (
 	ErrMsgSSHConnectFailedPrefix  = "远程连接失败（SSH）："
 	ErrMsgSSHExecFailedPrefix     = "远程命令执行失败："
 	ErrMsgCloudSDKPrefix          = "云平台返回异常："
+	// ErrMsgSSHCredentialDecryptFailed 常见于 security.encryption_key 变更后旧密文无法解密。
+	ErrMsgSSHCredentialDecryptFailed = "服务器 SSH 凭据解密失败（可能 encryption_key 已变更），请到「服务器管理」重新保存该服务器的 SSH 密码或私钥"
+	ErrMsgDbInstancePasswordDecryptFailed = "数据库实例密码解密失败（可能 encryption_key 已变更），请重新编辑实例并保存密码"
+	ErrMsgCloudCredentialDecryptFailed    = "云账号 AK/SK 解密失败（可能 encryption_key 已变更），请重新保存该云账号凭据"
 )
