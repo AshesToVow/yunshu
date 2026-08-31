@@ -18,6 +18,7 @@ func seedPermissionsAI() []model.Permission {
 		{Name: "AI 调查列表", Resource: "/api/v1/ai/investigations", Action: "GET", Description: "List AI investigations"},
 		{Name: "AI 调查详情", Resource: "/api/v1/ai/investigations/:id", Action: "GET", Description: "Get AI investigation"},
 		{Name: "AI Pod 排障分析", Resource: "/api/v1/ai/k8s/pod-diagnose", Action: "POST", Description: "AI analyze pod diagnose"},
+		{Name: "AI 生成 K8s YAML", Resource: "/api/v1/ai/k8s/generate-yaml", Action: "POST", Description: "AI generate Kubernetes YAML from description"},
 		{Name: "AI CI 构建失败分析", Resource: "/api/v1/ai/cicd/build-fail", Action: "POST", Description: "AI analyze CI build failure"},
 		{Name: "AI 告警解释", Resource: "/api/v1/ai/alert/explain", Action: "POST", Description: "AI explain alert fingerprint delivery"},
 		{Name: "AI 审批列表", Resource: "/api/v1/ai/approvals", Action: "GET", Description: "List AI tool approvals"},

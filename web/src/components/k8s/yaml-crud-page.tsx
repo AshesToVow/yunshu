@@ -9,6 +9,7 @@ import { OpsPageHeader } from "../ops/ops-page-header";
 import { useK8sContext } from "../../hooks/use-k8s-context";
 import { useK8sWatch } from "../../hooks/use-k8s-watch";
 import { useEditGuardStore } from "../../stores/edit-guard-store";
+import { AiYamlGeneratePanel } from "./ai-yaml-generate-panel";
 import { K8sDeleteDialog } from "./k8s-delete-dialog";
 import { MonacoYamlEditor, validateYaml } from "./monaco-yaml-editor";
 
@@ -80,6 +81,8 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   onEdit?: (record: TItem, ctx: { clusterId: number; namespace?: string; reload: () => void }) => void;
   detailExtra?: (detail: TDetail, yamlCtx?: { yaml: string; setYaml: (v: string) => void }) => React.ReactNode;
   createTemplate?: (ctx: { namespace?: string }) => string;
+  /** AI 生成 YAML 时的资源 Kind，缺省从模板或标题推断 */
+  aiResourceKind?: string;
   /** 点击「创建」打开右侧抽屉后调用（准备表单初始值等，如 prepareCreate） */
   onCreateDrawerOpen?: (ctx: YamlCrudCreateCtx) => void;
   /** 「表单创建」Tab 内容（与 Pod 页一致：与 YAML 同在一个创建抽屉内） */
@@ -116,6 +119,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     onLoadNamespaces,
     detailExtra,
     createTemplate,
+    aiResourceKind,
     onCreateDrawerOpen,
     renderCreateFormTab,
     onToolbarReady,
@@ -429,11 +433,30 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
 
   const canApplyDetailYaml = Boolean(api.apply) && !disableMutations;
 
+  const resolvedAiKind = useMemo(() => {
+    if (aiResourceKind?.trim()) return aiResourceKind.trim();
+    const tpl = createTemplate?.({ namespace }) ?? "";
+    try {
+      const doc = YAML.parse(tpl) as { kind?: string } | null;
+      if (doc?.kind) return String(doc.kind);
+    } catch {
+      /* ignore */
+    }
+    return title.replace(/管理$/, "").trim() || "Resource";
+  }, [aiResourceKind, createTemplate, namespace, title]);
+
   const yamlCreatePanel = (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        支持直接粘贴 Kubernetes YAML（底层使用 Kom SDK 的 apply）。打开时已预填模板（若有），可清空后自行编写。
+        支持直接粘贴 Kubernetes YAML（底层使用 Kom SDK 的 apply）。打开时已预填模板（若有），可清空后自行编写，或用 AI 按描述生成。
       </Typography.Paragraph>
+      <AiYamlGeneratePanel
+        resourceKind={resolvedAiKind}
+        namespace={namespace}
+        clusterId={clusterId}
+        hintYaml={manifest}
+        onGenerated={setManifest}
+      />
       <Space wrap>
         {createTemplate ? (
           <Button size="small" onClick={() => setManifest(createTemplate({ namespace }))}>
@@ -571,12 +594,23 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
                   key: "yaml",
                   label: "YAML",
                   children: (
-                    <MonacoYamlEditor
-                      value={detailYaml}
-                      onChange={canApplyDetailYaml ? setDetailYaml : undefined}
-                      readOnly={!canApplyDetailYaml}
-                      height={480}
-                    />
+                    <Space direction="vertical" style={{ width: "100%" }} size="middle">
+                      {canApplyDetailYaml ? (
+                        <AiYamlGeneratePanel
+                          resourceKind={resolvedAiKind}
+                          namespace={namespace}
+                          clusterId={clusterId}
+                          hintYaml={detailYaml}
+                          onGenerated={setDetailYaml}
+                        />
+                      ) : null}
+                      <MonacoYamlEditor
+                        value={detailYaml}
+                        onChange={canApplyDetailYaml ? setDetailYaml : undefined}
+                        readOnly={!canApplyDetailYaml}
+                        height={480}
+                      />
+                    </Space>
                   ),
                 },
               ]}

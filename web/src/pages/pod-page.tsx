@@ -1034,6 +1034,7 @@ export function PodPage() {
         createOpen={createOpen}
         setCreateOpen={setCreateOpen}
         namespace={namespace}
+        clusterId={clusterId}
         simpleMode={simpleMode}
         setSimpleMode={setSimpleMode}
         editTarget={editTarget}

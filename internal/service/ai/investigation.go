@@ -107,9 +107,11 @@ func (s *Service) StartInvestigation(
 		return fail("采集失败: " + err.Error())
 	}
 	collectRaw, _ := json.Marshal(collect)
-	row.CollectJSON = string(truncateBytes(collectRaw, 500_000))
+	row.CollectJSON = scrubNonBMPForMySQL(string(truncateBytes(collectRaw, 500_000)))
 	row.Status = "analyzing"
-	_ = s.db.WithContext(ctx).Save(&row).Error
+	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		return fail("保存采集失败: " + err.Error())
+	}
 
 	query := investigationQuery(kind, req, collect)
 	ragHits := s.retrieveKnowledge(ctx, query, 8)
@@ -135,8 +137,8 @@ func (s *Service) StartInvestigation(
 		"model":       report.Model,
 	})
 	reportRaw, _ := json.Marshal(report)
-	row.AnalysisJSON = string(analysisRaw)
-	row.ReportJSON = string(reportRaw)
+	row.AnalysisJSON = scrubNonBMPForMySQL(string(analysisRaw))
+	row.ReportJSON = scrubNonBMPForMySQL(string(reportRaw))
 	row.Status = "done"
 	row.UpdatedAt = time.Now()
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {

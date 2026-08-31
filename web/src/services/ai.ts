@@ -318,6 +318,24 @@ export function analyzePodDiagnoseAI(payload: {
   return getData<AIPodDiagnoseResult>(http.post("/ai/k8s/pod-diagnose", payload, { timeout: 120000 }));
 }
 
+export type AIGenerateK8sYAMLResult = {
+  yaml: string;
+  provider: string;
+  model: string;
+  raw_reply?: string;
+};
+
+export function generateK8sYAML(payload: {
+  provider?: string;
+  resource_kind: string;
+  namespace?: string;
+  description: string;
+  hint_yaml?: string;
+  cluster_id?: number;
+}) {
+  return getData<AIGenerateK8sYAMLResult>(http.post("/ai/k8s/generate-yaml", payload, { timeout: 120000 }));
+}
+
 export function analyzeCicdBuildFailAI(payload: { provider?: string; project_id: number; run_id: number }) {
   return getData<AICicdBuildFailResult>(http.post("/ai/cicd/build-fail", payload, { timeout: 120000 }));
 }

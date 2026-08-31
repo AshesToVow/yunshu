@@ -14,10 +14,10 @@ type AiInvestigation struct {
 	Namespace    string    `json:"namespace" gorm:"size:128"`
 	Resource     string    `json:"resource" gorm:"size:256"`
 	Fingerprint  string    `json:"fingerprint" gorm:"size:128;index"`
-	InputJSON    string    `json:"input_json" gorm:"type:mediumtext"`
-	CollectJSON  string    `json:"collect_json" gorm:"type:mediumtext"`
-	AnalysisJSON string    `json:"analysis_json" gorm:"type:mediumtext"`
-	ReportJSON   string    `json:"report_json" gorm:"type:mediumtext"`
+	InputJSON    string    `json:"input_json" gorm:"type:mediumtext;charset:utf8mb4"`
+	CollectJSON  string    `json:"collect_json" gorm:"type:mediumtext;charset:utf8mb4"`
+	AnalysisJSON string    `json:"analysis_json" gorm:"type:mediumtext;charset:utf8mb4"`
+	ReportJSON   string    `json:"report_json" gorm:"type:mediumtext;charset:utf8mb4"`
 	SessionID    *uint     `json:"session_id,omitempty" gorm:"index"`
 	ApprovalID   *uint     `json:"approval_id,omitempty" gorm:"index"`
 	ErrorMsg     string    `json:"error_msg,omitempty" gorm:"size:1024"`

@@ -439,7 +439,9 @@ export async function getProjectServerGroupTree(projectId: number) {
 }
 
 export async function upsertProjectServerGroup(projectId: number, payload: ServerGroupUpsertPayload) {
-  return await getData<ServerGroupItem>(http.post(`/projects/${projectId}/server-groups`, payload));
+  return await getData<ServerGroupItem>(
+    http.post(`/projects/${projectId}/server-groups`, { ...payload, project_id: projectId }),
+  );
 }
 
 export async function deleteProjectServerGroup(projectId: number, groupId: number) {

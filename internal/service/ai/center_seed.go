@@ -154,6 +154,9 @@ func (s *Service) seedPromptsFromDir(ctx context.Context, dir string) error {
 		case strings.HasPrefix(code, "diagnosis/"):
 			typ = "diagnosis"
 			scene = strings.TrimPrefix(code, "diagnosis/")
+		case strings.HasPrefix(code, "generation/"):
+			typ = "generation"
+			scene = strings.TrimPrefix(code, "generation/")
 		}
 		var prompt model.AiPrompt
 		err := s.db.WithContext(ctx).Where("code = ?", code).First(&prompt).Error

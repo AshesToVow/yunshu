@@ -38,6 +38,7 @@
 |------|------|------|
 | POST | `/api/v1/ai/chat` | 助手（同步） |
 | POST | `/api/v1/ai/chat/stream` | 助手 SSE 进度（progress/rag/tool/reply/done） |
+| POST | `/api/v1/ai/k8s/generate-yaml` | 按自然语言生成 K8s YAML（创建页回填，不直接 apply） |
 | POST | `/api/v1/ai/investigations` | 发起调查（alert\|pod\|cicd\|chat） |
 | GET | `/api/v1/ai/investigations` | 调查列表 |
 | GET | `/api/v1/ai/investigations/:id` | 调查详情 |
@@ -55,6 +56,7 @@
 | 告警历史 | AI解读（投递解释）+ **AI调查**（完整闭环） |
 | Pod 排障抽屉 | AI 分析 + **AI 调查** |
 | CI 构建详情 | AI 分析 + **AI 调查** |
+| K8s 资源创建（YamlCrud / Pod） | **AI 生成 YAML**（描述→编辑器，人工核对后 apply） |
 | 运维助手 | 流式对话 + 工具/RAG 证据面板 |
 
 ## Tool 运行时
@@ -86,9 +88,10 @@
 
 ## 部署注意
 
-1. 重启服务 AutoMigrate（含 `ai_investigations`）
-2. 重新 seed 权限（含 chat/stream、investigations、knowledge/embed）
+1. 重启服务 AutoMigrate（含 `ai_investigations`）；启动 PostMigrate 会将 AI 文本表转为 **utf8mb4**（修复调查存 emoji 报 1366）
+2. 重新 seed 权限（含 chat/stream、investigations、knowledge/embed、**k8s/generate-yaml**）
 3. 菜单同步后可见「AI 调查」
-4. **必须保证运行时可读取 `data/ai`**
+4. **必须保证运行时可读取 `data/ai`**；能力中心 **reseed** 以加载 `generation/k8s-yaml` Prompt
 5. 先 reseed → sync ES →（可选）向量化
 6. 调查为同步阻塞调用，耗时受 LLM/采集影响，前端超时约 180s
+7. 若库表仍为 utf8，也可手动：`ALTER TABLE ai_investigations CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`

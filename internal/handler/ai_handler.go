@@ -294,6 +294,25 @@ func (h *AIHandler) PodDiagnose(c *gin.Context) {
 	response.Success(c, res)
 }
 
+func (h *AIHandler) GenerateK8sYAML(c *gin.Context) {
+	var req aisvc.GenerateK8sYAMLRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.GenerateK8sYAML(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 func (h *AIHandler) CicdBuildFail(c *gin.Context) {
 	var req aisvc.CicdBuildFailAIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
