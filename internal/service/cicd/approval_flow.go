@@ -245,35 +245,10 @@ func (s *Service) nextPendingStepAfter(ctx context.Context, releaseRunID uint, a
 }
 
 func (s *Service) ListReleaseApprovalSteps(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) ([]ReleaseApprovalStepItem, error) {
-	release, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "view")
-	if err != nil {
+	if _, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "view"); err != nil {
 		return nil, err
 	}
-	_ = release
-	var steps []model.CicdReleaseApprovalStep
-	if err := s.db.WithContext(ctx).Where("release_run_id = ?", runID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
-		return nil, err
-	}
-	items := make([]ReleaseApprovalStepItem, 0, len(steps))
-	for _, st := range steps {
-		item := ReleaseApprovalStepItem{
-			ID:             st.ID,
-			StageKey:       st.StageKey,
-			StageName:      st.StageName,
-			SortOrder:      st.SortOrder,
-			Status:         st.Status,
-			UserGroupID:    st.UserGroupID,
-			ReviewerUserID: st.ReviewerUserID,
-			ReviewerName:   st.ReviewerName,
-			ReviewComment:  st.ReviewComment,
-		}
-		if st.ReviewedAt != nil {
-			ts := st.ReviewedAt.Format("2006-01-02 15:04:05")
-			item.ReviewedAt = &ts
-		}
-		items = append(items, item)
-	}
-	return items, nil
+	return s.buildReleaseApprovalStepItems(ctx, runID)
 }
 
 func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.CicdApprovalFlowStage) map[uint]string {

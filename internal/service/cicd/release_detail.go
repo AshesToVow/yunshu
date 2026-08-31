@@ -101,8 +101,41 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 			groupNames[g.ID] = g.Name
 		}
 	}
+	// 兼容：workflow 回写曾只写 reviewer_user_id，未写 reviewer_name
+	reviewerIDs := make([]uint, 0)
+	reviewerSeen := map[uint]struct{}{}
+	for _, st := range steps {
+		if strings.TrimSpace(st.ReviewerName) != "" {
+			continue
+		}
+		if st.ReviewerUserID == nil || *st.ReviewerUserID == 0 {
+			continue
+		}
+		id := *st.ReviewerUserID
+		if _, ok := reviewerSeen[id]; ok {
+			continue
+		}
+		reviewerSeen[id] = struct{}{}
+		reviewerIDs = append(reviewerIDs, id)
+	}
+	reviewerNames := map[uint]string{}
+	if len(reviewerIDs) > 0 {
+		var users []model.User
+		_ = s.db.WithContext(ctx).Select("id, username, nickname").Where("id IN ?", reviewerIDs).Find(&users).Error
+		for _, u := range users {
+			name := strings.TrimSpace(u.Username)
+			if name == "" {
+				name = strings.TrimSpace(u.Nickname)
+			}
+			reviewerNames[u.ID] = name
+		}
+	}
 	items := make([]ReleaseApprovalStepItem, 0, len(steps))
 	for _, st := range steps {
+		name := strings.TrimSpace(st.ReviewerName)
+		if name == "" && st.ReviewerUserID != nil {
+			name = reviewerNames[*st.ReviewerUserID]
+		}
 		item := ReleaseApprovalStepItem{
 			ID:             st.ID,
 			StageKey:       st.StageKey,
@@ -111,7 +144,7 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 			Status:         st.Status,
 			UserGroupID:    st.UserGroupID,
 			ReviewerUserID: st.ReviewerUserID,
-			ReviewerName:   st.ReviewerName,
+			ReviewerName:   name,
 			ReviewComment:  st.ReviewComment,
 		}
 		if st.UserGroupID != nil {

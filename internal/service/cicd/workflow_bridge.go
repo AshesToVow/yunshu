@@ -103,15 +103,20 @@ func (s *Service) syncLegacyReleaseSteps(ctx context.Context, releaseID uint, ne
 	}
 	now := time.Now()
 	reviewerID := uint(0)
+	reviewerName := ""
 	if actor != nil {
 		reviewerID = actor.ID
+		reviewerName = strings.TrimSpace(actor.Username)
+		if reviewerName == "" {
+			reviewerName = strings.TrimSpace(actor.Nickname)
+		}
 	}
 	status := model.CicdApprovalStepRejected
 	if approve {
 		status = model.CicdApprovalStepApproved
 	}
 	if err := s.db.WithContext(ctx).Model(&step).Updates(map[string]any{
-		"status": status, "reviewer_user_id": reviewerID,
+		"status": status, "reviewer_user_id": reviewerID, "reviewer_name": reviewerName,
 		"review_comment": strings.TrimSpace(comment), "reviewed_at": now,
 	}).Error; err != nil {
 		return err
