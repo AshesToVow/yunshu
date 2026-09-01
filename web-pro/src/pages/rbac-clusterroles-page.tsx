@@ -1,0 +1,68 @@
+// @ts-nocheck
+import { Tag } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import { useRef } from "react";
+import { RbacClusterRoleFormCreateDrawer } from "../components/k8s/k8s-resource-form-drawers";
+import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
+import { applyRbac, deleteRbac, getRbacDetail, listClusterRoles, type RbacClusterRoleItem, type RbacDetail } from "../services/rbac";
+
+type Item = RbacClusterRoleItem;
+type Detail = RbacDetail;
+
+export function RbacClusterRolesPage() {
+  const listReloadRef = useRef<() => void>(() => {});
+
+  const columns: ColumnsType<Item> = [
+    { title: "名称", dataIndex: "name", width: 280 },
+    { title: "规则数", dataIndex: "rules", width: 100, render: (v: number) => <Tag color="blue">{v}</Tag> },
+    { title: "创建时间", dataIndex: "creation_time", width: 180, fixed: "right" },
+  ];
+
+  return (
+    <>
+    <YamlCrudPage<Item, Detail>
+      title="RBAC - ClusterRole"
+      needNamespace={false}
+      columns={columns}
+      onToolbarReady={(ctx) => {
+        listReloadRef.current = ctx.reload;
+      }}
+      renderCreateFormTab={(ctx) => (
+        <RbacClusterRoleFormCreateDrawer
+          embedded
+          open
+          clusterId={ctx.clusterId}
+          onClose={ctx.closeCreateDrawer}
+          onSuccess={() => {
+            listReloadRef.current();
+            ctx.closeCreateDrawer();
+          }}
+        />
+      )}
+      api={{
+        list: async ({ clusterId, keyword }) => (await listClusterRoles(clusterId, keyword)).list,
+        detail: async ({ clusterId, name }) => await getRbacDetail({ cluster_id: clusterId, kind: "ClusterRole", name }),
+        apply: async ({ clusterId, manifest }) => await applyRbac(clusterId, manifest),
+        remove: async (args) =>
+          await deleteRbac({
+            cluster_id: args.clusterId,
+            kind: "ClusterRole",
+            name: args.name,
+            grace_period_seconds: args.grace_period_seconds,
+            propagation_policy: args.propagation_policy,
+          }),
+      }}
+      createTemplate={() => `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: demo-clusterrole
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+`}
+    />
+    </>
+  );
+}
+

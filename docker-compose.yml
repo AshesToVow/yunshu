@@ -86,8 +86,8 @@ services:
 
   frontend:
     build:
-      context: ./web
-      dockerfile: Dockerfile.frontend
+      context: .
+      dockerfile: web-pro/Dockerfile.frontend
     container_name: yunshu-frontend
     restart: unless-stopped
     mem_limit: 64m

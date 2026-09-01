@@ -105,7 +105,7 @@ internal/plugin/               # 插件注册、path_filter（与 web/plugin-pat
 ### 3.1 二次开发入口
 
 外部贡献者请先读 **[CONTRIBUTING.md](../CONTRIBUTING.md)**。  
-插件菜单/API 路径规则须同时维护 `internal/plugin/path_filter.go` 与 `web/src/modules/plugin-path.ts`。
+插件菜单/API 路径规则须同时维护 `internal/plugin/path_filter.go` 与 `web-pro/src/modules/plugin-path.ts`。
 
 ---
 

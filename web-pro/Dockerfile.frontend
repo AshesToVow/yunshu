@@ -1,0 +1,23 @@
+# web-pro/Dockerfile.frontend
+# 构建上下文：仓库根目录（docker-compose context: .）
+
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:22-alpine AS builder
+
+WORKDIR /repo/web-pro
+
+COPY web-pro/package.json web-pro/package-lock.json ./
+RUN npm ci --registry=https://registry.npmmirror.com
+
+COPY web-pro/ ./
+
+ENV NODE_ENV=production
+RUN npm run build
+
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:1.25-alpine
+
+COPY web-pro/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /repo/web-pro/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

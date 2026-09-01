@@ -1,0 +1,807 @@
+// @ts-nocheck
+import type { ApiResponse, PageData } from "../types/api";
+import { getData, http } from "./http";
+
+export interface CicdAccessPerm {
+  can_view: boolean;
+  can_build: boolean;
+  can_release: boolean;
+  can_manage: boolean;
+}
+
+export interface CicdServiceItem {
+  id: number;
+  project_id: number;
+  identifier: string;
+  name: string;
+  service_type: string;
+  owner?: string;
+  product_line?: string;
+  remark?: string;
+  status: number;
+  jenkins_job: string;
+  has_ci_config: boolean;
+  deploy_config_count: number;
+  last_build_result?: string;
+  last_build_at?: string;
+  access?: CicdAccessPerm;
+}
+
+export interface CicdCiConfig {
+  id: number;
+  service_id: number;
+  git_url: string;
+  ref_type: string;
+  ref_name: string;
+  language_type?: string;
+  build_type: string;
+  build_shell?: string;
+  build_path?: string;
+  project_name?: string;
+  version?: string;
+  node_version?: string;
+  npm_install_mode?: string;
+  clean_npm_cache: boolean;
+  clean_node_modules: boolean;
+  java_tool_name?: string;
+  server_port?: string;
+  pack_config_paths?: string;
+  description?: string;
+}
+
+export interface CicdDeployConfig {
+  id: number;
+  service_id: number;
+  name: string;
+  deploy_kind: string;
+  tenv: string;
+  audit_enabled: boolean;
+  importance?: string;
+  dest_path?: string;
+  server_ids_json?: string;
+  deploy_user?: string;
+  deploy_group?: string;
+  artifact_retain_count: number;
+  run_user?: string;
+  start_script_type?: string;
+  custom_script_content?: string;
+  clean_deploy_dir: boolean;
+  jvm_opts?: string;
+  server_port: number;
+  deploy_method?: string;
+  deploy_action?: string;
+  deploy_config_type?: string;
+  deploy_config_template?: string;
+  k8s_namespace?: string;
+  k8s_cluster_id?: number;
+  image_name?: string;
+  image_tag?: string;
+  replicas: number;
+  container_port: number;
+  deploy_strategy?: string;
+  canary_replicas?: number;
+  canary_percent?: number;
+  canary_steps_json?: string;
+  blue_green_service?: string;
+  status: number;
+  server_count?: number;
+  nodes_status?: string;
+}
+
+export interface CicdBuildRun {
+  id: number;
+  project_id: number;
+  service_id: number;
+  build_number: number;
+  branch_name?: string;
+  publish_mode: string;
+  tenv?: string;
+  build_result: string;
+  builder_name?: string;
+  version?: string;
+  package_path?: string;
+  image_address?: string;
+  download_url?: string;
+  jenkins_build_url?: string;
+  params_json?: string;
+  started_at?: string;
+  finished_at?: string;
+  service_name?: string;
+  service_identifier?: string;
+  sonar_project_key?: string;
+  sonar_dashboard_url?: string;
+  sonar_summary_json?: string;
+}
+
+export interface CicdReleaseRun {
+  id: number;
+  project_id: number;
+  service_id: number;
+  deploy_config_id?: number;
+  title: string;
+  release_kind: string;
+  release_type?: string;
+  tenv?: string;
+  status: string;
+  current_stage_key?: string;
+  current_stage_name?: string;
+  submitter_user_id?: number;
+  submitter_name?: string;
+  image_address?: string;
+  artifact_name?: string;
+  audit_enabled?: boolean;
+  reviewer_name?: string;
+  review_comment?: string;
+  reviewed_at?: string;
+  jenkins_build_number?: number;
+  jenkins_build_url?: string;
+  params_json?: string;
+  progressive_json?: string;
+  started_at?: string;
+  finished_at?: string;
+  service_name?: string;
+  service_identifier?: string;
+  project_name?: string;
+  mine_status?: "mine_pending" | "mine_done";
+}
+
+function projectPath(projectId: number, suffix: string) {
+  return `/projects/${projectId}/cicd${suffix}`;
+}
+
+export async function listCicdServices(projectId: number, params?: Record<string, unknown>) {
+  return getData<PageData<CicdServiceItem>>(
+    http.get(projectPath(projectId, "/services"), { params }) as Promise<ApiResponse<PageData<CicdServiceItem>>>,
+  );
+}
+
+export async function createCicdService(projectId: number, payload: Record<string, unknown>) {
+  return getData<CicdServiceItem>(
+    http.post(projectPath(projectId, "/services"), payload) as Promise<ApiResponse<CicdServiceItem>>,
+  );
+}
+
+export async function updateCicdService(projectId: number, serviceId: number, payload: Record<string, unknown>) {
+  return getData<CicdServiceItem>(
+    http.put(`${projectPath(projectId, "/services")}/${serviceId}`, payload) as Promise<ApiResponse<CicdServiceItem>>,
+  );
+}
+
+export async function deleteCicdService(projectId: number, serviceId: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`${projectPath(projectId, "/services")}/${serviceId}`) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export interface CicdCiConfigView {
+  configured: boolean;
+  config?: CicdCiConfig | null;
+}
+
+export async function getCiConfig(projectId: number, serviceId: number) {
+  return getData<CicdCiConfigView>(
+    http.get(`${projectPath(projectId, "/services")}/${serviceId}/ci-config`) as Promise<ApiResponse<CicdCiConfigView>>,
+  );
+}
+
+export interface CicdCiConfigUpsertResult {
+  config: CicdCiConfig;
+  jenkins_sync?: { job_name: string; script_path: string; created: boolean; updated: boolean };
+  jenkins_sync_error?: string;
+}
+
+export async function upsertCiConfig(projectId: number, serviceId: number, payload: Record<string, unknown>) {
+  return getData<CicdCiConfigUpsertResult>(
+    http.put(`${projectPath(projectId, "/services")}/${serviceId}/ci-config`, payload) as Promise<
+      ApiResponse<CicdCiConfigUpsertResult>
+    >,
+  );
+}
+
+export async function listDeployConfigs(projectId: number, serviceId: number) {
+  return getData<CicdDeployConfig[]>(
+    http.get(`${projectPath(projectId, "/services")}/${serviceId}/deploy-configs`) as Promise<
+      ApiResponse<CicdDeployConfig[]>
+    >,
+  );
+}
+
+export interface CicdArtifactItem {
+  name: string;
+  size: number;
+  last_modified?: string;
+  object_key: string;
+}
+
+export async function listCicdArtifacts(projectId: number, serviceId: number) {
+  return getData<CicdArtifactItem[]>(
+    http.get(`${projectPath(projectId, "/services")}/${serviceId}/artifacts`) as Promise<
+      ApiResponse<CicdArtifactItem[]>
+    >,
+  );
+}
+
+/** 下载按服务生成的 helm/ 脚手架 zip（解压到业务仓库根目录）。 */
+export async function downloadHelmScaffold(
+  projectId: number,
+  serviceId: number,
+  params?: {
+    chart_name?: string;
+    image_repository?: string;
+    replica_count?: number;
+    container_port?: number;
+    service_port?: number;
+  },
+): Promise<Blob> {
+  return (await http.get(`${projectPath(projectId, "/services")}/${serviceId}/helm-scaffold`, {
+    params,
+    responseType: "blob",
+  })) as unknown as Blob;
+}
+
+/** 未保存服务时按参数预览下载脚手架。 */
+export async function downloadHelmScaffoldPreview(
+  projectId: number,
+  params: {
+    chart_name: string;
+    image_repository?: string;
+    replica_count?: number;
+    container_port?: number;
+    service_port?: number;
+  },
+): Promise<Blob> {
+  return (await http.get(projectPath(projectId, "/helm-scaffold"), {
+    params,
+    responseType: "blob",
+  })) as unknown as Blob;
+}
+
+export async function createDeployConfig(projectId: number, serviceId: number, payload: Record<string, unknown>) {
+  return getData<CicdDeployConfig>(
+    http.post(`${projectPath(projectId, "/services")}/${serviceId}/deploy-configs`, payload) as Promise<
+      ApiResponse<CicdDeployConfig>
+    >,
+  );
+}
+
+export async function updateDeployConfig(
+  projectId: number,
+  serviceId: number,
+  configId: number,
+  payload: Record<string, unknown>,
+) {
+  return getData<CicdDeployConfig>(
+    http.put(`${projectPath(projectId, "/services")}/${serviceId}/deploy-configs/${configId}`, payload) as Promise<
+      ApiResponse<CicdDeployConfig>
+    >,
+  );
+}
+
+export async function deleteDeployConfig(projectId: number, serviceId: number, configId: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`${projectPath(projectId, "/services")}/${serviceId}/deploy-configs/${configId}`) as Promise<
+      ApiResponse<{ deleted: boolean }>
+    >,
+  );
+}
+
+export async function triggerBuild(projectId: number, serviceId: number, payload: Record<string, unknown>) {
+  return getData<CicdBuildRun>(
+    http.post(`${projectPath(projectId, "/services")}/${serviceId}/builds`, payload) as Promise<
+      ApiResponse<CicdBuildRun>
+    >,
+  );
+}
+
+export async function triggerRelease(projectId: number, serviceId: number, payload: Record<string, unknown>) {
+  return getData<CicdReleaseRun>(
+    http.post(`${projectPath(projectId, "/services")}/${serviceId}/releases`, payload) as Promise<
+      ApiResponse<CicdReleaseRun>
+    >,
+  );
+}
+
+export async function listBuildRuns(projectId: number, params?: Record<string, unknown>) {
+  return getData<PageData<CicdBuildRun>>(
+    http.get(projectPath(projectId, "/build-runs"), { params }) as Promise<ApiResponse<PageData<CicdBuildRun>>>,
+  );
+}
+
+export async function getBuildRun(projectId: number, runId: number) {
+  return getData<CicdBuildRun>(
+    http.get(`${projectPath(projectId, "/build-runs")}/${runId}`) as Promise<ApiResponse<CicdBuildRun>>,
+  );
+}
+
+export async function getBuildRunLog(projectId: number, runId: number) {
+  return getData<{ log: string }>(
+    http.get(`${projectPath(projectId, "/build-runs")}/${runId}/log`) as Promise<ApiResponse<{ log: string }>>,
+  );
+}
+
+export async function deleteBuildRun(projectId: number, runId: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`${projectPath(projectId, "/build-runs")}/${runId}`) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function listReleaseRuns(projectId: number, params?: Record<string, unknown>) {
+  return getData<PageData<CicdReleaseRun>>(
+    http.get(projectPath(projectId, "/release-runs"), { params }) as Promise<ApiResponse<PageData<CicdReleaseRun>>>,
+  );
+}
+
+export async function getReleaseRunDetail(projectId: number, runId: number) {
+  return getData<CicdReleaseRunDetail>(
+    http.get(`${projectPath(projectId, "/release-runs")}/${runId}`) as Promise<ApiResponse<CicdReleaseRunDetail>>,
+  );
+}
+
+export async function getReleaseRunLog(projectId: number, runId: number) {
+  return getData<{ log: string }>(
+    http.get(`${projectPath(projectId, "/release-runs")}/${runId}/log`) as Promise<ApiResponse<{ log: string }>>,
+  );
+}
+
+export interface ReleaseVerifyResult {
+  release_id: number;
+  status: string;
+  ready_ok?: boolean | null;
+  ready_detail?: string;
+  log_errors: number;
+  log_detail?: string;
+  new_alerts: number;
+  alert_detail?: string;
+  checked_at: string;
+}
+
+export async function verifyReleaseRun(projectId: number, runId: number) {
+  return getData<ReleaseVerifyResult>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/verify`, {}) as Promise<
+      ApiResponse<ReleaseVerifyResult>
+    >,
+  );
+}
+
+export async function deleteReleaseRun(projectId: number, runId: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`${projectPath(projectId, "/release-runs")}/${runId}`) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function approveReleaseRun(projectId: number, runId: number, comment?: string) {
+  return getData<CicdReleaseRun>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/approve`, { comment }) as Promise<
+      ApiResponse<CicdReleaseRun>
+    >,
+  );
+}
+
+export async function rejectReleaseRun(projectId: number, runId: number, comment?: string) {
+  return getData<CicdReleaseRun>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/reject`, { comment }) as Promise<
+      ApiResponse<CicdReleaseRun>
+    >,
+  );
+}
+
+export async function executeReleaseRun(projectId: number, runId: number) {
+  return getData<CicdReleaseRun>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/execute`) as Promise<ApiResponse<CicdReleaseRun>>,
+  );
+}
+
+export async function terminateReleaseRun(projectId: number, runId: number, comment?: string) {
+  return getData<CicdReleaseRun>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/terminate`, { comment }) as Promise<
+      ApiResponse<CicdReleaseRun>
+    >,
+  );
+}
+
+export async function batchApproveReleaseRuns(projectId: number, ids: number[], comment?: string) {
+  return getData<{ count: number }>(
+    http.post(`${projectPath(projectId, "/release-runs")}/batch-approve`, { ids, comment }) as Promise<
+      ApiResponse<{ count: number }>
+    >,
+  );
+}
+
+export async function batchRejectReleaseRuns(projectId: number, ids: number[], comment?: string) {
+  return getData<{ count: number }>(
+    http.post(`${projectPath(projectId, "/release-runs")}/batch-reject`, { ids, comment }) as Promise<
+      ApiResponse<{ count: number }>
+    >,
+  );
+}
+
+export async function batchExecuteReleaseRuns(projectId: number, ids: number[]) {
+  return getData<{ count: number }>(
+    http.post(`${projectPath(projectId, "/release-runs")}/batch-execute`, { ids }) as Promise<
+      ApiResponse<{ count: number }>
+    >,
+  );
+}
+
+export async function batchTerminateReleaseRuns(projectId: number, ids: number[], comment?: string) {
+  return getData<{ count: number }>(
+    http.post(`${projectPath(projectId, "/release-runs")}/batch-terminate`, { ids, comment }) as Promise<
+      ApiResponse<{ count: number }>
+    >,
+  );
+}
+
+export interface CicdApprovalFlowStage {
+  stage_key: string;
+  stage_name: string;
+  sort_order: number;
+  enabled: boolean;
+  user_group_id?: number;
+  user_group_name?: string;
+}
+
+export interface CicdApprovalFlow {
+  project_id: number;
+  configured: boolean;
+  stages: CicdApprovalFlowStage[];
+}
+
+export interface CicdReleaseApprovalStep {
+  id: number;
+  stage_key: string;
+  stage_name: string;
+  sort_order: number;
+  status: string;
+  user_group_id?: number;
+  user_group_name?: string;
+  reviewer_user_id?: number;
+  reviewer_name?: string;
+  review_comment?: string;
+  reviewed_at?: string;
+}
+
+export interface CicdReleaseHandler {
+  user_id: number;
+  username: string;
+  nickname: string;
+}
+
+export interface CicdReleaseOperationLog {
+  action: string;
+  actor_name: string;
+  operated_at: string;
+  message: string;
+}
+
+export interface CicdReleaseRunDetail extends CicdReleaseRun {
+  approval_steps?: CicdReleaseApprovalStep[];
+  approval_flow_text?: string;
+  current_handlers?: CicdReleaseHandler[];
+  operation_logs?: CicdReleaseOperationLog[];
+  dest_hosts?: string[];
+  deploy_config_name?: string;
+  dest_path?: string;
+}
+
+export async function getApprovalFlow(projectId: number) {
+  return getData<CicdApprovalFlow>(
+    http.get(projectPath(projectId, "/approval-flow")) as Promise<ApiResponse<CicdApprovalFlow>>,
+  );
+}
+
+export async function saveApprovalFlow(
+  projectId: number,
+  stages: {
+    stage_key: string;
+    stage_name?: string;
+    sort_order?: number;
+    enabled: boolean;
+    user_group_id?: number;
+  }[],
+) {
+  return getData<CicdApprovalFlow>(
+    http.put(projectPath(projectId, "/approval-flow"), { stages }) as Promise<ApiResponse<CicdApprovalFlow>>,
+  );
+}
+
+export async function listReleaseApprovalSteps(projectId: number, runId: number) {
+  return getData<CicdReleaseApprovalStep[]>(
+    http.get(`${projectPath(projectId, "/release-runs")}/${runId}/approval-steps`) as Promise<
+      ApiResponse<CicdReleaseApprovalStep[]>
+    >,
+  );
+}
+
+// --- Build stages / artifacts meta ---
+
+export interface CicdRunStage {
+  id: number;
+  project_id: number;
+  service_id: number;
+  run_kind: string;
+  run_id: number;
+  stage_order: number;
+  stage_type: string;
+  stage_name: string;
+  status: string;
+  started_at?: string;
+  finished_at?: string;
+  duration_sec?: number;
+  logs?: string;
+  error_message?: string;
+  extra_json?: string;
+}
+
+export interface CicdArtifactMeta {
+  id: number;
+  project_id: number;
+  service_id: number;
+  build_run_id: number;
+  artifact_type: string;
+  name: string;
+  storage_path?: string;
+  digest?: string;
+  git_commit?: string;
+  size_bytes?: number;
+}
+
+export async function listBuildRunStages(projectId: number, runId: number) {
+  return getData<CicdRunStage[]>(
+    http.get(`${projectPath(projectId, "/build-runs")}/${runId}/stages`) as Promise<ApiResponse<CicdRunStage[]>>,
+  );
+}
+
+export async function listBuildRunArtifactsMeta(projectId: number, runId: number) {
+  return getData<CicdArtifactMeta[]>(
+    http.get(`${projectPath(projectId, "/build-runs")}/${runId}/artifacts-meta`) as Promise<
+      ApiResponse<CicdArtifactMeta[]>
+    >,
+  );
+}
+
+export async function platformRollbackRelease(
+  projectId: number,
+  runId: number,
+  payload?: {
+    cluster_id?: number;
+    namespace?: string;
+    kind?: string;
+    name?: string;
+    revision?: number;
+  },
+) {
+  return getData<Record<string, unknown>>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/platform-rollback`, payload || {}) as Promise<
+      ApiResponse<Record<string, unknown>>
+    >,
+  );
+}
+
+export async function promoteProgressiveRelease(
+  projectId: number,
+  runId: number,
+  payload?: {
+    cluster_id?: number;
+    namespace?: string;
+    workload?: string;
+    service_name?: string;
+    target_percent?: number;
+    final?: boolean;
+  },
+) {
+  return getData<Record<string, unknown>>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/progressive/promote`, payload || {}) as Promise<
+      ApiResponse<Record<string, unknown>>
+    >,
+  );
+}
+
+export async function abortProgressiveRelease(
+  projectId: number,
+  runId: number,
+  payload?: {
+    cluster_id?: number;
+    namespace?: string;
+    workload?: string;
+    service_name?: string;
+  },
+) {
+  return getData<Record<string, unknown>>(
+    http.post(`${projectPath(projectId, "/release-runs")}/${runId}/progressive/abort`, payload || {}) as Promise<
+      ApiResponse<Record<string, unknown>>
+    >,
+  );
+}
+
+// --- Image registries ---
+
+export interface ImageRegistryItem {
+  id: number;
+  name: string;
+  type: string;
+  url: string;
+  host_ip?: string;
+  username?: string;
+  default_project?: string;
+  is_default: boolean;
+  status: number;
+  remark?: string;
+  has_password?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProjectRegistryBinding {
+  id?: number;
+  project_id: number;
+  registry_id: number;
+  harbor_project?: string;
+}
+
+export interface HarborProjectItem {
+  project_id?: number;
+  name: string;
+}
+
+export interface HarborRepoItem {
+  name: string;
+  artifact_count?: number;
+}
+
+export interface HarborTagItem {
+  digest: string;
+  tags: string[];
+  size?: number;
+  push_time?: string;
+  linked_build_runs?: { id: number; project_id: number; build_number: number; image_address?: string }[];
+}
+
+export interface ImageCleanupPolicy {
+  id: number;
+  registry_id: number;
+  harbor_project?: string;
+  keep_last_n: number;
+  retain_days: number;
+  enabled: boolean;
+  cron_spec: string;
+  last_run_at?: string;
+  last_result?: string;
+}
+
+export interface CicdPipelineTemplate {
+  id: number;
+  language_type: string;
+  name: string;
+  script_path: string;
+  description?: string;
+  sort: number;
+  status: number;
+}
+
+export async function listRegistries(params?: { page?: number; page_size?: number }) {
+  return getData<PageData<ImageRegistryItem>>(
+    http.get("/registries", { params }) as Promise<ApiResponse<PageData<ImageRegistryItem>>>,
+  );
+}
+
+export async function getRegistry(id: number) {
+  return getData<ImageRegistryItem>(http.get(`/registries/${id}`) as Promise<ApiResponse<ImageRegistryItem>>);
+}
+
+export async function createRegistry(payload: Record<string, unknown>) {
+  return getData<ImageRegistryItem>(http.post("/registries", payload) as Promise<ApiResponse<ImageRegistryItem>>);
+}
+
+export async function updateRegistry(id: number, payload: Record<string, unknown>) {
+  return getData<ImageRegistryItem>(http.put(`/registries/${id}`, payload) as Promise<ApiResponse<ImageRegistryItem>>);
+}
+
+export async function deleteRegistry(id: number) {
+  return getData<{ deleted: boolean }>(http.delete(`/registries/${id}`) as Promise<ApiResponse<{ deleted: boolean }>>);
+}
+
+export async function pingRegistry(id: number) {
+  return getData<Record<string, unknown>>(
+    http.post(`/registries/${id}/ping`) as Promise<ApiResponse<Record<string, unknown>>>,
+  );
+}
+
+export async function getProjectRegistryBinding(projectId: number) {
+  return getData<ProjectRegistryBinding | null>(
+    http.get(`/projects/${projectId}/registry-binding`, { silentErrorToast: true }) as Promise<
+      ApiResponse<ProjectRegistryBinding | null>
+    >,
+  ).catch(() => null);
+}
+
+export async function upsertProjectRegistryBinding(
+  projectId: number,
+  payload: { registry_id: number; harbor_project?: string },
+) {
+  return getData<ProjectRegistryBinding>(
+    http.put(`/projects/${projectId}/registry-binding`, payload) as Promise<ApiResponse<ProjectRegistryBinding>>,
+  );
+}
+
+export async function deleteProjectRegistryBinding(projectId: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`/projects/${projectId}/registry-binding`) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function listHarborProjects(params?: { registry_id?: number; project_id?: number }) {
+  return getData<HarborProjectItem[]>(
+    http.get("/registries/browse/projects", { params }) as Promise<ApiResponse<HarborProjectItem[]>>,
+  );
+}
+
+export async function listHarborRepositories(params: {
+  registry_id?: number;
+  project_id?: number;
+  harbor_project: string;
+}) {
+  return getData<HarborRepoItem[]>(
+    http.get("/registries/browse/repositories", { params }) as Promise<ApiResponse<HarborRepoItem[]>>,
+  );
+}
+
+export async function listHarborArtifacts(params: {
+  registry_id?: number;
+  project_id?: number;
+  harbor_project?: string;
+  repository: string;
+}) {
+  return getData<HarborTagItem[]>(
+    http.get("/registries/browse/artifacts", { params }) as Promise<ApiResponse<HarborTagItem[]>>,
+  );
+}
+
+export async function deleteHarborArtifact(payload: {
+  registry_id?: number;
+  project_id?: number;
+  harbor_project?: string;
+  repository: string;
+  reference: string;
+}) {
+  return getData<{ deleted: boolean }>(
+    http.post("/registries/browse/artifacts/delete", payload) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function listCleanupPolicies(registryId?: number) {
+  return getData<ImageCleanupPolicy[]>(
+    http.get("/registries/cleanup-policies", {
+      params: registryId ? { registry_id: registryId } : undefined,
+    }) as Promise<ApiResponse<ImageCleanupPolicy[]>>,
+  );
+}
+
+export async function createCleanupPolicy(payload: Record<string, unknown>) {
+  return getData<ImageCleanupPolicy>(
+    http.post("/registries/cleanup-policies", payload) as Promise<ApiResponse<ImageCleanupPolicy>>,
+  );
+}
+
+export async function updateCleanupPolicy(id: number, payload: Record<string, unknown>) {
+  return getData<ImageCleanupPolicy>(
+    http.put(`/registries/cleanup-policies/${id}`, payload) as Promise<ApiResponse<ImageCleanupPolicy>>,
+  );
+}
+
+export async function deleteCleanupPolicy(id: number) {
+  return getData<{ deleted: boolean }>(
+    http.delete(`/registries/cleanup-policies/${id}`) as Promise<ApiResponse<{ deleted: boolean }>>,
+  );
+}
+
+export async function runCleanupPolicy(id: number) {
+  return getData<{ result: string }>(
+    http.post(`/registries/cleanup-policies/${id}/run`) as Promise<ApiResponse<{ result: string }>>,
+  );
+}
+
+export async function listPipelineTemplates() {
+  return getData<CicdPipelineTemplate[]>(
+    http.get("/pipeline-templates") as Promise<ApiResponse<CicdPipelineTemplate[]>>,
+  );
+}
