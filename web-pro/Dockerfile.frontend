@@ -5,12 +5,14 @@ FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:22-alpine AS builde
 
 WORKDIR /repo/web-pro
 
-COPY web-pro/package.json web-pro/package-lock.json ./
-RUN npm ci --registry=https://registry.npmmirror.com
+# .npmrc（legacy-peer-deps）必须在 npm ci 前就位，否则 lockfile 校验会失败
+COPY web-pro/.npmrc web-pro/package.json web-pro/package-lock.json ./
+RUN npm ci --legacy-peer-deps --registry=https://registry.npmmirror.com
 
 COPY web-pro/ ./
 
 ENV NODE_ENV=production
+ENV HUSKY=0
 RUN npm run build
 
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:1.25-alpine
