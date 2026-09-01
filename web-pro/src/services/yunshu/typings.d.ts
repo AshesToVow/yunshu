@@ -42,6 +42,36 @@ declare namespace YunshuAPI {
     cooldown_in: number;
   };
 
+  type EmailLoginPayload = {
+    email: string;
+    code: string;
+  };
+
+  type SendEmailCodePayload = {
+    email: string;
+    scene: 'login' | 'register';
+  };
+
+  type SendEmailCodeResult = {
+    email: string;
+    scene: 'login' | 'register';
+    expires_in: number;
+    cooldown_in: number;
+  };
+
+  type RegisterPayload = {
+    username: string;
+    email: string;
+    nickname: string;
+    password: string;
+    code: string;
+  };
+
+  type RegisterResult = {
+    message: string;
+    user: UserItem;
+  };
+
   type MenuItem = {
     id: number;
     parent_id?: number;
