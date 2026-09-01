@@ -27,11 +27,6 @@ logs/*.log
 web/dist/
 web/node_modules/
 web/tsconfig.*.tsbuildinfo
-web-pro/dist/
-web-pro/node_modules/
-web-pro/.husky/
-web-pro/src/.umi/
-web-pro/src/.umi-production/
 .cursor/
 .impeccable/
 

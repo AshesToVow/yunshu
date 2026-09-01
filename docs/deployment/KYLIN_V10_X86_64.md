@@ -112,7 +112,7 @@ npm ci
 npm run build
 ```
 
-产物目录：`web-pro/dist/`。Docker Compose 使用 `web-pro/Dockerfile.frontend`。
+产物目录：`web/dist/`。构建时若需指定后端 API 基地址，按项目惯例配置环境变量或 `vite` 配置（见 `web/vite.config.ts` / `.env.production`）。
 
 ## 7. Nginx：静态站点 + 反向代理 API
 
@@ -122,7 +122,7 @@ npm run build
 server {
     listen 80;
     server_name cmdb.example.com;
-    root /opt/yunshu-cmdb/src/web-pro/dist;
+    root /opt/yunshu-cmdb/src/web/dist;
     index index.html;
 
     location / {

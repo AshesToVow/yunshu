@@ -202,17 +202,17 @@ git clone https://github.com/AshesToVow/yunshu.git
 cd yunshu
 git checkout prod_yunsh_20260712
 go mod download
-cd web-pro && npm install && cd ..
+cd web && npm install && cd ..
 
 go run . migrate
 go run . seed
 go run . server
 ```
 
-新终端启动前端（**正式版 web-pro**）：
+新终端启动前端：
 
 ```bash
-cd web-pro
+cd web
 npm run dev
 ```
 
@@ -220,11 +220,9 @@ npm run dev
 
 | 服务 | 地址 |
 |------|------|
-| 前端（web-pro） | http://localhost:8000 |
+| 前端 | http://localhost:5173 |
 | 后端 API | http://localhost:8080 |
 | Swagger | http://localhost:8080/swagger/index.html |
-
-> 业务源码在 `web-pro/src/`，直接修改即可，无需 sync。
 
 > 后端二进制入口为 Cobra 子命令，根命令名为 `permission-system`（`go run . server` 即可）。
 
@@ -506,9 +504,9 @@ go run . server
 go test ./...
 gofmt -w ./...
 
-# 前端（Ant Design Pro，唯一正式版）
-cd web-pro && npm run dev    # 开发，端口 8000
-cd web-pro && npm run build  # 生产静态资源 → web-pro/dist
+# 前端
+cd web && npm run dev      # 开发
+cd web && npm run build    # 生产静态资源
 ```
 
 OpenAPI / Swagger：启动后访问 `/swagger/index.html`。部分接口说明见 `docs/apipost/`。

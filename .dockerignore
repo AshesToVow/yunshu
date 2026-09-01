@@ -9,10 +9,9 @@
 .vscode/
 
 # 前端（backend 镜像不需要）
-web-pro/node_modules/
-web-pro/dist/
-web-pro/src/.umi/
-web-pro/src/.umi-production/
+web/node_modules/
+web/dist/
+web/
 
 # 本地与产物
 logs/

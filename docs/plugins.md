@@ -57,8 +57,8 @@ plugins:
 | 路由 | `register_<name>_routes.go` + `plugin_bind.go`（含 `RegisterCicdRoutes`） |
 | 权限种子 | `cmd/seed.go` |
 | 菜单 | `internal/menu/catalog.go` → `go run . seed` |
-| 前端路由 | `web-pro/src/modules/<name>/routes.tsx` 或动态菜单 |
-| **插件路径规则** | `internal/plugin/path_filter.go` **与** `web-pro/src/modules/plugin-path.ts`（必须同步） |
+| 前端路由 | `web/src/modules/<name>/routes.tsx` 或动态菜单 |
+| **插件路径规则** | `internal/plugin/path_filter.go` **与** `web/src/modules/plugin-path.ts`（必须同步） |
 | OpenAPI | `go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml` |
 
 详见 [CONTRIBUTING.md](../CONTRIBUTING.md)。

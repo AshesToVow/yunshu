@@ -15,8 +15,8 @@ go run . migrate
 go run . seed
 go run . server
 
-# 前端（另开终端，正式版 web-pro）
-cd web-pro && npm install && npm run dev
+# 前端（另开终端）
+cd web && npm install && npm run dev
 ```
 
 默认管理员：`admin` / `Admin@123`（仅首次 seed 写入）。
@@ -28,8 +28,7 @@ cd web-pro && npm install && npm run dev
 | 1 | [docs/CODEBASE-MAP.md](docs/CODEBASE-MAP.md) | 后端分层、Service 目录、阅读路径 |
 | 2 | [docs/plugins.md](docs/plugins.md) | 插件机制、内置插件、新增步骤 |
 | 3 | [docs/handbook/api/http-api-conventions.md](docs/handbook/api/http-api-conventions.md) | HTTP 错误格式、鉴权 |
-| 4 | [web-pro/package.json](web-pro/package.json) | 前端 npm scripts（正式版） |
-| 5 | [docs/web-pro-migration.md](docs/web-pro-migration.md) | Pro 前端架构与 sync:legacy |
+| 4 | [web/package.json](web/package.json) | 前端 npm scripts |
 
 ---
 
@@ -46,11 +45,9 @@ internal/
   plugins/<名>/   各插件 init() 注册 + Models 迁移
   router/         register_*_routes.go + Wire 装配
   menu/           内置菜单 catalog + DB 同步
-web-pro/src/
-  pages/          页面组件（*-page.tsx）
-  components/     业务组件
+web/src/
+  pages/          页面组件
   services/       API 客户端（axios 封装）
-  modules/        插件路由、plugin-path
   modules/        按插件拆分的前端路由
   modules/plugin-path.ts   菜单/API → 插件映射（须与后端同步）
 ```
@@ -71,7 +68,7 @@ web-pro/src/
 3. **路由** — `internal/router/register_<plugin>_routes.go`
 4. **权限种子** — `cmd/seed.go` 增加 `Permission` 行
 5. **OpenAPI** — `go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml`
-6. **前端** — `web-pro/src/services/` + 页面；若新菜单则改 `internal/menu/catalog.go` 并 `go run . seed`
+6. **前端** — `web/src/services/` + 页面；若新菜单则改 `internal/menu/catalog.go` 并 `go run . seed`
 
 ---
 
@@ -87,8 +84,8 @@ web-pro/src/
 
 前端：
 
-1. `web-pro/src/modules/<name>/routes.tsx`（或动态菜单 + page loader）
-2. **`web-pro/src/modules/plugin-path.ts`** — 菜单 path 与 API resource 规则
+1. `web/src/modules/<name>/routes.tsx`（或动态菜单 + page loader）
+2. **`web/src/modules/plugin-path.ts`** — 菜单 path 与 API resource 规则
 3. **`internal/plugin/path_filter.go`** — 与上条保持同步（见 §5）
 4. `internal/menu/catalog.go` — 侧栏菜单
 
@@ -103,7 +100,7 @@ Worker（可选）：实现 `Module.StartWorkers`，在 `plugin.Runtime` 注入�
 | 文件 | 用途 |
 |------|------|
 | `internal/plugin/path_filter.go` | 后端菜单过滤、策略授权 UI |
-| `web-pro/src/modules/plugin-path.ts` | 前端侧栏、权限列表过滤 |
+| `web/src/modules/plugin-path.ts` | 前端侧栏、权限列表过滤 |
 
 **修改任一侧时必须同步另一侧。** 特殊规则：
 
@@ -139,7 +136,7 @@ go test ./internal/plugin/... ./internal/pkg/mysqlbackup/...
 go build -o yunshu .
 
 # 前端
-cd web-pro && npm run build && npm run lint
+cd web && npm run build && npm run lint
 ```
 
 ---
