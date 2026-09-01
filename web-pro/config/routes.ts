@@ -10,6 +10,11 @@ export default [
       },
     ],
   },
+  // exportStatic 需要显式根路由，否则 dist 无 index.html，Docker 会留下 nginx 欢迎页
+  {
+    path: '/',
+    redirect: '/dashboard',
+  },
   {
     path: '/workflow/inbox',
     component: './workflow/inbox',

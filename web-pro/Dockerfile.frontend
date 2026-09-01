@@ -17,8 +17,22 @@ RUN npm run build
 
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:1.25-alpine
 
+# 清空基础镜像默认欢迎页，避免 dist 缺 index.html 时仍显示 Welcome to nginx!
+RUN rm -rf /usr/share/nginx/html/*
+
 COPY web-pro/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /repo/web-pro/dist /usr/share/nginx/html
+
+# 兜底：若构建未产出根 index.html，用 SPA 壳层 404.html 顶替
+RUN if [ ! -f /usr/share/nginx/html/index.html ]; then \
+      if [ -f /usr/share/nginx/html/404.html ]; then \
+        cp /usr/share/nginx/html/404.html /usr/share/nginx/html/index.html; \
+      elif [ -f /usr/share/nginx/html/dashboard/index.html ]; then \
+        cp /usr/share/nginx/html/dashboard/index.html /usr/share/nginx/html/index.html; \
+      else \
+        echo "ERROR: no SPA index.html in dist" >&2; exit 1; \
+      fi; \
+    fi
 
 EXPOSE 80
 
