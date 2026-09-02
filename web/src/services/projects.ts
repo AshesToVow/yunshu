@@ -670,3 +670,143 @@ export async function exportProjectLogs(
     responseType: "blob",
   })) as unknown as Blob;
 }
+
+export interface LogHistogramBucket {
+  time: string;
+  count: number;
+}
+
+export interface LogSignatureItem {
+  signature: string;
+  count: number;
+  sample: string;
+  level?: string;
+}
+
+export interface LogOverviewResult {
+  total: number;
+  histogram: LogHistogramBucket[];
+  level_counts: Record<string, number>;
+  top_error_signatures: LogSignatureItem[];
+}
+
+export interface LogPatternItem {
+  id: number;
+  project_id: number;
+  signature: string;
+  sample: string;
+  level: string;
+  service_name: string;
+  hit_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export interface LogAnomalyItem {
+  id: number;
+  project_id: number;
+  pattern_id?: number;
+  anomaly_type: string;
+  signature: string;
+  title: string;
+  detail: string;
+  severity: string;
+  status: string;
+  detected_at: string;
+}
+
+export interface LogAnalyzeResult {
+  overview?: LogOverviewResult;
+  ai_summary: string;
+  root_causes: Array<{ title?: string; evidence?: string; confidence?: string }>;
+  actions: Array<{ priority?: number; action?: string; command_hint?: string }>;
+  provider?: string;
+  model?: string;
+}
+
+type LogSearchParams = {
+  server_id?: number;
+  service_id?: number;
+  log_source_id?: number;
+  collector_mode?: string;
+  cluster_id?: number;
+  namespace?: string;
+  pod?: string;
+  container?: string;
+  keyword?: string;
+  level?: string;
+  file_path?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  page_size?: number;
+};
+
+export async function getProjectLogOverview(projectId: number, params: LogSearchParams) {
+  return await getData(
+    http.get<any, ApiResponse<LogOverviewResult>>(`/projects/${projectId}/logs/overview`, {
+      params: { ...params, project_id: projectId },
+    }),
+  );
+}
+
+export async function getProjectLogPatterns(
+  projectId: number,
+  params: LogSearchParams & { keyword?: string; page?: number; page_size?: number },
+) {
+  return await getData(
+    http.get<any, ApiResponse<PageData<LogPatternItem>>>(`/projects/${projectId}/logs/patterns`, {
+      params: { ...params, project_id: projectId },
+    }),
+  );
+}
+
+export async function getProjectLogAnomalies(
+  projectId: number,
+  params: { status?: string; anomaly_type?: string; page?: number; page_size?: number },
+) {
+  return await getData(
+    http.get<any, ApiResponse<PageData<LogAnomalyItem>>>(`/projects/${projectId}/logs/anomalies`, {
+      params: { ...params, project_id: projectId },
+    }),
+  );
+}
+
+export async function analyzeProjectLogs(
+  projectId: number,
+  payload: LogSearchParams & { provider?: string },
+) {
+  return await getData(
+    http.post<any, ApiResponse<LogAnalyzeResult>>(`/ai/logs/analyze`, {
+      project_id: projectId,
+      ...payload,
+    }),
+  );
+}
+
+export interface LogContextResult {
+  anchor_time: string;
+  window_from: string;
+  window_to: string;
+  overview?: LogOverviewResult;
+  recent_changes?: Array<{ id: number; source: string; action: string; summary: string; started_at: string }>;
+  recent_alerts?: Array<{ id: number; title: string; severity: string; status: string; createdAt?: string }>;
+}
+
+export async function getProjectLogContext(
+  projectId: number,
+  params: {
+    anchor_time?: string;
+    window_minutes?: number;
+    alert_id?: number;
+    change_id?: number;
+    fingerprint?: string;
+    service_id?: number;
+  },
+) {
+  return await getData(
+    http.get<any, ApiResponse<LogContextResult>>(`/projects/${projectId}/logs/context`, {
+      params: { ...params, project_id: projectId },
+    }),
+  );
+}

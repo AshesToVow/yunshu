@@ -3,9 +3,6 @@ package ai
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"sort"
-	"strings"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/llm"
@@ -94,7 +91,7 @@ func (s *Service) executeLogTool(
 		if err != nil {
 			return nil, err
 		}
-		return summarizeLogHits(res, q), nil
+		return summarizeLogHitsForTool(res, q), nil
 	case "list_log_sources":
 		if err := requireProject(); err != nil {
 			return nil, err
@@ -175,156 +172,24 @@ func (s *Service) buildLogSearchQuery(
 	return q
 }
 
-var (
-	reDigits   = regexp.MustCompile(`\d+`)
-	reUUIDLike = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
-	reHexLong  = regexp.MustCompile(`\b[0-9a-fA-F]{16,}\b`)
-	reIPv4     = regexp.MustCompile(`\b\d{1,3}(?:\.\d{1,3}){3}\b`)
-)
-
-type countEntry struct {
-	Key   string
-	Count int
-}
-
-func summarizeLogHits(res *pagination.Result[logplatform.LogSearchItem], q logplatform.LogSearchQuery) map[string]any {
-	if res == nil {
+func summarizeLogHitsForTool(res *pagination.Result[logplatform.LogSearchItem], q logplatform.LogSearchQuery) map[string]any {
+	summary := logplatform.SummarizeLogHits(res, 8)
+	if summary == nil {
 		return map[string]any{"total": 0, "summary": "无命中", "query": q}
 	}
-	list := res.List
-	levelCnt := map[string]int{}
-	svcCnt := map[string]int{}
-	podCnt := map[string]int{}
-	sigCnt := map[string]int{}
-	sigSample := map[string]string{}
-	samples := make([]map[string]any, 0, 8)
-
-	for i, it := range list {
-		lv := strings.TrimSpace(it.Level)
-		if lv == "" {
-			lv = inferLevelFromMessage(it.Message)
-		}
-		if lv == "" {
-			lv = "(unknown)"
-		}
-		levelCnt[lv]++
-		svc := strings.TrimSpace(it.ServiceName)
-		if svc == "" {
-			svc = "(unknown)"
-		}
-		svcCnt[svc]++
-		pod := firstNonEmpty(it.Pod, it.PodName)
-		if pod == "" {
-			pod = "(unknown)"
-		}
-		podCnt[pod]++
-
-		sig := normalizeLogSignature(it.Message)
-		if sig != "" {
-			sigCnt[sig]++
-			if _, ok := sigSample[sig]; !ok {
-				sigSample[sig] = truncateRunes(it.Message, 240)
-			}
-		}
-		if i < 8 {
-			samples = append(samples, map[string]any{
-				"timestamp":    it.Timestamp,
-				"level":        lv,
-				"service_name": it.ServiceName,
-				"namespace":    it.Namespace,
-				"pod":          firstNonEmpty(it.Pod, it.PodName),
-				"message":      truncateRunes(it.Message, 300),
-			})
-		}
-	}
-
-	topSigs := topCountEntries(sigCnt, 10)
-	topSigOut := make([]map[string]any, 0, len(topSigs))
-	for _, e := range topSigs {
-		topSigOut = append(topSigOut, map[string]any{
-			"signature": e.Key,
-			"count":     e.Count,
-			"sample":    sigSample[e.Key],
-		})
-	}
-
 	hint := "已整理采样日志；请结合 top_error_signatures 与 samples 给出根因假设与下一步。"
-	if res.Total == 0 || len(list) == 0 {
+	if summary.Total == 0 || summary.Sampled == 0 {
 		hint = "无命中：请放宽 keyword、调整 from/to，或调用 list_log_sources / list_loggie_status / list_cluster_log_rules 排查采集。"
 	}
-
 	return map[string]any{
-		"total":                res.Total,
-		"sampled":              len(list),
-		"page":                 res.Page,
-		"page_size":            res.PageSize,
+		"total":                summary.Total,
+		"sampled":              summary.Sampled,
 		"query":                q,
-		"level_counts":         levelCnt,
-		"service_counts":       topCountMap(svcCnt, 8),
-		"pod_counts":           topCountMap(podCnt, 8),
-		"top_error_signatures": topSigOut,
-		"samples":              samples,
+		"level_counts":         summary.LevelCounts,
+		"service_counts":       summary.ServiceCounts,
+		"pod_counts":           summary.PodCounts,
+		"top_error_signatures": summary.TopErrorSignatures,
+		"samples":              summary.Samples,
 		"analysis_hint":        hint,
 	}
-}
-
-func normalizeLogSignature(msg string) string {
-	s := strings.TrimSpace(msg)
-	if s == "" {
-		return ""
-	}
-	s = reUUIDLike.ReplaceAllString(s, "<uuid>")
-	s = reHexLong.ReplaceAllString(s, "<hex>")
-	s = reIPv4.ReplaceAllString(s, "<ip>")
-	s = reDigits.ReplaceAllString(s, "N")
-	s = strings.Join(strings.Fields(s), " ")
-	return truncateRunes(s, 160)
-}
-
-func inferLevelFromMessage(msg string) string {
-	u := strings.ToUpper(msg)
-	for _, lv := range []string{"FATAL", "ERROR", "WARN", "WARNING", "INFO", "DEBUG", "TRACE"} {
-		if strings.Contains(u, lv) {
-			if lv == "WARNING" {
-				return "WARN"
-			}
-			return lv
-		}
-	}
-	return ""
-}
-
-func topCountEntries(m map[string]int, n int) []countEntry {
-	out := make([]countEntry, 0, len(m))
-	for k, v := range m {
-		out = append(out, countEntry{Key: k, Count: v})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Count == out[j].Count {
-			return out[i].Key < out[j].Key
-		}
-		return out[i].Count > out[j].Count
-	})
-	if n > 0 && len(out) > n {
-		out = out[:n]
-	}
-	return out
-}
-
-func topCountMap(m map[string]int, n int) map[string]int {
-	entries := topCountEntries(m, n)
-	out := make(map[string]int, len(entries))
-	for _, e := range entries {
-		out[e.Key] = e.Count
-	}
-	return out
-}
-
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
 }

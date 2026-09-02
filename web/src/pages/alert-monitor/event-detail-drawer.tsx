@@ -1,7 +1,8 @@
-import { BellOutlined, ClockCircleOutlined, QuestionCircleOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { BellOutlined, ClockCircleOutlined, FileSearchOutlined, QuestionCircleOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
 import { Alert, Button, Descriptions, Drawer, Dropdown, Input, Space, Spin, Steps, Tag, Timeline, Typography, message } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   acknowledgeAlert,
   clearAlertAck,
@@ -20,6 +21,7 @@ import { formatDateTime } from "../../utils/format";
 import { formatMatchedPolicyNamesDisplay } from "../../utils/alert-policy-display";
 import { describeAlertEvent, summarizeAlertEventHint } from "../../utils/alert-event-reasons";
 import { explainAlertRecipients, parseLabelMap } from "../../utils/alert-recipient-reason";
+import { buildAlertLogContextUrl } from "../../utils/log-navigation";
 import { AlertAckActionButton } from "./ack-action";
 
 export type AlertEventDetailTarget = {
@@ -94,6 +96,19 @@ export function AlertEventDetailDrawer({
   const [notes, setNotes] = useState<AlertProgressNote[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
+
+  const latestEvent = events[0];
+  const logContextUrl = useMemo(() => {
+    const pid = projectId || target?.project_id;
+    if (!pid || !target) return "";
+    return buildAlertLogContextUrl({
+      project_id: pid,
+      alert_id: latestEvent?.id,
+      fingerprint: target.fingerprint,
+      starts_at: target.starts_at || latestEvent?.createdAt,
+      window_minutes: 5,
+    });
+  }, [projectId, target, latestEvent]);
 
   useEffect(() => {
     if (!open || !target?.fingerprint) {
@@ -316,6 +331,11 @@ export function AlertEventDetailDrawer({
               <Button icon={<RobotOutlined />} onClick={() => onAiExplain(target)}>
                 AI 解读
               </Button>
+            ) : null}
+            {logContextUrl ? (
+              <Link to={logContextUrl}>
+                <Button icon={<FileSearchOutlined />}>关联日志</Button>
+              </Link>
             ) : null}
           </Space>
         ) : null

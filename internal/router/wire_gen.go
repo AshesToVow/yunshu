@@ -148,6 +148,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	}
 	v91 := provideElasticsearchProvider(app)
 	v92 := provideLogSearchService(v91, v78)
+	logIntelligenceService := provideLogIntelligenceService(db, v92, v29)
 	v93 := routerRouteRepositories.LogRetention
 	v94 := provideLogRetentionService(v91, v93)
 	v95 := provideKafkaProvider(app)
@@ -223,6 +224,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		MysqlBackup:          v89,
 		Dbmgmt:               dbmgmtService,
 		LogSearch:            v92,
+		LogIntelligence:      logIntelligenceService,
 		LogRetention:         v94,
 		KafkaToES:            v96,
 		LoggieAgent:          v98,
@@ -281,7 +283,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	rbacHandler := handler.NewRBACHandler(v73)
 	serviceAccountHandler := handler.NewServiceAccountHandler(v74)
 	overviewHandler := handler.NewOverviewHandler(v77)
-	projectHandler := handler.NewProjectHandler(v82, v92)
+	projectHandler := handler.NewProjectHandler(v82, v92, logIntelligenceService)
 	projectCatalogHandler := handler.NewProjectCatalogHandler(v84, v86)
 	cmdbHandler := handler.NewCMDBHandler(v87)
 	mysqlBackupHandler := handler.NewMysqlBackupHandler(v89)

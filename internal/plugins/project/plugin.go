@@ -32,7 +32,7 @@ func (m *module) Manifest() plugin.Manifest {
 			"/service-portrait", "/project-logs", "/project-log-sources", "/log-retention", "/loggie-status",
 		},
 		APIPrefixes: []string{"/api/v1/projects"},
-		Workers:     []string{"log_retention", "kafka_to_es"},
+		Workers:     []string{"log_retention", "kafka_to_es", "log_intelligence"},
 	}
 }
 
@@ -46,6 +46,8 @@ func (m *module) Models() []any {
 		&model.LoggieAgent{},
 		&model.ClusterLogAgent{},
 		&model.ClusterLogRule{},
+		&model.LogPattern{},
+		&model.LogAnomaly{},
 		&model.ServiceCatalog{},
 		&model.ServiceLink{},
 		&model.ChangeEvent{},
@@ -68,6 +70,11 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if kafkaSvc, ok := rt.KafkaToES.(*service.KafkaToESService); ok && kafkaSvc != nil {
 		lifecycle.Go("project.kafka-to-es-reconcile", func() {
 			kafkaSvc.Run(bgCtx)
+		})
+	}
+	if logIntel, ok := rt.LogIntelligence.(*service.LogIntelligenceService); ok && logIntel != nil {
+		lifecycle.Go("project.log-intelligence", func() {
+			service.RunLogIntelligenceWorker(bgCtx, logIntel)
 		})
 	}
 	return nil

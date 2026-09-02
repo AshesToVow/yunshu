@@ -53,6 +53,7 @@ func (p *ElasticsearchProvider) Client(ctx context.Context) (*esclient.Client, c
 	}
 	p.cached = cfg
 	p.client = cli
+	EnsureLogIndexTemplate(ctx, p)
 	return p.client, cfg, nil
 }
 

@@ -1,15 +1,44 @@
-import { DownloadOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, DatePicker, Form, Input, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import { DownloadOutlined, ReloadOutlined, RobotOutlined, SearchOutlined } from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Drawer,
+  Form,
+  Input,
+  List,
+  Progress,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
+  analyzeProjectLogs,
   exportProjectLogs,
+  getProjectLogAnomalies,
+  getProjectLogOverview,
+  getProjectLogPatterns,
   getProjectLogSources,
   getProjectServers,
   getProjectServices,
   getProjects,
   searchProjectLogs,
+  type LogAnalyzeResult,
+  type LogAnomalyItem,
+  type LogOverviewResult,
+  type LogPatternItem,
   type LogSearchItem,
   type LogSourceItem,
   type ProjectItem,
@@ -38,6 +67,7 @@ type SearchForm = {
 };
 
 export function ProjectLogsPage() {
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -46,6 +76,15 @@ export function ProjectLogsPage() {
   const [rows, setRows] = useState<LogSearchItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [overview, setOverview] = useState<LogOverviewResult | null>(null);
+  const [patterns, setPatterns] = useState<LogPatternItem[]>([]);
+  const [patternTotal, setPatternTotal] = useState(0);
+  const [anomalies, setAnomalies] = useState<LogAnomalyItem[]>([]);
+  const [anomalyTotal, setAnomalyTotal] = useState(0);
+  const [activeTab, setActiveTab] = useState("logs");
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<LogAnalyzeResult | null>(null);
 
   const [form] = Form.useForm<SearchForm>();
   const watchProjectId = Form.useWatch("project_id", form);
@@ -81,6 +120,45 @@ export function ProjectLogsPage() {
 
   const [emptyHint, setEmptyHint] = useState<string>("");
 
+  const buildSearchParams = useCallback((values: SearchForm, page?: number, pageSize?: number) => {
+    const range = values.time_range;
+    return {
+      server_id: values.server_id,
+      service_id: values.service_id,
+      log_source_id: values.log_source_id,
+      collector_mode: values.collector_mode || undefined,
+      cluster_id: values.cluster_id,
+      namespace: values.namespace?.trim() || undefined,
+      pod: values.pod?.trim() || undefined,
+      container: values.container?.trim() || undefined,
+      keyword: values.keyword?.trim() || undefined,
+      level: values.level?.trim() || undefined,
+      file_path: values.file_path?.trim() || undefined,
+      from: range?.[0]?.toISOString(),
+      to: range?.[1]?.toISOString(),
+      page: page ?? values.page ?? 1,
+      page_size: pageSize ?? values.page_size ?? 100,
+    };
+  }, []);
+
+  const loadOverviewAndIntel = useCallback(
+    async (values: SearchForm) => {
+      if (!values.project_id) return;
+      const params = buildSearchParams(values);
+      const [ov, pat, an] = await Promise.all([
+        getProjectLogOverview(values.project_id, params).catch(() => null),
+        getProjectLogPatterns(values.project_id, { ...params, page: 1, page_size: 20 }).catch(() => ({ list: [], total: 0 })),
+        getProjectLogAnomalies(values.project_id, { status: "open", page: 1, page_size: 20 }).catch(() => ({ list: [], total: 0 })),
+      ]);
+      setOverview(ov);
+      setPatterns(pat?.list ?? []);
+      setPatternTotal(pat?.total ?? 0);
+      setAnomalies(an?.list ?? []);
+      setAnomalyTotal(an?.total ?? 0);
+    },
+    [buildSearchParams],
+  );
+
   const runSearch = useCallback(
     async (override?: Partial<SearchForm>) => {
       const values = { ...form.getFieldsValue(), ...override };
@@ -95,26 +173,12 @@ export function ProjectLogsPage() {
       setLoading(true);
       setEmptyHint("");
       try {
-        const res = await searchProjectLogs(values.project_id, {
-          server_id: values.server_id,
-          service_id: values.service_id,
-          log_source_id: values.log_source_id,
-          collector_mode: values.collector_mode || undefined,
-          cluster_id: values.cluster_id,
-          namespace: values.namespace?.trim() || undefined,
-          pod: values.pod?.trim() || undefined,
-          container: values.container?.trim() || undefined,
-          keyword: values.keyword?.trim() || undefined,
-          level: values.level?.trim() || undefined,
-          file_path: filePath,
-          from: range?.[0]?.toISOString(),
-          to: range?.[1]?.toISOString(),
-          page,
-          page_size: pageSize,
-        });
+        const params = buildSearchParams(values, page, pageSize);
+        const res = await searchProjectLogs(values.project_id, params);
         setRows(res.list);
         setTotal(res.total);
         form.setFieldsValue({ page, page_size: pageSize });
+        void loadOverviewAndIntel({ ...values, page, page_size: pageSize });
         if ((res.total ?? 0) === 0 && filePath) {
           setEmptyHint(
             `按文件名「${filePath}」无命中。请确认 Agent「热更」后已写入 file_path，或清空文件名筛选项/扩大时间范围。`,
@@ -134,8 +198,28 @@ export function ProjectLogsPage() {
         setLoading(false);
       }
     },
-    [form],
+    [form, buildSearchParams, loadOverviewAndIntel],
   );
+
+  const runAiAnalyze = useCallback(async () => {
+    const values = form.getFieldsValue();
+    if (!values.project_id) {
+      message.warning("请选择项目");
+      return;
+    }
+    setAiOpen(true);
+    setAiLoading(true);
+    setAiResult(null);
+    try {
+      const params = buildSearchParams(values);
+      const res = await analyzeProjectLogs(values.project_id, params);
+      setAiResult(res);
+    } catch (e: unknown) {
+      message.error(String((e as Error)?.message ?? e));
+    } finally {
+      setAiLoading(false);
+    }
+  }, [form, buildSearchParams]);
 
   useEffect(() => {
     void (async () => {
@@ -145,16 +229,39 @@ export function ProjectLogsPage() {
       ]);
       setProjects(data.list);
       setClusters(clusterRes?.list || []);
-      const defaultProject = data.list[0]?.id;
+
+      const qPid = Number(searchParams.get("project_id") || 0);
+      const defaultProject = qPid || data.list[0]?.id;
+      const tab = searchParams.get("tab");
+      if (tab === "patterns" || tab === "anomalies" || tab === "logs") {
+        setActiveTab(tab);
+      }
+      const anchorTime = searchParams.get("anchor_time");
+      const windowMinutes = Number(searchParams.get("window_minutes") || 5) || 5;
+      let timeRange: [Dayjs, Dayjs] = [dayjs().subtract(24, "hour"), dayjs()];
+      if (anchorTime) {
+        const anchor = dayjs(anchorTime);
+        if (anchor.isValid()) {
+          timeRange = [anchor.subtract(windowMinutes, "minute"), anchor.add(windowMinutes, "minute")];
+        }
+      }
+      const initial: Partial<SearchForm> = {
+        project_id: defaultProject,
+        page: 1,
+        page_size: 100,
+        time_range: timeRange,
+        level: searchParams.get("level") || undefined,
+        log_source_id: Number(searchParams.get("log_source_id") || 0) || undefined,
+        service_id: Number(searchParams.get("service_id") || 0) || undefined,
+      };
       if (defaultProject) {
-        form.setFieldsValue({
-          project_id: defaultProject,
-          page: 1,
-          page_size: 100,
-          time_range: [dayjs().subtract(24, "hour"), dayjs()],
-        });
+        form.setFieldsValue(initial);
         await reloadServers(defaultProject);
-        await runSearch({ project_id: defaultProject, page: 1, page_size: 100, time_range: [dayjs().subtract(24, "hour"), dayjs()] });
+        if (initial.service_id) {
+          await reloadServices(defaultProject, initial.server_id);
+          await reloadSources(defaultProject, initial.service_id);
+        }
+        await runSearch(initial);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -307,6 +414,9 @@ export function ProjectLogsPage() {
             >
               导出
             </Button>
+            <Button icon={<RobotOutlined />} onClick={() => void runAiAnalyze()}>
+              AI 分析
+            </Button>
             <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => void runSearch({ page: 1 })}>
               检索
             </Button>
@@ -447,28 +557,220 @@ export function ProjectLogsPage() {
           <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={emptyHint} />
         ) : null}
 
-        <div className="project-logs-table-wrap">
-          <Table
-            rowKey={(r, i) => `${r.timestamp}-${i}`}
-            loading={loading}
-            columns={columns}
-            dataSource={rows}
+        {searchParams.get("alert_id") || searchParams.get("change_id") || searchParams.get("fingerprint") ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="关联上下文检索"
+            description={`已按${searchParams.get("alert_id") ? "告警" : searchParams.get("change_id") ? "变更" : "告警指纹"}锚点设置时间窗口（±${searchParams.get("window_minutes") || 5} 分钟）`}
+          />
+        ) : null}
+
+        {overview ? (
+          <Card size="small" className="project-logs-overview" style={{ marginBottom: 12 }}>
+            <Row gutter={16}>
+              <Col span={4}>
+                <Statistic title="命中总数" value={overview.total} />
+              </Col>
+              <Col span={8}>
+                <Typography.Text type="secondary">级别分布</Typography.Text>
+                <div style={{ marginTop: 8 }}>
+                  <Space wrap>
+                    {Object.entries(overview.level_counts || {}).map(([lv, cnt]) => (
+                      <Tag key={lv} color={lv === "ERROR" || lv === "FATAL" ? "error" : lv === "WARN" ? "warning" : "default"}>
+                        {lv}: {cnt}
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              </Col>
+              <Col span={12}>
+                <Typography.Text type="secondary">时间分布</Typography.Text>
+                <LogHistogramChart buckets={overview.histogram || []} />
+              </Col>
+            </Row>
+            {(overview.top_error_signatures?.length ?? 0) > 0 ? (
+              <div style={{ marginTop: 12 }}>
+                <Typography.Text type="secondary">Top 错误签名</Typography.Text>
+                <List
+                  size="small"
+                  dataSource={overview.top_error_signatures.slice(0, 5)}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Space direction="vertical" size={0} style={{ width: "100%" }}>
+                        <Space>
+                          <Tag>{item.count}</Tag>
+                          {item.level ? <Tag color="error">{item.level}</Tag> : null}
+                          <Typography.Text code style={{ fontSize: 12 }}>{item.signature}</Typography.Text>
+                        </Space>
+                        <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>{item.sample}</Typography.Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
+
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            {
+              key: "logs",
+              label: `原始日志 (${total})`,
+              children: (
+                <div className="project-logs-table-wrap">
+                  <Table
+                    rowKey={(r, i) => `${r.timestamp}-${i}`}
+                    loading={loading}
+                    columns={columns}
+                    dataSource={rows}
+                    size="small"
+                    className="project-logs-table"
+                    tableLayout="fixed"
+                    pagination={{
+                      current: form.getFieldValue("page") ?? 1,
+                      pageSize: form.getFieldValue("page_size") ?? 100,
+                      total,
+                      showSizeChanger: true,
+                      pageSizeOptions: ["50", "100", "200", "500"],
+                      showTotal: (t) => `共 ${t} 条`,
+                      onChange: (page, pageSize) => void runSearch({ page, page_size: pageSize }),
+                    }}
+                    scroll={{ x: 1100 }}
+                  />
+                </div>
+              ),
+            },
+            {
+              key: "patterns",
+              label: `模板聚类 (${patternTotal})`,
+              children: (
+                <Table
+                  rowKey="id"
+                  size="small"
+                  dataSource={patterns}
+                  pagination={false}
+                  columns={[
+                    { title: "级别", dataIndex: "level", width: 80, render: (v: string) => <Tag>{v || "-"}</Tag> },
+                    { title: "命中", dataIndex: "hit_count", width: 80 },
+                    { title: "服务", dataIndex: "service_name", width: 120 },
+                    { title: "签名", dataIndex: "signature", render: (v: string) => <Typography.Text code>{v}</Typography.Text> },
+                    { title: "样例", dataIndex: "sample", ellipsis: true },
+                    { title: "最近", dataIndex: "last_seen_at", width: 170, render: (v: string) => formatDateTime(v) },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: "anomalies",
+              label: `异常事件 (${anomalyTotal})`,
+              children: (
+                <Table
+                  rowKey="id"
+                  size="small"
+                  dataSource={anomalies}
+                  pagination={false}
+                  columns={[
+                    {
+                      title: "类型",
+                      dataIndex: "anomaly_type",
+                      width: 110,
+                      render: (v: string) => (v === "error_spike" ? "量突增" : "新模板"),
+                    },
+                    {
+                      title: "级别",
+                      dataIndex: "severity",
+                      width: 90,
+                      render: (v: string) => <Tag color={v === "critical" ? "error" : "warning"}>{v}</Tag>,
+                    },
+                    { title: "标题", dataIndex: "title" },
+                    { title: "详情", dataIndex: "detail", ellipsis: true },
+                    { title: "时间", dataIndex: "detected_at", width: 170, render: (v: string) => formatDateTime(v) },
+                  ]}
+                />
+              ),
+            },
+          ]}
+        />
+      </Card>
+
+      <Drawer title="AI 日志分析" width={560} open={aiOpen} onClose={() => setAiOpen(false)} destroyOnClose>
+        {aiLoading ? (
+          <Typography.Text>分析中…</Typography.Text>
+        ) : aiResult ? (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            <Alert type="info" message={aiResult.ai_summary} />
+            {(aiResult.root_causes?.length ?? 0) > 0 ? (
+              <div>
+                <Typography.Title level={5}>根因候选</Typography.Title>
+                <List
+                  size="small"
+                  dataSource={aiResult.root_causes}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <List.Item.Meta
+                        title={
+                          <Space>
+                            <span>{item.title || "—"}</span>
+                            {item.confidence ? <Tag>{item.confidence}</Tag> : null}
+                          </Space>
+                        }
+                        description={item.evidence}
+                      />
+                    </List.Item>
+                  )}
+                />
+              </div>
+            ) : null}
+            {(aiResult.actions?.length ?? 0) > 0 ? (
+              <div>
+                <Typography.Title level={5}>排查建议</Typography.Title>
+                <List
+                  size="small"
+                  dataSource={aiResult.actions}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Typography.Text>
+                        {item.priority ? `[P${item.priority}] ` : ""}
+                        {item.action}
+                        {item.command_hint ? ` — ${item.command_hint}` : ""}
+                      </Typography.Text>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            ) : null}
+          </Space>
+        ) : (
+          <Typography.Text type="secondary">点击「AI 分析」基于当前筛选条件生成摘要与排查建议。</Typography.Text>
+        )}
+      </Drawer>
+    </div>
+  );
+}
+
+function LogHistogramChart({ buckets }: { buckets: Array<{ time: string; count: number }> }) {
+  const max = Math.max(1, ...buckets.map((b) => b.count));
+  if (!buckets.length) {
+    return <Typography.Text type="secondary">无时间分布数据</Typography.Text>;
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 48, marginTop: 8, overflowX: "auto" }}>
+      {buckets.map((b) => (
+        <div key={b.time} title={`${formatDateTime(b.time)}: ${b.count}`} style={{ flex: "1 0 8px", minWidth: 8 }}>
+          <Progress
+            percent={Math.round((b.count / max) * 100)}
+            showInfo={false}
             size="small"
-            className="project-logs-table"
-            tableLayout="fixed"
-            pagination={{
-              current: form.getFieldValue("page") ?? 1,
-              pageSize: form.getFieldValue("page_size") ?? 100,
-              total,
-              showSizeChanger: true,
-              pageSizeOptions: ["50", "100", "200", "500"],
-              showTotal: (t) => `共 ${t} 条`,
-              onChange: (page, pageSize) => void runSearch({ page, page_size: pageSize }),
-            }}
-            scroll={{ x: 1100 }}
+            strokeColor="#1677ff"
+            style={{ height: 48 }}
           />
         </div>
-      </Card>
+      ))}
     </div>
   );
 }

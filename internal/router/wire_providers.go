@@ -278,6 +278,10 @@ func provideLogSearchService(es *service.ElasticsearchProvider, serverRepo inter
 	return service.NewLogSearchService(es, serverRepo)
 }
 
+func provideLogIntelligenceService(db *gorm.DB, logSearch *service.LogSearchService, projectRepo interfaces.ProjectRepository) *service.LogIntelligenceService {
+	return service.NewLogIntelligenceService(db, logSearch, projectRepo)
+}
+
 func provideLogRetentionService(es *service.ElasticsearchProvider, repo interfaces.LogRetentionRepository) *service.LogRetentionService {
 	return service.NewLogRetentionService(es, repo)
 }
@@ -384,6 +388,7 @@ var ServiceSet = wire.NewSet(
 	provideKafkaProvider,
 	provideKafkaToESService,
 	provideLogSearchService,
+	provideLogIntelligenceService,
 	provideLogRetentionService,
 	provideLoggieConfig,
 	provideLoggieAgentService,

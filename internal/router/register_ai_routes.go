@@ -25,6 +25,7 @@ func RegisterAIRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	g.POST("/k8s/generate-yaml", d.aiHandler.GenerateK8sYAML)
 	g.POST("/cicd/build-fail", d.aiHandler.CicdBuildFail)
 	g.POST("/alert/explain", d.aiHandler.AlertExplain)
+	g.POST("/logs/analyze", d.aiHandler.LogAnalyze)
 	g.GET("/approvals", d.aiHandler.ListApprovals)
 	g.POST("/approvals/:id/review", d.aiHandler.ReviewApproval)
 	g.POST("/approvals/:id/execute", d.aiHandler.ExecuteApproval)

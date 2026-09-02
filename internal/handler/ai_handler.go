@@ -351,6 +351,25 @@ func (h *AIHandler) AlertExplain(c *gin.Context) {
 	response.Success(c, res)
 }
 
+func (h *AIHandler) LogAnalyze(c *gin.Context) {
+	var req aisvc.LogAnalyzeAIRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.AnalyzeLogs(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 func (h *AIHandler) ListApprovals(c *gin.Context) {
 	var q aisvc.ApprovalListQuery
 	_ = c.ShouldBindQuery(&q)

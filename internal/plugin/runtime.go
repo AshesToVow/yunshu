@@ -24,6 +24,7 @@ type Runtime struct {
 	Inspect      any // *inspect.Service
 	LogRetention any // *service.LogRetentionService
 	KafkaToES    any // *service.KafkaToESService
+	LogIntelligence any // *service.LogIntelligenceService
 }
 
 // IsEnabled 判断某插件是否在当前配置下启用。

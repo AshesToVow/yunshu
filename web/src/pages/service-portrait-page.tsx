@@ -6,6 +6,7 @@ import { getProjects, type ProjectItem } from "../services/projects";
 import { listServiceCatalog, type ServiceCatalogItem } from "../services/service-catalog";
 import { getServicePortrait, type ServicePortrait } from "../services/service-portrait";
 import { formatDateTime } from "../utils/format";
+import { buildChangeLogContextUrl, buildProjectLogsUrl } from "../utils/log-navigation";
 
 export function ServicePortraitPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -143,7 +144,13 @@ export function ServicePortraitPage() {
                 <List.Item>
                   <Space>
                     <Tag>{it.kind}</Tag>
-                    <Link to={it.path}>
+                    <Link
+                      to={
+                        projectId
+                          ? `${it.path}${it.path.includes("?") ? "&" : "?"}project_id=${projectId}`
+                          : it.path
+                      }
+                    >
                       <LinkOutlined /> {it.label}
                     </Link>
                     {it.hint ? (
@@ -170,6 +177,41 @@ export function ServicePortraitPage() {
               </Descriptions>
             </Card>
           ) : null}
+          {portrait?.log_summary ? (
+            <Card title="日志智能" size="small" style={{ marginTop: 16 }}>
+              <Space direction="vertical" style={{ width: "100%" }}>
+                <Space wrap>
+                  <Tag color={portrait.log_summary.open_anomaly_count > 0 ? "error" : "success"}>
+                    Open 异常 {portrait.log_summary.open_anomaly_count}
+                  </Tag>
+                  <Tag>模板 {portrait.log_summary.pattern_count}</Tag>
+                  {projectId ? (
+                    <Link to={buildProjectLogsUrl({ project_id: projectId, tab: "anomalies" })}>
+                      查看异常
+                    </Link>
+                  ) : null}
+                </Space>
+                <List
+                  size="small"
+                  locale={{ emptyText: "暂无 open 异常" }}
+                  dataSource={portrait.log_summary.recent_anomalies || []}
+                  renderItem={(it) => (
+                    <List.Item>
+                      <Space direction="vertical" size={0}>
+                        <Space>
+                          <Tag color={it.severity === "critical" ? "error" : "warning"}>{it.severity}</Tag>
+                          <Typography.Text>{it.title}</Typography.Text>
+                        </Space>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {formatDateTime(it.detected_at)}
+                        </Typography.Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              </Space>
+            </Card>
+          ) : null}
         </Col>
         <Col xs={24} lg={14}>
           <Card title="最近变更" loading={loading} size="small">
@@ -183,6 +225,16 @@ export function ServicePortraitPage() {
                 { title: "来源", dataIndex: "source", width: 80, render: (v: string) => <Tag>{v}</Tag> },
                 { title: "动作", dataIndex: "action", width: 120 },
                 { title: "摘要", dataIndex: "summary" },
+                {
+                  title: "操作",
+                  width: 100,
+                  render: (_: unknown, r: { id: number; started_at: string }) =>
+                    projectId ? (
+                      <Link to={buildChangeLogContextUrl({ project_id: projectId, change_id: r.id, started_at: r.started_at })}>
+                        关联日志
+                      </Link>
+                    ) : null,
+                },
               ]}
             />
           </Card>

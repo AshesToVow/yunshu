@@ -318,6 +318,17 @@ type (
 	LogSearchService      = logplatform.LogSearchService
 	LogSearchQuery        = logplatform.LogSearchQuery
 	LogSearchItem         = logplatform.LogSearchItem
+	LogIntelligenceService = logplatform.LogIntelligenceService
+	LogPatternListQuery   = logplatform.LogPatternListQuery
+	LogPatternItem        = logplatform.LogPatternItem
+	LogAnomalyListQuery   = logplatform.LogAnomalyListQuery
+	LogAnomalyItem        = logplatform.LogAnomalyItem
+	LogContextQuery       = logplatform.LogContextQuery
+	LogContextResult      = logplatform.LogContextResult
+	LogOverviewResult     = logplatform.LogOverviewResult
+	LogHistogramBucket    = logplatform.LogHistogramBucket
+	LogSignatureItem      = logplatform.LogSignatureItem
+	LogSummaryResult      = logplatform.LogSummaryResult
 	LogRetentionService   = logplatform.LogRetentionService
 	ElasticsearchProvider = logplatform.ElasticsearchProvider
 	KafkaProvider         = logplatform.KafkaProvider
@@ -338,6 +349,8 @@ type (
 
 var (
 	NewLogSearchService      = logplatform.NewLogSearchService
+	NewLogIntelligenceService = logplatform.NewLogIntelligenceService
+	RunLogIntelligenceWorker = logplatform.RunIntelligenceWorker
 	NewLogRetentionService   = logplatform.NewLogRetentionService
 	NewElasticsearchProvider = logplatform.NewElasticsearchProvider
 	NewKafkaProvider         = logplatform.NewKafkaProvider

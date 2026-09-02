@@ -36,6 +36,7 @@ func (s *Service) loadPromptContent(ctx context.Context, code string, vars map[s
 			"diagnosis/k8s-pod":           "k8s_pod_diagnose",
 			"diagnosis/cicd-build-fail":   "cicd_build_fail",
 			"diagnosis/alert-explain":     "alert_explain",
+			"diagnosis/log-analyze":       "diagnosis_log-analyze",
 			"generation/k8s-yaml":         "generation_k8s-yaml",
 		}
 		name := legacy[code]
