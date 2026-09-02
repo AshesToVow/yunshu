@@ -46,6 +46,7 @@ import {
   type ServiceItem,
 } from "../services/projects";
 import { getClusters, type ClusterItem } from "../services/clusters";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
 type SearchForm = {
@@ -170,6 +171,9 @@ export function ProjectLogsPage() {
       const pageSize = values.page_size ?? 100;
       const range = values.time_range;
       const filePath = values.file_path?.trim() || undefined;
+      if (range?.[0] && range?.[1] && range[1].diff(range[0], "day") > 7) {
+        message.warning("时间范围超过 7 天，检索可能较慢；建议缩小到 1 天内");
+      }
       setLoading(true);
       setEmptyHint("");
       try {
@@ -193,7 +197,7 @@ export function ProjectLogsPage() {
           setEmptyHint("未选时间范围且无数据。确认主机 Agent 或集群 DaemonSet 已写入对应索引。");
         }
       } catch (e: unknown) {
-        message.error(String((e as Error)?.message ?? e));
+        message.error(extractApiErrorMessage(e));
       } finally {
         setLoading(false);
       }
@@ -215,7 +219,7 @@ export function ProjectLogsPage() {
       const res = await analyzeProjectLogs(values.project_id, params);
       setAiResult(res);
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      message.error(extractApiErrorMessage(e));
     } finally {
       setAiLoading(false);
     }
@@ -407,7 +411,7 @@ export function ProjectLogsPage() {
                     window.URL.revokeObjectURL(url);
                     message.success("导出完成");
                   } catch (e: unknown) {
-                    message.error(String((e as Error)?.message ?? e));
+                    message.error(extractApiErrorMessage(e));
                   }
                 })();
               }}

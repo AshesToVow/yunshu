@@ -255,7 +255,7 @@ elasticsearch:
   timestamp_field: "@timestamp"
   default_size: 100
   max_size: 1000
-  timeout_seconds: 30
+  timeout_seconds: 90
   default_retention_days: 30
   cleanup_cron_spec: "0 3 * * *"   # 每天 03:00 清理过期索引
 
