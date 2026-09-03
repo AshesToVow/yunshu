@@ -36,7 +36,7 @@ func storageDictSeeds() []DictEntryCreateRequest {
 		{DictType: "kafka_username", Label: "Kafka 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "SASL 用户名，可选"},
 		{DictType: "kafka_password", Label: "Kafka 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：SASL 密码"},
 		{DictType: "kafka_sasl_mechanism", Label: "Kafka SASL 机制", Value: "plain", Sort: intRef(1), Status: 0, Remark: "plain / scram-sha-256 / scram-sha-512"},
-		{DictType: "kafka_batch_size", Label: "Kafka 消费批大小", Value: "200", Sort: intRef(1), Status: 1, Remark: "写入 ES 的批量条数"},
-		{DictType: "kafka_workers", Label: "Kafka 消费并发", Value: "1", Sort: intRef(1), Status: 1, Remark: "消费者并发数"},
+		{DictType: "kafka_batch_size", Label: "Kafka 消费批大小", Value: "200", Sort: intRef(1), Status: 1, Remark: "每 worker 攒批写入 ES 的条数；dev 可 200～500"},
+		{DictType: "kafka_workers", Label: "Kafka 消费并发", Value: "1", Sort: intRef(1), Status: 1, Remark: "同消费组并行 Reader 数；建议 ≤ 全部分区总数，单机 Kafka/ES 可先试 2～4"},
 	}
 }

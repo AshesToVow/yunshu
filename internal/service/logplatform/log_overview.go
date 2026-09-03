@@ -104,14 +104,18 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 }
 
 func overviewAggBody(query any, tsField, interval string, q LogSearchQuery, levelFields []string) map[string]any {
+	dh := map[string]any{
+		"field":          tsField,
+		"fixed_interval": interval,
+		"min_doc_count":  0,
+	}
+	// 未选时间范围时不要写 extended_bounds:null，ES 7 会 x_content_parse_exception。
+	if bounds := extendedBounds(q.From, q.To); bounds != nil {
+		dh["extended_bounds"] = bounds
+	}
 	aggs := map[string]any{
 		"log_histogram": map[string]any{
-			"date_histogram": map[string]any{
-				"field":           tsField,
-				"fixed_interval":  interval,
-				"min_doc_count":   0,
-				"extended_bounds": extendedBounds(q.From, q.To),
-			},
+			"date_histogram": dh,
 		},
 	}
 	for i, field := range levelFields {
@@ -120,11 +124,12 @@ func overviewAggBody(query any, tsField, interval string, q LogSearchQuery, leve
 			continue
 		}
 		name := fmt.Sprintf("level_terms_%d", i)
-		terms := map[string]any{
-			"field": field,
-			"size":  20,
+		aggs[name] = map[string]any{
+			"terms": map[string]any{
+				"field": field,
+				"size":  20,
+			},
 		}
-		aggs[name] = map[string]any{"terms": terms}
 	}
 	return map[string]any{
 		"size":             0,
@@ -158,23 +163,14 @@ func pickHistogramInterval(from, to string) string {
 	}
 }
 
+// extendedBounds 仅在 from/to 都有有效值时返回；任一为空则返回 nil（调用方勿写入 JSON）。
 func extendedBounds(from, to string) map[string]any {
 	from = strings.TrimSpace(from)
 	to = strings.TrimSpace(to)
-	if from == "" && to == "" {
+	if from == "" || to == "" {
 		return nil
 	}
-	b := map[string]any{}
-	if from != "" {
-		b["min"] = from
-	}
-	if to != "" {
-		b["max"] = to
-	}
-	if len(b) == 0 {
-		return nil
-	}
-	return b
+	return map[string]any{"min": from, "max": to}
 }
 
 func parseTotalHits(raw map[string]any) int64 {
