@@ -3964,6 +3964,65 @@ body {
 }
 
 /* Project logs page：占满内容区剩余高度，终端随容器伸缩 */
+.project-logs-page .project-logs-overview-panel {
+  padding: 4px 0 8px;
+}
+
+.project-logs-page .project-logs-stat-card .ant-statistic-title {
+  font-size: 12px;
+}
+
+.project-logs-page .project-logs-histogram-wrap {
+  width: 100%;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.project-logs-page .project-logs-histogram-card .ant-card-body {
+  padding-top: 8px;
+}
+
+.project-logs-page .project-logs-level-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.project-logs-page .project-logs-level-row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-logs-page .project-logs-level-bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.project-logs-page .project-logs-level-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #4096ff, #1677ff);
+}
+
+.project-logs-page .project-logs-level-count {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+  min-width: 48px;
+  text-align: right;
+}
+
+.admin-shell.theme-dark .project-logs-page .project-logs-level-bar-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.admin-shell.theme-dark .project-logs-page .project-logs-level-count {
+  color: rgba(255, 255, 255, 0.65);
+}
+
 .project-logs-page {
   display: flex;
   flex-direction: column;

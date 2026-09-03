@@ -267,7 +267,7 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 		MaxWait:        200 * time.Millisecond,
 		CommitInterval: 0,
 		Dialer:         dialer,
-		StartOffset:    kafka.LastOffset,
+		StartOffset:    kafka.FirstOffset,
 		QueueCapacity:  256,
 	})
 	defer reader.Close()
@@ -679,7 +679,7 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	out.Partitions = lags
 	out.LagTotal = lagTotal
 	if out.ConsumerRunning {
-		out.Message = fmt.Sprintf("Yunshu Kafka→ES 消费者运行中（组 %s，订阅 %d 个 Topic）", cfg.ConsumerGroup, len(topics))
+		out.Message = fmt.Sprintf("Yunshu Kafka→ES 消费者运行中（组 %s，订阅 %d 个 Topic，%d worker）", cfg.ConsumerGroup, len(topics), workers)
 		if strings.Contains(out.LastError, "暂无 Agent Topic") {
 			out.LastError = ""
 		}
@@ -690,6 +690,10 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 		if strings.Contains(out.LastError, "暂无 Agent Topic") {
 			out.LastError = ""
 		}
+	}
+	// 提示：积压含历史 Topic 未消费分区；消费者从 earliest 追平后 lag 才会下降
+	if out.LagTotal > 0 && out.ConsumerRunning {
+		out.Message += fmt.Sprintf("；当前积压 %d 条（含历史 Topic 时追平需时间）", out.LagTotal)
 	}
 	return out, nil
 }

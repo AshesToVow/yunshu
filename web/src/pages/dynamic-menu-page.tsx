@@ -81,6 +81,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/ai/center": "ai-center-page",
   "/ai/investigations": "ai-investigations-page",
   "/esmgmt/connections": "esmgmt-connections-page",
+  "/esmgmt/storage": "esmgmt-storage-page",
   "/esmgmt/overview": "esmgmt-overview-page",
   "/esmgmt/console": "esmgmt-console-page",
   "/workflow/inbox": "workflow-inbox-page",
@@ -154,7 +155,7 @@ export function DynamicMenuPage() {
   const hasPathFallback = Boolean(PATH_COMPONENT_FALLBACK[normalizedPath]);
 
   if (normalizedPath === "/log-kafka") {
-    return <Navigate to="/log-retention?tab=kafka" replace />;
+    return <Navigate to="/log-retention" replace />;
   }
 
   if (!pluginsLoading && !isPathAllowedByPlugins(location.pathname, isPluginEnabled)) {

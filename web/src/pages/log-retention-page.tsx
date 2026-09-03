@@ -1,19 +1,9 @@
-import {
-  ClusterOutlined,
-  DeleteOutlined,
-  LinkOutlined,
-  PlayCircleOutlined,
-  ReloadOutlined,
-  SaveOutlined,
-} from "@ant-design/icons";
+import { ClusterOutlined, DeleteOutlined, LinkOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
   Alert,
   Button,
   Card,
   Col,
-  Form,
-  Input,
-  InputNumber,
   Popconfirm,
   Row,
   Select,
@@ -21,121 +11,31 @@ import {
   Statistic,
   Switch,
   Table,
-  Tabs,
   Tag,
   Tooltip,
   Typography,
   message,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
-  deleteESIndex,
   deleteKafkaTopic,
-  deleteProjectLogRetention,
-  getESConfigPreview,
-  getESStorageStats,
-  getGlobalLogRetention,
   getKafkaConfigPreview,
   getKafkaQueueStats,
-  getProjects,
-  listLogRetentionPolicies,
-  runLogRetentionCleanup,
-  setLogPlatformESConnection,
-  upsertGlobalLogRetention,
-  upsertProjectLogRetention,
-  type ESConfigPreview,
-  type ESIndexStatItem,
-  type ESStorageStats,
   type KafkaConfigPreview,
   type KafkaPartitionLag,
   type KafkaQueueStats,
-  type LogRetentionItem,
-  type ProjectItem,
 } from "../services/log-platform";
-import { listEsmgmtConnections, type EsmgmtConnection } from "../services/esmgmt";
 import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
-type GlobalForm = {
-  retention_days: number;
-  enabled: boolean;
-  index_pattern?: string;
-  remark?: string;
-};
-
 export function LogRetentionPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get("tab") === "kafka" ? "kafka" : "es";
-
-  const [globalForm] = Form.useForm<GlobalForm>();
-  const [stats, setStats] = useState<ESStorageStats | null>(null);
-  const [esCfg, setEsCfg] = useState<ESConfigPreview | null>(null);
-  const [esError, setEsError] = useState<string>("");
-  const [esConnections, setEsConnections] = useState<EsmgmtConnection[]>([]);
-  const [bindingES, setBindingES] = useState(false);
-  const [policies, setPolicies] = useState<LogRetentionItem[]>([]);
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [projectId, setProjectId] = useState<number>();
-  const [projectDays, setProjectDays] = useState(30);
-  const [projectEnabled, setProjectEnabled] = useState(true);
-
   const [kafkaStats, setKafkaStats] = useState<KafkaQueueStats | null>(null);
   const [kafkaCfg, setKafkaCfg] = useState<KafkaConfigPreview | null>(null);
   const [kafkaLoading, setKafkaLoading] = useState(false);
-
-  const reloadES = useCallback(async () => {
-    setLoading(true);
-    setEsError("");
-    try {
-      const [global, list, cfg, proj, conns] = await Promise.all([
-        getGlobalLogRetention(),
-        listLogRetentionPolicies(),
-        getESConfigPreview().catch(() => null),
-        getProjects({ page: 1, page_size: 1000 }),
-        listEsmgmtConnections().catch(() => [] as EsmgmtConnection[]),
-      ]);
-      setEsCfg(cfg);
-      setEsConnections(conns || []);
-      globalForm.setFieldsValue({
-        retention_days: global.retention_days,
-        enabled: global.enabled,
-        index_pattern: global.index_pattern || undefined,
-        remark: global.remark || undefined,
-      });
-      setPolicies(list.list);
-      setProjects(proj.list);
-      try {
-        setStats(await getESStorageStats());
-      } catch (e: unknown) {
-        setStats(null);
-        setEsError(extractApiErrorMessage(e, "无法拉取 ES 存储统计"));
-      }
-    } catch (e: unknown) {
-      message.error(extractApiErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [globalForm]);
-
-  async function bindESConnection(connectionId: number) {
-    setBindingES(true);
-    try {
-      const cfg = await setLogPlatformESConnection(connectionId);
-      setEsCfg(cfg);
-      message.success(
-        connectionId > 0
-          ? `已绑定 ES 连接 #${connectionId}${cfg.connection_name ? `（${cfg.connection_name}）` : ""}`
-          : "已回退为数据字典地址",
-      );
-      await reloadES();
-    } catch (e: unknown) {
-      message.error(extractApiErrorMessage(e, "绑定 ES 连接失败"));
-    } finally {
-      setBindingES(false);
-    }
-  }
+  const [topicPage, setTopicPage] = useState(1);
+  const [topicPageSize, setTopicPageSize] = useState(10);
 
   const reloadKafka = useCallback(async () => {
     setKafkaLoading(true);
@@ -144,48 +44,18 @@ export function LogRetentionPage() {
       setKafkaStats(s);
       setKafkaCfg(c);
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      message.error(extractApiErrorMessage(e));
     } finally {
       setKafkaLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void reloadES();
-  }, [reloadES]);
-
-  useEffect(() => {
-    if (tab !== "kafka") return;
     void reloadKafka();
     const t = window.setInterval(() => void reloadKafka(), 15000);
     return () => window.clearInterval(t);
-  }, [tab, reloadKafka]);
+  }, [reloadKafka]);
 
-  async function saveGlobal() {
-    const values = await globalForm.validateFields();
-    await upsertGlobalLogRetention(values);
-    message.success("全局保留策略已保存");
-    await reloadES();
-  }
-
-  async function saveProjectOverride() {
-    if (!projectId) {
-      message.warning("请选择项目");
-      return;
-    }
-    await upsertProjectLogRetention(projectId, { retention_days: projectDays, enabled: projectEnabled });
-    message.success("项目覆盖策略已保存");
-    await reloadES();
-  }
-
-  async function removeProjectOverride() {
-    if (!projectId) return;
-    await deleteProjectLogRetention(projectId);
-    message.success("已删除项目覆盖，将继承全局策略");
-    await reloadES();
-  }
-
-  const projectOverrides = policies.filter((p) => p.project_id !== 0);
   const partitions: KafkaPartitionLag[] = kafkaStats?.partitions ?? [];
   const topicRows = useMemo(() => {
     const topicList = kafkaStats?.topics || [];
@@ -202,548 +72,189 @@ export function LogRetentionPage() {
       if (p.lag > 0) row.lag_total += p.lag;
       map.set(topic, row);
     }
-    return Array.from(map.values()).sort((a, b) => a.topic.localeCompare(b.topic));
+    return Array.from(map.values()).sort((a, b) => b.lag_total - a.lag_total || a.topic.localeCompare(b.topic));
   }, [partitions, kafkaStats?.topics]);
 
-  const showEmptyTopicHint =
-    !!kafkaStats?.sink_via_kafka && (kafkaStats?.topics || []).length === 0;
-
-  function canManageESIndex(name: string, matched?: boolean) {
-    if (matched) return true;
-    const n = String(name || "").trim().toLowerCase();
-    return (n.startsWith("yunshu-agent-") || n.startsWith("yunshu-k8s-")) && !n.startsWith(".");
-  }
+  const showEmptyTopicHint = !!kafkaStats?.sink_via_kafka && (kafkaStats?.topics || []).length === 0;
 
   async function handleDeleteTopic(topic: string) {
     try {
       await deleteKafkaTopic(topic);
-      message.success(`已删除 Topic：${topic}。若采集仍在写入或随后触发部署同步，Topic 可能被自动重建。`);
-      setKafkaStats((prev) =>
-        prev
-          ? {
-              ...prev,
-              topics: (prev.topics || []).filter((t) => t !== topic),
-              partitions: (prev.partitions || []).filter((p) => p.topic !== topic),
-            }
-          : prev,
-      );
+      message.success(`已删除 Topic：${topic}`);
       await reloadKafka();
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
-    }
-  }
-
-  async function handleDeleteIndex(index: string) {
-    try {
-      await deleteESIndex(index);
-      message.success(`已删除索引：${index}`);
-      await reloadES();
-    } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      message.error(extractApiErrorMessage(e));
     }
   }
 
   return (
     <div className="log-retention-page page-stack">
-      <Tabs
-        activeKey={tab}
-        onChange={(key) => {
-          if (key === "kafka") setSearchParams({ tab: "kafka" });
-          else setSearchParams({});
-        }}
-        items={[
-          {
-            key: "es",
-            label: "ES 索引保留",
-            children: (
-              <div className="log-retention-es">
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message={
-                    <>
-                      请在下方选择「ES 管理控制台」中的连接作为日志检索目标；索引模式/保留策略仍由数据字典{" "}
-                      <Typography.Text code>elasticsearch_index_pattern</Typography.Text> 等控制。也可{" "}
-                      <Link to="/esmgmt/connections">从字典导入连接</Link>。
-                    </>
-                  }
-                />
-
-                <Card size="small" className="table-card" title="日志平台 ES 连接" style={{ marginBottom: 12 }}>
-                  <Space wrap align="center">
-                    <span>使用连接：</span>
-                    <Select
-                      style={{ minWidth: 320 }}
-                      loading={loading || bindingES}
-                      value={esCfg?.connection_id && esCfg.connection_id > 0 ? esCfg.connection_id : 0}
-                      placeholder="选择 ES 连接"
-                      options={[
-                        { value: 0, label: "数据字典地址（elasticsearch_addresses）" },
-                        ...esConnections.map((c) => ({
-                          value: c.id,
-                          label: `${c.name} (#${c.id}) — ${c.addresses}${c.is_default ? " [默认]" : ""}`,
-                        })),
-                      ]}
-                      onChange={(v) => void bindESConnection(Number(v) || 0)}
-                    />
-                    <Link to="/esmgmt/connections">管理连接</Link>
-                  </Space>
-                </Card>
-
-                {esCfg ? (
-                  <Alert
-                    type={esCfg.enabled ? "success" : "warning"}
-                    showIcon
-                    style={{ marginBottom: 12 }}
-                    message={
-                      <Space wrap size={8}>
-                        <span>运行时配置：</span>
-                        <Tag color={esCfg.source === "managed" ? "purple" : "default"}>
-                          {esCfg.source === "managed"
-                            ? `连接 ${esCfg.connection_name || "#" + esCfg.connection_id}`
-                            : "数据字典"}
-                        </Tag>
-                        <Tag color={esCfg.enabled ? "green" : "orange"}>{esCfg.enabled ? "enabled=true" : "enabled=false"}</Tag>
-                        <Tag>{(esCfg.addresses || []).join(", ") || "无地址"}</Tag>
-                        <Tag>user={esCfg.username || "(空)"}</Tag>
-                        <Tag color={esCfg.has_password ? "blue" : "default"}>
-                          {esCfg.has_password ? "已配置密码" : "未配置密码"}
-                        </Tag>
-                        <Tag>{esCfg.index_pattern || "yunshu-agent-*"}</Tag>
-                      </Space>
-                    }
-                  />
-                ) : null}
-
-                <Card
-                  size="small"
-                  className="table-card"
-                  title="ES 存储概览"
-                  style={{ marginBottom: 12 }}
-                  extra={
-                    <Button size="small" icon={<ReloadOutlined />} onClick={() => void reloadES()} loading={loading}>
-                      刷新
-                    </Button>
-                  }
-                >
-                  {stats ? (
-                    <>
-                      <Row gutter={[16, 12]} style={{ marginBottom: 12 }}>
-                        <Col xs={12} sm={6}>
-                          <Statistic title="全部索引" value={stats.index_count} suffix="个" />
-                        </Col>
-                        <Col xs={12} sm={6}>
-                          <Statistic title="全部文档" value={stats.document_count} />
-                        </Col>
-                        <Col xs={12} sm={6}>
-                          <Statistic title="全部占用" value={stats.store_human || "-"} />
-                        </Col>
-                        <Col xs={12} sm={6}>
-                          <Statistic
-                            title={`可管理 ${stats.index_pattern || "yunshu-agent-*"}`}
-                            value={stats.pattern_index_count ?? 0}
-                            suffix={`/ ${stats.pattern_store_human || "-"}`}
-                          />
-                        </Col>
-                      </Row>
-                      <div className="k8s-table-scroll-host">
-                        <Table<ESIndexStatItem>
-                          size="small"
-                          rowKey="name"
-                          pagination={{ pageSize: 8, showSizeChanger: true, size: "small" }}
-                          dataSource={stats.indices ?? []}
-                          scroll={{ x: 640 }}
-                          columns={[
-                            {
-                              title: "索引名",
-                              dataIndex: "name",
-                              ellipsis: true,
-                              render: (name: string, r) => (
-                                <Space size={4} wrap>
-                                  <span>{name}</span>
-                                  {canManageESIndex(name, r.matched_pattern) ? <Tag color="blue">平台</Tag> : null}
-                                </Space>
-                              ),
-                            },
-                            {
-                              title: "文档",
-                              dataIndex: "docs_count",
-                              width: 110,
-                              render: (n: number) => (n ?? 0).toLocaleString(),
-                            },
-                            { title: "占用", dataIndex: "store_human", width: 100 },
-                            {
-                              title: "操作",
-                              key: "action",
-                              width: 88,
-                              fixed: "right",
-                              render: (_, r) =>
-                                canManageESIndex(r.name, r.matched_pattern) ? (
-                                  <Popconfirm
-                                    title={`确认删除索引 ${r.name}？`}
-                                    description="删除后不可恢复"
-                                    okText="删除"
-                                    okButtonProps={{ danger: true }}
-                                    cancelText="取消"
-                                    onConfirm={() => void handleDeleteIndex(r.name)}
-                                  >
-                                    <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                                      删除
-                                    </Button>
-                                  </Popconfirm>
-                                ) : (
-                                  <span style={{ color: "#999" }}>-</span>
-                                ),
-                            },
-                          ]}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                      <Alert
-                        type="error"
-                        showIcon
-                        message={esError || "无法连接 ES 或未启用 elasticsearch.enabled"}
-                        description={
-                          <div>
-                            <div>请逐项核对数据字典（不是 ES 管理控制台）：</div>
-                            <ol style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-                              <li>
-                                <Typography.Text code>elasticsearch_enabled</Typography.Text> = true（已启用）
-                              </li>
-                              <li>
-                                <Typography.Text code>elasticsearch_addresses</Typography.Text> = http://10.10.10.5:9200
-                              </li>
-                              <li>
-                                <Typography.Text code>elasticsearch_username</Typography.Text> /{" "}
-                                <Typography.Text code>elasticsearch_password</Typography.Text>{" "}
-                                必须也是「启用」状态，且与 ES 认证一致（默认种子常为禁用空密码）
-                              </li>
-                            </ol>
-                            <div style={{ marginTop: 8 }}>
-                              快捷入口：
-                              <Link to="/dict-entries?keyword=elasticsearch_">打开 elasticsearch_* 字典</Link>
-                            </div>
-                          </div>
-                        }
-                      />
-                    </Space>
-                  )}
-                </Card>
-
-                <div className="log-retention-policy-grid">
-                  <Card
-                    size="small"
-                    title="全局默认策略"
-                    extra={
-                      <Space size={8} wrap>
-                        <Button
-                          size="small"
-                          icon={<PlayCircleOutlined />}
-                          onClick={() =>
-                            void (async () => {
-                              const res = await runLogRetentionCleanup();
-                              message.success(res.message || "清理完成");
-                              await reloadES();
-                            })()
-                          }
-                        >
-                          立即清理
-                        </Button>
-                        <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => void saveGlobal()}>
-                          保存
-                        </Button>
-                      </Space>
-                    }
-                  >
-                    <Form form={globalForm} layout="vertical" size="small">
-                      <Row gutter={12}>
-                        <Col xs={24} sm={12}>
-                          <Form.Item label="保留天数" name="retention_days" rules={[{ required: true }]} style={{ marginBottom: 12 }}>
-                            <InputNumber min={1} max={3650} style={{ width: "100%" }} addonAfter="天" />
-                          </Form.Item>
-                        </Col>
-                        <Col xs={24} sm={12}>
-                          <Form.Item label="启用自动清理" name="enabled" valuePropName="checked" style={{ marginBottom: 12 }}>
-                            <Switch />
-                          </Form.Item>
-                        </Col>
-                        <Col span={24}>
-                          <Form.Item
-                            label="索引模式"
-                            name="index_pattern"
-                            style={{ marginBottom: 12 }}
-                            extra="留空=同时清理 yunshu-agent-* 与 yunshu-k8s-*；也可只填其一"
-                          >
-                            <Input placeholder="默认 agent+k8s" />
-                          </Form.Item>
-                        </Col>
-                        <Col span={24}>
-                          <Form.Item label="备注" name="remark" style={{ marginBottom: 0 }}>
-                            <Input placeholder="可选" />
-                          </Form.Item>
-                        </Col>
-                      </Row>
-                    </Form>
-                  </Card>
-
-                  <Card size="small" title="项目级覆盖">
-                    <Space className="ops-filter-bar" wrap size={8} style={{ marginBottom: 12, width: "100%" }}>
-                      <Select
-                        style={{ minWidth: 0, width: "min(280px, 100%)", flex: "1 1 200px" }}
-                        placeholder="选择项目"
-                        options={projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))}
-                        value={projectId}
-                        onChange={setProjectId}
-                        allowClear
-                        size="small"
-                      />
-                      <InputNumber
-                        size="small"
-                        min={1}
-                        max={3650}
-                        value={projectDays}
-                        onChange={(v) => setProjectDays(v ?? 30)}
-                        addonAfter="天"
-                      />
-                      <span>
-                        启用 <Switch size="small" checked={projectEnabled} onChange={setProjectEnabled} />
-                      </span>
-                      <Button size="small" type="primary" onClick={() => void saveProjectOverride()}>
-                        保存覆盖
-                      </Button>
-                      <Button size="small" danger icon={<DeleteOutlined />} onClick={() => void removeProjectOverride()}>
-                        删除
-                      </Button>
-                    </Space>
-                    <Table
-                      rowKey={(r) => `${r.project_id}-${r.id}`}
-                      size="small"
-                      dataSource={projectOverrides}
-                      pagination={false}
-                      scroll={{ x: 560 }}
-                      locale={{ emptyText: "无项目覆盖，均继承全局策略" }}
-                      columns={[
-                        {
-                          title: "项目",
-                          dataIndex: "project_id",
-                          ellipsis: true,
-                          render: (id: number) => {
-                            const p = projects.find((x) => x.id === id);
-                            return p ? `${p.name} (${p.code})` : id;
-                          },
-                        },
-                        { title: "天数", dataIndex: "retention_days", width: 72 },
-                        {
-                          title: "启用",
-                          dataIndex: "enabled",
-                          width: 72,
-                          render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>),
-                        },
-                        { title: "索引模式", dataIndex: "index_pattern", ellipsis: true, render: (v?: string) => v || "-" },
-                        {
-                          title: "更新",
-                          dataIndex: "updated_at",
-                          width: 150,
-                          render: (v?: string) => (v ? formatDateTime(v) : "-"),
-                        },
-                      ]}
-                    />
-                  </Card>
-                </div>
-              </div>
-            ),
-          },
-          {
-            key: "kafka",
-            label: "Kafka 队列",
-            children: (
-              <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                <Space wrap>
-                  <Button icon={<ReloadOutlined />} loading={kafkaLoading} onClick={() => void reloadKafka()}>
-                    刷新
-                  </Button>
-                  <Link to="/dict-entries?keyword=kafka_">
-                    <Button icon={<LinkOutlined />}>数据字典配置</Button>
-                  </Link>
-                </Space>
-
-                <Alert
-                  type="info"
-                  showIcon
-                  message="开启 Kafka 后会出现 yunshu-agent-{ip}-日期 与 yunshu-k8s-{cluster}-p{project}-日期 Topic。删除后若仍会「过一会又出现」，通常是：① Agent/DaemonSet 仍在写入（Broker auto.create.topics）；② 重新部署/同步集群采集或引导主机 Agent 会 Ensure 当日 Topic。要真正停掉请先停采集再删 Topic。"
-                />
-
-                {showEmptyTopicHint ? (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    message="暂无 Agent Topic（yunshu-agent-{ip}-YYYY.MM.DD），请先引导/热更 Agent"
-                  />
-                ) : null}
-
-                {kafkaStats?.message && !showEmptyTopicHint ? (
-                  <Alert type={kafkaStats.sink_via_kafka ? "info" : "warning"} showIcon message={kafkaStats.message} />
-                ) : null}
-
-                <Row gutter={[12, 12]}>
-                  <Col xs={24} sm={12} md={6}>
-                    <Card size="small">
-                      <Statistic
-                        title="中转开关"
-                        value={kafkaStats?.sink_via_kafka ? "Kafka → ES" : "直写 ES"}
-                        prefix={<ClusterOutlined />}
-                      />
-                    </Card>
-                  </Col>
-                  <Col xs={24} sm={12} md={6}>
-                    <Card size="small">
-                      <Tooltip title="Broker 侧消费组未提交位移的积压（真实队列深度）">
-                        <Statistic title="消费积压 (lag)" value={kafkaStats?.lag_total ?? 0} />
-                      </Tooltip>
-                    </Card>
-                  </Col>
-                  <Col xs={24} sm={12} md={6}>
-                    <Card size="small">
-                      <Tooltip title="本 Yunshu 进程启动以来从 Kafka Fetch 的条数（内存计数，重启清零；不是 Broker 消费组状态）">
-                        <Statistic title="本进程已拉取" value={kafkaStats?.consumed_total ?? 0} />
-                      </Tooltip>
-                    </Card>
-                  </Col>
-                  <Col xs={24} sm={12} md={6}>
-                    <Card size="small">
-                      <Tooltip title="本 Yunshu 进程成功写入 Elasticsearch 的条数（内存计数，重启清零）">
-                        <Statistic title="本进程已写 ES" value={kafkaStats?.written_total ?? 0} />
-                      </Tooltip>
-                    </Card>
-                  </Col>
-                </Row>
-
-                <Card title="连接与消费组" size="small">
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 12 }}
-                    message="此处「消费者」= Yunshu 后端内的 Kafka→ES 消费循环（消费组名如下），不是 Topic 列表，也不是 Loggie。"
-                  />
-                  <Space wrap size={[16, 8]}>
-                    <span>
-                      启用：
-                      {kafkaCfg?.enabled ? <Tag color="green">true</Tag> : <Tag>false</Tag>}
-                    </span>
-                    <span>
-                      Yunshu 消费者：
-                      {kafkaStats?.consumer_running ? (
-                        <Tag color="green">运行中{kafkaStats.consumer_workers ? ` ×${kafkaStats.consumer_workers}` : ""}</Tag>
-                      ) : (
-                        <Tag color="orange">未运行</Tag>
-                      )}
-                    </span>
-                    <span>
-                      消费组：
-                      <Tag color="blue">{kafkaStats?.consumer_group || kafkaCfg?.consumer_group || "-"}</Tag>
-                    </span>
-                    <span>Topic 前缀：{kafkaStats?.topic_prefix || kafkaCfg?.topic_prefix || "yunshu-agent"}</span>
-                    <span>示例 Topic：{kafkaCfg?.topic_example || "yunshu-agent-10-10-10-1-2026.07.17"}</span>
-                    <span>
-                      订阅 Topic 数：
-                      <Tag>{(kafkaStats?.topics || []).length}</Tag>
-                      <Typography.Text type="secondary" style={{ marginLeft: 4 }}>
-                        （详见下方表格，可按积压排序/删除）
-                      </Typography.Text>
-                    </span>
-                    <span>Brokers：{(kafkaStats?.brokers || kafkaCfg?.brokers || []).join(", ") || "-"}</span>
-                    <span>最近拉取：{kafkaStats?.last_consume_at ? formatDateTime(kafkaStats.last_consume_at) : "-"}</span>
-                    <span>错误数：{kafkaStats?.error_total ?? 0}</span>
-                  </Space>
-                  {kafkaStats?.last_error && !String(kafkaStats.last_error).includes("暂无 Agent Topic") ? (
-                    <Alert style={{ marginTop: 12 }} type="error" showIcon message={kafkaStats.last_error} />
-                  ) : null}
-                </Card>
-
-                <Card className="table-card" title="Topic 积压（展开查看分区）" size="small">
-                  <div className="k8s-table-scroll-host">
-                    <Table
-                      rowKey="topic"
-                      size="small"
-                      loading={kafkaLoading}
-                      pagination={{ pageSize: 10, size: "small" }}
-                      dataSource={topicRows}
-                      scroll={{ x: 560 }}
-                      locale={{ emptyText: kafkaStats?.sink_via_kafka ? "暂无 Topic 数据" : "未启用 Kafka 中转" }}
-                      expandable={{
-                        expandedRowRender: (row) => (
-                          <Table
-                            size="small"
-                            pagination={false}
-                            rowKey={(r) => `${r.topic ?? ""}-${r.partition}`}
-                            dataSource={row.partitions}
-                            columns={[
-                              { title: "分区", dataIndex: "partition", width: 80 },
-                              { title: "高水位", dataIndex: "high_water_mark", width: 120 },
-                              {
-                                title: "消费位移",
-                                dataIndex: "consumer_offset",
-                                width: 120,
-                                render: (v: number) => (v < 0 ? "-" : v),
-                              },
-                              {
-                                title: "Lag",
-                                dataIndex: "lag",
-                                width: 100,
-                                render: (v: number) =>
-                                  v < 0 ? <Tag>-</Tag> : <Tag color={v > 1000 ? "red" : v > 0 ? "orange" : "green"}>{v}</Tag>,
-                              },
-                            ]}
-                          />
-                        ),
-                        rowExpandable: (row) => (row.partitions?.length ?? 0) > 0,
-                      }}
-                      columns={[
-                        { title: "Topic", dataIndex: "topic", ellipsis: true },
-                        {
-                          title: "分区数",
-                          width: 90,
-                          render: (_, row) => row.partitions.length || "-",
-                        },
-                        {
-                          title: "Lag 合计",
-                          dataIndex: "lag_total",
-                          width: 110,
-                          render: (v: number) =>
-                            v > 0 ? <Tag color={v > 1000 ? "red" : "orange"}>{v}</Tag> : <Tag color="green">0</Tag>,
-                        },
-                        {
-                          title: "操作",
-                          key: "action",
-                          width: 88,
-                          fixed: "right",
-                          render: (_, row) => (
-                            <Popconfirm
-                              title={`确认删除 Topic ${row.topic}？`}
-                              description="若 Agent 仍在写入，Broker 可能自动重建该 Topic；建议先热更/停止对应 Agent。"
-                              okText="删除"
-                              okButtonProps={{ danger: true }}
-                              cancelText="取消"
-                              onConfirm={() => void handleDeleteTopic(row.topic)}
-                            >
-                              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                                删除
-                              </Button>
-                            </Popconfirm>
-                          ),
-                        },
-                      ]}
-                    />
-                  </div>
-                </Card>
-              </Space>
-            ),
-          },
-        ]}
+      <OpsPageHeader
+        title="Kafka 队列"
+        description="观测 Loggie → Kafka → ES 中转链路；ES 存储与保留策略已迁移至 ES 管理控制台。"
+        breadcrumbs={[{ title: "日志平台" }, { title: "Kafka 队列" }]}
+        extra={
+          <Space>
+            <Link to="/esmgmt/storage">日志存储与保留</Link>
+            <Link to="/dict-entries?keyword=kafka_">
+              <Button icon={<LinkOutlined />}>Kafka 字典</Button>
+            </Link>
+            <Button icon={<ReloadOutlined />} loading={kafkaLoading} onClick={() => void reloadKafka()}>
+              刷新
+            </Button>
+          </Space>
+        }
       />
+
+      <Alert
+        type="info"
+        showIcon
+        message="Topic 命名：yunshu-agent-{ip}-日期 / yunshu-k8s-{cluster}-p{project}-日期。积压下降需消费者运行并从 earliest 追平历史分区。"
+      />
+
+      {showEmptyTopicHint ? (
+        <Alert type="warning" showIcon message="暂无 Agent Topic，请先引导/热更 Agent" />
+      ) : null}
+
+      {kafkaStats?.message && !showEmptyTopicHint ? (
+        <Alert type={kafkaStats.sink_via_kafka ? "info" : "warning"} showIcon message={kafkaStats.message} />
+      ) : null}
+
+      <Row gutter={[12, 12]}>
+        <Col xs={24} sm={12} md={6}>
+          <Card size="small">
+            <Statistic
+              title="中转开关"
+              value={kafkaStats?.sink_via_kafka ? "Kafka → ES" : "直写 ES"}
+              prefix={<ClusterOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card size="small">
+            <Tooltip title="Broker 消费组未提交位移的积压">
+              <Statistic title="消费积压 (lag)" value={kafkaStats?.lag_total ?? 0} />
+            </Tooltip>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card size="small">
+            <Tooltip title="本进程从 Kafka Fetch 的条数（重启清零）">
+              <Statistic title="本进程已拉取" value={kafkaStats?.consumed_total ?? 0} />
+            </Tooltip>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card size="small">
+            <Tooltip title="本进程成功写入 ES 的条数（重启清零）">
+              <Statistic title="本进程已写 ES" value={kafkaStats?.written_total ?? 0} />
+            </Tooltip>
+          </Card>
+        </Col>
+      </Row>
+
+      <Card title="连接与消费组" size="small">
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="「消费者」= Yunshu 后端 Kafka→ES 消费循环（消费组如下），不是 Topic 列表。"
+        />
+        <Space wrap size={[16, 8]}>
+          <span>
+            启用：{kafkaCfg?.enabled ? <Tag color="green">true</Tag> : <Tag>false</Tag>}
+          </span>
+          <span>
+            Yunshu 消费者：
+            {kafkaStats?.consumer_running ? (
+              <Tag color="green">运行中{kafkaStats.consumer_workers ? ` ×${kafkaStats.consumer_workers}` : ""}</Tag>
+            ) : (
+              <Tag color="orange">未运行</Tag>
+            )}
+          </span>
+          <span>
+            消费组：<Tag color="blue">{kafkaStats?.consumer_group || kafkaCfg?.consumer_group || "-"}</Tag>
+          </span>
+          <span>Topic 数：{(kafkaStats?.topics || []).length}</span>
+          <span>Brokers：{(kafkaStats?.brokers || kafkaCfg?.brokers || []).join(", ") || "-"}</span>
+          <span>最近拉取：{kafkaStats?.last_consume_at ? formatDateTime(kafkaStats.last_consume_at) : "-"}</span>
+        </Space>
+        {kafkaStats?.last_error && !String(kafkaStats.last_error).includes("暂无 Agent Topic") ? (
+          <Alert style={{ marginTop: 12 }} type="error" showIcon message={kafkaStats.last_error} />
+        ) : null}
+      </Card>
+
+      <Card className="table-card" title="Topic 积压（按 lag 降序，展开查看分区）" size="small">
+        <Table
+          rowKey="topic"
+          size="small"
+          loading={kafkaLoading}
+          dataSource={topicRows}
+          scroll={{ x: 560 }}
+          pagination={{
+            current: topicPage,
+            pageSize: topicPageSize,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50"],
+            showTotal: (t) => `共 ${t} 个 Topic`,
+            onChange: (p, ps) => {
+              setTopicPage(p);
+              setTopicPageSize(ps);
+            },
+          }}
+          expandable={{
+            expandedRowRender: (row) => (
+              <Table
+                size="small"
+                pagination={false}
+                rowKey={(r) => `${r.topic ?? ""}-${r.partition}`}
+                dataSource={row.partitions}
+                columns={[
+                  { title: "分区", dataIndex: "partition", width: 80 },
+                  { title: "高水位", dataIndex: "high_water_mark", width: 120 },
+                  {
+                    title: "消费位移",
+                    dataIndex: "consumer_offset",
+                    width: 120,
+                    render: (v: number) => (v < 0 ? "-" : v),
+                  },
+                  {
+                    title: "Lag",
+                    dataIndex: "lag",
+                    width: 100,
+                    render: (v: number) =>
+                      v < 0 ? <Tag>-</Tag> : <Tag color={v > 1000 ? "red" : v > 0 ? "orange" : "green"}>{v}</Tag>,
+                  },
+                ]}
+              />
+            ),
+            rowExpandable: (row) => (row.partitions?.length ?? 0) > 0,
+          }}
+          columns={[
+            { title: "Topic", dataIndex: "topic", ellipsis: true },
+            { title: "分区数", width: 90, render: (_, row) => row.partitions.length || "-" },
+            {
+              title: "Lag 合计",
+              dataIndex: "lag_total",
+              width: 110,
+              render: (v: number) => <Tag color={v > 1000 ? "red" : v > 0 ? "orange" : "green"}>{v}</Tag>,
+            },
+            {
+              title: "操作",
+              width: 100,
+              render: (_, row) => (
+                <Popconfirm title={`删除 Topic ${row.topic}？`} onConfirm={() => void handleDeleteTopic(row.topic)}>
+                  <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
+      </Card>
     </div>
   );
 }
+
+export default LogRetentionPage;

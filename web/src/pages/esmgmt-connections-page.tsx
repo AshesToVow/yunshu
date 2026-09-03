@@ -122,6 +122,7 @@ export function EsmgmtConnectionsPage() {
         extra={
           <Space>
             <Link to="/esmgmt/overview">集群概览</Link>
+            <Link to="/esmgmt/storage">日志存储</Link>
             <Link to="/esmgmt/console">REST 控制台</Link>
             <Button icon={<ReloadOutlined />} onClick={() => void load()}>
               刷新

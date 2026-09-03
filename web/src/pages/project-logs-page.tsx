@@ -9,7 +9,6 @@ import {
   Form,
   Input,
   List,
-  Progress,
   Row,
   Select,
   Space,
@@ -237,7 +236,7 @@ export function ProjectLogsPage() {
       const qPid = Number(searchParams.get("project_id") || 0);
       const defaultProject = qPid || data.list[0]?.id;
       const tab = searchParams.get("tab");
-      if (tab === "patterns" || tab === "anomalies" || tab === "logs") {
+      if (tab === "patterns" || tab === "anomalies" || tab === "logs" || tab === "overview") {
         setActiveTab(tab);
       }
       const anchorTime = searchParams.get("anchor_time");
@@ -571,57 +570,19 @@ export function ProjectLogsPage() {
           />
         ) : null}
 
-        {overview ? (
-          <Card size="small" className="project-logs-overview" style={{ marginBottom: 12 }}>
-            <Row gutter={16}>
-              <Col span={4}>
-                <Statistic title="命中总数" value={overview.total} />
-              </Col>
-              <Col span={8}>
-                <Typography.Text type="secondary">级别分布</Typography.Text>
-                <div style={{ marginTop: 8 }}>
-                  <Space wrap>
-                    {Object.entries(overview.level_counts || {}).map(([lv, cnt]) => (
-                      <Tag key={lv} color={lv === "ERROR" || lv === "FATAL" ? "error" : lv === "WARN" ? "warning" : "default"}>
-                        {lv}: {cnt}
-                      </Tag>
-                    ))}
-                  </Space>
-                </div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text type="secondary">时间分布</Typography.Text>
-                <LogHistogramChart buckets={overview.histogram || []} />
-              </Col>
-            </Row>
-            {(overview.top_error_signatures?.length ?? 0) > 0 ? (
-              <div style={{ marginTop: 12 }}>
-                <Typography.Text type="secondary">Top 错误签名</Typography.Text>
-                <List
-                  size="small"
-                  dataSource={overview.top_error_signatures.slice(0, 5)}
-                  renderItem={(item) => (
-                    <List.Item>
-                      <Space direction="vertical" size={0} style={{ width: "100%" }}>
-                        <Space>
-                          <Tag>{item.count}</Tag>
-                          {item.level ? <Tag color="error">{item.level}</Tag> : null}
-                          <Typography.Text code style={{ fontSize: 12 }}>{item.signature}</Typography.Text>
-                        </Space>
-                        <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>{item.sample}</Typography.Text>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
-              </div>
-            ) : null}
-          </Card>
-        ) : null}
-
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
           items={[
+            {
+              key: "overview",
+              label: `统计概览 (${overview?.total ?? 0})`,
+              children: overview ? (
+                <LogOverviewPanel overview={overview} />
+              ) : (
+                <Typography.Text type="secondary">检索后将展示时间分布与错误签名</Typography.Text>
+              ),
+            },
             {
               key: "logs",
               label: `原始日志 (${total})`,
@@ -757,24 +718,147 @@ export function ProjectLogsPage() {
   );
 }
 
-function LogHistogramChart({ buckets }: { buckets: Array<{ time: string; count: number }> }) {
-  const max = Math.max(1, ...buckets.map((b) => b.count));
-  if (!buckets.length) {
-    return <Typography.Text type="secondary">无时间分布数据</Typography.Text>;
-  }
+function LogOverviewPanel({ overview }: { overview: LogOverviewResult }) {
+  const levelEntries = Object.entries(overview.level_counts || {}).sort((a, b) => b[1] - a[1]);
+  const errorCount = (overview.level_counts?.ERROR ?? 0) + (overview.level_counts?.FATAL ?? 0);
+  const warnCount = overview.level_counts?.WARN ?? 0;
+
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 48, marginTop: 8, overflowX: "auto" }}>
-      {buckets.map((b) => (
-        <div key={b.time} title={`${formatDateTime(b.time)}: ${b.count}`} style={{ flex: "1 0 8px", minWidth: 8 }}>
-          <Progress
-            percent={Math.round((b.count / max) * 100)}
-            showInfo={false}
-            size="small"
-            strokeColor="#1677ff"
-            style={{ height: 48 }}
-          />
-        </div>
-      ))}
+    <div className="project-logs-overview-panel">
+      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+        <Col xs={12} sm={6}>
+          <Card size="small" className="project-logs-stat-card">
+            <Statistic title="命中总数" value={overview.total} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small" className="project-logs-stat-card">
+            <Statistic title="ERROR / FATAL" value={errorCount} valueStyle={{ color: errorCount > 0 ? "#cf1322" : undefined }} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small" className="project-logs-stat-card">
+            <Statistic title="WARN" value={warnCount} valueStyle={{ color: warnCount > 0 ? "#d48806" : undefined }} />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small" className="project-logs-stat-card">
+            <Statistic title="错误签名" value={overview.top_error_signatures?.length ?? 0} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Card size="small" title="时间分布" className="project-logs-histogram-card" style={{ marginBottom: 12 }}>
+        <LogHistogramChart buckets={overview.histogram || []} />
+      </Card>
+
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={10}>
+          <Card size="small" title="级别分布">
+            {levelEntries.length ? (
+              <div className="project-logs-level-bars">
+                {levelEntries.map(([lv, cnt]) => {
+                  const max = Math.max(1, ...levelEntries.map(([, c]) => c));
+                  const pct = Math.round((cnt / max) * 100);
+                  return (
+                    <div key={lv} className="project-logs-level-row">
+                      <Tag color={lv === "ERROR" || lv === "FATAL" ? "error" : lv === "WARN" ? "warning" : "default"}>{lv}</Tag>
+                      <div className="project-logs-level-bar-track">
+                        <div className="project-logs-level-bar-fill" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="project-logs-level-count">{cnt.toLocaleString()}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <Typography.Text type="secondary">无级别统计</Typography.Text>
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} md={14}>
+          <Card size="small" title="Top 错误签名">
+            {(overview.top_error_signatures?.length ?? 0) > 0 ? (
+              <List
+                size="small"
+                dataSource={overview.top_error_signatures.slice(0, 8)}
+                renderItem={(item) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={
+                        <Space wrap>
+                          <Tag>{item.count}</Tag>
+                          {item.level ? <Tag color="error">{item.level}</Tag> : null}
+                          <Typography.Text code style={{ fontSize: 12 }}>{item.signature}</Typography.Text>
+                        </Space>
+                      }
+                      description={<Typography.Text type="secondary" ellipsis>{item.sample}</Typography.Text>}
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Typography.Text type="secondary">当前筛选下无 ERROR/WARN 签名</Typography.Text>
+            )}
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  );
+}
+
+function LogHistogramChart({ buckets }: { buckets: Array<{ time: string; count: number }> }) {
+  const sorted = [...buckets].sort((a, b) => a.time.localeCompare(b.time));
+  const sampled =
+    sorted.length > 48
+      ? sorted.filter((_, i) => i % Math.ceil(sorted.length / 48) === 0)
+      : sorted;
+  const max = Math.max(1, ...sampled.map((b) => b.count));
+  if (!sampled.length) {
+    return <Typography.Text type="secondary">无时间分布数据（可缩小时间范围或确认 @timestamp 字段）</Typography.Text>;
+  }
+
+  const chartW = Math.max(640, sampled.length * 18);
+  const chartH = 160;
+  const padL = 36;
+  const padB = 28;
+  const padT = 8;
+  const innerH = chartH - padB - padT;
+  const barW = Math.max(6, (chartW - padL - 8) / sampled.length - 4);
+
+  return (
+    <div className="project-logs-histogram-wrap">
+      <svg width="100%" height={chartH} viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="xMinYMid meet">
+        {[0, 0.25, 0.5, 0.75, 1].map((r) => {
+          const y = padT + innerH * (1 - r);
+          const val = Math.round(max * r);
+          return (
+            <g key={r}>
+              <line x1={padL} y1={y} x2={chartW - 4} y2={y} stroke="rgba(0,0,0,0.06)" />
+              <text x={padL - 4} y={y + 4} textAnchor="end" fontSize={10} fill="#8c8c8c">
+                {val}
+              </text>
+            </g>
+          );
+        })}
+        {sampled.map((b, i) => {
+          const h = Math.max(2, (b.count / max) * innerH);
+          const x = padL + i * (barW + 4);
+          const y = padT + innerH - h;
+          const label = formatDateTime(b.time);
+          return (
+            <g key={`${b.time}-${i}`}>
+              <title>{`${label}: ${b.count}`}</title>
+              <rect x={x} y={y} width={barW} height={h} rx={2} fill="#1677ff" opacity={0.85} />
+              {(i === 0 || i === sampled.length - 1 || sampled.length <= 12) && (
+                <text x={x + barW / 2} y={chartH - 6} textAnchor="middle" fontSize={9} fill="#8c8c8c">
+                  {label.slice(5, 16)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
