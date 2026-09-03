@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/constants"
 )
 
 // LogHistogramBucket 时间直方图桶。
@@ -17,14 +17,18 @@ type LogHistogramBucket struct {
 
 // LogOverviewResult 日志概览（P1：直方图 + 级别 + 签名）。
 type LogOverviewResult struct {
-	Total              int64              `json:"total"`
+	Total              int64                `json:"total"`
 	Histogram          []LogHistogramBucket `json:"histogram"`
-	LevelCounts        map[string]int64   `json:"level_counts"`
-	TopErrorSignatures []LogSignatureItem `json:"top_error_signatures"`
-	Summary            *LogSummaryResult  `json:"summary,omitempty"`
+	LevelCounts        map[string]int64     `json:"level_counts"`
+	TopErrorSignatures []LogSignatureItem   `json:"top_error_signatures"`
+	Summary            *LogSummaryResult    `json:"summary,omitempty"`
 }
 
 // Overview 聚合检索概览：ES date_histogram + terms(level) + 采样签名。
+//
+// 注意：旧索引动态映射下 level 可能是 keyword 或 text+keyword。
+// 同一请求里同时聚合 level 与 level.keyword 会在 ES 7 上直接 400，
+// 进而被包装成 error_code=50001「operation failed」，而原始 Search 不受影响。
 func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*LogOverviewResult, error) {
 	prep, err := s.prepareSearch(ctx, q)
 	if err != nil {
@@ -32,7 +36,7 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 	}
 	cli, cfg, err := s.es.Client(ctx)
 	if err != nil {
-		return nil, err
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
 	}
 	tsField := strings.TrimSpace(cfg.TimestampField)
 	if tsField == "" {
@@ -40,43 +44,26 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 	}
 
 	interval := pickHistogramInterval(q.From, q.To)
-	body := map[string]any{
-		"size":             0,
-		"track_total_hits": true,
-		"query":            prep.boolQuery(),
-		"aggs": map[string]any{
-			"log_histogram": map[string]any{
-				"date_histogram": map[string]any{
-					"field":          tsField,
-					"fixed_interval": interval,
-					"min_doc_count":  0,
-					"extended_bounds": extendedBounds(q.From, q.To),
-				},
-			},
-			"level_terms": map[string]any{
-				"terms": map[string]any{
-					"field": "level",
-					"size":  20,
-					"missing": "(unknown)",
-				},
-			},
-			"level_kw_terms": map[string]any{
-				"terms": map[string]any{
-					"field": "level.keyword",
-					"size":  20,
-				},
-			},
-			"fields_level_terms": map[string]any{
-				"terms": map[string]any{
-					"field": "fields.level",
-					"size":  20,
-				},
-			},
-		},
+	query := prep.boolQuery()
+
+	// 按兼容性从强到弱尝试，避免单个字段映射不兼容拖垮整个概览。
+	attempts := []map[string]any{
+		overviewAggBody(query, tsField, interval, q, []string{"level", "fields.level"}),
+		overviewAggBody(query, tsField, interval, q, []string{"level.keyword", "fields.level.keyword"}),
+		overviewAggBody(query, tsField, interval, q, []string{"level"}),
+		overviewAggBody(query, tsField, interval, q, nil), // 仅直方图 + total
 	}
-	raw, err := cli.Search(ctx, prep.indices, body)
-	if err != nil {
-		return nil, bizerrors.Pass(ctx, "logsearch", "Overview", err)
+
+	var raw map[string]any
+	var lastErr error
+	for _, body := range attempts {
+		raw, lastErr = cli.Search(ctx, prep.indices, body)
+		if lastErr == nil {
+			break
+		}
+	}
+	if lastErr != nil {
+		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("日志概览聚合失败: %v", lastErr))
 	}
 
 	out := &LogOverviewResult{
@@ -85,9 +72,9 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 	}
 	out.Total = parseTotalHits(raw)
 	out.Histogram = parseDateHistogram(raw, "log_histogram")
-	out.LevelCounts = mergeTermsAggs(raw, "level_kw_terms", "level_terms", "fields_level_terms")
+	out.LevelCounts = mergeTermsAggs(raw, "level_terms_0", "level_terms_1", "level_terms_2", "level_terms_3")
 
-	// 采样 ERROR/WARN 日志提取签名（复用 SummarizeLogHits）
+	// 采样 ERROR/WARN 日志提取签名（复用 SummarizeLogHits）；采样失败不影响概览主体。
 	sampleQ := q
 	sampleQ.Page = 1
 	sampleQ.PageSize = 500
@@ -114,6 +101,37 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 		}
 	}
 	return out, nil
+}
+
+func overviewAggBody(query any, tsField, interval string, q LogSearchQuery, levelFields []string) map[string]any {
+	aggs := map[string]any{
+		"log_histogram": map[string]any{
+			"date_histogram": map[string]any{
+				"field":           tsField,
+				"fixed_interval":  interval,
+				"min_doc_count":   0,
+				"extended_bounds": extendedBounds(q.From, q.To),
+			},
+		},
+	}
+	for i, field := range levelFields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		name := fmt.Sprintf("level_terms_%d", i)
+		terms := map[string]any{
+			"field": field,
+			"size":  20,
+		}
+		aggs[name] = map[string]any{"terms": terms}
+	}
+	return map[string]any{
+		"size":             0,
+		"track_total_hits": true,
+		"query":            query,
+		"aggs":             aggs,
+	}
 }
 
 func pickHistogramInterval(from, to string) string {

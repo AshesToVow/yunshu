@@ -23,6 +23,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -599,30 +600,46 @@ export function LogRetentionPage() {
                   </Col>
                   <Col xs={24} sm={12} md={6}>
                     <Card size="small">
-                      <Statistic title="消费积压 (lag)" value={kafkaStats?.lag_total ?? 0} />
+                      <Tooltip title="Broker 侧消费组未提交位移的积压（真实队列深度）">
+                        <Statistic title="消费积压 (lag)" value={kafkaStats?.lag_total ?? 0} />
+                      </Tooltip>
                     </Card>
                   </Col>
                   <Col xs={24} sm={12} md={6}>
                     <Card size="small">
-                      <Statistic title="已消费" value={kafkaStats?.consumed_total ?? 0} />
+                      <Tooltip title="本 Yunshu 进程启动以来从 Kafka Fetch 的条数（内存计数，重启清零；不是 Broker 消费组状态）">
+                        <Statistic title="本进程已拉取" value={kafkaStats?.consumed_total ?? 0} />
+                      </Tooltip>
                     </Card>
                   </Col>
                   <Col xs={24} sm={12} md={6}>
                     <Card size="small">
-                      <Statistic title="已写入 ES" value={kafkaStats?.written_total ?? 0} />
+                      <Tooltip title="本 Yunshu 进程成功写入 Elasticsearch 的条数（内存计数，重启清零）">
+                        <Statistic title="本进程已写 ES" value={kafkaStats?.written_total ?? 0} />
+                      </Tooltip>
                     </Card>
                   </Col>
                 </Row>
 
                 <Card title="连接与消费组" size="small">
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message="此处「消费者」= Yunshu 后端内的 Kafka→ES 消费循环（消费组名如下），不是 Topic 列表，也不是 Loggie。"
+                  />
                   <Space wrap size={[16, 8]}>
                     <span>
                       启用：
                       {kafkaCfg?.enabled ? <Tag color="green">true</Tag> : <Tag>false</Tag>}
                     </span>
                     <span>
-                      消费者：
-                      {kafkaStats?.consumer_running ? <Tag color="green">运行中</Tag> : <Tag color="orange">未运行</Tag>}
+                      Yunshu 消费者：
+                      {kafkaStats?.consumer_running ? (
+                        <Tag color="green">运行中{kafkaStats.consumer_workers ? ` ×${kafkaStats.consumer_workers}` : ""}</Tag>
+                      ) : (
+                        <Tag color="orange">未运行</Tag>
+                      )}
                     </span>
                     <span>
                       消费组：
@@ -630,32 +647,17 @@ export function LogRetentionPage() {
                     </span>
                     <span>Topic 前缀：{kafkaStats?.topic_prefix || kafkaCfg?.topic_prefix || "yunshu-agent"}</span>
                     <span>示例 Topic：{kafkaCfg?.topic_example || "yunshu-agent-10-10-10-1-2026.07.17"}</span>
-                    <span>订阅 Topic 数：{(kafkaStats?.topics || []).length}</span>
+                    <span>
+                      订阅 Topic 数：
+                      <Tag>{(kafkaStats?.topics || []).length}</Tag>
+                      <Typography.Text type="secondary" style={{ marginLeft: 4 }}>
+                        （详见下方表格，可按积压排序/删除）
+                      </Typography.Text>
+                    </span>
                     <span>Brokers：{(kafkaStats?.brokers || kafkaCfg?.brokers || []).join(", ") || "-"}</span>
-                    <span>最近消费：{kafkaStats?.last_consume_at ? formatDateTime(kafkaStats.last_consume_at) : "-"}</span>
+                    <span>最近拉取：{kafkaStats?.last_consume_at ? formatDateTime(kafkaStats.last_consume_at) : "-"}</span>
                     <span>错误数：{kafkaStats?.error_total ?? 0}</span>
                   </Space>
-                  {(kafkaStats?.topics || []).length > 0 ? (
-                    <div style={{ marginTop: 8 }}>
-                      <Space wrap size={[4, 4]}>
-                        {kafkaStats!.topics!.map((t) => (
-                          <Popconfirm
-                            key={t}
-                            title={`确认删除 Topic ${t}？`}
-                            description="若 Agent 仍在写入或热更，Topic 可能被自动重建"
-                            okText="删除"
-                            okButtonProps={{ danger: true }}
-                            cancelText="取消"
-                            onConfirm={() => void handleDeleteTopic(t)}
-                          >
-                            <Tag closable onClose={(e) => e.preventDefault()}>
-                              {t}
-                            </Tag>
-                          </Popconfirm>
-                        ))}
-                      </Space>
-                    </div>
-                  ) : null}
                   {kafkaStats?.last_error && !String(kafkaStats.last_error).includes("暂无 Agent Topic") ? (
                     <Alert style={{ marginTop: 12 }} type="error" showIcon message={kafkaStats.last_error} />
                   ) : null}

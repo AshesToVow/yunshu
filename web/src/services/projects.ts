@@ -746,6 +746,7 @@ export async function getProjectLogOverview(projectId: number, params: LogSearch
   return await getData(
     http.get<any, ApiResponse<LogOverviewResult>>(`/projects/${projectId}/logs/overview`, {
       params: { ...params, project_id: projectId },
+      silentErrorToast: true,
     }),
   );
 }
@@ -757,6 +758,7 @@ export async function getProjectLogPatterns(
   return await getData(
     http.get<any, ApiResponse<PageData<LogPatternItem>>>(`/projects/${projectId}/logs/patterns`, {
       params: { ...params, project_id: projectId },
+      silentErrorToast: true,
     }),
   );
 }
@@ -768,6 +770,7 @@ export async function getProjectLogAnomalies(
   return await getData(
     http.get<any, ApiResponse<PageData<LogAnomalyItem>>>(`/projects/${projectId}/logs/anomalies`, {
       params: { ...params, project_id: projectId },
+      silentErrorToast: true,
     }),
   );
 }

@@ -90,6 +90,8 @@ export interface KafkaQueueStats {
   topics?: string[];
   consumer_group: string;
   consumer_running: boolean;
+  /** 本进程内仍在跑的 Kafka→ES 消费协程数 */
+  consumer_workers?: number;
   lag_total: number;
   partitions?: KafkaPartitionLag[];
   consumed_total: number;

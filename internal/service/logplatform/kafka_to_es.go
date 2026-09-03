@@ -23,13 +23,16 @@ import (
 )
 
 // KafkaToESService 以消费者组订阅各 Agent Topic，bulk 写入 Elasticsearch。
+//
+// 「消费者」即本服务进程内的 Kafka→ES 消费循环（消费组见 kafka_consumer_group），
+// 不是 Broker 上的 Topic 列表，也不是 Loggie。
 type KafkaToESService struct {
 	kafka *KafkaProvider
 	es    *ElasticsearchProvider
 
 	mu             sync.Mutex
 	cancel         context.CancelFunc
-	running        bool
+	running        bool // 期望运行（已 start 且未 stop）
 	cfgFingerprint string
 
 	consumedTotal atomic.Int64
@@ -37,7 +40,7 @@ type KafkaToESService struct {
 	errorTotal    atomic.Int64
 	lastConsumeAt atomic.Int64
 	lastError     atomic.Value
-	runningFlag   atomic.Bool
+	activeWorkers atomic.Int32 // 实际仍在 consumeLoop 中的 goroutine 数
 	activeTopics  atomic.Value // []string
 }
 
@@ -64,6 +67,7 @@ type KafkaQueueStats struct {
 	Topics          []string            `json:"topics,omitempty"`
 	ConsumerGroup   string              `json:"consumer_group"`
 	ConsumerRunning bool                `json:"consumer_running"`
+	ConsumerWorkers int32               `json:"consumer_workers"`
 	LagTotal        int64               `json:"lag_total"`
 	Partitions      []KafkaPartitionLag `json:"partitions,omitempty"`
 	ConsumedTotal   int64               `json:"consumed_total"`
@@ -145,7 +149,8 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 	}
 	fp := kafkaFingerprint(cfg, topics)
 	s.mu.Lock()
-	same := s.running && s.cfgFingerprint == fp
+	// cancel!=nil 表示本轮期望有消费协程；勿用 running 标志（stop 后协程退出前仍可能为 true）
+	same := s.cancel != nil && s.cfgFingerprint == fp
 	s.mu.Unlock()
 	if same {
 		return
@@ -171,17 +176,20 @@ func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.Kafk
 	s.running = true
 	s.cfgFingerprint = kafkaFingerprint(cfg, topics)
 	s.mu.Unlock()
-	s.runningFlag.Store(true)
 	s.activeTopics.Store(append([]string(nil), topics...))
 	s.setLastError("")
 	slog.Default().With("component", "kafka-to-es").Info("kafka consumer starting",
 		"group", cfg.ConsumerGroup, "topics", len(topics), "brokers", len(cfg.Brokers))
 
 	lifecycle.Go("logplatform.kafka-to-es", func() {
+		s.activeWorkers.Add(1)
 		defer func() {
-			s.runningFlag.Store(false)
+			s.activeWorkers.Add(-1)
 			s.mu.Lock()
-			s.running = false
+			// 仅在没有其它消费协程时清期望态，避免 stop→start 交接窗口误报「未运行」
+			if s.activeWorkers.Load() == 0 {
+				s.running = false
+			}
 			s.mu.Unlock()
 		}()
 		s.consumeLoop(runCtx, cfg, topics)
@@ -192,12 +200,12 @@ func (s *KafkaToESService) stopConsumer() {
 	s.mu.Lock()
 	cancel := s.cancel
 	s.cancel = nil
-	s.running = false
+	// 不在此处把 running 直接打成 false：旧协程可能仍在 Fetch/计数，
+	// 状态以 activeWorkers 为准，由 consumeLoop defer 回收。
 	s.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
-	s.runningFlag.Store(false)
 }
 
 func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConfig, topics []string) {
@@ -570,11 +578,13 @@ func (s *KafkaToESService) ConfigPreview(ctx context.Context) (*KafkaConfigPrevi
 }
 
 func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) {
+	workers := s.activeWorkers.Load()
 	out := &KafkaQueueStats{
 		ConsumedTotal:   s.consumedTotal.Load(),
 		WrittenTotal:    s.writtenTotal.Load(),
 		ErrorTotal:      s.errorTotal.Load(),
-		ConsumerRunning: s.runningFlag.Load(),
+		ConsumerWorkers: workers,
+		ConsumerRunning: workers > 0,
 	}
 	if ms := s.lastConsumeAt.Load(); ms > 0 {
 		out.LastConsumeAt = time.UnixMilli(ms).Format(time.RFC3339)
@@ -626,14 +636,14 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	out.Partitions = lags
 	out.LagTotal = lagTotal
 	if out.ConsumerRunning {
-		out.Message = fmt.Sprintf("消费组 %s 运行中，订阅 %d 个 Agent Topic", cfg.ConsumerGroup, len(topics))
+		out.Message = fmt.Sprintf("Yunshu Kafka→ES 消费者运行中（组 %s，订阅 %d 个 Topic）", cfg.ConsumerGroup, len(topics))
 		if strings.Contains(out.LastError, "暂无 Agent Topic") {
 			out.LastError = ""
 		}
 	} else if len(topics) == 0 {
 		out.Message = "暂无 Agent Topic，请先引导/热更 Agent（将自动创建 yunshu-agent-{ip}-YYYY.MM.DD）"
 	} else {
-		out.Message = "消费者未运行（请确认 ES 已启用）"
+		out.Message = "Yunshu Kafka→ES 消费者未运行（请确认 elasticsearch_enabled / 已绑定 ES 连接）"
 		if strings.Contains(out.LastError, "暂无 Agent Topic") {
 			out.LastError = ""
 		}
