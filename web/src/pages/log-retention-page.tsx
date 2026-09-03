@@ -23,6 +23,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Typography,
   message,
 } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -31,6 +32,7 @@ import {
   deleteESIndex,
   deleteKafkaTopic,
   deleteProjectLogRetention,
+  getESConfigPreview,
   getESStorageStats,
   getGlobalLogRetention,
   getKafkaConfigPreview,
@@ -40,6 +42,7 @@ import {
   runLogRetentionCleanup,
   upsertGlobalLogRetention,
   upsertProjectLogRetention,
+  type ESConfigPreview,
   type ESIndexStatItem,
   type ESStorageStats,
   type KafkaConfigPreview,
@@ -48,6 +51,7 @@ import {
   type LogRetentionItem,
   type ProjectItem,
 } from "../services/log-platform";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
 type GlobalForm = {
@@ -63,6 +67,8 @@ export function LogRetentionPage() {
 
   const [globalForm] = Form.useForm<GlobalForm>();
   const [stats, setStats] = useState<ESStorageStats | null>(null);
+  const [esCfg, setEsCfg] = useState<ESConfigPreview | null>(null);
+  const [esError, setEsError] = useState<string>("");
   const [policies, setPolicies] = useState<LogRetentionItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,13 +82,15 @@ export function LogRetentionPage() {
 
   const reloadES = useCallback(async () => {
     setLoading(true);
+    setEsError("");
     try {
-      const [global, list, storage, proj] = await Promise.all([
+      const [global, list, cfg, proj] = await Promise.all([
         getGlobalLogRetention(),
         listLogRetentionPolicies(),
-        getESStorageStats().catch(() => null),
+        getESConfigPreview().catch(() => null),
         getProjects({ page: 1, page_size: 1000 }),
       ]);
+      setEsCfg(cfg);
       globalForm.setFieldsValue({
         retention_days: global.retention_days,
         enabled: global.enabled,
@@ -90,10 +98,15 @@ export function LogRetentionPage() {
         remark: global.remark || undefined,
       });
       setPolicies(list.list);
-      setStats(storage);
       setProjects(proj.list);
+      try {
+        setStats(await getESStorageStats());
+      } catch (e: unknown) {
+        setStats(null);
+        setEsError(extractApiErrorMessage(e, "无法拉取 ES 存储统计"));
+      }
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      message.error(extractApiErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -225,12 +238,33 @@ export function LogRetentionPage() {
                   style={{ marginBottom: 12 }}
                   message={
                     <>
-                      按保留天数定时清理过期日志索引（yunshu-agent-* / yunshu-k8s-*）。集群连接与运维请到
-                      <Link to="/esmgmt/connections"> ES 管理控制台</Link>
-                      ；Agent 启停与热更请到「Agent 管理」。
+                      日志平台使用<strong>数据字典</strong> <Typography.Text code>elasticsearch_*</Typography.Text>
+                      （与「ES 集群控制」连接表独立）。请确认
+                      <Link to="/dict-entries?keyword=elasticsearch_"> elasticsearch_enabled / addresses / username / password </Link>
+                      均为启用且账号密码与 ES 一致。
                     </>
                   }
                 />
+
+                {esCfg ? (
+                  <Alert
+                    type={esCfg.enabled ? "success" : "warning"}
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                    message={
+                      <Space wrap size={8}>
+                        <span>运行时配置：</span>
+                        <Tag color={esCfg.enabled ? "green" : "orange"}>{esCfg.enabled ? "enabled=true" : "enabled=false"}</Tag>
+                        <Tag>{(esCfg.addresses || []).join(", ") || "无地址"}</Tag>
+                        <Tag>user={esCfg.username || "(空)"}</Tag>
+                        <Tag color={esCfg.has_password ? "blue" : "default"}>
+                          {esCfg.has_password ? "已配置密码" : "未配置密码"}
+                        </Tag>
+                        <Tag>{esCfg.index_pattern || "yunshu-agent-*"}</Tag>
+                      </Space>
+                    }
+                  />
+                ) : null}
 
                 <Card
                   size="small"
@@ -317,7 +351,35 @@ export function LogRetentionPage() {
                       </div>
                     </>
                   ) : (
-                    <span>无法连接 ES 或未启用 elasticsearch.enabled</span>
+                    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                      <Alert
+                        type="error"
+                        showIcon
+                        message={esError || "无法连接 ES 或未启用 elasticsearch.enabled"}
+                        description={
+                          <div>
+                            <div>请逐项核对数据字典（不是 ES 管理控制台）：</div>
+                            <ol style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                              <li>
+                                <Typography.Text code>elasticsearch_enabled</Typography.Text> = true（已启用）
+                              </li>
+                              <li>
+                                <Typography.Text code>elasticsearch_addresses</Typography.Text> = http://10.10.10.5:9200
+                              </li>
+                              <li>
+                                <Typography.Text code>elasticsearch_username</Typography.Text> /{" "}
+                                <Typography.Text code>elasticsearch_password</Typography.Text>{" "}
+                                必须也是「启用」状态，且与 ES 认证一致（默认种子常为禁用空密码）
+                              </li>
+                            </ol>
+                            <div style={{ marginTop: 8 }}>
+                              快捷入口：
+                              <Link to="/dict-entries?keyword=elasticsearch_">打开 elasticsearch_* 字典</Link>
+                            </div>
+                          </div>
+                        }
+                      />
+                    </Space>
                   )}
                 </Card>
 
