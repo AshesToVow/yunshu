@@ -18,9 +18,10 @@ func storageDictSeeds() []DictEntryCreateRequest {
 		{DictType: "esmgmt_backup_scheduler_tick_spec", Label: "ES 备份调度轮询 Cron", Value: "*/30 * * * * *", Sort: intRef(1), Status: 0, Remark: "六段式 Cron，轮询 esmgmt 备份规则"},
 		// Elasticsearch（字典优先，config.yaml 兜底）
 		{DictType: "elasticsearch_enabled", Label: "启用 ES 日志检索", Value: "false", Sort: intRef(1), Status: 1, Remark: "true/false；Loggie 采集写入 ES 后开启"},
-		{DictType: "elasticsearch_addresses", Label: "ES 地址列表", Value: "http://127.0.0.1:9200", Sort: intRef(1), Status: 1, Remark: "单节点填一个；集群可 JSON 数组或逗号分隔"},
+		{DictType: "elasticsearch_addresses", Label: "ES 地址列表", Value: "http://127.0.0.1:9200", Sort: intRef(1), Status: 1, Remark: "单节点填一个；集群可 JSON 数组或逗号分隔；当 elasticsearch_connection_id>0 时仅作兜底"},
 		{DictType: "elasticsearch_username", Label: "ES 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "Basic 认证用户名"},
 		{DictType: "elasticsearch_password", Label: "ES 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：Basic 认证密码"},
+		{DictType: "elasticsearch_connection_id", Label: "日志平台 ES 连接 ID", Value: "0", Sort: intRef(1), Status: 1, Remark: "esmgmt_connections.id；>0 时日志检索使用该连接的地址与认证"},
 		{DictType: "elasticsearch_index_pattern", Label: "ES 索引模式（主机）", Value: "yunshu-agent-*", Sort: intRef(1), Status: 1, Remark: "主机 Agent 检索/保留通配"},
 		{DictType: "elasticsearch_k8s_index_prefix", Label: "ES 索引前缀（集群）", Value: "yunshu-k8s", Sort: intRef(1), Status: 1, Remark: "集群采集：{prefix}-{clusterId}-p{projectId}-YYYY.MM.DD"},
 		{DictType: "elasticsearch_default_retention_days", Label: "默认保留天数", Value: "30", Sort: intRef(1), Status: 1, Remark: "elasticsearch.default_retention_days"},

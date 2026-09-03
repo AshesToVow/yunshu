@@ -153,6 +153,9 @@ export interface ESConfigPreview {
   username?: string;
   index_pattern: string;
   has_password: boolean;
+  connection_id?: number;
+  connection_name?: string;
+  source?: "managed" | "dict" | string;
 }
 
 export interface LoggieStatusItem {
@@ -299,6 +302,14 @@ export async function downloadLoggieFile(
 
 export async function getESConfigPreview() {
   return await getData(http.get<any, ApiResponse<ESConfigPreview>>("/log-platform/es-config"));
+}
+
+export async function setLogPlatformESConnection(connectionId: number) {
+  return await getData(
+    http.put<any, ApiResponse<ESConfigPreview>>("/log-platform/es-connection", {
+      connection_id: connectionId,
+    }),
+  );
 }
 
 export async function getLoggieStatus(projectId: number) {

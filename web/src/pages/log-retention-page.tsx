@@ -40,6 +40,7 @@ import {
   getProjects,
   listLogRetentionPolicies,
   runLogRetentionCleanup,
+  setLogPlatformESConnection,
   upsertGlobalLogRetention,
   upsertProjectLogRetention,
   type ESConfigPreview,
@@ -51,6 +52,7 @@ import {
   type LogRetentionItem,
   type ProjectItem,
 } from "../services/log-platform";
+import { listEsmgmtConnections, type EsmgmtConnection } from "../services/esmgmt";
 import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
@@ -69,6 +71,8 @@ export function LogRetentionPage() {
   const [stats, setStats] = useState<ESStorageStats | null>(null);
   const [esCfg, setEsCfg] = useState<ESConfigPreview | null>(null);
   const [esError, setEsError] = useState<string>("");
+  const [esConnections, setEsConnections] = useState<EsmgmtConnection[]>([]);
+  const [bindingES, setBindingES] = useState(false);
   const [policies, setPolicies] = useState<LogRetentionItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,13 +88,15 @@ export function LogRetentionPage() {
     setLoading(true);
     setEsError("");
     try {
-      const [global, list, cfg, proj] = await Promise.all([
+      const [global, list, cfg, proj, conns] = await Promise.all([
         getGlobalLogRetention(),
         listLogRetentionPolicies(),
         getESConfigPreview().catch(() => null),
         getProjects({ page: 1, page_size: 1000 }),
+        listEsmgmtConnections().catch(() => [] as EsmgmtConnection[]),
       ]);
       setEsCfg(cfg);
+      setEsConnections(conns || []);
       globalForm.setFieldsValue({
         retention_days: global.retention_days,
         enabled: global.enabled,
@@ -111,6 +117,24 @@ export function LogRetentionPage() {
       setLoading(false);
     }
   }, [globalForm]);
+
+  async function bindESConnection(connectionId: number) {
+    setBindingES(true);
+    try {
+      const cfg = await setLogPlatformESConnection(connectionId);
+      setEsCfg(cfg);
+      message.success(
+        connectionId > 0
+          ? `已绑定 ES 连接 #${connectionId}${cfg.connection_name ? `（${cfg.connection_name}）` : ""}`
+          : "已回退为数据字典地址",
+      );
+      await reloadES();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "绑定 ES 连接失败"));
+    } finally {
+      setBindingES(false);
+    }
+  }
 
   const reloadKafka = useCallback(async () => {
     setKafkaLoading(true);
@@ -238,13 +262,33 @@ export function LogRetentionPage() {
                   style={{ marginBottom: 12 }}
                   message={
                     <>
-                      日志平台使用<strong>数据字典</strong> <Typography.Text code>elasticsearch_*</Typography.Text>
-                      （与「ES 集群控制」连接表独立）。请确认
-                      <Link to="/dict-entries?keyword=elasticsearch_"> elasticsearch_enabled / addresses / username / password </Link>
-                      均为启用且账号密码与 ES 一致。
+                      请在下方选择「ES 管理控制台」中的连接作为日志检索目标；索引模式/保留策略仍由数据字典{" "}
+                      <Typography.Text code>elasticsearch_index_pattern</Typography.Text> 等控制。也可{" "}
+                      <Link to="/esmgmt/connections">从字典导入连接</Link>。
                     </>
                   }
                 />
+
+                <Card size="small" className="table-card" title="日志平台 ES 连接" style={{ marginBottom: 12 }}>
+                  <Space wrap align="center">
+                    <span>使用连接：</span>
+                    <Select
+                      style={{ minWidth: 320 }}
+                      loading={loading || bindingES}
+                      value={esCfg?.connection_id && esCfg.connection_id > 0 ? esCfg.connection_id : 0}
+                      placeholder="选择 ES 连接"
+                      options={[
+                        { value: 0, label: "数据字典地址（elasticsearch_addresses）" },
+                        ...esConnections.map((c) => ({
+                          value: c.id,
+                          label: `${c.name} (#${c.id}) — ${c.addresses}${c.is_default ? " [默认]" : ""}`,
+                        })),
+                      ]}
+                      onChange={(v) => void bindESConnection(Number(v) || 0)}
+                    />
+                    <Link to="/esmgmt/connections">管理连接</Link>
+                  </Space>
+                </Card>
 
                 {esCfg ? (
                   <Alert
@@ -254,6 +298,11 @@ export function LogRetentionPage() {
                     message={
                       <Space wrap size={8}>
                         <span>运行时配置：</span>
+                        <Tag color={esCfg.source === "managed" ? "purple" : "default"}>
+                          {esCfg.source === "managed"
+                            ? `连接 ${esCfg.connection_name || "#" + esCfg.connection_id}`
+                            : "数据字典"}
+                        </Tag>
                         <Tag color={esCfg.enabled ? "green" : "orange"}>{esCfg.enabled ? "enabled=true" : "enabled=false"}</Tag>
                         <Tag>{(esCfg.addresses || []).join(", ") || "无地址"}</Tag>
                         <Tag>user={esCfg.username || "(空)"}</Tag>

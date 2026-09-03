@@ -690,28 +690,57 @@ func (s *LoggieAgentService) ListStatus(ctx context.Context, projectID uint) ([]
 
 // ESConfigPreviewItem 供控制台展示 ES 连接信息（不含密码）。
 type ESConfigPreviewItem struct {
-	Enabled       bool     `json:"enabled"`
-	Addresses     []string `json:"addresses"`
-	Username      string   `json:"username"`
-	IndexPattern  string   `json:"index_pattern"`
-	HasPassword   bool     `json:"has_password"`
+	Enabled        bool     `json:"enabled"`
+	Addresses      []string `json:"addresses"`
+	Username       string   `json:"username"`
+	IndexPattern   string   `json:"index_pattern"`
+	HasPassword    bool     `json:"has_password"`
+	ConnectionID   uint     `json:"connection_id"`
+	ConnectionName string   `json:"connection_name,omitempty"`
+	Source         string   `json:"source"` // managed | dict
 }
 
 func (s *LoggieAgentService) ESConfigForUI(ctx context.Context) (*ESConfigPreviewItem, error) {
 	if s.esProvider == nil {
-		return &ESConfigPreviewItem{}, nil
+		return &ESConfigPreviewItem{Source: "dict"}, nil
 	}
 	cfg, err := s.esProvider.Resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &ESConfigPreviewItem{
+	connID := s.esProvider.ManagedConnectionID(ctx)
+	item := &ESConfigPreviewItem{
 		Enabled:      cfg.Enabled,
 		Addresses:    cfg.Addresses,
 		Username:     cfg.Username,
 		IndexPattern: cfg.IndexPattern,
 		HasPassword:  strings.TrimSpace(cfg.Password) != "",
-	}, nil
+		ConnectionID: connID,
+		Source:       "dict",
+	}
+	if connID > 0 {
+		item.Source = "managed"
+		if ep, lerr := s.esProvider.LookupManagedConnection(ctx, connID); lerr == nil && ep != nil {
+			item.ConnectionName = ep.Name
+		}
+	}
+	return item, nil
+}
+
+// SetESConnectionRequest 绑定日志平台使用的 esmgmt 连接。
+type SetESConnectionRequest struct {
+	ConnectionID uint `json:"connection_id"`
+}
+
+// SetESConnection 将日志平台绑定到指定 esmgmt 连接；connection_id=0 回退数据字典地址。
+func (s *LoggieAgentService) SetESConnection(ctx context.Context, req SetESConnectionRequest) (*ESConfigPreviewItem, error) {
+	if s.esProvider == nil {
+		return nil, constants.ErrBadRequestWithMsg("ES Provider 未就绪")
+	}
+	if err := s.esProvider.SetManagedConnectionID(ctx, req.ConnectionID); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	return s.ESConfigForUI(ctx)
 }
 
 func (s *LoggieAgentService) recentIngestByServer(ctx context.Context, projectID uint) map[uint]int64 {

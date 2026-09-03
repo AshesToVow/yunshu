@@ -97,6 +97,7 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "日志源类型（log_source_type）", value: "log_source_type", category: "log" },
   { label: "启用 ES（elasticsearch_enabled）", value: "elasticsearch_enabled", category: "log" },
   { label: "ES 地址（elasticsearch_addresses）", value: "elasticsearch_addresses", category: "log" },
+  { label: "日志平台 ES 连接 ID（elasticsearch_connection_id）", value: "elasticsearch_connection_id", category: "log" },
   { label: "ES 索引模式-主机（elasticsearch_index_pattern）", value: "elasticsearch_index_pattern", category: "log" },
   { label: "ES 索引前缀-集群（elasticsearch_k8s_index_prefix）", value: "elasticsearch_k8s_index_prefix", category: "log" },
   { label: "启用 Kafka 中转（kafka_enabled）", value: "kafka_enabled", category: "log" },

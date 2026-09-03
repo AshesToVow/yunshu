@@ -204,3 +204,21 @@ func (h *LoggieHandler) ESConfigPreview(c *gin.Context) {
 	}
 	response.Success(c, cfg)
 }
+
+func (h *LoggieHandler) SetESConnection(c *gin.Context) {
+	if h.svc == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("服务未就绪"))
+		return
+	}
+	var req service.SetESConnectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	cfg, err := h.svc.SetESConnection(c.Request.Context(), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, cfg)
+}

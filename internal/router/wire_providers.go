@@ -247,7 +247,15 @@ func provideEsmgmtService(
 	resolveSched := func(ctx context.Context) dictconfig.EsmgmtBackupSchedulerConfig {
 		return dictconfig.ResolveEsmgmtBackupSchedulerConfig(ctx, db, dictconfig.DefaultEsmgmtBackupSchedulerDictTypes())
 	}
-	return esmgmtsvc.NewService(db, string(encryptionKey), es, newStore, resolveSched)
+	svc, err := esmgmtsvc.NewService(db, string(encryptionKey), es, newStore, resolveSched)
+	if err != nil {
+		return nil, err
+	}
+	// 日志平台按 connection_id 使用 esmgmt 连接（避免 Wire 循环依赖，装配后注入）
+	if es != nil {
+		es.SetManagedConnectionLoader(svc)
+	}
+	return svc, nil
 }
 
 func provideK8sHelmService(

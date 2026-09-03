@@ -2,6 +2,7 @@ package dictconfig
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"yunshu/internal/model"
@@ -35,6 +36,45 @@ func FetchEnabledDictValueNonEmpty(ctx context.Context, db *gorm.DB, dictType st
 		return "", false
 	}
 	return v, true
+}
+
+// UpsertEnabledDictValue 按 dict_type 写入（或更新）一条启用状态的字典值。
+// 若已存在多条，更新 sort 最小、id 最大的那条（与 FetchEnabledDictValue 选取规则一致）。
+func UpsertEnabledDictValue(ctx context.Context, db *gorm.DB, dictType, label, value, remark string) error {
+	dictType = strings.TrimSpace(dictType)
+	if db == nil || dictType == "" {
+		return errors.New("dict upsert: invalid args")
+	}
+	if strings.TrimSpace(label) == "" {
+		label = dictType
+	}
+	var row model.DictEntry
+	err := db.WithContext(ctx).
+		Where("dict_type = ?", dictType).
+		Order("sort ASC, id DESC").
+		First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return db.WithContext(ctx).Create(&model.DictEntry{
+			DictType: dictType,
+			Label:    label,
+			Value:    value,
+			Sort:     1,
+			Status:   1,
+			Remark:   remark,
+		}).Error
+	}
+	if err != nil {
+		return err
+	}
+	updates := map[string]any{
+		"value":  value,
+		"status": 1,
+		"label":  label,
+	}
+	if strings.TrimSpace(remark) != "" {
+		updates["remark"] = remark
+	}
+	return db.WithContext(ctx).Model(&row).Updates(updates).Error
 }
 
 // 包内别名，供 minio/cicd 等 resolver 复用，避免重复实现。

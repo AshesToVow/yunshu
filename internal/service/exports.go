@@ -371,6 +371,7 @@ type (
 	LoggieBootstrapSourcePreview   = logplatform.LoggieBootstrapSourcePreview
 	LoggieStatusItem               = logplatform.LoggieStatusItem
 	ESConfigPreviewItem            = logplatform.ESConfigPreviewItem
+	SetESConnectionRequest         = logplatform.SetESConnectionRequest
 )
 
 // --- mysqlbackup ---

@@ -161,6 +161,82 @@ func (s *Service) ListConnectionsForSelect(ctx context.Context) ([]model.EsmgmtC
 	return s.ListConnections(ctx)
 }
 
+const dictImportConnectionName = "日志平台（数据字典）"
+const dictImportRemarkMarker = "imported_from:elasticsearch_dict"
+
+// LoadManagedESConnection 供日志平台 ElasticsearchProvider 按 ID 加载地址与解密后的密码。
+func (s *Service) LoadManagedESConnection(ctx context.Context, id uint) (*logplatform.ManagedESEndpoint, error) {
+	if id == 0 {
+		return nil, constants.ErrBadRequestWithMsg("connection id required")
+	}
+	var row model.EsmgmtConnection
+	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrNotFoundWithMsg("连接不存在")
+		}
+		return nil, err
+	}
+	pw, err := s.decryptPassword(row.PasswordEnc)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg("解密连接密码失败")
+	}
+	timeout := row.TimeoutSec
+	if timeout <= 0 {
+		timeout = 30
+	}
+	return &logplatform.ManagedESEndpoint{
+		ID:         row.ID,
+		Name:       row.Name,
+		Addresses:  splitAddresses(row.Addresses),
+		Username:   row.Username,
+		Password:   pw,
+		TimeoutSec: timeout,
+	}, nil
+}
+
+// ImportConnectionFromDict 从数据字典 elasticsearch_*（及 YAML 兜底）导入/更新一条 esmgmt 连接。
+func (s *Service) ImportConnectionFromDict(ctx context.Context, actor *auth.CurrentUser) (*model.EsmgmtConnection, error) {
+	if s.logES == nil {
+		return nil, constants.ErrBadRequestWithMsg("日志平台 ES Provider 未就绪")
+	}
+	cfg, err := s.logES.ResolveFromDict(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(cfg.Addresses) == 0 {
+		return nil, constants.ErrBadRequestWithMsg("数据字典未配置 elasticsearch_addresses")
+	}
+	var existing model.EsmgmtConnection
+	findErr := s.db.WithContext(ctx).
+		Where("remark LIKE ? OR name = ?", "%"+dictImportRemarkMarker+"%", dictImportConnectionName).
+		Order("id ASC").
+		First(&existing).Error
+	req := ConnectionUpsertRequest{
+		Name:       dictImportConnectionName,
+		Addresses:  AddressesInput(cfg.Addresses),
+		Username:   cfg.Username,
+		Password:   cfg.Password,
+		TimeoutSec: cfg.TimeoutSeconds,
+		Remark:     dictImportRemarkMarker + "；来自 elasticsearch_* 字典，可再编辑",
+	}
+	if findErr == nil {
+		// 已存在则更新；密码为空时不覆盖已保存密文
+		if strings.TrimSpace(req.Password) == "" {
+			req.Password = ""
+		}
+		req.IsDefault = existing.IsDefault
+		return s.UpdateConnection(ctx, existing.ID, req, actor)
+	}
+	if findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound) {
+		return nil, findErr
+	}
+	// 无默认连接时，将本条设为默认，便于 esmgmt 控制台开箱即用
+	var defCount int64
+	_ = s.db.WithContext(ctx).Model(&model.EsmgmtConnection{}).Where("is_default = ?", true).Count(&defCount).Error
+	req.IsDefault = defCount == 0
+	return s.CreateConnection(ctx, req, actor)
+}
+
 func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequest, actor *auth.CurrentUser) (*model.EsmgmtConnection, error) {
 	name := strings.TrimSpace(req.Name)
 	addrs := []string(req.Addresses)
