@@ -75,10 +75,11 @@ export function RulesTab() {
 
   useEffect(() => {
     if (!selected) return;
+    const defaults = selected.default_params || {};
     form.setFieldsValue({
-      datasource_id: datasources[0]?.id,
+      datasource_id: selected.group === "log" ? undefined : datasources[0]?.id,
       name: selected.name,
-      threshold: selected.default_params?.threshold,
+      ...defaults,
     });
   }, [selected, datasources, form]);
 
@@ -87,16 +88,27 @@ export function RulesTab() {
     try {
       const v = await form.validateFields();
       const params: Record<string, string> = {};
-      if (v.threshold != null && String(v.threshold).trim() !== "") {
-        params.threshold = String(v.threshold);
+      const keys = Object.keys(selected.default_params || {});
+      for (const k of keys) {
+        if (v[k] != null && String(v[k]).trim() !== "") {
+          params[k] = String(v[k]);
+        }
       }
+      const isLog = selected.group === "log" || selected.labels?.rule_kind === "log";
       await createAlertMonitorRuleFromTemplate({
         template_id: selected.id,
-        datasource_id: Number(v.datasource_id),
+        datasource_id: isLog ? undefined : Number(v.datasource_id),
+        project_id: ctx.projectContextId || undefined,
         name: v.name,
         params,
       });
-      message.success("已从模板创建规则（含 category label，可在订阅树按 category 路由）");
+      message.success(
+        isLog
+          ? "已创建日志告警规则（rule_kind=log，由日志评估器执行）"
+          : selected.group === "slo"
+            ? "已创建 SLO 燃尽规则（PromQL 多窗口模板）"
+            : "已从模板创建规则（含 category label，可在订阅树按 category 路由）",
+      );
       setTplOpen(false);
       setSelected(null);
       await ctx.loadRules(ctx.projectContextId);
@@ -152,7 +164,9 @@ export function RulesTab() {
         </Typography.Text>
       </Space>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        规则中心是唯一告警产生入口：平台定时对数据源执行 PromQL，命中后经屏蔽 / 抑制 / 订阅树投递到钉钉、企微、邮件等。可「新建规则」或「从模板创建」（含 Telegraf、blackbox、Pushgateway）。规则级「处理人」与值班表当前班次邮箱会在 outgoing 中合并去重。
+        规则中心是平台主告警入口：PromQL / SLO 燃尽 / 日志告警（ERROR 计数与突增）统一评估后，经屏蔽 / 抑制 / 订阅树投递。Alertmanager Webhook 仍可接入，但带
+        <Typography.Text code>monitor_rule_id</Typography.Text> / <Typography.Text code>source=prometheus_monitor</Typography.Text>{" "}
+        的事件会被跳过，避免双发。
       </Typography.Paragraph>
       <Alert
         type="info"
@@ -302,24 +316,36 @@ export function RulesTab() {
         />
         {selected ? (
           <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-            <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: "请选择数据源" }]}>
-              <Select
-                options={datasources.map((d: AlertDatasourceItem) => ({
-                  value: d.id,
-                  label: `${d.name}${d.project_id ? ` (项目 ${d.project_id})` : ""}`,
-                }))}
+            {selected.group === "log" || selected.labels?.rule_kind === "log" ? (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="日志告警无需数据源"
+                description="将创建 rule_kind=log 规则，由平台日志评估器对 ES 计数/突增判定后走统一通知链路。请选择顶栏项目上下文。"
               />
-            </Form.Item>
+            ) : (
+              <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: "请选择数据源" }]}>
+                <Select
+                  options={datasources.map((d: AlertDatasourceItem) => ({
+                    value: d.id,
+                    label: `${d.name}${d.project_id ? ` (项目 ${d.project_id})` : ""}`,
+                  }))}
+                />
+              </Form.Item>
+            )}
             <Form.Item name="name" label="规则名称">
               <Input />
             </Form.Item>
-            {selected.default_params?.threshold != null ? (
-              <Form.Item name="threshold" label="阈值 threshold">
-                <InputNumber style={{ width: "100%" }} />
+            {Object.keys(selected.default_params || {}).map((key) => (
+              <Form.Item key={key} name={key} label={key}>
+                <InputNumber style={{ width: "100%" }} stringMode />
               </Form.Item>
-            ) : null}
+            ))}
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              将写入 labels.category={selected.labels?.category || selected.group}，可在订阅树按 category 匹配路由。
+              {selected.group === "slo"
+                ? "SLO 模板为多窗口燃尽 PromQL，请按实际 SLI 指标修改 job/error_metric/total_metric/budget。"
+                : `将写入 labels.category=${selected.labels?.category || selected.group}，可在订阅树按 category 匹配路由。`}
             </Typography.Text>
           </Form>
         ) : null}

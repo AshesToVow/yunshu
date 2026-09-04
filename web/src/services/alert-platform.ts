@@ -41,6 +41,7 @@ export interface AlertMonitorRuleItem {
   project_name?: string;
   datasource_name?: string;
   name: string;
+  rule_kind?: string;
   expr: string;
   for_seconds: number;
   eval_interval_seconds: number;
@@ -400,7 +401,8 @@ export async function listAlertRuleTemplates(group?: string) {
 
 export function createAlertMonitorRuleFromTemplate(payload: {
   template_id: string;
-  datasource_id: number;
+  datasource_id?: number;
+  project_id?: number;
   name?: string;
   params?: Record<string, string>;
   enabled?: boolean;

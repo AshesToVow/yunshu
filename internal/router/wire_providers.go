@@ -132,6 +132,14 @@ func provideAlertService(
 	return service.NewAlertService(db, redisClient, sender, cfg, opts)
 }
 
+// attachAlertLogSearch 在 LogSearch 就绪后注入证据包依赖（避免 wire 循环顺序问题）。
+func attachAlertLogSearch(svc *service.AlertService, logSearch *service.LogSearchService) *service.AlertService {
+	if svc != nil {
+		svc.SetLogSearch(logSearch)
+	}
+	return svc
+}
+
 func provideAuthService(
 	userRepo interfaces.UserRepository,
 	redisClient *redis.Client,
@@ -282,8 +290,8 @@ func provideKafkaToESService(kafka *service.KafkaProvider, es *service.Elasticse
 	return service.NewKafkaToESService(kafka, es)
 }
 
-func provideLogSearchService(es *service.ElasticsearchProvider, serverRepo interfaces.ServerRepository) *service.LogSearchService {
-	return service.NewLogSearchService(es, serverRepo)
+func provideLogSearchService(db *gorm.DB, es *service.ElasticsearchProvider, serverRepo interfaces.ServerRepository) *service.LogSearchService {
+	return service.NewLogSearchService(es, serverRepo, db)
 }
 
 func provideLogIntelligenceService(db *gorm.DB, logSearch *service.LogSearchService, projectRepo interfaces.ProjectRepository) *service.LogIntelligenceService {

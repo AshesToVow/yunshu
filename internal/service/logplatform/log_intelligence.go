@@ -87,24 +87,36 @@ func (s *LogIntelligenceService) ListPatterns(ctx context.Context, q LogPatternL
 }
 
 type LogAnomalyItem struct {
-	ID          uint   `json:"id"`
-	ProjectID   uint   `json:"project_id"`
-	PatternID   *uint  `json:"pattern_id,omitempty"`
-	AnomalyType string `json:"anomaly_type"`
-	Signature   string `json:"signature"`
-	Title       string `json:"title"`
-	Detail      string `json:"detail"`
-	Severity    string `json:"severity"`
-	Status      string `json:"status"`
-	DetectedAt  string `json:"detected_at"`
+	ID           uint   `json:"id"`
+	ProjectID    uint   `json:"project_id"`
+	PatternID    *uint  `json:"pattern_id,omitempty"`
+	AnomalyType  string `json:"anomaly_type"`
+	Signature    string `json:"signature"`
+	Title        string `json:"title"`
+	Detail       string `json:"detail"`
+	Severity     string `json:"severity"`
+	Status       string `json:"status"`
+	AssigneeID   uint   `json:"assignee_id,omitempty"`
+	AssigneeName string `json:"assignee_name,omitempty"`
+	MutedUntil   string `json:"muted_until,omitempty"`
+	DetectedAt   string `json:"detected_at"`
 }
 
 type LogAnomalyListQuery struct {
 	ProjectID   uint   `form:"project_id"`
 	Status      string `form:"status"`
 	AnomalyType string `form:"anomaly_type"`
+	AssigneeID  *uint  `form:"assignee_id"`
 	Page        int    `form:"page"`
 	PageSize    int    `form:"page_size"`
+}
+
+// LogAnomalyUpdateRequest Error Tracking 状态/负责人更新。
+type LogAnomalyUpdateRequest struct {
+	Status       string `json:"status"`
+	AssigneeID   *uint  `json:"assignee_id"`
+	AssigneeName string `json:"assignee_name"`
+	MuteMinutes  *int   `json:"mute_minutes"` // >0 则置 muted 并写 muted_until
 }
 
 func (s *LogIntelligenceService) ListAnomalies(ctx context.Context, q LogAnomalyListQuery) (*pagination.Result[LogAnomalyItem], error) {
@@ -122,6 +134,9 @@ func (s *LogIntelligenceService) ListAnomalies(ctx context.Context, q LogAnomaly
 	if tp := strings.TrimSpace(q.AnomalyType); tp != "" {
 		dbq = dbq.Where("anomaly_type = ?", tp)
 	}
+	if q.AssigneeID != nil && *q.AssigneeID > 0 {
+		dbq = dbq.Where("assignee_id = ?", *q.AssigneeID)
+	}
 	var total int64
 	if err := dbq.Count(&total).Error; err != nil {
 		return nil, bizerrors.Pass(ctx, "logintel", "ListAnomalies", err)
@@ -136,6 +151,44 @@ func (s *LogIntelligenceService) ListAnomalies(ctx context.Context, q LogAnomaly
 		out = append(out, toLogAnomalyItem(r))
 	}
 	return &pagination.Result[LogAnomalyItem]{List: out, Total: total, Page: page, PageSize: pageSize}, nil
+}
+
+// UpdateAnomaly 更新错误追踪问题状态 / 负责人 / 静默。
+func (s *LogIntelligenceService) UpdateAnomaly(ctx context.Context, projectID, anomalyID uint, req LogAnomalyUpdateRequest) (*LogAnomalyItem, error) {
+	if projectID == 0 || anomalyID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("project_id / anomaly_id 必填")
+	}
+	if s.db == nil {
+		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
+	}
+	var row model.LogAnomaly
+	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", anomalyID, projectID).First(&row).Error; err != nil {
+		return nil, constants.ErrNotFoundWithMsg("问题不存在")
+	}
+	if st := strings.TrimSpace(req.Status); st != "" {
+		switch st {
+		case model.LogAnomalyStatusOpen, model.LogAnomalyStatusAck, model.LogAnomalyStatusResolved, model.LogAnomalyStatusMuted:
+			row.Status = st
+		default:
+			return nil, constants.ErrBadRequestWithMsg("status 无效")
+		}
+	}
+	if req.AssigneeID != nil {
+		row.AssigneeID = *req.AssigneeID
+	}
+	if name := strings.TrimSpace(req.AssigneeName); name != "" {
+		row.AssigneeName = name
+	}
+	if req.MuteMinutes != nil && *req.MuteMinutes > 0 {
+		until := time.Now().UTC().Add(time.Duration(*req.MuteMinutes) * time.Minute)
+		row.MutedUntil = &until
+		row.Status = model.LogAnomalyStatusMuted
+	}
+	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		return nil, bizerrors.Pass(ctx, "logintel", "UpdateAnomaly", err)
+	}
+	item := toLogAnomalyItem(row)
+	return &item, nil
 }
 
 // LogContextQuery 关联上下文查询（P4）。
@@ -456,12 +509,17 @@ func toLogPatternItem(r model.LogPattern) LogPatternItem {
 }
 
 func toLogAnomalyItem(r model.LogAnomaly) LogAnomalyItem {
-	return LogAnomalyItem{
+	item := LogAnomalyItem{
 		ID: r.ID, ProjectID: r.ProjectID, PatternID: r.PatternID,
 		AnomalyType: r.AnomalyType, Signature: r.Signature,
 		Title: r.Title, Detail: r.Detail, Severity: r.Severity,
-		Status: r.Status, DetectedAt: r.DetectedAt.Format(time.RFC3339),
+		Status: r.Status, AssigneeID: r.AssigneeID, AssigneeName: r.AssigneeName,
+		DetectedAt: r.DetectedAt.Format(time.RFC3339),
 	}
+	if r.MutedUntil != nil {
+		item.MutedUntil = r.MutedUntil.UTC().Format(time.RFC3339)
+	}
+	return item
 }
 
 // CountOpenAnomalies 统计项目 open 异常数（供服务画像健康分）。

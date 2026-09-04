@@ -15,6 +15,7 @@ import (
 	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/repository"
+	"yunshu/internal/service/logplatform"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -135,6 +136,17 @@ type AlertService struct {
 	cloudAccountRepo   interfaces.CloudAccountRepository
 
 	alertStateSvc AlertStateService
+
+	// 可选：证据包拉取项目日志采样
+	logSearch *logplatform.LogSearchService
+}
+
+// SetLogSearch 注入日志检索（证据包）；可在 DI 后置绑定。
+func (s *AlertService) SetLogSearch(ls *logplatform.LogSearchService) {
+	if s == nil {
+		return
+	}
+	s.logSearch = ls
 }
 
 // AlertServiceOptions 可选依赖：静默、处理人、内置规则评估。
@@ -158,6 +170,7 @@ type AlertServiceOptions struct {
 	StateSvc           AlertStateService
 	SubscriptionRepo   interfaces.AlertSubscriptionRepository
 	InhibitionRuleRepo interfaces.AlertInhibitionRuleRepository
+	LogSearch          *logplatform.LogSearchService
 }
 
 type promEnrichTask struct {
@@ -286,6 +299,9 @@ func NewAlertService(db *gorm.DB, redisClient *redis.Client, sender mailer.Sende
 		}
 		if opts.CloudAccountRepo != nil {
 			svc.cloudAccountRepo = opts.CloudAccountRepo
+		}
+		if opts.LogSearch != nil {
+			svc.logSearch = opts.LogSearch
 		}
 		svc.alertStateSvc = opts.StateSvc
 		if key := strings.TrimSpace(opts.EncryptionKey); key != "" {

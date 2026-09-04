@@ -1,22 +1,25 @@
-import { BellOutlined, ClockCircleOutlined, FileSearchOutlined, QuestionCircleOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, Button, Descriptions, Drawer, Dropdown, Input, Space, Spin, Steps, Tag, Timeline, Typography, message } from "antd";
+import { BellOutlined, ClockCircleOutlined, FileSearchOutlined, MedicineBoxOutlined, QuestionCircleOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Descriptions, Drawer, Dropdown, Input, Space, Spin, Steps, Tag, Timeline, Typography, message } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   acknowledgeAlert,
   clearAlertAck,
+  collectAlertEvidence,
   createAlertNote,
   explainAlertByFingerprint,
   getActiveAlertAck,
   listAlertEvents,
   listAlertNotes,
   type AlertEventItem,
+  type AlertEvidenceResult,
   type AlertProgressNote,
   type FingerprintDeliveryExplain,
 } from "../../services/alerts";
 import { createAlertSilence } from "../../services/alert-platform";
 import { extractApiErrorMessage } from "../../services/http";
+import { getPodDiagnose, type PodDiagnoseResult } from "../../services/pods";
 import { formatDateTime } from "../../utils/format";
 import { formatMatchedPolicyNamesDisplay } from "../../utils/alert-policy-display";
 import { describeAlertEvent, summarizeAlertEventHint } from "../../utils/alert-event-reasons";
@@ -87,6 +90,7 @@ export function AlertEventDetailDrawer({
   const [loading, setLoading] = useState(false);
   const [explain, setExplain] = useState<FingerprintDeliveryExplain | null>(null);
   const [events, setEvents] = useState<AlertEventItem[]>([]);
+  const [evidence, setEvidence] = useState<AlertEvidenceResult | null>(null);
   const [silencing, setSilencing] = useState(false);
   const [acking, setAcking] = useState(false);
   const [acked, setAcked] = useState(false);
@@ -96,6 +100,8 @@ export function AlertEventDetailDrawer({
   const [notes, setNotes] = useState<AlertProgressNote[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
+  const [podDiagnosing, setPodDiagnosing] = useState(false);
+  const [podDiagnose, setPodDiagnose] = useState<PodDiagnoseResult | null>(null);
 
   const latestEvent = events[0];
   const logContextUrl = useMemo(() => {
@@ -114,6 +120,8 @@ export function AlertEventDetailDrawer({
     if (!open || !target?.fingerprint) {
       setExplain(null);
       setEvents([]);
+      setEvidence(null);
+      setPodDiagnose(null);
       setAcked(false);
       setAckBy("");
       setAckExpires("");
@@ -124,9 +132,10 @@ export function AlertEventDetailDrawer({
     }
     let cancelled = false;
     setLoading(true);
+    setPodDiagnose(null);
     void (async () => {
       try {
-        const [ex, list, ack, noteRes] = await Promise.all([
+        const [ex, list, ack, noteRes, ev] = await Promise.all([
           explainAlertByFingerprint(target.fingerprint),
           listAlertEvents({
             page: 1,
@@ -136,6 +145,7 @@ export function AlertEventDetailDrawer({
           }),
           getActiveAlertAck(target.fingerprint).catch(() => null),
           listAlertNotes(target.fingerprint).catch(() => ({ list: [] as AlertProgressNote[] })),
+          collectAlertEvidence(target.fingerprint).catch(() => null),
         ]);
         if (cancelled) return;
         setExplain(ex);
@@ -144,6 +154,7 @@ export function AlertEventDetailDrawer({
         setAckBy(ack?.user_name || "");
         setAckExpires(ack?.expires_at || "");
         setNotes(noteRes.list ?? []);
+        setEvidence(ev);
       } catch (e) {
         if (!cancelled) message.error(extractApiErrorMessage(e, "加载通知记录失败"));
       } finally {
@@ -273,8 +284,40 @@ export function AlertEventDetailDrawer({
     }
   }
 
+  async function runPodDiagnose() {
+    const hint = evidence?.pod_diagnose_hint;
+    if (!hint?.available) return;
+    if (!hint.cluster_id || !hint.namespace || !hint.pod) {
+      message.warning(hint.reason || "缺少 cluster_id，无法发起 Pod 诊断");
+      return;
+    }
+    setPodDiagnosing(true);
+    try {
+      const result = await getPodDiagnose({
+        cluster_id: hint.cluster_id,
+        namespace: hint.namespace,
+        name: hint.pod,
+      });
+      setPodDiagnose(result);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "Pod 诊断失败"));
+    } finally {
+      setPodDiagnosing(false);
+    }
+  }
+
   const st = statusLabel(target?.status, target?.resolved_at);
   const firing = allowSilence && st.text === "正在告警";
+  const dimTags = evidence?.dims
+    ? [
+        evidence.dims.cluster ? { key: "cluster", label: `cluster: ${evidence.dims.cluster}` } : null,
+        evidence.dims.namespace ? { key: "ns", label: `ns: ${evidence.dims.namespace}` } : null,
+        evidence.dims.pod ? { key: "pod", label: `pod: ${evidence.dims.pod}` } : null,
+        evidence.dims.service ? { key: "svc", label: `service: ${evidence.dims.service}` } : null,
+      ].filter(Boolean) as Array<{ key: string; label: string }>
+    : [];
+  const logSamples = (evidence?.log_samples ?? []).slice(0, 5);
+  const levelCounts = evidence?.log_overview?.level_counts;
 
   return (
     <Drawer
@@ -430,6 +473,117 @@ export function AlertEventDetailDrawer({
                 .join("；")}
             />
           ) : null}
+
+          <Card size="small" title="证据包">
+            {dimTags.length ? (
+              <Space wrap style={{ marginBottom: 8 }}>
+                {dimTags.map((t) => (
+                  <Tag key={t.key}>{t.label}</Tag>
+                ))}
+              </Space>
+            ) : (
+              <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+                暂无维度标签
+              </Typography.Text>
+            )}
+
+            {evidence?.log_overview ? (
+              <Typography.Paragraph style={{ marginBottom: 8 }}>
+                日志概览：共 {evidence.log_overview.total ?? 0} 条
+                {levelCounts && Object.keys(levelCounts).length
+                  ? ` · ${Object.entries(levelCounts)
+                      .map(([lv, n]) => `${lv}:${n}`)
+                      .join(" / ")}`
+                  : ""}
+              </Typography.Paragraph>
+            ) : evidence?.log_hint ? (
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                {evidence.log_hint}
+              </Typography.Paragraph>
+            ) : null}
+
+            {logSamples.length ? (
+              <Space direction="vertical" size={4} style={{ width: "100%", marginBottom: 8 }}>
+                {logSamples.map((s, i) => (
+                  <div key={`${s.timestamp}-${i}`} style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary">{formatDateTime(s.timestamp) || s.timestamp}</Typography.Text>
+                    {s.level ? (
+                      <Tag style={{ marginLeft: 6 }} color={String(s.level).toLowerCase().includes("err") ? "red" : undefined}>
+                        {s.level}
+                      </Tag>
+                    ) : null}
+                    <Typography.Text ellipsis style={{ display: "block", maxWidth: "100%" }}>
+                      {s.message || "-"}
+                    </Typography.Text>
+                  </div>
+                ))}
+              </Space>
+            ) : null}
+
+            <Typography.Text strong style={{ display: "block", marginBottom: 4 }}>
+              近期变更
+            </Typography.Text>
+            {(evidence?.recent_changes ?? []).length ? (
+              <Timeline
+                style={{ marginBottom: 8 }}
+                items={(evidence?.recent_changes ?? []).map((c) => ({
+                  children: (
+                    <div style={{ fontSize: 12 }}>
+                      <Typography.Text type="secondary">{formatDateTime(c.started_at) || "-"}</Typography.Text>
+                      <div>{c.summary || c.action || c.source || "-"}</div>
+                    </div>
+                  ),
+                }))}
+              />
+            ) : (
+              <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+                暂无关联变更
+              </Typography.Text>
+            )}
+
+            {evidence?.pod_diagnose_hint?.available ? (
+              <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                <Button
+                  size="small"
+                  icon={<MedicineBoxOutlined />}
+                  loading={podDiagnosing}
+                  onClick={() => void runPodDiagnose()}
+                >
+                  Pod 诊断
+                </Button>
+                {podDiagnose ? (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message={podDiagnose.summary || "诊断结果"}
+                    description={
+                      (podDiagnose.hints ?? []).length
+                        ? (podDiagnose.hints ?? [])
+                            .slice(0, 5)
+                            .map((h) => `${h.title}${h.detail ? `：${h.detail}` : ""}`)
+                            .join("；")
+                        : "暂无诊断提示"
+                    }
+                  />
+                ) : null}
+              </Space>
+            ) : evidence?.pod_diagnose_hint?.cluster_name && !evidence.pod_diagnose_hint.cluster_id ? (
+              <Typography.Text type="secondary">
+                {evidence.pod_diagnose_hint.reason ||
+                  `仅有集群名「${evidence.pod_diagnose_hint.cluster_name}」，缺少 cluster_id，无法发起 Pod 诊断`}
+              </Typography.Text>
+            ) : null}
+
+            {logContextUrl ? (
+              <div style={{ marginTop: 8 }}>
+                <Link to={logContextUrl}>
+                  <Button size="small" icon={<FileSearchOutlined />}>
+                    关联日志
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
+          </Card>
 
           <Typography.Text strong>
             <BellOutlined /> 通知记录

@@ -329,6 +329,63 @@ func (h *ProjectHandler) ListLogAnomalies(c *gin.Context) {
 	response.Success(c, gin.H{"list": res.List, "total": res.Total, "page": res.Page, "page_size": res.PageSize})
 }
 
+// UpdateLogAnomaly 更新错误追踪问题（状态/负责人/静默）。
+func (h *ProjectHandler) UpdateLogAnomaly(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	anomalyID, err := parseUintParam(c, "anomaly_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req service.LogAnomalyUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if h.logIntel == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("日志智能服务不可用"))
+		return
+	}
+	res, err := h.logIntel.UpdateAnomaly(c.Request.Context(), projectID, anomalyID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+// LogTopN 日志排行榜。
+func (h *ProjectHandler) LogTopN(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	q, ok := bindQuery[service.LogTopNQuery](c)
+	if !ok {
+		return
+	}
+	q.ProjectID = projectID
+	if err := h.svc.ValidateLogSearchFilters(c.Request.Context(), projectID, q.ServerID, q.LogSourceID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if h.logSearch == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未配置"))
+		return
+	}
+	res, err := h.logSearch.TopN(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 // LogContext 关联上下文（变更/告警/日志）。
 func (h *ProjectHandler) LogContext(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")

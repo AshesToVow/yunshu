@@ -56,6 +56,12 @@ func seedPermissionsLog() []model.Permission {
 		{Name: "日志查询收藏列表", Resource: "/api/v1/projects/:id/log-saved-queries", Action: "GET", Description: "List saved log queries"},
 		{Name: "创建日志查询收藏", Resource: "/api/v1/projects/:id/log-saved-queries", Action: "POST", Description: "Create saved log query"},
 		{Name: "删除日志查询收藏", Resource: "/api/v1/projects/:id/log-saved-queries/:query_id", Action: "DELETE", Description: "Delete saved log query"},
+		{Name: "日志排行榜", Resource: "/api/v1/projects/:id/logs/topn", Action: "GET", Description: "Log TopN ranking by dimension"},
+		{Name: "更新日志错误追踪", Resource: "/api/v1/projects/:id/logs/anomalies/:anomaly_id", Action: "PUT", Description: "Update log error-tracking issue"},
+		{Name: "日志黑名单列表", Resource: "/api/v1/projects/:id/log-drop-rules", Action: "GET", Description: "List log drop/blacklist rules"},
+		{Name: "创建日志黑名单", Resource: "/api/v1/projects/:id/log-drop-rules", Action: "POST", Description: "Create log drop/blacklist rule"},
+		{Name: "更新日志黑名单", Resource: "/api/v1/projects/:id/log-drop-rules/:rule_id", Action: "PUT", Description: "Update log drop/blacklist rule"},
+		{Name: "删除日志黑名单", Resource: "/api/v1/projects/:id/log-drop-rules/:rule_id", Action: "DELETE", Description: "Delete log drop/blacklist rule"},
 		{Name: "主机自定义 Pipeline 下发", Resource: "/api/v1/projects/:id/loggie/deploy-yaml", Action: "POST", Description: "Deploy custom pipelines.yml to host Loggie"},
 	}
 }

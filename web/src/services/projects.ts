@@ -684,6 +684,9 @@ export interface LogAnomalyItem {
   detail: string;
   severity: string;
   status: string;
+  assignee_id?: number;
+  assignee_name?: string;
+  muted_until?: string;
   detected_at: string;
 }
 
@@ -714,6 +717,8 @@ type LogSearchParams = {
   extra_value?: string;
   from?: string;
   to?: string;
+  index_pattern?: string;
+  skip_drop_rules?: boolean;
   page?: number;
   page_size?: number;
 };
@@ -786,10 +791,43 @@ export async function getProjectLogPatterns(
 
 export async function getProjectLogAnomalies(
   projectId: number,
-  params: { status?: string; anomaly_type?: string; page?: number; page_size?: number },
+  params: { status?: string; anomaly_type?: string; assignee_id?: number; page?: number; page_size?: number },
 ) {
   return await getData(
     http.get<any, ApiResponse<PageData<LogAnomalyItem>>>(`/projects/${projectId}/logs/anomalies`, {
+      params: { ...params, project_id: projectId },
+      silentErrorToast: true,
+    }),
+  );
+}
+
+export async function updateProjectLogAnomaly(
+  projectId: number,
+  anomalyId: number,
+  payload: { status?: string; assignee_id?: number; assignee_name?: string; mute_minutes?: number },
+) {
+  return await getData(
+    http.put<any, ApiResponse<LogAnomalyItem>>(`/projects/${projectId}/logs/anomalies/${anomalyId}`, payload),
+  );
+}
+
+export interface LogTopNItem {
+  key: string;
+  count: number;
+}
+
+export interface LogTopNResult {
+  dim: string;
+  items: LogTopNItem[];
+  total: number;
+}
+
+export async function getProjectLogTopN(
+  projectId: number,
+  params: LogSearchParams & { dim?: string; size?: number },
+) {
+  return await getData(
+    http.get<any, ApiResponse<LogTopNResult>>(`/projects/${projectId}/logs/topn`, {
       params: { ...params, project_id: projectId },
       silentErrorToast: true,
     }),

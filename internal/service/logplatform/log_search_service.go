@@ -13,15 +13,18 @@ import (
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 type LogSearchService struct {
 	es         *ElasticsearchProvider
 	serverRepo interfaces.ServerRepository
+	db         *gorm.DB // 可选：加载项目黑名单
 }
 
-func NewLogSearchService(es *ElasticsearchProvider, serverRepo interfaces.ServerRepository) *LogSearchService {
-	return &LogSearchService{es: es, serverRepo: serverRepo}
+func NewLogSearchService(es *ElasticsearchProvider, serverRepo interfaces.ServerRepository, db *gorm.DB) *LogSearchService {
+	return &LogSearchService{es: es, serverRepo: serverRepo, db: db}
 }
 
 type LogSearchQuery struct {
@@ -44,6 +47,8 @@ type LogSearchQuery struct {
 	From          string `form:"from"`
 	To            string `form:"to"`
 	TraceID       string `form:"trace_id"`
+	IndexPattern  string `form:"index_pattern"` // 可选：覆盖默认索引（多数据流）
+	SkipDropRules bool   `form:"skip_drop_rules"`
 	Page          int    `form:"page"`
 	PageSize      int    `form:"page_size"`
 }
@@ -116,6 +121,13 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 }
 
 func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery) string {
+	if pat := strings.TrimSpace(q.IndexPattern); pat != "" {
+		// 仅允许相对安全的索引通配，防止跨集群滥用绝对奇怪的输入
+		if strings.ContainsAny(pat, " \t\n;") {
+			return strings.ReplaceAll(pat, " ", "")
+		}
+		return pat
+	}
 	k8sPrefix := ""
 	if s.es != nil {
 		if cfg, err := s.es.Resolve(ctx); err == nil {

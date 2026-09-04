@@ -424,3 +424,78 @@ func (h *ClusterLogHandler) DeleteSavedLogQuery(c *gin.Context) {
 	}
 	response.Success(c, gin.H{"message": "deleted"})
 }
+
+func (h *ClusterLogHandler) ListLogDropRules(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	list, err := h.svc.DropRules().List(c.Request.Context(), projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
+}
+
+func (h *ClusterLogHandler) CreateLogDropRule(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req service.LogDropRuleUpsert
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.DropRules().Create(c.Request.Context(), projectID, actorUserID(c), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *ClusterLogHandler) UpdateLogDropRule(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ruleID, err := parseUintParam(c, "rule_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req service.LogDropRuleUpsert
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.DropRules().Update(c.Request.Context(), projectID, ruleID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *ClusterLogHandler) DeleteLogDropRule(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ruleID, err := parseUintParam(c, "rule_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DropRules().Delete(c.Request.Context(), projectID, ruleID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted"})
+}

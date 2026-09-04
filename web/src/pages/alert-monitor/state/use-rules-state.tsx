@@ -1100,12 +1100,23 @@ export function useAlertMonitorRulesState(params: {
     },
     { title: "名称", dataIndex: "name", width: 160 },
     {
+      title: "类型",
+      dataIndex: "rule_kind",
+      width: 80,
+      render: (v: string) => {
+        const kind = v || "promql";
+        const color = kind === "log" ? "purple" : kind === "slo" ? "cyan" : "blue";
+        return <Tag color={color}>{kind}</Tag>;
+      },
+    },
+    {
       title: "数据源",
       key: "ds",
       width: 200,
       render: (_: unknown, r: AlertMonitorRuleItem) => {
         const name = String(r.datasource_name || "").trim();
         if (name) return name;
+        if ((r.rule_kind || "promql") === "log") return "日志(ES)";
         const ds = dsList.find((d) => d.id === r.datasource_id);
         return ds ? ds.name : String(r.datasource_id);
       },

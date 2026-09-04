@@ -13,6 +13,7 @@ type preparedSearch struct {
 	indices string
 	must    []map[string]any
 	filters []map[string]any
+	mustNot []map[string]any
 	cfg     config.ElasticsearchConfig
 }
 
@@ -29,11 +30,14 @@ func (s *LogSearchService) prepareSearch(ctx context.Context, q LogSearchQuery) 
 	}
 	_ = cliCfg // client resolved by caller via s.es.Client
 
+	ApplySimplifiedDQL(&q)
+
 	projectID := strconv.FormatUint(uint64(q.ProjectID), 10)
 	must := []map[string]any{
 		termIDFilter("project_id", projectID),
 	}
 	filters := make([]map[string]any, 0, 8)
+	mustNot := make([]map[string]any, 0)
 	if q.ServerID != nil && *q.ServerID > 0 {
 		filters = append(filters, termIDFilter("server_id", strconv.FormatUint(uint64(*q.ServerID), 10)))
 	}
@@ -97,19 +101,29 @@ func (s *LogSearchService) prepareSearch(ctx context.Context, q LogSearchQuery) 
 		filters = append(filters, multiFieldTermFilter([]string{"trace_id", "traceId", "traceid"}, strings.TrimSpace(q.TraceID)))
 	}
 
+	if !q.SkipDropRules && s.db != nil {
+		rules, err := NewLogDropRuleService(s.db).ListEnabled(ctx, q.ProjectID)
+		if err == nil && len(rules) > 0 {
+			mustNot = append(mustNot, dropRulesToMustNot(rules)...)
+		}
+	}
+
 	return &preparedSearch{
 		indices: s.resolveIndices(ctx, q),
 		must:    must,
 		filters: filters,
+		mustNot: mustNot,
 		cfg:     cliCfg,
 	}, nil
 }
 
 func (p *preparedSearch) boolQuery() map[string]any {
-	return map[string]any{
-		"bool": map[string]any{
-			"must":   p.must,
-			"filter": p.filters,
-		},
+	bq := map[string]any{
+		"must":   p.must,
+		"filter": p.filters,
 	}
+	if len(p.mustNot) > 0 {
+		bq["must_not"] = p.mustNot
+	}
+	return map[string]any{"bool": bq}
 }

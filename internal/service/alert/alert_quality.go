@@ -25,15 +25,19 @@ type AlertQualityReport struct {
 }
 
 type AlertNoiseItem struct {
-	Title    string `json:"title"`
-	Severity string `json:"severity"`
-	Count    int64  `json:"count"`
+	Title       string `json:"title"`
+	Severity    string `json:"severity"`
+	Count       int64  `json:"count"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+	Alertname   string `json:"alertname,omitempty"`
 }
 
 type AlertRepeatItem struct {
 	Fingerprint string `json:"fingerprint"`
 	Title       string `json:"title"`
 	Count       int64  `json:"count"`
+	Severity    string `json:"severity,omitempty"`
+	Alertname   string `json:"alertname,omitempty"`
 }
 
 func (s *AlertService) QualityReport(ctx context.Context, windowHours int, projectID uint) (*AlertQualityReport, error) {
@@ -73,13 +77,15 @@ func (s *AlertService) QualityReport(ctx context.Context, windowHours int, proje
 	}
 
 	type rowCount struct {
-		Title    string
-		Severity string
-		Count    int64
+		Title       string
+		Severity    string
+		Count       int64
+		Fingerprint string
+		Alertname   string
 	}
 	var noise []rowCount
 	noiseQ := db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Select("title, severity, COUNT(*) as count").
+		Select("title, severity, COUNT(*) as count, MAX(fingerprint) as fingerprint").
 		Where("created_at >= ? AND created_at <= ?", from, to)
 	if projectID > 0 {
 		noiseQ = noiseQ.Where("project_id = ?", projectID)
@@ -87,17 +93,21 @@ func (s *AlertService) QualityReport(ctx context.Context, windowHours int, proje
 	_ = noiseQ.Group("title, severity").Order("count DESC").Limit(10).Scan(&noise).Error
 	noiseTop := make([]AlertNoiseItem, 0, len(noise))
 	for _, n := range noise {
-		noiseTop = append(noiseTop, AlertNoiseItem{Title: n.Title, Severity: n.Severity, Count: n.Count})
+		noiseTop = append(noiseTop, AlertNoiseItem{
+			Title: n.Title, Severity: n.Severity, Count: n.Count,
+			Fingerprint: n.Fingerprint, Alertname: n.Alertname,
+		})
 	}
 
 	type fpRow struct {
 		Fingerprint string
 		Title       string
 		Count       int64
+		Severity    string
 	}
 	var fps []fpRow
 	fpQ := db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Select("fingerprint, MAX(title) as title, COUNT(*) as count").
+		Select("fingerprint, MAX(title) as title, COUNT(*) as count, MAX(severity) as severity").
 		Where("created_at >= ? AND created_at <= ? AND fingerprint <> ''", from, to)
 	if projectID > 0 {
 		fpQ = fpQ.Where("project_id = ?", projectID)
@@ -106,7 +116,9 @@ func (s *AlertService) QualityReport(ctx context.Context, windowHours int, proje
 		Order("count DESC").Limit(10).Scan(&fps).Error
 	repeats := make([]AlertRepeatItem, 0, len(fps))
 	for _, f := range fps {
-		repeats = append(repeats, AlertRepeatItem{Fingerprint: f.Fingerprint, Title: f.Title, Count: f.Count})
+		repeats = append(repeats, AlertRepeatItem{
+			Fingerprint: f.Fingerprint, Title: f.Title, Count: f.Count, Severity: f.Severity,
+		})
 	}
 
 	var curFiring int64

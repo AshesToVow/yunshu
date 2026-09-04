@@ -622,4 +622,40 @@ export function deleteLogSavedQuery(projectId: number, queryId: number) {
   return getData<{ message: string }>(http.delete(`/projects/${projectId}/log-saved-queries/${queryId}`));
 }
 
+export interface LogDropRuleItem {
+  id: number;
+  project_id: number;
+  name: string;
+  enabled: boolean;
+  field: string;
+  operator: string;
+  value: string;
+  remark?: string;
+  created_by?: number;
+  updated_at?: string;
+}
+
+export function listLogDropRules(projectId: number) {
+  return getData<{ list: LogDropRuleItem[] }>(http.get(`/projects/${projectId}/log-drop-rules`));
+}
+
+export function createLogDropRule(
+  projectId: number,
+  payload: { name: string; field: string; operator?: string; value: string; enabled?: boolean; remark?: string },
+) {
+  return getData<LogDropRuleItem>(http.post(`/projects/${projectId}/log-drop-rules`, payload));
+}
+
+export function updateLogDropRule(
+  projectId: number,
+  ruleId: number,
+  payload: { name: string; field: string; operator?: string; value: string; enabled?: boolean; remark?: string },
+) {
+  return getData<LogDropRuleItem>(http.put(`/projects/${projectId}/log-drop-rules/${ruleId}`, payload));
+}
+
+export function deleteLogDropRule(projectId: number, ruleId: number) {
+  return getData<{ message: string }>(http.delete(`/projects/${projectId}/log-drop-rules/${ruleId}`));
+}
+
 export { getProjects };

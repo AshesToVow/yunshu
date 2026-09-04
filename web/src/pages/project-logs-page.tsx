@@ -19,12 +19,15 @@ import {
   Input,
   List,
   Modal,
+  Popconfirm,
   Row,
   Select,
   Space,
+  Switch,
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -41,10 +44,12 @@ import {
   getProjectLogOverview,
   getProjectLogPatterns,
   getProjectLogSources,
+  getProjectLogTopN,
   getProjectServers,
   getProjectServices,
   getProjects,
   searchProjectLogs,
+  updateProjectLogAnomaly,
   type LogAnalyzeResult,
   type LogAnomalyItem,
   type LogContextResult,
@@ -54,15 +59,21 @@ import {
   type LogPatternItem,
   type LogSearchItem,
   type LogSourceItem,
+  type LogTopNResult,
   type ProjectItem,
   type ServerItem,
   type ServiceItem,
 } from "../services/projects";
 import {
+  createLogDropRule,
   createLogSavedQuery,
+  deleteLogDropRule,
   deleteLogSavedQuery,
   getLoggieStatus,
+  listLogDropRules,
   listLogSavedQueries,
+  updateLogDropRule,
+  type LogDropRuleItem,
   type LogSavedQueryItem,
 } from "../services/log-platform";
 import { getClusters, type ClusterItem } from "../services/clusters";
@@ -87,6 +98,7 @@ type SearchForm = {
   file_path?: string;
   extra_field?: string;
   extra_value?: string;
+  index_pattern?: string;
   time_range?: [Dayjs, Dayjs];
   page?: number;
   page_size?: number;
@@ -138,6 +150,13 @@ export function ProjectLogsPage() {
   const [parseOpen, setParseOpen] = useState(false);
   const [parseRow, setParseRow] = useState<LogSearchItem | null>(null);
   const [guideTips, setGuideTips] = useState<string[]>([]);
+  const [dropOpen, setDropOpen] = useState(false);
+  const [dropRules, setDropRules] = useState<LogDropRuleItem[]>([]);
+  const [dropLoading, setDropLoading] = useState(false);
+  const [topnDim, setTopnDim] = useState("service");
+  const [topn, setTopn] = useState<LogTopNResult | null>(null);
+  const [topnLoading, setTopnLoading] = useState(false);
+  const [dropForm] = Form.useForm<{ name: string; field: string; operator: string; value: string; enabled: boolean }>();
 
   const [form] = Form.useForm<SearchForm>();
   const watchCollectorMode = Form.useWatch("collector_mode", form);
@@ -201,6 +220,7 @@ export function ProjectLogsPage() {
       file_path: values.file_path?.trim() || undefined,
       extra_field: values.extra_field?.trim() || undefined,
       extra_value: values.extra_value?.trim() || undefined,
+      index_pattern: values.index_pattern?.trim() || undefined,
       from: range?.[0]?.toISOString(),
       to: range?.[1]?.toISOString(),
       page: page ?? values.page ?? 1,
@@ -220,6 +240,41 @@ export function ProjectLogsPage() {
       setSavedQueries([]);
     }
   }, []);
+
+  const reloadDropRules = useCallback(async (projectId?: number) => {
+    if (!projectId) {
+      setDropRules([]);
+      return;
+    }
+    try {
+      const res = await listLogDropRules(projectId);
+      setDropRules(res?.list || []);
+    } catch {
+      setDropRules([]);
+    }
+  }, []);
+
+  const loadTopN = useCallback(
+    async (dim?: string) => {
+      const values = form.getFieldsValue();
+      if (!values.project_id) return;
+      const d = dim || topnDim;
+      setTopnLoading(true);
+      try {
+        const res = await getProjectLogTopN(values.project_id, {
+          ...buildSearchParams(values),
+          dim: d,
+          size: 15,
+        });
+        setTopn(res);
+      } catch {
+        setTopn(null);
+      } finally {
+        setTopnLoading(false);
+      }
+    },
+    [form, buildSearchParams, topnDim],
+  );
 
   const refreshEmptyGuide = useCallback(async (projectId?: number, totalHits?: number) => {
     if (!projectId || (totalHits ?? 0) > 0) {
@@ -255,7 +310,7 @@ export function ProjectLogsPage() {
       const [ov, pat, an, fields] = await Promise.all([
         getProjectLogOverview(values.project_id, params).catch(() => null),
         getProjectLogPatterns(values.project_id, { ...params, page: 1, page_size: 20 }).catch(() => ({ list: [], total: 0 })),
-        getProjectLogAnomalies(values.project_id, { status: "open", page: 1, page_size: 20 }).catch(() => ({ list: [], total: 0 })),
+        getProjectLogAnomalies(values.project_id, { page: 1, page_size: 50 }).catch(() => ({ list: [], total: 0 })),
         getProjectLogFields(values.project_id, params).catch(() => null),
       ]);
       setOverview(ov);
@@ -264,8 +319,9 @@ export function ProjectLogsPage() {
       setAnomalies(an?.list ?? []);
       setAnomalyTotal(an?.total ?? 0);
       setFieldStats(fields?.fields ?? []);
+      void loadTopN();
     },
-    [buildSearchParams],
+    [buildSearchParams, loadTopN],
   );
 
   const runSearch = useCallback(
@@ -374,6 +430,7 @@ export function ProjectLogsPage() {
         }
         await runSearch(initial);
         void reloadSavedQueries(defaultProject);
+        void reloadDropRules(defaultProject);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -675,6 +732,7 @@ export function ProjectLogsPage() {
                   void reloadServers(pid);
                   void reloadServices(pid);
                   void reloadSavedQueries(pid);
+                  void reloadDropRules(pid);
                 }}
               />
             </Form.Item>
@@ -699,7 +757,13 @@ export function ProjectLogsPage() {
               </Space.Compact>
             </Form.Item>
             <Form.Item name="keyword">
-              <Input allowClear placeholder="关键词检索" style={{ width: 200 }} />
+              <Tooltip title="支持简化 DQL：level:ERROR AND service:api host:node-1">
+                <Input
+                  allowClear
+                  placeholder="关键词 / DQL：level:ERROR service:xxx"
+                  style={{ width: 280 }}
+                />
+              </Tooltip>
             </Form.Item>
             <Form.Item name="level" hidden>
               <Input />
@@ -778,6 +842,15 @@ export function ProjectLogsPage() {
             AI 分析建议
           </Button>
           <Button onClick={() => goAdjustPipeline()}>Pipeline 仓库</Button>
+          <Button
+            onClick={() => {
+              const pid = form.getFieldValue("project_id") as number | undefined;
+              void reloadDropRules(pid);
+              setDropOpen(true);
+            }}
+          >
+            黑名单 ({dropRules.filter((r) => r.enabled).length})
+          </Button>
         </Space>
       </div>
 
@@ -869,6 +942,15 @@ export function ProjectLogsPage() {
                   <Col span={8}>
                     <Form.Item label="文件名" name="file_path">
                       <Input allowClear placeholder="748.log / server.log" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={8}>
+                    <Form.Item
+                      label="索引 Pattern"
+                      name="index_pattern"
+                      tooltip="可选，覆盖默认索引（多数据流）。留空则按采集模式自动选择。"
+                    >
+                      <Input allowClear placeholder="例如 logs-app-* / k8s-logs-*" />
                     </Form.Item>
                   </Col>
                 </Row>
@@ -1139,9 +1221,41 @@ export function ProjectLogsPage() {
                 key: "analysis",
                 label: "智能分析",
                 children: overview ? (
-                  <LogAnalysisPanel overview={overview} onAi={() => void runAiAnalyze()} />
+                  <LogAnalysisPanel
+                    overview={overview}
+                    topn={topn}
+                    topnDim={topnDim}
+                    topnLoading={topnLoading}
+                    onAi={() => void runAiAnalyze()}
+                    onDimChange={(d) => {
+                      setTopnDim(d);
+                      void loadTopN(d);
+                    }}
+                    onTopNClick={(dim, key) => {
+                      if (dim === "service" || dim === "service_name") {
+                        form.setFieldsValue({ service_name: key, page: 1 });
+                        void runSearch({ page: 1, service_name: key });
+                      } else if (dim === "host") {
+                        form.setFieldsValue({ host: key, page: 1 });
+                        void runSearch({ page: 1, host: key });
+                      } else if (dim === "pod") {
+                        form.setFieldsValue({ pod: key, page: 1 });
+                        void runSearch({ page: 1, pod: key });
+                      } else if (dim === "namespace") {
+                        form.setFieldsValue({ namespace: key, page: 1 });
+                        void runSearch({ page: 1, namespace: key });
+                      } else if (dim === "level" || dim === "status") {
+                        form.setFieldsValue({ level: key, page: 1 });
+                        void runSearch({ page: 1, level: key });
+                      } else if (dim === "container") {
+                        form.setFieldsValue({ container: key, page: 1 });
+                        void runSearch({ page: 1, container: key });
+                      }
+                      setActiveTab("logs");
+                    }}
+                  />
                 ) : (
-                  <Typography.Text type="secondary">检索后展示级别分布与错误签名</Typography.Text>
+                  <Typography.Text type="secondary">检索后展示级别分布、排行榜与错误签名</Typography.Text>
                 ),
               },
               {
@@ -1165,7 +1279,7 @@ export function ProjectLogsPage() {
               },
               {
                 key: "anomalies",
-                label: `异常 (${anomalyTotal})`,
+                label: `错误追踪 (${anomalyTotal})`,
                 children: (
                   <Table
                     rowKey="id"
@@ -1173,11 +1287,122 @@ export function ProjectLogsPage() {
                     dataSource={anomalies}
                     pagination={false}
                     columns={[
-                      { title: "类型", dataIndex: "anomaly_type", width: 100, render: (v: string) => (v === "error_spike" ? "量突增" : "新模板") },
-                      { title: "级别", dataIndex: "severity", width: 90, render: (v: string) => <Tag color={v === "critical" ? "error" : "warning"}>{v}</Tag> },
-                      { title: "标题", dataIndex: "title" },
-                      { title: "详情", dataIndex: "detail", ellipsis: true },
-                      { title: "时间", dataIndex: "detected_at", width: 170, render: (v: string) => formatDateTime(v) },
+                      {
+                        title: "类型",
+                        dataIndex: "anomaly_type",
+                        width: 90,
+                        render: (v: string) => (v === "error_spike" ? "量突增" : "新模板"),
+                      },
+                      {
+                        title: "级别",
+                        dataIndex: "severity",
+                        width: 80,
+                        render: (v: string) => <Tag color={v === "critical" ? "error" : "warning"}>{v}</Tag>,
+                      },
+                      {
+                        title: "状态",
+                        dataIndex: "status",
+                        width: 100,
+                        render: (v: string) => {
+                          const color =
+                            v === "open" ? " magentared" : v === "resolved" ? "success" : v === "muted" ? "default" : "processing";
+                          return <Tag color={color === " magentared" ? "magenta" : color}>{v}</Tag>;
+                        },
+                      },
+                      { title: "标题", dataIndex: "title", ellipsis: true },
+                      {
+                        title: "负责人",
+                        dataIndex: "assignee_name",
+                        width: 100,
+                        render: (v: string) => v || "-",
+                      },
+                      {
+                        title: "签名",
+                        dataIndex: "signature",
+                        width: 160,
+                        render: (v: string) =>
+                          v ? <Typography.Text code>{v.slice(0, 40)}</Typography.Text> : "-",
+                      },
+                      { title: "时间", dataIndex: "detected_at", width: 160, render: (v: string) => formatDateTime(v) },
+                      {
+                        title: "操作",
+                        width: 220,
+                        render: (_: unknown, row: LogAnomalyItem) => {
+                          const pid = form.getFieldValue("project_id") as number;
+                          const refresh = () => void loadOverviewAndIntel(form.getFieldsValue());
+                          return (
+                            <Space size={4} wrap>
+                              {row.status !== "acknowledged" ? (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  onClick={() =>
+                                    void updateProjectLogAnomaly(pid, row.id, { status: "acknowledged" }).then(() => {
+                                      message.success("已确认");
+                                      refresh();
+                                    })
+                                  }
+                                >
+                                  确认
+                                </Button>
+                              ) : null}
+                              {row.status !== "resolved" ? (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  onClick={() =>
+                                    void updateProjectLogAnomaly(pid, row.id, { status: "resolved" }).then(() => {
+                                      message.success("已解决");
+                                      refresh();
+                                    })
+                                  }
+                                >
+                                  解决
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="link"
+                                size="small"
+                                onClick={() => {
+                                  const name = window.prompt("负责人名称", row.assignee_name || "");
+                                  if (name == null) return;
+                                  void updateProjectLogAnomaly(pid, row.id, { assignee_name: name.trim() }).then(() => {
+                                    message.success("已更新负责人");
+                                    refresh();
+                                  });
+                                }}
+                              >
+                                指派
+                              </Button>
+                              <Button
+                                type="link"
+                                size="small"
+                                onClick={() =>
+                                  void updateProjectLogAnomaly(pid, row.id, { mute_minutes: 60 }).then(() => {
+                                    message.success("已静默 60 分钟");
+                                    refresh();
+                                  })
+                                }
+                              >
+                                静默
+                              </Button>
+                              {row.signature ? (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  onClick={() => {
+                                    form.setFieldsValue({ keyword: row.signature, level: "ERROR", page: 1 });
+                                    setActiveTab("logs");
+                                    void runSearch({ page: 1, keyword: row.signature, level: "ERROR" });
+                                  }}
+                                >
+                                  关联日志
+                                </Button>
+                              ) : null}
+                            </Space>
+                          );
+                        },
+                      },
                     ]}
                   />
                 ),
@@ -1313,6 +1538,155 @@ export function ProjectLogsPage() {
           </Space>
         ) : null}
       </Modal>
+
+      <Drawer
+        title="日志黑名单（查询侧过滤）"
+        width={560}
+        open={dropOpen}
+        onClose={() => setDropOpen(false)}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
+          命中规则的日志在检索/概览中被 must_not 排除，不影响采集写入。可用于过滤噪声服务、主机或消息片段。
+        </Typography.Paragraph>
+        <Form
+          form={dropForm}
+          layout="vertical"
+          initialValues={{ operator: "eq", enabled: true, field: "service_name" }}
+          onFinish={(vals) => {
+            const pid = form.getFieldValue("project_id") as number;
+            if (!pid) {
+              message.warning("请选择项目");
+              return;
+            }
+            setDropLoading(true);
+            void createLogDropRule(pid, {
+              name: vals.name,
+              field: vals.field,
+              operator: vals.operator,
+              value: vals.value,
+              enabled: vals.enabled,
+            })
+              .then(() => {
+                message.success("已添加");
+                dropForm.resetFields();
+                dropForm.setFieldsValue({ operator: "eq", enabled: true, field: "service_name" });
+                return reloadDropRules(pid);
+              })
+              .catch((e: unknown) => message.error(extractApiErrorMessage(e, "添加失败")))
+              .finally(() => setDropLoading(false));
+          }}
+        >
+          <Row gutter={8}>
+            <Col span={8}>
+              <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                <Input placeholder="规则名" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="field" label="字段" rules={[{ required: true }]}>
+                <Select
+                  options={[
+                    { value: "service_name", label: "service_name" },
+                    { value: "host", label: "host" },
+                    { value: "level", label: "level" },
+                    { value: "pod", label: "pod" },
+                    { value: "namespace", label: "namespace" },
+                    { value: "message", label: "message" },
+                    { value: "signature", label: "signature" },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="operator" label="匹配">
+                <Select
+                  options={[
+                    { value: "eq", label: "等于" },
+                    { value: "contains", label: "包含" },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={16}>
+              <Form.Item name="value" label="值" rules={[{ required: true }]}>
+                <Input placeholder="匹配值" />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item name="enabled" label="启用" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label=" ">
+                <Button type="primary" htmlType="submit" loading={dropLoading} block>
+                  添加
+                </Button>
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+        <Table
+          rowKey="id"
+          size="small"
+          dataSource={dropRules}
+          pagination={false}
+          columns={[
+            { title: "名称", dataIndex: "name" },
+            {
+              title: "条件",
+              render: (_: unknown, r: LogDropRuleItem) => (
+                <Typography.Text code>
+                  {r.field} {r.operator} {r.value}
+                </Typography.Text>
+              ),
+            },
+            {
+              title: "启用",
+              dataIndex: "enabled",
+              width: 70,
+              render: (v: boolean, r: LogDropRuleItem) => (
+                <Switch
+                  size="small"
+                  checked={v}
+                  onChange={(checked) => {
+                    const pid = form.getFieldValue("project_id") as number;
+                    void updateLogDropRule(pid, r.id, {
+                      name: r.name,
+                      field: r.field,
+                      operator: r.operator,
+                      value: r.value,
+                      enabled: checked,
+                      remark: r.remark,
+                    }).then(() => reloadDropRules(pid));
+                  }}
+                />
+              ),
+            },
+            {
+              title: "操作",
+              width: 80,
+              render: (_: unknown, r: LogDropRuleItem) => (
+                <Popconfirm
+                  title="删除该规则？"
+                  onConfirm={() => {
+                    const pid = form.getFieldValue("project_id") as number;
+                    void deleteLogDropRule(pid, r.id).then(() => {
+                      message.success("已删除");
+                      void reloadDropRules(pid);
+                    });
+                  }}
+                >
+                  <Button type="link" danger size="small">
+                    删除
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
+      </Drawer>
     </div>
   );
 }
@@ -1475,8 +1849,25 @@ function LogLineCell({
   );
 }
 
-function LogAnalysisPanel({ overview, onAi }: { overview: LogOverviewResult; onAi: () => void }) {
+function LogAnalysisPanel({
+  overview,
+  topn,
+  topnDim,
+  topnLoading,
+  onAi,
+  onDimChange,
+  onTopNClick,
+}: {
+  overview: LogOverviewResult;
+  topn: LogTopNResult | null;
+  topnDim: string;
+  topnLoading: boolean;
+  onAi: () => void;
+  onDimChange: (dim: string) => void;
+  onTopNClick: (dim: string, key: string) => void;
+}) {
   const levelEntries = Object.entries(overview.level_counts || {}).sort((a, b) => b[1] - a[1]);
+  const topMax = Math.max(1, ...(topn?.items || []).map((i) => i.count));
   return (
     <div className="project-logs-analysis-panel">
       <Space style={{ marginBottom: 12 }}>
@@ -1506,6 +1897,53 @@ function LogAnalysisPanel({ overview, onAi }: { overview: LogOverviewResult; onA
           </div>
         </Col>
       </Row>
+
+      <div style={{ marginTop: 16 }}>
+        <Space style={{ marginBottom: 8 }}>
+          <Typography.Text strong>排行榜</Typography.Text>
+          <Select
+            size="small"
+            value={topnDim}
+            style={{ width: 140 }}
+            onChange={onDimChange}
+            options={[
+              { value: "service", label: "Service" },
+              { value: "pod", label: "Pod" },
+              { value: "host", label: "Host" },
+              { value: "level", label: "Level" },
+              { value: "namespace", label: "Namespace" },
+              { value: "container", label: "Container" },
+            ]}
+          />
+          {topnLoading ? <Typography.Text type="secondary">加载中…</Typography.Text> : null}
+        </Space>
+        {(topn?.items?.length ?? 0) > 0 ? (
+          <div className="project-logs-level-bars">
+            {topn!.items.map((item) => (
+              <div
+                key={item.key}
+                className="project-logs-level-row"
+                style={{ cursor: "pointer" }}
+                onClick={() => onTopNClick(topnDim, item.key)}
+              >
+                <Typography.Link style={{ minWidth: 120 }} ellipsis>
+                  {item.key}
+                </Typography.Link>
+                <div className="project-logs-level-bar-track">
+                  <div
+                    className="project-logs-level-bar-fill"
+                    style={{ width: `${Math.round((item.count / topMax) * 100)}%` }}
+                  />
+                </div>
+                <span className="project-logs-level-count">{item.count.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Typography.Text type="secondary">暂无排行数据</Typography.Text>
+        )}
+      </div>
+
       {(overview.top_error_signatures?.length ?? 0) > 0 ? (
         <List
           style={{ marginTop: 12 }}
