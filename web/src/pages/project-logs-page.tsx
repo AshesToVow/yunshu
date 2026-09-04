@@ -973,7 +973,7 @@ export function ProjectLogsPage() {
             />
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               采样 {fieldStats.length ? `${fieldStats.length} 字段` : "-"} ·{" "}
-              <a onClick={goAdjustPipeline}>调整 Pipeline</a>
+              <a onClick={() => goAdjustPipeline()}>调整 Pipeline</a>
             </Typography.Text>
           </div>
           {filteredFacetGroups.map((group) => (
