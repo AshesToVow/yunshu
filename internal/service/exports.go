@@ -339,6 +339,10 @@ type (
 	ClusterLogRuleItem    = logplatform.ClusterLogRuleItem
 	ClusterPipelinesPreview = logplatform.ClusterPipelinesPreview
 	ClusterPipelinesUpsert  = logplatform.ClusterPipelinesUpsert
+	LogPipelineUpsert       = logplatform.LogPipelineUpsert
+	LogPipelineApplyRequest = logplatform.LogPipelineApplyRequest
+	LogFieldsResult         = logplatform.LogFieldsResult
+	LogFieldStat            = logplatform.LogFieldStat
 	LogRetentionItem      = logplatform.LogRetentionItem
 	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
 	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult

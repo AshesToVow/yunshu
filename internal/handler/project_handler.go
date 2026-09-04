@@ -253,6 +253,34 @@ func (h *ProjectHandler) LogOverview(c *gin.Context) {
 	response.Success(c, res)
 }
 
+// DiscoverLogFields 字段发现（观测云风格可观察字段）。
+func (h *ProjectHandler) DiscoverLogFields(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	q, ok := bindQuery[service.LogSearchQuery](c)
+	if !ok {
+		return
+	}
+	q.ProjectID = projectID
+	if err := h.svc.ValidateLogSearchFilters(c.Request.Context(), projectID, q.ServerID, q.LogSourceID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if h.logSearch == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未配置"))
+		return
+	}
+	res, err := h.logSearch.DiscoverFields(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 // ListLogPatterns 日志模板聚类列表。
 func (h *ProjectHandler) ListLogPatterns(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")

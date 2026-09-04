@@ -41,6 +41,16 @@ func seedPermissionsLog() []model.Permission {
 		{Name: "ES 创建备份调度", Resource: "/api/v1/esmgmt/schedules", Action: "POST", Description: "Create Elasticsearch backup schedule"},
 		{Name: "ES 更新备份调度", Resource: "/api/v1/esmgmt/schedules/:id", Action: "PUT", Description: "Update Elasticsearch backup schedule"},
 		{Name: "ES 删除备份调度", Resource: "/api/v1/esmgmt/schedules/:id", Action: "DELETE", Description: "Delete Elasticsearch backup schedule"},
+		{Name: "日志字段发现", Resource: "/api/v1/projects/:id/logs/fields", Action: "GET", Description: "Discover observable log fields from ES samples"},
+		{Name: "Pipeline 仓库列表", Resource: "/api/v1/projects/:id/log-pipelines", Action: "GET", Description: "List Loggie pipeline repository entries"},
+		{Name: "创建 Pipeline 仓库条目", Resource: "/api/v1/projects/:id/log-pipelines", Action: "POST", Description: "Create Loggie pipeline repository entry"},
+		{Name: "Pipeline 仓库详情", Resource: "/api/v1/projects/:id/log-pipelines/:pipeline_id", Action: "GET", Description: "Get Loggie pipeline repository entry"},
+		{Name: "更新 Pipeline 仓库条目", Resource: "/api/v1/projects/:id/log-pipelines/:pipeline_id", Action: "PUT", Description: "Update Loggie pipeline repository entry"},
+		{Name: "删除 Pipeline 仓库条目", Resource: "/api/v1/projects/:id/log-pipelines/:pipeline_id", Action: "DELETE", Description: "Delete Loggie pipeline repository entry"},
+		{Name: "应用 Pipeline 到采集", Resource: "/api/v1/projects/:id/log-pipelines/:pipeline_id/apply", Action: "POST", Description: "Apply pipeline repo entry to cluster Loggie"},
+		{Name: "从集群同步 Pipeline", Resource: "/api/v1/projects/:id/log-pipelines/sync-from-cluster", Action: "POST", Description: "Sync cluster pipelines.yml into repository"},
+		{Name: "日志解析档列表", Resource: "/api/v1/projects/:id/log-parse-profiles", Action: "GET", Description: "List Loggie parse profile options"},
+		{Name: "AI 调整 Pipeline", Resource: "/api/v1/ai/logs/pipeline-adjust", Action: "POST", Description: "AI suggest Loggie pipeline adjustments"},
 	}
 }
 

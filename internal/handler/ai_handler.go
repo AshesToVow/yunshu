@@ -370,6 +370,25 @@ func (h *AIHandler) LogAnalyze(c *gin.Context) {
 	response.Success(c, res)
 }
 
+func (h *AIHandler) PipelineAdjust(c *gin.Context) {
+	var req aisvc.PipelineAdjustRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.AdjustLoggiePipeline(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 func (h *AIHandler) ListApprovals(c *gin.Context) {
 	var q aisvc.ApprovalListQuery
 	_ = c.ShouldBindQuery(&q)

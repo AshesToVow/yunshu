@@ -29,7 +29,7 @@ func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		MenuPathPrefixes: []string{
 			"/projects", "/project-members", "/project-services", "/service-catalog",
-			"/service-portrait", "/project-logs", "/project-log-sources", "/log-retention", "/loggie-status",
+			"/service-portrait", "/project-logs", "/project-log-sources", "/log-retention", "/loggie-status", "/log-pipelines",
 		},
 		APIPrefixes: []string{"/api/v1/projects"},
 		Workers:     []string{"log_retention", "kafka_to_es", "log_intelligence"},
@@ -46,6 +46,7 @@ func (m *module) Models() []any {
 		&model.LoggieAgent{},
 		&model.ClusterLogAgent{},
 		&model.ClusterLogRule{},
+		&model.LogPipeline{},
 		&model.LogPattern{},
 		&model.LogAnomaly{},
 		&model.ServiceCatalog{},

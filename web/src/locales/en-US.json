@@ -49,6 +49,7 @@
       "/project-services": "Services & log sources",
       "/project-log-sources": "Services & log sources",
       "/project-logs": "Log search",
+      "/log-pipelines": "Pipeline repository",
       "/agent-list": "Agents"
     },
     "groups": {

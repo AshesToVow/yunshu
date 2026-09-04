@@ -616,28 +616,12 @@ export interface LogSearchItem {
   podname?: string;
   container?: string;
   containername?: string;
+  trace_id?: string;
+  span_id?: string;
+  fields?: Record<string, string>;
 }
 
-export async function searchProjectLogs(
-  projectId: number,
-  params: {
-    server_id?: number;
-    service_id?: number;
-    log_source_id?: number;
-    collector_mode?: string;
-    cluster_id?: number;
-    namespace?: string;
-    pod?: string;
-    container?: string;
-    keyword?: string;
-    level?: string;
-    file_path?: string;
-    from?: string;
-    to?: string;
-    page?: number;
-    page_size?: number;
-  },
-) {
+export async function searchProjectLogs(projectId: number, params: LogSearchParams) {
   return await getData(
     http.get<any, ApiResponse<PageData<LogSearchItem>>>(`/projects/${projectId}/logs/search`, {
       params: { ...params, project_id: projectId },
@@ -645,25 +629,7 @@ export async function searchProjectLogs(
   );
 }
 
-export async function exportProjectLogs(
-  projectId: number,
-  params: {
-    server_id?: number;
-    service_id?: number;
-    log_source_id?: number;
-    collector_mode?: string;
-    cluster_id?: number;
-    namespace?: string;
-    pod?: string;
-    container?: string;
-    keyword?: string;
-    level?: string;
-    file_path?: string;
-    from?: string;
-    to?: string;
-    page_size?: number;
-  },
-): Promise<Blob> {
+export async function exportProjectLogs(projectId: number, params: LogSearchParams): Promise<Blob> {
   // http 拦截器已经返回 response.data（Blob），不可再取 .data
   return (await http.get(`/projects/${projectId}/logs/export`, {
     params: { ...params, project_id: projectId },
@@ -687,6 +653,8 @@ export interface LogOverviewResult {
   total: number;
   histogram: LogHistogramBucket[];
   level_counts: Record<string, number>;
+  service_name_counts?: Record<string, number>;
+  host_counts?: Record<string, number>;
   top_error_signatures: LogSignatureItem[];
 }
 
@@ -728,6 +696,8 @@ type LogSearchParams = {
   server_id?: number;
   service_id?: number;
   log_source_id?: number;
+  service_name?: string;
+  host?: string;
   collector_mode?: string;
   cluster_id?: number;
   namespace?: string;
@@ -748,6 +718,51 @@ export async function getProjectLogOverview(projectId: number, params: LogSearch
       params: { ...params, project_id: projectId },
       silentErrorToast: true,
     }),
+  );
+}
+
+export interface LogFieldStat {
+  name: string;
+  count: number;
+  sample_values?: string[];
+  kind?: string;
+}
+
+export interface LogFieldsResult {
+  total_samples: number;
+  fields: LogFieldStat[];
+}
+
+export async function getProjectLogFields(projectId: number, params: LogSearchParams) {
+  return await getData(
+    http.get<any, ApiResponse<LogFieldsResult>>(`/projects/${projectId}/logs/fields`, {
+      params: { ...params, project_id: projectId },
+      silentErrorToast: true,
+    }),
+  );
+}
+
+export interface PipelineAdjustResult {
+  summary: string;
+  parse_profile?: string;
+  suggested_yml?: string;
+  extracted_fields?: string[];
+  notes?: string[];
+  provider?: string;
+  model?: string;
+}
+
+export async function adjustLoggiePipeline(payload: {
+  provider?: string;
+  project_id?: number;
+  kind?: string;
+  goal?: string;
+  sample_logs?: string[];
+  current_yml?: string;
+  parse_profile?: string;
+}) {
+  return await getData(
+    http.post<any, ApiResponse<PipelineAdjustResult>>(`/ai/logs/pipeline-adjust`, payload),
   );
 }
 

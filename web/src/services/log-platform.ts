@@ -302,6 +302,15 @@ export async function downloadLoggieFile(
   downloadText(await blob.text(), names[file] ?? "pipeline.yml");
 }
 
+/** 读取主机当前生成的 pipelines.yml 文本（不触发浏览器下载）。 */
+export async function fetchLoggiePipelinesYAML(projectId: number, serverId: number) {
+  const blob = (await http.get(`/projects/${projectId}/loggie/pipeline/download`, {
+    params: { server_id: serverId, file: "pipelines" },
+    responseType: "blob",
+  })) as unknown as Blob;
+  return await blob.text();
+}
+
 export async function getESConfigPreview() {
   return await getData(http.get<any, ApiResponse<ESConfigPreview>>("/log-platform/es-config"));
 }
@@ -481,6 +490,80 @@ export function saveClusterLogPipelines(
 export function refreshClusterLogStatus(projectId: number, clusterId: number) {
   return getData<ClusterLogAgent>(
     http.get(`/projects/${projectId}/cluster-log/status`, { params: { cluster_id: clusterId } }),
+  );
+}
+
+export interface LogPipelineItem {
+  id: number;
+  project_id: number;
+  name: string;
+  kind: string;
+  cluster_id?: number;
+  server_id?: number;
+  parse_profile?: string;
+  content_yml?: string;
+  status: string;
+  version: number;
+  source_ref?: string;
+  remark?: string;
+  updated_at?: string;
+}
+
+export function listLogPipelines(projectId: number, kind?: string) {
+  return getData<{ list: LogPipelineItem[] }>(
+    http.get(`/projects/${projectId}/log-pipelines`, { params: kind ? { kind } : undefined }),
+  );
+}
+
+export function getLogPipeline(projectId: number, pipelineId: number) {
+  return getData<LogPipelineItem>(http.get(`/projects/${projectId}/log-pipelines/${pipelineId}`));
+}
+
+export function createLogPipeline(
+  projectId: number,
+  payload: {
+    name: string;
+    kind?: string;
+    cluster_id?: number;
+    server_id?: number;
+    parse_profile?: string;
+    content_yml?: string;
+    status?: string;
+    remark?: string;
+  },
+) {
+  return getData<LogPipelineItem>(http.post(`/projects/${projectId}/log-pipelines`, payload));
+}
+
+export function updateLogPipeline(
+  projectId: number,
+  pipelineId: number,
+  payload: Record<string, unknown>,
+) {
+  return getData<LogPipelineItem>(http.put(`/projects/${projectId}/log-pipelines/${pipelineId}`, payload));
+}
+
+export function deleteLogPipeline(projectId: number, pipelineId: number) {
+  return getData<{ message: string }>(http.delete(`/projects/${projectId}/log-pipelines/${pipelineId}`));
+}
+
+export function applyLogPipeline(
+  projectId: number,
+  pipelineId: number,
+  payload?: { apply_deploy?: boolean; namespace?: string },
+) {
+  return getData<LogPipelineItem>(http.post(`/projects/${projectId}/log-pipelines/${pipelineId}/apply`, payload || {}));
+}
+
+export function syncLogPipelineFromCluster(projectId: number, clusterId: number) {
+  return getData<LogPipelineItem>(
+    http.post(`/projects/${projectId}/log-pipelines/sync-from-cluster`, { cluster_id: clusterId }),
+  );
+}
+
+export function listLogParseProfiles(projectId: number) {
+  return getData<{ list: Array<{ value: string; label: string }> }>(
+    http.get(`/projects/${projectId}/log-parse-profiles`),
   );
 }
 

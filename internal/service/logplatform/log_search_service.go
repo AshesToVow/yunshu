@@ -30,6 +30,7 @@ type LogSearchQuery struct {
 	ServiceID     *uint  `form:"service_id"`
 	LogSourceID   *uint  `form:"log_source_id"`
 	ServiceName   string `form:"service_name"`
+	Host          string `form:"host"`
 	CollectorMode string `form:"collector_mode"` // host|k8s|空=全部
 	ClusterID     *uint  `form:"cluster_id"`
 	Namespace     string `form:"namespace"`
@@ -66,6 +67,7 @@ type LogSearchItem struct {
 	ContainerName string `json:"containername,omitempty"`
 	TraceID       string `json:"trace_id,omitempty"`
 	SpanID        string `json:"span_id,omitempty"`
+	Fields        map[string]string `json:"fields,omitempty"`
 }
 
 func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagination.Result[LogSearchItem], error) {
@@ -533,6 +535,7 @@ func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 	if item.Timestamp == "" {
 		item.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	}
+	item.Fields = flattenLogSource(src, "", 0)
 	return item
 }
 

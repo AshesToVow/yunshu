@@ -49,6 +49,7 @@
       "/project-services": "服务与日志源",
       "/project-log-sources": "服务与日志源",
       "/project-logs": "日志检索",
+      "/log-pipelines": "Pipeline 仓库",
       "/agent-list": "Agent 列表"
     },
     "groups": {

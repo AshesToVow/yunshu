@@ -98,6 +98,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/project-services": "project-collect-config-page",
   "/project-members": "project-members-page",
   "/project-logs": "project-logs-page",
+  "/log-pipelines": "log-pipeline-repo-page",
   "/log-retention": "log-retention-page",
   "/loggie-status": "loggie-status-page",
   "/project-log-sources": "project-collect-config-page",

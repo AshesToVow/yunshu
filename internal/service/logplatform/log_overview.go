@@ -20,6 +20,8 @@ type LogOverviewResult struct {
 	Total              int64                `json:"total"`
 	Histogram          []LogHistogramBucket `json:"histogram"`
 	LevelCounts        map[string]int64     `json:"level_counts"`
+	ServiceNameCounts  map[string]int64     `json:"service_name_counts,omitempty"`
+	HostCounts         map[string]int64     `json:"host_counts,omitempty"`
 	TopErrorSignatures []LogSignatureItem   `json:"top_error_signatures"`
 	Summary            *LogSummaryResult    `json:"summary,omitempty"`
 }
@@ -67,12 +69,20 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 	}
 
 	out := &LogOverviewResult{
-		LevelCounts: map[string]int64{},
-		Histogram:   []LogHistogramBucket{},
+		LevelCounts:       map[string]int64{},
+		ServiceNameCounts: map[string]int64{},
+		HostCounts:        map[string]int64{},
+		Histogram:         []LogHistogramBucket{},
 	}
 	out.Total = parseTotalHits(raw)
 	out.Histogram = parseDateHistogram(raw, "log_histogram")
 	out.LevelCounts = mergeTermsAggs(raw, "level_terms_0", "level_terms_1", "level_terms_2", "level_terms_3")
+	out.ServiceNameCounts = s.queryTermsFacet(ctx, prep, []string{
+		"service_name.keyword", "service_name", "fields.service_name.keyword", "fields.service_name",
+	}, 15)
+	out.HostCounts = s.queryTermsFacet(ctx, prep, []string{
+		"host.keyword", "host", "server_host.keyword", "server_host", "hostname.keyword", "hostname",
+	}, 15)
 
 	// 采样 ERROR/WARN 日志提取签名（复用 SummarizeLogHits）；采样失败不影响概览主体。
 	sampleQ := q
@@ -152,6 +162,8 @@ func pickHistogramInterval(from, to string) string {
 	}
 	d := tt.Sub(tf)
 	switch {
+	case d <= 30*time.Minute:
+		return "1m"
 	case d <= 2*time.Hour:
 		return "5m"
 	case d <= 24*time.Hour:
@@ -225,6 +237,75 @@ func mergeTermsAggs(raw map[string]any, names ...string) map[string]int64 {
 	return out
 }
 
+func (s *LogSearchService) queryTermsFacet(ctx context.Context, prep *preparedSearch, fieldCandidates []string, size int) map[string]int64 {
+	if prep == nil || size <= 0 {
+		return map[string]int64{}
+	}
+	cli, _, err := s.es.Client(ctx)
+	if err != nil {
+		return map[string]int64{}
+	}
+	for _, field := range fieldCandidates {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		body := map[string]any{
+			"size":  0,
+			"query": prep.boolQuery(),
+			"aggs": map[string]any{
+				"facet": map[string]any{
+					"terms": map[string]any{
+						"field": field,
+						"size":  size,
+					},
+				},
+			},
+		}
+		raw, err := cli.Search(ctx, prep.indices, body)
+		if err != nil {
+			continue
+		}
+		if counts := parseTermsAggPreserveCase(raw, "facet"); len(counts) > 0 {
+			return counts
+		}
+	}
+	return map[string]int64{}
+}
+
+func parseTermsAggPreserveCase(raw map[string]any, aggName string) map[string]int64 {
+	aggs, _ := raw["aggregations"].(map[string]any)
+	root, _ := aggs[aggName].(map[string]any)
+	buckets, _ := root["buckets"].([]any)
+	out := map[string]int64{}
+	for _, b := range buckets {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		key := termsBucketKey(bm)
+		if key == "" {
+			continue
+		}
+		cnt := int64(0)
+		if v, ok := bm["doc_count"].(float64); ok {
+			cnt = int64(v)
+		}
+		out[key] = cnt
+	}
+	return out
+}
+
+func termsBucketKey(bm map[string]any) string {
+	if key, ok := bm["key"].(string); ok {
+		return strings.TrimSpace(key)
+	}
+	if kv, ok := bm["key"].(float64); ok {
+		return fmt.Sprintf("%v", int64(kv))
+	}
+	return ""
+}
+
 func parseTermsAgg(raw map[string]any, aggName string) map[string]int64 {
 	aggs, _ := raw["aggregations"].(map[string]any)
 	root, _ := aggs[aggName].(map[string]any)
@@ -235,12 +316,7 @@ func parseTermsAgg(raw map[string]any, aggName string) map[string]int64 {
 		if !ok {
 			continue
 		}
-		key, _ := bm["key"].(string)
-		if key == "" {
-			if kv, ok := bm["key"].(float64); ok {
-				key = fmt.Sprintf("%v", int64(kv))
-			}
-		}
+		key := termsBucketKey(bm)
 		cnt := int64(0)
 		if v, ok := bm["doc_count"].(float64); ok {
 			cnt = int64(v)
