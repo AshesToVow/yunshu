@@ -51,6 +51,12 @@ func seedPermissionsLog() []model.Permission {
 		{Name: "从集群同步 Pipeline", Resource: "/api/v1/projects/:id/log-pipelines/sync-from-cluster", Action: "POST", Description: "Sync cluster pipelines.yml into repository"},
 		{Name: "日志解析档列表", Resource: "/api/v1/projects/:id/log-parse-profiles", Action: "GET", Description: "List Loggie parse profile options"},
 		{Name: "AI 调整 Pipeline", Resource: "/api/v1/ai/logs/pipeline-adjust", Action: "POST", Description: "AI suggest Loggie pipeline adjustments"},
+		{Name: "Pipeline 版本列表", Resource: "/api/v1/projects/:id/log-pipelines/:pipeline_id/versions", Action: "GET", Description: "List pipeline versions"},
+		{Name: "Pipeline 版本回滚", Resource: "/api/v1/projects/:id/log-pipelines/:pipeline_id/versions/:version_id/rollback", Action: "POST", Description: "Rollback pipeline version"},
+		{Name: "日志查询收藏列表", Resource: "/api/v1/projects/:id/log-saved-queries", Action: "GET", Description: "List saved log queries"},
+		{Name: "创建日志查询收藏", Resource: "/api/v1/projects/:id/log-saved-queries", Action: "POST", Description: "Create saved log query"},
+		{Name: "删除日志查询收藏", Resource: "/api/v1/projects/:id/log-saved-queries/:query_id", Action: "DELETE", Description: "Delete saved log query"},
+		{Name: "主机自定义 Pipeline 下发", Resource: "/api/v1/projects/:id/loggie/deploy-yaml", Action: "POST", Description: "Deploy custom pipelines.yml to host Loggie"},
 	}
 }
 

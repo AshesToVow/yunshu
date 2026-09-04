@@ -97,7 +97,8 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 		row.ClusterID = req.ClusterID
 		row.ServerID = req.ServerID
 		row.ParseProfile = strings.TrimSpace(req.ParseProfile)
-		if yml != "" {
+		if yml != "" && yml != strings.TrimSpace(row.ContentYAML) {
+			_ = s.snapshotPipelineVersion(ctx, &row, userID, "auto before update")
 			row.ContentYAML = req.ContentYAML
 			row.Version++
 		}
@@ -129,6 +130,9 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 	}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(row.ContentYAML) != "" {
+		_ = s.snapshotPipelineVersion(ctx, &row, userID, "initial")
 	}
 	return &row, nil
 }
@@ -199,7 +203,10 @@ func (s *ClusterLogService) ApplyLogPipeline(ctx context.Context, projectID, id,
 			return nil, err
 		}
 	case "host":
-		// 主机部署仍走 Agent 管理；仓库侧标记为已发布。
+		// 主机下发由 Loggie DeployCustomPipelinesYAML API 完成；此处仅标记 published。
+		if row.ServerID == 0 {
+			return nil, constants.ErrBadRequestWithMsg("该条目未绑定 server_id，无法标记下发")
+		}
 	case "template":
 		return nil, constants.ErrBadRequestWithMsg("模板类型请先复制为 host/k8s 条目再下发")
 	default:
@@ -207,11 +214,68 @@ func (s *ClusterLogService) ApplyLogPipeline(ctx context.Context, projectID, id,
 	}
 	row.Status = "published"
 	row.UpdatedBy = userID
-	row.Version++
 	if err := s.db.WithContext(ctx).Save(row).Error; err != nil {
 		return nil, err
 	}
 	return row, nil
+}
+
+func (s *ClusterLogService) snapshotPipelineVersion(ctx context.Context, row *model.LogPipeline, userID uint, remark string) error {
+	if row == nil || row.ID == 0 {
+		return nil
+	}
+	yml := strings.TrimSpace(row.ContentYAML)
+	if yml == "" {
+		return nil
+	}
+	ver := model.LogPipelineVersion{
+		PipelineID:  row.ID,
+		ProjectID:   row.ProjectID,
+		Version:     row.Version,
+		ContentYAML: row.ContentYAML,
+		Remark:      remark,
+		CreatedBy:   userID,
+	}
+	return s.db.WithContext(ctx).Create(&ver).Error
+}
+
+// ListLogPipelineVersions 列出历史版本。
+func (s *ClusterLogService) ListLogPipelineVersions(ctx context.Context, projectID, pipelineID uint) ([]model.LogPipelineVersion, error) {
+	if _, err := s.GetLogPipeline(ctx, projectID, pipelineID); err != nil {
+		return nil, err
+	}
+	var list []model.LogPipelineVersion
+	if err := s.db.WithContext(ctx).Where("project_id = ? AND pipeline_id = ?", projectID, pipelineID).
+		Order("version DESC").Limit(50).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// RollbackLogPipelineVersion 回滚到指定历史版本（会再产生新 version）。
+func (s *ClusterLogService) RollbackLogPipelineVersion(ctx context.Context, projectID, pipelineID, versionID, userID uint) (*model.LogPipeline, error) {
+	row, err := s.GetLogPipeline(ctx, projectID, pipelineID)
+	if err != nil {
+		return nil, err
+	}
+	var ver model.LogPipelineVersion
+	if err := s.db.WithContext(ctx).Where("id = ? AND pipeline_id = ? AND project_id = ?", versionID, pipelineID, projectID).First(&ver).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrNotFoundWithMsg("版本不存在")
+		}
+		return nil, err
+	}
+	return s.UpsertLogPipeline(ctx, projectID, row.ID, userID, LogPipelineUpsert{
+		Name:         row.Name,
+		Kind:         row.Kind,
+		ClusterID:    row.ClusterID,
+		ServerID:     row.ServerID,
+		ParseProfile: row.ParseProfile,
+		ContentYAML:  ver.ContentYAML,
+		Status:       row.Status,
+		Remark:       fmt.Sprintf("rollback to v%d", ver.Version),
+		SourceRef:    row.SourceRef,
+	})
 }
 
 // ListParseProfiles 暴露解析档选项给前端。

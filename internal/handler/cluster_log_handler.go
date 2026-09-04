@@ -334,3 +334,93 @@ func (h *ClusterLogHandler) ApplyPipelineRepo(c *gin.Context) {
 func (h *ClusterLogHandler) ListParseProfiles(c *gin.Context) {
 	response.Success(c, gin.H{"list": h.svc.ListParseProfiles()})
 }
+
+func (h *ClusterLogHandler) ListPipelineVersions(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	pid, err := parseUintParam(c, "pipeline_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	list, err := h.svc.ListLogPipelineVersions(c.Request.Context(), projectID, pid)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
+}
+
+func (h *ClusterLogHandler) RollbackPipelineVersion(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	pid, err := parseUintParam(c, "pipeline_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	vid, err := parseUintParam(c, "version_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.RollbackLogPipelineVersion(c.Request.Context(), projectID, pid, vid, actorUserID(c))
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *ClusterLogHandler) ListSavedLogQueries(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	list, err := h.svc.SavedQueries().List(c.Request.Context(), actorUserID(c), projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": list})
+}
+
+func (h *ClusterLogHandler) CreateSavedLogQuery(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req service.LogSavedQueryUpsert
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	req.ProjectID = projectID
+	row, err := h.svc.SavedQueries().Create(c.Request.Context(), actorUserID(c), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *ClusterLogHandler) DeleteSavedLogQuery(c *gin.Context) {
+	qid, err := parseUintParam(c, "query_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.SavedQueries().Delete(c.Request.Context(), actorUserID(c), qid); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted"})
+}

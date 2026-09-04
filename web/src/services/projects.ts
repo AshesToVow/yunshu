@@ -640,6 +640,7 @@ export async function exportProjectLogs(projectId: number, params: LogSearchPara
 export interface LogHistogramBucket {
   time: string;
   count: number;
+  level_counts?: Record<string, number>;
 }
 
 export interface LogSignatureItem {
@@ -655,6 +656,9 @@ export interface LogOverviewResult {
   level_counts: Record<string, number>;
   service_name_counts?: Record<string, number>;
   host_counts?: Record<string, number>;
+  namespace_counts?: Record<string, number>;
+  pod_counts?: Record<string, number>;
+  container_counts?: Record<string, number>;
   top_error_signatures: LogSignatureItem[];
 }
 
@@ -706,6 +710,8 @@ type LogSearchParams = {
   keyword?: string;
   level?: string;
   file_path?: string;
+  extra_field?: string;
+  extra_value?: string;
   from?: string;
   to?: string;
   page?: number;

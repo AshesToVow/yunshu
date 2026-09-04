@@ -343,6 +343,8 @@ type (
 	LogPipelineApplyRequest = logplatform.LogPipelineApplyRequest
 	LogFieldsResult         = logplatform.LogFieldsResult
 	LogFieldStat            = logplatform.LogFieldStat
+	LogSavedQueryUpsert     = logplatform.LogSavedQueryUpsert
+	LogSavedQueryService    = logplatform.LogSavedQueryService
 	LogRetentionItem      = logplatform.LogRetentionItem
 	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
 	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult

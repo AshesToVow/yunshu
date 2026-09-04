@@ -47,6 +47,7 @@ func (m *module) Models() []any {
 		&model.ClusterLogAgent{},
 		&model.ClusterLogRule{},
 		&model.LogPipeline{},
+		&model.LogPipelineVersion{},
 		&model.LogPattern{},
 		&model.LogAnomaly{},
 		&model.ServiceCatalog{},

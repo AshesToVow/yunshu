@@ -7,15 +7,19 @@ import {
   applyLogPipeline,
   createLogPipeline,
   deleteLogPipeline,
+  deployLoggieCustomYAML,
   fetchLoggiePipelinesYAML,
   getLoggieStatus,
   getProjects,
   listLogParseProfiles,
   listLogPipelines,
+  listLogPipelineVersions,
+  rollbackLogPipelineVersion,
   syncLogPipelineFromCluster,
   updateLogPipeline,
   type LoggieStatusItem,
   type LogPipelineItem,
+  type LogPipelineVersionItem,
   type ProjectItem,
 } from "../services/log-platform";
 import { adjustLoggiePipeline } from "../services/projects";
@@ -53,6 +57,10 @@ export function LogPipelineRepoPage() {
   const [syncKind, setSyncKind] = useState<"k8s" | "host">("k8s");
   const [syncTargetId, setSyncTargetId] = useState<number>();
   const [syncing, setSyncing] = useState(false);
+  const [versionOpen, setVersionOpen] = useState(false);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [versions, setVersions] = useState<LogPipelineVersionItem[]>([]);
+  const [rollingBackId, setRollingBackId] = useState<number>();
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -219,6 +227,74 @@ export function LogPipelineRepoPage() {
     }
   }
 
+  async function openVersionHistory() {
+    if (!projectId || !editing) return;
+    setVersionOpen(true);
+    setVersionLoading(true);
+    try {
+      const res = await listLogPipelineVersions(projectId, editing.id);
+      setVersions(res?.list || []);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "加载版本历史失败"));
+    } finally {
+      setVersionLoading(false);
+    }
+  }
+
+  async function runRollback(versionId: number) {
+    if (!projectId || !editing) return;
+    setRollingBackId(versionId);
+    try {
+      const updated = await rollbackLogPipelineVersion(projectId, editing.id, versionId);
+      message.success(`已回滚到版本 ${updated?.version ?? ""}`);
+      setEditing(updated);
+      setYamlText(updated?.content_yml || "pipelines:\n");
+      form.setFieldsValue({
+        name: updated.name,
+        kind: updated.kind,
+        cluster_id: updated.cluster_id || undefined,
+        server_id: updated.server_id || undefined,
+        parse_profile: updated.parse_profile,
+        status: updated.status,
+        remark: updated.remark,
+      });
+      const res = await listLogPipelineVersions(projectId, editing.id);
+      setVersions(res?.list || []);
+      await load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "回滚失败"));
+    } finally {
+      setRollingBackId(undefined);
+    }
+  }
+
+  async function runDeploy(row: LogPipelineItem) {
+    if (!projectId) return;
+    try {
+      if (row.kind === "host") {
+        if (!row.server_id) {
+          message.warning("主机类型需绑定 server_id");
+          return;
+        }
+        await deployLoggieCustomYAML(projectId, {
+          server_id: row.server_id,
+          pipelines_yml: row.content_yml || "",
+        });
+        await applyLogPipeline(projectId, row.id, {});
+        message.success("已下发到主机并标记发布");
+      } else if (row.kind === "k8s") {
+        await applyLogPipeline(projectId, row.id, { apply_deploy: true });
+        message.success("已下发到集群");
+      } else {
+        message.warning("模板类型不支持下发");
+        return;
+      }
+      await load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "下发失败"));
+    }
+  }
+
   async function runAiAdjust() {
     setAiLoading(true);
     try {
@@ -290,7 +366,7 @@ export function LogPipelineRepoPage() {
       >
         <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
           管理 Loggie <Typography.Text code>pipelines.yml</Typography.Text>
-          ：支持随时编辑、根据样例日志 AI 调整解析字段，并下发到 K8s DaemonSet。主机类型保存后请到「Agent 管理」执行部署/同步。
+          ：支持随时编辑、根据样例日志 AI 调整解析字段，下发到 K8s DaemonSet 或主机 Agent，并查看/回滚版本历史。
         </Typography.Paragraph>
         <Table
           rowKey="id"
@@ -343,19 +419,8 @@ export function LogPipelineRepoPage() {
                     type="link"
                     size="small"
                     icon={<ThunderboltOutlined />}
-                    disabled={r.kind !== "k8s"}
-                    onClick={() =>
-                      void (async () => {
-                        if (!projectId) return;
-                        try {
-                          await applyLogPipeline(projectId, r.id, { apply_deploy: true });
-                          message.success("已下发到集群");
-                          await load();
-                        } catch (e) {
-                          message.error(extractApiErrorMessage(e, "下发失败"));
-                        }
-                      })()
-                    }
+                    disabled={r.kind !== "k8s" && r.kind !== "host"}
+                    onClick={() => void runDeploy(r)}
                   >
                     下发
                   </Button>
@@ -389,6 +454,9 @@ export function LogPipelineRepoPage() {
         destroyOnClose
         footer={
           <Space>
+            {editing ? (
+              <Button onClick={() => void openVersionHistory()}>版本历史</Button>
+            ) : null}
             <Button icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>
               AI 调整
             </Button>
@@ -476,6 +544,39 @@ export function LogPipelineRepoPage() {
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={`版本历史${editing ? ` #${editing.id}` : ""}`}
+        open={versionOpen}
+        onCancel={() => setVersionOpen(false)}
+        footer={null}
+        width={720}
+        destroyOnClose
+      >
+        <Table
+          rowKey="id"
+          loading={versionLoading}
+          dataSource={versions}
+          size="small"
+          pagination={false}
+          columns={[
+            { title: "版本", dataIndex: "version", width: 80 },
+            { title: "备注", dataIndex: "remark", ellipsis: true },
+            { title: "创建时间", dataIndex: "created_at", width: 180 },
+            {
+              title: "操作",
+              width: 100,
+              render: (_: unknown, v: LogPipelineVersionItem) => (
+                <Popconfirm title={`确认回滚到版本 ${v.version}？`} onConfirm={() => void runRollback(v.id)}>
+                  <Button type="link" size="small" loading={rollingBackId === v.id}>
+                    回滚
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
       </Modal>
 
       <Modal

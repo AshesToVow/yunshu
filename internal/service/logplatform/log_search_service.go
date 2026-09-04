@@ -39,6 +39,8 @@ type LogSearchQuery struct {
 	Keyword       string `form:"keyword"`
 	Level         string `form:"level"`
 	FilePath      string `form:"file_path"`
+	ExtraField    string `form:"extra_field"`
+	ExtraValue    string `form:"extra_value"`
 	From          string `form:"from"`
 	To            string `form:"to"`
 	TraceID       string `form:"trace_id"`

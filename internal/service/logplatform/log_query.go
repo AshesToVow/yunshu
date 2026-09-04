@@ -57,6 +57,12 @@ func (s *LogSearchService) prepareSearch(ctx context.Context, q LogSearchQuery) 
 	if h := strings.TrimSpace(q.Host); h != "" {
 		filters = append(filters, multiFieldTermFilter([]string{"host", "server_host", "hostname"}, h))
 	}
+	if ef := strings.TrimSpace(q.ExtraField); ef != "" {
+		if ev := strings.TrimSpace(q.ExtraValue); ev != "" {
+			candidates := []string{ef, ef + ".keyword", "fields." + ef, "fields." + ef + ".keyword"}
+			filters = append(filters, multiFieldTermFilter(candidates, ev))
+		}
+	}
 	if q.ClusterID != nil && *q.ClusterID > 0 {
 		filters = append(filters, termIDFilter("cluster_id", strconv.FormatUint(uint64(*q.ClusterID), 10)))
 	}

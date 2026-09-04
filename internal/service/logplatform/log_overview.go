@@ -11,8 +11,9 @@ import (
 
 // LogHistogramBucket 时间直方图桶。
 type LogHistogramBucket struct {
-	Time  string `json:"time"`
-	Count int64  `json:"count"`
+	Time        string           `json:"time"`
+	Count       int64            `json:"count"`
+	LevelCounts map[string]int64 `json:"level_counts,omitempty"`
 }
 
 // LogOverviewResult 日志概览（P1：直方图 + 级别 + 签名）。
@@ -22,6 +23,9 @@ type LogOverviewResult struct {
 	LevelCounts        map[string]int64     `json:"level_counts"`
 	ServiceNameCounts  map[string]int64     `json:"service_name_counts,omitempty"`
 	HostCounts         map[string]int64     `json:"host_counts,omitempty"`
+	NamespaceCounts    map[string]int64     `json:"namespace_counts,omitempty"`
+	PodCounts          map[string]int64     `json:"pod_counts,omitempty"`
+	ContainerCounts    map[string]int64     `json:"container_counts,omitempty"`
 	TopErrorSignatures []LogSignatureItem   `json:"top_error_signatures"`
 	Summary            *LogSummaryResult    `json:"summary,omitempty"`
 }
@@ -72,6 +76,9 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 		LevelCounts:       map[string]int64{},
 		ServiceNameCounts: map[string]int64{},
 		HostCounts:        map[string]int64{},
+		NamespaceCounts:   map[string]int64{},
+		PodCounts:         map[string]int64{},
+		ContainerCounts:   map[string]int64{},
 		Histogram:         []LogHistogramBucket{},
 	}
 	out.Total = parseTotalHits(raw)
@@ -82,6 +89,15 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 	}, 15)
 	out.HostCounts = s.queryTermsFacet(ctx, prep, []string{
 		"host.keyword", "host", "server_host.keyword", "server_host", "hostname.keyword", "hostname",
+	}, 15)
+	out.NamespaceCounts = s.queryTermsFacet(ctx, prep, []string{
+		"namespace.keyword", "namespace", "fields.namespace.keyword", "fields.namespace",
+	}, 15)
+	out.PodCounts = s.queryTermsFacet(ctx, prep, []string{
+		"podname.keyword", "podname", "pod.keyword", "pod", "fields.podname", "fields.pod",
+	}, 15)
+	out.ContainerCounts = s.queryTermsFacet(ctx, prep, []string{
+		"containername.keyword", "containername", "container.keyword", "container",
 	}, 15)
 
 	// 采样 ERROR/WARN 日志提取签名（复用 SummarizeLogHits）；采样失败不影响概览主体。
@@ -123,10 +139,25 @@ func overviewAggBody(query any, tsField, interval string, q LogSearchQuery, leve
 	if bounds := extendedBounds(q.From, q.To); bounds != nil {
 		dh["extended_bounds"] = bounds
 	}
+	histNode := map[string]any{
+		"date_histogram": dh,
+	}
+	// 桶内级别拆分（取第一个兼容字段，避免同请求多字段冲突）。
+	if len(levelFields) > 0 {
+		lf := strings.TrimSpace(levelFields[0])
+		if lf != "" {
+			histNode["aggs"] = map[string]any{
+				"by_level": map[string]any{
+					"terms": map[string]any{
+						"field": lf,
+						"size":  10,
+					},
+				},
+			}
+		}
+	}
 	aggs := map[string]any{
-		"log_histogram": map[string]any{
-			"date_histogram": dh,
-		},
+		"log_histogram": histNode,
 	}
 	for i, field := range levelFields {
 		field = strings.TrimSpace(field)
@@ -218,7 +249,31 @@ func parseDateHistogram(raw map[string]any, aggName string) []LogHistogramBucket
 		if v, ok := bm["doc_count"].(float64); ok {
 			cnt = int64(v)
 		}
-		out = append(out, LogHistogramBucket{Time: key, Count: cnt})
+		levels := map[string]int64{}
+		if byLevel, ok := bm["by_level"].(map[string]any); ok {
+			if lbs, ok := byLevel["buckets"].([]any); ok {
+				for _, lb := range lbs {
+					lm, ok := lb.(map[string]any)
+					if !ok {
+						continue
+					}
+					lk := termsBucketKey(lm)
+					if lk == "" {
+						continue
+					}
+					lc := int64(0)
+					if v, ok := lm["doc_count"].(float64); ok {
+						lc = int64(v)
+					}
+					levels[strings.ToUpper(lk)] = lc
+				}
+			}
+		}
+		item := LogHistogramBucket{Time: key, Count: cnt}
+		if len(levels) > 0 {
+			item.LevelCounts = levels
+		}
+		out = append(out, item)
 	}
 	return out
 }

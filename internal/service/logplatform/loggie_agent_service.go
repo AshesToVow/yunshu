@@ -381,17 +381,47 @@ func (s *LoggieAgentService) DeployConfig(ctx context.Context, projectID uint, r
 		}
 	}
 	stdout, stderr, err := s.deployBundleOverSSH(ctx, req.ServerID, bundle)
+	return finishDeployResult(bundle, len(sources), stdout, stderr, err), nil
+}
+
+// DeployCustomPipelinesYAML 用仓库中的 pipelines.yml 覆盖下发到主机（保留其余 bootstrap 文件）。
+func (s *LoggieAgentService) DeployCustomPipelinesYAML(ctx context.Context, projectID, serverID uint, pipelinesYAML string) (*LoggieDeployResult, error) {
+	if projectID == 0 || serverID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("project_id 与 server_id 必填")
+	}
+	yml := strings.TrimSpace(pipelinesYAML)
+	if yml == "" || !strings.Contains(yml, "pipelines:") {
+		return nil, constants.ErrBadRequestWithMsg("pipelines_yml 无效")
+	}
+	agent, err := s.repo.GetByProjectAndServer(ctx, projectID, serverID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrBadRequestWithMsg("请先执行引导登记 Agent")
+		}
+		return nil, bizerrors.Pass(ctx, "loggie", "DeployCustomPipelinesYAML", err)
+	}
+	stored := parseStoredBootstrapConfig(agent.BootstrapConfig)
+	bundle, sources, err := s.bundleFromStored(ctx, projectID, serverID, agent, stored, true)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "loggie", "DeployCustomPipelinesYAML", err)
+	}
+	bundle.PipelinesOnlyYAML = yml
+	stdout, stderr, err := s.deployBundleOverSSH(ctx, serverID, bundle)
+	return finishDeployResult(bundle, len(sources), stdout, stderr, err), nil
+}
+
+func finishDeployResult(bundle LoggiePipelineBundle, sourceCount int, stdout, stderr string, err error) *LoggieDeployResult {
 	result := &LoggieDeployResult{
 		Success:       err == nil,
 		PipelineCount: bundle.PipelineCount,
-		SourceCount:   len(sources),
+		SourceCount:   sourceCount,
 		Stdout:        truncateDeployOutput(stdout, 2048),
 		Stderr:        truncateDeployOutput(stderr, 2048),
 		DeployedAt:    formatDeployTime(time.Now()),
 	}
 	if err != nil {
 		result.Message = truncateDeployOutput(err.Error(), 512)
-		return result, nil
+		return result
 	}
 	result.Message = "配置已下发"
 	out := strings.TrimSpace(stdout)
@@ -400,7 +430,7 @@ func (s *LoggieAgentService) DeployConfig(ctx context.Context, projectID uint, r
 	} else {
 		result.Message = "配置已下发并热更/重启 Loggie"
 	}
-	return result, nil
+	return result
 }
 
 func (s *LoggieAgentService) StartLoggie(ctx context.Context, projectID uint, req LoggieDeployRequest) (*LoggieDeployResult, error) {

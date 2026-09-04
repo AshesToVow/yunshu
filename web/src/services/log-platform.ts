@@ -567,4 +567,59 @@ export function listLogParseProfiles(projectId: number) {
   );
 }
 
+export interface LogPipelineVersionItem {
+  id: number;
+  pipeline_id: number;
+  version: number;
+  content_yml?: string;
+  remark?: string;
+  created_by?: number;
+  created_at?: string;
+}
+
+export function listLogPipelineVersions(projectId: number, pipelineId: number) {
+  return getData<{ list: LogPipelineVersionItem[] }>(
+    http.get(`/projects/${projectId}/log-pipelines/${pipelineId}/versions`),
+  );
+}
+
+export function rollbackLogPipelineVersion(projectId: number, pipelineId: number, versionId: number) {
+  return getData<LogPipelineItem>(
+    http.post(`/projects/${projectId}/log-pipelines/${pipelineId}/versions/${versionId}/rollback`, {}),
+  );
+}
+
+export function deployLoggieCustomYAML(
+  projectId: number,
+  payload: { server_id: number; pipelines_yml: string },
+) {
+  return getData<{ success: boolean; message?: string }>(
+    http.post(`/projects/${projectId}/loggie/deploy-yaml`, payload),
+  );
+}
+
+export interface LogSavedQueryItem {
+  id: number;
+  name: string;
+  query: string;
+  project_id: number;
+  kind: string;
+  updated_at?: string;
+}
+
+export function listLogSavedQueries(projectId: number) {
+  return getData<{ list: LogSavedQueryItem[] }>(http.get(`/projects/${projectId}/log-saved-queries`));
+}
+
+export function createLogSavedQuery(
+  projectId: number,
+  payload: { name: string; query: Record<string, unknown>; remark?: string },
+) {
+  return getData<LogSavedQueryItem>(http.post(`/projects/${projectId}/log-saved-queries`, payload));
+}
+
+export function deleteLogSavedQuery(projectId: number, queryId: number) {
+  return getData<{ message: string }>(http.delete(`/projects/${projectId}/log-saved-queries/${queryId}`));
+}
+
 export { getProjects };
