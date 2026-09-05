@@ -53,6 +53,7 @@ import {
   listInspectRuns,
   migrateInspectReportsToMinio,
   previewInspectReportTemplate,
+  promoteInspectItemToAlert,
   resendInspectEmail,
   resetInspectItems,
   startInspectRun,
@@ -257,6 +258,16 @@ export function ProjectInspectPage() {
           r.project_id === 0 ? <Tag>全局模板</Tag> : <Tag color="blue">项目定制</Tag>,
       },
       {
+        title: "持续告警",
+        width: 100,
+        render: (_, r) =>
+          r.linked_rule_id ? (
+            <Tag color="purple">规则 #{r.linked_rule_id}</Tag>
+          ) : (
+            <Typography.Text type="secondary">—</Typography.Text>
+          ),
+      },
+      {
         title: "阈值",
         width: 150,
         render: (_, r) => (
@@ -313,12 +324,12 @@ export function ProjectInspectPage() {
       },
       {
         title: "操作",
-        width: 130,
+        width: 210,
         render: (_, r) =>
           r.project_id === 0 ? (
             <Typography.Text type="secondary">只读</Typography.Text>
           ) : (
-            <Space>
+            <Space wrap>
               <Button
                 type="link"
                 size="small"
@@ -330,6 +341,32 @@ export function ProjectInspectPage() {
               >
                 编辑
               </Button>
+              <Popconfirm
+                title={
+                  r.linked_rule_id
+                    ? "同步更新已关联的持续告警规则？"
+                    : "转为持续告警规则（走规则中心评测与通知）？"
+                }
+                onConfirm={async () => {
+                  try {
+                    const rule = await promoteInspectItemToAlert(projectId, r.id, {
+                      datasource_id: plan?.datasource_id || undefined,
+                      for_seconds: 300,
+                      severity: "warning",
+                    });
+                    message.success(
+                      r.linked_rule_id ? `已更新规则 #${rule.id}` : `已创建规则 #${rule.id}`,
+                    );
+                    void refresh(projectId);
+                  } catch (e) {
+                    message.error(extractApiErrorMessage(e, "转换失败"));
+                  }
+                }}
+              >
+                <Button type="link" size="small">
+                  {r.linked_rule_id ? "同步告警" : "转持续告警"}
+                </Button>
+              </Popconfirm>
               <Popconfirm
                 title="删除该巡检项？"
                 onConfirm={async () => {
@@ -350,7 +387,7 @@ export function ProjectInspectPage() {
           ),
       },
     ],
-    [itemForm, projectId, refresh],
+    [itemForm, plan?.datasource_id, projectId, refresh],
   );
 
   const runColumns: ColumnsType<InspectRun> = [

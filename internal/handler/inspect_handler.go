@@ -163,6 +163,22 @@ func (h *InspectHandler) ResetItems(c *gin.Context) {
 	response.Success(c, gin.H{"created": n})
 }
 
+func (h *InspectHandler) PromoteItemAlert(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	itemID, err := parseUintParam(c, "itemId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req inspectsvc.PromoteAlertRequest) (any, error) {
+		return h.svc.PromoteItemToAlert(ctx, projectID, itemID, req)
+	})
+}
+
 func (h *InspectHandler) ListRuns(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {

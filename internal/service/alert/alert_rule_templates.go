@@ -279,5 +279,15 @@ func (s *AlertMonitorRuleService) CreateFromTemplate(ctx context.Context, req Cr
 		AnnotationsJSON:     string(annJSON),
 		Enabled:             &enabled,
 	}
-	return s.Create(ctx, upsert)
+	row, err := s.Create(ctx, upsert)
+	if err != nil {
+		return nil, err
+	}
+	if row != nil && row.ID > 0 {
+		row.Origin = model.AlertRuleOriginTemplate
+		if saveErr := s.ruleRepo.Save(ctx, row); saveErr != nil {
+			return row, nil // 规则已创建，来源标记失败不阻断
+		}
+	}
+	return row, nil
 }

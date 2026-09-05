@@ -120,6 +120,15 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	if ds.ProjectID != plan.ProjectID {
 		return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("数据源不属于当前项目"))
 	}
+	healthNote := ""
+	if health, herr := s.dsSvc.CheckHealth(ctx, run.DatasourceID); herr == nil && health != nil {
+		switch health.Status {
+		case model.DatasourceHealthDown:
+			return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("数据源不可用，已中止巡检："+health.Message))
+		case model.DatasourceHealthDegraded:
+			healthNote = "采集健康降级：" + health.Message + "。"
+		}
+	}
 
 	storInfo := resolveReportStorageInfo(dbCtx, s.db, s.reportDir)
 	if storInfo.RequireMinIO && !storInfo.MinioReady {
@@ -140,6 +149,9 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 		operator = "系统定时"
 	}
 	data := buildReportData(projectName, ds.Name, operator, plan.ReportListMode, collected)
+	if healthNote != "" {
+		data.Summary = healthNote + data.Summary
+	}
 
 	// 风险台账期次对比：回填「新增/持续/已恢复」与上期的责任人、整改期限，
 	// 再落库作为下一期的比对基线。落库失败只告警，不阻断报告生成。

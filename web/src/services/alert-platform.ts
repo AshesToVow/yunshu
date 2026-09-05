@@ -16,6 +16,12 @@ export interface AlertDatasourceItem {
   skip_tls_verify: boolean;
   enabled: boolean;
   remark?: string;
+  last_health_status?: string;
+  last_health_at?: string | null;
+  last_health_latency_ms?: number;
+  last_health_error?: string;
+  last_up_total?: number;
+  last_up_down?: number;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +48,8 @@ export interface AlertMonitorRuleItem {
   datasource_name?: string;
   name: string;
   rule_kind?: string;
+  origin?: string;
+  origin_inspect_item_id?: number;
   expr: string;
   for_seconds: number;
   eval_interval_seconds: number;
@@ -185,9 +193,35 @@ export interface DatasourcePingResult {
   latency_ms: number;
 }
 
-/** Prometheus 连通性检测（GET instant query vector(1)，与后端存储的鉴权/TLS 一致） */
+export interface DatasourceHealthResult {
+  datasource_id: number;
+  status: string;
+  message: string;
+  latency_ms: number;
+  up_total: number;
+  up_down: number;
+  checked_at?: string;
+  stale_seconds?: number;
+}
+
+/** Prometheus 连通性检测（会写回健康缓存） */
 export function pingAlertDatasource(id: number) {
   return getData<DatasourcePingResult>(http.get(`/alerts/datasources/${id}/ping`));
+}
+
+/** 即时健康探测（连通 + up 覆盖） */
+export function checkAlertDatasourceHealth(id: number) {
+  return getData<DatasourceHealthResult>(http.post(`/alerts/datasources/${id}/health-check`));
+}
+
+export function getAlertDatasourceHealth(id: number) {
+  return getData<DatasourceHealthResult>(http.get(`/alerts/datasources/${id}/health`));
+}
+
+export function listAlertDatasourceHealth(projectId: number) {
+  return getData<{ list?: DatasourceHealthResult[]; items?: DatasourceHealthResult[] }>(
+    http.get("/alerts/datasources/health", { params: { project_id: projectId } }),
+  );
 }
 
 /** GET Prometheus /api/v1/alerts，返回原始 JSON（含 data.alerts）。 */

@@ -1110,6 +1110,16 @@ export function useAlertMonitorRulesState(params: {
       },
     },
     {
+      title: "来源",
+      dataIndex: "origin",
+      width: 88,
+      render: (v: string) => {
+        if (v === "inspect") return <Tag color="purple">巡检</Tag>;
+        if (v === "template") return <Tag color="blue">模板</Tag>;
+        return <Tag>手工</Tag>;
+      },
+    },
+    {
       title: "数据源",
       key: "ds",
       width: 200,

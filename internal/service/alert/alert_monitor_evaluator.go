@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
+
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/repository"
 
@@ -227,6 +229,14 @@ func (s *AlertService) evaluateOneMonitorRule(ctx context.Context, rule *model.A
 		return
 	}
 	if !ds.Enabled || !isPromCompatibleDatasourceType(ds.Type) {
+		return
+	}
+	if IsDatasourceHealthBlocking(ds, time.Now()) {
+		slog.Default().With(
+			"component", "alert.monitor_eval",
+			"rule_id", rule.ID,
+			"datasource_id", ds.ID,
+		).Info("skip evaluate: datasource health down")
 		return
 	}
 	cli := &promapi.Client{

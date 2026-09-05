@@ -440,6 +440,8 @@ type (
 	AlertInhibitionRuleUpsertRequest = alert.AlertInhibitionRuleUpsertRequest
 	AlertDatasourceListQuery       = alert.AlertDatasourceListQuery
 	AlertDatasourceUpsertRequest     = alert.AlertDatasourceUpsertRequest
+	DatasourceHealthResult           = alert.DatasourceHealthResult
+	DatasourcePingResult             = alert.DatasourcePingResult
 	AlertConsulEndpointListQuery     = alert.AlertConsulEndpointListQuery
 	AlertConsulEndpointUpsertRequest = alert.AlertConsulEndpointUpsertRequest
 	AlertMonitorObjectListQuery      = alert.AlertMonitorObjectListQuery

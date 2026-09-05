@@ -46,6 +46,9 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	alerts.GET("/datasources", d.alertPlatformHandler.ListDatasources)
 	alerts.POST("/datasources", d.alertPlatformHandler.CreateDatasource)
+	alerts.GET("/datasources/health", d.alertPlatformHandler.ListDatasourceHealth)
+	alerts.GET("/datasources/:id/health", d.alertPlatformHandler.GetDatasourceHealth)
+	alerts.POST("/datasources/:id/health-check", d.alertPlatformHandler.CheckDatasourceHealth)
 	alerts.GET("/datasources/:id/ping", d.alertPlatformHandler.PingDatasource)
 	alerts.GET("/datasources/:id/prometheus-alerts", d.alertPlatformHandler.PromActiveAlerts)
 	alerts.POST("/datasources/:id/query", d.alertPlatformHandler.PromQuery)

@@ -26,6 +26,9 @@ type AlertMonitorRule struct {
 	AnnotationsJSON string `json:"annotations_json" gorm:"type:text;comment:附加 annotations JSON"`
 	Enabled         bool   `json:"enabled" gorm:"not null;default:true;index;index:idx_alert_rule_eval,priority:2;comment:是否启用"`
 
+	Origin               string `json:"origin" gorm:"size:16;not null;default:manual;index;comment:manual|inspect|template"`
+	OriginInspectItemID  uint   `json:"origin_inspect_item_id" gorm:"not null;default:0;index;comment:来源巡检项ID"`
+
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
@@ -35,6 +38,10 @@ const (
 	AlertRuleKindPromQL = "promql"
 	AlertRuleKindLog    = "log"
 	AlertRuleKindSLO    = "slo"
+
+	AlertRuleOriginManual   = "manual"
+	AlertRuleOriginInspect  = "inspect"
+	AlertRuleOriginTemplate = "template"
 )
 
 func (AlertMonitorRule) TableName() string {
