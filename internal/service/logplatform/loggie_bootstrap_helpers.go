@@ -108,6 +108,7 @@ func parseStoredBootstrapConfig(raw string) loggieStoredBootstrapConfig {
 	if strings.TrimSpace(raw) == "" {
 		stored.MonitorPort = 9196
 		stored.DeployDir = defaultLoggieDeployDir
+		stored.AutoFromLogSources = true
 		return stored
 	}
 	_ = json.Unmarshal([]byte(raw), &stored)
@@ -115,6 +116,10 @@ func parseStoredBootstrapConfig(raw string) loggieStoredBootstrapConfig {
 		stored.MonitorPort = 9196
 	}
 	stored.DeployDir = normalizeDeployDir(stored.DeployDir)
+	// 历史配置缺省字段时 Go bool 为 false；缺省应按「跟随日志源」处理
+	if !strings.Contains(raw, "auto_from_log_sources") {
+		stored.AutoFromLogSources = true
+	}
 	return stored
 }
 
@@ -177,7 +182,15 @@ func (s *LoggieAgentService) bundleFromStored(
 	refreshFromDB bool,
 ) (LoggiePipelineBundle, []loggieBootstrapSource, error) {
 	sources := stored.Sources
-	if refreshFromDB || (stored.AutoFromLogSources && len(sources) == 0) {
+	if refreshFromDB {
+		dbSources, err := s.loadBootstrapSourcesFromDB(ctx, projectID, serverID)
+		if err != nil {
+			return LoggiePipelineBundle{}, nil, err
+		}
+		// 强制按本机日志源刷新：即使为空也不回退到缓存（避免串机）
+		sources = dbSources
+		stored.Sources = sources
+	} else if stored.AutoFromLogSources && len(sources) == 0 {
 		dbSources, err := s.loadBootstrapSourcesFromDB(ctx, projectID, serverID)
 		if err != nil {
 			return LoggiePipelineBundle{}, nil, err

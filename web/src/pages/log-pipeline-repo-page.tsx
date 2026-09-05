@@ -184,7 +184,8 @@ export function LogPipelineRepoPage() {
     if (kind === "k8s") {
       setSyncTargetId(clusters[0]?.id);
     } else {
-      setSyncTargetId(agents[0]?.server_id);
+      const registered = agents.filter((a) => a.registered && a.server_id);
+      setSyncTargetId(registered[0]?.server_id ?? agents.find((a) => a.server_id)?.server_id);
     }
     setSyncOpen(true);
   }
@@ -202,7 +203,11 @@ export function LogPipelineRepoPage() {
       } else {
         const yml = await fetchLoggiePipelinesYAML(projectId, syncTargetId);
         const name = `host-server-${syncTargetId}`;
-        const existing = rows.find((r) => r.kind === "host" && r.server_id === syncTargetId && r.name === name);
+        // 按 server_id 定位；若名称被误绑到其它 server，也回收同名条目并纠正 server_id
+        let existing = rows.find((r) => r.kind === "host" && Number(r.server_id) === Number(syncTargetId));
+        if (!existing) {
+          existing = rows.find((r) => r.kind === "host" && r.name === name);
+        }
         const payload = {
           name,
           kind: "host" as const,
@@ -602,7 +607,7 @@ export function LogPipelineRepoPage() {
             value={syncTargetId}
             onChange={setSyncTargetId}
             options={agents
-              .filter((a) => a.server_id)
+              .filter((a) => a.registered && a.server_id)
               .map((a) => ({
                 value: a.server_id,
                 label: `${a.server_name || "server"} (${a.server_host || a.server_id})`,

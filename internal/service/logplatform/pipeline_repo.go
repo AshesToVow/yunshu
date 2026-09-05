@@ -309,8 +309,6 @@ func (s *ClusterLogService) SaveHostPipelineSnapshot(ctx context.Context, projec
 	if strings.TrimSpace(name) == "" {
 		name = fmt.Sprintf("host-server-%d", serverID)
 	}
-	var existing model.LogPipeline
-	err := s.db.WithContext(ctx).Where("project_id = ? AND kind = ? AND server_id = ? AND name = ?", projectID, "host", serverID, name).First(&existing).Error
 	req := LogPipelineUpsert{
 		Name:        name,
 		Kind:        "host",
@@ -319,6 +317,17 @@ func (s *ClusterLogService) SaveHostPipelineSnapshot(ctx context.Context, projec
 		Status:      "draft",
 		SourceRef:   fmt.Sprintf("server:%d", serverID),
 		Remark:      remark,
+	}
+	// 优先按 server_id 定位；再按名称回收误绑到其它 server 的条目
+	var existing model.LogPipeline
+	err := s.db.WithContext(ctx).
+		Where("project_id = ? AND kind = ? AND server_id = ?", projectID, "host", serverID).
+		Order("id ASC").
+		First(&existing).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = s.db.WithContext(ctx).
+			Where("project_id = ? AND kind = ? AND name = ?", projectID, "host", name).
+			First(&existing).Error
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return s.UpsertLogPipeline(ctx, projectID, 0, userID, req)

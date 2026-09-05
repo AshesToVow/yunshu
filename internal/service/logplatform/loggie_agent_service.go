@@ -350,9 +350,18 @@ func (s *LoggieAgentService) GeneratePipelineBundle(ctx context.Context, project
 		return nil, bizerrors.Pass(ctx, "loggie", "GeneratePipelineBundle", err)
 	}
 	stored := parseStoredBootstrapConfig(agent.BootstrapConfig)
-	bundle, _, err := s.bundleFromStored(ctx, projectID, serverID, agent, stored, stored.AutoFromLogSources)
+	// 下载/同步必须按该 server 的日志源现算，禁止复用 Bootstrap 缓存（否则会出现 A 机内容变成 B 机）
+	bundle, sources, err := s.bundleFromStored(ctx, projectID, serverID, agent, stored, true)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "loggie", "GeneratePipelineBundle", err)
+	}
+	if len(sources) > 0 {
+		stored.Sources = sources
+		stored.AutoFromLogSources = true
+		if raw, mErr := json.Marshal(stored); mErr == nil {
+			agent.BootstrapConfig = string(raw)
+			_ = s.repo.Save(ctx, agent)
+		}
 	}
 	return &bundle, nil
 }
