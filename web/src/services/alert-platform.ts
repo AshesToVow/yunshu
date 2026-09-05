@@ -438,6 +438,7 @@ export function createAlertMonitorRuleFromTemplate(payload: {
   datasource_id?: number;
   project_id?: number;
   name?: string;
+  severity?: string;
   params?: Record<string, string>;
   enabled?: boolean;
 }) {

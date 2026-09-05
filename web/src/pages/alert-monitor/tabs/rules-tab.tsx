@@ -79,6 +79,7 @@ export function RulesTab() {
     form.setFieldsValue({
       datasource_id: selected.group === "log" ? undefined : datasources[0]?.id,
       name: selected.name,
+      severity: selected.severity || "warning",
       ...defaults,
     });
   }, [selected, datasources, form]);
@@ -95,11 +96,16 @@ export function RulesTab() {
         }
       }
       const isLog = selected.group === "log" || selected.labels?.rule_kind === "log";
+      if (isLog && !ctx.projectContextId) {
+        message.warning("请先选择顶栏项目上下文，再创建日志告警规则");
+        return;
+      }
       await createAlertMonitorRuleFromTemplate({
         template_id: selected.id,
         datasource_id: isLog ? undefined : Number(v.datasource_id),
         project_id: ctx.projectContextId || undefined,
         name: v.name,
+        severity: v.severity,
         params,
       });
       message.success(
@@ -337,6 +343,15 @@ export function RulesTab() {
             <Form.Item name="name" label="规则名称">
               <Input />
             </Form.Item>
+            <Form.Item name="severity" label="告警级别" rules={[{ required: true, message: "请选择级别" }]}>
+              <Select
+                options={[
+                  { value: "critical", label: "critical" },
+                  { value: "warning", label: "warning" },
+                  { value: "info", label: "info" },
+                ]}
+              />
+            </Form.Item>
             {Object.keys(selected.default_params || {}).map((key) => (
               <Form.Item key={key} name={key} label={key}>
                 <InputNumber style={{ width: "100%" }} stringMode />
@@ -345,7 +360,9 @@ export function RulesTab() {
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {selected.group === "slo"
                 ? "SLO 模板为多窗口燃尽 PromQL，请按实际 SLI 指标修改 job/error_metric/total_metric/budget。"
-                : `将写入 labels.category=${selected.labels?.category || selected.group}，可在订阅树按 category 匹配路由。`}
+                : selected.group === "log"
+                  ? "创建后可在规则列表中配置处理人、值班；触发后走统一告警入站与订阅树通知。"
+                  : `将写入 labels.category=${selected.labels?.category || selected.group}，可在订阅树按 category 匹配路由。`}
             </Typography.Text>
           </Form>
         ) : null}

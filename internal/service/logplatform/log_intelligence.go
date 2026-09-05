@@ -175,8 +175,9 @@ func (s *LogIntelligenceService) UpdateAnomaly(ctx context.Context, projectID, a
 	}
 	if req.AssigneeID != nil {
 		row.AssigneeID = *req.AssigneeID
-	}
-	if name := strings.TrimSpace(req.AssigneeName); name != "" {
+		// 与 assignee_id 一并更新姓名；清空指派时 id=0 且 name 为空
+		row.AssigneeName = strings.TrimSpace(req.AssigneeName)
+	} else if name := strings.TrimSpace(req.AssigneeName); name != "" {
 		row.AssigneeName = name
 	}
 	if req.MuteMinutes != nil && *req.MuteMinutes > 0 {

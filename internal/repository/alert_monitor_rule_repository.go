@@ -23,8 +23,12 @@ func (r *AlertMonitorRuleRepository) List(ctx context.Context, f AlertMonitorRul
 		tx = tx.Where("datasource_id = ?", *f.DatasourceID)
 	}
 	if f.ProjectID != nil && *f.ProjectID > 0 {
-		tx = tx.Where("datasource_id IN (?)",
-			r.db.WithContext(ctx).Model(&model.AlertDatasource{}).Select("id").Where("project_id = ?", *f.ProjectID),
+		pid := *f.ProjectID
+		// 日志规则无 datasource，靠 project_id；PromQL 规则靠数据源归属项目。
+		tx = tx.Where(
+			"(project_id = ?) OR (datasource_id IN (?))",
+			pid,
+			r.db.WithContext(ctx).Model(&model.AlertDatasource{}).Select("id").Where("project_id = ? AND deleted_at IS NULL", pid),
 		)
 	}
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {

@@ -48,6 +48,7 @@ import {
   getProjectServers,
   getProjectServices,
   getProjects,
+  listProjectMembers,
   searchProjectLogs,
   updateProjectLogAnomaly,
   type LogAnalyzeResult,
@@ -61,6 +62,7 @@ import {
   type LogSourceItem,
   type LogTopNResult,
   type ProjectItem,
+  type ProjectMemberItem,
   type ServerItem,
   type ServiceItem,
 } from "../services/projects";
@@ -156,6 +158,11 @@ export function ProjectLogsPage() {
   const [topnDim, setTopnDim] = useState("service");
   const [topn, setTopn] = useState<LogTopNResult | null>(null);
   const [topnLoading, setTopnLoading] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignAnomaly, setAssignAnomaly] = useState<LogAnomalyItem | null>(null);
+  const [assignMembers, setAssignMembers] = useState<ProjectMemberItem[]>([]);
+  const [assignUserId, setAssignUserId] = useState<number | undefined>(undefined);
   const [dropForm] = Form.useForm<{ name: string; field: string; operator: string; value: string; enabled: boolean }>();
 
   const [form] = Form.useForm<SearchForm>();
@@ -1364,12 +1371,17 @@ export function ProjectLogsPage() {
                                 type="link"
                                 size="small"
                                 onClick={() => {
-                                  const name = window.prompt("负责人名称", row.assignee_name || "");
-                                  if (name == null) return;
-                                  void updateProjectLogAnomaly(pid, row.id, { assignee_name: name.trim() }).then(() => {
-                                    message.success("已更新负责人");
-                                    refresh();
-                                  });
+                                  void (async () => {
+                                    try {
+                                      const res = await listProjectMembers(pid);
+                                      setAssignMembers(res?.list ?? []);
+                                      setAssignAnomaly(row);
+                                      setAssignUserId(row.assignee_id || undefined);
+                                      setAssignOpen(true);
+                                    } catch (e: unknown) {
+                                      message.error(extractApiErrorMessage(e, "加载项目成员失败"));
+                                    }
+                                  })();
                                 }}
                               >
                                 指派
@@ -1411,6 +1423,61 @@ export function ProjectLogsPage() {
           />
         </main>
       </div>
+
+      <Modal
+        title="指派负责人"
+        open={assignOpen}
+        confirmLoading={assignLoading}
+        okText="确定"
+        cancelText="取消"
+        destroyOnClose
+        onCancel={() => {
+          setAssignOpen(false);
+          setAssignAnomaly(null);
+        }}
+        onOk={() => {
+          void (async () => {
+            if (!assignAnomaly) return;
+            const pid = form.getFieldValue("project_id") as number;
+            const member = assignMembers.find((m) => m.user_id === assignUserId);
+            setAssignLoading(true);
+            try {
+              await updateProjectLogAnomaly(pid, assignAnomaly.id, {
+                assignee_id: assignUserId ?? 0,
+                assignee_name: member
+                  ? member.nickname || member.username
+                  : "",
+              });
+              message.success(assignUserId ? "已指派" : "已清空负责人");
+              setAssignOpen(false);
+              setAssignAnomaly(null);
+              void loadOverviewAndIntel(form.getFieldsValue());
+            } catch (e: unknown) {
+              message.error(extractApiErrorMessage(e, "指派失败"));
+            } finally {
+              setAssignLoading(false);
+            }
+          })();
+        }}
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          从当前项目成员中选择负责人（需先在「项目成员」中添加）。
+        </Typography.Paragraph>
+        <Select
+          allowClear
+          showSearch
+          placeholder="选择项目成员"
+          style={{ width: "100%" }}
+          value={assignUserId}
+          onChange={(v) => setAssignUserId(v)}
+          optionFilterProp="label"
+          options={assignMembers.map((m) => ({
+            value: m.user_id,
+            label: `${m.nickname || m.username}${m.role ? ` (${m.role})` : ""}`,
+          }))}
+          notFoundContent={assignMembers.length ? "无匹配成员" : "暂无项目成员"}
+        />
+      </Modal>
 
       <Drawer title="AI 日志分析" width={560} open={aiOpen} onClose={() => setAiOpen(false)} destroyOnClose>
         {aiLoading ? (

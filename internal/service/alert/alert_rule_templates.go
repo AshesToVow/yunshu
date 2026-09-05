@@ -32,6 +32,7 @@ type CreateFromTemplateRequest struct {
 	DatasourceID uint              `json:"datasource_id"`
 	ProjectID    *uint             `json:"project_id"`
 	Name         string            `json:"name"`
+	Severity     string            `json:"severity"` // 可选覆盖模板默认级别
 	Params       map[string]string `json:"params"`
 	Enabled      *bool             `json:"enabled"`
 }
@@ -265,6 +266,13 @@ func (s *AlertMonitorRuleService) CreateFromTemplate(ctx context.Context, req Cr
 	if v := strings.TrimSpace(labels["rule_kind"]); v != "" {
 		kind = normalizeRuleKind(v)
 	}
+	sev := strings.TrimSpace(tpl.Severity)
+	if v := strings.TrimSpace(req.Severity); v != "" {
+		sev = v
+	}
+	if sev == "" {
+		sev = "warning"
+	}
 	upsert := AlertMonitorRuleUpsertRequest{
 		DatasourceID:        req.DatasourceID,
 		ProjectID:           req.ProjectID,
@@ -273,7 +281,7 @@ func (s *AlertMonitorRuleService) CreateFromTemplate(ctx context.Context, req Cr
 		Expr:                expr,
 		ForSeconds:          tpl.ForSeconds,
 		EvalIntervalSeconds: tpl.EvalIntervalSec,
-		Severity:            tpl.Severity,
+		Severity:            sev,
 		ThresholdUnit:       tpl.ThresholdUnit,
 		LabelsJSON:          string(labelsJSON),
 		AnnotationsJSON:     string(annJSON),
