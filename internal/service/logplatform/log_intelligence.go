@@ -330,12 +330,18 @@ func RunIntelligenceWorker(ctx context.Context, svc *LogIntelligenceService) {
 		return
 	}
 	spec := "*/15 * * * *"
-	slog.Default().With("component", "logintel").Info("Started log intelligence worker", "cron", spec)
-	cronutil.RunWorker(ctx, spec, func() {
+	log := slog.Default().With("component", "logintel")
+	run := func() {
 		if err := svc.runCycle(ctx); err != nil {
-			slog.Default().With("component", "logintel").Warn("Log intelligence cycle failed", "error", err)
+			log.Warn("Log intelligence cycle failed", "error", err)
+			return
 		}
-	}, spec)
+		log.Info("Log intelligence cycle completed")
+	}
+	// 启动立即跑一轮，避免只等到下一个 :00/:15/:30/:45
+	run()
+	log.Info("Started log intelligence worker", "cron", spec)
+	cronutil.RunWorker(ctx, spec, run, "0 */15 * * * *")
 }
 
 func (s *LogIntelligenceService) runCycle(ctx context.Context) error {
