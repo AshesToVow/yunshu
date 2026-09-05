@@ -67,11 +67,12 @@ func ListParseProfileOptions() []ParseProfileOption {
 
 func profileSyslog() pipelineParseProfile {
 	return pipelineParseProfile{
-		name:                "syslog",
-		multilinePattern:    `^\w{3}\s+\d{1,2}\s+`,
-		regexPattern:        `^(?P<ts>\w+\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<host>\S+)\s+(?P<message>.*)$`,
-		timestampFromLayout: "Jan _2 15:04:05",
-		timestampLocation:   "Local",
+		name:             "syslog",
+		multilinePattern: `^\w{3}\s+\d{1,2}\s+`,
+		regexPattern:     `^(?P<ts>\w+\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<host>\S+)\s+(?P<message>.*)$`,
+		// 传统 syslog 无年份：timestamp("Jan _2 15:04:05") 会得到 year=0，再 move 覆盖采集 @timestamp，
+		// 检索按时间窗过滤时永远查不到。保留 schema 写入的采集时间；ts 仅作原文展示。
+		timestampFromLayout: "",
 		maxLines:            200,
 	}
 }

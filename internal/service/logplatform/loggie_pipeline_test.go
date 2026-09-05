@@ -84,4 +84,8 @@ func TestBuildPipelineBundle_SyslogProfile(t *testing.T) {
 	if !strings.Contains(yaml, "(?P<host>") {
 		t.Fatal("expected syslog host capture group")
 	}
+	// 无年份 syslog 不得用 timestamp(ts) 覆盖采集时间
+	if strings.Contains(yaml, `fromLayout: "Jan _2 15:04:05"`) {
+		t.Fatal("syslog must not parse year-less timestamp into @timestamp")
+	}
 }
