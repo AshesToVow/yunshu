@@ -1095,7 +1095,10 @@ export function useAlertMonitorRulesState(params: {
         if (String(v || "").trim()) return v;
         const ds = dsList.find((d) => d.id === r.datasource_id);
         if (String(ds?.project_name || "").trim()) return String(ds?.project_name);
-        return r.project_id ? String(r.project_id) : "—";
+        // 日志规则无数据源，按 project_id 从项目列表解析名称（勿直接展示 ID）
+        const p = projects.find((it) => it.id === r.project_id);
+        if (p?.name) return p.name;
+        return r.project_id ? `项目 ${r.project_id}` : "—";
       },
     },
     { title: "名称", dataIndex: "name", width: 160 },

@@ -335,7 +335,7 @@ export function RulesTab() {
                 <Select
                   options={datasources.map((d: AlertDatasourceItem) => ({
                     value: d.id,
-                    label: `${d.name}${d.project_id ? ` (项目 ${d.project_id})` : ""}`,
+                    label: d.project_name ? `${d.project_name} / ${d.name}` : d.name,
                   }))}
                 />
               </Form.Item>

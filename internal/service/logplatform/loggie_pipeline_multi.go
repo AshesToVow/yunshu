@@ -39,16 +39,22 @@ func logSourceToGlobPath(src model.ServiceLogSource) string {
 	if src.IncludeRegex != nil {
 		inc = strings.TrimSpace(*src.IncludeRegex)
 	}
-	if inc != "" && !strings.Contains(path, "*") {
-		if strings.HasSuffix(path, "/") {
-			return path + inc
+	// 已含通配：用户显式 glob，原样下发（*.log / messages* / 任意后缀均可）
+	if strings.ContainsAny(path, "*?") {
+		return path
+	}
+	// 目录：以 / 结尾，或显式配置了 include 模式
+	isDir := strings.HasSuffix(path, "/")
+	if isDir || inc != "" {
+		base := strings.TrimRight(path, "/")
+		pattern := inc
+		if pattern == "" {
+			// 不强制 *.log：目录下匹配全部文件；需限制时可填 include（如 *.log / messages*）
+			pattern = "*"
 		}
-		return strings.TrimRight(path, "/") + "/" + inc
+		return base + "/" + pattern
 	}
-	// 目录型路径自动追加 /*.log，否则 file source 不会匹配目录下的滚动文件
-	if !strings.ContainsAny(path, "*?") && !strings.HasSuffix(strings.ToLower(path), ".log") {
-		return strings.TrimRight(path, "/") + "/*.log"
-	}
+	// 精确文件路径：保留原样（/var/log/messages、/var/log/syslog、无后缀名等）
 	return path
 }
 
