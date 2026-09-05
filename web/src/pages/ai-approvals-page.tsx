@@ -133,13 +133,16 @@ export function AiApprovalsPage() {
         loading={loading}
         dataSource={list}
         pagination={{ current: page, pageSize: 10, total, onChange: setPage }}
-        onRow={(row) => ({
-          id: `ai-approval-row-${row.id}`,
-          style:
-            highlightId > 0 && row.id === highlightId
-              ? { background: "rgba(22, 119, 255, 0.08)" }
-              : undefined,
-        })}
+        onRow={(row) => {
+          if (!row) return {};
+          return {
+            id: `ai-approval-row-${row.id}`,
+            style:
+              highlightId > 0 && row.id === highlightId
+                ? { background: "rgba(22, 119, 255, 0.08)" }
+                : undefined,
+          };
+        }}
         columns={[
           { title: "ID", dataIndex: "id", width: 70 },
           { title: "工具", dataIndex: "tool_name", width: 160 },
