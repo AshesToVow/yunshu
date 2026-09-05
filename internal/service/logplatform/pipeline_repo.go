@@ -128,13 +128,57 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 		Remark:       strings.TrimSpace(req.Remark),
 		UpdatedBy:    userID,
 	}
+	// 软删后同名仍占 uk_log_pipeline_proj_name，新建会 500；先回收再写。
+	var ghost model.LogPipeline
+	gerr := s.db.WithContext(ctx).Unscoped().
+		Where("project_id = ? AND name = ?", projectID, name).
+		First(&ghost).Error
+	if gerr == nil {
+		if ghost.DeletedAt.Valid {
+			ghost.DeletedAt = gorm.DeletedAt{}
+			ghost.Kind = kind
+			ghost.ClusterID = req.ClusterID
+			ghost.ServerID = req.ServerID
+			ghost.ParseProfile = strings.TrimSpace(req.ParseProfile)
+			if yml != "" {
+				_ = s.snapshotPipelineVersion(ctx, &ghost, userID, "restore before sync")
+				ghost.ContentYAML = req.ContentYAML
+				ghost.Version++
+			}
+			ghost.Status = status
+			ghost.Remark = strings.TrimSpace(req.Remark)
+			if ref := strings.TrimSpace(req.SourceRef); ref != "" {
+				ghost.SourceRef = ref
+			}
+			ghost.UpdatedBy = userID
+			if err := s.db.WithContext(ctx).Unscoped().Save(&ghost).Error; err != nil {
+				return nil, err
+			}
+			return &ghost, nil
+		}
+		return nil, constants.ErrBadRequestWithMsg("Pipeline 名称已存在: " + name)
+	}
+	if gerr != nil && !errors.Is(gerr, gorm.ErrRecordNotFound) {
+		return nil, gerr
+	}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if isDuplicateKeyErr(err) {
+			return nil, constants.ErrBadRequestWithMsg("Pipeline 名称已存在: " + name)
+		}
 		return nil, err
 	}
 	if strings.TrimSpace(row.ContentYAML) != "" {
 		_ = s.snapshotPipelineVersion(ctx, &row, userID, "initial")
 	}
 	return &row, nil
+}
+
+func isDuplicateKeyErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "1062") || strings.Contains(msg, "unique")
 }
 
 // DeleteLogPipeline 删除仓库条目。
@@ -318,14 +362,14 @@ func (s *ClusterLogService) SaveHostPipelineSnapshot(ctx context.Context, projec
 		SourceRef:   fmt.Sprintf("server:%d", serverID),
 		Remark:      remark,
 	}
-	// 优先按 server_id 定位；再按名称回收误绑到其它 server 的条目
+	// 优先按 server_id 定位；再按名称回收（含软删）误绑/已删条目
 	var existing model.LogPipeline
 	err := s.db.WithContext(ctx).
 		Where("project_id = ? AND kind = ? AND server_id = ?", projectID, "host", serverID).
 		Order("id ASC").
 		First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = s.db.WithContext(ctx).
+		err = s.db.WithContext(ctx).Unscoped().
 			Where("project_id = ? AND kind = ? AND name = ?", projectID, "host", name).
 			First(&existing).Error
 	}
@@ -334,6 +378,12 @@ func (s *ClusterLogService) SaveHostPipelineSnapshot(ctx context.Context, projec
 	}
 	if err != nil {
 		return nil, err
+	}
+	if existing.DeletedAt.Valid {
+		existing.DeletedAt = gorm.DeletedAt{}
+		if err := s.db.WithContext(ctx).Unscoped().Save(&existing).Error; err != nil {
+			return nil, err
+		}
 	}
 	return s.UpsertLogPipeline(ctx, projectID, existing.ID, userID, req)
 }

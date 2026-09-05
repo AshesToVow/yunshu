@@ -214,11 +214,13 @@ export function LogPipelineRepoPage() {
           server_id: syncTargetId,
           content_yml: yml,
           status: "draft",
-          remark: "从主机 Loggie 生成配置同步",
+          remark: `从主机 Loggie 生成配置同步（server_id=${syncTargetId}）`,
+          source_ref: `server:${syncTargetId}`,
         };
         if (existing) {
           await updateLogPipeline(projectId, existing.id, payload);
         } else {
+          // 后端会回收软删同名条目；若仍冲突则提示名称已存在
           await createLogPipeline(projectId, payload);
         }
         message.success("已从主机同步到仓库（草稿）");
