@@ -3,6 +3,7 @@ import { Alert, Button, Card, Input, Popconfirm, Select, Space, Switch, Table, T
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { ApprovalCenterNav } from "../components/approval-center-nav";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { listUserGroups, type UserGroupItem } from "../services/user-groups";
@@ -284,7 +285,12 @@ export function WorkflowDefinitionsPage() {
 
   return (
     <div>
-      <PageTelemetryHeader label="Workflow" title="审批流配置" subtitle="统一纳管各业务域审批节点与审批人用户组" />
+      <PageTelemetryHeader
+        label="审批中心"
+        title="流程配置"
+        subtitle="统一纳管各业务域审批节点与审批人；待办审批请到「我的待办」"
+      />
+      <ApprovalCenterNav />
       <Card
         extra={
           <Space wrap>
@@ -322,7 +328,7 @@ export function WorkflowDefinitionsPage() {
           description={
             <Typography.Paragraph style={{ marginBottom: 0 }}>
               {domainHint} 关闭开关即跳过该节点；启用须绑定审批用户组（值班节点除外）。配置变更
-              <strong>仅影响新建工单</strong>。待办统一在「工单中心 → 我的待办」处理。
+              <strong>仅影响新建工单</strong>。审批在「审批中心 → 我的待办」处理。
             </Typography.Paragraph>
           }
         />

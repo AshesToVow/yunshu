@@ -34,6 +34,9 @@ func MigrateLegacyTickets(ctx context.Context, db *gorm.DB) error {
 	if err := migratePendingReleaseRuns(ctx, svc, db, log); err != nil {
 		return err
 	}
+	if err := migratePendingExecutionReleaseRuns(ctx, svc, db, log); err != nil {
+		return err
+	}
 	return migratePendingAIToolApprovals(ctx, svc, db, log)
 }
 
@@ -242,6 +245,67 @@ func migratePendingReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB, l
 			changeTicket, err := svc.CreateInfoTicket(ctx, LinkedTicketInput{
 				Domain: model.WorkflowDomainOps, TicketType: model.WorkflowTicketTypeChange,
 				ProjectID: row.ProjectID, Title: "变更单 · " + row.Title, SubmitterUserID: submitter,
+				RefType: model.WorkflowRefCicdReleaseChange, RefID: row.ID,
+				Payload: map[string]any{"release_run_id": row.ID, "release_ticket_id": releaseTicket.ID},
+			}, model.WorkflowTicketStatusApproved)
+			if err != nil {
+				return err
+			}
+			changeID = &changeTicket.ID
+		}
+		if err := db.WithContext(ctx).Model(&row).Updates(map[string]any{
+			"workflow_ticket_id": releaseTicket.ID, "change_workflow_ticket_id": changeID,
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migratePendingExecutionReleaseRuns 将「待执行」发布单回填为已通过的统一工单，便于提交人在待办中执行。
+func migratePendingExecutionReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB, log *slog.Logger) error {
+	var rows []model.CicdReleaseRun
+	if err := db.WithContext(ctx).Where("status = ? AND audit_enabled = ?", model.CicdRunStatusPendingExecution, true).Find(&rows).Error; err != nil {
+		return err
+	}
+	now := time.Now()
+	for i := range rows {
+		row := rows[i]
+		if svc.HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, row.ID, model.WorkflowTicketTypeRelease) {
+			ticket, err := svc.GetTicketByRefType(ctx, model.WorkflowRefCicdReleaseRun, row.ID, model.WorkflowTicketTypeRelease)
+			if err == nil && ticket != nil && ticket.Status == model.WorkflowTicketStatusPending {
+				_ = markWorkflowTicketApproved(ctx, db, ticket.ID, now)
+			}
+			continue
+		}
+		submitter := uint(0)
+		if row.SubmitterUserID != nil {
+			submitter = *row.SubmitterUserID
+		}
+		title := strings.TrimSpace(row.Title)
+		if title == "" {
+			title = "发布工单"
+		}
+		releaseTicket, err := svc.CreateLinkedTicket(ctx, LinkedTicketInput{
+			Domain: model.WorkflowDomainCicd, TicketType: model.WorkflowTicketTypeRelease,
+			ProjectID: row.ProjectID, Title: title, SubmitterUserID: submitter,
+			RefType: model.WorkflowRefCicdReleaseRun, RefID: row.ID,
+		})
+		if err != nil {
+			if isFlowNotConfigured(err) {
+				log.Warn("skip release pending_execution migration: flow not configured", "run_id", row.ID, "project_id", row.ProjectID)
+				continue
+			}
+			return err
+		}
+		if err := markWorkflowTicketApproved(ctx, db, releaseTicket.ID, now); err != nil {
+			return err
+		}
+		changeID := row.ChangeWorkflowTicketID
+		if changeID == nil || *changeID == 0 {
+			changeTicket, err := svc.CreateInfoTicket(ctx, LinkedTicketInput{
+				Domain: model.WorkflowDomainOps, TicketType: model.WorkflowTicketTypeChange,
+				ProjectID: row.ProjectID, Title: "变更单 · " + title, SubmitterUserID: submitter,
 				RefType: model.WorkflowRefCicdReleaseChange, RefID: row.ID,
 				Payload: map[string]any{"release_run_id": row.ID, "release_ticket_id": releaseTicket.ID},
 			}, model.WorkflowTicketStatusApproved)

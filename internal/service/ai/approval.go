@@ -107,9 +107,35 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 
 	wf := s.workflowEngine()
 	if wf.HasLinkedTicket(ctx, model.WorkflowRefAiToolApproval, id) {
-		if err := s.reviewAIViaWorkflow(ctx, &row, req.Approve, req.Note, actor); err != nil {
+		detail, err := s.reviewAIViaWorkflow(ctx, &row, req.Approve, req.Note, actor)
+		if err != nil {
 			return nil, err
 		}
+		// 多级审批：仅终态才回写业务单；中间节点保持 pending
+		if detail != nil && detail.Status == model.WorkflowTicketStatusPending {
+			return &row, nil
+		}
+		uid := actor.ID
+		row.ReviewerID = &uid
+		row.ReviewNote = truncateStr(req.Note, 500)
+		if !req.Approve || (detail != nil && detail.Status == model.WorkflowTicketStatusRejected) {
+			row.Status = "rejected"
+			if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+				return nil, err
+			}
+			return &row, nil
+		}
+		if detail == nil || detail.Status != model.WorkflowTicketStatusApproved {
+			return &row, nil
+		}
+		row.Status = "approved"
+		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+			return nil, err
+		}
+		if req.Execute {
+			return s.ExecuteApproval(ctx, actor, id)
+		}
+		return &row, nil
 	}
 
 	uid := actor.ID

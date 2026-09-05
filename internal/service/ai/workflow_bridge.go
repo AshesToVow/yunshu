@@ -37,11 +37,10 @@ func (s *Service) createAIWorkflowTicket(ctx context.Context, row *model.AiToolA
 	return err
 }
 
-func (s *Service) reviewAIViaWorkflow(ctx context.Context, row *model.AiToolApproval, approve bool, note string, actor *auth.CurrentUser) error {
+func (s *Service) reviewAIViaWorkflow(ctx context.Context, row *model.AiToolApproval, approve bool, note string, actor *auth.CurrentUser) (*workflowsvc.TicketDetail, error) {
 	wf := s.workflowEngine()
 	if !wf.HasLinkedTicket(ctx, model.WorkflowRefAiToolApproval, row.ID) {
-		return workflowsvc.ErrNoLinkedTicket
+		return nil, workflowsvc.ErrNoLinkedTicket
 	}
-	_, err := wf.ReviewLinkedStep(ctx, model.WorkflowRefAiToolApproval, row.ID, approve, note, actor)
-	return err
+	return wf.ReviewLinkedStep(ctx, model.WorkflowRefAiToolApproval, row.ID, approve, note, actor)
 }

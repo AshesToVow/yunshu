@@ -480,7 +480,7 @@ export function AiAssistantPage() {
               ) : null}
               {sessionId ? <Tag>会话 #{sessionId}</Tag> : null}
               <Link to="/ai/investigations">调查记录</Link>
-              <Link to="/ai/approvals">操作审批</Link>
+              <Link to="/workflow/inbox?domain=ai">操作审批</Link>
             </Space>
             <Space wrap>
               <Select

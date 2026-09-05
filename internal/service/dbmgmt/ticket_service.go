@@ -112,12 +112,35 @@ func (s *Service) GetTicket(ctx context.Context, projectID, ticketID uint, actor
 		return nil, err
 	}
 	item := s.toTicketItem(ctx, *t)
+	s.fillTicketStageName(ctx, &item, t)
 	if s.canViewTicketSQL(ctx, projectID, t, actor) {
 		item.SqlText = t.SqlText
 	}
 	item.ReviewJSON = sanitizeReviewJSON(t.ReviewJSON)
 	item.ExecuteJSON = sanitizeReviewJSON(t.ExecuteJSON)
 	return &item, nil
+}
+
+func (s *Service) fillTicketStageName(ctx context.Context, item *TicketItem, t *model.DbSqlTicket) {
+	if item == nil || t == nil {
+		return
+	}
+	switch t.Status {
+	case model.DbTicketStatusPendingExecution:
+		item.CurrentStageName = "待提交人执行"
+		return
+	case model.DbTicketStatusPendingApproval:
+		var stage string
+		_ = s.db.WithContext(ctx).Raw(`
+SELECT s.stage_name FROM workflow_ticket_steps s
+JOIN workflow_tickets t ON t.id = s.ticket_id AND t.deleted_at IS NULL
+WHERE t.ref_type = ? AND t.ref_id = ? AND s.status = ? AND s.activated_at IS NOT NULL AND s.deleted_at IS NULL
+ORDER BY s.sort_order ASC, s.id ASC LIMIT 1
+`, model.WorkflowRefDbSqlTicket, t.ID, model.WorkflowStepPending).Scan(&stage).Error
+		if stage != "" {
+			item.CurrentStageName = stage
+		}
+	}
 }
 
 func (s *Service) preCheckForTicket(ctx context.Context, inst *model.DbInstance, dbName, sqlText string) (reviewJSON string, syntaxType int, err error) {
@@ -546,7 +569,9 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 		}
 		items := make([]TicketItem, 0, len(list))
 		for _, t := range list {
-			items = append(items, s.toTicketItem(ctx, t))
+			item := s.toTicketItem(ctx, t)
+			s.fillTicketStageName(ctx, &item, &t)
+			items = append(items, item)
 		}
 		s.enrichTicketMineStatus(ctx, items, q.MineViewer, mineTab)
 		return paginate(items, total, page, pageSize), nil
@@ -560,7 +585,9 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 	}
 	items := make([]TicketItem, 0, len(list))
 	for _, t := range list {
-		items = append(items, s.toTicketItem(ctx, t))
+		item := s.toTicketItem(ctx, t)
+		s.fillTicketStageName(ctx, &item, &t)
+		items = append(items, item)
 	}
 	return paginate(items, total, q.Page, q.PageSize), nil
 }
@@ -737,6 +764,7 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if execErr != nil {
 		ticket.Status = model.DbTicketStatusFailed
 		_ = s.repo.UpdateSqlTicket(ctx, ticket)
+		_ = s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticket.ID)
 		changeevent.Record(ctx, changeevent.Input{
 			ProjectID: projectID,
 			Source:    model.ChangeSourceDbmgmt,
@@ -752,6 +780,7 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if err := s.repo.UpdateSqlTicket(ctx, ticket); err != nil {
 		return err
 	}
+	_ = s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticket.ID)
 	changeevent.Record(ctx, changeevent.Input{
 		ProjectID: projectID,
 		Source:    model.ChangeSourceDbmgmt,

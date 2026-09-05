@@ -183,5 +183,41 @@ func (s *Service) HasLinkedTicketType(ctx context.Context, refType string, refID
 	return err == nil
 }
 
+// CloseLinkedTicket 将关联统一工单标记为 closed（业务执行完成/取消后调用）。
+func (s *Service) CloseLinkedTicket(ctx context.Context, refType string, refID uint) error {
+	ticket, err := s.GetTicketByRef(ctx, refType, refID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	if ticket.Status == model.WorkflowTicketStatusClosed || ticket.Status == model.WorkflowTicketStatusCancelled {
+		return nil
+	}
+	now := time.Now()
+	return s.db.WithContext(ctx).Model(ticket).Updates(map[string]any{
+		"status": model.WorkflowTicketStatusClosed, "closed_at": now,
+	}).Error
+}
+
+// CloseLinkedTicketTyped 按工单类型关闭关联统一工单。
+func (s *Service) CloseLinkedTicketTyped(ctx context.Context, refType string, refID uint, ticketType string) error {
+	ticket, err := s.GetTicketByRefType(ctx, refType, refID, ticketType)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	if ticket.Status == model.WorkflowTicketStatusClosed || ticket.Status == model.WorkflowTicketStatusCancelled {
+		return nil
+	}
+	now := time.Now()
+	return s.db.WithContext(ctx).Model(ticket).Updates(map[string]any{
+		"status": model.WorkflowTicketStatusClosed, "closed_at": now,
+	}).Error
+}
+
 // ErrNoLinkedTicket 业务实体尚未关联统一工单。
 var ErrNoLinkedTicket = errors.New("no linked workflow ticket")

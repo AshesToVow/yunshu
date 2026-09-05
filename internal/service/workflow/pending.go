@@ -162,6 +162,17 @@ func (s *Service) ListPendingForUser(ctx context.Context, q PendingListQuery, ac
 	s.fillUserNames(ctx, userNames)
 
 	items := make([]PendingTicketItem, 0, len(rows))
+	executeTickets := map[uint]struct{}{}
+	if mineScope == MineScopeAll {
+		for _, r := range rows {
+			if r.Status == model.WorkflowTicketStatusApproved && r.SubmitterUserID == userID &&
+				((r.TicketType == model.WorkflowTicketTypeRelease && r.RefType == model.WorkflowRefCicdReleaseRun) ||
+					(r.TicketType == model.WorkflowTicketTypeSql && r.RefType == model.WorkflowRefDbSqlTicket)) {
+				executeTickets[r.WorkflowTicketID] = struct{}{}
+			}
+		}
+	}
+	seenExecute := map[uint]struct{}{}
 	for _, r := range rows {
 		mineStatus := "mine_done"
 		if r.StepStatus == model.WorkflowStepPending && r.ActivatedAt != nil {
@@ -182,6 +193,15 @@ func (s *Service) ListPendingForUser(ctx context.Context, q PendingListQuery, ac
 				stageName = "待执行"
 				mineStatus = "mine_pending"
 			}
+		}
+		if _, isExecTicket := executeTickets[r.WorkflowTicketID]; isExecTicket {
+			if action != "execute" && action != "execute_sql" {
+				continue
+			}
+			if _, ok := seenExecute[r.WorkflowTicketID]; ok {
+				continue
+			}
+			seenExecute[r.WorkflowTicketID] = struct{}{}
 		}
 		items = append(items, PendingTicketItem{
 			WorkflowTicketID: r.WorkflowTicketID, StepID: r.StepID,
@@ -231,7 +251,7 @@ func buildDeepLink(domain, ticketType string, projectID uint, refType string, re
 	}
 	switch domain {
 	case model.WorkflowDomainIncident:
-		return fmt.Sprintf("/workflow/inbox?ticket=%d", refID)
+		return fmt.Sprintf("/workflow/inbox?ticket=%d", refID) // refID 此处为业务 ref；inbox 同时匹配 workflow_ticket_id / ref_id
 	}
 	_ = ticketType
 	return fmt.Sprintf("/workflow/inbox?project=%d", projectID)

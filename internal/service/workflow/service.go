@@ -465,8 +465,20 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 	if step.Status != model.WorkflowStepPending || step.ActivatedAt == nil {
 		return nil, constants.ErrBadRequestWithMsg("该审批节点不可操作")
 	}
-	def, _, _ := s.loadDefinition(ctx, DefinitionKey{Domain: ticket.Domain, ProjectID: ticket.ProjectID, TicketType: ticket.TicketType})
-	if def != nil && def.ForbidSelfApprove {
+	// 按工单绑定的 definition_id 读取职责分离开关（避免 ticket_type 回退 default 后查不到配置）
+	forbidSelf := true
+	if ticket.DefinitionID > 0 {
+		var def model.WorkflowDefinition
+		if err := s.db.WithContext(ctx).First(&def, ticket.DefinitionID).Error; err == nil {
+			forbidSelf = def.ForbidSelfApprove
+		}
+	} else {
+		def, _, _ := s.resolveFlow(ctx, DefinitionKey{Domain: ticket.Domain, ProjectID: ticket.ProjectID, TicketType: ticket.TicketType})
+		if def != nil {
+			forbidSelf = def.ForbidSelfApprove
+		}
+	}
+	if forbidSelf {
 		if err := forbidSelfApprove(actor, ticket.SubmitterUserID); err != nil {
 			return nil, err
 		}

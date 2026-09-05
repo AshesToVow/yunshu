@@ -128,6 +128,7 @@ func (s *Service) CreateAppUserRequest(ctx context.Context, projectID uint, body
 		return nil, err
 	}
 	if err := s.initAppUserRequestSteps(ctx, req); err != nil {
+		_ = s.db.WithContext(ctx).Model(req).Update("status", model.DbAccessRequestStatusRejected).Error
 		return nil, err
 	}
 	iid := body.InstanceID

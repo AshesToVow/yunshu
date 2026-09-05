@@ -268,6 +268,7 @@ func (s *Service) enrichTicketMineStatus(ctx context.Context, items []TicketItem
 				switch item.Status {
 				case model.DbTicketStatusPendingExecution:
 					item.MineStatus = dbMineStatusPending
+					item.CurrentStageName = "待提交人执行"
 				case model.DbTicketStatusSuccess, model.DbTicketStatusFailed, model.DbTicketStatusExecuting:
 					item.MineStatus = dbMineStatusDone
 				}
@@ -277,7 +278,7 @@ func (s *Service) enrichTicketMineStatus(ctx context.Context, items []TicketItem
 		if len(sts) == 0 {
 			pending := item.Status == model.DbTicketStatusPendingApproval
 			s.enrichMineFromWorkflow(ctx, item.ID, model.WorkflowRefDbSqlTicket, pending, &item.MineStatus, &item.CurrentStageName, actor)
-			if item.CurrentStageName == "" && item.Status == model.DbTicketStatusPendingExecution {
+			if item.Status == model.DbTicketStatusPendingExecution {
 				item.CurrentStageName = "待提交人执行"
 			}
 			continue
@@ -321,6 +322,8 @@ func (s *Service) enrichTicketMineStatus(ctx context.Context, items []TicketItem
 			case model.DbTicketStatusPendingExecution:
 				item.CurrentStageName = "待提交人执行"
 			}
+		} else if item.Status == model.DbTicketStatusPendingExecution {
+			item.CurrentStageName = "待提交人执行"
 		}
 	}
 }

@@ -1,6 +1,7 @@
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Select, Space, Table, Tag, message } from "antd";
+import { Alert, Button, Card, Select, Space, Table, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   executeAIApproval,
   listAIApprovals,
@@ -11,9 +12,11 @@ import { getClusters, type ClusterItem } from "../services/clusters";
 import { extractApiErrorMessage } from "../services/http";
 
 export function AiApprovalsPage() {
+  const [searchParams] = useSearchParams();
+  const highlightId = Number(searchParams.get("highlight") || searchParams.get("ticket") || 0);
   const [list, setList] = useState<AIApprovalItem[]>([]);
   const [total, setTotal] = useState(0);
-  const [status, setStatus] = useState<string>("pending");
+  const [status, setStatus] = useState<string>(() => (highlightId > 0 ? "" : "pending"));
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
@@ -45,7 +48,16 @@ export function AiApprovalsPage() {
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随筛选/分页刷新
   }, [status, page]);
+
+  useEffect(() => {
+    if (highlightId <= 0) return;
+    const el = document.getElementById(`ai-approval-row-${highlightId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightId, list]);
 
   async function review(id: number, approve: boolean, execute?: boolean) {
     try {
@@ -80,6 +92,18 @@ export function AiApprovalsPage() {
 
   return (
     <Card className="table-card">
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message={
+          <Typography.Text>
+            日常审批请到{" "}
+            <Link to="/workflow/inbox?domain=ai">审批中心 → 我的待办</Link>
+            ；本页保留为 AI 高危操作的执行台（批准后执行 / 重试）。
+          </Typography.Text>
+        }
+      />
       <div className="toolbar">
         <Space>
           <Select
@@ -109,6 +133,13 @@ export function AiApprovalsPage() {
         loading={loading}
         dataSource={list}
         pagination={{ current: page, pageSize: 10, total, onChange: setPage }}
+        onRow={(row) => ({
+          id: `ai-approval-row-${row.id}`,
+          style:
+            highlightId > 0 && row.id === highlightId
+              ? { background: "rgba(22, 119, 255, 0.08)" }
+              : undefined,
+        })}
         columns={[
           { title: "ID", dataIndex: "id", width: 70 },
           { title: "工具", dataIndex: "tool_name", width: 160 },
