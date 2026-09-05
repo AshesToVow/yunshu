@@ -18,8 +18,8 @@ export type PendingTicketItem = {
   activated_at?: string;
   created_at: string;
   mine_status: "mine_pending" | "mine_done";
-  /** review=审批；execute=提交人执行发布 */
-  action?: "review" | "execute" | string;
+  /** review=审批；execute=发布执行；execute_sql=SQL 执行 */
+  action?: "review" | "execute" | "execute_sql" | string;
 };
 
 export type PendingListQuery = {

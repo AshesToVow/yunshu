@@ -48,9 +48,14 @@ func (s *Service) createReleaseWorkflowTickets(ctx context.Context, release *mod
 	if err != nil {
 		return err
 	}
+	stageKey := ""
+	if active, err := wf.GetActiveStep(ctx, releaseTicket.ID); err == nil && active != nil {
+		stageKey = active.StageKey
+	}
 	return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
 		"workflow_ticket_id":        releaseTicket.ID,
 		"change_workflow_ticket_id": changeTicket.ID,
+		"current_stage_key":         stageKey,
 	}).Error
 }
 

@@ -8,11 +8,13 @@ import {
   approveDbAccessRequest,
   approveDbAppUserRequest,
   approveDbTicket,
+  executeDbTicket,
   rejectDbAccessRequest,
   rejectDbAppUserRequest,
   rejectDbTicket,
 } from "../services/dbmgmt";
 import { approveReleaseRun, executeReleaseRun, rejectReleaseRun } from "../services/cicd";
+import { reviewAIApproval } from "../services/ai";
 import {
   listPendingWorkflowTickets,
   reviewWorkflowStep,
@@ -27,6 +29,7 @@ const DOMAIN_OPTIONS = [
   { label: "全部域", value: "" },
   { label: "数据库", value: "dbmgmt" },
   { label: "发布", value: "cicd" },
+  { label: "AI", value: "ai" },
   { label: "故障", value: "incident" },
   { label: "变更", value: "ops" },
 ];
@@ -37,6 +40,8 @@ function domainLabel(domain: string) {
       return "数据库";
     case "cicd":
       return "发布";
+    case "ai":
+      return "AI";
     case "incident":
       return "故障";
     case "ops":
@@ -52,6 +57,8 @@ function domainColor(domain: string) {
       return "blue";
     case "cicd":
       return "purple";
+    case "ai":
+      return "cyan";
     case "incident":
       return "red";
     case "ops":
@@ -71,6 +78,8 @@ function ticketTypeLabel(row: PendingTicketItem) {
       return "应用用户";
     case "release":
       return "发布审批";
+    case "tool_approval":
+      return "高危操作";
     case "change":
       return "变更单";
     case "incident":
@@ -165,6 +174,8 @@ export function WorkflowInboxPage() {
       } else if (ref_type === "cicd_release_run") {
         if (reviewApprove) await approveReleaseRun(project_id, ref_id, comment);
         else await rejectReleaseRun(project_id, ref_id, comment);
+      } else if (ref_type === "ai_tool_approval") {
+        await reviewAIApproval(ref_id, { approve: reviewApprove, note: comment });
       } else {
         await reviewWorkflowStep(reviewTarget.workflow_ticket_id, reviewTarget.step_id, reviewApprove, comment);
       }
@@ -206,7 +217,8 @@ export function WorkflowInboxPage() {
       fixed: "right",
       render: (_, row) => {
         const pending = row.mine_status === "mine_pending";
-        const isExecute = row.action === "execute";
+        const isExecuteRelease = row.action === "execute";
+        const isExecuteSql = row.action === "execute_sql";
         return (
           <Space size="small">
             {row.deep_link ? (
@@ -216,7 +228,7 @@ export function WorkflowInboxPage() {
                 </Button>
               </Link>
             ) : null}
-            {pending && isExecute ? (
+            {pending && isExecuteRelease ? (
               <Button
                 type="link"
                 size="small"
@@ -229,6 +241,20 @@ export function WorkflowInboxPage() {
                 }}
               >
                 执行发布
+              </Button>
+            ) : pending && isExecuteSql ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<PlayCircleOutlined />}
+                onClick={() => {
+                  void executeDbTicket(row.project_id, row.ref_id).then(() => {
+                    message.success("已触发 SQL 执行");
+                    void load();
+                  });
+                }}
+              >
+                执行 SQL
               </Button>
             ) : pending ? (
               <>
@@ -253,7 +279,7 @@ export function WorkflowInboxPage() {
       <PageTelemetryHeader
         label="Workflow"
         title="我的待办"
-        subtitle="统一入口：审批 + 发布执行（审批完成后，提交人可在此执行发布）"
+        subtitle="统一入口：审批 + 提交人执行（发布 / SQL）"
       />
       <Card>
         <Space wrap style={{ marginBottom: 16 }}>

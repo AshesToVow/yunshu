@@ -12,7 +12,7 @@ import {
   type WorkflowStageItem,
 } from "../services/workflow";
 
-type DomainKey = "dbmgmt" | "cicd" | "incident";
+type DomainKey = "dbmgmt" | "cicd" | "incident" | "ai";
 
 type StageRow = WorkflowStageItem & {
   draftEnabled: boolean;
@@ -24,6 +24,7 @@ type StageRow = WorkflowStageItem & {
 const DOMAIN_OPTIONS: { label: string; value: DomainKey; hint: string }[] = [
   { label: "数据库 (dbmgmt)", value: "dbmgmt", hint: "SQL 工单、权限申请、应用用户共用此流程（ticket_type=default）。" },
   { label: "发布 (cicd)", value: "cicd", hint: "发布审批流；配置变更仅影响新建发布工单。" },
+  { label: "AI (ai)", value: "ai", hint: "AI 高危工具审批（全局 project_id=0，ticket_type=tool_approval，平台角色审批）。" },
   { label: "故障 (incident)", value: "incident", hint: "告警转故障单审批；可含值班派单节点。" },
 ];
 
@@ -48,7 +49,7 @@ export function WorkflowDefinitionsPage() {
   const [projectId, setProjectId] = useState<number>();
   const [domain, setDomain] = useState<DomainKey>(() => {
     const d = searchParams.get("domain");
-    if (d === "cicd" || d === "incident" || d === "dbmgmt") return d;
+    if (d === "cicd" || d === "incident" || d === "dbmgmt" || d === "ai") return d;
     return "dbmgmt";
   });
   const [loading, setLoading] = useState(false);
@@ -56,6 +57,9 @@ export function WorkflowDefinitionsPage() {
   const [rows, setRows] = useState<StageRow[]>([]);
   const [groups, setGroups] = useState<UserGroupItem[]>([]);
   const [configured, setConfigured] = useState(false);
+
+  const defProjectId = domain === "ai" ? 0 : projectId;
+  const defTicketType = domain === "ai" ? "tool_approval" : "default";
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
@@ -82,17 +86,17 @@ export function WorkflowDefinitionsPage() {
   }, []);
 
   const load = useCallback(async () => {
-    if (!projectId) return;
+    if (domain !== "ai" && !projectId) return;
     setLoading(true);
     try {
-      await loadGroups(projectId);
-      const res = await getWorkflowDefinition(domain, projectId);
+      if (projectId) await loadGroups(projectId);
+      const res = await getWorkflowDefinition(domain, defProjectId ?? 0, defTicketType);
       setConfigured(Boolean(res.configured));
       setRows(toRows(res.stages ?? []));
     } finally {
       setLoading(false);
     }
-  }, [domain, projectId, loadGroups]);
+  }, [domain, projectId, defProjectId, defTicketType, loadGroups]);
 
   useEffect(() => {
     void load();
@@ -172,7 +176,10 @@ export function WorkflowDefinitionsPage() {
       },
       {
         title: "审批用户组",
-        render: (_, row) => (
+        render: (_, row) =>
+          row.assignee_rule_type === "platform_role" ? (
+            <Typography.Text type="secondary">平台角色（admin / ops-admin / ai-approver）</Typography.Text>
+          ) : (
           <Select
             allowClear
             showSearch
@@ -188,7 +195,7 @@ export function WorkflowDefinitionsPage() {
               );
             }}
           />
-        ),
+          ),
       },
       {
         title: "操作",
@@ -232,13 +239,18 @@ export function WorkflowDefinitionsPage() {
   );
 
   const save = async () => {
-    if (!projectId) return;
+    if (domain !== "ai" && !projectId) return;
     for (const row of rows) {
       if (!row.draftName.trim()) {
         message.warning("审批节点名称不能为空");
         return;
       }
-      if (row.draftEnabled && row.assignee_rule_type !== "duty" && !row.draftUserGroupId) {
+      if (
+        row.draftEnabled &&
+        row.assignee_rule_type !== "duty" &&
+        row.assignee_rule_type !== "platform_role" &&
+        !row.draftUserGroupId
+      ) {
         message.warning(`请为「${row.draftName}」选择用户组`);
         return;
       }
@@ -247,16 +259,20 @@ export function WorkflowDefinitionsPage() {
     try {
       const saved = await saveWorkflowDefinition(
         domain,
-        projectId,
+        defProjectId ?? 0,
         rows.map((s, index) => ({
           stage_key: s.stage_key,
           stage_name: s.draftName.trim(),
           sort_order: index + 1,
           enabled: s.draftEnabled,
-          assignee_rule_type: s.assignee_rule_type || "user_group",
-          user_group_id: s.draftEnabled && s.assignee_rule_type !== "duty" ? s.draftUserGroupId : undefined,
+          assignee_rule_type: s.assignee_rule_type || (domain === "ai" ? "platform_role" : "user_group"),
+          user_group_id:
+            s.draftEnabled && s.assignee_rule_type !== "duty" && s.assignee_rule_type !== "platform_role"
+              ? s.draftUserGroupId
+              : undefined,
           duty_monitor_rule_id: s.duty_monitor_rule_id,
         })),
+        defTicketType,
       );
       setConfigured(Boolean(saved.configured));
       setRows(toRows(saved.stages ?? []));
@@ -278,12 +294,14 @@ export function WorkflowDefinitionsPage() {
               options={DOMAIN_OPTIONS.map((d) => ({ value: d.value, label: d.label }))}
               onChange={(v) => setDomain(v)}
             />
-            <Select
-              style={{ width: 200 }}
-              value={projectId}
-              options={projects.map((p) => ({ value: p.id, label: p.name }))}
-              onChange={setProjectId}
-            />
+            {domain !== "ai" ? (
+              <Select
+                style={{ width: 200 }}
+                value={projectId}
+                options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                onChange={setProjectId}
+              />
+            ) : null}
             <Button icon={<ReloadOutlined />} onClick={() => void load()}>
               刷新
             </Button>

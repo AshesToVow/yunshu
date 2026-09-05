@@ -41,7 +41,7 @@ type PendingTicketItem struct {
 	ActivatedAt      *time.Time `json:"activated_at,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	MineStatus       string     `json:"mine_status"`
-	// Action: review=审批通过/驳回；execute=提交人执行发布
+	// Action: review=审批；execute=提交人执行（发布 / SQL）
 	Action string `json:"action,omitempty"`
 }
 
@@ -61,6 +61,7 @@ func (s *Service) ListPendingForUser(ctx context.Context, q PendingListQuery, ac
 	domains := parseDomains(q.Domains)
 	userID := actorUserID(actor)
 	isSuper := actor != nil && auth.IsSuperAdminRole(actor.RoleCodes)
+	canPlatformReview := CanPlatformRoleReview(actor)
 
 	base := s.db.WithContext(ctx).
 		Table("workflow_ticket_steps AS s").
@@ -82,50 +83,24 @@ func (s *Service) ListPendingForUser(ctx context.Context, q PendingListQuery, ac
 		if isSuper {
 			base = base.Where(`(
 				(t.status = ? AND s.status = ? AND s.activated_at IS NOT NULL)
-				OR (
-					t.status = ? AND t.ticket_type = ? AND t.ref_type = ? AND t.submitter_user_id = ?
-					AND EXISTS (
-						SELECT 1 FROM cicd_release_runs r
-						WHERE r.id = t.ref_id AND r.status = ? AND r.deleted_at IS NULL
-					)
-					AND s.id = (
-						SELECT s2.id FROM workflow_ticket_steps s2
-						WHERE s2.ticket_id = t.id AND s2.deleted_at IS NULL
-						ORDER BY s2.sort_order DESC, s2.id DESC
-						LIMIT 1
-					)
-				)
-			)`,
+				OR `+sqlSubmitterPendingExecution()+`
+			)`, append([]any{
 				model.WorkflowTicketStatusPending, model.WorkflowStepPending,
-				model.WorkflowTicketStatusApproved, model.WorkflowTicketTypeRelease, model.WorkflowRefCicdReleaseRun, userID,
-				model.CicdRunStatusPendingExecution,
-			)
+			}, argsSubmitterPendingExecution(userID)...)...)
 		} else {
 			base = base.Where(`(
 				(t.status = ? AND s.status = ? AND s.activated_at IS NOT NULL AND (
 					s.assignee_user_id = ? OR
+					(s.assignee_rule_type = ? AND ?) OR
 					(s.user_group_id IS NOT NULL AND s.user_group_id > 0 AND EXISTS (
 						SELECT 1 FROM user_group_users ugu WHERE ugu.user_group_id = s.user_group_id AND ugu.user_id = ?
 					))
 				))
-				OR (
-					t.status = ? AND t.ticket_type = ? AND t.ref_type = ? AND t.submitter_user_id = ?
-					AND EXISTS (
-						SELECT 1 FROM cicd_release_runs r
-						WHERE r.id = t.ref_id AND r.status = ? AND r.deleted_at IS NULL
-					)
-					AND s.id = (
-						SELECT s2.id FROM workflow_ticket_steps s2
-						WHERE s2.ticket_id = t.id AND s2.deleted_at IS NULL
-						ORDER BY s2.sort_order DESC, s2.id DESC
-						LIMIT 1
-					)
-				)
-			)`,
-				model.WorkflowTicketStatusPending, model.WorkflowStepPending, userID, userID,
-				model.WorkflowTicketStatusApproved, model.WorkflowTicketTypeRelease, model.WorkflowRefCicdReleaseRun, userID,
-				model.CicdRunStatusPendingExecution,
-			)
+				OR `+sqlSubmitterPendingExecution()+`
+			)`, append([]any{
+				model.WorkflowTicketStatusPending, model.WorkflowStepPending, userID,
+				model.WorkflowAssigneePlatformRole, canPlatformReview, userID,
+			}, argsSubmitterPendingExecution(userID)...)...)
 		}
 	case MineScopeDone:
 		if userID == 0 {
@@ -138,25 +113,14 @@ func (s *Service) ListPendingForUser(ctx context.Context, q PendingListQuery, ac
 		if !isSuper && userID > 0 {
 			base = base.Where(`(
 				s.assignee_user_id = ? OR s.reviewer_user_id = ? OR
+				(s.assignee_rule_type = ? AND ?) OR
 				(s.user_group_id IS NOT NULL AND s.user_group_id > 0 AND EXISTS (
 					SELECT 1 FROM user_group_users ugu WHERE ugu.user_group_id = s.user_group_id AND ugu.user_id = ?
 				))
-				OR (
-					t.ticket_type = ? AND t.ref_type = ? AND t.submitter_user_id = ?
-					AND EXISTS (
-						SELECT 1 FROM cicd_release_runs r
-						WHERE r.id = t.ref_id AND r.status = ? AND r.deleted_at IS NULL
-					)
-					AND s.id = (
-						SELECT s2.id FROM workflow_ticket_steps s2
-						WHERE s2.ticket_id = t.id AND s2.deleted_at IS NULL
-						ORDER BY s2.sort_order DESC, s2.id DESC
-						LIMIT 1
-					)
-				)
-			)`, userID, userID, userID,
-				model.WorkflowTicketTypeRelease, model.WorkflowRefCicdReleaseRun, userID,
-				model.CicdRunStatusPendingExecution)
+				OR `+sqlSubmitterPendingExecution()+`
+			)`, append([]any{
+				userID, userID, model.WorkflowAssigneePlatformRole, canPlatformReview, userID,
+			}, argsSubmitterPendingExecution(userID)...)...)
 		}
 	}
 
@@ -207,12 +171,17 @@ func (s *Service) ListPendingForUser(ctx context.Context, q PendingListQuery, ac
 		stageName := r.CurrentStageName
 		if (mineScope == MineScopePending || mineScope == MineScopeAll) &&
 			r.Status == model.WorkflowTicketStatusApproved &&
-			r.TicketType == model.WorkflowTicketTypeRelease &&
-			r.RefType == model.WorkflowRefCicdReleaseRun &&
 			r.SubmitterUserID == userID {
-			action = "execute"
-			stageName = "待执行"
-			mineStatus = "mine_pending"
+			switch {
+			case r.TicketType == model.WorkflowTicketTypeRelease && r.RefType == model.WorkflowRefCicdReleaseRun:
+				action = "execute"
+				stageName = "待执行"
+				mineStatus = "mine_pending"
+			case r.TicketType == model.WorkflowTicketTypeSql && r.RefType == model.WorkflowRefDbSqlTicket:
+				action = "execute_sql"
+				stageName = "待执行"
+				mineStatus = "mine_pending"
+			}
 		}
 		items = append(items, PendingTicketItem{
 			WorkflowTicketID: r.WorkflowTicketID, StepID: r.StepID,
@@ -257,6 +226,8 @@ func buildDeepLink(domain, ticketType string, projectID uint, refType string, re
 		return fmt.Sprintf("/cicd/release-records?project=%d&release=%d", projectID, refID)
 	case model.WorkflowRefAlertEvent:
 		return fmt.Sprintf("/alert-events?highlight=%d", refID)
+	case model.WorkflowRefAiToolApproval:
+		return fmt.Sprintf("/ai/approvals?highlight=%d", refID)
 	}
 	switch domain {
 	case model.WorkflowDomainIncident:
@@ -264,4 +235,45 @@ func buildDeepLink(domain, ticketType string, projectID uint, refType string, re
 	}
 	_ = ticketType
 	return fmt.Sprintf("/workflow/inbox?project=%d", projectID)
+}
+
+// sqlSubmitterPendingExecution 提交人待执行：发布 + SQL（审批已通过）。
+func sqlSubmitterPendingExecution() string {
+	return `(
+		(
+			t.status = ? AND t.ticket_type = ? AND t.ref_type = ? AND t.submitter_user_id = ?
+			AND EXISTS (
+				SELECT 1 FROM cicd_release_runs r
+				WHERE r.id = t.ref_id AND r.status = ? AND r.deleted_at IS NULL
+			)
+			AND s.id = (
+				SELECT s2.id FROM workflow_ticket_steps s2
+				WHERE s2.ticket_id = t.id AND s2.deleted_at IS NULL
+				ORDER BY s2.sort_order DESC, s2.id DESC
+				LIMIT 1
+			)
+		)
+		OR (
+			t.status = ? AND t.ticket_type = ? AND t.ref_type = ? AND t.submitter_user_id = ?
+			AND EXISTS (
+				SELECT 1 FROM db_sql_tickets st
+				WHERE st.id = t.ref_id AND st.status = ?
+			)
+			AND s.id = (
+				SELECT s2.id FROM workflow_ticket_steps s2
+				WHERE s2.ticket_id = t.id AND s2.deleted_at IS NULL
+				ORDER BY s2.sort_order DESC, s2.id DESC
+				LIMIT 1
+			)
+		)
+	)`
+}
+
+func argsSubmitterPendingExecution(userID uint) []any {
+	return []any{
+		model.WorkflowTicketStatusApproved, model.WorkflowTicketTypeRelease, model.WorkflowRefCicdReleaseRun, userID,
+		model.CicdRunStatusPendingExecution,
+		model.WorkflowTicketStatusApproved, model.WorkflowTicketTypeSql, model.WorkflowRefDbSqlTicket, userID,
+		model.DbTicketStatusPendingExecution,
+	}
 }

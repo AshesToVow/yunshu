@@ -182,9 +182,7 @@ func (s *Service) createPendingRelease(
 	if err := s.db.WithContext(ctx).Create(&release).Error; err != nil {
 		return nil, err
 	}
-	if err := s.initReleaseApprovalSteps(ctx, &release); err != nil {
-		return nil, err
-	}
+	// 统一引擎创建审批步骤；不再双写 cicd_release_approval_steps
 	if err := s.createReleaseWorkflowTickets(ctx, &release); err != nil {
 		return nil, err
 	}

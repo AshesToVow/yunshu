@@ -209,13 +209,14 @@ func provideDbmgmtService(
 	projectRepo interfaces.ProjectRepository,
 	userGroupRepo interfaces.UserGroupRepository,
 	userRepo interfaces.UserRepository,
+	dutyRepo interfaces.AlertDutyRepository,
 	db *gorm.DB,
 	encryptionKey SecurityEncryptionKey,
 	sender mailer.Sender,
 	appName AppDisplayName,
 	cfg config.DbmgmtConfig,
 ) (*dbmgmtsvc.Service, error) {
-	return dbmgmtsvc.NewService(dbmgmtRepo, serverRepo, projectRepo, userGroupRepo, userRepo, db, string(encryptionKey), sender, string(appName), cfg)
+	return dbmgmtsvc.NewService(dbmgmtRepo, serverRepo, projectRepo, userGroupRepo, userRepo, dutyRepo, db, string(encryptionKey), sender, string(appName), cfg)
 }
 
 func provideCicdService(
@@ -225,12 +226,13 @@ func provideCicdService(
 	userGroupRepo interfaces.UserGroupRepository,
 	userRepo interfaces.UserRepository,
 	memberRepo interfaces.ProjectMemberRepository,
+	dutyRepo interfaces.AlertDutyRepository,
 	cicdCfg config.CicdConfig,
 	sender mailer.Sender,
 	appName AppDisplayName,
 	k8sNS *service.K8sNamespaceService,
 ) *cicdsvc.Service {
-	return cicdsvc.NewService(db, serverRepo, projectRepo, userGroupRepo, userRepo, memberRepo, cicdCfg, sender, string(appName), k8sNS)
+	return cicdsvc.NewService(db, serverRepo, projectRepo, userGroupRepo, userRepo, memberRepo, dutyRepo, cicdCfg, sender, string(appName), k8sNS)
 }
 
 func provideInspectService(

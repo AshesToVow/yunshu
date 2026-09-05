@@ -23,6 +23,7 @@ type Service struct {
 	userGroupRepo interfaces.UserGroupRepository
 	userRepo      interfaces.UserRepository
 	memberRepo    interfaces.ProjectMemberRepository
+	dutyRepo      interfaces.AlertDutyRepository
 	nsEnsurer     K8sNamespaceEnsurer
 	mailer        mailer.Sender
 	appName       string
@@ -35,7 +36,7 @@ type Service struct {
 	k8sProgressive     K8sProgressiveFns
 }
 
-func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
+func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, dutyRepo interfaces.AlertDutyRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
 	if yamlCicd.RunSyncIntervalSeconds <= 0 {
 		yamlCicd.RunSyncIntervalSeconds = 15
 	}
@@ -52,6 +53,7 @@ func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo
 		userGroupRepo: userGroupRepo,
 		userRepo:      userRepo,
 		memberRepo:    memberRepo,
+		dutyRepo:      dutyRepo,
 		nsEnsurer:     nsEnsurer,
 		mailer:        emailSender,
 		appName:       strings.TrimSpace(appName),

@@ -79,6 +79,9 @@ func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint
 }
 
 func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint) ([]ReleaseApprovalStepItem, error) {
+	if items, ok := s.buildReleaseApprovalStepItemsFromWorkflow(ctx, runID); ok {
+		return items, nil
+	}
 	var steps []model.CicdReleaseApprovalStep
 	if err := s.db.WithContext(ctx).Where("release_run_id = ?", runID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
 		return nil, err
@@ -157,6 +160,39 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func (s *Service) buildReleaseApprovalStepItemsFromWorkflow(ctx context.Context, runID uint) ([]ReleaseApprovalStepItem, bool) {
+	wf := s.workflowEngine()
+	ticket, err := wf.GetTicketByRefType(ctx, model.WorkflowRefCicdReleaseRun, runID, model.WorkflowTicketTypeRelease)
+	if err != nil || ticket == nil {
+		return nil, false
+	}
+	detail, err := wf.TicketDetail(ctx, ticket.ID)
+	if err != nil || detail == nil || len(detail.Steps) == 0 {
+		return nil, false
+	}
+	items := make([]ReleaseApprovalStepItem, 0, len(detail.Steps))
+	for _, st := range detail.Steps {
+		item := ReleaseApprovalStepItem{
+			ID:             st.ID,
+			StageKey:       st.StageKey,
+			StageName:      st.StageName,
+			SortOrder:      st.SortOrder,
+			Status:         st.Status,
+			UserGroupID:    st.UserGroupID,
+			UserGroupName:  st.UserGroupName,
+			ReviewerUserID: st.ReviewerUserID,
+			ReviewerName:   st.ReviewerName,
+			ReviewComment:  st.ReviewComment,
+		}
+		if st.ReviewedAt != nil {
+			ts := st.ReviewedAt.Format("2006-01-02 15:04:05")
+			item.ReviewedAt = &ts
+		}
+		items = append(items, item)
+	}
+	return items, true
 }
 
 func buildApprovalFlowText(steps []ReleaseApprovalStepItem) string {

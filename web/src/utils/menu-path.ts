@@ -54,6 +54,7 @@ export const AUX_MENU_ACCESS_ALTERNATES: Record<string, string[]> = {
   "/cicd/release-records": ["/workflow/inbox"],
   "/alert-monitor-platform": ["/workflow/inbox"],
   "/alert-events": ["/workflow/inbox"],
+  "/ai/approvals": ["/workflow/inbox"],
 };
 
 /** 旧拼写兼容（下划线 → 连字符）。 */
