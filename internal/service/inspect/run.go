@@ -156,6 +156,8 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	// 风险台账期次对比：回填「新增/持续/已恢复」与上期的责任人、整改期限，
 	// 再落库作为下一期的比对基线。落库失败只告警，不阻断报告生成。
 	data.Ledger, data.Diff = s.applyPeriodDiff(dbCtx, plan.ProjectID, run.ID, data.Timestamp, data.Ledger)
+	data.RiskTiers = buildRiskTierSummary(data.Ledger)
+	data.Conclusion = buildLeadershipConclusion(&data)
 	if err := s.saveFindings(dbCtx, plan.ProjectID, run.ID, data.Timestamp, data.Ledger, data.Diff); err != nil {
 		slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
 			Warn("inspect findings persist failed", "error", err)

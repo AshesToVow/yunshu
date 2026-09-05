@@ -59,7 +59,6 @@ services:
         # 华为云镜像路径为 docker.io/library/...（不是 docker.io/golang）
         GO_IMAGE: ${GO_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.26.2-alpine}
         ALPINE_IMAGE: ${ALPINE_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/alpine:3.19}
-        WKHTMLTOPDF_IMAGE: ${WKHTMLTOPDF_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/surnet/alpine-wkhtmltopdf:3.23.2-0.12.6-full}
     container_name: yunshu-backend
     restart: unless-stopped
     mem_limit: 384m
@@ -72,7 +71,7 @@ services:
       # 业务配置全部来自挂载的 configs/config.yaml（含 JWT / encryption_key / mysql / redis）
       - RUN_SEED=${RUN_SEED:-1}
       - WAIT_MYSQL=${WAIT_MYSQL:-1}
-      - INSPECT_SERVER_PDF=${INSPECT_SERVER_PDF:-html_only}
+      # 巡检 PDF 仅前端 html2canvas/jsPDF；服务端不再渲染
     volumes:
       - ./configs:/app/configs:ro
       - ./logs:/app/logs
