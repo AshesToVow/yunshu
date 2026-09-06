@@ -154,7 +154,11 @@ export type DbSqlCheckResult = {
   error?: string;
 };
 
-export async function checkDbSql(projectId: number, instanceId: number, body: { database?: string; sql: string }) {
+export async function checkDbSql(
+  projectId: number,
+  instanceId: number,
+  body: { database?: string; sql: string; audit_mode?: "system" | "manual" },
+) {
   return getData<DbSqlCheckResult>(http.post(`${base(projectId)}/instances/${instanceId}/check`, body));
 }
 

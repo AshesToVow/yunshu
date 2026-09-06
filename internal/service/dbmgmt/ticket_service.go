@@ -113,6 +113,19 @@ func (s *Service) GetTicket(ctx context.Context, projectID, ticketID uint, actor
 	}
 	item := s.toTicketItem(ctx, *t)
 	s.fillTicketStageName(ctx, &item, t)
+	// 详情页审批/执行按钮依赖 mine_status；按状态选择视角填充。
+	mineTab := "approval"
+	switch t.Status {
+	case model.DbTicketStatusPendingExecution,
+		model.DbTicketStatusExecuting,
+		model.DbTicketStatusSuccess,
+		model.DbTicketStatusFailed,
+		model.DbTicketStatusApproved:
+		mineTab = "execution"
+	}
+	items := []TicketItem{item}
+	s.enrichTicketMineStatus(ctx, items, actor, mineTab)
+	item = items[0]
 	if s.canViewTicketSQL(ctx, projectID, t, actor) {
 		item.SqlText = t.SqlText
 	}
@@ -143,12 +156,21 @@ ORDER BY s.sort_order ASC, s.id ASC LIMIT 1
 	}
 }
 
-func (s *Service) preCheckForTicket(ctx context.Context, inst *model.DbInstance, dbName, sqlText string) (reviewJSON string, syntaxType int, err error) {
-	if !s.goInceptionAvailable(ctx,inst) {
-		if reDDL.MatchString(strings.ToUpper(sqlText)) {
-			return "", goinception.SyntaxDDL, nil
-		}
-		return "", goinception.SyntaxDML, nil
+func (s *Service) preCheckForTicket(
+	ctx context.Context,
+	inst *model.DbInstance,
+	dbName, sqlText, auditMode string,
+) (reviewJSON string, syntaxType int, err error) {
+	localSyntax := goinception.SyntaxDML
+	if reDDL.MatchString(strings.ToUpper(sqlText)) {
+		localSyntax = goinception.SyntaxDDL
+	}
+	// 人工审核：不连 goInception，由审批人审 SQL；系统审核才做引擎预检。
+	if normalizeAuditMode(auditMode) == model.DbAuditModeManual {
+		return "", localSyntax, nil
+	}
+	if !s.goInceptionAvailable(ctx, inst) {
+		return "", localSyntax, nil
 	}
 	rs, checkErr := s.runGoInceptionCheck(ctx, inst, dbName, sqlText)
 	if checkErr != nil {
@@ -162,7 +184,7 @@ func (s *Service) preCheckForTicket(ctx context.Context, inst *model.DbInstance,
 	if rs != nil {
 		return reviewJSON, rs.SyntaxType, nil
 	}
-	return "", goinception.SyntaxDML, nil
+	return "", localSyntax, nil
 }
 
 func (s *Service) executeWriteViaEngine(ctx context.Context, inst *model.DbInstance, database, sqlText string, backup bool, actor *auth.CurrentUser, ticketID *uint) (executeJSON string, err error) {
@@ -263,7 +285,7 @@ func (s *Service) ExecuteSQL(ctx context.Context, projectID, instanceID uint, re
 	auditMode := normalizeAuditMode(req.AuditMode)
 	backup := resolveBackupChoice(req.IsBackup, cfg.GoInceptionBackup)
 	if s.requiresTicketApproval(inst, assess, cfgResolved, auditMode) {
-		reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, req.Database, sqlText)
+		reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, req.Database, sqlText, auditMode)
 		if checkErr != nil {
 			return nil, checkErr
 		}
@@ -329,7 +351,7 @@ func (s *Service) createSqlExecuteTicket(ctx context.Context, projectID uint, in
 	if !forceTicket && !s.needsApproval(inst, assess, configResolved{ProdForceApproval: cfg.ProdForceApproval}) {
 		return nil, constants.ErrBadRequestWithMsg("当前 SQL 无需创建工单")
 	}
-	reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, database, sqlText)
+	reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, database, sqlText, model.DbAuditModeSystem)
 	if checkErr != nil {
 		return nil, checkErr
 	}
@@ -338,7 +360,7 @@ func (s *Service) createSqlExecuteTicket(ctx context.Context, projectID uint, in
 		ProjectID: projectID, InstanceID: inst.ID, TicketType: model.DbTicketTypeSqlExecute,
 		SubmitterUserID: actorUserID(actor), SubmitterName: actorUsername(actor),
 		DatabaseName: database, SqlText: sqlText, RiskLevel: assess.RiskLevel,
-		SyntaxType: syntaxType, IsBackup: cfg.GoInceptionBackup,
+		SyntaxType: syntaxType, IsBackup: cfg.GoInceptionBackup, AuditMode: model.DbAuditModeSystem,
 		ParsedOpsJSON: string(ops), ReviewJSON: reviewJSON, Reason: strings.TrimSpace(reason),
 		Status: model.DbTicketStatusDraft,
 	}
@@ -401,7 +423,7 @@ func (s *Service) ImportSQL(ctx context.Context, projectID, instanceID uint, req
 	auditMode := normalizeAuditMode(req.AuditMode)
 	backup := resolveBackupChoice(req.IsBackup, cfg.GoInceptionBackup)
 	if s.requiresTicketApproval(inst, assess, cfgResolved, auditMode) {
-		reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, req.Database, req.Sql)
+		reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, req.Database, req.Sql, auditMode)
 		if checkErr != nil {
 			return nil, checkErr
 		}

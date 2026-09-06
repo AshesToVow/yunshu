@@ -280,6 +280,10 @@ func (s *Service) enrichTicketMineStatus(ctx context.Context, items []TicketItem
 			s.enrichMineFromWorkflow(ctx, item.ID, model.WorkflowRefDbSqlTicket, pending, &item.MineStatus, &item.CurrentStageName, actor)
 			if item.Status == model.DbTicketStatusPendingExecution {
 				item.CurrentStageName = "待提交人执行"
+				// 统一工单无 legacy steps 时，提交人待执行也应标成 mine_pending（详情/列表都能出执行按钮）
+				if item.SubmitterUserID == userID && item.MineStatus == "" {
+					item.MineStatus = dbMineStatusPending
+				}
 			}
 			continue
 		}
@@ -321,9 +325,15 @@ func (s *Service) enrichTicketMineStatus(ctx context.Context, items []TicketItem
 				}
 			case model.DbTicketStatusPendingExecution:
 				item.CurrentStageName = "待提交人执行"
+				if item.SubmitterUserID == userID && item.MineStatus == "" {
+					item.MineStatus = dbMineStatusPending
+				}
 			}
 		} else if item.Status == model.DbTicketStatusPendingExecution {
 			item.CurrentStageName = "待提交人执行"
+			if item.SubmitterUserID == userID && item.MineStatus == "" {
+				item.MineStatus = dbMineStatusPending
+			}
 		}
 	}
 }
