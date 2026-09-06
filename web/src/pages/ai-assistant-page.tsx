@@ -6,7 +6,7 @@ import {
   RobotOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Input, List, Select, Space, Switch, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Input, List, Select, Space, Switch, Tag, Typography, message, theme } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   chatAIStream,
@@ -81,6 +81,7 @@ function parseAssistantMeta(metaJSON?: string): string {
 }
 
 export function AiAssistantPage() {
+  const { token } = theme.useToken();
   const prefs = useMemo(() => loadPrefs(), []);
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -555,9 +556,10 @@ export function AiAssistantPage() {
               height: 420,
               overflow: "auto",
               padding: 12,
-              background: "var(--ant-color-fill-quaternary, #fafafa)",
+              background: token.colorFillAlter,
               borderRadius: 8,
-              border: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
+              border: `1px solid ${token.colorBorderSecondary}`,
+              color: token.colorText,
             }}
           >
             {messages.length === 0 ? (
@@ -575,8 +577,9 @@ export function AiAssistantPage() {
                       marginLeft: m.role === "user" ? "auto" : 0,
                       padding: "10px 12px",
                       borderRadius: 8,
-                      background: m.role === "user" ? "var(--ant-color-primary-bg, #e6f4ff)" : "#fff",
-                      border: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
+                      background: m.role === "user" ? token.colorPrimaryBg : token.colorBgContainer,
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      color: token.colorText,
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-word",
                     }}
@@ -599,7 +602,8 @@ export function AiAssistantPage() {
                           fontSize: 12,
                           maxHeight: 120,
                           overflow: "auto",
-                          background: "rgba(0,0,0,0.04)",
+                          background: token.colorFillSecondary,
+                          color: token.colorText,
                           borderRadius: 6,
                           whiteSpace: "pre-wrap",
                         }}

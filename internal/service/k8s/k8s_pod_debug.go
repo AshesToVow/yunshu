@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"yunshu/internal/dictconfig"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -16,14 +17,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const defaultDebugImage = "busybox:1.36"
-
 type PodDebugRequest struct {
 	ClusterID       uint   `json:"cluster_id" binding:"required"`
 	Namespace       string `json:"namespace" binding:"required"`
 	Name            string `json:"name" binding:"required"`
 	TargetContainer string `json:"target_container"` // 可选：共享目标容器命名空间
-	Image           string `json:"image"`            // 默认 busybox:1.36
+	Image           string `json:"image"`            // 可选；空则用字典 k8s_pod_debug_image / 默认 busybox
 	ContainerName   string `json:"container_name"`   // 可选：指定临时容器名
 }
 
@@ -32,6 +31,14 @@ type PodDebugResult struct {
 	Image              string `json:"image"`
 	Ready              bool   `json:"ready"`
 	Message            string `json:"message"`
+}
+
+// ResolveDebugImage 解析调试镜像：请求覆盖 > 数据字典 > 内置默认。
+func (s *K8sPodService) ResolveDebugImage(ctx context.Context, override string) string {
+	if v := strings.TrimSpace(override); v != "" {
+		return v
+	}
+	return dictconfig.ResolvePodDebugImage(ctx, s.db)
 }
 
 // DebugEphemeral 向 Pod 注入临时调试容器（需集群支持 EphemeralContainers）。
@@ -48,10 +55,7 @@ func (s *K8sPodService) DebugEphemeral(ctx context.Context, req PodDebugRequest)
 	if ns == "" || name == "" {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsge278df185255)
 	}
-	image := strings.TrimSpace(req.Image)
-	if image == "" {
-		image = defaultDebugImage
-	}
+	image := s.ResolveDebugImage(ctx, req.Image)
 	ecName := strings.TrimSpace(req.ContainerName)
 	if ecName == "" {
 		ecName = fmt.Sprintf("yunshu-debug-%d", time.Now().Unix()%100000)

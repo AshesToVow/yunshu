@@ -27,7 +27,7 @@ export const DICT_CATEGORY_META: Record<Exclude<DictCategoryId, "all">, DictCate
   system: { id: "system", label: "系统", color: "blue", description: "邮件、认证会话、密码策略、通用状态等基础配置" },
   alert: { id: "alert", label: "告警", color: "volcano", description: "告警规则、通道、Prometheus、企微/钉钉" },
   log: { id: "log", label: "日志", color: "cyan", description: "ES / Kafka / Agent、采集源等平台配置" },
-  k8s: { id: "k8s", label: "Kubernetes", color: "purple", description: "集群模板、Event 转发等" },
+  k8s: { id: "k8s", label: "Kubernetes", color: "purple", description: "集群模板、Event 转发、Pod 调试镜像等" },
   cmdb: { id: "cmdb", label: "CMDB / 服务器", color: "geekblue", description: "服务器分组、云厂商凭据模板" },
   backup: { id: "backup", label: "备份 / MinIO", color: "orange", description: "MySQL 备份归档与 MinIO 连接" },
   dbmgmt: { id: "dbmgmt", label: "数据库管理", color: "gold", description: "SQL 查询、审批、goInception 等平台配置" },
@@ -121,6 +121,7 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "K8s Event 批处理周期秒（k8s_event_forward_worker_interval_seconds）", value: "k8s_event_forward_worker_interval_seconds", category: "k8s" },
   { label: "K8s Event 批大小（k8s_event_forward_worker_batch_size）", value: "k8s_event_forward_worker_batch_size", category: "k8s" },
   { label: "K8s Event 最大重试（k8s_event_forward_worker_max_retries）", value: "k8s_event_forward_worker_max_retries", category: "k8s" },
+  { label: "Pod 调试镜像（k8s_pod_debug_image）", value: "k8s_pod_debug_image", category: "k8s" },
   { label: "Kubeconfig 模板（k8s_kubeconfig_template）", value: "k8s_kubeconfig_template", category: "k8s" },
   { label: "K8s 直连配置键（k8s_direct_config）", value: "k8s_direct_config", category: "k8s" },
 

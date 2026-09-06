@@ -136,6 +136,11 @@ func (h *PodHandler) DebugEphemeral(c *gin.Context) {
 	ServeJSON(c, h.svc.DebugEphemeral)
 }
 
+// DebugImageDefault 返回当前生效的调试镜像（字典 / 默认）。
+func (h *PodHandler) DebugImageDefault(c *gin.Context) {
+	response.Success(c, gin.H{"image": h.svc.ResolveDebugImage(c.Request.Context(), "")})
+}
+
 // Restart 处理对应的 HTTP 请求并返回统一响应。
 func (h *PodHandler) Restart(c *gin.Context) {
 	ServeJSONOK(c, gin.H{"message": "restarted"}, h.svc.Restart)

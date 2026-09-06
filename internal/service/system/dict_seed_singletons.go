@@ -42,6 +42,7 @@ func dictSingletonTypes() map[string]struct{} {
 		"k8s_event_forward_worker_interval_seconds": {},
 		"k8s_event_forward_worker_batch_size":       {},
 		"k8s_event_forward_worker_max_retries":      {},
+		"k8s_pod_debug_image":                       {},
 		// MinIO
 		"minio_endpoint":      {},
 		"minio_access_key":    {},

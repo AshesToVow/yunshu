@@ -57,6 +57,7 @@ func seedPermissionsK8s() []model.Permission {
 		{Name: "Pod 文件删除", Resource: "/api/v1/pods/file/delete", Action: "POST", Description: "Delete pod file"},
 		{Name: "Pod Exec", Resource: "/api/v1/pods/exec", Action: "POST", Description: "Exec command in pod"},
 		{Name: "Pod 临时调试容器", Resource: "/api/v1/pods/debug", Action: "POST", Description: "Inject ephemeral debug container"},
+		{Name: "Pod 调试镜像", Resource: "/api/v1/pods/debug/image", Action: "GET", Description: "Get default ephemeral debug image"},
 		{Name: "Pod 交互式终端", Resource: "/api/v1/pods/exec/ws", Action: "GET", Description: "Interactive exec terminal via websocket"},
 		{Name: "Pod 重启", Resource: "/api/v1/pods/restart", Action: "POST", Description: "Restart pod"},
 		{Name: "Pod YAML 创建", Resource: "/api/v1/pods/create/yaml", Action: "POST", Description: "Create pod by yaml"},

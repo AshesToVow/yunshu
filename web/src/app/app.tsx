@@ -96,6 +96,9 @@ export function App() {
                 colorWarningBorder: "#594214",
                 colorErrorBg: "#2a1215",
                 colorErrorBorder: "#5c2223",
+                // 强制描述/标题用主文字色，避免浅底上继承的浅色字
+                colorText: "rgba(255,255,255,0.88)",
+                colorTextHeading: "rgba(255,255,255,0.92)",
               }
             : undefined,
         },

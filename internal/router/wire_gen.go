@@ -100,7 +100,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		return nil, err
 	}
 	v57 := k8s.NewK8sClusterService(v25, v34, v56, v22, v23, v9, v20)
-	v58 := k8s.NewK8sPodService(v56, v22, v23)
+	v58 := k8s.NewK8sPodService(v56, v22, v23, db)
 	v59 := k8s.NewK8sNamespaceService(v56, v22, v23)
 	v60 := k8s.NewK8sNodeService(v56)
 	v61 := k8s.NewK8sWorkloadService(v56, db)

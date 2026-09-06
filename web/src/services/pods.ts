@@ -282,6 +282,10 @@ export function debugPodEphemeral(payload: PodDebugPayload) {
   return getData<PodDebugResult>(http.post("/pods/debug", payload));
 }
 
+export function getPodDebugImageDefault() {
+  return getData<{ image: string }>(http.get("/pods/debug/image"));
+}
+
 export function restartPod(payload: { cluster_id: number; namespace: string; name: string }) {
   return getData<{ message: string }>(http.post("/pods/restart", payload));
 }

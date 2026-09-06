@@ -16,7 +16,7 @@ import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { validateYaml } from "../components/k8s/monaco-yaml-editor";
 import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
-import { createPodByYAML, createPodSimple, debugPodEphemeral, deletePod, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, restartPod, updatePodSimple, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
+import { createPodByYAML, createPodSimple, debugPodEphemeral, deletePod, downloadPodLogs, getPodDebugImageDefault, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, restartPod, updatePodSimple, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
 import { analyzePodDiagnoseAI, startAIInvestigation, type AIPodDiagnoseResult } from "../services/ai";
 import { useNavigate } from "react-router-dom";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
@@ -86,6 +86,10 @@ export function PodPage() {
   const [streaming, setStreaming] = useState(false);
   const [execOpen, setExecOpen] = useState(false);
   const [preferredExecContainer, setPreferredExecContainer] = useState<string | undefined>();
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugTarget, setDebugTarget] = useState<PodItem | null>(null);
+  const [debugImage, setDebugImage] = useState("busybox:1.36");
+  const [debugSubmitting, setDebugSubmitting] = useState(false);
   const [fileOpen, setFileOpen] = useState(false);
   const [filePath, setFilePath] = useState("/");
   const [fileList, setFileList] = useState<PodFileItem[]>([]);
@@ -147,7 +151,7 @@ export function PodPage() {
   });
 
   const anyPanelOpen =
-    createOpen || execOpen || detailOpen || logsOpen || diagnoseOpen || fileOpen || deleteDialogOpen;
+    createOpen || execOpen || detailOpen || logsOpen || diagnoseOpen || fileOpen || deleteDialogOpen || debugOpen;
   const pauseWatch = anyPanelOpen || (detailTab === "logs" && streaming);
 
   useEffect(() => {
@@ -666,27 +670,16 @@ export function PodPage() {
                           icon: <BugOutlined />,
                           label: "临时调试容器",
                           onClick: () => {
-                            void (async () => {
-                              try {
-                                const res = await debugPodEphemeral({
-                                  cluster_id: clusterId!,
-                                  namespace: record.namespace,
-                                  name: record.name,
-                                });
-                                message.success(res.message || `已注入 ${res.ephemeral_container}`);
-                                setPreferredExecContainer(res.ephemeral_container);
-                                setSelected(record);
-                                const d = await getPodDetail({
-                                  cluster_id: clusterId!,
-                                  namespace: record.namespace,
-                                  name: record.name,
-                                });
-                                setDetail(d);
-                                setExecOpen(true);
-                              } catch {
-                                /* interceptor */
-                              }
-                            })();
+                            setDebugTarget(record);
+                            setDebugOpen(true);
+                            setDebugImage("busybox:1.36");
+                            void getPodDebugImageDefault()
+                              .then((r) => {
+                                if (r?.image) setDebugImage(r.image);
+                              })
+                              .catch(() => {
+                                /* keep default */
+                              });
                           },
                         }
                       : null,
@@ -866,6 +859,59 @@ export function PodPage() {
         fileInputRef={fileInputRef}
         loadFiles={loadFiles}
       />
+
+      <Modal
+        title={debugTarget ? `注入临时调试容器：${debugTarget.namespace}/${debugTarget.name}` : "注入临时调试容器"}
+        open={debugOpen}
+        confirmLoading={debugSubmitting}
+        okText="注入并打开终端"
+        onCancel={() => {
+          setDebugOpen(false);
+          setDebugTarget(null);
+        }}
+        onOk={() => {
+          if (!clusterId || !debugTarget) return;
+          setDebugSubmitting(true);
+          void (async () => {
+            try {
+              const res = await debugPodEphemeral({
+                cluster_id: clusterId,
+                namespace: debugTarget.namespace,
+                name: debugTarget.name,
+                image: debugImage.trim() || undefined,
+              });
+              message.success(res.message || `已注入 ${res.ephemeral_container}（${res.image}）`);
+              setPreferredExecContainer(res.ephemeral_container);
+              setSelected(debugTarget);
+              const d = await getPodDetail({
+                cluster_id: clusterId,
+                namespace: debugTarget.namespace,
+                name: debugTarget.name,
+              });
+              setDetail(d);
+              setDebugOpen(false);
+              setDebugTarget(null);
+              setExecOpen(true);
+            } catch {
+              /* interceptor */
+            } finally {
+              setDebugSubmitting(false);
+            }
+          })();
+        }}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          默认镜像来自数据字典 <Typography.Text code>k8s_pod_debug_image</Typography.Text>
+          ；内网请改为可拉取的 Harbor / 私有仓库地址。本次可临时覆盖。
+        </Typography.Paragraph>
+        <Input
+          value={debugImage}
+          onChange={(e) => setDebugImage(e.target.value)}
+          placeholder="例如 harbor.example.com/library/busybox:1.36"
+          allowClear
+        />
+      </Modal>
 
       <Drawer
         title={selected ? `Exec 进入容器 - ${selected.namespace}/${selected.name}` : "Exec 进入容器"}

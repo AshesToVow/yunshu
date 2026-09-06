@@ -78,6 +78,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	pods.POST("/file/upload", d.podHandler.UploadFile)
 	pods.POST("/file/delete", d.podHandler.DeleteFile)
 	pods.POST("/exec", d.podHandler.Exec)
+	pods.GET("/debug/image", d.podHandler.DebugImageDefault)
 	pods.POST("/debug", d.podHandler.DebugEphemeral)
 	// Interactive exec via WebSocket (ticket from POST /auth/ws-ticket)
 	podsWS := api.Group("/pods")

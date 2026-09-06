@@ -25,11 +25,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"gorm.io/gorm"
 )
 
 type K8sPodService struct {
 	runtime     *K8sRuntimeService
 	dyn         *DynamicResourceService
+	db          *gorm.DB
 	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
 	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 }
@@ -39,9 +41,10 @@ func NewK8sPodService(
 	runtime *K8sRuntimeService,
 	nsDeny interfaces.K8sNamespaceDenyRepository,
 	nsAllow interfaces.K8sNamespaceAllowRepository,
+	db *gorm.DB,
 ) *K8sPodService {
 	return &K8sPodService{
-		runtime: runtime, dyn: NewDynamicResourceService(runtime),
+		runtime: runtime, dyn: NewDynamicResourceService(runtime), db: db,
 		nsDenyRepo: nsDeny, nsAllowRepo: nsAllow,
 	}
 }

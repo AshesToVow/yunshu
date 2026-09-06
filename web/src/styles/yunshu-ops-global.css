@@ -78,6 +78,31 @@ body {
   color: var(--admin-text-main);
 }
 
+/* 暗色主题 Alert：避免浅底 + 浅字（antd warning 默认浅黄底） */
+.admin-shell.ops-platform.theme-dark .ant-alert {
+  color: var(--admin-text-main);
+}
+.admin-shell.ops-platform.theme-dark .ant-alert .ant-alert-message,
+.admin-shell.ops-platform.theme-dark .ant-alert .ant-alert-description {
+  color: var(--admin-text-main);
+}
+.admin-shell.ops-platform.theme-dark .ant-alert-warning {
+  background: var(--ops-warning-bg, #2b2111) !important;
+  border-color: #594214 !important;
+}
+.admin-shell.ops-platform.theme-dark .ant-alert-info {
+  background: var(--ops-info-bg, #111a2c) !important;
+  border-color: #15325b !important;
+}
+.admin-shell.ops-platform.theme-dark .ant-alert-success {
+  background: var(--ops-success-bg, #162312) !important;
+  border-color: #274916 !important;
+}
+.admin-shell.ops-platform.theme-dark .ant-alert-error {
+  background: var(--ops-error-bg, #2a1215) !important;
+  border-color: #5c2223 !important;
+}
+
 .admin-shell.ops-platform::before,
 .admin-shell.ops-platform::after {
   display: none !important;
