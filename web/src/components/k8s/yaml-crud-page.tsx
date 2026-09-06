@@ -1,11 +1,13 @@
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Card, Collapse, Drawer, Modal, Select, Space, Table, Tabs, Typography, message } from "antd";
+import { Alert, Button, Card, Collapse, Drawer, Modal, Select, Space, Table, Tabs, Typography, message } from "antd";
 import type { ColumnType, ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import YAML from "yaml";
 import type { K8sDeleteOptions } from "../../services/service-factory";
+import { extractApiErrorMessage } from "../../services/http";
 import { K8sPageToolbar } from "../ops/k8s-page-toolbar";
 import { OpsPageHeader } from "../ops/ops-page-header";
+import { useK8sClusterTier } from "../../hooks/use-k8s-cluster-tier";
 import { useK8sContext } from "../../hooks/use-k8s-context";
 import { useK8sWatch } from "../../hooks/use-k8s-watch";
 import { useEditGuardStore } from "../../stores/edit-guard-store";
@@ -45,6 +47,18 @@ export type YamlCrudApplyArgs = {
   manifest: string;
 };
 
+export type YamlCrudPreviewResult = {
+  dry_run_ok: boolean;
+  message?: string;
+  diffs?: Array<{
+    kind: string;
+    namespace: string;
+    name: string;
+    exists: boolean;
+    unified?: string;
+  }>;
+};
+
 export type YamlCrudDeleteArgs = {
   clusterId: number;
   namespace?: string;
@@ -55,6 +69,8 @@ export interface YamlCrudApi<TItem, TDetail> {
   list: (args: YamlCrudListArgs) => Promise<TItem[]>;
   detail: (args: YamlCrudDetailArgs) => Promise<TDetail>;
   apply?: (args: YamlCrudApplyArgs) => Promise<unknown>;
+  /** 可选：Apply 前预检（Deployment/StatefulSet preview-apply） */
+  previewApply?: (args: YamlCrudApplyArgs) => Promise<YamlCrudPreviewResult>;
   remove?: (args: YamlCrudDeleteArgs) => Promise<unknown>;
 }
 
@@ -94,7 +110,7 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   showEditButton?: boolean;
   confirmOverwrite?: boolean;
   disableMutations?: boolean;
-  /** 操作列宽度，节点等页面操作较多时可加大 */
+  /** 操作列宽度，节点等页面操作较多时可加大；默认需容纳 详情/编辑/删除（及常见额外操作） */
   actionColumnWidth?: number;
   /** 启用 K8s SSE Watch 时传入资源短名，如 deployments、pods */
   watchResource?: string;
@@ -128,7 +144,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     showEditButton = true,
     confirmOverwrite = true,
     disableMutations = false,
-    actionColumnWidth = 260,
+    actionColumnWidth = 360,
     watchResource,
     description,
     headerExtra,
@@ -147,9 +163,12 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     syncUrl: true,
     onLoadNamespaces,
   });
+  const { canMutate, loading: tierLoading } = useK8sClusterTier(clusterId);
+  const mutationsDisabled = disableMutations || (!!clusterId && !tierLoading && !canMutate);
   const [keyword, setKeyword] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TItem[]>([]);
+  const [listError, setListError] = useState<string>("");
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -181,10 +200,14 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
       const effectiveKeyword = (overrideKeyword ?? keyword).trim();
       const list = await api.list({ clusterId, namespace, keyword: effectiveKeyword || undefined });
       if (seq !== reloadSeqRef.current) return;
+      setListError("");
       setData(list ?? []);
-    } catch {
+    } catch (err: unknown) {
       if (seq !== reloadSeqRef.current) return;
       setData([]);
+      const msg = extractApiErrorMessage(err, "加载列表失败");
+      setListError(msg);
+      if (!silent) message.error(msg);
     } finally {
       if (!silent && seq === reloadSeqRef.current) setLoading(false);
     }
@@ -210,10 +233,11 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
   }, [clusterId, namespace]);
 
   useK8sWatch({
-    enabled: Boolean(watchResource) && watchLive && Boolean(needNamespace),
+    enabled: Boolean(watchResource) && watchLive && Boolean(clusterId) && (!needNamespace || Boolean(namespace)),
     clusterId,
     namespace,
     resource: watchResource,
+    requireNamespace: Boolean(needNamespace),
     onRefresh: () => void reload(undefined, { silent: true }),
     onDisabled: () => setWatchLive(false),
   });
@@ -239,10 +263,12 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     key: "action",
     width: actionColumnWidth,
     fixed: "right",
+    className: "yunshu-table-actions-cell",
     render: (_: unknown, record: TItem) => (
-      <Space>
+      <Space size={0} wrap className="yunshu-table-actions">
         <Button
           type="link"
+          size="small"
           icon={<EyeOutlined />}
           onClick={() => {
             if (!clusterId) return;
@@ -276,9 +302,10 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
         >
           详情
         </Button>
-        {!disableMutations && showEditButton && onEdit ? (
+        {!mutationsDisabled && showEditButton && onEdit ? (
           <Button
             type="link"
+            size="small"
             icon={<EditOutlined />}
             onClick={() => {
               if (!clusterId) return;
@@ -289,10 +316,11 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
           </Button>
         ) : null}
         {extraRowActions?.(record, { clusterId: clusterId ?? 0, namespace, reload })}
-        {!disableMutations && api.remove ? (
+        {!mutationsDisabled && api.remove ? (
           <Button
             danger
             type="link"
+            size="small"
             icon={<DeleteOutlined />}
             onClick={() => {
               setDeleteTarget(record);
@@ -326,7 +354,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
 
   const hasFormTab = Boolean(renderCreateFormTab);
   const hasYamlTab = Boolean(api.apply);
-  const canOpenCreate = !disableMutations && (hasFormTab || hasYamlTab);
+  const canOpenCreate = !mutationsDisabled && (hasFormTab || hasYamlTab);
 
   function handleOpenCreateDrawer() {
     if (!clusterId) return;
@@ -356,13 +384,75 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
       }
     };
 
+    const runPreviewThen = async (next: () => Promise<void>) => {
+      const previewFn = api.previewApply;
+      if (!previewFn) {
+        await next();
+        return;
+      }
+      setApplyLoading(true);
+      setDetailApplyLoading(true);
+      try {
+        const preview = await previewFn({ clusterId, manifest: manifestText });
+        const diffs = preview.diffs ?? [];
+        const unified = diffs
+          .map((d) => d.unified?.trim())
+          .filter(Boolean)
+          .join("\n\n");
+        const statusLine = preview.dry_run_ok
+          ? "Server-side dry-run 通过"
+          : `Dry-run 未通过：${preview.message || "未知错误"}`;
+        Modal.confirm({
+          title: "应用预检",
+          width: 820,
+          okText: preview.dry_run_ok ? "确认应用" : "仍要应用",
+          okButtonProps: preview.dry_run_ok ? undefined : { danger: true },
+          cancelText: "取消",
+          content: (
+            <Space direction="vertical" style={{ width: "100%" }} size="small">
+              <Typography.Text type={preview.dry_run_ok ? "success" : "danger"}>{statusLine}</Typography.Text>
+              {diffs.length ? (
+                <Typography.Text type="secondary">
+                  变更对象：
+                  {diffs.map((d) => `${d.kind}/${d.namespace || "-"}/${d.name}${d.exists ? "" : " (新建)"}`).join("，")}
+                </Typography.Text>
+              ) : null}
+              <Typography.Paragraph
+                style={{
+                  marginBottom: 0,
+                  maxHeight: 360,
+                  overflow: "auto",
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "var(--ys-font-mono, monospace)",
+                  fontSize: 12,
+                  background: "var(--admin-surface, #f8fafc)",
+                  padding: 12,
+                  borderRadius: 8,
+                }}
+              >
+                {unified || preview.message || "无文本 diff（可能为新建或无法解析）"}
+              </Typography.Paragraph>
+            </Space>
+          ),
+          onOk: async () => {
+            await next();
+          },
+        });
+      } catch (err: unknown) {
+        message.error(extractApiErrorMessage(err, "预检失败"));
+      } finally {
+        setApplyLoading(false);
+        setDetailApplyLoading(false);
+      }
+    };
+
     const confirmAndApply = async () => {
       if (!confirmOverwrite) {
-        await doApply();
+        await runPreviewThen(doApply);
         return;
       }
       if (!manifestText.trim()) {
-        await doApply();
+        await runPreviewThen(doApply);
         return;
       }
 
@@ -383,7 +473,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
         }
 
         if (!targetName) {
-          await doApply();
+          await runPreviewThen(doApply);
           return;
         }
 
@@ -396,7 +486,13 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
         }
 
         if (!exists) {
-          await doApply();
+          await runPreviewThen(doApply);
+          return;
+        }
+
+        // 有 preview 时直接走预检弹窗；否则保留覆盖确认
+        if (api.previewApply) {
+          await runPreviewThen(doApply);
           return;
         }
 
@@ -411,7 +507,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
         });
         return;
       } catch {
-        await doApply();
+        await runPreviewThen(doApply);
         return;
       }
     };
@@ -433,7 +529,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     });
   }
 
-  const canApplyDetailYaml = Boolean(api.apply) && !disableMutations;
+  const canApplyDetailYaml = Boolean(api.apply) && !mutationsDisabled;
 
   const resolvedAiKind = useMemo(() => {
     if (aiResourceKind?.trim()) return aiResourceKind.trim();
@@ -507,6 +603,28 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
           ) : undefined
         }
       />
+      {listError ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="列表加载失败"
+          description={listError}
+          action={
+            <Button size="small" onClick={() => void reload()}>
+              重试
+            </Button>
+          }
+        />
+      ) : null}
+      {clusterId && !tierLoading && !canMutate && !disableMutations ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="当前集群档位为只读（或只读+Exec），已隐藏创建/编辑/删除；变更需 admin 档位"
+        />
+      ) : null}
 
       {renderSummary ? <div className="k8s-summary-row-wrap">{renderSummary(data, toolbarCtx)}</div> : null}
 
@@ -522,7 +640,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
         />
       </div>
 
-      {!disableMutations && (hasFormTab || hasYamlTab) ? (
+      {!mutationsDisabled && (hasFormTab || hasYamlTab) ? (
         <Drawer
           title={
             <Space direction="vertical" size={0}>

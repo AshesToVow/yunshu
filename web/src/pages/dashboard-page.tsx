@@ -206,7 +206,7 @@ export function DashboardPage() {
         description={t("dashboard.subtitle")}
         meta={
           <Typography.Text type="secondary">
-            {loading ? t("dashboard.syncPending") : loadError ? "同步失败" : t("dashboard.syncLive")}
+            {loading ? t("dashboard.syncPending") : loadError ? t("dashboard.syncFailed") : t("dashboard.syncLive")}
           </Typography.Text>
         }
       />

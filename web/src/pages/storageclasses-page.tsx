@@ -40,6 +40,7 @@ export function StorageClassesPage() {
     <YamlCrudPage<StorageClassItem, StorageDetail>
       title="存储 - StorageClass"
       needNamespace={false}
+      actionColumnWidth={400}
       columns={columns}
       showEditButton={false}
       api={{

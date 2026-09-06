@@ -289,8 +289,9 @@ export function EsmgmtStoragePage() {
                 {
                   title: "操作",
                   key: "action",
-                  width: 88,
+                  width: 110,
                   fixed: "right",
+                  className: "yunshu-table-actions-cell",
                   render: (_, r) =>
                     canManageESIndex(r.name, r.matched_pattern) ? (
                       <Popconfirm title={`确认删除 ${r.name}？`} onConfirm={() => void handleDeleteIndex(r.name)}>

@@ -128,6 +128,7 @@ export interface PodContainerInfo {
   ready: boolean;
   restart_count: number;
   state: string;
+  ephemeral?: boolean;
 }
 
 export interface PodDetail {
@@ -144,6 +145,7 @@ export interface PodDetail {
   annotations: Record<string, string>;
   containers: PodContainerInfo[];
   init_containers: PodContainerInfo[];
+  ephemeral_containers?: PodContainerInfo[];
   start_time: string;
   creation_time: string;
   volumes: Array<{
@@ -259,6 +261,27 @@ export function deletePod(payload: PodDeletePayload) {
 export function execPod(payload: PodExecPayload) {
   return getData<{ output: string }>(http.post("/pods/exec", payload));
 }
+
+export type PodDebugPayload = {
+  cluster_id: number;
+  namespace: string;
+  name: string;
+  target_container?: string;
+  image?: string;
+  container_name?: string;
+};
+
+export type PodDebugResult = {
+  ephemeral_container: string;
+  image: string;
+  ready: boolean;
+  message: string;
+};
+
+export function debugPodEphemeral(payload: PodDebugPayload) {
+  return getData<PodDebugResult>(http.post("/pods/debug", payload));
+}
+
 export function restartPod(payload: { cluster_id: number; namespace: string; name: string }) {
   return getData<{ message: string }>(http.post("/pods/restart", payload));
 }

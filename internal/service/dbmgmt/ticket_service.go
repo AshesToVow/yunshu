@@ -57,7 +57,7 @@ type TicketItem struct {
 	DatabaseName     string `json:"database_name"`
 	RiskLevel        string `json:"risk_level"`
 	SyntaxType       int    `json:"syntax_type,omitempty"`
-	IsBackup         bool   `json:"is_backup,omitempty"`
+	IsBackup         bool   `json:"is_backup"`
 	Status           string `json:"status"`
 	CurrentStageName string `json:"current_stage_name,omitempty"`
 	MineStatus       string `json:"mine_status,omitempty"`
@@ -764,8 +764,8 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 		return err
 	}
 	tid := ticket.ID
-	cfg := s.resolvedConfig(ctx)
-	backup := ticket.IsBackup || cfg.GoInceptionBackup
+	// 执行阶段以工单提交时的备份选择为准，不再被全局 goInception 默认覆盖。
+	backup := ticket.IsBackup
 	var execJSON string
 	var execErr error
 	if s.goInceptionAvailable(ctx,inst) {
@@ -819,6 +819,33 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 func (s *Service) ListTicketSteps(ctx context.Context, projectID, ticketID uint) ([]model.DbSqlTicketStep, error) {
 	if _, err := s.repo.GetSqlTicketInProject(ctx, projectID, ticketID); err != nil {
 		return nil, err
+	}
+	wf := s.workflowEngine()
+	if linked, err := wf.GetTicketByRef(ctx, model.WorkflowRefDbSqlTicket, ticketID); err == nil && linked != nil {
+		detail, dErr := wf.TicketDetail(ctx, linked.ID)
+		if dErr != nil {
+			return nil, dErr
+		}
+		out := make([]model.DbSqlTicketStep, 0, len(detail.Steps))
+		for _, st := range detail.Steps {
+			out = append(out, model.DbSqlTicketStep{
+				ID:             st.ID,
+				TicketID:       ticketID,
+				StageKey:       st.StageKey,
+				StageName:      st.StageName,
+				SortOrder:      st.SortOrder,
+				Status:         st.Status,
+				UserGroupID:    st.UserGroupID,
+				ReviewerUserID: st.ReviewerUserID,
+				ReviewerName:   st.ReviewerName,
+				ReviewComment:  st.ReviewComment,
+				ReviewedAt:     st.ReviewedAt,
+				ActivatedAt:    st.ActivatedAt,
+				CreatedAt:      st.CreatedAt,
+				UpdatedAt:      st.UpdatedAt,
+			})
+		}
+		return out, nil
 	}
 	return s.repo.ListSqlTicketSteps(ctx, ticketID)
 }

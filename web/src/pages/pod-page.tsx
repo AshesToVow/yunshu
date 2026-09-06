@@ -1,4 +1,4 @@
-import { CodeOutlined, DeleteOutlined, DownOutlined, DownloadOutlined, EditOutlined, FileSearchOutlined, FileTextOutlined, FolderOpenOutlined, MedicineBoxOutlined, PlusOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
+import { BugOutlined, CodeOutlined, DeleteOutlined, DownOutlined, DownloadOutlined, EditOutlined, FileSearchOutlined, FileTextOutlined, FolderOpenOutlined, MedicineBoxOutlined, PlusOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Alert, Button, Card, Checkbox, Divider, Drawer, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Tooltip, Typography, message } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
@@ -16,7 +16,7 @@ import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { validateYaml } from "../components/k8s/monaco-yaml-editor";
 import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
-import { createPodByYAML, createPodSimple, deletePod, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, restartPod, updatePodSimple, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
+import { createPodByYAML, createPodSimple, debugPodEphemeral, deletePod, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, restartPod, updatePodSimple, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
 import { analyzePodDiagnoseAI, startAIInvestigation, type AIPodDiagnoseResult } from "../services/ai";
 import { useNavigate } from "react-router-dom";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
@@ -85,6 +85,7 @@ export function PodPage() {
   const prevPodKeyRef = useRef("");
   const [streaming, setStreaming] = useState(false);
   const [execOpen, setExecOpen] = useState(false);
+  const [preferredExecContainer, setPreferredExecContainer] = useState<string | undefined>();
   const [fileOpen, setFileOpen] = useState(false);
   const [filePath, setFilePath] = useState("/");
   const [fileList, setFileList] = useState<PodFileItem[]>([]);
@@ -103,6 +104,7 @@ export function PodPage() {
     selected,
     detail,
     execCommand,
+    preferredContainer: preferredExecContainer,
     execTermHostRef,
   });
   const [createOpen, setCreateOpen] = useState(false);
@@ -412,14 +414,29 @@ export function PodPage() {
     if (!clusterId) return;
     setFileLoading(true);
     try {
+      let container: string | undefined;
+      try {
+        const detailRes = await getPodDetail({
+          cluster_id: clusterId,
+          namespace: target.namespace,
+          name: target.name,
+        });
+        container = detailRes.containers?.[0]?.name;
+      } catch {
+        /* 容器名可选，后端会再解析 */
+      }
       const res = await listPodFiles({
         cluster_id: clusterId,
         namespace: target.namespace,
         name: target.name,
         path: path || "/",
+        container,
       });
       setFileList(res.list || []);
       setFilePath(path || "/");
+    } catch (e) {
+      setFileList([]);
+      message.error(extractApiErrorMessage(e, "加载 Pod 文件失败"));
     } finally {
       setFileLoading(false);
     }
@@ -637,8 +654,39 @@ export function PodPage() {
                           icon: <CodeOutlined />,
                           label: "Exec",
                           onClick: () => {
+                            setPreferredExecContainer(undefined);
                             setSelected(record);
                             setExecOpen(true);
+                          },
+                        }
+                      : null,
+                    canExec
+                      ? {
+                          key: "debug",
+                          icon: <BugOutlined />,
+                          label: "临时调试容器",
+                          onClick: () => {
+                            void (async () => {
+                              try {
+                                const res = await debugPodEphemeral({
+                                  cluster_id: clusterId!,
+                                  namespace: record.namespace,
+                                  name: record.name,
+                                });
+                                message.success(res.message || `已注入 ${res.ephemeral_container}`);
+                                setPreferredExecContainer(res.ephemeral_container);
+                                setSelected(record);
+                                const d = await getPodDetail({
+                                  cluster_id: clusterId!,
+                                  namespace: record.namespace,
+                                  name: record.name,
+                                });
+                                setDetail(d);
+                                setExecOpen(true);
+                              } catch {
+                                /* interceptor */
+                              }
+                            })();
                           },
                         }
                       : null,
@@ -713,6 +761,7 @@ export function PodPage() {
             onExec={
               selected && canExec
                 ? () => {
+                    setPreferredExecContainer(undefined);
                     setExecOpen(true);
                   }
                 : undefined

@@ -27,14 +27,24 @@
   --ops-border: #e2e8f0;
   --ops-text: #0f172a;
   --ops-text-secondary: #64748b;
+  --ops-text-muted: #64748b;
 }
 
 .admin-shell.ops-platform.theme-dark {
   --ops-bg-layout: #141414;
   --ops-bg-container: #1f1f1f;
   --ops-border: #303030;
-  --ops-text: rgba(255, 255, 255, 0.85);
-  --ops-text-secondary: rgba(255, 255, 255, 0.45);
+  --ops-text: rgba(255, 255, 255, 0.88);
+  --ops-text-secondary: rgba(255, 255, 255, 0.68);
+  --ops-text-muted: rgba(255, 255, 255, 0.68);
+  --ops-success-bg: #162312;
+  --ops-success-text: #73d13d;
+  --ops-warning-bg: #2b2111;
+  --ops-warning-text: #faad14;
+  --ops-error-bg: #2a1215;
+  --ops-error-text: #ff7875;
+  --ops-info-bg: #111a2c;
+  --ops-info-text: #69b1ff;
 }
 
 /* Reduce visual noise: disable CRT overlay in ops mode */

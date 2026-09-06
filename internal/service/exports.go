@@ -302,6 +302,7 @@ type (
 	K8sAuthMatrixRow           = k8s.K8sAuthMatrixRow
 	K8sUserClusterAuthRow      = k8s.K8sUserClusterAuthRow
 	K8sEventForwardRuleUpsertRequest = eventforward.K8sEventForwardRuleUpsertRequest
+	K8sForwardedEventListQuery       = eventforward.K8sForwardedEventListQuery
 	RolloutUndoRequest              = k8s.RolloutUndoRequest
 	RolloutUndoResult               = k8s.RolloutUndoResult
 	DeploymentRevisionQuery         = k8s.DeploymentRevisionQuery
@@ -495,10 +496,12 @@ type (
 	NamespaceListItem = k8s.NamespaceListItem
 	NamespaceListQuery = k8s.NamespaceListQuery
 	PodEventQuery = k8s.PodEventQuery
-	PodExecRequest = k8s.PodExecRequest
-	PodFileQuery = k8s.PodFileQuery
-	PodListQuery = k8s.PodListQuery
-	PodLogsQuery = k8s.PodLogsQuery
+	PodDebugRequest = k8s.PodDebugRequest
+	PodDebugResult  = k8s.PodDebugResult
+	PodExecRequest  = k8s.PodExecRequest
+	PodFileQuery    = k8s.PodFileQuery
+	PodListQuery    = k8s.PodListQuery
+	PodLogsQuery    = k8s.PodLogsQuery
 	MysqlBackupJobListQuery = mysqlbackup.MysqlBackupJobListQuery
 	SendLoginCodeByUsernameRequest = system.SendLoginCodeByUsernameRequest
 )

@@ -182,7 +182,14 @@ func (r *DbmgmtRepository) UpdateAccessRequestStep(ctx context.Context, step *mo
 // --- SQL Ticket ---
 
 func (r *DbmgmtRepository) CreateSqlTicket(ctx context.Context, t *model.DbSqlTicket) error {
-	return r.db.WithContext(ctx).Create(t).Error
+	// IsBackup=false 是合法值；GORM 对带 default 的零值会跳过写入并落到库默认 true，须显式 Select。
+	return r.db.WithContext(ctx).
+		Select(
+			"ProjectID", "InstanceID", "TicketType", "SubmitterUserID", "SubmitterName",
+			"DatabaseName", "SqlText", "SqlFileRef", "AuditMode", "RiskLevel", "SyntaxType",
+			"IsBackup", "ParsedOpsJSON", "ReviewJSON", "ExecuteJSON", "Reason", "Status", "RequestJSON",
+		).
+		Create(t).Error
 }
 
 func (r *DbmgmtRepository) UpdateSqlTicket(ctx context.Context, t *model.DbSqlTicket) error {

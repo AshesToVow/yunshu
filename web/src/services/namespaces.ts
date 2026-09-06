@@ -55,8 +55,20 @@ export interface NamespaceDetail {
   yaml: string;
 }
 
-export function listNamespaces(clusterId: number, keyword?: string) {
-  return getData<NamespaceItem[]>(http.get("/namespaces", { params: { cluster_id: clusterId, keyword } }));
+export function listNamespaces(
+  clusterId: number,
+  keyword?: string,
+  opts?: { with_pod_stats?: boolean },
+) {
+  return getData<NamespaceItem[]>(
+    http.get("/namespaces", {
+      params: {
+        cluster_id: clusterId,
+        keyword,
+        ...(opts?.with_pod_stats ? { with_pod_stats: true } : {}),
+      },
+    }),
+  );
 }
 
 export function getNamespaceDetail(clusterId: number, name: string) {

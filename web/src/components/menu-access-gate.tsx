@@ -1,6 +1,7 @@
 import { Result, Spin } from "antd";
 import { Link, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/auth-context";
 import { useMenuTree } from "../hooks/use-menu-tree";
 import {
@@ -22,6 +23,7 @@ type MenuAccessGateProps = {
  * 无菜单辅助页 / 旧重定向 / 工单深链备选见 resolveMenuAccessCandidates。
  */
 export function MenuAccessGate({ children }: MenuAccessGateProps) {
+  const { t } = useTranslation();
   const location = useLocation();
   const { user } = useAuth();
   const { menus, loading, error } = useMenuTree();
@@ -40,7 +42,7 @@ export function MenuAccessGate({ children }: MenuAccessGateProps) {
   if (loading && !menus.length) {
     return (
       <div className="page-loading">
-        <Spin size="large" tip="校验菜单权限..." />
+        <Spin size="large" tip={t("app.menuCheckLoading")} />
       </div>
     );
   }
@@ -49,8 +51,8 @@ export function MenuAccessGate({ children }: MenuAccessGateProps) {
     return (
       <Result
         status="error"
-        title="菜单权限校验失败"
-        subTitle={error instanceof Error ? error.message : "无法加载菜单树，请刷新后重试"}
+        title={t("app.menuCheckFailed")}
+        subTitle={error instanceof Error ? error.message : t("app.menuCheckFailedSub")}
       />
     );
   }
@@ -62,9 +64,9 @@ export function MenuAccessGate({ children }: MenuAccessGateProps) {
     return (
       <Result
         status="403"
-        title="无访问权限"
-        subTitle={`当前账号不具备菜单 ${accessCandidates[0] ?? path} 的入口权限。请联系管理员在「授权管理」中分配对应 API。`}
-        extra={<Link to="/">返回总览</Link>}
+        title={t("app.noAccessTitle")}
+        subTitle={t("app.noAccessSub", { path: accessCandidates[0] ?? path })}
+        extra={<Link to="/">{t("app.backOverview")}</Link>}
       />
     );
   }

@@ -1,5 +1,6 @@
 import { Button, Result, Typography } from "antd";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import i18n from "../i18n";
 
 type Props = { children: ReactNode };
 
@@ -25,10 +26,10 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <Result
           status="error"
-          title="页面渲染异常"
+          title={i18n.t("app.renderErrorTitle")}
           subTitle={
             <Typography.Paragraph type="secondary" style={{ maxWidth: 560, margin: "0 auto" }}>
-              {this.state.error.message || "未知错误"}
+              {this.state.error.message || i18n.t("app.unknownError")}
             </Typography.Paragraph>
           }
           extra={
@@ -39,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 window.location.assign("/");
               }}
             >
-              返回首页
+              {i18n.t("app.backHome")}
             </Button>
           }
         />

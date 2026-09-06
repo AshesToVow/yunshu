@@ -9,6 +9,8 @@ export type UseK8sWatchOptions = {
   clusterId?: number;
   namespace?: string;
   resource?: string;
+  /** 命名空间资源为 true；Nodes/Namespaces/PV 等集群级资源为 false */
+  requireNamespace?: boolean;
   /** Watch 事件后的静默刷新（勿在依赖中传不稳定内联函数；内部已用 ref 稳定） */
   onRefresh: () => void;
   onDisabled?: () => void;
@@ -24,6 +26,7 @@ export function useK8sWatch({
   clusterId,
   namespace,
   resource = "pods",
+  requireNamespace = true,
   onRefresh,
   onDisabled,
   debounceMs = 1200,
@@ -45,7 +48,8 @@ export function useK8sWatch({
     }
     pendingRefreshRef.current = false;
 
-    if (!enabled || !clusterId || !namespace) return;
+    if (!enabled || !clusterId) return;
+    if (requireNamespace && !namespace) return;
 
     let cancelled = false;
     const ac = new AbortController();
@@ -67,7 +71,6 @@ export function useK8sWatch({
     const handleEvent = (ev: K8sWatchEvent) => {
       const t = String(ev.type || "").toLowerCase();
       if (IGNORED_EVENT_TYPES.has(t)) return;
-      // 后端 SSE 心跳为注释行，不会进此回调；error 帧由抛错路径处理
       scheduleRefresh();
     };
 
@@ -75,7 +78,12 @@ export function useK8sWatch({
       while (!cancelled && !ac.signal.aborted) {
         try {
           await streamK8sResourceWatch(
-            { cluster_id: clusterId, namespace, resource, timeout_seconds: 3600 },
+            {
+              cluster_id: clusterId,
+              namespace: requireNamespace ? namespace : namespace || undefined,
+              resource,
+              timeout_seconds: 3600,
+            },
             handleEvent,
             ac.signal,
           );
@@ -99,5 +107,5 @@ export function useK8sWatch({
         debounceTimerRef.current = null;
       }
     };
-  }, [enabled, clusterId, namespace, resource, debounceMs]);
+  }, [enabled, clusterId, namespace, resource, requireNamespace, debounceMs]);
 }

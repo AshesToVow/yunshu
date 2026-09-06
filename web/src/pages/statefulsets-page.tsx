@@ -7,7 +7,7 @@ import {
   ScissorOutlined,
   TagsOutlined,
 } from "@ant-design/icons";
-import { Button, Form, Input, InputNumber, Modal, Progress, Space, Tag, Typography, message } from "antd";
+import { Button, Form, Input, InputNumber, Modal, Progress, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
@@ -19,15 +19,18 @@ import { listNamespaces as listClusterNamespaces } from "../services/clusters";
 import { useWorkloadProgressOptional } from "../contexts/workload-progress-context";
 import {
   applyStatefulSet,
+  previewApplyStatefulSet,
   buildCpuMemoryResourceMaps,
   deleteStatefulSet,
   getStatefulSetDetail,
   listStatefulSets,
   listStatefulSetPods,
+  listStatefulSetRevisions,
   patchStatefulSetContainerResources,
   restartStatefulSet,
   rolloutUndoStatefulSet,
   scaleStatefulSet,
+  type DeploymentRevisionItem,
   type WorkloadDetail,
   type WorkloadItem,
 } from "../services/workloads";
@@ -134,6 +137,10 @@ export function StatefulsetsPage() {
     limits_cpu?: string;
     limits_memory?: string;
   }>();
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  const [revisionLoading, setRevisionLoading] = useState(false);
+  const [revisionRows, setRevisionRows] = useState<DeploymentRevisionItem[]>([]);
+  const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
   const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(async ({ clusterId, namespace, name }) => await listStatefulSetPods(clusterId, namespace, name));
   const { renderKVIcon, viewer } = useKeyValueViewer();
 
@@ -203,6 +210,7 @@ export function StatefulsetsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listStatefulSets(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getStatefulSetDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyStatefulSet(clusterId, manifest),
+          previewApply: async ({ clusterId, manifest }) => await previewApplyStatefulSet(clusterId, manifest),
           remove: async (args) => await deleteStatefulSet(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
@@ -345,23 +353,19 @@ spec:
                     },
                   },
                   {
-                    key: "undo",
-                    label: "回滚标记",
-                    icon: <ReloadOutlined />,
+                    key: "revisions",
+                    label: "历史版本 / 回滚",
+                    icon: <FileTextOutlined />,
                     onClick: () => {
-                      void (async () => {
-                        const ns = ctx.namespace ?? "default";
-                        await rolloutUndoStatefulSet(ctx.clusterId, ns, record.name);
-                        message.success("已标记 StatefulSet 回滚");
-                        progress?.track({
-                          kind: "StatefulSet",
-                          clusterId: ctx.clusterId,
-                          namespace: ns,
-                          name: record.name,
-                          title: `回滚 ${record.name}`,
-                        });
-                        ctx.reload();
-                      })();
+                      const ns = ctx.namespace ?? "default";
+                      setRevisionTarget({ clusterId: ctx.clusterId, namespace: ns, name: record.name });
+                      setRevisionOpen(true);
+                      setRevisionLoading(true);
+                      setRevisionRows([]);
+                      void listStatefulSetRevisions(ctx.clusterId, ns, record.name)
+                        .then((rows) => setRevisionRows(rows || []))
+                        .catch(() => message.error("加载历史版本失败"))
+                        .finally(() => setRevisionLoading(false));
                     },
                   },
                 ],
@@ -376,6 +380,101 @@ spec:
       />
 
       {viewer}
+
+      <Modal
+        title={`StatefulSet 历史版本${revisionTarget ? `：${revisionTarget.name}` : ""}`}
+        open={revisionOpen}
+        onCancel={() => setRevisionOpen(false)}
+        footer={null}
+        destroyOnClose
+        width={720}
+      >
+        <Table
+          rowKey={(r) => String(r.revision)}
+          loading={revisionLoading}
+          dataSource={revisionRows}
+          pagination={false}
+          columns={[
+            { title: "Revision", dataIndex: "revision", width: 100 },
+            {
+              title: "当前",
+              dataIndex: "current",
+              width: 80,
+              render: (v: boolean) => (v ? <Tag color="green">是</Tag> : "-"),
+            },
+            {
+              title: "创建时间",
+              dataIndex: "created_at",
+              render: (v?: string) => v || "-",
+            },
+            {
+              title: "操作",
+              key: "action",
+              width: 120,
+              render: (_, row) =>
+                row.current ? null : (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      if (!revisionTarget) return;
+                      void (async () => {
+                        try {
+                          await rolloutUndoStatefulSet(
+                            revisionTarget.clusterId,
+                            revisionTarget.namespace,
+                            revisionTarget.name,
+                            row.revision,
+                          );
+                          message.success(`已标记回滚到 revision ${row.revision}`);
+                          progress?.track({
+                            kind: "StatefulSet",
+                            clusterId: revisionTarget.clusterId,
+                            namespace: revisionTarget.namespace,
+                            name: revisionTarget.name,
+                            title: `回滚 ${revisionTarget.name}`,
+                          });
+                          setRevisionOpen(false);
+                          listReloadRef.current();
+                        } catch {
+                          /* interceptor */
+                        }
+                      })();
+                    }}
+                  >
+                    回滚到此版
+                  </Button>
+                ),
+            },
+          ]}
+        />
+        <Space style={{ marginTop: 12 }}>
+          <Button
+            onClick={() => {
+              if (!revisionTarget) return;
+              void (async () => {
+                try {
+                  await rolloutUndoStatefulSet(revisionTarget.clusterId, revisionTarget.namespace, revisionTarget.name);
+                  message.success("已标记回滚到上一版本");
+                  progress?.track({
+                    kind: "StatefulSet",
+                    clusterId: revisionTarget.clusterId,
+                    namespace: revisionTarget.namespace,
+                    name: revisionTarget.name,
+                    title: `回滚 ${revisionTarget.name}`,
+                  });
+                  setRevisionOpen(false);
+                  listReloadRef.current();
+                } catch {
+                  /* interceptor */
+                }
+              })();
+            }}
+          >
+            回滚到上一版
+          </Button>
+        </Space>
+      </Modal>
 
       <Modal
         title={`StatefulSet 水平扩缩（HPA / scale 子资源类）${scaleTarget ? `：${scaleTarget.name}` : ""}`}

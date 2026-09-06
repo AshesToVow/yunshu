@@ -780,10 +780,11 @@ export function ProjectServersPage() {
     { title: "测试错误", dataIndex: "last_test_error", ellipsis: true, render: (v?: string | null) => (v ? <span title={v}>{v}</span> : "-") },
     {
       title: "操作",
-      width: 220,
+      width: 300,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: ServerItem) => (
-        <Space size={6} wrap>
+        <Space size={6} wrap className="yunshu-table-actions">
           <Button
             size="small"
             icon={<LinkOutlined />}
@@ -872,10 +873,11 @@ export function ProjectServersPage() {
     { title: "测试错误", dataIndex: "last_test_error", ellipsis: true, render: (v?: string | null) => (v ? <span title={v}>{v}</span> : "-") },
     {
       title: "操作",
-      width: 260,
+      width: 420,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: ServerItem) => (
-        <Space size={6} wrap>
+        <Space size={6} wrap className="yunshu-table-actions">
           <Button
             size="small"
             icon={<LinkOutlined />}

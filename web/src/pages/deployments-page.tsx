@@ -26,6 +26,7 @@ import { formatDateTime } from "../utils/format";
 import { extractApiErrorMessage } from "../services/http";
 import {
   applyDeployment,
+  previewApplyDeployment,
   buildCpuMemoryResourceMaps,
   deleteDeployment,
   getDeploymentDetail,
@@ -303,6 +304,7 @@ export function DeploymentsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listDeployments(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getDeploymentDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyDeployment(clusterId, manifest),
+          previewApply: async ({ clusterId, manifest }) => await previewApplyDeployment(clusterId, manifest),
           remove: async (args) => await deleteDeployment(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onEdit={(record, ctx) => formActions.openEdit({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }, record)}

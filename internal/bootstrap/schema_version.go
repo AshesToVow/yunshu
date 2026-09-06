@@ -10,7 +10,7 @@ import (
 
 // ExpectedSchemaVersion 与 migrate 写入的版本对齐；启动校验失败则拒绝起服。
 // 每次改变 AutoMigrate 模型集合或破坏性种子时递增。
-const ExpectedSchemaVersion = 20260829
+const ExpectedSchemaVersion = 20260906
 
 const schemaMetaKey = "schema_version"
 

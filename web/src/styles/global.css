@@ -5314,11 +5314,11 @@ body {
   max-width: 560px;
 }
 
-/* Agent 管理：防止宽表格撑破主内容区 */
+/* Agent 管理：防止宽表格撑破主内容区（表格本身横向滚动，勿裁切操作列） */
 .loggie-status-page {
   max-width: 100%;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 .loggie-status-page .table-card.ant-card,
 .loggie-status-page .ant-card-body,
@@ -5352,5 +5352,19 @@ body {
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+/* 表格操作列：避免删除等按钮被裁切出列外 */
+.yunshu-table-actions-cell {
+  overflow: visible !important;
+}
+.yunshu-table-actions {
+  max-width: 100%;
+}
+.yunshu-table-actions .ant-btn-link {
+  padding-inline: 4px;
+}
+.ant-table-wrapper .ant-table-cell-fix-right {
+  overflow: visible;
 }
 

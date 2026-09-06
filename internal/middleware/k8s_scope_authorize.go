@@ -162,7 +162,7 @@ func K8sScopeAuthorize(
 		if strings.EqualFold(method, "GET") && service.IsK8sReadAPIPath(routePath) && !forceTier {
 			intent = k8sauth.AccessIntentRead
 		}
-		if forceTier && strings.Contains(strings.TrimSpace(routePath), "exec") {
+		if forceTier && k8sRouteIsExecLike(routePath) {
 			intent = k8sauth.AccessIntentExec
 		}
 		if strings.EqualFold(method, "GET") && !forceTier && !tracked {
@@ -184,8 +184,8 @@ func K8sScopeAuthorize(
 				msg := "须在请求中携带 cluster_id，以便集群档位校验"
 				if strings.HasSuffix(strings.TrimSpace(routePath), "/ingresses/nginx/restart") {
 					msg = "重启 Ingress-Nginx 须在请求体中携带 cluster_id，且需集群 admin 档位"
-				} else if strings.Contains(strings.TrimSpace(routePath), "exec") {
-					msg = "Pod Exec 须在请求中携带 cluster_id（及 namespace），以便集群档位校验"
+				} else if k8sRouteIsExecLike(routePath) {
+					msg = "Pod Exec / 文件操作须在请求中携带 cluster_id（及 namespace），以便集群档位校验"
 				}
 				response.Error(c, constants.ErrBadRequestWithMsg(msg))
 				c.Abort()
@@ -196,8 +196,8 @@ func K8sScopeAuthorize(
 		}
 
 		if concreteNS == "" {
-			if forceTier && strings.Contains(strings.TrimSpace(routePath), "exec") {
-				response.Error(c, constants.ErrBadRequestWithMsg("Pod Exec 须指定 namespace"))
+			if forceTier && k8sRouteIsExecLike(routePath) {
+				response.Error(c, constants.ErrBadRequestWithMsg("Pod Exec / 文件操作须指定 namespace"))
 				c.Abort()
 				return
 			}
@@ -291,6 +291,7 @@ func k8sScopeForceTierCheck(routePath, method string) bool {
 	switch m {
 	case "POST":
 		if strings.HasSuffix(p, "/pods/exec") ||
+			strings.HasSuffix(p, "/pods/debug") ||
 			strings.HasSuffix(p, "/ingresses/nginx/restart") ||
 			strings.HasSuffix(p, "/nodes/drain") ||
 			strings.HasSuffix(p, "/rbac/apply") {
@@ -310,6 +311,18 @@ func k8sScopeForceTierCheck(routePath, method string) bool {
 	default:
 		return false
 	}
+}
+
+// k8sRouteIsExecLike Pod 终端与容器文件变更同属 exec 档位意图。
+func k8sRouteIsExecLike(routePath string) bool {
+	p := strings.TrimSpace(routePath)
+	if p == "" {
+		return false
+	}
+	if strings.Contains(p, "exec") || strings.HasSuffix(p, "/pods/debug") {
+		return true
+	}
+	return strings.Contains(p, "/pods/file/upload") || strings.Contains(p, "/pods/file/delete")
 }
 
 func extractConfirmFromRequest(c *gin.Context) bool {
