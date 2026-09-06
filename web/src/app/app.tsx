@@ -79,7 +79,7 @@ export function App() {
           },
           Button: {
             controlHeightLG: 44,
-            colorLink,
+            colorLink: linkColor,
             colorLinkHover: linkHover,
           },
           Table: {
