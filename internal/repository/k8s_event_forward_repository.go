@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
@@ -101,6 +102,11 @@ func (r *K8sEventForwardRepository) SaveForwardedEvent(ctx context.Context, ev *
 		return nil
 	}
 	ev.Processed = false
+	if strings.TrimSpace(ev.Status) == "" {
+		ev.Status = model.K8sFwdStatusPending
+	}
+	// 同一 Event UID 更新（count/message 抖动）不应反复重置为待转发，避免告警风暴。
+	// 仅当 type/reason/message 相对库内已有行发生变化时才重新入队。
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "evt_key"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
@@ -112,8 +118,19 @@ func (r *K8sEventForwardRepository) SaveForwardedEvent(ctx context.Context, ev *
 			"level":      ev.Level,
 			"message":    ev.Message,
 			"timestamp":  ev.Timestamp,
-			"processed":  false,
-			"attempts":   0,
+			"processed": gorm.Expr(
+				"CASE WHEN `type` <> VALUES(`type`) OR `reason` <> VALUES(`reason`) OR `message` <> VALUES(`message`) THEN 0 ELSE `processed` END",
+			),
+			"status": gorm.Expr(
+				"CASE WHEN `type` <> VALUES(`type`) OR `reason` <> VALUES(`reason`) OR `message` <> VALUES(`message`) THEN ? ELSE `status` END",
+				model.K8sFwdStatusPending,
+			),
+			"attempts": gorm.Expr(
+				"CASE WHEN `type` <> VALUES(`type`) OR `reason` <> VALUES(`reason`) OR `message` <> VALUES(`message`) THEN 0 ELSE `attempts` END",
+			),
+			"last_error": gorm.Expr(
+				"CASE WHEN `type` <> VALUES(`type`) OR `reason` <> VALUES(`reason`) OR `message` <> VALUES(`message`) THEN '' ELSE `last_error` END",
+			),
 		}),
 	}).Create(ev).Error
 }
@@ -121,20 +138,22 @@ func (r *K8sEventForwardRepository) SaveForwardedEvent(ctx context.Context, ev *
 func (r *K8sEventForwardRepository) ListUnprocessedEvents(ctx context.Context, limit int) ([]model.K8sForwardedEvent, error) {
 	var list []model.K8sForwardedEvent
 	err := r.db.WithContext(ctx).
-		Where("processed = ?", false).
+		Where("(status = ? OR (status = '' AND processed = ?))", model.K8sFwdStatusPending, false).
 		Order("timestamp ASC").
 		Limit(limit).
 		Find(&list).Error
 	return list, err
 }
 
-// ClaimUnprocessedEvents 在事务内加锁领取待转发事件，降低多实例重复推送。
-// MySQL 5.7 无 SKIP LOCKED：对 settings 行 FOR UPDATE 串行化领取，并先标记 processed。
+const staleInflightAfter = "5 MINUTE"
+
+// ClaimUnprocessedEvents 领取 pending，并回收超时的 inflight（进程崩溃保护）。
 func (r *K8sEventForwardRepository) ClaimUnprocessedEvents(ctx context.Context, limit int) ([]model.K8sForwardedEvent, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	var list []model.K8sForwardedEvent
+	now := time.Now()
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var st model.K8sEventForwardSetting
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&st, 1).Error; err != nil {
@@ -143,7 +162,19 @@ func (r *K8sEventForwardRepository) ClaimUnprocessedEvents(ctx context.Context, 
 			}
 			return err
 		}
-		if err := tx.Where("processed = ?", false).
+		// 回收卡死的 inflight
+		_ = tx.Model(&model.K8sForwardedEvent{}).
+			Where("status = ? AND claimed_at IS NOT NULL AND claimed_at < DATE_SUB(NOW(), INTERVAL "+staleInflightAfter+")", model.K8sFwdStatusInflight).
+			Updates(map[string]interface{}{
+				"status":     model.K8sFwdStatusPending,
+				"processed":  false,
+				"claimed_at": nil,
+			}).Error
+
+		if err := tx.Where(
+			"(status = ? OR (IFNULL(status,'') = '' AND processed = ?))",
+			model.K8sFwdStatusPending, false,
+		).
 			Order("timestamp ASC").
 			Limit(limit).
 			Find(&list).Error; err != nil {
@@ -153,26 +184,105 @@ func (r *K8sEventForwardRepository) ClaimUnprocessedEvents(ctx context.Context, 
 			return nil
 		}
 		ids := make([]int64, 0, len(list))
-		for _, ev := range list {
-			ids = append(ids, ev.ID)
+		for i := range list {
+			ids = append(ids, list[i].ID)
+			list[i].Status = model.K8sFwdStatusInflight
+			list[i].ClaimedAt = &now
 		}
 		return tx.Model(&model.K8sForwardedEvent{}).
-			Where("id IN ? AND processed = ?", ids, false).
-			Update("processed", true).Error
+			Where("id IN ?", ids).
+			Updates(map[string]interface{}{
+				"status":     model.K8sFwdStatusInflight,
+				"processed":  false,
+				"claimed_at": now,
+			}).Error
 	})
 	return list, err
 }
 
 func (r *K8sEventForwardRepository) MarkEventProcessed(ctx context.Context, id int64, processed bool) error {
+	updates := map[string]interface{}{"processed": processed}
+	if processed {
+		updates["status"] = model.K8sFwdStatusDelivered
+	} else {
+		updates["status"] = model.K8sFwdStatusPending
+		updates["claimed_at"] = nil
+	}
 	return r.db.WithContext(ctx).Model(&model.K8sForwardedEvent{}).
 		Where("id = ?", id).
-		Update("processed", processed).Error
+		Updates(updates).Error
+}
+
+func (r *K8sEventForwardRepository) MarkEventDead(ctx context.Context, id int64, lastErr string) error {
+	return r.db.WithContext(ctx).Model(&model.K8sForwardedEvent{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":     model.K8sFwdStatusDead,
+			"processed":  true,
+			"last_error": truncateFwdErr(lastErr),
+			"claimed_at": nil,
+		}).Error
+}
+
+func (r *K8sEventForwardRepository) MarkEventFailed(ctx context.Context, id int64, lastErr string) error {
+	return r.db.WithContext(ctx).Model(&model.K8sForwardedEvent{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":     model.K8sFwdStatusPending,
+			"processed":  false,
+			"last_error": truncateFwdErr(lastErr),
+			"attempts":   gorm.Expr("attempts + ?", 1),
+			"claimed_at": nil,
+		}).Error
 }
 
 func (r *K8sEventForwardRepository) IncrementEventAttempts(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Model(&model.K8sForwardedEvent{}).
 		Where("id = ?", id).
 		UpdateColumn("attempts", gorm.Expr("attempts + ?", 1)).Error
+}
+
+func (r *K8sEventForwardRepository) ListForwardedEvents(ctx context.Context, f K8sForwardedEventListFilter) (*pagination.Result[model.K8sForwardedEvent], error) {
+	page, pageSize := pagination.Normalize(f.Page, f.PageSize)
+	q := r.db.WithContext(ctx).Model(&model.K8sForwardedEvent{})
+	if st := strings.TrimSpace(f.Status); st != "" {
+		q = q.Where("status = ?", st)
+	}
+	if cid := strings.TrimSpace(f.ClusterID); cid != "" {
+		q = q.Where("cluster_id = ?", cid)
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	var list []model.K8sForwardedEvent
+	err := q.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return &pagination.Result[model.K8sForwardedEvent]{
+		List: list, Total: total, Page: page, PageSize: pageSize,
+	}, nil
+}
+
+func (r *K8sEventForwardRepository) RequeueDeadEvent(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Model(&model.K8sForwardedEvent{}).
+		Where("id = ? AND status = ?", id, model.K8sFwdStatusDead).
+		Updates(map[string]interface{}{
+			"status":     model.K8sFwdStatusPending,
+			"processed":  false,
+			"attempts":   0,
+			"last_error": "",
+			"claimed_at": nil,
+		}).Error
+}
+
+func truncateFwdErr(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 1000 {
+		return s[:1000] + "…"
+	}
+	return s
 }
 
 func (r *K8sEventForwardRepository) ListEnabledRules(ctx context.Context) ([]model.K8sEventForwardRule, error) {

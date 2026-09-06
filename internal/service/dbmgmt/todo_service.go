@@ -31,21 +31,22 @@ func (s *Service) accessRequestPendingSubquery(actor *auth.CurrentUser) *gorm.DB
 			Where("r.status = ?", model.DbAccessRequestStatusPending)
 	}
 	userID := actorUserID(actor)
+	wf := s.workflowPendingSubquery(userID, model.WorkflowRefDbAccessRequest, "db_access_requests.id")
 	currentStep := s.db.Table("db_access_request_steps AS s").
 		Select("1").
 		Joins("JOIN user_group_users AS ugu ON ugu.user_group_id = s.user_group_id AND ugu.user_id = ?", userID).
-		Where("s.access_request_id = r.id").
+		Where("s.access_request_id = db_access_requests.id").
 		Where("s.status = ?", model.DbApprovalStepPending).
 		Where("s.user_group_id IS NOT NULL AND s.user_group_id > 0").
 		Where(`s.sort_order = (
 			SELECT MIN(s2.sort_order) FROM db_access_request_steps s2
-			WHERE s2.access_request_id = r.id AND s2.status = ?
+			WHERE s2.access_request_id = db_access_requests.id AND s2.status = ?
 		)`, model.DbApprovalStepPending)
 	return s.db.Table("db_access_requests AS r").
 		Select("1").
 		Where("r.id = db_access_requests.id").
 		Where("r.status = ?", model.DbAccessRequestStatusPending).
-		Where("EXISTS (?)", currentStep)
+		Where("EXISTS (?) OR EXISTS (?)", wf, currentStep)
 }
 
 func (s *Service) filterAccessRequestsApprovalDone(dbq *gorm.DB, userID uint) *gorm.DB {
@@ -56,15 +57,16 @@ func (s *Service) accessRequestDoneSubquery(userID uint) *gorm.DB {
 	if userID == 0 {
 		return s.db.Table("db_access_requests AS r").Select("1").Where("1 = 0")
 	}
+	wf := s.workflowDoneSubquery(userID, model.WorkflowRefDbAccessRequest, "db_access_requests.id")
 	acted := s.db.Table("db_access_request_steps AS s").
 		Select("1").
-		Where("s.access_request_id = r.id").
+		Where("s.access_request_id = db_access_requests.id").
 		Where("s.reviewer_user_id = ?", userID).
 		Where("s.status IN ?", []string{model.DbApprovalStepApproved, model.DbApprovalStepRejected})
 	return s.db.Table("db_access_requests AS r").
 		Select("1").
 		Where("r.id = db_access_requests.id").
-		Where("EXISTS (?)", acted)
+		Where("EXISTS (?) OR EXISTS (?)", wf, acted)
 }
 
 func (s *Service) filterAccessRequestsApprovalMine(dbq *gorm.DB, actor *auth.CurrentUser) *gorm.DB {
@@ -83,21 +85,22 @@ func (s *Service) ticketPendingSubquery(actor *auth.CurrentUser) *gorm.DB {
 			Where("r.status = ?", model.DbTicketStatusPendingApproval)
 	}
 	userID := actorUserID(actor)
+	wf := s.workflowPendingSubquery(userID, model.WorkflowRefDbSqlTicket, "db_sql_tickets.id")
 	currentStep := s.db.Table("db_sql_ticket_steps AS s").
 		Select("1").
 		Joins("JOIN user_group_users AS ugu ON ugu.user_group_id = s.user_group_id AND ugu.user_id = ?", userID).
-		Where("s.ticket_id = r.id").
+		Where("s.ticket_id = db_sql_tickets.id").
 		Where("s.status = ?", model.DbApprovalStepPending).
 		Where("s.user_group_id IS NOT NULL AND s.user_group_id > 0").
 		Where(`s.sort_order = (
 			SELECT MIN(s2.sort_order) FROM db_sql_ticket_steps s2
-			WHERE s2.ticket_id = r.id AND s2.status = ?
+			WHERE s2.ticket_id = db_sql_tickets.id AND s2.status = ?
 		)`, model.DbApprovalStepPending)
 	return s.db.Table("db_sql_tickets AS r").
 		Select("1").
 		Where("r.id = db_sql_tickets.id").
 		Where("r.status = ?", model.DbTicketStatusPendingApproval).
-		Where("EXISTS (?)", currentStep)
+		Where("EXISTS (?) OR EXISTS (?)", wf, currentStep)
 }
 
 func (s *Service) filterTicketsApprovalDone(dbq *gorm.DB, userID uint) *gorm.DB {
@@ -108,15 +111,16 @@ func (s *Service) ticketDoneSubquery(userID uint) *gorm.DB {
 	if userID == 0 {
 		return s.db.Table("db_sql_tickets AS r").Select("1").Where("1 = 0")
 	}
+	wf := s.workflowDoneSubquery(userID, model.WorkflowRefDbSqlTicket, "db_sql_tickets.id")
 	acted := s.db.Table("db_sql_ticket_steps AS s").
 		Select("1").
-		Where("s.ticket_id = r.id").
+		Where("s.ticket_id = db_sql_tickets.id").
 		Where("s.reviewer_user_id = ?", userID).
 		Where("s.status IN ?", []string{model.DbApprovalStepApproved, model.DbApprovalStepRejected})
 	return s.db.Table("db_sql_tickets AS r").
 		Select("1").
 		Where("r.id = db_sql_tickets.id").
-		Where("EXISTS (?)", acted)
+		Where("EXISTS (?) OR EXISTS (?)", wf, acted)
 }
 
 func (s *Service) filterTicketsApprovalMine(dbq *gorm.DB, actor *auth.CurrentUser) *gorm.DB {
@@ -152,6 +156,27 @@ func (s *Service) filterTicketsExecutionMine(dbq *gorm.DB, userID uint) *gorm.DB
 	return dbq.Where("EXISTS (?) OR EXISTS (?)", pending, done)
 }
 
+func (s *Service) workflowPendingSubquery(userID uint, refType, refIDCol string) *gorm.DB {
+	return s.db.Table("workflow_tickets AS t").
+		Select("1").
+		Joins("JOIN workflow_ticket_steps AS s ON s.ticket_id = t.id AND s.deleted_at IS NULL").
+		Where("t.ref_type = ? AND t.ref_id = "+refIDCol+" AND t.deleted_at IS NULL", refType).
+		Where("t.status = ? AND s.status = ? AND s.activated_at IS NOT NULL",
+			model.WorkflowTicketStatusPending, model.WorkflowStepPending).
+		Where(`(s.assignee_user_id = ? OR (s.user_group_id IS NOT NULL AND s.user_group_id > 0 AND EXISTS (
+			SELECT 1 FROM user_group_users ugu WHERE ugu.user_group_id = s.user_group_id AND ugu.user_id = ?
+		)))`, userID, userID)
+}
+
+func (s *Service) workflowDoneSubquery(userID uint, refType, refIDCol string) *gorm.DB {
+	return s.db.Table("workflow_tickets AS t").
+		Select("1").
+		Joins("JOIN workflow_ticket_steps AS s ON s.ticket_id = t.id AND s.deleted_at IS NULL").
+		Where("t.ref_type = ? AND t.ref_id = "+refIDCol+" AND t.deleted_at IS NULL", refType).
+		Where("s.reviewer_user_id = ?", userID).
+		Where("s.status IN ?", []string{model.WorkflowStepApproved, model.WorkflowStepRejected})
+}
+
 func (s *Service) enrichAccessRequestMineStatus(ctx context.Context, items []AccessRequestItem, actor *auth.CurrentUser) {
 	userID := actorUserID(actor)
 	if userID == 0 || len(items) == 0 {
@@ -170,6 +195,10 @@ func (s *Service) enrichAccessRequestMineStatus(ctx context.Context, items []Acc
 	for i := range items {
 		item := &items[i]
 		sts := byReq[item.ID]
+		if len(sts) == 0 {
+			s.enrichMineFromWorkflow(ctx, item.ID, model.WorkflowRefDbAccessRequest, item.Status == model.DbAccessRequestStatusPending, &item.MineStatus, &item.CurrentStageName, actor)
+			continue
+		}
 		if item.Status == model.DbAccessRequestStatusPending {
 			for _, st := range sts {
 				if st.ReviewerUserID != nil && *st.ReviewerUserID == userID &&
@@ -239,8 +268,21 @@ func (s *Service) enrichTicketMineStatus(ctx context.Context, items []TicketItem
 				switch item.Status {
 				case model.DbTicketStatusPendingExecution:
 					item.MineStatus = dbMineStatusPending
+					item.CurrentStageName = "待提交人执行"
 				case model.DbTicketStatusSuccess, model.DbTicketStatusFailed, model.DbTicketStatusExecuting:
 					item.MineStatus = dbMineStatusDone
+				}
+			}
+			continue
+		}
+		if len(sts) == 0 {
+			pending := item.Status == model.DbTicketStatusPendingApproval
+			s.enrichMineFromWorkflow(ctx, item.ID, model.WorkflowRefDbSqlTicket, pending, &item.MineStatus, &item.CurrentStageName, actor)
+			if item.Status == model.DbTicketStatusPendingExecution {
+				item.CurrentStageName = "待提交人执行"
+				// 统一工单无 legacy steps 时，提交人待执行也应标成 mine_pending（详情/列表都能出执行按钮）
+				if item.SubmitterUserID == userID && item.MineStatus == "" {
+					item.MineStatus = dbMineStatusPending
 				}
 			}
 			continue
@@ -283,8 +325,62 @@ func (s *Service) enrichTicketMineStatus(ctx context.Context, items []TicketItem
 				}
 			case model.DbTicketStatusPendingExecution:
 				item.CurrentStageName = "待提交人执行"
+				if item.SubmitterUserID == userID && item.MineStatus == "" {
+					item.MineStatus = dbMineStatusPending
+				}
+			}
+		} else if item.Status == model.DbTicketStatusPendingExecution {
+			item.CurrentStageName = "待提交人执行"
+			if item.SubmitterUserID == userID && item.MineStatus == "" {
+				item.MineStatus = dbMineStatusPending
 			}
 		}
+	}
+}
+
+func (s *Service) enrichMineFromWorkflow(
+	ctx context.Context, refID uint, refType string, pendingBiz bool,
+	mineStatus, stageName *string, actor *auth.CurrentUser,
+) {
+	userID := actorUserID(actor)
+	var steps []model.WorkflowTicketStep
+	err := s.db.WithContext(ctx).Raw(`
+SELECT s.* FROM workflow_ticket_steps s
+JOIN workflow_tickets t ON t.id = s.ticket_id AND t.deleted_at IS NULL
+WHERE t.ref_type = ? AND t.ref_id = ? AND s.deleted_at IS NULL
+ORDER BY s.sort_order ASC, s.id ASC
+`, refType, refID).Scan(&steps).Error
+	if err != nil || len(steps) == 0 {
+		return
+	}
+	for _, st := range steps {
+		if st.ReviewerUserID != nil && *st.ReviewerUserID == userID &&
+			(st.Status == model.WorkflowStepApproved || st.Status == model.WorkflowStepRejected) {
+			*mineStatus = dbMineStatusDone
+			return
+		}
+	}
+	if !pendingBiz {
+		return
+	}
+	for i := range steps {
+		st := &steps[i]
+		if st.Status != model.WorkflowStepPending || st.ActivatedAt == nil {
+			continue
+		}
+		if stageName != nil && *stageName == "" {
+			*stageName = st.StageName
+		}
+		ok := false
+		if st.AssigneeUserID != nil && *st.AssigneeUserID == userID {
+			ok = true
+		} else {
+			ok, _ = s.userCanApproveStep(ctx, actor, st.UserGroupID)
+		}
+		if ok {
+			*mineStatus = dbMineStatusPending
+		}
+		return
 	}
 }
 
@@ -300,21 +396,22 @@ func (s *Service) appUserRequestPendingSubquery(actor *auth.CurrentUser) *gorm.D
 			Where("r.status = ?", model.DbAccessRequestStatusPending)
 	}
 	userID := actorUserID(actor)
+	wf := s.workflowPendingSubquery(userID, model.WorkflowRefDbAppUserRequest, "db_app_user_requests.id")
 	currentStep := s.db.Table("db_app_user_request_steps AS s").
 		Select("1").
 		Joins("JOIN user_group_users AS ugu ON ugu.user_group_id = s.user_group_id AND ugu.user_id = ?", userID).
-		Where("s.app_user_request_id = r.id").
+		Where("s.app_user_request_id = db_app_user_requests.id").
 		Where("s.status = ?", model.DbApprovalStepPending).
 		Where("s.user_group_id IS NOT NULL AND s.user_group_id > 0").
 		Where(`s.sort_order = (
 			SELECT MIN(s2.sort_order) FROM db_app_user_request_steps s2
-			WHERE s2.app_user_request_id = r.id AND s2.status = ?
+			WHERE s2.app_user_request_id = db_app_user_requests.id AND s2.status = ?
 		)`, model.DbApprovalStepPending)
 	return s.db.Table("db_app_user_requests AS r").
 		Select("1").
 		Where("r.id = db_app_user_requests.id").
 		Where("r.status = ?", model.DbAccessRequestStatusPending).
-		Where("EXISTS (?)", currentStep)
+		Where("EXISTS (?) OR EXISTS (?)", wf, currentStep)
 }
 
 func (s *Service) filterAppUserRequestsApprovalDone(dbq *gorm.DB, userID uint) *gorm.DB {
@@ -325,15 +422,16 @@ func (s *Service) appUserRequestDoneSubquery(userID uint) *gorm.DB {
 	if userID == 0 {
 		return s.db.Table("db_app_user_requests AS r").Select("1").Where("1 = 0")
 	}
+	wf := s.workflowDoneSubquery(userID, model.WorkflowRefDbAppUserRequest, "db_app_user_requests.id")
 	acted := s.db.Table("db_app_user_request_steps AS s").
 		Select("1").
-		Where("s.app_user_request_id = r.id").
+		Where("s.app_user_request_id = db_app_user_requests.id").
 		Where("s.reviewer_user_id = ?", userID).
 		Where("s.status IN ?", []string{model.DbApprovalStepApproved, model.DbApprovalStepRejected})
 	return s.db.Table("db_app_user_requests AS r").
 		Select("1").
 		Where("r.id = db_app_user_requests.id").
-		Where("EXISTS (?)", acted)
+		Where("EXISTS (?) OR EXISTS (?)", wf, acted)
 }
 
 func (s *Service) filterAppUserRequestsApprovalMine(dbq *gorm.DB, actor *auth.CurrentUser) *gorm.DB {
@@ -358,6 +456,11 @@ func (s *Service) enrichAppUserRequestMineStatus(ctx context.Context, items []Ap
 	for i := range items {
 		item := &items[i]
 		sts := byReq[item.ID]
+		if len(sts) == 0 {
+			s.enrichMineFromWorkflow(ctx, item.ID, model.WorkflowRefDbAppUserRequest,
+				item.Status == model.DbAccessRequestStatusPending, &item.MineStatus, &item.CurrentStageName, actor)
+			continue
+		}
 		if item.Status == model.DbAccessRequestStatusPending {
 			for _, st := range sts {
 				if st.ReviewerUserID != nil && *st.ReviewerUserID == userID &&

@@ -43,6 +43,7 @@ func (s *Service) retrieveFromDB(ctx context.Context, query string, modules []st
 	if len(tokens) == 0 {
 		return nil
 	}
+	queryVec := s.queryEmbedding(ctx, query)
 	var out []ragHit
 	// 故障案例优先
 	var cases []model.AiIncidentCase
@@ -66,12 +67,22 @@ func (s *Service) retrieveFromDB(ctx context.Context, query string, modules []st
 			"\n方案：" + truncateRunesStr(c.Solution, 400)
 		out = append(out, ragHit{Source: "case:" + c.CaseID, Module: "case", Content: content, Score: sc + c.Confidence})
 	}
-	// KB chunks
+	// KB chunks（词法 + 可选语义混合）
 	var chunks []model.AiKbChunk
 	_ = s.db.WithContext(ctx).Order("id DESC").Limit(500).Find(&chunks).Error
 	for _, ch := range chunks {
 		blob := strings.ToLower(ch.HeadingPath + " " + ch.Content)
 		sc := scoreTokens(blob, tokens)
+		if sc <= 0 && len(queryVec) == 0 {
+			continue
+		}
+		if sc <= 0 && len(ch.Embedding) == 0 {
+			continue
+		}
+		if sc <= 0 {
+			sc = 0.1 // 仅语义命中时给弱词法底分
+		}
+		sc = applyHybridChunkScore(ch, sc, queryVec)
 		if sc <= 0 {
 			continue
 		}

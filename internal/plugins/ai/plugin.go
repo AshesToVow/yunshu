@@ -42,5 +42,6 @@ func (m *module) Models() []any {
 		&model.AiEvalRun{},
 		&model.AiEvalResult{},
 		&model.AiAuditEvent{},
+		&model.AiInvestigation{},
 	}
 }

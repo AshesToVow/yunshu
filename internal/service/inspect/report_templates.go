@@ -64,15 +64,14 @@ var reportTemplateFuncs = template.FuncMap{
 	"riskLevel":     riskLevelCN,
 	"priorityLabel": findingPriorityLabel,
 	"inc":           func(i int) int { return i + 1 },
+	"add":           func(a, b int) int { return a + b },
 }
 
 func builtinTemplateFile(code string) string {
 	switch strings.TrimSpace(code) {
 	case "compact":
 		return "templates/compact.html"
-	case "executive":
-		return "templates/executive.html"
-	case "print":
+	case "executive", "print", "default", "":
 		return "templates/report.html"
 	default:
 		return "templates/report.html"
@@ -137,9 +136,9 @@ func (s *Service) resolveReportTemplate(ctx context.Context, projectID, template
 
 func builtinReportTemplateSeeds() []model.InspectReportTemplate {
 	return []model.InspectReportTemplate{
-		{ProjectID: 0, Code: "default", Name: "客户汇报版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "封面+KPI+执行摘要，适合对客户汇报与归档"},
+		{ProjectID: 0, Code: "default", Name: "客户汇报版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "领导汇报：结论→统计→风险→分域明细→整改→总结；PDF 用浏览器导出"},
 		{ProjectID: 0, Code: "compact", Name: "紧凑版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "信息密度高，适合邮件快速浏览"},
-		{ProjectID: 0, Code: "executive", Name: "摘要版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "侧重结论与关注项，不含全量明细表"},
+		{ProjectID: 0, Code: "executive", Name: "摘要版", Engine: "go_html", IsBuiltin: true, Status: 1, Remark: "与汇报版同版式，侧重结论与关注项"},
 	}
 }
 
@@ -371,6 +370,32 @@ func (s *Service) PreviewReportTemplate(ctx context.Context, projectID uint, req
 		CollectResult{Total: 12, Critical: 1, Warning: 2, Normal: 9},
 		data.Score, data.Grade, 2, 4,
 	)
+	previewSamples := []MetricSample{
+		{Type: "基础设施层", Name: "CPU 使用率", Instance: "10.0.0.1", Value: 92, Threshold: 85, Unit: "%", Status: "critical"},
+		{Type: "基础设施层", Name: "内存使用率", Instance: "10.0.0.1", Value: 60, Threshold: 85, Unit: "%", Status: "normal"},
+		{Type: "k8s集群", Name: "Node Ready", Instance: "node-1", Value: 1, Threshold: 1, Status: "normal"},
+		{Type: "数据库监控", Name: "连接数", Instance: "mysql-1", Value: 420, Threshold: 400, Status: "warning"},
+	}
+	data.Groups = append(data.Groups, ReportGroup{
+		Type:  "k8s集群",
+		Stats: GroupStats{Total: 1, Normal: 1},
+		Metrics: []MetricSample{
+			{Type: "k8s集群", Name: "Node Ready", Instance: "node-1", Value: 1, Threshold: 1, Status: "normal"},
+		},
+	})
+	data.ContentGroups = append(data.ContentGroups,
+		ContentGroup{
+			Type:  "k8s集群",
+			Stats: GroupStats{Total: 1, Normal: 1},
+			Items: []ContentItem{{Name: "Node Ready", SampleCount: 1}},
+		},
+		ContentGroup{
+			Type:  "数据库监控",
+			Stats: GroupStats{Total: 1, Warning: 1},
+			Items: []ContentItem{{Name: "连接数", SampleCount: 1}},
+		},
+	)
+	enrichLeadershipReport(&data, previewSamples)
 	return renderHTMLWithTemplate(code, body, data)
 }
 

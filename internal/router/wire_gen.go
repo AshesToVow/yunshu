@@ -100,7 +100,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		return nil, err
 	}
 	v57 := k8s.NewK8sClusterService(v25, v34, v56, v22, v23, v9, v20)
-	v58 := k8s.NewK8sPodService(v56, v22, v23)
+	v58 := k8s.NewK8sPodService(v56, v22, v23, db)
 	v59 := k8s.NewK8sNamespaceService(v56, v22, v23)
 	v60 := k8s.NewK8sNodeService(v56)
 	v61 := k8s.NewK8sWorkloadService(v56, db)
@@ -134,7 +134,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	if err != nil {
 		return nil, err
 	}
-	service := provideCicdService(db, v78, v29, v24, v5, v9, cicdConfig, sender, appDisplayName, v59)
+	service := provideCicdService(db, v78, v29, v24, v5, v9, v38, cicdConfig, sender, appDisplayName, v59)
 	v88 := routerRouteRepositories.MysqlBackup
 	v89, err := provideMysqlBackupService(v88, v78, v29, v5, db, securityEncryptionKey, sender, appDisplayName)
 	if err != nil {
@@ -142,12 +142,14 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	}
 	v90 := routerRouteRepositories.Dbmgmt
 	dbmgmtConfig := provideDbmgmtConfig(app)
-	dbmgmtService, err := provideDbmgmtService(v90, v78, v29, v24, v5, db, securityEncryptionKey, sender, appDisplayName, dbmgmtConfig)
+	dbmgmtService, err := provideDbmgmtService(v90, v78, v29, v24, v5, v38, db, securityEncryptionKey, sender, appDisplayName, dbmgmtConfig)
 	if err != nil {
 		return nil, err
 	}
 	v91 := provideElasticsearchProvider(app)
-	v92 := provideLogSearchService(v91, v78)
+	v92 := provideLogSearchService(db, v91, v78)
+	v52 = attachAlertLogSearch(v52, v92)
+	logIntelligenceService := provideLogIntelligenceService(db, v92, v29)
 	v93 := routerRouteRepositories.LogRetention
 	v94 := provideLogRetentionService(v91, v93)
 	v95 := provideKafkaProvider(app)
@@ -223,6 +225,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		MysqlBackup:          v89,
 		Dbmgmt:               dbmgmtService,
 		LogSearch:            v92,
+		LogIntelligence:      logIntelligenceService,
 		LogRetention:         v94,
 		KafkaToES:            v96,
 		LoggieAgent:          v98,
@@ -281,7 +284,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	rbacHandler := handler.NewRBACHandler(v73)
 	serviceAccountHandler := handler.NewServiceAccountHandler(v74)
 	overviewHandler := handler.NewOverviewHandler(v77)
-	projectHandler := handler.NewProjectHandler(v82, v92)
+	projectHandler := handler.NewProjectHandler(v82, v92, logIntelligenceService)
 	projectCatalogHandler := handler.NewProjectCatalogHandler(v84, v86)
 	cmdbHandler := handler.NewCMDBHandler(v87)
 	mysqlBackupHandler := handler.NewMysqlBackupHandler(v89)

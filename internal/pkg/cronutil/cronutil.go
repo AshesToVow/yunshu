@@ -2,6 +2,7 @@ package cronutil
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -86,9 +87,20 @@ func ShouldRunWithDayAnchor(spec string, last *time.Time, now time.Time) bool {
 	return true
 }
 
+// NormalizeCronSpecForSeconds cron.WithSeconds() 需要 6 段；常见 5 段表达式自动补秒位 0。
+func NormalizeCronSpecForSeconds(spec string) string {
+	spec = strings.TrimSpace(spec)
+	fields := strings.Fields(spec)
+	if len(fields) == 5 {
+		return "0 " + spec
+	}
+	return spec
+}
+
 // RunWorker 按 spec 周期性执行 job，阻塞至 ctx 取消。spec 无效且 fallbackSpec 非空时尝试 fallback。
 func RunWorker(ctx context.Context, spec string, job func(), fallbackSpec string) {
-	spec = strings.TrimSpace(spec)
+	spec = NormalizeCronSpecForSeconds(spec)
+	fallbackSpec = NormalizeCronSpecForSeconds(fallbackSpec)
 	c := cron.New(cron.WithSeconds())
 	wrapped := func() {
 		if ctx.Err() != nil {
@@ -96,14 +108,19 @@ func RunWorker(ctx context.Context, spec string, job func(), fallbackSpec string
 		}
 		job()
 	}
+	log := slog.Default().With("component", "cronutil")
 	if _, err := c.AddFunc(spec, wrapped); err != nil {
+		log.Warn("cron AddFunc failed", "spec", spec, "error", err)
 		fallbackSpec = strings.TrimSpace(fallbackSpec)
 		if fallbackSpec == "" || fallbackSpec == spec {
+			log.Error("cron worker aborted: invalid schedule", "spec", spec)
 			return
 		}
 		if _, err2 := c.AddFunc(fallbackSpec, wrapped); err2 != nil {
+			log.Error("cron worker aborted: fallback schedule invalid", "spec", spec, "fallback", fallbackSpec, "error", err2)
 			return
 		}
+		log.Info("cron using fallback schedule", "fallback", fallbackSpec)
 	}
 	c.Start()
 	<-ctx.Done()

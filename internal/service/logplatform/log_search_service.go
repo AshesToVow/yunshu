@@ -13,15 +13,18 @@ import (
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 type LogSearchService struct {
 	es         *ElasticsearchProvider
 	serverRepo interfaces.ServerRepository
+	db         *gorm.DB // 可选：加载项目黑名单
 }
 
-func NewLogSearchService(es *ElasticsearchProvider, serverRepo interfaces.ServerRepository) *LogSearchService {
-	return &LogSearchService{es: es, serverRepo: serverRepo}
+func NewLogSearchService(es *ElasticsearchProvider, serverRepo interfaces.ServerRepository, db *gorm.DB) *LogSearchService {
+	return &LogSearchService{es: es, serverRepo: serverRepo, db: db}
 }
 
 type LogSearchQuery struct {
@@ -30,6 +33,7 @@ type LogSearchQuery struct {
 	ServiceID     *uint  `form:"service_id"`
 	LogSourceID   *uint  `form:"log_source_id"`
 	ServiceName   string `form:"service_name"`
+	Host          string `form:"host"`
 	CollectorMode string `form:"collector_mode"` // host|k8s|空=全部
 	ClusterID     *uint  `form:"cluster_id"`
 	Namespace     string `form:"namespace"`
@@ -38,8 +42,13 @@ type LogSearchQuery struct {
 	Keyword       string `form:"keyword"`
 	Level         string `form:"level"`
 	FilePath      string `form:"file_path"`
+	ExtraField    string `form:"extra_field"`
+	ExtraValue    string `form:"extra_value"`
 	From          string `form:"from"`
 	To            string `form:"to"`
+	TraceID       string `form:"trace_id"`
+	IndexPattern  string `form:"index_pattern"` // 可选：覆盖默认索引（多数据流）
+	SkipDropRules bool   `form:"skip_drop_rules"`
 	Page          int    `form:"page"`
 	PageSize      int    `form:"page_size"`
 }
@@ -63,14 +72,15 @@ type LogSearchItem struct {
 	PodName       string `json:"podname,omitempty"`
 	Container     string `json:"container,omitempty"`
 	ContainerName string `json:"containername,omitempty"`
+	TraceID       string `json:"trace_id,omitempty"`
+	SpanID        string `json:"span_id,omitempty"`
+	Fields        map[string]string `json:"fields,omitempty"`
 }
 
 func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagination.Result[LogSearchItem], error) {
-	if q.ProjectID == 0 {
-		return nil, constants.ErrProjectIDRequired
-	}
-	if s.es == nil {
-		return nil, constants.ErrBadRequestWithMsg("Elasticsearch 未配置")
+	prep, err := s.prepareSearch(ctx, q)
+	if err != nil {
+		return nil, err
 	}
 	cli, cfg, err := s.es.Client(ctx)
 	if err != nil {
@@ -82,74 +92,12 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 	}
 	from := (page - 1) * pageSize
 
-	projectID := strconv.FormatUint(uint64(q.ProjectID), 10)
-	must := []map[string]any{
-		termIDFilter("project_id", projectID),
-	}
-	filters := make([]map[string]any, 0, 8)
-	if q.ServerID != nil && *q.ServerID > 0 {
-		filters = append(filters, termIDFilter("server_id", strconv.FormatUint(uint64(*q.ServerID), 10)))
-	}
-	if q.ServiceID != nil && *q.ServiceID > 0 {
-		filters = append(filters, termIDFilter("service_id", strconv.FormatUint(uint64(*q.ServiceID), 10)))
-	}
-	if q.LogSourceID != nil && *q.LogSourceID > 0 {
-		filters = append(filters, termIDFilter("log_source_id", strconv.FormatUint(uint64(*q.LogSourceID), 10)))
-	}
-	if lv := strings.TrimSpace(q.Level); lv != "" {
-		if clause := levelFilter(lv); clause != nil {
-			filters = append(filters, clause)
-		}
-	}
-	if fp := strings.TrimSpace(q.FilePath); fp != "" {
-		filters = append(filters, filePathFilter(fp))
-	}
-	if sn := strings.TrimSpace(q.ServiceName); sn != "" {
-		filters = append(filters, termIDFilter("service_name", sn))
-	}
-	if q.ClusterID != nil && *q.ClusterID > 0 {
-		filters = append(filters, termIDFilter("cluster_id", strconv.FormatUint(uint64(*q.ClusterID), 10)))
-	}
-	// collector_mode：k8s 精确匹配；host 兼容未热更旧文档（字段缺失）
-	switch normalizeCollectorMode(q.CollectorMode) {
-	case "k8s":
-		filters = append(filters, termIDFilter("collector_mode", "k8s"))
-	case "host":
-		filters = append(filters, hostCollectorModeFilter())
-	}
-	if ns := strings.TrimSpace(q.Namespace); ns != "" {
-		filters = append(filters, termIDFilter("namespace", ns))
-	}
-	if pod := strings.TrimSpace(q.Pod); pod != "" {
-		filters = append(filters, multiFieldTermFilter([]string{"podname", "pod"}, pod))
-	}
-	if ct := strings.TrimSpace(q.Container); ct != "" {
-		filters = append(filters, multiFieldTermFilter([]string{"containername", "container"}, ct))
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		must = append(must, map[string]any{
-			"simple_query_string": map[string]any{
-				"query":            kw,
-				"fields":           messageFieldsForQuery(cfg.MessageFields),
-				"default_operator": "and",
-			},
-		})
-	}
-	if timeFilter := timeRangeFilter(q.From, q.To, cfg.TimestampField); timeFilter != nil {
-		filters = append(filters, timeFilter)
-	}
-
 	body := map[string]any{
 		"track_total_hits": true,
 		"from":             from,
 		"size":             pageSize,
 		"sort":             searchSort(cfg.TimestampField),
-		"query": map[string]any{
-			"bool": map[string]any{
-				"must":   must,
-				"filter": filters,
-			},
-		},
+		"query":            prep.boolQuery(),
 	}
 	if kw := strings.TrimSpace(q.Keyword); kw != "" {
 		body["highlight"] = map[string]any{
@@ -159,8 +107,7 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 		}
 	}
 
-	indices := s.resolveIndices(ctx, q)
-	raw, err := cli.Search(ctx, indices, body)
+	raw, err := cli.Search(ctx, prep.indices, body)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "logsearch", "Search", err)
 	}
@@ -174,6 +121,13 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 }
 
 func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery) string {
+	if pat := strings.TrimSpace(q.IndexPattern); pat != "" {
+		// 仅允许相对安全的索引通配，防止跨集群滥用绝对奇怪的输入
+		if strings.ContainsAny(pat, " \t\n;") {
+			return strings.ReplaceAll(pat, " ", "")
+		}
+		return pat
+	}
 	k8sPrefix := ""
 	if s.es != nil {
 		if cfg, err := s.es.Resolve(ctx); err == nil {
@@ -520,6 +474,8 @@ func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 		ContainerName: pickString(src, "containername", "container", "container_name"),
 		ServiceName:   pickString(src, "service_name"),
 		ServerHost:    pickString(src, "server_host"),
+		TraceID:       pickString(src, "trace_id", "traceId", "traceid"),
+		SpanID:        pickString(src, "span_id", "spanId", "spanid"),
 	}
 	if item.Level == "" {
 		item.Level = extractLevelFromMessage(item.Message)
@@ -555,6 +511,12 @@ func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 		if item.Host == "" {
 			item.Host = pickString(meta, "host", "hostname")
 		}
+		if item.TraceID == "" {
+			item.TraceID = pickString(meta, "trace_id", "traceId", "traceid")
+		}
+		if item.SpanID == "" {
+			item.SpanID = pickString(meta, "span_id", "spanId", "spanid")
+		}
 	}
 	if item.PodName == "" {
 		item.PodName = item.Pod
@@ -587,6 +549,7 @@ func mapHit(src map[string]any, cfg config.ElasticsearchConfig) LogSearchItem {
 	if item.Timestamp == "" {
 		item.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	}
+	item.Fields = flattenLogSource(src, "", 0)
 	return item
 }
 

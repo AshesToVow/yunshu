@@ -140,8 +140,12 @@ func (c *OpenAICompatClient) Embed(ctx context.Context, texts []string) ([][]flo
 	if strings.TrimSpace(c.apiKey) == "" {
 		return nil, fmt.Errorf("未配置 API Key")
 	}
+	modelName := strings.TrimSpace(c.model)
+	if modelName == "" {
+		modelName = "text-embedding-3-small"
+	}
 	body := map[string]any{
-		"model": "text-embedding-3-small",
+		"model": modelName,
 		"input": texts,
 	}
 	raw, err := json.Marshal(body)

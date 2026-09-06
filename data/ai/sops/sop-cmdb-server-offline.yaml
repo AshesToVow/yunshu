@@ -1,0 +1,17 @@
+code: sop-cmdb-server-offline
+title: CMDB 服务器离线排查 SOP
+scenario: 主机 SSH/探测失败或状态异常
+preconditions: 提供 project_id，尽量提供 server 名称关键字
+input_params: project_id, keyword, server_id
+check_steps: |
+  1. list_servers
+  2. get_server
+exec_steps: |
+  1. 校验网络与安全组
+  2. 更新失效凭据
+  3. 确认主机运行状态后重测
+verify_steps: 连通测试成功，状态恢复正常
+exception_handle: 无 server_id 时先用 list_servers 按关键字定位
+rollback: 恢复误改的凭据（如有）
+risk: 批量改密影响面大
+approval_needed: false

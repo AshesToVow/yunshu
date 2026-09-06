@@ -32,7 +32,7 @@ func (s *ServiceCatalogService) buildHealth(ctx context.Context, item *ServiceCa
 	}
 	now := time.Now()
 	since := now.Add(-24 * time.Hour)
-	factors := make([]PortraitHealthFactor, 0, 3)
+	factors := make([]PortraitHealthFactor, 0, 4)
 
 	// 告警因子：满分 40；firing critical -15/条(上限30)，warning -5/条(上限10)
 	alertScore, alertMax := 40, 40
@@ -114,7 +114,29 @@ func (s *ServiceCatalogService) buildHealth(ctx context.Context, item *ServiceCa
 		Key: "ready", Label: "Ready", Score: readyScore, Max: readyMax, Deduct: readyMax - readyScore, Detail: readyDetail,
 	})
 
-	score := alertScore + relScore + readyScore
+	// 日志异常因子：满分 10；open critical -4/条(上限8)，warning -2/条(上限4)
+	logScore, logMax := 10, 10
+	var openCritical, openWarning int64
+	_ = s.db.WithContext(ctx).Model(&model.LogAnomaly{}).
+		Where("project_id = ? AND status = ? AND severity = ?", item.ProjectID, model.LogAnomalyStatusOpen, model.LogAnomalySeverityCritical).
+		Count(&openCritical).Error
+	_ = s.db.WithContext(ctx).Model(&model.LogAnomaly{}).
+		Where("project_id = ? AND status = ? AND severity = ?", item.ProjectID, model.LogAnomalyStatusOpen, model.LogAnomalySeverityWarning).
+		Count(&openWarning).Error
+	deductLog := int(openCritical)*4 + int(openWarning)*2
+	if deductLog > 10 {
+		deductLog = 10
+	}
+	logScore -= deductLog
+	logDetail := fmt.Sprintf("open 日志异常 critical=%d warning=%d", openCritical, openWarning)
+	factors = append(factors, PortraitHealthFactor{
+		Key: "log", Label: "日志", Score: logScore, Max: logMax, Deduct: deductLog, Detail: logDetail,
+	})
+
+	score := alertScore + relScore + readyScore + logScore
+	if score > 100 {
+		score = 100
+	}
 	grade := "A"
 	switch {
 	case score >= 85:

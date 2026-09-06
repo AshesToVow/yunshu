@@ -95,3 +95,20 @@ func (h *K8sEventForwardHandler) UpdateSettings(c *gin.Context) {
 	}
 	response.Success(c, req)
 }
+
+func (h *K8sEventForwardHandler) ListForwardedEvents(c *gin.Context) {
+	ServeQuery(c, h.svc.ListForwardedEvents)
+}
+
+func (h *K8sEventForwardHandler) RequeueDeadEvent(c *gin.Context) {
+	id, err := parseInt64Param(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.RequeueDeadEvent(c.Request.Context(), id); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"requeued": true})
+}

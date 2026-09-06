@@ -31,6 +31,10 @@ func (s *Service) createToolApproval(ctx context.Context, userID uint, toolName,
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return nil, err
 	}
+	if err := s.createAIWorkflowTicket(ctx, &row); err != nil {
+		_ = s.db.WithContext(ctx).Delete(&row).Error
+		return nil, fmt.Errorf("创建统一审批工单失败: %w", err)
+	}
 	return map[string]any{
 		"approval_id": row.ID,
 		"status":      row.Status,
@@ -100,6 +104,40 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 	if row.UserID == actor.ID && !auth.IsSuperAdminRole(actor.RoleCodes) {
 		return nil, constants.ErrForbiddenWithMsg("不能审批自己发起的操作")
 	}
+
+	wf := s.workflowEngine()
+	if wf.HasLinkedTicket(ctx, model.WorkflowRefAiToolApproval, id) {
+		detail, err := s.reviewAIViaWorkflow(ctx, &row, req.Approve, req.Note, actor)
+		if err != nil {
+			return nil, err
+		}
+		// 多级审批：仅终态才回写业务单；中间节点保持 pending
+		if detail != nil && detail.Status == model.WorkflowTicketStatusPending {
+			return &row, nil
+		}
+		uid := actor.ID
+		row.ReviewerID = &uid
+		row.ReviewNote = truncateStr(req.Note, 500)
+		if !req.Approve || (detail != nil && detail.Status == model.WorkflowTicketStatusRejected) {
+			row.Status = "rejected"
+			if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+				return nil, err
+			}
+			return &row, nil
+		}
+		if detail == nil || detail.Status != model.WorkflowTicketStatusApproved {
+			return &row, nil
+		}
+		row.Status = "approved"
+		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+			return nil, err
+		}
+		if req.Execute {
+			return s.ExecuteApproval(ctx, actor, id)
+		}
+		return &row, nil
+	}
+
 	uid := actor.ID
 	row.ReviewerID = &uid
 	row.ReviewNote = truncateStr(req.Note, 500)

@@ -6,7 +6,7 @@ import (
 
 // RegisterAlertRoutes 告警平台 HTTP 路由。
 func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
-	// 内部入站（K8s Event 等）；不再提供 Alertmanager Webhook。
+	// 内部入站：Alertmanager Webhook（平台规则重复标签会跳过，避免双发）+ K8s Event。
 	alertIngress := api.Group("/alerts")
 	alertIngress.POST("/webhook", d.alertHandler.ReceiveAlertmanagerWebhook)
 	alertIngress.POST("/ingress/k8s-events", d.alertHandler.ReceiveK8sEventIngress)
@@ -23,6 +23,7 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	alerts.GET("/events", d.alertHandler.ListEvents)
 	alerts.GET("/events/grouped", d.alertHandler.ListEventsGrouped)
 	alerts.GET("/events/by-fingerprint", d.alertHandler.ExplainFingerprintDelivery)
+	alerts.GET("/events/evidence", d.alertHandler.CollectAlertEvidence)
 	alerts.GET("/cur-events", d.alertHandler.ListCurEvents)
 	alerts.GET("/his-events", d.alertHandler.ListHisEvents)
 	alerts.GET("/his-events/export.csv", d.alertHandler.ExportHisEventsCSV)
@@ -45,6 +46,9 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	alerts.GET("/datasources", d.alertPlatformHandler.ListDatasources)
 	alerts.POST("/datasources", d.alertPlatformHandler.CreateDatasource)
+	alerts.GET("/datasources/health", d.alertPlatformHandler.ListDatasourceHealth)
+	alerts.GET("/datasources/:id/health", d.alertPlatformHandler.GetDatasourceHealth)
+	alerts.POST("/datasources/:id/health-check", d.alertPlatformHandler.CheckDatasourceHealth)
 	alerts.GET("/datasources/:id/ping", d.alertPlatformHandler.PingDatasource)
 	alerts.GET("/datasources/:id/prometheus-alerts", d.alertPlatformHandler.PromActiveAlerts)
 	alerts.POST("/datasources/:id/query", d.alertPlatformHandler.PromQuery)

@@ -82,7 +82,7 @@ func normalizeDbStageKey(raw string) (string, error) {
 }
 
 func (s *Service) workflowEngine() *workflowsvc.Service {
-	return workflowsvc.NewService(s.db, s.userGroupRepo, nil, s.userRepo)
+	return workflowsvc.NewService(s.db, s.userGroupRepo, s.dutyRepo, s.userRepo)
 }
 
 func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*ApprovalFlowResponse, error) {

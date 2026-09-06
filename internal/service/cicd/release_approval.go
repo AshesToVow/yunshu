@@ -182,10 +182,11 @@ func (s *Service) createPendingRelease(
 	if err := s.db.WithContext(ctx).Create(&release).Error; err != nil {
 		return nil, err
 	}
-	if err := s.initReleaseApprovalSteps(ctx, &release); err != nil {
-		return nil, err
-	}
+	// 统一引擎创建审批步骤；不再双写 cicd_release_approval_steps
 	if err := s.createReleaseWorkflowTickets(ctx, &release); err != nil {
+		_ = s.db.WithContext(ctx).Model(&release).Updates(map[string]any{
+			"status": model.CicdRunStatusCancelled, "review_comment": "创建统一审批工单失败，已自动取消",
+		}).Error
 		return nil, err
 	}
 	if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
@@ -315,7 +316,16 @@ func (s *Service) transitionReleaseStatus(ctx context.Context, runID uint, fromS
 	if res.Error != nil {
 		return false, res.Error
 	}
-	return res.RowsAffected > 0, nil
+	if res.RowsAffected == 0 {
+		return false, nil
+	}
+	if st, ok := updates["status"].(string); ok {
+		switch st {
+		case model.CicdRunStatusSuccess, model.CicdRunStatusFailure, model.CicdRunStatusCancelled, model.CicdRunStatusRejected:
+			_ = s.workflowEngine().CloseLinkedTicketTyped(ctx, model.WorkflowRefCicdReleaseRun, runID, model.WorkflowTicketTypeRelease)
+		}
+	}
+	return true, nil
 }
 
 // claimApprovalStep 以 pending 为条件原子占用审批节点，返回本次是否抢到。

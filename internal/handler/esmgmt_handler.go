@@ -47,6 +47,15 @@ func (h *EsmgmtHandler) CreateConnection(c *gin.Context) {
 	response.Success(c, item)
 }
 
+func (h *EsmgmtHandler) ImportConnectionFromDict(c *gin.Context) {
+	item, err := h.svc.ImportConnectionFromDict(c.Request.Context(), actorFrom(c))
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, item)
+}
+
 func (h *EsmgmtHandler) UpdateConnection(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {

@@ -25,6 +25,8 @@ func (s *Service) loadPromptContent(ctx context.Context, code string, vars map[s
 		code = "diagnosis/cicd-build-fail"
 	case "alert_explain":
 		code = "diagnosis/alert-explain"
+	case "k8s_generate_yaml":
+		code = "generation/k8s-yaml"
 	}
 	body, err := s.loadPromptFromDB(ctx, code)
 	if err != nil || strings.TrimSpace(body) == "" {
@@ -34,6 +36,9 @@ func (s *Service) loadPromptContent(ctx context.Context, code string, vars map[s
 			"diagnosis/k8s-pod":           "k8s_pod_diagnose",
 			"diagnosis/cicd-build-fail":   "cicd_build_fail",
 			"diagnosis/alert-explain":     "alert_explain",
+			"diagnosis/log-analyze":       "diagnosis_log-analyze",
+			"generation/k8s-yaml":         "generation_k8s-yaml",
+			"generation/loggie-pipeline":  "generation_loggie-pipeline",
 		}
 		name := legacy[code]
 		if name == "" {

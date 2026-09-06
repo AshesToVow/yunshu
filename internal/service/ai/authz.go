@@ -9,6 +9,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/service/k8s"
+	workflowsvc "yunshu/internal/service/workflow"
 
 	"gorm.io/gorm"
 )
@@ -55,19 +56,7 @@ func resolveActor(ctx context.Context, actor *auth.CurrentUser) *auth.CurrentUse
 
 // canReviewApprovals 超级管理员或具备审批查看全局的运维角色。
 func canReviewApprovals(actor *auth.CurrentUser) bool {
-	if actor == nil {
-		return false
-	}
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
-		return true
-	}
-	for _, c := range actor.RoleCodes {
-		switch c {
-		case "admin", "ops-admin", "ai-approver":
-			return true
-		}
-	}
-	return false
+	return workflowsvc.CanPlatformRoleReview(actor)
 }
 
 // withActorContext 将主体写入 ctx，供 K8s 服务层做 NS deny/allow 过滤。

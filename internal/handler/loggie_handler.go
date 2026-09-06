@@ -126,6 +126,28 @@ func (h *LoggieHandler) DeployConfig(c *gin.Context) {
 	})
 }
 
+func (h *LoggieHandler) DeployCustomYAML(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req struct {
+		ServerID      uint   `json:"server_id"`
+		PipelinesYAML string `json:"pipelines_yml"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	res, err := h.svc.DeployCustomPipelinesYAML(c.Request.Context(), projectID, req.ServerID, req.PipelinesYAML)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 func (h *LoggieHandler) RestartLoggie(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
@@ -198,6 +220,24 @@ func (h *LoggieHandler) ESConfigPreview(c *gin.Context) {
 		return
 	}
 	cfg, err := h.svc.ESConfigForUI(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, cfg)
+}
+
+func (h *LoggieHandler) SetESConnection(c *gin.Context) {
+	if h.svc == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("服务未就绪"))
+		return
+	}
+	var req service.SetESConnectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	cfg, err := h.svc.SetESConnection(c.Request.Context(), req)
 	if err != nil {
 		response.Error(c, err)
 		return

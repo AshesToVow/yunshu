@@ -48,6 +48,14 @@ type ReportData struct {
 	Ledger []LedgerEntry
 	// Diff 与上期的对比结论。HasBaseline=false 时模板不渲染该章节。
 	Diff PeriodDiff
+
+	// —— 客户汇报版分页数据（按实际巡检分类动态生成） ——
+	Assets           []AssetBucket
+	CategorySections []CategorySection
+	RiskTiers        RiskTierSummary
+	Conclusion       string
+	StarRating       string
+	DetailPageStart  int // 明细页起始页码（结论=1 统计=2 风险=3）
 }
 
 type ContentGroup struct {
@@ -132,7 +140,7 @@ func buildReportData(projectName, dsName, user, listMode string, collected Colle
 	case "summary":
 		hint = "摘要模式：明细区仅展示需关注的异常样本"
 	}
-	return ReportData{
+	data := ReportData{
 		Timestamp:       time.Now(),
 		Project:         projectName,
 		Datasource:      dsName,
@@ -162,6 +170,20 @@ func buildReportData(projectName, dsName, user, listMode string, collected Colle
 		Criteria:        buildScoreCriteria(collected, score, grade, categoryCount, checkItemCount),
 		Ledger:          buildLedgerEntries(collected.Samples),
 	}
+	enrichLeadershipReport(&data, collected.Samples)
+	return data
+}
+
+func enrichLeadershipReport(data *ReportData, samples []MetricSample) {
+	if data == nil {
+		return
+	}
+	data.Assets = buildAssetBuckets(samples, data.ContentGroups)
+	data.CategorySections = buildCategorySections(data.ContentGroups, data.Groups, samples, 60)
+	data.RiskTiers = buildRiskTierSummary(data.Ledger)
+	data.StarRating = starRating(data.Grade)
+	data.DetailPageStart = 4
+	data.Conclusion = buildLeadershipConclusion(data)
 }
 
 func buildContentGroups(samples []MetricSample) []ContentGroup {

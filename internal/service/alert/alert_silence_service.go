@@ -14,6 +14,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/service/changeevent"
 
 	"gorm.io/gorm"
 )
@@ -220,6 +221,19 @@ func (s *AlertSilenceService) Create(ctx context.Context, userID uint, req Alert
 	}
 	if err := s.repo.Create(ctx, &row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.silence", "Create", err)
+	}
+	if row.ProjectID > 0 {
+		changeevent.Record(ctx, changeevent.Input{
+			ProjectID: row.ProjectID,
+			Source:    model.ChangeSourceAlert,
+			Action:    "silence_create",
+			RiskLevel: model.ChangeRiskLow,
+			Status:    model.ChangeStatusSucceeded,
+			Summary:   fmt.Sprintf("创建告警静默「%s」至 %s", row.Name, row.EndsAt.Format(time.RFC3339)),
+			Payload: map[string]any{
+				"silence_id": row.ID, "name": row.Name, "ends_at": row.EndsAt,
+			},
+		})
 	}
 	return &row, nil
 }

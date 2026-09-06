@@ -40,7 +40,7 @@ func openClusterSecret(aead cipher.AEAD, stored string) (string, error) {
 	if looksLikePlainClusterSecret(stored) {
 		return stored, nil
 	}
-	return "", err
+	return "", fmt.Errorf("集群凭证解密失败（可能 encryption_key 已变更），请重新编辑集群并保存 kubeconfig/token")
 }
 
 func looksLikePlainClusterSecret(s string) bool {

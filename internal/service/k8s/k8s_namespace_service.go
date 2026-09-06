@@ -3,16 +3,18 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strings"
+	"time"
+
 	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8sutil"
-	"log/slog"
-	bizerrors "yunshu/internal/pkg/errors"
 
 	kom "github.com/weibaohui/kom/kom"
 	corev1 "k8s.io/api/core/v1"
@@ -23,7 +25,12 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-type NamespaceListQuery = ClusterKeywordQuery
+type NamespaceListQuery struct {
+	ClusterID    uint   `form:"cluster_id" binding:"required"`
+	Keyword      string `form:"keyword"`
+	WithPodStats bool   `form:"with_pod_stats"` // true 时全量 Pod List 精确统计（大集群较慢）
+}
+
 type NamespaceDetailQuery = ClusterNameQuery
 
 // NamespaceApplyRequest ???? YAML ???FailIfExists ? true ?????????????????????YAML ????????????
@@ -112,18 +119,28 @@ func NewK8sNamespaceService(
 
 var namespaceGVK = schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Namespace"}
 
-// List ????????????
+// List 列出 Namespace。默认用 metrics + ResourceQuota 做轻量统计；
+// with_pod_stats=1 或命名空间很少时才全量 List Pod（大集群避免超时）。
 func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery, pack *k8sauth.PrincipalPack) ([]NamespaceListItem, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, query.ClusterID)
 	if err != nil {
 		return nil, err
 	}
 
+	list, err := s.runtime.ListNamespacesViaKom(ctx, query.ClusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	const fullPodStatsNSThreshold = 40
+	wantFullPodStats := query.WithPodStats || len(list) <= fullPodStatsNSThreshold
+
 	podSummary := map[string]namespacePodSummary{}
-	{
+	if wantFullPodStats {
+		statsCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		defer cancel()
 		var pods []corev1.Pod
-		// ???????? namespace ??????? namespace ?? List ??????
-		if e := k.WithContext(ctx).Resource(&corev1.Pod{}).AllNamespace().List(&pods).Error; e != nil {
+		if e := k.WithContext(statsCtx).Resource(&corev1.Pod{}).AllNamespace().List(&pods).Error; e != nil {
 			slog.Default().With("component", "k8s.namespace").Warn("list pods for namespace stats failed", "error", e, "cluster_id", query.ClusterID)
 		} else {
 			for _, p := range pods {
@@ -141,6 +158,11 @@ func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery
 				podSummary[ns] = sum
 			}
 		}
+	} else {
+		slog.Default().With("component", "k8s.namespace").Info(
+			"skip full pod list for namespace stats; using metrics+quota",
+			"cluster_id", query.ClusterID, "namespace_count", len(list),
+		)
 	}
 
 	nsUsage := aggregatePodMetricsUsageByNamespace(ctx, k)
@@ -157,14 +179,22 @@ func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery
 					continue
 				}
 				rqByNS[q] = append(rqByNS[q], rqs[i])
+				mergeQuotaIntoPodSummary(podSummary, q, &rqs[i])
 			}
 		}
 	}
 
-	list, err := s.runtime.ListNamespacesViaKom(ctx, query.ClusterID)
-	if err != nil {
-		return nil, err
+	// 无全量 Pod 统计时，用 metrics 样本数近似 Pod 数（仅 Running 且上报 metrics 的）。
+	if !wantFullPodStats {
+		for ns, u := range nsUsage {
+			sum := podSummary[ns]
+			if sum.PodCount == 0 && u.PodCount > 0 {
+				sum.PodCount = u.PodCount
+				podSummary[ns] = sum
+			}
+		}
 	}
+
 	kw := strings.ToLower(strings.TrimSpace(query.Keyword))
 	out := make([]NamespaceListItem, 0, len(list))
 	for _, ns := range list {
@@ -228,6 +258,32 @@ func (s *K8sNamespaceService) List(ctx context.Context, query NamespaceListQuery
 	}
 
 	return out, nil
+}
+
+// mergeQuotaIntoPodSummary 用 ResourceQuota.Status.Used 填补未做全量 Pod List 时的统计缺口。
+func mergeQuotaIntoPodSummary(dst map[string]namespacePodSummary, ns string, rq *corev1.ResourceQuota) {
+	if rq == nil || ns == "" {
+		return
+	}
+	sum := dst[ns]
+	if v, ok := rq.Status.Used[corev1.ResourcePods]; ok {
+		if n, ok := v.AsInt64(); ok && int(n) > sum.PodCount {
+			sum.PodCount = int(n)
+		}
+	}
+	if v, ok := rq.Status.Used[corev1.ResourceRequestsCPU]; ok && sum.CPURequests.IsZero() {
+		sum.CPURequests = v.DeepCopy()
+	}
+	if v, ok := rq.Status.Used[corev1.ResourceLimitsCPU]; ok && sum.CPULimits.IsZero() {
+		sum.CPULimits = v.DeepCopy()
+	}
+	if v, ok := rq.Status.Used[corev1.ResourceRequestsMemory]; ok && sum.MemRequests.IsZero() {
+		sum.MemRequests = v.DeepCopy()
+	}
+	if v, ok := rq.Status.Used[corev1.ResourceLimitsMemory]; ok && sum.MemLimits.IsZero() {
+		sum.MemLimits = v.DeepCopy()
+	}
+	dst[ns] = sum
 }
 
 type namespacePodSummary struct {

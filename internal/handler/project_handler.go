@@ -17,11 +17,12 @@ import (
 type ProjectHandler struct {
 	svc       *service.ProjectMgmtService
 	logSearch *service.LogSearchService
+	logIntel  *service.LogIntelligenceService
 }
 
 // NewProjectHandler 创建相关逻辑。
-func NewProjectHandler(svc *service.ProjectMgmtService, logSearch *service.LogSearchService) *ProjectHandler {
-	return &ProjectHandler{svc: svc, logSearch: logSearch}
+func NewProjectHandler(svc *service.ProjectMgmtService, logSearch *service.LogSearchService, logIntel *service.LogIntelligenceService) *ProjectHandler {
+	return &ProjectHandler{svc: svc, logSearch: logSearch, logIntel: logIntel}
 }
 
 // List 查询列表对应的 HTTP 接口处理逻辑。
@@ -222,6 +223,191 @@ func (h *ProjectHandler) ExportLogs(c *gin.Context) {
 	}
 	filename := fmt.Sprintf("project-%d-logs-page-%s.txt", projectID, time.Now().Format("20060102-150405"))
 	exportutil.ServeBytes(c, filename, "text/plain; charset=utf-8", []byte(text))
+}
+
+// LogOverview 日志概览（直方图 + 级别 + 签名）。
+func (h *ProjectHandler) LogOverview(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	q, ok := bindQuery[service.LogSearchQuery](c)
+	if !ok {
+		return
+	}
+	q.ProjectID = projectID
+	if err := h.svc.ValidateLogSearchFilters(c.Request.Context(), projectID, q.ServerID, q.LogSourceID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if h.logSearch == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未配置"))
+		return
+	}
+	res, err := h.logSearch.Overview(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+// DiscoverLogFields 字段发现（观测云风格可观察字段）。
+func (h *ProjectHandler) DiscoverLogFields(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	q, ok := bindQuery[service.LogSearchQuery](c)
+	if !ok {
+		return
+	}
+	q.ProjectID = projectID
+	if err := h.svc.ValidateLogSearchFilters(c.Request.Context(), projectID, q.ServerID, q.LogSourceID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if h.logSearch == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未配置"))
+		return
+	}
+	res, err := h.logSearch.DiscoverFields(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+// ListLogPatterns 日志模板聚类列表。
+func (h *ProjectHandler) ListLogPatterns(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	q, ok := bindQuery[service.LogPatternListQuery](c)
+	if !ok {
+		return
+	}
+	q.ProjectID = projectID
+	if h.logIntel == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("日志智能服务不可用"))
+		return
+	}
+	res, err := h.logIntel.ListPatterns(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": res.List, "total": res.Total, "page": res.Page, "page_size": res.PageSize})
+}
+
+// ListLogAnomalies 日志异常事件列表。
+func (h *ProjectHandler) ListLogAnomalies(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	q, ok := bindQuery[service.LogAnomalyListQuery](c)
+	if !ok {
+		return
+	}
+	q.ProjectID = projectID
+	if h.logIntel == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("日志智能服务不可用"))
+		return
+	}
+	res, err := h.logIntel.ListAnomalies(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": res.List, "total": res.Total, "page": res.Page, "page_size": res.PageSize})
+}
+
+// UpdateLogAnomaly 更新错误追踪问题（状态/负责人/静默）。
+func (h *ProjectHandler) UpdateLogAnomaly(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	anomalyID, err := parseUintParam(c, "anomaly_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req service.LogAnomalyUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if h.logIntel == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("日志智能服务不可用"))
+		return
+	}
+	res, err := h.logIntel.UpdateAnomaly(c.Request.Context(), projectID, anomalyID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+// LogTopN 日志排行榜。
+func (h *ProjectHandler) LogTopN(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	q, ok := bindQuery[service.LogTopNQuery](c)
+	if !ok {
+		return
+	}
+	q.ProjectID = projectID
+	if err := h.svc.ValidateLogSearchFilters(c.Request.Context(), projectID, q.ServerID, q.LogSourceID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if h.logSearch == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("Elasticsearch 未配置"))
+		return
+	}
+	res, err := h.logSearch.TopN(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+// LogContext 关联上下文（变更/告警/日志）。
+func (h *ProjectHandler) LogContext(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	q, ok := bindQuery[service.LogContextQuery](c)
+	if !ok {
+		return
+	}
+	q.ProjectID = projectID
+	if h.logIntel == nil {
+		response.Error(c, constants.ErrBadRequestWithMsg("日志智能服务不可用"))
+		return
+	}
+	res, err := h.logIntel.GetContext(c.Request.Context(), q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
 }
 
 // ListProjectMembers 项目成员列表。

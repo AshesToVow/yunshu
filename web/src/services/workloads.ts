@@ -98,6 +98,25 @@ export function getDeploymentDetail(clusterId: number, namespace: string, name: 
 export function applyDeployment(clusterId: number, manifest: string) {
   return deploymentsSvc.apply({ cluster_id: clusterId, manifest });
 }
+
+export type WorkloadPreviewResult = {
+  dry_run_ok: boolean;
+  message?: string;
+  diffs?: Array<{
+    kind: string;
+    namespace: string;
+    name: string;
+    exists: boolean;
+    before?: string;
+    after?: string;
+    unified?: string;
+  }>;
+  impact?: Record<string, unknown>;
+};
+
+export function previewApplyDeployment(clusterId: number, manifest: string) {
+  return deploymentsSvc.post<WorkloadPreviewResult>("/preview-apply", { cluster_id: clusterId, manifest });
+}
 export function deleteDeployment(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return deploymentsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
@@ -182,6 +201,9 @@ export function getStatefulSetDetail(clusterId: number, namespace: string, name:
 export function applyStatefulSet(clusterId: number, manifest: string) {
   return statefulsetsSvc.apply({ cluster_id: clusterId, manifest });
 }
+export function previewApplyStatefulSet(clusterId: number, manifest: string) {
+  return statefulsetsSvc.post<WorkloadPreviewResult>("/preview-apply", { cluster_id: clusterId, manifest });
+}
 export function deleteStatefulSet(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return statefulsetsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
@@ -217,6 +239,10 @@ export function rolloutUndoStatefulSet(clusterId: number, namespace: string, nam
   });
 }
 
+export function listStatefulSetRevisions(clusterId: number, namespace: string, name: string) {
+  return statefulsetsSvc.get<DeploymentRevisionItem[]>("/revisions", k8sParams(clusterId, { namespace, name }));
+}
+
 export function listStatefulSetPods(clusterId: number, namespace: string, name: string) {
   return statefulsetsSvc.get<RelatedPodItem[]>("/pods", k8sParams(clusterId, { namespace, name }));
 }
@@ -235,6 +261,19 @@ export function deleteDaemonSet(clusterId: number, namespace: string, name: stri
 }
 export function restartDaemonSet(clusterId: number, namespace: string, name: string) {
   return daemonsetsSvc.post<boolean>("/restart", { cluster_id: clusterId, namespace, name });
+}
+
+export function listDaemonSetRevisions(clusterId: number, namespace: string, name: string) {
+  return daemonsetsSvc.get<DeploymentRevisionItem[]>("/revisions", k8sParams(clusterId, { namespace, name }));
+}
+
+export function rolloutUndoDaemonSet(clusterId: number, namespace: string, name: string, revision?: number) {
+  return daemonsetsSvc.post<Record<string, unknown>>("/rollout-undo", {
+    cluster_id: clusterId,
+    namespace,
+    name,
+    revision: revision ?? 0,
+  });
 }
 
 /** DaemonSet 仅支持垂直扩缩（修改 Pod 模板 resources）；不支持水平副本扩缩（与 HPA scale 语义一致）。 */

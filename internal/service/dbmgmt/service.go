@@ -27,6 +27,7 @@ type Service struct {
 	projectRepo   interfaces.ProjectRepository
 	userGroupRepo interfaces.UserGroupRepository
 	userRepo      interfaces.UserRepository
+	dutyRepo      interfaces.AlertDutyRepository
 	db            *gorm.DB
 	aead          cipher.AEAD
 	mailer        mailer.Sender
@@ -43,6 +44,7 @@ func NewService(
 	projectRepo interfaces.ProjectRepository,
 	userGroupRepo interfaces.UserGroupRepository,
 	userRepo interfaces.UserRepository,
+	dutyRepo interfaces.AlertDutyRepository,
 	db *gorm.DB,
 	encryptionKey string,
 	emailSender mailer.Sender,
@@ -63,6 +65,7 @@ func NewService(
 		projectRepo:   projectRepo,
 		userGroupRepo: userGroupRepo,
 		userRepo:      userRepo,
+		dutyRepo:      dutyRepo,
 		db:            db,
 		aead:          aead,
 		mailer:        emailSender,

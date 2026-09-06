@@ -4,6 +4,7 @@
  */
 import { Button, Card, Divider, Drawer, Form, Input, InputNumber, Select, Space, Tabs, Typography } from "antd";
 import type { FormInstance } from "antd/es/form";
+import { AiYamlGeneratePanel } from "../../components/k8s/ai-yaml-generate-panel";
 import { MonacoYamlEditor } from "../../components/k8s/monaco-yaml-editor";
 import type { PodItem } from "../../services/pods";
 import { POD_CREATE_YAML_TEMPLATE } from "./pod-create-template";
@@ -13,6 +14,7 @@ export type PodFormDrawerProps = {
   createOpen: boolean;
   setCreateOpen: (v: boolean) => void;
   namespace: string;
+  clusterId?: number;
   simpleMode: "create" | "edit";
   setSimpleMode: (v: "create" | "edit") => void;
   editTarget: PodItem | null;
@@ -30,6 +32,7 @@ export function PodFormDrawer({
   createOpen,
   setCreateOpen,
   namespace,
+  clusterId,
   simpleMode,
   setSimpleMode,
   editTarget,
@@ -710,7 +713,14 @@ export function PodFormDrawer({
                       label: "YAML 创建",
                       children: (
                         <Form form={yamlForm} layout="vertical" requiredMark="optional" scrollToFirstError initialValues={{ manifest: "" }}>
-                          <Space wrap style={{ marginBottom: 8 }}>
+                          <AiYamlGeneratePanel
+                            resourceKind="Pod"
+                            namespace={namespace}
+                            clusterId={clusterId}
+                            hintYaml={yamlForm.getFieldValue("manifest") || POD_CREATE_YAML_TEMPLATE}
+                            onGenerated={(yaml) => yamlForm.setFieldsValue({ manifest: yaml })}
+                          />
+                          <Space wrap style={{ marginBottom: 8, marginTop: 8 }}>
                             <Button size="small" type="default" onClick={() => yamlForm.setFieldsValue({ manifest: POD_CREATE_YAML_TEMPLATE })}>
                               填入模板
                             </Button>

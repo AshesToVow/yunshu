@@ -57,7 +57,7 @@ type TicketItem struct {
 	DatabaseName     string `json:"database_name"`
 	RiskLevel        string `json:"risk_level"`
 	SyntaxType       int    `json:"syntax_type,omitempty"`
-	IsBackup         bool   `json:"is_backup,omitempty"`
+	IsBackup         bool   `json:"is_backup"`
 	Status           string `json:"status"`
 	CurrentStageName string `json:"current_stage_name,omitempty"`
 	MineStatus       string `json:"mine_status,omitempty"`
@@ -112,6 +112,20 @@ func (s *Service) GetTicket(ctx context.Context, projectID, ticketID uint, actor
 		return nil, err
 	}
 	item := s.toTicketItem(ctx, *t)
+	s.fillTicketStageName(ctx, &item, t)
+	// 详情页审批/执行按钮依赖 mine_status；按状态选择视角填充。
+	mineTab := "approval"
+	switch t.Status {
+	case model.DbTicketStatusPendingExecution,
+		model.DbTicketStatusExecuting,
+		model.DbTicketStatusSuccess,
+		model.DbTicketStatusFailed,
+		model.DbTicketStatusApproved:
+		mineTab = "execution"
+	}
+	items := []TicketItem{item}
+	s.enrichTicketMineStatus(ctx, items, actor, mineTab)
+	item = items[0]
 	if s.canViewTicketSQL(ctx, projectID, t, actor) {
 		item.SqlText = t.SqlText
 	}
@@ -120,12 +134,43 @@ func (s *Service) GetTicket(ctx context.Context, projectID, ticketID uint, actor
 	return &item, nil
 }
 
-func (s *Service) preCheckForTicket(ctx context.Context, inst *model.DbInstance, dbName, sqlText string) (reviewJSON string, syntaxType int, err error) {
-	if !s.goInceptionAvailable(ctx,inst) {
-		if reDDL.MatchString(strings.ToUpper(sqlText)) {
-			return "", goinception.SyntaxDDL, nil
+func (s *Service) fillTicketStageName(ctx context.Context, item *TicketItem, t *model.DbSqlTicket) {
+	if item == nil || t == nil {
+		return
+	}
+	switch t.Status {
+	case model.DbTicketStatusPendingExecution:
+		item.CurrentStageName = "待提交人执行"
+		return
+	case model.DbTicketStatusPendingApproval:
+		var stage string
+		_ = s.db.WithContext(ctx).Raw(`
+SELECT s.stage_name FROM workflow_ticket_steps s
+JOIN workflow_tickets t ON t.id = s.ticket_id AND t.deleted_at IS NULL
+WHERE t.ref_type = ? AND t.ref_id = ? AND s.status = ? AND s.activated_at IS NOT NULL AND s.deleted_at IS NULL
+ORDER BY s.sort_order ASC, s.id ASC LIMIT 1
+`, model.WorkflowRefDbSqlTicket, t.ID, model.WorkflowStepPending).Scan(&stage).Error
+		if stage != "" {
+			item.CurrentStageName = stage
 		}
-		return "", goinception.SyntaxDML, nil
+	}
+}
+
+func (s *Service) preCheckForTicket(
+	ctx context.Context,
+	inst *model.DbInstance,
+	dbName, sqlText, auditMode string,
+) (reviewJSON string, syntaxType int, err error) {
+	localSyntax := goinception.SyntaxDML
+	if reDDL.MatchString(strings.ToUpper(sqlText)) {
+		localSyntax = goinception.SyntaxDDL
+	}
+	// 人工审核：不连 goInception，由审批人审 SQL；系统审核才做引擎预检。
+	if normalizeAuditMode(auditMode) == model.DbAuditModeManual {
+		return "", localSyntax, nil
+	}
+	if !s.goInceptionAvailable(ctx, inst) {
+		return "", localSyntax, nil
 	}
 	rs, checkErr := s.runGoInceptionCheck(ctx, inst, dbName, sqlText)
 	if checkErr != nil {
@@ -139,7 +184,7 @@ func (s *Service) preCheckForTicket(ctx context.Context, inst *model.DbInstance,
 	if rs != nil {
 		return reviewJSON, rs.SyntaxType, nil
 	}
-	return "", goinception.SyntaxDML, nil
+	return "", localSyntax, nil
 }
 
 func (s *Service) executeWriteViaEngine(ctx context.Context, inst *model.DbInstance, database, sqlText string, backup bool, actor *auth.CurrentUser, ticketID *uint) (executeJSON string, err error) {
@@ -240,7 +285,7 @@ func (s *Service) ExecuteSQL(ctx context.Context, projectID, instanceID uint, re
 	auditMode := normalizeAuditMode(req.AuditMode)
 	backup := resolveBackupChoice(req.IsBackup, cfg.GoInceptionBackup)
 	if s.requiresTicketApproval(inst, assess, cfgResolved, auditMode) {
-		reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, req.Database, sqlText)
+		reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, req.Database, sqlText, auditMode)
 		if checkErr != nil {
 			return nil, checkErr
 		}
@@ -306,7 +351,7 @@ func (s *Service) createSqlExecuteTicket(ctx context.Context, projectID uint, in
 	if !forceTicket && !s.needsApproval(inst, assess, configResolved{ProdForceApproval: cfg.ProdForceApproval}) {
 		return nil, constants.ErrBadRequestWithMsg("当前 SQL 无需创建工单")
 	}
-	reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, database, sqlText)
+	reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, database, sqlText, model.DbAuditModeSystem)
 	if checkErr != nil {
 		return nil, checkErr
 	}
@@ -315,7 +360,7 @@ func (s *Service) createSqlExecuteTicket(ctx context.Context, projectID uint, in
 		ProjectID: projectID, InstanceID: inst.ID, TicketType: model.DbTicketTypeSqlExecute,
 		SubmitterUserID: actorUserID(actor), SubmitterName: actorUsername(actor),
 		DatabaseName: database, SqlText: sqlText, RiskLevel: assess.RiskLevel,
-		SyntaxType: syntaxType, IsBackup: cfg.GoInceptionBackup,
+		SyntaxType: syntaxType, IsBackup: cfg.GoInceptionBackup, AuditMode: model.DbAuditModeSystem,
 		ParsedOpsJSON: string(ops), ReviewJSON: reviewJSON, Reason: strings.TrimSpace(reason),
 		Status: model.DbTicketStatusDraft,
 	}
@@ -378,7 +423,7 @@ func (s *Service) ImportSQL(ctx context.Context, projectID, instanceID uint, req
 	auditMode := normalizeAuditMode(req.AuditMode)
 	backup := resolveBackupChoice(req.IsBackup, cfg.GoInceptionBackup)
 	if s.requiresTicketApproval(inst, assess, cfgResolved, auditMode) {
-		reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, req.Database, req.Sql)
+		reviewJSON, syntaxType, checkErr := s.preCheckForTicket(ctx, inst, req.Database, req.Sql, auditMode)
 		if checkErr != nil {
 			return nil, checkErr
 		}
@@ -546,7 +591,9 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 		}
 		items := make([]TicketItem, 0, len(list))
 		for _, t := range list {
-			items = append(items, s.toTicketItem(ctx, t))
+			item := s.toTicketItem(ctx, t)
+			s.fillTicketStageName(ctx, &item, &t)
+			items = append(items, item)
 		}
 		s.enrichTicketMineStatus(ctx, items, q.MineViewer, mineTab)
 		return paginate(items, total, page, pageSize), nil
@@ -560,7 +607,9 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 	}
 	items := make([]TicketItem, 0, len(list))
 	for _, t := range list {
-		items = append(items, s.toTicketItem(ctx, t))
+		item := s.toTicketItem(ctx, t)
+		s.fillTicketStageName(ctx, &item, &t)
+		items = append(items, item)
 	}
 	return paginate(items, total, q.Page, q.PageSize), nil
 }
@@ -715,8 +764,8 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 		return err
 	}
 	tid := ticket.ID
-	cfg := s.resolvedConfig(ctx)
-	backup := ticket.IsBackup || cfg.GoInceptionBackup
+	// 执行阶段以工单提交时的备份选择为准，不再被全局 goInception 默认覆盖。
+	backup := ticket.IsBackup
 	var execJSON string
 	var execErr error
 	if s.goInceptionAvailable(ctx,inst) {
@@ -737,6 +786,7 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if execErr != nil {
 		ticket.Status = model.DbTicketStatusFailed
 		_ = s.repo.UpdateSqlTicket(ctx, ticket)
+		_ = s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticket.ID)
 		changeevent.Record(ctx, changeevent.Input{
 			ProjectID: projectID,
 			Source:    model.ChangeSourceDbmgmt,
@@ -752,6 +802,7 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if err := s.repo.UpdateSqlTicket(ctx, ticket); err != nil {
 		return err
 	}
+	_ = s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticket.ID)
 	changeevent.Record(ctx, changeevent.Input{
 		ProjectID: projectID,
 		Source:    model.ChangeSourceDbmgmt,
@@ -768,6 +819,33 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 func (s *Service) ListTicketSteps(ctx context.Context, projectID, ticketID uint) ([]model.DbSqlTicketStep, error) {
 	if _, err := s.repo.GetSqlTicketInProject(ctx, projectID, ticketID); err != nil {
 		return nil, err
+	}
+	wf := s.workflowEngine()
+	if linked, err := wf.GetTicketByRef(ctx, model.WorkflowRefDbSqlTicket, ticketID); err == nil && linked != nil {
+		detail, dErr := wf.TicketDetail(ctx, linked.ID)
+		if dErr != nil {
+			return nil, dErr
+		}
+		out := make([]model.DbSqlTicketStep, 0, len(detail.Steps))
+		for _, st := range detail.Steps {
+			out = append(out, model.DbSqlTicketStep{
+				ID:             st.ID,
+				TicketID:       ticketID,
+				StageKey:       st.StageKey,
+				StageName:      st.StageName,
+				SortOrder:      st.SortOrder,
+				Status:         st.Status,
+				UserGroupID:    st.UserGroupID,
+				ReviewerUserID: st.ReviewerUserID,
+				ReviewerName:   st.ReviewerName,
+				ReviewComment:  st.ReviewComment,
+				ReviewedAt:     st.ReviewedAt,
+				ActivatedAt:    st.ActivatedAt,
+				CreatedAt:      st.CreatedAt,
+				UpdatedAt:      st.UpdatedAt,
+			})
+		}
+		return out, nil
 	}
 	return s.repo.ListSqlTicketSteps(ctx, ticketID)
 }

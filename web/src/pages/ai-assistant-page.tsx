@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import {
   ClearOutlined,
   DeleteOutlined,
@@ -5,10 +6,10 @@ import {
   RobotOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Input, List, Select, Space, Switch, Tag, Typography, message } from "antd";
+import { Alert, Button, Card, Input, List, Select, Space, Switch, Tag, Typography, message, theme } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  chatAI,
+  chatAIStream,
   clearAISession,
   createAISession,
   deleteAISession,
@@ -19,9 +20,10 @@ import {
   type AIChatMessage,
   type AIChatResult,
   type AIChatSession,
+  type AIChatStreamEvent,
   type AIStatus,
 } from "../services/ai";
-import { getClusters, type ClusterItem } from "../services/clusters";
+import { getClusters, listNamespaces, type ClusterItem } from "../services/clusters";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { extractApiErrorMessage } from "../services/http";
 
@@ -32,6 +34,7 @@ const PREFS_KEY = "yunshu.ai.assistant.prefs.v1";
 type Prefs = {
   clusterId?: number;
   projectId?: number;
+  namespace?: string;
   enableTools: boolean;
   enableWrite: boolean;
   provider?: string;
@@ -47,6 +50,7 @@ function loadPrefs(): Prefs {
       enableWrite: parsed.enableWrite ?? false,
       clusterId: parsed.clusterId,
       projectId: parsed.projectId,
+      namespace: parsed.namespace,
       provider: parsed.provider,
     };
   } catch {
@@ -79,6 +83,7 @@ function parseAssistantMeta(metaJSON?: string): string {
 }
 
 export function AiAssistantPage() {
+  const { token } = theme.useToken();
   const prefs = useMemo(() => loadPrefs(), []);
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -91,14 +96,18 @@ export function AiAssistantPage() {
   const [enableWrite, setEnableWrite] = useState(prefs.enableWrite);
   const [clusterId, setClusterId] = useState<number | undefined>(prefs.clusterId);
   const [projectId, setProjectId] = useState<number | undefined>(prefs.projectId);
+  const [namespace, setNamespace] = useState<string | undefined>(prefs.namespace);
+  const [namespaceOptions, setNamespaceOptions] = useState<{ value: string; label: string }[]>([]);
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [lastSteps, setLastSteps] = useState<AIChatResult["tool_steps"]>([]);
   const [lastRag, setLastRag] = useState<AIChatResult["rag_hits"]>([]);
+  const [liveTimeline, setLiveTimeline] = useState<string[]>([]);
   const [sessions, setSessions] = useState<AIChatSession[]>([]);
   const [sessionId, setSessionId] = useState<number | undefined>();
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const providerOptions = useMemo(() => {
     const list = status?.providers || [];
@@ -131,8 +140,22 @@ export function AiAssistantPage() {
   }, []);
 
   useEffect(() => {
-    savePrefs({ clusterId, projectId, enableTools, enableWrite, provider });
-  }, [clusterId, projectId, enableTools, enableWrite, provider]);
+    savePrefs({ clusterId, projectId, namespace, enableTools, enableWrite, provider });
+  }, [clusterId, projectId, namespace, enableTools, enableWrite, provider]);
+
+  useEffect(() => {
+    if (!clusterId) {
+      setNamespaceOptions([]);
+      return;
+    }
+    void listNamespaces(clusterId)
+      .then((res) => {
+        const list = res?.list || [];
+        setNamespaceOptions(list.map((n) => ({ value: n.name, label: n.name })));
+        setNamespace((prev) => (prev && list.some((n) => n.name === prev) ? prev : undefined));
+      })
+      .catch(() => setNamespaceOptions([]));
+  }, [clusterId]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -287,38 +310,101 @@ export function AiAssistantPage() {
     setMessages(next);
     setInput("");
     setSending(true);
+    setLiveTimeline(["开始对话…"]);
+    setLastSteps([]);
+    setLastRag([]);
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    const steps: NonNullable<AIChatResult["tool_steps"]> = [];
+    let replyText = "";
+    let finalSid = sid;
+    let ragHits: AIChatResult["rag_hits"] = [];
+
+    const pushTimeline = (line: string) => {
+      setLiveTimeline((prev) => [...prev.slice(-40), line]);
+    };
+
     try {
-      const res = await chatAI({
-        provider: provider || undefined,
-        session_id: sid,
-        messages: next.map(({ role, content }) => ({ role, content })),
-        cluster_id: clusterId,
-        project_id: projectId,
-        enable_tools: enableTools,
-        enable_write_tools: enableWrite,
-      });
-      if (res.session_id && res.session_id !== sid) {
-        setSessionId(res.session_id);
-        sid = res.session_id;
+      await chatAIStream(
+        {
+          provider: provider || undefined,
+          session_id: sid,
+          messages: next.map(({ role, content }) => ({ role, content })),
+          cluster_id: clusterId,
+          project_id: projectId,
+          namespace: namespace || undefined,
+          enable_tools: enableTools,
+          enable_write_tools: enableWrite,
+        },
+        (ev: AIChatStreamEvent) => {
+          if (ev.session_id) finalSid = ev.session_id;
+          switch (ev.type) {
+            case "progress":
+              if (ev.message) pushTimeline(ev.message);
+              break;
+            case "rag":
+              ragHits = ev.rag_hits || [];
+              setLastRag(ragHits);
+              pushTimeline(`RAG 命中 ${(ragHits || []).length} 条`);
+              break;
+            case "tool":
+              if (ev.tool_step) {
+                steps.push(ev.tool_step);
+                setLastSteps([...steps]);
+                pushTimeline(
+                  `工具 ${ev.tool_step.name} ${ev.tool_step.ok === false ? "失败" : "完成"}`,
+                );
+              }
+              break;
+            case "reply":
+              replyText = ev.reply || replyText;
+              break;
+            case "error":
+              pushTimeline(`错误: ${ev.error || ev.message || "unknown"}`);
+              message.error(ev.error || ev.message || "对话失败");
+              break;
+            case "done":
+              if (ev.reply) replyText = ev.reply;
+              if (ev.session_id) finalSid = ev.session_id;
+              break;
+            default:
+              break;
+          }
+        },
+        ac.signal,
+      );
+
+      if (finalSid && finalSid !== sid) {
+        setSessionId(finalSid);
+        sid = finalSid;
       }
-      setLastSteps(res.tool_steps || []);
-      setLastRag(res.rag_hits || []);
-      const meta =
-        (res.tool_steps?.length ? `工具 ${res.tool_steps.length} 次` : "") +
-        (res.rag_hits?.length ? ` · RAG ${res.rag_hits.length}` : "");
+      const metaParts: string[] = [];
+      if (steps.length) metaParts.push(`工具 ${steps.length} 次`);
+      if (ragHits?.length) metaParts.push(`RAG ${ragHits.length}`);
       setMessages((prev) => [
         ...prev,
-        { id: `a-${Date.now()}`, role: "assistant", content: res.reply || "（空回复）", meta },
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: replyText || "（空回复）",
+          meta: metaParts.length ? metaParts.join(" · ") : undefined,
+        },
       ]);
       setSessions((prev) => {
         const title = text.length > 40 ? `${text.slice(0, 40)}…` : text;
         const mapped = prev.map((s) =>
-          s.id === sid ? { ...s, title: s.title === "新对话" ? title : s.title, message_count: (s.message_count || 0) + 2 } : s,
+          s.id === sid
+            ? { ...s, title: s.title === "新对话" ? title : s.title, message_count: (s.message_count || 0) + 2 }
+            : s,
         );
         return mapped.sort((a, b) => (a.id === sid ? -1 : b.id === sid ? 1 : 0));
       });
+      pushTimeline("完成");
     } catch (e) {
-      message.error(extractApiErrorMessage(e, "对话失败"));
+      if ((e as Error)?.name === "AbortError") return;
+      message.error(e instanceof Error ? e.message : extractApiErrorMessage(e, "对话失败"));
     } finally {
       setSending(false);
     }
@@ -413,6 +499,8 @@ export function AiAssistantPage() {
                 </Tag>
               ) : null}
               {sessionId ? <Tag>会话 #{sessionId}</Tag> : null}
+              <Link to="/ai/investigations">调查记录</Link>
+              <Link to="/workflow/inbox?domain=ai">操作审批</Link>
             </Space>
             <Space wrap>
               <Select
@@ -451,7 +539,7 @@ export function AiAssistantPage() {
               type="warning"
               showIcon
               message="先选上下文，再问事实问题"
-              description="查 Pod/事件请选集群；查日志/构建/告警请选项目。助手会优先调工具取证，知识库只作排查思路参考。写操作需开启「写工具」并走审批。"
+              description="查 Pod/事件请选集群与命名空间；查日志/构建/告警/监控请选项目。助手会跨主机连通性、日志、Prometheus 与告警取证后再给处理步骤。写操作需开启「写工具」并走审批。"
             />
           )}
 
@@ -464,7 +552,7 @@ export function AiAssistantPage() {
               allowClear
               showSearch
               optionFilterProp="label"
-              placeholder="选择项目（日志/CI/告警）"
+              placeholder="选择项目（日志/CI/告警/监控）"
               style={{ minWidth: 200 }}
               value={projectId}
               options={projectOptions}
@@ -478,7 +566,21 @@ export function AiAssistantPage() {
               style={{ minWidth: 200 }}
               value={clusterId}
               options={clusterOptions}
-              onChange={(v) => setClusterId(typeof v === "number" ? v : undefined)}
+              onChange={(v) => {
+                setClusterId(typeof v === "number" ? v : undefined);
+                setNamespace(undefined);
+              }}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="命名空间（可选）"
+              style={{ minWidth: 160 }}
+              value={namespace}
+              options={namespaceOptions}
+              disabled={!clusterId}
+              onChange={(v) => setNamespace(typeof v === "string" ? v : undefined)}
             />
           </Space>
           <div
@@ -487,14 +589,15 @@ export function AiAssistantPage() {
               height: 420,
               overflow: "auto",
               padding: 12,
-              background: "var(--ant-color-fill-quaternary, #fafafa)",
+              background: token.colorFillAlter,
               borderRadius: 8,
-              border: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
+              border: `1px solid ${token.colorBorderSecondary}`,
+              color: token.colorText,
             }}
           >
             {messages.length === 0 ? (
               <Typography.Text type="secondary">
-                示例：某命名空间 Pod CrashLoop；某次构建失败原因；告警为什么没收到。请先选好项目/集群，并在问题中给出 namespace 与资源名。
+                示例：某主机不通怎么查；某服务 ERROR 日志怎么处理；某告警为何触发。请先选项目（日志/监控），K8s 问题再选集群与命名空间。
               </Typography.Text>
             ) : (
               <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -507,8 +610,9 @@ export function AiAssistantPage() {
                       marginLeft: m.role === "user" ? "auto" : 0,
                       padding: "10px 12px",
                       borderRadius: 8,
-                      background: m.role === "user" ? "var(--ant-color-primary-bg, #e6f4ff)" : "#fff",
-                      border: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
+                      background: m.role === "user" ? token.colorPrimaryBg : token.colorBgContainer,
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      color: token.colorText,
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-word",
                     }}
@@ -520,10 +624,39 @@ export function AiAssistantPage() {
                     <div>{m.content}</div>
                   </div>
                 ))}
-                {sending ? <Typography.Text type="secondary">思考中...</Typography.Text> : null}
+                {sending ? (
+                  <div>
+                    <Typography.Text type="secondary">思考中…</Typography.Text>
+                    {liveTimeline.length > 0 ? (
+                      <pre
+                        style={{
+                          margin: "8px 0 0",
+                          padding: 8,
+                          fontSize: 12,
+                          maxHeight: 120,
+                          overflow: "auto",
+                          background: token.colorFillSecondary,
+                          color: token.colorText,
+                          borderRadius: 6,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {liveTimeline.join("\n")}
+                      </pre>
+                    ) : null}
+                  </div>
+                ) : null}
               </Space>
             )}
           </div>
+
+          {!sending && liveTimeline.length > 0 ? (
+            <Card size="small" title="执行轨迹" extra={<Button type="link" size="small" onClick={() => setLiveTimeline([])}>清除</Button>}>
+              <pre style={{ margin: 0, fontSize: 12, maxHeight: 140, overflow: "auto", whiteSpace: "pre-wrap" }}>
+                {liveTimeline.join("\n")}
+              </pre>
+            </Card>
+          ) : null}
 
           {lastSteps && lastSteps.length > 0 ? (
             <Card size="small" title="最近工具调用">

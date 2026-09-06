@@ -2,11 +2,11 @@
 
 ## 概述
 
-`ai` 插件：多模型、运维助手（Tool Calling + RAG）、场景分析、高危审批、**AI 运维能力中心**（Prompt/知识/案例/SOP/Tool/Evaluation）。
+`ai` 插件：多模型、运维助手（Tool Calling + RAG + SSE 进度）、**调查闭环**、场景分析、高危审批（含 Policy）、**AI 运维能力中心**（Prompt/知识/案例/SOP/Tool/Evaluation）。
 
 ## 启用
 
-`plugins.enabled` 含 `ai`；字典 `ai_enabled=true` 并配置 API Key（或后续 `ai_llm_models`）。
+`plugins.enabled` 含 `ai`；字典 `ai_enabled=true` 并配置 API Key（或能力中心 `ai_llm_models`）。
 
 ## 能力中心（去硬编码）
 
@@ -27,60 +27,81 @@
 
 ## 菜单
 
-- `/ai/assistant` 运维助手
+- `/ai/assistant` 运维助手（SSE 工具轨迹）
+- `/ai/investigations` AI 调查记录
 - `/ai/approvals` 操作审批
-- `/ai/center` 能力中心（Prompt/Tools/案例/SOP/KB/Eval）
+- `/ai/center` 能力中心（Prompt/Tools/案例/SOP/KB/Eval/向量化）
 
 ## 主要 API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/v1/ai/chat` | 助手（读 DB Prompt + RAG + Tool 注册表） |
+| POST | `/api/v1/ai/chat` | 助手（同步） |
+| POST | `/api/v1/ai/chat/stream` | 助手 SSE 进度（progress/rag/tool/reply/done） |
+| POST | `/api/v1/ai/k8s/generate-yaml` | 按自然语言生成 K8s YAML（创建页回填，不直接 apply） |
+| POST | `/api/v1/ai/investigations` | 发起调查（alert\|pod\|cicd\|chat） |
+| GET | `/api/v1/ai/investigations` | 调查列表 |
+| GET | `/api/v1/ai/investigations/:id` | 调查详情 |
+| POST | `/api/v1/ai/knowledge/sync` | DB→ES 同步 |
+| POST | `/api/v1/ai/knowledge/embed` | KB chunks 向量化（混合 RAG） |
 | GET | `/api/v1/ai/center/overview` | 能力中心统计 |
 | POST | `/api/v1/ai/center/reseed` | 从 data/ai 重载种子 |
-| GET/POST | `/api/v1/ai/center/prompts*` | Prompt 与版本 |
-| GET/PATCH | `/api/v1/ai/center/tools*` | Tool 注册表 |
-| GET | `/api/v1/ai/center/cases` `/sops` `/knowledge-bases` | 案例/SOP/KB |
-| POST | `/api/v1/ai/center/eval/run` | Evaluation（`live=true` 走真实 Chat） |
-| POST | `/api/v1/ai/knowledge/sync` | DB→ES 同步 |
 
-另有 sessions、approvals、场景分析接口（见历史文档）。
+另有 sessions、approvals、场景分析（pod-diagnose / build-fail / alert-explain）。
+
+## 业务入口
+
+| 页面 | 能力 |
+|------|------|
+| 告警历史 | AI解读（投递解释）+ **AI调查**（完整闭环） |
+| Pod 排障抽屉 | AI 分析 + **AI 调查** |
+| CI 构建详情 | AI 分析 + **AI 调查** |
+| K8s 资源创建（YamlCrud / Pod） | **AI 生成 YAML**（描述→编辑器，人工核对后 apply） |
+| 运维助手 | 流式对话 + 工具/RAG 证据面板 |
 
 ## Tool 运行时
 
-- `builtin`：现有 Go 服务（K8s/日志/CI/告警等）
-- `script`：Python2.7+/3、Shell、Go 二进制；根目录沙箱 `data/ai/tools`；写操作仍走审批
+- `builtin`：K8s / **日志（检索+分析+采集诊断）** / CI / 告警 / **CMDB 服务器** / **DB 实例** / **ES 连接**
+- `script`：沙箱 `data/ai/tools`；写操作走审批
+- **Policy**：扩缩容 replicas>50 需 reason 含 `emergency`；禁止删 `kube-system`/`kube-public`/`yunshu-logging` Pod；写操作须有 namespace
 
-样例脚本工具：
+## 日志分析（助手）
 
-- `data/ai/tools/linux/disk_check/` → `linux.disk.check`
-- `data/ai/tools/linux/mem_check/` → `linux.mem.check`
-- `data/ai/tools/linux/load_check/` → `linux.load.check`
+在运维助手选择项目后可对话触发：
 
-环境变量 `YUNSHU_AI_PYTHON` 可指定解释器。脚本探测的是 AI 运行环境本机；远端主机请用服务器操作台。
+1. `analyze_logs`：级别/服务/Pod 统计 + 高频错误签名 + 样例（快速整理）
+2. `search_logs`：原始命中（支持 level/from/to/service_name 等）
+3. 为空时：`list_log_sources` → `list_loggie_status`（主机）/ `list_cluster_log_rules`（K8s）
 
+知识：`data/ai/kb/kb_log/`；SOP：`sop-log-error-analysis`、`sop-log-empty`。
 ## RAG
 
-优先 DB 故障案例 + chunks + SOP，其次 ES `yunshu-ai-kb-*`，再回退内嵌模块文档。
+1. DB 案例 + chunks + SOP（词法；有 Embedding 时混合语义）
+2. ES `yunshu-ai-kb-*`
+3. 回退内嵌模块文档
 
-## 种子覆盖矩阵（持续补充）
+能力中心「向量化 KB Chunks」写入 `ai_kb_chunks.embedding`。
+
+## 种子覆盖矩阵
 
 | 模块 | 案例 | SOP | KB | 脚本工具 | Builtin |
 |------|------|-----|----|----------|---------|
 | k8s | CrashLoop/ImagePull/Pending/OOM | ✓ | kb_k8s | — | 强 |
 | cicd | 构建失败 | ✓ | kb_cicd | — | list/get/log |
 | alert | 未收到 | ✓ | kb_alert | — | list/explain |
-| log | 检索为空 | ✓ | kb_log | — | search_logs |
+| log | 检索为空 + 错误整理 | ✓ | kb_log | — | search_logs / **analyze_logs** / list_log_sources / list_loggie_status / list_cluster_log_rules |
 | linux | 磁盘打满 | ✓ | kb_linux | disk/mem/load | — |
-| cmdb/db/esmgmt | — | — | — | — | 暂无 |
+| cmdb | 服务器离线 | ✓ | kb_cmdb | — | list_servers/get_server |
+| dbmgmt | 连接失败 | ✓ | — | — | list_db_instances |
+| esmgmt | 连接不可达 | ✓ | kb_esmgmt | — | list_es_connections |
 
 ## 部署注意
 
-1. 重启服务 AutoMigrate 新表
-2. 重新 seed 权限（能力中心 API）
-3. 菜单同步后可见「AI 能力中心」
-4. **必须保证运行时可读取 `data/ai`**：
-   - 本地：在仓库根目录启动，或设 `YUNSHU_AI_DATA_DIR`
-   - Docker：`Dockerfile.backend` 已 `COPY data/ai/` → `/app/data/ai`，并设 `YUNSHU_AI_DATA_DIR=/app/data/ai`（需重建镜像）
-5. 能力中心若只有 `tools` 有数、Prompt/KB/案例为 0：说明只 seed 了代码内 builtin，文件种子未读到 → 点「同步 data/ai 种子」看报错，或检查 `data_root_ok`
-6. 「同步知识库到 ES」从 **DB** 读文档/案例/SOP；库为空则 indexed=0。先 reseed，再 sync；且需 ES 已启用
+1. 重启服务 AutoMigrate（含 `ai_investigations`）；启动 PostMigrate 会将 AI 文本表转为 **utf8mb4**（修复调查存 emoji 报 1366）
+2. 重新 seed 权限（含 chat/stream、investigations、knowledge/embed、**k8s/generate-yaml**）
+3. 菜单同步后可见「AI 调查」
+4. **必须保证运行时可读取 `data/ai`**；能力中心 **reseed** 以加载新 Prompt/KB/SOP/Tool（含 `generation/k8s-yaml`、`diagnosis/log-analyze`、日志分析工具定义）
+5. 先 reseed → sync ES →（可选）向量化
+6. 调查为同步阻塞调用，耗时受 LLM/采集影响，前端超时约 180s
+7. 若库表仍为 utf8，也可手动：`ALTER TABLE ai_investigations CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+8. 系统 Prompt（`system/ops-agent`）若库中已有版本，reseed **不会**覆盖；需在能力中心发布新版本，或删版本后 reseed

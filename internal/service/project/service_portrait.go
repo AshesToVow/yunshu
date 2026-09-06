@@ -18,6 +18,22 @@ type ServicePortrait struct {
 	EntryPoints   []PortraitEntryPoint `json:"entry_points"`
 	CicdSummary   *PortraitCicdSummary `json:"cicd_summary,omitempty"`
 	Health        *PortraitHealth      `json:"health,omitempty"`
+	LogSummary    *PortraitLogSummary  `json:"log_summary,omitempty"`
+}
+
+// PortraitLogSummary 日志智能摘要（异常 + 模板统计）。
+type PortraitLogSummary struct {
+	OpenAnomalyCount int64                  `json:"open_anomaly_count"`
+	PatternCount     int64                  `json:"pattern_count"`
+	RecentAnomalies  []PortraitLogAnomalyBrief `json:"recent_anomalies"`
+}
+
+type PortraitLogAnomalyBrief struct {
+	ID          uint   `json:"id"`
+	AnomalyType string `json:"anomaly_type"`
+	Title       string `json:"title"`
+	Severity    string `json:"severity"`
+	DetectedAt  string `json:"detected_at"`
 }
 
 type PortraitEntryPoint struct {
@@ -63,6 +79,7 @@ func (s *ServiceCatalogService) Portrait(ctx context.Context, projectID, catalog
 		EntryPoints:   buildPortraitEntries(item),
 		CicdSummary:   loadCicdSummary(ctx, s.db, item),
 		Health:        s.buildHealth(ctx, item),
+		LogSummary:    s.loadLogSummary(ctx, item),
 	}, nil
 }
 
@@ -90,6 +107,8 @@ func buildPortraitEntries(item *ServiceCatalogItem) []PortraitEntryPoint {
 		case model.ServiceLinkLogSource:
 			add("logs", "日志检索", "/project-logs",
 				fmt.Sprintf("log_source_id=%v", derefUint(l.RefID)))
+			add("logs", "日志异常", "/project-logs",
+				"tab=anomalies")
 		case model.ServiceLinkAlertMonitorRule:
 			add("alert", "告警监控", "/alert-monitor-platform",
 				fmt.Sprintf("rule_id=%v", derefUint(l.RefID)))
@@ -150,4 +169,36 @@ func loadCicdSummary(ctx context.Context, db *gorm.DB, item *ServiceCatalogItem)
 		}
 	}
 	return sum
+}
+
+func (s *ServiceCatalogService) loadLogSummary(ctx context.Context, item *ServiceCatalogItem) *PortraitLogSummary {
+	if s.db == nil || item == nil || item.ProjectID == 0 {
+		return nil
+	}
+	var openCnt, patCnt int64
+	_ = s.db.WithContext(ctx).Model(&model.LogAnomaly{}).
+		Where("project_id = ? AND status = ?", item.ProjectID, model.LogAnomalyStatusOpen).
+		Count(&openCnt).Error
+	_ = s.db.WithContext(ctx).Model(&model.LogPattern{}).
+		Where("project_id = ?", item.ProjectID).
+		Count(&patCnt).Error
+	var rows []model.LogAnomaly
+	_ = s.db.WithContext(ctx).Model(&model.LogAnomaly{}).
+		Where("project_id = ? AND status = ?", item.ProjectID, model.LogAnomalyStatusOpen).
+		Order("detected_at DESC").Limit(5).Find(&rows).Error
+	recent := make([]PortraitLogAnomalyBrief, 0, len(rows))
+	for _, r := range rows {
+		recent = append(recent, PortraitLogAnomalyBrief{
+			ID: r.ID, AnomalyType: r.AnomalyType, Title: r.Title,
+			Severity: r.Severity, DetectedAt: r.DetectedAt.Format(time.RFC3339),
+		})
+	}
+	if openCnt == 0 && patCnt == 0 && len(recent) == 0 {
+		return &PortraitLogSummary{OpenAnomalyCount: 0, PatternCount: patCnt}
+	}
+	return &PortraitLogSummary{
+		OpenAnomalyCount: openCnt,
+		PatternCount:     patCnt,
+		RecentAnomalies:  recent,
+	}
 }

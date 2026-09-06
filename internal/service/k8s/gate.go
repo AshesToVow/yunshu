@@ -18,6 +18,7 @@ func projectIDOf(cluster *model.K8sCluster) uint {
 }
 
 // assertK8sWritable 写操作门禁：须为 write/exec 意图，且非只读档位；高危动作另走 RequireDestructiveConfirm。
+// Pod 文件 upload/delete 由中间件标为 AccessIntentExec，与终端同档。
 func assertK8sWritable(ctx context.Context, cluster *model.K8sCluster, action, _ string) error {
 	if cluster == nil {
 		return constants.ErrBadRequestWithMsg("集群无效")
@@ -32,7 +33,7 @@ func assertK8sWritable(ctx context.Context, cluster *model.K8sCluster, action, _
 	}
 	if scope, ok := k8sauth.RequestScopeFromContext(ctx); ok && scope.AccessRank > 0 {
 		if scope.AccessRank < K8sAccessRankAdmin && intent != k8sauth.AccessIntentExec {
-			// exec 档位允许终端；其他变更须 admin
+			// exec 档位允许终端/文件；其他变更须 admin
 			if action != "exec" {
 				return constants.ErrForbiddenWithMsg("变更类操作须集群 admin 档位")
 			}

@@ -15,8 +15,22 @@ func TestRenderBuiltinTemplates(t *testing.T) {
 		Score:     90,
 		Grade:     "A",
 		Summary:   "ok",
+		Verdict:   "整体稳定",
+		Assets: []AssetBucket{
+			{Key: "基础设施层", Label: "基础设施层", Total: 10, Normal: 9, Abnormal: 1, Rate: 90},
+			{Key: "k8s集群", Label: "k8s集群", Total: 2, Normal: 2, Abnormal: 0, Rate: 100},
+		},
+		CategorySections: []CategorySection{
+			{Key: "基础设施层", Title: "基础设施层", Kind: "host", Total: 10, Normal: 9, Abnormal: 1, Rate: 90},
+			{Key: "k8s集群", Title: "k8s集群", Kind: "k8s", Total: 2, Normal: 2, Abnormal: 0, Rate: 100,
+				Metrics: []MetricSample{{Name: "Node Ready", Instance: "n1", Value: 1, Status: "normal"}},
+			},
+		},
+		DetailPageStart: 4,
+		StarRating:      "★★★★★",
+		Conclusion:      "本次巡检共覆盖基础设施层 10 项、k8s集群 2 项。",
 		Groups: []ReportGroup{{
-			Type:    "host",
+			Type:    "基础设施层",
 			Stats:   GroupStats{Total: 1, Normal: 1},
 			Metrics: []MetricSample{{Name: "cpu", Instance: "a", Value: 1, Status: "normal"}},
 		}},
@@ -26,7 +40,7 @@ func TestRenderBuiltinTemplates(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := string(b)
-	for _, want := range []string{"demo", "grade-a", "重点关注事项", "分类巡检明细", "检查项覆盖范围", "处置建议", "执行摘要", "巡检覆盖", "P0"} {
+	for _, want := range []string{"demo", "巡检结论", "巡检统计", "风险问题汇总", "问题整改", "巡检总结", "k8s集群"} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("default template missing %q", want)
 		}
@@ -36,8 +50,8 @@ func TestRenderBuiltinTemplates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", code, err)
 		}
-		if !strings.Contains(string(b), "demo") || !strings.Contains(string(b), "grade-a") {
-			t.Fatalf("%s missing project/grade", code)
+		if !strings.Contains(string(b), "demo") {
+			t.Fatalf("%s missing project", code)
 		}
 	}
 }
@@ -76,25 +90,9 @@ func TestRenderExcelAndPDF(t *testing.T) {
 	if len(xlsx) < 100 {
 		t.Fatalf("excel too small: %d", len(xlsx))
 	}
-	// 默认 INSPECT_SERVER_PDF=html_only,服务端不生成 PDF(由前端 html2canvas 上传高质量版)。
+	// 服务端不再生成 PDF（仅浏览器 html2canvas/jsPDF）
 	if got := renderBinaryPDF(data, nil); got != nil {
-		t.Fatalf("default mode should not render server-side pdf, got %d bytes", len(got))
-	}
-	// 结构化 PDF 渲染器本身仍需可用(INSPECT_SERVER_PDF=structured 时启用)。
-	pdf := renderStructuredPDF(data)
-	if len(pdf) < 4 || string(pdf[:4]) != "%PDF" {
-		n := min(len(pdf), 8)
-		t.Fatalf("not pdf: %q", string(pdf[:n]))
-	}
-	body := string(pdf)
-	if strings.Contains(body, "Helvetica") {
-		t.Fatal("pdf still uses Helvetica (Chinese will break)")
-	}
-	// 结构化 PDF 使用 Adobe 中文 CID 字体 STSong-Light（Type0）。
-	if strings.Contains(body, "STSong-Light") {
-		if !strings.Contains(body, "5DE1") {
-			t.Fatal("structured pdf missing Chinese UTF-16 hex for 巡")
-		}
+		t.Fatalf("server pdf should be disabled, got %d bytes", len(got))
 	}
 }
 

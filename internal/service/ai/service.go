@@ -21,8 +21,12 @@ import (
 	"yunshu/internal/pkg/llm"
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
+	cmdbsvc "yunshu/internal/service/cmdb"
+	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	esmgmtsvc "yunshu/internal/service/esmgmt"
 	"yunshu/internal/service/k8s"
 	"yunshu/internal/service/logplatform"
+	projectsvc "yunshu/internal/service/project"
 
 	"gorm.io/gorm"
 )
@@ -46,9 +50,66 @@ type Service struct {
 	esProvider    *logplatform.ElasticsearchProvider
 	cicdSvc       *cicdsvc.Service
 	alertSvc      *alert.AlertService
+	alertDSSvc    *alert.AlertDatasourceService
+	serverRepo    interfaces.ServerRepository
+	cmdbSvc       *cmdbsvc.Service
+	dbmgmtSvc     *dbmgmtsvc.Service
+	esmgmtSvc     *esmgmtsvc.Service
+	changeEventSvc *projectsvc.ChangeEventService
+	silenceSvc    *alert.AlertSilenceService
+	projectMgmt   *projectsvc.ProjectMgmtService
+	loggieAgent   *logplatform.LoggieAgentService
+	clusterLog    *logplatform.ClusterLogService
 	rateMu        sync.Mutex
 	rateMap       map[uint]time.Time // 简易限流：每用户最短间隔
 	seedOnce      sync.Once
+}
+
+// SetPlatformDeps 在 assembleRouteDeps 中注入可选平台依赖（CMDB/DB/ES）。
+func (s *Service) SetPlatformDeps(
+	serverRepo interfaces.ServerRepository,
+	cmdbSvc *cmdbsvc.Service,
+	dbmgmtSvc *dbmgmtsvc.Service,
+	esmgmtSvc *esmgmtsvc.Service,
+) {
+	if s == nil {
+		return
+	}
+	s.serverRepo = serverRepo
+	s.cmdbSvc = cmdbSvc
+	s.dbmgmtSvc = dbmgmtSvc
+	s.esmgmtSvc = esmgmtSvc
+}
+
+// SetMonitorDeps 注入监控数据源（Prometheus 查询）。
+func (s *Service) SetMonitorDeps(ds *alert.AlertDatasourceService) {
+	if s == nil {
+		return
+	}
+	s.alertDSSvc = ds
+}
+
+// SetOpsDeps 注入变更时间线与告警静默（调查闭环 / 工具）。
+func (s *Service) SetOpsDeps(changeSvc *projectsvc.ChangeEventService, silenceSvc *alert.AlertSilenceService) {
+	if s == nil {
+		return
+	}
+	s.changeEventSvc = changeSvc
+	s.silenceSvc = silenceSvc
+}
+
+// SetLogPlatformDeps 注入日志平台只读诊断依赖（日志源 / Loggie / 集群采集规则）。
+func (s *Service) SetLogPlatformDeps(
+	projectMgmt *projectsvc.ProjectMgmtService,
+	loggieAgent *logplatform.LoggieAgentService,
+	clusterLog *logplatform.ClusterLogService,
+) {
+	if s == nil {
+		return
+	}
+	s.projectMgmt = projectMgmt
+	s.loggieAgent = loggieAgent
+	s.clusterLog = clusterLog
 }
 
 func NewService(
@@ -289,33 +350,80 @@ type ChatResponse struct {
 	RAGHits   []ragHit   `json:"rag_hits,omitempty"`
 }
 
+// ChatEvent 对话进度事件（SSE / 内部 emit，非 token 流）。
+type ChatEvent struct {
+	Type      string    `json:"type"` // progress|rag|tool|reply|error|done
+	Message   string    `json:"message,omitempty"`
+	ToolStep  *toolStep `json:"tool_step,omitempty"`
+	RAGHits   []ragHit  `json:"rag_hits,omitempty"`
+	Reply     string    `json:"reply,omitempty"`
+	SessionID uint      `json:"session_id,omitempty"`
+	Error     string    `json:"error,omitempty"`
+}
+
 func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser, req ChatRequest) (*ChatResponse, error) {
+	return s.chatWithEmit(ctx, userID, actor, req, nil)
+}
+
+// ChatStream 与 Chat 同一逻辑，通过 emit 推送进度事件。
+func (s *Service) ChatStream(
+	ctx context.Context,
+	userID uint,
+	actor *auth.CurrentUser,
+	req ChatRequest,
+	emit func(ChatEvent),
+) (*ChatResponse, error) {
+	return s.chatWithEmit(ctx, userID, actor, req, emit)
+}
+
+func (s *Service) chatWithEmit(
+	ctx context.Context,
+	userID uint,
+	actor *auth.CurrentUser,
+	req ChatRequest,
+	emit func(ChatEvent),
+) (*ChatResponse, error) {
+	fire := func(ev ChatEvent) {
+		if emit != nil {
+			emit(ev)
+		}
+	}
 	cfg, err := s.requireEnabled(ctx)
 	if err != nil {
+		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
 		return nil, err
 	}
 	if err := s.checkRate(userID); err != nil {
+		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
 		return nil, err
 	}
 	actor = resolveActor(ctx, actor)
 	if actor == nil && userID > 0 {
-		return nil, constants.ErrUnauthorized
+		err := constants.ErrUnauthorized
+		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
+		return nil, err
 	}
 	if req.ProjectID > 0 {
 		if err := s.assertProjectMember(ctx, actor, req.ProjectID); err != nil {
+			fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
 			return nil, err
 		}
 	}
 	if len(req.Messages) == 0 {
-		return nil, constants.ErrBadRequestWithMsg("messages 不能为空")
+		err := constants.ErrBadRequestWithMsg("messages 不能为空")
+		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
+		return nil, err
 	}
 	for _, m := range req.Messages {
 		if len(m.Content) > 20_000 {
-			return nil, constants.ErrBadRequestWithMsg("单条消息过长")
+			err := constants.ErrBadRequestWithMsg("单条消息过长")
+			fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
+			return nil, err
 		}
 	}
 	if req.SessionID > 0 {
 		if _, err := s.getOwnedSession(ctx, userID, req.SessionID); err != nil {
+			fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
 			return nil, err
 		}
 	}
@@ -333,6 +441,7 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 		}
 	}
 
+	fire(ChatEvent{Type: "progress", Message: "准备上下文"})
 	ctxJSON, _ := json.Marshal(map[string]any{
 		"project_id": req.ProjectID,
 		"cluster_id": req.ClusterID,
@@ -343,13 +452,16 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 	s.ensureSeed()
 	sys, err := s.loadPromptContent(ctx, "system/ops-agent", map[string]string{"context_json": string(ctxJSON)})
 	if err != nil {
+		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
 		return nil, err
 	}
 
 	var ragHits []ragHit
 	if !req.DisableRAG {
+		fire(ChatEvent{Type: "progress", Message: "检索知识库"})
 		ragHits = s.retrieveKnowledge(ctx, lastUser, 8)
 		if len(ragHits) > 0 {
+			fire(ChatEvent{Type: "rag", Message: "知识库命中", RAGHits: ragHits})
 			var b strings.Builder
 			b.WriteString("\n\n## 知识库检索片段\n")
 			for _, h := range ragHits {
@@ -381,6 +493,7 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 
 	cli, name, pcfg, err := s.clientFor(ctx, &cfg, req.Provider)
 	if err != nil {
+		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
 		return nil, err
 	}
 
@@ -403,6 +516,8 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 		if perr != nil {
 			slog.Warn("ai chat persist failed", "user_id", userID, "err", perr)
 		}
+		fire(ChatEvent{Type: "reply", Message: "完成", Reply: reply, SessionID: sid})
+		fire(ChatEvent{Type: "done", SessionID: sid, Reply: reply})
 		return &ChatResponse{
 			Reply:     reply,
 			Provider:  name,
@@ -414,16 +529,20 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 		}, nil
 	}
 
-	const maxRounds = 6
+	fire(ChatEvent{Type: "progress", Message: "调用模型"})
+	const maxRounds = 8
 	for range maxRounds {
 		resp, err := cli.Chat(ctx, llm.ChatRequest{
-			Model:     pcfg.Model,
-			Messages:  msgs,
-			MaxTokens: cfg.MaxTokens,
-			Tools:     tools,
+			Model:       pcfg.Model,
+			Messages:    msgs,
+			MaxTokens:   cfg.MaxTokens,
+			Temperature: 0.2,
+			Tools:       tools,
 		})
 		if err != nil {
-			return nil, constants.ErrBadRequestWithMsg("AI 调用失败: " + err.Error())
+			msg := "AI 调用失败: " + err.Error()
+			fire(ChatEvent{Type: "error", Error: msg, Message: msg})
+			return nil, constants.ErrBadRequestWithMsg(msg)
 		}
 		last = resp
 		usage.PromptTokens += resp.Usage.PromptTokens
@@ -441,8 +560,11 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 			ToolCalls: resp.ToolCalls,
 		})
 		for _, call := range resp.ToolCalls {
+			fire(ChatEvent{Type: "progress", Message: "执行工具 " + call.Function.Name})
 			step := s.executeTool(ctx, userID, call.Function.Name, call.Function.Arguments, tc)
 			steps = append(steps, step)
+			st := step
+			fire(ChatEvent{Type: "tool", Message: step.Name, ToolStep: &st})
 			msgs = append(msgs, llm.Message{
 				Role:       "tool",
 				Content:    step.Result,
@@ -450,9 +572,12 @@ func (s *Service) Chat(ctx context.Context, userID uint, actor *auth.CurrentUser
 				Name:       call.Function.Name,
 			})
 		}
+		fire(ChatEvent{Type: "progress", Message: "根据工具结果继续推理"})
 	}
 	if last == nil {
-		return nil, constants.ErrBadRequestWithMsg("AI 无响应")
+		err := constants.ErrBadRequestWithMsg("AI 无响应")
+		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
+		return nil, err
 	}
 	s.logUsage(userID, "chat", name, last)
 	return finish(last.Content, last.Model)

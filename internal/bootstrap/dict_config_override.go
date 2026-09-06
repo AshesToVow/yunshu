@@ -120,4 +120,11 @@ func (b *Builder) applyDictConfigOverrides(ctx context.Context, ov dictConfigOve
 		"brokers", len(b.app.Config.Kafka.Brokers),
 		"topic", b.app.Config.Kafka.Topic,
 	)
+
+	b.app.Config.Auth = dictconfig.ResolveAuthConfig(ctx, b.app.DB, b.yamlAuthBase, dictconfig.DefaultAuthDictTypes())
+	logf("auth config resolved (dict overrides yaml)",
+		"access_token_ttl_minutes", b.app.Config.Auth.AccessTokenTTLMinutes,
+		"refresh_token_ttl_hours", b.app.Config.Auth.RefreshTokenTTLHours,
+		"email_code_ttl_seconds", b.app.Config.Auth.EmailCodeTTLSeconds,
+	)
 }

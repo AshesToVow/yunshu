@@ -1,67 +1,22 @@
 import { LinkOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Empty, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { ApprovalCenterNav } from "../components/approval-center-nav";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { listWorkflowTickets, type WorkflowTicketRow } from "../services/workflow";
 import { formatDateTime } from "../utils/format";
-
-const DOMAIN_OPTIONS = [
-  { label: "全部域", value: "" },
-  { label: "数据库", value: "dbmgmt" },
-  { label: "发布", value: "cicd" },
-  { label: "故障", value: "incident" },
-  { label: "变更", value: "ops" },
-];
-
-function domainLabel(domain: string) {
-  switch (domain) {
-    case "dbmgmt":
-      return "数据库";
-    case "cicd":
-      return "发布";
-    case "incident":
-      return "故障";
-    case "ops":
-      return "变更";
-    default:
-      return domain || "—";
-  }
-}
-
-function statusTag(status: string) {
-  switch (status) {
-    case "pending":
-      return <Tag color="processing">待审批</Tag>;
-    case "approved":
-      return <Tag color="success">已通过</Tag>;
-    case "rejected":
-      return <Tag color="error">已驳回</Tag>;
-    case "cancelled":
-      return <Tag>已取消</Tag>;
-    default:
-      return <Tag>{status || "—"}</Tag>;
-  }
-}
-
-function deepLink(row: WorkflowTicketRow) {
-  switch (row.ref_type) {
-    case "db_sql_ticket":
-      return `/dbmgmt/workflow/tickets/${row.ref_id}?project=${row.project_id}`;
-    case "db_access_request":
-      return `/dbmgmt/apply/query?project=${row.project_id}&highlight=${row.ref_id}`;
-    case "db_app_user_request":
-      return `/dbmgmt/apply/app-user?project=${row.project_id}&highlight=${row.ref_id}`;
-    case "cicd_release_run":
-      return `/cicd/release-records?project=${row.project_id}&release=${row.ref_id}`;
-    case "alert_event":
-      return `/alert-events?highlight=${row.ref_id}`;
-    default:
-      return `/workflow/inbox?project=${row.project_id}`;
-  }
-}
+import {
+  WORKFLOW_DOMAIN_OPTIONS,
+  workflowBusinessDeepLink,
+  workflowDomainColor,
+  workflowDomainLabel,
+  workflowStatusColor,
+  workflowStatusLabel,
+  workflowTicketTypeLabel,
+} from "../utils/workflow-labels";
 
 export function WorkflowTicketsPage() {
   const [searchParams] = useSearchParams();
@@ -81,6 +36,15 @@ export function WorkflowTicketsPage() {
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => setProjects(res.list ?? []));
   }, []);
+
+  useEffect(() => {
+    const d = searchParams.get("domain");
+    if (d !== null) setDomain(d);
+    const p = Number(searchParams.get("project") || 0);
+    if (p > 0) setProjectId(p);
+    const st = searchParams.get("status");
+    if (st !== null) setStatus(st);
+  }, [searchParams]);
 
   const projectNameMap = useMemo(() => {
     const m = new Map<number, string>();
@@ -114,9 +78,14 @@ export function WorkflowTicketsPage() {
       title: "域",
       dataIndex: "domain",
       width: 88,
-      render: (v: string) => <Tag>{domainLabel(v)}</Tag>,
+      render: (v: string) => <Tag color={workflowDomainColor(v)}>{workflowDomainLabel(v)}</Tag>,
     },
-    { title: "类型", dataIndex: "ticket_type", width: 120 },
+    {
+      title: "类型",
+      dataIndex: "ticket_type",
+      width: 120,
+      render: (v: string) => workflowTicketTypeLabel(v),
+    },
     {
       title: "项目",
       dataIndex: "project_id",
@@ -124,7 +93,12 @@ export function WorkflowTicketsPage() {
       render: (id: number) => projectNameMap.get(id) ?? (id ? `#${id}` : "—"),
     },
     { title: "标题", dataIndex: "title", ellipsis: true },
-    { title: "状态", dataIndex: "status", width: 100, render: (v: string) => statusTag(v) },
+    {
+      title: "状态",
+      dataIndex: "status",
+      width: 100,
+      render: (v: string) => <Tag color={workflowStatusColor(v)}>{workflowStatusLabel(v)}</Tag>,
+    },
     {
       title: "创建时间",
       dataIndex: "created_at",
@@ -136,7 +110,7 @@ export function WorkflowTicketsPage() {
       key: "actions",
       width: 100,
       render: (_, row) => (
-        <Link to={deepLink(row)}>
+        <Link to={workflowBusinessDeepLink(row)}>
           <Button type="link" size="small" icon={<LinkOutlined />}>
             详情
           </Button>
@@ -147,7 +121,13 @@ export function WorkflowTicketsPage() {
 
   return (
     <div>
-      <PageTelemetryHeader label="Workflow" title="工单列表" subtitle="跨域工单历史；审批动作请到「我的待办」" />
+      <PageTelemetryHeader
+        label="审批中心"
+        title="全部工单"
+        subtitle="跨域审计列表；审批请到「我的待办」，执行请到业务详情"
+        meta={[`共 ${total}`]}
+      />
+      <ApprovalCenterNav />
       <Card>
         <Space wrap style={{ marginBottom: 16 }}>
           <Select
@@ -168,7 +148,7 @@ export function WorkflowTicketsPage() {
               setDomain(v);
               setPage(1);
             }}
-            options={DOMAIN_OPTIONS}
+            options={[...WORKFLOW_DOMAIN_OPTIONS]}
           />
           <Select
             allowClear
@@ -183,12 +163,13 @@ export function WorkflowTicketsPage() {
               { label: "待审批", value: "pending" },
               { label: "已通过", value: "approved" },
               { label: "已驳回", value: "rejected" },
+              { label: "已关闭", value: "closed" },
+              { label: "已取消", value: "cancelled" },
             ]}
           />
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
             刷新
           </Button>
-          <Typography.Text type="secondary">业务执行（SQL 执行等）仍在各业务详情页完成</Typography.Text>
         </Space>
         <Table
           rowKey="id"
@@ -196,6 +177,7 @@ export function WorkflowTicketsPage() {
           columns={columns}
           dataSource={rows}
           scroll={{ x: 1000 }}
+          locale={{ emptyText: <Empty description="暂无工单" /> }}
           pagination={{
             current: page,
             pageSize,

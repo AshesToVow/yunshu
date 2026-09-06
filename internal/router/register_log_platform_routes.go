@@ -14,6 +14,7 @@ func RegisterLogPlatformRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	g.GET("/es-storage", d.logPlatformHandler.StorageStats)
 	g.DELETE("/es-indices/:index", d.logPlatformHandler.DeleteESIndex)
 	g.GET("/es-config", d.loggieHandler.ESConfigPreview)
+	g.PUT("/es-connection", d.loggieHandler.SetESConnection)
 	g.GET("/kafka-stats", d.logPlatformHandler.KafkaStats)
 	g.GET("/kafka-config", d.logPlatformHandler.KafkaConfigPreview)
 	g.DELETE("/kafka-topics/:topic", d.logPlatformHandler.DeleteKafkaTopic)

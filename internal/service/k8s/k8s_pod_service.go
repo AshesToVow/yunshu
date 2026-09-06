@@ -25,11 +25,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"gorm.io/gorm"
 )
 
 type K8sPodService struct {
 	runtime     *K8sRuntimeService
 	dyn         *DynamicResourceService
+	db          *gorm.DB
 	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
 	nsAllowRepo interfaces.K8sNamespaceAllowRepository
 }
@@ -39,9 +41,10 @@ func NewK8sPodService(
 	runtime *K8sRuntimeService,
 	nsDeny interfaces.K8sNamespaceDenyRepository,
 	nsAllow interfaces.K8sNamespaceAllowRepository,
+	db *gorm.DB,
 ) *K8sPodService {
 	return &K8sPodService{
-		runtime: runtime, dyn: NewDynamicResourceService(runtime),
+		runtime: runtime, dyn: NewDynamicResourceService(runtime), db: db,
 		nsDenyRepo: nsDeny, nsAllowRepo: nsAllow,
 	}
 }
@@ -155,32 +158,44 @@ func (s *K8sPodService) Detail(ctx context.Context, query PodDetailQuery) (*PodD
 			State:        k8sutil.ContainerState(c.State),
 		})
 	}
+	ephemeralContainers := make([]PodContainerInfo, 0, len(pod.Status.EphemeralContainerStatuses))
+	for _, c := range pod.Status.EphemeralContainerStatuses {
+		ephemeralContainers = append(ephemeralContainers, PodContainerInfo{
+			Name:         c.Name,
+			Image:        c.Image,
+			Ready:        c.Ready,
+			RestartCount: c.RestartCount,
+			State:        k8sutil.ContainerState(c.State),
+			Ephemeral:    true,
+		})
+	}
 	startTime := time.Time{}
 	if pod.Status.StartTime != nil {
 		startTime = pod.Status.StartTime.Time
 	}
 	return &PodDetail{
-		Name:              pod.Name,
-		Namespace:         pod.Namespace,
-		UID:               string(pod.UID),
-		Phase:             string(pod.Status.Phase),
-		NodeName:          pod.Spec.NodeName,
-		ServiceAccount:    pod.Spec.ServiceAccountName,
-		PodIP:             pod.Status.PodIP,
-		HostIP:            pod.Status.HostIP,
-		QOSClass:          string(pod.Status.QOSClass),
-		Labels:            pod.Labels,
-		Annotations:       pod.Annotations,
-		Containers:        containers,
-		InitContainers:    initContainers,
-		Conditions:        pod.Status.Conditions,
-		Volumes:           pod.Spec.Volumes,
-		Tolerations:       pod.Spec.Tolerations,
-		NodeSelector:      pod.Spec.NodeSelector,
-		PriorityClassName: pod.Spec.PriorityClassName,
-		Affinity:          pod.Spec.Affinity,
-		StartTime:         startTime,
-		CreationTime:      pod.CreationTimestamp.Time,
+		Name:                pod.Name,
+		Namespace:           pod.Namespace,
+		UID:                 string(pod.UID),
+		Phase:               string(pod.Status.Phase),
+		NodeName:            pod.Spec.NodeName,
+		ServiceAccount:      pod.Spec.ServiceAccountName,
+		PodIP:               pod.Status.PodIP,
+		HostIP:              pod.Status.HostIP,
+		QOSClass:            string(pod.Status.QOSClass),
+		Labels:              pod.Labels,
+		Annotations:         pod.Annotations,
+		Containers:          containers,
+		InitContainers:      initContainers,
+		EphemeralContainers: ephemeralContainers,
+		Conditions:          pod.Status.Conditions,
+		Volumes:             pod.Spec.Volumes,
+		Tolerations:         pod.Spec.Tolerations,
+		NodeSelector:        pod.Spec.NodeSelector,
+		PriorityClassName:   pod.Spec.PriorityClassName,
+		Affinity:            pod.Spec.Affinity,
+		StartTime:           startTime,
+		CreationTime:        pod.CreationTimestamp.Time,
 	}, nil
 }
 

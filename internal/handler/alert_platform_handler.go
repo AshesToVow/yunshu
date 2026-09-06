@@ -96,6 +96,49 @@ func (h *AlertPlatformHandler) PingDatasource(c *gin.Context) {
 	response.Success(c, res)
 }
 
+// ListDatasourceHealth GET — 项目下数据源健康缓存列表。
+func (h *AlertPlatformHandler) ListDatasourceHealth(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q struct {
+		ProjectID uint `form:"project_id" binding:"required"`
+	}) (gin.H, error) {
+		list, err := h.ds.ListHealth(ctx, q.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"list": list, "items": list}, nil
+	})
+}
+
+// GetDatasourceHealth GET — 读取数据源最近一次健康探测。
+func (h *AlertPlatformHandler) GetDatasourceHealth(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	res, err := h.ds.GetHealth(c.Request.Context(), id)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+// CheckDatasourceHealth POST — 即时探测并写回健康缓存。
+func (h *AlertPlatformHandler) CheckDatasourceHealth(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	res, err := h.ds.CheckHealth(c.Request.Context(), id)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 func (h *AlertPlatformHandler) PromQuery(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {

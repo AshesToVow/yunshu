@@ -25,7 +25,6 @@ func dbmgmtDictSeeds() []DictEntryCreateRequest {
 		{DictType: "dbmgmt_query_timeout_seconds", Label: "SQL 查询超时(秒)", Value: "30", Sort: intRef(1), Status: 1, Remark: "dbmgmt.query_timeout_seconds"},
 		{DictType: "dbmgmt_max_rows", Label: "查询最大返回行数", Value: "1000", Sort: intRef(1), Status: 1, Remark: "dbmgmt.max_result_rows"},
 		{DictType: "dbmgmt_max_import_file_mb", Label: "SQL 文件导入上限(MB)", Value: "10", Sort: intRef(1), Status: 1, Remark: "dbmgmt.max_import_file_mb"},
-		{DictType: "cmdb_max_transfer_file_mb", Label: "服务器文件传输上限(MB)", Value: "50", Sort: intRef(1), Status: 1, Remark: "服务器操作台 SFTP 上传/下载单文件上限"},
 		{DictType: "dbmgmt_prod_force_approval", Label: "生产环境强制审批", Value: "true", Sort: intRef(1), Status: 1, Remark: "dbmgmt.prod_force_approval：true/false"},
 		{DictType: "dbmgmt_forbid_self_approve", Label: "禁止自审自批", Value: "true", Sort: intRef(1), Status: 1, Remark: "dbmgmt.forbid_self_approve：true/false"},
 		{DictType: "dbmgmt_approval_sla_hours", Label: "审批超时阈值(小时)", Value: "24", Sort: intRef(1), Status: 1, Remark: "dbmgmt.approval_sla_hours"},
@@ -39,7 +38,7 @@ func dbmgmtDictSeeds() []DictEntryCreateRequest {
 	}
 }
 
-// securityDictSeeds 安全域内置字典种子：密码策略（系统分类；可随时在数据字典调整）。
+// securityDictSeeds 安全域内置字典种子：密码策略 + auth.*（系统分类；可随时在数据字典调整）。
 func securityDictSeeds() []DictEntryCreateRequest {
 	return []DictEntryCreateRequest{
 		{DictType: "password_min_length", Label: "密码最小长度", Value: "8", Sort: intRef(1), Status: 1, Remark: "password_min_length"},
@@ -50,5 +49,16 @@ func securityDictSeeds() []DictEntryCreateRequest {
 		{DictType: "password_require_special", Label: "须含特殊字符", Value: "true", Sort: intRef(1), Status: 1, Remark: "true/false"},
 		{DictType: "password_expiry_days", Label: "密码过期天数", Value: "90", Sort: intRef(1), Status: 1, Remark: "默认 90 天（约 3 个月）；0=不过期"},
 		{DictType: "password_forbid_username", Label: "禁止包含用户名", Value: "true", Sort: intRef(1), Status: 1, Remark: "true/false"},
+
+		{DictType: "auth_jwt_secret", Label: "JWT 签名密钥", Value: "", Sort: intRef(1), Status: 0, Remark: "auth.jwt_secret：敏感；启用后覆盖 YAML；改后需重启且会使已发 Token 失效"},
+		{DictType: "auth_access_token_ttl_minutes", Label: "Access Token 有效期(分钟)", Value: "15", Sort: intRef(1), Status: 1, Remark: "auth.access_token_ttl_minutes；改后需重启"},
+		{DictType: "auth_refresh_token_ttl_hours", Label: "Refresh Token 有效期(小时)", Value: "168", Sort: intRef(1), Status: 1, Remark: "auth.refresh_token_ttl_hours；默认 7 天；改后需重启"},
+		{DictType: "auth_cookie_secure", Label: "Cookie Secure", Value: "false", Sort: intRef(1), Status: 1, Remark: "auth.cookie_secure：生产 HTTPS 建议 true；改后需重启"},
+		{DictType: "auth_cookie_domain", Label: "Cookie Domain", Value: "", Sort: intRef(1), Status: 0, Remark: "auth.cookie_domain：同域反代留空；改后需重启"},
+		{DictType: "auth_csp_enabled", Label: "启用 CSP", Value: "true", Sort: intRef(1), Status: 1, Remark: "auth.csp_enabled：true/false；改后需重启"},
+		{DictType: "auth_email_code_ttl_seconds", Label: "邮箱验证码有效期(秒)", Value: "600", Sort: intRef(1), Status: 1, Remark: "auth.email_code_ttl_seconds；改后需重启"},
+		{DictType: "auth_email_code_cooldown_seconds", Label: "邮箱验证码冷却(秒)", Value: "60", Sort: intRef(1), Status: 1, Remark: "auth.email_code_cooldown_seconds；改后需重启"},
+		{DictType: "auth_login_max_fail_attempts", Label: "登录失败锁定次数", Value: "5", Sort: intRef(1), Status: 1, Remark: "auth.login_max_fail_attempts；改后需重启"},
+		{DictType: "auth_login_lock_seconds", Label: "登录锁定时长(秒)", Value: "900", Sort: intRef(1), Status: 1, Remark: "auth.login_lock_seconds；改后需重启"},
 	}
 }

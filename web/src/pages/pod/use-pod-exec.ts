@@ -11,6 +11,7 @@ export type UsePodExecParams = {
   selected: PodItem | null;
   detail: PodDetail | null;
   execCommand: string;
+  preferredContainer?: string;
   execTermHostRef: RefObject<HTMLDivElement | null>;
 };
 
@@ -21,6 +22,7 @@ export function usePodExec({
   selected,
   detail,
   execCommand,
+  preferredContainer,
   execTermHostRef,
 }: UsePodExecParams) {
   const execTermRef = useRef<Terminal | null>(null);
@@ -28,6 +30,8 @@ export function usePodExec({
   const execWsRef = useRef<WebSocket | null>(null);
   const execCommandRef = useRef(execCommand);
   execCommandRef.current = execCommand;
+  const preferredContainerRef = useRef(preferredContainer);
+  preferredContainerRef.current = preferredContainer;
 
   function closeExecSocket() {
     try {
@@ -69,9 +73,20 @@ export function usePodExec({
     execFitRef.current = fit;
 
     void (async () => {
+      const pickContainer = (d: PodDetail | null | undefined) => {
+        if (!d) return undefined;
+        const prefer = preferredContainerRef.current?.trim();
+        const ephemeral = (d.ephemeral_containers ?? []).map((c) => c.name).filter(Boolean);
+        const regular = (d.containers ?? []).map((c) => c.name).filter(Boolean);
+        if (prefer && (ephemeral.includes(prefer) || regular.includes(prefer))) {
+          return prefer;
+        }
+        return regular[0] || ephemeral[0];
+      };
+
       let container: string | undefined;
       if (detail?.namespace === selected.namespace && detail.name === selected.name) {
-        container = detail.containers?.[0]?.name;
+        container = pickContainer(detail);
       } else {
         try {
           const d = await getPodDetail({
@@ -79,7 +94,7 @@ export function usePodExec({
             namespace: selected.namespace,
             name: selected.name,
           });
-          container = d.containers?.[0]?.name;
+          container = pickContainer(d);
         } catch {
           // 后端会解析默认容器；此处失败时不阻塞 Exec 连接
         }

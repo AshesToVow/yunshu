@@ -52,7 +52,7 @@ export function ReleaseDrawer({
             type="warning"
             showIcon
             message="该环境已开启发布审核"
-            description="提交后将进入「待办列表 → 待审核」，审批通过后再进入「待执行」由审核人/运维执行 Jenkins 发布。"
+            description="提交后进入「工单中心 → 我的待办」审批；全部通过后由提交人在「CD 历史工单」详情中点击「执行发布」触发 Jenkins。"
             style={{ marginBottom: 16 }}
           />
         ) : null}

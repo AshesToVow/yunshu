@@ -1,9 +1,49 @@
+# =============================================================================
+# Yunshu 主配置（唯一纳管入口）
+# =============================================================================
+# 日常部署 / Docker Compose / 裸机：只改本文件。无需 .env / .env.example。
+# 环境变量仍可作为临时覆盖（viper），但不作为交付配置源。
+#
+# 密钥生成（上线前必做，与 DB 备份一同保管；更换后历史密文永久不可解）：
+#   security.encryption_key ← openssl rand -base64 32
+#   auth.jwt_secret         ← openssl rand -base64 48 | tr -d '+/='
+#
+# ---------- 场景速查（改哪些）----------
+# Docker Compose（本仓库 docker-compose.yml）：
+#   1) mysql.host          → 宿主机 IP（旧 compose 无 host-gateway；常用 172.17.0.1）
+#   2) mysql.password      → 与宿主机 MySQL 一致
+#   3) redis.addr          → yunshu-redis:6379
+#   4) redis.password      → 与 compose 里 redis --requirepass 完全一致
+#   5) auth.jwt_secret / security.encryption_key → 上式 openssl 生成
+#   6) app.env             → 联调可先 dev；正式上线改 prod（prod 拒绝占位/弱密钥）
+#
+# 裸机 / 本机 go run：
+#   mysql.* / redis.* 指向本机或内网地址；密钥同上。
+#
+# ---------- 可选能力何时打开 ----------
+# plugins.enabled      裁剪业务模块；列表为空 = 启用默认全集
+# ai.enabled           需要 AI 助手 / 模型调用时改为 true，并填 api_key
+# cicd.enabled         对接 Jenkins / Harbor / MinIO 发布流水线时
+# elasticsearch.enabled  Loggie→ES 日志检索；需 ES 可达
+# kafka.enabled        日志经 Kafka 中转再写 ES；false 时 Loggie 可直写 ES
+# swagger.enabled      仅开发/联调；生产保持 false
+# dbmgmt.goinception_* 需要 SQL 审核/执行时开启并填 goinception 地址
+# alert.prometheus_*   需要从 Prometheus 富化告警当前值时
+# k8s_event_forward.*  多集群 Event 转发入站；也可用数据字典覆盖
+#
+# ---------- 配置优先级 ----------
+# 启动必需：app / http / log / mysql|database / redis / auth / security（本文件）
+# 运行期运营：mail / auth / alert.webhook_token / prometheus / k8s_event_forward → 数据字典优先
+# =============================================================================
+
 app:
   name: yunshu-cmdb
+  # dev|test：占位密钥仅告警；prod|production：弱密钥/仓库占位值直接拒绝启动
   env: dev
   port: 8080
 
 # 业务插件（GVA 风格）：按需启停模块；空 enabled 表示启用默认全集。
+# 裁剪示例：不需要 CI/CD 时从列表去掉 cicd；不需要 AI 时去掉 ai（并保持 ai.enabled=false）。
 plugins:
   enabled:
     - core
@@ -18,7 +58,7 @@ plugins:
     - ai
     - esmgmt
 
-# AI（字典 ai_* 优先覆盖）
+# AI：ai.enabled=true 且 plugins 含 ai 时路由/Worker 才生效；密钥优先用数据字典 ai_* 覆盖
 ai:
   enabled: false
   default_provider: openai_compat
@@ -37,7 +77,7 @@ ai:
     api_key: ""
     model: "claude-sonnet-4-20250514"
 
-# 数据库管理（字典 dbmgmt_* 可覆盖）
+# 数据库管理：plugins 含 dbmgmt 时启用；goinception 不可达时可设 goinception_enabled=false（仅直连能力）
 dbmgmt:
   query_timeout_seconds: 30
   max_result_rows: 1000
@@ -54,7 +94,8 @@ dbmgmt:
   goinception_port: 4000
   goinception_backup: true
 
-# CI/CD（字典 cicd_* 优先覆盖下列 YAML）
+# CI/CD：plugins 含 cicd 且本段 enabled=true 时启用；未接 Jenkins 时可 enabled=false
+# 凭据也可在数据字典 cicd_* / cicd_harbor_* 覆盖，改字典无需重启部分项
 cicd:
   enabled: true
   jenkins:
@@ -123,23 +164,21 @@ log:
 
 mysql:
   driver: mysql              # mysql（默认）或 postgres
-  host: 10.10.10.103        # Docker 服务名，容器内部通信
+  # 裸机：内网 IP；Docker Compose 连宿主机 MySQL：改为 172.17.0.1 或宿主机实际 IP
+  host: 10.10.10.103
   port: 3306
   user: root
-  password: "0gvzJr66iNs5"  # 生产环境务必修改，勿提交真实密码
+  password: "0gvzJr66iNs5"  # 生产务必修改；勿把真实生产密码提交到公共仓库
   db_name: yunshu
   charset: utf8mb4
   loc: Asia%2FShanghai
-  max_idle_conns: 5          # 降低以节省内存
-  max_open_conns: 20         # 降低以节省内存
+  max_idle_conns: 5
+  max_open_conns: 20
   conn_max_lifetime_seconds: 3600
-  # auto_migrate: 是否在启动时执行 GORM AutoMigrate 自动改表。
-  #   未配置时按环境推断：app.env 为 prod/production 则关闭，其他环境开启。
-  #   生产环境请保持关闭（滚动发布多副本并发 DDL 不可回滚），改用版本化 migration。
-  #   显式配置优先级：database.auto_migrate > mysql.auto_migrate > 环境推断。
+  # auto_migrate: 未配置时按环境推断（非 prod 开 / prod 关）。生产请保持关，用 migrate 子命令。
   # auto_migrate: false
 
-# PostgreSQL 示例（与 mysql 二选一；也可用 database: 键，见 .codegraph/kite-comparison.md）
+# PostgreSQL 示例（与 mysql 二选一；也可用顶层 database: 键）
 # database:
 #   driver: postgres
 #   host: 127.0.0.1
@@ -149,20 +188,14 @@ mysql:
 #   db_name: yunshu
 #   sslmode: disable
 #   timezone: Asia/Shanghai
-#   max_idle_conns: 5
-#   max_open_conns: 20
-#   conn_max_lifetime_seconds: 3600
-  # auto_migrate: 是否在启动时执行 GORM AutoMigrate 自动改表。
-  #   未配置时按环境推断：app.env 为 prod/production 则关闭，其他环境开启。
-  #   生产环境请保持关闭（滚动发布多副本并发 DDL 不可回滚），改用版本化 migration。
-  #   显式配置优先级：database.auto_migrate > mysql.auto_migrate > 环境推断。
-  # auto_migrate: false
 
 redis:
-  addr: 10.10.10.103:6379    # Docker 服务名，容器内部通信
-  password: "1234"  # 生产环境务必修改
+  # 裸机：host:port；Docker Compose：必须改为 yunshu-redis:6379
+  addr: 10.10.10.103:6379
+  # 必须与 docker-compose.yml 中 redis --requirepass 一致（Compose 默认见该文件注释）
+  password: "1234"
   db: 0
-  pool_size: 10              # 降低以节省内存
+  pool_size: 10
 
 # mail：数据字典 mail_* 优先，下列 YAML 仅作兜底（发信时每次从字典读取，改字典无需重启）
 # 字典项：mail_host / mail_port / mail_username / mail_password / mail_from_email / mail_from_name / mail_use_tls
@@ -176,30 +209,41 @@ redis:
 #   use_tls: true
 
 auth:
-  jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"  # 生产环境务必修改，至少32字节；勿使用仓库默认值上线
+  # 数据字典 auth_* 优先，下列 YAML 仅作兜底（改字典后需重启进程生效）
+  # 字典项：auth_jwt_secret / auth_access_token_ttl_minutes / auth_refresh_token_ttl_hours /
+  #         auth_cookie_secure / auth_cookie_domain / auth_csp_enabled /
+  #         auth_email_code_ttl_seconds / auth_email_code_cooldown_seconds /
+  #         auth_login_max_fail_attempts / auth_login_lock_seconds
+  # 生成：openssl rand -base64 48 | tr -d '+/='；app.env=prod 时禁止使用下方仓库占位值
+  jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"
   access_token_ttl_minutes: 15   # 短 access；浏览器 HttpOnly Cookie（ys_at）
   refresh_token_ttl_hours: 168   # 7 天 refresh（ys_rt）；Redis 一次性轮换
-  cookie_secure: false           # 本地 http；生产 HTTPS 改为 true（或依赖 env=prod 默认）
+  cookie_secure: false           # 本地 http；生产 HTTPS 改为 true（或 app.env=prod 时默认 Secure）
   # cookie_domain: ""            # 同域反代留空
   csp_enabled: true
   email_code_ttl_seconds: 600
   email_code_cooldown_seconds: 60
+  # login_max_fail_attempts: 5
+  # login_lock_seconds: 900
 
 casbin:
   model_path: configs/casbin_model.conf
-  # 多副本部署时定时从 DB 重新加载策略的间隔（秒）。0=默认30s，负数=关闭（单副本）。
+  # 多副本：定时从 DB 重载策略（秒）。0=默认 30s；负数=关闭（单副本可关）
   auto_load_interval_seconds: 30
 
 swagger:
+  # 仅开发/联调打开；生产务必 false（勿对公网暴露）
   enabled: false
   path: /swagger
 
 security:
-  # 32 bytes key for encrypting sensitive data (base64 recommended)
-  # 生产环境必须替换；占位值仅用于本地开发
+  # 云账号 AK/SK、SSH、kubeconfig、ES 密码等 AES-GCM 密钥
+  # 生成：openssl rand -base64 32（解码后须正好 32 字节）；或 32 字节原文
+  # app.env=dev 时下方占位仅告警；app.env=prod 时必须换成强随机，否则拒绝启动
+  # 警告：更换密钥后历史密文永久不可解——请与数据库备份一并保管
   encryption_key: "change-me-32bytes-base64"
 
-# 日志检索（Loggie 采集 → Elasticsearch，Yunshu 代理查询）
+# 日志检索：需要控制台查 Loggie 日志时 enabled=true，并保证 ES 可达
 elasticsearch:
   enabled: false
   addresses:
@@ -207,23 +251,21 @@ elasticsearch:
   username: ""
   password: ""
   index_pattern: "yunshu-agent-*"
-  # Loggie Agent 一键安装：远端 wget/curl 拉取二进制的 URL（可含 {arch} 占位，如 amd64/arm64）
-  # 离线二进制路径配在 loggie 段，见下方 loggie.offline_binary_path
   message_fields: ["message", "body", "log", "content"]
   timestamp_field: "@timestamp"
   default_size: 100
   max_size: 1000
-  timeout_seconds: 30
+  timeout_seconds: 90
   default_retention_days: 30
   cleanup_cron_spec: "0 3 * * *"   # 每天 03:00 清理过期索引
 
-# Kafka 日志中转（可选；字典 kafka_* 优先）。enabled=false 时 Loggie 直写 ES；true 时每 Agent 一个 Topic
+# Kafka：仅当日志管道需要「Loggie → Kafka → ES」时 enabled=true；false 时 Loggie 可直写 ES
 kafka:
   enabled: false
   brokers:
     - "127.0.0.1:9092"
-  topic_prefix: "yunshu-agent"   # 实际 Topic = yunshu-agent-{服务器IP}-YYYY.MM.DD（IP 中的 . 转为 -）
-  consumer_group: "yunshu-log-es" # 必填消费组
+  topic_prefix: "yunshu-agent"   # Topic = yunshu-agent-{服务器IP}-YYYY.MM.DD（IP 中 . 转为 -）
+  consumer_group: "yunshu-log-es"
   username: ""
   password: ""
   sasl_mechanism: ""
@@ -293,12 +335,9 @@ alert:
   # 仅内置 PromQL 监控规则的调度节拍（robfig/cron 六段式，含秒）。云到期规则在控制台配置 Cron，由服务内独立节拍轮询。空则默认 */5 * * * * *（每 5 秒）。
   # monitor_eval_cron_spec: "*/5 * * * * *"
 
-# 多集群 K8s Event 转发：请在「数据字典」维护（字典优先，下列 YAML 兜底）；Normal 不转发，告警 labels 带集群 owning_project_id
-# dict_type: k8s_event_forward_enabled | k8s_event_forward_watcher_buffer_size |
-#            k8s_event_forward_worker_interval_seconds | k8s_event_forward_worker_batch_size |
-#            k8s_event_forward_worker_max_retries
-# 入站：POST /api/v1/alerts/ingress/k8s-events（鉴权同 alert_webhook_token）
-# 采集与 Consul SD 样例见 deploy/monitoring/k8s_event_forward:
+# 多集群 K8s Event 转发：需要 Event→告警入站时 enabled=true（字典 k8s_event_forward_* 优先）
+# 入站：POST /api/v1/alerts/ingress/k8s-events；样例见 deploy/monitoring/k8s_event_forward
+k8s_event_forward:
   enabled: false
   watcher_buffer_size: 1000
   worker_interval_seconds: 10
@@ -306,21 +345,9 @@ alert:
   worker_max_retries: 3
 
 # =========================
-# 配置源收敛说明（建议）
+# 配置源分工（勿再维护 .env.example）
 # =========================
-# 1) 启动必需项（必须来自 YAML / ENV）：
-#    - app.*, http.*, grpc.*, log.*
-#    - mysql.*, redis.*
-#    - auth.*, casbin.*, swagger.*, security.*
-#    - agent.register_secret
-#
-# 2) 运行期可运营项（数据字典优先，YAML 兜底）：
-#    - mail.*                 -> mail_host / mail_port / mail_username / mail_password / mail_from_email / mail_from_name / mail_use_tls
-#    - alert.webhook_token    -> alert_webhook_token
-#    - alert.prometheus_url   -> alert_enrich_prometheus_url
-#    - alert.prometheus_token -> alert_enrich_prometheus_token
-#    - k8s_event_forward.*    -> k8s_event_forward_enabled / _watcher_buffer_size / _worker_*
-#
-# 3) 业务页面辅助选项（仅字典，不在 YAML 维护）：
-#    - dingtalk_webhook_url / wecom_webhook_url / alert_webhook_url
-#    - wecom_* / dingtalk_* / alert_promql_label_key / alert_threshold_unit 等
+# 1) 本文件：启动必需项与默认值（app/http/log/mysql/redis/auth/security/plugins/…）
+# 2) 数据字典优先、YAML 兜底：mail_*、alert_webhook_token、alert_enrich_prometheus_*、k8s_event_forward_*
+# 3) 仅字典：钉钉/企微 Webhook、告警录入辅助项等页面运营配置
+# 4) 可选环境变量：仅运维临时覆盖（如 MYSQL_HOST），不作为交付清单

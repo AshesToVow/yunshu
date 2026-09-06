@@ -3,9 +3,15 @@ version: '3.3'
 # 默认：MySQL 在宿主机（非容器），仅启动 redis + backend + frontend。
 # 若要用容器 MySQL：docker-compose --profile container-mysql up -d
 #
+# 配置唯一入口：configs/config.yaml（挂载到容器 /app/configs）
+#   启动前请按该文件顶部「场景速查」改 mysql/redis/密钥/app.env。
+#   不要依赖 .env / .env.example。
+#
+# Redis 密码必须与 config.yaml → redis.password 完全一致（下方 --requirepass）。
+#
 # 构建提示：
 #   1) 确保仓库根目录有 .dockerignore（否则 context 可达数百 MB）
-#   2) 可选开启 BuildKit（非必须）：export DOCKER_BUILDKIT=1
+#   2) 可选开启 BuildKit：export DOCKER_BUILDKIT=1
 services:
   redis:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.4.2-alpine
@@ -17,8 +23,9 @@ services:
       - TZ=Asia/Shanghai
     command:
       - redis-server
+      # 与 configs/config.yaml redis.password 保持一致后改此处
       - --requirepass
-      - "${REDIS_PASSWORD:-YunshuRedis@2026Secure!}"
+      - "1234"
       - --maxmemory
       - "96mb"
       - --maxmemory-policy
@@ -38,7 +45,7 @@ services:
     networks:
       - yunshu-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-YunshuRedis@2026Secure!}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "1234", "ping"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -52,7 +59,6 @@ services:
         # 华为云镜像路径为 docker.io/library/...（不是 docker.io/golang）
         GO_IMAGE: ${GO_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.26.2-alpine}
         ALPINE_IMAGE: ${ALPINE_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/alpine:3.19}
-        WKHTMLTOPDF_IMAGE: ${WKHTMLTOPDF_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/surnet/alpine-wkhtmltopdf:3.23.2-0.12.6-full}
     container_name: yunshu-backend
     restart: unless-stopped
     mem_limit: 384m
@@ -61,21 +67,11 @@ services:
       - "8080:8080"
     environment:
       - GIN_MODE=release
-      - APP_ENV=prod
       - TZ=Asia/Shanghai
-      # 宿主机 MySQL：旧 compose 不支持 host-gateway，默认走 docker0 网关；请在 .env 覆盖为实际 IP
-      - MYSQL_HOST=${MYSQL_HOST:-172.17.0.1}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_USER=${MYSQL_USER:-root}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-YunshuDB@2026Secure!}
-      - MYSQL_DB_NAME=${MYSQL_DB_NAME:-yunshu}
-      - REDIS_ADDR=yunshu-redis:6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-YunshuRedis@2026Secure!}
-      - JWT_SECRET=${JWT_SECRET:-YunshuJWTSecretKey2026ChangeInProduction}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-32bytes-base64}
+      # 业务配置全部来自挂载的 configs/config.yaml（含 JWT / encryption_key / mysql / redis）
       - RUN_SEED=${RUN_SEED:-1}
       - WAIT_MYSQL=${WAIT_MYSQL:-1}
-      - INSPECT_SERVER_PDF=${INSPECT_SERVER_PDF:-html_only}
+      # 巡检 PDF 仅前端 html2canvas/jsPDF；服务端不再渲染
     volumes:
       - ./configs:/app/configs:ro
       - ./logs:/app/logs
@@ -85,7 +81,7 @@ services:
     networks:
       - yunshu-network
     # 旧版 docker-compose 不支持 extra_hosts: host-gateway。
-    # 连宿主机 MySQL 请在 .env 设 MYSQL_HOST 为宿主机 IP（如 10.10.10.4），不要用 host.docker.internal。
+    # 连宿主机 MySQL：在 config.yaml 设 mysql.host 为宿主机 IP（如 10.10.10.4 / 172.17.0.1）。
 
   frontend:
     build:
@@ -104,6 +100,7 @@ services:
         condition: service_started
     networks:
       - yunshu-network
+
 
 networks:
   yunshu-network:

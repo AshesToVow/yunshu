@@ -259,6 +259,52 @@ export function explainAlertByFingerprint(fingerprint: string) {
   return getData<FingerprintDeliveryExplain>(http.get("/alerts/events/by-fingerprint", { params: { fingerprint } }));
 }
 
+export type AlertEvidenceResult = {
+  fingerprint: string;
+  project_id?: number;
+  alertname?: string;
+  severity?: string;
+  status?: string;
+  starts_at?: string;
+  labels?: Record<string, string>;
+  dims?: {
+    cluster?: string;
+    namespace?: string;
+    pod?: string;
+    service?: string;
+    node?: string;
+    container?: string;
+  };
+  recent_changes?: Array<{
+    id: number;
+    source?: string;
+    action?: string;
+    summary?: string;
+    started_at?: string;
+  }>;
+  log_overview?: { total?: number; level_counts?: Record<string, number> };
+  log_samples?: Array<{
+    timestamp: string;
+    level?: string;
+    message: string;
+    host?: string;
+    pod?: string;
+  }>;
+  log_hint?: string;
+  pod_diagnose_hint?: {
+    cluster_id?: number;
+    cluster_name?: string;
+    namespace?: string;
+    pod?: string;
+    available?: boolean;
+    reason?: string;
+  };
+};
+
+export function collectAlertEvidence(fingerprint: string) {
+  return getData<AlertEvidenceResult>(http.get("/alerts/events/evidence", { params: { fingerprint } }));
+}
+
 export function sendAlertmanagerWebhook(payload: Record<string, unknown>, token?: string) {
   const headers: Record<string, string> = {};
   if ((token || "").trim()) {

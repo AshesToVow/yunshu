@@ -1,0 +1,17 @@
+code: sop-dbmgmt-conn-fail
+title: 数据库连接失败排查 SOP
+scenario: 实例探测失败或应用连库失败
+preconditions: 提供 project_id
+input_params: project_id, env, keyword
+check_steps: |
+  1. list_db_instances
+  2. 必要时 list_servers 核对 SSH 隧道宿主
+exec_steps: |
+  1. 修正 host/port/账号
+  2. 切换直连或 SSH 隧道
+  3. 确认实例存活与权限
+verify_steps: 探测成功并可执行只读查询
+exception_handle: 权限不足时升级到项目管理员处理账号
+rollback: 回退错误的连接配置
+risk: 公网暴露与明文泄露风险
+approval_needed: false

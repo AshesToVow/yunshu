@@ -1,0 +1,19 @@
+case_id: CASE-LOG-ERROR-PATTERN-001
+title: 应用 ERROR 日志快速整理典型案例
+category: log
+technology: elasticsearch
+symptom: 业务反馈「一堆报错」，需要快速看出是哪类异常、影响哪些服务
+environment: Yunshu 日志平台
+diagnosis: |
+  1. 确认 project_id
+  2. analyze_logs（level=ERROR 或 keyword=Exception）
+  3. 依据 top_error_signatures / service_counts 归纳主因
+  4. 必要时 search_logs 取原文；空结果则查采集链路
+root_cause: 同一异常签名大量重复（下游超时/配置错误等）；或采集缺失导致误判为空
+solution: 用 analyze_logs 收敛签名；对主签名对应服务做针对性修复或继续 get_pod_logs
+verification: 报告中能列出 Top 签名与样例，并指向明确下一步
+risk: 删除索引不可恢复；禁止建议随意删索引
+related_tools: '["analyze_logs","search_logs","list_log_sources","list_loggie_status"]'
+related_sop: '["sop-log-error-analysis","sop-log-empty"]'
+source: seed
+confidence: 0.88

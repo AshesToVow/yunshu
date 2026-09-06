@@ -138,7 +138,7 @@ func (s *Service) buildOpenParams(inst *model.DbInstance, password string) dbcon
 func (s *Service) openSession(ctx context.Context, inst *model.DbInstance) (*dbconn.Session, error) {
 	pw, err := cryptox.DecryptString(s.aead, inst.EncPassword)
 	if err != nil {
-		return nil, err
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgDbInstancePasswordDecryptFailed)
 	}
 	return dbconn.OpenSession(ctx, s.buildOpenParams(inst, pw), sshDialer{s: s})
 }
@@ -314,7 +314,7 @@ func (s *Service) pingInstance(ctx context.Context, projectID, id uint) (*PingRe
 	}
 	pw, err := cryptox.DecryptString(s.aead, inst.EncPassword)
 	if err != nil {
-		return nil, err
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgDbInstancePasswordDecryptFailed)
 	}
 	p := s.buildOpenParams(inst, pw)
 	err = dbconn.Ping(ctx, p, sshDialer{s: s})

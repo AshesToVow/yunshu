@@ -23,6 +23,7 @@ func RegisterInspectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	inspect.DELETE("/items/:itemId", d.inspectHandler.DeleteItem)
 	inspect.POST("/items/sync-template", d.inspectHandler.SyncItems)
 	inspect.POST("/items/reset-template", d.inspectHandler.ResetItems)
+	inspect.POST("/items/:itemId/promote-alert", d.inspectHandler.PromoteItemAlert)
 	inspect.GET("/runs", d.inspectHandler.ListRuns)
 	inspect.GET("/runs/trends", d.inspectHandler.ListRunTrends)
 	inspect.POST("/runs", d.inspectHandler.CreateRun)

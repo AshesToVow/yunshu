@@ -3,7 +3,7 @@ import { Suspense, useMemo } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useMenuTree } from "../hooks/use-menu-tree";
 import { createLazyMenuPage } from "../utils/menu-page-loader";
-import { findMenuByPath, normalizeMenuPath } from "../utils/menu-path";
+import { findMenuByPath, normalizeMenuPath, resolveMenuAccessCandidates } from "../utils/menu-path";
 import { usePlugins } from "../contexts/plugin-context";
 import { isPathAllowedByPlugins } from "../modules/plugin-path";
 
@@ -79,7 +79,9 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/ai/assistant": "ai-assistant-page",
   "/ai/approvals": "ai-approvals-page",
   "/ai/center": "ai-center-page",
+  "/ai/investigations": "ai-investigations-page",
   "/esmgmt/connections": "esmgmt-connections-page",
+  "/esmgmt/storage": "esmgmt-storage-page",
   "/esmgmt/overview": "esmgmt-overview-page",
   "/esmgmt/console": "esmgmt-console-page",
   "/workflow/inbox": "workflow-inbox-page",
@@ -96,6 +98,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/project-services": "project-collect-config-page",
   "/project-members": "project-members-page",
   "/project-logs": "project-logs-page",
+  "/log-pipelines": "log-pipeline-repo-page",
   "/log-retention": "log-retention-page",
   "/loggie-status": "loggie-status-page",
   "/project-log-sources": "project-collect-config-page",
@@ -113,10 +116,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/server-console": "server-console-page",
 };
 
-/** 辅助页：无独立菜单时继承父级入口权限（如 CR 模板库 ← CR 实例管理） */
-const AUX_MENU_PARENT: Record<string, string> = {
-  "/k8s-cr-templates": "/crs",
-};
+/** 辅助页继承父级入口：见 utils/menu-path.ts 的 AUX_MENU_PARENT */
 
 function RouteFallback() {
   return (
@@ -135,10 +135,9 @@ export function DynamicMenuPage() {
     if (!menus?.length) return undefined;
     const found = findMenuByPath(menus, location.pathname);
     if (found) return found;
-    const normalizedPath = normalizeMenuPath(location.pathname);
-    const parentPath = AUX_MENU_PARENT[normalizedPath];
-    if (parentPath && PATH_COMPONENT_FALLBACK[normalizedPath]) {
-      return findMenuByPath(menus, parentPath);
+    for (const accessPath of resolveMenuAccessCandidates(location.pathname)) {
+      const via = findMenuByPath(menus, accessPath);
+      if (via) return via;
     }
     return undefined;
   }, [menus, location.pathname]);
@@ -157,7 +156,7 @@ export function DynamicMenuPage() {
   const hasPathFallback = Boolean(PATH_COMPONENT_FALLBACK[normalizedPath]);
 
   if (normalizedPath === "/log-kafka") {
-    return <Navigate to="/log-retention?tab=kafka" replace />;
+    return <Navigate to="/log-retention" replace />;
   }
 
   if (!pluginsLoading && !isPathAllowedByPlugins(location.pathname, isPluginEnabled)) {

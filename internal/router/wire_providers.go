@@ -132,6 +132,14 @@ func provideAlertService(
 	return service.NewAlertService(db, redisClient, sender, cfg, opts)
 }
 
+// attachAlertLogSearch 在 LogSearch 就绪后注入证据包依赖（避免 wire 循环顺序问题）。
+func attachAlertLogSearch(svc *service.AlertService, logSearch *service.LogSearchService) *service.AlertService {
+	if svc != nil {
+		svc.SetLogSearch(logSearch)
+	}
+	return svc
+}
+
 func provideAuthService(
 	userRepo interfaces.UserRepository,
 	redisClient *redis.Client,
@@ -201,13 +209,14 @@ func provideDbmgmtService(
 	projectRepo interfaces.ProjectRepository,
 	userGroupRepo interfaces.UserGroupRepository,
 	userRepo interfaces.UserRepository,
+	dutyRepo interfaces.AlertDutyRepository,
 	db *gorm.DB,
 	encryptionKey SecurityEncryptionKey,
 	sender mailer.Sender,
 	appName AppDisplayName,
 	cfg config.DbmgmtConfig,
 ) (*dbmgmtsvc.Service, error) {
-	return dbmgmtsvc.NewService(dbmgmtRepo, serverRepo, projectRepo, userGroupRepo, userRepo, db, string(encryptionKey), sender, string(appName), cfg)
+	return dbmgmtsvc.NewService(dbmgmtRepo, serverRepo, projectRepo, userGroupRepo, userRepo, dutyRepo, db, string(encryptionKey), sender, string(appName), cfg)
 }
 
 func provideCicdService(
@@ -217,12 +226,13 @@ func provideCicdService(
 	userGroupRepo interfaces.UserGroupRepository,
 	userRepo interfaces.UserRepository,
 	memberRepo interfaces.ProjectMemberRepository,
+	dutyRepo interfaces.AlertDutyRepository,
 	cicdCfg config.CicdConfig,
 	sender mailer.Sender,
 	appName AppDisplayName,
 	k8sNS *service.K8sNamespaceService,
 ) *cicdsvc.Service {
-	return cicdsvc.NewService(db, serverRepo, projectRepo, userGroupRepo, userRepo, memberRepo, cicdCfg, sender, string(appName), k8sNS)
+	return cicdsvc.NewService(db, serverRepo, projectRepo, userGroupRepo, userRepo, memberRepo, dutyRepo, cicdCfg, sender, string(appName), k8sNS)
 }
 
 func provideInspectService(
@@ -247,7 +257,15 @@ func provideEsmgmtService(
 	resolveSched := func(ctx context.Context) dictconfig.EsmgmtBackupSchedulerConfig {
 		return dictconfig.ResolveEsmgmtBackupSchedulerConfig(ctx, db, dictconfig.DefaultEsmgmtBackupSchedulerDictTypes())
 	}
-	return esmgmtsvc.NewService(db, string(encryptionKey), es, newStore, resolveSched)
+	svc, err := esmgmtsvc.NewService(db, string(encryptionKey), es, newStore, resolveSched)
+	if err != nil {
+		return nil, err
+	}
+	// 日志平台按 connection_id 使用 esmgmt 连接（避免 Wire 循环依赖，装配后注入）
+	if es != nil {
+		es.SetManagedConnectionLoader(svc)
+	}
+	return svc, nil
 }
 
 func provideK8sHelmService(
@@ -274,8 +292,12 @@ func provideKafkaToESService(kafka *service.KafkaProvider, es *service.Elasticse
 	return service.NewKafkaToESService(kafka, es)
 }
 
-func provideLogSearchService(es *service.ElasticsearchProvider, serverRepo interfaces.ServerRepository) *service.LogSearchService {
-	return service.NewLogSearchService(es, serverRepo)
+func provideLogSearchService(db *gorm.DB, es *service.ElasticsearchProvider, serverRepo interfaces.ServerRepository) *service.LogSearchService {
+	return service.NewLogSearchService(es, serverRepo, db)
+}
+
+func provideLogIntelligenceService(db *gorm.DB, logSearch *service.LogSearchService, projectRepo interfaces.ProjectRepository) *service.LogIntelligenceService {
+	return service.NewLogIntelligenceService(db, logSearch, projectRepo)
 }
 
 func provideLogRetentionService(es *service.ElasticsearchProvider, repo interfaces.LogRetentionRepository) *service.LogRetentionService {
@@ -384,6 +406,7 @@ var ServiceSet = wire.NewSet(
 	provideKafkaProvider,
 	provideKafkaToESService,
 	provideLogSearchService,
+	provideLogIntelligenceService,
 	provideLogRetentionService,
 	provideLoggieConfig,
 	provideLoggieAgentService,

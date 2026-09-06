@@ -222,6 +222,8 @@ func normalizeStages(items []StageUpsertItem) ([]normalizedStage, error) {
 				if st.DutyMonitorRuleID == nil || *st.DutyMonitorRuleID == 0 {
 					return nil, constants.ErrBadRequestWithMsg("排班派单节点须绑定监控规则: " + name)
 				}
+			case model.WorkflowAssigneePlatformRole:
+				// 平台角色审批（AI 高危操作等），无需绑定用户组
 			default:
 				return nil, constants.ErrBadRequestWithMsg("不支持的派单规则: " + ruleType)
 			}
@@ -441,7 +443,7 @@ type ReviewStepRequest struct {
 	Comment string `json:"comment" binding:"omitempty,max=512"`
 }
 
-// ReviewStep 审批当前激活步骤。
+// ReviewStep 审批当前激活步骤（乐观锁：仅 pending 可抢占）。
 func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req ReviewStepRequest, actor *auth.CurrentUser) (*TicketDetail, error) {
 	var ticket model.WorkflowTicket
 	if err := s.db.WithContext(ctx).First(&ticket, ticketID).Error; err != nil {
@@ -463,8 +465,20 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 	if step.Status != model.WorkflowStepPending || step.ActivatedAt == nil {
 		return nil, constants.ErrBadRequestWithMsg("该审批节点不可操作")
 	}
-	def, _, _ := s.loadDefinition(ctx, DefinitionKey{Domain: ticket.Domain, ProjectID: ticket.ProjectID, TicketType: ticket.TicketType})
-	if def != nil && def.ForbidSelfApprove {
+	// 按工单绑定的 definition_id 读取职责分离开关（避免 ticket_type 回退 default 后查不到配置）
+	forbidSelf := true
+	if ticket.DefinitionID > 0 {
+		var def model.WorkflowDefinition
+		if err := s.db.WithContext(ctx).First(&def, ticket.DefinitionID).Error; err == nil {
+			forbidSelf = def.ForbidSelfApprove
+		}
+	} else {
+		def, _, _ := s.resolveFlow(ctx, DefinitionKey{Domain: ticket.Domain, ProjectID: ticket.ProjectID, TicketType: ticket.TicketType})
+		if def != nil {
+			forbidSelf = def.ForbidSelfApprove
+		}
+	}
+	if forbidSelf {
 		if err := forbidSelfApprove(actor, ticket.SubmitterUserID); err != nil {
 			return nil, err
 		}
@@ -480,19 +494,24 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 	reviewerID := actorUserID(actor)
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		status := model.WorkflowStepRejected
-		ticketStatus := model.WorkflowTicketStatusRejected
 		if req.Approve {
 			status = model.WorkflowStepApproved
 		}
-		if err := tx.Model(&step).Updates(map[string]any{
-			"status": status, "reviewer_user_id": reviewerID,
-			"review_comment": strings.TrimSpace(req.Comment), "reviewed_at": now,
-		}).Error; err != nil {
-			return err
+		res := tx.Model(&model.WorkflowTicketStep{}).
+			Where("id = ? AND ticket_id = ? AND status = ? AND activated_at IS NOT NULL", stepID, ticketID, model.WorkflowStepPending).
+			Updates(map[string]any{
+				"status": status, "reviewer_user_id": reviewerID,
+				"review_comment": strings.TrimSpace(req.Comment), "reviewed_at": now,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errStepConflict
 		}
 		if !req.Approve {
 			return tx.Model(&ticket).Updates(map[string]any{
-				"status": ticketStatus, "closed_at": now,
+				"status": model.WorkflowTicketStatusRejected, "closed_at": now,
 			}).Error
 		}
 		var steps []model.WorkflowTicketStep
@@ -514,10 +533,16 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 		}).Error
 	})
 	if err != nil {
+		if errors.Is(err, errStepConflict) {
+			return nil, err
+		}
 		return nil, bizerrors.Pass(ctx, "workflow", "ReviewStep", err)
 	}
 	return s.TicketDetail(ctx, ticketID)
 }
+
+// errStepConflict 并发审批冲突：本节点已被他人处理。
+var errStepConflict = constants.ErrBadRequestWithMsg("审批节点状态已变更，请刷新后重试")
 
 func (s *Service) loadDefinition(ctx context.Context, key DefinitionKey) (*model.WorkflowDefinition, []model.WorkflowStage, error) {
 	return s.loadDefinitionTx(s.db.WithContext(ctx), key)
@@ -589,7 +614,13 @@ func (s *Service) userCanReviewStep(ctx context.Context, actor *auth.CurrentUser
 	if step.AssigneeUserID != nil && *step.AssigneeUserID > 0 {
 		return *step.AssigneeUserID == userID, nil
 	}
+	if step.AssigneeRuleType == model.WorkflowAssigneePlatformRole {
+		return CanPlatformRoleReview(actor), nil
+	}
 	if step.UserGroupID == nil || *step.UserGroupID == 0 {
+		return false, nil
+	}
+	if s.userGroupRepo == nil {
 		return false, nil
 	}
 	ids, err := s.userGroupRepo.ListMemberUserIDs(ctx, *step.UserGroupID)

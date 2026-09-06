@@ -267,6 +267,35 @@ export async function execProjectServerCommand(projectId: number, serverId: numb
   return await getData<ServerExecResult>(http.post(`/projects/${projectId}/servers/${serverId}/exec`, payload));
 }
 
+export interface ServerProbePayload {
+  kind?: "disk" | "mem" | "load" | "all";
+  path?: string;
+  timeout_sec?: number;
+}
+
+export interface ServerProbeResult {
+  server_id: number;
+  server_name?: string;
+  host?: string;
+  kind?: string;
+  note?: string;
+  commands?: Array<{
+    name: string;
+    command: string;
+    stdout?: string;
+    stderr?: string;
+    exit_code: number;
+  }>;
+  duration_ms?: number;
+}
+
+/** SSH 只读探测远端主机磁盘/内存/负载（白名单命令）。 */
+export async function probeProjectServer(projectId: number, serverId: number, payload?: ServerProbePayload) {
+  return await getData<ServerProbeResult>(
+    http.post(`/projects/${projectId}/servers/${serverId}/probe`, payload || { kind: "all" }),
+  );
+}
+
 export interface ServerRemoteFileItem {
   name: string;
   path: string;
@@ -439,7 +468,9 @@ export async function getProjectServerGroupTree(projectId: number) {
 }
 
 export async function upsertProjectServerGroup(projectId: number, payload: ServerGroupUpsertPayload) {
-  return await getData<ServerGroupItem>(http.post(`/projects/${projectId}/server-groups`, payload));
+  return await getData<ServerGroupItem>(
+    http.post(`/projects/${projectId}/server-groups`, { ...payload, project_id: projectId }),
+  );
 }
 
 export async function deleteProjectServerGroup(projectId: number, groupId: number) {
@@ -614,28 +645,12 @@ export interface LogSearchItem {
   podname?: string;
   container?: string;
   containername?: string;
+  trace_id?: string;
+  span_id?: string;
+  fields?: Record<string, string>;
 }
 
-export async function searchProjectLogs(
-  projectId: number,
-  params: {
-    server_id?: number;
-    service_id?: number;
-    log_source_id?: number;
-    collector_mode?: string;
-    cluster_id?: number;
-    namespace?: string;
-    pod?: string;
-    container?: string;
-    keyword?: string;
-    level?: string;
-    file_path?: string;
-    from?: string;
-    to?: string;
-    page?: number;
-    page_size?: number;
-  },
-) {
+export async function searchProjectLogs(projectId: number, params: LogSearchParams) {
   return await getData(
     http.get<any, ApiResponse<PageData<LogSearchItem>>>(`/projects/${projectId}/logs/search`, {
       params: { ...params, project_id: projectId },
@@ -643,28 +658,246 @@ export async function searchProjectLogs(
   );
 }
 
-export async function exportProjectLogs(
-  projectId: number,
-  params: {
-    server_id?: number;
-    service_id?: number;
-    log_source_id?: number;
-    collector_mode?: string;
-    cluster_id?: number;
-    namespace?: string;
-    pod?: string;
-    container?: string;
-    keyword?: string;
-    level?: string;
-    file_path?: string;
-    from?: string;
-    to?: string;
-    page_size?: number;
-  },
-): Promise<Blob> {
+export async function exportProjectLogs(projectId: number, params: LogSearchParams): Promise<Blob> {
   // http 拦截器已经返回 response.data（Blob），不可再取 .data
   return (await http.get(`/projects/${projectId}/logs/export`, {
     params: { ...params, project_id: projectId },
     responseType: "blob",
   })) as unknown as Blob;
+}
+
+export interface LogHistogramBucket {
+  time: string;
+  count: number;
+  level_counts?: Record<string, number>;
+}
+
+export interface LogSignatureItem {
+  signature: string;
+  count: number;
+  sample: string;
+  level?: string;
+}
+
+export interface LogOverviewResult {
+  total: number;
+  histogram: LogHistogramBucket[];
+  level_counts: Record<string, number>;
+  service_name_counts?: Record<string, number>;
+  host_counts?: Record<string, number>;
+  namespace_counts?: Record<string, number>;
+  pod_counts?: Record<string, number>;
+  container_counts?: Record<string, number>;
+  top_error_signatures: LogSignatureItem[];
+}
+
+export interface LogPatternItem {
+  id: number;
+  project_id: number;
+  signature: string;
+  sample: string;
+  level: string;
+  service_name: string;
+  hit_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export interface LogAnomalyItem {
+  id: number;
+  project_id: number;
+  pattern_id?: number;
+  anomaly_type: string;
+  signature: string;
+  title: string;
+  detail: string;
+  severity: string;
+  status: string;
+  assignee_id?: number;
+  assignee_name?: string;
+  muted_until?: string;
+  detected_at: string;
+}
+
+export interface LogAnalyzeResult {
+  overview?: LogOverviewResult;
+  ai_summary: string;
+  root_causes: Array<{ title?: string; evidence?: string; confidence?: string }>;
+  actions: Array<{ priority?: number; action?: string; command_hint?: string }>;
+  provider?: string;
+  model?: string;
+}
+
+type LogSearchParams = {
+  server_id?: number;
+  service_id?: number;
+  log_source_id?: number;
+  service_name?: string;
+  host?: string;
+  collector_mode?: string;
+  cluster_id?: number;
+  namespace?: string;
+  pod?: string;
+  container?: string;
+  keyword?: string;
+  level?: string;
+  file_path?: string;
+  extra_field?: string;
+  extra_value?: string;
+  from?: string;
+  to?: string;
+  index_pattern?: string;
+  skip_drop_rules?: boolean;
+  page?: number;
+  page_size?: number;
+};
+
+export async function getProjectLogOverview(projectId: number, params: LogSearchParams) {
+  return await getData(
+    http.get<any, ApiResponse<LogOverviewResult>>(`/projects/${projectId}/logs/overview`, {
+      params: { ...params, project_id: projectId },
+      silentErrorToast: true,
+    }),
+  );
+}
+
+export interface LogFieldStat {
+  name: string;
+  count: number;
+  sample_values?: string[];
+  kind?: string;
+}
+
+export interface LogFieldsResult {
+  total_samples: number;
+  fields: LogFieldStat[];
+}
+
+export async function getProjectLogFields(projectId: number, params: LogSearchParams) {
+  return await getData(
+    http.get<any, ApiResponse<LogFieldsResult>>(`/projects/${projectId}/logs/fields`, {
+      params: { ...params, project_id: projectId },
+      silentErrorToast: true,
+    }),
+  );
+}
+
+export interface PipelineAdjustResult {
+  summary: string;
+  parse_profile?: string;
+  suggested_yml?: string;
+  extracted_fields?: string[];
+  notes?: string[];
+  provider?: string;
+  model?: string;
+}
+
+export async function adjustLoggiePipeline(payload: {
+  provider?: string;
+  project_id?: number;
+  kind?: string;
+  goal?: string;
+  sample_logs?: string[];
+  current_yml?: string;
+  parse_profile?: string;
+}) {
+  return await getData(
+    http.post<any, ApiResponse<PipelineAdjustResult>>(`/ai/logs/pipeline-adjust`, payload),
+  );
+}
+
+export async function getProjectLogPatterns(
+  projectId: number,
+  params: LogSearchParams & { keyword?: string; page?: number; page_size?: number },
+) {
+  return await getData(
+    http.get<any, ApiResponse<PageData<LogPatternItem>>>(`/projects/${projectId}/logs/patterns`, {
+      params: { ...params, project_id: projectId },
+      silentErrorToast: true,
+    }),
+  );
+}
+
+export async function getProjectLogAnomalies(
+  projectId: number,
+  params: { status?: string; anomaly_type?: string; assignee_id?: number; page?: number; page_size?: number },
+) {
+  return await getData(
+    http.get<any, ApiResponse<PageData<LogAnomalyItem>>>(`/projects/${projectId}/logs/anomalies`, {
+      params: { ...params, project_id: projectId },
+      silentErrorToast: true,
+    }),
+  );
+}
+
+export async function updateProjectLogAnomaly(
+  projectId: number,
+  anomalyId: number,
+  payload: { status?: string; assignee_id?: number; assignee_name?: string; mute_minutes?: number },
+) {
+  return await getData(
+    http.put<any, ApiResponse<LogAnomalyItem>>(`/projects/${projectId}/logs/anomalies/${anomalyId}`, payload),
+  );
+}
+
+export interface LogTopNItem {
+  key: string;
+  count: number;
+}
+
+export interface LogTopNResult {
+  dim: string;
+  items: LogTopNItem[];
+  total: number;
+}
+
+export async function getProjectLogTopN(
+  projectId: number,
+  params: LogSearchParams & { dim?: string; size?: number },
+) {
+  return await getData(
+    http.get<any, ApiResponse<LogTopNResult>>(`/projects/${projectId}/logs/topn`, {
+      params: { ...params, project_id: projectId },
+      silentErrorToast: true,
+    }),
+  );
+}
+
+export async function analyzeProjectLogs(
+  projectId: number,
+  payload: LogSearchParams & { provider?: string },
+) {
+  return await getData(
+    http.post<any, ApiResponse<LogAnalyzeResult>>(`/ai/logs/analyze`, {
+      project_id: projectId,
+      ...payload,
+    }),
+  );
+}
+
+export interface LogContextResult {
+  anchor_time: string;
+  window_from: string;
+  window_to: string;
+  overview?: LogOverviewResult;
+  recent_changes?: Array<{ id: number; source: string; action: string; summary: string; started_at: string }>;
+  recent_alerts?: Array<{ id: number; title: string; severity: string; status: string; createdAt?: string }>;
+}
+
+export async function getProjectLogContext(
+  projectId: number,
+  params: {
+    anchor_time?: string;
+    window_minutes?: number;
+    alert_id?: number;
+    change_id?: number;
+    fingerprint?: string;
+    service_id?: number;
+  },
+) {
+  return await getData(
+    http.get<any, ApiResponse<LogContextResult>>(`/projects/${projectId}/logs/context`, {
+      params: { ...params, project_id: projectId },
+    }),
+  );
 }

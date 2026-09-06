@@ -144,7 +144,7 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
           },
           {
             title: "操作",
-            width: 200,
+            width: 260,
             render: (_, r) => (
               <Space>
                 <Button size="small" onClick={() => navigate(`/dbmgmt/workflow/tickets/${r.id}?project=${projectId}&tab=info`)}>
@@ -153,6 +153,15 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
                 <Button size="small" type="primary" style={{ background: "#52c41a", borderColor: "#52c41a" }} onClick={() => navigate(`/dbmgmt/workflow/tickets/${r.id}?project=${projectId}&tab=log`)}>
                   详情
                 </Button>
+                {r.status === "pending_execution" ? (
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => navigate(`/dbmgmt/workflow/tickets/${r.id}?project=${projectId}&tab=info`)}
+                  >
+                    去执行
+                  </Button>
+                ) : null}
               </Space>
             ),
           },

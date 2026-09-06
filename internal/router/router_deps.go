@@ -99,6 +99,7 @@ type RouteDeps struct {
 	loggieHandler      *handler.LoggieHandler
 	clusterLogHandler  *handler.ClusterLogHandler
 	logRetentionSvc    *service.LogRetentionService
+	logIntelSvc        *service.LogIntelligenceService
 	kafkaToESSvc       *service.KafkaToESService
 	inspectSvc         *inspectsvc.Service
 	inspectHandler     *handler.InspectHandler
@@ -172,6 +173,14 @@ func (d *RouteDeps) KafkaToESService() *service.KafkaToESService {
 		return nil
 	}
 	return d.kafkaToESSvc
+}
+
+// LogIntelligenceService 供 project 插件日志智能分析 worker 使用。
+func (d *RouteDeps) LogIntelligenceService() *service.LogIntelligenceService {
+	if d == nil {
+		return nil
+	}
+	return d.logIntelSvc
 }
 
 // InspectService 供 inspect 插件调度器使用。
@@ -289,6 +298,7 @@ func assembleRouteDeps(
 		loggieHandler:      handlers.Loggie,
 		clusterLogHandler:  handlers.ClusterLog,
 		logRetentionSvc:    svcs.LogRetention,
+		logIntelSvc:        svcs.LogIntelligence,
 		kafkaToESSvc:       svcs.KafkaToES,
 		inspectSvc:         svcs.Inspect,
 		inspectHandler:     handlers.Inspect,
@@ -300,6 +310,12 @@ func assembleRouteDeps(
 			app.DB, repos.UserGroup, repos.AlertDuty, repos.User,
 		)),
 		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(app.DB)),
+	}
+	if svcs.AI != nil {
+		svcs.AI.SetPlatformDeps(repos.Server, svcs.CMDB, svcs.Dbmgmt, svcs.Esmgmt)
+		svcs.AI.SetLogPlatformDeps(svcs.ProjectMgmt, svcs.LoggieAgent, svcs.ClusterLog)
+		svcs.AI.SetMonitorDeps(svcs.AlertDatasource)
+		svcs.AI.SetOpsDeps(svcs.ChangeEvent, svcs.AlertSilence)
 	}
 	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil

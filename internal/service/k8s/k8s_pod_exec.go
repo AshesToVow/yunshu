@@ -40,17 +40,33 @@ func (s *K8sPodService) Exec(ctx context.Context, req PodExecRequest) (string, e
 }
 
 func (s *K8sPodService) resolveExecContainer(ctx context.Context, k *kom.Kubectl, namespace, podName, container string) (string, error) {
-	if c := strings.TrimSpace(container); c != "" {
-		return c, nil
-	}
 	ns := strings.TrimSpace(namespace)
 	name := strings.TrimSpace(podName)
+	want := strings.TrimSpace(container)
 	if ns == "" || name == "" {
 		return "", constants.ErrBadRequestWithMsg(constants.ErrMsge278df185255)
 	}
 	var pod corev1.Pod
 	if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(ns).Name(name).Get(&pod).Error; err != nil {
 		return "", bizerrors.Internalf(ctx, "k8s.pod", "api", err, constants.ErrFmtc52b9130d74c)
+	}
+	if want != "" {
+		for _, c := range pod.Spec.Containers {
+			if c.Name == want {
+				return want, nil
+			}
+		}
+		for _, c := range pod.Spec.InitContainers {
+			if c.Name == want {
+				return want, nil
+			}
+		}
+		for _, c := range pod.Spec.EphemeralContainers {
+			if c.Name == want {
+				return want, nil
+			}
+		}
+		return "", constants.ErrBadRequestWithMsg("指定容器不存在: " + want)
 	}
 	if len(pod.Spec.Containers) == 0 {
 		return "", constants.ErrBadRequestWithMsg("Pod 无可用容器")

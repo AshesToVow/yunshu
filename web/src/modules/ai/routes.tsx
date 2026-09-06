@@ -10,6 +10,9 @@ const AiApprovalsPage = lazy(() =>
 const AiCenterPage = lazy(() =>
   import("../../pages/ai-center-page").then((m) => ({ default: m.AiCenterPage })),
 );
+const AiInvestigationsPage = lazy(() =>
+  import("../../pages/ai-investigations-page").then((m) => ({ default: m.AiInvestigationsPage })),
+);
 
 export const AI_PLUGIN = "ai";
 
@@ -17,4 +20,5 @@ export const aiRoutes: RouteObject[] = [
   { path: "ai/assistant", element: <AiAssistantPage /> },
   { path: "ai/approvals", element: <AiApprovalsPage /> },
   { path: "ai/center", element: <AiCenterPage /> },
+  { path: "ai/investigations", element: <AiInvestigationsPage /> },
 ];

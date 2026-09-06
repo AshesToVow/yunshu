@@ -41,6 +41,10 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 		return
 	}
 	for _, rel := range releases {
+		// 已关联统一工单的由 syncWorkflowApprovalReminders 催办，避免双发
+		if rel.WorkflowTicketID != nil && *rel.WorkflowTicketID > 0 {
+			continue
+		}
 		step, err := s.getCurrentPendingStep(ctx, rel.ID)
 		if err != nil || step == nil {
 			continue
@@ -69,6 +73,91 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 			Where("id = ?", step.ID).
 			Update("last_reminded_at", ts).Error
 	}
+	s.syncWorkflowApprovalReminders(ctx, sla, interval, now)
+}
+
+// syncWorkflowApprovalReminders 对已切到统一引擎的发布工单按 workflow_ticket_steps 催办。
+func (s *Service) syncWorkflowApprovalReminders(ctx context.Context, sla, interval time.Duration, now time.Time) {
+	type row struct {
+		StepID          uint
+		TicketID        uint
+		StageName       string
+		ActivatedAt     time.Time
+		LastRemindedAt  *time.Time
+		UserGroupID     *uint
+		AssigneeUserID  *uint
+		RefID           uint
+		Title           string
+		ProjectID       uint
+		SubmitterUserID uint
+	}
+	var list []row
+	err := s.db.WithContext(ctx).Raw(`
+SELECT s.id AS step_id, s.ticket_id, s.stage_name, s.activated_at, s.last_reminded_at,
+       s.user_group_id, s.assignee_user_id, t.ref_id, t.title, t.project_id, t.submitter_user_id
+FROM workflow_ticket_steps s
+JOIN workflow_tickets t ON t.id = s.ticket_id AND t.deleted_at IS NULL
+WHERE t.domain = ? AND t.ticket_type = ? AND t.status = ?
+  AND s.status = ? AND s.activated_at IS NOT NULL AND s.deleted_at IS NULL
+`, model.WorkflowDomainCicd, model.WorkflowTicketTypeRelease, model.WorkflowTicketStatusPending,
+		model.WorkflowStepPending).Scan(&list).Error
+	if err != nil {
+		slog.Default().With("component", "cicd").Warn("list workflow approval steps failed", "error", err)
+		return
+	}
+	for _, it := range list {
+		if now.Sub(it.ActivatedAt) < sla {
+			continue
+		}
+		if it.LastRemindedAt != nil && now.Sub(*it.LastRemindedAt) < interval {
+			continue
+		}
+		userIDs := s.workflowStepNotifyUserIDs(ctx, it.AssigneeUserID, it.UserGroupID)
+		if len(userIDs) == 0 {
+			continue
+		}
+		emails := s.collectUserEmails(ctx, userIDs)
+		if len(emails) == 0 {
+			continue
+		}
+		waitHours := int(now.Sub(it.ActivatedAt).Hours())
+		if waitHours < 1 {
+			waitHours = 1
+		}
+		appName := strings.TrimSpace(s.appName)
+		if appName == "" {
+			appName = "Yunshu"
+		}
+		subject := fmt.Sprintf("[%s CI/CD] 发布审批超时提醒 - %s", appName, strings.TrimSpace(it.Title))
+		body := fmt.Sprintf("发布工单 #%d（统一工单 #%d）在节点「%s」已等待超过 %d 小时，请尽快审批。\n项目ID：%d",
+			it.RefID, it.TicketID, it.StageName, waitHours, it.ProjectID)
+		sent := false
+		for _, email := range emails {
+			if err := s.mailer.Send(ctx, email, subject, body); err == nil {
+				sent = true
+			}
+		}
+		if !sent {
+			continue
+		}
+		_ = s.db.WithContext(ctx).Model(&model.WorkflowTicketStep{}).
+			Where("id = ?", it.StepID).
+			Update("last_reminded_at", now).Error
+	}
+}
+
+func (s *Service) workflowStepNotifyUserIDs(ctx context.Context, assigneeID, groupID *uint) []uint {
+	if assigneeID != nil && *assigneeID > 0 {
+		return []uint{*assigneeID}
+	}
+	if groupID == nil || *groupID == 0 || s.userGroupRepo == nil {
+		return nil
+	}
+	ids, err := s.userGroupRepo.ListMemberUserIDs(ctx, *groupID)
+	if err != nil {
+		return nil
+	}
+	return ids
 }
 
 func (s *Service) backfillPendingStepActivatedAt(ctx context.Context) {

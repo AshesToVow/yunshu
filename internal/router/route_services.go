@@ -63,6 +63,7 @@ type routeServices struct {
 	MysqlBackup          *service.MysqlBackupService
 	Dbmgmt               *dbmgmtsvc.Service
 	LogSearch            *service.LogSearchService
+	LogIntelligence      *service.LogIntelligenceService
 	LogRetention         *service.LogRetentionService
 	KafkaToES            *service.KafkaToESService
 	LoggieAgent          *service.LoggieAgentService

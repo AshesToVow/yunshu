@@ -35,7 +35,7 @@ func (s *Service) goInceptionClient(ctx context.Context) *goinception.Client {
 func (s *Service) instanceGoInceptionTarget(inst *model.DbInstance) (goinception.Target, error) {
 	pw, err := cryptox.DecryptString(s.aead, inst.EncPassword)
 	if err != nil {
-		return goinception.Target{}, err
+		return goinception.Target{}, constants.ErrBadRequestWithMsg(constants.ErrMsgDbInstancePasswordDecryptFailed)
 	}
 	return goinception.Target{
 		Host:     inst.Host,
@@ -46,8 +46,10 @@ func (s *Service) instanceGoInceptionTarget(inst *model.DbInstance) (goinception
 }
 
 type SQLCheckRequest struct {
-	Database string `json:"database"`
-	Sql      string `json:"sql" binding:"required"`
+	Database  string `json:"database"`
+	Sql       string `json:"sql" binding:"required"`
+	// AuditMode: system=走 goInception；manual=仅平台本地规则，不连 goInception。
+	AuditMode string `json:"audit_mode"`
 }
 
 type SQLCheckResponse struct {
@@ -80,10 +82,12 @@ func (s *Service) CheckSQL(ctx context.Context, projectID, instanceID uint, req 
 	if err := s.checkWritePermission(ctx, projectID, inst, req.Database, sqlText, needDDL, actor); err != nil {
 		return nil, err
 	}
-	viaEngine := s.goInceptionAvailable(ctx, inst)
-	assess := AssessSQLForWrite(sqlText, inst.Env == model.DbEnvProd, viaEngine)
+	// 仅「系统审核」走 goInception；人工审核只做平台本地规则预检。
+	useGoInception := normalizeAuditMode(req.AuditMode) == model.DbAuditModeSystem &&
+		s.goInceptionAvailable(ctx, inst)
+	assess := AssessSQLForWrite(sqlText, inst.Env == model.DbEnvProd, useGoInception)
 	out := &SQLCheckResponse{
-		RiskLevel: assess.RiskLevel,
+		RiskLevel:  assess.RiskLevel,
 		SyntaxType: goinception.SyntaxDML,
 	}
 	if assess.Blocked {
@@ -92,7 +96,7 @@ func (s *Service) CheckSQL(ctx context.Context, projectID, instanceID uint, req 
 		out.ErrorCount = 1
 		return out, nil
 	}
-	if !viaEngine {
+	if !useGoInception {
 		out.Checked = true
 		if assess.RiskLevel == model.DbRiskHigh || reDDL.MatchString(strings.ToUpper(sqlText)) {
 			out.SyntaxType = goinception.SyntaxDDL

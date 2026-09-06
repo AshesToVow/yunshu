@@ -38,6 +38,7 @@ func Register(app *bootstrap.App, bgCtx context.Context) (*eventforward.Manager,
 		Inspect:                 d.InspectService(),
 		LogRetention:            d.LogRetentionService(),
 		KafkaToES:               d.KafkaToESService(),
+		LogIntelligence:         d.LogIntelligenceService(),
 	}
 
 	api := app.Engine.Group("/api/v1")

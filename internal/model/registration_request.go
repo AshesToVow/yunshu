@@ -19,11 +19,12 @@ type RegistrationRequest struct {
 	Nickname      string                    `json:"nickname" gorm:"size:128;not null;comment:申请昵称"`
 	Password      string                    `json:"-" gorm:"size:255;not null;comment:加密后的登录密码"`
 	Status        RegistrationRequestStatus `json:"status" gorm:"not null;default:0;index;comment:审核状态 0待审核 1通过 2拒绝"`
-	ReviewerID    *uint                     `json:"reviewer_id,omitempty" gorm:"comment:审核人用户ID"`
-	ReviewComment string                    `json:"review_comment,omitempty" gorm:"size:255;comment:审核备注"`
-	ReviewedAt    *time.Time                `json:"reviewed_at,omitempty" gorm:"comment:审核时间"`
-	CreatedAt     time.Time                 `json:"created_at" gorm:"index;comment:创建时间"`
-	UpdatedAt     time.Time                 `json:"updated_at" gorm:"comment:更新时间"`
+	ReviewerID       *uint                     `json:"reviewer_id,omitempty" gorm:"comment:审核人用户ID"`
+	ReviewerUsername string                    `json:"reviewer_username,omitempty" gorm:"-"`
+	ReviewComment    string                    `json:"review_comment,omitempty" gorm:"size:255;comment:审核备注"`
+	ReviewedAt       *time.Time                `json:"reviewed_at,omitempty" gorm:"comment:审核时间"`
+	CreatedAt        time.Time                 `json:"created_at" gorm:"index;comment:创建时间"`
+	UpdatedAt        time.Time                 `json:"updated_at" gorm:"comment:更新时间"`
 }
 
 // TableName 指定 GORM 表名为 registration_requests。

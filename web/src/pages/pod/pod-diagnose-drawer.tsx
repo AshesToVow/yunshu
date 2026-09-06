@@ -15,6 +15,8 @@ export type PodDiagnoseDrawerProps = {
   aiDiagnoseLoading: boolean;
   aiDiagnoseResult: AIPodDiagnoseResult | null;
   handleAIDiagnose: () => void | Promise<void>;
+  aiInvestigateLoading?: boolean;
+  handleAIInvestigate?: () => void | Promise<void>;
 };
 
 export function PodDiagnoseDrawer({
@@ -26,6 +28,8 @@ export function PodDiagnoseDrawer({
   aiDiagnoseLoading,
   aiDiagnoseResult,
   handleAIDiagnose,
+  aiInvestigateLoading,
+  handleAIInvestigate,
 }: PodDiagnoseDrawerProps) {
   return (
         <Drawer
@@ -34,14 +38,25 @@ export function PodDiagnoseDrawer({
           onClose={() => setDiagnoseOpen(false)}
           width={920}
           extra={
-            <Button
-              type="primary"
-              loading={aiDiagnoseLoading}
-              disabled={!diagnoseResult || diagnoseLoading}
-              onClick={() => void handleAIDiagnose()}
-            >
-              AI 分析
-            </Button>
+            <Space>
+              <Button
+                type="primary"
+                loading={aiDiagnoseLoading}
+                disabled={!diagnoseResult || diagnoseLoading}
+                onClick={() => void handleAIDiagnose()}
+              >
+                AI 分析
+              </Button>
+              {handleAIInvestigate ? (
+                <Button
+                  loading={aiInvestigateLoading}
+                  disabled={!selected || diagnoseLoading}
+                  onClick={() => void handleAIInvestigate()}
+                >
+                  AI 调查
+                </Button>
+              ) : null}
+            </Space>
           }
         >
           {diagnoseLoading ? (

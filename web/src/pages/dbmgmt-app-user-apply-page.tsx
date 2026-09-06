@@ -420,7 +420,7 @@ export function DbmgmtAppUserApplyPage() {
             <Button danger onClick={reset}>
               重置
             </Button>
-            <Link to="/dbmgmt/workflow/pending">查看待审核</Link>
+            <Link to="/workflow/inbox?domain=dbmgmt">查看我的待办</Link>
           </Space>
         </Form.Item>
       </Form>

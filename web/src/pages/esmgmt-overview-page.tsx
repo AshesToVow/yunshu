@@ -65,6 +65,8 @@ export function EsmgmtOverviewPage() {
   const [restores, setRestores] = useState<EsmgmtRestoreJob[]>([]);
   const [schedules, setSchedules] = useState<EsmgmtBackupSchedule[]>([]);
   const [indexFilter, setIndexFilter] = useState("");
+  const [indexPage, setIndexPage] = useState(1);
+  const [indexPageSize, setIndexPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
   const [backingUp, setBackingUp] = useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -355,7 +357,17 @@ export function EsmgmtOverviewPage() {
           dataSource={indices.filter((i) =>
             !indexFilter.trim() ? true : i.name.toLowerCase().includes(indexFilter.trim().toLowerCase()),
           )}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          pagination={{
+            current: indexPage,
+            pageSize: indexPageSize,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50", "100"],
+            showTotal: (t) => `共 ${t} 个索引`,
+            onChange: (p, ps) => {
+              setIndexPage(p);
+              setIndexPageSize(ps);
+            },
+          }}
           columns={[
             { title: "索引", dataIndex: "name", ellipsis: true },
             { title: "文档数", dataIndex: "docs_count", width: 100 },

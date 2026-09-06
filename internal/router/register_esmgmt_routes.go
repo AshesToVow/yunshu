@@ -11,6 +11,7 @@ func RegisterEsmgmtRoutes(api *gin.RouterGroup, d *RouteDeps) {
 
 	g.GET("/connections", d.esmgmtHandler.ListConnections)
 	g.POST("/connections", d.esmgmtHandler.CreateConnection)
+	g.POST("/connections/import-from-dict", d.esmgmtHandler.ImportConnectionFromDict)
 	g.POST("/connections/test", d.esmgmtHandler.TestConnection)
 	g.PUT("/connections/:id", d.esmgmtHandler.UpdateConnection)
 	g.DELETE("/connections/:id", d.esmgmtHandler.DeleteConnection)

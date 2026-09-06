@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
 	aisvc "yunshu/internal/service/ai"
@@ -53,6 +56,104 @@ func (h *AIHandler) Chat(c *gin.Context) {
 		return
 	}
 	response.Success(c, res)
+}
+
+func (h *AIHandler) ChatStream(c *gin.Context) {
+	var req aisvc.ChatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(200)
+	c.Writer.Flush()
+
+	writeEvent := func(ev aisvc.ChatEvent) {
+		raw, err := json.Marshal(ev)
+		if err != nil {
+			return
+		}
+		_, _ = fmt.Fprintf(c.Writer, "data: %s\n\n", raw)
+		c.Writer.Flush()
+	}
+
+	_, err := h.svc.ChatStream(auth.RequestContext(c), uid, user, req, writeEvent)
+	if err != nil {
+		writeEvent(aisvc.ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
+	}
+}
+
+func (h *AIHandler) StartInvestigation(c *gin.Context) {
+	var req aisvc.StartInvestigationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.StartInvestigation(auth.RequestContext(c), uid, user, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) ListInvestigations(c *gin.Context) {
+	var q aisvc.InvestigationListQuery
+	_ = c.ShouldBindQuery(&q)
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.ListInvestigations(auth.RequestContext(c), uid, q)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) GetInvestigation(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.GetInvestigation(auth.RequestContext(c), uid, uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) EmbedKnowledge(c *gin.Context) {
+	rep, err := h.svc.SyncEmbeddings(auth.RequestContext(c))
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, rep)
 }
 
 func (h *AIHandler) ListSessions(c *gin.Context) {
@@ -193,6 +294,25 @@ func (h *AIHandler) PodDiagnose(c *gin.Context) {
 	response.Success(c, res)
 }
 
+func (h *AIHandler) GenerateK8sYAML(c *gin.Context) {
+	var req aisvc.GenerateK8sYAMLRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.GenerateK8sYAML(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 func (h *AIHandler) CicdBuildFail(c *gin.Context) {
 	var req aisvc.CicdBuildFailAIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -224,6 +344,44 @@ func (h *AIHandler) AlertExplain(c *gin.Context) {
 		uid = user.ID
 	}
 	res, err := h.svc.AnalyzeAlertExplain(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) LogAnalyze(c *gin.Context) {
+	var req aisvc.LogAnalyzeAIRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.AnalyzeLogs(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+func (h *AIHandler) PipelineAdjust(c *gin.Context) {
+	var req aisvc.PipelineAdjustRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	res, err := h.svc.AdjustLoggiePipeline(auth.RequestContext(c), uid, req)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -293,6 +451,10 @@ func (h *AIHandler) SyncKnowledge(c *gin.Context) {
 
 func (h *AIHandler) CenterOverview(c *gin.Context) {
 	response.Success(c, h.svc.CenterOverview(auth.RequestContext(c)))
+}
+
+func (h *AIHandler) ToolRuntimeHealth(c *gin.Context) {
+	response.Success(c, h.svc.ToolRuntimeHealth(auth.RequestContext(c)))
 }
 
 func (h *AIHandler) ReseedCenter(c *gin.Context) {
@@ -529,4 +691,483 @@ func (h *AIHandler) RunEval(c *gin.Context) {
 		return
 	}
 	response.Success(c, run)
+}
+
+func (h *AIHandler) GetPrompt(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.GetPrompt(auth.RequestContext(c), uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) CreatePrompt(c *gin.Context) {
+	var req aisvc.PromptUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	row, err := h.svc.CreatePrompt(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) UpdatePrompt(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.PromptUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdatePrompt(auth.RequestContext(c), uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) DeletePrompt(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeletePrompt(auth.RequestContext(c), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) GetSOP(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.GetSOP(auth.RequestContext(c), uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) CreateSOP(c *gin.Context) {
+	var req aisvc.SOPUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	row, err := h.svc.CreateSOP(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) UpdateSOP(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.SOPUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdateSOP(auth.RequestContext(c), uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) DeleteSOP(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteSOP(auth.RequestContext(c), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) GetCase(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.GetIncidentCase(auth.RequestContext(c), uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) CreateCase(c *gin.Context) {
+	var req aisvc.IncidentCaseUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	row, err := h.svc.CreateIncidentCase(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) UpdateCase(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.IncidentCaseUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdateIncidentCase(auth.RequestContext(c), uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) DeleteCase(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteIncidentCase(auth.RequestContext(c), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) CreateKB(c *gin.Context) {
+	var req aisvc.KBUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.CreateKnowledgeBase(auth.RequestContext(c), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) UpdateKB(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.KBUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdateKnowledgeBase(auth.RequestContext(c), uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) DeleteKB(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteKnowledgeBase(auth.RequestContext(c), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) ListKBDocuments(c *gin.Context) {
+	var q struct {
+		KBID uint `form:"kb_id"`
+	}
+	_ = c.ShouldBindQuery(&q)
+	rows, err := h.svc.ListKBDocuments(auth.RequestContext(c), q.KBID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) GetKBDocument(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.GetKBDocument(auth.RequestContext(c), uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) CreateKBDocument(c *gin.Context) {
+	var req aisvc.KBDocUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	user, _ := auth.CurrentUserFromContext(c)
+	var uid uint
+	if user != nil {
+		uid = user.ID
+	}
+	row, err := h.svc.CreateKBDocument(auth.RequestContext(c), uid, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) UpdateKBDocument(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.KBDocUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdateKBDocument(auth.RequestContext(c), uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) DeleteKBDocument(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteKBDocument(auth.RequestContext(c), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) GetTool(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.GetTool(auth.RequestContext(c), uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) CreateTool(c *gin.Context) {
+	var req aisvc.ToolUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.CreateTool(auth.RequestContext(c), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) UpdateTool(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.ToolUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdateTool(auth.RequestContext(c), uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) DeleteTool(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteTool(auth.RequestContext(c), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+func (h *AIHandler) GetEvalCase(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.GetEvalCase(auth.RequestContext(c), uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) CreateEvalCase(c *gin.Context) {
+	var req aisvc.EvalCaseUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.CreateEvalCase(auth.RequestContext(c), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) UpdateEvalCase(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	var req aisvc.EvalCaseUpsertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.svc.UpdateEvalCase(auth.RequestContext(c), uri.ID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
+func (h *AIHandler) DeleteEvalCase(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	if err := h.svc.DeleteEvalCase(auth.RequestContext(c), uri.ID); err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
 }

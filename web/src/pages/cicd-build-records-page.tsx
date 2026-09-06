@@ -1,8 +1,8 @@
-import { DeleteOutlined, EyeOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DeleteOutlined, ExperimentOutlined, EyeOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Drawer, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import {
   deleteBuildRun,
@@ -15,7 +15,7 @@ import {
   type CicdBuildRun,
   type CicdRunStage,
 } from "../services/cicd";
-import { analyzeCicdBuildFailAI, type AICicdBuildFailResult } from "../services/ai";
+import { analyzeCicdBuildFailAI, startAIInvestigation, type AICicdBuildFailResult } from "../services/ai";
 import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
@@ -45,6 +45,7 @@ function buildArtifactType(row: CicdBuildRun): "minio" | "helm" | "image" | null
 }
 
 export function CicdBuildRecordsPage() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [serviceKeyword, setServiceKeyword] = useState("");
@@ -65,6 +66,7 @@ export function CicdBuildRecordsPage() {
   const [logLoading, setLogLoading] = useState(false);
   const logPreRef = useRef<HTMLPreElement>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiInvestigateLoading, setAiInvestigateLoading] = useState(false);
   const [aiResult, setAiResult] = useState<AICicdBuildFailResult | null>(null);
 
   useEffect(() => {
@@ -139,6 +141,26 @@ export function CicdBuildRecordsPage() {
       message.error(extractApiErrorMessage(e, "AI 分析失败"));
     } finally {
       setAiLoading(false);
+    }
+  }
+
+  async function handleAIInvestigate(run: CicdBuildRun | null) {
+    if (!projectId || !run || aiInvestigateLoading) return;
+    setAiInvestigateLoading(true);
+    try {
+      const inv = await startAIInvestigation({
+        kind: "cicd",
+        title: `构建调查 #${run.build_number || run.id}`,
+        project_id: projectId,
+        run_id: run.id,
+        resource: String(run.id),
+      });
+      message.success(`调查已完成 #${inv.id}`);
+      navigate(`/ai/investigations?id=${inv.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 调查失败"));
+    } finally {
+      setAiInvestigateLoading(false);
     }
   }
 
@@ -276,14 +298,24 @@ export function CicdBuildRecordsPage() {
           setAiResult(null);
         }}
         extra={
-          <Button
-            type="primary"
-            loading={aiLoading}
-            disabled={!detail || !projectId}
-            onClick={() => void handleAIAnalyze(detail)}
-          >
-            AI 分析
-          </Button>
+          <Space>
+            <Button
+              type="primary"
+              loading={aiLoading}
+              disabled={!detail || !projectId}
+              onClick={() => void handleAIAnalyze(detail)}
+            >
+              AI 分析
+            </Button>
+            <Button
+              icon={<ExperimentOutlined />}
+              loading={aiInvestigateLoading}
+              disabled={!detail || !projectId}
+              onClick={() => void handleAIInvestigate(detail)}
+            >
+              AI 调查
+            </Button>
+          </Space>
         }
       >
         {detail && (

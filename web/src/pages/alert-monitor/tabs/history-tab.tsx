@@ -1,8 +1,8 @@
 import { extractApiErrorMessage } from "../../../services/http";
 import { Alert, Button, Card, Input, Modal, Segmented, Space, Tag, Typography, message } from "antd";
-import { BellOutlined, DownloadOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { BellOutlined, DownloadOutlined, ExperimentOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAlertMonitor } from "../context";
 import { AlertEventDetailDrawer, type AlertEventDetailTarget } from "../event-detail-drawer";
 import { AlertAckActionButton } from "../ack-action";
@@ -16,9 +16,11 @@ import {
   type AlertCurEventItem,
   type AlertHisEventItem,
 } from "../../../services/alerts";
-import { analyzeAlertExplainAI, type AIAlertExplainResult } from "../../../services/ai";
+import { analyzeAlertExplainAI, startAIInvestigation, type AIAlertExplainResult } from "../../../services/ai";
+import { createAlertSilence } from "../../../services/alert-platform";
 import { formatDateTime } from "../../../utils/format";
 import { DEFAULT_PAGE_SIZE, tablePagination } from "../../../utils/table-pagination";
+import dayjs from "dayjs";
 
 const AlertConfigCenterPanel = lazy(async () => {
   const mod = await import("../../alert-config-center-panel");
@@ -29,6 +31,7 @@ type EventView = "current" | "lifecycle" | "delivery";
 
 export function HistoryTab() {
   const ctx = useAlertMonitor();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const deepFingerprint = String(searchParams.get("fingerprint") || "").trim();
   const [view, setView] = useState<EventView>("current");
@@ -44,6 +47,8 @@ export function HistoryTab() {
   const [loading, setLoading] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiInvestigateLoading, setAiInvestigateLoading] = useState(false);
+  const [silenceLoadingFp, setSilenceLoadingFp] = useState<string>("");
   const [aiTarget, setAiTarget] = useState<AlertCurEventItem | null>(null);
   const [aiResult, setAiResult] = useState<AIAlertExplainResult | null>(null);
   const [detail, setDetail] = useState<AlertEventDetailTarget | null>(null);
@@ -186,6 +191,52 @@ export function HistoryTab() {
       message.error(extractApiErrorMessage(e, "AI 解读失败"));
     } finally {
       setAiLoading(false);
+    }
+  }
+
+  async function runAiInvestigate(row: AlertCurEventItem) {
+    if (!row.fingerprint) {
+      message.warning("该告警无指纹，无法发起调查");
+      return;
+    }
+    setAiInvestigateLoading(true);
+    try {
+      const inv = await startAIInvestigation({
+        kind: "alert",
+        title: `告警调查 ${row.alertname || row.fingerprint}`,
+        fingerprint: row.fingerprint,
+        project_id: ctx.projectContextId || row.project_id || undefined,
+      });
+      message.success(`调查已完成 #${inv.id}`);
+      navigate(`/ai/investigations?id=${inv.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 调查失败"));
+    } finally {
+      setAiInvestigateLoading(false);
+    }
+  }
+
+  async function quickSilence2h(row: AlertCurEventItem) {
+    if (!row.fingerprint) {
+      message.warning("缺少指纹，无法静默");
+      return;
+    }
+    setSilenceLoadingFp(row.fingerprint);
+    try {
+      await createAlertSilence({
+        name: `静默 ${row.alertname || row.fingerprint}（2h）`,
+        matchers_json: JSON.stringify([{ name: "fingerprint", value: row.fingerprint, is_regex: false }]),
+        comment: "告警历史快捷静默 2h（闭环止血）",
+        enabled: true,
+        starts_at: dayjs().toISOString(),
+        ends_at: dayjs().add(2, "hour").toISOString(),
+        project_id: ctx.projectContextId || row.project_id || undefined,
+      });
+      message.success("已静默 2 小时");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "创建静默失败"));
+    } finally {
+      setSilenceLoadingFp("");
     }
   }
 
@@ -379,7 +430,27 @@ export function HistoryTab() {
                     disabled={!r.fingerprint}
                     onClick={() => void runAiExplain(r)}
                   >
-                    AI
+                    AI解读
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<ExperimentOutlined />}
+                    disabled={!r.fingerprint}
+                    loading={aiInvestigateLoading}
+                    onClick={() => void runAiInvestigate(r)}
+                  >
+                    AI调查
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<StopOutlined />}
+                    disabled={!r.fingerprint}
+                    loading={silenceLoadingFp === r.fingerprint}
+                    onClick={() => void quickSilence2h(r)}
+                  >
+                    静默2h
                   </Button>
                 </Space>
               ),
@@ -481,6 +552,14 @@ export function HistoryTab() {
               onClick={() => aiTarget && void runAiExplain(aiTarget)}
             >
               重新解读
+            </Button>
+            <Button
+              icon={<ExperimentOutlined />}
+              loading={aiInvestigateLoading}
+              disabled={!aiTarget?.fingerprint}
+              onClick={() => aiTarget && void runAiInvestigate(aiTarget)}
+            >
+              完整调查
             </Button>
             <Button onClick={() => setAiOpen(false)}>关闭</Button>
           </Space>

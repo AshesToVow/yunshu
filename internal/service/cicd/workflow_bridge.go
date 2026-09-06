@@ -48,9 +48,14 @@ func (s *Service) createReleaseWorkflowTickets(ctx context.Context, release *mod
 	if err != nil {
 		return err
 	}
+	stageKey := ""
+	if active, err := wf.GetActiveStep(ctx, releaseTicket.ID); err == nil && active != nil {
+		stageKey = active.StageKey
+	}
 	return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
 		"workflow_ticket_id":        releaseTicket.ID,
 		"change_workflow_ticket_id": changeTicket.ID,
+		"current_stage_key":         stageKey,
 	}).Error
 }
 
@@ -103,15 +108,20 @@ func (s *Service) syncLegacyReleaseSteps(ctx context.Context, releaseID uint, ne
 	}
 	now := time.Now()
 	reviewerID := uint(0)
+	reviewerName := ""
 	if actor != nil {
 		reviewerID = actor.ID
+		reviewerName = strings.TrimSpace(actor.Username)
+		if reviewerName == "" {
+			reviewerName = strings.TrimSpace(actor.Nickname)
+		}
 	}
 	status := model.CicdApprovalStepRejected
 	if approve {
 		status = model.CicdApprovalStepApproved
 	}
 	if err := s.db.WithContext(ctx).Model(&step).Updates(map[string]any{
-		"status": status, "reviewer_user_id": reviewerID,
+		"status": status, "reviewer_user_id": reviewerID, "reviewer_name": reviewerName,
 		"review_comment": strings.TrimSpace(comment), "reviewed_at": now,
 	}).Error; err != nil {
 		return err

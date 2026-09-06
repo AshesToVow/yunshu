@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
+
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/repository"
 
@@ -56,16 +58,29 @@ func (s *AlertService) tickMonitorRules(ctx context.Context) error {
 			}
 			func(r *repository.EvalMonitorRule) {
 				defer s.monitorEvalLockRelease(ctx, r.ID)
-				s.evaluateOneMonitorRule(ctx, &r.AlertMonitorRule, r.ProjectID)
+				s.dispatchMonitorRuleEval(ctx, &r.AlertMonitorRule, r.ProjectID)
 			}(rule)
 			continue
 		}
 		if !s.shouldEvalRuleNoRedis(rule.ID, rule.EvalIntervalSeconds, now) {
 			continue
 		}
-		s.evaluateOneMonitorRule(ctx, &rule.AlertMonitorRule, rule.ProjectID)
+		s.dispatchMonitorRuleEval(ctx, &rule.AlertMonitorRule, rule.ProjectID)
 	}
 	return nil
+}
+
+func (s *AlertService) dispatchMonitorRuleEval(ctx context.Context, rule *model.AlertMonitorRule, projectID uint) {
+	if rule == nil {
+		return
+	}
+	switch normalizeRuleKind(rule.RuleKind) {
+	case model.AlertRuleKindLog:
+		s.evaluateOneLogAlertRule(ctx, rule, projectID)
+	default:
+		// promql / slo 均走 PromQL 评估
+		s.evaluateOneMonitorRule(ctx, rule, projectID)
+	}
 }
 
 func buildMonitorRuleLabels(rule *model.AlertMonitorRule, projectID uint, ds *model.AlertDatasource) map[string]string {
@@ -203,11 +218,25 @@ func parsePromFirstSample(body []byte) (map[string]string, string) {
 }
 
 func (s *AlertService) evaluateOneMonitorRule(ctx context.Context, rule *model.AlertMonitorRule, projectID uint) {
+	if rule == nil {
+		return
+	}
+	if normalizeRuleKind(rule.RuleKind) == model.AlertRuleKindLog {
+		return
+	}
 	ds, err := s.datasourceRepo.GetByID(ctx, rule.DatasourceID)
 	if err != nil {
 		return
 	}
 	if !ds.Enabled || !isPromCompatibleDatasourceType(ds.Type) {
+		return
+	}
+	if IsDatasourceHealthBlocking(ds, time.Now()) {
+		slog.Default().With(
+			"component", "alert.monitor_eval",
+			"rule_id", rule.ID,
+			"datasource_id", ds.ID,
+		).Info("skip evaluate: datasource health down")
 		return
 	}
 	cli := &promapi.Client{

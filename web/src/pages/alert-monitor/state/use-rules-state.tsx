@@ -1095,10 +1095,33 @@ export function useAlertMonitorRulesState(params: {
         if (String(v || "").trim()) return v;
         const ds = dsList.find((d) => d.id === r.datasource_id);
         if (String(ds?.project_name || "").trim()) return String(ds?.project_name);
-        return r.project_id ? String(r.project_id) : "—";
+        // 日志规则无数据源，按 project_id 从项目列表解析名称（勿直接展示 ID）
+        const p = projects.find((it) => it.id === r.project_id);
+        if (p?.name) return p.name;
+        return r.project_id ? `项目 ${r.project_id}` : "—";
       },
     },
     { title: "名称", dataIndex: "name", width: 160 },
+    {
+      title: "类型",
+      dataIndex: "rule_kind",
+      width: 80,
+      render: (v: string) => {
+        const kind = v || "promql";
+        const color = kind === "log" ? "purple" : kind === "slo" ? "cyan" : "blue";
+        return <Tag color={color}>{kind}</Tag>;
+      },
+    },
+    {
+      title: "来源",
+      dataIndex: "origin",
+      width: 88,
+      render: (v: string) => {
+        if (v === "inspect") return <Tag color="purple">巡检</Tag>;
+        if (v === "template") return <Tag color="blue">模板</Tag>;
+        return <Tag>手工</Tag>;
+      },
+    },
     {
       title: "数据源",
       key: "ds",
@@ -1106,6 +1129,7 @@ export function useAlertMonitorRulesState(params: {
       render: (_: unknown, r: AlertMonitorRuleItem) => {
         const name = String(r.datasource_name || "").trim();
         if (name) return name;
+        if ((r.rule_kind || "promql") === "log") return "日志(ES)";
         const ds = dsList.find((d) => d.id === r.datasource_id);
         return ds ? ds.name : String(r.datasource_id);
       },

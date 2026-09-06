@@ -40,8 +40,9 @@ func DefaultCatalog() []Spec {
 			Children: []Spec{
 				{Path: "/project-services", Name: "服务与日志源", Icon: "SettingOutlined", Sort: 1, Component: "project-collect-config-page", Status: 1},
 				{Path: "/project-logs", Name: "日志检索", Icon: "FileTextOutlined", Sort: 2, Component: "project-logs-page", Status: 1},
-				{Path: "/log-retention", Name: "保留策略", Icon: "HistoryOutlined", Sort: 3, Component: "log-retention-page", Status: 1},
-				{Path: "/loggie-status", Name: "Agent 管理", Icon: "CloudServerOutlined", Sort: 4, Component: "loggie-status-page", Status: 1},
+				{Path: "/log-pipelines", Name: "Pipeline 仓库", Icon: "ApartmentOutlined", Sort: 3, Component: "log-pipeline-repo-page", Status: 1},
+				{Path: "/log-retention", Name: "Kafka 队列", Icon: "HistoryOutlined", Sort: 4, Component: "log-retention-page", Status: 1},
+				{Path: "/loggie-status", Name: "Agent 管理", Icon: "CloudServerOutlined", Sort: 5, Component: "loggie-status-page", Status: 1},
 			},
 		},
 		{
@@ -149,16 +150,18 @@ func DefaultCatalog() []Spec {
 			Path: "/ai", Name: "AI", Icon: "RobotOutlined", Sort: 9, Status: 1,
 			Children: []Spec{
 				{Path: "/ai/assistant", Name: "AI 运维助手", Icon: "CommentOutlined", Sort: 1, Component: "ai-assistant-page", Status: 1},
-				{Path: "/ai/approvals", Name: "AI 操作审批", Icon: "AuditOutlined", Sort: 2, Component: "ai-approvals-page", Status: 1},
-				{Path: "/ai/center", Name: "AI 能力中心", Icon: "AppstoreOutlined", Sort: 3, Component: "ai-center-page", Status: 1},
+				{Path: "/ai/investigations", Name: "AI 调查", Icon: "ExperimentOutlined", Sort: 2, Component: "ai-investigations-page", Status: 1},
+				{Path: "/ai/approvals", Name: "AI 操作审批", Icon: "AuditOutlined", Sort: 3, Component: "ai-approvals-page", Status: 1},
+				{Path: "/ai/center", Name: "AI 能力中心", Icon: "AppstoreOutlined", Sort: 4, Component: "ai-center-page", Status: 1},
 			},
 		},
 		{
 			Path: "/esmgmt", Name: "ES 管理控制台", Icon: "CloudServerOutlined", Sort: 10, Status: 1,
 			Children: []Spec{
 				{Path: "/esmgmt/connections", Name: "连接管理", Icon: "ApiOutlined", Sort: 1, Component: "esmgmt-connections-page", Status: 1},
-				{Path: "/esmgmt/overview", Name: "集群概览", Icon: "FundOutlined", Sort: 2, Component: "esmgmt-overview-page", Status: 1},
-				{Path: "/esmgmt/console", Name: "REST 控制台", Icon: "CodeOutlined", Sort: 3, Component: "esmgmt-console-page", Status: 1},
+				{Path: "/esmgmt/storage", Name: "日志存储", Icon: "DatabaseOutlined", Sort: 2, Component: "esmgmt-storage-page", Status: 1},
+				{Path: "/esmgmt/overview", Name: "集群概览", Icon: "FundOutlined", Sort: 3, Component: "esmgmt-overview-page", Status: 1},
+				{Path: "/esmgmt/console", Name: "REST 控制台", Icon: "CodeOutlined", Sort: 4, Component: "esmgmt-console-page", Status: 1},
 			},
 		},
 		{

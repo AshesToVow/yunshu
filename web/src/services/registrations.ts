@@ -8,6 +8,7 @@ export interface RegistrationRequestItem {
   nickname: string;
   status: number;
   reviewer_id?: number;
+  reviewer_username?: string;
   review_comment?: string;
   reviewed_at?: string;
   created_at: string;

@@ -350,9 +350,18 @@ func (s *LoggieAgentService) GeneratePipelineBundle(ctx context.Context, project
 		return nil, bizerrors.Pass(ctx, "loggie", "GeneratePipelineBundle", err)
 	}
 	stored := parseStoredBootstrapConfig(agent.BootstrapConfig)
-	bundle, _, err := s.bundleFromStored(ctx, projectID, serverID, agent, stored, stored.AutoFromLogSources)
+	// 下载/同步必须按该 server 的日志源现算，禁止复用 Bootstrap 缓存（否则会出现 A 机内容变成 B 机）
+	bundle, sources, err := s.bundleFromStored(ctx, projectID, serverID, agent, stored, true)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "loggie", "GeneratePipelineBundle", err)
+	}
+	if len(sources) > 0 {
+		stored.Sources = sources
+		stored.AutoFromLogSources = true
+		if raw, mErr := json.Marshal(stored); mErr == nil {
+			agent.BootstrapConfig = string(raw)
+			_ = s.repo.Save(ctx, agent)
+		}
 	}
 	return &bundle, nil
 }
@@ -381,17 +390,47 @@ func (s *LoggieAgentService) DeployConfig(ctx context.Context, projectID uint, r
 		}
 	}
 	stdout, stderr, err := s.deployBundleOverSSH(ctx, req.ServerID, bundle)
+	return finishDeployResult(bundle, len(sources), stdout, stderr, err), nil
+}
+
+// DeployCustomPipelinesYAML 用仓库中的 pipelines.yml 覆盖下发到主机（保留其余 bootstrap 文件）。
+func (s *LoggieAgentService) DeployCustomPipelinesYAML(ctx context.Context, projectID, serverID uint, pipelinesYAML string) (*LoggieDeployResult, error) {
+	if projectID == 0 || serverID == 0 {
+		return nil, constants.ErrBadRequestWithMsg("project_id 与 server_id 必填")
+	}
+	yml := strings.TrimSpace(pipelinesYAML)
+	if yml == "" || !strings.Contains(yml, "pipelines:") {
+		return nil, constants.ErrBadRequestWithMsg("pipelines_yml 无效")
+	}
+	agent, err := s.repo.GetByProjectAndServer(ctx, projectID, serverID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrBadRequestWithMsg("请先执行引导登记 Agent")
+		}
+		return nil, bizerrors.Pass(ctx, "loggie", "DeployCustomPipelinesYAML", err)
+	}
+	stored := parseStoredBootstrapConfig(agent.BootstrapConfig)
+	bundle, sources, err := s.bundleFromStored(ctx, projectID, serverID, agent, stored, true)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "loggie", "DeployCustomPipelinesYAML", err)
+	}
+	bundle.PipelinesOnlyYAML = yml
+	stdout, stderr, err := s.deployBundleOverSSH(ctx, serverID, bundle)
+	return finishDeployResult(bundle, len(sources), stdout, stderr, err), nil
+}
+
+func finishDeployResult(bundle LoggiePipelineBundle, sourceCount int, stdout, stderr string, err error) *LoggieDeployResult {
 	result := &LoggieDeployResult{
 		Success:       err == nil,
 		PipelineCount: bundle.PipelineCount,
-		SourceCount:   len(sources),
+		SourceCount:   sourceCount,
 		Stdout:        truncateDeployOutput(stdout, 2048),
 		Stderr:        truncateDeployOutput(stderr, 2048),
 		DeployedAt:    formatDeployTime(time.Now()),
 	}
 	if err != nil {
 		result.Message = truncateDeployOutput(err.Error(), 512)
-		return result, nil
+		return result
 	}
 	result.Message = "配置已下发"
 	out := strings.TrimSpace(stdout)
@@ -400,7 +439,7 @@ func (s *LoggieAgentService) DeployConfig(ctx context.Context, projectID uint, r
 	} else {
 		result.Message = "配置已下发并热更/重启 Loggie"
 	}
-	return result, nil
+	return result
 }
 
 func (s *LoggieAgentService) StartLoggie(ctx context.Context, projectID uint, req LoggieDeployRequest) (*LoggieDeployResult, error) {
@@ -690,28 +729,57 @@ func (s *LoggieAgentService) ListStatus(ctx context.Context, projectID uint) ([]
 
 // ESConfigPreviewItem 供控制台展示 ES 连接信息（不含密码）。
 type ESConfigPreviewItem struct {
-	Enabled       bool     `json:"enabled"`
-	Addresses     []string `json:"addresses"`
-	Username      string   `json:"username"`
-	IndexPattern  string   `json:"index_pattern"`
-	HasPassword   bool     `json:"has_password"`
+	Enabled        bool     `json:"enabled"`
+	Addresses      []string `json:"addresses"`
+	Username       string   `json:"username"`
+	IndexPattern   string   `json:"index_pattern"`
+	HasPassword    bool     `json:"has_password"`
+	ConnectionID   uint     `json:"connection_id"`
+	ConnectionName string   `json:"connection_name,omitempty"`
+	Source         string   `json:"source"` // managed | dict
 }
 
 func (s *LoggieAgentService) ESConfigForUI(ctx context.Context) (*ESConfigPreviewItem, error) {
 	if s.esProvider == nil {
-		return &ESConfigPreviewItem{}, nil
+		return &ESConfigPreviewItem{Source: "dict"}, nil
 	}
 	cfg, err := s.esProvider.Resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &ESConfigPreviewItem{
+	connID := s.esProvider.ManagedConnectionID(ctx)
+	item := &ESConfigPreviewItem{
 		Enabled:      cfg.Enabled,
 		Addresses:    cfg.Addresses,
 		Username:     cfg.Username,
 		IndexPattern: cfg.IndexPattern,
 		HasPassword:  strings.TrimSpace(cfg.Password) != "",
-	}, nil
+		ConnectionID: connID,
+		Source:       "dict",
+	}
+	if connID > 0 {
+		item.Source = "managed"
+		if ep, lerr := s.esProvider.LookupManagedConnection(ctx, connID); lerr == nil && ep != nil {
+			item.ConnectionName = ep.Name
+		}
+	}
+	return item, nil
+}
+
+// SetESConnectionRequest 绑定日志平台使用的 esmgmt 连接。
+type SetESConnectionRequest struct {
+	ConnectionID uint `json:"connection_id"`
+}
+
+// SetESConnection 将日志平台绑定到指定 esmgmt 连接；connection_id=0 回退数据字典地址。
+func (s *LoggieAgentService) SetESConnection(ctx context.Context, req SetESConnectionRequest) (*ESConfigPreviewItem, error) {
+	if s.esProvider == nil {
+		return nil, constants.ErrBadRequestWithMsg("ES Provider 未就绪")
+	}
+	if err := s.esProvider.SetManagedConnectionID(ctx, req.ConnectionID); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	return s.ESConfigForUI(ctx)
 }
 
 func (s *LoggieAgentService) recentIngestByServer(ctx context.Context, projectID uint) map[uint]int64 {
