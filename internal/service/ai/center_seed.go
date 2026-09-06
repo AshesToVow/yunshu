@@ -170,18 +170,41 @@ func (s *Service) seedPromptsFromDir(ctx context.Context, dir string) error {
 		}
 		var verCount int64
 		_ = s.db.WithContext(ctx).Model(&model.AiPromptVersion{}).Where("prompt_id = ?", prompt.ID).Count(&verCount).Error
-		if verCount > 0 {
-			continue
-		}
 		body, err := os.ReadFile(filepath.Join(dir, e.Name(), "v1.md"))
 		if err != nil {
 			continue
 		}
+		content := string(body)
+		if verCount == 0 {
+			ver := model.AiPromptVersion{
+				PromptID:  prompt.ID,
+				Version:   1,
+				Content:   content,
+				Changelog: "seed",
+				IsCurrent: true,
+			}
+			if err := s.db.WithContext(ctx).Create(&ver).Error; err != nil {
+				return err
+			}
+			continue
+		}
+		// 文件内容变更时追加新版本（便于运维更新 system/ops-agent 等）
+		var cur model.AiPromptVersion
+		if err := s.db.WithContext(ctx).Where("prompt_id = ? AND is_current = ?", prompt.ID, true).First(&cur).Error; err != nil {
+			continue
+		}
+		if cur.Content == content {
+			continue
+		}
+		_ = s.db.WithContext(ctx).Model(&model.AiPromptVersion{}).
+			Where("prompt_id = ?", prompt.ID).
+			Update("is_current", false).Error
+		next := cur.Version + 1
 		ver := model.AiPromptVersion{
 			PromptID:  prompt.ID,
-			Version:   1,
-			Content:   string(body),
-			Changelog: "seed",
+			Version:   next,
+			Content:   content,
+			Changelog: "seed update",
 			IsCurrent: true,
 		}
 		if err := s.db.WithContext(ctx).Create(&ver).Error; err != nil {
@@ -433,8 +456,14 @@ func (s *Service) seedBuiltinToolDefs(ctx context.Context) error {
 		{Name: "get_cicd_build_log", Description: "构建日志", Module: "cicd", Runtime: "builtin", HandlerKey: "get_cicd_build_log", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
 		{Name: "list_alerts", Description: "列出告警", Module: "alert", Runtime: "builtin", HandlerKey: "list_alerts", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "explain_alert", Description: "解释告警投递", Module: "alert", Runtime: "builtin", HandlerKey: "explain_alert", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "get_alert_detail", Description: "告警事件详情", Module: "alert", Runtime: "builtin", HandlerKey: "get_alert_detail", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "list_alert_datasources", Description: "列出监控数据源", Module: "monitor", Runtime: "builtin", HandlerKey: "list_alert_datasources", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "query_prometheus", Description: "PromQL 即时查询", Module: "monitor", Runtime: "builtin", HandlerKey: "query_prometheus", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "query_prometheus_range", Description: "PromQL 区间查询", Module: "monitor", Runtime: "builtin", HandlerKey: "query_prometheus_range", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "list_prometheus_active_alerts", Description: "Prometheus active alerts", Module: "monitor", Runtime: "builtin", HandlerKey: "list_prometheus_active_alerts", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
 		{Name: "list_servers", Description: "列出 CMDB 服务器", Module: "cmdb", Runtime: "builtin", HandlerKey: "list_servers", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "get_server", Description: "服务器详情", Module: "cmdb", Runtime: "builtin", HandlerKey: "get_server", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "test_server_connectivity", Description: "探测服务器连通性", Module: "cmdb", Runtime: "builtin", HandlerKey: "test_server_connectivity", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
 		{Name: "list_db_instances", Description: "列出数据库实例", Module: "dbmgmt", Runtime: "builtin", HandlerKey: "list_db_instances", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "list_es_connections", Description: "列出 ES 连接", Module: "esmgmt", Runtime: "builtin", HandlerKey: "list_es_connections", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "scale_deployment", Description: "扩缩容（审批）", Module: "k8s", Runtime: "builtin", HandlerKey: "scale_deployment", Permission: "WRITE", RiskLevel: "HIGH", RequireConfirmation: true, Enabled: true, AuditRequired: true, TimeoutSec: 30},

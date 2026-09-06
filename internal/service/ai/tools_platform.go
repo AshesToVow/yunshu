@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"yunshu/internal/pkg/auth"
@@ -33,6 +34,16 @@ func (s *Service) platformToolDefinitions() []llm.ToolDefinition {
 				},
 				"required": []string{"server_id"},
 			}),
+		llm.NewFunctionTool("test_server_connectivity",
+			"探测 CMDB 服务器连通性（TCP/云实例状态，只读）。主机宕机/网络不通时先 list_servers 再对本机探测；不是 SSH 执行命令。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"server_id":  map[string]any{"type": "integer", "description": "单机探测"},
+					"project_id": map[string]any{"type": "integer", "description": "与 server_ids 组合做批量探测"},
+					"server_ids": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "可选，批量；空则探测项目下部分主机"},
+				},
+			}),
 		llm.NewFunctionTool("list_db_instances",
 			"列出项目数据库实例（只读，无密码）。需要 project_id。",
 			map[string]any{
@@ -57,6 +68,7 @@ func (s *Service) platformToolDefinitions() []llm.ToolDefinition {
 func (s *Service) executePlatformTool(
 	ctx context.Context,
 	name string,
+	args map[string]any,
 	getUint func(string, uint) uint,
 	getStr func(string) string,
 	projectID uint,
@@ -91,7 +103,16 @@ func (s *Service) executePlatformTool(
 			return nil, fmt.Errorf("server_id 必填")
 		}
 		if s.cmdbSvc != nil {
-			return s.cmdbSvc.GetServer(ctx, sid)
+			sv, err := s.cmdbSvc.GetServer(ctx, sid)
+			if err != nil {
+				return nil, err
+			}
+			if sv != nil && sv.ProjectID > 0 {
+				if err := s.assertProjectMember(ctx, actor, sv.ProjectID); err != nil {
+					return nil, err
+				}
+			}
+			return sv, nil
 		}
 		if s.serverRepo == nil {
 			return nil, fmt.Errorf("CMDB 服务不可用")
@@ -99,6 +120,11 @@ func (s *Service) executePlatformTool(
 		sv, err := s.serverRepo.GetByID(ctx, sid)
 		if err != nil {
 			return nil, err
+		}
+		if sv.ProjectID > 0 {
+			if err := s.assertProjectMember(ctx, actor, sv.ProjectID); err != nil {
+				return nil, err
+			}
 		}
 		return map[string]any{
 			"id":         sv.ID,
@@ -110,6 +136,38 @@ func (s *Service) executePlatformTool(
 			"status":     sv.Status,
 			"tags":       sv.Tags,
 		}, nil
+	case "test_server_connectivity":
+		if err := requireActor(); err != nil {
+			return nil, err
+		}
+		if s.cmdbSvc == nil {
+			return nil, fmt.Errorf("CMDB 服务不可用")
+		}
+		sid := getUint("server_id", 0)
+		if sid > 0 {
+			sv, err := s.cmdbSvc.GetServer(ctx, sid)
+			if err != nil {
+				return nil, err
+			}
+			if sv != nil && sv.ProjectID > 0 {
+				if err := s.assertProjectMember(ctx, actor, sv.ProjectID); err != nil {
+					return nil, err
+				}
+			}
+			return s.cmdbSvc.TestServerConnectivity(ctx, cmdbsvc.ServerTestRequest{ServerID: sid})
+		}
+		pid := getUint("project_id", projectID)
+		if pid == 0 {
+			return nil, fmt.Errorf("请提供 server_id，或 project_id（可带 server_ids）")
+		}
+		if err := s.assertProjectMember(ctx, actor, pid); err != nil {
+			return nil, err
+		}
+		return s.cmdbSvc.BatchTestServerConnectivity(ctx, cmdbsvc.BatchServerTestRequest{
+			ProjectID: pid,
+			ServerIDs: parseUintSlice(args["server_ids"]),
+			Parallel:  5,
+		})
 	case "list_db_instances":
 		if err := requireProject(); err != nil {
 			return nil, err
@@ -166,6 +224,36 @@ func (s *Service) executePlatformTool(
 	default:
 		return nil, fmt.Errorf("未知平台工具: %s", name)
 	}
+}
+
+func parseUintSlice(v any) []uint {
+	arr, ok := v.([]any)
+	if !ok || len(arr) == 0 {
+		return nil
+	}
+	out := make([]uint, 0, len(arr))
+	for _, it := range arr {
+		switch n := it.(type) {
+		case float64:
+			if n > 0 {
+				out = append(out, uint(n))
+			}
+		case int:
+			if n > 0 {
+				out = append(out, uint(n))
+			}
+		case int64:
+			if n > 0 {
+				out = append(out, uint(n))
+			}
+		case json.Number:
+			i, err := n.Int64()
+			if err == nil && i > 0 {
+				out = append(out, uint(i))
+			}
+		}
+	}
+	return out
 }
 
 func (s *Service) listServersViaRepo(ctx context.Context, projectID uint, keyword string, pageSize int) (any, error) {

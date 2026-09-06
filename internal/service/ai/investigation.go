@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -11,7 +12,10 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/llm"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/service/alert"
+	cmdbsvc "yunshu/internal/service/cmdb"
 	"yunshu/internal/service/k8s"
+	"yunshu/internal/service/logplatform"
 )
 
 // InvestigationReport 结构化调查报告。
@@ -26,15 +30,17 @@ type InvestigationReport struct {
 }
 
 type StartInvestigationRequest struct {
-	Kind        string `json:"kind" binding:"required"` // alert|pod|cicd|chat
+	Kind        string `json:"kind" binding:"required"` // alert|pod|cicd|chat|incident
 	Title       string `json:"title"`
 	Provider    string `json:"provider"`
 	ProjectID   uint   `json:"project_id"`
 	ClusterID   uint   `json:"cluster_id"`
 	Namespace   string `json:"namespace"`
-	Resource    string `json:"resource"` // pod name / run id as string
+	Resource    string `json:"resource"` // pod name / run id as string / server id
 	Fingerprint string `json:"fingerprint"`
 	RunID       uint   `json:"run_id"`
+	ServerID    uint   `json:"server_id"`
+	Keyword     string `json:"keyword"` // incident/log keyword
 	SessionID   *uint  `json:"session_id"`
 	Query       string `json:"query"` // chat kind
 }
@@ -64,9 +70,9 @@ func (s *Service) StartInvestigation(
 	}
 	kind := strings.ToLower(strings.TrimSpace(req.Kind))
 	switch kind {
-	case "alert", "pod", "cicd", "chat":
+	case "alert", "pod", "cicd", "chat", "incident":
 	default:
-		return nil, constants.ErrBadRequestWithMsg("kind 须为 alert|pod|cicd|chat")
+		return nil, constants.ErrBadRequestWithMsg("kind 须为 alert|pod|cicd|chat|incident")
 	}
 	if req.ProjectID > 0 {
 		if err := s.assertProjectMember(ctx, actor, req.ProjectID); err != nil {
@@ -193,6 +199,18 @@ func defaultInvestigationTitle(kind string, req StartInvestigationRequest) strin
 		return "Pod 调查 " + strings.TrimSpace(req.Namespace) + "/" + strings.TrimSpace(req.Resource)
 	case "cicd":
 		return "CI 构建调查"
+	case "incident":
+		t := strings.TrimSpace(req.Title)
+		if t == "" {
+			t = strings.TrimSpace(req.Keyword)
+		}
+		if t == "" {
+			t = strings.TrimSpace(req.Query)
+		}
+		if t == "" {
+			return "综合故障调查"
+		}
+		return "综合调查: " + truncateStr(t, 80)
 	default:
 		q := strings.TrimSpace(req.Query)
 		if q == "" {
@@ -229,21 +247,58 @@ func (s *Service) collectInvestigation(
 		if s.alertSvc == nil {
 			return nil, nil, constants.ErrBadRequestWithMsg("告警服务不可用")
 		}
+		events, total, _, _, err := s.alertSvc.ListEvents(ctx, alert.AlertEventListQuery{
+			Fingerprint: fp,
+			ProjectID:   req.ProjectID,
+			Page:        1,
+			PageSize:    10,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
 		explain, err := s.alertSvc.ExplainFingerprintDelivery(ctx, fp)
 		if err != nil {
 			return nil, nil, err
 		}
+		var logSummary any
+		if req.ProjectID > 0 && s.logSearch != nil {
+			kw := strings.TrimSpace(req.Keyword)
+			if kw == "" && len(events) > 0 {
+				kw = strings.TrimSpace(events[0].Title)
+			}
+			if kw != "" {
+				if res, e := s.logSearch.Search(ctx, logplatform.LogSearchQuery{
+					ProjectID: req.ProjectID,
+					Keyword:   kw,
+					Namespace: strings.TrimSpace(req.Namespace),
+					Page:      1,
+					PageSize:  30,
+				}); e == nil {
+					logSummary = summarizeLogHitsForTool(res, logplatform.LogSearchQuery{Keyword: kw, ProjectID: req.ProjectID})
+					evidence = append(evidence, map[string]any{"type": "logs", "keyword": kw})
+				}
+			}
+		}
 		bundle := map[string]any{
 			"fingerprint":             explain.Fingerprint,
+			"events_total":            total,
+			"events":                  events,
 			"firing_delivered":        explain.FiringDelivered,
 			"firing_delivered_source": explain.FiringDeliveredSource,
 			"skip_summary":            explain.SkipSummary,
-			"events_count":            len(explain.Events),
+			"delivery_events_count":   len(explain.Events),
+			"log_summary":             logSummary,
+			"summary":                 fmt.Sprintf("告警指纹 %s，事件 %d 条", fp, total),
 		}
+		evidence = append(evidence, map[string]any{
+			"type": "alert_detail", "fingerprint": fp, "events_total": total,
+		})
 		evidence = append(evidence, map[string]any{
 			"type": "alert_explain", "fingerprint": fp, "firing_delivered": explain.FiringDelivered,
 		})
 		return bundle, evidence, nil
+	case "incident":
+		return s.collectIncidentInvestigation(ctx, actor, req)
 	case "pod":
 		ns := strings.TrimSpace(req.Namespace)
 		name := strings.TrimSpace(req.Resource)
@@ -309,6 +364,112 @@ func (s *Service) collectInvestigation(
 	}
 }
 
+func (s *Service) collectIncidentInvestigation(
+	ctx context.Context,
+	actor *auth.CurrentUser,
+	req StartInvestigationRequest,
+) (map[string]any, []map[string]any, error) {
+	if req.ProjectID == 0 {
+		return nil, nil, constants.ErrBadRequestWithMsg("incident 调查需要 project_id")
+	}
+	if err := s.assertProjectMember(ctx, actor, req.ProjectID); err != nil {
+		return nil, nil, err
+	}
+	evidence := []map[string]any{}
+	bundle := map[string]any{
+		"project_id": req.ProjectID,
+		"cluster_id": req.ClusterID,
+		"namespace":  strings.TrimSpace(req.Namespace),
+		"keyword":    strings.TrimSpace(req.Keyword),
+		"query":      strings.TrimSpace(req.Query),
+	}
+	parts := []string{"综合采集"}
+
+	// 主机
+	if s.cmdbSvc != nil {
+		if req.ServerID > 0 {
+			if r, err := s.cmdbSvc.TestServerConnectivity(ctx, cmdbsvc.ServerTestRequest{ServerID: req.ServerID}); err == nil {
+				bundle["server_probe"] = r
+				evidence = append(evidence, map[string]any{"type": "server_probe", "server_id": req.ServerID, "ok": r.OK})
+				parts = append(parts, fmt.Sprintf("主机探测 ok=%v", r.OK))
+			}
+			if sv, err := s.cmdbSvc.GetServer(ctx, req.ServerID); err == nil {
+				bundle["server"] = sv
+			}
+		} else {
+			if list, err := s.cmdbSvc.ListServers(ctx, cmdbsvc.ServerListQuery{
+				ProjectID: req.ProjectID, Keyword: strings.TrimSpace(req.Keyword), Page: 1, PageSize: 10, Actor: actor,
+			}); err == nil {
+				bundle["servers"] = list
+				cnt := 0
+				if list != nil {
+					cnt = int(list.Total)
+				}
+				evidence = append(evidence, map[string]any{"type": "servers", "count": cnt})
+			}
+		}
+	}
+
+	// 日志
+	kw := strings.TrimSpace(req.Keyword)
+	if kw == "" {
+		kw = strings.TrimSpace(req.Query)
+	}
+	if kw == "" {
+		kw = strings.TrimSpace(req.Title)
+	}
+	if s.logSearch != nil && kw != "" {
+		lq := logplatform.LogSearchQuery{
+			ProjectID: req.ProjectID,
+			Keyword:   kw,
+			Namespace: strings.TrimSpace(req.Namespace),
+			Page:      1,
+			PageSize:  40,
+		}
+		if req.ClusterID > 0 {
+			cid := req.ClusterID
+			lq.ClusterID = &cid
+		}
+		if res, err := s.logSearch.Search(ctx, lq); err == nil {
+			bundle["log_summary"] = summarizeLogHitsForTool(res, logplatform.LogSearchQuery{Keyword: kw, ProjectID: req.ProjectID})
+			evidence = append(evidence, map[string]any{"type": "logs", "keyword": kw})
+			parts = append(parts, "已采集日志摘要")
+		}
+	}
+
+	// 告警
+	if s.alertSvc != nil {
+		if fp := strings.TrimSpace(req.Fingerprint); fp != "" {
+			if events, total, _, _, err := s.alertSvc.ListEvents(ctx, alert.AlertEventListQuery{
+				Fingerprint: fp, ProjectID: req.ProjectID, Page: 1, PageSize: 10,
+			}); err == nil {
+				bundle["alert_events"] = events
+				bundle["alert_events_total"] = total
+				evidence = append(evidence, map[string]any{"type": "alert_detail", "fingerprint": fp, "total": total})
+				parts = append(parts, fmt.Sprintf("告警事件 %d", total))
+			}
+			if explain, err := s.alertSvc.ExplainFingerprintDelivery(ctx, fp); err == nil {
+				bundle["alert_delivery"] = map[string]any{
+					"firing_delivered": explain.FiringDelivered,
+					"skip_summary":     explain.SkipSummary,
+				}
+			}
+		} else {
+			if events, total, _, _, err := s.alertSvc.ListEvents(ctx, alert.AlertEventListQuery{
+				ProjectID: req.ProjectID, Keyword: kw, Status: "firing", Page: 1, PageSize: 15,
+			}); err == nil {
+				bundle["recent_firing_alerts"] = events
+				bundle["recent_firing_total"] = total
+				evidence = append(evidence, map[string]any{"type": "alerts_firing", "total": total})
+				parts = append(parts, fmt.Sprintf("firing 告警 %d", total))
+			}
+		}
+	}
+
+	bundle["summary"] = strings.Join(parts, "；")
+	return bundle, evidence, nil
+}
+
 func (s *Service) analyzeInvestigation(
 	ctx context.Context,
 	userID uint,
@@ -327,9 +488,21 @@ func (s *Service) analyzeInvestigation(
 	var ctxPayload any
 	switch kind {
 	case "alert":
-		promptCode = "diagnosis/alert-explain"
-		summaryFallback = "指纹投递追溯"
+		// 含事件详情 + 可选日志时走综合处置；仅投递解释场景仍可用 alert-explain
+		if _, hasEvents := collect["events"]; hasEvents {
+			promptCode = "diagnosis/incident-remediate"
+		} else {
+			promptCode = "diagnosis/alert-explain"
+		}
+		summaryFallback = "告警调查"
 		ctxPayload = collect
+	case "incident":
+		promptCode = "diagnosis/incident-remediate"
+		summaryFallback = "综合故障调查"
+		ctxPayload = collect
+		if v, ok := collect["summary"].(string); ok {
+			summaryFallback = v
+		}
 	case "pod":
 		promptCode = "diagnosis/k8s-pod"
 		if d, ok := collect["diagnose"]; ok {

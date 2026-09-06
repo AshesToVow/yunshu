@@ -235,7 +235,7 @@ export type AIInvestigationReport = {
 };
 
 export function startAIInvestigation(payload: {
-  kind: "alert" | "pod" | "cicd" | "chat" | string;
+  kind: "alert" | "pod" | "cicd" | "chat" | "incident" | string;
   title?: string;
   provider?: string;
   project_id?: number;
@@ -244,6 +244,8 @@ export function startAIInvestigation(payload: {
   resource?: string;
   fingerprint?: string;
   run_id?: number;
+  server_id?: number;
+  keyword?: string;
   session_id?: number;
   query?: string;
 }) {

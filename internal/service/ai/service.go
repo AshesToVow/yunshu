@@ -50,6 +50,7 @@ type Service struct {
 	esProvider    *logplatform.ElasticsearchProvider
 	cicdSvc       *cicdsvc.Service
 	alertSvc      *alert.AlertService
+	alertDSSvc    *alert.AlertDatasourceService
 	serverRepo    interfaces.ServerRepository
 	cmdbSvc       *cmdbsvc.Service
 	dbmgmtSvc     *dbmgmtsvc.Service
@@ -76,6 +77,14 @@ func (s *Service) SetPlatformDeps(
 	s.cmdbSvc = cmdbSvc
 	s.dbmgmtSvc = dbmgmtSvc
 	s.esmgmtSvc = esmgmtSvc
+}
+
+// SetMonitorDeps 注入监控数据源（Prometheus 查询）。
+func (s *Service) SetMonitorDeps(ds *alert.AlertDatasourceService) {
+	if s == nil {
+		return
+	}
+	s.alertDSSvc = ds
 }
 
 // SetLogPlatformDeps 注入日志平台只读诊断依赖（日志源 / Loggie / 集群采集规则）。
@@ -510,13 +519,14 @@ func (s *Service) chatWithEmit(
 	}
 
 	fire(ChatEvent{Type: "progress", Message: "调用模型"})
-	const maxRounds = 6
+	const maxRounds = 8
 	for range maxRounds {
 		resp, err := cli.Chat(ctx, llm.ChatRequest{
-			Model:     pcfg.Model,
-			Messages:  msgs,
-			MaxTokens: cfg.MaxTokens,
-			Tools:     tools,
+			Model:       pcfg.Model,
+			Messages:    msgs,
+			MaxTokens:   cfg.MaxTokens,
+			Temperature: 0.2,
+			Tools:       tools,
 		})
 		if err != nil {
 			msg := "AI 调用失败: " + err.Error()

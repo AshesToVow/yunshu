@@ -23,7 +23,7 @@ import {
   type AIChatStreamEvent,
   type AIStatus,
 } from "../services/ai";
-import { getClusters, type ClusterItem } from "../services/clusters";
+import { getClusters, listNamespaces, type ClusterItem } from "../services/clusters";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { extractApiErrorMessage } from "../services/http";
 
@@ -34,6 +34,7 @@ const PREFS_KEY = "yunshu.ai.assistant.prefs.v1";
 type Prefs = {
   clusterId?: number;
   projectId?: number;
+  namespace?: string;
   enableTools: boolean;
   enableWrite: boolean;
   provider?: string;
@@ -49,6 +50,7 @@ function loadPrefs(): Prefs {
       enableWrite: parsed.enableWrite ?? false,
       clusterId: parsed.clusterId,
       projectId: parsed.projectId,
+      namespace: parsed.namespace,
       provider: parsed.provider,
     };
   } catch {
@@ -94,6 +96,8 @@ export function AiAssistantPage() {
   const [enableWrite, setEnableWrite] = useState(prefs.enableWrite);
   const [clusterId, setClusterId] = useState<number | undefined>(prefs.clusterId);
   const [projectId, setProjectId] = useState<number | undefined>(prefs.projectId);
+  const [namespace, setNamespace] = useState<string | undefined>(prefs.namespace);
+  const [namespaceOptions, setNamespaceOptions] = useState<{ value: string; label: string }[]>([]);
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [lastSteps, setLastSteps] = useState<AIChatResult["tool_steps"]>([]);
@@ -136,8 +140,22 @@ export function AiAssistantPage() {
   }, []);
 
   useEffect(() => {
-    savePrefs({ clusterId, projectId, enableTools, enableWrite, provider });
-  }, [clusterId, projectId, enableTools, enableWrite, provider]);
+    savePrefs({ clusterId, projectId, namespace, enableTools, enableWrite, provider });
+  }, [clusterId, projectId, namespace, enableTools, enableWrite, provider]);
+
+  useEffect(() => {
+    if (!clusterId) {
+      setNamespaceOptions([]);
+      return;
+    }
+    void listNamespaces(clusterId)
+      .then((res) => {
+        const list = res?.list || [];
+        setNamespaceOptions(list.map((n) => ({ value: n.name, label: n.name })));
+        setNamespace((prev) => (prev && list.some((n) => n.name === prev) ? prev : undefined));
+      })
+      .catch(() => setNamespaceOptions([]));
+  }, [clusterId]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -316,6 +334,7 @@ export function AiAssistantPage() {
           messages: next.map(({ role, content }) => ({ role, content })),
           cluster_id: clusterId,
           project_id: projectId,
+          namespace: namespace || undefined,
           enable_tools: enableTools,
           enable_write_tools: enableWrite,
         },
@@ -520,7 +539,7 @@ export function AiAssistantPage() {
               type="warning"
               showIcon
               message="先选上下文，再问事实问题"
-              description="查 Pod/事件请选集群；查日志/构建/告警请选项目。助手会优先调工具取证，知识库只作排查思路参考。写操作需开启「写工具」并走审批。"
+              description="查 Pod/事件请选集群与命名空间；查日志/构建/告警/监控请选项目。助手会跨主机连通性、日志、Prometheus 与告警取证后再给处理步骤。写操作需开启「写工具」并走审批。"
             />
           )}
 
@@ -533,7 +552,7 @@ export function AiAssistantPage() {
               allowClear
               showSearch
               optionFilterProp="label"
-              placeholder="选择项目（日志/CI/告警）"
+              placeholder="选择项目（日志/CI/告警/监控）"
               style={{ minWidth: 200 }}
               value={projectId}
               options={projectOptions}
@@ -547,7 +566,21 @@ export function AiAssistantPage() {
               style={{ minWidth: 200 }}
               value={clusterId}
               options={clusterOptions}
-              onChange={(v) => setClusterId(typeof v === "number" ? v : undefined)}
+              onChange={(v) => {
+                setClusterId(typeof v === "number" ? v : undefined);
+                setNamespace(undefined);
+              }}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="命名空间（可选）"
+              style={{ minWidth: 160 }}
+              value={namespace}
+              options={namespaceOptions}
+              disabled={!clusterId}
+              onChange={(v) => setNamespace(typeof v === "string" ? v : undefined)}
             />
           </Space>
           <div
@@ -564,7 +597,7 @@ export function AiAssistantPage() {
           >
             {messages.length === 0 ? (
               <Typography.Text type="secondary">
-                示例：某命名空间 Pod CrashLoop；某次构建失败原因；告警为什么没收到。请先选好项目/集群，并在问题中给出 namespace 与资源名。
+                示例：某主机不通怎么查；某服务 ERROR 日志怎么处理；某告警为何触发。请先选项目（日志/监控），K8s 问题再选集群与命名空间。
               </Typography.Text>
             ) : (
               <Space direction="vertical" style={{ width: "100%" }} size="middle">

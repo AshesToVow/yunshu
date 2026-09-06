@@ -236,6 +236,7 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 				"required": []string{"fingerprint"},
 			}),
 	}
+	defs = append(defs, s.monitorToolDefinitions()...)
 	defs = append(defs, s.platformToolDefinitions()...)
 	defs = append(defs, s.logToolDefinitions()...)
 	if includeWrite {
@@ -617,8 +618,10 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			break
 		}
 		out, err = s.alertSvc.ExplainFingerprintDelivery(ctx, getStr("fingerprint"))
-	case "list_servers", "get_server", "list_db_instances", "list_es_connections":
-		out, err = s.executePlatformTool(ctx, name, getUint, getStr, projectID, actor, requireProject, requireActor)
+	case "list_alert_datasources", "query_prometheus", "query_prometheus_range", "list_prometheus_active_alerts", "get_alert_detail":
+		out, err = s.executeMonitorTool(ctx, name, getUint, getStr, projectID, actor, requireProject, requireActor)
+	case "list_servers", "get_server", "test_server_connectivity", "list_db_instances", "list_es_connections":
+		out, err = s.executePlatformTool(ctx, name, args, getUint, getStr, projectID, actor, requireProject, requireActor)
 	case "scale_deployment", "restart_deployment", "delete_pod":
 		if err = requireK8sAdmin(); err != nil {
 			break
