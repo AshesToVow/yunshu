@@ -315,6 +315,7 @@ func assembleRouteDeps(
 		svcs.AI.SetPlatformDeps(repos.Server, svcs.CMDB, svcs.Dbmgmt, svcs.Esmgmt)
 		svcs.AI.SetLogPlatformDeps(svcs.ProjectMgmt, svcs.LoggieAgent, svcs.ClusterLog)
 		svcs.AI.SetMonitorDeps(svcs.AlertDatasource)
+		svcs.AI.SetOpsDeps(svcs.ChangeEvent, svcs.AlertSilence)
 	}
 	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil

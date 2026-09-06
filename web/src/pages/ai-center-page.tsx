@@ -38,6 +38,7 @@ import {
   deleteAIEvalCase,
   getAICenterOverview,
   getAICenterPrompt,
+  getAIToolRuntimeHealth,
   listAICenterCases,
   listAICenterKBDocuments,
   listAICenterKBs,
@@ -90,6 +91,7 @@ export function AiCenterPage() {
   const [models, setModels] = useState<AILLMModelItem[]>([]);
   const [evalCases, setEvalCases] = useState<Row[]>([]);
   const [evalResult, setEvalResult] = useState<Record<string, unknown> | null>(null);
+  const [runtimeHealth, setRuntimeHealth] = useState<Record<string, unknown> | null>(null);
 
   const [modelModalOpen, setModelModalOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<AILLMModelItem | null>(null);
@@ -129,6 +131,11 @@ export function AiCenterPage() {
       setOverview((await getAICenterOverview()) || {});
     } catch (e) {
       message.error(extractApiErrorMessage(e, "加载概览失败"));
+    }
+    try {
+      setRuntimeHealth((await getAIToolRuntimeHealth()) || null);
+    } catch {
+      /* ignore */
     }
   }
 
@@ -295,7 +302,17 @@ export function AiCenterPage() {
                 {k}: {String(v)}
               </Tag>
             ))}
+            {runtimeHealth ? (
+              <Tag color={runtimeHealth.ok ? "success" : "error"}>
+                脚本运行时: {runtimeHealth.python_ok ? `Python OK (${String(runtimeHealth.python_version || runtimeHealth.python_bin || "")})` : "Python 缺失"}
+              </Tag>
+            ) : null}
           </Space>
+          {runtimeHealth && Array.isArray(runtimeHealth.suggestions) && (runtimeHealth.suggestions as string[]).length > 0 ? (
+            <Typography.Paragraph type="secondary">
+              {(runtimeHealth.suggestions as string[]).join("；")}
+            </Typography.Paragraph>
+          ) : null}
           {evalResult ? (
             <Typography.Paragraph>
               最近评估：{String(evalResult.summary || "")}（status={String(evalResult.status)}）

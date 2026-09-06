@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/llm"
 	"yunshu/internal/repository"
+	"yunshu/internal/service/alert"
 	cmdbsvc "yunshu/internal/service/cmdb"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	projectsvc "yunshu/internal/service/project"
 )
 
 func (s *Service) platformToolDefinitions() []llm.ToolDefinition {
@@ -43,6 +47,32 @@ func (s *Service) platformToolDefinitions() []llm.ToolDefinition {
 					"project_id": map[string]any{"type": "integer", "description": "与 server_ids 组合做批量探测"},
 					"server_ids": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "可选，批量；空则探测项目下部分主机"},
 				},
+			}),
+		llm.NewFunctionTool("probe_server_metrics",
+			"经 SSH 在远端 CMDB 服务器上只读探测磁盘/内存/负载（白名单命令）。需要 project_id+server_id 与 exec 权限。查业务机磁盘用此工具，不要用 linux.disk.check（那是 AI 容器本机）。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"server_id":  map[string]any{"type": "integer"},
+					"kind":       map[string]any{"type": "string", "description": "disk|mem|load|all，默认 all"},
+					"path":       map[string]any{"type": "string", "description": "disk 路径，默认 /"},
+				},
+				"required": []string{"server_id"},
+			}),
+		llm.NewFunctionTool("list_change_events",
+			"查询项目变更时间线（发布/K8s/DB/静默/SSH 探测等）。排查告警前建议看告警前后窗口变更。",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"source":     map[string]any{"type": "string", "description": "cicd|k8s|dbmgmt|cmdb|alert"},
+					"keyword":    map[string]any{"type": "string"},
+					"from":       map[string]any{"type": "string", "description": "RFC3339"},
+					"to":         map[string]any{"type": "string", "description": "RFC3339"},
+					"page_size":  map[string]any{"type": "integer"},
+				},
+				"required": []string{"project_id"},
 			}),
 		llm.NewFunctionTool("list_db_instances",
 			"列出项目数据库实例（只读，无密码）。需要 project_id。",
@@ -168,6 +198,64 @@ func (s *Service) executePlatformTool(
 			ServerIDs: parseUintSlice(args["server_ids"]),
 			Parallel:  5,
 		})
+	case "probe_server_metrics":
+		if err := requireActor(); err != nil {
+			return nil, err
+		}
+		if s.cmdbSvc == nil {
+			return nil, fmt.Errorf("CMDB 服务不可用")
+		}
+		sid := getUint("server_id", 0)
+		if sid == 0 {
+			return nil, fmt.Errorf("server_id 必填")
+		}
+		pid := getUint("project_id", projectID)
+		if pid == 0 {
+			sv, err := s.cmdbSvc.GetServer(ctx, sid)
+			if err != nil {
+				return nil, err
+			}
+			if sv != nil {
+				pid = sv.ProjectID
+			}
+		}
+		if pid == 0 {
+			return nil, fmt.Errorf("project_id 必填")
+		}
+		if err := s.assertProjectMember(ctx, actor, pid); err != nil {
+			return nil, err
+		}
+		kind := getStr("kind")
+		if kind == "" {
+			kind = "all"
+		}
+		return s.cmdbSvc.ProbeHostMetrics(ctx, cmdbsvc.HostProbeRequest{
+			ProjectID: pid,
+			ServerID:  sid,
+			Kind:      cmdbsvc.HostProbeKind(kind),
+			Path:      getStr("path"),
+			Actor:     actor,
+		})
+	case "list_change_events":
+		if err := requireProject(); err != nil {
+			return nil, err
+		}
+		if s.changeEventSvc == nil {
+			return nil, fmt.Errorf("变更时间线服务不可用")
+		}
+		ps := int(getUint("page_size", 30))
+		if ps <= 0 || ps > 100 {
+			ps = 30
+		}
+		return s.changeEventSvc.List(ctx, projectsvc.ChangeEventListQuery{
+			ProjectID: projectID,
+			Source:    getStr("source"),
+			Keyword:   getStr("keyword"),
+			From:      getStr("from"),
+			To:        getStr("to"),
+			Page:      1,
+			PageSize:  ps,
+		})
 	case "list_db_instances":
 		if err := requireProject(); err != nil {
 			return nil, err
@@ -286,4 +374,69 @@ func (s *Service) listServersViaRepo(ctx context.Context, projectID uint, keywor
 		})
 	}
 	return map[string]any{"total": total, "list": out, "page": 1, "page_size": pageSize}, nil
+}
+
+func (s *Service) executeCreateAlertSilence(
+	ctx context.Context,
+	actor *auth.CurrentUser,
+	projectID uint,
+	getUint func(string, uint) uint,
+	getStr func(string) string,
+) (any, error) {
+	if s.silenceSvc == nil {
+		return nil, fmt.Errorf("静默服务不可用")
+	}
+	fp := strings.TrimSpace(getStr("fingerprint"))
+	if fp == "" {
+		return nil, fmt.Errorf("fingerprint 必填")
+	}
+	pid := getUint("project_id", projectID)
+	if pid == 0 {
+		return nil, fmt.Errorf("project_id 必填")
+	}
+	if err := s.assertProjectMember(ctx, actor, pid); err != nil {
+		return nil, err
+	}
+	hours := int(getUint("hours", 2))
+	if hours <= 0 {
+		hours = 2
+	}
+	if hours > 72 {
+		hours = 72
+	}
+	alertname := strings.TrimSpace(getStr("alertname"))
+	if alertname == "" {
+		alertname = fp
+	}
+	comment := strings.TrimSpace(getStr("comment"))
+	if comment == "" {
+		comment = "AI 助手告警闭环静默"
+	}
+	matchers := []map[string]any{{
+		"name": "fingerprint", "value": fp, "is_regex": false,
+	}}
+	raw, _ := json.Marshal(matchers)
+	now := time.Now()
+	ends := now.Add(time.Duration(hours) * time.Hour)
+	en := true
+	uid := uint(0)
+	if actor != nil {
+		uid = actor.ID
+	}
+	row, err := s.silenceSvc.Create(ctx, uid, alert.AlertSilenceUpsertRequest{
+		ProjectID:    pid,
+		Name:         fmt.Sprintf("AI静默 %s（%dh）", truncateStr(alertname, 64), hours),
+		MatchersJSON: string(raw),
+		StartsAt:     now,
+		EndsAt:       ends,
+		Comment:      comment,
+		Enabled:      &en,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"ok": true, "silence_id": row.ID, "ends_at": ends, "hours": hours,
+		"note": "静默已生效；告警监控 → 降噪·静默 可管理",
+	}, nil
 }

@@ -17,8 +17,10 @@ import {
   type AlertHisEventItem,
 } from "../../../services/alerts";
 import { analyzeAlertExplainAI, startAIInvestigation, type AIAlertExplainResult } from "../../../services/ai";
+import { createAlertSilence } from "../../../services/alert-platform";
 import { formatDateTime } from "../../../utils/format";
 import { DEFAULT_PAGE_SIZE, tablePagination } from "../../../utils/table-pagination";
+import dayjs from "dayjs";
 
 const AlertConfigCenterPanel = lazy(async () => {
   const mod = await import("../../alert-config-center-panel");
@@ -46,6 +48,7 @@ export function HistoryTab() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiInvestigateLoading, setAiInvestigateLoading] = useState(false);
+  const [silenceLoadingFp, setSilenceLoadingFp] = useState<string>("");
   const [aiTarget, setAiTarget] = useState<AlertCurEventItem | null>(null);
   const [aiResult, setAiResult] = useState<AIAlertExplainResult | null>(null);
   const [detail, setDetail] = useState<AlertEventDetailTarget | null>(null);
@@ -210,6 +213,30 @@ export function HistoryTab() {
       message.error(extractApiErrorMessage(e, "AI 调查失败"));
     } finally {
       setAiInvestigateLoading(false);
+    }
+  }
+
+  async function quickSilence2h(row: AlertCurEventItem) {
+    if (!row.fingerprint) {
+      message.warning("缺少指纹，无法静默");
+      return;
+    }
+    setSilenceLoadingFp(row.fingerprint);
+    try {
+      await createAlertSilence({
+        name: `静默 ${row.alertname || row.fingerprint}（2h）`,
+        matchers_json: JSON.stringify([{ name: "fingerprint", value: row.fingerprint, is_regex: false }]),
+        comment: "告警历史快捷静默 2h（闭环止血）",
+        enabled: true,
+        starts_at: dayjs().toISOString(),
+        ends_at: dayjs().add(2, "hour").toISOString(),
+        project_id: ctx.projectContextId || row.project_id || undefined,
+      });
+      message.success("已静默 2 小时");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "创建静默失败"));
+    } finally {
+      setSilenceLoadingFp("");
     }
   }
 
@@ -414,6 +441,16 @@ export function HistoryTab() {
                     onClick={() => void runAiInvestigate(r)}
                   >
                     AI调查
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<StopOutlined />}
+                    disabled={!r.fingerprint}
+                    loading={silenceLoadingFp === r.fingerprint}
+                    onClick={() => void quickSilence2h(r)}
+                  >
+                    静默2h
                   </Button>
                 </Space>
               ),

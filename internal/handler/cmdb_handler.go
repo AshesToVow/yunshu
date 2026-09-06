@@ -148,6 +148,27 @@ func (h *CMDBHandler) ExecServerCommand(c *gin.Context) {
 	})
 }
 
+// ProbeServer 远端只读资源探测（SSH 白名单命令）。
+func (h *CMDBHandler) ProbeServer(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	serverID, err := parseUintParam(c, "serverId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	actor, _ := auth.CurrentUserFromContext(c)
+	ServeJSON(c, func(ctx context.Context, req service.HostProbeRequest) (*service.HostProbeResult, error) {
+		req.ProjectID = projectID
+		req.ServerID = serverID
+		req.Actor = actor
+		return h.svc.ProbeHostMetrics(ctx, req)
+	})
+}
+
 // ListServerGroups 鏌ヨ鍒楄〃瀵瑰簲鐨?HTTP 鎺ュ彛澶勭悊閫昏緫銆?
 func (h *CMDBHandler) ListServerGroups(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")

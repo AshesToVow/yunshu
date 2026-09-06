@@ -241,6 +241,19 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 	defs = append(defs, s.logToolDefinitions()...)
 	if includeWrite {
 		defs = append(defs,
+			llm.NewFunctionTool("create_alert_silence",
+				"为告警指纹创建静默（立即生效，非审批）。需 project_id + fingerprint；默认 2 小时。用于告警闭环止血，勿滥用。",
+				map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"project_id":  map[string]any{"type": "integer"},
+						"fingerprint": map[string]any{"type": "string"},
+						"hours":       map[string]any{"type": "integer", "description": "静默时长小时，默认 2，最大 72"},
+						"comment":     map[string]any{"type": "string"},
+						"alertname":   map[string]any{"type": "string"},
+					},
+					"required": []string{"fingerprint"},
+				}),
 			llm.NewFunctionTool("scale_deployment",
 				"申请扩缩容 Deployment：仅创建审批单，不会立即执行。调用前确认 cluster/namespace/name/replicas。",
 				map[string]any{
@@ -620,8 +633,13 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		out, err = s.alertSvc.ExplainFingerprintDelivery(ctx, getStr("fingerprint"))
 	case "list_alert_datasources", "query_prometheus", "query_prometheus_range", "list_prometheus_active_alerts", "get_alert_detail":
 		out, err = s.executeMonitorTool(ctx, name, getUint, getStr, projectID, actor, requireProject, requireActor)
-	case "list_servers", "get_server", "test_server_connectivity", "list_db_instances", "list_es_connections":
+	case "list_servers", "get_server", "test_server_connectivity", "probe_server_metrics", "list_change_events", "list_db_instances", "list_es_connections":
 		out, err = s.executePlatformTool(ctx, name, args, getUint, getStr, projectID, actor, requireProject, requireActor)
+	case "create_alert_silence":
+		if err = requireActor(); err != nil {
+			break
+		}
+		out, err = s.executeCreateAlertSilence(ctx, actor, projectID, getUint, getStr)
 	case "scale_deployment", "restart_deployment", "delete_pod":
 		if err = requireK8sAdmin(); err != nil {
 			break

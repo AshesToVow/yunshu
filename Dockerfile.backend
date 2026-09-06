@@ -22,7 +22,11 @@ RUN go build -trimpath -ldflags="-s -w" -o /yunshu ./main.go
 FROM ${ALPINE_IMAGE}
 
 # 巡检 PDF 仅浏览器 html2canvas/jsPDF 导出，镜像不再捆绑 Chromium / wkhtmltopdf
-RUN apk add --no-cache tzdata ca-certificates fontconfig ttf-freefont font-wqy-zenhei
+# python3：AI 脚本工具（linux.disk.check 等）运行时依赖
+RUN apk add --no-cache tzdata ca-certificates fontconfig ttf-freefont font-wqy-zenhei python3 \
+ && ln -sf /usr/bin/python3 /usr/bin/python
+
+ENV YUNSHU_AI_PYTHON=/usr/bin/python3
 
 COPY --from=builder /yunshu /app/yunshu
 COPY configs/ /app/configs/

@@ -24,6 +24,18 @@ export function reseedAICenter() {
   }>(http.post("/ai/center/reseed", {}));
 }
 
+export function getAIToolRuntimeHealth() {
+  return getData<{
+    ok: boolean;
+    python_ok?: boolean;
+    python_bin?: string;
+    python_version?: string;
+    shell_ok?: boolean;
+    data_root_ok?: boolean;
+    suggestions?: string[];
+  }>(http.get("/ai/center/tool-runtime-health"));
+}
+
 export function listAICenterPrompts() {
   return getData<{ list: Array<Record<string, unknown>> }>(http.get("/ai/center/prompts"));
 }

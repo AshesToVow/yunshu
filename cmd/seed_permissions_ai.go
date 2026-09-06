@@ -28,6 +28,7 @@ func seedPermissionsAI() []model.Permission {
 		{Name: "AI 知识库同步", Resource: "/api/v1/ai/knowledge/sync", Action: "POST", Description: "Sync AI knowledge base to ES"},
 		{Name: "AI 知识库向量化", Resource: "/api/v1/ai/knowledge/embed", Action: "POST", Description: "Sync AI knowledge chunk embeddings"},
 		{Name: "AI 能力中心概览", Resource: "/api/v1/ai/center/overview", Action: "GET", Description: "AI capability center overview"},
+		{Name: "AI 工具运行时健康", Resource: "/api/v1/ai/center/tool-runtime-health", Action: "GET", Description: "Check AI script tool runtime (python/shell)"},
 		{Name: "AI 能力中心重载种子", Resource: "/api/v1/ai/center/reseed", Action: "POST", Description: "Reseed AI center from data/ai"},
 		{Name: "AI Prompt 列表", Resource: "/api/v1/ai/center/prompts", Action: "GET", Description: "List AI prompts"},
 		{Name: "AI Prompt 创建", Resource: "/api/v1/ai/center/prompts", Action: "POST", Description: "Create AI prompt"},

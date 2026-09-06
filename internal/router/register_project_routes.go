@@ -86,4 +86,5 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	projectScoped.DELETE("/service-catalog/:catalogId", d.projectCatalogHandler.DeleteCatalog)
 	projectScoped.POST("/service-catalog/:catalogId/links", d.projectCatalogHandler.AddLink)
 	projectScoped.DELETE("/service-catalog/:catalogId/links/:linkId", d.projectCatalogHandler.DeleteLink)
+	projectScoped.GET("/change-events", d.projectCatalogHandler.ListChangeEvents)
 }

@@ -9,6 +9,7 @@ import {
   execProjectServerCommand,
   getProjectServerDetail,
   listProjectServerFiles,
+  probeProjectServer,
   uploadProjectServerFile,
   type ServerDetailItem,
   type ServerRemoteFileItem,
@@ -113,6 +114,33 @@ export function ServerConsolePage() {
       }
     } catch (e) {
       message.error(extractApiErrorMessage(e, "命令执行失败"));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function runReadonlyProbe() {
+    if (!validParams) return;
+    if (!accessLoaded || !canExec) {
+      message.error("仅有查看权限，不能探测");
+      return;
+    }
+    setRunning(true);
+    try {
+      const res = await probeProjectServer(projectId, serverId, { kind: "all", path: "/" });
+      const parts = (res?.commands || []).map(
+        (c) => `# ${c.name}: ${c.command}\n${c.stdout || ""}${c.stderr ? `\n[stderr] ${c.stderr}` : ""}`,
+      );
+      setResult({
+        stdout: parts.join("\n\n"),
+        stderr: "",
+        exit_code: (res?.commands || []).some((c) => c.exit_code !== 0) ? 1 : 0,
+        duration_ms: res?.duration_ms || 0,
+        truncated: false,
+      });
+      message.success("只读探测完成");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "只读探测失败"));
     } finally {
       setRunning(false);
     }
@@ -493,6 +521,9 @@ export function ServerConsolePage() {
                         disabled={!accessLoaded || !canExec}
                       >
                         执行
+                      </Button>
+                      <Button loading={running} disabled={!accessLoaded || !canExec} onClick={() => void runReadonlyProbe()}>
+                        只读探测（磁盘/内存/负载）
                       </Button>
                       <Button icon={<ReloadOutlined />} onClick={() => setResult(null)}>
                         清空结果

@@ -33,6 +33,7 @@ func RegisterAIRoutes(api *gin.RouterGroup, d *RouteDeps) {
 	g.POST("/knowledge/sync", d.aiHandler.SyncKnowledge)
 	g.POST("/knowledge/embed", d.aiHandler.EmbedKnowledge)
 	g.GET("/center/overview", d.aiHandler.CenterOverview)
+	g.GET("/center/tool-runtime-health", d.aiHandler.ToolRuntimeHealth)
 	g.POST("/center/reseed", d.aiHandler.ReseedCenter)
 	g.GET("/center/prompts", d.aiHandler.ListPrompts)
 	g.POST("/center/prompts", d.aiHandler.CreatePrompt)

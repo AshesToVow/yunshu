@@ -55,6 +55,8 @@ type Service struct {
 	cmdbSvc       *cmdbsvc.Service
 	dbmgmtSvc     *dbmgmtsvc.Service
 	esmgmtSvc     *esmgmtsvc.Service
+	changeEventSvc *projectsvc.ChangeEventService
+	silenceSvc    *alert.AlertSilenceService
 	projectMgmt   *projectsvc.ProjectMgmtService
 	loggieAgent   *logplatform.LoggieAgentService
 	clusterLog    *logplatform.ClusterLogService
@@ -85,6 +87,15 @@ func (s *Service) SetMonitorDeps(ds *alert.AlertDatasourceService) {
 		return
 	}
 	s.alertDSSvc = ds
+}
+
+// SetOpsDeps 注入变更时间线与告警静默（调查闭环 / 工具）。
+func (s *Service) SetOpsDeps(changeSvc *projectsvc.ChangeEventService, silenceSvc *alert.AlertSilenceService) {
+	if s == nil {
+		return
+	}
+	s.changeEventSvc = changeSvc
+	s.silenceSvc = silenceSvc
 }
 
 // SetLogPlatformDeps 注入日志平台只读诊断依赖（日志源 / Loggie / 集群采集规则）。

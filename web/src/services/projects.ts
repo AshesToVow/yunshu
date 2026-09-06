@@ -267,6 +267,35 @@ export async function execProjectServerCommand(projectId: number, serverId: numb
   return await getData<ServerExecResult>(http.post(`/projects/${projectId}/servers/${serverId}/exec`, payload));
 }
 
+export interface ServerProbePayload {
+  kind?: "disk" | "mem" | "load" | "all";
+  path?: string;
+  timeout_sec?: number;
+}
+
+export interface ServerProbeResult {
+  server_id: number;
+  server_name?: string;
+  host?: string;
+  kind?: string;
+  note?: string;
+  commands?: Array<{
+    name: string;
+    command: string;
+    stdout?: string;
+    stderr?: string;
+    exit_code: number;
+  }>;
+  duration_ms?: number;
+}
+
+/** SSH 只读探测远端主机磁盘/内存/负载（白名单命令）。 */
+export async function probeProjectServer(projectId: number, serverId: number, payload?: ServerProbePayload) {
+  return await getData<ServerProbeResult>(
+    http.post(`/projects/${projectId}/servers/${serverId}/probe`, payload || { kind: "all" }),
+  );
+}
+
 export interface ServerRemoteFileItem {
   name: string;
   path: string;

@@ -176,6 +176,10 @@ type (
 	ServerDetailItem         = cmdb.ServerDetailItem
 	ServerExecRequest        = cmdb.ServerExecRequest
 	ServerExecResult         = cmdb.ServerExecResult
+	HostProbeRequest         = cmdb.HostProbeRequest
+	HostProbeResult          = cmdb.HostProbeResult
+	HostProbeKind            = cmdb.HostProbeKind
+	HostProbeCommandResult   = cmdb.HostProbeCommandResult
 	ServerGroupItem          = cmdb.ServerGroupItem
 	ServerGroupUpsertRequest = cmdb.ServerGroupUpsertRequest
 	ServerGroupTreeQuery     = cmdb.ServerGroupTreeQuery

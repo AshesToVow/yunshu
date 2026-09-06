@@ -16,6 +16,7 @@ import (
 	cmdbsvc "yunshu/internal/service/cmdb"
 	"yunshu/internal/service/k8s"
 	"yunshu/internal/service/logplatform"
+	projectsvc "yunshu/internal/service/project"
 )
 
 // InvestigationReport 结构化调查报告。
@@ -296,6 +297,60 @@ func (s *Service) collectInvestigation(
 		evidence = append(evidence, map[string]any{
 			"type": "alert_explain", "fingerprint": fp, "firing_delivered": explain.FiringDelivered,
 		})
+
+		// 变更时间线：告警前后 2 小时
+		if req.ProjectID > 0 && s.changeEventSvc != nil {
+			to := time.Now()
+			from := to.Add(-2 * time.Hour)
+			if len(events) > 0 && !events[0].CreatedAt.IsZero() {
+				from = events[0].CreatedAt.Add(-2 * time.Hour)
+				to = events[0].CreatedAt.Add(30 * time.Minute)
+				if to.After(time.Now()) {
+					to = time.Now()
+				}
+			}
+			if ch, e := s.changeEventSvc.List(ctx, projectsvc.ChangeEventListQuery{
+				ProjectID: req.ProjectID,
+				From:      from.Format(time.RFC3339),
+				To:        to.Format(time.RFC3339),
+				Page:      1,
+				PageSize:  30,
+			}); e == nil && ch != nil {
+				bundle["recent_changes"] = ch.List
+				bundle["recent_changes_total"] = ch.Total
+				evidence = append(evidence, map[string]any{
+					"type": "change_events", "total": ch.Total, "window": map[string]string{
+						"from": from.Format(time.RFC3339), "to": to.Format(time.RFC3339),
+					},
+				})
+			}
+		}
+
+		// 可选：指定 server_id 或从告警标题/载荷猜测主机后 SSH 只读探测
+		serverID := req.ServerID
+		if serverID == 0 && req.ProjectID > 0 && s.cmdbSvc != nil && len(events) > 0 {
+			hint := events[0].Title + " " + events[0].Cluster + " " + events[0].RequestPayload
+			serverID = s.matchServerFromAlertHint(ctx, req.ProjectID, hint)
+		}
+		if serverID > 0 && req.ProjectID > 0 && s.cmdbSvc != nil {
+			if probe, e := s.cmdbSvc.ProbeHostMetrics(ctx, cmdbsvc.HostProbeRequest{
+				ProjectID: req.ProjectID,
+				ServerID:  serverID,
+				Kind:      cmdbsvc.HostProbeAll,
+				Actor:     actor,
+			}); e == nil {
+				bundle["host_probe"] = probe
+				evidence = append(evidence, map[string]any{"type": "host_probe", "server_id": serverID})
+			} else {
+				bundle["host_probe_error"] = e.Error()
+			}
+		}
+
+		bundle["recommended_actions"] = []map[string]any{
+			{"action": "silence", "hint": "可在告警页快捷静默，或助手调用 create_alert_silence", "fingerprint": fp},
+			{"action": "check_changes", "hint": "核对 recent_changes 是否与告警同源"},
+			{"action": "conclude", "hint": "调查完成后在 AI 调查记录中归档结论"},
+		}
 		return bundle, evidence, nil
 	case "incident":
 		return s.collectIncidentInvestigation(ctx, actor, req)
@@ -561,6 +616,11 @@ func (s *Service) analyzeInvestigation(
 		RawReply: resp.Content,
 	}
 	applyParsedAnalysis(&out.Summary, &out.RootCauses, &out.Actions, resp.Content)
+	if kind == "alert" {
+		if rec, ok := collect["recommended_actions"].([]map[string]any); ok && len(rec) > 0 {
+			out.Actions = append(out.Actions, rec...)
+		}
+	}
 	return out, nil
 }
 
@@ -608,4 +668,29 @@ func (s *Service) analyzeChatInvestigation(
 	}
 	applyParsedAnalysis(&out.Summary, &out.RootCauses, &out.Actions, resp.Content)
 	return out, nil
+}
+
+// matchServerFromAlertHint 从告警标题/集群名/载荷中匹配 CMDB 主机（host 或 name 子串）。
+func (s *Service) matchServerFromAlertHint(ctx context.Context, projectID uint, hint string) uint {
+	hint = strings.ToLower(strings.TrimSpace(hint))
+	if projectID == 0 || hint == "" || s.cmdbSvc == nil {
+		return 0
+	}
+	res, err := s.cmdbSvc.ListServers(ctx, cmdbsvc.ServerListQuery{
+		ProjectID: projectID, Page: 1, PageSize: 100,
+	})
+	if err != nil || res == nil {
+		return 0
+	}
+	for _, sv := range res.List {
+		host := strings.ToLower(strings.TrimSpace(sv.Host))
+		name := strings.ToLower(strings.TrimSpace(sv.Name))
+		if host != "" && strings.Contains(hint, host) {
+			return sv.ID
+		}
+		if name != "" && len(name) >= 3 && strings.Contains(hint, name) {
+			return sv.ID
+		}
+	}
+	return 0
 }
