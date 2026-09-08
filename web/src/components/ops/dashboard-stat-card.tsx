@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 
 export type DashboardStatCardProps = {
   title: ReactNode;
-  value: number;
+  value: number | string;
   hint?: ReactNode;
   icon: ReactNode;
   accent: string;
