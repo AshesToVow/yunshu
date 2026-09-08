@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"yunshu/internal/ai/runbooks"
-	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/k8sauth"
@@ -37,8 +36,7 @@ func (s *Service) toolDefinitions(includeWrite bool) []llm.ToolDefinition {
 	s.ensureSeed()
 	defs := s.builtinToolDefinitions(includeWrite)
 	// 追加已启用的脚本工具
-	var scripts []model.AiToolDef
-	_ = s.db.Where("enabled = ? AND runtime = ?", true, "script").Find(&scripts).Error
+	scripts, _ := s.repo.ListEnabledScriptTools(context.Background())
 	for _, t := range scripts {
 		schema := map[string]any{"type": "object", "properties": map[string]any{}}
 		if strings.TrimSpace(t.InputSchemaJSON) != "" {
@@ -301,8 +299,8 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 	s.ensureSeed()
 
 	// 注册表：禁用 / 脚本工具
-	var reg model.AiToolDef
-	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&reg).Error; err == nil {
+	reg, regErr := s.repo.GetToolByName(ctx, name)
+	if regErr == nil && reg != nil {
 		if !reg.Enabled {
 			step.OK = false
 			step.Error = "工具已禁用"

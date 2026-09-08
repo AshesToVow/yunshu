@@ -33,10 +33,8 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 	interval := time.Duration(intervalHours) * time.Hour
 	now := time.Now()
 
-	var releases []model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).
-		Where("status = ? AND audit_enabled = ?", model.CicdRunStatusPendingApproval, true).
-		Find(&releases).Error; err != nil {
+	releases, err := s.repo.ListPendingApprovalReleases(ctx, 0)
+	if err != nil {
 		slog.Default().With("component", "cicd").Warn("list pending approval releases failed", "error", err)
 		return
 	}
@@ -68,39 +66,14 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 			)
 			continue
 		}
-		ts := now
-		_ = s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
-			Where("id = ?", step.ID).
-			Update("last_reminded_at", ts).Error
+		_ = s.repo.MarkApprovalStepsReminded(ctx, []uint{step.ID}, now)
 	}
 	s.syncWorkflowApprovalReminders(ctx, sla, interval, now)
 }
 
 // syncWorkflowApprovalReminders 对已切到统一引擎的发布工单按 workflow_ticket_steps 催办。
 func (s *Service) syncWorkflowApprovalReminders(ctx context.Context, sla, interval time.Duration, now time.Time) {
-	type row struct {
-		StepID          uint
-		TicketID        uint
-		StageName       string
-		ActivatedAt     time.Time
-		LastRemindedAt  *time.Time
-		UserGroupID     *uint
-		AssigneeUserID  *uint
-		RefID           uint
-		Title           string
-		ProjectID       uint
-		SubmitterUserID uint
-	}
-	var list []row
-	err := s.db.WithContext(ctx).Raw(`
-SELECT s.id AS step_id, s.ticket_id, s.stage_name, s.activated_at, s.last_reminded_at,
-       s.user_group_id, s.assignee_user_id, t.ref_id, t.title, t.project_id, t.submitter_user_id
-FROM workflow_ticket_steps s
-JOIN workflow_tickets t ON t.id = s.ticket_id AND t.deleted_at IS NULL
-WHERE t.domain = ? AND t.ticket_type = ? AND t.status = ?
-  AND s.status = ? AND s.activated_at IS NOT NULL AND s.deleted_at IS NULL
-`, model.WorkflowDomainCicd, model.WorkflowTicketTypeRelease, model.WorkflowTicketStatusPending,
-		model.WorkflowStepPending).Scan(&list).Error
+	list, err := s.repo.ListWorkflowApprovalReminderRows(ctx)
 	if err != nil {
 		slog.Default().With("component", "cicd").Warn("list workflow approval steps failed", "error", err)
 		return
@@ -140,9 +113,7 @@ WHERE t.domain = ? AND t.ticket_type = ? AND t.status = ?
 		if !sent {
 			continue
 		}
-		_ = s.db.WithContext(ctx).Model(&model.WorkflowTicketStep{}).
-			Where("id = ?", it.StepID).
-			Update("last_reminded_at", now).Error
+		_ = s.repo.UpdateWorkflowTicketStepFields(ctx, it.StepID, map[string]any{"last_reminded_at": now})
 	}
 }
 
@@ -161,26 +132,13 @@ func (s *Service) workflowStepNotifyUserIDs(ctx context.Context, assigneeID, gro
 }
 
 func (s *Service) backfillPendingStepActivatedAt(ctx context.Context) {
-	type row struct {
-		ID uint
-	}
-	var ids []row
-	err := s.db.WithContext(ctx).Raw(`
-SELECT s.id FROM cicd_release_approval_steps s
-JOIN cicd_release_runs r ON r.id = s.release_run_id
-WHERE r.status = ? AND s.status = ? AND s.activated_at IS NULL
-AND s.sort_order = (
-  SELECT MIN(s2.sort_order) FROM cicd_release_approval_steps s2
-  WHERE s2.release_run_id = s.release_run_id AND s2.status = ?
-)`, model.CicdRunStatusPendingApproval, model.CicdApprovalStepPending, model.CicdApprovalStepPending).Scan(&ids).Error
+	ids, err := s.repo.ListLegacyApprovalReminderSeedIDs(ctx)
 	if err != nil || len(ids) == 0 {
 		return
 	}
 	now := time.Now()
 	for _, id := range ids {
-		_ = s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
-			Where("id = ? AND activated_at IS NULL", id.ID).
-			Update("activated_at", now).Error
+		_ = s.repo.UpdateApprovalStepFields(ctx, id, map[string]any{"activated_at": now})
 	}
 }
 
@@ -259,11 +217,11 @@ func (s *Service) lookupProjectName(ctx context.Context, projectID uint) string 
 	if projectID == 0 {
 		return "-"
 	}
-	var row model.Project
-	if err := s.db.WithContext(ctx).Select("name").Where("id = ?", projectID).First(&row).Error; err != nil {
+	name, err := s.repo.GetProjectName(ctx, projectID)
+	if err != nil {
 		return fmt.Sprintf("#%d", projectID)
 	}
-	if name := strings.TrimSpace(row.Name); name != "" {
+	if name = strings.TrimSpace(name); name != "" {
 		return name
 	}
 	return fmt.Sprintf("#%d", projectID)
@@ -273,14 +231,14 @@ func (s *Service) lookupServiceName(ctx context.Context, serviceID uint) string 
 	if serviceID == 0 {
 		return "-"
 	}
-	var row model.CicdService
-	if err := s.db.WithContext(ctx).Select("name, identifier").Where("id = ?", serviceID).First(&row).Error; err != nil {
+	brief, err := s.repo.GetServiceBrief(ctx, serviceID)
+	if err != nil {
 		return fmt.Sprintf("#%d", serviceID)
 	}
-	if name := strings.TrimSpace(row.Name); name != "" {
+	if name := strings.TrimSpace(brief.Name); name != "" {
 		return name
 	}
-	if id := strings.TrimSpace(row.Identifier); id != "" {
+	if id := strings.TrimSpace(brief.Identifier); id != "" {
 		return id
 	}
 	return fmt.Sprintf("#%d", serviceID)

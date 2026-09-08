@@ -7,12 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
 	"gorm.io/gorm"
+
 )
 
 // LinkedTicketInput 创建与业务实体关联的统一工单。
@@ -38,16 +40,7 @@ func (s *Service) GetTicketByRefType(ctx context.Context, refType string, refID 
 	if refType == "" || refID == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
-	q := s.db.WithContext(ctx).Where("ref_type = ? AND ref_id = ?", refType, refID)
-	if tt := strings.TrimSpace(ticketType); tt != "" {
-		q = q.Where("ticket_type = ?", tt)
-	}
-	var row model.WorkflowTicket
-	err := q.Order("id DESC").First(&row).Error
-	if err != nil {
-		return nil, err
-	}
-	return &row, nil
+	return s.repo.GetTicketByRef(ctx, refType, refID, strings.TrimSpace(ticketType))
 }
 
 // CreateLinkedTicket 基于流程定义创建关联工单（dbmgmt/cicd 等业务写入 workflow_tickets）。
@@ -72,14 +65,14 @@ func (s *Service) CreateLinkedTicket(ctx context.Context, in LinkedTicketInput) 
 	// 工单 ticket_type 保留业务类型；definition 可能来自 default 回退
 	ticketType := key.TicketType
 	var ticket model.WorkflowTicket
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.repo.Transaction(ctx, func(tx interfaces.WorkflowRepository) error {
 		ticket = model.WorkflowTicket{
 			DefinitionID: def.ID, Domain: key.Domain, TicketType: ticketType,
 			ProjectID: in.ProjectID, Title: title, Status: model.WorkflowTicketStatusPending,
 			SubmitterUserID: in.SubmitterUserID, RefType: strings.TrimSpace(in.RefType), RefID: in.RefID,
 			PayloadJSON: payloadJSON,
 		}
-		if err := tx.Create(&ticket).Error; err != nil {
+		if err := tx.CreateTicket(ctx, &ticket); err != nil {
 			return err
 		}
 		now := time.Now()
@@ -97,7 +90,7 @@ func (s *Service) CreateLinkedTicket(ctx context.Context, in LinkedTicketInput) 
 			if i == 0 {
 				step.ActivatedAt = &now
 			}
-			if err := tx.Create(&step).Error; err != nil {
+			if err := tx.CreateStep(ctx, &step); err != nil {
 				return err
 			}
 		}
@@ -135,7 +128,7 @@ func (s *Service) CreateInfoTicket(ctx context.Context, in LinkedTicketInput, st
 		SubmitterUserID: in.SubmitterUserID, RefType: strings.TrimSpace(in.RefType), RefID: in.RefID,
 		PayloadJSON: payloadJSON,
 	}
-	if err := s.db.WithContext(ctx).Create(&ticket).Error; err != nil {
+	if err := s.repo.CreateTicket(ctx, &ticket); err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "CreateInfoTicket", err)
 	}
 	return &ticket, nil
@@ -143,15 +136,7 @@ func (s *Service) CreateInfoTicket(ctx context.Context, in LinkedTicketInput, st
 
 // GetActiveStep 返回当前待审批步骤。
 func (s *Service) GetActiveStep(ctx context.Context, ticketID uint) (*model.WorkflowTicketStep, error) {
-	var step model.WorkflowTicketStep
-	err := s.db.WithContext(ctx).
-		Where("ticket_id = ? AND status = ? AND activated_at IS NOT NULL", ticketID, model.WorkflowStepPending).
-		Order("sort_order ASC, id ASC").
-		First(&step).Error
-	if err != nil {
-		return nil, err
-	}
-	return &step, nil
+	return s.repo.GetActiveStep(ctx, ticketID)
 }
 
 // ReviewLinkedStep 审批关联工单并返回最新工单状态。
@@ -196,9 +181,9 @@ func (s *Service) CloseLinkedTicket(ctx context.Context, refType string, refID u
 		return nil
 	}
 	now := time.Now()
-	return s.db.WithContext(ctx).Model(ticket).Updates(map[string]any{
+	return s.repo.UpdateTicketFields(ctx, ticket.ID, map[string]any{
 		"status": model.WorkflowTicketStatusClosed, "closed_at": now,
-	}).Error
+	})
 }
 
 // CloseLinkedTicketTyped 按工单类型关闭关联统一工单。
@@ -214,9 +199,9 @@ func (s *Service) CloseLinkedTicketTyped(ctx context.Context, refType string, re
 		return nil
 	}
 	now := time.Now()
-	return s.db.WithContext(ctx).Model(ticket).Updates(map[string]any{
+	return s.repo.UpdateTicketFields(ctx, ticket.ID, map[string]any{
 		"status": model.WorkflowTicketStatusClosed, "closed_at": now,
-	}).Error
+	})
 }
 
 // ErrNoLinkedTicket 业务实体尚未关联统一工单。

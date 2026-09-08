@@ -11,6 +11,7 @@ import (
 
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
@@ -26,7 +27,7 @@ type SchedulerConfigResolver func(ctx context.Context) dictconfig.EsmgmtBackupSc
 
 // Service Elasticsearch 管理服务。
 type Service struct {
-	db             *gorm.DB
+	repo           interfaces.EsmgmtRepository
 	aead           cipher.AEAD
 	logES          *logplatform.ElasticsearchProvider
 	newObjectStore ObjectStoreFactory
@@ -38,14 +39,14 @@ type Service struct {
 
 // NewService 创建 ES 管理服务。encryptionKey 为空时仍可启动，但写入密码会失败。
 func NewService(
-	db *gorm.DB,
+	repo interfaces.EsmgmtRepository,
 	encryptionKey string,
 	logES *logplatform.ElasticsearchProvider,
 	newObjectStore ObjectStoreFactory,
 	resolveSched SchedulerConfigResolver,
 ) (*Service, error) {
 	s := &Service{
-		db:             db,
+		repo:           repo,
 		logES:          logES,
 		newObjectStore: newObjectStore,
 		resolveSched:   resolveSched,
@@ -145,8 +146,8 @@ type ProxyRequest struct {
 }
 
 func (s *Service) ListConnections(ctx context.Context) ([]model.EsmgmtConnection, error) {
-	var list []model.EsmgmtConnection
-	if err := s.db.WithContext(ctx).Order("id desc").Find(&list).Error; err != nil {
+	list, err := s.repo.ListConnections(ctx)
+	if err != nil {
 		return nil, err
 	}
 	for i := range list {
@@ -169,8 +170,8 @@ func (s *Service) LoadManagedESConnection(ctx context.Context, id uint) (*logpla
 	if id == 0 {
 		return nil, constants.ErrBadRequestWithMsg("connection id required")
 	}
-	var row model.EsmgmtConnection
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetConnection(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("连接不存在")
 		}
@@ -194,6 +195,7 @@ func (s *Service) LoadManagedESConnection(ctx context.Context, id uint) (*logpla
 	}, nil
 }
 
+
 // ImportConnectionFromDict 从数据字典 elasticsearch_*（及 YAML 兜底）导入/更新一条 esmgmt 连接。
 func (s *Service) ImportConnectionFromDict(ctx context.Context, actor *auth.CurrentUser) (*model.EsmgmtConnection, error) {
 	if s.logES == nil {
@@ -206,11 +208,7 @@ func (s *Service) ImportConnectionFromDict(ctx context.Context, actor *auth.Curr
 	if len(cfg.Addresses) == 0 {
 		return nil, constants.ErrBadRequestWithMsg("数据字典未配置 elasticsearch_addresses")
 	}
-	var existing model.EsmgmtConnection
-	findErr := s.db.WithContext(ctx).
-		Where("remark LIKE ? OR name = ?", "%"+dictImportRemarkMarker+"%", dictImportConnectionName).
-		Order("id ASC").
-		First(&existing).Error
+	existing, findErr := s.repo.FindDictImportConnection(ctx, dictImportRemarkMarker, dictImportConnectionName)
 	req := ConnectionUpsertRequest{
 		Name:       dictImportConnectionName,
 		Addresses:  AddressesInput(cfg.Addresses),
@@ -231,8 +229,7 @@ func (s *Service) ImportConnectionFromDict(ctx context.Context, actor *auth.Curr
 		return nil, findErr
 	}
 	// 无默认连接时，将本条设为默认，便于 esmgmt 控制台开箱即用
-	var defCount int64
-	_ = s.db.WithContext(ctx).Model(&model.EsmgmtConnection{}).Where("is_default = ?", true).Count(&defCount).Error
+	defCount, _ := s.repo.CountDefaultConnections(ctx)
 	req.IsDefault = defCount == 0
 	return s.CreateConnection(ctx, req, actor)
 }
@@ -266,17 +263,7 @@ func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequ
 		}
 		row.PasswordEnc = enc
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if row.IsDefault {
-			if err := tx.Model(&model.EsmgmtConnection{}).
-				Where("is_default = ?", true).
-				Update("is_default", false).Error; err != nil {
-				return err
-			}
-		}
-		return tx.Create(&row).Error
-	})
-	if err != nil {
+	if err := s.repo.CreateConnectionClearDefaults(ctx, &row); err != nil {
 		return nil, err
 	}
 	row.HasPassword = strings.TrimSpace(row.PasswordEnc) != ""
@@ -288,8 +275,8 @@ func (s *Service) UpdateConnection(ctx context.Context, id uint, req ConnectionU
 	if err := s.assertConnectionManage(ctx, id, actor); err != nil {
 		return nil, err
 	}
-	var row model.EsmgmtConnection
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetConnection(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
@@ -317,33 +304,23 @@ func (s *Service) UpdateConnection(ctx context.Context, id uint, req ConnectionU
 		}
 		row.PasswordEnc = enc
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if row.IsDefault {
-			if err := tx.Model(&model.EsmgmtConnection{}).
-				Where("is_default = ? AND id <> ?", true, id).
-				Update("is_default", false).Error; err != nil {
-				return err
-			}
-		}
-		return tx.Save(&row).Error
-	})
-	if err != nil {
+	if err := s.repo.UpdateConnectionClearDefaults(ctx, id, row); err != nil {
 		return nil, err
 	}
 	row.HasPassword = strings.TrimSpace(row.PasswordEnc) != ""
 	row.PasswordEnc = ""
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) DeleteConnection(ctx context.Context, id uint, actor *auth.CurrentUser) error {
 	if err := s.assertConnectionManage(ctx, id, actor); err != nil {
 		return err
 	}
-	res := s.db.WithContext(ctx).Delete(&model.EsmgmtConnection{}, id)
-	if res.Error != nil {
-		return res.Error
+	n, err := s.repo.DeleteConnection(ctx, id)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFound
 	}
 	return nil
@@ -380,8 +357,8 @@ func (s *Service) TestConnection(ctx context.Context, req TestConnectionRequest)
 		timeout = 30
 	}
 	if req.ConnectionID > 0 {
-		var row model.EsmgmtConnection
-		if err := s.db.WithContext(ctx).First(&row, req.ConnectionID).Error; err != nil {
+		row, err := s.repo.GetConnection(ctx, req.ConnectionID)
+		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return &PingResult{OK: false, Message: "连接不存在"}, nil
 			}
@@ -608,10 +585,9 @@ func (s *Service) resolveClient(ctx context.Context, connectionID uint) (*esclie
 		}
 		return cli, nil
 	}
-	var def model.EsmgmtConnection
-	err := s.db.WithContext(ctx).Where("is_default = ?", true).First(&def).Error
+	def, err := s.repo.GetDefaultConnection(ctx)
 	if err == nil {
-		cli, err := s.clientFromRow(ctx, &def)
+		cli, err := s.clientFromRow(ctx, def)
 		if err != nil {
 			return nil, err
 		}
@@ -631,14 +607,14 @@ func (s *Service) resolveClient(ctx context.Context, connectionID uint) (*esclie
 }
 
 func (s *Service) clientFromConnectionID(ctx context.Context, id uint) (*esclient.Client, error) {
-	var row model.EsmgmtConnection
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetConnection(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("连接不存在")
 		}
 		return nil, err
 	}
-	return s.clientFromRow(ctx, &row)
+	return s.clientFromRow(ctx, row)
 }
 
 func (s *Service) clientFromRow(ctx context.Context, row *model.EsmgmtConnection) (*esclient.Client, error) {

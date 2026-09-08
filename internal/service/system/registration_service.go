@@ -21,13 +21,13 @@ import (
 )
 
 type RegistrationService struct {
-	regRepo  interfaces.RegistrationRequestRepository
-	userRepo interfaces.UserRepository
-	redis    *redis.Client
-	db       *gorm.DB
-	authCfg  config.AuthConfig
-	mailer   mailer.Sender
-	appName  string
+	regRepo       interfaces.RegistrationRequestRepository
+	userRepo      interfaces.UserRepository
+	redis         *redis.Client
+	resolvePolicy PasswordPolicyResolver
+	authCfg       config.AuthConfig
+	mailer        mailer.Sender
+	appName       string
 }
 
 // NewRegistrationService 创建相关逻辑。
@@ -35,19 +35,19 @@ func NewRegistrationService(
 	regRepo interfaces.RegistrationRequestRepository,
 	userRepo interfaces.UserRepository,
 	redis *redis.Client,
-	db *gorm.DB,
+	resolvePolicy PasswordPolicyResolver,
 	authCfg config.AuthConfig,
 	mailer mailer.Sender,
 	appName string,
 ) *RegistrationService {
 	return &RegistrationService{
-		regRepo:  regRepo,
-		userRepo: userRepo,
-		redis:    redis,
-		db:       db,
-		authCfg:  authCfg,
-		mailer:   mailer,
-		appName:  appName,
+		regRepo:       regRepo,
+		userRepo:      userRepo,
+		redis:         redis,
+		resolvePolicy: resolvePolicy,
+		authCfg:       authCfg,
+		mailer:        mailer,
+		appName:       appName,
 	}
 }
 
@@ -76,7 +76,7 @@ func (s *RegistrationService) Apply(ctx context.Context, req ApplyRegisterReques
 	if err := s.validateEmailCode(ctx, emailCodeSceneRegister, email, req.Code); err != nil {
 		return bizerrors.Pass(ctx, "registration", "Apply", err)
 	}
-	if err := enforcePasswordComplexity(ctx, s.db, req.Password, username); err != nil {
+	if err := enforcePasswordComplexity(ctx, s.resolvePolicy, req.Password, username); err != nil {
 		return err
 	}
 

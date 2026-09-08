@@ -12,6 +12,9 @@ export type DashboardStatCardProps = {
   /** 点击 KPI 下钻路由 */
   to?: string;
   className?: string;
+  /** 驾驶舱大屏样式 */
+  variant?: "default" | "cockpit";
+  tone?: "default" | "k8s" | "alert";
 };
 
 export function DashboardStatCard({
@@ -23,26 +26,50 @@ export function DashboardStatCard({
   loading,
   to,
   className,
+  variant = "default",
+  tone = "default",
 }: DashboardStatCardProps) {
+  const isCockpit = variant === "cockpit";
+  const cardClass = [
+    isCockpit ? "overview-big-screen__stat-card" : "dashboard-stat-card",
+    isCockpit && tone === "k8s" ? "overview-big-screen__stat-card--k8s" : "",
+    isCockpit && tone === "alert" ? "overview-big-screen__stat-card--alert" : "",
+    to ? (isCockpit ? "overview-big-screen__stat-card--clickable" : "dashboard-stat-card--clickable") : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   const card = (
-    <Card
-      className={["dashboard-stat-card", to ? "dashboard-stat-card--clickable" : "", className].filter(Boolean).join(" ")}
-      loading={loading}
-      bordered
-      hoverable={Boolean(to)}
-    >
-      <div className="dashboard-stat-card__head">
-        <span className="dashboard-stat-card__icon" style={{ color: accent, backgroundColor: `${accent}14` }}>
+    <Card className={cardClass} loading={loading} bordered={!isCockpit} hoverable={Boolean(to)}>
+      <div className={isCockpit ? "overview-big-screen__stat-head" : "dashboard-stat-card__head"}>
+        <span
+          className={isCockpit ? "overview-big-screen__stat-icon" : "dashboard-stat-card__icon"}
+          style={
+            isCockpit
+              ? { color: accent, boxShadow: `0 0 24px ${accent}44`, borderColor: `${accent}55` }
+              : { color: accent, backgroundColor: `${accent}14` }
+          }
+        >
           {icon}
         </span>
         <Statistic
-          title={title}
+          title={
+            isCockpit ? <span className="overview-big-screen__stat-title">{title}</span> : title
+          }
           value={value}
-          valueStyle={{ fontSize: 24, fontWeight: 600 }}
+          valueStyle={
+            isCockpit
+              ? { fontSize: 28, fontWeight: 700, color: "#f8fafc", fontVariantNumeric: "tabular-nums" }
+              : { fontSize: 24, fontWeight: 600 }
+          }
         />
       </div>
       {hint ? (
-        <Typography.Paragraph type="secondary" className="dashboard-stat-card__hint">
+        <Typography.Paragraph
+          type={isCockpit ? undefined : "secondary"}
+          className={isCockpit ? "overview-big-screen__stat-hint" : "dashboard-stat-card__hint"}
+        >
           {hint}
         </Typography.Paragraph>
       ) : null}
@@ -51,7 +78,7 @@ export function DashboardStatCard({
 
   if (!to) return card;
   return (
-    <Link to={to} className="dashboard-stat-card-link">
+    <Link to={to} className={isCockpit ? "overview-big-screen__stat-link" : "dashboard-stat-card-link"}>
       {card}
     </Link>
   );

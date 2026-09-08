@@ -78,7 +78,10 @@ func isDeployArtifactName(name string) bool {
 }
 
 func (s *Service) newCicdMinioClient(ctx context.Context) (*minio.Client, error) {
-	minioCfg := dictconfig.ResolveCicdMinioConfig(ctx, s.db)
+	var minioCfg dictconfig.MinioConfig
+	if s.resolveMinio != nil {
+		minioCfg = s.resolveMinio(ctx)
+	}
 	// 列制品只需要 endpoint + AK/SK；桶名由 cicd_minio_bucket_* 单独决定，不要求备份用的 minio_bucket。
 	if strings.TrimSpace(minioCfg.Endpoint) == "" ||
 		strings.TrimSpace(minioCfg.AccessKey) == "" ||

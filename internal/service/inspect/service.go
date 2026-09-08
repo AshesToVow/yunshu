@@ -18,19 +18,28 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/service/alert"
+	"yunshu/internal/service/platformtpl"
 
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 )
 
+// ReportStoreFactory 由装配层注入，避免 Service 直持 *gorm.DB 解析 MinIO。
+type ReportStoreFactory func(ctx context.Context) ReportStore
+
+// ReportStorageInfoFactory 由装配层注入，解析报告存储状态展示。
+type ReportStorageInfoFactory func(ctx context.Context) ReportStorageInfo
+
 type Service struct {
-	db        *gorm.DB
-	redis     *redis.Client
-	dsSvc     *alert.AlertDatasourceService
-	projects  interfaces.ProjectRepository
-	mailer    mailer.Sender
-	appName   string
-	reportDir string
+	repo            interfaces.InspectRepository
+	platformTplRepo interfaces.PlatformTemplateRepository
+	redis           *redis.Client
+	dsSvc           *alert.AlertDatasourceService
+	projects        interfaces.ProjectRepository
+	mailer          mailer.Sender
+	appName         string
+	reportDir       string
+	newReportStore  ReportStoreFactory
+	storageInfo     ReportStorageInfoFactory
 
 	workerOnce sync.Once
 	workerCtx  context.Context
@@ -38,40 +47,57 @@ type Service struct {
 }
 
 func NewService(
-	db *gorm.DB,
+	repo interfaces.InspectRepository,
+	platformTplRepo interfaces.PlatformTemplateRepository,
 	redisClient *redis.Client,
 	dsSvc *alert.AlertDatasourceService,
 	projects interfaces.ProjectRepository,
 	sender mailer.Sender,
 	appName string,
+	newReportStore ReportStoreFactory,
+	storageInfo ReportStorageInfoFactory,
 ) *Service {
 	dir := filepath.Join("logs", "inspect-reports")
 	_ = os.MkdirAll(dir, 0o755)
 	return &Service{
-		db:        db,
-		redis:     redisClient,
-		dsSvc:     dsSvc,
-		projects:  projects,
-		mailer:    sender,
-		appName:   strings.TrimSpace(appName),
-		reportDir: dir,
+		repo:            repo,
+		platformTplRepo: platformTplRepo,
+		redis:           redisClient,
+		dsSvc:           dsSvc,
+		projects:        projects,
+		mailer:          sender,
+		appName:         strings.TrimSpace(appName),
+		reportDir:       dir,
+		newReportStore:  newReportStore,
+		storageInfo:     storageInfo,
 	}
 }
 
+func (s *Service) reportStore(ctx context.Context) ReportStore {
+	if s != nil && s.newReportStore != nil {
+		return s.newReportStore(ctx)
+	}
+	return newLocalReportStore(s.reportDir)
+}
+
+// store 与 reportStore 同义，保留短名供报告读写路径使用。
 func (s *Service) store(ctx context.Context) ReportStore {
-	return resolveReportStore(ctx, s.db, s.reportDir)
+	return s.reportStore(ctx)
 }
 
-// ReportStorageInfo 返回当前巡检报告存储后端与 MinIO 就绪状态。
 func (s *Service) ReportStorageInfo(ctx context.Context) ReportStorageInfo {
-	if s == nil {
-		return ReportStorageInfo{Backend: StorageLocal}
+	if s != nil && s.storageInfo != nil {
+		return s.storageInfo(ctx)
 	}
-	return resolveReportStorageInfo(ctx, s.db, s.reportDir)
+	return ReportStorageInfo{Backend: StorageLocal, LocalRoot: s.reportDir, MinioReason: "未配置"}
+}
+
+func (s *Service) platformTpl() *platformtpl.Service {
+	return platformtpl.NewService(s.platformTplRepo, nil)
 }
 
 func (s *Service) appNameOrDefault() string {
-	if s.appName != "" {
+	if s != nil && s.appName != "" {
 		return s.appName
 	}
 	return "yunshu"

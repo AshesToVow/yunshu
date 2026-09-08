@@ -101,8 +101,8 @@ func (s *LogSearchService) prepareSearch(ctx context.Context, q LogSearchQuery) 
 		filters = append(filters, multiFieldTermFilter([]string{"trace_id", "traceId", "traceid"}, strings.TrimSpace(q.TraceID)))
 	}
 
-	if !q.SkipDropRules && s.db != nil {
-		rules, err := NewLogDropRuleService(s.db).ListEnabled(ctx, q.ProjectID)
+	if !q.SkipDropRules && s.dropRuleRepo != nil {
+		rules, err := NewLogDropRuleService(s.dropRuleRepo).ListEnabled(ctx, q.ProjectID)
 		if err == nil && len(rules) > 0 {
 			mustNot = append(mustNot, dropRulesToMustNot(rules)...)
 		}

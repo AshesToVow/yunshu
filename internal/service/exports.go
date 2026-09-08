@@ -26,6 +26,7 @@ type (
 	PolicyGovernanceService = system.PolicyGovernanceService
 	UserGroupService    = system.UserGroupService
 	RegistrationService = system.RegistrationService
+	PasswordPolicyResolver = system.PasswordPolicyResolver
 	MenuService         = system.MenuService
 	DictEntryService    = system.DictEntryService
 	LoginRequest        = system.LoginRequest
@@ -342,7 +343,11 @@ type (
 	LogDropRuleService    = logplatform.LogDropRuleService
 	LogRetentionService   = logplatform.LogRetentionService
 	ElasticsearchProvider = logplatform.ElasticsearchProvider
+	ElasticsearchConfigResolver = logplatform.ElasticsearchConfigResolver
+	DictValueReader       = logplatform.DictValueReader
+	DictValueWriter       = logplatform.DictValueWriter
 	KafkaProvider         = logplatform.KafkaProvider
+	KafkaConfigResolver   = logplatform.KafkaConfigResolver
 	KafkaToESService      = logplatform.KafkaToESService
 	LoggieAgentService    = logplatform.LoggieAgentService
 	ClusterLogService     = logplatform.ClusterLogService

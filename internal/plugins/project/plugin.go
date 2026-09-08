@@ -65,17 +65,17 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := rt.LogRetention.(*service.LogRetentionService); ok && svc != nil && rt.Config != nil {
+	if svc, ok := plugin.As[*service.LogRetentionService](rt.LogRetention); ok && svc != nil && rt.Config != nil {
 		lifecycle.Go("project.log-retention", func() {
 			service.RunLogRetentionScheduler(bgCtx, svc, config.ElasticsearchConfig{})
 		})
 	}
-	if kafkaSvc, ok := rt.KafkaToES.(*service.KafkaToESService); ok && kafkaSvc != nil {
+	if kafkaSvc, ok := plugin.As[*service.KafkaToESService](rt.KafkaToES); ok && kafkaSvc != nil {
 		lifecycle.Go("project.kafka-to-es-reconcile", func() {
 			kafkaSvc.Run(bgCtx)
 		})
 	}
-	if logIntel, ok := rt.LogIntelligence.(*service.LogIntelligenceService); ok && logIntel != nil {
+	if logIntel, ok := plugin.As[*service.LogIntelligenceService](rt.LogIntelligence); ok && logIntel != nil {
 		lifecycle.Go("project.log-intelligence", func() {
 			service.RunLogIntelligenceWorker(bgCtx, logIntel)
 		})

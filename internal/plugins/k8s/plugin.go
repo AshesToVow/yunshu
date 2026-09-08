@@ -2,10 +2,13 @@ package k8s
 
 import (
 	"context"
-
-	"yunshu/internal/model"
 	"log/slog"
+
+	"yunshu/internal/config"
+	"yunshu/internal/dictconfig"
+	"yunshu/internal/model"
 	"yunshu/internal/plugin"
+	"yunshu/internal/repository"
 	"yunshu/internal/service"
 	"yunshu/internal/service/k8s/eventforward"
 
@@ -78,17 +81,21 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil || rt.DB == nil || rt.Config == nil {
 		return nil
 	}
-	runtimeSvc, _ := rt.K8sRuntime.(*service.K8sRuntimeService)
+	runtimeSvc, _ := plugin.As[*service.K8sRuntimeService](rt.K8sRuntime)
 	if runtimeSvc == nil {
 		return nil
 	}
 	mgr, err := eventforward.NewManager(
-		nil,
+		repository.NewK8sEventForwardRepository(rt.DB),
 		runtimeSvc,
 		rt.YamlK8sEventForwardBase,
 		rt.Config.Alert,
 		rt.Config.App.Port,
-		rt.DB,
+		func(ctx context.Context) config.K8sEventForwardConfig {
+			return dictconfig.ResolveK8sEventForwardConfig(
+				ctx, rt.DB, rt.YamlK8sEventForwardBase, dictconfig.DefaultK8sEventForwardDictTypes(),
+			)
+		},
 	)
 	if err != nil {
 		slog.Default().With("component", "k8s.event_forward").Error(

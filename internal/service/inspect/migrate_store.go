@@ -5,27 +5,25 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"yunshu/internal/model"
 )
 
 // MigrateReportsToMinIO 将项目下仍存于本地的巡检报告迁移到 MinIO（需 MinIO 已配置）。
 func (s *Service) MigrateReportsToMinIO(ctx context.Context, projectID uint) (int, error) {
-	if s == nil || s.db == nil || projectID == 0 {
+	if s == nil || s.repo == nil || projectID == 0 {
 		return 0, nil
 	}
-	info := resolveReportStorageInfo(ctx, s.db, s.reportDir)
+	info := s.ReportStorageInfo(ctx)
 	if !info.MinioReady {
 		return 0, fmt.Errorf("MinIO 未就绪：%s", strings.TrimSpace(info.MinioReason))
 	}
-	minioStore := resolveReportStore(ctx, s.db, s.reportDir)
+	minioStore := s.store(ctx)
 	if minioStore.Backend() != StorageMinio {
 		return 0, fmt.Errorf("当前存储后端不是 MinIO")
 	}
 	local := newLocalReportStore(s.reportDir)
 
-	var runs []model.InspectRun
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND storage = ?", projectID, StorageLocal).Find(&runs).Error; err != nil {
+	runs, err := s.repo.ListLocalStorageRuns(ctx, projectID)
+	if err != nil {
 		return 0, err
 	}
 	migrated := 0
@@ -58,7 +56,7 @@ func (s *Service) MigrateReportsToMinIO(ctx context.Context, projectID uint) (in
 		}
 		if changed {
 			run.Storage = StorageMinio
-			if err := s.db.WithContext(ctx).Save(&run).Error; err != nil {
+			if err := s.repo.SaveRun(ctx, &run); err != nil {
 				return migrated, err
 			}
 			migrated++

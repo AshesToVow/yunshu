@@ -36,22 +36,20 @@ type ReleaseRunDetailResponse struct {
 }
 
 func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (*ReleaseRunDetailResponse, error) {
-	var row model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+	row, err := s.repo.GetReleaseRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "view"); err != nil {
 		return nil, err
 	}
-	item := ReleaseRunItem{CicdReleaseRun: row}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err == nil {
-		item.ServiceName = svc.Name
-		item.ServiceIdentifier = svc.Identifier
+	item := ReleaseRunItem{CicdReleaseRun: *row}
+	if brief, err := s.repo.GetServiceBrief(ctx, row.ServiceID); err == nil && brief != nil {
+		item.ServiceName = brief.Name
+		item.ServiceIdentifier = brief.Identifier
 	}
-	var proj model.Project
-	if err := s.db.WithContext(ctx).Select("name").Where("id = ?", projectID).First(&proj).Error; err == nil {
-		item.ProjectName = proj.Name
+	if name, err := s.repo.GetProjectName(ctx, projectID); err == nil {
+		item.ProjectName = name
 	}
 	if row.CurrentStageKey != "" {
 		item.CurrentStageName = stageNameByKey(row.CurrentStageKey)
@@ -63,8 +61,8 @@ func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint
 	}
 	flowText := buildApprovalFlowText(steps)
 	handlers, _ := s.loadCurrentHandlers(ctx, steps)
-	logs := buildReleaseOperationLogs(row, steps, flowText)
-	destHosts, deployName, destPath := s.loadReleaseDeployMeta(ctx, projectID, &row)
+	logs := buildReleaseOperationLogs(*row, steps, flowText)
+	destHosts, deployName, destPath := s.loadReleaseDeployMeta(ctx, projectID, row)
 
 	return &ReleaseRunDetailResponse{
 		ReleaseRunItem:   item,
@@ -82,8 +80,8 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 	if items, ok := s.buildReleaseApprovalStepItemsFromWorkflow(ctx, runID); ok {
 		return items, nil
 	}
-	var steps []model.CicdReleaseApprovalStep
-	if err := s.db.WithContext(ctx).Where("release_run_id = ?", runID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
+	steps, err := s.repo.ListApprovalStepsByRun(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
 	groupIDs := make([]uint, 0)
@@ -98,8 +96,7 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 	}
 	groupNames := map[uint]string{}
 	if len(groupIDs) > 0 {
-		var groups []model.UserGroup
-		_ = s.db.WithContext(ctx).Select("id, name").Where("id IN ?", groupIDs).Find(&groups).Error
+		groups, _ := s.repo.ListUserGroupsByIDs(ctx, groupIDs)
 		for _, g := range groups {
 			groupNames[g.ID] = g.Name
 		}
@@ -123,8 +120,7 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 	}
 	reviewerNames := map[uint]string{}
 	if len(reviewerIDs) > 0 {
-		var users []model.User
-		_ = s.db.WithContext(ctx).Select("id, username, nickname").Where("id IN ?", reviewerIDs).Find(&users).Error
+		users, _ := s.repo.ListUsersByIDs(ctx, reviewerIDs)
 		for _, u := range users {
 			name := strings.TrimSpace(u.Username)
 			if name == "" {
@@ -225,8 +221,7 @@ func (s *Service) loadCurrentHandlers(ctx context.Context, steps []ReleaseApprov
 		if err != nil || len(userIDs) == 0 {
 			return nil, err
 		}
-		var users []model.User
-		_ = s.db.WithContext(ctx).Select("id, username, nickname").Where("id IN ?", userIDs).Find(&users).Error
+		users, _ := s.repo.ListUsersByIDs(ctx, userIDs)
 		out := make([]ReleaseHandlerItem, 0, len(users))
 		for _, u := range users {
 			name := u.Username
@@ -373,12 +368,12 @@ func (s *Service) loadReleaseDeployMeta(ctx context.Context, projectID uint, rel
 	if release == nil || release.DeployConfigID == nil {
 		return nil, "", ""
 	}
-	var dc model.CicdDeployConfig
-	if err := s.db.WithContext(ctx).Where("id = ?", *release.DeployConfigID).First(&dc).Error; err != nil {
+	dc, err := s.repo.GetDeployConfigByID(ctx, *release.DeployConfigID)
+	if err != nil {
 		return nil, "", ""
 	}
 	destPath := strings.TrimSpace(dc.DestPath)
-	destStr, _ := s.resolveDestIPs(ctx, projectID, &dc)
+	destStr, _ := s.resolveDestIPs(ctx, projectID, dc)
 	var hosts []string
 	if destStr != "" {
 		for _, h := range strings.Split(destStr, ",") {

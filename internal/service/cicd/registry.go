@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/platformhttp"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -52,9 +54,8 @@ func (s *Service) ResolveRegistryForProject(ctx context.Context, projectID uint)
 		Password:     cfg.Harbor.Password,
 		ProjectGroup: cfg.Harbor.ProjectGroup,
 	}
-	if projectID > 0 && s.db != nil {
-		var bind model.ProjectRegistryBinding
-		if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&bind).Error; err == nil && bind.RegistryID > 0 {
+	if projectID > 0 && s.repo != nil {
+		if bind, err := s.repo.GetProjectRegistryBinding(ctx, projectID); err == nil && bind.RegistryID > 0 {
 			if reg, err := s.getRegistry(ctx, bind.RegistryID); err == nil {
 				out = registryToResolved(reg)
 				if v := strings.TrimSpace(bind.HarborProject); v != "" {
@@ -74,13 +75,9 @@ func (s *Service) ResolveRegistryForProject(ctx context.Context, projectID uint)
 			return out
 		}
 	}
-	if s.db != nil {
-		var def model.ImageRegistry
-		if err := s.db.WithContext(ctx).
-			Where("is_default = ? AND status = 1", true).
-			Order("id ASC").
-			First(&def).Error; err == nil {
-			out = registryToResolved(&def)
+	if s.repo != nil {
+		if def, err := s.repo.GetDefaultEnabledHarbor(ctx); err == nil {
+			out = registryToResolved(def)
 		}
 	}
 	if out.ProjectGroup == "" {
@@ -109,11 +106,14 @@ func registryToResolved(reg *model.ImageRegistry) ResolvedRegistry {
 }
 
 func (s *Service) getRegistry(ctx context.Context, id uint) (*model.ImageRegistry, error) {
-	var reg model.ImageRegistry
-	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&reg).Error; err != nil {
-		return nil, constants.ErrNotFound
+	reg, err := s.repo.GetImageRegistry(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrNotFound
+		}
+		return nil, err
 	}
-	return &reg, nil
+	return reg, nil
 }
 
 // --- CRUD ---
@@ -143,13 +143,11 @@ type RegistryListQuery struct {
 
 func (s *Service) ListRegistries(ctx context.Context, q RegistryListQuery) (*pagination.Result[RegistryItem], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	db := s.db.WithContext(ctx).Model(&model.ImageRegistry{})
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.ImageRegistry
-	if err := db.Order("is_default DESC, id ASC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, err := s.repo.ListImageRegistries(ctx, repository.CicdImageRegistryListParams{
+		Offset: (page - 1) * pageSize,
+		Limit:  pageSize,
+	})
+	if err != nil {
 		return nil, err
 	}
 	items := make([]RegistryItem, 0, len(rows))
@@ -188,9 +186,14 @@ func (s *Service) UpsertRegistry(ctx context.Context, id uint, req RegistryUpser
 	}
 	var reg model.ImageRegistry
 	if id > 0 {
-		if err := s.db.WithContext(ctx).Where("id = ?", id).First(&reg).Error; err != nil {
-			return nil, constants.ErrNotFound
+		existing, err := s.repo.GetImageRegistry(ctx, id)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, constants.ErrNotFound
+			}
+			return nil, err
 		}
+		reg = *existing
 	}
 	reg.Name = strings.TrimSpace(req.Name)
 	reg.Type = typ
@@ -205,16 +208,16 @@ func (s *Service) UpsertRegistry(ctx context.Context, id uint, req RegistryUpser
 	reg.Status = status
 	reg.Remark = strings.TrimSpace(req.Remark)
 
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.repo.Transaction(ctx, func(tx repository.CicdRepo) error {
 		if reg.IsDefault {
-			if err := tx.Model(&model.ImageRegistry{}).Where("is_default = ?", true).Update("is_default", false).Error; err != nil {
+			if err := tx.ClearDefaultImageRegistries(ctx); err != nil {
 				return err
 			}
 		}
 		if id == 0 {
-			return tx.Create(&reg).Error
+			return tx.CreateImageRegistry(ctx, &reg)
 		}
-		return tx.Save(&reg).Error
+		return tx.SaveImageRegistry(ctx, &reg)
 	})
 	if err != nil {
 		return nil, err
@@ -224,15 +227,13 @@ func (s *Service) UpsertRegistry(ctx context.Context, id uint, req RegistryUpser
 }
 
 func (s *Service) DeleteRegistry(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&model.ImageRegistry{}, id)
-	if res.Error != nil {
-		return res.Error
+	err := s.repo.DeleteImageRegistryCascade(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return constants.ErrNotFound
+		}
+		return err
 	}
-	if res.RowsAffected == 0 {
-		return constants.ErrNotFound
-	}
-	_ = s.db.WithContext(ctx).Where("registry_id = ?", id).Delete(&model.ProjectRegistryBinding{}).Error
-	_ = s.db.WithContext(ctx).Where("registry_id = ?", id).Delete(&model.ImageCleanupPolicy{}).Error
 	return nil
 }
 
@@ -276,47 +277,46 @@ type ProjectRegistryBindingRequest struct {
 }
 
 func (s *Service) GetProjectRegistryBinding(ctx context.Context, projectID uint) (*model.ProjectRegistryBinding, error) {
-	var bind model.ProjectRegistryBinding
-	if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&bind).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	bind, err := s.repo.GetProjectRegistryBinding(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return &model.ProjectRegistryBinding{ProjectID: projectID}, nil
 		}
 		return nil, err
 	}
-	return &bind, nil
+	return bind, nil
 }
 
 func (s *Service) UpsertProjectRegistryBinding(ctx context.Context, projectID uint, req ProjectRegistryBindingRequest) (*model.ProjectRegistryBinding, error) {
 	if _, err := s.getRegistry(ctx, req.RegistryID); err != nil {
 		return nil, err
 	}
-	var bind model.ProjectRegistryBinding
-	err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&bind).Error
+	bind, err := s.repo.GetProjectRegistryBinding(ctx, projectID)
 	if err != nil {
-		bind = model.ProjectRegistryBinding{
-			ProjectID:     projectID,
-			RegistryID:    req.RegistryID,
-			HarborProject: strings.TrimSpace(req.HarborProject),
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			newBind := model.ProjectRegistryBinding{
+				ProjectID:     projectID,
+				RegistryID:    req.RegistryID,
+				HarborProject: strings.TrimSpace(req.HarborProject),
+			}
+			if err := s.repo.CreateProjectRegistryBinding(ctx, &newBind); err != nil {
+				return nil, err
+			}
+			return &newBind, nil
 		}
-		if err := s.db.WithContext(ctx).Create(&bind).Error; err != nil {
-			return nil, err
-		}
-		return &bind, nil
+		return nil, err
 	}
 	bind.RegistryID = req.RegistryID
 	bind.HarborProject = strings.TrimSpace(req.HarborProject)
-	if err := s.db.WithContext(ctx).Save(&bind).Error; err != nil {
+	if err := s.repo.SaveProjectRegistryBinding(ctx, bind); err != nil {
 		return nil, err
 	}
-	return &bind, nil
+	return bind, nil
 }
 
 func (s *Service) DeleteProjectRegistryBinding(ctx context.Context, projectID uint) error {
-	res := s.db.WithContext(ctx).Where("project_id = ?", projectID).Delete(&model.ProjectRegistryBinding{})
-	if res.Error != nil {
-		return res.Error
-	}
-	return nil
+	_, err := s.repo.DeleteProjectRegistryBinding(ctx, projectID)
+	return err
 }
 
 // --- HTTP helpers ---

@@ -13,18 +13,16 @@ import (
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/repository"
-
-	"gorm.io/gorm"
 )
 
 type LogSearchService struct {
-	es         *ElasticsearchProvider
-	serverRepo interfaces.ServerRepository
-	db         *gorm.DB // 可选：加载项目黑名单
+	es           *ElasticsearchProvider
+	serverRepo   interfaces.ServerRepository
+	dropRuleRepo interfaces.LogDropRuleRepository
 }
 
-func NewLogSearchService(es *ElasticsearchProvider, serverRepo interfaces.ServerRepository, db *gorm.DB) *LogSearchService {
-	return &LogSearchService{es: es, serverRepo: serverRepo, db: db}
+func NewLogSearchService(es *ElasticsearchProvider, serverRepo interfaces.ServerRepository, dropRuleRepo interfaces.LogDropRuleRepository) *LogSearchService {
+	return &LogSearchService{es: es, serverRepo: serverRepo, dropRuleRepo: dropRuleRepo}
 }
 
 type LogSearchQuery struct {

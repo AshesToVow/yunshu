@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"strings"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-
-	"gorm.io/gorm"
 )
 
 const savedQueryKindLog = "log"
@@ -23,31 +22,29 @@ type LogSavedQueryUpsert struct {
 
 // LogSavedQueryService 日志查询收藏（复用 platform_saved_queries，kind=log）。
 type LogSavedQueryService struct {
-	db *gorm.DB
+	repo interfaces.LogSavedQueryRepository
 }
 
-func NewLogSavedQueryService(db *gorm.DB) *LogSavedQueryService {
-	return &LogSavedQueryService{db: db}
+func NewLogSavedQueryService(repo interfaces.LogSavedQueryRepository) *LogSavedQueryService {
+	return &LogSavedQueryService{repo: repo}
 }
 
-// SavedQueries 复用 ClusterLogService 的 DB。
+// SavedQueries 复用 ClusterLogService 注入的收藏 Repo。
 func (s *ClusterLogService) SavedQueries() *LogSavedQueryService {
-	return NewLogSavedQueryService(s.db)
+	return NewLogSavedQueryService(s.savedQueryRepo)
 }
 
 func (s *LogSavedQueryService) List(ctx context.Context, userID, projectID uint) ([]model.PlatformSavedQuery, error) {
-	q := s.db.WithContext(ctx).Where("user_id = ? AND kind = ?", userID, savedQueryKindLog)
-	if projectID > 0 {
-		q = q.Where("project_id = ?", projectID)
+	if s.repo == nil {
+		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
 	}
-	var list []model.PlatformSavedQuery
-	if err := q.Order("updated_at DESC").Limit(100).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return list, nil
+	return s.repo.List(ctx, userID, projectID)
 }
 
 func (s *LogSavedQueryService) Create(ctx context.Context, userID uint, req LogSavedQueryUpsert) (*model.PlatformSavedQuery, error) {
+	if s.repo == nil {
+		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
+	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return nil, constants.ErrBadRequestWithMsg("名称不能为空")
@@ -66,19 +63,21 @@ func (s *LogSavedQueryService) Create(ctx context.Context, userID uint, req LogS
 		Kind:      savedQueryKindLog,
 		ProjectID: req.ProjectID,
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.Create(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *LogSavedQueryService) Delete(ctx context.Context, userID, id uint) error {
-	res := s.db.WithContext(ctx).Where("id = ? AND user_id = ? AND kind = ?", id, userID, savedQueryKindLog).
-		Delete(&model.PlatformSavedQuery{})
-	if res.Error != nil {
-		return res.Error
+	if s.repo == nil {
+		return constants.ErrBadRequestWithMsg("数据库不可用")
 	}
-	if res.RowsAffected == 0 {
+	n, err := s.repo.DeleteByUser(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
 		return constants.ErrNotFoundWithMsg("收藏不存在")
 	}
 	return nil

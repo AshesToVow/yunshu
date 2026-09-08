@@ -324,11 +324,19 @@
     }
   },
   "dashboard": {
-    "label": "[ OPS / OVERVIEW ]",
+    "label": "[ OPS / COMMAND CENTER ]",
     "title": "运维运行总览",
+    "titleScreen": "智慧运维驾驶舱",
     "subtitle": "资产底座、Kubernetes、告警与日志采集、发布与工单统计",
+    "subtitleScreen": "全局资产 · 集群态势 · 告警采集 · 发布吞吐 — 一屏掌控",
     "syncPending": "SYNC / PENDING",
     "syncLive": "SYNC / LIVE",
+    "syncFailed": "SYNC / FAILED",
+    "refresh": "刷新",
+    "fullscreen": "全屏",
+    "loadFailed": "概览数据加载失败",
+    "healthTitle": "运行健康度",
+    "podHealth": "Pod 健康率",
     "sectionAssets": "资产底座",
     "sectionK8s": "Kubernetes 运行态势",
     "sectionAlert": "告警与日志采集",
@@ -389,7 +397,6 @@
         "hint": "已登记但未满足在线条件"
       }
     },
-    "uptimeFormat": "{{hours}}小时 {{minutes}}分钟",
-    "syncFailed": "同步失败"
+    "uptimeFormat": "{{hours}}小时 {{minutes}}分钟"
   }
 }

@@ -11,14 +11,14 @@ import (
 )
 
 func (s *Service) assertReleaseRunAccess(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser, need string) (*model.CicdReleaseRun, error) {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+	release, err := s.repo.GetReleaseRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if err := s.AssertCicdAccess(ctx, projectID, release.ServiceID, actor, need); err != nil {
 		return nil, err
 	}
-	return &release, nil
+	return release, nil
 }
 
 func (s *Service) RequireProjectAdmin(ctx context.Context, projectID uint, actor *auth.CurrentUser) error {

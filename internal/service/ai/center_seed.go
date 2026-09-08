@@ -159,55 +159,37 @@ func (s *Service) seedPromptsFromDir(ctx context.Context, dir string) error {
 			scene = strings.TrimPrefix(code, "generation/")
 		}
 		var prompt model.AiPrompt
-		err := s.db.WithContext(ctx).Where("code = ?", code).First(&prompt).Error
+		promptPtr, err := s.repo.GetPromptByCode(ctx, code)
 		if err == gorm.ErrRecordNotFound {
 			prompt = model.AiPrompt{Code: code, Name: name, Type: typ, Scene: scene, Enabled: true}
-			if err := s.db.WithContext(ctx).Create(&prompt).Error; err != nil {
+			if err := s.repo.CreatePrompt(ctx, &prompt); err != nil {
 				return err
 			}
 		} else if err != nil {
 			return err
+		} else {
+			prompt = *promptPtr
 		}
-		var verCount int64
-		_ = s.db.WithContext(ctx).Model(&model.AiPromptVersion{}).Where("prompt_id = ?", prompt.ID).Count(&verCount).Error
+		verCount, _ := s.repo.CountPromptVersions(ctx, prompt.ID)
 		body, err := os.ReadFile(filepath.Join(dir, e.Name(), "v1.md"))
 		if err != nil {
 			continue
 		}
 		content := string(body)
 		if verCount == 0 {
-			ver := model.AiPromptVersion{
-				PromptID:  prompt.ID,
-				Version:   1,
-				Content:   content,
-				Changelog: "seed",
-				IsCurrent: true,
-			}
-			if err := s.db.WithContext(ctx).Create(&ver).Error; err != nil {
+			if _, err := s.repo.PublishPromptVersion(ctx, prompt.ID, 0, content, "seed"); err != nil {
 				return err
 			}
 			continue
 		}
-		// 文件内容变更时追加新版本（便于运维更新 system/ops-agent 等）
-		var cur model.AiPromptVersion
-		if err := s.db.WithContext(ctx).Where("prompt_id = ? AND is_current = ?", prompt.ID, true).First(&cur).Error; err != nil {
+		cur, err := s.repo.GetCurrentPromptVersion(ctx, prompt.ID)
+		if err != nil {
 			continue
 		}
 		if cur.Content == content {
 			continue
 		}
-		_ = s.db.WithContext(ctx).Model(&model.AiPromptVersion{}).
-			Where("prompt_id = ?", prompt.ID).
-			Update("is_current", false).Error
-		next := cur.Version + 1
-		ver := model.AiPromptVersion{
-			PromptID:  prompt.ID,
-			Version:   next,
-			Content:   content,
-			Changelog: "seed update",
-			IsCurrent: true,
-		}
-		if err := s.db.WithContext(ctx).Create(&ver).Error; err != nil {
+		if err := s.repo.SeedPromptVersionUpdate(ctx, prompt.ID, content, cur.Version+1); err != nil {
 			return err
 		}
 	}
@@ -225,15 +207,17 @@ func (s *Service) seedKnowledgeFromDir(ctx context.Context, dir string) error {
 		}
 		code := e.Name()
 		var kb model.AiKnowledgeBase
-		err := s.db.WithContext(ctx).Where("code = ?", code).First(&kb).Error
+		kbPtr, err := s.repo.GetKnowledgeBaseByCode(ctx, code)
 		if err == gorm.ErrRecordNotFound {
 			cat := strings.TrimPrefix(code, "kb_")
 			kb = model.AiKnowledgeBase{Code: code, Name: code, Category: cat, Enabled: true}
-			if err := s.db.WithContext(ctx).Create(&kb).Error; err != nil {
+			if err := s.repo.CreateKnowledgeBase(ctx, &kb); err != nil {
 				return err
 			}
 		} else if err != nil {
 			return err
+		} else {
+			kb = *kbPtr
 		}
 		files, _ := os.ReadDir(filepath.Join(dir, e.Name()))
 		for _, f := range files {
@@ -241,8 +225,7 @@ func (s *Service) seedKnowledgeFromDir(ctx context.Context, dir string) error {
 				continue
 			}
 			src := code + "/" + f.Name()
-			var cnt int64
-			_ = s.db.WithContext(ctx).Model(&model.AiKbDocument{}).Where("kb_id = ? AND source = ?", kb.ID, src).Count(&cnt).Error
+			cnt, _ := s.repo.CountKBDocumentBySource(ctx, kb.ID, src)
 			if cnt > 0 {
 				continue
 			}
@@ -254,7 +237,7 @@ func (s *Service) seedKnowledgeFromDir(ctx context.Context, dir string) error {
 				KBID: kb.ID, Title: f.Name(), Source: src, Version: "v1",
 				Enabled: true, Confidence: 0.8, Content: string(raw),
 			}
-			if err := s.db.WithContext(ctx).Create(&doc).Error; err != nil {
+			if err := s.repo.CreateKBDocument(ctx, &doc); err != nil {
 				return err
 			}
 			_ = s.rechunkDocument(ctx, &doc)
@@ -301,8 +284,7 @@ func (s *Service) seedCasesFromDir(ctx context.Context, dir string) error {
 		if c.CaseID == "" {
 			continue
 		}
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiIncidentCase{}).Where("case_id = ?", c.CaseID).Count(&cnt).Error
+		cnt, _ := s.repo.CountIncidentCaseByCaseID(ctx, c.CaseID)
 		if cnt > 0 {
 			continue
 		}
@@ -316,7 +298,7 @@ func (s *Service) seedCasesFromDir(ctx context.Context, dir string) error {
 		if row.Confidence <= 0 {
 			row.Confidence = 0.8
 		}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateIncidentCase(ctx, &row); err != nil {
 			return err
 		}
 	}
@@ -358,8 +340,7 @@ func (s *Service) seedSOPsFromDir(ctx context.Context, dir string) error {
 		if c.Code == "" {
 			continue
 		}
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiSOP{}).Where("code = ?", c.Code).Count(&cnt).Error
+		cnt, _ := s.repo.CountSOPByCode(ctx, c.Code)
 		if cnt > 0 {
 			continue
 		}
@@ -369,7 +350,7 @@ func (s *Service) seedSOPsFromDir(ctx context.Context, dir string) error {
 			VerifySteps: c.VerifySteps, ExceptionHandle: c.ExceptionHandle, Rollback: c.Rollback,
 			Risk: c.Risk, ApprovalNeeded: c.ApprovalNeeded, Enabled: true,
 		}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateSOP(ctx, &row); err != nil {
 			return err
 		}
 	}
@@ -403,8 +384,7 @@ func (s *Service) seedToolsFromDir(ctx context.Context, dir string) error {
 		if err := yaml.Unmarshal(raw, &t); err != nil || t.Name == "" {
 			return nil
 		}
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("name = ?", t.Name).Count(&cnt).Error
+		cnt, _ := s.repo.CountToolsByName(ctx, t.Name)
 		if cnt > 0 {
 			return nil
 		}
@@ -423,7 +403,7 @@ func (s *Service) seedToolsFromDir(ctx context.Context, dir string) error {
 		if row.TimeoutSec <= 0 {
 			row.TimeoutSec = 30
 		}
-		return s.db.WithContext(ctx).Create(&row).Error
+		return s.repo.CreateTool(ctx, &row)
 	})
 }
 
@@ -474,13 +454,12 @@ func (s *Service) seedBuiltinToolDefs(ctx context.Context) error {
 		{Name: "delete_pod", Description: "删除 Pod（审批）", Module: "k8s", Runtime: "builtin", HandlerKey: "delete_pod", Permission: "WRITE", RiskLevel: "HIGH", RequireConfirmation: true, Enabled: true, AuditRequired: true, TimeoutSec: 30},
 	}
 	for _, b := range builtins {
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("name = ?", b.Name).Count(&cnt).Error
+		cnt, _ := s.repo.CountToolsByName(ctx, b.Name)
 		if cnt > 0 {
 			continue
 		}
 		// 填入与 tools.go 一致的 schema 可后续完善；Chat 仍用代码侧完整 schema
-		if err := s.db.WithContext(ctx).Create(&b).Error; err != nil {
+		if err := s.repo.CreateTool(ctx, &b); err != nil {
 			return err
 		}
 	}
@@ -516,8 +495,7 @@ func (s *Service) seedEvalFromDir(ctx context.Context, dir string) error {
 		if err := yaml.Unmarshal(raw, &c); err != nil || c.CaseCode == "" {
 			continue
 		}
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiEvalCase{}).Where("case_code = ?", c.CaseCode).Count(&cnt).Error
+		cnt, _ := s.repo.CountEvalCaseByCaseCode(ctx, c.CaseCode)
 		if cnt > 0 {
 			continue
 		}
@@ -534,7 +512,7 @@ func (s *Service) seedEvalFromDir(ctx context.Context, dir string) error {
 			ExpectKeywords: c.ExpectKeywords, ForbidKeywords: c.ForbidKeywords,
 			ExpectTools: c.ExpectTools, ExpectRisk: c.ExpectRisk, ScoreWeight: w, Enabled: true,
 		}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateEvalCase(ctx, &row); err != nil {
 			return err
 		}
 	}
@@ -545,8 +523,7 @@ func (s *Service) seedPromptsFromDirCounted(ctx context.Context, dir string) (in
 	if err := s.seedPromptsFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiPrompt{}).Count(&n).Error
+	n, _ := s.repo.CountPrompts(ctx)
 	return int(n), nil
 }
 
@@ -554,9 +531,8 @@ func (s *Service) seedKnowledgeFromDirCounted(ctx context.Context, dir string) (
 	if err = s.seedKnowledgeFromDir(ctx, dir); err != nil {
 		return 0, 0, err
 	}
-	var k, d int64
-	_ = s.db.WithContext(ctx).Model(&model.AiKnowledgeBase{}).Count(&k).Error
-	_ = s.db.WithContext(ctx).Model(&model.AiKbDocument{}).Count(&d).Error
+	k, _ := s.repo.CountKnowledgeBases(ctx)
+	d, _ := s.repo.CountKBDocuments(ctx)
 	return int(k), int(d), nil
 }
 
@@ -564,8 +540,7 @@ func (s *Service) seedCasesFromDirCounted(ctx context.Context, dir string) (int,
 	if err := s.seedCasesFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiIncidentCase{}).Count(&n).Error
+	n, _ := s.repo.CountIncidentCases(ctx)
 	return int(n), nil
 }
 
@@ -573,8 +548,7 @@ func (s *Service) seedSOPsFromDirCounted(ctx context.Context, dir string) (int, 
 	if err := s.seedSOPsFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiSOP{}).Count(&n).Error
+	n, _ := s.repo.CountSOPs(ctx)
 	return int(n), nil
 }
 
@@ -582,8 +556,7 @@ func (s *Service) seedToolsFromDirCounted(ctx context.Context, dir string) (int,
 	if err := s.seedToolsFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("runtime = ?", "script").Count(&n).Error
+	n, _ := s.repo.CountToolsByRuntime(ctx, "script")
 	return int(n), nil
 }
 
@@ -591,8 +564,7 @@ func (s *Service) seedBuiltinToolDefsCounted(ctx context.Context) (int, error) {
 	if err := s.seedBuiltinToolDefs(ctx); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("runtime = ?", "builtin").Count(&n).Error
+	n, _ := s.repo.CountToolsByRuntime(ctx, "builtin")
 	return int(n), nil
 }
 
@@ -600,7 +572,6 @@ func (s *Service) seedEvalFromDirCounted(ctx context.Context, dir string) (int, 
 	if err := s.seedEvalFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiEvalCase{}).Count(&n).Error
+	n, _ := s.repo.CountEvalCases(ctx)
 	return int(n), nil
 }

@@ -12,6 +12,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/llm"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 	"yunshu/internal/service/alert"
 	cmdbsvc "yunshu/internal/service/cmdb"
 	"yunshu/internal/service/k8s"
@@ -98,14 +99,14 @@ func (s *Service) StartInvestigation(
 		InputJSON:   string(input),
 		SessionID:   req.SessionID,
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateInvestigation(ctx, &row); err != nil {
 		return nil, err
 	}
 
 	fail := func(msg string) (*model.AiInvestigation, error) {
 		row.Status = "failed"
 		row.ErrorMsg = truncateStr(msg, 1000)
-		_ = s.db.WithContext(ctx).Save(&row).Error
+		_ = s.repo.SaveInvestigation(ctx, &row)
 		return &row, constants.ErrBadRequestWithMsg(msg)
 	}
 
@@ -116,7 +117,7 @@ func (s *Service) StartInvestigation(
 	collectRaw, _ := json.Marshal(collect)
 	row.CollectJSON = scrubNonBMPForMySQL(string(truncateBytes(collectRaw, 500_000)))
 	row.Status = "analyzing"
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.repo.SaveInvestigation(ctx, &row); err != nil {
 		return fail("保存采集失败: " + err.Error())
 	}
 
@@ -148,7 +149,7 @@ func (s *Service) StartInvestigation(
 	row.ReportJSON = scrubNonBMPForMySQL(string(reportRaw))
 	row.Status = "done"
 	row.UpdatedAt = time.Now()
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.repo.SaveInvestigation(ctx, &row); err != nil {
 		return fail("保存报告失败: " + err.Error())
 	}
 	return &row, nil
@@ -163,19 +164,14 @@ func (s *Service) ListInvestigations(
 		return nil, constants.ErrUnauthorized
 	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	db := s.db.WithContext(ctx).Model(&model.AiInvestigation{}).Where("user_id = ?", userID)
-	if k := strings.TrimSpace(q.Kind); k != "" {
-		db = db.Where("kind = ?", k)
-	}
-	if st := strings.TrimSpace(q.Status); st != "" {
-		db = db.Where("status = ?", st)
-	}
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var list []model.AiInvestigation
-	if err := db.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+	list, total, err := s.repo.ListInvestigations(ctx, repository.AiInvestigationListParams{
+		UserID: userID,
+		Kind:   strings.TrimSpace(q.Kind),
+		Status: strings.TrimSpace(q.Status),
+		Offset: (page - 1) * pageSize,
+		Limit:  pageSize,
+	})
+	if err != nil {
 		return nil, err
 	}
 	return &pagination.Result[model.AiInvestigation]{List: list, Total: total, Page: page, PageSize: pageSize}, nil
@@ -185,11 +181,11 @@ func (s *Service) GetInvestigation(ctx context.Context, userID, id uint) (*model
 	if userID == 0 {
 		return nil, constants.ErrUnauthorized
 	}
-	var row model.AiInvestigation
-	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&row).Error; err != nil {
+	row, err := s.repo.GetInvestigationByUser(ctx, userID, id)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
-	return &row, nil
+	return row, nil
 }
 
 func defaultInvestigationTitle(kind string, req StartInvestigationRequest) string {

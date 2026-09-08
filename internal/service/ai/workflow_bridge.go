@@ -11,14 +11,14 @@ import (
 )
 
 func (s *Service) workflowEngine() *workflowsvc.Service {
-	return workflowsvc.NewService(s.db, nil, nil, nil)
+	return workflowsvc.NewService(s.workflowRepo, nil, nil, nil)
 }
 
 func (s *Service) createAIWorkflowTicket(ctx context.Context, row *model.AiToolApproval) error {
-	if row == nil || row.ID == 0 || s.db == nil {
+	if row == nil || row.ID == 0 || s.workflowRepo == nil {
 		return nil
 	}
-	if err := workflowsvc.EnsureDefaultAIToolApprovalDefinition(ctx, s.db); err != nil {
+	if err := workflowsvc.EnsureDefaultAIToolApprovalDefinition(ctx, s.workflowRepo); err != nil {
 		return err
 	}
 	title := fmt.Sprintf("AI 高危操作 · %s", strings.TrimSpace(row.ToolName))

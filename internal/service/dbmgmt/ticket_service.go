@@ -143,13 +143,7 @@ func (s *Service) fillTicketStageName(ctx context.Context, item *TicketItem, t *
 		item.CurrentStageName = "待提交人执行"
 		return
 	case model.DbTicketStatusPendingApproval:
-		var stage string
-		_ = s.db.WithContext(ctx).Raw(`
-SELECT s.stage_name FROM workflow_ticket_steps s
-JOIN workflow_tickets t ON t.id = s.ticket_id AND t.deleted_at IS NULL
-WHERE t.ref_type = ? AND t.ref_id = ? AND s.status = ? AND s.activated_at IS NOT NULL AND s.deleted_at IS NULL
-ORDER BY s.sort_order ASC, s.id ASC LIMIT 1
-`, model.WorkflowRefDbSqlTicket, t.ID, model.WorkflowStepPending).Scan(&stage).Error
+		stage, _ := s.repo.GetActiveWorkflowStageName(ctx, model.WorkflowRefDbSqlTicket, t.ID)
 		if stage != "" {
 			item.CurrentStageName = stage
 		}
@@ -169,8 +163,10 @@ func (s *Service) preCheckForTicket(
 	if normalizeAuditMode(auditMode) == model.DbAuditModeManual {
 		return "", localSyntax, nil
 	}
-	if !s.goInceptionAvailable(ctx, inst) {
-		return "", localSyntax, nil
+	if reason := s.goInceptionSkipReason(ctx, inst); reason != "" {
+		// 工单仍可创建；ReviewJSON 记录引擎跳过原因，避免静默降级
+		note, _ := json.Marshal(map[string]any{"engine_skipped": true, "reason": reason})
+		return string(note), localSyntax, nil
 	}
 	rs, checkErr := s.runGoInceptionCheck(ctx, inst, dbName, sqlText)
 	if checkErr != nil {
@@ -544,10 +540,6 @@ func (s *Service) runWriteSQL(ctx context.Context, inst *model.DbInstance, datab
 func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*pagination.Result[TicketItem], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	if q.Mine && q.MineViewer != nil {
-		dbq := s.db.WithContext(ctx).Model(&model.DbSqlTicket{}).Where("project_id = ?", q.ProjectID)
-		if tt := strings.TrimSpace(q.TicketType); tt != "" {
-			dbq = dbq.Where("ticket_type = ?", tt)
-		}
 		scope := strings.TrimSpace(q.MineScope)
 		if scope == "" {
 			scope = "all"
@@ -556,37 +548,20 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 		if mineTab == "" {
 			mineTab = "approval"
 		}
-		if mineTab == "execution" {
-			if st := strings.TrimSpace(q.Status); st != "" {
-				dbq = dbq.Where("status = ?", st)
-			}
-			switch scope {
-			case "pending":
-				dbq = s.filterTicketsExecutionPending(dbq, actorUserID(q.MineViewer))
-			case "done":
-				dbq = s.filterTicketsExecutionDone(dbq, actorUserID(q.MineViewer))
-			default:
-				dbq = s.filterTicketsExecutionMine(dbq, actorUserID(q.MineViewer))
-			}
-		} else {
-			if st := strings.TrimSpace(q.Status); st != "" {
-				dbq = dbq.Where("status = ?", st)
-			}
-			switch scope {
-			case "pending":
-				dbq = s.filterTicketsApprovalPending(dbq, q.MineViewer)
-			case "done":
-				dbq = s.filterTicketsApprovalDone(dbq, actorUserID(q.MineViewer))
-			default:
-				dbq = s.filterTicketsApprovalMine(dbq, q.MineViewer)
-			}
-		}
-		var total int64
-		if err := dbq.Count(&total).Error; err != nil {
-			return nil, err
-		}
-		var list []model.DbSqlTicket
-		if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+		list, total, err := s.repo.ListSqlTicketsMine(ctx, repository.DbTicketMineListParams{
+			DbMineListParams: repository.DbMineListParams{
+				ProjectID:    q.ProjectID,
+				Status:       q.Status,
+				Scope:        scope,
+				UserID:       actorUserID(q.MineViewer),
+				IsSuperAdmin: auth.IsSuperAdminRole(q.MineViewer.RoleCodes),
+				Page:         page,
+				PageSize:     pageSize,
+			},
+			TicketType: q.TicketType,
+			MineTab:    mineTab,
+		})
+		if err != nil {
 			return nil, err
 		}
 		items := make([]TicketItem, 0, len(list))
@@ -749,14 +724,11 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if err := s.checkWritePermission(ctx, projectID, inst, ticket.DatabaseName, ticket.SqlText, needDDL, actor); err != nil {
 		return err
 	}
-	claim := s.db.WithContext(ctx).Model(&model.DbSqlTicket{}).
-		Where("id = ? AND project_id = ? AND status IN ?", ticketID, projectID,
-			[]string{model.DbTicketStatusPendingExecution, model.DbTicketStatusApproved}).
-		Update("status", model.DbTicketStatusExecuting)
-	if claim.Error != nil {
-		return claim.Error
+	claimRows, claimErr := s.repo.ClaimSqlTicketExecuting(ctx, projectID, ticketID)
+	if claimErr != nil {
+		return claimErr
 	}
-	if claim.RowsAffected != 1 {
+	if claimRows != 1 {
 		return constants.ErrBadRequestWithMsg("工单状态不允许执行或正在执行中")
 	}
 	ticket, err = s.repo.GetSqlTicketInProject(ctx, projectID, ticketID)

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"yunshu/internal/dictconfig"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
@@ -39,9 +38,11 @@ type ServerFilePathQuery struct {
 
 func (s *Service) maxTransferBytes(ctx context.Context) int64 {
 	mb := defaultMaxTransferFileMB
-	if v, ok := dictconfig.FetchEnabledDictValue(ctx, s.db, "cmdb_max_transfer_file_mb"); ok {
-		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
-			mb = n
+	if s.dictRepo != nil {
+		if list, err := s.dictRepo.ListByTypeEnabled(ctx, "cmdb_max_transfer_file_mb"); err == nil && len(list) > 0 {
+			if n, err := strconv.Atoi(strings.TrimSpace(list[0].Value)); err == nil && n > 0 {
+				mb = n
+			}
 		}
 	}
 	return int64(mb) * 1024 * 1024

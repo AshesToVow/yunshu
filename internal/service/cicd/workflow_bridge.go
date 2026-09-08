@@ -12,6 +12,23 @@ import (
 	workflowsvc "yunshu/internal/service/workflow"
 )
 
+func (s *Service) linkChangeTicket(ctx context.Context, releaseID, changeTicketID uint) error {
+	release, err := s.repo.GetReleaseRunByID(ctx, releaseID)
+	if err != nil {
+		return err
+	}
+	ticket, err := s.workflowRepo.GetTicket(ctx, changeTicketID)
+	if err != nil {
+		return err
+	}
+	if ticket.TicketType != model.WorkflowTicketTypeChange {
+		return constants.ErrBadRequestWithMsg("目标工单不是变更单")
+	}
+	return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
+		"change_workflow_ticket_id": changeTicketID,
+	})
+}
+
 func (s *Service) createReleaseWorkflowTickets(ctx context.Context, release *model.CicdReleaseRun) error {
 	if release == nil || release.ID == 0 {
 		return constants.ErrBadRequestWithMsg("工单不存在")
@@ -52,11 +69,11 @@ func (s *Service) createReleaseWorkflowTickets(ctx context.Context, release *mod
 	if active, err := wf.GetActiveStep(ctx, releaseTicket.ID); err == nil && active != nil {
 		stageKey = active.StageKey
 	}
-	return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
-		"workflow_ticket_id":        releaseTicket.ID,
-		"change_workflow_ticket_id": changeTicket.ID,
-		"current_stage_key":         stageKey,
-	}).Error
+	return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
+		"workflow_ticket_id":          releaseTicket.ID,
+		"change_workflow_ticket_id":   changeTicket.ID,
+		"current_stage_key":           stageKey,
+	})
 }
 
 func (s *Service) reviewReleaseViaWorkflow(ctx context.Context, release *model.CicdReleaseRun, approve bool, comment string, actor *auth.CurrentUser) error {
@@ -73,23 +90,25 @@ func (s *Service) reviewReleaseViaWorkflow(ctx context.Context, release *model.C
 	}
 	if !approve {
 		_ = s.syncLegacyReleaseSteps(ctx, release.ID, "", false, comment, actor)
-		return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+		return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
 			"status": model.CicdRunStatusRejected, "current_stage_key": "",
 			"review_comment": strings.TrimSpace(comment),
-		}).Error
+		})
 	}
 	if detail.Status == model.WorkflowTicketStatusApproved {
 		_ = s.syncLegacyReleaseSteps(ctx, release.ID, "", true, comment, actor)
-		return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+		return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
 			"status": model.CicdRunStatusPendingExecution, "current_stage_key": "",
-		}).Error
+		})
 	}
 	// 同步 current_stage_key 供旧 UI 展示
 	if len(detail.Steps) > 0 {
 		for _, st := range detail.Steps {
 			if st.Status == model.WorkflowStepPending && st.ActivatedAt != nil {
 				_ = s.syncLegacyReleaseSteps(ctx, release.ID, st.StageKey, true, comment, actor)
-				return s.db.WithContext(ctx).Model(release).Update("current_stage_key", st.StageKey).Error
+				return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
+					"current_stage_key": st.StageKey,
+				})
 			}
 		}
 	}
@@ -98,11 +117,7 @@ func (s *Service) reviewReleaseViaWorkflow(ctx context.Context, release *model.C
 
 // syncLegacyReleaseSteps 将 workflow 审批结果回写 cicd_release_approval_steps，供 SLA/旧详情兼容。
 func (s *Service) syncLegacyReleaseSteps(ctx context.Context, releaseID uint, nextStageKey string, approve bool, comment string, actor *auth.CurrentUser) error {
-	var step model.CicdReleaseApprovalStep
-	err := s.db.WithContext(ctx).
-		Where("release_run_id = ? AND status = ?", releaseID, model.CicdApprovalStepPending).
-		Order("sort_order ASC, id ASC").
-		First(&step).Error
+	step, err := s.repo.GetPendingApprovalStep(ctx, releaseID)
 	if err != nil {
 		return nil // 无旧步骤则跳过
 	}
@@ -120,34 +135,14 @@ func (s *Service) syncLegacyReleaseSteps(ctx context.Context, releaseID uint, ne
 	if approve {
 		status = model.CicdApprovalStepApproved
 	}
-	if err := s.db.WithContext(ctx).Model(&step).Updates(map[string]any{
+	if err := s.repo.UpdateApprovalStepFields(ctx, step.ID, map[string]any{
 		"status": status, "reviewer_user_id": reviewerID, "reviewer_name": reviewerName,
 		"review_comment": strings.TrimSpace(comment), "reviewed_at": now,
-	}).Error; err != nil {
+	}); err != nil {
 		return err
 	}
-	if !approve {
+	if !approve || nextStageKey == "" {
 		return nil
 	}
-	if nextStageKey == "" {
-		return nil
-	}
-	return s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
-		Where("release_run_id = ? AND stage_key = ? AND status = ?", releaseID, nextStageKey, model.CicdApprovalStepPending).
-		Updates(map[string]any{"activated_at": now, "last_reminded_at": nil}).Error
-}
-
-func (s *Service) linkChangeTicket(ctx context.Context, releaseID, changeTicketID uint) error {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).First(&release, releaseID).Error; err != nil {
-		return err
-	}
-	var ticket model.WorkflowTicket
-	if err := s.db.WithContext(ctx).First(&ticket, changeTicketID).Error; err != nil {
-		return err
-	}
-	if ticket.TicketType != model.WorkflowTicketTypeChange {
-		return constants.ErrBadRequestWithMsg("目标工单不是变更单")
-	}
-	return s.db.WithContext(ctx).Model(&release).Update("change_workflow_ticket_id", changeTicketID).Error
+	return s.repo.ActivateApprovalStep(ctx, releaseID, nextStageKey)
 }

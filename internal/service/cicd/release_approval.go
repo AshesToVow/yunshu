@@ -53,9 +53,11 @@ func (s *Service) prepareRelease(
 		return nil, constants.ErrBadRequestWithMsg("请先配置 CI 信息")
 	}
 	var dc model.CicdDeployConfig
-	if err := s.db.WithContext(ctx).Where("id = ? AND service_id = ?", req.DeployConfigID, serviceID).First(&dc).Error; err != nil {
+	dcRow, err := s.repo.GetDeployConfig(ctx, serviceID, req.DeployConfigID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
+	dc = *dcRow
 
 	artifactName := strings.TrimSpace(req.ArtifactName)
 	imageAddress := strings.TrimSpace(req.ImageAddress)
@@ -69,10 +71,8 @@ func (s *Service) prepareRelease(
 			if err := s.assertBuildQualityGate(ctx, projectID, serviceID, req.BuildRunID); err != nil {
 				return nil, err
 			}
-			var br model.CicdBuildRun
-			if err := s.db.WithContext(ctx).
-				Where("id = ? AND service_id = ? AND project_id = ?", req.BuildRunID, serviceID, projectID).
-				First(&br).Error; err != nil {
+			br, err := s.repo.GetBuildRun(ctx, projectID, req.BuildRunID)
+			if err != nil {
 				return nil, constants.ErrNotFound
 			}
 			if strings.TrimSpace(br.ImageAddress) == "" {
@@ -179,20 +179,22 @@ func (s *Service) createPendingRelease(
 		RequestJSON:     snapshotJSON(p),
 		StartedAt:       &now,
 	}
-	if err := s.db.WithContext(ctx).Create(&release).Error; err != nil {
+	if err := s.repo.CreateReleaseRun(ctx, &release); err != nil {
 		return nil, err
 	}
 	// 统一引擎创建审批步骤；不再双写 cicd_release_approval_steps
 	if err := s.createReleaseWorkflowTickets(ctx, &release); err != nil {
-		_ = s.db.WithContext(ctx).Model(&release).Updates(map[string]any{
+		_ = s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
 			"status": model.CicdRunStatusCancelled, "review_comment": "创建统一审批工单失败，已自动取消",
-		}).Error
+		})
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
+	releaseRow, err := s.repo.GetReleaseRunByID(ctx, release.ID)
+	if err != nil {
 		return nil, err
 	}
-	recordReleaseChange(ctx, s.db, &release, "release_create", model.ChangeStatusStarted,
+	release = *releaseRow
+	recordReleaseChange(ctx, s.catalogRepo, &release, "release_create", model.ChangeStatusStarted,
 		fmt.Sprintf("创建发布工单 #%d：%s", release.ID, release.Title))
 	return &release, nil
 }
@@ -275,18 +277,16 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 		"artifact_name": p.artifactName,
 		"jenkins_queue_url": strings.TrimSpace(queuePath),
 	}
-	if err := s.db.WithContext(persistCtx).Model(release).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateReleaseRunFields(persistCtx, release.ID, updates); err != nil {
 		return err
 	}
 	// 尽力而为地立即解析构建号；失败/超时不影响工单状态，
 	// 交由 RunSyncWorker 通过 queue_url 补偿（见 recoverReleaseBuildNumber）。
 	if buildNum, err := client.ResolveQueueBuildNumber(ctx, queuePath, lastNum, 90*time.Second); err == nil && buildNum > 0 {
-		_ = s.db.WithContext(persistCtx).Model(&model.CicdReleaseRun{}).
-			Where("id = ? AND jenkins_build_number = 0", release.ID).
-			Updates(map[string]any{
-				"jenkins_build_number": buildNum,
-				"jenkins_build_url":    client.BuildURL(p.svc.JenkinsJob, buildNum),
-			}).Error
+		_, _ = s.repo.UpdateReleaseRunFieldsIfBuildNumberZero(persistCtx, release.ID, map[string]any{
+			"jenkins_build_number": buildNum,
+			"jenkins_build_url":    client.BuildURL(p.svc.JenkinsJob, buildNum),
+		})
 	}
 	_ = executorUserID
 	return nil
@@ -302,21 +302,18 @@ type BatchReleaseIDsRequest struct {
 }
 
 func (s *Service) hasApprovalSteps(ctx context.Context, releaseRunID uint) (bool, error) {
-	var n int64
-	err := s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).Where("release_run_id = ?", releaseRunID).Count(&n).Error
+	n, err := s.repo.CountApprovalSteps(ctx, releaseRunID)
 	return n > 0, err
 }
 
 // transitionReleaseStatus 以期望状态为条件原子推进工单状态，返回本次是否抢到转换。
 // 工单表无乐观锁列，靠 WHERE status 条件 + RowsAffected 防止并发审批/执行/终止重复推进。
 func (s *Service) transitionReleaseStatus(ctx context.Context, runID uint, fromStatus string, updates map[string]any) (bool, error) {
-	res := s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
-		Where("id = ? AND status = ?", runID, fromStatus).
-		Updates(updates)
-	if res.Error != nil {
-		return false, res.Error
+	affected, err := s.repo.ClaimReleaseRunStatus(ctx, runID, []string{fromStatus}, updates)
+	if err != nil {
+		return false, err
 	}
-	if res.RowsAffected == 0 {
+	if affected == 0 {
 		return false, nil
 	}
 	if st, ok := updates["status"].(string); ok {
@@ -331,13 +328,11 @@ func (s *Service) transitionReleaseStatus(ctx context.Context, runID uint, fromS
 // claimApprovalStep 以 pending 为条件原子占用审批节点，返回本次是否抢到。
 // 同一节点的 approve / reject 并发时，只有一方成功，另一方视为已被处理。
 func (s *Service) claimApprovalStep(ctx context.Context, stepID uint, updates map[string]any) (bool, error) {
-	res := s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
-		Where("id = ? AND status = ?", stepID, model.CicdApprovalStepPending).
-		Updates(updates)
-	if res.Error != nil {
-		return false, res.Error
+	affected, err := s.repo.ClaimPendingApprovalStep(ctx, stepID, updates)
+	if err != nil {
+		return false, err
 	}
-	return res.RowsAffected > 0, nil
+	return affected > 0, nil
 }
 
 // errReleaseConflict 并发状态流转冲突：本次调用未抢到转换（已被他人处理）。
@@ -387,35 +382,37 @@ func (s *Service) approveLegacySingleStep(ctx context.Context, release *model.Ci
 	if !ok {
 		return nil, errReleaseConflict
 	}
-	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(release).Error; err != nil {
+	updated, err := s.repo.GetReleaseRunByID(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
-	return release, nil
+	return updated, nil
 }
 
 func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser, comment string) (*model.CicdReleaseRun, error) {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+	release, err := s.repo.GetReleaseRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if release.Status != model.CicdRunStatusPendingApproval {
 		return nil, constants.ErrBadRequestWithMsg("仅待审核工单可审批通过")
 	}
 	if s.workflowEngine().HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, runID, model.WorkflowTicketTypeRelease) {
-		if err := s.reviewReleaseViaWorkflow(ctx, &release, true, comment, actor); err != nil {
+		if err := s.reviewReleaseViaWorkflow(ctx, release, true, comment, actor); err != nil {
 			return nil, err
 		}
-		if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+		updated, err := s.repo.GetReleaseRunByID(ctx, runID)
+		if err != nil {
 			return nil, err
 		}
-		return &release, nil
+		return updated, nil
 	}
 	hasSteps, err := s.hasApprovalSteps(ctx, runID)
 	if err != nil {
 		return nil, err
 	}
 	if !hasSteps {
-		return s.approveLegacySingleStep(ctx, &release, runID, actor, comment)
+		return s.approveLegacySingleStep(ctx, release, runID, actor, comment)
 	}
 	if actor == nil || actor.ID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("未登录无法审批")
@@ -456,31 +453,33 @@ func (s *Service) ApproveReleaseRun(ctx context.Context, projectID, runID uint, 
 		return nil, errReleaseConflict
 	}
 	step.Status = model.CicdApprovalStepApproved
-	if err := s.advanceReleaseAfterApproval(ctx, &release, step); err != nil {
+	if err := s.advanceReleaseAfterApproval(ctx, release, step); err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+	updated, err := s.repo.GetReleaseRunByID(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
-	return &release, nil
+	return updated, nil
 }
 
 func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser, comment string) (*model.CicdReleaseRun, error) {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+	release, err := s.repo.GetReleaseRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if release.Status != model.CicdRunStatusPendingApproval {
 		return nil, constants.ErrBadRequestWithMsg("仅待审核工单可驳回")
 	}
 	if s.workflowEngine().HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, runID, model.WorkflowTicketTypeRelease) {
-		if err := s.reviewReleaseViaWorkflow(ctx, &release, false, comment, actor); err != nil {
+		if err := s.reviewReleaseViaWorkflow(ctx, release, false, comment, actor); err != nil {
 			return nil, err
 		}
-		if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+		updated, err := s.repo.GetReleaseRunByID(ctx, runID)
+		if err != nil {
 			return nil, err
 		}
-		return &release, nil
+		return updated, nil
 	}
 	hasSteps, err := s.hasApprovalSteps(ctx, runID)
 	if err != nil {
@@ -519,10 +518,11 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, a
 		if !ok {
 			return nil, errReleaseConflict
 		}
-		if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+		updated, err := s.repo.GetReleaseRunByID(ctx, runID)
+		if err != nil {
 			return nil, err
 		}
-		return &release, nil
+		return updated, nil
 	}
 	step, err := s.getCurrentPendingStep(ctx, runID)
 	if err != nil {
@@ -563,18 +563,19 @@ func (s *Service) RejectReleaseRun(ctx context.Context, projectID, runID uint, a
 		"finished_at":       now,
 		"current_stage_key": "",
 	}
-	if err := s.db.WithContext(ctx).Model(&release).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateReleaseRunFields(ctx, runID, updates); err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+	updated, err := s.repo.GetReleaseRunByID(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
-	return &release, nil
+	return updated, nil
 }
 
 func (s *Service) ExecuteReleaseRun(ctx context.Context, projectID, runID uint, executorUserID *uint) (*model.CicdReleaseRun, error) {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+	release, err := s.repo.GetReleaseRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if release.Status != model.CicdRunStatusPendingExecution {
@@ -593,24 +594,25 @@ func (s *Service) ExecuteReleaseRun(ctx context.Context, projectID, runID uint, 
 	if !claimed {
 		return nil, errReleaseConflict
 	}
-	if err := s.executeReleaseRun(ctx, &release, executorUserID); err != nil {
+	if err := s.executeReleaseRun(ctx, release, executorUserID); err != nil {
 		// 触发失败：回退到待执行，允许提交人重试（executeReleaseRun 尚未成功触发构建）。
 		_, _ = s.transitionReleaseStatus(context.WithoutCancel(ctx), runID, model.CicdRunStatusRunning, map[string]any{
 			"status": model.CicdRunStatusPendingExecution,
 		})
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+	updated, err := s.repo.GetReleaseRunByID(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
-	recordReleaseChange(ctx, s.db, &release, "release_execute", model.ChangeStatusStarted,
-		fmt.Sprintf("执行发布 #%d：%s", release.ID, release.Title))
-	return &release, nil
+	recordReleaseChange(ctx, s.catalogRepo, updated, "release_execute", model.ChangeStatusStarted,
+		fmt.Sprintf("执行发布 #%d：%s", updated.ID, updated.Title))
+	return updated, nil
 }
 
 func (s *Service) TerminateReleaseRun(ctx context.Context, projectID, runID uint, reviewerUserID *uint, reviewerName, comment string) (*model.CicdReleaseRun, error) {
-	var release model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+	release, err := s.repo.GetReleaseRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if release.Status != model.CicdRunStatusPendingExecution {
@@ -635,12 +637,13 @@ func (s *Service) TerminateReleaseRun(ctx context.Context, projectID, runID uint
 	if !ok {
 		return nil, errReleaseConflict
 	}
-	if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+	updated, err := s.repo.GetReleaseRunByID(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
-	recordReleaseChange(ctx, s.db, &release, "release_terminate", model.ChangeStatusAborted,
-		fmt.Sprintf("终止发布 #%d：%s", release.ID, release.Title))
-	return &release, nil
+	recordReleaseChange(ctx, s.catalogRepo, updated, "release_terminate", model.ChangeStatusAborted,
+		fmt.Sprintf("终止发布 #%d：%s", updated.ID, updated.Title))
+	return updated, nil
 }
 
 func (s *Service) BatchApproveReleaseRuns(ctx context.Context, projectID uint, ids []uint, actor *auth.CurrentUser, comment string) (int, error) {

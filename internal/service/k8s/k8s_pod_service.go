@@ -25,15 +25,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"gorm.io/gorm"
 )
 
+// PodDebugImageResolver 由装配层注入，避免 Service 直持 *gorm.DB 读字典。
+type PodDebugImageResolver func(ctx context.Context) string
+
 type K8sPodService struct {
-	runtime     *K8sRuntimeService
-	dyn         *DynamicResourceService
-	db          *gorm.DB
-	nsDenyRepo  interfaces.K8sNamespaceDenyRepository
-	nsAllowRepo interfaces.K8sNamespaceAllowRepository
+	runtime       *K8sRuntimeService
+	dyn           *DynamicResourceService
+	resolveDebug  PodDebugImageResolver
+	nsDenyRepo    interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo   interfaces.K8sNamespaceAllowRepository
 }
 
 // NewK8sPodService 创建相关逻辑。
@@ -41,10 +43,10 @@ func NewK8sPodService(
 	runtime *K8sRuntimeService,
 	nsDeny interfaces.K8sNamespaceDenyRepository,
 	nsAllow interfaces.K8sNamespaceAllowRepository,
-	db *gorm.DB,
+	resolveDebug PodDebugImageResolver,
 ) *K8sPodService {
 	return &K8sPodService{
-		runtime: runtime, dyn: NewDynamicResourceService(runtime), db: db,
+		runtime: runtime, dyn: NewDynamicResourceService(runtime), resolveDebug: resolveDebug,
 		nsDenyRepo: nsDeny, nsAllowRepo: nsAllow,
 	}
 }

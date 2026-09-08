@@ -63,6 +63,32 @@ type DbmgmtRepo interface {
 	CreateInstanceAccount(ctx context.Context, acc *model.DbInstanceAccount) error
 	ListInstanceAccounts(ctx context.Context, projectID, instanceID uint) ([]model.DbInstanceAccount, error)
 	GetInstanceAccount(ctx context.Context, projectID, id uint) (*model.DbInstanceAccount, error)
+
+	ListColumnMaskRules(ctx context.Context, instanceID uint) ([]model.DbColumnMaskRule, error)
+	GetColumnMaskRule(ctx context.Context, instanceID, id uint) (*model.DbColumnMaskRule, error)
+	FindColumnMaskRule(ctx context.Context, instanceID uint, schema, table, column string) (*model.DbColumnMaskRule, error)
+	CreateColumnMaskRule(ctx context.Context, rule *model.DbColumnMaskRule) error
+	UpdateColumnMaskRule(ctx context.Context, rule *model.DbColumnMaskRule) error
+	DeleteColumnMaskRule(ctx context.Context, instanceID, id uint) error
+
+	GetAccessRequest(ctx context.Context, id uint) (*model.DbAccessRequest, error)
+	GetSqlTicket(ctx context.Context, id uint) (*model.DbSqlTicket, error)
+	GetAppUserRequest(ctx context.Context, id uint) (*model.DbAppUserRequest, error)
+	ClaimSqlTicketExecuting(ctx context.Context, projectID, ticketID uint) (int64, error)
+
+	ListAccessRequestStepsByRequestIDs(ctx context.Context, ids []uint) ([]model.DbAccessRequestStep, error)
+	ListSqlTicketStepsByTicketIDs(ctx context.Context, ids []uint) ([]model.DbSqlTicketStep, error)
+	ListAppUserRequestStepsByRequestIDs(ctx context.Context, ids []uint) ([]model.DbAppUserRequestStep, error)
+
+	ListAccessRequestsMine(ctx context.Context, p DbMineListParams) ([]model.DbAccessRequest, int64, error)
+	ListSqlTicketsMine(ctx context.Context, p DbTicketMineListParams) ([]model.DbSqlTicket, int64, error)
+	ListAppUserRequestsMine(ctx context.Context, p DbMineListParams) ([]model.DbAppUserRequest, int64, error)
+
+	GetActiveWorkflowStageName(ctx context.Context, refType string, refID uint) (string, error)
+	ListWorkflowStepsByRef(ctx context.Context, refType string, refID uint) ([]model.WorkflowTicketStep, error)
+	CountPendingWorkflowSteps(ctx context.Context, ticketID uint) (int64, error)
+	ListWorkflowApprovalReminderRows(ctx context.Context, domains []string) ([]WorkflowApprovalReminderRow, error)
+	UpdateWorkflowStepLastRemindedAt(ctx context.Context, stepID uint, at time.Time) error
 }
 
 var _ DbmgmtRepo = (*DbmgmtRepository)(nil)

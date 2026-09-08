@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -78,12 +79,7 @@ func (s *Service) SyncEmbeddings(ctx context.Context) (*EmbedSyncReport, error) 
 	if err != nil {
 		return nil, err
 	}
-	var chunks []model.AiKbChunk
-	_ = s.db.WithContext(ctx).
-		Where("embedding IS NULL OR LENGTH(embedding) = 0").
-		Order("id ASC").
-		Limit(200).
-		Find(&chunks).Error
+	chunks, _ := s.repo.ListChunksMissingEmbedding(ctx, 200)
 	rep := &EmbedSyncReport{}
 	for _, ch := range chunks {
 		text := strings.TrimSpace(ch.HeadingPath + "\n" + ch.Content)
@@ -106,9 +102,7 @@ func (s *Service) SyncEmbeddings(ctx context.Context) (*EmbedSyncReport, error) 
 			continue
 		}
 		blob := packEmbedding(float64To32(vecs[0]))
-		if err := s.db.WithContext(ctx).Model(&model.AiKbChunk{}).
-			Where("id = ?", ch.ID).
-			Update("embedding", blob).Error; err != nil {
+		if err := s.repo.UpdateChunkEmbedding(ctx, ch.ID, blob); err != nil {
 			rep.Failed++
 			continue
 		}
@@ -124,19 +118,15 @@ func (s *Service) queryEmbedder(ctx context.Context) (llm.Embedder, error) {
 		timeout = 60
 	}
 	// 优先 embedding 类型模型
-	var row model.AiLLMModel
-	err := s.db.WithContext(ctx).
-		Where("enabled = ? AND model_type = ?", true, "embedding").
-		Order("is_default DESC, id ASC").
-		First(&row).Error
-	if err == nil {
-		cli, _, _, cerr := s.clientFromDBModel(&row, timeout)
+	row, err := s.repo.FindEmbeddingModel(ctx)
+	if err == nil && row != nil {
+		cli, _, _, cerr := s.clientFromDBModel(row, timeout)
 		if cerr == nil {
 			if emb, ok := cli.(llm.Embedder); ok {
 				return emb, nil
 			}
 		}
-	} else if err != gorm.ErrRecordNotFound {
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 	// 回退：当前默认 chat 客户端若支持 Embed

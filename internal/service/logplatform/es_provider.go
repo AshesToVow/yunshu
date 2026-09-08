@@ -10,9 +10,16 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
 	"yunshu/internal/pkg/esclient"
-
-	"gorm.io/gorm"
 )
+
+// ElasticsearchConfigResolver 解析运行期字典覆盖后的 ES 配置（由 Wire 注入）。
+type ElasticsearchConfigResolver func(ctx context.Context) config.ElasticsearchConfig
+
+// DictValueReader 读取启用态字典值。
+type DictValueReader func(ctx context.Context, dictType string) (string, bool)
+
+// DictValueWriter 写入/更新启用态字典值。
+type DictValueWriter func(ctx context.Context, dictType, label, value, remark string) error
 
 // ManagedESEndpoint 来自 esmgmt 连接表的可连接端点（地址/认证）。
 type ManagedESEndpoint struct {
@@ -32,7 +39,9 @@ type ManagedESConnectionLoader interface {
 // ElasticsearchProvider 运行时从数据字典 + YAML 解析 ES 配置并创建客户端。
 // 若字典 elasticsearch_connection_id > 0，地址与认证改用 esmgmt 连接；索引模式/保留等仍来自字典。
 type ElasticsearchProvider struct {
-	db       *gorm.DB
+	resolve  ElasticsearchConfigResolver
+	fetchDict DictValueReader
+	upsertDict DictValueWriter
 	yamlBase config.ElasticsearchConfig
 
 	mu     sync.Mutex
@@ -42,8 +51,18 @@ type ElasticsearchProvider struct {
 	connLoader ManagedESConnectionLoader
 }
 
-func NewElasticsearchProvider(db *gorm.DB, yamlBase config.ElasticsearchConfig) *ElasticsearchProvider {
-	return &ElasticsearchProvider{db: db, yamlBase: yamlBase.Normalized()}
+func NewElasticsearchProvider(
+	resolve ElasticsearchConfigResolver,
+	fetchDict DictValueReader,
+	upsertDict DictValueWriter,
+	yamlBase config.ElasticsearchConfig,
+) *ElasticsearchProvider {
+	return &ElasticsearchProvider{
+		resolve:    resolve,
+		fetchDict:  fetchDict,
+		upsertDict: upsertDict,
+		yamlBase:   yamlBase.Normalized(),
+	}
 }
 
 // SetManagedConnectionLoader 在 Wire 装配 esmgmt 后注入，用于按连接 ID 加载地址与密码。
@@ -60,7 +79,7 @@ func (p *ElasticsearchProvider) Resolve(ctx context.Context) (config.Elasticsear
 	if p == nil {
 		return config.ElasticsearchConfig{}, fmt.Errorf("elasticsearch provider nil")
 	}
-	cfg := dictconfig.ResolveElasticsearchConfig(ctx, p.db, p.yamlBase)
+	cfg := p.resolveConfig(ctx)
 	connID := p.readManagedConnectionID(ctx)
 	if connID == 0 {
 		return cfg, nil
@@ -93,12 +112,22 @@ func (p *ElasticsearchProvider) ResolveFromDict(ctx context.Context) (config.Ela
 	if p == nil {
 		return config.ElasticsearchConfig{}, fmt.Errorf("elasticsearch provider nil")
 	}
-	return dictconfig.ResolveElasticsearchConfig(ctx, p.db, p.yamlBase), nil
+	return p.resolveConfig(ctx), nil
+}
+
+func (p *ElasticsearchProvider) resolveConfig(ctx context.Context) config.ElasticsearchConfig {
+	if p.resolve != nil {
+		return p.resolve(ctx)
+	}
+	return p.yamlBase
 }
 
 func (p *ElasticsearchProvider) readManagedConnectionID(ctx context.Context) uint {
+	if p.fetchDict == nil {
+		return 0
+	}
 	types := dictconfig.DefaultElasticsearchDictTypes()
-	v, ok := dictconfig.FetchEnabledDictValue(ctx, p.db, types.ConnectionID)
+	v, ok := p.fetchDict(ctx, types.ConnectionID)
 	if !ok {
 		return 0
 	}
@@ -136,6 +165,9 @@ func (p *ElasticsearchProvider) SetManagedConnectionID(ctx context.Context, id u
 	if p == nil {
 		return fmt.Errorf("elasticsearch provider nil")
 	}
+	if p.upsertDict == nil {
+		return fmt.Errorf("dict writer not wired")
+	}
 	if id > 0 {
 		p.mu.Lock()
 		loader := p.connLoader
@@ -148,8 +180,8 @@ func (p *ElasticsearchProvider) SetManagedConnectionID(ctx context.Context, id u
 		}
 	}
 	types := dictconfig.DefaultElasticsearchDictTypes()
-	if err := dictconfig.UpsertEnabledDictValue(
-		ctx, p.db, types.ConnectionID,
+	if err := p.upsertDict(
+		ctx, types.ConnectionID,
 		"日志平台 ES 连接 ID",
 		strconv.FormatUint(uint64(id), 10),
 		"esmgmt_connections.id；>0 时日志检索使用该连接",
@@ -158,8 +190,8 @@ func (p *ElasticsearchProvider) SetManagedConnectionID(ctx context.Context, id u
 	}
 	// 绑定真实连接时同步开启检索开关，避免选了连接却仍因 enabled=false 不可用。
 	if id > 0 {
-		_ = dictconfig.UpsertEnabledDictValue(
-			ctx, p.db, types.Enabled,
+		_ = p.upsertDict(
+			ctx, types.Enabled,
 			"启用 ES 日志检索",
 			"true",
 			"由日志平台选择 ES 连接时自动开启",

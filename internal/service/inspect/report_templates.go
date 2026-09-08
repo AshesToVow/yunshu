@@ -3,6 +3,7 @@ package inspect
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"math"
@@ -109,25 +110,19 @@ func renderHTMLWithTemplate(code, body string, data ReportData) ([]byte, error) 
 
 func (s *Service) resolveReportTemplate(ctx context.Context, projectID, templateID uint) (*model.InspectReportTemplate, error) {
 	if templateID > 0 {
-		var row model.InspectReportTemplate
-		err := s.db.WithContext(ctx).
-			Where("id = ? AND status = 1 AND (project_id = 0 OR project_id = ?)", templateID, projectID).
-			First(&row).Error
+		row, err := s.repo.GetReportTemplate(ctx, projectID, templateID)
 		if err == nil {
-			return &row, nil
+			return row, nil
 		}
-		if err != gorm.ErrRecordNotFound {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
 	}
-	var def model.InspectReportTemplate
-	err := s.db.WithContext(ctx).
-		Where("project_id = 0 AND code = ? AND status = 1", "default").
-		First(&def).Error
+	def, err := s.repo.GetGlobalDefaultReportTemplate(ctx)
 	if err == nil {
-		return &def, nil
+		return def, nil
 	}
-	if err != gorm.ErrRecordNotFound {
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 	// DB 尚未 seed 时回退 embed
@@ -144,16 +139,13 @@ func builtinReportTemplateSeeds() []model.InspectReportTemplate {
 
 // SeedReportTemplates 幂等写入全局内置报告版式。
 func (s *Service) SeedReportTemplates(ctx context.Context) error {
-	if s == nil || s.db == nil {
+	if s == nil || s.repo == nil {
 		return nil
 	}
 	for _, want := range builtinReportTemplateSeeds() {
-		var row model.InspectReportTemplate
-		err := s.db.WithContext(ctx).
-			Where("project_id = 0 AND code = ?", want.Code).
-			First(&row).Error
-		if err == gorm.ErrRecordNotFound {
-			if err := s.db.WithContext(ctx).Create(&want).Error; err != nil {
+		row, err := s.repo.GetGlobalReportTemplateByCode(ctx, want.Code)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := s.repo.CreateReportTemplate(ctx, &want); err != nil {
 				return err
 			}
 			continue
@@ -166,7 +158,7 @@ func (s *Service) SeedReportTemplates(ctx context.Context) error {
 		row.IsBuiltin = true
 		row.Status = 1
 		row.Engine = "go_html"
-		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		if err := s.repo.SaveReportTemplate(ctx, row); err != nil {
 			return err
 		}
 	}
@@ -182,12 +174,7 @@ type ReportTemplateUpsertRequest struct {
 }
 
 func (s *Service) ListReportTemplates(ctx context.Context, projectID uint) ([]model.InspectReportTemplate, error) {
-	var rows []model.InspectReportTemplate
-	err := s.db.WithContext(ctx).
-		Where("(project_id = 0 OR project_id = ?) AND status = 1", projectID).
-		Order("project_id ASC, id ASC").
-		Find(&rows).Error
-	return rows, err
+	return s.repo.ListReportTemplates(ctx, projectID)
 }
 
 func (s *Service) CreateReportTemplate(ctx context.Context, projectID uint, req ReportTemplateUpsertRequest) (*model.InspectReportTemplate, error) {
@@ -212,16 +199,16 @@ func (s *Service) CreateReportTemplate(ctx context.Context, projectID uint, req 
 		Remark:    strings.TrimSpace(req.Remark),
 		Status:    1,
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateReportTemplate(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *Service) UpdateReportTemplate(ctx context.Context, projectID, tid uint, req ReportTemplateUpsertRequest) (*model.InspectReportTemplate, error) {
-	var row model.InspectReportTemplate
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", tid, projectID).First(&row).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	row, err := s.repo.GetProjectReportTemplate(ctx, projectID, tid)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("模板不存在或不可修改全局内置模板")
 		}
 		return nil, err
@@ -239,19 +226,18 @@ func (s *Service) UpdateReportTemplate(ctx context.Context, projectID, tid uint,
 	if req.Status != nil {
 		row.Status = *req.Status
 	}
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.repo.SaveReportTemplate(ctx, row); err != nil {
 		return nil, err
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) DeleteReportTemplate(ctx context.Context, projectID, tid uint) error {
-	res := s.db.WithContext(ctx).Where("id = ? AND project_id = ? AND is_builtin = ?", tid, projectID, false).
-		Delete(&model.InspectReportTemplate{})
-	if res.Error != nil {
-		return res.Error
+	n, err := s.repo.DeleteProjectReportTemplate(ctx, projectID, tid)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFoundWithMsg("模板不存在或不可删除")
 	}
 	return nil
@@ -262,12 +248,9 @@ func (s *Service) CopyReportTemplate(ctx context.Context, projectID, sourceID ui
 	if projectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("project_id required")
 	}
-	var src model.InspectReportTemplate
-	err := s.db.WithContext(ctx).
-		Where("id = ? AND (project_id = 0 OR project_id = ?)", sourceID, projectID).
-		First(&src).Error
+	src, err := s.repo.GetCopyableReportTemplate(ctx, projectID, sourceID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("源模板不存在")
 		}
 		return nil, err
@@ -298,7 +281,7 @@ func (s *Service) CopyReportTemplate(ctx context.Context, projectID, sourceID ui
 		Remark:    "复制自 " + src.Code,
 		Status:    1,
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateReportTemplate(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil

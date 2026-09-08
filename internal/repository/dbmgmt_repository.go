@@ -410,6 +410,52 @@ func (r *DbmgmtRepository) GetInstanceAccount(ctx context.Context, projectID, id
 	return &acc, err
 }
 
+func (r *DbmgmtRepository) ListColumnMaskRules(ctx context.Context, instanceID uint) ([]model.DbColumnMaskRule, error) {
+	var list []model.DbColumnMaskRule
+	err := r.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("id ASC").Find(&list).Error
+	return list, err
+}
+
+func (r *DbmgmtRepository) GetColumnMaskRule(ctx context.Context, instanceID, id uint) (*model.DbColumnMaskRule, error) {
+	var row model.DbColumnMaskRule
+	err := r.db.WithContext(ctx).Where("instance_id = ? AND id = ?", instanceID, id).First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *DbmgmtRepository) FindColumnMaskRule(ctx context.Context, instanceID uint, schema, table, column string) (*model.DbColumnMaskRule, error) {
+	var row model.DbColumnMaskRule
+	err := r.db.WithContext(ctx).Where(
+		"instance_id = ? AND schema_name = ? AND table_name = ? AND column_name = ?",
+		instanceID, schema, table, column,
+	).First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *DbmgmtRepository) CreateColumnMaskRule(ctx context.Context, rule *model.DbColumnMaskRule) error {
+	return r.db.WithContext(ctx).Create(rule).Error
+}
+
+func (r *DbmgmtRepository) UpdateColumnMaskRule(ctx context.Context, rule *model.DbColumnMaskRule) error {
+	return r.db.WithContext(ctx).Save(rule).Error
+}
+
+func (r *DbmgmtRepository) DeleteColumnMaskRule(ctx context.Context, instanceID, id uint) error {
+	res := r.db.WithContext(ctx).Where("instance_id = ? AND id = ?", instanceID, id).Delete(&model.DbColumnMaskRule{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 // ListPendingAccessStepsForReminder 列出待 SLA 提醒的权限申请步骤。
 func (r *DbmgmtRepository) ListPendingAccessStepsForReminder(ctx context.Context, sla time.Duration) ([]model.DbAccessRequestStep, error) {
 	cutoff := time.Now().Add(-sla)

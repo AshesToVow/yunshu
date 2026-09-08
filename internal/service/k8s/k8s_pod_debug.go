@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"yunshu/internal/dictconfig"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -38,7 +37,7 @@ func (s *K8sPodService) ResolveDebugImage(ctx context.Context, override string) 
 	if v := strings.TrimSpace(override); v != "" {
 		return v
 	}
-	return dictconfig.ResolvePodDebugImage(ctx, s.db)
+	return s.resolveDebug(ctx)
 }
 
 // DebugEphemeral 向 Pod 注入临时调试容器（需集群支持 EphemeralContainers）。

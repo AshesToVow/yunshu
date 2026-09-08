@@ -15,6 +15,7 @@ type ServerRepo interface {
 	ProjectNameByID(ctx context.Context, projectID uint) (string, error)
 	List(ctx context.Context, params ServerListParams) ([]model.Server, int64, error)
 	GetByProjectProviderInstance(ctx context.Context, projectID uint, provider string, cloudInstanceID string) (*model.Server, error)
+	ListByProject(ctx context.Context, projectID uint) ([]model.Server, error)
 	ListByProjectWithoutGroup(ctx context.Context, projectID uint) ([]model.Server, error)
 	ListByProjectGroupProvider(ctx context.Context, projectID uint, groupID uint, provider string) ([]model.Server, error)
 	ListByProjectProviderCloud(ctx context.Context, projectID uint, provider string) ([]model.Server, error)

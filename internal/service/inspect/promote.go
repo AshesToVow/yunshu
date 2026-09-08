@@ -3,6 +3,7 @@ package inspect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,9 +28,9 @@ func (s *Service) PromoteItemToAlert(ctx context.Context, projectID, itemID uint
 	if projectID == 0 || itemID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("project_id and item_id required")
 	}
-	var item model.InspectItem
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", itemID, projectID).First(&item).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	item, err := s.repo.GetItem(ctx, projectID, itemID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("巡检项不存在（请先同步模板到项目）")
 		}
 		return nil, err
@@ -87,16 +88,18 @@ func (s *Service) PromoteItemToAlert(ctx context.Context, projectID, itemID uint
 		item.ID,
 	)
 
-	var rule model.AlertMonitorRule
+	var rule *model.AlertMonitorRule
 	if item.LinkedRuleID > 0 {
-		if err := s.db.WithContext(ctx).First(&rule, item.LinkedRuleID).Error; err != nil {
-			if err != gorm.ErrRecordNotFound {
+		rule, err = s.repo.GetMonitorRule(ctx, item.LinkedRuleID)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, err
 			}
 			item.LinkedRuleID = 0
+			rule = nil
 		}
 	}
-	if item.LinkedRuleID > 0 {
+	if item.LinkedRuleID > 0 && rule != nil {
 		rule.DatasourceID = dsID
 		rule.ProjectID = projectID
 		rule.Name = promoteRuleName(item.Name)
@@ -111,39 +114,33 @@ func (s *Service) PromoteItemToAlert(ctx context.Context, projectID, itemID uint
 		rule.Enabled = enabled
 		rule.Origin = model.AlertRuleOriginInspect
 		rule.OriginInspectItemID = item.ID
-		if err := s.db.WithContext(ctx).Save(&rule).Error; err != nil {
+		if err := s.repo.SaveMonitorRule(ctx, rule); err != nil {
 			return nil, err
 		}
-		return &rule, nil
+		return rule, nil
 	}
 
-	rule = model.AlertMonitorRule{
-		DatasourceID:         dsID,
-		ProjectID:            projectID,
-		Name:                 promoteRuleName(item.Name),
-		RuleKind:             model.AlertRuleKindPromQL,
-		Expr:                 expr,
-		ForSeconds:           forSec,
-		EvalIntervalSeconds:  ev,
-		Severity:             sev,
-		ThresholdUnit:        unit,
-		LabelsJSON:           labelsJSON,
-		AnnotationsJSON:      annJSON,
-		Enabled:              enabled,
-		Origin:               model.AlertRuleOriginInspect,
-		OriginInspectItemID:  item.ID,
+	newRule := model.AlertMonitorRule{
+		DatasourceID:        dsID,
+		ProjectID:           projectID,
+		Name:                promoteRuleName(item.Name),
+		RuleKind:            model.AlertRuleKindPromQL,
+		Expr:                expr,
+		ForSeconds:          forSec,
+		EvalIntervalSeconds: ev,
+		Severity:            sev,
+		ThresholdUnit:       unit,
+		LabelsJSON:          labelsJSON,
+		AnnotationsJSON:     annJSON,
+		Enabled:             enabled,
+		Origin:              model.AlertRuleOriginInspect,
+		OriginInspectItemID: item.ID,
 	}
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&rule).Error; err != nil {
-			return err
-		}
-		return tx.Model(&model.InspectItem{}).Where("id = ?", item.ID).
-			Update("linked_rule_id", rule.ID).Error
-	}); err != nil {
+	if err := s.repo.CreateMonitorRuleLinkItem(ctx, &newRule, item.ID); err != nil {
 		return nil, err
 	}
-	item.LinkedRuleID = rule.ID
-	return &rule, nil
+	item.LinkedRuleID = newRule.ID
+	return &newRule, nil
 }
 
 func promoteRuleName(name string) string {
@@ -164,7 +161,6 @@ func buildInspectAlertExpr(query string, threshold float64, thresholdType string
 	}
 	// 已是比较表达式则原样使用
 	if strings.ContainsAny(q, "<>=") && !strings.HasPrefix(strings.ToLower(q), "count(") {
-		// 粗略：含比较符时仍包一层阈值，避免双重；若用户已写比较则直接返回
 		low := strings.ToLower(q)
 		if strings.Contains(low, " > ") || strings.Contains(low, " < ") ||
 			strings.Contains(low, ">=") || strings.Contains(low, "<=") ||
@@ -195,8 +191,8 @@ func buildInspectAlertExpr(query string, threshold float64, thresholdType string
 
 func mergeInspectPromoteLabels(raw string, itemID uint) string {
 	m := map[string]string{
-		"origin":           model.AlertRuleOriginInspect,
-		"inspect_item_id":  strconv.FormatUint(uint64(itemID), 10),
+		"origin":          model.AlertRuleOriginInspect,
+		"inspect_item_id": strconv.FormatUint(uint64(itemID), 10),
 	}
 	raw = strings.TrimSpace(raw)
 	if raw != "" && raw != "{}" {
@@ -219,7 +215,6 @@ func escapeJSONString(s string) string {
 	if err != nil {
 		return `""`
 	}
-	// Marshal 带引号，去掉首尾
 	if len(b) >= 2 {
 		return string(b[1 : len(b)-1])
 	}

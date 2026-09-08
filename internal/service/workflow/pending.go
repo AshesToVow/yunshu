@@ -10,8 +10,8 @@ import (
 	"yunshu/internal/pkg/auth"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
-	"gorm.io/gorm"
 )
 
 // PendingListQuery 跨域待办查询。
@@ -63,93 +63,12 @@ func (s *Service) ListPendingForUser(ctx context.Context, q PendingListQuery, ac
 	isSuper := actor != nil && auth.IsSuperAdminRole(actor.RoleCodes)
 	canPlatformReview := CanPlatformRoleReview(actor)
 
-	base := s.db.WithContext(ctx).
-		Table("workflow_ticket_steps AS s").
-		Select(`t.id AS workflow_ticket_id, s.id AS step_id, t.domain, t.ticket_type, t.project_id,
-			t.title, t.status, s.stage_name AS current_stage_name, t.submitter_user_id, t.ref_type, t.ref_id,
-			s.activated_at, t.created_at, s.status AS step_status, s.reviewer_user_id`).
-		Joins("JOIN workflow_tickets t ON t.id = s.ticket_id").
-		Where("t.deleted_at IS NULL AND s.deleted_at IS NULL")
-
-	if len(domains) > 0 {
-		base = base.Where("t.domain IN ?", domains)
-	}
-	if q.ProjectID != nil && *q.ProjectID > 0 {
-		base = base.Where("t.project_id = ?", *q.ProjectID)
-	}
-
-	switch mineScope {
-	case MineScopePending:
-		if isSuper {
-			base = base.Where(`(
-				(t.status = ? AND s.status = ? AND s.activated_at IS NOT NULL)
-				OR `+sqlSubmitterPendingExecution()+`
-			)`, append([]any{
-				model.WorkflowTicketStatusPending, model.WorkflowStepPending,
-			}, argsSubmitterPendingExecution(userID)...)...)
-		} else {
-			base = base.Where(`(
-				(t.status = ? AND s.status = ? AND s.activated_at IS NOT NULL AND (
-					s.assignee_user_id = ? OR
-					(s.assignee_rule_type = ? AND ?) OR
-					(s.user_group_id IS NOT NULL AND s.user_group_id > 0 AND EXISTS (
-						SELECT 1 FROM user_group_users ugu WHERE ugu.user_group_id = s.user_group_id AND ugu.user_id = ?
-					))
-				))
-				OR `+sqlSubmitterPendingExecution()+`
-			)`, append([]any{
-				model.WorkflowTicketStatusPending, model.WorkflowStepPending, userID,
-				model.WorkflowAssigneePlatformRole, canPlatformReview, userID,
-			}, argsSubmitterPendingExecution(userID)...)...)
-		}
-	case MineScopeDone:
-		if userID == 0 {
-			base = base.Where("1 = 0")
-		} else {
-			base = base.Where("s.reviewer_user_id = ? AND s.status IN ?", userID,
-				[]string{model.WorkflowStepApproved, model.WorkflowStepRejected})
-		}
-	default: // all
-		if !isSuper && userID > 0 {
-			base = base.Where(`(
-				s.assignee_user_id = ? OR s.reviewer_user_id = ? OR
-				(s.assignee_rule_type = ? AND ?) OR
-				(s.user_group_id IS NOT NULL AND s.user_group_id > 0 AND EXISTS (
-					SELECT 1 FROM user_group_users ugu WHERE ugu.user_group_id = s.user_group_id AND ugu.user_id = ?
-				))
-				OR `+sqlSubmitterPendingExecution()+`
-			)`, append([]any{
-				userID, userID, model.WorkflowAssigneePlatformRole, canPlatformReview, userID,
-			}, argsSubmitterPendingExecution(userID)...)...)
-		}
-	}
-
-	var total int64
-	countQ := base.Session(&gorm.Session{})
-	if err := countQ.Count(&total).Error; err != nil {
-		return nil, bizerrors.Pass(ctx, "workflow", "ListPendingForUser", err)
-	}
-
-	type row struct {
-		WorkflowTicketID uint
-		StepID           uint
-		Domain           string
-		TicketType       string
-		ProjectID        uint
-		Title            string
-		Status           string
-		CurrentStageName string
-		SubmitterUserID  uint
-		RefType          string
-		RefID            uint
-		ActivatedAt      *time.Time
-		CreatedAt        time.Time
-		StepStatus       string
-		ReviewerUserID   *uint
-	}
-	var rows []row
-	if err := base.Order("s.activated_at ASC, t.id DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, err := s.repo.ListPending(ctx, repository.WorkflowPendingFilter{
+		Domains: domains, ProjectID: q.ProjectID, MineScope: mineScope,
+		UserID: userID, IsSuper: isSuper, CanPlatformReview: canPlatformReview,
+		Offset: (page - 1) * pageSize, Limit: pageSize,
+	})
+	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "ListPendingForUser", err)
 	}
 
@@ -255,45 +174,4 @@ func buildDeepLink(domain, ticketType string, projectID uint, refType string, re
 	}
 	_ = ticketType
 	return fmt.Sprintf("/workflow/inbox?project=%d", projectID)
-}
-
-// sqlSubmitterPendingExecution 提交人待执行：发布 + SQL（审批已通过）。
-func sqlSubmitterPendingExecution() string {
-	return `(
-		(
-			t.status = ? AND t.ticket_type = ? AND t.ref_type = ? AND t.submitter_user_id = ?
-			AND EXISTS (
-				SELECT 1 FROM cicd_release_runs r
-				WHERE r.id = t.ref_id AND r.status = ? AND r.deleted_at IS NULL
-			)
-			AND s.id = (
-				SELECT s2.id FROM workflow_ticket_steps s2
-				WHERE s2.ticket_id = t.id AND s2.deleted_at IS NULL
-				ORDER BY s2.sort_order DESC, s2.id DESC
-				LIMIT 1
-			)
-		)
-		OR (
-			t.status = ? AND t.ticket_type = ? AND t.ref_type = ? AND t.submitter_user_id = ?
-			AND EXISTS (
-				SELECT 1 FROM db_sql_tickets st
-				WHERE st.id = t.ref_id AND st.status = ?
-			)
-			AND s.id = (
-				SELECT s2.id FROM workflow_ticket_steps s2
-				WHERE s2.ticket_id = t.id AND s2.deleted_at IS NULL
-				ORDER BY s2.sort_order DESC, s2.id DESC
-				LIMIT 1
-			)
-		)
-	)`
-}
-
-func argsSubmitterPendingExecution(userID uint) []any {
-	return []any{
-		model.WorkflowTicketStatusApproved, model.WorkflowTicketTypeRelease, model.WorkflowRefCicdReleaseRun, userID,
-		model.CicdRunStatusPendingExecution,
-		model.WorkflowTicketStatusApproved, model.WorkflowTicketTypeSql, model.WorkflowRefDbSqlTicket, userID,
-		model.DbTicketStatusPendingExecution,
-	}
 }

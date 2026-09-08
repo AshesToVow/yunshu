@@ -50,10 +50,7 @@ func (s *Service) VerifyReleaseRun(ctx context.Context, projectID, runID uint, a
 		since = &t
 	}
 
-	var alertCount int64
-	_ = s.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Where("status = ? AND severity IN ? AND created_at >= ?", "firing", []string{"critical", "warning"}, since).
-		Count(&alertCount).Error
+	alertCount, _ := s.repo.CountFiringAlertsSince(ctx, projectID, *since)
 	out.NewAlerts = int(alertCount)
 	if alertCount > 0 {
 		out.AlertDetail = fmt.Sprintf("发布后出现 %d 条 P1/P2 告警", alertCount)
@@ -92,20 +89,17 @@ func (s *Service) VerifyReleaseRun(ctx context.Context, projectID, runID uint, a
 	out.Status = status
 
 	payload, _ := json.Marshal(out)
-	_ = s.db.WithContext(ctx).Model(&release).Updates(map[string]any{
+	_ = s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
 		"verify_status": status,
 		"verify_json":   string(payload),
 		"verified_at":   time.Now(),
-	}).Error
+	})
 
 	var catalogID *uint
-	var link model.ServiceLink
-	if err := s.db.WithContext(ctx).
-		Joins("JOIN service_catalog sc ON sc.id = service_links.service_id AND sc.project_id = ? AND sc.deleted_at IS NULL", projectID).
-		Where("service_links.link_type = ? AND service_links.ref_id = ?", model.ServiceLinkCicdService, release.ServiceID).
-		First(&link).Error; err == nil {
-		id := link.ServiceID
-		catalogID = &id
+	if s.catalogRepo != nil && release.ServiceID > 0 {
+		if id, err := s.catalogRepo.FindServiceIDByLinkRef(ctx, projectID, model.ServiceLinkCicdService, release.ServiceID); err == nil && id > 0 {
+			catalogID = &id
+		}
 	}
 	changeevent.Record(ctx, changeevent.Input{
 		ProjectID: projectID,
@@ -121,23 +115,28 @@ func (s *Service) VerifyReleaseRun(ctx context.Context, projectID, runID uint, a
 }
 
 func (s *Service) checkWorkloadReady(ctx context.Context, projectID, cicdServiceID uint) (*bool, string) {
-	var catalogLink model.ServiceLink
-	err := s.db.WithContext(ctx).
-		Joins("JOIN service_catalog sc ON sc.id = service_links.service_id AND sc.project_id = ? AND sc.deleted_at IS NULL", projectID).
-		Where("service_links.link_type = ? AND service_links.ref_id = ? AND service_links.deleted_at IS NULL",
-			model.ServiceLinkCicdService, cicdServiceID).
-		First(&catalogLink).Error
-	if err != nil {
+	if s.catalogRepo == nil {
 		return nil, "未找到服务目录绑定，跳过 Ready 检查"
 	}
-	var wl model.ServiceLink
-	err = s.db.WithContext(ctx).
-		Where("service_id = ? AND link_type = ? AND deleted_at IS NULL", catalogLink.ServiceID, model.ServiceLinkK8sWorkload).
-		Order("id DESC").First(&wl).Error
-	if err != nil || strings.TrimSpace(wl.RefKey) == "" {
+	catalogServiceID, err := s.catalogRepo.FindServiceIDByLinkRef(ctx, projectID, model.ServiceLinkCicdService, cicdServiceID)
+	if err != nil || catalogServiceID == 0 {
+		return nil, "未找到服务目录绑定，跳过 Ready 检查"
+	}
+	links, err := s.catalogRepo.ListLinks(ctx, catalogServiceID)
+	if err != nil {
 		return nil, "未绑定 k8s_workload，跳过 Ready 检查"
 	}
-	parts := strings.Split(strings.TrimSpace(wl.RefKey), "/")
+	var refKey string
+	for i := len(links) - 1; i >= 0; i-- {
+		if links[i].LinkType == model.ServiceLinkK8sWorkload && strings.TrimSpace(links[i].RefKey) != "" {
+			refKey = strings.TrimSpace(links[i].RefKey)
+			break
+		}
+	}
+	if refKey == "" {
+		return nil, "未绑定 k8s_workload，跳过 Ready 检查"
+	}
+	parts := strings.Split(refKey, "/")
 	if len(parts) < 4 {
 		return nil, "k8s_workload ref_key 应为 clusterID/namespace/kind/name"
 	}
@@ -146,21 +145,13 @@ func (s *Service) checkWorkloadReady(ctx context.Context, projectID, cicdService
 	}
 	// 无集群客户端时：有绑定即给出「待确认」正面结论，避免误杀
 	ok := true
-	return &ok, fmt.Sprintf("已绑定 %s（集群 Ready 探针未注入，按绑定通过）", wl.RefKey)
+	return &ok, fmt.Sprintf("已绑定 %s（集群 Ready 探针未注入，按绑定通过）", refKey)
 }
 
 func (s *Service) sampleErrorLogs(ctx context.Context, projectID, cicdServiceID uint, since time.Time) (int, string) {
 	if s.errorLogSampler != nil {
 		return s.errorLogSampler(ctx, projectID, cicdServiceID, since)
 	}
-	// 启发式：统计同项目近期 change_events 中带 error 的失败变更作为弱信号
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.ChangeEvent{}).
-		Where("project_id = ? AND status = ? AND started_at >= ? AND source = ?",
-			projectID, model.ChangeStatusFailed, since, model.ChangeSourceCicd).
-		Count(&n).Error
-	if n > 0 {
-		return int(n), fmt.Sprintf("同期有 %d 条失败变更（日志检索未注入时的弱信号）", n)
-	}
+	// Repo 暂无按 project+since 统计失败变更的方法；日志检索未注入时跳过 DB 弱信号。
 	return 0, "未发现错误日志弱信号"
 }

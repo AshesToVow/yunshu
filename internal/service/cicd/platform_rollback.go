@@ -3,7 +3,6 @@ package cicd
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"yunshu/internal/model"
@@ -69,9 +68,9 @@ func (s *Service) PlatformRollbackRelease(ctx context.Context, projectID, runID 
 		"platform_rollback": out,
 		"release_id":        release.ID,
 	})
-	_ = s.db.WithContext(ctx).Model(&release).Updates(map[string]any{
+	_ = s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
 		"verify_json": string(b),
-	}).Error
+	})
 	return out, nil
 }
 
@@ -83,28 +82,14 @@ type linkedWorkload struct {
 }
 
 func (s *Service) lookupLinkedWorkload(ctx context.Context, cicdServiceID uint) linkedWorkload {
-	var catalogLink model.ServiceLink
-	if err := s.db.WithContext(ctx).
-		Where("link_type = ? AND ref_id = ?", model.ServiceLinkCicdService, cicdServiceID).
-		First(&catalogLink).Error; err != nil {
+	clusterID, ns, kind, name, err := s.repo.LookupLinkedK8sWorkload(ctx, cicdServiceID)
+	if err != nil {
 		return linkedWorkload{}
 	}
-	var wl model.ServiceLink
-	if err := s.db.WithContext(ctx).
-		Where("service_id = ? AND link_type = ?", catalogLink.ServiceID, model.ServiceLinkK8sWorkload).
-		First(&wl).Error; err != nil {
-		return linkedWorkload{}
-	}
-	parts := strings.Split(strings.TrimSpace(wl.RefKey), "/")
-	if len(parts) < 4 {
-		return linkedWorkload{}
-	}
-	var cid uint
-	_, _ = fmt.Sscanf(parts[0], "%d", &cid)
 	return linkedWorkload{
-		ClusterID: cid,
-		Namespace: parts[1],
-		Kind:      parts[2],
-		Name:      parts[3],
+		ClusterID: clusterID,
+		Namespace: ns,
+		Kind:      kind,
+		Name:      name,
 	}
 }

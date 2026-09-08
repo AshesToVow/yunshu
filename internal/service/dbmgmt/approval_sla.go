@@ -59,32 +59,10 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 }
 
 func (s *Service) syncWorkflowApprovalReminders(ctx context.Context, sla, interval time.Duration, now time.Time) {
-	if s.db == nil || s.mailer == nil || !s.mailer.Enabled() {
+	if s.mailer == nil || !s.mailer.Enabled() {
 		return
 	}
-	type row struct {
-		StepID           uint
-		TicketID         uint
-		StageName        string
-		ActivatedAt      time.Time
-		LastRemindedAt   *time.Time
-		UserGroupID      *uint
-		AssigneeUserID   *uint
-		AssigneeRuleType string
-		Domain           string
-		RefID            uint
-		Title            string
-		TicketType       string
-	}
-	var list []row
-	err := s.db.WithContext(ctx).Raw(`
-SELECT s.id AS step_id, s.ticket_id, s.stage_name, s.activated_at, s.last_reminded_at,
-       s.user_group_id, s.assignee_user_id, s.assignee_rule_type, t.domain, t.ref_id, t.title, t.ticket_type
-FROM workflow_ticket_steps s
-JOIN workflow_tickets t ON t.id = s.ticket_id AND t.deleted_at IS NULL
-WHERE t.domain IN (?, ?) AND t.status = ?
-  AND s.status = ? AND s.activated_at IS NOT NULL AND s.deleted_at IS NULL
-`, model.WorkflowDomainDbmgmt, model.WorkflowDomainAI, model.WorkflowTicketStatusPending, model.WorkflowStepPending).Scan(&list).Error
+	list, err := s.repo.ListWorkflowApprovalReminderRows(ctx, []string{model.WorkflowDomainDbmgmt, model.WorkflowDomainAI})
 	if err != nil {
 		slog.Default().With("component", "dbmgmt").Warn("list workflow approval steps failed", "error", err)
 		return
@@ -122,9 +100,7 @@ WHERE t.domain IN (?, ?) AND t.status = ?
 			slog.Default().With("component", "dbmgmt").Warn("workflow SLA reminder failed", "step_id", it.StepID, "error", err)
 			continue
 		}
-		_ = s.db.WithContext(ctx).Model(&model.WorkflowTicketStep{}).
-			Where("id = ?", it.StepID).
-			Update("last_reminded_at", now).Error
+		_ = s.repo.UpdateWorkflowStepLastRemindedAt(ctx, it.StepID, now)
 	}
 }
 

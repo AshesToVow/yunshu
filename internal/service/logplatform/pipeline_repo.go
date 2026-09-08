@@ -36,15 +36,7 @@ func (s *ClusterLogService) ListLogPipelines(ctx context.Context, projectID uint
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return nil, err
 	}
-	q := s.db.WithContext(ctx).Where("project_id = ?", projectID)
-	if k := strings.TrimSpace(kind); k != "" {
-		q = q.Where("kind = ?", k)
-	}
-	var list []model.LogPipeline
-	if err := q.Order("updated_at DESC").Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return list, nil
+	return s.pipelineRepo.List(ctx, projectID, kind)
 }
 
 // GetLogPipeline 获取单条。
@@ -52,14 +44,14 @@ func (s *ClusterLogService) GetLogPipeline(ctx context.Context, projectID, id ui
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return nil, err
 	}
-	var row model.LogPipeline
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND id = ?", projectID, id).First(&row).Error; err != nil {
+	row, err := s.pipelineRepo.GetByIDInProject(ctx, projectID, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("Pipeline 不存在")
 		}
 		return nil, err
 	}
-	return &row, nil
+	return row, nil
 }
 
 // UpsertLogPipeline 新建或更新（id=0 新建）。
@@ -84,9 +76,9 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 		return nil, constants.ErrBadRequestWithMsg("status 仅支持 draft|published")
 	}
 
-	var row model.LogPipeline
 	if id > 0 {
-		if err := s.db.WithContext(ctx).Where("project_id = ? AND id = ?", projectID, id).First(&row).Error; err != nil {
+		row, err := s.pipelineRepo.GetByIDInProject(ctx, projectID, id)
+		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, constants.ErrNotFoundWithMsg("Pipeline 不存在")
 			}
@@ -98,7 +90,7 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 		row.ServerID = req.ServerID
 		row.ParseProfile = strings.TrimSpace(req.ParseProfile)
 		if yml != "" && yml != strings.TrimSpace(row.ContentYAML) {
-			_ = s.snapshotPipelineVersion(ctx, &row, userID, "auto before update")
+			_ = s.snapshotPipelineVersion(ctx, row, userID, "auto before update")
 			row.ContentYAML = req.ContentYAML
 			row.Version++
 		}
@@ -108,13 +100,13 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 			row.SourceRef = ref
 		}
 		row.UpdatedBy = userID
-		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		if err := s.pipelineRepo.Save(ctx, row); err != nil {
 			return nil, err
 		}
-		return &row, nil
+		return row, nil
 	}
 
-	row = model.LogPipeline{
+	row := model.LogPipeline{
 		ProjectID:    projectID,
 		Name:         name,
 		Kind:         kind,
@@ -129,10 +121,7 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 		UpdatedBy:    userID,
 	}
 	// 软删后同名仍占 uk_log_pipeline_proj_name，新建会 500；先回收再写。
-	var ghost model.LogPipeline
-	gerr := s.db.WithContext(ctx).Unscoped().
-		Where("project_id = ? AND name = ?", projectID, name).
-		First(&ghost).Error
+	ghost, gerr := s.pipelineRepo.GetUnscopedByProjectAndName(ctx, projectID, name)
 	if gerr == nil {
 		if ghost.DeletedAt.Valid {
 			ghost.DeletedAt = gorm.DeletedAt{}
@@ -141,7 +130,7 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 			ghost.ServerID = req.ServerID
 			ghost.ParseProfile = strings.TrimSpace(req.ParseProfile)
 			if yml != "" {
-				_ = s.snapshotPipelineVersion(ctx, &ghost, userID, "restore before sync")
+				_ = s.snapshotPipelineVersion(ctx, ghost, userID, "restore before sync")
 				ghost.ContentYAML = req.ContentYAML
 				ghost.Version++
 			}
@@ -151,17 +140,17 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 				ghost.SourceRef = ref
 			}
 			ghost.UpdatedBy = userID
-			if err := s.db.WithContext(ctx).Unscoped().Save(&ghost).Error; err != nil {
+			if err := s.pipelineRepo.UnscopedSave(ctx, ghost); err != nil {
 				return nil, err
 			}
-			return &ghost, nil
+			return ghost, nil
 		}
 		return nil, constants.ErrBadRequestWithMsg("Pipeline 名称已存在: " + name)
 	}
 	if gerr != nil && !errors.Is(gerr, gorm.ErrRecordNotFound) {
 		return nil, gerr
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.pipelineRepo.Create(ctx, &row); err != nil {
 		if isDuplicateKeyErr(err) {
 			return nil, constants.ErrBadRequestWithMsg("Pipeline 名称已存在: " + name)
 		}
@@ -186,11 +175,11 @@ func (s *ClusterLogService) DeleteLogPipeline(ctx context.Context, projectID, id
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return err
 	}
-	res := s.db.WithContext(ctx).Where("project_id = ? AND id = ?", projectID, id).Delete(&model.LogPipeline{})
-	if res.Error != nil {
-		return res.Error
+	n, err := s.pipelineRepo.DeleteByIDInProject(ctx, projectID, id)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFoundWithMsg("Pipeline 不存在")
 	}
 	return nil
@@ -203,8 +192,7 @@ func (s *ClusterLogService) SyncLogPipelinesFromCluster(ctx context.Context, pro
 		return nil, err
 	}
 	name := fmt.Sprintf("k8s-cluster-%d", clusterID)
-	var existing model.LogPipeline
-	err = s.db.WithContext(ctx).Where("project_id = ? AND kind = ? AND cluster_id = ? AND name = ?", projectID, "k8s", clusterID, name).First(&existing).Error
+	existing, err := s.pipelineRepo.GetByProjectKindClusterName(ctx, projectID, "k8s", clusterID, name)
 	req := LogPipelineUpsert{
 		Name:        name,
 		Kind:        "k8s",
@@ -258,7 +246,7 @@ func (s *ClusterLogService) ApplyLogPipeline(ctx context.Context, projectID, id,
 	}
 	row.Status = "published"
 	row.UpdatedBy = userID
-	if err := s.db.WithContext(ctx).Save(row).Error; err != nil {
+	if err := s.pipelineRepo.Save(ctx, row); err != nil {
 		return nil, err
 	}
 	return row, nil
@@ -280,7 +268,7 @@ func (s *ClusterLogService) snapshotPipelineVersion(ctx context.Context, row *mo
 		Remark:      remark,
 		CreatedBy:   userID,
 	}
-	return s.db.WithContext(ctx).Create(&ver).Error
+	return s.pipelineRepo.CreateVersion(ctx, &ver)
 }
 
 // ListLogPipelineVersions 列出历史版本。
@@ -288,12 +276,7 @@ func (s *ClusterLogService) ListLogPipelineVersions(ctx context.Context, project
 	if _, err := s.GetLogPipeline(ctx, projectID, pipelineID); err != nil {
 		return nil, err
 	}
-	var list []model.LogPipelineVersion
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND pipeline_id = ?", projectID, pipelineID).
-		Order("version DESC").Limit(50).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return list, nil
+	return s.pipelineRepo.ListVersions(ctx, projectID, pipelineID, 50)
 }
 
 // RollbackLogPipelineVersion 回滚到指定历史版本（会再产生新 version）。
@@ -302,8 +285,8 @@ func (s *ClusterLogService) RollbackLogPipelineVersion(ctx context.Context, proj
 	if err != nil {
 		return nil, err
 	}
-	var ver model.LogPipelineVersion
-	if err := s.db.WithContext(ctx).Where("id = ? AND pipeline_id = ? AND project_id = ?", versionID, pipelineID, projectID).First(&ver).Error; err != nil {
+	ver, err := s.pipelineRepo.GetVersion(ctx, projectID, pipelineID, versionID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("版本不存在")
 		}
@@ -363,15 +346,9 @@ func (s *ClusterLogService) SaveHostPipelineSnapshot(ctx context.Context, projec
 		Remark:      remark,
 	}
 	// 优先按 server_id 定位；再按名称回收（含软删）误绑/已删条目
-	var existing model.LogPipeline
-	err := s.db.WithContext(ctx).
-		Where("project_id = ? AND kind = ? AND server_id = ?", projectID, "host", serverID).
-		Order("id ASC").
-		First(&existing).Error
+	existing, err := s.pipelineRepo.GetHostByServer(ctx, projectID, serverID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = s.db.WithContext(ctx).Unscoped().
-			Where("project_id = ? AND kind = ? AND name = ?", projectID, "host", name).
-			First(&existing).Error
+		existing, err = s.pipelineRepo.GetUnscopedHostByName(ctx, projectID, name)
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return s.UpsertLogPipeline(ctx, projectID, 0, userID, req)
@@ -381,7 +358,7 @@ func (s *ClusterLogService) SaveHostPipelineSnapshot(ctx context.Context, projec
 	}
 	if existing.DeletedAt.Valid {
 		existing.DeletedAt = gorm.DeletedAt{}
-		if err := s.db.WithContext(ctx).Unscoped().Save(&existing).Error; err != nil {
+		if err := s.pipelineRepo.UnscopedSave(ctx, existing); err != nil {
 			return nil, err
 		}
 	}

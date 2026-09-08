@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -17,9 +18,9 @@ func MigrateLegacyTickets(ctx context.Context, db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
-	svc := NewService(db, nil, nil, nil)
+	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil)
 	log := slog.Default().With("component", "workflow.migrate_tickets")
-	if err := EnsureDefaultAIToolApprovalDefinition(ctx, db); err != nil {
+	if err := EnsureDefaultAIToolApprovalDefinitionDB(ctx, db); err != nil {
 		log.Warn("ensure AI tool approval definition failed", "error", err)
 	}
 	if err := migratePendingSqlTickets(ctx, svc, db, log); err != nil {

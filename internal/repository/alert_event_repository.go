@@ -224,4 +224,102 @@ COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0)
 	return stats, nil
 }
 
+func (r *AlertEventRepository) BackfillProjectIDFromDatasource(ctx context.Context) error {
+	return r.db.WithContext(ctx).Exec(`
+UPDATE alert_events e
+INNER JOIN alert_datasources d ON e.datasource_id = d.id AND d.deleted_at IS NULL
+SET e.project_id = d.project_id
+WHERE IFNULL(e.project_id, 0) = 0
+  AND e.datasource_id > 0
+  AND d.project_id > 0
+  AND e.deleted_at IS NULL`).Error
+}
+
+func (r *AlertEventRepository) BackfillProjectIDFromSubscriptions(ctx context.Context) error {
+	return r.db.WithContext(ctx).Exec(`
+UPDATE alert_events e
+INNER JOIN alert_subscription_nodes n
+  ON n.deleted_at IS NULL AND n.project_id > 0
+ AND FIND_IN_SET(n.id, e.matched_policy_ids)
+SET e.project_id = n.project_id
+WHERE IFNULL(e.project_id, 0) = 0
+  AND e.matched_policy_ids IS NOT NULL
+  AND TRIM(e.matched_policy_ids) <> ''
+  AND e.deleted_at IS NULL`).Error
+}
+
+func (r *AlertEventRepository) FirstProjectIDBySubscriptionIDs(ctx context.Context, ids []uint) (uint, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	var pid uint
+	err := r.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).
+		Select("project_id").Where("id IN ? AND project_id > 0", ids).
+		Order("project_id ASC").Limit(1).Scan(&pid).Error
+	return pid, err
+}
+
+func (r *AlertEventRepository) QualityWindowStats(ctx context.Context, from, to time.Time, projectID uint) (*AlertQualityWindowStats, error) {
+	out := &AlertQualityWindowStats{}
+	scope := func() *gorm.DB {
+		tx := r.db.WithContext(ctx).Model(&model.AlertEvent{}).
+			Where("created_at >= ? AND created_at <= ?", from, to)
+		if projectID > 0 {
+			tx = tx.Where("project_id = ?", projectID)
+		}
+		return tx
+	}
+	if err := scope().Count(&out.Total).Error; err != nil {
+		return nil, err
+	}
+	if err := scope().Where("success = ?", false).Count(&out.Failed).Error; err != nil {
+		return nil, err
+	}
+
+	type noiseRow struct {
+		Title       string
+		Severity    string
+		Count       int64
+		Fingerprint string
+		Alertname   string
+	}
+	var noise []noiseRow
+	if err := scope().
+		Select("title, severity, COUNT(*) as count, MAX(fingerprint) as fingerprint").
+		Group("title, severity").Order("count DESC").Limit(10).
+		Scan(&noise).Error; err != nil {
+		return nil, err
+	}
+	out.Noise = make([]AlertQualityNoiseRow, 0, len(noise))
+	for _, n := range noise {
+		out.Noise = append(out.Noise, AlertQualityNoiseRow{
+			Title: n.Title, Severity: n.Severity, Count: n.Count,
+			Fingerprint: n.Fingerprint, Alertname: n.Alertname,
+		})
+	}
+
+	type fpRow struct {
+		Fingerprint string
+		Title       string
+		Count       int64
+		Severity    string
+	}
+	var fps []fpRow
+	if err := scope().
+		Select("fingerprint, MAX(title) as title, COUNT(*) as count, MAX(severity) as severity").
+		Where("fingerprint <> ''").
+		Group("fingerprint").Having("COUNT(*) >= ?", 3).
+		Order("count DESC").Limit(10).
+		Scan(&fps).Error; err != nil {
+		return nil, err
+	}
+	out.Repeats = make([]AlertQualityRepeatRow, 0, len(fps))
+	for _, f := range fps {
+		out.Repeats = append(out.Repeats, AlertQualityRepeatRow{
+			Fingerprint: f.Fingerprint, Title: f.Title, Count: f.Count, Severity: f.Severity,
+		})
+	}
+	return out, nil
+}
+
 var _ AlertEventRepo = (*AlertEventRepository)(nil)

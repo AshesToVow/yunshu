@@ -6,6 +6,8 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
+
+	"gorm.io/gorm"
 )
 
 // --- Prompt meta CRUD ---
@@ -17,7 +19,6 @@ type PromptUpsertRequest struct {
 	Scene   string `json:"scene"`
 	Enabled *bool  `json:"enabled"`
 	Remark  string `json:"remark"`
-	// 创建时可同时写入首版内容
 	Content   string `json:"content"`
 	Changelog string `json:"changelog"`
 }
@@ -28,14 +29,14 @@ type PromptDetail struct {
 }
 
 func (s *Service) GetPrompt(ctx context.Context, id uint) (*PromptDetail, error) {
-	var row model.AiPrompt
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetPromptByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("Prompt 不存在")
 	}
-	out := &PromptDetail{AiPrompt: row}
-	var ver model.AiPromptVersion
-	if err := s.db.WithContext(ctx).Where("prompt_id = ? AND is_current = ?", id, true).First(&ver).Error; err == nil {
-		out.CurrentVersion = &ver
+	out := &PromptDetail{AiPrompt: *row}
+	ver, err := s.repo.GetCurrentPromptVersion(ctx, id)
+	if err == nil {
+		out.CurrentVersion = ver
 	}
 	return out, nil
 }
@@ -58,31 +59,22 @@ func (s *Service) CreatePrompt(ctx context.Context, userID uint, req PromptUpser
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	tx := s.db.WithContext(ctx).Begin()
-	if err := tx.Create(&row).Error; err != nil {
-		tx.Rollback()
-		return nil, err
-	}
+	var ver *model.AiPromptVersion
 	content := strings.TrimSpace(req.Content)
 	if content != "" {
-		ver := model.AiPromptVersion{
-			PromptID: row.ID, Version: 1, Content: content,
+		ver = &model.AiPromptVersion{
+			Version: 1, Content: content,
 			Changelog: coalesce(req.Changelog, "create"), IsCurrent: true, CreatedBy: userID,
 		}
-		if err := tx.Create(&ver).Error; err != nil {
-			tx.Rollback()
-			return nil, err
-		}
 	}
-	if err := tx.Commit().Error; err != nil {
+	if err := s.repo.CreatePromptWithVersionTx(ctx, &row, ver); err != nil {
 		return nil, err
 	}
 	return s.GetPrompt(ctx, row.ID)
 }
 
 func (s *Service) UpdatePrompt(ctx context.Context, id uint, req PromptUpsertRequest) (*PromptDetail, error) {
-	var row model.AiPrompt
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	if _, err := s.repo.GetPromptByID(ctx, id); err != nil {
 		return nil, constants.ErrNotFoundWithMsg("Prompt 不存在")
 	}
 	updates := map[string]any{
@@ -96,32 +88,23 @@ func (s *Service) UpdatePrompt(ctx context.Context, id uint, req PromptUpsertReq
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
 	}
-	// code 一般不改；若传入且不同则允许（需唯一）
-	if c := strings.TrimSpace(req.Code); c != "" && c != row.Code {
+	if c := strings.TrimSpace(req.Code); c != "" {
 		updates["code"] = c
 	}
-	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdatePrompt(ctx, id, updates); err != nil {
 		return nil, err
 	}
 	return s.GetPrompt(ctx, id)
 }
 
 func (s *Service) DeletePrompt(ctx context.Context, id uint) error {
-	tx := s.db.WithContext(ctx).Begin()
-	if err := tx.Where("prompt_id = ?", id).Delete(&model.AiPromptVersion{}).Error; err != nil {
-		tx.Rollback()
+	if err := s.repo.DeletePromptCascade(ctx, id); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg("Prompt 不存在")
+		}
 		return err
 	}
-	res := tx.Delete(&model.AiPrompt{}, id)
-	if res.Error != nil {
-		tx.Rollback()
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		tx.Rollback()
-		return constants.ErrNotFoundWithMsg("Prompt 不存在")
-	}
-	return tx.Commit().Error
+	return nil
 }
 
 // --- SOP CRUD ---
@@ -143,11 +126,11 @@ type SOPUpsertRequest struct {
 }
 
 func (s *Service) GetSOP(ctx context.Context, id uint) (*model.AiSOP, error) {
-	var row model.AiSOP
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetSOPByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("SOP 不存在")
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) CreateSOP(ctx context.Context, userID uint, req SOPUpsertRequest) (*model.AiSOP, error) {
@@ -175,28 +158,23 @@ func (s *Service) CreateSOP(ctx context.Context, userID uint, req SOPUpsertReque
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateSOP(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *Service) UpdateSOP(ctx context.Context, id uint, req SOPUpsertRequest) (*model.AiSOP, error) {
-	var row model.AiSOP
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetSOPByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("SOP 不存在")
 	}
 	updates := map[string]any{
-		"title":            strings.TrimSpace(req.Title),
-		"scenario":         req.Scenario,
-		"preconditions":    req.Preconditions,
-		"input_params":     req.InputParams,
-		"check_steps":      req.CheckSteps,
-		"exec_steps":       req.ExecSteps,
-		"verify_steps":     req.VerifySteps,
-		"exception_handle": req.ExceptionHandle,
-		"rollback":         req.Rollback,
-		"risk":             req.Risk,
+		"title": strings.TrimSpace(req.Title), "scenario": req.Scenario,
+		"preconditions": req.Preconditions, "input_params": req.InputParams,
+		"check_steps": req.CheckSteps, "exec_steps": req.ExecSteps,
+		"verify_steps": req.VerifySteps, "exception_handle": req.ExceptionHandle,
+		"rollback": req.Rollback, "risk": req.Risk,
 	}
 	if c := strings.TrimSpace(req.Code); c != "" {
 		updates["code"] = c
@@ -207,20 +185,18 @@ func (s *Service) UpdateSOP(ctx context.Context, id uint, req SOPUpsertRequest) 
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateSOP(ctx, id, updates); err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).First(&row, id).Error
-	return &row, nil
+	return s.repo.GetSOPByID(ctx, row.ID)
 }
 
 func (s *Service) DeleteSOP(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&model.AiSOP{}, id)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return constants.ErrNotFoundWithMsg("SOP 不存在")
+	if err := s.repo.DeleteSOP(ctx, id); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg("SOP 不存在")
+		}
+		return err
 	}
 	return nil
 }
@@ -247,11 +223,11 @@ type IncidentCaseUpsertRequest struct {
 }
 
 func (s *Service) GetIncidentCase(ctx context.Context, id uint) (*model.AiIncidentCase, error) {
-	var row model.AiIncidentCase
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetIncidentCaseByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("案例不存在")
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) CreateIncidentCase(ctx context.Context, userID uint, req IncidentCaseUpsertRequest) (*model.AiIncidentCase, error) {
@@ -279,15 +255,15 @@ func (s *Service) CreateIncidentCase(ctx context.Context, userID uint, req Incid
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateIncidentCase(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *Service) UpdateIncidentCase(ctx context.Context, id uint, req IncidentCaseUpsertRequest) (*model.AiIncidentCase, error) {
-	var row model.AiIncidentCase
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetIncidentCaseByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("案例不存在")
 	}
 	updates := map[string]any{
@@ -306,20 +282,18 @@ func (s *Service) UpdateIncidentCase(ctx context.Context, id uint, req IncidentC
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateIncidentCase(ctx, id, updates); err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).First(&row, id).Error
-	return &row, nil
+	return s.repo.GetIncidentCaseByID(ctx, id)
 }
 
 func (s *Service) DeleteIncidentCase(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&model.AiIncidentCase{}, id)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return constants.ErrNotFoundWithMsg("案例不存在")
+	if err := s.repo.DeleteIncidentCase(ctx, id); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg("案例不存在")
+		}
+		return err
 	}
 	return nil
 }
@@ -342,14 +316,14 @@ type KBUpsertRequest struct {
 }
 
 type KBDocUpsertRequest struct {
-	KBID       uint    `json:"kb_id"`
-	Title      string  `json:"title" binding:"required,max=256"`
-	Source     string  `json:"source"`
-	Version    string  `json:"version"`
-	Content    string  `json:"content"`
-	MetaJSON   string  `json:"meta_json"`
+	KBID       uint     `json:"kb_id"`
+	Title      string   `json:"title" binding:"required,max=256"`
+	Source     string   `json:"source"`
+	Version    string   `json:"version"`
+	Content    string   `json:"content"`
+	MetaJSON   string   `json:"meta_json"`
 	Confidence *float64 `json:"confidence"`
-	Enabled    *bool   `json:"enabled"`
+	Enabled    *bool    `json:"enabled"`
 }
 
 func (s *Service) CreateKnowledgeBase(ctx context.Context, req KBUpsertRequest) (*model.AiKnowledgeBase, error) {
@@ -371,15 +345,14 @@ func (s *Service) CreateKnowledgeBase(ctx context.Context, req KBUpsertRequest) 
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateKnowledgeBase(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *Service) UpdateKnowledgeBase(ctx context.Context, id uint, req KBUpsertRequest) (*model.AiKnowledgeBase, error) {
-	var row model.AiKnowledgeBase
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	if _, err := s.repo.GetKnowledgeBaseByID(ctx, id); err != nil {
 		return nil, constants.ErrNotFoundWithMsg("知识库不存在")
 	}
 	updates := map[string]any{
@@ -391,58 +364,39 @@ func (s *Service) UpdateKnowledgeBase(ctx context.Context, id uint, req KBUpsert
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateKnowledgeBase(ctx, id, updates); err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).First(&row, id).Error
-	return &row, nil
+	return s.repo.GetKnowledgeBaseByID(ctx, id)
 }
 
 func (s *Service) DeleteKnowledgeBase(ctx context.Context, id uint) error {
-	tx := s.db.WithContext(ctx).Begin()
-	var docs []model.AiKbDocument
-	_ = tx.Where("kb_id = ?", id).Find(&docs).Error
-	for _, d := range docs {
-		_ = tx.Where("document_id = ?", d.ID).Delete(&model.AiKbChunk{}).Error
+	if err := s.repo.DeleteKnowledgeBaseCascade(ctx, id); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg("知识库不存在")
+		}
+		return err
 	}
-	_ = tx.Where("kb_id = ?", id).Delete(&model.AiKbDocument{}).Error
-	_ = tx.Where("kb_id = ?", id).Delete(&model.AiKbChunk{}).Error
-	res := tx.Delete(&model.AiKnowledgeBase{}, id)
-	if res.Error != nil {
-		tx.Rollback()
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		tx.Rollback()
-		return constants.ErrNotFoundWithMsg("知识库不存在")
-	}
-	return tx.Commit().Error
+	return nil
 }
 
 func (s *Service) ListKBDocuments(ctx context.Context, kbID uint) ([]model.AiKbDocument, error) {
-	var rows []model.AiKbDocument
-	q := s.db.WithContext(ctx).Order("id DESC")
-	if kbID > 0 {
-		q = q.Where("kb_id = ?", kbID)
-	}
-	err := q.Limit(500).Find(&rows).Error
-	return rows, err
+	return s.repo.ListKBDocuments(ctx, kbID, 500)
 }
 
 func (s *Service) GetKBDocument(ctx context.Context, id uint) (*model.AiKbDocument, error) {
-	var row model.AiKbDocument
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetKBDocumentByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("文档不存在")
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) CreateKBDocument(ctx context.Context, userID uint, req KBDocUpsertRequest) (*model.AiKbDocument, error) {
 	if req.KBID == 0 || strings.TrimSpace(req.Title) == "" {
 		return nil, constants.ErrBadRequestWithMsg("kb_id 与 title 必填")
 	}
-	var kb model.AiKnowledgeBase
-	if err := s.db.WithContext(ctx).First(&kb, req.KBID).Error; err != nil {
+	if _, err := s.repo.GetKnowledgeBaseByID(ctx, req.KBID); err != nil {
 		return nil, constants.ErrBadRequestWithMsg("知识库不存在")
 	}
 	row := model.AiKbDocument{
@@ -456,15 +410,14 @@ func (s *Service) CreateKBDocument(ctx context.Context, userID uint, req KBDocUp
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateKBDocument(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *Service) UpdateKBDocument(ctx context.Context, id uint, req KBDocUpsertRequest) (*model.AiKbDocument, error) {
-	var row model.AiKbDocument
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	if _, err := s.repo.GetKBDocumentByID(ctx, id); err != nil {
 		return nil, constants.ErrNotFoundWithMsg("文档不存在")
 	}
 	updates := map[string]any{
@@ -480,28 +433,21 @@ func (s *Service) UpdateKBDocument(ctx context.Context, id uint, req KBDocUpsert
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateKBDocument(ctx, id, updates); err != nil {
 		return nil, err
 	}
-	// 内容变更后清旧切片，等待重新 embed
-	_ = s.db.WithContext(ctx).Where("document_id = ?", id).Delete(&model.AiKbChunk{}).Error
-	_ = s.db.WithContext(ctx).First(&row, id).Error
-	return &row, nil
+	_ = s.repo.DeleteKBDocumentChunks(ctx, id)
+	return s.repo.GetKBDocumentByID(ctx, id)
 }
 
 func (s *Service) DeleteKBDocument(ctx context.Context, id uint) error {
-	tx := s.db.WithContext(ctx).Begin()
-	_ = tx.Where("document_id = ?", id).Delete(&model.AiKbChunk{}).Error
-	res := tx.Delete(&model.AiKbDocument{}, id)
-	if res.Error != nil {
-		tx.Rollback()
-		return res.Error
+	if err := s.repo.DeleteKBDocumentCascade(ctx, id); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg("文档不存在")
+		}
+		return err
 	}
-	if res.RowsAffected == 0 {
-		tx.Rollback()
-		return constants.ErrNotFoundWithMsg("文档不存在")
-	}
-	return tx.Commit().Error
+	return nil
 }
 
 // --- Tool full update / create script / delete ---
@@ -510,7 +456,7 @@ type ToolUpsertRequest struct {
 	Name                string `json:"name"`
 	Description         string `json:"description"`
 	Module              string `json:"module"`
-	Runtime             string `json:"runtime"` // builtin|script
+	Runtime             string `json:"runtime"`
 	HandlerKey          string `json:"handler_key"`
 	ScriptLang          string `json:"script_lang"`
 	ScriptPath          string `json:"script_path"`
@@ -525,11 +471,11 @@ type ToolUpsertRequest struct {
 }
 
 func (s *Service) GetTool(ctx context.Context, id uint) (*model.AiToolDef, error) {
-	var row model.AiToolDef
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetToolByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("工具不存在")
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) CreateTool(ctx context.Context, req ToolUpsertRequest) (*model.AiToolDef, error) {
@@ -557,15 +503,14 @@ func (s *Service) CreateTool(ctx context.Context, req ToolUpsertRequest) (*model
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateTool(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *Service) UpdateTool(ctx context.Context, id uint, req ToolUpsertRequest) (*model.AiToolDef, error) {
-	var row model.AiToolDef
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	if _, err := s.repo.GetToolByID(ctx, id); err != nil {
 		return nil, constants.ErrNotFoundWithMsg("工具不存在")
 	}
 	updates := map[string]any{
@@ -597,22 +542,21 @@ func (s *Service) UpdateTool(ctx context.Context, id uint, req ToolUpsertRequest
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateTool(ctx, id, updates); err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).First(&row, id).Error
-	return &row, nil
+	return s.repo.GetToolByID(ctx, id)
 }
 
 func (s *Service) DeleteTool(ctx context.Context, id uint) error {
-	var row model.AiToolDef
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetToolByID(ctx, id)
+	if err != nil {
 		return constants.ErrNotFoundWithMsg("工具不存在")
 	}
 	if strings.EqualFold(row.Runtime, "builtin") {
 		return constants.ErrBadRequestWithMsg("内置工具不可删除，可禁用")
 	}
-	return s.db.WithContext(ctx).Delete(&row).Error
+	return s.repo.DeleteToolRow(ctx, row)
 }
 
 // --- Eval Case CRUD ---
@@ -631,11 +575,11 @@ type EvalCaseUpsertRequest struct {
 }
 
 func (s *Service) GetEvalCase(ctx context.Context, id uint) (*model.AiEvalCase, error) {
-	var row model.AiEvalCase
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetEvalCaseByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("评估用例不存在")
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) CreateEvalCase(ctx context.Context, req EvalCaseUpsertRequest) (*model.AiEvalCase, error) {
@@ -661,15 +605,15 @@ func (s *Service) CreateEvalCase(ctx context.Context, req EvalCaseUpsertRequest)
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateEvalCase(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *Service) UpdateEvalCase(ctx context.Context, id uint, req EvalCaseUpsertRequest) (*model.AiEvalCase, error) {
-	var row model.AiEvalCase
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetEvalCaseByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("评估用例不存在")
 	}
 	updates := map[string]any{
@@ -687,20 +631,18 @@ func (s *Service) UpdateEvalCase(ctx context.Context, id uint, req EvalCaseUpser
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Model(&row).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateEvalCase(ctx, id, updates); err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).First(&row, id).Error
-	return &row, nil
+	return s.repo.GetEvalCaseByID(ctx, id)
 }
 
 func (s *Service) DeleteEvalCase(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&model.AiEvalCase{}, id)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return constants.ErrNotFoundWithMsg("评估用例不存在")
+	if err := s.repo.DeleteEvalCase(ctx, id); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg("评估用例不存在")
+		}
+		return err
 	}
 	return nil
 }

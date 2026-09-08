@@ -24,10 +24,10 @@ type AlertEvidenceResult struct {
 	Labels      map[string]string `json:"labels,omitempty"`
 	Dims        alertnotify.Dims  `json:"dims"`
 
-	RecentChanges []model.ChangeEvent     `json:"recent_changes,omitempty"`
+	RecentChanges []model.ChangeEvent            `json:"recent_changes,omitempty"`
 	LogOverview   *logplatform.LogOverviewResult `json:"log_overview,omitempty"`
-	LogSamples    []AlertEvidenceLogSample `json:"log_samples,omitempty"`
-	LogHint       string                  `json:"log_hint,omitempty"`
+	LogSamples    []AlertEvidenceLogSample       `json:"log_samples,omitempty"`
+	LogHint       string                         `json:"log_hint,omitempty"`
 
 	// Pod 诊断由前端按 cluster_id/namespace/pod 调用；此处仅给出建议参数。
 	PodDiagnoseHint *AlertPodDiagnoseHint `json:"pod_diagnose_hint,omitempty"`
@@ -56,15 +56,14 @@ func (s *AlertService) CollectEvidence(ctx context.Context, fingerprint string) 
 	if fp == "" {
 		return nil, constants.ErrBadRequestWithMsg("fingerprint required")
 	}
-	if s.db == nil {
-		return nil, constants.ErrBadRequestWithMsg("db unavailable")
+	if s == nil || s.curHisRepo == nil {
+		return nil, constants.ErrBadRequestWithMsg("alert store unavailable")
 	}
 
 	out := &AlertEvidenceResult{Fingerprint: fp, Labels: map[string]string{}, Status: "unknown"}
 
-	var cur model.AlertCurEvent
-	err := s.db.WithContext(ctx).Where("fingerprint = ?", fp).First(&cur).Error
-	if err == nil {
+	cur, err := s.curHisRepo.GetCurByFingerprint(ctx, fp)
+	if err == nil && cur != nil {
 		out.Status = "firing"
 		out.ProjectID = cur.ProjectID
 		out.Alertname = cur.Alertname
@@ -72,8 +71,8 @@ func (s *AlertService) CollectEvidence(ctx context.Context, fingerprint string) 
 		out.StartsAt = cur.StartsAt.UTC().Format(time.RFC3339)
 		out.Labels = parseLabelsJSON(cur.LabelsJSON)
 	} else {
-		var his model.AlertHisEvent
-		if err2 := s.db.WithContext(ctx).Where("fingerprint = ?", fp).Order("id DESC").First(&his).Error; err2 == nil {
+		his, err2 := s.curHisRepo.GetLatestHisByFingerprint(ctx, fp)
+		if err2 == nil && his != nil {
 			out.Status = "resolved"
 			out.ProjectID = his.ProjectID
 			out.Alertname = his.Alertname
@@ -103,11 +102,10 @@ func (s *AlertService) CollectEvidence(ctx context.Context, fingerprint string) 
 			}
 		}
 		from := anchor.Add(-30 * time.Minute)
-		var changes []model.ChangeEvent
-		_ = s.db.WithContext(ctx).
-			Where("project_id = ? AND started_at >= ? AND started_at <= ?", out.ProjectID, from, anchor.Add(30*time.Minute)).
-			Order("id DESC").Limit(10).Find(&changes).Error
-		out.RecentChanges = changes
+		if s.changeEventRepo != nil {
+			changes, _ := s.changeEventRepo.ListByProjectInRange(ctx, out.ProjectID, from, anchor.Add(30*time.Minute), 10)
+			out.RecentChanges = changes
+		}
 
 		if s.logSearch != nil {
 			sq := logplatform.LogSearchQuery{

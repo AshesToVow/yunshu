@@ -4,11 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
-
-	"gorm.io/gorm"
 )
 
 type PromqlSavedQueryUpsertRequest struct {
@@ -20,31 +19,30 @@ type PromqlSavedQueryUpsertRequest struct {
 }
 
 type PromqlSavedQueryService struct {
-	db *gorm.DB
+	repo interfaces.PromqlSavedQueryRepository
 }
 
-func NewPromqlSavedQueryService(db *gorm.DB) *PromqlSavedQueryService {
-	return &PromqlSavedQueryService{db: db}
+func NewPromqlSavedQueryService(repo interfaces.PromqlSavedQueryRepository) *PromqlSavedQueryService {
+	return &PromqlSavedQueryService{repo: repo}
 }
 
 func (s *AlertService) ListPromqlSavedQueries(ctx context.Context, userID uint) ([]model.PlatformSavedQuery, error) {
-	return NewPromqlSavedQueryService(s.db).List(ctx, userID)
+	return NewPromqlSavedQueryService(s.promqlSavedQueryRepo).List(ctx, userID)
 }
 
 func (s *AlertService) CreatePromqlSavedQuery(ctx context.Context, userID uint, req PromqlSavedQueryUpsertRequest) (*model.PlatformSavedQuery, error) {
-	return NewPromqlSavedQueryService(s.db).Create(ctx, userID, req)
+	return NewPromqlSavedQueryService(s.promqlSavedQueryRepo).Create(ctx, userID, req)
 }
 
 func (s *AlertService) DeletePromqlSavedQuery(ctx context.Context, userID, id uint) error {
-	return NewPromqlSavedQueryService(s.db).Delete(ctx, userID, id)
+	return NewPromqlSavedQueryService(s.promqlSavedQueryRepo).Delete(ctx, userID, id)
 }
 
 func (s *PromqlSavedQueryService) List(ctx context.Context, userID uint) ([]model.PlatformSavedQuery, error) {
-	if s == nil || s.db == nil || userID == 0 {
+	if s == nil || s.repo == nil || userID == 0 {
 		return nil, nil
 	}
-	var list []model.PlatformSavedQuery
-	err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("id DESC").Find(&list).Error
+	list, err := s.repo.ListByUser(ctx, userID)
 	return list, bizerrors.Pass(ctx, "alert.promql_saved", "List", err)
 }
 
@@ -60,18 +58,18 @@ func (s *PromqlSavedQueryService) Create(ctx context.Context, userID uint, req P
 		UserID: userID, Name: strings.TrimSpace(req.Name), Query: strings.TrimSpace(req.Query),
 		DatasourceID: req.DatasourceID, Kind: kind, ProjectID: req.ProjectID,
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.Create(ctx, &row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.promql_saved", "Create", err)
 	}
 	return &row, nil
 }
 
 func (s *PromqlSavedQueryService) Delete(ctx context.Context, userID, id uint) error {
-	res := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&model.PlatformSavedQuery{})
-	if res.Error != nil {
-		return bizerrors.Pass(ctx, "alert.promql_saved", "Delete", res.Error)
+	rows, err := s.repo.DeleteByUser(ctx, userID, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.promql_saved", "Delete", err)
 	}
-	if res.RowsAffected == 0 {
+	if rows == 0 {
 		return constants.ErrNotFound
 	}
 	return nil

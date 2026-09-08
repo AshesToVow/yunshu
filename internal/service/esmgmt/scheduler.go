@@ -64,7 +64,7 @@ func (s *Service) CreateSchedule(ctx context.Context, req ScheduleUpsertRequest,
 	if req.MaxDocs != nil {
 		row.MaxDocs = *req.MaxDocs
 	}
-	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+	if err := s.repo.CreateSchedule(ctx, row); err != nil {
 		return nil, err
 	}
 	return row, nil
@@ -75,8 +75,8 @@ func (s *Service) UpdateSchedule(ctx context.Context, id uint, req ScheduleUpser
 	if id == 0 {
 		return nil, constants.ErrBadRequestWithMsg("调度 ID 无效")
 	}
-	var row model.EsmgmtBackupSchedule
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetSchedule(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 	if req.ConnectionID > 0 {
@@ -103,36 +103,28 @@ func (s *Service) UpdateSchedule(ctx context.Context, id uint, req ScheduleUpser
 	if req.ClearRemark || strings.TrimSpace(req.Remark) != "" {
 		row.Remark = strings.TrimSpace(req.Remark)
 	}
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.repo.SaveSchedule(ctx, row); err != nil {
 		return nil, err
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) DeleteSchedule(ctx context.Context, id uint) error {
 	if id == 0 {
 		return constants.ErrBadRequestWithMsg("调度 ID 无效")
 	}
-	res := s.db.WithContext(ctx).Delete(&model.EsmgmtBackupSchedule{}, id)
-	if res.Error != nil {
-		return res.Error
+	n, err := s.repo.DeleteSchedule(ctx, id)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFound
 	}
 	return nil
 }
 
 func (s *Service) ListSchedules(ctx context.Context, connectionID uint) ([]model.EsmgmtBackupSchedule, error) {
-	q := s.db.WithContext(ctx).Order("id desc")
-	if connectionID > 0 {
-		q = q.Where("connection_id = ?", connectionID)
-	}
-	var list []model.EsmgmtBackupSchedule
-	if err := q.Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return list, nil
+	return s.repo.ListSchedules(ctx, connectionID)
 }
 
 // RunBackupScheduler 启动定时备份 Worker（字典 esmgmt_backup_scheduler_*）。
@@ -158,10 +150,8 @@ func (s *Service) RunBackupScheduler(ctx context.Context) {
 }
 
 func (s *Service) tickScheduledBackups(ctx context.Context) error {
-	var list []model.EsmgmtBackupSchedule
-	if err := s.db.WithContext(ctx).
-		Where("enabled = ? AND cron_spec <> ?", true, "").
-		Find(&list).Error; err != nil {
+	list, err := s.repo.ListEnabledSchedules(ctx)
+	if err != nil {
 		return err
 	}
 	now := time.Now()
@@ -170,10 +160,7 @@ func (s *Service) tickScheduledBackups(ctx context.Context) error {
 		if !cronutil.ShouldRunWithDayAnchor(sch.CronSpec, sch.LastScheduledAt, now) {
 			continue
 		}
-		var running int64
-		_ = s.db.WithContext(ctx).Model(&model.EsmgmtBackupJob{}).
-			Where("connection_id = ? AND index_name = ? AND status IN ?", sch.ConnectionID, sch.IndexName, []string{"pending", "running"}).
-			Count(&running).Error
+		running, _ := s.repo.CountRunningBackupJobs(ctx, sch.ConnectionID, sch.IndexName)
 		if running > 0 {
 			continue
 		}
@@ -197,9 +184,7 @@ func (s *Service) runScheduled(ctx context.Context, sch *model.EsmgmtBackupSched
 		s.schedMu.Unlock()
 	}()
 
-	_ = s.db.WithContext(ctx).Model(&model.EsmgmtBackupSchedule{}).
-		Where("id = ?", sch.ID).
-		Update("last_scheduled_at", now).Error
+	_ = s.repo.UpdateScheduleLastScheduledAt(ctx, sch.ID, now)
 
 	_, _ = s.enqueueBackup(ctx, BackupIndexRequest{
 		ConnectionID: sch.ConnectionID,

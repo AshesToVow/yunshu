@@ -40,7 +40,7 @@ func (s *Service) sendRunEmail(ctx context.Context, plan *model.InspectPlan, run
 	}
 	if lastErr == nil {
 		now := time.Now()
-		_ = s.db.WithContext(ctx).Model(run).Update("email_sent_at", now).Error
+		_ = s.repo.UpdateRunFields(ctx, run.ID, map[string]any{"email_sent_at": now})
 	}
 	return lastErr
 }

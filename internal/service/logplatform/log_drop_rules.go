@@ -4,10 +4,9 @@ import (
 	"context"
 	"strings"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-
-	"gorm.io/gorm"
 )
 
 // LogDropRuleUpsert 创建/更新黑名单。
@@ -22,41 +21,47 @@ type LogDropRuleUpsert struct {
 
 // LogDropRuleService 日志黑名单 CRUD。
 type LogDropRuleService struct {
-	db *gorm.DB
+	repo interfaces.LogDropRuleRepository
 }
 
-func NewLogDropRuleService(db *gorm.DB) *LogDropRuleService {
-	return &LogDropRuleService{db: db}
+func NewLogDropRuleService(repo interfaces.LogDropRuleRepository) *LogDropRuleService {
+	return &LogDropRuleService{repo: repo}
 }
 
 func (s *ClusterLogService) DropRules() *LogDropRuleService {
-	return NewLogDropRuleService(s.db)
+	return NewLogDropRuleService(s.dropRuleRepo)
 }
 
 func (s *LogDropRuleService) List(ctx context.Context, projectID uint) ([]model.LogDropRule, error) {
 	if projectID == 0 {
 		return nil, constants.ErrProjectIDRequired
 	}
-	var list []model.LogDropRule
-	err := s.db.WithContext(ctx).Where("project_id = ?", projectID).
-		Order("enabled DESC, id DESC").Find(&list).Error
-	return list, err
+	if s.repo == nil {
+		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
+	}
+	return s.repo.ListByProject(ctx, projectID)
 }
 
 func (s *LogDropRuleService) Create(ctx context.Context, projectID, userID uint, req LogDropRuleUpsert) (*model.LogDropRule, error) {
+	if s.repo == nil {
+		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
+	}
 	row, err := normalizeDropRule(projectID, userID, req)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+	if err := s.repo.Create(ctx, row); err != nil {
 		return nil, err
 	}
 	return row, nil
 }
 
 func (s *LogDropRuleService) Update(ctx context.Context, projectID, ruleID uint, req LogDropRuleUpsert) (*model.LogDropRule, error) {
-	var row model.LogDropRule
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", ruleID, projectID).First(&row).Error; err != nil {
+	if s.repo == nil {
+		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
+	}
+	row, err := s.repo.GetByIDInProject(ctx, projectID, ruleID)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("黑名单规则不存在")
 	}
 	norm, err := normalizeDropRule(projectID, row.CreatedBy, req)
@@ -71,30 +76,31 @@ func (s *LogDropRuleService) Update(ctx context.Context, projectID, ruleID uint,
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.repo.Save(ctx, row); err != nil {
 		return nil, err
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *LogDropRuleService) Delete(ctx context.Context, projectID, ruleID uint) error {
-	res := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", ruleID, projectID).Delete(&model.LogDropRule{})
-	if res.Error != nil {
-		return res.Error
+	if s.repo == nil {
+		return constants.ErrBadRequestWithMsg("数据库不可用")
 	}
-	if res.RowsAffected == 0 {
+	n, err := s.repo.DeleteByIDInProject(ctx, projectID, ruleID)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
 		return constants.ErrNotFoundWithMsg("黑名单规则不存在")
 	}
 	return nil
 }
 
 func (s *LogDropRuleService) ListEnabled(ctx context.Context, projectID uint) ([]model.LogDropRule, error) {
-	if projectID == 0 || s.db == nil {
+	if projectID == 0 || s.repo == nil {
 		return nil, nil
 	}
-	var list []model.LogDropRule
-	err := s.db.WithContext(ctx).Where("project_id = ? AND enabled = ?", projectID, true).Find(&list).Error
-	return list, err
+	return s.repo.ListEnabledByProject(ctx, projectID)
 }
 
 func normalizeDropRule(projectID, userID uint, req LogDropRuleUpsert) (*model.LogDropRule, error) {

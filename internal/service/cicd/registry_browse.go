@@ -286,16 +286,10 @@ func (s *Service) DeleteHarborArtifact(ctx context.Context, registryID, projectI
 
 func (s *Service) findLinkedBuilds(ctx context.Context, imageAddress string) []LinkedBuildBrief {
 	imageAddress = strings.TrimSpace(imageAddress)
-	if imageAddress == "" || s.db == nil {
+	if imageAddress == "" {
 		return nil
 	}
-	var rows []model.CicdBuildRun
-	_ = s.db.WithContext(ctx).
-		Select("id", "project_id", "service_id", "build_number", "image_address").
-		Where("image_address = ? OR image_address LIKE ?", imageAddress, imageAddress+"%").
-		Order("id DESC").
-		Limit(20).
-		Find(&rows).Error
+	rows, _ := s.repo.ListBuildRunsByImageAddress(ctx, imageAddress, 20)
 	out := make([]LinkedBuildBrief, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, LinkedBuildBrief{

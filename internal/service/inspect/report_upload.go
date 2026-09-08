@@ -77,7 +77,7 @@ func (s *Service) SaveReportPDF(ctx context.Context, projectID, runID uint, pdf 
 	if err := store.Put(ctx, key, pdf, "application/pdf"); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Model(run).Updates(map[string]any{
+	return s.repo.UpdateRunFields(ctx, run.ID, map[string]any{
 		"report_pdf_path": key,
-	}).Error
+	})
 }

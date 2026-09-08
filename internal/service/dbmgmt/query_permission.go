@@ -27,6 +27,9 @@ func extractQueryTableRefs(sqlText, defaultDB string) []queryTableRef {
 	if reExplainShow.MatchString(strings.TrimSpace(sqlText)) {
 		return nil
 	}
+	if refs, ok := extractTableRefsAST(sqlText, defaultDB); ok {
+		return refs
+	}
 	seen := map[string]struct{}{}
 	var refs []queryTableRef
 	add := func(schema, table string) {

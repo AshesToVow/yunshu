@@ -43,7 +43,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := rt.Esmgmt.(*esmgmtsvc.Service); ok && svc != nil {
+	if svc, ok := plugin.As[*esmgmtsvc.Service](rt.Esmgmt); ok && svc != nil {
 		lifecycle.Go("esmgmt.backup-scheduler", func() { svc.RunBackupScheduler(bgCtx) })
 	}
 	return nil

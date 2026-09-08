@@ -19,6 +19,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -27,7 +28,7 @@ var stageKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`)
 
 // Service 统一工单引擎：流程定义 + 通用工单 + 排班派单。
 type Service struct {
-	db            *gorm.DB
+	repo          interfaces.WorkflowRepository
 	userGroupRepo interfaces.UserGroupRepository
 	dutyRepo      interfaces.AlertDutyRepository
 	userRepo      interfaces.UserRepository
@@ -35,13 +36,13 @@ type Service struct {
 
 // NewService 创建工单引擎。
 func NewService(
-	db *gorm.DB,
+	repo interfaces.WorkflowRepository,
 	userGroupRepo interfaces.UserGroupRepository,
 	dutyRepo interfaces.AlertDutyRepository,
 	userRepo interfaces.UserRepository,
 ) *Service {
 	return &Service{
-		db:            db,
+		repo:          repo,
 		userGroupRepo: userGroupRepo,
 		dutyRepo:      dutyRepo,
 		userRepo:      userRepo,
@@ -128,8 +129,8 @@ func (s *Service) UpsertDefinition(ctx context.Context, key DefinitionKey, req D
 	if err != nil {
 		return nil, err
 	}
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		def, _, err := s.loadDefinitionTx(tx, key)
+	err = s.repo.Transaction(ctx, func(tx interfaces.WorkflowRepository) error {
+		def, _, err := tx.LoadDefinition(ctx, key.Domain, key.ProjectID, key.TicketType)
 		if err != nil {
 			return err
 		}
@@ -138,22 +139,21 @@ func (s *Service) UpsertDefinition(ctx context.Context, key DefinitionKey, req D
 				Domain: key.Domain, ProjectID: key.ProjectID, TicketType: key.TicketType,
 				Name: key.Domain + " workflow", Enabled: true, ForbidSelfApprove: true,
 			}
-			if err := tx.Create(def).Error; err != nil {
+			if err := tx.CreateDefinition(ctx, def); err != nil {
 				return err
 			}
 		}
 		keys := make([]string, 0, len(normalized))
 		for _, st := range normalized {
 			keys = append(keys, st.Key)
-			var existing model.WorkflowStage
-			err := tx.Where("definition_id = ? AND stage_key = ?", def.ID, st.Key).First(&existing).Error
+			existing, err := tx.GetStageByKey(ctx, def.ID, st.Key)
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				row := model.WorkflowStage{
 					DefinitionID: def.ID, StageKey: st.Key, StageName: st.Name, SortOrder: st.Sort,
 					Enabled: st.Enabled, AssigneeRuleType: st.RuleType,
 					UserGroupID: st.UserGroupID, DutyMonitorRuleID: st.DutyRuleID,
 				}
-				if err := tx.Create(&row).Error; err != nil {
+				if err := tx.CreateStage(ctx, &row); err != nil {
 					return err
 				}
 				continue
@@ -161,19 +161,15 @@ func (s *Service) UpsertDefinition(ctx context.Context, key DefinitionKey, req D
 			if err != nil {
 				return err
 			}
-			if err := tx.Model(&existing).Updates(map[string]any{
+			if err := tx.UpdateStageFields(ctx, existing.ID, map[string]any{
 				"stage_name": st.Name, "sort_order": st.Sort, "enabled": st.Enabled,
 				"assignee_rule_type": st.RuleType, "user_group_id": st.UserGroupID,
 				"duty_monitor_rule_id": st.DutyRuleID,
-			}).Error; err != nil {
+			}); err != nil {
 				return err
 			}
 		}
-		q := tx.Where("definition_id = ?", def.ID)
-		if len(keys) > 0 {
-			q = q.Where("stage_key NOT IN ?", keys)
-		}
-		return q.Delete(&model.WorkflowStage{}).Error
+		return tx.DeleteStagesNotIn(ctx, def.ID, keys)
 	})
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "UpsertDefinition", err)
@@ -341,7 +337,7 @@ func (s *Service) CreateTicket(ctx context.Context, req CreateTicketRequest, act
 		payloadJSON = string(b)
 	}
 	var ticket model.WorkflowTicket
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.repo.Transaction(ctx, func(tx interfaces.WorkflowRepository) error {
 		ticket = model.WorkflowTicket{
 			DefinitionID: def.ID, Domain: key.Domain, TicketType: key.TicketType,
 			ProjectID: req.ProjectID, Title: strings.TrimSpace(req.Title),
@@ -349,7 +345,7 @@ func (s *Service) CreateTicket(ctx context.Context, req CreateTicketRequest, act
 			RefType: strings.TrimSpace(req.RefType), RefID: req.RefID,
 			PayloadJSON: payloadJSON, Remark: strings.TrimSpace(req.Remark),
 		}
-		if err := tx.Create(&ticket).Error; err != nil {
+		if err := tx.CreateTicket(ctx, &ticket); err != nil {
 			return err
 		}
 		now := time.Now()
@@ -367,7 +363,7 @@ func (s *Service) CreateTicket(ctx context.Context, req CreateTicketRequest, act
 			if i == 0 {
 				step.ActivatedAt = &now
 			}
-			if err := tx.Create(&step).Error; err != nil {
+			if err := tx.CreateStep(ctx, &step); err != nil {
 				return err
 			}
 		}
@@ -393,25 +389,12 @@ func (s *Service) CreateIncidentFromAlert(ctx context.Context, alertEventID uint
 
 func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*pagination.Result[TicketDetail], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	query := s.db.WithContext(ctx).Model(&model.WorkflowTicket{})
-	if d := strings.TrimSpace(q.Domain); d != "" {
-		query = query.Where("domain = ?", d)
-	}
-	if tt := strings.TrimSpace(q.TicketType); tt != "" {
-		query = query.Where("ticket_type = ?", tt)
-	}
-	if q.ProjectID != nil {
-		query = query.Where("project_id = ?", *q.ProjectID)
-	}
-	if st := strings.TrimSpace(q.Status); st != "" {
-		query = query.Where("status = ?", st)
-	}
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		return nil, bizerrors.Pass(ctx, "workflow", "ListTickets", err)
-	}
-	var rows []model.WorkflowTicket
-	if err := query.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, err := s.repo.ListTickets(ctx, repository.WorkflowTicketListParams{
+		Domain: strings.TrimSpace(q.Domain), TicketType: strings.TrimSpace(q.TicketType),
+		ProjectID: q.ProjectID, Status: strings.TrimSpace(q.Status),
+		Offset: (page - 1) * pageSize, Limit: pageSize,
+	})
+	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "ListTickets", err)
 	}
 	items := make([]TicketDetail, 0, len(rows))
@@ -428,14 +411,14 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 }
 
 func (s *Service) TicketDetail(ctx context.Context, id uint) (*TicketDetail, error) {
-	var row model.WorkflowTicket
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetTicket(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "workflow", "TicketDetail", err)
 	}
-	return s.ticketDetailFromRow(ctx, row)
+	return s.ticketDetailFromRow(ctx, *row)
 }
 
 type ReviewStepRequest struct {
@@ -445,31 +428,32 @@ type ReviewStepRequest struct {
 
 // ReviewStep 审批当前激活步骤（乐观锁：仅 pending 可抢占）。
 func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req ReviewStepRequest, actor *auth.CurrentUser) (*TicketDetail, error) {
-	var ticket model.WorkflowTicket
-	if err := s.db.WithContext(ctx).First(&ticket, ticketID).Error; err != nil {
+	ticketPtr, err := s.repo.GetTicket(ctx, ticketID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "workflow", "ReviewStep", err)
 	}
+	ticket := *ticketPtr
 	if ticket.Status != model.WorkflowTicketStatusPending {
 		return nil, constants.ErrBadRequestWithMsg("工单不在待审批状态")
 	}
-	var step model.WorkflowTicketStep
-	if err := s.db.WithContext(ctx).Where("id = ? AND ticket_id = ?", stepID, ticketID).First(&step).Error; err != nil {
+	stepPtr, err := s.repo.GetStep(ctx, ticketID, stepID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "workflow", "ReviewStep", err)
 	}
+	step := *stepPtr
 	if step.Status != model.WorkflowStepPending || step.ActivatedAt == nil {
 		return nil, constants.ErrBadRequestWithMsg("该审批节点不可操作")
 	}
 	// 按工单绑定的 definition_id 读取职责分离开关（避免 ticket_type 回退 default 后查不到配置）
 	forbidSelf := true
 	if ticket.DefinitionID > 0 {
-		var def model.WorkflowDefinition
-		if err := s.db.WithContext(ctx).First(&def, ticket.DefinitionID).Error; err == nil {
+		if def, err := s.repo.GetDefinitionByID(ctx, ticket.DefinitionID); err == nil && def != nil {
 			forbidSelf = def.ForbidSelfApprove
 		}
 	} else {
@@ -492,30 +476,28 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 	}
 	now := time.Now()
 	reviewerID := actorUserID(actor)
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.repo.Transaction(ctx, func(tx interfaces.WorkflowRepository) error {
 		status := model.WorkflowStepRejected
 		if req.Approve {
 			status = model.WorkflowStepApproved
 		}
-		res := tx.Model(&model.WorkflowTicketStep{}).
-			Where("id = ? AND ticket_id = ? AND status = ? AND activated_at IS NOT NULL", stepID, ticketID, model.WorkflowStepPending).
-			Updates(map[string]any{
-				"status": status, "reviewer_user_id": reviewerID,
-				"review_comment": strings.TrimSpace(req.Comment), "reviewed_at": now,
-			})
-		if res.Error != nil {
-			return res.Error
+		n, err := tx.ClaimStepReview(ctx, stepID, ticketID, map[string]any{
+			"status": status, "reviewer_user_id": reviewerID,
+			"review_comment": strings.TrimSpace(req.Comment), "reviewed_at": now,
+		})
+		if err != nil {
+			return err
 		}
-		if res.RowsAffected == 0 {
+		if n == 0 {
 			return errStepConflict
 		}
 		if !req.Approve {
-			return tx.Model(&ticket).Updates(map[string]any{
+			return tx.UpdateTicketFields(ctx, ticket.ID, map[string]any{
 				"status": model.WorkflowTicketStatusRejected, "closed_at": now,
-			}).Error
+			})
 		}
-		var steps []model.WorkflowTicketStep
-		if err := tx.Where("ticket_id = ?", ticketID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
+		steps, err := tx.ListStepsByTicket(ctx, ticketID)
+		if err != nil {
 			return err
 		}
 		var next *model.WorkflowTicketStep
@@ -526,11 +508,11 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 			}
 		}
 		if next != nil {
-			return tx.Model(next).Update("activated_at", now).Error
+			return tx.ActivateStep(ctx, next.ID, now)
 		}
-		return tx.Model(&ticket).Updates(map[string]any{
+		return tx.UpdateTicketFields(ctx, ticket.ID, map[string]any{
 			"status": model.WorkflowTicketStatusApproved, "closed_at": now,
-		}).Error
+		})
 	})
 	if err != nil {
 		if errors.Is(err, errStepConflict) {
@@ -545,29 +527,13 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 var errStepConflict = constants.ErrBadRequestWithMsg("审批节点状态已变更，请刷新后重试")
 
 func (s *Service) loadDefinition(ctx context.Context, key DefinitionKey) (*model.WorkflowDefinition, []model.WorkflowStage, error) {
-	return s.loadDefinitionTx(s.db.WithContext(ctx), key)
-}
-
-func (s *Service) loadDefinitionTx(tx *gorm.DB, key DefinitionKey) (*model.WorkflowDefinition, []model.WorkflowStage, error) {
 	key = key.normalize()
-	var def model.WorkflowDefinition
-	err := tx.Where("domain = ? AND project_id = ? AND ticket_type = ?", key.Domain, key.ProjectID, key.TicketType).First(&def).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil, nil
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	var stages []model.WorkflowStage
-	if err := tx.Where("definition_id = ?", def.ID).Order("sort_order ASC, id ASC").Find(&stages).Error; err != nil {
-		return nil, nil, err
-	}
-	return &def, stages, nil
+	return s.repo.LoadDefinition(ctx, key.Domain, key.ProjectID, key.TicketType)
 }
 
 func (s *Service) ticketDetailFromRow(ctx context.Context, row model.WorkflowTicket) (*TicketDetail, error) {
-	var steps []model.WorkflowTicketStep
-	if err := s.db.WithContext(ctx).Where("ticket_id = ?", row.ID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
+	steps, err := s.repo.ListStepsByTicket(ctx, row.ID)
+	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "ticketDetailFromRow", err)
 	}
 	groupNames := map[uint]string{}
@@ -689,19 +655,19 @@ func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.Workf
 }
 
 func (s *Service) fillUserGroupNames(ctx context.Context, names map[uint]string) {
-	if len(names) == 0 || s.db == nil {
+	if len(names) == 0 || s.userGroupRepo == nil {
 		return
 	}
 	ids := make([]uint, 0, len(names))
 	for id := range names {
 		ids = append(ids, id)
 	}
-	var groups []model.UserGroup
-	if err := s.db.WithContext(ctx).Select("id, name").Where("id IN ?", ids).Find(&groups).Error; err != nil {
+	m, err := s.userGroupRepo.ListNamesByIDs(ctx, ids)
+	if err != nil {
 		return
 	}
-	for _, g := range groups {
-		names[g.ID] = g.Name
+	for id, name := range m {
+		names[id] = name
 	}
 }
 

@@ -13,7 +13,6 @@ import (
 	"unicode/utf8"
 
 	"yunshu/internal/config"
-	"yunshu/internal/dictconfig"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
@@ -33,10 +32,11 @@ import (
 
 // Service AI 业务服务。
 type Service struct {
-	db            *gorm.DB
-	yamlAI        config.AIConfig
-	encryptionKey string
-	dataDir       string
+	repo           interfaces.AiRepository
+	workflowRepo   interfaces.WorkflowRepository
+	resolveConfig  func(ctx context.Context) config.AIConfig
+	encryptionKey  string
+	dataDir        string
 	memberRepo    interfaces.ProjectMemberRepository
 	accessRepo    interfaces.K8sClusterAccessRepository
 	nsDenyRepo    interfaces.K8sNamespaceDenyRepository
@@ -65,7 +65,7 @@ type Service struct {
 	seedOnce      sync.Once
 }
 
-// SetPlatformDeps 在 assembleRouteDeps 中注入可选平台依赖（CMDB/DB/ES）。
+// SetPlatformDeps 由 Wire attachAIOptionalDeps 注入可选平台依赖（CMDB/DB/ES）。
 func (s *Service) SetPlatformDeps(
 	serverRepo interfaces.ServerRepository,
 	cmdbSvc *cmdbsvc.Service,
@@ -113,8 +113,9 @@ func (s *Service) SetLogPlatformDeps(
 }
 
 func NewService(
-	db *gorm.DB,
-	yamlAI config.AIConfig,
+	repo interfaces.AiRepository,
+	workflowRepo interfaces.WorkflowRepository,
+	resolveConfig func(ctx context.Context) config.AIConfig,
 	encryptionKey string,
 	memberRepo interfaces.ProjectMemberRepository,
 	accessRepo interfaces.K8sClusterAccessRepository,
@@ -131,8 +132,9 @@ func NewService(
 	alertSvc *alert.AlertService,
 ) *Service {
 	return &Service{
-		db:            db,
-		yamlAI:        yamlAI,
+		repo:          repo,
+		workflowRepo:  workflowRepo,
+		resolveConfig: resolveConfig,
 		encryptionKey: encryptionKey,
 		dataDir:       filepath.Join("data", "ai"),
 		memberRepo:    memberRepo,
@@ -161,7 +163,10 @@ func (s *Service) ensureSeed() {
 }
 
 func (s *Service) resolved(ctx context.Context) config.AIConfig {
-	return dictconfig.ResolveAIConfig(ctx, s.db, s.yamlAI, dictconfig.DefaultAIDictTypes())
+	if s.resolveConfig != nil {
+		return s.resolveConfig(ctx)
+	}
+	return config.AIConfig{}
 }
 
 func (s *Service) requireEnabled(ctx context.Context) (config.AIConfig, error) {
@@ -169,8 +174,7 @@ func (s *Service) requireEnabled(ctx context.Context) (config.AIConfig, error) {
 	if cfg.Enabled {
 		return cfg, nil
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiLLMModel{}).Where("enabled = ?", true).Count(&n)
+	n, _ := s.repo.CountEnabledLLMModels(ctx)
 	if n > 0 {
 		cfg.Enabled = true
 		return cfg, nil
@@ -245,7 +249,7 @@ func (s *Service) Status(ctx context.Context) StatusResponse {
 	cfg := s.resolved(ctx)
 	var providers []ProviderStatus
 	var dbRows []model.AiLLMModel
-	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Order("is_default DESC, id ASC").Find(&dbRows).Error
+	dbRows, _ = s.repo.ListEnabledLLMModels(ctx)
 	defaultName := cfg.DefaultProvider
 	for _, row := range dbRows {
 		providers = append(providers, ProviderStatus{

@@ -8,9 +8,9 @@ import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/projectacl"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // ServerAccessPerm 某台机器的有效权限。
@@ -89,10 +89,7 @@ func (s *Service) EffectiveServerAccess(ctx context.Context, projectID, serverID
 		return &ServerAccessPerm{}, nil
 	}
 	kind, ref := projectacl.UserPrincipalRef(actor.ID)
-	var g model.ServerAccessGrant
-	err = s.db.WithContext(ctx).
-		Where("project_id = ? AND server_id = ? AND principal_kind = ? AND principal_ref = ?", projectID, serverID, kind, ref).
-		First(&g).Error
+	g, err := s.accessGrantRepo.Get(ctx, projectID, serverID, kind, ref)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return &ServerAccessPerm{}, nil
@@ -142,16 +139,9 @@ func (s *Service) visibleServerScope(ctx context.Context, projectID uint, actor 
 		return false, []uint{}, nil
 	}
 	kind, ref := projectacl.UserPrincipalRef(actor.ID)
-	var ids []uint
-	err = s.db.WithContext(ctx).Model(&model.ServerAccessGrant{}).
-		Where("project_id = ? AND principal_kind = ? AND principal_ref = ? AND (can_view = ? OR can_exec = ? OR can_manage = ?)",
-			projectID, kind, ref, true, true, true).
-		Pluck("server_id", &ids).Error
+	ids, err := s.accessGrantRepo.ListVisibleServerIDs(ctx, projectID, kind, ref)
 	if err != nil {
 		return false, nil, err
-	}
-	if ids == nil {
-		ids = []uint{}
 	}
 	return false, ids, nil
 }
@@ -160,28 +150,23 @@ func (s *Service) ListServerGrants(ctx context.Context, projectID uint, actor *a
 	if err := s.assertCanManageServerGrants(ctx, projectID, actor); err != nil {
 		return nil, err
 	}
-	q := s.db.WithContext(ctx).Model(&model.ServerAccessGrant{}).Where("project_id = ?", projectID)
+	params := repository.ServerAccessGrantListParams{ProjectID: projectID, ServerID: serverID}
 	if userID > 0 {
-		_, ref := projectacl.UserPrincipalRef(userID)
-		q = q.Where("principal_kind = ? AND principal_ref = ?", model.ResourcePrincipalUser, ref)
+		kind, ref := projectacl.UserPrincipalRef(userID)
+		params.PrincipalKind, params.PrincipalRef = kind, ref
 	}
-	if serverID > 0 {
-		q = q.Where("server_id = ?", serverID)
-	}
-	var rows []model.ServerAccessGrant
-	if err := q.Order("id DESC").Find(&rows).Error; err != nil {
+	rows, err := s.accessGrantRepo.List(ctx, params)
+	if err != nil {
 		return nil, err
 	}
 	out := make([]ServerGrantItem, 0, len(rows))
 	for _, r := range rows {
 		item := ServerGrantItem{ServerAccessGrant: r}
-		var sv model.Server
-		if err := s.db.WithContext(ctx).Select("id", "name", "host").Where("id = ?", r.ServerID).First(&sv).Error; err == nil {
+		if sv, err := s.serverRepo.GetByID(ctx, r.ServerID); err == nil && sv != nil {
 			item.ServerName, item.ServerHost = sv.Name, sv.Host
 		}
 		if uid, ok := projectacl.ParseUserRef(r.PrincipalRef); ok {
-			var u model.User
-			if err := s.db.WithContext(ctx).Select("id", "username", "nickname").Where("id = ?", uid).First(&u).Error; err == nil {
+			if u, err := s.userRepo.GetByID(ctx, uid); err == nil && u != nil {
 				item.Username, item.Nickname = u.Username, u.Nickname
 			}
 		}
@@ -226,20 +211,12 @@ func (s *Service) UpsertServerGrant(ctx context.Context, req ServerGrantUpsertRe
 		Remark:        strings.TrimSpace(req.Remark),
 		CreatedBy:     req.CreatedBy,
 	}
-	// Assignments(map) 强制写入 false，避免冲突更新吞掉 bool 零值。
-	err = s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-		DoUpdates: clause.Assignments(map[string]any{
-			"can_view": canView, "can_exec": canExec, "can_manage": canManage,
-			"remark": strings.TrimSpace(req.Remark), "updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
-		}),
-	}).Create(&row).Error
-	if err != nil {
+	if err := s.accessGrantRepo.Upsert(ctx, &row); err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).
-		Where("project_id = ? AND server_id = ? AND principal_kind = ? AND principal_ref = ?", req.ProjectID, req.ServerID, kind, ref).
-		First(&row).Error
+	if g, err := s.accessGrantRepo.Get(ctx, req.ProjectID, req.ServerID, kind, ref); err == nil && g != nil {
+		return g, nil
+	}
 	return &row, nil
 }
 
@@ -269,13 +246,7 @@ func (s *Service) BulkUpsertServerGrants(ctx context.Context, req ServerGrantBul
 			ProjectID: req.ProjectID, ServerID: sid, PrincipalKind: kind, PrincipalRef: ref,
 			CanView: canView, CanExec: canExec, CanManage: canManage, CreatedBy: req.CreatedBy,
 		}
-		if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-			DoUpdates: clause.Assignments(map[string]any{
-				"can_view": canView, "can_exec": canExec, "can_manage": canManage,
-				"updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
-			}),
-		}).Create(&row).Error; err == nil {
+		if err := s.accessGrantRepo.Upsert(ctx, &row); err == nil {
 			n++
 		}
 	}
@@ -286,11 +257,11 @@ func (s *Service) DeleteServerGrant(ctx context.Context, projectID, grantID uint
 	if err := s.assertCanManageServerGrants(ctx, projectID, actor); err != nil {
 		return err
 	}
-	res := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", grantID, projectID).Delete(&model.ServerAccessGrant{})
-	if res.Error != nil {
-		return res.Error
+	n, err := s.accessGrantRepo.Delete(ctx, projectID, grantID)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFound
 	}
 	return nil
@@ -301,12 +272,12 @@ func (s *Service) BootstrapServerGrantsForMembers(ctx context.Context, req Boots
 	if err := s.assertCanManageServerGrants(ctx, req.ProjectID, actor); err != nil {
 		return nil, err
 	}
-	var members []model.ProjectMember
-	if err := s.db.WithContext(ctx).Where("project_id = ?", req.ProjectID).Find(&members).Error; err != nil {
+	members, err := s.memberRepo.ListByProject(ctx, req.ProjectID)
+	if err != nil {
 		return nil, err
 	}
-	var servers []model.Server
-	if err := s.db.WithContext(ctx).Where("project_id = ?", req.ProjectID).Find(&servers).Error; err != nil {
+	servers, err := s.serverRepo.ListByProject(ctx, req.ProjectID)
+	if err != nil {
 		return nil, err
 	}
 	granted, skipped := 0, 0
@@ -322,12 +293,7 @@ func (s *Service) BootstrapServerGrantsForMembers(ctx context.Context, req Boots
 				CanView: true, CanExec: true, CanManage: false, CreatedBy: req.CreatedBy,
 				Remark: "bootstrap",
 			}
-			if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-				Columns: []clause.Column{{Name: "project_id"}, {Name: "server_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-				DoUpdates: clause.Assignments(map[string]any{
-					"can_view": true, "can_exec": true, "updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
-				}),
-			}).Create(&row).Error; err == nil {
+			if err := s.accessGrantRepo.Upsert(ctx, &row); err == nil {
 				granted++
 			}
 		}

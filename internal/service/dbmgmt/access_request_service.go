@@ -223,7 +223,8 @@ func (s *Service) CreateAccessRequest(ctx context.Context, projectID uint, body 
 		return nil, err
 	}
 	if err := s.initAccessRequestSteps(ctx, req); err != nil {
-		_ = s.db.WithContext(ctx).Model(req).Update("status", model.DbAccessRequestStatusRejected).Error
+		req.Status = model.DbAccessRequestStatusRejected
+		_ = s.repo.UpdateAccessRequest(ctx, req)
 		return nil, err
 	}
 	iid := body.InstanceID
@@ -237,28 +238,20 @@ func (s *Service) CreateAccessRequest(ctx context.Context, projectID uint, body 
 func (s *Service) ListAccessRequests(ctx context.Context, q AccessRequestListQuery) (*pagination.Result[AccessRequestItem], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	if q.Mine && q.MineViewer != nil {
-		dbq := s.db.WithContext(ctx).Model(&model.DbAccessRequest{}).Where("project_id = ?", q.ProjectID)
-		if st := strings.TrimSpace(q.Status); st != "" {
-			dbq = dbq.Where("status = ?", st)
-		}
 		scope := strings.TrimSpace(q.MineScope)
 		if scope == "" {
 			scope = "all"
 		}
-		switch scope {
-		case "pending":
-			dbq = s.filterAccessRequestsApprovalPending(dbq, q.MineViewer)
-		case "done":
-			dbq = s.filterAccessRequestsApprovalDone(dbq, actorUserID(q.MineViewer))
-		default:
-			dbq = s.filterAccessRequestsApprovalMine(dbq, q.MineViewer)
-		}
-		var total int64
-		if err := dbq.Count(&total).Error; err != nil {
-			return nil, err
-		}
-		var list []model.DbAccessRequest
-		if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+		list, total, err := s.repo.ListAccessRequestsMine(ctx, repository.DbMineListParams{
+			ProjectID:    q.ProjectID,
+			Status:       q.Status,
+			Scope:        scope,
+			UserID:       actorUserID(q.MineViewer),
+			IsSuperAdmin: auth.IsSuperAdminRole(q.MineViewer.RoleCodes),
+			Page:         page,
+			PageSize:     pageSize,
+		})
+		if err != nil {
 			return nil, err
 		}
 		items := make([]AccessRequestItem, 0, len(list))

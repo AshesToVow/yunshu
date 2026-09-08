@@ -7,28 +7,32 @@ import (
 	"time"
 
 	"yunshu/internal/config"
-	"yunshu/internal/dictconfig"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/dbconn"
 	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/pagination"
+	workflowsvc "yunshu/internal/service/workflow"
 
 	"crypto/cipher"
 
 	"golang.org/x/crypto/ssh"
-	"gorm.io/gorm"
 )
+
+// DbmgmtConfigResolver 解析运行期字典覆盖后的 dbmgmt 配置（由 Wire 注入，避免 Service 持有 *gorm.DB）。
+type DbmgmtConfigResolver func(ctx context.Context) config.DbmgmtConfig
 
 // Service 数据库管理插件核心服务。
 type Service struct {
 	repo          interfaces.DbmgmtRepository
 	serverRepo    interfaces.ServerRepository
 	projectRepo   interfaces.ProjectRepository
+	memberRepo    interfaces.ProjectMemberRepository
 	userGroupRepo interfaces.UserGroupRepository
 	userRepo      interfaces.UserRepository
 	dutyRepo      interfaces.AlertDutyRepository
-	db            *gorm.DB
+	workflow      *workflowsvc.Service
+	resolveCfg    DbmgmtConfigResolver
 	aead          cipher.AEAD
 	mailer        mailer.Sender
 	appName       string
@@ -42,10 +46,12 @@ func NewService(
 	repo interfaces.DbmgmtRepository,
 	serverRepo interfaces.ServerRepository,
 	projectRepo interfaces.ProjectRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 	userGroupRepo interfaces.UserGroupRepository,
 	userRepo interfaces.UserRepository,
 	dutyRepo interfaces.AlertDutyRepository,
-	db *gorm.DB,
+	workflow *workflowsvc.Service,
+	resolveCfg DbmgmtConfigResolver,
 	encryptionKey string,
 	emailSender mailer.Sender,
 	appName string,
@@ -59,14 +65,22 @@ func NewService(
 	if cfg.QueryTimeoutSeconds <= 0 {
 		cfg = config.DefaultDbmgmtConfig()
 	}
+	if resolveCfg == nil {
+		resolveCfg = func(context.Context) config.DbmgmtConfig { return cfg }
+	}
+	if workflow == nil {
+		workflow = workflowsvc.NewService(nil, userGroupRepo, dutyRepo, userRepo)
+	}
 	return &Service{
 		repo:          repo,
 		serverRepo:    serverRepo,
 		projectRepo:   projectRepo,
+		memberRepo:    memberRepo,
 		userGroupRepo: userGroupRepo,
 		userRepo:      userRepo,
 		dutyRepo:      dutyRepo,
-		db:            db,
+		workflow:      workflow,
+		resolveCfg:    resolveCfg,
 		aead:          aead,
 		mailer:        emailSender,
 		appName:       strings.TrimSpace(appName),
@@ -76,11 +90,10 @@ func NewService(
 }
 
 func (s *Service) resolvedConfig(ctx context.Context) config.DbmgmtConfig {
-	base := s.cfg
-	if s.db == nil {
-		return base
+	if s.resolveCfg == nil {
+		return s.cfg
 	}
-	return dictconfig.ResolveDbmgmtConfig(ctx, s.db, base)
+	return s.resolveCfg(ctx)
 }
 
 func (s *Service) acquireInstance(instanceID uint) func() {

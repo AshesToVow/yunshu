@@ -14,17 +14,22 @@ import (
 )
 
 func (s *Service) goInceptionAvailable(ctx context.Context, inst *model.DbInstance) bool {
+	return s.goInceptionSkipReason(ctx, inst) == ""
+}
+
+// goInceptionSkipReason 返回不可用原因；空串表示可用。
+func (s *Service) goInceptionSkipReason(ctx context.Context, inst *model.DbInstance) string {
 	cfg := s.resolvedConfig(ctx)
 	if !cfg.GoInceptionEnabled || strings.TrimSpace(cfg.GoInceptionHost) == "" {
-		return false
+		return "未启用 goInception（请检查配置 dbmgmt.go_inception）"
 	}
 	if strings.ToLower(strings.TrimSpace(inst.Driver)) != model.DbDriverMySQL {
-		return false
+		return "goInception 仅支持 MySQL 实例"
 	}
 	if strings.ToLower(strings.TrimSpace(inst.ConnectMode)) == model.DbConnectSSHTunnel {
-		return false
+		return "SSH 隧道实例不支持 goInception（引擎无法直连），已回退平台本地规则；如需 Inception 审核/备份请改为直连"
 	}
-	return true
+	return ""
 }
 
 func (s *Service) goInceptionClient(ctx context.Context) *goinception.Client {
@@ -53,14 +58,15 @@ type SQLCheckRequest struct {
 }
 
 type SQLCheckResponse struct {
-	Checked      bool                  `json:"checked"`
-	Goinception  bool                  `json:"goinception"`
-	SyntaxType   int                   `json:"syntax_type"`
-	ErrorCount   int                   `json:"error_count"`
-	WarningCount int                   `json:"warning_count"`
-	RiskLevel    string                `json:"risk_level"`
+	Checked      bool                    `json:"checked"`
+	Goinception  bool                    `json:"goinception"`
+	EngineNote   string                  `json:"engine_note,omitempty"`
+	SyntaxType   int                     `json:"syntax_type"`
+	ErrorCount   int                     `json:"error_count"`
+	WarningCount int                     `json:"warning_count"`
+	RiskLevel    string                  `json:"risk_level"`
 	Rows         []goinception.ReviewRow `json:"rows,omitempty"`
-	Error        string                `json:"error,omitempty"`
+	Error        string                  `json:"error,omitempty"`
 }
 
 func (s *Service) CheckSQL(ctx context.Context, projectID, instanceID uint, req SQLCheckRequest, actor *auth.CurrentUser) (*SQLCheckResponse, error) {
@@ -82,13 +88,16 @@ func (s *Service) CheckSQL(ctx context.Context, projectID, instanceID uint, req 
 	if err := s.checkWritePermission(ctx, projectID, inst, req.Database, sqlText, needDDL, actor); err != nil {
 		return nil, err
 	}
-	// 仅「系统审核」走 goInception；人工审核只做平台本地规则预检。
-	useGoInception := normalizeAuditMode(req.AuditMode) == model.DbAuditModeSystem &&
-		s.goInceptionAvailable(ctx, inst)
+	wantSystem := normalizeAuditMode(req.AuditMode) == model.DbAuditModeSystem
+	skipReason := s.goInceptionSkipReason(ctx, inst)
+	useGoInception := wantSystem && skipReason == ""
 	assess := AssessSQLForWrite(sqlText, inst.Env == model.DbEnvProd, useGoInception)
 	out := &SQLCheckResponse{
 		RiskLevel:  assess.RiskLevel,
 		SyntaxType: goinception.SyntaxDML,
+	}
+	if wantSystem && skipReason != "" {
+		out.EngineNote = skipReason
 	}
 	if assess.Blocked {
 		out.Checked = true

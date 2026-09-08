@@ -11,6 +11,7 @@ import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 )
 
 type SessionCreateRequest struct {
@@ -42,7 +43,7 @@ type SessionListItem struct {
 }
 
 type SessionDetail struct {
-	Session  model.AiChatSession  `json:"session"`
+	Session  model.AiChatSession   `json:"session"`
 	Messages []model.AiChatMessage `json:"messages"`
 }
 
@@ -76,7 +77,7 @@ func (s *Service) CreateSession(ctx context.Context, userID uint, req SessionCre
 		EnableTools: enableTools,
 		EnableWrite: req.EnableWrite,
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateSession(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
@@ -87,36 +88,19 @@ func (s *Service) ListSessions(ctx context.Context, userID uint, q SessionListQu
 		return nil, constants.ErrUnauthorized
 	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	dbq := s.db.WithContext(ctx).Model(&model.AiChatSession{}).Where("user_id = ?", userID)
-	var total int64
-	if err := dbq.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.AiChatSession
-	if err := dbq.Order("COALESCE(last_message_at, updated_at) DESC, id DESC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, err := s.repo.ListSessions(ctx, repository.AiSessionListParams{
+		UserID: userID,
+		Offset: (page - 1) * pageSize,
+		Limit:  pageSize,
+	})
+	if err != nil {
 		return nil, err
 	}
 	sessionIDs := make([]uint, len(rows))
 	for i, row := range rows {
 		sessionIDs[i] = row.ID
 	}
-	msgCnt := map[uint]int64{}
-	if len(sessionIDs) > 0 {
-		type cntRow struct {
-			SessionID uint
-			Cnt       int64
-		}
-		var counts []cntRow
-		_ = s.db.WithContext(ctx).Model(&model.AiChatMessage{}).
-			Select("session_id, COUNT(*) AS cnt").
-			Where("session_id IN ?", sessionIDs).
-			Group("session_id").
-			Scan(&counts).Error
-		for _, c := range counts {
-			msgCnt[c.SessionID] = c.Cnt
-		}
-	}
+	msgCnt, _ := s.repo.CountSessionMessages(ctx, sessionIDs)
 	items := make([]SessionListItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, SessionListItem{AiChatSession: row, MessageCount: msgCnt[row.ID]})
@@ -129,9 +113,8 @@ func (s *Service) GetSession(ctx context.Context, userID, sessionID uint) (*Sess
 	if err != nil {
 		return nil, err
 	}
-	var msgs []model.AiChatMessage
-	if err := s.db.WithContext(ctx).Where("session_id = ?", sessionID).
-		Order("id ASC").Limit(500).Find(&msgs).Error; err != nil {
+	msgs, err := s.repo.ListSessionMessages(ctx, sessionID, 500)
+	if err != nil {
 		return nil, err
 	}
 	return &SessionDetail{Session: *sess, Messages: msgs}, nil
@@ -177,7 +160,7 @@ func (s *Service) UpdateSession(ctx context.Context, userID, sessionID uint, req
 	if len(updates) == 0 {
 		return sess, nil
 	}
-	if err := s.db.WithContext(ctx).Model(sess).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateSession(ctx, sess.ID, updates); err != nil {
 		return nil, err
 	}
 	return s.getOwnedSession(ctx, userID, sessionID)
@@ -188,16 +171,7 @@ func (s *Service) DeleteSession(ctx context.Context, userID, sessionID uint) err
 	if err != nil {
 		return err
 	}
-	tx := s.db.WithContext(ctx).Begin()
-	if err := tx.Where("session_id = ?", sess.ID).Delete(&model.AiChatMessage{}).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	if err := tx.Delete(sess).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit().Error
+	return s.repo.DeleteSessionCascade(ctx, sess.ID)
 }
 
 func (s *Service) ClearSessionMessages(ctx context.Context, userID, sessionID uint) error {
@@ -205,15 +179,12 @@ func (s *Service) ClearSessionMessages(ctx context.Context, userID, sessionID ui
 	if err != nil {
 		return err
 	}
-	if err := s.db.WithContext(ctx).Where("session_id = ?", sess.ID).Delete(&model.AiChatMessage{}).Error; err != nil {
-		return err
-	}
 	now := time.Now()
-	return s.db.WithContext(ctx).Model(sess).Updates(map[string]any{
+	return s.repo.ClearSessionMessages(ctx, sess.ID, map[string]any{
 		"title":           "新对话",
 		"last_message_at": nil,
 		"updated_at":      now,
-	}).Error
+	})
 }
 
 func (s *Service) getOwnedSession(ctx context.Context, userID, sessionID uint) (*model.AiChatSession, error) {
@@ -223,12 +194,11 @@ func (s *Service) getOwnedSession(ctx context.Context, userID, sessionID uint) (
 	if sessionID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("会话 ID 无效")
 	}
-	var sess model.AiChatSession
-	err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", sessionID, userID).First(&sess).Error
+	sess, err := s.repo.GetSessionByUser(ctx, userID, sessionID)
 	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("会话不存在")
 	}
-	return &sess, nil
+	return sess, nil
 }
 
 type chatTurnMeta struct {
@@ -238,7 +208,6 @@ type chatTurnMeta struct {
 	Model     string     `json:"model,omitempty"`
 }
 
-// persistChatTurn 将本轮 user/assistant 消息写入 MySQL，并返回会话 ID。
 func (s *Service) persistChatTurn(
 	ctx context.Context,
 	userID uint,
@@ -312,7 +281,7 @@ func (s *Service) persistChatTurn(
 		})
 	}
 	if len(msgs) > 0 {
-		if err := s.db.WithContext(ctx).Create(&msgs).Error; err != nil {
+		if err := s.repo.CreateMessages(ctx, msgs); err != nil {
 			return sess.ID, err
 		}
 	}
@@ -331,7 +300,7 @@ func (s *Service) persistChatTurn(
 	if sess.Title == "新对话" && userContent != "" {
 		updates["title"] = truncateRunes(userContent, 40)
 	}
-	_ = s.db.WithContext(ctx).Model(sess).Updates(updates).Error
+	_ = s.repo.UpdateSession(ctx, sess.ID, updates)
 	return sess.ID, nil
 }
 

@@ -23,8 +23,8 @@ type ServicePortrait struct {
 
 // PortraitLogSummary 日志智能摘要（异常 + 模板统计）。
 type PortraitLogSummary struct {
-	OpenAnomalyCount int64                  `json:"open_anomaly_count"`
-	PatternCount     int64                  `json:"pattern_count"`
+	OpenAnomalyCount int64                     `json:"open_anomaly_count"`
+	PatternCount     int64                     `json:"pattern_count"`
 	RecentAnomalies  []PortraitLogAnomalyBrief `json:"recent_anomalies"`
 }
 
@@ -77,7 +77,7 @@ func (s *ServiceCatalogService) Portrait(ctx context.Context, projectID, catalog
 		Service:       *item,
 		RecentChanges: recentChanges,
 		EntryPoints:   buildPortraitEntries(item),
-		CicdSummary:   loadCicdSummary(ctx, s.db, item),
+		CicdSummary:   s.loadCicdSummary(ctx, item),
 		Health:        s.buildHealth(ctx, item),
 		LogSummary:    s.loadLogSummary(ctx, item),
 	}, nil
@@ -130,8 +130,8 @@ func derefUint(p *uint) uint {
 	return *p
 }
 
-func loadCicdSummary(ctx context.Context, db *gorm.DB, item *ServiceCatalogItem) *PortraitCicdSummary {
-	if db == nil || item == nil {
+func (s *ServiceCatalogService) loadCicdSummary(ctx context.Context, item *ServiceCatalogItem) *PortraitCicdSummary {
+	if s.portraitRepo == nil || item == nil {
 		return nil
 	}
 	var cicdID uint
@@ -144,8 +144,8 @@ func loadCicdSummary(ctx context.Context, db *gorm.DB, item *ServiceCatalogItem)
 	if cicdID == 0 {
 		return nil
 	}
-	var svc model.CicdService
-	if err := db.WithContext(ctx).Where("id = ? AND project_id = ?", cicdID, item.ProjectID).First(&svc).Error; err != nil {
+	svc, err := s.portraitRepo.GetCicdService(ctx, item.ProjectID, cicdID)
+	if err != nil || svc == nil {
 		return nil
 	}
 	sum := &PortraitCicdSummary{
@@ -153,11 +153,7 @@ func loadCicdSummary(ctx context.Context, db *gorm.DB, item *ServiceCatalogItem)
 		Identifier:    svc.Identifier,
 		Name:          svc.Name,
 	}
-	var run model.CicdReleaseRun
-	if err := db.WithContext(ctx).
-		Where("project_id = ? AND service_id = ?", item.ProjectID, svc.ID).
-		Order("id DESC").
-		First(&run).Error; err == nil {
+	if run, err := s.portraitRepo.LatestReleaseRun(ctx, item.ProjectID, svc.ID); err == nil && run != nil {
 		id := run.ID
 		sum.LastReleaseID = &id
 		sum.LastStatus = run.Status
@@ -172,20 +168,12 @@ func loadCicdSummary(ctx context.Context, db *gorm.DB, item *ServiceCatalogItem)
 }
 
 func (s *ServiceCatalogService) loadLogSummary(ctx context.Context, item *ServiceCatalogItem) *PortraitLogSummary {
-	if s.db == nil || item == nil || item.ProjectID == 0 {
+	if s.portraitRepo == nil || item == nil || item.ProjectID == 0 {
 		return nil
 	}
-	var openCnt, patCnt int64
-	_ = s.db.WithContext(ctx).Model(&model.LogAnomaly{}).
-		Where("project_id = ? AND status = ?", item.ProjectID, model.LogAnomalyStatusOpen).
-		Count(&openCnt).Error
-	_ = s.db.WithContext(ctx).Model(&model.LogPattern{}).
-		Where("project_id = ?", item.ProjectID).
-		Count(&patCnt).Error
-	var rows []model.LogAnomaly
-	_ = s.db.WithContext(ctx).Model(&model.LogAnomaly{}).
-		Where("project_id = ? AND status = ?", item.ProjectID, model.LogAnomalyStatusOpen).
-		Order("detected_at DESC").Limit(5).Find(&rows).Error
+	openCnt, _ := s.portraitRepo.CountOpenAnomalies(ctx, item.ProjectID, "")
+	patCnt, _ := s.portraitRepo.CountLogPatterns(ctx, item.ProjectID)
+	rows, _ := s.portraitRepo.ListRecentOpenAnomalies(ctx, item.ProjectID, 5)
 	recent := make([]PortraitLogAnomalyBrief, 0, len(rows))
 	for _, r := range rows {
 		recent = append(recent, PortraitLogAnomalyBrief{

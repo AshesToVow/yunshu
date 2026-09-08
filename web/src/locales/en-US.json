@@ -324,11 +324,19 @@
     }
   },
   "dashboard": {
-    "label": "[ OPS / OVERVIEW ]",
+    "label": "[ OPS / COMMAND CENTER ]",
     "title": "Operations overview",
+    "titleScreen": "Smart Ops Command Center",
     "subtitle": "Assets, Kubernetes, alerts & log agents, release and ticket stats",
+    "subtitleScreen": "Assets · Cluster posture · Alerts & collection · Release throughput — one screen",
     "syncPending": "SYNC / PENDING",
     "syncLive": "SYNC / LIVE",
+    "syncFailed": "SYNC / FAILED",
+    "refresh": "Refresh",
+    "fullscreen": "Fullscreen",
+    "loadFailed": "Failed to load overview",
+    "healthTitle": "Runtime health",
+    "podHealth": "Pod health rate",
     "sectionAssets": "Asset base",
     "sectionK8s": "Kubernetes posture",
     "sectionAlert": "Alerts & log collection",
@@ -389,7 +397,6 @@
         "hint": "Registered but not online"
       }
     },
-    "uptimeFormat": "{{hours}}h {{minutes}}m",
-    "syncFailed": "Sync failed"
+    "uptimeFormat": "{{hours}}h {{minutes}}m"
   }
 }

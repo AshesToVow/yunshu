@@ -4,8 +4,10 @@ import (
 	"context"
 	"slices"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -29,11 +31,11 @@ func CanPlatformRoleReview(actor *auth.CurrentUser) bool {
 }
 
 // EnsureDefaultAIToolApprovalDefinition 确保全局 AI 工具审批流存在（project_id=0）。
-func EnsureDefaultAIToolApprovalDefinition(ctx context.Context, db *gorm.DB) error {
-	if db == nil {
+func EnsureDefaultAIToolApprovalDefinition(ctx context.Context, wfRepo interfaces.WorkflowRepository) error {
+	if wfRepo == nil {
 		return nil
 	}
-	svc := NewService(db, nil, nil, nil)
+	svc := NewService(wfRepo, nil, nil, nil)
 	key := DefinitionKey{
 		Domain: model.WorkflowDomainAI, ProjectID: 0, TicketType: model.WorkflowTicketTypeToolApproval,
 	}
@@ -51,4 +53,12 @@ func EnsureDefaultAIToolApprovalDefinition(ctx context.Context, db *gorm.DB) err
 		}},
 	})
 	return err
+}
+
+// EnsureDefaultAIToolApprovalDefinitionDB 供 bootstrap / migrate 等仍持有 *gorm.DB 的调用方。
+func EnsureDefaultAIToolApprovalDefinitionDB(ctx context.Context, db *gorm.DB) error {
+	if db == nil {
+		return nil
+	}
+	return EnsureDefaultAIToolApprovalDefinition(ctx, repository.NewWorkflowRepository(db))
 }

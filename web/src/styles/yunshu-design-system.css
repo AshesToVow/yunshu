@@ -324,21 +324,23 @@
   gap: 12px;
 }
 
-/* Dashboard cockpit — high-density single-screen telemetry */
+/* Dashboard cockpit — 智慧运维大屏（深色径向驾驶舱） */
 .overview-big-screen.overview-cockpit {
-  --cockpit-bg: #0a0a0a;
-  --cockpit-surface: #121212;
-  --cockpit-border: rgba(234, 234, 234, 0.14);
-  --cockpit-text: #eaeaea;
-  --cockpit-muted: rgba(234, 234, 234, 0.58);
-  --cockpit-accent: var(--ys-accent);
+  --cockpit-bg: #070f1a;
+  --cockpit-surface: rgba(15, 31, 53, 0.78);
+  --cockpit-border: rgba(56, 189, 248, 0.18);
+  --cockpit-text: #f1f5f9;
+  --cockpit-muted: rgba(186, 214, 238, 0.72);
+  --cockpit-accent: #38bdf8;
 
-  margin: -12px -14px -16px;
-  padding: 10px 12px 14px;
-  background: var(--cockpit-bg) !important;
-  border-radius: 0 !important;
+  margin: -20px -24px 0;
+  padding: 18px 22px 28px;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -30%, rgba(56, 189, 248, 0.14), transparent 52%),
+    linear-gradient(165deg, #070f1a 0%, #0d2137 42%, #081018 100%) !important;
+  border-radius: 0 0 14px 14px !important;
   box-shadow: none !important;
-  min-height: calc(100dvh - 52px);
+  min-height: calc(100dvh - 72px);
 }
 
 .admin-shell:not(.ops-platform).theme-light .overview-cockpit {
@@ -441,9 +443,9 @@
 }
 
 .overview-cockpit .overview-cockpit__header {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--cockpit-border);
+  margin-bottom: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.18);
 }
 
 .overview-cockpit .overview-cockpit__header .page-telemetry__title {

@@ -5,6 +5,7 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -29,7 +30,7 @@ func migrateDbmgmtStages(ctx context.Context, db *gorm.DB) error {
 	for _, row := range legacy {
 		byProject[row.ProjectID] = append(byProject[row.ProjectID], row)
 	}
-	svc := NewService(db, nil, nil, nil)
+	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil)
 	for projectID, rows := range byProject {
 		key := DefinitionKey{Domain: model.WorkflowDomainDbmgmt, ProjectID: projectID}
 		def, _, err := svc.loadDefinition(ctx, key)
@@ -63,7 +64,7 @@ func migrateCicdStages(ctx context.Context, db *gorm.DB) error {
 	for _, row := range legacy {
 		byProject[row.ProjectID] = append(byProject[row.ProjectID], row)
 	}
-	svc := NewService(db, nil, nil, nil)
+	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil)
 	for projectID, rows := range byProject {
 		key := DefinitionKey{Domain: model.WorkflowDomainCicd, ProjectID: projectID}
 		def, _, err := svc.loadDefinition(ctx, key)
@@ -90,7 +91,14 @@ func migrateCicdStages(ctx context.Context, db *gorm.DB) error {
 
 // EnabledLegacyDbmgmtStages 供 dbmgmt 初始化审批步骤时读取统一引擎配置。
 func EnabledLegacyDbmgmtStages(ctx context.Context, db *gorm.DB, userGroupRepo interfaces.UserGroupRepository, projectID uint) ([]model.DbApprovalFlowStage, error) {
-	svc := NewService(db, userGroupRepo, nil, nil)
+	return EnabledLegacyDbmgmtStagesFrom(ctx, NewService(repository.NewWorkflowRepository(db), userGroupRepo, nil, nil), projectID)
+}
+
+// EnabledLegacyDbmgmtStagesFrom 使用已有引擎实例读取 dbmgmt 启用节点。
+func EnabledLegacyDbmgmtStagesFrom(ctx context.Context, svc *Service, projectID uint) ([]model.DbApprovalFlowStage, error) {
+	if svc == nil {
+		return nil, gorm.ErrInvalidDB
+	}
 	stages, err := svc.EnabledStages(ctx, DefinitionKey{Domain: model.WorkflowDomainDbmgmt, ProjectID: projectID})
 	if err != nil {
 		return nil, err
@@ -106,7 +114,14 @@ func EnabledLegacyDbmgmtStages(ctx context.Context, db *gorm.DB, userGroupRepo i
 
 // EnabledLegacyCicdStages 供 cicd 初始化发布审批步骤。
 func EnabledLegacyCicdStages(ctx context.Context, db *gorm.DB, userGroupRepo interfaces.UserGroupRepository, projectID uint) ([]model.CicdApprovalFlowStage, error) {
-	svc := NewService(db, userGroupRepo, nil, nil)
+	return EnabledLegacyCicdStagesFrom(ctx, NewService(repository.NewWorkflowRepository(db), userGroupRepo, nil, nil), projectID)
+}
+
+// EnabledLegacyCicdStagesFrom 使用已有引擎实例读取 cicd 启用节点。
+func EnabledLegacyCicdStagesFrom(ctx context.Context, svc *Service, projectID uint) ([]model.CicdApprovalFlowStage, error) {
+	if svc == nil {
+		return nil, gorm.ErrInvalidDB
+	}
 	stages, err := svc.EnabledStages(ctx, DefinitionKey{Domain: model.WorkflowDomainCicd, ProjectID: projectID})
 	if err != nil {
 		return nil, err

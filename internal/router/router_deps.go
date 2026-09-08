@@ -9,6 +9,7 @@ import (
 	"yunshu/internal/handler"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/middleware"
+	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/service"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
@@ -305,19 +306,17 @@ func assembleRouteDeps(
 		aiHandler:          handlers.AI,
 		esmgmtSvc:          svcs.Esmgmt,
 		esmgmtHandler:      handlers.Esmgmt,
-		platformFeatures:   handler.NewPlatformFeaturesHandler(app.DB, svcs.AlertMonitorRule),
+		platformFeatures:   handler.NewPlatformFeaturesHandler(svcs.AlertMonitorRule, repos.AlertRuleChange, repos.PromqlSavedQuery, repos.K8sCrTemplate),
 		workflowHandler: handler.NewWorkflowHandler(workflowsvc.NewService(
-			app.DB, repos.UserGroup, repos.AlertDuty, repos.User,
+			repos.Workflow, repos.UserGroup, repos.AlertDuty, repos.User,
 		)),
-		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(app.DB)),
+		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(
+			repos.PlatformTemplate,
+			func(ctx context.Context) (*objectstore.Client, error) {
+				return objectstore.NewFromDB(ctx, app.DB)
+			},
+		)),
 	}
-	if svcs.AI != nil {
-		svcs.AI.SetPlatformDeps(repos.Server, svcs.CMDB, svcs.Dbmgmt, svcs.Esmgmt)
-		svcs.AI.SetLogPlatformDeps(svcs.ProjectMgmt, svcs.LoggieAgent, svcs.ClusterLog)
-		svcs.AI.SetMonitorDeps(svcs.AlertDatasource)
-		svcs.AI.SetOpsDeps(svcs.ChangeEvent, svcs.AlertSilence)
-	}
-	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil
 }
 

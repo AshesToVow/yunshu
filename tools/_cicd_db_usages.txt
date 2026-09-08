@@ -1,0 +1,211 @@
+﻿approval_flow.go:179: if err := s.db.WithContext(ctx).Create(&steps).Error; err != nil {
+approval_flow.go:182: return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+approval_flow.go:189: err := s.db.WithContext(ctx).
+approval_flow.go:220: if err := s.db.WithContext(ctx).Model(next).Updates(map[string]any{
+approval_flow.go:226: return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+approval_flow.go:230: return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+approval_flow.go:238: err := s.db.WithContext(ctx).
+approval_flow.go:274: _ = s.db.WithContext(ctx).Select("id, name").Where("id IN ?", ids).Find(&groups).Error
+approval_flow.go:282: wfPending := s.db.Table("workflow_tickets AS t").
+approval_flow.go:293: noSteps := s.db.Table("cicd_release_approval_steps AS s0").
+approval_flow.go:296: noWF := s.db.Table("workflow_tickets AS tw").
+approval_flow.go:300: currentStep := s.db.Table("cicd_release_approval_steps AS s").
+approval_flow.go:317: wfActed := s.db.Table("workflow_tickets AS t").
+approval_flow.go:324: actedStep := s.db.Table("cicd_release_approval_steps AS s").
+approval_flow.go:329: legacy := s.db.Table("cicd_release_runs AS lr").
+approval_flow.go:354: pending := s.db.Table("cicd_release_runs AS r").
+approval_flow.go:359: done := s.db.Table("cicd_release_runs AS r").
+approval_flow.go:371: noSteps := s.db.Table("cicd_release_approval_steps AS s0").
+approval_flow.go:374: currentStep := s.db.Table("cicd_release_approval_steps AS s").
+approval_flow.go:384: return s.db.Table("cicd_release_runs AS r").
+approval_flow.go:392: actedStep := s.db.Table("cicd_release_approval_steps AS s").
+approval_flow.go:397: legacy := s.db.Table("cicd_release_runs AS lr").
+approval_flow.go:402: return s.db.Table("cicd_release_runs AS r").
+approval_flow.go:411: if err := s.db.WithContext(ctx).
+approval_flow.go:467: _ = s.db.WithContext(ctx).Where("release_run_id IN ?", runIDs).Order("sort_order ASC, id ASC").Find(&steps).Error
+approval_flow.go:512: err := s.db.WithContext(ctx).Raw(`
+approval_sla.go:37: if err := s.db.WithContext(ctx).
+approval_sla.go:72: _ = s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
+approval_sla.go:95: err := s.db.WithContext(ctx).Raw(`
+approval_sla.go:143: _ = s.db.WithContext(ctx).Model(&model.WorkflowTicketStep{}).
+approval_sla.go:168: err := s.db.WithContext(ctx).Raw(`
+approval_sla.go:181: _ = s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
+approval_sla.go:263: if err := s.db.WithContext(ctx).Select("name").Where("id = ?", projectID).First(&row).Error; err != nil {
+approval_sla.go:277: if err := s.db.WithContext(ctx).Select("name, identifier").Where("id = ?", serviceID).First(&row).Error; err != nil {
+authz.go:15: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+callback.go:190: if err := s.db.WithContext(ctx).Where("id = ?", req.RunID).First(&br).Error; err != nil {
+callback.go:200: if err := s.db.WithContext(ctx).
+callback.go:207: if err := s.db.WithContext(ctx).
+callback.go:219: if err := s.db.WithContext(ctx).Where("id = ?", req.RunID).First(&rr).Error; err != nil {
+callback.go:229: if err := s.db.WithContext(ctx).
+callback.go:236: if err := s.db.WithContext(ctx).
+callback.go:318: q := s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", br.ID)
+callback.go:386: return s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).Where("id = ?", rr.ID).Updates(updates).Error
+callback.go:453: err := s.db.WithContext(ctx).
+callback.go:482: return s.db.WithContext(ctx).Model(&existing).Updates(updates).Error
+callback.go:504: return s.db.WithContext(ctx).Create(&row).Error
+callback.go:528: q := s.db.WithContext(ctx).Where("build_run_id = ? AND artifact_type = ?", br.ID, at)
+callback.go:536: return s.db.WithContext(ctx).Model(&existing).Updates(map[string]any{
+callback.go:556: return s.db.WithContext(ctx).Create(&row).Error
+callback.go:562: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&br).Error; err != nil {
+callback.go:569: if err := s.db.WithContext(ctx).
+callback.go:584: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&br).Error; err != nil {
+callback.go:591: if err := s.db.WithContext(ctx).
+cicd_access.go:82: err = s.db.WithContext(ctx).
+cicd_access.go:144: err = s.db.WithContext(ctx).Model(&model.CicdAccessGrant{}).
+cicd_access.go:161: q := s.db.WithContext(ctx).Model(&model.CicdAccessGrant{}).Where("project_id = ?", projectID)
+cicd_access.go:177: if err := s.db.WithContext(ctx).Select("id", "name").Where("id = ?", r.ServiceID).First(&svc).Error; err == nil {
+cicd_access.go:182: if err := s.db.WithContext(ctx).Select("id", "username", "nickname").Where("id = ?", uid).First(&u).Error; err == nil {
+cicd_access.go:196: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", req.ServiceID, req.ProjectID).First(&svc).Error; err != nil {
+cicd_access.go:217: if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
+cicd_access.go:223: _ = s.db.WithContext(ctx).
+cicd_access.go:248: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", sid, req.ProjectID).First(&svc).Error; err != nil {
+cicd_access.go:255: if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
+cicd_access.go:269: res := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", grantID, projectID).Delete(&model.CicdAccessGrant{})
+cicd_access.go:284: if err := s.db.WithContext(ctx).Where("project_id = ?", req.ProjectID).Find(&members).Error; err != nil {
+cicd_access.go:288: if err := s.db.WithContext(ctx).Where("project_id = ?", req.ProjectID).Find(&services).Error; err != nil {
+cicd_access.go:304: if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
+ci_config.go:42: if err := s.db.WithContext(ctx).Where("service_id = ?", serviceID).First(&row).Error; err != nil {
+ci_config.go:93: err = s.db.WithContext(ctx).Where("service_id = ?", serviceID).First(&row).Error
+ci_config.go:127: if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+ci_config.go:131: if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+deploy_config.go:69: if err := s.db.WithContext(ctx).Where("service_id = ?", serviceID).Order("id ASC").Find(&rows).Error; err != nil {
+deploy_config.go:91: _ = s.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&servers).Error
+deploy_config.go:150: if err := s.db.WithContext(ctx).Where("id = ? AND service_id = ?", configID, serviceID).First(&row).Error; err != nil {
+deploy_config.go:161: dupQ := s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).
+deploy_config.go:254: if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+deploy_config.go:258: if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+deploy_config.go:286: return s.db.WithContext(ctx).Where("id = ? AND service_id = ?", configID, serviceID).Delete(&model.CicdDeployConfig{}).Error
+helm_scaffold.go:37: _ = s.db.WithContext(ctx).
+jenkins_sync.go:72: _ = s.db.WithContext(ctx).Model(svc).Update("jenkins_job", jobName).Error
+jenkins_sync.go:280: if err := s.db.WithContext(ctx).Where("service_id = ?", svc.ID).First(&ci).Error; err == nil {
+k8s_pipeline.go:18: _ = s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).
+k8s_pipeline.go:26: if err := s.db.WithContext(ctx).
+k8s_pipeline.go:37: if err := s.db.WithContext(ctx).
+pipeline_template.go:24: if err := s.db.WithContext(ctx).Where("status = 1").Order("sort ASC, id ASC").Find(&rows).Error; err != nil {
+pipeline_template.go:41: if err := s.db.WithContext(ctx).Where("id = ?", id).First(&row).Error; err != nil {
+pipeline_template.go:52: if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+pipeline_template.go:55: } else if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+pipeline_template.go:71: _ = s.db.WithContext(ctx).Model(&model.CicdPipelineTemplate{}).Where("language_type = ?", d.LanguageType).Count(&n).Error
+pipeline_template.go:74: _ = s.db.WithContext(ctx).Create(&row).Error
+pipeline_template.go:92: if err := s.db.WithContext(ctx).
+platform_progressive.go:269: if err := s.db.WithContext(ctx).Where("id = ?", *release.DeployConfigID).First(&dc).Error; err != nil {
+platform_progressive.go:307: return s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).Where("id = ?", releaseID).
+platform_rollback.go:72: _ = s.db.WithContext(ctx).Model(&release).Updates(map[string]any{
+platform_rollback.go:87: if err := s.db.WithContext(ctx).
+platform_rollback.go:93: if err := s.db.WithContext(ctx).
+project_harbor.go:26: if err := s.db.WithContext(ctx).
+project_harbor.go:44: if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&bind).Error; err == nil && bind.RegistryID > 0 {
+quality_gate.go:23: if err := s.db.WithContext(ctx).
+registry.go:57: if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&bind).Error; err == nil && bind.RegistryID > 0 {
+registry.go:79: if err := s.db.WithContext(ctx).
+registry.go:113: if err := s.db.WithContext(ctx).Where("id = ?", id).First(&reg).Error; err != nil {
+registry.go:146: db := s.db.WithContext(ctx).Model(&model.ImageRegistry{})
+registry.go:191: if err := s.db.WithContext(ctx).Where("id = ?", id).First(&reg).Error; err != nil {
+registry.go:208: err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+registry.go:227: res := s.db.WithContext(ctx).Delete(&model.ImageRegistry{}, id)
+registry.go:234: _ = s.db.WithContext(ctx).Where("registry_id = ?", id).Delete(&model.ProjectRegistryBinding{}).Error
+registry.go:235: _ = s.db.WithContext(ctx).Where("registry_id = ?", id).Delete(&model.ImageCleanupPolicy{}).Error
+registry.go:280: if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&bind).Error; err != nil {
+registry.go:294: err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&bind).Error
+registry.go:301: if err := s.db.WithContext(ctx).Create(&bind).Error; err != nil {
+registry.go:308: if err := s.db.WithContext(ctx).Save(&bind).Error; err != nil {
+registry.go:315: res := s.db.WithContext(ctx).Where("project_id = ?", projectID).Delete(&model.ProjectRegistryBinding{})
+registry_browse.go:293: _ = s.db.WithContext(ctx).
+registry_cleanup.go:25: q := s.db.WithContext(ctx).Model(&model.ImageCleanupPolicy{})
+registry_cleanup.go:62: if err := s.db.WithContext(ctx).Where("id = ?", id).First(&row).Error; err != nil {
+registry_cleanup.go:73: if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+registry_cleanup.go:76: } else if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+registry_cleanup.go:83: res := s.db.WithContext(ctx).Delete(&model.ImageCleanupPolicy{}, id)
+registry_cleanup.go:110: _ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&policies).Error
+registry_cleanup.go:128: _ = s.db.WithContext(ctx).Model(&model.ImageCleanupPolicy{}).Where("id = ?", p.ID).Updates(map[string]any{
+registry_cleanup.go:242: if err := s.db.WithContext(ctx).Where("id = ?", id).First(&p).Error; err != nil {
+registry_cleanup.go:250: _ = s.db.WithContext(ctx).Model(&p).Updates(map[string]any{
+release_approval.go:56: if err := s.db.WithContext(ctx).Where("id = ? AND service_id = ?", req.DeployConfigID, serviceID).First(&dc).Error; err != nil {
+release_approval.go:73: if err := s.db.WithContext(ctx).
+release_approval.go:182: if err := s.db.WithContext(ctx).Create(&release).Error; err != nil {
+release_approval.go:187: _ = s.db.WithContext(ctx).Model(&release).Updates(map[string]any{
+release_approval.go:192: if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
+release_approval.go:278: if err := s.db.WithContext(persistCtx).Model(release).Updates(updates).Error; err != nil {
+release_approval.go:284: _ = s.db.WithContext(persistCtx).Model(&model.CicdReleaseRun{}).
+release_approval.go:306: err := s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).Where("release_run_id = ?", releaseRunID).Count(&n).Error
+release_approval.go:313: res := s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+release_approval.go:334: res := s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
+release_approval.go:390: if err := s.db.WithContext(ctx).Where("id = ?", runID).First(release).Error; err != nil {
+release_approval.go:398: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+release_approval.go:408: if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+release_approval.go:462: if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+release_approval.go:470: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+release_approval.go:480: if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+release_approval.go:522: if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+release_approval.go:566: if err := s.db.WithContext(ctx).Model(&release).Updates(updates).Error; err != nil {
+release_approval.go:569: if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+release_approval.go:577: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+release_approval.go:603: if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+release_approval.go:613: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&release).Error; err != nil {
+release_approval.go:638: if err := s.db.WithContext(ctx).Where("id = ?", runID).First(&release).Error; err != nil {
+release_detail.go:40: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+release_detail.go:48: if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err == nil {
+release_detail.go:53: if err := s.db.WithContext(ctx).Select("name").Where("id = ?", projectID).First(&proj).Error; err == nil {
+release_detail.go:86: if err := s.db.WithContext(ctx).Where("release_run_id = ?", runID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
+release_detail.go:102: _ = s.db.WithContext(ctx).Select("id, name").Where("id IN ?", groupIDs).Find(&groups).Error
+release_detail.go:127: _ = s.db.WithContext(ctx).Select("id, username, nickname").Where("id IN ?", reviewerIDs).Find(&users).Error
+release_detail.go:229: _ = s.db.WithContext(ctx).Select("id, username, nickname").Where("id IN ?", userIDs).Find(&users).Error
+release_detail.go:377: if err := s.db.WithContext(ctx).Where("id = ?", *release.DeployConfigID).First(&dc).Error; err != nil {
+runs.go:32: dbq := s.db.WithContext(ctx).Model(&model.CicdBuildRun{})
+runs.go:111: dbq := s.db.WithContext(ctx).Model(&model.CicdReleaseRun{})
+runs.go:179: _ = s.db.WithContext(ctx).Where("id IN ?", ids).Find(&svcs).Error
+runs.go:188: if err := s.db.WithContext(ctx).Select("name").Where("id = ?", q.ProjectID).First(&proj).Error; err == nil {
+runs.go:211: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+runs.go:219: if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err == nil {
+runs.go:235: if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err != nil {
+runs.go:247: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+runs.go:257: if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err != nil {
+runs.go:269: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+runs.go:275: return s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).Delete(&model.CicdBuildRun{}).Error
+runs.go:284: return s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).Delete(&model.CicdReleaseRun{}).Error
+runs.go:307: _ = s.db.WithContext(ctx).Where("id IN ?", ids).Find(&svcs).Error
+run_sync.go:44: _ = s.db.WithContext(ctx).Where("build_result IN ?", []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}).Limit(50).Find(&buildRuns).Error
+run_sync.go:49: _ = s.db.WithContext(ctx).Where("status IN ?", []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}).Limit(50).Find(&releaseRuns).Error
+run_sync.go:56: _ = s.db.WithContext(ctx).
+run_sync.go:77: if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
+run_sync.go:81: _ = s.db.WithContext(ctx).Where("service_id = ?", run.ServiceID).First(&ci).Error
+run_sync.go:101: _ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Updates(updates).Error
+run_sync.go:109: if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
+run_sync.go:113: _ = s.db.WithContext(ctx).Where("service_id = ?", run.ServiceID).First(&ci).Error
+run_sync.go:139: _ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Updates(updates).Error
+run_sync.go:148: _ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).
+run_sync.go:159: if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
+run_sync.go:186: _ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+run_sync.go:203: if err := s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+run_sync.go:218: _ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
+service_crud.go:55: dbq := s.db.WithContext(ctx).Model(&model.CicdService{}).Where("project_id = ?", q.ProjectID)
+service_crud.go:90: _ = s.db.WithContext(ctx).Model(&model.CicdCiConfig{}).
+service_crud.go:102: _ = s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).
+service_crud.go:111: _ = s.db.WithContext(ctx).
+service_crud.go:170: _ = s.db.WithContext(ctx).Model(&model.CicdCiConfig{}).Where("service_id = ?", serviceID).Count(&ciCnt).Error
+service_crud.go:201: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", serviceID, req.ProjectID).First(&row).Error; err != nil {
+service_crud.go:209: if err := s.db.WithContext(ctx).Model(&model.CicdService{}).
+service_crud.go:227: if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+service_crud.go:231: if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+service_crud.go:243: return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+service_crud.go:262: if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", serviceID, projectID).First(&row).Error; err != nil {
+trigger.go:79: if err := s.db.WithContext(ctx).Create(&run).Error; err != nil {
+trigger.go:103: _ = s.db.WithContext(ctx).Model(&run).Updates(map[string]any{
+trigger.go:122: if err := s.db.WithContext(ctx).Model(&run).Updates(updates).Error; err != nil {
+trigger.go:125: if err := s.db.WithContext(ctx).Where("id = ?", run.ID).First(&run).Error; err != nil {
+trigger.go:163: if err := s.db.WithContext(ctx).Create(&release).Error; err != nil {
+trigger.go:169: if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
+verify.go:54: _ = s.db.WithContext(ctx).Model(&model.AlertEvent{}).
+verify.go:95: _ = s.db.WithContext(ctx).Model(&release).Updates(map[string]any{
+verify.go:160: _ = s.db.WithContext(ctx).Model(&model.ChangeEvent{}).
+workflow_bridge.go:55: return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+workflow_bridge.go:76: return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+workflow_bridge.go:83: return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+workflow_bridge.go:92: return s.db.WithContext(ctx).Model(release).Update("current_stage_key", st.StageKey).Error
+workflow_bridge.go:102: err := s.db.WithContext(ctx).
+workflow_bridge.go:123: if err := s.db.WithContext(ctx).Model(&step).Updates(map[string]any{
+workflow_bridge.go:135: return s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
+workflow_bridge.go:142: if err := s.db.WithContext(ctx).First(&release, releaseID).Error; err != nil {
+workflow_bridge.go:146: if err := s.db.WithContext(ctx).First(&ticket, changeTicketID).Error; err != nil {
+workflow_bridge.go:152: return s.db.WithContext(ctx).Model(&release).Update("change_workflow_ticket_id", changeTicketID).Error

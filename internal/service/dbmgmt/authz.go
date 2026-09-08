@@ -20,8 +20,10 @@ func (s *Service) projectMemberRole(ctx context.Context, projectID uint, actor *
 	if auth.IsSuperAdminRole(actor.RoleCodes) {
 		return "owner", true, nil
 	}
-	var m model.ProjectMember
-	err = s.db.WithContext(ctx).Where("project_id = ? AND user_id = ?", projectID, actorUserID(actor)).First(&m).Error
+	if s.memberRepo == nil {
+		return "", false, constants.ErrForbidden
+	}
+	m, err := s.memberRepo.GetByProjectAndUser(ctx, projectID, actorUserID(actor))
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return "", false, constants.ErrForbidden

@@ -5,17 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 	"yunshu/internal/service/k8s"
 )
 
 func (s *Service) createToolApproval(ctx context.Context, userID uint, toolName, argsJSON string, clusterID uint, ns, resource, reason string) (map[string]any, error) {
-	if s.db == nil {
+	if s.repo == nil {
 		return nil, fmt.Errorf("数据库不可用")
 	}
 	row := model.AiToolApproval{
@@ -28,11 +28,11 @@ func (s *Service) createToolApproval(ctx context.Context, userID uint, toolName,
 		Reason:    truncateStr(reason, 500),
 		Status:    "pending",
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.CreateApproval(ctx, &row); err != nil {
 		return nil, err
 	}
 	if err := s.createAIWorkflowTicket(ctx, &row); err != nil {
-		_ = s.db.WithContext(ctx).Delete(&row).Error
+		_ = s.repo.DeleteApproval(ctx, row.ID)
 		return nil, fmt.Errorf("创建统一审批工单失败: %w", err)
 	}
 	return map[string]any{
@@ -52,27 +52,24 @@ type ApprovalListQuery struct {
 }
 
 func (s *Service) ListApprovals(ctx context.Context, actor *auth.CurrentUser, q ApprovalListQuery) (*pagination.Result[model.AiToolApproval], error) {
-	if s.db == nil {
+	if s.repo == nil {
 		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
 	}
 	if actor == nil || actor.ID == 0 {
 		return nil, constants.ErrUnauthorized
 	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	db := s.db.WithContext(ctx).Model(&model.AiToolApproval{})
-	if st := strings.TrimSpace(q.Status); st != "" {
-		db = db.Where("status = ?", st)
+	p := repository.AiApprovalListParams{
+		Status: strings.TrimSpace(q.Status),
+		Offset: (page - 1) * pageSize,
+		Limit:  pageSize,
 	}
-	// 默认仅本人；审批角色显式 all=true 时可看全部
 	if q.MineOnly || !q.All || !canReviewApprovals(actor) {
-		db = db.Where("user_id = ?", actor.ID)
+		p.RestrictUser = true
+		p.UserID = actor.ID
 	}
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var list []model.AiToolApproval
-	if err := db.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+	list, total, err := s.repo.ListApprovals(ctx, p)
+	if err != nil {
 		return nil, err
 	}
 	return &pagination.Result[model.AiToolApproval]{List: list, Total: total, Page: page, PageSize: pageSize}, nil
@@ -85,7 +82,7 @@ type ReviewApprovalRequest struct {
 }
 
 func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, id uint, req ReviewApprovalRequest) (*model.AiToolApproval, error) {
-	if s.db == nil {
+	if s.repo == nil {
 		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
 	}
 	if actor == nil || actor.ID == 0 {
@@ -94,8 +91,8 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 	if !canReviewApprovals(actor) {
 		return nil, constants.ErrForbiddenWithMsg("无权审批 AI 高危操作")
 	}
-	var row model.AiToolApproval
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetApprovalByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if row.Status != "pending" {
@@ -107,35 +104,34 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 
 	wf := s.workflowEngine()
 	if wf.HasLinkedTicket(ctx, model.WorkflowRefAiToolApproval, id) {
-		detail, err := s.reviewAIViaWorkflow(ctx, &row, req.Approve, req.Note, actor)
+		detail, err := s.reviewAIViaWorkflow(ctx, row, req.Approve, req.Note, actor)
 		if err != nil {
 			return nil, err
 		}
-		// 多级审批：仅终态才回写业务单；中间节点保持 pending
 		if detail != nil && detail.Status == model.WorkflowTicketStatusPending {
-			return &row, nil
+			return row, nil
 		}
 		uid := actor.ID
 		row.ReviewerID = &uid
 		row.ReviewNote = truncateStr(req.Note, 500)
 		if !req.Approve || (detail != nil && detail.Status == model.WorkflowTicketStatusRejected) {
 			row.Status = "rejected"
-			if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+			if err := s.repo.SaveApproval(ctx, row); err != nil {
 				return nil, err
 			}
-			return &row, nil
+			return row, nil
 		}
 		if detail == nil || detail.Status != model.WorkflowTicketStatusApproved {
-			return &row, nil
+			return row, nil
 		}
 		row.Status = "approved"
-		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		if err := s.repo.SaveApproval(ctx, row); err != nil {
 			return nil, err
 		}
 		if req.Execute {
 			return s.ExecuteApproval(ctx, actor, id)
 		}
-		return &row, nil
+		return row, nil
 	}
 
 	uid := actor.ID
@@ -143,19 +139,19 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 	row.ReviewNote = truncateStr(req.Note, 500)
 	if !req.Approve {
 		row.Status = "rejected"
-		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		if err := s.repo.SaveApproval(ctx, row); err != nil {
 			return nil, err
 		}
-		return &row, nil
+		return row, nil
 	}
 	row.Status = "approved"
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.repo.SaveApproval(ctx, row); err != nil {
 		return nil, err
 	}
 	if req.Execute {
 		return s.ExecuteApproval(ctx, actor, id)
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, id uint) (*model.AiToolApproval, error) {
@@ -163,28 +159,24 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 		return nil, constants.ErrUnauthorized
 	}
 	if !canReviewApprovals(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
-		// 允许申请人在已批准后触发执行，但仍注入本人上下文做 K8s ACL
-		var peek model.AiToolApproval
-		if err := s.db.WithContext(ctx).First(&peek, id).Error; err != nil {
+		peek, err := s.repo.GetApprovalByID(ctx, id)
+		if err != nil {
 			return nil, constants.ErrNotFound
 		}
 		if peek.UserID != actor.ID {
 			return nil, constants.ErrForbiddenWithMsg("无权执行该审批单")
 		}
 	}
-	// 乐观锁：仅 approved/failed → executing
-	res := s.db.WithContext(ctx).Model(&model.AiToolApproval{}).
-		Where("id = ? AND status IN ?", id, []string{"approved", "failed"}).
-		Updates(map[string]any{"status": "executing", "updated_at": time.Now()})
-	if res.Error != nil {
-		return nil, res.Error
+	affected, err := s.repo.ClaimApprovalExecution(ctx, id, []string{"approved", "failed"})
+	if err != nil {
+		return nil, err
 	}
-	if res.RowsAffected == 0 {
+	if affected == 0 {
 		return nil, constants.ErrBadRequestWithMsg("仅已批准的审批单可执行（可能已被他人执行）")
 	}
 
-	var row model.AiToolApproval
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetApprovalByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 
@@ -216,8 +208,9 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 	}
 
 	if err := s.assertK8sClusterAccess(ctx, actor, clusterID, ns, k8s.K8sAccessRankAdmin); err != nil {
-		_ = s.db.WithContext(ctx).Model(&model.AiToolApproval{}).Where("id = ?", id).
-			Updates(map[string]any{"status": "failed", "result_msg": truncateStr(err.Error(), 1000)})
+		_ = s.repo.UpdateApprovalFields(ctx, id, map[string]any{
+			"status": "failed", "result_msg": truncateStr(err.Error(), 1000),
+		})
 		return nil, err
 	}
 
@@ -260,8 +253,8 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 		row.Status = "executed"
 		row.ResultMsg = "执行成功"
 	}
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
-		return &row, fmt.Errorf("执行结果落库失败: %w", err)
+	if err := s.repo.SaveApproval(ctx, row); err != nil {
+		return row, fmt.Errorf("执行结果落库失败: %w", err)
 	}
-	return &row, execErr
+	return row, execErr
 }
