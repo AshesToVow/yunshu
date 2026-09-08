@@ -335,6 +335,7 @@
     "refresh": "刷新",
     "fullscreen": "全屏",
     "loadFailed": "概览数据加载失败",
+    "loadPartial": "部分大屏数据加载失败（已降级展示）",
     "healthTitle": "运行健康度",
     "podHealth": "Pod 健康率",
     "agentHealth": "采集在线率",

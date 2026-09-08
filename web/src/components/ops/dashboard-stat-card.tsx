@@ -71,7 +71,7 @@ export function DashboardStatCard({
               ? {
                   fontSize: compact ? 22 : 28,
                   fontWeight: 700,
-                  color: valueColor,
+                  color: valueColor ?? "#f8fafc",
                   fontVariantNumeric: "tabular-nums",
                 }
               : { fontSize: 24, fontWeight: 600 }

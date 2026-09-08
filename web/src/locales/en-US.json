@@ -335,6 +335,7 @@
     "refresh": "Refresh",
     "fullscreen": "Fullscreen",
     "loadFailed": "Failed to load overview",
+    "loadPartial": "Some screen data failed to load (showing fallback)",
     "healthTitle": "Runtime health",
     "podHealth": "Pod health rate",
     "agentHealth": "Agent online rate",

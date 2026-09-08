@@ -16,7 +16,7 @@ import {
   ThunderboltOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Space, Tag, Typography } from "antd";
+import { Alert, Button, Space, Tag, Typography } from "antd";
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -32,12 +32,14 @@ import { BarChart } from "../components/bar-chart";
 import { LineChart } from "../components/line-chart";
 import { DashboardStatCard } from "../components/ops/dashboard-stat-card";
 import {
+  getOverview,
   getOverviewProjectLaunches,
   getOverviewReleaseByPerson,
   getOverviewScreen,
   type OverviewLabelCount,
   type OverviewProjectLaunchesResponse,
   type OverviewReleaseByPersonResponse,
+  type OverviewResponse,
   type OverviewScreenResponse,
 } from "../services/overview";
 import { extractApiErrorMessage } from "../services/http";
@@ -58,26 +60,45 @@ function formatTime(iso?: string) {
 function severityTone(sev: string): "critical" | "warning" | "info" | "default" {
   const s = (sev || "").toLowerCase();
   if (s.includes("critical") || s.includes("fatal") || s === "p0" || s === "p1") return "critical";
-  if (s.includes("warn") || s === "p2") return "warning";
+  if (s.includes("warn") || s === "p2" || s === "high") return "warning";
   if (s.includes("info") || s.includes("low")) return "info";
   return "default";
 }
 
-function PanelFrame({ children, className = "" }: { children: ReactNode; className?: string }) {
+function Panel({
+  title,
+  icon,
+  extra,
+  children,
+  className = "",
+}: {
+  title: ReactNode;
+  icon?: ReactNode;
+  extra?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={`overview-panel-frame ${className}`.trim()}>
-      <span className="overview-panel-frame__corner is-tl" />
-      <span className="overview-panel-frame__corner is-tr" />
-      <span className="overview-panel-frame__corner is-bl" />
-      <span className="overview-panel-frame__corner is-br" />
-      {children}
-    </div>
+    <section className={`overview-panel ${className}`.trim()}>
+      <span className="overview-panel__corner is-tl" />
+      <span className="overview-panel__corner is-tr" />
+      <span className="overview-panel__corner is-bl" />
+      <span className="overview-panel__corner is-br" />
+      <header className="overview-panel__head">
+        <div className="overview-panel__title">
+          {icon}
+          <span>{title}</span>
+        </div>
+        {extra ? <div className="overview-panel__extra">{extra}</div> : null}
+      </header>
+      <div className="overview-panel__body">{children}</div>
+    </section>
   );
 }
 
 function HealthGauge({ pct, label }: { pct: number; label: string }) {
   const tone = pct >= 95 ? "ok" : pct >= 80 ? "warn" : "bad";
-  const r = 42;
+  const r = 40;
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, pct));
   const offset = c * (1 - clamped / 100);
@@ -108,7 +129,7 @@ function HealthGauge({ pct, label }: { pct: number; label: string }) {
 function BreakdownBars({ items, empty }: { items: OverviewLabelCount[]; empty: string }) {
   const max = Math.max(1, ...items.map((i) => Number(i.count) || 0));
   if (!items.length) {
-    return <div className="overview-feed-empty">{empty}</div>;
+    return <div className="overview-feed-empty overview-feed-empty--sm">{empty}</div>;
   }
   return (
     <ul className="overview-breakdown">
@@ -129,9 +150,20 @@ function BreakdownBars({ items, empty }: { items: OverviewLabelCount[]; empty: s
   );
 }
 
+type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
+
+async function settled<T>(p: Promise<T>): Promise<Settled<T>> {
+  try {
+    return { ok: true, value: await p };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
 export function DashboardPage() {
   const { t } = useTranslation();
   const [screen, setScreen] = useState<OverviewScreenResponse | null>(null);
+  const [fallback, setFallback] = useState<OverviewResponse | null>(null);
   const [projectLaunches, setProjectLaunches] = useState<OverviewProjectLaunchesResponse | null>(null);
   const [releaseByPerson, setReleaseByPerson] = useState<OverviewReleaseByPersonResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,26 +173,29 @@ export function DashboardPage() {
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    setLoadError(null);
-    try {
-      const [screenData, launches, byPerson] = await Promise.all([
-        getOverviewScreen(),
-        getOverviewProjectLaunches(),
-        getOverviewReleaseByPerson(),
-      ]);
-      setScreen(screenData);
-      setProjectLaunches(launches);
-      setReleaseByPerson(byPerson);
-    } catch (e) {
-      setLoadError(extractApiErrorMessage(e, "加载概览失败"));
-      if (!silent) {
-        setScreen(null);
-        setProjectLaunches(null);
-        setReleaseByPerson(null);
-      }
-    } finally {
-      setLoading(false);
+    const [screenRes, launchesRes, byPersonRes, overviewRes] = await Promise.all([
+      settled(getOverviewScreen()),
+      settled(getOverviewProjectLaunches()),
+      settled(getOverviewReleaseByPerson()),
+      settled(getOverview()),
+    ]);
+
+    const errors: string[] = [];
+    if (screenRes.ok) {
+      setScreen(screenRes.value);
+    } else {
+      errors.push(extractApiErrorMessage(screenRes.error, "screen"));
+      if (!silent) setScreen(null);
     }
+    if (launchesRes.ok) setProjectLaunches(launchesRes.value);
+    else if (!silent) setProjectLaunches(null);
+    if (byPersonRes.ok) setReleaseByPerson(byPersonRes.value);
+    else if (!silent) setReleaseByPerson(null);
+    if (overviewRes.ok) setFallback(overviewRes.value);
+    else if (!silent) setFallback(null);
+
+    setLoadError(errors.length ? errors.join("；") : null);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -174,8 +209,30 @@ export function DashboardPage() {
     return () => window.clearInterval(id);
   }, []);
 
-  const kpi = screen?.kpi;
+  const kpi = useMemo(() => {
+    if (screen?.kpi) return screen.kpi;
+    if (!fallback) return null;
+    return {
+      users_count: fallback.users_count,
+      clusters_count: fallback.clusters_count,
+      servers_count: fallback.servers_count,
+      servers_enabled: 0,
+      servers_disabled: 0,
+      pending_registrations_count: fallback.pending_registrations_count,
+      pod_normal_count: fallback.pod_normal_count,
+      pod_abnormal_count: fallback.pod_abnormal_count,
+      event_warning_count: fallback.event_warning_count,
+      alert_firing_count: fallback.alert_firing_count ?? 0,
+      alert_events_today_count: fallback.alert_events_today_count ?? 0,
+      loggie_agents_online_count: fallback.loggie_agents_online_count ?? 0,
+      loggie_agents_offline_count: fallback.loggie_agents_offline_count ?? 0,
+      ai_investigations_today: 0,
+      ai_investigations_open: 0,
+    };
+  }, [screen, fallback]);
+
   const health = screen?.health;
+  const hasLaunchChart = Boolean(projectLaunches && (projectLaunches.series?.length ?? 0) > 0);
 
   const syncLabel = loading
     ? t("dashboard.syncPending")
@@ -289,7 +346,7 @@ export function DashboardPage() {
   ];
 
   return (
-    <div ref={setScreenRef} className="overview-big-screen overview-cockpit overview-cockpit--v3">
+    <div ref={setScreenRef} className="overview-big-screen overview-cockpit overview-cockpit--v4">
       <header className="overview-big-screen__hero overview-cockpit__header">
         <div className="overview-big-screen__hero-main">
           <Typography.Text className="overview-big-screen__eyebrow">{t("dashboard.label")}</Typography.Text>
@@ -322,7 +379,7 @@ export function DashboardPage() {
       </header>
 
       {loadError ? (
-        <Alert type="error" showIcon style={{ marginBottom: 12 }} message={t("dashboard.loadFailed")} description={loadError} />
+        <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={t("dashboard.loadPartial")} description={loadError} />
       ) : null}
 
       <section className="overview-kpi-strip">
@@ -338,249 +395,173 @@ export function DashboardPage() {
             hint={item.hint}
             icon={item.icon}
             accent={item.accent}
-            loading={loading && !screen}
+            loading={loading && !kpi}
             to={item.to}
           />
         ))}
       </section>
 
-      <div className="overview-cockpit__body">
-        <aside className="overview-cockpit__rail overview-cockpit__rail--left">
-          <PanelFrame>
-            <Card
-              className="overview-big-screen__panel"
-              bordered={false}
-              title={
-                <Space>
-                  <AlertOutlined />
-                  <span>{t("dashboard.alertsTopTitle")}</span>
-                  <Tag color="error">{(kpi?.alert_firing_count ?? 0).toLocaleString()}</Tag>
-                </Space>
-              }
-              extra={
-                <Link to="/alert-monitor-platform/history" className="overview-panel-link">
-                  {t("dashboard.viewAll")}
-                </Link>
-              }
-              loading={loading && !screen}
+      <div className={`overview-cockpit__body ${hasLaunchChart ? "has-chart" : "no-chart"}`}>
+        <Panel
+          className="overview-cockpit__alerts"
+          icon={<AlertOutlined />}
+          title={
+            <>
+              {t("dashboard.alertsTopTitle")}
+              <Tag color="error">{(kpi?.alert_firing_count ?? 0).toLocaleString()}</Tag>
+            </>
+          }
+          extra={
+            <Link to="/alert-monitor-platform/history" className="overview-panel-link">
+              {t("dashboard.viewAll")}
+            </Link>
+          }
+        >
+          {(screen?.alerts_top ?? []).length > 0 ? (
+            <ul className="overview-feed overview-feed--alerts">
+              {screen!.alerts_top.map((a) => (
+                <li key={a.id} data-tone={severityTone(a.severity)}>
+                  <div className="overview-feed__row">
+                    <strong title={a.alertname}>{a.alertname || "—"}</strong>
+                    <Tag>{a.severity || "unknown"}</Tag>
+                  </div>
+                  <div className="overview-feed__meta">
+                    <span>{a.cluster || t("dashboard.noCluster")}</span>
+                    <span>{formatTime(a.starts_at)}</span>
+                  </div>
+                  {a.summary ? <p className="overview-feed__summary">{a.summary}</p> : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="overview-empty-state overview-empty-state--compact">
+              <CheckCircleOutlined />
+              <p>{t("dashboard.alertsTopEmpty")}</p>
+            </div>
+          )}
+        </Panel>
+
+        <div className="overview-cockpit__center">
+          {hasLaunchChart ? (
+            <Panel
+              className="overview-cockpit__chart"
+              icon={<LineChartOutlined />}
+              title={t("dashboard.projectLaunchTitle")}
             >
-              {(screen?.alerts_top ?? []).length > 0 ? (
-                <ul className="overview-feed overview-feed--alerts">
-                  {screen!.alerts_top.map((a) => (
-                    <li key={a.id} data-tone={severityTone(a.severity)}>
+              <LineChart
+                darkMode
+                labels={projectLaunches!.days}
+                series={launchSeries}
+                height={220}
+                yAxisLabel={t("dashboard.launchCountLabel")}
+              />
+            </Panel>
+          ) : null}
+
+          <div className="overview-cockpit__feeds">
+            <Panel icon={<HistoryOutlined />} title={t("dashboard.recentReleasesTitle")}>
+              {(screen?.recent_releases ?? []).length > 0 ? (
+                <ul className="overview-feed">
+                  {screen!.recent_releases.map((r) => (
+                    <li key={r.id}>
                       <div className="overview-feed__row">
-                        <strong title={a.alertname}>{a.alertname || "—"}</strong>
-                        <Tag>{a.severity || "unknown"}</Tag>
+                        <strong title={r.title}>{r.title || `#${r.id}`}</strong>
+                        <Tag>{r.status}</Tag>
                       </div>
                       <div className="overview-feed__meta">
-                        <span>{a.cluster || t("dashboard.noCluster")}</span>
-                        <span>{formatTime(a.starts_at)}</span>
+                        <span>{r.project_name || `P${r.project_id}`}</span>
+                        <span>{r.submitter_name}</span>
+                        <span>{formatTime(r.finished_at || r.created_at)}</span>
                       </div>
-                      {a.summary ? <p className="overview-feed__summary">{a.summary}</p> : null}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <div className="overview-empty-state overview-empty-state--compact">
-                  <CheckCircleOutlined />
-                  <p>{t("dashboard.alertsTopEmpty")}</p>
-                </div>
+                <div className="overview-feed-empty">{t("dashboard.recentReleasesEmpty")}</div>
               )}
-            </Card>
-          </PanelFrame>
-        </aside>
+            </Panel>
 
-        <main className="overview-cockpit__center">
-          <PanelFrame className="overview-cockpit__center-main">
-            <Card
-              className="overview-big-screen__panel overview-big-screen__trend-main-card"
-              bordered={false}
-              title={
-                <Space>
-                  <LineChartOutlined />
-                  <span>{t("dashboard.projectLaunchTitle")}</span>
-                </Space>
-              }
-              loading={loading && !projectLaunches}
-            >
-              {projectLaunches && launchSeries.length > 0 ? (
-                <LineChart
-                  darkMode
-                  labels={projectLaunches.days}
-                  series={launchSeries}
-                  height={260}
-                  yAxisLabel={t("dashboard.launchCountLabel")}
-                />
+            <Panel icon={<WarningOutlined />} title={t("dashboard.recentChangesTitle")}>
+              {(screen?.recent_changes ?? []).length > 0 ? (
+                <ul className="overview-feed">
+                  {screen!.recent_changes.map((c) => (
+                    <li key={c.id}>
+                      <div className="overview-feed__row">
+                        <strong title={c.summary || c.action}>{c.summary || c.action || c.source}</strong>
+                        <Tag color={c.risk_level === "high" || c.risk_level === "critical" ? "error" : "default"}>
+                          {c.risk_level || c.status}
+                        </Tag>
+                      </div>
+                      <div className="overview-feed__meta">
+                        <span>{c.source}</span>
+                        <span>{c.action}</span>
+                        <span>{formatTime(c.started_at)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <div className="overview-empty-state">
-                  <LineChartOutlined />
-                  <p>{t("dashboard.projectLaunchEmpty")}</p>
-                </div>
+                <div className="overview-feed-empty">{t("dashboard.recentChangesEmpty")}</div>
               )}
-            </Card>
-          </PanelFrame>
-
-          <div className="overview-cockpit__center-bottom">
-            <PanelFrame>
-              <Card
-                className="overview-big-screen__panel"
-                bordered={false}
-                title={
-                  <Space>
-                    <HistoryOutlined />
-                    <span>{t("dashboard.recentReleasesTitle")}</span>
-                  </Space>
-                }
-                loading={loading && !screen}
-              >
-                {(screen?.recent_releases ?? []).length > 0 ? (
-                  <ul className="overview-feed">
-                    {screen!.recent_releases.map((r) => (
-                      <li key={r.id}>
-                        <div className="overview-feed__row">
-                          <strong title={r.title}>{r.title || `#${r.id}`}</strong>
-                          <Tag>{r.status}</Tag>
-                        </div>
-                        <div className="overview-feed__meta">
-                          <span>{r.project_name || `P${r.project_id}`}</span>
-                          <span>{r.submitter_name}</span>
-                          <span>{formatTime(r.finished_at || r.created_at)}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="overview-feed-empty">{t("dashboard.recentReleasesEmpty")}</div>
-                )}
-              </Card>
-            </PanelFrame>
-
-            <PanelFrame>
-              <Card
-                className="overview-big-screen__panel"
-                bordered={false}
-                title={
-                  <Space>
-                    <WarningOutlined />
-                    <span>{t("dashboard.recentChangesTitle")}</span>
-                  </Space>
-                }
-                loading={loading && !screen}
-              >
-                {(screen?.recent_changes ?? []).length > 0 ? (
-                  <ul className="overview-feed">
-                    {screen!.recent_changes.map((c) => (
-                      <li key={c.id}>
-                        <div className="overview-feed__row">
-                          <strong title={c.summary || c.action}>{c.summary || c.action || c.source}</strong>
-                          <Tag color={c.risk_level === "high" || c.risk_level === "critical" ? "error" : "default"}>
-                            {c.risk_level || c.status}
-                          </Tag>
-                        </div>
-                        <div className="overview-feed__meta">
-                          <span>{c.source}</span>
-                          <span>{c.action}</span>
-                          <span>{formatTime(c.started_at)}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="overview-feed-empty">{t("dashboard.recentChangesEmpty")}</div>
-                )}
-              </Card>
-            </PanelFrame>
+            </Panel>
           </div>
-        </main>
+        </div>
 
-        <aside className="overview-cockpit__rail overview-cockpit__rail--right">
-          <PanelFrame>
-            <Card
-              className="overview-big-screen__panel"
-              bordered={false}
-              title={
-                <Space>
-                  <CheckCircleOutlined />
-                  <span>{t("dashboard.healthTitle")}</span>
-                </Space>
-              }
-              loading={loading && !screen}
-            >
-              <div className="overview-dual-gauge">
-                <HealthGauge pct={health?.pod_health_pct ?? 100} label={t("dashboard.podHealth")} />
-                <HealthGauge pct={health?.agent_online_pct ?? 100} label={t("dashboard.agentHealth")} />
-              </div>
-              <div className="overview-breakdown-block">
-                <div className="overview-big-screen__section-label">{t("dashboard.alertSeverityTitle")}</div>
-                <BreakdownBars items={health?.alert_by_severity ?? []} empty={t("dashboard.breakdownEmpty")} />
-              </div>
-              <div className="overview-breakdown-block">
-                <div className="overview-big-screen__section-label">{t("dashboard.loggieHealthTitle")}</div>
-                <BreakdownBars items={health?.loggie_by_health ?? []} empty={t("dashboard.breakdownEmpty")} />
-              </div>
-            </Card>
-          </PanelFrame>
+        <div className="overview-cockpit__rail overview-cockpit__rail--right">
+          <Panel icon={<CheckCircleOutlined />} title={t("dashboard.healthTitle")}>
+            <div className="overview-dual-gauge">
+              <HealthGauge pct={health?.pod_health_pct ?? 100} label={t("dashboard.podHealth")} />
+              <HealthGauge pct={health?.agent_online_pct ?? 100} label={t("dashboard.agentHealth")} />
+            </div>
+            <div className="overview-breakdown-block">
+              <div className="overview-big-screen__section-label">{t("dashboard.alertSeverityTitle")}</div>
+              <BreakdownBars items={health?.alert_by_severity ?? []} empty={t("dashboard.breakdownEmpty")} />
+            </div>
+            <div className="overview-breakdown-block">
+              <div className="overview-big-screen__section-label">{t("dashboard.loggieHealthTitle")}</div>
+              <BreakdownBars items={health?.loggie_by_health ?? []} empty={t("dashboard.breakdownEmpty")} />
+            </div>
+          </Panel>
 
-          <PanelFrame>
-            <Card
-              className="overview-big-screen__panel"
-              bordered={false}
-              title={
-                <Space>
-                  <DisconnectOutlined />
-                  <span>{t("dashboard.loggieOfflineTitle")}</span>
-                </Space>
-              }
-              extra={
-                <Link to="/loggie-status" className="overview-panel-link">
-                  {t("dashboard.viewAll")}
-                </Link>
-              }
-              loading={loading && !screen}
-            >
-              {(screen?.loggie_offline_sample ?? []).length > 0 ? (
-                <ul className="overview-feed overview-feed--compact">
-                  {screen!.loggie_offline_sample.map((a) => (
-                    <li key={a.id}>
-                      <div className="overview-feed__row">
-                        <strong>
-                          S{a.server_id} · P{a.project_id}
-                        </strong>
-                        <Tag>{a.health_status || "offline"}</Tag>
-                      </div>
-                      <div className="overview-feed__meta">
-                        <span>{formatTime(a.last_seen_at)}</span>
-                      </div>
-                      {a.last_error ? <p className="overview-feed__summary">{a.last_error}</p> : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="overview-feed-empty">{t("dashboard.loggieOfflineEmpty")}</div>
-              )}
-            </Card>
-          </PanelFrame>
+          <Panel
+            icon={<DisconnectOutlined />}
+            title={t("dashboard.loggieOfflineTitle")}
+            extra={
+              <Link to="/loggie-status" className="overview-panel-link">
+                {t("dashboard.viewAll")}
+              </Link>
+            }
+          >
+            {(screen?.loggie_offline_sample ?? []).length > 0 ? (
+              <ul className="overview-feed overview-feed--compact">
+                {screen!.loggie_offline_sample.map((a) => (
+                  <li key={a.id}>
+                    <div className="overview-feed__row">
+                      <strong>
+                        S{a.server_id} · P{a.project_id}
+                      </strong>
+                      <Tag>{a.health_status || "offline"}</Tag>
+                    </div>
+                    <div className="overview-feed__meta">
+                      <span>{formatTime(a.last_seen_at)}</span>
+                    </div>
+                    {a.last_error ? <p className="overview-feed__summary">{a.last_error}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="overview-feed-empty overview-feed-empty--sm">{t("dashboard.loggieOfflineEmpty")}</div>
+            )}
+          </Panel>
 
-          <PanelFrame className="overview-cockpit__person-panel">
-            <Card
-              className="overview-big-screen__panel"
-              bordered={false}
-              title={
-                <Space>
-                  <BarChartOutlined />
-                  <span>{t("dashboard.releaseByPersonTitle")}</span>
-                </Space>
-              }
-              loading={loading && !releaseByPerson}
-            >
-              {releaseByPerson && personBars.length > 0 ? (
-                <BarChart darkMode items={personBars} height={160} valueLabel={t("dashboard.releaseCountLabel")} />
-              ) : (
-                <div className="overview-feed-empty">{t("dashboard.releaseByPersonEmpty")}</div>
-              )}
-            </Card>
-          </PanelFrame>
-        </aside>
+          <Panel icon={<BarChartOutlined />} title={t("dashboard.releaseByPersonTitle")} className="overview-cockpit__person-panel">
+            {releaseByPerson && personBars.length > 0 ? (
+              <BarChart darkMode items={personBars} height={200} valueLabel={t("dashboard.releaseCountLabel")} />
+            ) : (
+              <div className="overview-feed-empty overview-feed-empty--sm">{t("dashboard.releaseByPersonEmpty")}</div>
+            )}
+          </Panel>
+        </div>
       </div>
     </div>
   );
