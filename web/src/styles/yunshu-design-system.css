@@ -556,3 +556,250 @@
     display: none;
   }
 }
+
+/* ===== 智慧运维大屏 v2：三栏驾驶舱 ===== */
+.overview-cockpit--v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: calc(100dvh - 72px);
+}
+
+.overview-cockpit--v2 .overview-cockpit__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(420px, 2.2fr) minmax(280px, 1.15fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.overview-cockpit--v2 .overview-cockpit__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.overview-cockpit--v2 .overview-cockpit__center {
+  display: grid;
+  grid-template-rows: minmax(280px, 1.4fr) minmax(200px, 1fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.overview-cockpit--v2 .overview-cockpit__center-main,
+.overview-cockpit--v2 .overview-cockpit__center-side,
+.overview-cockpit--v2 .overview-panel-frame {
+  min-height: 0;
+  height: 100%;
+}
+
+.overview-panel-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1px;
+  border: 1px solid rgba(56, 189, 248, 0.16);
+  background: rgba(8, 18, 32, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.04);
+}
+
+.overview-panel-frame > .ant-card,
+.overview-panel-frame > .overview-kpi-section {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.overview-panel-frame__corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.overview-panel-frame__corner.is-tl {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid #38bdf8;
+  border-left: 2px solid #38bdf8;
+}
+
+.overview-panel-frame__corner.is-tr {
+  top: -1px;
+  right: -1px;
+  border-top: 2px solid #38bdf8;
+  border-right: 2px solid #38bdf8;
+}
+
+.overview-panel-frame__corner.is-bl {
+  bottom: -1px;
+  left: -1px;
+  border-bottom: 2px solid #38bdf8;
+  border-left: 2px solid #38bdf8;
+}
+
+.overview-panel-frame__corner.is-br {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid #38bdf8;
+  border-right: 2px solid #38bdf8;
+}
+
+.overview-kpi-section {
+  padding: 10px 12px 12px;
+}
+
+.overview-kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.overview-big-screen__stat-card--compact.ant-card .ant-card-body {
+  padding: 12px !important;
+}
+
+.overview-big-screen__stat-card--compact .overview-big-screen__stat-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  border-radius: 10px;
+}
+
+.overview-big-screen__stat-card--compact .overview-big-screen__stat-hint {
+  margin-top: 8px !important;
+  font-size: 11px !important;
+}
+
+.overview-big-screen__stat-card--danger.ant-card {
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  box-shadow: 0 0 24px rgba(248, 113, 113, 0.12);
+}
+
+.overview-health-gauge {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  margin: 4px auto 14px;
+}
+
+.overview-health-gauge__svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.overview-health-gauge__track {
+  fill: none;
+  stroke: rgba(56, 189, 248, 0.12);
+  stroke-width: 10;
+}
+
+.overview-health-gauge__progress {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.overview-health-gauge__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.overview-health-gauge__center strong {
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #f8fafc;
+}
+
+.overview-health-gauge[data-tone="ok"] .overview-health-gauge__center strong { color: #34d399; }
+.overview-health-gauge[data-tone="warn"] .overview-health-gauge__center strong { color: #fbbf24; }
+.overview-health-gauge[data-tone="bad"] .overview-health-gauge__center strong { color: #f87171; }
+
+.overview-health-gauge__center span {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(186, 214, 238, 0.75);
+}
+
+.overview-empty-state {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(148, 163, 184, 0.85);
+  text-align: center;
+  padding: 24px;
+}
+
+.overview-empty-state .anticon {
+  font-size: 28px;
+  color: rgba(56, 189, 248, 0.45);
+}
+
+.overview-empty-state p {
+  margin: 0;
+  max-width: 36ch;
+  line-height: 1.5;
+}
+
+.overview-empty-state--compact {
+  min-height: 160px;
+}
+
+.overview-cockpit--v2 .overview-big-screen__panel.ant-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.overview-cockpit--v2 .overview-big-screen__panel .ant-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.overview-cockpit--v2 .overview-big-screen__section-label {
+  margin: 0 0 10px !important;
+}
+
+@media (max-width: 1280px) {
+  .overview-cockpit--v2 .overview-cockpit__body {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-cockpit--v2 .overview-cockpit__center {
+    grid-template-rows: auto;
+  }
+
+  .overview-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .overview-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-health-gauge__progress {
+    transition: none;
+  }
+}

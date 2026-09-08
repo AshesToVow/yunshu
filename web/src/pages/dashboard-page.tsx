@@ -15,8 +15,8 @@ import {
   ThunderboltOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Row, Space, Typography } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Button, Card, Space, Typography } from "antd";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CHART_BRAND,
@@ -73,26 +73,34 @@ const defaultMetrics: DashboardMetrics = {
   loggieAgentsOffline: 0,
 };
 
-const assetStats = [
+type StatDef = {
+  key: keyof DashboardMetrics;
+  icon: ReactNode;
+  accent: string;
+  tone?: "default" | "k8s" | "alert";
+  dangerWhenPositive?: boolean;
+};
+
+const assetStats: StatDef[] = [
   { key: "users", icon: <TeamOutlined />, accent: CHART_BRAND },
   { key: "clusters", icon: <ClusterOutlined />, accent: CHART_BRAND },
   { key: "servers", icon: <DesktopOutlined />, accent: CHART_SECONDARY },
-  { key: "pendingRegistrations", icon: <SafetyCertificateOutlined />, accent: CHART_WARNING },
-] as const;
+  { key: "pendingRegistrations", icon: <SafetyCertificateOutlined />, accent: CHART_WARNING, dangerWhenPositive: true },
+];
 
-const k8sStats = [
-  { key: "podNormal", icon: <CheckCircleOutlined />, accent: CHART_SUCCESS },
-  { key: "podAbnormal", icon: <WarningOutlined />, accent: CHART_ERROR },
-  { key: "eventTotal", icon: <CloudOutlined />, accent: CHART_INFO },
-  { key: "eventWarning", icon: <ThunderboltOutlined />, accent: CHART_WARNING },
-] as const;
+const k8sStats: StatDef[] = [
+  { key: "podNormal", icon: <CheckCircleOutlined />, accent: CHART_SUCCESS, tone: "k8s" },
+  { key: "podAbnormal", icon: <WarningOutlined />, accent: CHART_ERROR, tone: "k8s", dangerWhenPositive: true },
+  { key: "eventTotal", icon: <CloudOutlined />, accent: CHART_INFO, tone: "k8s" },
+  { key: "eventWarning", icon: <ThunderboltOutlined />, accent: CHART_WARNING, tone: "k8s", dangerWhenPositive: true },
+];
 
-const alertAndAgentStats = [
-  { key: "alertFiring", icon: <AlertOutlined />, accent: CHART_ERROR },
-  { key: "alertEventsToday", icon: <AlertOutlined />, accent: CHART_WARNING },
-  { key: "loggieAgentsOnline", icon: <ApiOutlined />, accent: CHART_SUCCESS },
-  { key: "loggieAgentsOffline", icon: <DisconnectOutlined />, accent: CHART_MUTED },
-] as const;
+const alertAndAgentStats: StatDef[] = [
+  { key: "alertFiring", icon: <AlertOutlined />, accent: CHART_ERROR, tone: "alert", dangerWhenPositive: true },
+  { key: "alertEventsToday", icon: <AlertOutlined />, accent: CHART_WARNING, tone: "alert", dangerWhenPositive: true },
+  { key: "loggieAgentsOnline", icon: <ApiOutlined />, accent: CHART_SUCCESS, tone: "alert" },
+  { key: "loggieAgentsOffline", icon: <DisconnectOutlined />, accent: CHART_MUTED, tone: "alert", dangerWhenPositive: true },
+];
 
 const dashboardDrillDown: Partial<Record<keyof DashboardMetrics, string>> = {
   users: "/users",
@@ -114,6 +122,94 @@ function formatClock(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+function HealthGauge({ pct, label }: { pct: number; label: string }) {
+  const tone = pct >= 95 ? "ok" : pct >= 80 ? "warn" : "bad";
+  const r = 54;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, pct));
+  const offset = c * (1 - clamped / 100);
+  const stroke = tone === "ok" ? "#34d399" : tone === "warn" ? "#fbbf24" : "#f87171";
+
+  return (
+    <div className="overview-health-gauge" data-tone={tone}>
+      <svg viewBox="0 0 140 140" className="overview-health-gauge__svg" aria-hidden>
+        <circle className="overview-health-gauge__track" cx="70" cy="70" r={r} />
+        <circle
+          className="overview-health-gauge__progress"
+          cx="70"
+          cy="70"
+          r={r}
+          stroke={stroke}
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <div className="overview-health-gauge__center">
+        <strong>{clamped}%</strong>
+        <span>{label}</span>
+      </div>
+    </div>
+  );
+}
+
+function PanelFrame({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={`overview-panel-frame ${className}`.trim()}>
+      <span className="overview-panel-frame__corner is-tl" />
+      <span className="overview-panel-frame__corner is-tr" />
+      <span className="overview-panel-frame__corner is-bl" />
+      <span className="overview-panel-frame__corner is-br" />
+      {children}
+    </div>
+  );
+}
+
+function StatSection({
+  label,
+  icon,
+  items,
+  metrics,
+  loading,
+  t,
+}: {
+  label: string;
+  icon: ReactNode;
+  items: StatDef[];
+  metrics: DashboardMetrics;
+  loading: boolean;
+  t: (key: string) => string;
+}) {
+  return (
+    <section className="overview-kpi-section">
+      <div className="overview-big-screen__section-label">
+        {icon} {label}
+      </div>
+      <div className="overview-kpi-grid">
+        {items.map((item) => {
+          const value = metrics[item.key] as number;
+          const danger = Boolean(item.dangerWhenPositive && value > 0);
+          return (
+            <DashboardStatCard
+              key={item.key}
+              variant="cockpit"
+              tone={item.tone}
+              compact
+              danger={danger}
+              title={t(`dashboard.stats.${item.key}.title`)}
+              value={value}
+              hint={t(`dashboard.stats.${item.key}.hint`)}
+              icon={item.icon}
+              accent={item.accent}
+              loading={loading}
+              to={dashboardDrillDown[item.key]}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function DashboardPage() {
   const { t } = useTranslation();
   const [metrics, setMetrics] = useState<DashboardMetrics>(defaultMetrics);
@@ -124,8 +220,8 @@ export function DashboardPage() {
   const [now, setNow] = useState(() => new Date());
   const [screenRef, setScreenRef] = useState<HTMLDivElement | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setLoadError(null);
     try {
       const [overview, launches, byPerson] = await Promise.all([
@@ -153,9 +249,11 @@ export function DashboardPage() {
       setReleaseByPerson(byPerson);
     } catch (e) {
       setLoadError(extractApiErrorMessage(e, "加载概览失败"));
-      setMetrics(defaultMetrics);
-      setProjectLaunches(null);
-      setReleaseByPerson(null);
+      if (!silent) {
+        setMetrics(defaultMetrics);
+        setProjectLaunches(null);
+        setReleaseByPerson(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -163,6 +261,8 @@ export function DashboardPage() {
 
   useEffect(() => {
     void load();
+    const refresh = window.setInterval(() => void load(true), 30_000);
+    return () => window.clearInterval(refresh);
   }, [load]);
 
   useEffect(() => {
@@ -202,198 +302,103 @@ export function DashboardPage() {
   }, [metrics.podNormal, metrics.podAbnormal]);
 
   const enterFullscreen = () => {
-    const el = screenRef;
-    if (!el) return;
-    void el.requestFullscreen?.();
+    if (!screenRef) return;
+    void screenRef.requestFullscreen?.();
   };
 
   return (
-    <div
-      ref={setScreenRef}
-      className="overview-big-screen overview-cockpit"
-    >
-      <div className="overview-big-screen__top">
-        <div className="overview-big-screen__hero overview-cockpit__header">
-          <div className="overview-big-screen__hero-main">
-            <Typography.Text className="overview-big-screen__eyebrow">
-              {t("dashboard.label")}
-            </Typography.Text>
-            <Typography.Title level={3} className="overview-big-screen__title">
-              <ThunderboltOutlined />
-              {t("dashboard.titleScreen")}
-            </Typography.Title>
-            <Typography.Text className="overview-big-screen__subtitle">
-              {t("dashboard.subtitleScreen")}
-            </Typography.Text>
-          </div>
-          <div className="overview-big-screen__hero-meta">
-            <div className={`overview-big-screen__sync ${loading ? "is-pending" : loadError ? "is-failed" : "is-live"}`}>
-              <span className="overview-big-screen__sync-dot" />
-              {syncLabel}
-            </div>
-            <div className="overview-big-screen__clock">{formatClock(now)}</div>
-            <Space size={8}>
-              <Button
-                size="small"
-                icon={<ReloadOutlined spin={loading} />}
-                onClick={() => void load()}
-                className="overview-big-screen__action"
-              >
-                {t("dashboard.refresh")}
-              </Button>
-              <Button
-                size="small"
-                icon={<ExpandOutlined />}
-                onClick={enterFullscreen}
-                className="overview-big-screen__action"
-              >
-                {t("dashboard.fullscreen")}
-              </Button>
-            </Space>
-          </div>
+    <div ref={setScreenRef} className="overview-big-screen overview-cockpit overview-cockpit--v2">
+      <header className="overview-big-screen__hero overview-cockpit__header">
+        <div className="overview-big-screen__hero-main">
+          <Typography.Text className="overview-big-screen__eyebrow">{t("dashboard.label")}</Typography.Text>
+          <Typography.Title level={3} className="overview-big-screen__title">
+            <ThunderboltOutlined />
+            {t("dashboard.titleScreen")}
+          </Typography.Title>
+          <Typography.Text className="overview-big-screen__subtitle">{t("dashboard.subtitleScreen")}</Typography.Text>
         </div>
+        <div className="overview-big-screen__hero-meta">
+          <div className={`overview-big-screen__sync ${loading ? "is-pending" : loadError ? "is-failed" : "is-live"}`}>
+            <span className="overview-big-screen__sync-dot" />
+            {syncLabel}
+          </div>
+          <div className="overview-big-screen__clock">{formatClock(now)}</div>
+          <Space size={8}>
+            <Button
+              size="small"
+              icon={<ReloadOutlined spin={loading} />}
+              onClick={() => void load()}
+              className="overview-big-screen__action"
+            >
+              {t("dashboard.refresh")}
+            </Button>
+            <Button size="small" icon={<ExpandOutlined />} onClick={enterFullscreen} className="overview-big-screen__action">
+              {t("dashboard.fullscreen")}
+            </Button>
+          </Space>
+        </div>
+      </header>
 
-        {loadError ? (
-          <Alert
-            type="error"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message={t("dashboard.loadFailed")}
-            description={loadError}
-          />
-        ) : null}
+      {loadError ? (
+        <Alert type="error" showIcon style={{ marginBottom: 12 }} message={t("dashboard.loadFailed")} description={loadError} />
+      ) : null}
 
-        <Typography.Text className="overview-big-screen__section-label">
-          <TeamOutlined /> {t("dashboard.sectionAssets")}
-        </Typography.Text>
-        <Row gutter={[16, 16]} className="overview-big-screen__metrics">
-          {assetStats.map((item) => (
-            <Col xs={24} sm={12} xl={6} key={item.key}>
-              <DashboardStatCard
-                variant="cockpit"
-                title={t(`dashboard.stats.${item.key}.title`)}
-                value={metrics[item.key]}
-                hint={t(`dashboard.stats.${item.key}.hint`)}
-                icon={item.icon}
-                accent={item.accent}
-                loading={loading}
-                to={dashboardDrillDown[item.key]}
-              />
-            </Col>
-          ))}
-        </Row>
+      <div className="overview-cockpit__body">
+        <aside className="overview-cockpit__rail overview-cockpit__rail--left">
+          <PanelFrame>
+            <StatSection
+              label={t("dashboard.sectionAssets")}
+              icon={<TeamOutlined />}
+              items={assetStats}
+              metrics={metrics}
+              loading={loading}
+              t={t}
+            />
+          </PanelFrame>
+          <PanelFrame>
+            <StatSection
+              label={t("dashboard.sectionK8s")}
+              icon={<ClusterOutlined />}
+              items={k8sStats}
+              metrics={metrics}
+              loading={loading}
+              t={t}
+            />
+          </PanelFrame>
+        </aside>
 
-        <Typography.Text className="overview-big-screen__section-label">
-          <ClusterOutlined /> {t("dashboard.sectionK8s")}
-        </Typography.Text>
-        <Row gutter={[16, 16]} className="overview-big-screen__metrics">
-          {k8sStats.map((item) => (
-            <Col xs={24} sm={12} xl={6} key={item.key}>
-              <DashboardStatCard
-                variant="cockpit"
-                tone="k8s"
-                title={t(`dashboard.stats.${item.key}.title`)}
-                value={metrics[item.key]}
-                hint={t(`dashboard.stats.${item.key}.hint`)}
-                icon={item.icon}
-                accent={item.accent}
-                loading={loading}
-                to={dashboardDrillDown[item.key]}
-              />
-            </Col>
-          ))}
-        </Row>
-
-        <Typography.Text className="overview-big-screen__section-label">
-          <AlertOutlined /> {t("dashboard.sectionAlert")}
-        </Typography.Text>
-        <Row gutter={[16, 16]} className="overview-big-screen__metrics">
-          {alertAndAgentStats.map((item) => (
-            <Col xs={24} sm={12} xl={6} key={item.key}>
-              <DashboardStatCard
-                variant="cockpit"
-                tone="alert"
-                title={t(`dashboard.stats.${item.key}.title`)}
-                value={metrics[item.key]}
-                hint={t(`dashboard.stats.${item.key}.hint`)}
-                icon={item.icon}
-                accent={item.accent}
-                loading={loading}
-                to={dashboardDrillDown[item.key]}
-              />
-            </Col>
-          ))}
-        </Row>
-      </div>
-
-      <Row gutter={[16, 16]} align="stretch" className="overview-big-screen__trend-row" style={{ marginTop: 8 }}>
-        <Col xs={24} xl={15} className="overview-big-screen__trend-main-col">
-          <Card
-            className="overview-big-screen__panel overview-big-screen__trend-main-card"
-            bordered={false}
-            title={
-              <Space>
-                <LineChartOutlined />
-                <span>{t("dashboard.projectLaunchTitle")}</span>
-              </Space>
-            }
-            loading={loading && !projectLaunches}
-          >
-            {projectLaunches && launchSeries.length > 0 ? (
-              <LineChart
-                darkMode
-                labels={projectLaunches.days}
-                series={launchSeries}
-                height={360}
-                yAxisLabel={t("dashboard.launchCountLabel")}
-              />
-            ) : (
-              <Typography.Text className="overview-big-screen__empty">
-                {t("dashboard.projectLaunchEmpty")}
-              </Typography.Text>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} xl={9} className="overview-big-screen__trend-rail-col">
-          <div className="overview-big-screen__trend-rail">
+        <main className="overview-cockpit__center">
+          <PanelFrame className="overview-cockpit__center-main">
             <Card
-              className="overview-big-screen__panel overview-big-screen__trend-rail-card"
+              className="overview-big-screen__panel overview-big-screen__trend-main-card"
               bordered={false}
               title={
                 <Space>
-                  <CheckCircleOutlined />
-                  <span>{t("dashboard.healthTitle")}</span>
+                  <LineChartOutlined />
+                  <span>{t("dashboard.projectLaunchTitle")}</span>
                 </Space>
               }
-              loading={loading}
+              loading={loading && !projectLaunches}
             >
-              <div className="overview-big-screen__trend-rail-pod-body">
-                <div className="overview-big-screen__health-ring" data-tone={podHealthPct >= 95 ? "ok" : podHealthPct >= 80 ? "warn" : "bad"}>
-                  <strong>{podHealthPct}%</strong>
-                  <span>{t("dashboard.podHealth")}</span>
+              {projectLaunches && launchSeries.length > 0 ? (
+                <LineChart
+                  darkMode
+                  labels={projectLaunches.days}
+                  series={launchSeries}
+                  height={320}
+                  yAxisLabel={t("dashboard.launchCountLabel")}
+                />
+              ) : (
+                <div className="overview-empty-state">
+                  <LineChartOutlined />
+                  <p>{t("dashboard.projectLaunchEmpty")}</p>
                 </div>
-                <div className="overview-big-screen__health-grid">
-                  <div>
-                    <span>{t("dashboard.stats.podNormal.title")}</span>
-                    <b>{metrics.podNormal}</b>
-                  </div>
-                  <div>
-                    <span>{t("dashboard.stats.podAbnormal.title")}</span>
-                    <b className="is-danger">{metrics.podAbnormal}</b>
-                  </div>
-                  <div>
-                    <span>{t("dashboard.stats.alertFiring.title")}</span>
-                    <b className={metrics.alertFiring > 0 ? "is-danger" : ""}>{metrics.alertFiring}</b>
-                  </div>
-                  <div>
-                    <span>{t("dashboard.stats.loggieAgentsOnline.title")}</span>
-                    <b className="is-ok">{metrics.loggieAgentsOnline}</b>
-                  </div>
-                </div>
-              </div>
+              )}
             </Card>
+          </PanelFrame>
+          <PanelFrame className="overview-cockpit__center-side">
             <Card
-              className="overview-big-screen__panel overview-big-screen__trend-rail-card"
+              className="overview-big-screen__panel"
               bordered={false}
               title={
                 <Space>
@@ -404,21 +409,63 @@ export function DashboardPage() {
               loading={loading && !releaseByPerson}
             >
               {releaseByPerson && personBars.length > 0 ? (
-                <BarChart
-                  darkMode
-                  items={personBars}
-                  height={220}
-                  valueLabel={t("dashboard.releaseCountLabel")}
-                />
+                <BarChart darkMode items={personBars} height={220} valueLabel={t("dashboard.releaseCountLabel")} />
               ) : (
-                <Typography.Text className="overview-big-screen__empty">
-                  {t("dashboard.releaseByPersonEmpty")}
-                </Typography.Text>
+                <div className="overview-empty-state overview-empty-state--compact">
+                  <BarChartOutlined />
+                  <p>{t("dashboard.releaseByPersonEmpty")}</p>
+                </div>
               )}
             </Card>
-          </div>
-        </Col>
-      </Row>
+          </PanelFrame>
+        </main>
+
+        <aside className="overview-cockpit__rail overview-cockpit__rail--right">
+          <PanelFrame>
+            <Card
+              className="overview-big-screen__panel"
+              bordered={false}
+              title={
+                <Space>
+                  <CheckCircleOutlined />
+                  <span>{t("dashboard.healthTitle")}</span>
+                </Space>
+              }
+              loading={loading}
+            >
+              <HealthGauge pct={podHealthPct} label={t("dashboard.podHealth")} />
+              <div className="overview-big-screen__health-grid">
+                <div>
+                  <span>{t("dashboard.stats.podNormal.title")}</span>
+                  <b>{metrics.podNormal}</b>
+                </div>
+                <div>
+                  <span>{t("dashboard.stats.podAbnormal.title")}</span>
+                  <b className="is-danger">{metrics.podAbnormal}</b>
+                </div>
+                <div>
+                  <span>{t("dashboard.stats.alertFiring.title")}</span>
+                  <b className={metrics.alertFiring > 0 ? "is-danger" : ""}>{metrics.alertFiring.toLocaleString()}</b>
+                </div>
+                <div>
+                  <span>{t("dashboard.stats.loggieAgentsOnline.title")}</span>
+                  <b className="is-ok">{metrics.loggieAgentsOnline}</b>
+                </div>
+              </div>
+            </Card>
+          </PanelFrame>
+          <PanelFrame>
+            <StatSection
+              label={t("dashboard.sectionAlert")}
+              icon={<AlertOutlined />}
+              items={alertAndAgentStats}
+              metrics={metrics}
+              loading={loading}
+              t={t}
+            />
+          </PanelFrame>
+        </aside>
+      </div>
     </div>
   );
 }

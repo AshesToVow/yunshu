@@ -15,6 +15,10 @@ export type DashboardStatCardProps = {
   /** 驾驶舱大屏样式 */
   variant?: "default" | "cockpit";
   tone?: "default" | "k8s" | "alert";
+  /** 紧凑 KPI（大屏侧栏） */
+  compact?: boolean;
+  /** 异常高亮数值 */
+  danger?: boolean;
 };
 
 export function DashboardStatCard({
@@ -28,17 +32,23 @@ export function DashboardStatCard({
   className,
   variant = "default",
   tone = "default",
+  compact = false,
+  danger = false,
 }: DashboardStatCardProps) {
   const isCockpit = variant === "cockpit";
   const cardClass = [
     isCockpit ? "overview-big-screen__stat-card" : "dashboard-stat-card",
     isCockpit && tone === "k8s" ? "overview-big-screen__stat-card--k8s" : "",
     isCockpit && tone === "alert" ? "overview-big-screen__stat-card--alert" : "",
+    isCockpit && compact ? "overview-big-screen__stat-card--compact" : "",
+    isCockpit && danger ? "overview-big-screen__stat-card--danger" : "",
     to ? (isCockpit ? "overview-big-screen__stat-card--clickable" : "dashboard-stat-card--clickable") : "",
     className,
   ]
     .filter(Boolean)
     .join(" ");
+
+  const valueColor = isCockpit ? (danger ? "#f87171" : "#f8fafc") : undefined;
 
   const card = (
     <Card className={cardClass} loading={loading} bordered={!isCockpit} hoverable={Boolean(to)}>
@@ -47,20 +57,23 @@ export function DashboardStatCard({
           className={isCockpit ? "overview-big-screen__stat-icon" : "dashboard-stat-card__icon"}
           style={
             isCockpit
-              ? { color: accent, boxShadow: `0 0 24px ${accent}44`, borderColor: `${accent}55` }
+              ? { color: accent, boxShadow: `0 0 18px ${accent}40`, borderColor: `${accent}55` }
               : { color: accent, backgroundColor: `${accent}14` }
           }
         >
           {icon}
         </span>
         <Statistic
-          title={
-            isCockpit ? <span className="overview-big-screen__stat-title">{title}</span> : title
-          }
+          title={isCockpit ? <span className="overview-big-screen__stat-title">{title}</span> : title}
           value={value}
           valueStyle={
             isCockpit
-              ? { fontSize: 28, fontWeight: 700, color: "#f8fafc", fontVariantNumeric: "tabular-nums" }
+              ? {
+                  fontSize: compact ? 22 : 28,
+                  fontWeight: 700,
+                  color: valueColor,
+                  fontVariantNumeric: "tabular-nums",
+                }
               : { fontSize: 24, fontWeight: 600 }
           }
         />
