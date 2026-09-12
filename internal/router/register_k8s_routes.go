@@ -268,6 +268,7 @@ func RegisterK8sRoutes(api *gin.RouterGroup, d K8sRouteDeps) {
 		crTpl := api.Group("/k8s-cr-templates")
 		crTpl.Use(d.AuthMiddleware(), d.Authorize(), d.OpAudit())
 		crTpl.GET("", d.PlatformFeaturesHandler().ListCrTemplates)
+		crTpl.GET("/:id", d.PlatformFeaturesHandler().GetCrTemplate)
 		crTpl.POST("", d.PlatformFeaturesHandler().CreateCrTemplate)
 		crTpl.PUT("/:id", d.PlatformFeaturesHandler().UpdateCrTemplate)
 		crTpl.DELETE("/:id", d.PlatformFeaturesHandler().DeleteCrTemplate)

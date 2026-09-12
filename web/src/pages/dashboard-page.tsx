@@ -20,17 +20,8 @@ import { Alert, Button, Space, Tag, Typography } from "antd";
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  CHART_BRAND,
-  CHART_ERROR,
-  CHART_MUTED,
-  CHART_SECONDARY,
-  CHART_SUCCESS,
-  CHART_WARNING,
-} from "../constants/chart-colors";
 import { BarChart } from "../components/bar-chart";
 import { LineChart } from "../components/line-chart";
-import { DashboardStatCard } from "../components/ops/dashboard-stat-card";
 import {
   getOverview,
   getOverviewProjectLaunches,
@@ -80,10 +71,6 @@ function Panel({
 }) {
   return (
     <section className={`overview-panel ${className}`.trim()}>
-      <span className="overview-panel__corner is-tl" />
-      <span className="overview-panel__corner is-tr" />
-      <span className="overview-panel__corner is-bl" />
-      <span className="overview-panel__corner is-br" />
       <header className="overview-panel__head">
         <div className="overview-panel__title">
           {icon}
@@ -98,11 +85,11 @@ function Panel({
 
 function HealthGauge({ pct, label }: { pct: number; label: string }) {
   const tone = pct >= 95 ? "ok" : pct >= 80 ? "warn" : "bad";
-  const r = 40;
+  const r = 38;
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, pct));
   const offset = c * (1 - clamped / 100);
-  const stroke = tone === "ok" ? "#34d399" : tone === "warn" ? "#fbbf24" : "#f87171";
+  const stroke = tone === "ok" ? "#2dd4bf" : tone === "warn" ? "#fbbf24" : "#f87171";
 
   return (
     <div className="overview-health-gauge overview-health-gauge--sm" data-tone={tone}>
@@ -147,6 +134,53 @@ function BreakdownBars({ items, empty }: { items: OverviewLabelCount[]; empty: s
         );
       })}
     </ul>
+  );
+}
+
+type KpiMetric = {
+  key: string;
+  label: string;
+  value: number | string;
+  hint?: string;
+  to?: string;
+  danger?: boolean;
+  icon: ReactNode;
+};
+
+function KpiDomain({
+  title,
+  tone,
+  metrics,
+}: {
+  title: string;
+  tone: "asset" | "runtime" | "risk";
+  metrics: KpiMetric[];
+}) {
+  return (
+    <div className={`overview-kpi-domain overview-kpi-domain--${tone}`}>
+      <div className="overview-kpi-domain__label">{title}</div>
+      <div className="overview-kpi-domain__grid">
+        {metrics.map((m) => {
+          const inner = (
+            <div className={`overview-kpi-metric ${m.danger ? "is-danger" : ""}`.trim()}>
+              <div className="overview-kpi-metric__top">
+                <span className="overview-kpi-metric__icon">{m.icon}</span>
+                <span className="overview-kpi-metric__label">{m.label}</span>
+              </div>
+              <div className="overview-kpi-metric__value">{m.value}</div>
+              {m.hint ? <div className="overview-kpi-metric__hint">{m.hint}</div> : null}
+            </div>
+          );
+          return m.to ? (
+            <Link key={m.key} to={m.to} className="overview-kpi-metric-link">
+              {inner}
+            </Link>
+          ) : (
+            <div key={m.key}>{inner}</div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -233,6 +267,7 @@ export function DashboardPage() {
 
   const health = screen?.health;
   const hasLaunchChart = Boolean(projectLaunches && (projectLaunches.series?.length ?? 0) > 0);
+  const firingCount = kpi?.alert_firing_count ?? 0;
 
   const syncLabel = loading
     ? t("dashboard.syncPending")
@@ -264,141 +299,154 @@ export function DashboardPage() {
     void screenRef.requestFullscreen?.();
   };
 
-  const kpiStrip = [
+  const assetMetrics: KpiMetric[] = [
     {
       key: "users",
-      title: t("dashboard.stats.users.title"),
-      value: kpi?.users_count ?? 0,
+      label: t("dashboard.stats.users.title"),
+      value: (kpi?.users_count ?? 0).toLocaleString(),
       icon: <TeamOutlined />,
-      accent: CHART_BRAND,
       to: "/users",
     },
     {
       key: "clusters",
-      title: t("dashboard.stats.clusters.title"),
-      value: kpi?.clusters_count ?? 0,
+      label: t("dashboard.stats.clusters.title"),
+      value: (kpi?.clusters_count ?? 0).toLocaleString(),
       icon: <ClusterOutlined />,
-      accent: CHART_BRAND,
       to: "/clusters",
     },
     {
       key: "servers",
-      title: t("dashboard.stats.servers.title"),
-      value: kpi?.servers_count ?? 0,
+      label: t("dashboard.stats.servers.title"),
+      value: (kpi?.servers_count ?? 0).toLocaleString(),
       hint:
         kpi && (kpi.servers_enabled > 0 || kpi.servers_disabled > 0)
           ? t("dashboard.serversSplit", { enabled: kpi.servers_enabled, disabled: kpi.servers_disabled })
-          : t("dashboard.stats.servers.hint"),
+          : undefined,
       icon: <DesktopOutlined />,
-      accent: CHART_SECONDARY,
       to: "/project-servers",
     },
+  ];
+
+  const runtimeMetrics: KpiMetric[] = [
     {
       key: "pods",
-      title: t("dashboard.podPairTitle"),
+      label: t("dashboard.podPairTitle"),
       value: `${kpi?.pod_normal_count ?? 0} / ${kpi?.pod_abnormal_count ?? 0}`,
       hint: t("dashboard.podPairHint"),
       icon: <CheckCircleOutlined />,
-      accent: (kpi?.pod_abnormal_count ?? 0) > 0 ? CHART_ERROR : CHART_SUCCESS,
       danger: (kpi?.pod_abnormal_count ?? 0) > 0,
       to: "/pods",
     },
     {
-      key: "alerts",
-      title: t("dashboard.stats.alertFiring.title"),
-      value: kpi?.alert_firing_count ?? 0,
-      hint: t("dashboard.alertTodayHint", { count: kpi?.alert_events_today_count ?? 0 }),
-      icon: <AlertOutlined />,
-      accent: CHART_ERROR,
-      danger: (kpi?.alert_firing_count ?? 0) > 0,
-      tone: "alert" as const,
-      to: "/alert-monitor-platform/history",
-    },
-    {
       key: "loggie",
-      title: t("dashboard.loggiePairTitle"),
+      label: t("dashboard.loggiePairTitle"),
       value: `${kpi?.loggie_agents_online_count ?? 0} / ${kpi?.loggie_agents_offline_count ?? 0}`,
       hint: t("dashboard.loggiePairHint"),
       icon: <ApiOutlined />,
-      accent: (kpi?.loggie_agents_offline_count ?? 0) > 0 ? CHART_WARNING : CHART_SUCCESS,
       danger: (kpi?.loggie_agents_offline_count ?? 0) > 0,
-      tone: "alert" as const,
       to: "/loggie-status",
     },
     {
-      key: "pending",
-      title: t("dashboard.stats.pendingRegistrations.title"),
-      value: kpi?.pending_registrations_count ?? 0,
-      icon: <SafetyCertificateOutlined />,
-      accent: CHART_WARNING,
-      danger: (kpi?.pending_registrations_count ?? 0) > 0,
-      to: "/registrations",
-    },
-    {
       key: "ai",
-      title: t("dashboard.aiTodayTitle"),
-      value: kpi?.ai_investigations_today ?? 0,
+      label: t("dashboard.aiTodayTitle"),
+      value: (kpi?.ai_investigations_today ?? 0).toLocaleString(),
       hint: t("dashboard.aiOpenHint", { count: kpi?.ai_investigations_open ?? 0 }),
       icon: <RobotOutlined />,
-      accent: CHART_MUTED,
       to: "/ai/investigations",
     },
   ];
 
+  const riskMetrics: KpiMetric[] = [
+    {
+      key: "alerts",
+      label: t("dashboard.stats.alertFiring.title"),
+      value: firingCount.toLocaleString(),
+      hint: t("dashboard.alertTodayHint", { count: kpi?.alert_events_today_count ?? 0 }),
+      icon: <AlertOutlined />,
+      danger: firingCount > 0,
+      to: "/alert-monitor-platform/history",
+    },
+    {
+      key: "pending",
+      label: t("dashboard.stats.pendingRegistrations.title"),
+      value: (kpi?.pending_registrations_count ?? 0).toLocaleString(),
+      icon: <SafetyCertificateOutlined />,
+      danger: (kpi?.pending_registrations_count ?? 0) > 0,
+      to: "/registrations",
+    },
+    {
+      key: "warning-events",
+      label: t("dashboard.stats.eventWarning.title"),
+      value: (kpi?.event_warning_count ?? 0).toLocaleString(),
+      hint: t("dashboard.stats.eventWarning.hint"),
+      icon: <WarningOutlined />,
+      danger: (kpi?.event_warning_count ?? 0) > 0,
+    },
+  ];
+
+  const tickerAlerts = (screen?.alerts_top ?? []).slice(0, 8);
+
   return (
-    <div ref={setScreenRef} className="overview-big-screen overview-cockpit overview-cockpit--v4">
-      <header className="overview-big-screen__hero overview-cockpit__header">
-        <div className="overview-big-screen__hero-main">
-          <Typography.Text className="overview-big-screen__eyebrow">{t("dashboard.label")}</Typography.Text>
-          <Typography.Title level={3} className="overview-big-screen__title">
+    <div ref={setScreenRef} className="overview-big-screen overview-cockpit overview-cockpit--v5">
+      <header className="overview-cockpit__header">
+        <div className="overview-cockpit__header-main">
+          <div className="overview-cockpit__brand">
             <ThunderboltOutlined />
-            {t("dashboard.titleScreen")}
-          </Typography.Title>
-          <Typography.Text className="overview-big-screen__subtitle">{t("dashboard.subtitleScreen")}</Typography.Text>
+            <div>
+              <Typography.Title level={3} className="overview-cockpit__title">
+                {t("dashboard.titleScreen")}
+              </Typography.Title>
+              <Typography.Text className="overview-cockpit__subtitle">{t("dashboard.subtitleScreen")}</Typography.Text>
+            </div>
+          </div>
         </div>
-        <div className="overview-big-screen__hero-meta">
-          <div className={`overview-big-screen__sync ${loading ? "is-pending" : loadError ? "is-failed" : "is-live"}`}>
-            <span className="overview-big-screen__sync-dot" />
+        <div className="overview-cockpit__header-meta">
+          <div className={`overview-cockpit__sync ${loading ? "is-pending" : loadError ? "is-failed" : "is-live"}`}>
+            <span className="overview-cockpit__sync-dot" />
             {syncLabel}
           </div>
-          <div className="overview-big-screen__clock">{formatClock(now)}</div>
+          <div className="overview-cockpit__clock">{formatClock(now)}</div>
           <Space size={8}>
             <Button
               size="small"
               icon={<ReloadOutlined spin={loading} />}
               onClick={() => void load()}
-              className="overview-big-screen__action"
+              className="overview-cockpit__action"
             >
               {t("dashboard.refresh")}
             </Button>
-            <Button size="small" icon={<ExpandOutlined />} onClick={enterFullscreen} className="overview-big-screen__action">
+            <Button size="small" icon={<ExpandOutlined />} onClick={enterFullscreen} className="overview-cockpit__action">
               {t("dashboard.fullscreen")}
             </Button>
           </Space>
         </div>
       </header>
 
-      {loadError ? (
-        <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={t("dashboard.loadPartial")} description={loadError} />
+      {tickerAlerts.length > 0 ? (
+        <div className="overview-alert-ticker" aria-live="polite">
+          <span className="overview-alert-ticker__badge">{t("dashboard.tickerBadge", { count: firingCount })}</span>
+          <div className="overview-alert-ticker__track">
+            <div className="overview-alert-ticker__marquee">
+              {[...tickerAlerts, ...tickerAlerts].map((a, idx) => (
+                <span key={`${a.id}-${idx}`} className={`overview-alert-ticker__item is-${severityTone(a.severity)}`}>
+                  <em>{a.severity || "alert"}</em>
+                  {a.alertname || "—"}
+                  {a.cluster ? ` · ${a.cluster}` : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
       ) : null}
 
-      <section className="overview-kpi-strip">
-        {kpiStrip.map((item) => (
-          <DashboardStatCard
-            key={item.key}
-            variant="cockpit"
-            tone={item.tone}
-            compact
-            danger={item.danger}
-            title={item.title}
-            value={item.value}
-            hint={item.hint}
-            icon={item.icon}
-            accent={item.accent}
-            loading={loading && !kpi}
-            to={item.to}
-          />
-        ))}
+      {loadError ? (
+        <Alert type="warning" showIcon style={{ marginBottom: 0 }} message={t("dashboard.loadPartial")} description={loadError} />
+      ) : null}
+
+      <section className="overview-kpi-domains" aria-busy={loading && !kpi}>
+        <KpiDomain title={t("dashboard.sectionAssets")} tone="asset" metrics={assetMetrics} />
+        <KpiDomain title={t("dashboard.sectionK8s")} tone="runtime" metrics={runtimeMetrics} />
+        <KpiDomain title={t("dashboard.sectionAlert")} tone="risk" metrics={riskMetrics} />
       </section>
 
       <div className={`overview-cockpit__body ${hasLaunchChart ? "has-chart" : "no-chart"}`}>
@@ -408,7 +456,7 @@ export function DashboardPage() {
           title={
             <>
               {t("dashboard.alertsTopTitle")}
-              <Tag color="error">{(kpi?.alert_firing_count ?? 0).toLocaleString()}</Tag>
+              <Tag color={firingCount > 0 ? "error" : "success"}>{firingCount.toLocaleString()}</Tag>
             </>
           }
           extra={
@@ -443,16 +491,12 @@ export function DashboardPage() {
 
         <div className="overview-cockpit__center">
           {hasLaunchChart ? (
-            <Panel
-              className="overview-cockpit__chart"
-              icon={<LineChartOutlined />}
-              title={t("dashboard.projectLaunchTitle")}
-            >
+            <Panel className="overview-cockpit__chart" icon={<LineChartOutlined />} title={t("dashboard.projectLaunchTitle")}>
               <LineChart
                 darkMode
                 labels={projectLaunches!.days}
                 series={launchSeries}
-                height={220}
+                height={200}
                 yAxisLabel={t("dashboard.launchCountLabel")}
               />
             </Panel>
@@ -514,11 +558,11 @@ export function DashboardPage() {
               <HealthGauge pct={health?.agent_online_pct ?? 100} label={t("dashboard.agentHealth")} />
             </div>
             <div className="overview-breakdown-block">
-              <div className="overview-big-screen__section-label">{t("dashboard.alertSeverityTitle")}</div>
+              <div className="overview-section-label">{t("dashboard.alertSeverityTitle")}</div>
               <BreakdownBars items={health?.alert_by_severity ?? []} empty={t("dashboard.breakdownEmpty")} />
             </div>
             <div className="overview-breakdown-block">
-              <div className="overview-big-screen__section-label">{t("dashboard.loggieHealthTitle")}</div>
+              <div className="overview-section-label">{t("dashboard.loggieHealthTitle")}</div>
               <BreakdownBars items={health?.loggie_by_health ?? []} empty={t("dashboard.breakdownEmpty")} />
             </div>
           </Panel>
@@ -556,7 +600,7 @@ export function DashboardPage() {
 
           <Panel icon={<BarChartOutlined />} title={t("dashboard.releaseByPersonTitle")} className="overview-cockpit__person-panel">
             {releaseByPerson && personBars.length > 0 ? (
-              <BarChart darkMode items={personBars} height={200} valueLabel={t("dashboard.releaseCountLabel")} />
+              <BarChart darkMode items={personBars} height={180} valueLabel={t("dashboard.releaseCountLabel")} />
             ) : (
               <div className="overview-feed-empty overview-feed-empty--sm">{t("dashboard.releaseByPersonEmpty")}</div>
             )}

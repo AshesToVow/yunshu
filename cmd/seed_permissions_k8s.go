@@ -194,6 +194,7 @@ func seedPermissionsK8s() []model.Permission {
 		{Name: "CRD 应用 YAML", Resource: "/api/v1/crds/apply", Action: "POST", Description: "Apply custom resource definition yaml"},
 		{Name: "删除 CRD", Resource: "/api/v1/crds", Action: "DELETE", Description: "Delete custom resource definition"},
 		{Name: "K8s CR 模板列表", Resource: "/api/v1/k8s-cr-templates", Action: "GET", Description: "List k8s CR/YAML templates"},
+		{Name: "K8s CR 模板详情", Resource: "/api/v1/k8s-cr-templates/:id", Action: "GET", Description: "Get k8s CR/YAML template by id"},
 		{Name: "创建 K8s CR 模板", Resource: "/api/v1/k8s-cr-templates", Action: "POST", Description: "Create k8s CR template"},
 		{Name: "更新 K8s CR 模板", Resource: "/api/v1/k8s-cr-templates/:id", Action: "PUT", Description: "Update k8s CR template"},
 		{Name: "删除 K8s CR 模板", Resource: "/api/v1/k8s-cr-templates/:id", Action: "DELETE", Description: "Delete k8s CR template"},

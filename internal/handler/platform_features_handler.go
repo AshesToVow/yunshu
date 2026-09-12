@@ -131,6 +131,20 @@ func (h *PlatformFeaturesHandler) ListCrTemplates(c *gin.Context) {
 	})
 }
 
+func (h *PlatformFeaturesHandler) GetCrTemplate(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	row, err := h.crTemplateSvc().Get(c.Request.Context(), id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, row)
+}
+
 func (h *PlatformFeaturesHandler) CreateCrTemplate(c *gin.Context) {
 	ServeJSON(c, h.crTemplateSvc().Create)
 }

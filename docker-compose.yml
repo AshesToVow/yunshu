@@ -1,10 +1,15 @@
 version: '3.3'
 
-# 默认：MySQL 在宿主机（非容器），仅启动 redis + backend + frontend。
-# 若要用容器 MySQL：docker-compose --profile container-mysql up -d
+# 默认：关系库在宿主机（非容器），仅启动 redis + backend + frontend。
+# 容器 MySQL：docker-compose --profile container-mysql up -d（若已提供该 profile）
+# 容器 PostgreSQL：
+#   1) 将 configs/config.smoke-pg.yaml 内容合并进 config.yaml（或挂载该文件）
+#      database.driver=postgres, host=yunshu-postgres
+#   2) docker-compose --profile container-postgres up -d
+#   3) backend 建议 RUN_MIGRATE=1；entrypoint 会按 driver 等库（WAIT_DB / 兼容 WAIT_MYSQL）
 #
 # 配置唯一入口：configs/config.yaml（挂载到容器 /app/configs）
-#   启动前请按该文件顶部「场景速查」改 mysql/redis/密钥/app.env。
+#   启动前请按该文件顶部「场景速查」改 database|mysql / redis / 密钥 / app.env。
 #   不要依赖 .env / .env.example。
 #
 # Redis 密码必须与 config.yaml → redis.password 完全一致（下方 --requirepass）。
@@ -51,6 +56,32 @@ services:
       retries: 5
       start_period: 10s
 
+  # 可选：平台主库用 PostgreSQL（与 MySQL 二选一，改 config database.driver）
+  postgres:
+    profiles: ["container-postgres"]
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/postgres:16-alpine
+    container_name: yunshu-postgres
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER: yunshu
+      - POSTGRES_PASSWORD: yunshu
+      - POSTGRES_DB: yunshu
+    ports:
+      - "5432:5432"
+    volumes:
+      - /export/postgres_data:/var/lib/postgresql/data
+    networks:
+      - yunshu-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yunshu -d yunshu"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   backend:
     build:
       context: .
@@ -68,11 +99,12 @@ services:
     environment:
       - GIN_MODE=release
       - TZ=Asia/Shanghai
-      # 业务配置全部来自挂载的 configs/config.yaml（含 JWT / encryption_key / mysql / redis）
+      # 业务配置全部来自挂载的 configs/config.yaml（含 JWT / encryption_key / database|mysql / redis）
       - RUN_SEED=${RUN_SEED:-1}
-      - WAIT_MYSQL=${WAIT_MYSQL:-1}
-      # 巡检 PDF 仅前端 html2canvas/jsPDF；服务端不再渲染
-    volumes:
+      - RUN_MIGRATE=${RUN_MIGRATE:-0}
+      # entrypoint 读 WAIT_DB；未设时回退 WAIT_MYSQL（见 deploy/docker/entrypoint.sh）
+      - WAIT_DB=${WAIT_DB:-1}
+      - WAIT_MYSQL=${WAIT_MYSQL:-1}    volumes:
       - ./configs:/app/configs:ro
       - ./logs:/app/logs
     depends_on:
@@ -81,7 +113,8 @@ services:
     networks:
       - yunshu-network
     # 旧版 docker-compose 不支持 extra_hosts: host-gateway。
-    # 连宿主机 MySQL：在 config.yaml 设 mysql.host 为宿主机 IP（如 10.10.10.4 / 172.17.0.1）。
+    # 连宿主机库：在 config.yaml 设 database.host / mysql.host 为宿主机 IP。
+    # 连本 compose 的 postgres：--profile container-postgres，host=yunshu-postgres。
 
   frontend:
     build:

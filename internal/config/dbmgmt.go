@@ -36,3 +36,33 @@ func DefaultDbmgmtConfig() DbmgmtConfig {
 		GoInceptionBackup:             true,
 	}
 }
+
+// ApplyDefaults 填充 dbmgmt 零值字段。
+func (c *DbmgmtConfig) ApplyDefaults() {
+	def := DefaultDbmgmtConfig()
+	if c.QueryTimeoutSeconds <= 0 {
+		c.QueryTimeoutSeconds = def.QueryTimeoutSeconds
+	}
+	if c.MaxResultRows <= 0 {
+		c.MaxResultRows = def.MaxResultRows
+	}
+	if c.MaxImportFileMB <= 0 {
+		c.MaxImportFileMB = def.MaxImportFileMB
+	}
+	if c.ApprovalSlaHours <= 0 {
+		c.ApprovalSlaHours = def.ApprovalSlaHours
+	}
+	if c.ApprovalReminderIntervalHours <= 0 {
+		c.ApprovalReminderIntervalHours = def.ApprovalReminderIntervalHours
+	}
+	if len(c.AllowedDrivers) == 0 {
+		c.AllowedDrivers = append([]string(nil), def.AllowedDrivers...)
+	}
+	if c.PingIntervalSeconds <= 0 {
+		c.PingIntervalSeconds = def.PingIntervalSeconds
+	}
+	if c.MaxConcurrentPerInstance <= 0 {
+		c.MaxConcurrentPerInstance = def.MaxConcurrentPerInstance
+	}
+}
+

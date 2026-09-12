@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/database"
 	"yunshu/internal/pkg/pagination"
 
 	"gorm.io/gorm"
@@ -107,6 +108,8 @@ func (r *K8sEventForwardRepository) SaveForwardedEvent(ctx context.Context, ev *
 	}
 	// 同一 Event UID 更新（count/message 抖动）不应反复重置为待转发，避免告警风暴。
 	// 仅当 type/reason/message 相对库内已有行发生变化时才重新入队。
+	dialect := database.DialectName(r.db)
+	changed := database.SQLOnConflictChanged(dialect, "type", "reason", "message")
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "evt_key"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
@@ -119,17 +122,17 @@ func (r *K8sEventForwardRepository) SaveForwardedEvent(ctx context.Context, ev *
 			"message":    ev.Message,
 			"timestamp":  ev.Timestamp,
 			"processed": gorm.Expr(
-				"CASE WHEN `type` <> VALUES(`type`) OR `reason` <> VALUES(`reason`) OR `message` <> VALUES(`message`) THEN 0 ELSE `processed` END",
+				"CASE WHEN ("+changed+") THEN 0 ELSE processed END",
 			),
 			"status": gorm.Expr(
-				"CASE WHEN `type` <> VALUES(`type`) OR `reason` <> VALUES(`reason`) OR `message` <> VALUES(`message`) THEN ? ELSE `status` END",
+				"CASE WHEN ("+changed+") THEN ? ELSE status END",
 				model.K8sFwdStatusPending,
 			),
 			"attempts": gorm.Expr(
-				"CASE WHEN `type` <> VALUES(`type`) OR `reason` <> VALUES(`reason`) OR `message` <> VALUES(`message`) THEN 0 ELSE `attempts` END",
+				"CASE WHEN ("+changed+") THEN 0 ELSE attempts END",
 			),
 			"last_error": gorm.Expr(
-				"CASE WHEN `type` <> VALUES(`type`) OR `reason` <> VALUES(`reason`) OR `message` <> VALUES(`message`) THEN '' ELSE `last_error` END",
+				"CASE WHEN ("+changed+") THEN '' ELSE last_error END",
 			),
 		}),
 	}).Create(ev).Error
@@ -163,8 +166,9 @@ func (r *K8sEventForwardRepository) ClaimUnprocessedEvents(ctx context.Context, 
 			return err
 		}
 		// 回收卡死的 inflight
+		stalePred := database.SQLStaleTimestampBefore(database.DialectName(tx), "claimed_at", staleInflightAfter)
 		_ = tx.Model(&model.K8sForwardedEvent{}).
-			Where("status = ? AND claimed_at IS NOT NULL AND claimed_at < DATE_SUB(NOW(), INTERVAL "+staleInflightAfter+")", model.K8sFwdStatusInflight).
+			Where("status = ? AND claimed_at IS NOT NULL AND "+stalePred, model.K8sFwdStatusInflight).
 			Updates(map[string]interface{}{
 				"status":     model.K8sFwdStatusPending,
 				"processed":  false,
@@ -172,7 +176,7 @@ func (r *K8sEventForwardRepository) ClaimUnprocessedEvents(ctx context.Context, 
 			}).Error
 
 		if err := tx.Where(
-			"(status = ? OR (IFNULL(status,'') = '' AND processed = ?))",
+			"(status = ? OR (COALESCE(status,'') = '' AND processed = ?))",
 			model.K8sFwdStatusPending, false,
 		).
 			Order("timestamp ASC").

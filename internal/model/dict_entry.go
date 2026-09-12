@@ -12,7 +12,7 @@ type DictEntry struct {
 	ID        uint           `json:"id" gorm:"primaryKey;comment:主键ID"`
 	DictType  string         `json:"dict_type" gorm:"size:64;not null;index:idx_dict_type_status,priority:1;comment:字典类型"`
 	Label     string         `json:"label" gorm:"size:128;not null;comment:显示标签"`
-	Value     string         `json:"value" gorm:"type:mediumtext;not null;comment:字典值（如完整 kubeconfig）"`
+	Value     string         `json:"value" gorm:"type:text;not null;comment:字典值（如完整 kubeconfig）"`
 	Sort      int            `json:"sort" gorm:"not null;default:0;comment:排序"`
 	Status    int            `json:"status" gorm:"not null;default:1;index:idx_dict_type_status,priority:2;comment:状态 1启用 0停用"`
 	Remark    string         `json:"remark" gorm:"size:512;comment:备注"`

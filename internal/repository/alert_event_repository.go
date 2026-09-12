@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/database"
 
 	"gorm.io/gorm"
 )
@@ -225,27 +226,13 @@ COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0)
 }
 
 func (r *AlertEventRepository) BackfillProjectIDFromDatasource(ctx context.Context) error {
-	return r.db.WithContext(ctx).Exec(`
-UPDATE alert_events e
-INNER JOIN alert_datasources d ON e.datasource_id = d.id AND d.deleted_at IS NULL
-SET e.project_id = d.project_id
-WHERE IFNULL(e.project_id, 0) = 0
-  AND e.datasource_id > 0
-  AND d.project_id > 0
-  AND e.deleted_at IS NULL`).Error
+	sql := database.SQLBackfillAlertEventProjectFromDatasource(database.DialectName(r.db))
+	return r.db.WithContext(ctx).Exec(sql).Error
 }
 
 func (r *AlertEventRepository) BackfillProjectIDFromSubscriptions(ctx context.Context) error {
-	return r.db.WithContext(ctx).Exec(`
-UPDATE alert_events e
-INNER JOIN alert_subscription_nodes n
-  ON n.deleted_at IS NULL AND n.project_id > 0
- AND FIND_IN_SET(n.id, e.matched_policy_ids)
-SET e.project_id = n.project_id
-WHERE IFNULL(e.project_id, 0) = 0
-  AND e.matched_policy_ids IS NOT NULL
-  AND TRIM(e.matched_policy_ids) <> ''
-  AND e.deleted_at IS NULL`).Error
+	sql := database.SQLBackfillAlertEventProjectFromSubscriptions(database.DialectName(r.db))
+	return r.db.WithContext(ctx).Exec(sql).Error
 }
 
 func (r *AlertEventRepository) FirstProjectIDBySubscriptionIDs(ctx context.Context, ids []uint) (uint, error) {

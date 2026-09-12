@@ -10,15 +10,21 @@
 #
 # ---------- 场景速查（改哪些）----------
 # Docker Compose（本仓库 docker-compose.yml）：
-#   1) mysql.host          → 宿主机 IP（旧 compose 无 host-gateway；常用 172.17.0.1）
-#   2) mysql.password      → 与宿主机 MySQL 一致
+#   1) 主库三选一：
+#      - MySQL：mysql.driver=mysql，mysql.host → 宿主机 IP（常用 172.17.0.1）
+#      - PostgreSQL：用顶层 database:（见 configs/config.smoke-pg.yaml），
+#        host=yunshu-postgres，并 docker-compose --profile container-postgres up -d
+#      - 达梦 DM8：database.driver=dameng（或 dm），默认端口 5236，schema 为当前模式
+#        （见 configs/config.smoke-dm.yaml）；需自备达梦实例（无官方公共 Docker 镜像）
+#   2) mysql.password / database.password → 与库实例一致
 #   3) redis.addr          → yunshu-redis:6379
 #   4) redis.password      → 与 compose 里 redis --requirepass 完全一致
 #   5) auth.jwt_secret / security.encryption_key → 上式 openssl 生成
 #   6) app.env             → 联调可先 dev；正式上线改 prod（prod 拒绝占位/弱密钥）
 #
 # 裸机 / 本机 go run：
-#   mysql.* / redis.* 指向本机或内网地址；密钥同上。
+#   database|mysql.* / redis.* 指向本机或内网地址；密钥同上。
+#   PG 冒烟：bash scripts/smoke-pg.sh（需 Docker）
 #
 # ---------- 可选能力何时打开 ----------
 # plugins.enabled      裁剪业务模块；列表为空 = 启用默认全集
@@ -33,6 +39,7 @@
 #
 # ---------- 配置优先级 ----------
 # 启动必需：app / http / log / mysql|database / redis / auth / security（本文件）
+# 主库：mysql: 与 database: 二选一（有 database.host 或 db_name 时优先 database）；driver=mysql|postgres|dameng
 # 运行期运营：mail / auth / alert.webhook_token / prometheus / k8s_event_forward → 数据字典优先
 # =============================================================================
 
@@ -178,7 +185,7 @@ mysql:
   # auto_migrate: 未配置时按环境推断（非 prod 开 / prod 关）。生产请保持关，用 migrate 子命令。
   # auto_migrate: false
 
-# PostgreSQL 示例（与 mysql 二选一；也可用顶层 database: 键）
+# PostgreSQL 示例（与 mysql / 达梦三选一；也可用顶层 database: 键）
 # database:
 #   driver: postgres
 #   host: 127.0.0.1
@@ -188,6 +195,16 @@ mysql:
 #   db_name: yunshu
 #   sslmode: disable
 #   timezone: Asia/Shanghai
+
+# 达梦 DM8 示例（driver 可用 dameng / dm / dm8；schema 为登录后当前模式）
+# database:
+#   driver: dameng
+#   host: 127.0.0.1
+#   port: 5236
+#   user: SYSDBA
+#   password: secret
+#   db_name: YUNSHU
+#   schema: YUNSHU
 
 redis:
   # 裸机：host:port；Docker Compose：必须改为 yunshu-redis:6379

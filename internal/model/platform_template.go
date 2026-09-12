@@ -46,7 +46,7 @@ type PlatformTemplateVersion struct {
 	ID            uint      `json:"id" gorm:"primaryKey"`
 	TemplateID    uint      `json:"template_id" gorm:"not null;uniqueIndex:uk_plat_tpl_ver,priority:1;index"`
 	Version       int       `json:"version" gorm:"not null;uniqueIndex:uk_plat_tpl_ver,priority:2"`
-	ContentInline string    `json:"content_inline" gorm:"type:longtext;comment:正文权威副本"`
+	ContentInline string    `json:"content_inline" gorm:"type:text;comment:正文权威副本"`
 	StorageKey    string    `json:"storage_key" gorm:"size:512;comment:MinIO object key"`
 	Checksum      string    `json:"checksum" gorm:"size:64"`
 	Remark        string    `json:"remark" gorm:"size:512"`

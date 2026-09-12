@@ -36,6 +36,14 @@ func (s *K8sCrTemplateService) List(ctx context.Context, projectID uint, kind st
 	return list, bizerrors.Pass(ctx, "k8s.cr_template", "List", err)
 }
 
+func (s *K8sCrTemplateService) Get(ctx context.Context, id uint) (*model.K8sCrTemplate, error) {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "k8s.cr_template", "Get", err)
+	}
+	return row, nil
+}
+
 func (s *K8sCrTemplateService) Create(ctx context.Context, req K8sCrTemplateUpsertRequest) (*model.K8sCrTemplate, error) {
 	ver := strings.TrimSpace(req.GVKVersion)
 	if ver == "" {

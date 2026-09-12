@@ -49,7 +49,8 @@ func CheckSchemaVersion(db *gorm.DB) error {
 		)
 	}
 	var row SchemaMeta
-	err := db.Where("`key` = ?", schemaMetaKey).First(&row).Error
+	// 用结构体条件，由 GORM 按 dialector 正确引用保留字列名 key（避免 MySQL 反引号在 PG 上失败）。
+	err := db.Where(&SchemaMeta{Key: schemaMetaKey}).First(&row).Error
 	if err != nil {
 		return fmt.Errorf(
 			"schema version missing: %w (run `yunshu migrate`, expected=%d)",

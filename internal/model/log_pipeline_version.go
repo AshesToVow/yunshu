@@ -12,7 +12,7 @@ type LogPipelineVersion struct {
 	PipelineID  uint           `json:"pipeline_id" gorm:"not null;index;comment:log_pipelines.id"`
 	ProjectID   uint           `json:"project_id" gorm:"not null;index"`
 	Version     int            `json:"version" gorm:"not null"`
-	ContentYAML string         `json:"content_yml" gorm:"type:longtext"`
+	ContentYAML string         `json:"content_yml" gorm:"type:text"`
 	Remark      string         `json:"remark" gorm:"size:255"`
 	CreatedBy   uint           `json:"created_by" gorm:"not null;default:0"`
 	CreatedAt   time.Time      `json:"created_at"`

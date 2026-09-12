@@ -194,51 +194,7 @@ func NewAlertService(redisClient *redis.Client, sender mailer.Sender, cfg config
 	if opts == nil {
 		panic("alert: AlertServiceOptions is required")
 	}
-	if cfg.DefaultTimeoutMS <= 0 {
-		cfg.DefaultTimeoutMS = 5000
-	}
-	if cfg.MaxPayloadChars <= 0 {
-		cfg.MaxPayloadChars = 8000
-	}
-	if cfg.DedupTTLSeconds <= 0 {
-		cfg.DedupTTLSeconds = 86400
-	}
-	if cfg.PromQueryTimeout <= 0 {
-		cfg.PromQueryTimeout = 5
-	}
-	if cfg.GroupWaitSeconds < 0 {
-		cfg.GroupWaitSeconds = 0
-	}
-	if cfg.GroupIntervalSeconds <= 0 {
-		cfg.GroupIntervalSeconds = 60
-	}
-	if cfg.RepeatIntervalSeconds <= 0 {
-		cfg.RepeatIntervalSeconds = 300
-	}
-	if cfg.AggregateTTLSeconds <= 0 {
-		cfg.AggregateTTLSeconds = 86400
-	}
-	if cfg.WebhookQueueMaxLen <= 0 {
-		cfg.WebhookQueueMaxLen = 10000
-	}
-	if cfg.MonitorEvalLeaderLockSeconds <= 0 {
-		cfg.MonitorEvalLeaderLockSeconds = 30
-	}
-	if len(cfg.GroupBy) == 0 {
-		cfg.GroupBy = []string{"alertname", "cluster", "namespace", "severity", "receiver"}
-	}
-	if len(cfg.DigestBy) == 0 {
-		cfg.DigestBy = []string{"instance", "pod", "node", "host", "mountpoint", "device", "fqdn", "job"}
-	}
-	if cfg.PlatformLimits.DingdingMaxChars <= 0 {
-		cfg.PlatformLimits.DingdingMaxChars = 4500
-	}
-	if cfg.PlatformLimits.WeComMaxChars <= 0 {
-		cfg.PlatformLimits.WeComMaxChars = 3500
-	}
-	if cfg.PlatformLimits.GenericMaxChars <= 0 {
-		cfg.PlatformLimits.GenericMaxChars = 8000
-	}
+	cfg.ApplyDefaults()
 
 	receiverCache := opts.ReceiverGroupCache
 	if receiverCache == nil && opts.ReceiverGroupRepo != nil {
