@@ -2,9 +2,12 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"yunshu/internal/model"
+
+	"gorm.io/gorm"
 )
 
 // --- KB Chunk ---
@@ -220,6 +223,38 @@ func (r *AiRepository) ListInvestigations(ctx context.Context, p AiInvestigation
 func (r *AiRepository) GetInvestigationByUser(ctx context.Context, userID, id uint) (*model.AiInvestigation, error) {
 	var row model.AiInvestigation
 	err := r.dbq(ctx).Where("id = ? AND user_id = ?", id, userID).First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *AiRepository) GetInvestigationByApprovalID(ctx context.Context, approvalID uint) (*model.AiInvestigation, error) {
+	if approvalID == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var row model.AiInvestigation
+	err := r.dbq(ctx).Where("approval_id = ?", approvalID).Order("id desc").First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// FindInvestigationLinkingApproval 按 approval_id 或报告/分析 JSON 中的挂接查找（多审批场景）。
+func (r *AiRepository) FindInvestigationLinkingApproval(ctx context.Context, approvalID uint) (*model.AiInvestigation, error) {
+	if approvalID == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if inv, err := r.GetInvestigationByApprovalID(ctx, approvalID); err == nil {
+		return inv, nil
+	}
+	needle := `"approval_id":` + fmt.Sprintf("%d", approvalID)
+	var row model.AiInvestigation
+	err := r.dbq(ctx).
+		Where("status = ? AND (analysis_json LIKE ? OR report_json LIKE ?)", "awaiting_approval", "%"+needle+"%", "%"+needle+"%").
+		Order("id desc").
+		First(&row).Error
 	if err != nil {
 		return nil, err
 	}

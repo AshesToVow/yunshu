@@ -28,28 +28,19 @@ func (s *Service) attachInvestigationApprovals(
 		return
 	}
 	var firstID uint
-	linked := make([]map[string]any, 0, len(cands))
 	for _, c := range cands {
 		argsRaw, _ := json.Marshal(c.Args)
 		out, err := s.createToolApproval(ctx, userID, c.Tool, string(argsRaw), c.ClusterID, c.Namespace, c.Resource, c.Reason)
 		if err != nil {
-			linked = append(linked, map[string]any{
-				"tool": c.Tool, "ok": false, "error": err.Error(),
+			report.Actions = append(report.Actions, map[string]any{
+				"action": "approval_failed", "tool": c.Tool, "error": err.Error(),
 			})
 			continue
 		}
-		aid, _ := out["approval_id"].(uint)
-		if aid == 0 {
-			if f, ok := out["approval_id"].(float64); ok {
-				aid = uint(f)
-			}
-		}
+		aid := uintFromAny(out["approval_id"], 0)
 		if firstID == 0 && aid > 0 {
 			firstID = aid
 		}
-		linked = append(linked, map[string]any{
-			"tool": c.Tool, "ok": true, "approval_id": aid, "status": "pending",
-		})
 		report.Actions = append(report.Actions, map[string]any{
 			"action":      "pending_approval",
 			"tool":        c.Tool,
@@ -63,18 +54,8 @@ func (s *Service) attachInvestigationApprovals(
 	row.ApprovalID = &firstID
 	row.Status = "awaiting_approval"
 	row.UpdatedAt = time.Now()
-	reportRaw, _ := json.Marshal(report)
-	analysisRaw, _ := json.Marshal(map[string]any{
-		"summary":     report.Summary,
-		"root_causes": report.RootCauses,
-		"actions":     report.Actions,
-		"approvals":   linked,
-		"provider":    report.Provider,
-		"model":       report.Model,
-	})
-	row.AnalysisJSON = scrubNonBMPForMySQL(string(analysisRaw))
-	row.ReportJSON = scrubNonBMPForMySQL(string(reportRaw))
-	_ = actor // 预留：后续按 actor 过滤可执行写动作
+	// AnalysisJSON / ReportJSON 由 StartInvestigation 统一落库，避免被覆盖丢 approvals
+	_ = actor
 }
 
 type investigationWriteCandidate struct {
@@ -87,7 +68,7 @@ type investigationWriteCandidate struct {
 }
 
 func extractInvestigationWriteCandidates(
-	kind string,
+	_ string,
 	req StartInvestigationRequest,
 	report *InvestigationReport,
 ) []investigationWriteCandidate {
@@ -105,26 +86,7 @@ func extractInvestigationWriteCandidates(
 		out = append(out, c)
 	}
 
-	// 告警调查：默认挂静默审批（止血，需人审）
-	if kind == "alert" {
-		fp := strings.TrimSpace(req.Fingerprint)
-		if fp != "" && req.ProjectID > 0 {
-			hours := 2
-			add(investigationWriteCandidate{
-				Tool:      "create_alert_silence",
-				ClusterID: req.ClusterID,
-				Resource:  fp,
-				Reason:    "调查建议静默止血",
-				Args: map[string]any{
-					"project_id":  req.ProjectID,
-					"fingerprint": fp,
-					"hours":       hours,
-					"comment":     "AI 调查建议静默",
-				},
-			})
-		}
-	}
-
+	// 告警调查：不再默认建静默审批（避免噪音）；仅当报告 actions 显式要求时建单
 	for _, a := range report.Actions {
 		tool := normalizeWriteToolName(actionField(a, "tool", "action", "name"))
 		if tool == "" || !isApprovalBackedWriteTool(tool) {

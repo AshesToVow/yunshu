@@ -61,6 +61,7 @@ export interface AIChatSession {
   provider?: string;
   enable_tools: boolean;
   enable_write: boolean;
+  context_json?: string;
   last_message_at?: string;
   created_at?: string;
   updated_at?: string;

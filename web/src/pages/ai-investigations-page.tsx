@@ -201,11 +201,35 @@ export function AiInvestigationsPage() {
             <Descriptions.Item label="命名空间">{selected.namespace || "-"}</Descriptions.Item>
             <Descriptions.Item label="资源/指纹">{selected.resource || selected.fingerprint || "-"}</Descriptions.Item>
             <Descriptions.Item label="审批单" span={2}>
-              {selected.approval_id ? (
-                <Link to="/ai/approvals">#{selected.approval_id}（去审批）</Link>
-              ) : (
-                "-"
-              )}
+              {(() => {
+                const ids = new Set<number>();
+                if (selected.approval_id) ids.add(selected.approval_id);
+                try {
+                  const analysis = selected.analysis_json ? JSON.parse(selected.analysis_json) : null;
+                  const list = (analysis?.approvals || analysis?.actions || []) as Array<{
+                    approval_id?: number;
+                    action?: string;
+                  }>;
+                  for (const a of list) {
+                    if (a?.approval_id && (a.action === "pending_approval" || !a.action)) {
+                      ids.add(Number(a.approval_id));
+                    }
+                  }
+                } catch {
+                  /* ignore */
+                }
+                if (ids.size === 0) return "-";
+                return (
+                  <Space wrap size="small">
+                    {[...ids].map((id) => (
+                      <Link key={id} to="/ai/approvals">
+                        #{id}
+                      </Link>
+                    ))}
+                    <Typography.Text type="secondary">（去审批）</Typography.Text>
+                  </Space>
+                );
+              })()}
             </Descriptions.Item>
           </Descriptions>
           {IN_FLIGHT.has(selected.status) ? (

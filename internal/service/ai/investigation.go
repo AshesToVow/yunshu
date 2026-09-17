@@ -142,10 +142,17 @@ func (s *Service) StartInvestigation(
 	if row.Status != "awaiting_approval" {
 		row.Status = "done"
 	}
+	approvalsMeta := make([]map[string]any, 0)
+	for _, a := range report.Actions {
+		if actionField(a, "action") == "pending_approval" {
+			approvalsMeta = append(approvalsMeta, a)
+		}
+	}
 	analysisRaw, _ := json.Marshal(map[string]any{
 		"summary":     report.Summary,
 		"root_causes": report.RootCauses,
 		"actions":     report.Actions,
+		"approvals":   approvalsMeta,
 		"provider":    report.Provider,
 		"model":       report.Model,
 	})
@@ -347,7 +354,7 @@ func (s *Service) collectInvestigation(
 		}
 
 		bundle["recommended_actions"] = []map[string]any{
-			{"action": "create_alert_silence", "tool": "create_alert_silence", "fingerprint": fp, "project_id": req.ProjectID, "hint": "将创建静默审批单，通过后生效"},
+			{"action": "suggest_silence", "hint": "如需止血，可在助手开启写工具后申请 create_alert_silence（走审批）", "fingerprint": fp},
 			{"action": "check_changes", "hint": "核对 recent_changes 是否与告警同源"},
 			{"action": "conclude", "hint": "调查完成后在 AI 调查记录中归档结论"},
 		}

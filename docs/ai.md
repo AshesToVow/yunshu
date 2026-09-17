@@ -125,3 +125,6 @@
 6. 调查多为同步阻塞，前端超时约 180s；进行中状态详情页会轮询
 7. 系统 Prompt（`system/ops-agent`）若库中已有版本，reseed **不会**覆盖
 8. 不含 MCP（扩展点预留，未实现协议桥）
+9. `seed` 会增量补齐：已有 AI 能力中心/Eval 权限的角色自动获得 `eval/runs`；已有 `/ai/chat` 的角色自动获得 `/ai/chat/stream`
+10. 调查挂接审批后，审批 **驳回/执行完成/失败** 会回写调查状态离开 `awaiting_approval`；仅「已批准未执行」仍保持等待
+11. 告警调查 **不默认**创建静默审批；需报告/助手显式申请 `create_alert_silence`

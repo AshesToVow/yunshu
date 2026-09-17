@@ -175,6 +175,8 @@ type AiRepo interface {
 	SaveInvestigation(ctx context.Context, row *model.AiInvestigation) error
 	ListInvestigations(ctx context.Context, p AiInvestigationListParams) ([]model.AiInvestigation, int64, error)
 	GetInvestigationByUser(ctx context.Context, userID, id uint) (*model.AiInvestigation, error)
+	GetInvestigationByApprovalID(ctx context.Context, approvalID uint) (*model.AiInvestigation, error)
+	FindInvestigationLinkingApproval(ctx context.Context, approvalID uint) (*model.AiInvestigation, error)
 }
 
 var _ AiRepo = (*AiRepository)(nil)

@@ -211,10 +211,23 @@ export function AiAssistantPage() {
       const detail = await getAISession(id);
       setSessionId(detail.session.id);
       if (detail.session.cluster_id) setClusterId(detail.session.cluster_id);
+      else setClusterId(undefined);
       if (detail.session.project_id) setProjectId(detail.session.project_id);
+      else setProjectId(undefined);
       if (detail.session.provider) setProvider(detail.session.provider);
       setEnableTools(detail.session.enable_tools);
       setEnableWrite(detail.session.enable_write);
+      let nsFromCtx: string | undefined;
+      if (detail.session.context_json) {
+        try {
+          const ctx = JSON.parse(detail.session.context_json) as { namespace?: string };
+          const ns = String(ctx.namespace || "").trim();
+          if (ns) nsFromCtx = ns;
+        } catch {
+          /* ignore bad context_json */
+        }
+      }
+      setNamespace(nsFromCtx);
       const bubbles: Bubble[] = (detail.messages || []).map((m) => ({
         id: `m-${m.id}`,
         role: m.role === "assistant" ? "assistant" : "user",
@@ -756,13 +769,14 @@ export function AiAssistantPage() {
               </Space>
             </Card>
           ) : null}
-          <Space.Compact style={{ width: "100%" }}>
+          <Space align="end" style={{ width: "100%" }} wrap>
             <Input.TextArea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="输入运维问题，Enter 发送（Shift+Enter 换行）"
               autoSize={{ minRows: 2, maxRows: 6 }}
               disabled={!status?.enabled || sending}
+              style={{ flex: 1, minWidth: 240 }}
               onPressEnter={(e) => {
                 if (!e.shiftKey) {
                   e.preventDefault();
@@ -776,16 +790,15 @@ export function AiAssistantPage() {
               loading={sending}
               disabled={!status?.enabled || !input.trim()}
               onClick={() => void handleSend()}
-              style={{ height: "auto" }}
             >
               发送
             </Button>
             {sending ? (
-              <Button danger icon={<StopOutlined />} onClick={handleCancelSend} style={{ height: "auto" }}>
+              <Button danger icon={<StopOutlined />} onClick={handleCancelSend}>
                 取消
               </Button>
             ) : null}
-          </Space.Compact>
+          </Space>
         </Space>
       </Card>
     </div>

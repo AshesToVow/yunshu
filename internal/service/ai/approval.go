@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
@@ -119,6 +120,7 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 			if err := s.repo.SaveApproval(ctx, row); err != nil {
 				return nil, err
 			}
+			s.syncInvestigationAfterApproval(ctx, row)
 			return row, nil
 		}
 		if detail == nil || detail.Status != model.WorkflowTicketStatusApproved {
@@ -131,6 +133,7 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 		if req.Execute {
 			return s.ExecuteApproval(ctx, actor, id)
 		}
+		s.syncInvestigationAfterApproval(ctx, row)
 		return row, nil
 	}
 
@@ -142,6 +145,7 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 		if err := s.repo.SaveApproval(ctx, row); err != nil {
 			return nil, err
 		}
+		s.syncInvestigationAfterApproval(ctx, row)
 		return row, nil
 	}
 	row.Status = "approved"
@@ -151,6 +155,7 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 	if req.Execute {
 		return s.ExecuteApproval(ctx, actor, id)
 	}
+	s.syncInvestigationAfterApproval(ctx, row)
 	return row, nil
 }
 
@@ -280,5 +285,100 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 	if err := s.repo.SaveApproval(ctx, row); err != nil {
 		return row, fmt.Errorf("执行结果落库失败: %w", err)
 	}
+	s.syncInvestigationAfterApproval(ctx, row)
 	return row, execErr
+}
+
+// syncInvestigationAfterApproval 审批终态后回写关联调查，闭合 awaiting_approval。
+func (s *Service) syncInvestigationAfterApproval(ctx context.Context, appr *model.AiToolApproval) {
+	if s.repo == nil || appr == nil || appr.ID == 0 {
+		return
+	}
+	switch appr.Status {
+	case "rejected", "executed", "failed", "approved":
+		// approved 且未执行时：若还有 pending 兄弟单则保持 awaiting；仅全部终态才推进
+	default:
+		return
+	}
+	inv, err := s.repo.FindInvestigationLinkingApproval(ctx, appr.ID)
+	if err != nil || inv == nil || inv.Status != "awaiting_approval" {
+		return
+	}
+	ids := linkedApprovalIDsFromInvestigation(inv)
+	if len(ids) == 0 {
+		ids = []uint{appr.ID}
+	}
+	allTerminal := true
+	anyFailed := false
+	for _, id := range ids {
+		a, e := s.repo.GetApprovalByID(ctx, id)
+		if e != nil || a == nil {
+			allTerminal = false
+			break
+		}
+		switch a.Status {
+		case "pending", "approved", "executing":
+			allTerminal = false
+		case "rejected", "executed":
+			// ok
+		case "failed":
+			anyFailed = true
+		default:
+			allTerminal = false
+		}
+	}
+	if !allTerminal {
+		return
+	}
+	if anyFailed {
+		inv.Status = "failed"
+	} else {
+		inv.Status = "done"
+	}
+	inv.UpdatedAt = time.Now()
+	_ = s.repo.SaveInvestigation(ctx, inv)
+}
+
+func linkedApprovalIDsFromInvestigation(inv *model.AiInvestigation) []uint {
+	if inv == nil {
+		return nil
+	}
+	seen := map[uint]struct{}{}
+	var ids []uint
+	add := func(id uint) {
+		if id == 0 {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if inv.ApprovalID != nil {
+		add(*inv.ApprovalID)
+	}
+	for _, raw := range []string{inv.AnalysisJSON, inv.ReportJSON} {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		var blob map[string]any
+		if json.Unmarshal([]byte(raw), &blob) != nil {
+			continue
+		}
+		for _, key := range []string{"approvals", "actions"} {
+			arr, ok := blob[key].([]any)
+			if !ok {
+				continue
+			}
+			for _, item := range arr {
+				m, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				add(uintFromAny(m["approval_id"], 0))
+			}
+		}
+	}
+	return ids
 }

@@ -250,7 +250,7 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 						"comment":     map[string]any{"type": "string"},
 						"alertname":   map[string]any{"type": "string"},
 					},
-					"required": []string{"fingerprint"},
+					"required": []string{"project_id", "fingerprint"},
 				}),
 			llm.NewFunctionTool("scale_deployment",
 				"申请扩缩容 Deployment：仅创建审批单，不会立即执行。调用前确认 cluster/namespace/name/replicas。",
@@ -644,7 +644,22 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		if err = requireActor(); err != nil {
 			break
 		}
-		out, err = s.createToolApproval(ctx, userID, name, argsJSON, clusterID, "", getStr("fingerprint"), getStr("comment"))
+		if err = requireProject(); err != nil {
+			break
+		}
+		if getStr("fingerprint") == "" {
+			err = fmt.Errorf("fingerprint 必填")
+			break
+		}
+		if projectID == 0 {
+			err = fmt.Errorf("project_id 必填")
+			break
+		}
+		// 确保 ArgsJSON 含校验后的 project_id，避免执行阶段缺参
+		args["project_id"] = projectID
+		args["fingerprint"] = getStr("fingerprint")
+		fixedArgs, _ := json.Marshal(args)
+		out, err = s.createToolApproval(ctx, userID, name, string(fixedArgs), clusterID, "", getStr("fingerprint"), getStr("comment"))
 	case "scale_deployment", "restart_deployment", "delete_pod":
 		if err = requireK8sAdmin(); err != nil {
 			break
