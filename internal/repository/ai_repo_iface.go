@@ -144,6 +144,9 @@ type AiRepo interface {
 	CountEvalCaseByCaseCode(ctx context.Context, caseCode string) (int64, error)
 	CreateEvalRun(ctx context.Context, run *model.AiEvalRun) error
 	SaveEvalRun(ctx context.Context, run *model.AiEvalRun) error
+	ListEvalRuns(ctx context.Context, limit int) ([]model.AiEvalRun, error)
+	GetEvalRunByID(ctx context.Context, id uint) (*model.AiEvalRun, error)
+	ListEvalResultsByRunID(ctx context.Context, runID uint) ([]model.AiEvalResult, error)
 	CreateEvalResult(ctx context.Context, result *model.AiEvalResult) error
 
 	// --- Approval ---

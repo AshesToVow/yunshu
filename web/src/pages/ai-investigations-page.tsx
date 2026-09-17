@@ -1,6 +1,6 @@
 import { ExperimentOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Descriptions, Select, Space, Table, Tag, Typography, message } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
@@ -36,6 +36,8 @@ function statusColor(s: string) {
   }
 }
 
+const IN_FLIGHT = new Set(["collecting", "analyzing"]);
+
 export function AiInvestigationsPage() {
   const [searchParams] = useSearchParams();
   const focusId = Number(searchParams.get("id") || 0);
@@ -45,6 +47,7 @@ export function AiInvestigationsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AIInvestigation | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function refresh(p = page) {
     setLoading(true);
@@ -79,17 +82,40 @@ export function AiInvestigationsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId]);
 
+  useEffect(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    if (!selected?.id || !IN_FLIGHT.has(selected.status)) return;
+    pollRef.current = setInterval(() => {
+      void getAIInvestigation(selected.id)
+        .then((row) => {
+          setSelected(row);
+          if (!IN_FLIGHT.has(row.status)) {
+            void refresh();
+          }
+        })
+        .catch(() => undefined);
+    }, 2500);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, selected?.status]);
+
   const report = parseReport(selected);
 
   return (
     <div className="page-stack">
       <OpsPageHeader
         title="AI 调查"
-        description="告警 / Pod / CI 等场景的采集→分析→报告闭环；可从告警历史、Pod 排障入口发起。"
+        description="告警 / Pod / CI / 对话等场景的采集→分析→报告；写动作会挂接审批（awaiting_approval）。"
         breadcrumbs={[{ title: "AI" }, { title: "AI 调查" }]}
         extra={
           <Space>
             <Link to="/ai/assistant">运维助手</Link>
+            <Link to="/ai/approvals">操作审批</Link>
             <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>
               刷新
             </Button>
@@ -109,6 +135,7 @@ export function AiInvestigationsPage() {
               { value: "pod", label: "Pod" },
               { value: "cicd", label: "CI/CD" },
               { value: "chat", label: "对话" },
+              { value: "incident", label: "综合" },
             ]}
             onChange={(v) => setKind(v)}
           />
@@ -118,6 +145,7 @@ export function AiInvestigationsPage() {
           rowKey="id"
           loading={loading}
           dataSource={list}
+          locale={{ emptyText: "暂无调查记录" }}
           pagination={{
             current: page,
             pageSize: 20,
@@ -136,7 +164,7 @@ export function AiInvestigationsPage() {
             {
               title: "状态",
               dataIndex: "status",
-              width: 120,
+              width: 140,
               render: (v: string) => <Tag color={statusColor(v)}>{v}</Tag>,
             },
             { title: "更新时间", dataIndex: "updated_at", width: 180 },
@@ -172,7 +200,17 @@ export function AiInvestigationsPage() {
             <Descriptions.Item label="集群">{selected.cluster_id || "-"}</Descriptions.Item>
             <Descriptions.Item label="命名空间">{selected.namespace || "-"}</Descriptions.Item>
             <Descriptions.Item label="资源/指纹">{selected.resource || selected.fingerprint || "-"}</Descriptions.Item>
+            <Descriptions.Item label="审批单" span={2}>
+              {selected.approval_id ? (
+                <Link to="/ai/approvals">#{selected.approval_id}（去审批）</Link>
+              ) : (
+                "-"
+              )}
+            </Descriptions.Item>
           </Descriptions>
+          {IN_FLIGHT.has(selected.status) ? (
+            <Alert type="info" showIcon message="调查进行中，自动刷新状态…" style={{ marginBottom: 12 }} />
+          ) : null}
           {selected.error_msg ? <Alert type="error" showIcon message={selected.error_msg} style={{ marginBottom: 12 }} /> : null}
           {report ? (
             <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -207,7 +245,9 @@ export function AiInvestigationsPage() {
               ) : null}
             </Space>
           ) : (
-            <Typography.Text type="secondary">暂无结构化报告</Typography.Text>
+            <Typography.Text type="secondary">
+              {IN_FLIGHT.has(selected.status) ? "等待报告生成…" : "暂无结构化报告"}
+            </Typography.Text>
           )}
         </Card>
       ) : null}

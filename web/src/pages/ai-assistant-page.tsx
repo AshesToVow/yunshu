@@ -1,10 +1,12 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ClearOutlined,
   DeleteOutlined,
+  ExperimentOutlined,
   PlusOutlined,
   RobotOutlined,
   SendOutlined,
+  StopOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Card, Input, List, Select, Space, Switch, Tag, Typography, message, theme } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +19,8 @@ import {
   getAIStatus,
   listAISessions,
   pingAI,
+  startAIInvestigation,
+  updateAISession,
   type AIChatMessage,
   type AIChatResult,
   type AIChatSession,
@@ -84,6 +88,7 @@ function parseAssistantMeta(metaJSON?: string): string {
 
 export function AiAssistantPage() {
   const { token } = theme.useToken();
+  const navigate = useNavigate();
   const prefs = useMemo(() => loadPrefs(), []);
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -106,6 +111,7 @@ export function AiAssistantPage() {
   const [sessions, setSessions] = useState<AIChatSession[]>([]);
   const [sessionId, setSessionId] = useState<number | undefined>();
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [investigateLoading, setInvestigateLoading] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -284,9 +290,62 @@ export function AiAssistantPage() {
     }
   }
 
+  async function syncSessionPrefs() {
+    if (!sessionId) return;
+    try {
+      await updateAISession(sessionId, {
+        project_id: projectId,
+        cluster_id: clusterId,
+        provider: provider || undefined,
+        enable_tools: enableTools,
+        enable_write: enableWrite,
+        namespace: namespace || "",
+      });
+    } catch {
+      /* 偏好同步失败不阻断对话 */
+    }
+  }
+
+  function handleCancelSend() {
+    abortRef.current?.abort();
+    setSending(false);
+    setLiveTimeline((prev) => [...prev.slice(-40), "已取消"]);
+  }
+
+  async function handleInvestigateFromChat() {
+    const text = input.trim() || messages.filter((m) => m.role === "user").slice(-1)[0]?.content || "";
+    if (!text) {
+      message.warning("请先输入或发送要调查的问题");
+      return;
+    }
+    if (!status?.enabled) {
+      message.warning("AI 未启用");
+      return;
+    }
+    setInvestigateLoading(true);
+    try {
+      const inv = await startAIInvestigation({
+        kind: "chat",
+        title: text.slice(0, 80),
+        query: text,
+        project_id: projectId,
+        cluster_id: clusterId,
+        namespace: namespace || undefined,
+        session_id: sessionId,
+      });
+      message.success(`调查已完成 #${inv.id}${inv.status === "awaiting_approval" ? "（待审批）" : ""}`);
+      navigate(`/ai/investigations?id=${inv.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "发起调查失败"));
+    } finally {
+      setInvestigateLoading(false);
+    }
+  }
+
   async function handleSend() {
     const text = input.trim();
     if (!text || sending) return;
+    await syncSessionPrefs();
     let sid = sessionId;
     if (!sid) {
       try {
@@ -524,6 +583,14 @@ export function AiAssistantPage() {
               >
                 清空
               </Button>
+              <Button
+                icon={<ExperimentOutlined />}
+                loading={investigateLoading}
+                disabled={!status?.enabled || sending}
+                onClick={() => void handleInvestigateFromChat()}
+              >
+                发起调查
+              </Button>
             </Space>
           </Space>
 
@@ -713,6 +780,11 @@ export function AiAssistantPage() {
             >
               发送
             </Button>
+            {sending ? (
+              <Button danger icon={<StopOutlined />} onClick={handleCancelSend} style={{ height: "auto" }}>
+                取消
+              </Button>
+            ) : null}
           </Space.Compact>
         </Space>
       </Card>

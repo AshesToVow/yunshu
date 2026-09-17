@@ -207,51 +207,75 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 		name = row.Resource
 	}
 
-	if err := s.assertK8sClusterAccess(ctx, actor, clusterID, ns, k8s.K8sAccessRankAdmin); err != nil {
-		_ = s.repo.UpdateApprovalFields(ctx, id, map[string]any{
-			"status": "failed", "result_msg": truncateStr(err.Error(), 1000),
-		})
-		return nil, err
-	}
-
 	execCtx := withActorContext(ctx, actor)
 
 	var execErr error
 	switch row.ToolName {
-	case "scale_deployment":
-		if s.workloadSvc == nil {
-			execErr = fmt.Errorf("Workload 服务不可用")
-			break
+	case "scale_deployment", "restart_deployment", "delete_pod":
+		if err := s.assertK8sClusterAccess(ctx, actor, clusterID, ns, k8s.K8sAccessRankAdmin); err != nil {
+			_ = s.repo.UpdateApprovalFields(ctx, id, map[string]any{
+				"status": "failed", "result_msg": truncateStr(err.Error(), 1000),
+			})
+			return nil, err
 		}
-		replicas := int32(getUint("replicas", 1))
-		execErr = s.workloadSvc.DeploymentScale(execCtx, k8s.WorkloadScaleRequest{
-			ClusterID: clusterID, Namespace: ns, Name: name, Replicas: replicas,
-		})
-	case "restart_deployment":
-		if s.workloadSvc == nil {
-			execErr = fmt.Errorf("Workload 服务不可用")
-			break
+		switch row.ToolName {
+		case "scale_deployment":
+			if s.workloadSvc == nil {
+				execErr = fmt.Errorf("Workload 服务不可用")
+				break
+			}
+			replicas := int32(getUint("replicas", 1))
+			execErr = s.workloadSvc.DeploymentScale(execCtx, k8s.WorkloadScaleRequest{
+				ClusterID: clusterID, Namespace: ns, Name: name, Replicas: replicas,
+			})
+		case "restart_deployment":
+			if s.workloadSvc == nil {
+				execErr = fmt.Errorf("Workload 服务不可用")
+				break
+			}
+			execErr = s.workloadSvc.DeploymentRestart(execCtx, k8s.NamespacedDetailQuery{
+				ClusterID: clusterID, Namespace: ns, Name: name,
+			})
+		case "delete_pod":
+			if s.podSvc == nil {
+				execErr = fmt.Errorf("Pod 服务不可用")
+				break
+			}
+			execErr = s.podSvc.Delete(execCtx, k8s.PodDeleteRequest{
+				ClusterID: clusterID, Namespace: ns, Name: name,
+			})
 		}
-		execErr = s.workloadSvc.DeploymentRestart(execCtx, k8s.NamespacedDetailQuery{
-			ClusterID: clusterID, Namespace: ns, Name: name,
-		})
-	case "delete_pod":
-		if s.podSvc == nil {
-			execErr = fmt.Errorf("Pod 服务不可用")
-			break
+	case "create_alert_silence":
+		out, err := s.executeCreateAlertSilence(execCtx, actor, getUint("project_id", 0), getUint, getStr)
+		if err != nil {
+			execErr = err
+		} else {
+			raw, _ := json.Marshal(out)
+			row.ResultMsg = truncateStr(string(raw), 1000)
 		}
-		execErr = s.podSvc.Delete(execCtx, k8s.PodDeleteRequest{
-			ClusterID: clusterID, Namespace: ns, Name: name,
-		})
 	default:
-		execErr = fmt.Errorf("不支持执行的工具: %s", row.ToolName)
+		reg, regErr := s.repo.GetToolByName(ctx, row.ToolName)
+		if regErr != nil || reg == nil || !strings.EqualFold(reg.Runtime, "script") {
+			execErr = fmt.Errorf("不支持执行的工具: %s", row.ToolName)
+			break
+		}
+		out, err := s.runScriptTool(execCtx, toolDefRow{
+			Name: reg.Name, ScriptLang: reg.ScriptLang, ScriptPath: reg.ScriptPath, TimeoutSec: reg.TimeoutSec,
+		}, row.ArgsJSON)
+		if err != nil {
+			execErr = err
+		} else {
+			row.ResultMsg = truncateStr(out, 1000)
+		}
 	}
 	if execErr != nil {
 		row.Status = "failed"
 		row.ResultMsg = truncateStr(execErr.Error(), 1000)
 	} else {
 		row.Status = "executed"
-		row.ResultMsg = "执行成功"
+		if strings.TrimSpace(row.ResultMsg) == "" {
+			row.ResultMsg = "执行成功"
+		}
 	}
 	if err := s.repo.SaveApproval(ctx, row); err != nil {
 		return row, fmt.Errorf("执行结果落库失败: %w", err)

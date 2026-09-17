@@ -363,6 +363,29 @@ func (r *AiRepository) SaveEvalRun(ctx context.Context, run *model.AiEvalRun) er
 	return r.dbq(ctx).Save(run).Error
 }
 
+func (r *AiRepository) ListEvalRuns(ctx context.Context, limit int) ([]model.AiEvalRun, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	var rows []model.AiEvalRun
+	err := r.dbq(ctx).Order("id DESC").Limit(limit).Find(&rows).Error
+	return rows, err
+}
+
+func (r *AiRepository) GetEvalRunByID(ctx context.Context, id uint) (*model.AiEvalRun, error) {
+	var row model.AiEvalRun
+	if err := r.dbq(ctx).First(&row, id).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *AiRepository) ListEvalResultsByRunID(ctx context.Context, runID uint) ([]model.AiEvalResult, error) {
+	var rows []model.AiEvalResult
+	err := r.dbq(ctx).Where("run_id = ?", runID).Order("id ASC").Find(&rows).Error
+	return rows, err
+}
+
 func (r *AiRepository) CreateEvalResult(ctx context.Context, result *model.AiEvalResult) error {
 	return r.dbq(ctx).Create(result).Error
 }

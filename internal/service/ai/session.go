@@ -30,6 +30,7 @@ type SessionUpdateRequest struct {
 	Provider    *string `json:"provider"`
 	EnableTools *bool   `json:"enable_tools"`
 	EnableWrite *bool   `json:"enable_write"`
+	Namespace   *string `json:"namespace"` // 写入 ContextJSON.namespace
 }
 
 type SessionListQuery struct {
@@ -156,6 +157,18 @@ func (s *Service) UpdateSession(ctx context.Context, userID, sessionID uint, req
 	}
 	if req.EnableWrite != nil {
 		updates["enable_write"] = *req.EnableWrite
+	}
+	if req.Namespace != nil {
+		ctxMap := map[string]any{}
+		if strings.TrimSpace(sess.ContextJSON) != "" {
+			_ = json.Unmarshal([]byte(sess.ContextJSON), &ctxMap)
+			if ctxMap == nil {
+				ctxMap = map[string]any{}
+			}
+		}
+		ctxMap["namespace"] = strings.TrimSpace(*req.Namespace)
+		raw, _ := json.Marshal(ctxMap)
+		updates["context_json"] = string(raw)
 	}
 	if len(updates) == 0 {
 		return sess, nil

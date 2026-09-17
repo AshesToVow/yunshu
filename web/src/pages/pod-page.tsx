@@ -18,6 +18,7 @@ import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
 import { createPodByYAML, createPodSimple, debugPodEphemeral, deletePod, downloadPodLogs, getPodDebugImageDefault, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, restartPod, updatePodSimple, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
 import { analyzePodDiagnoseAI, startAIInvestigation, type AIPodDiagnoseResult } from "../services/ai";
+import { useAiEnabled } from "../hooks/use-ai-enabled";
 import { useNavigate } from "react-router-dom";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
@@ -35,6 +36,7 @@ import { PodFilesDrawer } from "./pod/pod-files-drawer";
 import { PodFormDrawer } from "./pod/pod-form-drawer";
 
 export function PodPage() {
+  const { enabled: aiEnabled } = useAiEnabled();
   const rfc1123Subdomain = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/;
   const rfc1123Label = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
   const {
@@ -259,6 +261,10 @@ export function PodPage() {
 
   async function handleAIDiagnose() {
     if (!clusterId || !selected || aiDiagnoseLoading) return;
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     setAiDiagnoseLoading(true);
     try {
       const res = await analyzePodDiagnoseAI({
@@ -277,6 +283,10 @@ export function PodPage() {
 
   async function handleAIInvestigate() {
     if (!clusterId || !selected || aiInvestigateLoading) return;
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     setAiInvestigateLoading(true);
     try {
       const inv = await startAIInvestigation({
@@ -286,7 +296,7 @@ export function PodPage() {
         namespace: selected.namespace,
         resource: selected.name,
       });
-      message.success(`调查已完成 #${inv.id}`);
+      message.success(`调查已完成 #${inv.id}${inv.status === "awaiting_approval" ? "（待审批）" : ""}`);
       navigate(`/ai/investigations?id=${inv.id}`);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "AI 调查失败"));

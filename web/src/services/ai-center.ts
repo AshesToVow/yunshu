@@ -222,6 +222,16 @@ export function runAIEval(live = false) {
   return getData<Record<string, unknown>>(http.post("/ai/center/eval/run", { live }, { timeout: 300000 }));
 }
 
+export function listAIEvalRuns(limit = 20) {
+  return getData<{ list: Array<Record<string, unknown>> }>(http.get("/ai/center/eval/runs", { params: { limit } }));
+}
+
+export function getAIEvalRun(id: number) {
+  return getData<{ run: Record<string, unknown>; results: Array<Record<string, unknown>> }>(
+    http.get(`/ai/center/eval/runs/${id}`),
+  );
+}
+
 export function syncAIKnowledge() {
   return getData<{ indexed: number; failed?: number; errors?: string[] }>(http.post("/ai/knowledge/sync", {}));
 }

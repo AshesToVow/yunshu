@@ -77,6 +77,8 @@ func RegisterAIRoutes(api *gin.RouterGroup, d AIRouteDeps) {
 	g.GET("/center/eval/cases", h.ListEvalCases)
 	g.POST("/center/eval/cases", h.CreateEvalCase)
 	g.POST("/center/eval/run", h.RunEval)
+	g.GET("/center/eval/runs", h.ListEvalRuns)
+	g.GET("/center/eval/runs/:id", h.GetEvalRun)
 	g.GET("/center/eval/cases/:id", h.GetEvalCase)
 	g.PUT("/center/eval/cases/:id", h.UpdateEvalCase)
 	g.DELETE("/center/eval/cases/:id", h.DeleteEvalCase)

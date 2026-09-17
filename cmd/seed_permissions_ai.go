@@ -74,6 +74,8 @@ func seedPermissionsAI() []model.Permission {
 		{Name: "AI 更新评估用例", Resource: "/api/v1/ai/center/eval/cases/:id", Action: "PUT", Description: "Update eval case"},
 		{Name: "AI 删除评估用例", Resource: "/api/v1/ai/center/eval/cases/:id", Action: "DELETE", Description: "Delete eval case"},
 		{Name: "AI 评估运行", Resource: "/api/v1/ai/center/eval/run", Action: "POST", Description: "Run eval suite"},
+		{Name: "AI 评估运行历史", Resource: "/api/v1/ai/center/eval/runs", Action: "GET", Description: "List eval runs"},
+		{Name: "AI 评估运行详情", Resource: "/api/v1/ai/center/eval/runs/:id", Action: "GET", Description: "Get eval run with results"},
 	}
 }
 

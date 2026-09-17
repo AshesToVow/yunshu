@@ -298,6 +298,7 @@ export function updateAISession(
     provider?: string;
     enable_tools?: boolean;
     enable_write?: boolean;
+    namespace?: string;
   },
 ) {
   return getData<AIChatSession>(http.patch(`/ai/sessions/${id}`, payload));

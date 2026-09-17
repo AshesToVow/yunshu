@@ -72,6 +72,23 @@ func (s *Service) RunEvalSuite(ctx context.Context, user *auth.CurrentUser, live
 	return &run, nil
 }
 
+func (s *Service) ListEvalRuns(ctx context.Context, limit int) ([]model.AiEvalRun, error) {
+	s.ensureSeed()
+	return s.repo.ListEvalRuns(ctx, limit)
+}
+
+func (s *Service) GetEvalRunDetail(ctx context.Context, id uint) (*model.AiEvalRun, []model.AiEvalResult, error) {
+	run, err := s.repo.GetEvalRunByID(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	results, err := s.repo.ListEvalResultsByRunID(ctx, id)
+	if err != nil {
+		return run, nil, err
+	}
+	return run, results, nil
+}
+
 func formatFloat(f float64) string {
 	b, _ := json.Marshal(f)
 	return string(b)

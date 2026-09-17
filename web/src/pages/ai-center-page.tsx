@@ -48,6 +48,8 @@ import {
   listAICenterSOPs,
   listAICenterTools,
   listAIEvalCases,
+  listAIEvalRuns,
+  getAIEvalRun,
   publishAICenterPrompt,
   reseedAICenter,
   rollbackAICenterPrompt,
@@ -90,7 +92,12 @@ export function AiCenterPage() {
   const [selectedKbId, setSelectedKbId] = useState<number>();
   const [models, setModels] = useState<AILLMModelItem[]>([]);
   const [evalCases, setEvalCases] = useState<Row[]>([]);
+  const [evalRuns, setEvalRuns] = useState<Row[]>([]);
   const [evalResult, setEvalResult] = useState<Record<string, unknown> | null>(null);
+  const [evalRunDetail, setEvalRunDetail] = useState<{
+    run: Record<string, unknown>;
+    results: Array<Record<string, unknown>>;
+  } | null>(null);
   const [runtimeHealth, setRuntimeHealth] = useState<Record<string, unknown> | null>(null);
 
   const [modelModalOpen, setModelModalOpen] = useState(false);
@@ -156,6 +163,7 @@ export function AiCenterPage() {
       listAICenterSOPs().then((r) => setSops(r?.list || [])),
       listAICenterKBs().then((r) => setKbs(r?.list || [])),
       listAIEvalCases().then((r) => setEvalCases(r?.list || [])),
+      listAIEvalRuns(20).then((r) => setEvalRuns(r?.list || [])),
       refreshModels(),
     ];
     await Promise.all(tasks.map((p) => p.catch(() => undefined)));
@@ -248,10 +256,21 @@ export function AiCenterPage() {
       const r = await runAIEval(live);
       setEvalResult(r || null);
       message.success(live ? "在线评估完成" : "离线评估完成");
+      const runs = await listAIEvalRuns(20);
+      setEvalRuns(runs?.list || []);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "评估失败"));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function openEvalRun(id: number) {
+    try {
+      const detail = await getAIEvalRun(id);
+      setEvalRunDetail(detail || null);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "加载评估运行详情失败"));
     }
   }
 
@@ -315,7 +334,8 @@ export function AiCenterPage() {
           ) : null}
           {evalResult ? (
             <Typography.Paragraph>
-              最近评估：{String(evalResult.summary || "")}（status={String(evalResult.status)}）
+              最近评估：{String(evalResult.summary || "")}（status={String(evalResult.status)}
+              {evalResult.id ? ` · run #${String(evalResult.id)}` : ""}）
             </Typography.Paragraph>
           ) : null}
 
@@ -1475,6 +1495,50 @@ export function AiCenterPage() {
                         新建用例
                       </Button>
                     </Space>
+                    <Typography.Text type="secondary">运行历史（最近 20 次）</Typography.Text>
+                    <Table
+                      rowKey="id"
+                      size="small"
+                      dataSource={evalRuns}
+                      locale={{ emptyText: "暂无评估运行" }}
+                      pagination={false}
+                      columns={[
+                        { title: "ID", dataIndex: "id", width: 70 },
+                        { title: "套件", dataIndex: "suite", width: 100 },
+                        { title: "状态", dataIndex: "status", width: 90 },
+                        {
+                          title: "得分",
+                          width: 120,
+                          render: (_: unknown, row: Row) =>
+                            `${String(row.total_score ?? "-")} / ${String(row.max_score ?? "-")}`,
+                        },
+                        { title: "摘要", dataIndex: "summary", ellipsis: true },
+                        {
+                          title: "操作",
+                          width: 90,
+                          render: (_: unknown, row: Row) => (
+                            <Button type="link" size="small" onClick={() => void openEvalRun(Number(row.id))}>
+                              详情
+                            </Button>
+                          ),
+                        },
+                      ]}
+                    />
+                    {evalRunDetail ? (
+                      <Card
+                        size="small"
+                        title={`运行 #${String(evalRunDetail.run.id)} 明细`}
+                        extra={
+                          <Button type="link" size="small" onClick={() => setEvalRunDetail(null)}>
+                            关闭
+                          </Button>
+                        }
+                      >
+                        <pre style={{ margin: 0, fontSize: 12, maxHeight: 280, overflow: "auto", whiteSpace: "pre-wrap" }}>
+                          {JSON.stringify(evalRunDetail.results || [], null, 2)}
+                        </pre>
+                      </Card>
+                    ) : null}
                   <Table
                     rowKey="id"
                     size="small"

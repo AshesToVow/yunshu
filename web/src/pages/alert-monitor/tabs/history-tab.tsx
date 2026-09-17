@@ -17,6 +17,7 @@ import {
   type AlertHisEventItem,
 } from "../../../services/alerts";
 import { analyzeAlertExplainAI, startAIInvestigation, type AIAlertExplainResult } from "../../../services/ai";
+import { useAiEnabled } from "../../../hooks/use-ai-enabled";
 import { createAlertSilence } from "../../../services/alert-platform";
 import { formatDateTime } from "../../../utils/format";
 import { DEFAULT_PAGE_SIZE, tablePagination } from "../../../utils/table-pagination";
@@ -31,6 +32,7 @@ type EventView = "current" | "lifecycle" | "delivery";
 
 export function HistoryTab() {
   const ctx = useAlertMonitor();
+  const { enabled: aiEnabled } = useAiEnabled();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const deepFingerprint = String(searchParams.get("fingerprint") || "").trim();
@@ -172,6 +174,10 @@ export function HistoryTab() {
   }, [deepFingerprint, curRows, hisRows, loading, loadHis]);
 
   async function runAiExplain(row: AlertCurEventItem) {
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     if (!row.fingerprint) {
       message.warning("该告警无指纹，无法 AI 解读");
       return;
@@ -195,6 +201,10 @@ export function HistoryTab() {
   }
 
   async function runAiInvestigate(row: AlertCurEventItem) {
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     if (!row.fingerprint) {
       message.warning("该告警无指纹，无法发起调查");
       return;
@@ -207,7 +217,7 @@ export function HistoryTab() {
         fingerprint: row.fingerprint,
         project_id: ctx.projectContextId || row.project_id || undefined,
       });
-      message.success(`调查已完成 #${inv.id}`);
+      message.success(`调查已完成 #${inv.id}${inv.status === "awaiting_approval" ? "（待审批）" : ""}`);
       navigate(`/ai/investigations?id=${inv.id}`);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "AI 调查失败"));

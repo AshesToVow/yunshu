@@ -16,6 +16,7 @@ import {
   type CicdRunStage,
 } from "../services/cicd";
 import { analyzeCicdBuildFailAI, startAIInvestigation, type AICicdBuildFailResult } from "../services/ai";
+import { useAiEnabled } from "../hooks/use-ai-enabled";
 import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
@@ -46,6 +47,7 @@ function buildArtifactType(row: CicdBuildRun): "minio" | "helm" | "image" | null
 
 export function CicdBuildRecordsPage() {
   const navigate = useNavigate();
+  const { enabled: aiEnabled } = useAiEnabled();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [serviceKeyword, setServiceKeyword] = useState("");
@@ -128,6 +130,10 @@ export function CicdBuildRecordsPage() {
 
   async function handleAIAnalyze(run: CicdBuildRun | null) {
     if (!projectId || !run || aiLoading) return;
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     setAiLoading(true);
     try {
       const res = await analyzeCicdBuildFailAI({ project_id: projectId, run_id: run.id });
@@ -146,6 +152,10 @@ export function CicdBuildRecordsPage() {
 
   async function handleAIInvestigate(run: CicdBuildRun | null) {
     if (!projectId || !run || aiInvestigateLoading) return;
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     setAiInvestigateLoading(true);
     try {
       const inv = await startAIInvestigation({
@@ -155,7 +165,7 @@ export function CicdBuildRecordsPage() {
         run_id: run.id,
         resource: String(run.id),
       });
-      message.success(`调查已完成 #${inv.id}`);
+      message.success(`调查已完成 #${inv.id}${inv.status === "awaiting_approval" ? "（待审批）" : ""}`);
       navigate(`/ai/investigations?id=${inv.id}`);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "AI 调查失败"));

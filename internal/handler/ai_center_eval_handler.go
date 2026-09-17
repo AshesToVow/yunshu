@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strconv"
+
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
 	aisvc "yunshu/internal/service/ai"
@@ -29,6 +31,37 @@ func (h *AIHandler) RunEval(c *gin.Context) {
 		return
 	}
 	response.Success(c, run)
+}
+
+func (h *AIHandler) ListEvalRuns(c *gin.Context) {
+	limit := 20
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	rows, err := h.svc.ListEvalRuns(auth.RequestContext(c), limit)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"list": rows})
+}
+
+func (h *AIHandler) GetEvalRun(c *gin.Context) {
+	var uri struct {
+		ID uint `uri:"id" binding:"required"`
+	}
+	if err := c.ShouldBindUri(&uri); err != nil {
+		response.Error(c, err)
+		return
+	}
+	run, results, err := h.svc.GetEvalRunDetail(auth.RequestContext(c), uri.ID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, gin.H{"run": run, "results": results})
 }
 
 func (h *AIHandler) GetEvalCase(c *gin.Context) {

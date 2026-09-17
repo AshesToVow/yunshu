@@ -131,6 +131,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	// AI 助手：具备对话或会话列表任一权限即可进入菜单
 	out["/ai/assistant"] = []EntryPermission{
 		{Resource: "/api/v1/ai/chat", Action: "POST"},
+		{Resource: "/api/v1/ai/chat/stream", Action: "POST"},
 		{Resource: "/api/v1/ai/sessions", Action: "GET"},
 	}
 	// 「服务与日志源」整合页：具备任一列表权限即可进入菜单

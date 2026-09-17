@@ -240,7 +240,7 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 	if includeWrite {
 		defs = append(defs,
 			llm.NewFunctionTool("create_alert_silence",
-				"为告警指纹创建静默（立即生效，非审批）。需 project_id + fingerprint；默认 2 小时。用于告警闭环止血，勿滥用。",
+				"申请告警静默（止血）：仅创建审批单，通过后才会生效。需 project_id + fingerprint；默认 2 小时。",
 				map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -318,11 +318,18 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 				return step
 			}
 			if scriptToolRequiresApproval(reg.RiskLevel, reg.Permission) {
-				err := errScriptNeedsApproval(name)
-				step.OK = false
-				step.Error = err.Error()
-				step.Result = step.Error
-				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
+				out, err := s.createToolApproval(ctx, userID, name, argsJSON, tc.ClusterID, tc.Namespace, name, "脚本写/高危工具")
+				if err != nil {
+					step.OK = false
+					step.Error = err.Error()
+					step.Result = err.Error()
+					s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, err.Error())
+					return step
+				}
+				raw, _ := json.Marshal(out)
+				step.OK = true
+				step.Result = truncateStr(string(raw), 24_000)
+				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, true, "created approval")
 				return step
 			}
 			out, err := s.runScriptTool(ctx, toolDefRow{
@@ -637,7 +644,7 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 		if err = requireActor(); err != nil {
 			break
 		}
-		out, err = s.executeCreateAlertSilence(ctx, actor, projectID, getUint, getStr)
+		out, err = s.createToolApproval(ctx, userID, name, argsJSON, clusterID, "", getStr("fingerprint"), getStr("comment"))
 	case "scale_deployment", "restart_deployment", "delete_pod":
 		if err = requireK8sAdmin(); err != nil {
 			break

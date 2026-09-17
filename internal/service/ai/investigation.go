@@ -137,6 +137,11 @@ func (s *Service) StartInvestigation(
 		return fail("分析失败: " + err.Error())
 	}
 	report.Evidence = evidence
+	row.Status = "done"
+	s.attachInvestigationApprovals(ctx, userID, actor, &row, report, req)
+	if row.Status != "awaiting_approval" {
+		row.Status = "done"
+	}
 	analysisRaw, _ := json.Marshal(map[string]any{
 		"summary":     report.Summary,
 		"root_causes": report.RootCauses,
@@ -147,7 +152,6 @@ func (s *Service) StartInvestigation(
 	reportRaw, _ := json.Marshal(report)
 	row.AnalysisJSON = scrubNonBMPForMySQL(string(analysisRaw))
 	row.ReportJSON = scrubNonBMPForMySQL(string(reportRaw))
-	row.Status = "done"
 	row.UpdatedAt = time.Now()
 	if err := s.repo.SaveInvestigation(ctx, &row); err != nil {
 		return fail("保存报告失败: " + err.Error())
@@ -343,7 +347,7 @@ func (s *Service) collectInvestigation(
 		}
 
 		bundle["recommended_actions"] = []map[string]any{
-			{"action": "silence", "hint": "可在告警页快捷静默，或助手调用 create_alert_silence", "fingerprint": fp},
+			{"action": "create_alert_silence", "tool": "create_alert_silence", "fingerprint": fp, "project_id": req.ProjectID, "hint": "将创建静默审批单，通过后生效"},
 			{"action": "check_changes", "hint": "核对 recent_changes 是否与告警同源"},
 			{"action": "conclude", "hint": "调查完成后在 AI 调查记录中归档结论"},
 		}

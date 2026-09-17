@@ -1,0 +1,18 @@
+case_id: CASE-MONITOR-PROMQL-001
+title: Prometheus 查询无数据典型案例
+category: monitor
+technology: prometheus
+symptom: PromQL 查询返回空，或助手 query_prometheus 无序列
+environment: 告警数据源 / Prometheus
+diagnosis: |
+  1. list_alert_datasources 确认数据源与项目绑定
+  2. list_prometheus_active_alerts 看是否有 firing
+  3. query_prometheus 用 up 等简单指标验证连通
+root_cause: 数据源地址错误、租户/项目未绑定、指标名或标签过滤过严
+solution: 修正数据源 URL/鉴权；放宽标签；核对时间点
+verification: up 或目标指标有返回；告警规则评估正常
+risk: 只读查询无写风险
+related_tools: '["list_alert_datasources","query_prometheus","list_prometheus_active_alerts"]'
+related_sop: '["sop-monitor-promql-empty"]'
+source: seed
+confidence: 0.85

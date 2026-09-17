@@ -2,7 +2,6 @@ package ai
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"yunshu/internal/pkg/auth"
@@ -127,8 +126,4 @@ func scriptToolRequiresApproval(riskLevel, permission string) bool {
 	default:
 		return false
 	}
-}
-
-func errScriptNeedsApproval(name string) error {
-	return fmt.Errorf("脚本工具 %s 为高危/写操作，禁止直接执行，请走审批或降低风险等级", name)
 }
