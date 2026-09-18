@@ -120,11 +120,12 @@ func (s *LogSearchService) Search(ctx context.Context, q LogSearchQuery) (*pagin
 
 func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery) string {
 	if pat := strings.TrimSpace(q.IndexPattern); pat != "" {
-		// 仅允许相对安全的索引通配，防止跨集群滥用绝对奇怪的输入
-		if strings.ContainsAny(pat, " \t\n;") {
-			return strings.ReplaceAll(pat, " ", "")
+		pat = strings.ReplaceAll(pat, " ", "")
+		if indexPatternAllowed(ctx, s, pat) {
+			return pat
 		}
-		return pat
+		// 不安全覆盖忽略，回退默认索引解析
+		q.IndexPattern = ""
 	}
 	k8sPrefix := ""
 	if s.es != nil {
@@ -152,6 +153,33 @@ func (s *LogSearchService) resolveIndices(ctx context.Context, q LogSearchQuery)
 		}
 		return host + "," + k8s
 	}
+}
+
+func indexPatternAllowed(ctx context.Context, s *LogSearchService, pat string) bool {
+	if pat == "" || strings.ContainsAny(pat, "\t\n;") {
+		return false
+	}
+	k8sPrefix := ""
+	if s != nil && s.es != nil {
+		if cfg, err := s.es.Resolve(ctx); err == nil {
+			k8sPrefix = strings.ToLower(strings.TrimSpace(cfg.K8sIndexPrefix))
+		}
+	}
+	for _, part := range strings.Split(pat, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" || strings.HasPrefix(part, ".") || strings.Contains(part, "..") {
+			return false
+		}
+		lower := strings.ToLower(part)
+		if strings.HasPrefix(lower, "yunshu") || strings.HasPrefix(lower, "loggie") {
+			continue
+		}
+		if k8sPrefix != "" && strings.HasPrefix(lower, k8sPrefix) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func normalizeCollectorMode(mode string) string {

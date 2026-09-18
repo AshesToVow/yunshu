@@ -96,9 +96,12 @@ type BackupDownloadResult struct {
 }
 
 // PresignBackupDownload 生成备份产物临时下载链接。
-func (s *Service) PresignBackupDownload(ctx context.Context, jobID uint, artifact string) (*BackupDownloadResult, error) {
+func (s *Service) PresignBackupDownload(ctx context.Context, jobID uint, artifact string, actor *auth.CurrentUser) (*BackupDownloadResult, error) {
 	job, err := s.GetBackupJob(ctx, jobID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.assertConnectionWrite(ctx, job.ConnectionID, actor); err != nil {
 		return nil, err
 	}
 	if job.Status != "success" {

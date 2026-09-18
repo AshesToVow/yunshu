@@ -143,7 +143,7 @@ func (h *EsmgmtHandler) CreateIndex(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.CreateIndex(c.Request.Context(), req); err != nil {
+	if err := h.svc.CreateIndex(c.Request.Context(), req, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -154,7 +154,7 @@ func (h *EsmgmtHandler) DeleteIndex(c *gin.Context) {
 	connID := parseOptionalUintQuery(c, "connection_id")
 	name := strings.TrimSpace(c.Param("name"))
 	force := parseBoolQuery(c, "force")
-	if err := h.svc.DeleteIndex(c.Request.Context(), connID, name, force); err != nil {
+	if err := h.svc.DeleteIndex(c.Request.Context(), connID, name, force, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -164,7 +164,7 @@ func (h *EsmgmtHandler) DeleteIndex(c *gin.Context) {
 func (h *EsmgmtHandler) OpenIndex(c *gin.Context) {
 	connID := parseOptionalUintQuery(c, "connection_id")
 	name := strings.TrimSpace(c.Param("name"))
-	if err := h.svc.OpenIndex(c.Request.Context(), connID, name); err != nil {
+	if err := h.svc.OpenIndex(c.Request.Context(), connID, name, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -174,7 +174,7 @@ func (h *EsmgmtHandler) OpenIndex(c *gin.Context) {
 func (h *EsmgmtHandler) CloseIndex(c *gin.Context) {
 	connID := parseOptionalUintQuery(c, "connection_id")
 	name := strings.TrimSpace(c.Param("name"))
-	if err := h.svc.CloseIndex(c.Request.Context(), connID, name); err != nil {
+	if err := h.svc.CloseIndex(c.Request.Context(), connID, name, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -257,7 +257,7 @@ func (h *EsmgmtHandler) DownloadBackup(c *gin.Context) {
 		return
 	}
 	artifact := strings.TrimSpace(c.Query("artifact"))
-	out, err := h.svc.PresignBackupDownload(c.Request.Context(), id, artifact)
+	out, err := h.svc.PresignBackupDownload(c.Request.Context(), id, artifact, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -358,7 +358,7 @@ func (h *EsmgmtHandler) DeleteSchedule(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.DeleteSchedule(c.Request.Context(), id); err != nil {
+	if err := h.svc.DeleteSchedule(c.Request.Context(), id, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}

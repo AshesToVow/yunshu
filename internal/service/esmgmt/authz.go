@@ -58,8 +58,8 @@ func (s *Service) assertConnectionWrite(ctx context.Context, connectionID uint, 
 		def, err := s.repo.GetDefaultConnection(ctx)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				// 无默认连接时仅允许已登录用户走字典回退（只读场景由上层 API 约束）
-				return nil
+				// 无默认连接时禁止写操作走字典回退（避免 Owner 模型被绕过）
+				return constants.ErrForbiddenWithMsg("未配置默认 ES 连接，请指定 connection_id")
 			}
 			return err
 		}

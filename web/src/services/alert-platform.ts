@@ -361,10 +361,15 @@ export interface AlertSilenceBatchItem {
   ends_at: string;
   comment?: string;
   enabled?: boolean;
+  /** 可选；非空时覆盖请求级 project_id */
+  project_id?: number;
 }
 
-export function createAlertSilencesBatch(items: AlertSilenceBatchItem[]) {
-  return getData<{ created: number }>(http.post("/alerts/silences/batch", { items }));
+export function createAlertSilencesBatch(payload: {
+  items: AlertSilenceBatchItem[];
+  project_id?: number;
+}) {
+  return getData<{ created: number }>(http.post("/alerts/silences/batch", payload));
 }
 
 export function updateAlertSilence(id: number, payload: Record<string, unknown>) {

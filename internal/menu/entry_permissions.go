@@ -117,6 +117,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/esmgmt/connections": {"/api/v1/esmgmt/connections", "GET"},
 		"/esmgmt/storage":     {"/api/v1/log-platform/retention", "GET"},
 		"/esmgmt/overview":    {"/api/v1/esmgmt/cluster/health", "GET"},
+		"/esmgmt/backups":     {"/api/v1/esmgmt/backups", "GET"},
 		"/esmgmt/console":     {"/api/v1/esmgmt/proxy", "POST"},
 
 		"/crds": {"/api/v1/crds", "GET"},

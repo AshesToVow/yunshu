@@ -307,9 +307,13 @@ func assembleRouteDeps(
 		esmgmtSvc:          svcs.Esmgmt,
 		esmgmtHandler:      handlers.Esmgmt,
 		platformFeatures:   handler.NewPlatformFeaturesHandler(svcs.AlertMonitorRule, repos.AlertRuleChange, repos.PromqlSavedQuery, repos.K8sCrTemplate),
-		workflowHandler: handler.NewWorkflowHandler(workflowsvc.NewService(
-			repos.Workflow, repos.UserGroup, repos.AlertDuty, repos.User,
-		)),
+		workflowHandler: handler.NewWorkflowHandler(func() *workflowsvc.Service {
+			wf := workflowsvc.NewService(
+				repos.Workflow, repos.UserGroup, repos.AlertDuty, repos.User,
+			)
+			wf.SetAlertEventRepo(repos.AlertEvent)
+			return wf
+		}()),
 		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(
 			repos.PlatformTemplate,
 			func(ctx context.Context) (*objectstore.Client, error) {

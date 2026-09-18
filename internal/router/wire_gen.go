@@ -72,7 +72,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v36 := routerRouteRepositories.DictEntry
 	v37 := system.NewDictEntryService(v36)
 	v38 := routerRouteRepositories.AlertSilence
-	v39 := alert.NewAlertSilenceService(v38)
+	v39 := alert.NewAlertSilenceService(v38, v10)
 	v40 := routerRouteRepositories.AlertDuty
 	v41 := alert.NewAlertDutyService(v40, v12, v5)
 	v42 := routerRouteRepositories.AlertReceiverGroup

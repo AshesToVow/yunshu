@@ -180,6 +180,7 @@ export function EsmgmtStoragePage() {
           <Space>
             <Link to="/esmgmt/connections">连接管理</Link>
             <Link to="/esmgmt/overview">集群概览</Link>
+            <Link to="/esmgmt/backups">备份与恢复</Link>
             <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void reload()}>
               刷新
             </Button>

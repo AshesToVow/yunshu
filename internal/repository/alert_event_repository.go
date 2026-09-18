@@ -35,6 +35,17 @@ func (r *AlertEventRepository) GetByFingerprint(ctx context.Context, fingerprint
 	return &event, nil
 }
 
+func (r *AlertEventRepository) GetByID(ctx context.Context, id uint) (*model.AlertEvent, error) {
+	if id == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var event model.AlertEvent
+	if err := r.db.WithContext(ctx).First(&event, id).Error; err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
 func (r *AlertEventRepository) UpdateStatus(ctx context.Context, fingerprint, status string) error {
 	res := r.db.WithContext(ctx).Model(&model.AlertEvent{}).
 		Where("group_key = ? OR labels_digest = ?", fingerprint, fingerprint).

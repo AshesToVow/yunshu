@@ -23,12 +23,13 @@ type DictValueWriter func(ctx context.Context, dictType, label, value, remark st
 
 // ManagedESEndpoint 来自 esmgmt 连接表的可连接端点（地址/认证）。
 type ManagedESEndpoint struct {
-	ID         uint
-	Name       string
-	Addresses  []string
-	Username   string
-	Password   string
-	TimeoutSec int
+	ID          uint
+	Name        string
+	Addresses   []string
+	Username    string
+	Password    string
+	TimeoutSec  int
+	OwnerUserID uint
 }
 
 // ManagedESConnectionLoader 由 esmgmt.Service 实现，避免 ElasticsearchProvider ↔ esmgmt 构造循环依赖。

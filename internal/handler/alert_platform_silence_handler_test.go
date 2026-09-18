@@ -73,7 +73,7 @@ var _ repository.AlertSilenceRepo = (*silenceRepoFake)(nil)
 func newSilenceHandlerEngine(t *testing.T, repo *silenceRepoFake) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	silenceSvc := alert.NewAlertSilenceService(repo)
+	silenceSvc := alert.NewAlertSilenceService(repo, nil)
 	h := handler.NewAlertPlatformHandler(nil, silenceSvc, nil, nil, nil, nil, nil)
 	eng := gin.New()
 	eng.Use(middleware.ErrorHandler())

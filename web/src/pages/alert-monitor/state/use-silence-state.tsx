@@ -356,7 +356,10 @@ export function useAlertMonitorSilenceState(params: {
         starts_at: it.startsAt.toISOString(),
         ends_at: it.endsAt.toISOString(),
       }));
-      const { created } = await createAlertSilencesBatch(items);
+      const { created } = await createAlertSilencesBatch({
+        project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
+        items,
+      });
       message.success(`已创建 ${created} 条静默`);
       setQuickSilenceOpen(false);
       await loadSilences();

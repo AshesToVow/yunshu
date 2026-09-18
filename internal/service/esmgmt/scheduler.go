@@ -79,7 +79,18 @@ func (s *Service) UpdateSchedule(ctx context.Context, id uint, req ScheduleUpser
 	if err != nil {
 		return nil, err
 	}
+	connID := row.ConnectionID
 	if req.ConnectionID > 0 {
+		connID = req.ConnectionID
+	}
+	if err := s.assertConnectionWrite(ctx, connID, actor); err != nil {
+		return nil, err
+	}
+	// 若改绑连接，原连接也须有写权限
+	if req.ConnectionID > 0 && req.ConnectionID != row.ConnectionID {
+		if err := s.assertConnectionWrite(ctx, row.ConnectionID, actor); err != nil {
+			return nil, err
+		}
 		row.ConnectionID = req.ConnectionID
 	}
 	if name := strings.TrimSpace(req.IndexName); name != "" {
@@ -109,9 +120,16 @@ func (s *Service) UpdateSchedule(ctx context.Context, id uint, req ScheduleUpser
 	return row, nil
 }
 
-func (s *Service) DeleteSchedule(ctx context.Context, id uint) error {
+func (s *Service) DeleteSchedule(ctx context.Context, id uint, actor *auth.CurrentUser) error {
 	if id == 0 {
 		return constants.ErrBadRequestWithMsg("调度 ID 无效")
+	}
+	row, err := s.repo.GetSchedule(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.assertConnectionWrite(ctx, row.ConnectionID, actor); err != nil {
+		return err
 	}
 	n, err := s.repo.DeleteSchedule(ctx, id)
 	if err != nil {

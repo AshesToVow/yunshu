@@ -90,6 +90,7 @@ export function EsmgmtConsolePage() {
         extra={
           <Space>
             <Link to="/esmgmt/overview">集群概览</Link>
+            <Link to="/esmgmt/backups">备份与恢复</Link>
             <Link to="/esmgmt/connections">连接管理</Link>
           </Space>
         }

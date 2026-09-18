@@ -310,7 +310,8 @@ export function sendAlertmanagerWebhook(payload: Record<string, unknown>, token?
   if ((token || "").trim()) {
     headers["X-Webhook-Token"] = String(token).trim();
   }
-  return getData<{ message: string }>(http.post("/alerts/ingress/k8s-events", payload, { headers }));
+  // Alertmanager 正式入口；勿打 k8s-events（会跳过当前告警 cur_events）
+  return getData<{ message: string }>(http.post("/alerts/webhook", payload, { headers }));
 }
 
 export interface AlertCurEventItem {

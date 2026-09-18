@@ -161,7 +161,8 @@ func DefaultCatalog() []Spec {
 				{Path: "/esmgmt/connections", Name: "连接管理", Icon: "ApiOutlined", Sort: 1, Component: "esmgmt-connections-page", Status: 1},
 				{Path: "/esmgmt/storage", Name: "日志存储", Icon: "DatabaseOutlined", Sort: 2, Component: "esmgmt-storage-page", Status: 1},
 				{Path: "/esmgmt/overview", Name: "集群概览", Icon: "FundOutlined", Sort: 3, Component: "esmgmt-overview-page", Status: 1},
-				{Path: "/esmgmt/console", Name: "REST 控制台", Icon: "CodeOutlined", Sort: 4, Component: "esmgmt-console-page", Status: 1},
+				{Path: "/esmgmt/backups", Name: "备份与恢复", Icon: "CloudUploadOutlined", Sort: 4, Component: "esmgmt-backups-page", Status: 1},
+				{Path: "/esmgmt/console", Name: "REST 控制台", Icon: "CodeOutlined", Sort: 5, Component: "esmgmt-console-page", Status: 1},
 			},
 		},
 		{

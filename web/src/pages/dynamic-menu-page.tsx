@@ -83,6 +83,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/esmgmt/connections": "esmgmt-connections-page",
   "/esmgmt/storage": "esmgmt-storage-page",
   "/esmgmt/overview": "esmgmt-overview-page",
+  "/esmgmt/backups": "esmgmt-backups-page",
   "/esmgmt/console": "esmgmt-console-page",
   "/workflow/inbox": "workflow-inbox-page",
   "/workflow/tickets": "workflow-tickets-page",

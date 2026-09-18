@@ -28,10 +28,11 @@ var stageKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`)
 
 // Service 统一工单引擎：流程定义 + 通用工单 + 排班派单。
 type Service struct {
-	repo          interfaces.WorkflowRepository
-	userGroupRepo interfaces.UserGroupRepository
-	dutyRepo      interfaces.AlertDutyRepository
-	userRepo      interfaces.UserRepository
+	repo           interfaces.WorkflowRepository
+	userGroupRepo  interfaces.UserGroupRepository
+	dutyRepo       interfaces.AlertDutyRepository
+	userRepo       interfaces.UserRepository
+	alertEventRepo interfaces.AlertEventRepository
 }
 
 // NewService 创建工单引擎。
@@ -47,6 +48,14 @@ func NewService(
 		dutyRepo:      dutyRepo,
 		userRepo:      userRepo,
 	}
+}
+
+// SetAlertEventRepo 注入告警事件查询（告警转故障单取 project_id）。
+func (s *Service) SetAlertEventRepo(repo interfaces.AlertEventRepository) {
+	if s == nil {
+		return
+	}
+	s.alertEventRepo = repo
 }
 
 type DefinitionKey struct {
@@ -380,10 +389,22 @@ func (s *Service) CreateIncidentFromAlert(ctx context.Context, alertEventID uint
 	if title == "" {
 		title = "告警转工单 #" + itoa(alertEventID)
 	}
+	var projectID uint
+	if s.alertEventRepo != nil && alertEventID > 0 {
+		ev, err := s.alertEventRepo.GetByID(ctx, alertEventID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, constants.ErrNotFoundWithMsg("告警事件不存在")
+			}
+			return nil, bizerrors.Pass(ctx, "workflow", "CreateIncidentFromAlert", err)
+		}
+		projectID = ev.ProjectID
+	}
 	return s.CreateTicket(ctx, CreateTicketRequest{
 		Domain: model.WorkflowDomainIncident, TicketType: model.WorkflowTicketTypeIncident,
-		Title: title, RefType: "alert_event", RefID: alertEventID,
-		Payload: map[string]any{"alert_event_id": alertEventID},
+		ProjectID: projectID,
+		Title:     title, RefType: "alert_event", RefID: alertEventID,
+		Payload: map[string]any{"alert_event_id": alertEventID, "project_id": projectID},
 	}, actor)
 }
 
@@ -581,6 +602,10 @@ func (s *Service) userCanReviewStep(ctx context.Context, actor *auth.CurrentUser
 		return *step.AssigneeUserID == userID, nil
 	}
 	if step.AssigneeRuleType == model.WorkflowAssigneePlatformRole {
+		return CanPlatformRoleReview(actor), nil
+	}
+	// 值班节点未解析到人：允许平台审批角色接手，避免工单永久卡死
+	if step.AssigneeRuleType == model.WorkflowAssigneeDuty {
 		return CanPlatformRoleReview(actor), nil
 	}
 	if step.UserGroupID == nil || *step.UserGroupID == 0 {

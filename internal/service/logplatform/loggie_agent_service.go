@@ -14,10 +14,11 @@ import (
 	"yunshu/internal/config"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	cryptox "yunshu/internal/pkg/crypto"
-	"yunshu/internal/repository"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -772,9 +773,24 @@ type SetESConnectionRequest struct {
 }
 
 // SetESConnection 将日志平台绑定到指定 esmgmt 连接；connection_id=0 回退数据字典地址。
-func (s *LoggieAgentService) SetESConnection(ctx context.Context, req SetESConnectionRequest) (*ESConfigPreviewItem, error) {
+// 绑定非 0 连接时须为超管或该连接 Owner。
+func (s *LoggieAgentService) SetESConnection(ctx context.Context, req SetESConnectionRequest, actor *auth.CurrentUser) (*ESConfigPreviewItem, error) {
 	if s.esProvider == nil {
 		return nil, constants.ErrBadRequestWithMsg("ES Provider 未就绪")
+	}
+	if req.ConnectionID > 0 {
+		ep, err := s.esProvider.LookupManagedConnection(ctx, req.ConnectionID)
+		if err != nil {
+			return nil, constants.ErrBadRequestWithMsg(err.Error())
+		}
+		if actor == nil || actor.ID == 0 {
+			return nil, constants.ErrUnauthorized
+		}
+		if !auth.IsSuperAdminRole(actor.RoleCodes) {
+			if ep.OwnerUserID == 0 || ep.OwnerUserID != actor.ID {
+				return nil, constants.ErrForbiddenWithMsg("仅连接负责人或超级管理员可绑定该 ES 连接")
+			}
+		}
 	}
 	if err := s.esProvider.SetManagedConnectionID(ctx, req.ConnectionID); err != nil {
 		return nil, constants.ErrBadRequestWithMsg(err.Error())

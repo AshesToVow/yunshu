@@ -419,11 +419,7 @@ func (s *Service) executeCreateAlertSilence(
 	now := time.Now()
 	ends := now.Add(time.Duration(hours) * time.Hour)
 	en := true
-	uid := uint(0)
-	if actor != nil {
-		uid = actor.ID
-	}
-	row, err := s.silenceSvc.Create(ctx, uid, alert.AlertSilenceUpsertRequest{
+	row, err := s.silenceSvc.Create(ctx, actor, alert.AlertSilenceUpsertRequest{
 		ProjectID:    pid,
 		Name:         fmt.Sprintf("AI静默 %s（%dh）", truncateStr(alertname, 64), hours),
 		MatchersJSON: string(raw),

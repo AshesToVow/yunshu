@@ -270,13 +270,15 @@ func (h *AlertPlatformHandler) ListSilences(c *gin.Context) {
 
 func (h *AlertPlatformHandler) CreateSilence(c *gin.Context) {
 	ServeJSON(c, func(ctx context.Context, req service.AlertSilenceUpsertRequest) (any, error) {
-		return h.silence.Create(ctx, alertPlatformUserID(c), req)
+		actor, _ := auth.CurrentUserFromContext(c)
+		return h.silence.Create(ctx, actor, req)
 	})
 }
 
 func (h *AlertPlatformHandler) CreateSilenceBatch(c *gin.Context) {
 	ServeJSON(c, func(ctx context.Context, req service.AlertSilenceBatchRequest) (gin.H, error) {
-		n, err := h.silence.CreateBatch(ctx, alertPlatformUserID(c), req)
+		actor, _ := auth.CurrentUserFromContext(c)
+		n, err := h.silence.CreateBatch(ctx, actor, req)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +293,8 @@ func (h *AlertPlatformHandler) UpdateSilence(c *gin.Context) {
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertSilenceUpsertRequest) (any, error) {
-		return h.silence.Update(ctx, id, req)
+		actor, _ := auth.CurrentUserFromContext(c)
+		return h.silence.Update(ctx, id, actor, req)
 	})
 }
 
@@ -301,7 +304,8 @@ func (h *AlertPlatformHandler) DeleteSilence(c *gin.Context) {
 		abortService(c, err)
 		return
 	}
-	if err := h.silence.Delete(c.Request.Context(), id); err != nil {
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.silence.Delete(c.Request.Context(), id, actor); err != nil {
 		abortService(c, err)
 		return
 	}

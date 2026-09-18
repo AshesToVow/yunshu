@@ -61,6 +61,7 @@ type AlertDatasourceFilterOption struct {
 type AlertEventRepo interface {
 	Create(ctx context.Context, event *model.AlertEvent) error
 	GetByFingerprint(ctx context.Context, fingerprint string) (*model.AlertEvent, error)
+	GetByID(ctx context.Context, id uint) (*model.AlertEvent, error)
 	UpdateStatus(ctx context.Context, fingerprint, status string) error
 	List(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]model.AlertEvent, int64, error)
 	ListGroupedByGroupKey(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]AlertEventGroupRow, int64, error)

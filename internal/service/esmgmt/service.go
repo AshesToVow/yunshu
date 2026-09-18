@@ -186,12 +186,13 @@ func (s *Service) LoadManagedESConnection(ctx context.Context, id uint) (*logpla
 		timeout = 30
 	}
 	return &logplatform.ManagedESEndpoint{
-		ID:         row.ID,
-		Name:       row.Name,
-		Addresses:  splitAddresses(row.Addresses),
-		Username:   row.Username,
-		Password:   pw,
-		TimeoutSec: timeout,
+		ID:          row.ID,
+		Name:        row.Name,
+		Addresses:   splitAddresses(row.Addresses),
+		Username:    row.Username,
+		Password:    pw,
+		TimeoutSec:  timeout,
+		OwnerUserID: row.OwnerUserID,
 	}, nil
 }
 
@@ -247,12 +248,20 @@ func (s *Service) CreateConnection(ctx context.Context, req ConnectionUpsertRequ
 	if timeout <= 0 {
 		timeout = 30
 	}
+	isDefault := req.IsDefault
+	if isDefault && !isSuperAdmin(actor) {
+		// 非超管不可抢默认连接；仅当系统尚无默认连接时允许首条自动默认（ImportFromDict 路径）
+		defCount, _ := s.repo.CountDefaultConnections(ctx)
+		if defCount > 0 {
+			isDefault = false
+		}
+	}
 	row := model.EsmgmtConnection{
 		Name:        name,
 		Addresses:   joinAddresses(addrs),
 		Username:    strings.TrimSpace(req.Username),
 		TimeoutSec:  timeout,
-		IsDefault:   req.IsDefault,
+		IsDefault:   isDefault,
 		OwnerUserID: actorID(actor),
 		Remark:      strings.TrimSpace(req.Remark),
 	}
@@ -294,6 +303,9 @@ func (s *Service) UpdateConnection(ctx context.Context, id uint, req ConnectionU
 	row.Username = strings.TrimSpace(req.Username)
 	if req.TimeoutSec > 0 {
 		row.TimeoutSec = req.TimeoutSec
+	}
+	if req.IsDefault && !row.IsDefault && !isSuperAdmin(actor) {
+		return nil, constants.ErrForbiddenWithMsg("仅超级管理员可将连接设为默认")
 	}
 	row.IsDefault = req.IsDefault
 	row.Remark = strings.TrimSpace(req.Remark)
@@ -439,7 +451,10 @@ type CreateIndexRequest struct {
 }
 
 // CreateIndex 创建索引（可选 settings/mappings）；禁止系统索引名，已存在则失败。
-func (s *Service) CreateIndex(ctx context.Context, req CreateIndexRequest) error {
+func (s *Service) CreateIndex(ctx context.Context, req CreateIndexRequest, actor *auth.CurrentUser) error {
+	if err := s.assertConnectionWrite(ctx, req.ConnectionID, actor); err != nil {
+		return err
+	}
 	index := strings.TrimSpace(req.Name)
 	if index == "" {
 		return constants.ErrBadRequestWithMsg("索引名不能为空")
@@ -475,7 +490,10 @@ func (s *Service) CreateIndex(ctx context.Context, req CreateIndexRequest) error
 }
 
 // DeleteIndex 删除索引；名称含 yunshu-agent 时须 force=true。
-func (s *Service) DeleteIndex(ctx context.Context, connectionID uint, index string, force bool) error {
+func (s *Service) DeleteIndex(ctx context.Context, connectionID uint, index string, force bool, actor *auth.CurrentUser) error {
+	if err := s.assertConnectionWrite(ctx, connectionID, actor); err != nil {
+		return err
+	}
 	index = strings.TrimSpace(index)
 	if index == "" {
 		return constants.ErrBadRequestWithMsg("索引名不能为空")
@@ -499,7 +517,10 @@ func (s *Service) DeleteIndex(ctx context.Context, connectionID uint, index stri
 	return nil
 }
 
-func (s *Service) OpenIndex(ctx context.Context, connectionID uint, index string) error {
+func (s *Service) OpenIndex(ctx context.Context, connectionID uint, index string, actor *auth.CurrentUser) error {
+	if err := s.assertConnectionWrite(ctx, connectionID, actor); err != nil {
+		return err
+	}
 	index = strings.TrimSpace(index)
 	if index == "" {
 		return constants.ErrBadRequestWithMsg("索引名不能为空")
@@ -514,7 +535,10 @@ func (s *Service) OpenIndex(ctx context.Context, connectionID uint, index string
 	return nil
 }
 
-func (s *Service) CloseIndex(ctx context.Context, connectionID uint, index string) error {
+func (s *Service) CloseIndex(ctx context.Context, connectionID uint, index string, actor *auth.CurrentUser) error {
+	if err := s.assertConnectionWrite(ctx, connectionID, actor); err != nil {
+		return err
+	}
 	index = strings.TrimSpace(index)
 	if index == "" {
 		return constants.ErrBadRequestWithMsg("索引名不能为空")

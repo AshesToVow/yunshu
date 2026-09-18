@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/response"
@@ -237,7 +238,8 @@ func (h *LoggieHandler) SetESConnection(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	cfg, err := h.svc.SetESConnection(c.Request.Context(), req)
+	actor, _ := auth.CurrentUserFromContext(c)
+	cfg, err := h.svc.SetESConnection(c.Request.Context(), req, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
