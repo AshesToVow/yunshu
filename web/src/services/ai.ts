@@ -368,7 +368,13 @@ export interface AIApprovalItem {
   created_at?: string;
 }
 
-export function listAIApprovals(params?: { status?: string; page?: number; page_size?: number }) {
+export function listAIApprovals(params?: {
+  status?: string;
+  page?: number;
+  page_size?: number;
+  all?: boolean;
+  mine_only?: boolean;
+}) {
   return getData<{ list: AIApprovalItem[]; total: number }>(http.get("/ai/approvals", { params }));
 }
 

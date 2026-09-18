@@ -1,9 +1,8 @@
 package ai
 
 import (
+	"encoding/json"
 	"testing"
-
-	"yunshu/internal/model"
 )
 
 func TestExtractInvestigationWriteCandidates_AlertNoDefaultSilence(t *testing.T) {
@@ -62,15 +61,14 @@ func TestNormalizeWriteToolName(t *testing.T) {
 	}
 }
 
-func TestLinkedApprovalIDsFromInvestigation(t *testing.T) {
+func TestValidateInvestigationWriteCandidate_Policy(t *testing.T) {
 	t.Parallel()
-	aid := uint(9)
-	inv := &model.AiInvestigation{
-		ApprovalID:   &aid,
-		AnalysisJSON: `{"approvals":[{"approval_id":9},{"approval_id":10}]}`,
+	c := investigationWriteCandidate{
+		Tool: "delete_pod", Namespace: "kube-system", Resource: "x", Reason: "cleanup",
+		Args: map[string]any{"cluster_id": 1, "namespace": "kube-system", "name": "x"},
 	}
-	ids := linkedApprovalIDsFromInvestigation(inv)
-	if len(ids) != 2 {
-		t.Fatalf("want 2 ids, got %v", ids)
+	raw, _ := json.Marshal(c.Args)
+	if err := checkWriteToolPolicy(c.Tool, string(raw), c.Namespace, c.Reason); err == nil {
+		t.Fatal("expected policy reject for kube-system delete")
 	}
 }

@@ -8,10 +8,13 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
+	"yunshu/internal/service/k8s"
 )
 
 // attachInvestigationApprovals 将调查报告中的写动作转为审批单，闭合「采集→分析→待审批」。
 // 成功创建至少一张审批单时状态为 awaiting_approval，并写入 ApprovalID（首张）。
+// 返回值：已创建的审批单 ID（供落库失败时回滚）。
 func (s *Service) attachInvestigationApprovals(
 	ctx context.Context,
 	userID uint,
@@ -19,17 +22,24 @@ func (s *Service) attachInvestigationApprovals(
 	row *model.AiInvestigation,
 	report *InvestigationReport,
 	req StartInvestigationRequest,
-) {
+) []uint {
 	if s.repo == nil || row == nil || report == nil {
-		return
+		return nil
 	}
 	cands := extractInvestigationWriteCandidates(row.Kind, req, report)
 	if len(cands) == 0 {
-		return
+		return nil
 	}
 	var firstID uint
+	var created []uint
 	for _, c := range cands {
 		argsRaw, _ := json.Marshal(c.Args)
+		if err := s.validateInvestigationWriteCandidate(ctx, actor, c, string(argsRaw)); err != nil {
+			report.Actions = append(report.Actions, map[string]any{
+				"action": "approval_skipped", "tool": c.Tool, "error": err.Error(),
+			})
+			continue
+		}
 		out, err := s.createToolApproval(ctx, userID, c.Tool, string(argsRaw), c.ClusterID, c.Namespace, c.Resource, c.Reason)
 		if err != nil {
 			report.Actions = append(report.Actions, map[string]any{
@@ -38,6 +48,9 @@ func (s *Service) attachInvestigationApprovals(
 			continue
 		}
 		aid := uintFromAny(out["approval_id"], 0)
+		if aid > 0 {
+			created = append(created, aid)
+		}
 		if firstID == 0 && aid > 0 {
 			firstID = aid
 		}
@@ -49,13 +62,35 @@ func (s *Service) attachInvestigationApprovals(
 		})
 	}
 	if firstID == 0 {
-		return
+		return created
 	}
 	row.ApprovalID = &firstID
 	row.Status = "awaiting_approval"
 	row.UpdatedAt = time.Now()
-	// AnalysisJSON / ReportJSON 由 StartInvestigation 统一落库，避免被覆盖丢 approvals
-	_ = actor
+	return created
+}
+
+func (s *Service) validateInvestigationWriteCandidate(
+	ctx context.Context,
+	actor *auth.CurrentUser,
+	c investigationWriteCandidate,
+	argsJSON string,
+) error {
+	switch c.Tool {
+	case "scale_deployment", "restart_deployment", "delete_pod":
+		if err := checkWriteToolPolicy(c.Tool, argsJSON, c.Namespace, c.Reason); err != nil {
+			return err
+		}
+		return s.assertK8sClusterAccess(ctx, actor, c.ClusterID, c.Namespace, k8s.K8sAccessRankAdmin)
+	case "create_alert_silence":
+		pid := uintFromAny(c.Args["project_id"], 0)
+		if pid == 0 {
+			return constants.ErrBadRequestWithMsg("project_id 必填")
+		}
+		return s.assertProjectMember(ctx, actor, pid)
+	default:
+		return nil
+	}
 }
 
 type investigationWriteCandidate struct {
@@ -136,7 +171,7 @@ func extractInvestigationWriteCandidates(
 			args["name"] = name
 			if tool == "scale_deployment" {
 				if _, ok := args["replicas"]; !ok {
-					continue // 缺副本数不建单
+					continue
 				}
 			}
 			args["reason"] = reason
@@ -144,7 +179,6 @@ func extractInvestigationWriteCandidates(
 				Tool: tool, Args: args, ClusterID: clusterID, Namespace: ns, Resource: name, Reason: reason,
 			})
 		default:
-			// 脚本等：保留 args，resource 用 tool 名
 			add(investigationWriteCandidate{
 				Tool: tool, Args: args, ClusterID: clusterID, Namespace: ns, Resource: name, Reason: reason,
 			})

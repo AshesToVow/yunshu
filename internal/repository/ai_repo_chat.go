@@ -2,7 +2,8 @@ package repository
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"yunshu/internal/model"
@@ -241,7 +242,7 @@ func (r *AiRepository) GetInvestigationByApprovalID(ctx context.Context, approva
 	return &row, nil
 }
 
-// FindInvestigationLinkingApproval 按 approval_id 或报告/分析 JSON 中的挂接查找（多审批场景）。
+// FindInvestigationLinkingApproval 按 approval_id 精确关联查找（含多审批 JSON 挂接）。
 func (r *AiRepository) FindInvestigationLinkingApproval(ctx context.Context, approvalID uint) (*model.AiInvestigation, error) {
 	if approvalID == 0 {
 		return nil, gorm.ErrRecordNotFound
@@ -249,14 +250,68 @@ func (r *AiRepository) FindInvestigationLinkingApproval(ctx context.Context, app
 	if inv, err := r.GetInvestigationByApprovalID(ctx, approvalID); err == nil {
 		return inv, nil
 	}
-	needle := `"approval_id":` + fmt.Sprintf("%d", approvalID)
-	var row model.AiInvestigation
+	var rows []model.AiInvestigation
 	err := r.dbq(ctx).
-		Where("status = ? AND (analysis_json LIKE ? OR report_json LIKE ?)", "awaiting_approval", "%"+needle+"%", "%"+needle+"%").
+		Where("status = ?", "awaiting_approval").
 		Order("id desc").
-		First(&row).Error
+		Limit(200).
+		Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	return &row, nil
+	for i := range rows {
+		if investigationJSONLinksApproval(&rows[i], approvalID) {
+			return &rows[i], nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func investigationJSONLinksApproval(inv *model.AiInvestigation, approvalID uint) bool {
+	if inv == nil || approvalID == 0 {
+		return false
+	}
+	for _, raw := range []string{inv.AnalysisJSON, inv.ReportJSON} {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		var blob map[string]any
+		if json.Unmarshal([]byte(raw), &blob) != nil {
+			continue
+		}
+		for _, key := range []string{"approvals", "actions"} {
+			arr, ok := blob[key].([]any)
+			if !ok {
+				continue
+			}
+			for _, item := range arr {
+				m, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				if jsonUint(m["approval_id"]) == approvalID {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func jsonUint(v any) uint {
+	switch n := v.(type) {
+	case float64:
+		return uint(n)
+	case int:
+		return uint(n)
+	case int64:
+		return uint(n)
+	case uint:
+		return n
+	case json.Number:
+		i, _ := n.Int64()
+		return uint(i)
+	default:
+		return 0
+	}
 }

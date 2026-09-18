@@ -8,7 +8,7 @@ type AiInvestigation struct {
 	UserID       uint      `json:"user_id" gorm:"not null;index"`
 	Kind         string    `json:"kind" gorm:"size:32;not null;index"` // alert|pod|cicd|chat
 	Title        string    `json:"title" gorm:"size:256;not null"`
-	Status       string    `json:"status" gorm:"size:32;not null;index;default:collecting"` // collecting|analyzing|recommend|awaiting_approval|done|failed
+	Status       string    `json:"status" gorm:"size:32;not null;index;default:collecting"` // collecting|analyzing|awaiting_approval|done|failed|cancelled
 	ProjectID    uint      `json:"project_id" gorm:"index"`
 	ClusterID    uint      `json:"cluster_id" gorm:"index"`
 	Namespace    string    `json:"namespace" gorm:"size:128"`

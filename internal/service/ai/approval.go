@@ -65,7 +65,8 @@ func (s *Service) ListApprovals(ctx context.Context, actor *auth.CurrentUser, q 
 		Offset: (page - 1) * pageSize,
 		Limit:  pageSize,
 	}
-	if q.MineOnly || !q.All || !canReviewApprovals(actor) {
+	// 审批角色默认看全部；仅 mine_only=true 时限本人。普通人始终仅本人。
+	if q.MineOnly || !canReviewApprovals(actor) {
 		p.RestrictUser = true
 		p.UserID = actor.ID
 	}
@@ -172,7 +173,7 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 			return nil, constants.ErrForbiddenWithMsg("无权执行该审批单")
 		}
 	}
-	affected, err := s.repo.ClaimApprovalExecution(ctx, id, []string{"approved", "failed"})
+	affected, err := s.repo.ClaimApprovalExecution(ctx, id, []string{"approved", "failed", "executing"})
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +212,24 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 	if name == "" {
 		name = row.Resource
 	}
+	reason := getStr("reason")
+	if reason == "" {
+		reason = row.Reason
+	}
+
+	// 执行前再次强制策略（调查挂单可能绕过建单时的校验）
+	switch row.ToolName {
+	case "scale_deployment", "restart_deployment", "delete_pod":
+		if err := checkWriteToolPolicy(row.ToolName, row.ArgsJSON, ns, reason); err != nil {
+			_ = s.repo.UpdateApprovalFields(ctx, id, map[string]any{
+				"status": "failed", "result_msg": truncateStr(err.Error(), 1000),
+			})
+			row.Status = "failed"
+			row.ResultMsg = truncateStr(err.Error(), 1000)
+			s.syncInvestigationAfterApproval(ctx, row)
+			return row, err
+		}
+	}
 
 	execCtx := withActorContext(ctx, actor)
 
@@ -221,7 +240,10 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 			_ = s.repo.UpdateApprovalFields(ctx, id, map[string]any{
 				"status": "failed", "result_msg": truncateStr(err.Error(), 1000),
 			})
-			return nil, err
+			row.Status = "failed"
+			row.ResultMsg = truncateStr(err.Error(), 1000)
+			s.syncInvestigationAfterApproval(ctx, row)
+			return row, err
 		}
 		switch row.ToolName {
 		case "scale_deployment":
@@ -296,7 +318,6 @@ func (s *Service) syncInvestigationAfterApproval(ctx context.Context, appr *mode
 	}
 	switch appr.Status {
 	case "rejected", "executed", "failed", "approved":
-		// approved 且未执行时：若还有 pending 兄弟单则保持 awaiting；仅全部终态才推进
 	default:
 		return
 	}
@@ -309,7 +330,7 @@ func (s *Service) syncInvestigationAfterApproval(ctx context.Context, appr *mode
 		ids = []uint{appr.ID}
 	}
 	allTerminal := true
-	anyFailed := false
+	anyFailed, anyRejected, anyExecuted := false, false, false
 	for _, id := range ids {
 		a, e := s.repo.GetApprovalByID(ctx, id)
 		if e != nil || a == nil {
@@ -319,8 +340,10 @@ func (s *Service) syncInvestigationAfterApproval(ctx context.Context, appr *mode
 		switch a.Status {
 		case "pending", "approved", "executing":
 			allTerminal = false
-		case "rejected", "executed":
-			// ok
+		case "rejected":
+			anyRejected = true
+		case "executed":
+			anyExecuted = true
 		case "failed":
 			anyFailed = true
 		default:
@@ -330,9 +353,14 @@ func (s *Service) syncInvestigationAfterApproval(ctx context.Context, appr *mode
 	if !allTerminal {
 		return
 	}
-	if anyFailed {
+	switch {
+	case anyFailed:
 		inv.Status = "failed"
-	} else {
+	case anyExecuted:
+		inv.Status = "done"
+	case anyRejected:
+		inv.Status = "cancelled"
+	default:
 		inv.Status = "done"
 	}
 	inv.UpdatedAt = time.Now()

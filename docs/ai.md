@@ -64,7 +64,7 @@
 
 | 页面 | 能力 |
 |------|------|
-| 告警历史 | AI解读 + **AI调查**（告警调查会挂静默审批） |
+| 告警历史 | AI解读 + **AI调查**（静默需显式申请，走审批） |
 | Pod 排障抽屉 | AI 分析 + **AI 调查** |
 | CI 构建详情 | AI 分析 + **AI 调查** |
 | K8s 资源创建（YamlCrud / Pod） | **AI 生成 YAML**（描述→编辑器，人工核对后 apply） |
@@ -122,9 +122,10 @@
 3. 菜单同步后可见「AI 调查」；助手入口含 stream 权限
 4. **必须保证运行时可读取 `data/ai`**；能力中心 **reseed** 加载新 Prompt/KB/SOP/Tool/Eval（含 monitor、kb_dbmgmt、CASE-013）
 5. 先 reseed → sync ES →（可选）向量化
-6. 调查多为同步阻塞，前端超时约 180s；进行中状态详情页会轮询
-7. 系统 Prompt（`system/ops-agent`）若库中已有版本，reseed **不会**覆盖
+6. 调查多为同步阻塞，前端超时约 180s；`collecting`/`analyzing`/`awaiting_approval` 详情页会轮询
+7. 系统 Prompt（`system/ops-agent`）若库中内容与种子不一致，reseed **会更新**当前版本内容；仅「已有且内容相同」时跳过
 8. 不含 MCP（扩展点预留，未实现协议桥）
 9. `seed` 会增量补齐：已有 AI 能力中心/Eval 权限的角色自动获得 `eval/runs`；已有 `/ai/chat` 的角色自动获得 `/ai/chat/stream`
-10. 调查挂接审批后，审批 **驳回/执行完成/失败** 会回写调查状态离开 `awaiting_approval`；仅「已批准未执行」仍保持等待
-11. 告警调查 **不默认**创建静默审批；需报告/助手显式申请 `create_alert_silence`
+10. 调查挂接审批后：驳回→`cancelled`；执行成功→`done`；执行失败→`failed`；仅「已批准未执行」仍 `awaiting_approval`
+11. 告警调查 **不默认** 创建静默审批；需报告/助手显式申请 `create_alert_silence`
+12. 写工具硬策略（保护 NS、replicas>50）在 **调查建单** 与 **审批执行** 两处均校验

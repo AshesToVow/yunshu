@@ -30,7 +30,7 @@ export function AiApprovalsPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await listAIApprovals({ status: status || undefined, page, page_size: 10 });
+      const res = await listAIApprovals({ status: status || undefined, page, page_size: 10, all: true });
       setList(res.list || []);
       setTotal(res.total || 0);
     } catch (e) {

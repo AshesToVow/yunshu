@@ -26,17 +26,18 @@ function statusColor(s: string) {
       return "success";
     case "failed":
       return "error";
+    case "cancelled":
+      return "default";
     case "analyzing":
     case "collecting":
-      return "processing";
     case "awaiting_approval":
-      return "warning";
+      return "processing";
     default:
       return "default";
   }
 }
 
-const IN_FLIGHT = new Set(["collecting", "analyzing"]);
+const IN_FLIGHT = new Set(["collecting", "analyzing", "awaiting_approval"]);
 
 export function AiInvestigationsPage() {
   const [searchParams] = useSearchParams();
@@ -233,7 +234,16 @@ export function AiInvestigationsPage() {
             </Descriptions.Item>
           </Descriptions>
           {IN_FLIGHT.has(selected.status) ? (
-            <Alert type="info" showIcon message="调查进行中，自动刷新状态…" style={{ marginBottom: 12 }} />
+            <Alert
+              type="info"
+              showIcon
+              message={
+                selected.status === "awaiting_approval"
+                  ? "等待审批中，审批完成后将自动刷新状态…"
+                  : "调查进行中，自动刷新状态…"
+              }
+              style={{ marginBottom: 12 }}
+            />
           ) : null}
           {selected.error_msg ? <Alert type="error" showIcon message={selected.error_msg} style={{ marginBottom: 12 }} /> : null}
           {report ? (

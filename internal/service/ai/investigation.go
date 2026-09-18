@@ -138,7 +138,7 @@ func (s *Service) StartInvestigation(
 	}
 	report.Evidence = evidence
 	row.Status = "done"
-	s.attachInvestigationApprovals(ctx, userID, actor, &row, report, req)
+	createdApprovals := s.attachInvestigationApprovals(ctx, userID, actor, &row, report, req)
 	if row.Status != "awaiting_approval" {
 		row.Status = "done"
 	}
@@ -161,6 +161,9 @@ func (s *Service) StartInvestigation(
 	row.ReportJSON = scrubNonBMPForMySQL(string(reportRaw))
 	row.UpdatedAt = time.Now()
 	if err := s.repo.SaveInvestigation(ctx, &row); err != nil {
+		for _, aid := range createdApprovals {
+			_ = s.repo.DeleteApproval(ctx, aid)
+		}
 		return fail("保存报告失败: " + err.Error())
 	}
 	return &row, nil
