@@ -110,6 +110,7 @@ func provideAlertServiceOptions(
 	changeEventRepo interfaces.ChangeEventRepository,
 	dictEntryRepo interfaces.DictEntryRepository,
 	receiverGroupRepo interfaces.AlertReceiverGroupRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 ) *service.AlertServiceOptions {
 	return &service.AlertServiceOptions{
 		SilenceSvc:           silence,
@@ -136,6 +137,7 @@ func provideAlertServiceOptions(
 		ChangeEventRepo:      changeEventRepo,
 		DictEntryRepo:        dictEntryRepo,
 		ReceiverGroupRepo:    receiverGroupRepo,
+		MemberRepo:           memberRepo,
 	}
 }
 

@@ -94,7 +94,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v55 := routerRouteRepositories.AlertCurHis
 	v56 := routerRouteRepositories.PromqlSavedQuery
 	v57 := routerRouteRepositories.ChangeEvent
-	v58 := provideAlertServiceOptions(v39, v45, v14, v41, v43, securityEncryptionKey, v46, v47, v12, v13, v31, v48, v49, v50, alertStateService, v51, v52, v53, v54, v55, v56, v57, v36, v42)
+	v58 := provideAlertServiceOptions(v39, v45, v14, v41, v43, securityEncryptionKey, v46, v47, v12, v13, v31, v48, v49, v50, alertStateService, v51, v52, v53, v54, v55, v56, v57, v36, v42, v10)
 	v59 := provideElasticsearchProvider(app)
 	v60 := routerRouteRepositories.Server
 	v61 := routerRouteRepositories.LogDropRule
@@ -102,7 +102,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v63 := provideAlertService(client, sender, alertConfig, v58, v62)
 	v64 := alert.NewCloudExpiryRuleService(v49)
 	v65 := alert.NewAlertDatasourceService(v13)
-	v66 := alert.NewAlertMonitorRuleService(v12, v13, client)
+	v66 := alert.NewAlertMonitorRuleService(v12, v13, client, v10)
 	v67, err := provideK8sRuntimeService(v27, v24, v25, v10, securityEncryptionKey)
 	if err != nil {
 		return nil, err

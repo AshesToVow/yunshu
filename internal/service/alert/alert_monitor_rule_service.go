@@ -42,9 +42,10 @@ type AlertMonitorRuleUpsertRequest struct {
 }
 
 type AlertMonitorRuleService struct {
-	ruleRepo interfaces.AlertMonitorRuleRepository
-	dsRepo   interfaces.AlertDatasourceRepository
-	redis    *redis.Client
+	ruleRepo   interfaces.AlertMonitorRuleRepository
+	dsRepo     interfaces.AlertDatasourceRepository
+	redis      *redis.Client
+	memberRepo interfaces.ProjectMemberRepository
 }
 
 type AlertMonitorRuleListItem struct {
@@ -57,8 +58,9 @@ func NewAlertMonitorRuleService(
 	ruleRepo interfaces.AlertMonitorRuleRepository,
 	dsRepo interfaces.AlertDatasourceRepository,
 	redisClient *redis.Client,
+	memberRepo interfaces.ProjectMemberRepository,
 ) *AlertMonitorRuleService {
-	return &AlertMonitorRuleService{ruleRepo: ruleRepo, dsRepo: dsRepo, redis: redisClient}
+	return &AlertMonitorRuleService{ruleRepo: ruleRepo, dsRepo: dsRepo, redis: redisClient, memberRepo: memberRepo}
 }
 
 func (s *AlertMonitorRuleService) List(ctx context.Context, q AlertMonitorRuleListQuery) ([]AlertMonitorRuleListItem, int64, int, int, error) {
@@ -104,6 +106,9 @@ func (s *AlertMonitorRuleService) Get(ctx context.Context, id uint) (*model.Aler
 }
 
 func (s *AlertMonitorRuleService) Create(ctx context.Context, req AlertMonitorRuleUpsertRequest) (*model.AlertMonitorRule, error) {
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, projectIDPtr(req.ProjectID)); err != nil {
+		return nil, err
+	}
 	kind := normalizeRuleKind(req.RuleKind)
 	if kind != model.AlertRuleKindLog {
 		if req.DatasourceID == 0 {
@@ -166,6 +171,14 @@ func (s *AlertMonitorRuleService) Update(ctx context.Context, id uint, req Alert
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.rule", "Update", err)
 	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return nil, err
+	}
+	if req.ProjectID != nil && *req.ProjectID != row.ProjectID {
+		if err := assertAlertProjectWrite(ctx, s.memberRepo, *req.ProjectID); err != nil {
+			return nil, err
+		}
+	}
 	if req.DatasourceID > 0 && req.DatasourceID != row.DatasourceID {
 		if _, err := s.dsRepo.GetByID(ctx, req.DatasourceID); err != nil {
 			if err == gorm.ErrRecordNotFound {
@@ -214,7 +227,14 @@ func (s *AlertMonitorRuleService) Update(ctx context.Context, id uint, req Alert
 }
 
 func (s *AlertMonitorRuleService) Delete(ctx context.Context, id uint) error {
-	err := s.ruleRepo.DeleteCascade(ctx, id)
+	row, err := s.Get(ctx, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.rule", "Delete", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return err
+	}
+	err = s.ruleRepo.DeleteCascade(ctx, id)
 	if err == gorm.ErrRecordNotFound {
 		return constants.ErrNotFoundWithMsg(constants.ErrMsgdfcd891c9a94)
 	}

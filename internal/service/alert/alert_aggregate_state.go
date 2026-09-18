@@ -181,10 +181,14 @@ func evaluateFiringGroupTiming(cfg config.AlertConfig, now time.Time, firstSeen,
 
 // peekFiringGroupTiming 只读判定分组节流（更新观测字段 count/first_seen/last_seen，不写 last_sent）。
 func (s *AlertService) peekFiringGroupTiming(ctx context.Context, groupKey, labelsDigest string) (shouldSend bool, reason string, count int64, firstSeen string, lastSeen string) {
-	if s.redis == nil || strings.TrimSpace(groupKey) == "" {
+	gk := strings.TrimSpace(groupKey)
+	if gk == "" {
 		return true, "", 1, "", ""
 	}
-	key := firingGroupTimingRedisKey(groupKey)
+	if s.redis == nil {
+		return s.peekLocalFiringGroupTiming(gk, labelsDigest)
+	}
+	key := firingGroupTimingRedisKey(gk)
 	now := time.Now().UTC()
 	nowStr := now.Format(time.RFC3339)
 
@@ -214,10 +218,15 @@ func (s *AlertService) peekFiringGroupTiming(ctx context.Context, groupKey, labe
 
 // commitFiringGroupTimingSend 在至少一个通道 HTTP 发送成功后调用，记录「上次成功通知」时间。
 func (s *AlertService) commitFiringGroupTimingSend(ctx context.Context, groupKey, labelsDigest string) {
-	if s.redis == nil || strings.TrimSpace(groupKey) == "" {
+	gk := strings.TrimSpace(groupKey)
+	if gk == "" {
 		return
 	}
-	key := firingGroupTimingRedisKey(groupKey)
+	if s.redis == nil {
+		s.commitLocalFiringGroupTiming(gk, labelsDigest)
+		return
+	}
+	key := firingGroupTimingRedisKey(gk)
 	nowStr := time.Now().UTC().Format(time.RFC3339)
 	_ = s.redis.HSet(ctx, key, "last_sent", nowStr).Err()
 	if d := strings.TrimSpace(labelsDigest); d != "" {

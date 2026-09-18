@@ -38,6 +38,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/project-log-sources":         {"/api/v1/projects/:id/log-sources", "GET"}, // 兼容旧菜单 path
 		"/project-logs":                {"/api/v1/projects/:id/logs/search", "GET"},
 		"/log-retention":               {"/api/v1/log-platform/retention", "GET"},
+		"/log-pipelines":               {"/api/v1/projects/:id/log-pipelines", "GET"},
 		"/loggie-status":               {"/api/v1/projects/:id/loggie/status", "GET"},
 
 		"/dbmgmt/apply/database":       {"/api/v1/projects/:id/dbmgmt/tickets", "GET"},

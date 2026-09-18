@@ -422,7 +422,7 @@ loggie:
 3. **云到期规则**（监控平台 →「云到期规则」Tab）：按项目配置云厂商、提前天数、**Cron**（如 `0 */2 * * *` 每 2 小时）；后台每分钟检查是否到点（非每 5 秒拉云）；须配置 `security.encryption_key` 以解密云账号。
 4. **告警策略**：匹配标签、路由到渠道（钉钉/邮件/Webhook）。
 5. **告警静默**：维护窗口内抑制通知。
-6. **Alertmanager Webhook**：配置 `alert.webhook_token`（或数据字典），指向 `POST /api/v1/alerts/webhook/alertmanager`；鉴权使用请求头 **`X-Alert-Token`**（或 `Authorization: Bearer <token>`），**不支持** URL query `?token=`。
+6. **Alertmanager Webhook**：配置 `alert.webhook_token`（或数据字典），指向 `POST /api/v1/alerts/webhook`；鉴权使用请求头 **`X-Alert-Token`**（或 `Authorization: Bearer <token>`），**不支持** URL query `?token=`。
 
 说明见：[docs/alert-notify-guide.md](docs/alert-notify-guide.md)、[docs/alert-routing-and-delivery-guide.md](docs/alert-routing-and-delivery-guide.md)
 

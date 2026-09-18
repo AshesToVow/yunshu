@@ -6,6 +6,8 @@ func TestAssertSafeOutboundURL_BlocksPrivate(t *testing.T) {
 	cases := []string{
 		"http://127.0.0.1/hook",
 		"http://localhost/hook",
+		"http://10.1.2.3/hook",
+		"http://192.168.1.8/hook",
 		"http://169.254.169.254/latest/meta-data",
 		"ftp://example.com/x",
 	}

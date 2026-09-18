@@ -73,7 +73,8 @@ func (s *Service) VerifyReleaseRun(ctx context.Context, projectID, runID uint, a
 	if alertCount > 0 {
 		failBits++
 	}
-	if readyOK != nil && !*readyOK {
+	// 未检查（未绑定 workload / 探针未注入）不能当成通过。
+	if readyOK == nil || !*readyOK {
 		failBits++
 	}
 	if logErrors > 0 {
@@ -143,9 +144,7 @@ func (s *Service) checkWorkloadReady(ctx context.Context, projectID, cicdService
 	if s.workloadReadyCheck != nil {
 		return s.workloadReadyCheck(ctx, parts[0], parts[1], parts[2], parts[3])
 	}
-	// 无集群客户端时：有绑定即给出「待确认」正面结论，避免误杀
-	ok := true
-	return &ok, fmt.Sprintf("已绑定 %s（集群 Ready 探针未注入，按绑定通过）", refKey)
+	return nil, fmt.Sprintf("已绑定 %s，但集群 Ready 探针未注入，不能判定通过", refKey)
 }
 
 func (s *Service) sampleErrorLogs(ctx context.Context, projectID, cicdServiceID uint, since time.Time) (int, string) {

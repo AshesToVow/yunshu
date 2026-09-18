@@ -22,6 +22,7 @@ import (
 // AlertSubscriptionService 订阅树服务
 type AlertSubscriptionService struct {
 	repo         interfaces.AlertSubscriptionRepository
+	memberRepo   interfaces.ProjectMemberRepository
 	groups       *AlertReceiverGroupService
 	cacheMu      sync.RWMutex
 	rootNodes    map[uint][]*CachedSubscriptionNode // projectID -> root nodes
@@ -69,6 +70,14 @@ func (s *AlertSubscriptionService) AttachReceiverGroups(groups *AlertReceiverGro
 		return
 	}
 	s.groups = groups
+}
+
+// SetMemberRepo 注入项目成员仓库，供写接口做项目 ACL。
+func (s *AlertSubscriptionService) SetMemberRepo(memberRepo interfaces.ProjectMemberRepository) {
+	if s == nil {
+		return
+	}
+	s.memberRepo = memberRepo
 }
 
 // AlertSubscriptionNodeUpsertRequest 创建/更新请求
@@ -184,6 +193,14 @@ func buildNodeTree(nodes []model.AlertSubscriptionNode) []model.AlertSubscriptio
 
 // CreateNode 创建订阅节点
 func (s *AlertSubscriptionService) CreateNode(ctx context.Context, req AlertSubscriptionNodeUpsertRequest) (*model.AlertSubscriptionNode, error) {
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, req.ProjectID); err != nil {
+		return nil, err
+	}
+	return s.createNodeCore(ctx, req)
+}
+
+// createNodeCore 写入订阅节点（不做项目 ACL；由公开 API 或路由向导在调用前校验）。
+func (s *AlertSubscriptionService) createNodeCore(ctx context.Context, req AlertSubscriptionNodeUpsertRequest) (*model.AlertSubscriptionNode, error) {
 	if err := validateSubscriptionNode(req); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.subscription", "CreateNode", err)
 	}
@@ -251,6 +268,9 @@ func (s *AlertSubscriptionService) UpdateNode(ctx context.Context, id uint, req 
 			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsgb196d0c97d2f)
 		}
 		return nil, bizerrors.Pass(ctx, "alert.subscription", "UpdateNode", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, node.ProjectID); err != nil {
+		return nil, err
 	}
 
 	// 不允许修改所属项目
@@ -321,6 +341,16 @@ func (s *AlertSubscriptionService) UpdateNode(ctx context.Context, id uint, req 
 
 // DeleteNode 删除订阅节点
 func (s *AlertSubscriptionService) DeleteNode(ctx context.Context, id uint) error {
+	node, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg(constants.ErrMsgb196d0c97d2f)
+		}
+		return bizerrors.Pass(ctx, "alert.subscription", "DeleteNode", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, node.ProjectID); err != nil {
+		return err
+	}
 	// 检查是否有子节点
 	childCount, err := s.repo.CountChildren(ctx, id)
 	if err != nil {

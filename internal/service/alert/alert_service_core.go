@@ -143,6 +143,10 @@ type AlertService struct {
 
 	// 可选：证据包拉取项目日志采样
 	logSearch *logplatform.LogSearchService
+
+	// Redis 不可用时的进程内分组节流与升级队列
+	localMu sync.Mutex
+	local   *processLocalAlertState
 }
 
 // SetLogSearch 注入日志检索（证据包）；可在 DI 后置绑定。
@@ -182,6 +186,7 @@ type AlertServiceOptions struct {
 	DictEntryRepo        interfaces.DictEntryRepository
 	ReceiverGroupRepo    interfaces.AlertReceiverGroupRepository
 	LogSearch            *logplatform.LogSearchService
+	MemberRepo           interfaces.ProjectMemberRepository
 }
 
 type promEnrichTask struct {
@@ -232,6 +237,9 @@ func NewAlertService(redisClient *redis.Client, sender mailer.Sender, cfg config
 		receiverGroupRepo:    opts.ReceiverGroupRepo,
 		alertStateSvc:        opts.StateSvc,
 		logSearch:            opts.LogSearch,
+	}
+	if svc.subscriptionSvc != nil {
+		svc.subscriptionSvc.SetMemberRepo(opts.MemberRepo)
 	}
 	if opts.ReceiverGroupRepo != nil {
 		svc.subscriptionSvc.AttachReceiverGroups(NewAlertReceiverGroupService(

@@ -164,9 +164,8 @@ func (s *Service) preCheckForTicket(
 		return "", localSyntax, nil
 	}
 	if reason := s.goInceptionSkipReason(ctx, inst); reason != "" {
-		// 工单仍可创建；ReviewJSON 记录引擎跳过原因，避免静默降级
-		note, _ := json.Marshal(map[string]any{"engine_skipped": true, "reason": reason})
-		return string(note), localSyntax, nil
+		// 系统审核模式下引擎不可用时拒绝静默降级为「已系统审过」
+		return "", localSyntax, constants.ErrBadRequestWithMsg(reason + "；请改用人工审核")
 	}
 	rs, checkErr := s.runGoInceptionCheck(ctx, inst, dbName, sqlText)
 	if checkErr != nil {
