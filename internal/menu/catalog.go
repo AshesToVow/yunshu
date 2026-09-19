@@ -40,9 +40,10 @@ func DefaultCatalog() []Spec {
 			Children: []Spec{
 				{Path: "/project-services", Name: "服务与日志源", Icon: "SettingOutlined", Sort: 1, Component: "project-collect-config-page", Status: 1},
 				{Path: "/project-logs", Name: "日志检索", Icon: "FileTextOutlined", Sort: 2, Component: "project-logs-page", Status: 1},
-				{Path: "/log-pipelines", Name: "Pipeline 仓库", Icon: "ApartmentOutlined", Sort: 3, Component: "log-pipeline-repo-page", Status: 1},
-				{Path: "/log-retention", Name: "Kafka 队列", Icon: "HistoryOutlined", Sort: 4, Component: "log-retention-page", Status: 1},
-				{Path: "/loggie-status", Name: "Agent 管理", Icon: "CloudServerOutlined", Sort: 5, Component: "loggie-status-page", Status: 1},
+				{Path: "/nginx-access-stats", Name: "Nginx 访问统计", Icon: "BarChartOutlined", Sort: 3, Component: "nginx-access-stats-page", Status: 1},
+				{Path: "/log-pipelines", Name: "Pipeline 仓库", Icon: "ApartmentOutlined", Sort: 4, Component: "log-pipeline-repo-page", Status: 1},
+				{Path: "/log-retention", Name: "Kafka 队列", Icon: "HistoryOutlined", Sort: 5, Component: "log-retention-page", Status: 1},
+				{Path: "/loggie-status", Name: "Agent 管理", Icon: "CloudServerOutlined", Sort: 6, Component: "loggie-status-page", Status: 1},
 			},
 		},
 		{

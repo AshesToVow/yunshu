@@ -9,7 +9,13 @@ export function buildProjectLogsUrl(params: {
   tab?: "logs" | "patterns" | "anomalies";
   log_source_id?: number;
   service_id?: number;
+  server_id?: number;
   level?: string;
+  keyword?: string;
+  extra_field?: string;
+  extra_value?: string;
+  from?: string;
+  to?: string;
 }) {
   const q = new URLSearchParams();
   q.set("project_id", String(params.project_id));
@@ -21,7 +27,13 @@ export function buildProjectLogsUrl(params: {
   if (params.tab) q.set("tab", params.tab);
   if (params.log_source_id) q.set("log_source_id", String(params.log_source_id));
   if (params.service_id) q.set("service_id", String(params.service_id));
+  if (params.server_id) q.set("server_id", String(params.server_id));
   if (params.level) q.set("level", params.level);
+  if (params.keyword) q.set("keyword", params.keyword);
+  if (params.extra_field) q.set("extra_field", params.extra_field);
+  if (params.extra_value) q.set("extra_value", params.extra_value);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
   const qs = q.toString();
   return `/project-logs${qs ? `?${qs}` : ""}`;
 }

@@ -29,6 +29,7 @@ func RegisterProjectRoutes(api *gin.RouterGroup, d ProjectRouteDeps) {
 	projectScoped.DELETE("/log-sources/:logSourceId", d.ProjectHandler().DeleteLogSource)
 	projectScoped.GET("/logs/search", d.ProjectHandler().SearchLogs)
 	projectScoped.GET("/logs/overview", d.ProjectHandler().LogOverview)
+	projectScoped.GET("/logs/nginx-access-stats", d.ProjectHandler().NginxAccessStats)
 	projectScoped.GET("/logs/topn", d.ProjectHandler().LogTopN)
 	projectScoped.GET("/logs/fields", d.ProjectHandler().DiscoverLogFields)
 	projectScoped.GET("/logs/patterns", d.ProjectHandler().ListLogPatterns)

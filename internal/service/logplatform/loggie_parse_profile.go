@@ -102,9 +102,11 @@ func profileSpringLog() pipelineParseProfile {
 
 func profileNginxAccess() pipelineParseProfile {
 	return pipelineParseProfile{
-		name:                "nginx_access",
-		multilinePattern:    `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`,
-		regexPattern:        `^(?P<remote>\S+)\s+-\s+-\s+\[(?P<ts>[^\]]+)\]\s+"(?P<request>[^"]*)"\s+(?P<status>\d{3})\s+(?P<bytes>\S+)(?:\s+"(?P<referrer>[^"]*)"\s+"(?P<agent>[^"]*)")?\s*$`,
+		name:             "nginx_access",
+		multilinePattern: `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`,
+		// combined：IP - - [ts] "METHOD URI PROTO" status bytes "ref" "ua"
+		// 可选行尾 $request_time（秒）；method/uri/proto 从 request 拆出便于 TOP/统计。
+		regexPattern: `^(?P<remote>\S+)\s+\S+\s+\S+\s+\[(?P<ts>[^\]]+)\]\s+"(?P<request>(?P<method>\S+)\s+(?P<uri>\S+)(?:\s+(?P<proto>[^"]*))?)"\s+(?P<status>\d{3})\s+(?P<bytes>\S+)(?:\s+"(?P<referrer>[^"]*)"\s+"(?P<agent>[^"]*)"(?:\s+(?P<request_time>[\d.]+))?)?\s*$`,
 		timestampFromLayout: "02/Jan/2006:15:04:05 -0700",
 		maxLines:            50,
 	}

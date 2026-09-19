@@ -334,6 +334,9 @@ type (
 	LogContextResult      = logplatform.LogContextResult
 	LogOverviewResult     = logplatform.LogOverviewResult
 	LogHistogramBucket    = logplatform.LogHistogramBucket
+	NginxAccessStatsQuery  = logplatform.NginxAccessStatsQuery
+	NginxAccessStatsResult = logplatform.NginxAccessStatsResult
+	NginxAccessURIStat     = logplatform.NginxAccessURIStat
 	LogSignatureItem      = logplatform.LogSignatureItem
 	LogSummaryResult      = logplatform.LogSummaryResult
 	LogTopNQuery          = logplatform.LogTopNQuery

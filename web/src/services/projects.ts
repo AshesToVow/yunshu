@@ -761,6 +761,47 @@ export async function getProjectLogOverview(projectId: number, params: LogSearch
   );
 }
 
+export interface NginxAccessURIStat {
+  uri: string;
+  count: number;
+  percent: number;
+}
+
+export interface NginxAccessStatsResult {
+  from: string;
+  to: string;
+  pv: number;
+  uv: number;
+  avg_qps: number;
+  peak_qps: number;
+  status_2xx_rate: number;
+  status_3xx_rate: number;
+  status_4xx_rate: number;
+  status_5xx_rate: number;
+  latency_available: boolean;
+  avg_latency_ms?: number;
+  p95_latency_ms?: number;
+  p99_latency_ms?: number;
+  histogram: LogHistogramBucket[];
+  top_uris: NginxAccessURIStat[];
+  latency_hint?: string;
+}
+
+export async function getNginxAccessStats(
+  projectId: number,
+  params: LogSearchParams & { top_n?: number },
+) {
+  return await getData(
+    http.get<any, ApiResponse<NginxAccessStatsResult>>(
+      `/projects/${projectId}/logs/nginx-access-stats`,
+      {
+        params: { ...params, project_id: projectId },
+        silentErrorToast: true,
+      },
+    ),
+  );
+}
+
 export interface LogFieldStat {
   name: string;
   count: number;
