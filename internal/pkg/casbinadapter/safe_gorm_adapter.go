@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/casbin/casbin/v2/model"
+	"github.com/casbin/casbin/v2/persist"
 	"gorm.io/gorm"
 )
 
@@ -25,6 +26,9 @@ type SafeGormAdapter struct {
 	db        *gorm.DB
 	tableName string
 }
+
+// Ensure BatchAdapter so Enforcer.AddPolicies / RemovePolicies do not panic.
+var _ persist.BatchAdapter = (*SafeGormAdapter)(nil)
 
 func NewSafeGormAdapter(db *gorm.DB, tableName string) *SafeGormAdapter {
 	if strings.TrimSpace(tableName) == "" {
@@ -101,10 +105,30 @@ func (a *SafeGormAdapter) AddPolicy(sec string, ptype string, rule []string) err
 	return a.db.Table(a.tableName).Create(&row).Error
 }
 
+func (a *SafeGormAdapter) AddPolicies(sec string, ptype string, rules [][]string) error {
+	if len(rules) == 0 {
+		return nil
+	}
+	rows := make([]CasbinRule, 0, len(rules))
+	for _, rule := range rules {
+		rows = append(rows, toCasbinRule(ptype, rule))
+	}
+	return a.db.Table(a.tableName).Create(&rows).Error
+}
+
 func (a *SafeGormAdapter) RemovePolicy(sec string, ptype string, rule []string) error {
 	q := a.db.Table(a.tableName).Where("ptype = ?", ptype)
 	q = applyRuleWhere(q, 0, rule)
 	return q.Delete(&CasbinRule{}).Error
+}
+
+func (a *SafeGormAdapter) RemovePolicies(sec string, ptype string, rules [][]string) error {
+	for _, rule := range rules {
+		if err := a.RemovePolicy(sec, ptype, rule); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *SafeGormAdapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error {
@@ -138,4 +162,3 @@ func applyRuleWhere(q *gorm.DB, fieldIndex int, fieldValues []string) *gorm.DB {
 	}
 	return q
 }
-
