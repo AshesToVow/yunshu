@@ -13,7 +13,6 @@ import {
   RobotOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
-  ThunderboltOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Space, Tag, Typography } from "antd";
@@ -89,7 +88,7 @@ function HealthGauge({ pct, label }: { pct: number; label: string }) {
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, pct));
   const offset = c * (1 - clamped / 100);
-  const stroke = tone === "ok" ? "#2dd4bf" : tone === "warn" ? "#fbbf24" : "#f87171";
+  const stroke = tone === "ok" ? "#0d9488" : tone === "warn" ? "#d97706" : "#dc2626";
 
   return (
     <div className="overview-health-gauge overview-health-gauge--sm" data-tone={tone}>
@@ -387,11 +386,13 @@ export function DashboardPage() {
   const tickerAlerts = (screen?.alerts_top ?? []).slice(0, 8);
 
   return (
-    <div ref={setScreenRef} className="overview-big-screen overview-cockpit overview-cockpit--v5">
+    <div ref={setScreenRef} className="overview-big-screen overview-cockpit overview-cockpit--v6">
       <header className="overview-cockpit__header">
         <div className="overview-cockpit__header-main">
           <div className="overview-cockpit__brand">
-            <ThunderboltOutlined />
+            <span className="overview-cockpit__brand-mark" aria-hidden>
+              YS
+            </span>
             <div>
               <Typography.Title level={3} className="overview-cockpit__title">
                 {t("dashboard.titleScreen")}

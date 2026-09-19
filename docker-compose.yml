@@ -66,9 +66,9 @@ services:
     cpus: 0.5
     environment:
       - TZ=Asia/Shanghai
-      - POSTGRES_USER: yunshu
-      - POSTGRES_PASSWORD: yunshu
-      - POSTGRES_DB: yunshu
+      - POSTGRES_USER=yunshu
+      - POSTGRES_PASSWORD=yunshu
+      - POSTGRES_DB=yunshu
     ports:
       - "5432:5432"
     volumes:
@@ -104,7 +104,8 @@ services:
       - RUN_MIGRATE=${RUN_MIGRATE:-0}
       # entrypoint 读 WAIT_DB；未设时回退 WAIT_MYSQL（见 deploy/docker/entrypoint.sh）
       - WAIT_DB=${WAIT_DB:-1}
-      - WAIT_MYSQL=${WAIT_MYSQL:-1}    volumes:
+      - WAIT_MYSQL=${WAIT_MYSQL:-1}
+    volumes:
       - ./configs:/app/configs:ro
       - ./logs:/app/logs
     depends_on:

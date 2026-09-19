@@ -624,14 +624,13 @@ body {
   min-height: calc(100dvh - 72px);
 }
 
-.overview-big-screen:fullscreen {
+.overview-big-screen.overview-cockpit:fullscreen {
   margin: 0;
-  padding: 24px 28px 36px;
+  padding: 22px 26px;
   min-height: 100dvh;
   border-radius: 0;
   overflow: auto;
-  background: radial-gradient(ellipse 120% 80% at 50% -30%, rgba(56, 189, 248, 0.16), transparent 52%),
-    linear-gradient(165deg, #070f1a 0%, #0d2137 42%, #081018 100%);
+  background: var(--cockpit-bg, #0f1419) !important;
 }
 
 .overview-big-screen__title.ant-typography {
