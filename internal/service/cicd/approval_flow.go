@@ -13,8 +13,6 @@ import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	workflowsvc "yunshu/internal/service/workflow"
-
-	"gorm.io/gorm"
 )
 
 type ApprovalFlowStageItem struct {
@@ -100,7 +98,7 @@ func normalizeStageKey(raw string) (string, error) {
 }
 
 func (s *Service) workflowEngine() *workflowsvc.Service {
-	return workflowsvc.NewService(s.db, s.userGroupRepo, nil, s.userRepo)
+	return workflowsvc.NewService(s.workflowRepo, s.userGroupRepo, s.dutyRepo, s.userRepo)
 }
 
 func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*ApprovalFlowResponse, error) {
@@ -142,7 +140,7 @@ func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req Ap
 }
 
 func (s *Service) loadEnabledFlowStages(ctx context.Context, projectID uint) ([]model.CicdApprovalFlowStage, error) {
-	return workflowsvc.EnabledLegacyCicdStages(ctx, s.db, s.userGroupRepo, projectID)
+	return workflowsvc.EnabledLegacyCicdStagesFrom(ctx, s.workflowEngine(), projectID)
 }
 
 func (s *Service) initReleaseApprovalSteps(ctx context.Context, release *model.CicdReleaseRun) error {
@@ -172,24 +170,16 @@ func (s *Service) initReleaseApprovalSteps(ctx context.Context, release *model.C
 		}
 		steps = append(steps, step)
 	}
-	if err := s.db.WithContext(ctx).Create(&steps).Error; err != nil {
+	if err := s.repo.CreateApprovalSteps(ctx, steps); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+	return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
 		"current_stage_key": stages[0].StageKey,
-	}).Error
+	})
 }
 
 func (s *Service) getCurrentPendingStep(ctx context.Context, releaseRunID uint) (*model.CicdReleaseApprovalStep, error) {
-	var step model.CicdReleaseApprovalStep
-	err := s.db.WithContext(ctx).
-		Where("release_run_id = ? AND status = ?", releaseRunID, model.CicdApprovalStepPending).
-		Order("sort_order ASC, id ASC").
-		First(&step).Error
-	if err != nil {
-		return nil, err
-	}
-	return &step, nil
+	return s.repo.GetPendingApprovalStep(ctx, releaseRunID)
 }
 
 func (s *Service) userCanApproveStep(ctx context.Context, userID uint, step *model.CicdReleaseApprovalStep) (bool, error) {
@@ -213,67 +203,41 @@ func (s *Service) advanceReleaseAfterApproval(ctx context.Context, release *mode
 	}
 	if next != nil {
 		now := time.Now()
-		if err := s.db.WithContext(ctx).Model(next).Updates(map[string]any{
+		if err := s.repo.UpdateApprovalStepFields(ctx, next.ID, map[string]any{
 			"activated_at":     now,
 			"last_reminded_at": nil,
-		}).Error; err != nil {
+		}); err != nil {
 			return err
 		}
-		return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+		return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
 			"current_stage_key": next.StageKey,
-		}).Error
+		})
 	}
-	return s.db.WithContext(ctx).Model(release).Updates(map[string]any{
+	return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
 		"status":            model.CicdRunStatusPendingExecution,
 		"current_stage_key": "",
-	}).Error
+	})
 }
 
 func (s *Service) nextPendingStepAfter(ctx context.Context, releaseRunID uint, afterSort int) (*model.CicdReleaseApprovalStep, error) {
-	var step model.CicdReleaseApprovalStep
-	err := s.db.WithContext(ctx).
-		Where("release_run_id = ? AND status = ? AND sort_order > ?", releaseRunID, model.CicdApprovalStepPending, afterSort).
-		Order("sort_order ASC, id ASC").
-		First(&step).Error
+	steps, err := s.repo.ListApprovalStepsByRun(ctx, releaseRunID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
 		return nil, err
 	}
-	return &step, nil
+	for _, step := range steps {
+		if step.Status == model.CicdApprovalStepPending && step.SortOrder > afterSort {
+			st := step
+			return &st, nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *Service) ListReleaseApprovalSteps(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) ([]ReleaseApprovalStepItem, error) {
-	release, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "view")
-	if err != nil {
+	if _, err := s.assertReleaseRunAccess(ctx, projectID, runID, actor, "view"); err != nil {
 		return nil, err
 	}
-	_ = release
-	var steps []model.CicdReleaseApprovalStep
-	if err := s.db.WithContext(ctx).Where("release_run_id = ?", runID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
-		return nil, err
-	}
-	items := make([]ReleaseApprovalStepItem, 0, len(steps))
-	for _, st := range steps {
-		item := ReleaseApprovalStepItem{
-			ID:             st.ID,
-			StageKey:       st.StageKey,
-			StageName:      st.StageName,
-			SortOrder:      st.SortOrder,
-			Status:         st.Status,
-			UserGroupID:    st.UserGroupID,
-			ReviewerUserID: st.ReviewerUserID,
-			ReviewerName:   st.ReviewerName,
-			ReviewComment:  st.ReviewComment,
-		}
-		if st.ReviewedAt != nil {
-			ts := st.ReviewedAt.Format("2006-01-02 15:04:05")
-			item.ReviewedAt = &ts
-		}
-		items = append(items, item)
-	}
-	return items, nil
+	return s.buildReleaseApprovalStepItems(ctx, runID)
 }
 
 func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.CicdApprovalFlowStage) map[uint]string {
@@ -291,133 +255,25 @@ func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.CicdA
 	if len(ids) == 0 {
 		return out
 	}
-	var groups []model.UserGroup
-	_ = s.db.WithContext(ctx).Select("id, name").Where("id IN ?", ids).Find(&groups).Error
+	groups, _ := s.repo.ListUserGroupsByIDs(ctx, ids)
 	for _, g := range groups {
 		out[g.ID] = g.Name
 	}
 	return out
 }
 
-func (s *Service) filterReleaseRunsForApprover(dbq *gorm.DB, userID uint) *gorm.DB {
-	// 无审批步骤的旧工单：与单级审批一致，项目成员均可见（审批时走 legacy 逻辑）
-	noSteps := s.db.Table("cicd_release_approval_steps AS s0").
-		Select("1").
-		Where("s0.release_run_id = cicd_release_runs.id")
-	currentStep := s.db.Table("cicd_release_approval_steps AS s").
-		Select("1").
-		Joins("JOIN user_group_users AS ugu ON ugu.user_group_id = s.user_group_id AND ugu.user_id = ?", userID).
-		Where("s.release_run_id = cicd_release_runs.id").
-		Where("s.status = ?", model.CicdApprovalStepPending).
-		Where("s.user_group_id IS NOT NULL AND s.user_group_id > 0").
-		Where(`s.sort_order = (
-			SELECT MIN(s2.sort_order) FROM cicd_release_approval_steps s2
-			WHERE s2.release_run_id = cicd_release_runs.id AND s2.status = ?
-		)`, model.CicdApprovalStepPending)
-	return dbq.Where("cicd_release_runs.status = ?", model.CicdRunStatusPendingApproval).
-		Where("NOT EXISTS (?) OR EXISTS (?)", noSteps, currentStep)
-}
-
-// filterReleaseRunsApprovalDone 当前用户已处理过的审批（通过或驳回）。
-func (s *Service) filterReleaseRunsApprovalDone(dbq *gorm.DB, userID uint) *gorm.DB {
-	actedStep := s.db.Table("cicd_release_approval_steps AS s").
-		Select("1").
-		Where("s.release_run_id = cicd_release_runs.id").
-		Where("s.reviewer_user_id = ?", userID).
-		Where("s.status IN ?", []string{model.CicdApprovalStepApproved, model.CicdApprovalStepRejected})
-	legacy := s.db.Table("cicd_release_runs AS lr").
-		Select("1").
-		Where("lr.id = cicd_release_runs.id").
-		Where("lr.reviewer_user_id = ?", userID).
-		Where("lr.reviewed_at IS NOT NULL")
-	return dbq.Where("EXISTS (?) OR EXISTS (?)", actedStep, legacy)
-}
-
-// filterReleaseRunsExecutionDone 当前用户作为提交人且已触发执行（非待审/待执行）。
-func (s *Service) filterReleaseRunsExecutionDone(dbq *gorm.DB, userID uint) *gorm.DB {
-	return dbq.Where("submitter_user_id = ?", userID).
-		Where("status NOT IN ?", []string{
-			model.CicdRunStatusPendingApproval,
-			model.CicdRunStatusPendingExecution,
-		})
-}
-
-// filterReleaseRunsForMineUser 待办「全部」：待处理 + 已处理。
-func (s *Service) filterReleaseRunsApprovalMine(dbq *gorm.DB, userID uint) *gorm.DB {
-	pending := s.approvalPendingExistsSubquery(userID)
-	done := s.approvalDoneExistsSubquery(userID)
-	return dbq.Where("EXISTS (?) OR EXISTS (?)", pending, done)
-}
-
-func (s *Service) filterReleaseRunsExecutionMine(dbq *gorm.DB, userID uint) *gorm.DB {
-	pending := s.db.Table("cicd_release_runs AS r").
-		Select("1").
-		Where("r.id = cicd_release_runs.id").
-		Where("r.submitter_user_id = ?", userID).
-		Where("r.status = ?", model.CicdRunStatusPendingExecution)
-	done := s.db.Table("cicd_release_runs AS r").
-		Select("1").
-		Where("r.id = cicd_release_runs.id").
-		Where("r.submitter_user_id = ?", userID).
-		Where("r.status NOT IN ?", []string{
-			model.CicdRunStatusPendingApproval,
-			model.CicdRunStatusPendingExecution,
-		})
-	return dbq.Where("EXISTS (?) OR EXISTS (?)", pending, done)
-}
-
-func (s *Service) approvalPendingExistsSubquery(userID uint) *gorm.DB {
-	noSteps := s.db.Table("cicd_release_approval_steps AS s0").
-		Select("1").
-		Where("s0.release_run_id = r.id")
-	currentStep := s.db.Table("cicd_release_approval_steps AS s").
-		Select("1").
-		Joins("JOIN user_group_users AS ugu ON ugu.user_group_id = s.user_group_id AND ugu.user_id = ?", userID).
-		Where("s.release_run_id = r.id").
-		Where("s.status = ?", model.CicdApprovalStepPending).
-		Where("s.user_group_id IS NOT NULL AND s.user_group_id > 0").
-		Where(`s.sort_order = (
-			SELECT MIN(s2.sort_order) FROM cicd_release_approval_steps s2
-			WHERE s2.release_run_id = r.id AND s2.status = ?
-		)`, model.CicdApprovalStepPending)
-	return s.db.Table("cicd_release_runs AS r").
-		Select("1").
-		Where("r.id = cicd_release_runs.id").
-		Where("r.status = ?", model.CicdRunStatusPendingApproval).
-		Where("NOT EXISTS (?) OR EXISTS (?)", noSteps, currentStep)
-}
-
-func (s *Service) approvalDoneExistsSubquery(userID uint) *gorm.DB {
-	actedStep := s.db.Table("cicd_release_approval_steps AS s").
-		Select("1").
-		Where("s.release_run_id = r.id").
-		Where("s.reviewer_user_id = ?", userID).
-		Where("s.status IN ?", []string{model.CicdApprovalStepApproved, model.CicdApprovalStepRejected})
-	legacy := s.db.Table("cicd_release_runs AS lr").
-		Select("1").
-		Where("lr.id = r.id").
-		Where("lr.reviewer_user_id = ?", userID).
-		Where("lr.reviewed_at IS NOT NULL")
-	return s.db.Table("cicd_release_runs AS r").
-		Select("1").
-		Where("r.id = cicd_release_runs.id").
-		Where("EXISTS (?) OR EXISTS (?)", actedStep, legacy)
-}
-
-// backfillPendingReleaseSteps 为历史待审工单补建审批步骤（配置审批流之后提交的旧数据）。
+// backfillPendingReleaseSteps 为历史待审工单补建统一工单（不再写入遗留步骤表）。
 func (s *Service) backfillPendingReleaseSteps(ctx context.Context, projectID uint) error {
-	var runs []model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).
-		Where("project_id = ? AND status = ? AND audit_enabled = ?", projectID, model.CicdRunStatusPendingApproval, true).
-		Find(&runs).Error; err != nil {
+	runs, err := s.repo.ListPendingApprovalReleases(ctx, projectID)
+	if err != nil {
 		return err
 	}
+	wf := s.workflowEngine()
 	for i := range runs {
-		has, err := s.hasApprovalSteps(ctx, runs[i].ID)
-		if err != nil || has {
+		if wf.HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, runs[i].ID, model.WorkflowTicketTypeRelease) {
 			continue
 		}
-		_ = s.initReleaseApprovalSteps(ctx, &runs[i])
+		_ = s.createReleaseWorkflowTickets(ctx, &runs[i])
 	}
 	return nil
 }
@@ -462,8 +318,7 @@ func (s *Service) enrichReleaseRunApprovalMineStatus(ctx context.Context, items 
 	for _, it := range items {
 		runIDs = append(runIDs, it.ID)
 	}
-	var steps []model.CicdReleaseApprovalStep
-	_ = s.db.WithContext(ctx).Where("release_run_id IN ?", runIDs).Order("sort_order ASC, id ASC").Find(&steps).Error
+	steps, _ := s.repo.ListApprovalStepsByRuns(ctx, runIDs)
 	byRun := make(map[uint][]model.CicdReleaseApprovalStep, len(items))
 	for _, st := range steps {
 		byRun[st.ReleaseRunID] = append(byRun[st.ReleaseRunID], st)
@@ -478,11 +333,7 @@ func (s *Service) enrichReleaseRunApprovalMineStatus(ctx context.Context, items 
 		}
 		sts := byRun[item.ID]
 		if len(sts) == 0 {
-			if item.ReviewerUserID != nil && *item.ReviewerUserID == userID && item.ReviewedAt != nil {
-				item.MineStatus = releaseMineStatusDone
-			} else {
-				item.MineStatus = releaseMineStatusPending
-			}
+			s.enrichReleaseMineFromWorkflow(ctx, item, userID)
 			continue
 		}
 		for _, st := range sts {
@@ -507,5 +358,50 @@ func (s *Service) enrichReleaseRunApprovalMineStatus(ctx context.Context, items 
 				item.MineStatus = releaseMineStatusPending
 			}
 		}
+	}
+}
+
+func (s *Service) enrichReleaseMineFromWorkflow(ctx context.Context, item *ReleaseRunItem, userID uint) {
+	wf := s.workflowEngine()
+	ticket, err := wf.GetTicketByRefType(ctx, model.WorkflowRefCicdReleaseRun, item.ID, model.WorkflowTicketTypeRelease)
+	if err != nil || ticket == nil {
+		if item.ReviewerUserID != nil && *item.ReviewerUserID == userID && item.ReviewedAt != nil {
+			item.MineStatus = releaseMineStatusDone
+		} else {
+			item.MineStatus = releaseMineStatusPending
+		}
+		return
+	}
+	steps, err := s.workflowRepo.ListStepsByTicket(ctx, ticket.ID)
+	if err != nil || len(steps) == 0 {
+		if item.ReviewerUserID != nil && *item.ReviewerUserID == userID && item.ReviewedAt != nil {
+			item.MineStatus = releaseMineStatusDone
+		} else {
+			item.MineStatus = releaseMineStatusPending
+		}
+		return
+	}
+	for _, st := range steps {
+		if st.ReviewerUserID != nil && *st.ReviewerUserID == userID &&
+			(st.Status == model.WorkflowStepApproved || st.Status == model.WorkflowStepRejected) {
+			item.MineStatus = releaseMineStatusDone
+			return
+		}
+	}
+	for i := range steps {
+		st := &steps[i]
+		if st.Status != model.WorkflowStepPending || st.ActivatedAt == nil {
+			continue
+		}
+		if st.AssigneeUserID != nil && *st.AssigneeUserID == userID {
+			item.MineStatus = releaseMineStatusPending
+			return
+		}
+		if st.UserGroupID != nil && *st.UserGroupID > 0 {
+			if ok, _ := s.userCanApproveStep(ctx, userID, &model.CicdReleaseApprovalStep{UserGroupID: st.UserGroupID}); ok {
+				item.MineStatus = releaseMineStatusPending
+			}
+		}
+		return
 	}
 }

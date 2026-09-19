@@ -1,0 +1,77 @@
+# PostgreSQL 冒烟 / Compose profile=container-postgres 示例配置。
+# 用法：
+#   1) docker compose --profile container-postgres up -d postgres redis
+#   2) 将本文件复制或挂载为 configs/config.yaml，或：
+#      YUNSHU_CONFIG=/app/configs/config.smoke-pg.yaml
+#   3) backend 启动前：RUN_MIGRATE=1 RUN_SEED=1
+#
+# CI / 本地脚本 scripts/smoke-pg.sh 也会生成等价临时配置。
+
+app:
+  name: yunshu-cmdb
+  env: dev
+  port: 8080
+
+plugins:
+  enabled:
+    - core
+    - k8s
+    - alert
+    - project
+    - cmdb
+    - backup
+    - cicd
+    - dbmgmt
+    - inspect
+    - ai
+    - esmgmt
+
+ai:
+  enabled: false
+
+database:
+  driver: postgres
+  host: yunshu-postgres
+  port: 5432
+  user: yunshu
+  password: "yunshu"
+  db_name: yunshu
+  sslmode: disable
+  timezone: Asia/Shanghai
+  max_idle_conns: 5
+  max_open_conns: 20
+  conn_max_lifetime_seconds: 3600
+
+redis:
+  addr: yunshu-redis:6379
+  password: "1234"
+  db: 0
+  pool_size: 10
+
+auth:
+  jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"
+  access_token_ttl_minutes: 15
+  refresh_token_ttl_hours: 168
+
+security:
+  encryption_key: "dGVzdC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE="
+
+casbin:
+  model_path: configs/casbin_model.conf
+  auto_load_interval_seconds: 0
+
+http:
+  read_header_timeout_seconds: 5
+  read_timeout_seconds: 60
+  write_timeout_seconds: 60
+  idle_timeout_seconds: 60
+  shutdown_timeout_seconds: 10
+
+log:
+  level: info
+  format: json
+  output: console
+
+swagger:
+  enabled: false
+  path: /swagger/*any

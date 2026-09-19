@@ -14,33 +14,24 @@ func (s *Service) serviceUsesK8sPipeline(ctx context.Context, svc *model.CicdSer
 	if strings.EqualFold(svc.ServiceType, model.CicdServiceTypeMicro) {
 		return true
 	}
-	var cnt int64
-	_ = s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).
-		Where("service_id = ? AND deploy_kind = ?", svc.ID, model.CicdDeployKindContainer).
-		Count(&cnt).Error
+	cnt, _ := s.repo.CountContainerDeploys(ctx, svc.ID)
 	return cnt > 0
 }
 
 func (s *Service) primaryContainerDeployConfig(ctx context.Context, serviceID uint) *model.CicdDeployConfig {
-	var dc model.CicdDeployConfig
-	if err := s.db.WithContext(ctx).
-		Where("service_id = ? AND deploy_kind = ?", serviceID, model.CicdDeployKindContainer).
-		Order("id ASC").
-		First(&dc).Error; err != nil {
+	dc, err := s.repo.GetFirstContainerDeploy(ctx, serviceID)
+	if err != nil {
 		return nil
 	}
-	return &dc
+	return dc
 }
 
 func (s *Service) firstDeployConfig(ctx context.Context, serviceID uint) *model.CicdDeployConfig {
-	var dc model.CicdDeployConfig
-	if err := s.db.WithContext(ctx).
-		Where("service_id = ?", serviceID).
-		Order("id ASC").
-		First(&dc).Error; err != nil {
+	dc, err := s.repo.GetFirstDeployConfig(ctx, serviceID)
+	if err != nil {
 		return nil
 	}
-	return &dc
+	return dc
 }
 
 func (s *Service) defaultBuildTenv(ctx context.Context, serviceID uint) string {

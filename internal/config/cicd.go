@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // CicdConfig CI/CD 平台连接（数据字典 cicd_* 优先覆盖）。
 type CicdConfig struct {
 	Enabled bool `mapstructure:"enabled"`
@@ -123,3 +125,33 @@ func DefaultCicdConfig() CicdConfig {
 		ProdForceAudit:                true,
 	}
 }
+
+// ApplyDefaults 填充 CI/CD 零值；enabledSet 表示 yaml/env 是否显式配置了 cicd.enabled。
+func (c *CicdConfig) ApplyDefaults(enabledSet bool) {
+	def := DefaultCicdConfig()
+	if !c.Enabled && !enabledSet {
+		c.Enabled = def.Enabled
+	}
+	if strings.TrimSpace(c.Jenkinsfile.Repo) == "" {
+		c.Jenkinsfile.Repo = def.Jenkinsfile.Repo
+	}
+	if strings.TrimSpace(c.Jenkinsfile.Branch) == "" {
+		c.Jenkinsfile.Branch = def.Jenkinsfile.Branch
+	}
+	if strings.TrimSpace(c.Jenkinsfile.Front) == "" {
+		c.Jenkinsfile.Front = def.Jenkinsfile.Front
+	}
+	if strings.TrimSpace(c.Jenkinsfile.Backend) == "" {
+		c.Jenkinsfile.Backend = def.Jenkinsfile.Backend
+	}
+	if c.RunSyncIntervalSeconds <= 0 {
+		c.RunSyncIntervalSeconds = def.RunSyncIntervalSeconds
+	}
+	if c.DefaultWaitMins <= 0 {
+		c.DefaultWaitMins = def.DefaultWaitMins
+	}
+	if c.DefaultArtifactRetain <= 0 {
+		c.DefaultArtifactRetain = def.DefaultArtifactRetain
+	}
+}
+

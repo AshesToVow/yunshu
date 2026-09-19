@@ -43,7 +43,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := rt.Inspect.(*inspectsvc.Service); ok && svc != nil {
+	if svc, ok := plugin.As[*inspectsvc.Service](rt.Inspect); ok && svc != nil {
 		_ = svc.SeedGlobalTemplates(bgCtx)
 		_ = svc.SeedReportTemplates(bgCtx)
 		lifecycle.Go("inspect.scheduler", func() { svc.RunScheduler(bgCtx) })

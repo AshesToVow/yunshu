@@ -27,9 +27,10 @@ type AlertMonitorRuleListQuery struct {
 }
 
 type AlertMonitorRuleUpsertRequest struct {
-	DatasourceID        uint   `json:"datasource_id" binding:"required"`
+	DatasourceID        uint   `json:"datasource_id"`
 	ProjectID           *uint  `json:"project_id"`
 	Name                string `json:"name" binding:"required,max=128"`
+	RuleKind            string `json:"rule_kind"` // promql|log|slo
 	Expr                string `json:"expr" binding:"required"`
 	ForSeconds          int    `json:"for_seconds"`
 	EvalIntervalSeconds int    `json:"eval_interval_seconds"`
@@ -41,9 +42,10 @@ type AlertMonitorRuleUpsertRequest struct {
 }
 
 type AlertMonitorRuleService struct {
-	ruleRepo interfaces.AlertMonitorRuleRepository
-	dsRepo   interfaces.AlertDatasourceRepository
-	redis    *redis.Client
+	ruleRepo   interfaces.AlertMonitorRuleRepository
+	dsRepo     interfaces.AlertDatasourceRepository
+	redis      *redis.Client
+	memberRepo interfaces.ProjectMemberRepository
 }
 
 type AlertMonitorRuleListItem struct {
@@ -56,8 +58,9 @@ func NewAlertMonitorRuleService(
 	ruleRepo interfaces.AlertMonitorRuleRepository,
 	dsRepo interfaces.AlertDatasourceRepository,
 	redisClient *redis.Client,
+	memberRepo interfaces.ProjectMemberRepository,
 ) *AlertMonitorRuleService {
-	return &AlertMonitorRuleService{ruleRepo: ruleRepo, dsRepo: dsRepo, redis: redisClient}
+	return &AlertMonitorRuleService{ruleRepo: ruleRepo, dsRepo: dsRepo, redis: redisClient, memberRepo: memberRepo}
 }
 
 func (s *AlertMonitorRuleService) List(ctx context.Context, q AlertMonitorRuleListQuery) ([]AlertMonitorRuleListItem, int64, int, int, error) {
@@ -103,11 +106,22 @@ func (s *AlertMonitorRuleService) Get(ctx context.Context, id uint) (*model.Aler
 }
 
 func (s *AlertMonitorRuleService) Create(ctx context.Context, req AlertMonitorRuleUpsertRequest) (*model.AlertMonitorRule, error) {
-	if _, err := s.dsRepo.GetByID(ctx, req.DatasourceID); err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgaf3782e3e26f)
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, projectIDPtr(req.ProjectID)); err != nil {
+		return nil, err
+	}
+	kind := normalizeRuleKind(req.RuleKind)
+	if kind != model.AlertRuleKindLog {
+		if req.DatasourceID == 0 {
+			return nil, constants.ErrBadRequestWithMsg("datasource_id 必填")
 		}
-		return nil, bizerrors.Pass(ctx, "alert.rule", "Create", err)
+		if _, err := s.dsRepo.GetByID(ctx, req.DatasourceID); err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgaf3782e3e26f)
+			}
+			return nil, bizerrors.Pass(ctx, "alert.rule", "Create", err)
+		}
+	} else if _, err := parseLogAlertConfig(req.Expr); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("日志规则 Expr 须为合法 JSON 配置: " + err.Error())
 	}
 	ev := req.EvalIntervalSeconds
 	if ev <= 0 {
@@ -124,9 +138,16 @@ func (s *AlertMonitorRuleService) Create(ctx context.Context, req AlertMonitorRu
 	if unit == "" {
 		unit = "raw"
 	}
+	if kind == model.AlertRuleKindLog {
+		unit = "count"
+		if req.ProjectID == nil || *req.ProjectID == 0 {
+			return nil, constants.ErrBadRequestWithMsg("日志规则须指定 project_id")
+		}
+	}
 	row := model.AlertMonitorRule{
 		DatasourceID:        req.DatasourceID,
 		Name:                strings.TrimSpace(req.Name),
+		RuleKind:            kind,
 		Expr:                strings.TrimSpace(req.Expr),
 		ForSeconds:          req.ForSeconds,
 		EvalIntervalSeconds: ev,
@@ -135,6 +156,9 @@ func (s *AlertMonitorRuleService) Create(ctx context.Context, req AlertMonitorRu
 		LabelsJSON:          strings.TrimSpace(req.LabelsJSON),
 		AnnotationsJSON:     strings.TrimSpace(req.AnnotationsJSON),
 		Enabled:             req.Enabled == nil || *req.Enabled,
+	}
+	if req.ProjectID != nil {
+		row.ProjectID = *req.ProjectID
 	}
 	if err := s.ruleRepo.Create(ctx, &row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.rule", "Create", err)
@@ -146,6 +170,14 @@ func (s *AlertMonitorRuleService) Update(ctx context.Context, id uint, req Alert
 	row, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.rule", "Update", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return nil, err
+	}
+	if req.ProjectID != nil && *req.ProjectID != row.ProjectID {
+		if err := assertAlertProjectWrite(ctx, s.memberRepo, *req.ProjectID); err != nil {
+			return nil, err
+		}
 	}
 	if req.DatasourceID > 0 && req.DatasourceID != row.DatasourceID {
 		if _, err := s.dsRepo.GetByID(ctx, req.DatasourceID); err != nil {
@@ -159,8 +191,19 @@ func (s *AlertMonitorRuleService) Update(ctx context.Context, id uint, req Alert
 	if strings.TrimSpace(req.Name) != "" {
 		row.Name = strings.TrimSpace(req.Name)
 	}
+	if strings.TrimSpace(req.RuleKind) != "" {
+		row.RuleKind = normalizeRuleKind(req.RuleKind)
+	}
+	if req.ProjectID != nil {
+		row.ProjectID = *req.ProjectID
+	}
 	if strings.TrimSpace(req.Expr) != "" {
 		row.Expr = strings.TrimSpace(req.Expr)
+		if normalizeRuleKind(row.RuleKind) == model.AlertRuleKindLog {
+			if _, err := parseLogAlertConfig(row.Expr); err != nil {
+				return nil, constants.ErrBadRequestWithMsg("日志规则 Expr 须为合法 JSON 配置: " + err.Error())
+			}
+		}
 	}
 	row.ForSeconds = req.ForSeconds
 	if req.EvalIntervalSeconds > 0 {
@@ -184,7 +227,14 @@ func (s *AlertMonitorRuleService) Update(ctx context.Context, id uint, req Alert
 }
 
 func (s *AlertMonitorRuleService) Delete(ctx context.Context, id uint) error {
-	err := s.ruleRepo.DeleteCascade(ctx, id)
+	row, err := s.Get(ctx, id)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.rule", "Delete", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return err
+	}
+	err = s.ruleRepo.DeleteCascade(ctx, id)
 	if err == gorm.ErrRecordNotFound {
 		return constants.ErrNotFoundWithMsg(constants.ErrMsgdfcd891c9a94)
 	}

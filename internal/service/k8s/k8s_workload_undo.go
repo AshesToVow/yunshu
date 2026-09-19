@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"strconv"
@@ -113,6 +114,45 @@ func (s *K8sWorkloadService) StatefulSetRolloutUndo(ctx context.Context, req Rol
 		FromRevision: fromRev,
 		ToRevision:   toRev,
 		Message:      "已标记 StatefulSet 回滚目标（ControllerRevision），请确认滚动状态",
+	}, nil
+}
+
+// DaemonSetRolloutUndo 基于 ControllerRevision 恢复 Pod 模板实现 DaemonSet 回滚。
+func (s *K8sWorkloadService) DaemonSetRolloutUndo(ctx context.Context, req RolloutUndoRequest) (*RolloutUndoResult, error) {
+	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	if err != nil {
+		return nil, err
+	}
+	ns := strings.TrimSpace(req.Namespace)
+	name := strings.TrimSpace(req.Name)
+	var ds appsv1.DaemonSet
+	if err := k.WithContext(ctx).Resource(&appsv1.DaemonSet{}).Namespace(ns).Name(name).Get(&ds).Error; err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.workload.undo", "get", err, "获取 DaemonSet 失败")
+	}
+	fromRev := fmt.Sprintf("%d", ds.Generation)
+	var crList []appsv1.ControllerRevision
+	if err := k.WithContext(ctx).Resource(&appsv1.ControllerRevision{}).Namespace(ns).List(&crList).Error; err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.workload.undo", "list_cr", err, "列出 ControllerRevision 失败")
+	}
+	owned := filterOwnedDaemonSetControllerRevisions(crList, &ds)
+	target, err := pickControllerRevision(owned, req.Revision)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	copyObj := ds.DeepCopy()
+	if err := applyControllerRevisionTemplateToDaemonSet(copyObj, target); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("无法从历史版本恢复模板: " + err.Error())
+	}
+	if err := k.WithContext(ctx).Resource(&appsv1.DaemonSet{}).Namespace(ns).Name(name).Update(copyObj).Error; err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.workload.undo", "update", err, "回滚 DaemonSet 失败")
+	}
+	return &RolloutUndoResult{
+		Kind:         "DaemonSet",
+		Namespace:    ns,
+		Name:         name,
+		FromRevision: fromRev,
+		ToRevision:   strconv.FormatInt(target.Revision, 10),
+		Message:      "DaemonSet 已回滚到历史 ControllerRevision",
 	}, nil
 }
 
@@ -250,4 +290,19 @@ func copyStrMap(in map[string]string) map[string]string {
 	out := make(map[string]string, len(in))
 	maps.Copy(out, in)
 	return out
+}
+
+func applyControllerRevisionTemplateToDaemonSet(ds *appsv1.DaemonSet, cr *appsv1.ControllerRevision) error {
+	if ds == nil || cr == nil || len(cr.Data.Raw) == 0 {
+		return fmt.Errorf("历史版本数据为空")
+	}
+	var hist appsv1.DaemonSet
+	if err := json.Unmarshal(cr.Data.Raw, &hist); err != nil {
+		return err
+	}
+	if hist.Spec.Template.Spec.Containers == nil && len(hist.Spec.Template.Spec.InitContainers) == 0 {
+		return fmt.Errorf("历史版本未包含 Pod 模板")
+	}
+	ds.Spec.Template = hist.Spec.Template
+	return nil
 }

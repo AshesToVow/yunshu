@@ -1,7 +1,11 @@
 import { ReloadOutlined } from "@ant-design/icons";
-import { Card, Col, Progress, Row, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Col, Popconfirm, Progress, Row, Select, Space, Table, Tag, Typography, message } from "antd";
+import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
+import { createInhibitionRule } from "../services/alert-inhibition";
+import { createAlertSilence } from "../services/alert-platform";
 import { getAlertQualityReport, type AlertQualityReport } from "../services/alert-quality";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
@@ -10,6 +14,9 @@ const WINDOW_OPTIONS = [
   { value: 72, label: "近 3 天" },
   { value: 168, label: "近 7 天" },
 ];
+
+type NoiseRow = AlertQualityReport["noise_top"][number];
+type RepeatRow = AlertQualityReport["repeat_fingerprints"][number];
 
 type Props = {
   /** 嵌入告警平台时隐藏独立项目选择，跟随顶栏上下文 */
@@ -23,6 +30,7 @@ export function AlertQualityPage({ embedded, projectContextId }: Props) {
   const [windowHours, setWindowHours] = useState(24);
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<AlertQualityReport | null>(null);
+  const [actionKey, setActionKey] = useState("");
 
   const effectiveProjectId = embedded ? projectContextId : projectId;
 
@@ -61,6 +69,86 @@ export function AlertQualityPage({ embedded, projectContextId }: Props) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function silence2h(row: { fingerprint?: string; alertname?: string; title?: string }, key: string) {
+    if (!row.fingerprint) {
+      message.warning("缺少 fingerprint，无法静默");
+      return;
+    }
+    const matchers: Array<{ name: string; value: string; is_regex: boolean }> = [
+      { name: "fingerprint", value: row.fingerprint, is_regex: false },
+    ];
+    const alertname = row.alertname || row.title;
+    if (alertname) matchers.push({ name: "alertname", value: alertname, is_regex: false });
+    setActionKey(key);
+    try {
+      await createAlertSilence({
+        name: `静默 ${alertname || row.fingerprint}（2 小时）`,
+        matchers_json: JSON.stringify(matchers),
+        comment: "质量治理一键静默 2h",
+        enabled: true,
+        starts_at: dayjs().toISOString(),
+        ends_at: dayjs().add(2, "hour").toISOString(),
+        project_id: effectiveProjectId && effectiveProjectId > 0 ? effectiveProjectId : undefined,
+      });
+      message.success("已创建 2 小时静默");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "创建静默失败"));
+    } finally {
+      setActionKey("");
+    }
+  }
+
+  async function createInhibitionDraft(row: { fingerprint?: string; alertname?: string; title?: string }, key: string) {
+    const title = row.title || row.alertname || row.fingerprint || "unknown";
+    const labels: Record<string, string> = {};
+    if (row.alertname) labels.alertname = row.alertname;
+    else if (row.fingerprint) labels.fingerprint = row.fingerprint;
+    else if (row.title) labels.alertname = row.title;
+    if (!Object.keys(labels).length) {
+      message.warning("缺少匹配标签，无法创建抑制草稿");
+      return;
+    }
+    const labelsJson = JSON.stringify(labels);
+    setActionKey(key);
+    try {
+      await createInhibitionRule({
+        name: `抑制草稿-${title}`,
+        source_match_labels_json: labelsJson,
+        target_match_labels_json: labelsJson,
+        duration_seconds: 3600,
+        enabled: true,
+        project_id: effectiveProjectId && effectiveProjectId > 0 ? effectiveProjectId : undefined,
+      });
+      message.success("已创建抑制草稿");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "创建抑制草稿失败"));
+    } finally {
+      setActionKey("");
+    }
+  }
+
+  function renderActions(row: NoiseRow | RepeatRow, prefix: string) {
+    const fp = "fingerprint" in row ? row.fingerprint : undefined;
+    const silenceKey = `${prefix}-silence-${fp || row.title}`;
+    const inhibitKey = `${prefix}-inhibit-${fp || row.title}`;
+    return (
+      <Space size={4} wrap>
+        {fp ? (
+          <Popconfirm title="确认静默该告警 2 小时？" onConfirm={() => void silence2h(row, silenceKey)}>
+            <Button size="small" type="link" loading={actionKey === silenceKey}>
+              静默 2h
+            </Button>
+          </Popconfirm>
+        ) : null}
+        <Popconfirm title="创建抑制规则草稿？" onConfirm={() => void createInhibitionDraft(row, inhibitKey)}>
+          <Button size="small" type="link" loading={actionKey === inhibitKey}>
+            抑制草稿
+          </Button>
+        </Popconfirm>
+      </Space>
+    );
   }
 
   return (
@@ -135,14 +223,20 @@ export function AlertQualityPage({ embedded, projectContextId }: Props) {
         <Col xs={24} lg={12}>
           <Card title="噪音 Top" size="small" loading={loading}>
             <Table
-              rowKey={(r) => `${r.title}-${r.severity}`}
+              rowKey={(r) => `${r.title}-${r.severity}-${r.fingerprint || ""}`}
               size="small"
               pagination={false}
               dataSource={report?.noise_top || []}
               columns={[
-                { title: "标题", dataIndex: "title" },
+                { title: "标题", dataIndex: "title", ellipsis: true },
                 { title: "级别", dataIndex: "severity", width: 90, render: (v: string) => <Tag>{v}</Tag> },
                 { title: "次数", dataIndex: "count", width: 80 },
+                {
+                  title: "操作",
+                  key: "actions",
+                  width: 160,
+                  render: (_: unknown, row: NoiseRow) => renderActions(row, "noise"),
+                },
               ]}
             />
           </Card>
@@ -158,6 +252,12 @@ export function AlertQualityPage({ embedded, projectContextId }: Props) {
                 { title: "Fingerprint", dataIndex: "fingerprint", ellipsis: true },
                 { title: "标题", dataIndex: "title", ellipsis: true },
                 { title: "次数", dataIndex: "count", width: 80 },
+                {
+                  title: "操作",
+                  key: "actions",
+                  width: 160,
+                  render: (_: unknown, row: RepeatRow) => renderActions(row, "repeat"),
+                },
               ]}
             />
           </Card>

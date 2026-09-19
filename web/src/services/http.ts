@@ -20,6 +20,8 @@ declare module "axios" {
 export const HTTP_TIMEOUT_DEFAULT = 30000;
 /** K8s 列表/详情会聚合 metrics、全集群 Pod 等，后端耗时常超过 15s */
 export const HTTP_TIMEOUT_K8S = 60000;
+/** 日志检索/概览可能扫多日 ES 索引，默认 30s 易被前端误杀 */
+export const HTTP_TIMEOUT_LOG_SEARCH = 120000;
 /** Loggie Agent 安装含二进制下载/上传，可能较慢 */
 export const HTTP_TIMEOUT_LOGGIE_INSTALL = 300000;
 
@@ -35,16 +37,36 @@ const K8S_SLOW_PATH =
 
 const CLUSTER_SLOW_PATH = /\/clusters\/\d+\/(namespaces|status|component-statuses|api-resources)/;
 const LOGGIE_INSTALL_PATH = /\/projects\/\d+\/loggie\/install/;
+/** 项目日志检索相关慢路径 */
+const LOG_SEARCH_PATH = /\/projects\/\d+\/logs\/(search|overview|export|patterns|anomalies|context)/;
+const AI_LOG_ANALYZE_PATH = /\/ai\/logs\/analyze/;
 
 function resolveRequestTimeout(url: string, configured?: number): number | undefined {
   const path = url.split("?")[0] ?? url;
   if (LOGGIE_INSTALL_PATH.test(path)) {
     return HTTP_TIMEOUT_LOGGIE_INSTALL;
   }
+  if (LOG_SEARCH_PATH.test(path) || AI_LOG_ANALYZE_PATH.test(path)) {
+    return HTTP_TIMEOUT_LOG_SEARCH;
+  }
   if (K8S_SLOW_PATH.test(path) || CLUSTER_SLOW_PATH.test(path)) {
     return HTTP_TIMEOUT_K8S;
   }
   return configured;
+}
+
+function timeoutHintForUrl(url: string): string {
+  const path = url.split("?")[0] ?? url;
+  if (LOGGIE_INSTALL_PATH.test(path)) {
+    return "请求超时：Agent 安装较慢，请确认离线包 deploy/loggie/binary/loggie 存在且目标机 SSH 可达后重试";
+  }
+  if (LOG_SEARCH_PATH.test(path) || AI_LOG_ANALYZE_PATH.test(path)) {
+    return "请求超时：日志检索耗时过长，请缩小时间范围或减少筛选条件后重试";
+  }
+  if (K8S_SLOW_PATH.test(path) || CLUSTER_SLOW_PATH.test(path)) {
+    return "请求超时：K8s 查询较慢，请缩小范围后重试";
+  }
+  return "请求超时，请稍后重试";
 }
 
 function toastOnce(key: string, content: string) {
@@ -110,11 +132,11 @@ http.interceptors.response.use(
     const status = error.response?.status;
     const rawData = error.response?.data;
     const resolved = resolveApiErrorDisplayMessage(rawData?.error_code, rawData?.message);
+    const cfg = error.config as InternalAxiosRequestConfig | undefined;
     const isTimeout = error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
     const errorMessage = isTimeout
-      ? "请求超时：Agent 安装较慢，请确认离线包 deploy/loggie/binary/loggie 存在且目标机 SSH 可达后重试"
+      ? timeoutHintForUrl(String(cfg?.url ?? ""))
       : resolved || error.message || "请求失败";
-    const cfg = error.config as InternalAxiosRequestConfig | undefined;
     const silentErrorToast = Boolean(cfg?.silentErrorToast);
     const errorCode = rawData?.error_code ?? "";
 
@@ -165,6 +187,11 @@ export async function getData<T>(promise: Promise<ApiResponse<T>>) {
 /** 从 axios 错误中取出后端 Body.Message（与 response.Error 业务话术对齐）；非 axios 时回退 Error.message。 */
 export function extractApiErrorMessage(error: unknown, fallback = "请求失败"): string {
   if (axios.isAxiosError(error)) {
+    const isTimeout =
+      error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
+    if (isTimeout) {
+      return timeoutHintForUrl(String(error.config?.url ?? ""));
+    }
     const data = error.response?.data as { message?: string; error_code?: string } | undefined;
     const resolved = resolveApiErrorDisplayMessage(data?.error_code, data?.message);
     if (resolved) {

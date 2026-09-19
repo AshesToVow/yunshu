@@ -19,6 +19,9 @@ export function BarChart({ items, height = 320, darkMode = false, valueLabel = "
   const padding = { top: 24, right: 16, bottom: 72, left: 40 };
   const plotH = height - padding.top - padding.bottom;
   const maxValue = Math.max(...items.map((it) => it.value), 1);
+  const yMax = Math.max(1, Math.ceil(maxValue));
+  const tickCount = Math.min(4, yMax);
+  const ticks = Array.from({ length: tickCount + 1 }, (_, i) => Math.round((yMax * i) / tickCount));
   const barGap = 12;
   const minBarWidth = 28;
   const contentWidth = Math.max(viewWidth, items.length * (minBarWidth + barGap) + padding.left + padding.right);
@@ -36,15 +39,15 @@ export function BarChart({ items, height = 320, darkMode = false, valueLabel = "
   const bars = useMemo(() => {
     const plotW = contentWidth - padding.left - padding.right;
     const barWidth = items.length > 0 ? Math.min(48, Math.max(minBarWidth, plotW / items.length - barGap)) : minBarWidth;
-    const totalBarsWidth = items.length * barWidth + Math.max(0, items.length-1) * barGap;
+    const totalBarsWidth = items.length * barWidth + Math.max(0, items.length - 1) * barGap;
     const startX = padding.left + Math.max(0, (plotW - totalBarsWidth) / 2);
     return items.map((item, i) => {
-      const barH = (item.value / maxValue) * plotH;
+      const barH = (item.value / yMax) * plotH;
       const x = startX + i * (barWidth + barGap);
       const y = padding.top + plotH - barH;
       return { ...item, x, y, barH, barWidth };
     });
-  }, [contentWidth, items, maxValue, plotH]);
+  }, [contentWidth, items, yMax, plotH]);
 
   const gridColor = darkMode ? "rgba(56, 189, 248, 0.14)" : "#eef3fb";
   const textColor = darkMode ? "#94a3b8" : "#64748b";
@@ -54,11 +57,10 @@ export function BarChart({ items, height = 320, darkMode = false, valueLabel = "
   return (
     <div ref={containerRef} style={{ width: "100%", overflowX: "auto" }}>
       <svg viewBox={`0 0 ${contentWidth} ${height}`} width={contentWidth} height={height} style={{ display: "block" }}>
-        {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-          const y = padding.top + t * plotH;
-          const val = Math.round(maxValue * (1 - t));
+        {ticks.map((val) => {
+          const y = padding.top + plotH * (1 - val / yMax);
           return (
-            <g key={t}>
+            <g key={`tick-${val}`}>
               <line x1={padding.left} x2={contentWidth - padding.right} y1={y} y2={y} stroke={gridColor} strokeWidth={1} />
               <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize={11} fill={textColor}>
                 {val}

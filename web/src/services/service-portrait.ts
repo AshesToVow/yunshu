@@ -20,11 +20,26 @@ export interface PortraitCicdSummary {
   last_at?: string;
 }
 
+export interface PortraitLogAnomalyBrief {
+  id: number;
+  anomaly_type: string;
+  title: string;
+  severity: string;
+  detected_at: string;
+}
+
+export interface PortraitLogSummary {
+  open_anomaly_count: number;
+  pattern_count: number;
+  recent_anomalies: PortraitLogAnomalyBrief[];
+}
+
 export interface ServicePortrait {
   service: ServiceCatalogItem;
   recent_changes: ChangeEventItem[];
   entry_points: PortraitEntryPoint[];
   cicd_summary?: PortraitCicdSummary | null;
+  log_summary?: PortraitLogSummary | null;
   health?: {
     score: number;
     grade: string;

@@ -27,14 +27,24 @@
   --ops-border: #e2e8f0;
   --ops-text: #0f172a;
   --ops-text-secondary: #64748b;
+  --ops-text-muted: #64748b;
 }
 
 .admin-shell.ops-platform.theme-dark {
   --ops-bg-layout: #141414;
   --ops-bg-container: #1f1f1f;
   --ops-border: #303030;
-  --ops-text: rgba(255, 255, 255, 0.85);
-  --ops-text-secondary: rgba(255, 255, 255, 0.45);
+  --ops-text: rgba(255, 255, 255, 0.88);
+  --ops-text-secondary: rgba(255, 255, 255, 0.68);
+  --ops-text-muted: rgba(255, 255, 255, 0.68);
+  --ops-success-bg: #162312;
+  --ops-success-text: #73d13d;
+  --ops-warning-bg: #2b2111;
+  --ops-warning-text: #faad14;
+  --ops-error-bg: #2a1215;
+  --ops-error-text: #ff7875;
+  --ops-info-bg: #111a2c;
+  --ops-info-text: #69b1ff;
 }
 
 /* Reduce visual noise: disable CRT overlay in ops mode */
@@ -559,6 +569,100 @@
   display: flex;
   justify-content: center;
   padding: 32px 0;
+}
+
+/* Pod 日志对话框：最大化 + 右下角拖拽缩放 */
+.pod-logs-modal-wrap .ant-modal {
+  max-width: calc(100vw - 24px);
+  padding-bottom: 0;
+}
+
+.pod-logs-modal-wrap--maximized .ant-modal {
+  top: 0 !important;
+  max-width: 100vw;
+  margin: 0;
+  padding: 0;
+}
+
+.pod-logs-modal-wrap--maximized .ant-modal-content {
+  border-radius: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.pod-logs-modal-wrap--maximized .ant-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pod-logs-modal__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 28px;
+  min-width: 0;
+}
+
+.pod-logs-modal__title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pod-logs-modal__max-btn {
+  flex: 0 0 auto;
+  color: var(--admin-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.pod-logs-modal__toolbar {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.pod-logs-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pod-logs-modal__pre.code-block-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+}
+
+.pod-logs-modal__resize-handle {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  touch-action: none;
+  z-index: 2;
+  background:
+    linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.18) 50%) no-repeat,
+    linear-gradient(135deg, transparent 65%, rgba(0, 0, 0, 0.18) 65%) no-repeat;
+  background-position: right 2px bottom 2px, right 2px bottom 2px;
+  background-size: 12px 12px, 8px 8px;
+  opacity: 0.7;
+}
+
+.pod-logs-modal__resize-handle:hover {
+  opacity: 1;
+}
+
+.admin-shell.theme-dark .pod-logs-modal__resize-handle {
+  background:
+    linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.28) 50%) no-repeat,
+    linear-gradient(135deg, transparent 65%, rgba(255, 255, 255, 0.28) 65%) no-repeat;
+  background-position: right 2px bottom 2px, right 2px bottom 2px;
+  background-size: 12px 12px, 8px 8px;
 }
 
 .k8s-summary-row-wrap {

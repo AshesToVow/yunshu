@@ -29,7 +29,7 @@ func normalizeAlertNoteContent(raw string) (string, error) {
 }
 
 func (s *AlertService) CreateAlertNote(ctx context.Context, userID uint, userName string, req AlertNoteCreateRequest) (*model.AlertProgressNote, error) {
-	if s == nil || s.db == nil {
+	if s == nil || s.progressNoteRepo == nil {
 		return nil, constants.ErrInternal
 	}
 	fp := strings.TrimSpace(req.Fingerprint)
@@ -46,7 +46,7 @@ func (s *AlertService) CreateAlertNote(ctx context.Context, userID uint, userNam
 		UserName:    strings.TrimSpace(userName),
 		Content:     content,
 	}
-	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+	if err := s.progressNoteRepo.Create(ctx, row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.note", "CreateAlertNote", err)
 	}
 	return row, nil
@@ -54,38 +54,33 @@ func (s *AlertService) CreateAlertNote(ctx context.Context, userID uint, userNam
 
 func (s *AlertService) ListAlertNotes(ctx context.Context, fingerprint string) ([]model.AlertProgressNote, error) {
 	out := []model.AlertProgressNote{}
-	if s == nil || s.db == nil {
+	if s == nil || s.progressNoteRepo == nil {
 		return out, nil
 	}
 	fp := strings.TrimSpace(fingerprint)
 	if fp == "" {
 		return out, constants.ErrBadRequestWithMsg("fingerprint required")
 	}
-	err := s.db.WithContext(ctx).
-		Where("fingerprint = ?", fp).
-		Order("id ASC").
-		Limit(200).
-		Find(&out).Error
+	list, err := s.progressNoteRepo.ListByFingerprint(ctx, fp, 200)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.note", "ListAlertNotes", err)
 	}
-	return out, nil
+	if list == nil {
+		return out, nil
+	}
+	return list, nil
 }
 
 func (s *AlertService) ListLatestNotesByFingerprints(ctx context.Context, fingerprints []string) (map[string]model.AlertProgressNote, error) {
 	out := map[string]model.AlertProgressNote{}
-	if s == nil || s.db == nil {
+	if s == nil || s.progressNoteRepo == nil {
 		return out, nil
 	}
 	uniq := uniqueNonEmptyStrings(fingerprints)
 	if len(uniq) == 0 {
 		return out, nil
 	}
-	var rows []model.AlertProgressNote
-	err := s.db.WithContext(ctx).
-		Where("fingerprint IN ?", uniq).
-		Order("id DESC").
-		Find(&rows).Error
+	rows, err := s.progressNoteRepo.ListLatestByFingerprints(ctx, uniq)
 	if err != nil {
 		return out, bizerrors.Pass(ctx, "alert.note", "ListLatestNotesByFingerprints", err)
 	}

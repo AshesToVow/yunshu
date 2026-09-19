@@ -314,6 +314,7 @@ export function NetworkPoliciesPage() {
         title="网络策略管理"
         needNamespace
         watchResource="networkpolicies"
+        actionColumnWidth={400}
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

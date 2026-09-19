@@ -240,8 +240,9 @@ export function OperationLogsPage() {
             {
               title: "操作",
               key: "action",
-              width: 90,
+              width: 110,
               fixed: "right",
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, record: OperationLogItem) => (
                 <Popconfirm title="确定删除？" onConfirm={() => void handleDelete(record.id)}>
                   <Button type="link" size="small" danger icon={<DeleteOutlined />}>

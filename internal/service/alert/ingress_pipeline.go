@@ -198,6 +198,8 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 			_ = host.ClearCurrentMetric(ctx, alert.Fingerprint)
 			_ = host.ClearGroupAggregateState(ctx, groupKey)
 			host.ClearGroupWaitPending(ctx, groupKey)
+			// 即使未投递过 firing，也要清升级队列，避免 Ack/升级残留。
+			host.OnResolvedComplete(ctx, alert.Fingerprint, groupKey)
 			continue
 		}
 		if status == "resolved" {

@@ -11,6 +11,7 @@ import (
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sutil"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/yaml"
@@ -151,8 +152,8 @@ func (s *K8sWorkloadService) Apply(ctx context.Context, req NamespacedApplyReque
 			ActorID:   actorID,
 			Reason:    "before_apply",
 		}
-		if s.db != nil {
-			if err := s.db.WithContext(ctx).Create(&row).Error; err == nil {
+		if s.snapRepo != nil {
+			if err := s.snapRepo.Create(ctx, &row); err == nil {
 				snapIDs = append(snapIDs, row.ID)
 			}
 		}
@@ -224,11 +225,9 @@ func (s *K8sWorkloadService) deleteWorkloadByKind(ctx context.Context, req Names
 			Namespace: req.Namespace, Kind: kind, Name: req.Name,
 			YAML: string(y), ActorID: actorID, Reason: "before_delete",
 		}
-		if s.db != nil {
-			if s.db != nil {
-				if err := s.db.WithContext(ctx).Create(&row).Error; err == nil {
-					snapID = row.ID
-				}
+		if s.snapRepo != nil {
+			if err := s.snapRepo.Create(ctx, &row); err == nil {
+				snapID = row.ID
 			}
 		}
 	}
@@ -249,37 +248,20 @@ func (s *K8sWorkloadService) ListSnapshots(ctx context.Context, q SnapshotListQu
 	if q.ProjectID == 0 && q.ClusterID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("project_id or cluster_id required")
 	}
-	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	dbq := s.db.WithContext(ctx).Model(&model.K8sWorkloadSnapshot{})
-	if q.ProjectID > 0 {
-		dbq = dbq.Where("project_id = ?", q.ProjectID)
-	}
-	if q.ClusterID > 0 {
-		dbq = dbq.Where("cluster_id = ?", q.ClusterID)
-	}
-	if ns := strings.TrimSpace(q.Namespace); ns != "" {
-		dbq = dbq.Where("namespace = ?", ns)
-	}
-	if kind := strings.TrimSpace(q.Kind); kind != "" {
-		dbq = dbq.Where("kind = ?", kind)
-	}
-	if name := strings.TrimSpace(q.Name); name != "" {
-		dbq = dbq.Where("name = ?", name)
-	}
-	var total int64
-	if err := dbq.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var list []model.K8sWorkloadSnapshot
-	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return &pagination.Result[model.K8sWorkloadSnapshot]{List: list, Total: total, Page: page, PageSize: pageSize}, nil
+	return s.snapRepo.List(ctx, repository.K8sWorkloadSnapshotListParams{
+		ProjectID: q.ProjectID,
+		ClusterID: q.ClusterID,
+		Namespace: q.Namespace,
+		Kind:      q.Kind,
+		Name:      q.Name,
+		Page:      q.Page,
+		PageSize:  q.PageSize,
+	})
 }
 
 func (s *K8sWorkloadService) RollbackSnapshot(ctx context.Context, req SnapshotRollbackRequest) error {
-	var snap model.K8sWorkloadSnapshot
-	if err := s.db.WithContext(ctx).Where("id = ?", req.SnapshotID).First(&snap).Error; err != nil {
+	snap, err := s.snapRepo.GetByID(ctx, req.SnapshotID)
+	if err != nil || snap == nil {
 		return constants.ErrNotFound
 	}
 	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)

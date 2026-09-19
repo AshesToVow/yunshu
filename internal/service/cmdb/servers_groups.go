@@ -54,6 +54,8 @@ func (s *Service) ListServerGroupTree(ctx context.Context, q ServerGroupTreeQuer
 }
 
 // UpsertServerGroup 创建或更新服务器分组。
+// category 除内置 self_hosted / cloud 外，允许自定义标识（与数据字典 server_group_category 对齐）；
+// 自定义类型按自建语义处理（可挂服务器，不走云账号同步）。
 func (s *Service) UpsertServerGroup(ctx context.Context, req ServerGroupUpsertRequest) (*ServerGroupItem, error) {
 	if err := s.ensureDefaultServerGroups(ctx, req.ProjectID); err != nil {
 		return nil, bizerrors.Pass(ctx, "cmdb", "UpsertServerGroup", err)
@@ -62,7 +64,13 @@ func (s *Service) UpsertServerGroup(ctx context.Context, req ServerGroupUpsertRe
 	if category == "" {
 		category = model.ServerGroupCategorySelfHosted
 	}
+	if err := validateServerGroupCategory(category); err != nil {
+		return nil, err
+	}
 	provider := strings.TrimSpace(req.Provider)
+	if category != model.ServerGroupCategoryCloud && provider == "" {
+		provider = "custom"
+	}
 	status := req.Status
 	if status != model.StatusDisabled {
 		status = model.StatusEnabled
@@ -100,6 +108,23 @@ func (s *Service) UpsertServerGroup(ctx context.Context, req ServerGroupUpsertRe
 		ID: item.ID, ProjectID: item.ProjectID, ParentID: item.ParentID, Name: item.Name,
 		Category: item.Category, Provider: item.Provider, Sort: item.Sort, Status: item.Status,
 	}, nil
+}
+
+func validateServerGroupCategory(category string) error {
+	// 标识：小写字母开头，仅 a-z 0-9 _，最长 32
+	if len(category) == 0 || len(category) > 32 {
+		return constants.ErrBadRequestWithMsg("分组类型标识长度须为 1～32")
+	}
+	for i, r := range category {
+		ok := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_'
+		if i == 0 && (r < 'a' || r > 'z') {
+			return constants.ErrBadRequestWithMsg("分组类型标识须以小写字母开头（如 idc、colo）")
+		}
+		if !ok {
+			return constants.ErrBadRequestWithMsg("分组类型标识仅允许小写字母、数字和下划线")
+		}
+	}
+	return nil
 }
 
 // DeleteServerGroup 删除服务器分组。

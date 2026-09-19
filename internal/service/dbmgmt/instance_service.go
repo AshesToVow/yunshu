@@ -76,6 +76,7 @@ type InstanceListQuery struct {
 	Keyword   string
 	Page      int `form:"page"`
 	PageSize  int `form:"page_size"`
+	Actor     *auth.CurrentUser `form:"-"`
 }
 
 func normalizeInstanceRole(role string) string {
@@ -138,7 +139,7 @@ func (s *Service) buildOpenParams(inst *model.DbInstance, password string) dbcon
 func (s *Service) openSession(ctx context.Context, inst *model.DbInstance) (*dbconn.Session, error) {
 	pw, err := cryptox.DecryptString(s.aead, inst.EncPassword)
 	if err != nil {
-		return nil, err
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgDbInstancePasswordDecryptFailed)
 	}
 	return dbconn.OpenSession(ctx, s.buildOpenParams(inst, pw), sshDialer{s: s})
 }
@@ -152,15 +153,64 @@ func (s *Service) ListInstances(ctx context.Context, q InstanceListQuery) (*pagi
 	}
 	items := make([]InstanceItem, 0, len(list))
 	for _, inst := range list {
+		if !s.canSeeInstance(ctx, q.ProjectID, &inst, q.Actor) {
+			continue
+		}
 		items = append(items, s.toInstanceItem(ctx, inst))
 	}
-	return paginate(items, total, q.Page, q.PageSize), nil
+	// 授权过滤后 total 以可见条数为准（当前页内过滤；完整分页需全量过滤时再优化）
+	visibleTotal := total
+	if q.Actor != nil && !auth.IsSuperAdminRole(q.Actor.RoleCodes) {
+		if err := s.requireProjectAdminOrOwner(ctx, q.ProjectID, q.Actor); err != nil {
+			visibleTotal = int64(len(items))
+			// 非管理员：为准确 total，在无关键词/环境过滤的小规模场景可接受再扫一遍
+			if q.Keyword == "" && q.Env == "" && total > int64(len(list)) {
+				all, _, e2 := s.repo.ListInstances(ctx, repository.DbInstanceListParams{
+					ProjectID: q.ProjectID, Page: 1, PageSize: 500,
+				})
+				if e2 == nil {
+					n := int64(0)
+					for i := range all {
+						if s.canSeeInstance(ctx, q.ProjectID, &all[i], q.Actor) {
+							n++
+						}
+					}
+					visibleTotal = n
+				}
+			}
+		}
+	}
+	return paginate(items, visibleTotal, q.Page, q.PageSize), nil
 }
 
-func (s *Service) GetInstance(ctx context.Context, projectID, id uint) (*InstanceItem, error) {
+// canSeeInstance 项目管理员/超管/实例 Owner 可见全部；其余需至少有连接/查询/写/管理任一授权。
+func (s *Service) canSeeInstance(ctx context.Context, projectID uint, inst *model.DbInstance, actor *auth.CurrentUser) bool {
+	if actor == nil {
+		return true
+	}
+	if auth.IsSuperAdminRole(actor.RoleCodes) {
+		return true
+	}
+	if inst.OwnerUserID != nil && *inst.OwnerUserID == actorUserID(actor) {
+		return true
+	}
+	if err := s.requireProjectAdminOrOwner(ctx, projectID, actor); err == nil {
+		return true
+	}
+	perm, err := s.GetEffectivePermission(ctx, projectID, inst.ID, actor)
+	if err != nil || perm == nil {
+		return false
+	}
+	return perm.CanManage || perm.CanQuery || perm.CanConnect || perm.CanDML || perm.CanDDL || perm.CanImport || perm.CanExport
+}
+
+func (s *Service) GetInstance(ctx context.Context, projectID, id uint, actor *auth.CurrentUser) (*InstanceItem, error) {
 	inst, err := s.repo.GetInstanceInProject(ctx, projectID, id)
 	if err != nil {
 		return nil, err
+	}
+	if !s.canSeeInstance(ctx, projectID, inst, actor) {
+		return nil, constants.ErrForbidden
 	}
 	item := s.toInstanceItem(ctx, *inst)
 	return &item, nil
@@ -314,7 +364,7 @@ func (s *Service) pingInstance(ctx context.Context, projectID, id uint) (*PingRe
 	}
 	pw, err := cryptox.DecryptString(s.aead, inst.EncPassword)
 	if err != nil {
-		return nil, err
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgDbInstancePasswordDecryptFailed)
 	}
 	p := s.buildOpenParams(inst, pw)
 	err = dbconn.Ping(ctx, p, sshDialer{s: s})

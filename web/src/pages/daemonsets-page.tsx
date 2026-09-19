@@ -1,5 +1,5 @@
 import { ColumnHeightOutlined, DownOutlined, EyeOutlined, FileTextOutlined, ReloadOutlined, TagsOutlined } from "@ant-design/icons";
-import { Alert, Button, Dropdown, Form, Input, InputNumber, Modal, Progress, Space, Tag, Typography, message } from "antd";
+import { Alert, Button, Dropdown, Form, Input, InputNumber, Modal, Progress, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
@@ -10,8 +10,11 @@ import {
   getDaemonSetDetail,
   listDaemonSets,
   listDaemonSetPods,
+  listDaemonSetRevisions,
   patchDaemonSetContainerResources,
   restartDaemonSet,
+  rolloutUndoDaemonSet,
+  type DeploymentRevisionItem,
   type WorkloadDetail,
   type WorkloadItem,
 } from "../services/workloads";
@@ -99,6 +102,10 @@ export function DaemonsetsPage() {
   const listReloadRef = useRef<() => void>(() => {});
   const [verticalOpen, setVerticalOpen] = useState(false);
   const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [revisionRows, setRevisionRows] = useState<DeploymentRevisionItem[]>([]);
+  const [revisionLoading, setRevisionLoading] = useState(false);
   const [verticalForm] = Form.useForm<{
     container_name?: string;
     requests_cpu?: string;
@@ -293,6 +300,22 @@ spec:
                       })();
                     },
                   },
+                  {
+                    key: "revisions",
+                    label: "历史版本 / 回滚",
+                    icon: <FileTextOutlined />,
+                    onClick: () => {
+                      const ns = ctx.namespace ?? "default";
+                      setRevisionTarget({ clusterId: ctx.clusterId, namespace: ns, name: record.name });
+                      setRevisionOpen(true);
+                      setRevisionLoading(true);
+                      setRevisionRows([]);
+                      void listDaemonSetRevisions(ctx.clusterId, ns, record.name)
+                        .then((rows) => setRevisionRows(rows || []))
+                        .catch(() => message.error("加载历史版本失败"))
+                        .finally(() => setRevisionLoading(false));
+                    },
+                  },
                 ],
               }}
             >
@@ -356,6 +379,87 @@ spec:
             <Input placeholder="如 512Mi" allowClear />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={`DaemonSet 历史版本${revisionTarget ? `：${revisionTarget.name}` : ""}`}
+        open={revisionOpen}
+        onCancel={() => setRevisionOpen(false)}
+        footer={null}
+        destroyOnClose
+        width={720}
+      >
+        <Table
+          rowKey={(r) => String(r.revision)}
+          loading={revisionLoading}
+          dataSource={revisionRows}
+          pagination={false}
+          columns={[
+            { title: "Revision", dataIndex: "revision", width: 100 },
+            {
+              title: "当前",
+              dataIndex: "current",
+              width: 80,
+              render: (v: boolean) => (v ? <Tag color="green">是</Tag> : "-"),
+            },
+            {
+              title: "创建时间",
+              dataIndex: "created_at",
+              render: (v?: string) => v || "-",
+            },
+            {
+              title: "操作",
+              key: "action",
+              width: 120,
+              render: (_, row) =>
+                row.current ? null : (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      if (!revisionTarget) return;
+                      void (async () => {
+                        try {
+                          await rolloutUndoDaemonSet(
+                            revisionTarget.clusterId,
+                            revisionTarget.namespace,
+                            revisionTarget.name,
+                            row.revision,
+                          );
+                          message.success(`已回滚到 revision ${row.revision}`);
+                          setRevisionOpen(false);
+                          listReloadRef.current();
+                        } catch {
+                          /* interceptor */
+                        }
+                      })();
+                    }}
+                  >
+                    回滚到此版
+                  </Button>
+                ),
+            },
+          ]}
+        />
+        <Space style={{ marginTop: 12 }}>
+          <Button
+            onClick={() => {
+              if (!revisionTarget) return;
+              void (async () => {
+                try {
+                  await rolloutUndoDaemonSet(revisionTarget.clusterId, revisionTarget.namespace, revisionTarget.name);
+                  message.success("已回滚到上一版本");
+                  setRevisionOpen(false);
+                  listReloadRef.current();
+                } catch {
+                  /* interceptor */
+                }
+              })();
+            }}
+          >
+            回滚到上一版
+          </Button>
+        </Space>
       </Modal>
 
       {viewer}

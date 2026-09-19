@@ -178,6 +178,11 @@ func defaultStagesForDomain(domain string) []workflowsvc.StageItem {
 		return workflowsvc.DefaultCicdStages()
 	case model.WorkflowDomainIncident:
 		return workflowsvc.DefaultIncidentStages()
+	case model.WorkflowDomainAI:
+		return []workflowsvc.StageItem{{
+			StageKey: "ai_ops", StageName: "AI 运维审批", SortOrder: 10,
+			Enabled: true, AssigneeRuleType: model.WorkflowAssigneePlatformRole,
+		}}
 	default:
 		return nil
 	}

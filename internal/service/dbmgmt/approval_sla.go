@@ -24,6 +24,9 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 
 	accessSteps, _ := s.repo.ListPendingAccessStepsForReminder(ctx, sla)
 	for _, step := range accessSteps {
+		if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, step.AccessRequestID) {
+			continue
+		}
 		if step.LastRemindedAt != nil && now.Sub(*step.LastRemindedAt) < interval {
 			continue
 		}
@@ -38,6 +41,9 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 
 	ticketSteps, _ := s.repo.ListPendingTicketStepsForReminder(ctx, sla)
 	for _, step := range ticketSteps {
+		if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, step.TicketID) {
+			continue
+		}
 		if step.LastRemindedAt != nil && now.Sub(*step.LastRemindedAt) < interval {
 			continue
 		}
@@ -49,6 +55,95 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 		step.LastRemindedAt = &ts
 		_ = s.repo.UpdateSqlTicketStep(ctx, &step)
 	}
+	s.syncWorkflowApprovalReminders(ctx, sla, interval, now)
+}
+
+func (s *Service) syncWorkflowApprovalReminders(ctx context.Context, sla, interval time.Duration, now time.Time) {
+	if s.mailer == nil || !s.mailer.Enabled() {
+		return
+	}
+	list, err := s.repo.ListWorkflowApprovalReminderRows(ctx, []string{model.WorkflowDomainDbmgmt, model.WorkflowDomainAI})
+	if err != nil {
+		slog.Default().With("component", "dbmgmt").Warn("list workflow approval steps failed", "error", err)
+		return
+	}
+	for _, it := range list {
+		if now.Sub(it.ActivatedAt) < sla {
+			continue
+		}
+		if it.LastRemindedAt != nil && now.Sub(*it.LastRemindedAt) < interval {
+			continue
+		}
+		userIDs := s.workflowStepNotifyUserIDs(ctx, it.AssigneeUserID, it.UserGroupID, it.AssigneeRuleType)
+		if len(userIDs) == 0 {
+			continue
+		}
+		label := "数据库审批"
+		switch {
+		case it.Domain == model.WorkflowDomainAI:
+			label = "AI 高危操作"
+		case it.TicketType == model.WorkflowTicketTypeSql:
+			label = "SQL 工单"
+		case it.TicketType == model.WorkflowTicketTypeAccess:
+			label = "权限申请"
+		case it.TicketType == model.WorkflowTicketTypeAppUser:
+			label = "应用账号申请"
+		}
+		appName := s.appName
+		if appName == "" {
+			appName = "Yunshu"
+		}
+		subject := fmt.Sprintf("[%s] %s待审批超时", appName, label)
+		body := fmt.Sprintf("「%s」#%d 在节点「%s」已超时，请尽快处理（统一工单 #%d）。",
+			label, it.RefID, it.StageName, it.TicketID)
+		if err := s.sendMailToUsers(ctx, userIDs, subject, body); err != nil {
+			slog.Default().With("component", "dbmgmt").Warn("workflow SLA reminder failed", "step_id", it.StepID, "error", err)
+			continue
+		}
+		_ = s.repo.UpdateWorkflowStepLastRemindedAt(ctx, it.StepID, now)
+	}
+}
+
+func (s *Service) workflowStepNotifyUserIDs(ctx context.Context, assigneeID, groupID *uint, ruleType string) []uint {
+	if assigneeID != nil && *assigneeID > 0 {
+		return []uint{*assigneeID}
+	}
+	if ruleType == model.WorkflowAssigneePlatformRole {
+		return s.platformRoleApproverUserIDs(ctx)
+	}
+	if groupID == nil || *groupID == 0 || s.userGroupRepo == nil {
+		return nil
+	}
+	ids, err := s.userGroupRepo.ListMemberUserIDs(ctx, *groupID)
+	if err != nil {
+		return nil
+	}
+	return ids
+}
+
+func (s *Service) platformRoleApproverUserIDs(ctx context.Context) []uint {
+	if s.userRepo == nil {
+		return nil
+	}
+	seen := map[uint]struct{}{}
+	out := make([]uint, 0)
+	for _, code := range []string{"admin", "ops-admin", "ai-approver", "super-admin"} {
+		ids, err := s.userRepo.ListUserIDsByRoleCode(ctx, code)
+		if err != nil {
+			continue
+		}
+		for _, id := range ids {
+			if id == 0 {
+				continue
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 func (s *Service) sendAccessReminderEmail(ctx context.Context, step model.DbAccessRequestStep) error {

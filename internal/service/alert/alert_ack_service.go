@@ -34,7 +34,7 @@ type AlertAckActiveInfo struct {
 
 // AcknowledgeAlert 认领告警：TTL 内同指纹 firing 通知抑制。
 func (s *AlertService) AcknowledgeAlert(ctx context.Context, userID uint, userName string, req AlertAckRequest) (*model.AlertAck, error) {
-	if s == nil || s.db == nil {
+	if s == nil || s.ackRepo == nil {
 		return nil, constants.ErrInternal
 	}
 	fp := strings.TrimSpace(req.Fingerprint)
@@ -51,7 +51,7 @@ func (s *AlertService) AcknowledgeAlert(ctx context.Context, userID uint, userNa
 		UserName:    strings.TrimSpace(userName),
 		ExpiresAt:   time.Now().UTC().Add(time.Duration(ttl) * time.Minute),
 	}
-	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+	if err := s.ackRepo.Create(ctx, row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.ack", "AcknowledgeAlert", err)
 	}
 	s.clearEscalationState(ctx, fp)
@@ -59,14 +59,10 @@ func (s *AlertService) AcknowledgeAlert(ctx context.Context, userID uint, userNa
 }
 
 func (s *AlertService) loadAckTTLAllowed(ctx context.Context) []int {
-	if s == nil || s.db == nil {
+	if s == nil || s.dictEntryRepo == nil {
 		return nil
 	}
-	var rows []model.DictEntry
-	err := s.db.WithContext(ctx).
-		Where("dict_type = ? AND status = ?", dictTypeAlertAckTTLMinutes, 1).
-		Order("sort ASC, id ASC").
-		Find(&rows).Error
+	rows, err := s.dictEntryRepo.ListByTypeEnabled(ctx, dictTypeAlertAckTTLMinutes)
 	if err != nil {
 		return nil
 	}
@@ -116,7 +112,7 @@ func parseAckTTLMinutes(allowed []int, requested int) (int, error) {
 
 // ClearAlertAck 提前结束认领（将未过期记录的 expires_at 置为现在）。
 func (s *AlertService) ClearAlertAck(ctx context.Context, fingerprint string) error {
-	if s == nil || s.db == nil {
+	if s == nil || s.ackRepo == nil {
 		return nil
 	}
 	fp := strings.TrimSpace(fingerprint)
@@ -124,9 +120,7 @@ func (s *AlertService) ClearAlertAck(ctx context.Context, fingerprint string) er
 		return constants.ErrBadRequestWithMsg("fingerprint required")
 	}
 	now := time.Now().UTC()
-	err := s.db.WithContext(ctx).Model(&model.AlertAck{}).
-		Where("fingerprint = ? AND expires_at > ?", fp, now).
-		Update("expires_at", now).Error
+	err := s.ackRepo.ExpireActive(ctx, fp, now)
 	return bizerrors.Pass(ctx, "alert.ack", "ClearAlertAck", err)
 }
 
@@ -139,14 +133,10 @@ func (s *AlertService) IsAckActive(ctx context.Context, fingerprint string) bool
 func (s *AlertService) GetActiveAck(ctx context.Context, fingerprint string) (*AlertAckActiveInfo, error) {
 	fp := strings.TrimSpace(fingerprint)
 	out := &AlertAckActiveInfo{Fingerprint: fp}
-	if s == nil || s.db == nil || fp == "" {
+	if s == nil || s.ackRepo == nil || fp == "" {
 		return out, nil
 	}
-	var row model.AlertAck
-	err := s.db.WithContext(ctx).
-		Where("fingerprint = ? AND expires_at > ?", fp, time.Now().UTC()).
-		Order("expires_at desc").
-		First(&row).Error
+	row, err := s.ackRepo.GetActive(ctx, fp, time.Now().UTC())
 	if err == gorm.ErrRecordNotFound {
 		return out, nil
 	}
@@ -164,18 +154,14 @@ func (s *AlertService) GetActiveAck(ctx context.Context, fingerprint string) (*A
 // ListActiveAcksByFingerprints 批量查询页内指纹的认领状态。
 func (s *AlertService) ListActiveAcksByFingerprints(ctx context.Context, fingerprints []string) (map[string]AlertAckActiveInfo, error) {
 	out := make(map[string]AlertAckActiveInfo)
-	if s == nil || s.db == nil || len(fingerprints) == 0 {
+	if s == nil || s.ackRepo == nil || len(fingerprints) == 0 {
 		return out, nil
 	}
 	uniq := uniqueNonEmptyStrings(fingerprints)
 	if len(uniq) == 0 {
 		return out, nil
 	}
-	var rows []model.AlertAck
-	err := s.db.WithContext(ctx).
-		Where("fingerprint IN ? AND expires_at > ?", uniq, time.Now().UTC()).
-		Order("expires_at desc").
-		Find(&rows).Error
+	rows, err := s.ackRepo.ListActiveByFingerprints(ctx, uniq, time.Now().UTC())
 	if err != nil {
 		return out, bizerrors.Pass(ctx, "alert.ack", "ListActiveAcksByFingerprints", err)
 	}

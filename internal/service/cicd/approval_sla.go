@@ -33,14 +33,16 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 	interval := time.Duration(intervalHours) * time.Hour
 	now := time.Now()
 
-	var releases []model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).
-		Where("status = ? AND audit_enabled = ?", model.CicdRunStatusPendingApproval, true).
-		Find(&releases).Error; err != nil {
+	releases, err := s.repo.ListPendingApprovalReleases(ctx, 0)
+	if err != nil {
 		slog.Default().With("component", "cicd").Warn("list pending approval releases failed", "error", err)
 		return
 	}
 	for _, rel := range releases {
+		// 已关联统一工单的由 syncWorkflowApprovalReminders 催办，避免双发
+		if rel.WorkflowTicketID != nil && *rel.WorkflowTicketID > 0 {
+			continue
+		}
 		step, err := s.getCurrentPendingStep(ctx, rel.ID)
 		if err != nil || step == nil {
 			continue
@@ -64,34 +66,79 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 			)
 			continue
 		}
-		ts := now
-		_ = s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
-			Where("id = ?", step.ID).
-			Update("last_reminded_at", ts).Error
+		_ = s.repo.MarkApprovalStepsReminded(ctx, []uint{step.ID}, now)
+	}
+	s.syncWorkflowApprovalReminders(ctx, sla, interval, now)
+}
+
+// syncWorkflowApprovalReminders 对已切到统一引擎的发布工单按 workflow_ticket_steps 催办。
+func (s *Service) syncWorkflowApprovalReminders(ctx context.Context, sla, interval time.Duration, now time.Time) {
+	list, err := s.repo.ListWorkflowApprovalReminderRows(ctx)
+	if err != nil {
+		slog.Default().With("component", "cicd").Warn("list workflow approval steps failed", "error", err)
+		return
+	}
+	for _, it := range list {
+		if now.Sub(it.ActivatedAt) < sla {
+			continue
+		}
+		if it.LastRemindedAt != nil && now.Sub(*it.LastRemindedAt) < interval {
+			continue
+		}
+		userIDs := s.workflowStepNotifyUserIDs(ctx, it.AssigneeUserID, it.UserGroupID)
+		if len(userIDs) == 0 {
+			continue
+		}
+		emails := s.collectUserEmails(ctx, userIDs)
+		if len(emails) == 0 {
+			continue
+		}
+		waitHours := int(now.Sub(it.ActivatedAt).Hours())
+		if waitHours < 1 {
+			waitHours = 1
+		}
+		appName := strings.TrimSpace(s.appName)
+		if appName == "" {
+			appName = "Yunshu"
+		}
+		subject := fmt.Sprintf("[%s CI/CD] 发布审批超时提醒 - %s", appName, strings.TrimSpace(it.Title))
+		body := fmt.Sprintf("发布工单 #%d（统一工单 #%d）在节点「%s」已等待超过 %d 小时，请尽快审批。\n项目ID：%d",
+			it.RefID, it.TicketID, it.StageName, waitHours, it.ProjectID)
+		sent := false
+		for _, email := range emails {
+			if err := s.mailer.Send(ctx, email, subject, body); err == nil {
+				sent = true
+			}
+		}
+		if !sent {
+			continue
+		}
+		_ = s.repo.UpdateWorkflowTicketStepFields(ctx, it.StepID, map[string]any{"last_reminded_at": now})
 	}
 }
 
-func (s *Service) backfillPendingStepActivatedAt(ctx context.Context) {
-	type row struct {
-		ID uint
+func (s *Service) workflowStepNotifyUserIDs(ctx context.Context, assigneeID, groupID *uint) []uint {
+	if assigneeID != nil && *assigneeID > 0 {
+		return []uint{*assigneeID}
 	}
-	var ids []row
-	err := s.db.WithContext(ctx).Raw(`
-SELECT s.id FROM cicd_release_approval_steps s
-JOIN cicd_release_runs r ON r.id = s.release_run_id
-WHERE r.status = ? AND s.status = ? AND s.activated_at IS NULL
-AND s.sort_order = (
-  SELECT MIN(s2.sort_order) FROM cicd_release_approval_steps s2
-  WHERE s2.release_run_id = s.release_run_id AND s2.status = ?
-)`, model.CicdRunStatusPendingApproval, model.CicdApprovalStepPending, model.CicdApprovalStepPending).Scan(&ids).Error
+	if groupID == nil || *groupID == 0 || s.userGroupRepo == nil {
+		return nil
+	}
+	ids, err := s.userGroupRepo.ListMemberUserIDs(ctx, *groupID)
+	if err != nil {
+		return nil
+	}
+	return ids
+}
+
+func (s *Service) backfillPendingStepActivatedAt(ctx context.Context) {
+	ids, err := s.repo.ListLegacyApprovalReminderSeedIDs(ctx)
 	if err != nil || len(ids) == 0 {
 		return
 	}
 	now := time.Now()
 	for _, id := range ids {
-		_ = s.db.WithContext(ctx).Model(&model.CicdReleaseApprovalStep{}).
-			Where("id = ? AND activated_at IS NULL", id.ID).
-			Update("activated_at", now).Error
+		_ = s.repo.UpdateApprovalStepFields(ctx, id, map[string]any{"activated_at": now})
 	}
 }
 
@@ -170,11 +217,11 @@ func (s *Service) lookupProjectName(ctx context.Context, projectID uint) string 
 	if projectID == 0 {
 		return "-"
 	}
-	var row model.Project
-	if err := s.db.WithContext(ctx).Select("name").Where("id = ?", projectID).First(&row).Error; err != nil {
+	name, err := s.repo.GetProjectName(ctx, projectID)
+	if err != nil {
 		return fmt.Sprintf("#%d", projectID)
 	}
-	if name := strings.TrimSpace(row.Name); name != "" {
+	if name = strings.TrimSpace(name); name != "" {
 		return name
 	}
 	return fmt.Sprintf("#%d", projectID)
@@ -184,14 +231,14 @@ func (s *Service) lookupServiceName(ctx context.Context, serviceID uint) string 
 	if serviceID == 0 {
 		return "-"
 	}
-	var row model.CicdService
-	if err := s.db.WithContext(ctx).Select("name, identifier").Where("id = ?", serviceID).First(&row).Error; err != nil {
+	brief, err := s.repo.GetServiceBrief(ctx, serviceID)
+	if err != nil {
 		return fmt.Sprintf("#%d", serviceID)
 	}
-	if name := strings.TrimSpace(row.Name); name != "" {
+	if name := strings.TrimSpace(brief.Name); name != "" {
 		return name
 	}
-	if id := strings.TrimSpace(row.Identifier); id != "" {
+	if id := strings.TrimSpace(brief.Identifier); id != "" {
 		return id
 	}
 	return fmt.Sprintf("#%d", serviceID)

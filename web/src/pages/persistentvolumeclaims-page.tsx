@@ -45,6 +45,7 @@ export function PersistentVolumeClaimsPage() {
       title="存储 - PersistentVolumeClaim"
       needNamespace
       watchResource="persistentvolumeclaims"
+      actionColumnWidth={400}
       onLoadNamespaces={async (cid) => {
         const res = await listClusterNamespaces(cid);
         return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));

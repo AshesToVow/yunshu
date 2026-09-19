@@ -186,60 +186,48 @@ func (s *Service) applyJenkinsCallback(ctx context.Context, req JenkinsCallbackR
 
 func (s *Service) resolveBuildRunForCallback(ctx context.Context, req JenkinsCallbackRequest) (*model.CicdBuildRun, error) {
 	if req.RunID > 0 {
-		var br model.CicdBuildRun
-		if err := s.db.WithContext(ctx).Where("id = ?", req.RunID).First(&br).Error; err != nil {
+		br, err := s.repo.GetBuildRunByID(ctx, req.RunID)
+		if err != nil {
 			return nil, constants.ErrNotFound
 		}
-		return &br, nil
+		return br, nil
 	}
 	job := strings.TrimSpace(req.JenkinsJob)
 	if job == "" || req.BuildNumber <= 0 {
 		return nil, constants.ErrBadRequestWithMsg("回调须提供 run_id，或 jenkins_job + build_number")
 	}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).
-		Where("jenkins_job = ? OR identifier = ?", job, job).
-		Order("id DESC").
-		First(&svc).Error; err != nil {
+	svc, err := s.repo.GetServiceByJenkinsJob(ctx, job)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
-	var br model.CicdBuildRun
-	if err := s.db.WithContext(ctx).
-		Where("service_id = ? AND build_number = ?", svc.ID, req.BuildNumber).
-		Order("id DESC").
-		First(&br).Error; err != nil {
+	br, err := s.repo.FindBuildRunByServiceJenkins(ctx, svc.ID, req.BuildNumber, 0)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
-	return &br, nil
+	return br, nil
 }
 
 func (s *Service) resolveReleaseRunForCallback(ctx context.Context, req JenkinsCallbackRequest) (*model.CicdReleaseRun, error) {
 	if req.RunID > 0 {
-		var rr model.CicdReleaseRun
-		if err := s.db.WithContext(ctx).Where("id = ?", req.RunID).First(&rr).Error; err != nil {
+		rr, err := s.repo.GetReleaseRunByID(ctx, req.RunID)
+		if err != nil {
 			return nil, constants.ErrNotFound
 		}
-		return &rr, nil
+		return rr, nil
 	}
 	job := strings.TrimSpace(req.JenkinsJob)
 	if job == "" || req.BuildNumber <= 0 {
 		return nil, constants.ErrBadRequestWithMsg("回调须提供 run_id，或 jenkins_job + build_number")
 	}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).
-		Where("jenkins_job = ? OR identifier = ?", job, job).
-		Order("id DESC").
-		First(&svc).Error; err != nil {
+	svc, err := s.repo.GetServiceByJenkinsJob(ctx, job)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
-	var rr model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).
-		Where("service_id = ? AND jenkins_build_number = ?", svc.ID, req.BuildNumber).
-		Order("id DESC").
-		First(&rr).Error; err != nil {
+	rr, err := s.repo.FindReleaseRunByServiceJenkins(ctx, svc.ID, req.BuildNumber, 0)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
-	return &rr, nil
+	return rr, nil
 }
 
 func (s *Service) applyBuildCallback(ctx context.Context, br *model.CicdBuildRun, event string, req JenkinsCallbackRequest) error {
@@ -315,20 +303,18 @@ func (s *Service) applyBuildCallback(ctx context.Context, br *model.CicdBuildRun
 	if len(updates) > 0 {
 		updates["updated_at"] = time.Now()
 		// 带 build_result 条件更新：与 run_sync 轮询并发时，避免用过期回调覆盖已落地的终态。
-		q := s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", br.ID)
 		if _, ok := updates["build_result"]; ok {
-			q = q.Where("build_result = ?", br.BuildResult)
-		}
-		res := q.Updates(updates)
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			if _, ok := updates["build_result"]; ok {
+			affected, err := s.repo.UpdateBuildRunFieldsIfStatus(ctx, br.ID, []string{br.BuildResult}, updates)
+			if err != nil {
+				return err
+			}
+			if affected == 0 {
 				// 状态已被他人（轮询/并发回调）推进，本次回调按幂等处理，不报错。
 				return nil
 			}
+			return nil
 		}
+		return s.repo.UpdateBuildRunFields(ctx, br.ID, updates)
 	}
 	return nil
 }
@@ -383,7 +369,7 @@ func (s *Service) applyReleaseCallback(ctx context.Context, rr *model.CicdReleas
 	if req.BuildNumber > 0 && rr.JenkinsBuildNumber == 0 {
 		updates["jenkins_build_number"] = req.BuildNumber
 	}
-	return s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).Where("id = ?", rr.ID).Updates(updates).Error
+	return s.repo.UpdateReleaseRunFields(ctx, rr.ID, updates)
 }
 
 // releaseCallbackStatusAllowed Jenkins run 回调仅允许从执行中/待执行推进到终态或保持 running。
@@ -449,12 +435,8 @@ func (s *Service) upsertRunStage(
 		}
 	}
 	now := time.Now()
-	var existing model.CicdRunStage
-	err := s.db.WithContext(ctx).
-		Where("run_kind = ? AND run_id = ? AND stage_type = ? AND stage_order = ?",
-			runKind, runID, stageType, stage.Order).
-		First(&existing).Error
-	if err == nil {
+	existing, err := s.repo.GetRunStage(ctx, runKind, runID, stageType, stage.Order)
+	if err == nil && existing != nil {
 		updates := map[string]any{
 			"stage_name":    name,
 			"status":        status,
@@ -479,7 +461,7 @@ func (s *Service) upsertRunStage(
 				updates["started_at"] = now
 			}
 		}
-		return s.db.WithContext(ctx).Model(&existing).Updates(updates).Error
+		return s.repo.UpdateRunStage(ctx, existing, updates)
 	}
 	row := model.CicdRunStage{
 		ProjectID:    projectID,
@@ -501,7 +483,7 @@ func (s *Service) upsertRunStage(
 	if status == model.CicdStageStatusSuccess || status == model.CicdStageStatusFailed || status == model.CicdStageStatusSkipped {
 		row.FinishedAt = &now
 	}
-	return s.db.WithContext(ctx).Create(&row).Error
+	return s.repo.CreateRunStage(ctx, &row)
 }
 
 func (s *Service) upsertArtifactFromCallback(ctx context.Context, br *model.CicdBuildRun, art *JenkinsCallbackArtifact) error {
@@ -524,23 +506,22 @@ func (s *Service) upsertArtifactFromCallback(ctx context.Context, br *model.Cicd
 	if gitCommit == "" {
 		gitCommit = strings.TrimSpace(br.GitCommit)
 	}
-	var existing model.CicdArtifact
-	q := s.db.WithContext(ctx).Where("build_run_id = ? AND artifact_type = ?", br.ID, at)
+	var existing *model.CicdArtifact
+	var err error
 	if path != "" {
-		q = q.Where("storage_path = ?", path)
+		existing, err = s.repo.FindArtifactByStoragePath(ctx, br.ID, at, path)
 	} else {
-		q = q.Where("name = ?", name)
+		existing, err = s.repo.FindArtifact(ctx, br.ID, at, name, "")
 	}
-	err := q.First(&existing).Error
-	if err == nil {
-		return s.db.WithContext(ctx).Model(&existing).Updates(map[string]any{
+	if err == nil && existing != nil {
+		return s.repo.UpdateArtifact(ctx, existing, map[string]any{
 			"name":         name,
 			"storage_path": path,
 			"digest":       strings.TrimSpace(art.Digest),
 			"git_commit":   gitCommit,
 			"size_bytes":   art.SizeBytes,
 			"updated_at":   time.Now(),
-		}).Error
+		})
 	}
 	row := model.CicdArtifact{
 		ProjectID:    br.ProjectID,
@@ -553,23 +534,20 @@ func (s *Service) upsertArtifactFromCallback(ctx context.Context, br *model.Cicd
 		GitCommit:    gitCommit,
 		SizeBytes:    art.SizeBytes,
 	}
-	return s.db.WithContext(ctx).Create(&row).Error
+	return s.repo.CreateArtifact(ctx, &row)
 }
 
 // ListBuildRunStages 返回构建阶段列表。
 func (s *Service) ListBuildRunStages(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) ([]model.CicdRunStage, error) {
-	var br model.CicdBuildRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&br).Error; err != nil {
+	br, err := s.repo.GetBuildRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if err := s.AssertCicdAccess(ctx, projectID, br.ServiceID, actor, "view"); err != nil {
 		return nil, err
 	}
-	var rows []model.CicdRunStage
-	if err := s.db.WithContext(ctx).
-		Where("run_kind = ? AND run_id = ?", model.CicdRunKindBuild, runID).
-		Order("stage_order ASC, id ASC").
-		Find(&rows).Error; err != nil {
+	rows, err := s.repo.ListRunStages(ctx, model.CicdRunKindBuild, runID)
+	if err != nil {
 		return nil, err
 	}
 	if rows == nil {
@@ -580,18 +558,15 @@ func (s *Service) ListBuildRunStages(ctx context.Context, projectID, runID uint,
 
 // ListBuildRunArtifactsMeta 返回构建关联的制品元数据。
 func (s *Service) ListBuildRunArtifactsMeta(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) ([]model.CicdArtifact, error) {
-	var br model.CicdBuildRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&br).Error; err != nil {
+	br, err := s.repo.GetBuildRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if err := s.AssertCicdAccess(ctx, projectID, br.ServiceID, actor, "view"); err != nil {
 		return nil, err
 	}
-	var rows []model.CicdArtifact
-	if err := s.db.WithContext(ctx).
-		Where("build_run_id = ?", runID).
-		Order("id ASC").
-		Find(&rows).Error; err != nil {
+	rows, err := s.repo.ListArtifactsByBuildRun(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
 	if rows == nil {

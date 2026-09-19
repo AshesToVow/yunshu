@@ -63,7 +63,7 @@ func (s *Service) enqueueBackup(ctx context.Context, req BackupIndexRequest, tri
 		Phase:        "queued",
 		CreatedBy:    createdBy,
 	}
-	if err := s.db.WithContext(ctx).Create(job).Error; err != nil {
+	if err := s.repo.CreateBackupJob(ctx, job); err != nil {
 		return nil, err
 	}
 	go s.runBackupJob(job.ID, req.MaxDocs)
@@ -77,26 +77,14 @@ func (s *Service) ListBackupJobs(ctx context.Context, connectionID uint, limit i
 	if limit > 200 {
 		limit = 200
 	}
-	q := s.db.WithContext(ctx).Order("id desc").Limit(limit)
-	if connectionID > 0 {
-		q = q.Where("connection_id = ?", connectionID)
-	}
-	var list []model.EsmgmtBackupJob
-	if err := q.Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return list, nil
+	return s.repo.ListBackupJobs(ctx, connectionID, limit)
 }
 
 func (s *Service) GetBackupJob(ctx context.Context, id uint) (*model.EsmgmtBackupJob, error) {
 	if id == 0 {
 		return nil, constants.ErrBadRequestWithMsg("任务 ID 无效")
 	}
-	var job model.EsmgmtBackupJob
-	if err := s.db.WithContext(ctx).First(&job, id).Error; err != nil {
-		return nil, err
-	}
-	return &job, nil
+	return s.repo.GetBackupJob(ctx, id)
 }
 
 // BackupDownloadResult 预签名下载。
@@ -108,9 +96,12 @@ type BackupDownloadResult struct {
 }
 
 // PresignBackupDownload 生成备份产物临时下载链接。
-func (s *Service) PresignBackupDownload(ctx context.Context, jobID uint, artifact string) (*BackupDownloadResult, error) {
+func (s *Service) PresignBackupDownload(ctx context.Context, jobID uint, artifact string, actor *auth.CurrentUser) (*BackupDownloadResult, error) {
 	job, err := s.GetBackupJob(ctx, jobID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.assertConnectionWrite(ctx, job.ConnectionID, actor); err != nil {
 		return nil, err
 	}
 	if job.Status != "success" {
@@ -157,35 +148,33 @@ func (s *Service) PresignBackupDownload(ctx context.Context, jobID uint, artifac
 func (s *Service) runBackupJob(jobID uint, maxDocs int) {
 	defer func() {
 		if r := recover(); r != nil {
-			_ = s.db.WithContext(context.Background()).Model(&model.EsmgmtBackupJob{}).
-				Where("id = ?", jobID).
-				Updates(map[string]any{"status": "failed", "phase": "panic", "error_message": "job panic"}).Error
+			_ = s.repo.UpdateBackupJobFields(context.Background(), jobID, map[string]any{
+				"status": "failed", "phase": "panic", "error_message": "job panic",
+			})
 		}
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	var job model.EsmgmtBackupJob
-	if err := s.db.WithContext(ctx).First(&job, jobID).Error; err != nil {
+	job, err := s.repo.GetBackupJob(ctx, jobID)
+	if err != nil {
 		return
 	}
-	_ = s.db.WithContext(ctx).Model(&job).Updates(map[string]any{
+	_ = s.repo.UpdateBackupJobFields(ctx, jobID, map[string]any{
 		"status": "running",
 		"phase":  "analysis",
-	}).Error
+	})
 
 	fail := func(phase string, err error) {
 		msg := err.Error()
 		if len(msg) > 1000 {
 			msg = msg[:1000]
 		}
-		_ = s.db.WithContext(context.Background()).Model(&model.EsmgmtBackupJob{}).
-			Where("id = ?", jobID).
-			Updates(map[string]any{
-				"status":        "failed",
-				"phase":         phase,
-				"error_message": msg,
-			}).Error
+		_ = s.repo.UpdateBackupJobFields(context.Background(), jobID, map[string]any{
+			"status":        "failed",
+			"phase":         phase,
+			"error_message": msg,
+		})
 	}
 
 	cli, err := s.resolveClient(ctx, job.ConnectionID)
@@ -206,7 +195,7 @@ func (s *Service) runBackupJob(jobID uint, maxDocs int) {
 		return
 	}
 
-	_ = s.db.WithContext(ctx).Model(&job).Update("phase", "mapping").Error
+	_ = s.repo.UpdateBackupJobFields(ctx, jobID, map[string]any{"phase": "mapping"})
 	mappingRaw, err := cli.GetIndexMapping(ctx, job.IndexName)
 	if err != nil {
 		fail("mapping", err)
@@ -218,7 +207,7 @@ func (s *Service) runBackupJob(jobID uint, maxDocs int) {
 		return
 	}
 
-	_ = s.db.WithContext(ctx).Model(&job).Update("phase", "data").Error
+	_ = s.repo.UpdateBackupJobFields(ctx, jobID, map[string]any{"phase": "data"})
 	hits, err := cli.ScrollAll(ctx, job.IndexName, maxDocs)
 	if err != nil {
 		fail("data", err)
@@ -238,7 +227,7 @@ func (s *Service) runBackupJob(jobID uint, maxDocs int) {
 		dataBuf.WriteByte('\n')
 	}
 
-	_ = s.db.WithContext(ctx).Model(&job).Update("phase", "upload").Error
+	_ = s.repo.UpdateBackupJobFields(ctx, jobID, map[string]any{"phase": "upload"})
 	store, err := s.newObjectStore(ctx)
 	if err != nil {
 		fail("upload", err)
@@ -303,20 +292,18 @@ func (s *Service) runBackupJob(jobID uint, maxDocs int) {
 		return
 	}
 
-	_ = s.db.WithContext(context.Background()).Model(&model.EsmgmtBackupJob{}).
-		Where("id = ?", jobID).
-		Updates(map[string]any{
-			"status":          "success",
-			"phase":           "done",
-			"doc_count":       len(hits),
-			"truncated":       truncated,
-			"minio_bucket":    store.Bucket(),
-			"minio_object":    zipKey,
-			"analysis_object": analysisKey,
-			"mapping_object":  mappingKey,
-			"data_object":     dataKey,
-			"error_message":   "",
-		}).Error
+	_ = s.repo.UpdateBackupJobFields(context.Background(), jobID, map[string]any{
+		"status":          "success",
+		"phase":           "done",
+		"doc_count":       len(hits),
+		"truncated":       truncated,
+		"minio_bucket":    store.Bucket(),
+		"minio_object":    zipKey,
+		"analysis_object": analysisKey,
+		"mapping_object":  mappingKey,
+		"data_object":     dataKey,
+		"error_message":   "",
+	})
 }
 
 func extractAnalysis(settingsRoot map[string]any, indexName string) map[string]any {

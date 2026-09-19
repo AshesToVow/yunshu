@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -21,6 +22,9 @@ type redisStateStore struct {
 	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository
 	dedupTTL           time.Duration
 	firingDeliveredTTL time.Duration
+
+	localMu    sync.Mutex
+	localCount map[string]int64
 }
 
 // NewRedisAlertStateService creates a Redis-backed AlertStateService.
@@ -46,6 +50,7 @@ func NewRedisAlertStateService(
 		firingDeliveryRepo: firingDeliveryRepo,
 		dedupTTL:           dedup,
 		firingDeliveredTTL: agg,
+		localCount:         map[string]int64{},
 	}
 }
 
@@ -102,8 +107,18 @@ func (s *redisStateStore) UpdateStatus(ctx context.Context, fingerprint string, 
 
 func (s *redisStateStore) TouchFingerprint(ctx context.Context, fingerprint, status string) (int64, error) {
 	fp := strings.TrimSpace(fingerprint)
-	if fp == "" || !s.redisOK() {
+	if fp == "" {
 		return 1, nil
+	}
+	if !s.redisOK() {
+		s.localMu.Lock()
+		if s.localCount == nil {
+			s.localCount = map[string]int64{}
+		}
+		s.localCount[fp]++
+		n := s.localCount[fp]
+		s.localMu.Unlock()
+		return n, nil
 	}
 	key := fingerprintRedisKey(fp)
 	status = strings.ToLower(strings.TrimSpace(status))

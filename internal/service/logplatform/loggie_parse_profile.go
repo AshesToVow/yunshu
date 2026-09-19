@@ -67,11 +67,12 @@ func ListParseProfileOptions() []ParseProfileOption {
 
 func profileSyslog() pipelineParseProfile {
 	return pipelineParseProfile{
-		name:                "syslog",
-		multilinePattern:    `^\w{3}\s+\d{1,2}\s+`,
-		regexPattern:        `^(?P<ts>\w+\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<host>\S+)\s+(?P<message>.*)$`,
-		timestampFromLayout: "Jan _2 15:04:05",
-		timestampLocation:   "Local",
+		name:             "syslog",
+		multilinePattern: `^\w{3}\s+\d{1,2}\s+`,
+		regexPattern:     `^(?P<ts>\w+\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<host>\S+)\s+(?P<message>.*)$`,
+		// 传统 syslog 无年份：timestamp("Jan _2 15:04:05") 会得到 year=0，再 move 覆盖采集 @timestamp，
+		// 检索按时间窗过滤时永远查不到。保留 schema 写入的采集时间；ts 仅作原文展示。
+		timestampFromLayout: "",
 		maxLines:            200,
 	}
 }
@@ -101,9 +102,11 @@ func profileSpringLog() pipelineParseProfile {
 
 func profileNginxAccess() pipelineParseProfile {
 	return pipelineParseProfile{
-		name:                "nginx_access",
-		multilinePattern:    `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`,
-		regexPattern:        `^(?P<remote>\S+)\s+-\s+-\s+\[(?P<ts>[^\]]+)\]\s+"(?P<request>[^"]*)"\s+(?P<status>\d{3})\s+(?P<bytes>\S+)(?:\s+"(?P<referrer>[^"]*)"\s+"(?P<agent>[^"]*)")?\s*$`,
+		name:             "nginx_access",
+		multilinePattern: `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`,
+		// combined：IP - - [ts] "METHOD URI PROTO" status bytes "ref" "ua"
+		// 可选行尾 $request_time（秒）；method/uri/proto 从 request 拆出便于 TOP/统计。
+		regexPattern: `^(?P<remote>\S+)\s+\S+\s+\S+\s+\[(?P<ts>[^\]]+)\]\s+"(?P<request>(?P<method>\S+)\s+(?P<uri>\S+)(?:\s+(?P<proto>[^"]*))?)"\s+(?P<status>\d{3})\s+(?P<bytes>\S+)(?:\s+"(?P<referrer>[^"]*)"\s+"(?P<agent>[^"]*)"(?:\s+(?P<request_time>[\d.]+))?)?\s*$`,
 		timestampFromLayout: "02/Jan/2006:15:04:05 -0700",
 		maxLines:            50,
 	}

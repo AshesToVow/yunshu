@@ -1,5 +1,5 @@
 import { PlayCircleOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, Space, Table, Tabs, Tag, Typography, Upload, message } from "antd";
+import { Alert, Button, Card, Form, Input, Space, Spin, Table, Tabs, Tag, Typography, Upload, message } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
@@ -9,6 +9,7 @@ import {
   execProjectServerCommand,
   getProjectServerDetail,
   listProjectServerFiles,
+  probeProjectServer,
   uploadProjectServerFile,
   type ServerDetailItem,
   type ServerRemoteFileItem,
@@ -118,6 +119,33 @@ export function ServerConsolePage() {
     }
   }
 
+  async function runReadonlyProbe() {
+    if (!validParams) return;
+    if (!accessLoaded || !canExec) {
+      message.error("仅有查看权限，不能探测");
+      return;
+    }
+    setRunning(true);
+    try {
+      const res = await probeProjectServer(projectId, serverId, { kind: "all", path: "/" });
+      const parts = (res?.commands || []).map(
+        (c) => `# ${c.name}: ${c.command}\n${c.stdout || ""}${c.stderr ? `\n[stderr] ${c.stderr}` : ""}`,
+      );
+      setResult({
+        stdout: parts.join("\n\n"),
+        stderr: "",
+        exit_code: (res?.commands || []).some((c) => c.exit_code !== 0) ? 1 : 0,
+        duration_ms: res?.duration_ms || 0,
+        truncated: false,
+      });
+      message.success("只读探测完成");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "只读探测失败"));
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function loadFiles(path = remotePath) {
     if (!validParams || !canExec) return;
     setFilesLoading(true);
@@ -169,13 +197,78 @@ export function ServerConsolePage() {
     xtermRef.current.write(text);
   }
 
+  function ensureTerminalMounted(): boolean {
+    const host = termBoxRef.current;
+    if (!host) return false;
+    const existing = xtermRef.current;
+    if (existing?.element?.isConnected) return true;
+
+    existing?.dispose();
+    xtermRef.current = null;
+    fitAddonRef.current = null;
+    dataDisposableRef.current?.dispose();
+    dataDisposableRef.current = null;
+
+    const term = new Terminal({
+      cursorBlink: true,
+      convertEol: true,
+      fontFamily: "Consolas, Menlo, Monaco, monospace",
+      fontSize: 13,
+      lineHeight: 1.25,
+      theme: {
+        background: "#0b1220",
+        foreground: "#d7e3ff",
+      },
+      scrollback: 5000,
+    });
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    host.replaceChildren();
+    term.open(host);
+    fitAddon.fit();
+    term.focus();
+    term.writeln("Ready. Click '连接终端' to start.");
+
+    dataDisposableRef.current = term.onData((data) => {
+      sendTerminalInput(data);
+    });
+
+    term.attachCustomKeyEventHandler((ev) => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.type === "keydown") {
+        const key = ev.key.toLowerCase();
+        if (key === "c") {
+          const selected = term.getSelection();
+          if (selected) {
+            void navigator.clipboard?.writeText(selected);
+          } else {
+            sendTerminalInput("\u0003");
+          }
+          return false;
+        }
+        if (key === "v") {
+          void navigator.clipboard?.readText().then((txt) => {
+            if (txt) {
+              sendTerminalInput(txt);
+            }
+          });
+          return false;
+        }
+      }
+      return true;
+    });
+
+    xtermRef.current = term;
+    fitAddonRef.current = fitAddon;
+    return true;
+  }
+
   async function openTerminal() {
     if (!validParams) return;
     if (!accessLoaded || !canExec) {
       message.error("仅有查看权限，不能连接 SSH 终端");
       return;
     }
-    if (!xtermRef.current) {
+    if (!ensureTerminalMounted()) {
       message.warning("终端正在初始化，请稍后再试");
       return;
     }
@@ -206,7 +299,7 @@ export function ServerConsolePage() {
     ws.onopen = () => {
       setTerminalConnecting(false);
       setTerminalConnected(true);
-      appendTerminalText("\r\n[已连接]\r\n");
+      appendTerminalText("\r\n[WebSocket 已连接，正在建立 SSH…]\r\n");
       fitAddonRef.current?.fit();
       xtermRef.current?.focus();
       const cols = Math.max(80, xtermRef.current?.cols ?? 120);
@@ -217,12 +310,17 @@ export function ServerConsolePage() {
     ws.onmessage = (ev) => {
       try {
         const payload = JSON.parse(String(ev.data)) as TerminalFrame;
+        if (payload.type === "ready") {
+          appendTerminalText("\r\n[后端就绪，正在拨号 SSH…]\r\n");
+          return;
+        }
         if (payload.type === "stdout" && typeof payload.data === "string") {
           appendTerminalText(payload.data);
           return;
         }
         if (payload.type === "error" && payload.data) {
           appendTerminalText(`\r\n[error] ${payload.data}\r\n`);
+          message.error(String(payload.data));
           return;
         }
         if (payload.type === "exit") {
@@ -271,66 +369,18 @@ export function ServerConsolePage() {
   }
 
   useEffect(() => {
-    if (xtermRef.current || !termBoxRef.current) return;
-
-    const term = new Terminal({
-      cursorBlink: true,
-      convertEol: true,
-      fontFamily: "Consolas, Menlo, Monaco, monospace",
-      fontSize: 13,
-      lineHeight: 1.25,
-      theme: {
-        background: "#0b1220",
-        foreground: "#d7e3ff",
-      },
-      scrollback: 5000,
-    });
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
-    term.open(termBoxRef.current);
-    fitAddon.fit();
-    term.focus();
-    term.writeln("Ready. Click '连接终端' to start.");
-
-    dataDisposableRef.current = term.onData((data) => {
-      sendTerminalInput(data);
-    });
-
-    term.attachCustomKeyEventHandler((ev) => {
-      if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.type === "keydown") {
-        const key = ev.key.toLowerCase();
-        if (key === "c") {
-          const selected = term.getSelection();
-          if (selected) {
-            void navigator.clipboard?.writeText(selected);
-          } else {
-            sendTerminalInput("\u0003");
-          }
-          return false;
-        }
-        if (key === "v") {
-          void navigator.clipboard?.readText().then((txt) => {
-            if (txt) {
-              sendTerminalInput(txt);
-            }
-          });
-          return false;
-        }
-      }
-      return true;
-    });
-
-    xtermRef.current = term;
-    fitAddonRef.current = fitAddon;
-
+    if (!termBoxRef.current) return;
+    ensureTerminalMounted();
+    const host = termBoxRef.current;
     const resizeObs = new ResizeObserver(() => {
-      fitAddon.fit();
+      fitAddonRef.current?.fit();
       const ws = wsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      const term = xtermRef.current;
+      if (ws && term && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
       }
     });
-    resizeObs.observe(termBoxRef.current);
+    resizeObs.observe(host);
 
     return () => {
       resizeObs.disconnect();
@@ -340,6 +390,7 @@ export function ServerConsolePage() {
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -384,7 +435,8 @@ export function ServerConsolePage() {
         extra={<Link to="/project-servers">返回服务器管理</Link>}
       />
 
-      <Card className="table-card" loading={loading} styles={{ body: { paddingTop: 8 } }}>
+      <Card className="table-card" styles={{ body: { paddingTop: 8 } }}>
+        <Spin spinning={loading}>
         {!accessLoaded ? (
           <Alert type="info" showIcon style={{ marginBottom: 12 }} message="正在校验服务器访问权限…" />
         ) : !canExec ? (
@@ -399,6 +451,13 @@ export function ServerConsolePage() {
         <Tabs
           onChange={(key) => {
             if (key === "files" && canExec) void loadFiles(remotePath || "/");
+            if (key === "terminal") {
+              // Tab 切回时容器可能刚恢复可见，补一次 fit / 重挂载
+              requestAnimationFrame(() => {
+                ensureTerminalMounted();
+                fitAddonRef.current?.fit();
+              });
+            }
           }}
           items={[
             {
@@ -429,7 +488,14 @@ export function ServerConsolePage() {
                   </Space>
                   <div
                     ref={termBoxRef}
-                    style={{ minHeight: 340, maxHeight: 520, overflow: "hidden", borderRadius: 10, padding: 8, background: "#0b1220" }}
+                    style={{
+                      height: 420,
+                      width: "100%",
+                      overflow: "hidden",
+                      borderRadius: 10,
+                      padding: 8,
+                      background: "#0b1220",
+                    }}
                   />
                 </Space>
               ),
@@ -455,6 +521,9 @@ export function ServerConsolePage() {
                         disabled={!accessLoaded || !canExec}
                       >
                         执行
+                      </Button>
+                      <Button loading={running} disabled={!accessLoaded || !canExec} onClick={() => void runReadonlyProbe()}>
+                        只读探测（磁盘/内存/负载）
                       </Button>
                       <Button icon={<ReloadOutlined />} onClick={() => setResult(null)}>
                         清空结果
@@ -579,6 +648,7 @@ export function ServerConsolePage() {
             },
           ]}
         />
+        </Spin>
       </Card>
     </div>
   );

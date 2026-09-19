@@ -65,8 +65,8 @@ func (s *Service) ListDeployConfigs(ctx context.Context, projectID, serviceID ui
 	if _, err := s.loadService(ctx, projectID, serviceID); err != nil {
 		return nil, err
 	}
-	var rows []model.CicdDeployConfig
-	if err := s.db.WithContext(ctx).Where("service_id = ?", serviceID).Order("id ASC").Find(&rows).Error; err != nil {
+	rows, err := s.repo.ListDeployConfigs(ctx, serviceID)
+	if err != nil {
 		return nil, err
 	}
 	serverMap := s.loadProjectServerMap(ctx, projectID)
@@ -87,8 +87,7 @@ func (s *Service) loadProjectServerMap(ctx context.Context, projectID uint) map[
 	if projectID == 0 {
 		return out
 	}
-	var servers []model.Server
-	_ = s.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&servers).Error
+	servers, _ := s.repo.ListServersByProject(ctx, projectID)
 	for _, srv := range servers {
 		out[srv.ID] = srv
 	}
@@ -147,9 +146,11 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 	serverJSON, _ := json.Marshal(req.ServerIDs)
 	var row model.CicdDeployConfig
 	if configID > 0 {
-		if err := s.db.WithContext(ctx).Where("id = ? AND service_id = ?", configID, serviceID).First(&row).Error; err != nil {
+		existing, err := s.repo.GetDeployConfig(ctx, serviceID, configID)
+		if err != nil {
 			return nil, constants.ErrNotFound
 		}
+		row = *existing
 	}
 	row.ServiceID = serviceID
 	row.Name = strings.TrimSpace(req.Name)
@@ -158,13 +159,8 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 	if row.Tenv == "" {
 		return nil, constants.ErrBadRequestWithMsg("发布环境不能为空")
 	}
-	dupQ := s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).
-		Where("service_id = ? AND deploy_kind = ? AND tenv = ?", serviceID, strings.TrimSpace(req.DeployKind), row.Tenv)
-	if configID > 0 {
-		dupQ = dupQ.Where("id <> ?", configID)
-	}
-	var dupCnt int64
-	if err := dupQ.Count(&dupCnt).Error; err != nil {
+	dupCnt, err := s.repo.CountDeployConfigDupKindTenv(ctx, serviceID, configID, strings.TrimSpace(req.DeployKind), row.Tenv)
+	if err != nil {
 		return nil, err
 	}
 	if dupCnt > 0 {
@@ -251,11 +247,11 @@ func (s *Service) UpsertDeployConfig(ctx context.Context, projectID, serviceID, 
 	row.BlueGreenService = strings.TrimSpace(req.BlueGreenService)
 	row.Status = status
 	if configID > 0 {
-		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		if err := s.repo.SaveDeployConfig(ctx, &row); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateDeployConfig(ctx, &row); err != nil {
 			return nil, err
 		}
 	}
@@ -283,5 +279,5 @@ func (s *Service) DeleteDeployConfig(ctx context.Context, projectID, serviceID, 
 	if _, err := s.loadService(ctx, projectID, serviceID); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Where("id = ? AND service_id = ?", configID, serviceID).Delete(&model.CicdDeployConfig{}).Error
+	return s.repo.DeleteDeployConfig(ctx, serviceID, configID)
 }

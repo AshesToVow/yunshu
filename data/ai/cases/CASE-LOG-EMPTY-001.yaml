@@ -12,7 +12,7 @@ root_cause: keyword 过宽/过窄、采集未启用、索引/Topic 租户前缀�
 solution: 调整检索条件；检查 Loggie/集群采集规则；核对 ES 索引与 Kafka Topic
 verification: 能检索到近期业务日志
 risk: 删除索引不可恢复，禁止建议随意删索引
-related_tools: '["search_logs"]'
+related_tools: '["search_logs","analyze_logs","list_log_sources","list_loggie_status","list_cluster_log_rules"]'
 related_sop: '["sop-log-empty"]'
 source: seed
 confidence: 0.86

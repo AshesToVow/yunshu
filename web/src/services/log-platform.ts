@@ -90,6 +90,8 @@ export interface KafkaQueueStats {
   topics?: string[];
   consumer_group: string;
   consumer_running: boolean;
+  /** 本进程内仍在跑的 Kafka→ES 消费协程数 */
+  consumer_workers?: number;
   lag_total: number;
   partitions?: KafkaPartitionLag[];
   consumed_total: number;
@@ -153,6 +155,9 @@ export interface ESConfigPreview {
   username?: string;
   index_pattern: string;
   has_password: boolean;
+  connection_id?: number;
+  connection_name?: string;
+  source?: "managed" | "dict" | string;
 }
 
 export interface LoggieStatusItem {
@@ -297,8 +302,25 @@ export async function downloadLoggieFile(
   downloadText(await blob.text(), names[file] ?? "pipeline.yml");
 }
 
+/** 读取主机当前生成的 pipelines.yml 文本（不触发浏览器下载）。 */
+export async function fetchLoggiePipelinesYAML(projectId: number, serverId: number) {
+  const blob = (await http.get(`/projects/${projectId}/loggie/pipeline/download`, {
+    params: { server_id: serverId, file: "pipelines" },
+    responseType: "blob",
+  })) as unknown as Blob;
+  return await blob.text();
+}
+
 export async function getESConfigPreview() {
   return await getData(http.get<any, ApiResponse<ESConfigPreview>>("/log-platform/es-config"));
+}
+
+export async function setLogPlatformESConnection(connectionId: number) {
+  return await getData(
+    http.put<any, ApiResponse<ESConfigPreview>>("/log-platform/es-connection", {
+      connection_id: connectionId,
+    }),
+  );
 }
 
 export async function getLoggieStatus(projectId: number) {
@@ -469,6 +491,171 @@ export function refreshClusterLogStatus(projectId: number, clusterId: number) {
   return getData<ClusterLogAgent>(
     http.get(`/projects/${projectId}/cluster-log/status`, { params: { cluster_id: clusterId } }),
   );
+}
+
+export interface LogPipelineItem {
+  id: number;
+  project_id: number;
+  name: string;
+  kind: string;
+  cluster_id?: number;
+  server_id?: number;
+  parse_profile?: string;
+  content_yml?: string;
+  status: string;
+  version: number;
+  source_ref?: string;
+  remark?: string;
+  updated_at?: string;
+}
+
+export function listLogPipelines(projectId: number, kind?: string) {
+  return getData<{ list: LogPipelineItem[] }>(
+    http.get(`/projects/${projectId}/log-pipelines`, { params: kind ? { kind } : undefined }),
+  );
+}
+
+export function getLogPipeline(projectId: number, pipelineId: number) {
+  return getData<LogPipelineItem>(http.get(`/projects/${projectId}/log-pipelines/${pipelineId}`));
+}
+
+export function createLogPipeline(
+  projectId: number,
+  payload: {
+    name: string;
+    kind?: string;
+    cluster_id?: number;
+    server_id?: number;
+    parse_profile?: string;
+    content_yml?: string;
+    status?: string;
+    remark?: string;
+  },
+) {
+  return getData<LogPipelineItem>(http.post(`/projects/${projectId}/log-pipelines`, payload));
+}
+
+export function updateLogPipeline(
+  projectId: number,
+  pipelineId: number,
+  payload: Record<string, unknown>,
+) {
+  return getData<LogPipelineItem>(http.put(`/projects/${projectId}/log-pipelines/${pipelineId}`, payload));
+}
+
+export function deleteLogPipeline(projectId: number, pipelineId: number) {
+  return getData<{ message: string }>(http.delete(`/projects/${projectId}/log-pipelines/${pipelineId}`));
+}
+
+export function applyLogPipeline(
+  projectId: number,
+  pipelineId: number,
+  payload?: { apply_deploy?: boolean; namespace?: string },
+) {
+  return getData<LogPipelineItem>(http.post(`/projects/${projectId}/log-pipelines/${pipelineId}/apply`, payload || {}));
+}
+
+export function syncLogPipelineFromCluster(projectId: number, clusterId: number) {
+  return getData<LogPipelineItem>(
+    http.post(`/projects/${projectId}/log-pipelines/sync-from-cluster`, { cluster_id: clusterId }),
+  );
+}
+
+export function listLogParseProfiles(projectId: number) {
+  return getData<{ list: Array<{ value: string; label: string }> }>(
+    http.get(`/projects/${projectId}/log-parse-profiles`),
+  );
+}
+
+export interface LogPipelineVersionItem {
+  id: number;
+  pipeline_id: number;
+  version: number;
+  content_yml?: string;
+  remark?: string;
+  created_by?: number;
+  created_at?: string;
+}
+
+export function listLogPipelineVersions(projectId: number, pipelineId: number) {
+  return getData<{ list: LogPipelineVersionItem[] }>(
+    http.get(`/projects/${projectId}/log-pipelines/${pipelineId}/versions`),
+  );
+}
+
+export function rollbackLogPipelineVersion(projectId: number, pipelineId: number, versionId: number) {
+  return getData<LogPipelineItem>(
+    http.post(`/projects/${projectId}/log-pipelines/${pipelineId}/versions/${versionId}/rollback`, {}),
+  );
+}
+
+export function deployLoggieCustomYAML(
+  projectId: number,
+  payload: { server_id: number; pipelines_yml: string },
+) {
+  return getData<{ success: boolean; message?: string }>(
+    http.post(`/projects/${projectId}/loggie/deploy-yaml`, payload),
+  );
+}
+
+export interface LogSavedQueryItem {
+  id: number;
+  name: string;
+  query: string;
+  project_id: number;
+  kind: string;
+  updated_at?: string;
+}
+
+export function listLogSavedQueries(projectId: number) {
+  return getData<{ list: LogSavedQueryItem[] }>(http.get(`/projects/${projectId}/log-saved-queries`));
+}
+
+export function createLogSavedQuery(
+  projectId: number,
+  payload: { name: string; query: Record<string, unknown>; remark?: string },
+) {
+  return getData<LogSavedQueryItem>(http.post(`/projects/${projectId}/log-saved-queries`, payload));
+}
+
+export function deleteLogSavedQuery(projectId: number, queryId: number) {
+  return getData<{ message: string }>(http.delete(`/projects/${projectId}/log-saved-queries/${queryId}`));
+}
+
+export interface LogDropRuleItem {
+  id: number;
+  project_id: number;
+  name: string;
+  enabled: boolean;
+  field: string;
+  operator: string;
+  value: string;
+  remark?: string;
+  created_by?: number;
+  updated_at?: string;
+}
+
+export function listLogDropRules(projectId: number) {
+  return getData<{ list: LogDropRuleItem[] }>(http.get(`/projects/${projectId}/log-drop-rules`));
+}
+
+export function createLogDropRule(
+  projectId: number,
+  payload: { name: string; field: string; operator?: string; value: string; enabled?: boolean; remark?: string },
+) {
+  return getData<LogDropRuleItem>(http.post(`/projects/${projectId}/log-drop-rules`, payload));
+}
+
+export function updateLogDropRule(
+  projectId: number,
+  ruleId: number,
+  payload: { name: string; field: string; operator?: string; value: string; enabled?: boolean; remark?: string },
+) {
+  return getData<LogDropRuleItem>(http.put(`/projects/${projectId}/log-drop-rules/${ruleId}`, payload));
+}
+
+export function deleteLogDropRule(projectId: number, ruleId: number) {
+  return getData<{ message: string }>(http.delete(`/projects/${projectId}/log-drop-rules/${ruleId}`));
 }
 
 export { getProjects };

@@ -52,7 +52,7 @@ type AiPromptVersion struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	PromptID  uint      `json:"prompt_id" gorm:"not null;index;uniqueIndex:uk_ai_prompt_ver"`
 	Version   int       `json:"version" gorm:"not null;uniqueIndex:uk_ai_prompt_ver"`
-	Content   string    `json:"content" gorm:"type:longtext;not null"`
+	Content   string    `json:"content" gorm:"type:text;not null"`
 	Changelog string    `json:"changelog" gorm:"size:512"`
 	IsCurrent bool      `json:"is_current" gorm:"not null;default:false;index"`
 	CreatedBy uint      `json:"created_by"`
@@ -85,8 +85,8 @@ type AiKbDocument struct {
 	Version    string         `json:"version" gorm:"size:64"`
 	Enabled    bool           `json:"enabled" gorm:"not null;default:true;index"`
 	Confidence float64        `json:"confidence" gorm:"type:decimal(4,2);default:0.80"`
-	Content    string         `json:"content" gorm:"type:longtext"`
-	MetaJSON   string         `json:"meta_json" gorm:"type:mediumtext"`
+	Content    string         `json:"content" gorm:"type:text"`
+	MetaJSON   string         `json:"meta_json" gorm:"type:text"`
 	CreatedBy  uint           `json:"created_by"`
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
@@ -102,9 +102,9 @@ type AiKbChunk struct {
 	KBID        uint      `json:"kb_id" gorm:"not null;index"`
 	Seq         int       `json:"seq" gorm:"not null"`
 	HeadingPath string    `json:"heading_path" gorm:"size:512"`
-	Content     string    `json:"content" gorm:"type:mediumtext;not null"`
+	Content     string    `json:"content" gorm:"type:text;not null"`
 	MetaJSON    string    `json:"meta_json" gorm:"type:text"`
-	Embedding   []byte    `json:"-" gorm:"type:mediumblob"` // 预留向量
+	Embedding   []byte    `json:"-"` // 预留向量
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -117,11 +117,11 @@ type AiIncidentCase struct {
 	Title         string         `json:"title" gorm:"size:256;not null"`
 	Category      string         `json:"category" gorm:"size:64;index"`
 	Technology    string         `json:"technology" gorm:"size:64;index"`
-	Symptom       string         `json:"symptom" gorm:"type:mediumtext"`
+	Symptom       string         `json:"symptom" gorm:"type:text"`
 	Environment   string         `json:"environment" gorm:"type:text"`
-	Diagnosis     string         `json:"diagnosis" gorm:"type:mediumtext"`
-	RootCause     string         `json:"root_cause" gorm:"type:mediumtext"`
-	Solution      string         `json:"solution" gorm:"type:mediumtext"`
+	Diagnosis     string         `json:"diagnosis" gorm:"type:text"`
+	RootCause     string         `json:"root_cause" gorm:"type:text"`
+	Solution      string         `json:"solution" gorm:"type:text"`
 	Verification  string         `json:"verification" gorm:"type:text"`
 	Risk          string         `json:"risk" gorm:"type:text"`
 	RelatedTools  string         `json:"related_tools" gorm:"type:text"` // JSON array
@@ -145,8 +145,8 @@ type AiSOP struct {
 	Scenario         string         `json:"scenario" gorm:"type:text"`
 	Preconditions    string         `json:"preconditions" gorm:"type:text"`
 	InputParams      string         `json:"input_params" gorm:"type:text"`
-	CheckSteps       string         `json:"check_steps" gorm:"type:mediumtext"`
-	ExecSteps        string         `json:"exec_steps" gorm:"type:mediumtext"`
+	CheckSteps       string         `json:"check_steps" gorm:"type:text"`
+	ExecSteps        string         `json:"exec_steps" gorm:"type:text"`
 	VerifySteps      string         `json:"verify_steps" gorm:"type:text"`
 	ExceptionHandle  string         `json:"exception_handle" gorm:"type:text"`
 	Rollback         string         `json:"rollback" gorm:"type:text"`
@@ -172,7 +172,7 @@ type AiToolDef struct {
 	ScriptLang          string         `json:"script_lang" gorm:"size:32"` // python27|go|shell
 	ScriptPath          string         `json:"script_path" gorm:"size:512"`
 	TimeoutSec          int            `json:"timeout_sec" gorm:"not null;default:30"`
-	InputSchemaJSON     string         `json:"input_schema_json" gorm:"type:mediumtext"`
+	InputSchemaJSON     string         `json:"input_schema_json" gorm:"type:text"`
 	Permission          string         `json:"permission" gorm:"size:32;not null;default:READ_ONLY"` // READ_ONLY|WRITE
 	RiskLevel           string         `json:"risk_level" gorm:"size:32;not null;default:LOW;index"`  // LOW|MEDIUM|HIGH|CRITICAL
 	RequireConfirmation bool           `json:"require_confirmation" gorm:"not null;default:false"`
@@ -192,7 +192,7 @@ type AiEvalCase struct {
 	Suite           string         `json:"suite" gorm:"size:64;index;default:default"`
 	CaseCode        string         `json:"case_code" gorm:"size:64;not null;uniqueIndex"`
 	Title           string         `json:"title" gorm:"size:256"`
-	InputQuestion   string         `json:"input_question" gorm:"type:mediumtext;not null"`
+	InputQuestion   string         `json:"input_question" gorm:"type:text;not null"`
 	ExpectKeywords  string         `json:"expect_keywords" gorm:"type:text"`  // JSON array
 	ForbidKeywords  string         `json:"forbid_keywords" gorm:"type:text"`  // JSON array
 	ExpectTools     string         `json:"expect_tools" gorm:"type:text"`     // JSON array
@@ -230,8 +230,8 @@ type AiEvalResult struct {
 	Passed    bool    `json:"passed"`
 	Score     float64 `json:"score"`
 	MaxScore  float64 `json:"max_score"`
-	Detail    string  `json:"detail" gorm:"type:mediumtext"`
-	Reply     string  `json:"reply" gorm:"type:mediumtext"`
+	Detail    string  `json:"detail" gorm:"type:text"`
+	Reply     string  `json:"reply" gorm:"type:text"`
 }
 
 func (AiEvalResult) TableName() string { return "ai_eval_results" }
@@ -245,7 +245,7 @@ type AiAuditEvent struct {
 	ToolName  string    `json:"tool_name" gorm:"size:128;index"`
 	RiskLevel string    `json:"risk_level" gorm:"size:32"`
 	OK        bool      `json:"ok"`
-	DetailJSON string   `json:"detail_json" gorm:"type:mediumtext"`
+	DetailJSON string   `json:"detail_json" gorm:"type:text"`
 	CreatedAt time.Time `json:"created_at" gorm:"index"`
 }
 

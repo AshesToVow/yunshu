@@ -217,7 +217,7 @@ func (p *AlibabaCloudProvider) QueryInstanceExpireAt(ctx context.Context, ak, sk
 	if t, parseErr := time.Parse("2006-01-02T15:04Z", raw); parseErr == nil {
 		return &t, nil
 	}
-	return nil, nil
+	return nil, fmt.Errorf("无法解析阿里云实例到期时间: %q", raw)
 }
 
 func (p *AlibabaCloudProvider) SyncInstanceTags(ctx context.Context, ak, sk, region, instanceID string, oldTags, newTags map[string]string) error {

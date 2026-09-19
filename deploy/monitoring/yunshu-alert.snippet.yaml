@@ -5,12 +5,12 @@
 #          Yunshu 规则中心评测 → group_* 节流 → 通知
 # 下列 group_* 仅作用于平台规则；与 alertmanager.yml 无关。
 #
-# K8s Event 转发仍可走内部入站（非 Alertmanager）：
-#   POST /api/v1/alerts/ingress/k8s-events
-#   鉴权：X-Alert-Token / Bearer，与下方 webhook_token（字典 alert_webhook_token）一致
+# K8s Event 转发：POST /api/v1/alerts/ingress/k8s-events
+# Alertmanager 入站：POST /api/v1/alerts/webhook（会写当前告警；不要打到 k8s-events）
+# 鉴权：X-Webhook-Token / Bearer，与下方 webhook_token（字典 alert_webhook_token）一致
 
 alert:
-  # 数据字典优先：alert_webhook_token（现仅用于 K8s Event 等内部入站，不再对接 Alertmanager）
+  # 数据字典优先：alert_webhook_token（AM webhook 与 K8s Event 入站共用）
   # webhook_token: "change-me-alert-token"
 
   default_timeout_ms: 5000

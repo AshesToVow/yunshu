@@ -4,21 +4,15 @@ import (
 	"fmt"
 
 	"yunshu/internal/plugin"
+	"yunshu/internal/routedeps"
 
 	"github.com/gin-gonic/gin"
 )
 
-func init() {
-	plugin.SetRouteBinder(bindPluginRoutes)
-}
-
-func bindPluginRoutes(name string, api *gin.RouterGroup, rt *plugin.Runtime) error {
-	if rt == nil || rt.Deps == nil {
-		return fmt.Errorf("route deps not set on plugin runtime")
-	}
-	d, ok := rt.Deps.(*RouteDeps)
-	if !ok || d == nil {
-		return fmt.Errorf("invalid route deps type")
+// bindPluginRoutes 按插件名注册 HTTP；deps 由 Register 闭包注入（不经 plugin.Runtime）。
+func bindPluginRoutes(name string, api *gin.RouterGroup, d routedeps.Bundle) error {
+	if d == nil {
+		return fmt.Errorf("route deps not set")
 	}
 	switch name {
 	case "core":
@@ -48,4 +42,10 @@ func bindPluginRoutes(name string, api *gin.RouterGroup, rt *plugin.Runtime) err
 		return fmt.Errorf("unknown plugin %q", name)
 	}
 	return nil
+}
+
+func installPluginRouteBinder(d routedeps.Bundle) {
+	plugin.SetRouteBinder(func(name string, api *gin.RouterGroup, _ *plugin.Runtime) error {
+		return bindPluginRoutes(name, api, d)
+	})
 }

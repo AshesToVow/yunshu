@@ -853,7 +853,7 @@ erDiagram
 ├── dict/entries/                       # 数据字典 (CRUD + 明文查看)
 ├── dict/options/:dictType              # 字典选项下拉
 ├── alerts/                             # 告警平台
-│   ├── POST   webhook/alertmanager     # Alertmanager Webhook 入口
+│   ├── POST   webhook     # Alertmanager Webhook 入口
 │   ├── channels/                       # 告警渠道 (CRUD + 测试 + 模板预览)
 │   ├── events/                         # 告警事件列表
 │   ├── history/stats                   # 历史统计

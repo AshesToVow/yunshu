@@ -23,8 +23,10 @@ import { listNamespaces as listClusterNamespaces } from "../services/clusters";
 import { TopologyGraphView } from "../components/k8s/topology-graph-view";
 import { getWorkloadTopology, type TopologyGraph } from "../services/k8s-topology";
 import { formatDateTime } from "../utils/format";
+import { extractApiErrorMessage } from "../services/http";
 import {
   applyDeployment,
+  previewApplyDeployment,
   buildCpuMemoryResourceMaps,
   deleteDeployment,
   getDeploymentDetail,
@@ -302,6 +304,7 @@ export function DeploymentsPage() {
           list: async ({ clusterId, namespace, keyword }) => await listDeployments(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getDeploymentDetail(clusterId, namespace ?? "default", name),
           apply: async ({ clusterId, manifest }) => await applyDeployment(clusterId, manifest),
+          previewApply: async ({ clusterId, manifest }) => await previewApplyDeployment(clusterId, manifest),
           remove: async (args) => await deleteDeployment(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onEdit={(record, ctx) => formActions.openEdit({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }, record)}
@@ -460,17 +463,25 @@ spec:
                     icon: <ReloadOutlined />,
                     onClick: () => {
                       void (async () => {
+                        if (!ctx.clusterId) {
+                          message.error("请先选择集群");
+                          return;
+                        }
                         const ns = ctx.namespace ?? "default";
-                        await restartDeployment(ctx.clusterId, ns, record.name);
-                        message.success("已触发滚动重启");
-                        progress?.track({
-                          kind: "Deployment",
-                          clusterId: ctx.clusterId,
-                          namespace: ns,
-                          name: record.name,
-                          title: `重启 ${record.name}`,
-                        });
-                        ctx.reload();
+                        try {
+                          await restartDeployment(ctx.clusterId, ns, record.name);
+                          message.success("已触发滚动重启");
+                          progress?.track({
+                            kind: "Deployment",
+                            clusterId: ctx.clusterId,
+                            namespace: ns,
+                            name: record.name,
+                            title: `重启 ${record.name}`,
+                          });
+                          ctx.reload();
+                        } catch (e) {
+                          message.error(extractApiErrorMessage(e, "重启失败"));
+                        }
                       })();
                     },
                   },

@@ -34,6 +34,7 @@ import { useAuth } from "../contexts/auth-context";
 import { useMenuTree } from "../hooks/use-menu-tree";
 import { resolveAppLocale } from "../i18n";
 import { buildSiderMenuItems, matchMenuSelectedKey, type AntdMenuItem } from "../utils/admin-menu";
+import { resolveRouteTitle } from "../utils/i18n-labels";
 import { usePlugins } from "../contexts/plugin-context";
 import { filterAntdMenuItems } from "../modules/filter-menu";
 import { useAdminThemeStore } from "../stores/admin-theme-store";
@@ -141,13 +142,7 @@ export function AdminLayout() {
     .filter(Boolean)
     .join(" ");
 
-  const pageTitle = useMemo(() => {
-    const layoutTitle = t(`layout.routes.${pathname}`, { defaultValue: "" });
-    if (layoutTitle) return layoutTitle;
-    const menuTitle = t(`menu.routes.${pathname}`, { defaultValue: "" });
-    if (menuTitle) return menuTitle;
-    return t("app.console");
-  }, [pathname, t, activeLocale]);
+  const pageTitle = useMemo(() => resolveRouteTitle(pathname, t), [pathname, t, activeLocale]);
 
   async function handleLogout() {
     await logoutAction();
@@ -301,7 +296,7 @@ export function AdminLayout() {
               </Button>
             ) : null}
             {uiPreferences.showThemeToggle ? (
-              <Button type="text" className="admin-icon-btn" onClick={handleToggleMode} title="模式切换">
+              <Button type="text" className="admin-icon-btn" onClick={handleToggleMode} title={t("app.themeMode")}>
                 {themeMode === "dark" ? <BulbOutlined /> : <BulbFilled />}
               </Button>
             ) : null}
@@ -419,20 +414,20 @@ export function AdminLayout() {
                           onClick={() => applyThemeMode("light")}
                           icon={<BulbFilled />}
                         >
-                          浅色
+                          {t("app.themeLight")}
                         </Button>
                         <Button
                           className={themeMode === "dark" ? "is-active" : ""}
                           onClick={() => applyThemeMode("dark")}
                           icon={<BulbOutlined />}
                         >
-                          深色
+                          {t("app.themeDark")}
                         </Button>
                       </Space>
                     </div>
 
                     <div className="admin-settings-section">
-                      <Typography.Text className="admin-settings-label">内置主题色</Typography.Text>
+                      <Typography.Text className="admin-settings-label">{t("app.accentColor")}</Typography.Text>
                       <div className="admin-accent-grid">
                         {["#0d9488", "#14b8a6", "#0ea5e9", "#10b981", "#eab308", "#6366f1", "#7c3aed", "#f97316", "#dc2626", "#4b5563", "#050505"].map((item) => (
                           <button
@@ -441,7 +436,7 @@ export function AdminLayout() {
                             className={`admin-accent-dot ${accent === item ? "is-active" : ""}`}
                             style={{ background: item }}
                             onClick={() => applyAccent(item)}
-                            aria-label={`切换主题色 ${item}`}
+                            aria-label={`${t("app.accentColor")} ${item}`}
                           />
                         ))}
                       </div>
@@ -451,32 +446,32 @@ export function AdminLayout() {
               },
               {
                 key: "layout",
-                label: "布局",
+                label: t("app.layout"),
                 children: (
                   <div className="admin-settings-section">
-                    <Typography.Text className="admin-settings-label">顶部快捷区</Typography.Text>
+                    <Typography.Text className="admin-settings-label">{t("app.headerShortcuts")}</Typography.Text>
                     <div className="admin-setting-row">
-                      <span>显示刷新按钮</span>
+                      <span>{t("app.showRefresh")}</span>
                       <Switch size="small" checked={uiPreferences.showRefresh} onChange={(checked) => patchUIPreferences({ showRefresh: checked })} />
                     </div>
                     <div className="admin-setting-row">
-                      <span>显示全屏按钮</span>
+                      <span>{t("app.showFullscreen")}</span>
                       <Switch size="small" checked={uiPreferences.showFullscreen} onChange={(checked) => patchUIPreferences({ showFullscreen: checked })} />
                     </div>
                     <div className="admin-setting-row">
-                      <span>显示主题切换按钮</span>
+                      <span>{t("app.showThemeToggle")}</span>
                       <Switch size="small" checked={uiPreferences.showThemeToggle} onChange={(checked) => patchUIPreferences({ showThemeToggle: checked })} />
                     </div>
                     <div className="admin-setting-row">
-                      <span>内容区紧凑模式</span>
+                      <span>{t("app.compactContent")}</span>
                       <Switch size="small" checked={uiPreferences.compactContent} onChange={(checked) => patchUIPreferences({ compactContent: checked })} />
                     </div>
                     <div className="admin-setting-row">
-                      <span>深色侧边栏</span>
+                      <span>{t("app.darkSider")}</span>
                       <Switch size="small" checked={uiPreferences.darkSider} onChange={(checked) => patchUIPreferences({ darkSider: checked })} />
                     </div>
                     <div className="admin-setting-row">
-                      <span>深色顶栏</span>
+                      <span>{t("app.darkHeader")}</span>
                       <Switch size="small" checked={uiPreferences.darkHeader} onChange={(checked) => patchUIPreferences({ darkHeader: checked })} />
                     </div>
                   </div>
@@ -484,15 +479,15 @@ export function AdminLayout() {
               },
               {
                 key: "shortcuts",
-                label: "快捷键",
+                label: t("app.shortcuts"),
                 children: (
                   <div className="admin-settings-section">
                     <div className="admin-setting-row">
-                      <span>开启全局搜索快捷键</span>
+                      <span>{t("app.enableSearchHotkey")}</span>
                       <Switch size="small" checked disabled />
                     </div>
                     <div className="admin-setting-row">
-                      <span>按键提示浮层</span>
+                      <span>{t("app.hotkeyHintOverlay")}</span>
                       <Switch size="small" checked disabled />
                     </div>
                   </div>
@@ -500,19 +495,19 @@ export function AdminLayout() {
               },
               {
                 key: "general",
-                label: "通用",
+                label: t("app.general"),
                 children: (
                   <div className="admin-settings-section">
                     <div className="admin-setting-row">
-                      <span>自动保存主题偏好</span>
+                      <span>{t("app.autoSaveTheme")}</span>
                       <Switch size="small" checked disabled />
                     </div>
                     <Space style={{ marginTop: 10 }}>
                       <Button type="primary" onClick={() => void handleCopyPreference()}>
-                        复制偏好设置
+                        {t("app.copyPreferences")}
                       </Button>
                       <Button danger onClick={() => void handleClearCacheAndLogout()}>
-                        清空缓存 & 退出登录
+                        {t("app.clearCacheLogout")}
                       </Button>
                     </Space>
                   </div>

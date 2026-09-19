@@ -49,8 +49,7 @@ func isBlockedOutboundIP(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
-	// 运维平台常见出站到内网 Webhook，故不封 RFC1918；仍禁止本机与链路本地/云元数据。
-	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
 		return true
 	}
 	if ip4 := ip.To4(); ip4 != nil {

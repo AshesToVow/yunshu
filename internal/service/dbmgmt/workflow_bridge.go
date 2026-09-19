@@ -47,26 +47,26 @@ func (s *Service) reviewDbmgmtViaWorkflow(ctx context.Context, refType string, r
 func (s *Service) syncDbmgmtRejected(ctx context.Context, refType string, refID uint) error {
 	switch refType {
 	case model.WorkflowRefDbSqlTicket:
-		var ticket model.DbSqlTicket
-		if err := s.db.WithContext(ctx).First(&ticket, refID).Error; err != nil {
+		ticket, err := s.repo.GetSqlTicket(ctx, refID)
+		if err != nil {
 			return err
 		}
 		ticket.Status = model.DbTicketStatusRejected
-		return s.repo.UpdateSqlTicket(ctx, &ticket)
+		return s.repo.UpdateSqlTicket(ctx, ticket)
 	case model.WorkflowRefDbAccessRequest:
-		var req model.DbAccessRequest
-		if err := s.db.WithContext(ctx).First(&req, refID).Error; err != nil {
+		req, err := s.repo.GetAccessRequest(ctx, refID)
+		if err != nil {
 			return err
 		}
 		req.Status = model.DbAccessRequestStatusRejected
-		return s.repo.UpdateAccessRequest(ctx, &req)
+		return s.repo.UpdateAccessRequest(ctx, req)
 	case model.WorkflowRefDbAppUserRequest:
-		var req model.DbAppUserRequest
-		if err := s.db.WithContext(ctx).First(&req, refID).Error; err != nil {
+		req, err := s.repo.GetAppUserRequest(ctx, refID)
+		if err != nil {
 			return err
 		}
 		req.Status = model.DbAccessRequestStatusRejected
-		return s.repo.UpdateAppUserRequest(ctx, &req)
+		return s.repo.UpdateAppUserRequest(ctx, req)
 	}
 	return nil
 }
@@ -155,9 +155,9 @@ func (s *Service) isFinalWorkflowApproval(ctx context.Context, refType string, r
 	if err != nil {
 		return false
 	}
-	var pending int64
-	_ = s.db.WithContext(ctx).Model(&model.WorkflowTicketStep{}).
-		Where("ticket_id = ? AND status = ?", ticket.ID, model.WorkflowStepPending).
-		Count(&pending).Error
+	pending, err := s.repo.CountPendingWorkflowSteps(ctx, ticket.ID)
+	if err != nil {
+		return false
+	}
 	return pending <= 1
 }

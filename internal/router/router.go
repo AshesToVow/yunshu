@@ -22,12 +22,12 @@ func Register(app *bootstrap.App, bgCtx context.Context) (*eventforward.Manager,
 	if err != nil {
 		return nil, fmt.Errorf("initialize route deps: %w", err)
 	}
+	installPluginRouteBinder(d)
 
 	rt := &plugin.Runtime{
 		DB:                      app.DB,
 		Config:                  app.Config,
 		YamlK8sEventForwardBase: app.YamlK8sEventForwardBase,
-		Deps:                    d,
 		Enabled:                 plugin.ResolveEnabled(&app.Config.Plugins),
 		K8sRuntime:              d.K8sRuntimeService(),
 		MysqlBackup:             d.MysqlBackupService(),
@@ -38,6 +38,7 @@ func Register(app *bootstrap.App, bgCtx context.Context) (*eventforward.Manager,
 		Inspect:                 d.InspectService(),
 		LogRetention:            d.LogRetentionService(),
 		KafkaToES:               d.KafkaToESService(),
+		LogIntelligence:         d.LogIntelligenceService(),
 	}
 
 	api := app.Engine.Group("/api/v1")

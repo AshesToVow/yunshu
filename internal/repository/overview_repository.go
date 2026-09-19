@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/database"
 
 	"gorm.io/gorm"
 )
@@ -26,10 +27,10 @@ func (r *OverviewRepository) DialectName() string {
 }
 
 func dayExprForColumn(dialect, column string) string {
-	switch dialect {
-	case "postgres":
+	switch {
+	case dialect == "postgres", database.IsDameng(dialect):
 		return fmt.Sprintf("to_char(%s, 'YYYY-MM-DD')", column)
-	case "sqlite":
+	case dialect == "sqlite":
 		return fmt.Sprintf("strftime('%%Y-%%m-%%d', %s)", column)
 	default:
 		return fmt.Sprintf("DATE_FORMAT(%s, '%%Y-%%m-%%d')", column)

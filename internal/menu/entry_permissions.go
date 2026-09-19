@@ -37,7 +37,9 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/project-services":            {"/api/v1/projects/:id/services", "GET"},
 		"/project-log-sources":         {"/api/v1/projects/:id/log-sources", "GET"}, // 兼容旧菜单 path
 		"/project-logs":                {"/api/v1/projects/:id/logs/search", "GET"},
+		"/nginx-access-stats":          {"/api/v1/projects/:id/logs/nginx-access-stats", "GET"},
 		"/log-retention":               {"/api/v1/log-platform/retention", "GET"},
+		"/log-pipelines":               {"/api/v1/projects/:id/log-pipelines", "GET"},
 		"/loggie-status":               {"/api/v1/projects/:id/loggie/status", "GET"},
 
 		"/dbmgmt/apply/database":       {"/api/v1/projects/:id/dbmgmt/tickets", "GET"},
@@ -112,9 +114,12 @@ func DefaultPathBindings() map[string][]EntryPermission {
 
 		"/ai/approvals": {"/api/v1/ai/approvals", "GET"},
 		"/ai/assistant": {"/api/v1/ai/chat", "POST"},
+		"/ai/investigations": {"/api/v1/ai/investigations", "GET"},
 
 		"/esmgmt/connections": {"/api/v1/esmgmt/connections", "GET"},
+		"/esmgmt/storage":     {"/api/v1/log-platform/retention", "GET"},
 		"/esmgmt/overview":    {"/api/v1/esmgmt/cluster/health", "GET"},
+		"/esmgmt/backups":     {"/api/v1/esmgmt/backups", "GET"},
 		"/esmgmt/console":     {"/api/v1/esmgmt/proxy", "POST"},
 
 		"/crds": {"/api/v1/crds", "GET"},
@@ -129,6 +134,7 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	// AI 助手：具备对话或会话列表任一权限即可进入菜单
 	out["/ai/assistant"] = []EntryPermission{
 		{Resource: "/api/v1/ai/chat", Action: "POST"},
+		{Resource: "/api/v1/ai/chat/stream", Action: "POST"},
 		{Resource: "/api/v1/ai/sessions", Action: "GET"},
 	}
 	// 「服务与日志源」整合页：具备任一列表权限即可进入菜单
@@ -148,6 +154,10 @@ func DefaultPathBindings() map[string][]EntryPermission {
 	}
 	out["/ai/center"] = []EntryPermission{
 		{Resource: "/api/v1/ai/center/overview", Action: "GET"},
+	}
+	out["/ai/investigations"] = []EntryPermission{
+		{Resource: "/api/v1/ai/investigations", Action: "GET"},
+		{Resource: "/api/v1/ai/investigations", Action: "POST"},
 	}
 	return out
 }

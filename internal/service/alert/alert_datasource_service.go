@@ -338,43 +338,10 @@ func (s *AlertDatasourceService) AlertmanagerSilences(ctx context.Context, id ui
 }
 
 func (s *AlertDatasourceService) PingDatasource(ctx context.Context, id uint) (*DatasourcePingResult, error) {
-	row, err := s.getRaw(ctx, id)
+	h, err := s.CheckHealth(ctx, id)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsg2f3e2fbecdc5)
-		}
-		return nil, bizerrors.Pass(ctx, "alert.datasource", "PingDatasource", err)
+		return nil, err
 	}
-	t := strings.TrimSpace(row.Type)
-	if t == "" {
-		t = "prometheus"
-	}
-	if t == "victoriametrics" {
-		t = "victoria"
-	}
-	if !isPromCompatibleDatasourceType(t) {
-		return &DatasourcePingResult{OK: false, Message: "仅 prometheus/victoria 支持连通性检测", LatencyMs: 0}, nil
-	}
-	if strings.TrimSpace(row.BaseURL) == "" {
-		return &DatasourcePingResult{OK: false, Message: "base_url 为空", LatencyMs: 0}, nil
-	}
-	cli := &promapi.Client{
-		BaseURL:       row.BaseURL,
-		BearerToken:   row.BearerToken,
-		BasicUser:     row.BasicUser,
-		BasicPassword: row.BasicPassword,
-		SkipTLSVerify: row.SkipTLSVerify,
-	}
-	qctx, cancel := context.WithTimeout(ctx, 12*time.Second)
-	defer cancel()
-	start := time.Now()
-	body, _, err := cli.QueryInstant(qctx, pingPromQL, "")
-	latency := time.Since(start).Milliseconds()
-	if err != nil {
-		return &DatasourcePingResult{OK: false, Message: err.Error(), LatencyMs: latency}, nil
-	}
-	if !promapi.QueryResponseStatusSuccess(body) {
-		return &DatasourcePingResult{OK: false, Message: "Prometheus 返回非 success 状态", LatencyMs: latency}, nil
-	}
-	return &DatasourcePingResult{OK: true, Message: "ok", LatencyMs: latency}, nil
+	ok := h.Status == model.DatasourceHealthOK || h.Status == model.DatasourceHealthDegraded
+	return &DatasourcePingResult{OK: ok, Message: h.Message, LatencyMs: h.LatencyMs}, nil
 }

@@ -40,6 +40,7 @@ type Builder struct {
 	err                     error
 	yamlMailBase            config.MailConfig            // config.yaml 中的 mail 底稿（字典覆盖前）
 	yamlK8sEventForwardBase config.K8sEventForwardConfig // config.yaml 中的 k8s_event_forward 底稿
+	yamlAuthBase            config.AuthConfig            // config.yaml 中的 auth 底稿（字典覆盖前）
 }
 
 func NewBuilder() *Builder {
@@ -61,6 +62,7 @@ func (b *Builder) WithInfra(infra *providers.Infra) *Builder {
 	if infra.Config != nil {
 		b.yamlMailBase = infra.Config.Mail
 		b.yamlK8sEventForwardBase = infra.Config.K8sEventForward
+		b.yamlAuthBase = infra.Config.Auth
 		b.app.YamlK8sEventForwardBase = infra.Config.K8sEventForward
 	}
 	if infra.Logger != nil {
@@ -82,6 +84,7 @@ func (b *Builder) WithConfig(path string) *Builder {
 	b.app.Config = cfg
 	b.yamlMailBase = cfg.Mail
 	b.yamlK8sEventForwardBase = cfg.K8sEventForward
+	b.yamlAuthBase = cfg.Auth
 	b.app.YamlK8sEventForwardBase = cfg.K8sEventForward
 	return b
 }

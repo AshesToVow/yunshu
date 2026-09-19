@@ -18,9 +18,10 @@ func storageDictSeeds() []DictEntryCreateRequest {
 		{DictType: "esmgmt_backup_scheduler_tick_spec", Label: "ES 备份调度轮询 Cron", Value: "*/30 * * * * *", Sort: intRef(1), Status: 0, Remark: "六段式 Cron，轮询 esmgmt 备份规则"},
 		// Elasticsearch（字典优先，config.yaml 兜底）
 		{DictType: "elasticsearch_enabled", Label: "启用 ES 日志检索", Value: "false", Sort: intRef(1), Status: 1, Remark: "true/false；Loggie 采集写入 ES 后开启"},
-		{DictType: "elasticsearch_addresses", Label: "ES 地址列表", Value: "http://127.0.0.1:9200", Sort: intRef(1), Status: 1, Remark: "单节点填一个；集群可 JSON 数组或逗号分隔"},
+		{DictType: "elasticsearch_addresses", Label: "ES 地址列表", Value: "http://127.0.0.1:9200", Sort: intRef(1), Status: 1, Remark: "单节点填一个；集群可 JSON 数组或逗号分隔；当 elasticsearch_connection_id>0 时仅作兜底"},
 		{DictType: "elasticsearch_username", Label: "ES 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "Basic 认证用户名"},
 		{DictType: "elasticsearch_password", Label: "ES 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：Basic 认证密码"},
+		{DictType: "elasticsearch_connection_id", Label: "日志平台 ES 连接 ID", Value: "0", Sort: intRef(1), Status: 1, Remark: "esmgmt_connections.id；>0 时日志检索使用该连接的地址与认证"},
 		{DictType: "elasticsearch_index_pattern", Label: "ES 索引模式（主机）", Value: "yunshu-agent-*", Sort: intRef(1), Status: 1, Remark: "主机 Agent 检索/保留通配"},
 		{DictType: "elasticsearch_k8s_index_prefix", Label: "ES 索引前缀（集群）", Value: "yunshu-k8s", Sort: intRef(1), Status: 1, Remark: "集群采集：{prefix}-{clusterId}-p{projectId}-YYYY.MM.DD"},
 		{DictType: "elasticsearch_default_retention_days", Label: "默认保留天数", Value: "30", Sort: intRef(1), Status: 1, Remark: "elasticsearch.default_retention_days"},
@@ -35,7 +36,7 @@ func storageDictSeeds() []DictEntryCreateRequest {
 		{DictType: "kafka_username", Label: "Kafka 用户名", Value: "", Sort: intRef(1), Status: 0, Remark: "SASL 用户名，可选"},
 		{DictType: "kafka_password", Label: "Kafka 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "敏感：SASL 密码"},
 		{DictType: "kafka_sasl_mechanism", Label: "Kafka SASL 机制", Value: "plain", Sort: intRef(1), Status: 0, Remark: "plain / scram-sha-256 / scram-sha-512"},
-		{DictType: "kafka_batch_size", Label: "Kafka 消费批大小", Value: "200", Sort: intRef(1), Status: 1, Remark: "写入 ES 的批量条数"},
-		{DictType: "kafka_workers", Label: "Kafka 消费并发", Value: "1", Sort: intRef(1), Status: 1, Remark: "消费者并发数"},
+		{DictType: "kafka_batch_size", Label: "Kafka 消费批大小", Value: "200", Sort: intRef(1), Status: 1, Remark: "每 worker 攒批写入 ES 的条数；dev 可 200～500"},
+		{DictType: "kafka_workers", Label: "Kafka 消费并发", Value: "1", Sort: intRef(1), Status: 1, Remark: "同消费组并行 Reader 数；建议 ≤ 全部分区总数，单机 Kafka/ES 可先试 2～4"},
 	}
 }

@@ -64,6 +64,10 @@ export function createEsmgmtConnection(payload: Record<string, unknown>) {
   return getData<EsmgmtConnection>(http.post("/esmgmt/connections", payload));
 }
 
+export function importEsmgmtConnectionFromDict() {
+  return getData<EsmgmtConnection>(http.post("/esmgmt/connections/import-from-dict", {}));
+}
+
 export function updateEsmgmtConnection(id: number, payload: Record<string, unknown>) {
   return getData<EsmgmtConnection>(http.put(`/esmgmt/connections/${id}`, payload));
 }

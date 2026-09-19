@@ -11,7 +11,7 @@
 |------|------|
 | 动作/路径目录 | `GET /api/v1/k8s-policies/actions`、`GET /api/v1/k8s-policies/paths`。 |
 | 按角色列已有策略 | `GET /api/v1/k8s-policies`。 |
-| 下发 | `POST /api/v1/k8s-policies/grant`。 |
+| 下发 | `POST /api/v1/k8s-policies/grant-preset`。 |
 
 ## 3. 与 API 权限关系
 

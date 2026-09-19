@@ -48,8 +48,11 @@ func escalationSendLockKey(fingerprint string) string {
 
 func (s *AlertService) currentEscalationLevel(ctx context.Context, fingerprint string) int {
 	fp := strings.TrimSpace(fingerprint)
-	if s == nil || s.redis == nil || fp == "" {
+	if s == nil || fp == "" {
 		return 0
+	}
+	if s.redis == nil {
+		return s.localEscalationLevel(fp)
 	}
 	raw, err := s.redis.Get(ctx, escalationLevelKey(fp)).Result()
 	if err != nil || strings.TrimSpace(raw) == "" {
@@ -64,10 +67,14 @@ func (s *AlertService) currentEscalationLevel(ctx context.Context, fingerprint s
 
 func (s *AlertService) setEscalationLevel(ctx context.Context, fingerprint string, level int) {
 	fp := strings.TrimSpace(fingerprint)
-	if s == nil || s.redis == nil || fp == "" {
+	if s == nil || fp == "" {
 		return
 	}
 	level = normalizeEscalationLevel(level)
+	if s.redis == nil {
+		s.setLocalEscalationLevel(fp, level)
+		return
+	}
 	ttl := time.Duration(maxInt(s.cfg.AggregateTTLSeconds, 3600)) * time.Second
 	if err := s.redis.Set(ctx, escalationLevelKey(fp), strconv.Itoa(level), ttl).Err(); err != nil {
 		alertLog().Warn("set escalation level failed", "error", err, "fingerprint", fp, "level", level)
@@ -76,7 +83,11 @@ func (s *AlertService) setEscalationLevel(ctx context.Context, fingerprint strin
 
 func (s *AlertService) clearEscalationState(ctx context.Context, fingerprint string) {
 	fp := strings.TrimSpace(fingerprint)
-	if s == nil || s.redis == nil || fp == "" {
+	if s == nil || fp == "" {
+		return
+	}
+	if s.redis == nil {
+		s.clearLocalEscalation(fp, true)
 		return
 	}
 	pipe := s.redis.TxPipeline()
@@ -149,7 +160,7 @@ func (s *AlertService) matchedReceiverGroupIDs(ctx context.Context, status strin
 
 // maybeScheduleEscalation 在当前层级处理后，若存在更高层接收组则排队升级。
 func (s *AlertService) maybeScheduleEscalation(ctx context.Context, env escalationPendingEnvelope, currentLevel int) {
-	if s == nil || s.redis == nil {
+	if s == nil {
 		return
 	}
 	fp := strings.TrimSpace(env.Fingerprint)
@@ -180,6 +191,17 @@ func (s *AlertService) maybeScheduleEscalation(ctx context.Context, env escalati
 		return
 	}
 	due := time.Now().UTC().Add(time.Duration(delaySec) * time.Second).Unix()
+	if s.redis == nil {
+		s.scheduleLocalEscalation(fp, raw, due)
+		alertLog().Info("escalation scheduled",
+			"fingerprint", fp,
+			"from_level", currentLevel,
+			"target_level", nextLevel,
+			"delay_seconds", delaySec,
+			"store", "process",
+		)
+		return
+	}
 	ttl := time.Duration(maxInt(s.cfg.AggregateTTLSeconds, delaySec+3600)) * time.Second
 	key := escalationPendingKey(fp)
 	// 已有更早/同级待升级任务时不覆盖（避免每次重复 firing 重置倒计时）。
@@ -204,8 +226,11 @@ func (s *AlertService) maybeScheduleEscalation(ctx context.Context, env escalati
 
 func (s *AlertService) loadEscalationPending(ctx context.Context, fingerprint string) *escalationPendingEnvelope {
 	fp := strings.TrimSpace(fingerprint)
-	if s == nil || s.redis == nil || fp == "" {
+	if s == nil || fp == "" {
 		return nil
+	}
+	if s.redis == nil {
+		return s.loadLocalEscalation(fp)
 	}
 	raw, err := s.redis.Get(ctx, escalationPendingKey(fp)).Result()
 	if err != nil || strings.TrimSpace(raw) == "" {
@@ -227,7 +252,11 @@ func (s *AlertService) loadEscalationPending(ctx context.Context, fingerprint st
 
 func (s *AlertService) clearEscalationPendingOnly(ctx context.Context, fingerprint string) {
 	fp := strings.TrimSpace(fingerprint)
-	if s == nil || s.redis == nil || fp == "" {
+	if s == nil || fp == "" {
+		return
+	}
+	if s.redis == nil {
+		s.clearLocalEscalation(fp, false)
 		return
 	}
 	pipe := s.redis.TxPipeline()
@@ -240,8 +269,11 @@ func (s *AlertService) clearEscalationPendingOnly(ctx context.Context, fingerpri
 
 func (s *AlertService) listDueEscalationFingerprints(ctx context.Context, now time.Time) []string {
 	out := []string{}
-	if s == nil || s.redis == nil {
+	if s == nil {
 		return out
+	}
+	if s.redis == nil {
+		return s.listLocalDueEscalation(now)
 	}
 	members, err := s.redis.ZRangeByScore(ctx, escalationQueueKey, &redis.ZRangeBy{
 		Min:    "-inf",
@@ -270,8 +302,11 @@ func (s *AlertService) listDueEscalationFingerprints(ctx context.Context, now ti
 
 func (s *AlertService) tryLockEscalationSend(ctx context.Context, fingerprint string) bool {
 	fp := strings.TrimSpace(fingerprint)
-	if s == nil || s.redis == nil || fp == "" {
-		return true
+	if s == nil || fp == "" {
+		return false
+	}
+	if s.redis == nil {
+		return s.tryLocalEscalationLock(fp)
 	}
 	ok, err := s.redis.SetNX(ctx, escalationSendLockKey(fp), "1", 30*time.Second).Result()
 	return err == nil && ok
@@ -279,7 +314,14 @@ func (s *AlertService) tryLockEscalationSend(ctx context.Context, fingerprint st
 
 func (s *AlertService) unlockEscalationSend(ctx context.Context, fingerprint string) {
 	fp := strings.TrimSpace(fingerprint)
-	if s == nil || s.redis == nil || fp == "" {
+	if s == nil || fp == "" {
+		return
+	}
+	if s.redis == nil {
+		st := s.processLocal()
+		st.mu.Lock()
+		delete(st.escLock, fp)
+		st.mu.Unlock()
 		return
 	}
 	if err := s.redis.Del(ctx, escalationSendLockKey(fp)).Err(); err != nil {
@@ -288,10 +330,11 @@ func (s *AlertService) unlockEscalationSend(ctx context.Context, fingerprint str
 }
 
 func (s *AlertService) flushDueEscalations(ctx context.Context) {
-	if s == nil || s.redis == nil {
+	if s == nil {
 		return
 	}
-	if !s.acquireTimingLeader(ctx) {
+	// 无 Redis 时单进程直接刷本地队列；有 Redis 时仍需抢 timing leader。
+	if s.redis != nil && !s.acquireTimingLeader(ctx) {
 		return
 	}
 	host := s.ingressHost()

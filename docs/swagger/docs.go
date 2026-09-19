@@ -369,7 +369,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/alerts/webhook/alertmanager": {
+        "/api/v1/alerts/webhook": {
             "post": {
                 "description": "Ingest Alertmanager notifications. Auth via header X-Alert-Token or Authorization Bearer (not query token).",
                 "consumes": [

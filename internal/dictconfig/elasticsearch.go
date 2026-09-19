@@ -21,6 +21,8 @@ type ElasticsearchDictTypes struct {
 	K8sIndexPrefix       string
 	DefaultRetentionDays string
 	CleanupCronSpec      string
+	// ConnectionID 指向 esmgmt_connections.id；>0 时日志平台使用该连接的地址/认证，字典地址仅作兜底。
+	ConnectionID string
 }
 
 func DefaultElasticsearchDictTypes() ElasticsearchDictTypes {
@@ -33,6 +35,7 @@ func DefaultElasticsearchDictTypes() ElasticsearchDictTypes {
 		K8sIndexPrefix:       "elasticsearch_k8s_index_prefix",
 		DefaultRetentionDays: "elasticsearch_default_retention_days",
 		CleanupCronSpec:      "elasticsearch_cleanup_cron_spec",
+		ConnectionID:         "elasticsearch_connection_id",
 	}
 }
 

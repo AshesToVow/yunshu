@@ -123,7 +123,8 @@ export function DenyRulesCard({
               {
                 title: "操作",
                 key: "op",
-                width: 100,
+                width: 110,
+                className: "yunshu-table-actions-cell",
                 render: (_, r) => (
                   <Popconfirm
                     title="确定删除该黑名单规则？"

@@ -26,6 +26,7 @@ type (
 	PolicyGovernanceService = system.PolicyGovernanceService
 	UserGroupService    = system.UserGroupService
 	RegistrationService = system.RegistrationService
+	PasswordPolicyResolver = system.PasswordPolicyResolver
 	MenuService         = system.MenuService
 	DictEntryService    = system.DictEntryService
 	LoginRequest        = system.LoginRequest
@@ -176,6 +177,10 @@ type (
 	ServerDetailItem         = cmdb.ServerDetailItem
 	ServerExecRequest        = cmdb.ServerExecRequest
 	ServerExecResult         = cmdb.ServerExecResult
+	HostProbeRequest         = cmdb.HostProbeRequest
+	HostProbeResult          = cmdb.HostProbeResult
+	HostProbeKind            = cmdb.HostProbeKind
+	HostProbeCommandResult   = cmdb.HostProbeCommandResult
 	ServerGroupItem          = cmdb.ServerGroupItem
 	ServerGroupUpsertRequest = cmdb.ServerGroupUpsertRequest
 	ServerGroupTreeQuery     = cmdb.ServerGroupTreeQuery
@@ -302,6 +307,7 @@ type (
 	K8sAuthMatrixRow           = k8s.K8sAuthMatrixRow
 	K8sUserClusterAuthRow      = k8s.K8sUserClusterAuthRow
 	K8sEventForwardRuleUpsertRequest = eventforward.K8sEventForwardRuleUpsertRequest
+	K8sForwardedEventListQuery       = eventforward.K8sForwardedEventListQuery
 	RolloutUndoRequest              = k8s.RolloutUndoRequest
 	RolloutUndoResult               = k8s.RolloutUndoResult
 	DeploymentRevisionQuery         = k8s.DeploymentRevisionQuery
@@ -318,9 +324,33 @@ type (
 	LogSearchService      = logplatform.LogSearchService
 	LogSearchQuery        = logplatform.LogSearchQuery
 	LogSearchItem         = logplatform.LogSearchItem
+	LogIntelligenceService = logplatform.LogIntelligenceService
+	LogPatternListQuery   = logplatform.LogPatternListQuery
+	LogPatternItem        = logplatform.LogPatternItem
+	LogAnomalyListQuery   = logplatform.LogAnomalyListQuery
+	LogAnomalyItem        = logplatform.LogAnomalyItem
+	LogAnomalyUpdateRequest = logplatform.LogAnomalyUpdateRequest
+	LogContextQuery       = logplatform.LogContextQuery
+	LogContextResult      = logplatform.LogContextResult
+	LogOverviewResult     = logplatform.LogOverviewResult
+	LogHistogramBucket    = logplatform.LogHistogramBucket
+	NginxAccessStatsQuery  = logplatform.NginxAccessStatsQuery
+	NginxAccessStatsResult = logplatform.NginxAccessStatsResult
+	NginxAccessURIStat     = logplatform.NginxAccessURIStat
+	LogSignatureItem      = logplatform.LogSignatureItem
+	LogSummaryResult      = logplatform.LogSummaryResult
+	LogTopNQuery          = logplatform.LogTopNQuery
+	LogTopNResult         = logplatform.LogTopNResult
+	LogTopNItem           = logplatform.LogTopNItem
+	LogDropRuleUpsert     = logplatform.LogDropRuleUpsert
+	LogDropRuleService    = logplatform.LogDropRuleService
 	LogRetentionService   = logplatform.LogRetentionService
 	ElasticsearchProvider = logplatform.ElasticsearchProvider
+	ElasticsearchConfigResolver = logplatform.ElasticsearchConfigResolver
+	DictValueReader       = logplatform.DictValueReader
+	DictValueWriter       = logplatform.DictValueWriter
 	KafkaProvider         = logplatform.KafkaProvider
+	KafkaConfigResolver   = logplatform.KafkaConfigResolver
 	KafkaToESService      = logplatform.KafkaToESService
 	LoggieAgentService    = logplatform.LoggieAgentService
 	ClusterLogService     = logplatform.ClusterLogService
@@ -328,6 +358,12 @@ type (
 	ClusterLogRuleItem    = logplatform.ClusterLogRuleItem
 	ClusterPipelinesPreview = logplatform.ClusterPipelinesPreview
 	ClusterPipelinesUpsert  = logplatform.ClusterPipelinesUpsert
+	LogPipelineUpsert       = logplatform.LogPipelineUpsert
+	LogPipelineApplyRequest = logplatform.LogPipelineApplyRequest
+	LogFieldsResult         = logplatform.LogFieldsResult
+	LogFieldStat            = logplatform.LogFieldStat
+	LogSavedQueryUpsert     = logplatform.LogSavedQueryUpsert
+	LogSavedQueryService    = logplatform.LogSavedQueryService
 	LogRetentionItem      = logplatform.LogRetentionItem
 	LogRetentionUpsertRequest = logplatform.LogRetentionUpsertRequest
 	LogRetentionCleanupResult = logplatform.LogRetentionCleanupResult
@@ -338,6 +374,8 @@ type (
 
 var (
 	NewLogSearchService      = logplatform.NewLogSearchService
+	NewLogIntelligenceService = logplatform.NewLogIntelligenceService
+	RunLogIntelligenceWorker = logplatform.RunIntelligenceWorker
 	NewLogRetentionService   = logplatform.NewLogRetentionService
 	NewElasticsearchProvider = logplatform.NewElasticsearchProvider
 	NewKafkaProvider         = logplatform.NewKafkaProvider
@@ -358,6 +396,7 @@ type (
 	LoggieBootstrapSourcePreview   = logplatform.LoggieBootstrapSourcePreview
 	LoggieStatusItem               = logplatform.LoggieStatusItem
 	ESConfigPreviewItem            = logplatform.ESConfigPreviewItem
+	SetESConnectionRequest         = logplatform.SetESConnectionRequest
 )
 
 // --- mysqlbackup ---
@@ -375,6 +414,9 @@ type (
 	AlertService              = alert.AlertService
 	AlertServiceOptions       = alert.AlertServiceOptions
 	AlertQualityReport        = alert.AlertQualityReport
+	AlertEvidenceResult       = alert.AlertEvidenceResult
+	AlertNoiseItem            = alert.AlertNoiseItem
+	AlertRepeatItem           = alert.AlertRepeatItem
 	AlertSilenceService       = alert.AlertSilenceService
 	AlertMaintenanceService   = alert.AlertMaintenanceService
 	AlertDutyService          = alert.AlertDutyService
@@ -411,6 +453,8 @@ type (
 	AlertInhibitionRuleUpsertRequest = alert.AlertInhibitionRuleUpsertRequest
 	AlertDatasourceListQuery       = alert.AlertDatasourceListQuery
 	AlertDatasourceUpsertRequest     = alert.AlertDatasourceUpsertRequest
+	DatasourceHealthResult           = alert.DatasourceHealthResult
+	DatasourcePingResult             = alert.DatasourcePingResult
 	AlertConsulEndpointListQuery     = alert.AlertConsulEndpointListQuery
 	AlertConsulEndpointUpsertRequest = alert.AlertConsulEndpointUpsertRequest
 	AlertMonitorObjectListQuery      = alert.AlertMonitorObjectListQuery
@@ -464,10 +508,12 @@ type (
 	NamespaceListItem = k8s.NamespaceListItem
 	NamespaceListQuery = k8s.NamespaceListQuery
 	PodEventQuery = k8s.PodEventQuery
-	PodExecRequest = k8s.PodExecRequest
-	PodFileQuery = k8s.PodFileQuery
-	PodListQuery = k8s.PodListQuery
-	PodLogsQuery = k8s.PodLogsQuery
+	PodDebugRequest = k8s.PodDebugRequest
+	PodDebugResult  = k8s.PodDebugResult
+	PodExecRequest  = k8s.PodExecRequest
+	PodFileQuery    = k8s.PodFileQuery
+	PodListQuery    = k8s.PodListQuery
+	PodLogsQuery    = k8s.PodLogsQuery
 	MysqlBackupJobListQuery = mysqlbackup.MysqlBackupJobListQuery
 	SendLoginCodeByUsernameRequest = system.SendLoginCodeByUsernameRequest
 )

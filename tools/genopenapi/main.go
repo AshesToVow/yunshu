@@ -51,7 +51,7 @@ func isPublic(method, path string) bool {
 		"POST /api/v1/auth/login":                   true,
 		"POST /api/v1/auth/email-login":             true,
 		"POST /api/v1/auth/register":                true,
-		"POST /api/v1/alerts/webhook/alertmanager":  true,
+		"POST /api/v1/alerts/webhook":  true,
 		"POST /api/v1/loggie/heartbeat/report":      true,
 	}
 	return public[method+" "+path]
@@ -165,7 +165,7 @@ func operationDescription(openAPIPath, method, fullPath string) string {
 	if strings.Contains(openAPIPath, "terminal") || strings.Contains(openAPIPath, "exec/ws") {
 		return "WebSocket 需先 POST /api/v1/auth/ws-ticket 获取一次性 ticket，再在连接 URL 查询参数中携带 ticket=。\n"
 	}
-	if method == "POST" && fullPath == "/api/v1/alerts/webhook/alertmanager" {
+	if method == "POST" && fullPath == "/api/v1/alerts/webhook" {
 		return "Alertmanager Webhook。鉴权：请求头 X-Alert-Token 或 Authorization: Bearer <webhook_token>（不支持 URL ?token=）。\n"
 	}
 	return ""
@@ -305,7 +305,7 @@ paths:
 				sec = `      security:
         - bearerAuth: []
 `
-			} else if r.path == "/api/v1/alerts/webhook/alertmanager" {
+			} else if r.path == "/api/v1/alerts/webhook" {
 				sec = `      security:
         - alertWebhookToken: []
 `

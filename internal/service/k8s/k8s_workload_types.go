@@ -1,6 +1,6 @@
 package k8s
 
-import "gorm.io/gorm"
+import "yunshu/internal/repository"
 
 type NamespacedListQuery struct {
 	ClusterNamespaceKeywordQuery
@@ -74,9 +74,9 @@ type WorkloadDetail struct {
 }
 
 type K8sWorkloadService struct {
-	runtime *K8sRuntimeService
-	dyn     *DynamicResourceService
-	db      *gorm.DB
+	runtime    *K8sRuntimeService
+	dyn        *DynamicResourceService
+	snapRepo   repository.K8sWorkloadSnapshotRepo
 }
 
 // NewK8sWorkloadService 创建相关逻辑。
@@ -94,6 +94,11 @@ type RelatedPodItem struct {
 
 // DeploymentPods 执行对应的业务逻辑。
 
-func NewK8sWorkloadService(runtime *K8sRuntimeService, db *gorm.DB) *K8sWorkloadService {
-	return &K8sWorkloadService{runtime: runtime, dyn: NewDynamicResourceService(runtime), db: db}
+func NewK8sWorkloadService(
+	runtime *K8sRuntimeService,
+	snapRepo repository.K8sWorkloadSnapshotRepo,
+) *K8sWorkloadService {
+	return &K8sWorkloadService{
+		runtime: runtime, dyn: NewDynamicResourceService(runtime), snapRepo: snapRepo,
+	}
 }

@@ -9,6 +9,8 @@ func k8sDictSeeds() []DictEntryCreateRequest {
 		{DictType: "k8s_event_forward_worker_interval_seconds", Label: "批处理周期(秒)", Value: "10", Sort: intRef(1), Status: 0, Remark: "k8s_event_forward.worker_interval_seconds"},
 		{DictType: "k8s_event_forward_worker_batch_size", Label: "批大小", Value: "50", Sort: intRef(1), Status: 0, Remark: "k8s_event_forward.worker_batch_size"},
 		{DictType: "k8s_event_forward_worker_max_retries", Label: "最大重试", Value: "3", Sort: intRef(1), Status: 0, Remark: "k8s_event_forward.worker_max_retries"},
+		// Pod 临时调试容器镜像（内网可改为 Harbor 内镜像，如 harbor.example.com/library/busybox:1.36）
+		{DictType: "k8s_pod_debug_image", Label: "Pod 调试镜像", Value: "busybox:1.36", Sort: intRef(1), Status: 1, Remark: "临时调试容器默认镜像；请求体 image 可覆盖"},
 		// 集群 kubeconfig 模板（请替换 server/token）；「集群管理」表单可一键插入
 		{DictType: "k8s_kubeconfig_template", Label: "单集群 kubeconfig 模板", Value: "kubeconfig文件", Sort: intRef(1), Status: 1, Remark: "占位说明：可在字典中维护完整 kubeconfig 供集群管理选择；勿将生产密钥提交到 Git"},
 		// 集群直连配置模板：label 作为配置键，value 存直连 JSON（可在集群管理 direct 模式通过 dict_config_key 引用）
