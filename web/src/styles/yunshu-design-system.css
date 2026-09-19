@@ -1625,8 +1625,7 @@
 }
 
 .admin-shell.ops-platform .overview-cockpit--v6,
-.admin-shell.ops-platform .overview-cockpit--v6 .ant-typography,
-.admin-shell.ops-platform .overview-cockpit--v6 .ant-tag {
+.admin-shell.ops-platform .overview-cockpit--v6 .ant-typography {
   color: var(--cockpit-text);
 }
 
@@ -1940,8 +1939,65 @@
 .overview-cockpit--v6 .overview-panel__body {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: none !important;
+  height: 100%;
   overflow: auto;
-  padding: 10px 12px 12px;
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.overview-cockpit--v6 .overview-cockpit__alerts,
+.overview-cockpit--v6 .overview-cockpit__feeds > .overview-panel {
+  min-height: 0;
+  align-self: stretch;
+}
+
+/* 标签：深底亮字，避免浅底浅字看不清 */
+.overview-cockpit--v6 .ant-tag {
+  margin-inline-end: 0 !important;
+  padding: 0 8px !important;
+  height: 22px !important;
+  line-height: 20px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  font-family: var(--ys-font-sans, "IBM Plex Sans", "PingFang SC", sans-serif) !important;
+  letter-spacing: 0.02em !important;
+  text-transform: none !important;
+  border-radius: 4px !important;
+  border: 1px solid rgba(148, 163, 184, 0.4) !important;
+  background: #0f172a !important;
+  color: #f1f5f9 !important;
+}
+
+.overview-cockpit--v6 .ant-tag.ant-tag-error,
+.overview-cockpit--v6 .ant-tag-red {
+  border-color: rgba(248, 113, 113, 0.55) !important;
+  background: #7f1d1d !important;
+  color: #fecaca !important;
+}
+
+.overview-cockpit--v6 .ant-tag.ant-tag-success,
+.overview-cockpit--v6 .ant-tag-green {
+  border-color: rgba(52, 211, 153, 0.45) !important;
+  background: #064e3b !important;
+  color: #a7f3d0 !important;
+}
+
+.overview-cockpit--v6 .ant-tag.ant-tag-warning,
+.overview-cockpit--v6 .ant-tag-gold,
+.overview-cockpit--v6 .ant-tag-orange {
+  border-color: rgba(251, 191, 36, 0.5) !important;
+  background: #78350f !important;
+  color: #fde68a !important;
+}
+
+.overview-cockpit--v6 .ant-tag.ant-tag-processing,
+.overview-cockpit--v6 .ant-tag-blue,
+.overview-cockpit--v6 .ant-tag-cyan {
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  background: #0c4a6e !important;
+  color: #bae6fd !important;
 }
 
 .overview-cockpit--v6 .overview-section-label {
@@ -1974,12 +2030,14 @@
 }
 
 .overview-cockpit--v6 .overview-feed {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  min-height: 0;
 }
 
 .overview-cockpit--v6 .overview-feed > li {

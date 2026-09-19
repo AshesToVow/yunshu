@@ -55,6 +55,28 @@ function severityTone(sev: string): "critical" | "warning" | "info" | "default" 
   return "default";
 }
 
+function tagColorForSeverity(sev: string): string | undefined {
+  switch (severityTone(sev)) {
+    case "critical":
+      return "error";
+    case "warning":
+      return "warning";
+    case "info":
+      return "processing";
+    default:
+      return undefined;
+  }
+}
+
+function tagColorForStatus(status: string): string | undefined {
+  const s = (status || "").toLowerCase();
+  if (["failed", "failure", "error", "rejected", "aborted"].some((k) => s.includes(k))) return "error";
+  if (["success", "succeeded", "passed", "done", "completed", "approved"].some((k) => s.includes(k))) return "success";
+  if (["running", "pending", "waiting", "in_progress", "processing"].some((k) => s.includes(k))) return "processing";
+  if (["warn", "partial"].some((k) => s.includes(k))) return "warning";
+  return undefined;
+}
+
 function Panel({
   title,
   icon,
@@ -472,7 +494,7 @@ export function DashboardPage() {
                 <li key={a.id} data-tone={severityTone(a.severity)}>
                   <div className="overview-feed__row">
                     <strong title={a.alertname}>{a.alertname || "—"}</strong>
-                    <Tag>{a.severity || "unknown"}</Tag>
+                    <Tag color={tagColorForSeverity(a.severity)}>{a.severity || "unknown"}</Tag>
                   </div>
                   <div className="overview-feed__meta">
                     <span>{a.cluster || t("dashboard.noCluster")}</span>
@@ -511,7 +533,7 @@ export function DashboardPage() {
                     <li key={r.id}>
                       <div className="overview-feed__row">
                         <strong title={r.title}>{r.title || `#${r.id}`}</strong>
-                        <Tag>{r.status}</Tag>
+                        <Tag color={tagColorForStatus(r.status)}>{r.status}</Tag>
                       </div>
                       <div className="overview-feed__meta">
                         <span>{r.project_name || `P${r.project_id}`}</span>
@@ -533,7 +555,13 @@ export function DashboardPage() {
                     <li key={c.id}>
                       <div className="overview-feed__row">
                         <strong title={c.summary || c.action}>{c.summary || c.action || c.source}</strong>
-                        <Tag color={c.risk_level === "high" || c.risk_level === "critical" ? "error" : "default"}>
+                        <Tag
+                          color={
+                            c.risk_level === "high" || c.risk_level === "critical"
+                              ? "error"
+                              : tagColorForStatus(c.status || c.risk_level || "")
+                          }
+                        >
                           {c.risk_level || c.status}
                         </Tag>
                       </div>
