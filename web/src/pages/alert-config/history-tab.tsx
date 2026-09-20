@@ -108,7 +108,8 @@ export function HistoryTab({
       message.success(`已创建故障工单 #${ticket.id}`);
       navigate(`/workflow/inbox?ticket=${ticket.id}`);
     } catch (e) {
-      message.error(extractApiErrorMessage(e, "转工单失败"));
+      const msg = extractApiErrorMessage(e, "转工单失败");
+      message.error(msg.includes("流程未配置") ? `${msg}；可在流程中心配置 incident 故障单` : msg);
     } finally {
       setTicketLoadingId(null);
     }

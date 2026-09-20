@@ -255,7 +255,8 @@ func (s *Service) EnabledStages(ctx context.Context, key DefinitionKey) ([]model
 	return stages, err
 }
 
-// resolveFlow 解析流程定义与启用节点；特定类型未配置时回退 default。
+// resolveFlow 解析流程定义与启用节点；特定类型未配置时回退 default；
+// incident 域再回退到全局 project_id=0（告警转工单开箱）。
 func (s *Service) resolveFlow(ctx context.Context, key DefinitionKey) (*model.WorkflowDefinition, []model.WorkflowStage, error) {
 	key = key.normalize()
 	def, stages, err := s.loadDefinition(ctx, key)
@@ -275,6 +276,22 @@ func (s *Service) resolveFlow(ctx context.Context, key DefinitionKey) (*model.Wo
 		enabled2 := filterEnabledStages(stages2)
 		if len(enabled2) > 0 && def2 != nil {
 			return def2, enabled2, nil
+		}
+	}
+	if key.Domain == model.WorkflowDomainIncident && key.ProjectID != 0 {
+		for _, tt := range []string{key.TicketType, model.WorkflowTicketTypeDefault} {
+			if tt == "" {
+				continue
+			}
+			gKey := DefinitionKey{Domain: key.Domain, ProjectID: 0, TicketType: tt}
+			gdef, gstages, gerr := s.loadDefinition(ctx, gKey)
+			if gerr != nil {
+				return nil, nil, gerr
+			}
+			genabled := filterEnabledStages(gstages)
+			if len(genabled) > 0 && gdef != nil {
+				return gdef, genabled, nil
+			}
 		}
 	}
 	if def != nil {
@@ -333,12 +350,17 @@ func (s *Service) CreateTicket(ctx context.Context, req CreateTicketRequest, act
 	if submitter == 0 && actor != nil {
 		submitter = actor.ID
 	}
+	if key.Domain == model.WorkflowDomainIncident {
+		if err := EnsureDefaultIncidentDefinition(ctx, s.repo); err != nil {
+			return nil, bizerrors.Pass(ctx, "workflow", "CreateTicket.ensureIncident", err)
+		}
+	}
 	def, stages, err := s.resolveFlow(ctx, key)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "CreateTicket", err)
 	}
 	if def == nil || len(stages) == 0 {
-		return nil, constants.ErrBadRequestWithMsg("流程未配置或未启用审批节点")
+		return nil, constants.ErrBadRequestWithMsg("流程未配置或未启用审批节点（请在流程中心配置 incident 故障单，或使用全局默认流程）")
 	}
 	payloadJSON := ""
 	if len(req.Payload) > 0 {

@@ -25,3 +25,9 @@ func TestResolveFlowFallsBackToDefault(t *testing.T) {
 		t.Fatal("filterEnabledStages should return empty slice")
 	}
 }
+
+func TestEnsureDefaultIncidentDefinitionNilRepo(t *testing.T) {
+	if err := EnsureDefaultIncidentDefinition(t.Context(), nil); err != nil {
+		t.Fatalf("nil repo should be no-op, got %v", err)
+	}
+}

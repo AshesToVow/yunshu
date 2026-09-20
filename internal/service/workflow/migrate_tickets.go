@@ -23,6 +23,9 @@ func MigrateLegacyTickets(ctx context.Context, db *gorm.DB) error {
 	if err := EnsureDefaultAIToolApprovalDefinitionDB(ctx, db); err != nil {
 		log.Warn("ensure AI tool approval definition failed", "error", err)
 	}
+	if err := EnsureDefaultIncidentDefinitionDB(ctx, db); err != nil {
+		log.Warn("ensure incident definition failed", "error", err)
+	}
 	if err := migratePendingSqlTickets(ctx, svc, db, log); err != nil {
 		return err
 	}
