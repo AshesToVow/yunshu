@@ -35,7 +35,7 @@ type Props = {
 export function AlertAckActionButton({ acked, loading, disabled, variant = "link", onAck, onClear }: Props) {
   const options = useAckTTLOptions();
   const btnType = variant === "link" ? "link" : "default";
-  const size = variant === "link" ? "small" : undefined;
+  const size = "small";
   if (acked) {
     return (
       <Button type={btnType} size={size} icon={<CheckOutlined />} loading={loading} disabled={disabled} onClick={onClear}>

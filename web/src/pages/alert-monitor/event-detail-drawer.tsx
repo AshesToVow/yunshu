@@ -323,13 +323,23 @@ export function AlertEventDetailDrawer({
     <Drawer
       title={target ? target.alertname || "告警详情" : "告警详情"}
       placement="right"
-      width={640}
+      width={720}
       open={open}
       onClose={onClose}
       destroyOnClose
-      extra={
-        target ? (
-          <Space wrap>
+    >
+      {!target ? null : (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+              paddingBottom: 4,
+              borderBottom: "1px solid rgba(5, 5, 5, 0.06)",
+            }}
+          >
             {firing ? (
               <AlertAckActionButton
                 variant="default"
@@ -362,30 +372,27 @@ export function AlertEventDetailDrawer({
                   ],
                 }}
               >
-                <Button icon={<StopOutlined />} loading={silencing}>
+                <Button size="small" icon={<StopOutlined />} loading={silencing}>
                   静默
                 </Button>
               </Dropdown>
             ) : null}
-            <Button icon={<QuestionCircleOutlined />} onClick={() => setWhyOpen((v) => !v)}>
+            <Button size="small" icon={<QuestionCircleOutlined />} onClick={() => setWhyOpen((v) => !v)}>
               为什么没收到
             </Button>
             {onAiExplain ? (
-              <Button icon={<RobotOutlined />} onClick={() => onAiExplain(target)}>
+              <Button size="small" icon={<RobotOutlined />} onClick={() => onAiExplain(target)}>
                 AI 解读
               </Button>
             ) : null}
             {logContextUrl ? (
               <Link to={logContextUrl}>
-                <Button icon={<FileSearchOutlined />}>关联日志</Button>
+                <Button size="small" icon={<FileSearchOutlined />}>
+                  关联日志
+                </Button>
               </Link>
             ) : null}
-          </Space>
-        ) : null
-      }
-    >
-      {!target ? null : (
-        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          </div>
           <Space wrap>
             <Tag color={st.color}>{st.text}</Tag>
             {target.severity ? <Tag color={severityColor(target.severity)}>{target.severity}</Tag> : null}
