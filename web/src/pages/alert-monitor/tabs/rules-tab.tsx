@@ -231,12 +231,13 @@ export function RulesTab() {
               { title: "备注", dataIndex: "comment", ellipsis: true },
               {
                 title: "操作",
-                width: 160,
+                width: 180,
+                className: "yunshu-table-actions-cell",
                 render: (_: unknown, r: AlertMonitorRuleChangeItem) => (
-                  <Space>
+                  <Space size={0} wrap className="yunshu-table-actions">
                     <Button
                       size="small"
-                      type="primary"
+                      type="link"
                       onClick={() =>
                         void approveMonitorRuleChange(r.id).then(async () => {
                           message.success("已批准并应用");
@@ -249,6 +250,7 @@ export function RulesTab() {
                     </Button>
                     <Button
                       size="small"
+                      type="link"
                       danger
                       onClick={() =>
                         void rejectMonitorRuleChange(r.id).then(() => {
@@ -277,7 +279,7 @@ export function RulesTab() {
           total: ctx.ruleTotal,
           onChange: (page, pageSize) => ctx.onRuleTableChange(page, pageSize),
         })}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1280 }}
       />
 
       <Modal

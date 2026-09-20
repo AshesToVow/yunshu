@@ -1,6 +1,16 @@
 import { extractApiErrorMessage } from "../../../services/http";
-import { Alert, Button, Card, Input, Modal, Segmented, Space, Tag, Typography, message } from "antd";
-import { BellOutlined, DownloadOutlined, ExperimentOutlined, FileAddOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Dropdown, Input, Modal, Segmented, Space, Tag, Typography, message } from "antd";
+import type { MenuProps } from "antd";
+import {
+  BellOutlined,
+  DownOutlined,
+  DownloadOutlined,
+  ExperimentOutlined,
+  FileAddOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+  StopOutlined,
+} from "@ant-design/icons";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAlertMonitor } from "../context";
@@ -377,7 +387,7 @@ export function HistoryTab() {
             total: curTotal,
             onChange: (page, pageSize) => void loadCur(page, pageSize, keyword),
           })}
-          scroll={{ x: 1560 }}
+          scroll={{ x: 1400 }}
           onRow={(r) => ({
             onClick: () => openDetail(toDetailFromCur(r)),
             style: { cursor: "pointer" },
@@ -437,67 +447,65 @@ export function HistoryTab() {
             { title: "更新", dataIndex: "updated_at", width: 170, render: (v) => formatDateTime(v) || "-" },
             {
               title: "操作",
-              width: 340,
+              width: 220,
               fixed: "right",
-              render: (_: unknown, r: AlertCurEventItem) => (
-                <Space size={0} onClick={(e) => e.stopPropagation()}>
-                  <AlertAckActionButton
-                    acked={Boolean(r.acked)}
-                    onAck={(minutes) => void toggleAck(r, minutes)}
-                    onClear={() => void toggleAck(r)}
-                  />
-                  <Button type="link" size="small" icon={<BellOutlined />} onClick={() => openDetail(toDetailFromCur(r))}>
-                    通知
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<StopOutlined />}
-                    onClick={() => ctx.openSilenceForEvent?.(toDetailFromCur(r))}
-                  >
-                    静默
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<FileAddOutlined />}
-                    disabled={!r.fingerprint}
-                    loading={ticketLoadingFp === r.fingerprint}
-                    onClick={() => void createTicketFromCur(r)}
-                  >
-                    转工单
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<RobotOutlined />}
-                    disabled={!r.fingerprint}
-                    onClick={() => void runAiExplain(r)}
-                  >
-                    AI解读
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<ExperimentOutlined />}
-                    disabled={!r.fingerprint}
-                    loading={aiInvestigateLoading}
-                    onClick={() => void runAiInvestigate(r)}
-                  >
-                    AI调查
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<StopOutlined />}
-                    disabled={!r.fingerprint}
-                    loading={silenceLoadingFp === r.fingerprint}
-                    onClick={() => void quickSilence2h(r)}
-                  >
-                    静默2h
-                  </Button>
-                </Space>
-              ),
+              className: "yunshu-table-actions-cell",
+              render: (_: unknown, r: AlertCurEventItem) => {
+                const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+                const moreItems: MenuProps["items"] = [
+                  {
+                    key: "silence",
+                    icon: <StopOutlined />,
+                    label: "自定义静默",
+                    onClick: () => ctx.openSilenceForEvent?.(toDetailFromCur(r)),
+                  },
+                  {
+                    key: "silence2h",
+                    icon: <StopOutlined />,
+                    label: "静默 2 小时",
+                    disabled: !r.fingerprint,
+                    onClick: () => void quickSilence2h(r),
+                  },
+                  {
+                    key: "ticket",
+                    icon: <FileAddOutlined />,
+                    label: "转工单",
+                    disabled: !r.fingerprint,
+                    onClick: () => void createTicketFromCur(r),
+                  },
+                  {
+                    key: "ai-explain",
+                    icon: <RobotOutlined />,
+                    label: "AI 解读",
+                    disabled: !r.fingerprint,
+                    onClick: () => void runAiExplain(r),
+                  },
+                  {
+                    key: "ai-investigate",
+                    icon: <ExperimentOutlined />,
+                    label: "AI 调查",
+                    disabled: !r.fingerprint,
+                    onClick: () => void runAiInvestigate(r),
+                  },
+                ];
+                return (
+                  <Space size={0} wrap className="yunshu-table-actions" onClick={stop}>
+                    <AlertAckActionButton
+                      acked={Boolean(r.acked)}
+                      onAck={(minutes) => void toggleAck(r, minutes)}
+                      onClear={() => void toggleAck(r)}
+                    />
+                    <Button type="link" size="small" icon={<BellOutlined />} onClick={() => openDetail(toDetailFromCur(r))}>
+                      通知
+                    </Button>
+                    <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
+                      <Button type="link" size="small" onClick={stop}>
+                        更多 <DownOutlined />
+                      </Button>
+                    </Dropdown>
+                  </Space>
+                );
+              },
             },
           ]}
           locale={{ emptyText: "当前没有正在告警的实例" }}

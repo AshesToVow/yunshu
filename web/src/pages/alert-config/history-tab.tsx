@@ -590,8 +590,9 @@ export function HistoryTab({
         {
           title: "操作",
           key: "actions",
-          width: 100,
+          width: 120,
           fixed: "right",
+          className: "yunshu-table-actions-cell",
           render: (_: unknown, row: AlertEventItem) => (
             <Button
               type="link"
@@ -599,6 +600,7 @@ export function HistoryTab({
               icon={<FileAddOutlined />}
               loading={ticketLoadingId === row.id}
               onClick={() => void createTicketFromEvent(row)}
+              title="转工单"
             >
               转工单
             </Button>

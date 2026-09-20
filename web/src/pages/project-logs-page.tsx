@@ -1333,12 +1333,13 @@ export function ProjectLogsPage() {
                       { title: "时间", dataIndex: "detected_at", width: 160, render: (v: string) => formatDateTime(v) },
                       {
                         title: "操作",
-                        width: 220,
+                        width: 180,
+                        className: "yunshu-table-actions-cell",
                         render: (_: unknown, row: LogAnomalyItem) => {
                           const pid = form.getFieldValue("project_id") as number;
                           const refresh = () => void loadOverviewAndIntel(form.getFieldsValue());
                           return (
-                            <Space size={4} wrap>
+                            <Space size={0} wrap className="yunshu-table-actions">
                               {row.status !== "acknowledged" ? (
                                 <Button
                                   type="link"
@@ -1367,50 +1368,54 @@ export function ProjectLogsPage() {
                                   解决
                                 </Button>
                               ) : null}
-                              <Button
-                                type="link"
-                                size="small"
-                                onClick={() => {
-                                  void (async () => {
-                                    try {
-                                      const res = await listProjectMembers(pid);
-                                      setAssignMembers(res?.list ?? []);
-                                      setAssignAnomaly(row);
-                                      setAssignUserId(row.assignee_id || undefined);
-                                      setAssignOpen(true);
-                                    } catch (e: unknown) {
-                                      message.error(extractApiErrorMessage(e, "加载项目成员失败"));
-                                    }
-                                  })();
+                              <Dropdown
+                                trigger={["click"]}
+                                menu={{
+                                  items: [
+                                    {
+                                      key: "assign",
+                                      label: "指派",
+                                      onClick: () => {
+                                        void (async () => {
+                                          try {
+                                            const res = await listProjectMembers(pid);
+                                            setAssignMembers(res?.list ?? []);
+                                            setAssignAnomaly(row);
+                                            setAssignUserId(row.assignee_id || undefined);
+                                            setAssignOpen(true);
+                                          } catch (e: unknown) {
+                                            message.error(extractApiErrorMessage(e, "加载项目成员失败"));
+                                          }
+                                        })();
+                                      },
+                                    },
+                                    {
+                                      key: "mute",
+                                      label: "静默 60 分钟",
+                                      onClick: () =>
+                                        void updateProjectLogAnomaly(pid, row.id, { mute_minutes: 60 }).then(() => {
+                                          message.success("已静默 60 分钟");
+                                          refresh();
+                                        }),
+                                    },
+                                    row.signature
+                                      ? {
+                                          key: "logs",
+                                          label: "关联日志",
+                                          onClick: () => {
+                                            form.setFieldsValue({ keyword: row.signature, level: "ERROR", page: 1 });
+                                            setActiveTab("logs");
+                                            void runSearch({ page: 1, keyword: row.signature, level: "ERROR" });
+                                          },
+                                        }
+                                      : null,
+                                  ].filter(Boolean) as never,
                                 }}
                               >
-                                指派
-                              </Button>
-                              <Button
-                                type="link"
-                                size="small"
-                                onClick={() =>
-                                  void updateProjectLogAnomaly(pid, row.id, { mute_minutes: 60 }).then(() => {
-                                    message.success("已静默 60 分钟");
-                                    refresh();
-                                  })
-                                }
-                              >
-                                静默
-                              </Button>
-                              {row.signature ? (
-                                <Button
-                                  type="link"
-                                  size="small"
-                                  onClick={() => {
-                                    form.setFieldsValue({ keyword: row.signature, level: "ERROR", page: 1 });
-                                    setActiveTab("logs");
-                                    void runSearch({ page: 1, keyword: row.signature, level: "ERROR" });
-                                  }}
-                                >
-                                  关联日志
+                                <Button type="link" size="small">
+                                  更多
                                 </Button>
-                              ) : null}
+                              </Dropdown>
                             </Space>
                           );
                         },

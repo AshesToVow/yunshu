@@ -1013,9 +1013,10 @@ export function AlertConfigCenterPanel({
             },
             {
               title: "操作",
-              width: 120,
+              width: 160,
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, r: AlertReceiverGroup) => (
-                <Space>
+                <Space size={0} wrap className="yunshu-table-actions">
                   <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openReceiverGroupEdit(r)}>
                     编辑
                   </Button>

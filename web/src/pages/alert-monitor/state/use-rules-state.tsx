@@ -12,9 +12,10 @@ import {
   EditOutlined,
   CalendarOutlined,
   TeamOutlined,
+  DownOutlined,
 } from "@ant-design/icons";
-import type { TreeSelectProps } from "antd";
-import { Button, Form, Popconfirm, Space, Tag, message } from "antd";
+import type { MenuProps, TreeSelectProps } from "antd";
+import { Button, Dropdown, Form, Popconfirm, Space, Tag, message } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -956,10 +957,11 @@ export function useAlertMonitorRulesState(params: {
     {
       title: "操作",
       key: "actions",
-      width: 120,
+      width: 160,
       fixed: "right" as const,
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: AlertDutyBlockItem) => (
-        <Space>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openBlkEdit(r)}>
             编辑
           </Button>
@@ -1140,22 +1142,42 @@ export function useAlertMonitorRulesState(params: {
     { title: "启用", dataIndex: "enabled", width: 70, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
     {
       title: "操作",
-      width: 320,
+      width: 200,
       fixed: "right" as const,
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: AlertMonitorRuleItem) => (
-        <Space wrap>
-          <Button type="link" size="small" onClick={() => openSilenceForMonitorRule(r)}>
-            静默
-          </Button>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openRuleEdit(r)}>
             规则
           </Button>
-          <Button type="link" size="small" icon={<TeamOutlined />} onClick={() => void openAssign(r.id)}>
-            处理人
-          </Button>
-          <Button type="link" size="small" icon={<CalendarOutlined />} onClick={() => void openDuty(r.id)}>
-            值班
-          </Button>
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: "silence",
+                  label: "静默",
+                  onClick: () => openSilenceForMonitorRule(r),
+                },
+                {
+                  key: "assign",
+                  icon: <TeamOutlined />,
+                  label: "处理人",
+                  onClick: () => void openAssign(r.id),
+                },
+                {
+                  key: "duty",
+                  icon: <CalendarOutlined />,
+                  label: "值班",
+                  onClick: () => void openDuty(r.id),
+                },
+              ] as MenuProps["items"],
+            }}
+            trigger={["click"]}
+          >
+            <Button type="link" size="small">
+              更多 <DownOutlined />
+            </Button>
+          </Dropdown>
           <Popconfirm title="删除规则？" onConfirm={() => void removeRule(r.id)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               删除

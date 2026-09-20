@@ -171,10 +171,11 @@ export function CicdReleaseRecordsPage() {
       {
         title: "操作",
         key: "actions",
-        width: 200,
+        width: 180,
         fixed: "right",
+        className: "yunshu-table-actions-cell",
         render: (_, row) => (
-          <Space size={4} wrap={false}>
+          <Space size={0} wrap className="yunshu-table-actions">
             <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(row)}>
               详情
             </Button>

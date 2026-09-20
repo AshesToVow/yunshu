@@ -331,16 +331,17 @@ export function ServiceCatalogPage() {
           },
           {
             title: "操作",
-            width: 220,
+            width: 200,
+            className: "yunshu-table-actions-cell",
             render: (_: unknown, row: ServiceCatalogItem) => (
-              <Space>
-                <Button type="link" onClick={() => openEdit(row)}>
+              <Space size={0} wrap className="yunshu-table-actions">
+                <Button type="link" size="small" onClick={() => openEdit(row)}>
                   编辑
                 </Button>
-                <Button type="link" onClick={() => navigate(`/service-portrait?project_id=${projectId}&catalog_id=${row.id}`)}>
+                <Button type="link" size="small" onClick={() => navigate(`/service-portrait?project_id=${projectId}&catalog_id=${row.id}`)}>
                   画像
                 </Button>
-                <Button type="link" icon={<LinkOutlined />} onClick={() => openLink(row)}>
+                <Button type="link" size="small" icon={<LinkOutlined />} onClick={() => openLink(row)}>
                   绑定
                 </Button>
                 <Popconfirm
@@ -353,7 +354,7 @@ export function ServiceCatalogPage() {
                     })
                   }
                 >
-                  <Button type="link" danger icon={<DeleteOutlined />}>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                     删除
                   </Button>
                 </Popconfirm>

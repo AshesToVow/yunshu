@@ -1,5 +1,5 @@
-import { CloudUploadOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import { CloudUploadOutlined, DownOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Dropdown, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from "antd";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -216,10 +216,11 @@ export function EsmgmtOverviewPage() {
             { title: "存储字节", dataIndex: "store_bytes", width: 120 },
             {
               title: "操作",
-              width: 280,
+              width: 160,
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, row?: { name: string }) =>
                 row ? (
-                  <Space wrap>
+                  <Space size={0} className="yunshu-table-actions">
                     <Button
                       type="link"
                       size="small"
@@ -229,30 +230,31 @@ export function EsmgmtOverviewPage() {
                     >
                       备份
                     </Button>
-                    <Button type="link" size="small" onClick={() => void openEsmgmtIndex(row.name, connectionId).then(load)}>
-                      打开
-                    </Button>
-                    <Button type="link" size="small" onClick={() => void closeEsmgmtIndex(row.name, connectionId).then(load)}>
-                      关闭
-                    </Button>
-                    <Popconfirm
-                      title={
-                        row.name.includes("yunshu-agent") || row.name.includes("yunshu-k8s")
-                          ? "日志索引，需强制删除确认"
-                          : "确认删除索引？"
-                      }
-                      onConfirm={() =>
-                        void deleteEsmgmtIndex(
-                          row.name,
-                          row.name.includes("yunshu-agent") || row.name.includes("yunshu-k8s"),
-                          connectionId,
-                        ).then(load)
-                      }
+                    <Dropdown
+                      trigger={["click"]}
+                      menu={{
+                        items: [
+                          { key: "open", label: "打开", onClick: () => void openEsmgmtIndex(row.name, connectionId).then(load) },
+                          { key: "close", label: "关闭", onClick: () => void closeEsmgmtIndex(row.name, connectionId).then(load) },
+                          {
+                            key: "delete",
+                            danger: true,
+                            label: "删除",
+                            onClick: () => {
+                              const force = row.name.includes("yunshu-agent") || row.name.includes("yunshu-k8s");
+                              Modal.confirm({
+                                title: force ? "日志索引，需强制删除确认" : "确认删除索引？",
+                                onOk: () => deleteEsmgmtIndex(row.name, force, connectionId).then(load),
+                              });
+                            },
+                          },
+                        ],
+                      }}
                     >
-                      <Button type="link" size="small" danger>
-                        删除
+                      <Button type="link" size="small">
+                        更多 <DownOutlined />
                       </Button>
-                    </Popconfirm>
+                    </Dropdown>
                   </Space>
                 ) : null,
             },

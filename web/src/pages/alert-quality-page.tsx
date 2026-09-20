@@ -134,11 +134,11 @@ export function AlertQualityPage({ embedded, projectContextId }: Props) {
     const silenceKey = `${prefix}-silence-${fp || row.title}`;
     const inhibitKey = `${prefix}-inhibit-${fp || row.title}`;
     return (
-      <Space size={4} wrap>
+      <Space size={0} wrap className="yunshu-table-actions">
         {fp ? (
           <Popconfirm title="确认静默该告警 2 小时？" onConfirm={() => void silence2h(row, silenceKey)}>
             <Button size="small" type="link" loading={actionKey === silenceKey}>
-              静默 2h
+              静默2h
             </Button>
           </Popconfirm>
         ) : null}
@@ -234,7 +234,8 @@ export function AlertQualityPage({ embedded, projectContextId }: Props) {
                 {
                   title: "操作",
                   key: "actions",
-                  width: 160,
+                  width: 180,
+                  className: "yunshu-table-actions-cell",
                   render: (_: unknown, row: NoiseRow) => renderActions(row, "noise"),
                 },
               ]}
@@ -255,7 +256,8 @@ export function AlertQualityPage({ embedded, projectContextId }: Props) {
                 {
                   title: "操作",
                   key: "actions",
-                  width: 160,
+                  width: 180,
+                  className: "yunshu-table-actions-cell",
                   render: (_: unknown, row: RepeatRow) => renderActions(row, "repeat"),
                 },
               ]}

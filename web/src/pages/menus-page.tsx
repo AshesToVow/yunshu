@@ -1,5 +1,5 @@
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, PlusSquareOutlined, ExpandOutlined, CompressOutlined, CheckCircleOutlined, StopOutlined, ApiOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, PlusSquareOutlined, ExpandOutlined, CompressOutlined, CheckCircleOutlined, StopOutlined, ApiOutlined, DownOutlined } from "@ant-design/icons";
+import { Button, Card, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { getAdminMenuTree, createMenu, updateMenu, deleteMenu, batchUpdateMenuStatus, getMenuBindings, replaceMenuBindings, type MenuPermissionBindingItem } from "../services/menus";
 import type { MenuItem, MenuCreatePayload, MenuUpdatePayload } from "../services/menus";
@@ -237,25 +237,38 @@ export function MenusPage() {
             {
               title: "操作",
               key: "action",
-              width: 280,
+              width: 180,
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, record: MenuItem) => (
-                <Space wrap>
-                  {record.path ? (
-                    <Button type="link" size="small" icon={<ApiOutlined />} onClick={() => void openBindings(record)}>
-                      入口权限
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<PlusSquareOutlined />}
-                    onClick={() => openCreate(record.id)}
-                  >
-                    添加子菜单
-                  </Button>
+                <Space size={0} wrap className="yunshu-table-actions">
                   <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
                     编辑
                   </Button>
+                  <Dropdown
+                    trigger={["click"]}
+                    menu={{
+                      items: [
+                        record.path
+                          ? {
+                              key: "bind",
+                              icon: <ApiOutlined />,
+                              label: "入口权限",
+                              onClick: () => void openBindings(record),
+                            }
+                          : null,
+                        {
+                          key: "child",
+                          icon: <PlusSquareOutlined />,
+                          label: "添加子菜单",
+                          onClick: () => openCreate(record.id),
+                        },
+                      ].filter(Boolean) as never,
+                    }}
+                  >
+                    <Button type="link" size="small">
+                      更多 <DownOutlined />
+                    </Button>
+                  </Dropdown>
                   <Popconfirm title="确认删除该菜单吗？子菜单需先删除。" onConfirm={() => void handleDelete(record.id)}>
                     <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                       删除

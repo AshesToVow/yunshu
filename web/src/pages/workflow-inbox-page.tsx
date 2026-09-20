@@ -1,9 +1,10 @@
-import { CheckOutlined, CloseOutlined, LinkOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, DownOutlined, LinkOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
   Button,
   Card,
   Descriptions,
   Drawer,
+  Dropdown,
   Empty,
   Form,
   Input,
@@ -19,7 +20,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApprovalCenterNav } from "../components/approval-center-nav";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { reviewAIApproval } from "../services/ai";
@@ -85,6 +86,7 @@ async function submitDomainReview(row: PendingTicketItem, approve: boolean, comm
 
 export function WorkflowInboxPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number | undefined>(() => {
     const n = Number(searchParams.get("project") || 0);
@@ -245,33 +247,51 @@ export function WorkflowInboxPage() {
     {
       title: "操作",
       key: "actions",
-      width: 200,
+      width: 180,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_, row) => {
         const pending = row.mine_status === "mine_pending";
         const isExecute = row.action === "execute" || row.action === "execute_sql";
         const link = workflowBusinessDeepLink(row);
+        const more = [
+          link
+            ? {
+                key: "link",
+                icon: <LinkOutlined />,
+                label: pending && isExecute ? "去执行" : "详情",
+                onClick: () => navigate(link),
+              }
+            : null,
+          pending && !isExecute
+            ? {
+                key: "approve",
+                icon: <CheckOutlined />,
+                label: "通过",
+                onClick: () => openReview(row, true),
+              }
+            : null,
+          pending && !isExecute
+            ? {
+                key: "reject",
+                icon: <CloseOutlined />,
+                danger: true,
+                label: "驳回",
+                onClick: () => openReview(row, false),
+              }
+            : null,
+        ].filter(Boolean);
         return (
-          <Space size="small">
+          <Space size={0} className="yunshu-table-actions">
             <Button type="link" size="small" onClick={() => void openPreview(row)}>
               预览
             </Button>
-            {link ? (
-              <Link to={link}>
-                <Button type="link" size="small" icon={<LinkOutlined />}>
-                  {pending && isExecute ? "去执行" : "详情"}
+            {more.length ? (
+              <Dropdown menu={{ items: more as never }} trigger={["click"]}>
+                <Button type="link" size="small">
+                  更多 <DownOutlined />
                 </Button>
-              </Link>
-            ) : null}
-            {pending && !isExecute ? (
-              <>
-                <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => openReview(row, true)}>
-                  通过
-                </Button>
-                <Button type="link" size="small" danger icon={<CloseOutlined />} onClick={() => openReview(row, false)}>
-                  驳回
-                </Button>
-              </>
+              </Dropdown>
             ) : null}
           </Space>
         );

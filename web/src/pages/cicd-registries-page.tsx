@@ -1,8 +1,9 @@
-import { ApiOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ApiOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
   Button,
   Card,
   Drawer,
+  Dropdown,
   Form,
   Input,
   InputNumber,
@@ -169,26 +170,32 @@ export function CicdRegistriesPage() {
     },
     {
       title: "操作",
-      width: 280,
+      width: 180,
+      className: "yunshu-table-actions-cell",
       render: (_, row) => (
-        <Space wrap>
-          <Button type="link" size="small" onClick={() => void openDetail(row)}>
-            详情/清理
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<ApiOutlined />}
-            onClick={async () => {
-              const r = await pingRegistry(row.id);
-              message.success(r?.ok ? "连通成功" : "已完成探测");
-            }}
-          >
-            测连
-          </Button>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
             编辑
           </Button>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "detail", label: "详情/清理", onClick: () => void openDetail(row) },
+                {
+                  key: "ping",
+                  icon: <ApiOutlined />,
+                  label: "测连",
+                  onClick: () =>
+                    void pingRegistry(row.id).then((r) => message.success(r?.ok ? "连通成功" : "已完成探测")),
+                },
+              ],
+            }}
+          >
+            <Button type="link" size="small">
+              更多 <DownOutlined />
+            </Button>
+          </Dropdown>
           <Popconfirm title="确认删除该注册中心？" onConfirm={() => deleteRegistry(row.id).then(load)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               删除
@@ -225,9 +232,10 @@ export function CicdRegistriesPage() {
     },
     {
       title: "操作",
-      width: 200,
+      width: 180,
+      className: "yunshu-table-actions-cell",
       render: (_, row) => (
-        <Space>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button
             type="link"
             size="small"

@@ -172,17 +172,18 @@ data:
           { title: "创建时间", dataIndex: "created_at", width: 180, render: (v: string) => formatDateTime(v) },
           {
             title: "操作",
-            width: 220,
+            width: 200,
+            className: "yunshu-table-actions-cell",
             render: (_: unknown, row: K8sCrTemplateItem) => (
-              <Space>
-                <Button type="link" icon={<RocketOutlined />} onClick={() => applyToCluster(row)}>
-                  应用到集群
+              <Space size={0} wrap className="yunshu-table-actions">
+                <Button type="link" size="small" icon={<RocketOutlined />} onClick={() => applyToCluster(row)}>
+                  应用
                 </Button>
-                <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>
+                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
                   编辑
                 </Button>
                 <Popconfirm title="删除该模板？" onConfirm={() => void deleteK8sCrTemplate(row.id).then(load)}>
-                  <Button type="link" danger icon={<DeleteOutlined />} />
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
               </Space>
             ),

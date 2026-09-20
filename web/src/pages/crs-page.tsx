@@ -103,19 +103,21 @@ export function CrsPage() {
     {
       title: "操作",
       key: "action",
-      width: 240,
+      width: 200,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, record: CrItem) => (
-        <Space>
-          <Button type="link" icon={<EyeOutlined />} onClick={() => void openDetail(record.name)}>
+        <Space size={0} wrap className="yunshu-table-actions">
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(record.name)}>
             详情
           </Button>
-          <Button type="link" icon={<EditOutlined />} onClick={() => void openEdit(record.name)}>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openEdit(record.name)}>
             编辑
           </Button>
           <Button
             danger
             type="link"
+            size="small"
             icon={<DeleteOutlined />}
             onClick={() => {
               setDeleteTargetName(record.name);

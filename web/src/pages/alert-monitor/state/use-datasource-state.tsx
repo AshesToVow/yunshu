@@ -127,9 +127,10 @@ export function useAlertMonitorDatasourceState(params: {
     { title: "启用", dataIndex: "enabled", width: 80, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
     {
       title: "操作",
-      width: 260,
+      width: 220,
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: AlertDatasourceItem) => (
-        <Space wrap>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button
             type="link"
             size="small"
@@ -137,7 +138,7 @@ export function useAlertMonitorDatasourceState(params: {
             loading={dsPingId === r.id}
             onClick={() => void runDsPing(r.id)}
           >
-            健康检测
+            检测
           </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openDsEdit(r)}>
             编辑

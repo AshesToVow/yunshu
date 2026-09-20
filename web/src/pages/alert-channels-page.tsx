@@ -380,16 +380,17 @@ export function AlertChannelsPage() {
           {
             title: "操作",
             key: "action",
-            width: 220,
+            width: 200,
+            className: "yunshu-table-actions-cell",
             render: (_: unknown, row: AlertChannelItem) => (
-              <Space size={4} wrap>
-                <Button type="link" icon={<SendOutlined />} onClick={() => openTest(row)}>
+              <Space size={0} wrap className="yunshu-table-actions">
+                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => openTest(row)}>
                   测试
                 </Button>
-                <Button type="link" onClick={() => openTemplateConfig(row.id)}>
+                <Button type="link" size="small" onClick={() => openTemplateConfig(row.id)}>
                   模板
                 </Button>
-                <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>
+                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
                   编辑
                 </Button>
                 <Popconfirm
@@ -402,7 +403,7 @@ export function AlertChannelsPage() {
                     })()
                   }
                 >
-                  <Button type="link" danger icon={<DeleteOutlined />}>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                     删除
                   </Button>
                 </Popconfirm>

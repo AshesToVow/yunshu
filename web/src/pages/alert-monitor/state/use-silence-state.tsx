@@ -212,11 +212,12 @@ export function useAlertMonitorSilenceState(params: {
       },
       {
         title: "操作",
-        width: 230,
+        width: 200,
+        className: "yunshu-table-actions-cell",
         render: (_: unknown, r: SilenceDisplayRow) => (
-            <Space>
+            <Space size={0} wrap className="yunshu-table-actions">
               <Button type="link" size="small" disabled={!r.enabled} onClick={() => void releaseSingleSilence(r)}>
-                解除静默
+                解除
               </Button>
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openSilEdit(r)}>
                 编辑

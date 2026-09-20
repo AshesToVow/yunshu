@@ -1,7 +1,8 @@
-import { PlusOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
+import { PlusOutlined, ReloadOutlined, SyncOutlined, DownOutlined } from "@ant-design/icons";
 import {
   Button,
   Card,
+  Dropdown,
   Form,
   Input,
   InputNumber,
@@ -373,12 +374,10 @@ export function AiCenterPage() {
                         { title: "启用", dataIndex: "enabled", width: 80, render: (v) => (v ? "是" : "否") },
                         {
                           title: "操作",
-                          width: 280,
+                          width: 180,
+                          className: "yunshu-table-actions-cell",
                           render: (_, row) => (
-                            <Space size="small" wrap>
-                              <Button type="link" size="small" onClick={() => void loadVersions(Number(row.id))}>
-                              版本
-                            </Button>
+                            <Space size={0} wrap className="yunshu-table-actions">
                               <Button
                                 type="link"
                                 size="small"
@@ -396,42 +395,46 @@ export function AiCenterPage() {
                               >
                                 编辑
                               </Button>
-                              <Button
-                                type="link"
-                                size="small"
-                                onClick={() => {
-                                  setSelectedPromptId(Number(row.id));
-                                  void getAICenterPrompt(Number(row.id)).then((detail) => {
-                                    const cur = (detail?.current_version || {}) as Row;
-                                    publishForm.setFieldsValue({
-                                      content: cur.content || "",
-                                      changelog: "",
-                                    });
-                                    setPublishOpen(true);
-                                  });
+                              <Dropdown
+                                trigger={["click"]}
+                                menu={{
+                                  items: [
+                                    { key: "versions", label: "版本", onClick: () => void loadVersions(Number(row.id)) },
+                                    {
+                                      key: "publish",
+                                      label: "发布新版",
+                                      onClick: () => {
+                                        setSelectedPromptId(Number(row.id));
+                                        void getAICenterPrompt(Number(row.id)).then((detail) => {
+                                          const cur = (detail?.current_version || {}) as Row;
+                                          publishForm.setFieldsValue({ content: cur.content || "", changelog: "" });
+                                          setPublishOpen(true);
+                                        });
+                                      },
+                                    },
+                                    {
+                                      key: "delete",
+                                      danger: true,
+                                      label: "删除",
+                                      onClick: () =>
+                                        confirmDelete(`删除 Prompt「${String(row.code)}」？`, async () => {
+                                          await deleteAICenterPrompt(Number(row.id));
+                                          message.success("已删除");
+                                          if (selectedPromptId === Number(row.id)) {
+                                            setSelectedPromptId(undefined);
+                                            setVersions([]);
+                                          }
+                                          await refreshLists();
+                                          await refreshOverview();
+                                        }),
+                                    },
+                                  ],
                                 }}
                               >
-                                发布新版
-                              </Button>
-                              <Button
-                                type="link"
-                                size="small"
-                                danger
-                                onClick={() =>
-                                  confirmDelete(`删除 Prompt「${String(row.code)}」？`, async () => {
-                                    await deleteAICenterPrompt(Number(row.id));
-                                    message.success("已删除");
-                                    if (selectedPromptId === Number(row.id)) {
-                                      setSelectedPromptId(undefined);
-                                      setVersions([]);
-                                    }
-                                    await refreshLists();
-                                    await refreshOverview();
-                                  })
-                                }
-                              >
-                                删除
-                              </Button>
+                                <Button type="link" size="small">
+                                  更多 <DownOutlined />
+                                </Button>
+                              </Dropdown>
                             </Space>
                           ),
                         },
