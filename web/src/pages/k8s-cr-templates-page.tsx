@@ -2,6 +2,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, RocketOutli
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { AiYamlGeneratePanel } from "../components/k8s/ai-yaml-generate-panel";
 import { MonacoYamlEditor } from "../components/k8s/monaco-yaml-editor";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
@@ -25,6 +26,8 @@ export function K8sCrTemplatesPage() {
   const [current, setCurrent] = useState<K8sCrTemplateItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  const watchedKind = Form.useWatch("gvk_kind", form) as string | undefined;
+  const watchedBody = Form.useWatch("body", form) as string | undefined;
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((r) => setProjects(r.list || []));
@@ -223,8 +226,17 @@ data:
             <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
         </Space>
-        <Form.Item label="YAML 正文" name="body" rules={[{ required: true }]}>
-          <MonacoYamlEditor height={360} />
+        <Form.Item label="YAML 正文" required>
+          <Space direction="vertical" style={{ width: "100%" }} size="middle">
+            <AiYamlGeneratePanel
+              resourceKind={(watchedKind || "").trim() || "CustomResource"}
+              hintYaml={watchedBody}
+              onGenerated={(yaml) => form.setFieldsValue({ body: yaml })}
+            />
+            <Form.Item name="body" rules={[{ required: true, message: "请填写 YAML 正文" }]} noStyle>
+              <MonacoYamlEditor height={360} />
+            </Form.Item>
+          </Space>
         </Form.Item>
         <Typography.Text type="secondary">
           保存后可在本页点「应用到集群」，或在「自定义资源」页使用「从模板创建」。

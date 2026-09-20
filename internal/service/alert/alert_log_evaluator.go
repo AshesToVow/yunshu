@@ -71,11 +71,18 @@ func parseLogAlertConfig(expr string) (LogAlertConfig, error) {
 }
 
 func (s *AlertService) evaluateOneLogAlertRule(ctx context.Context, rule *model.AlertMonitorRule, projectID uint) {
-	if s == nil || rule == nil || s.logSearch == nil || projectID == 0 {
+	if s == nil || rule == nil || projectID == 0 {
+		return
+	}
+	if s.logSearch == nil {
+		alertLog().Warn("log alert rule skipped: logSearch not injected",
+			"rule_id", rule.ID, "rule_name", rule.Name, "project_id", projectID)
 		return
 	}
 	cfg, err := parseLogAlertConfig(rule.Expr)
 	if err != nil {
+		alertLog().Warn("log alert rule config invalid",
+			"rule_id", rule.ID, "rule_name", rule.Name, "error", err)
 		return
 	}
 	now := time.Now().UTC()
@@ -93,6 +100,8 @@ func (s *AlertService) evaluateOneLogAlertRule(ctx context.Context, rule *model.
 	}
 	ov, err := s.logSearch.Overview(ctx, curQ)
 	if err != nil || ov == nil {
+		alertLog().Warn("log alert rule overview failed",
+			"rule_id", rule.ID, "rule_name", rule.Name, "project_id", projectID, "error", err)
 		return
 	}
 	curCount := ov.Total

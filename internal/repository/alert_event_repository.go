@@ -24,9 +24,13 @@ func (r *AlertEventRepository) Create(ctx context.Context, event *model.AlertEve
 }
 
 func (r *AlertEventRepository) GetByFingerprint(ctx context.Context, fingerprint string) (*model.AlertEvent, error) {
+	fp := strings.TrimSpace(fingerprint)
+	if fp == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
 	var event model.AlertEvent
 	err := r.db.WithContext(ctx).
-		Where("group_key = ? OR labels_digest = ?", fingerprint, fingerprint).
+		Where("fingerprint = ?", fp).
 		Order("id DESC").
 		First(&event).Error
 	if err != nil {

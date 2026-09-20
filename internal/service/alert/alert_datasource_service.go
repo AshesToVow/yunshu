@@ -151,7 +151,7 @@ func (s *AlertDatasourceService) Create(ctx context.Context, req AlertDatasource
 		Name:            strings.TrimSpace(req.Name),
 		Type:            t,
 		BaseURL:         strings.TrimSpace(req.BaseURL),
-		AlertmanagerURL: strings.TrimSpace(req.AlertmanagerURL),
+		AlertmanagerURL: "", // 已废弃：AM 静默下线，不再写入
 		BearerToken:     strings.TrimSpace(req.BearerToken),
 		BasicUser:       strings.TrimSpace(req.BasicUser),
 		BasicPassword:   strings.TrimSpace(req.BasicPassword),
@@ -193,7 +193,7 @@ func (s *AlertDatasourceService) Update(ctx context.Context, id uint, req AlertD
 	if strings.TrimSpace(req.BaseURL) != "" {
 		row.BaseURL = strings.TrimSpace(req.BaseURL)
 	}
-	row.AlertmanagerURL = strings.TrimSpace(req.AlertmanagerURL)
+	// AlertmanagerURL 已废弃：更新时保留原值，忽略请求写入
 	if req.SkipTLSVerify != nil {
 		row.SkipTLSVerify = *req.SkipTLSVerify
 	}
@@ -294,41 +294,6 @@ func (s *AlertDatasourceService) PrometheusActiveAlerts(ctx context.Context, id 
 	defer cancel()
 	body, _, err := cli.ActiveAlerts(qctx)
 	return body, bizerrors.Pass(ctx, "alert.datasource", "PrometheusActiveAlerts", err)
-}
-
-func (s *AlertDatasourceService) resolveAlertmanagerURL(row *model.AlertDatasource) (string, error) {
-	if u := strings.TrimSpace(row.AlertmanagerURL); u != "" {
-		return u, nil
-	}
-	derived := promapi.DeriveAlertmanagerURL(row.BaseURL)
-	if derived == "" {
-		return "", constants.ErrBadRequestWithMsg("无法从 Prometheus 地址推导 Alertmanager URL，请在数据源中填写 alertmanager_url")
-	}
-	return derived, nil
-}
-
-func (s *AlertDatasourceService) alertmanagerClientFor(ctx context.Context, id uint) (*promapi.Client, *model.AlertDatasource, error) {
-	row, err := s.getRaw(ctx, id)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil, constants.ErrNotFoundWithMsg(constants.ErrMsg2f3e2fbecdc5)
-		}
-		return nil, nil, bizerrors.Pass(ctx, "alert.datasource", "alertmanagerClientFor", err)
-	}
-	if !row.Enabled {
-		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsgfa357d889ce0)
-	}
-	amURL, err := s.resolveAlertmanagerURL(row)
-	if err != nil {
-		return nil, nil, err
-	}
-	return &promapi.Client{
-		BaseURL:       amURL,
-		BearerToken:   row.BearerToken,
-		BasicUser:     row.BasicUser,
-		BasicPassword: row.BasicPassword,
-		SkipTLSVerify: row.SkipTLSVerify,
-	}, row, nil
 }
 
 func (s *AlertDatasourceService) AlertmanagerSilences(ctx context.Context, id uint) (json.RawMessage, error) {

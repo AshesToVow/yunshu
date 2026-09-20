@@ -167,7 +167,6 @@ export function useAlertMonitorDatasourceState(params: {
       name: r.name,
       type: r.type,
       base_url: r.base_url,
-      alertmanager_url: r.alertmanager_url ?? "",
       basic_user: r.basic_user ?? "",
       skip_tls_verify: r.skip_tls_verify,
       enabled: r.enabled,

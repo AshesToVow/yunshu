@@ -1,6 +1,5 @@
 import dayjs from "dayjs";
 import type {
-  AlertmanagerSilenceRow,
   PromNativeAlertRow,
   QuickSilenceTarget,
   SilenceMatcherForm,
@@ -23,43 +22,6 @@ export function parseSilenceMatchersForForm(raw?: string): SilenceMatcherForm[] 
   } catch {
     return [{ name: "alertname", value: "", is_regex: false }];
   }
-}
-
-export function parseAlertmanagerSilences(raw: unknown): AlertmanagerSilenceRow[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((item) => {
-    const row = (item ?? {}) as {
-      id?: string;
-      comment?: string;
-      createdBy?: string;
-      startsAt?: string;
-      endsAt?: string;
-      status?: { state?: string; comment?: string; createdBy?: string; startsAt?: string; endsAt?: string };
-      matchers?: Array<{ name?: string; value?: string; isRegex?: boolean; is_regex?: boolean }>;
-    };
-    const state = String(row.status?.state ?? "").toLowerCase();
-    const matchers = Array.isArray(row.matchers)
-      ? row.matchers.map((m) => ({
-          name: String(m?.name ?? ""),
-          value: String(m?.value ?? ""),
-          is_regex: Boolean(m?.isRegex ?? m?.is_regex),
-        }))
-      : [];
-    const amId = String(row.id ?? "");
-    const comment = String(row.comment ?? row.status?.comment ?? "").trim();
-    return {
-      rowKey: `am-${amId}`,
-      source: "alertmanager" as const,
-      amId,
-      name: comment || String(row.createdBy ?? row.status?.createdBy ?? `Alertmanager #${amId}`),
-      comment: comment || undefined,
-      matchers,
-      starts_at: String(row.startsAt ?? row.status?.startsAt ?? ""),
-      ends_at: String(row.endsAt ?? row.status?.endsAt ?? ""),
-      state: state || "unknown",
-      enabled: state === "active" || state === "pending",
-    };
-  });
 }
 
 export function toQuickSilenceTarget(row: PromNativeAlertRow): QuickSilenceTarget {

@@ -305,6 +305,16 @@ export function collectAlertEvidence(fingerprint: string) {
   return getData<AlertEvidenceResult>(http.get("/alerts/events/evidence", { params: { fingerprint } }));
 }
 
+/** 告警转故障工单：投递事件 ID 或当前告警指纹均可。 */
+export function createIncidentFromAlert(payload: {
+  title?: string;
+  alert_event_id?: number;
+  fingerprint?: string;
+  project_id?: number;
+}) {
+  return getData<{ id: number; title?: string; deep_link?: string }>(http.post("/alerts/to-ticket", payload));
+}
+
 export function sendAlertmanagerWebhook(payload: Record<string, unknown>, token?: string) {
   const headers: Record<string, string> = {};
   if ((token || "").trim()) {

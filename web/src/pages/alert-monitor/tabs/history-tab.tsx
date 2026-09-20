@@ -1,6 +1,6 @@
 import { extractApiErrorMessage } from "../../../services/http";
 import { Alert, Button, Card, Input, Modal, Segmented, Space, Tag, Typography, message } from "antd";
-import { BellOutlined, DownloadOutlined, ExperimentOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { BellOutlined, DownloadOutlined, ExperimentOutlined, FileAddOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAlertMonitor } from "../context";
@@ -10,6 +10,7 @@ import { ResizableTable } from "../../../components/resizable-table";
 import {
   acknowledgeAlert,
   clearAlertAck,
+  createIncidentFromAlert,
   listCurEvents,
   listHisEvents,
   exportHisEventsCSV,
@@ -52,6 +53,7 @@ export function HistoryTab() {
   const [aiInvestigateLoading, setAiInvestigateLoading] = useState(false);
   const [silenceLoadingFp, setSilenceLoadingFp] = useState<string>("");
   const [aiTarget, setAiTarget] = useState<AlertCurEventItem | null>(null);
+  const [ticketLoadingFp, setTicketLoadingFp] = useState("");
   const [aiResult, setAiResult] = useState<AIAlertExplainResult | null>(null);
   const [detail, setDetail] = useState<AlertEventDetailTarget | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -250,6 +252,27 @@ export function HistoryTab() {
     }
   }
 
+  async function createTicketFromCur(row: AlertCurEventItem) {
+    if (!row.fingerprint) {
+      message.warning("缺少指纹，无法转工单");
+      return;
+    }
+    setTicketLoadingFp(row.fingerprint);
+    try {
+      const ticket = await createIncidentFromAlert({
+        title: `告警：${row.alertname || row.fingerprint}`,
+        fingerprint: row.fingerprint,
+        project_id: ctx.projectContextId || row.project_id || undefined,
+      });
+      message.success(`已创建故障工单 #${ticket.id}`);
+      navigate(`/workflow/inbox?ticket=${ticket.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "转工单失败"));
+    } finally {
+      setTicketLoadingFp("");
+    }
+  }
+
   async function toggleAck(row: AlertCurEventItem, minutes?: number) {
     if (!row.fingerprint) {
       message.warning("缺少指纹，无法认领");
@@ -413,7 +436,7 @@ export function HistoryTab() {
             { title: "更新", dataIndex: "updated_at", width: 170, render: (v) => formatDateTime(v) || "-" },
             {
               title: "操作",
-              width: 280,
+              width: 340,
               fixed: "right",
               render: (_: unknown, r: AlertCurEventItem) => (
                 <Space size={0} onClick={(e) => e.stopPropagation()}>
@@ -432,6 +455,16 @@ export function HistoryTab() {
                     onClick={() => ctx.openSilenceForEvent?.(toDetailFromCur(r))}
                   >
                     静默
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<FileAddOutlined />}
+                    disabled={!r.fingerprint}
+                    loading={ticketLoadingFp === r.fingerprint}
+                    onClick={() => void createTicketFromCur(r)}
+                  >
+                    转工单
                   </Button>
                   <Button
                     type="link"

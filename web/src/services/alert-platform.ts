@@ -229,7 +229,7 @@ export function promActiveAlerts(id: number) {
   return getData<{ data: unknown }>(http.get(`/alerts/datasources/${id}/prometheus-alerts`)).then((r) => r.data);
 }
 
-/** @deprecated Alertmanager 已下线 */
+/** @deprecated Alertmanager 静默已下线；保留空实现以免旧调用方崩溃。 */
 export function alertmanagerSilences(_id: number): Promise<unknown> {
   return Promise.resolve([]);
 }

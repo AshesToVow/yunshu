@@ -6,7 +6,7 @@ export function AlertMonitorLegacyRedirect() {
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   if (!tabParam) {
-    return <Navigate to="/alert-monitor-platform/datasources" replace />;
+    return <Navigate to="/alert-monitor-platform/history" replace />;
   }
   let tab = normalizeAlertMonitorTab(tabParam);
   if (tabParam === "config" && searchParams.get("cfg") === "history") {

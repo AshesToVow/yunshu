@@ -2,18 +2,12 @@
 import {
   Alert,
   Button,
-  Card,
-  Collapse,
-  Input,
-  Radio,
-  Segmented,
-  Select,
   Space,
   Table,
   Typography,
 } from "antd";
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { lazy, Suspense } from "react";
+import { Link } from "react-router-dom";
 import { useAlertMonitor } from "../context";
 import { tablePagination } from "../../../utils/table-pagination";
 
@@ -29,7 +23,9 @@ export function SilencesTab() {
                   description={
                     <Space direction="vertical" size={8} style={{ width: "100%" }}>
                       <span>
-                        在规则评测产生事件后、通道投递前按 labels 匹配；命中则不再外发。维护窗与临时静默均在此管理。不再对接 Alertmanager 静默。
+                        在规则评测产生事件后、通道投递前按 labels 匹配；命中则不再外发。本页管理临时/匹配器静默；计划性维护请使用{" "}
+                        <Link to="/alert-maintenance">维护窗</Link>
+                        。不再对接 Alertmanager 静默。
                       </span>
                       <span>
                         针对平台规则：在「规则中心」点该规则的「静默」，会预填{" "}
@@ -40,6 +36,9 @@ export function SilencesTab() {
                         <Button size="small" onClick={ctx.openHistoryTab}>
                           查看静默后的历史记录
                         </Button>
+                        <Link to="/alert-maintenance">
+                          <Button size="small">打开维护窗</Button>
+                        </Link>
                       </Space>
                     </Space>
                   }
@@ -120,9 +119,8 @@ export function SilencesTab() {
                     type: "checkbox",
                     selectedRowKeys: ctx.selectedSilenceIds,
                     onChange: (keys) => ctx.setSelectedSilenceIds(keys.map((k) => Number(k)).filter((n) => Number.isFinite(n))),
-                    getCheckboxProps: (r) => ({ disabled: r.source === "alertmanager" }),
                   }}
-                  loading={ctx.amSilencesLoading}
+                  loading={ctx.loading}
                   columns={ctx.silColumns}
                   dataSource={ctx.silenceDisplayList}
                   pagination={tablePagination()}

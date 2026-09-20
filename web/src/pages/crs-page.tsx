@@ -2,6 +2,7 @@ import { DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutli
 import { Button, Card, Drawer, Empty, Form, Input, Modal, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
+import { AiYamlGeneratePanel } from "../components/k8s/ai-yaml-generate-panel";
 import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { getClusters, listNamespaces as listClusterNamespaces, type ClusterItem } from "../services/clusters";
 import type { K8sDeleteOptions } from "../services/service-factory";
@@ -524,7 +525,16 @@ ${defaultNs}spec: {}
               <Input value={selectedResource?.namespaced ? namespace : "Cluster Scope"} readOnly />
             </Form.Item>
             <Form.Item label="YAML">
-              <Input.TextArea value={detailYaml} onChange={(e) => setDetailYaml(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
+              <Space direction="vertical" style={{ width: "100%" }} size="middle">
+                <AiYamlGeneratePanel
+                  resourceKind={selectedResource?.kind || "CustomResource"}
+                  namespace={selectedResource?.namespaced ? namespace : undefined}
+                  clusterId={clusterId}
+                  hintYaml={detailYaml}
+                  onGenerated={setDetailYaml}
+                />
+                <Input.TextArea value={detailYaml} onChange={(e) => setDetailYaml(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
+              </Space>
             </Form.Item>
           </Form>
         )}
@@ -554,7 +564,16 @@ ${defaultNs}spec: {}
           })();
         }}
       >
-        <Input.TextArea value={manifest} onChange={(e) => setManifest(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <AiYamlGeneratePanel
+            resourceKind={selectedResource?.kind || "CustomResource"}
+            namespace={selectedResource?.namespaced ? namespace : undefined}
+            clusterId={clusterId}
+            hintYaml={manifest}
+            onGenerated={setManifest}
+          />
+          <Input.TextArea value={manifest} onChange={(e) => setManifest(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
+        </Space>
       </Modal>
 
       <K8sDeleteDialog

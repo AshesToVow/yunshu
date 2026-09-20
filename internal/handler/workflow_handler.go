@@ -170,6 +170,23 @@ func (h *WorkflowHandler) CreateIncidentFromAlert(c *gin.Context) {
 	response.Success(c, data)
 }
 
+// CreateIncidentFromAlertRef POST /alerts/to-ticket：支持 alert_event_id 或 fingerprint。
+func (h *WorkflowHandler) CreateIncidentFromAlertRef(c *gin.Context) {
+	var req workflowsvc.CreateIncidentFromAlertRefRequest
+	_ = c.ShouldBindJSON(&req)
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok {
+		response.Error(c, constants.ErrNotLoggedIn)
+		return
+	}
+	data, err := h.svc.CreateIncidentFromAlertRef(c.Request.Context(), req, actor)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, data)
+}
+
 func defaultStagesForDomain(domain string) []workflowsvc.StageItem {
 	switch domain {
 	case model.WorkflowDomainDbmgmt:

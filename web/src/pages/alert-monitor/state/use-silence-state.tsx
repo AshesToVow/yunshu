@@ -2,13 +2,12 @@
  * 告警监控平台：静默（silences Tab）状态（RF-03 第三步拆分产物）
  *
  * 从 `use-alert-monitor-platform-state.tsx` 原地搬迁，逐字保留语义：
- * - 平台静默固定 page_size=200，按顶栏项目过滤；Alertmanager 已下线，
- *   `loadAmSilences` 保留为空实现（列表仍保留 source 分列渲染，便于回滚）
+ * - 平台静默固定 page_size=200，按顶栏项目过滤；Alertmanager 静默已下线并移除 UI 分支
  * - Prometheus 活跃告警跟随顶栏项目，数据源取「首个已启用」，无启用项时取首条
  * - 「解除静默」= 以原字段回写 enabled:false（不删除记录）
  * - 批量静默共用一条 comment，逐条落库
  *
- * 注意：`loadSilences` / `loadAmSilences` 仍由主 Hook 的 Tab 副作用调用，
+ * 注意：`loadSilences` 仍由主 Hook 的 Tab 副作用调用，
  * 这里不自建 Tab 级 effect，避免同一 Tab 触发两次请求。
  */
 import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
@@ -32,7 +31,6 @@ import {
 import { parseLabelMap } from "../../../utils/alert-recipient-reason";
 import { formatDateTime } from "../../../utils/format";
 import type {
-  AlertmanagerSilenceRow,
   PromNativeAlertRow,
   QuickSilenceTarget,
   SilenceDisplayRow,
@@ -66,8 +64,6 @@ export function useAlertMonitorSilenceState(params: {
   const [nativeAlertsRows, setNativeAlertsRows] = useState<PromNativeAlertRow[]>([]);
   const [selectedNativeAlertKeys, setSelectedNativeAlertKeys] = useState<string[]>([]);
   const [selectedSilenceIds, setSelectedSilenceIds] = useState<number[]>([]);
-  const [amSilenceRows, setAmSilenceRows] = useState<AlertmanagerSilenceRow[]>([]);
-  const [amSilencesLoading, setAmSilencesLoading] = useState(false);
   const [quickSilenceOpen, setQuickSilenceOpen] = useState(false);
   const [quickSilenceSubmitting, setQuickSilenceSubmitting] = useState(false);
   const [quickSilenceTargets, setQuickSilenceTargets] = useState<QuickSilenceTarget[]>([]);
@@ -114,20 +110,13 @@ export function useAlertMonitorSilenceState(params: {
     setSilenceList(r.list ?? []);
   }, [projectContextId]);
 
-  const loadAmSilences = useCallback(async () => {
-    // Alertmanager 已下线：不再拉取 /api/v2/silences
-    setAmSilenceRows([]);
-    setAmSilencesLoading(false);
-  }, []);
-
   const silenceDisplayList = useMemo((): SilenceDisplayRow[] => {
-    const platformRows = (silenceList ?? []).map((r) => ({
+    return (silenceList ?? []).map((r) => ({
       ...r,
       source: "platform" as const,
       rowKey: String(r.id),
     }));
-    return [...platformRows, ...amSilenceRows];
-  }, [silenceList, amSilenceRows]);
+  }, [silenceList]);
 
   const loadNativeSilAlerts = useCallback(async () => {
     if (!silenceDatasourceId) {
@@ -185,17 +174,9 @@ export function useAlertMonitorSilenceState(params: {
 
   const silColumns = [
       {
-        title: "来源",
-        key: "source",
-        width: 120,
-        render: (_: unknown, r: SilenceDisplayRow) =>
-          r.source === "alertmanager" ? <Tag color="blue">Alertmanager</Tag> : <Tag color="green">平台</Tag>,
-      },
-      {
         title: "ID",
-        key: "id",
-        width: 120,
-        render: (_: unknown, r: SilenceDisplayRow) => (r.source === "alertmanager" ? r.amId : r.id),
+        dataIndex: "id",
+        width: 80,
       },
       { title: "名称", dataIndex: "name" },
       {
@@ -214,10 +195,7 @@ export function useAlertMonitorSilenceState(params: {
           if (r.matchers?.length) {
             return r.matchers.map((x) => `${x.name ?? ""}=${x.value ?? ""}`).join(", ");
           }
-          if (r.source === "platform") {
-            return r.matchers_json?.slice(0, 80) ?? "—";
-          }
-          return "—";
+          return r.matchers_json?.slice(0, 80) ?? "—";
         },
       },
       { title: "开始", dataIndex: "starts_at", width: 170, render: (t: string) => formatDateTime(t) },
@@ -229,21 +207,13 @@ export function useAlertMonitorSilenceState(params: {
         render: (_: unknown, r: SilenceDisplayRow) => {
           const expired = dayjs(r.ends_at).isBefore(dayjs());
           if (expired) return <Tag color="red">已过期</Tag>;
-          if (r.source === "alertmanager") {
-            const st = String(r.state || "").toLowerCase();
-            const label = st === "active" ? "生效中" : st === "pending" ? "待生效" : st === "expired" ? "已过期" : st || "停用";
-            return r.enabled ? <Tag color="green">{label}</Tag> : <Tag>{label}</Tag>;
-          }
           return r.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>;
         },
       },
       {
         title: "操作",
         width: 230,
-        render: (_: unknown, r: SilenceDisplayRow) =>
-          r.source === "alertmanager" ? (
-            <Typography.Text type="secondary">在 Alertmanager UI 管理</Typography.Text>
-          ) : (
+        render: (_: unknown, r: SilenceDisplayRow) => (
             <Space>
               <Button type="link" size="small" disabled={!r.enabled} onClick={() => void releaseSingleSilence(r)}>
                 解除静默
@@ -459,8 +429,6 @@ export function useAlertMonitorSilenceState(params: {
   }
 
   return {
-    amSilencesLoading,
-    loadAmSilences,
     loadNativeSilAlerts,
     loadSilences,
     nativeAlertsColumns,

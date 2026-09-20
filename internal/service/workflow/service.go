@@ -408,6 +408,56 @@ func (s *Service) CreateIncidentFromAlert(ctx context.Context, alertEventID uint
 	}, actor)
 }
 
+// CreateIncidentFromAlertRef 支持投递事件 ID 或指纹（当前告警）转故障工单。
+type CreateIncidentFromAlertRefRequest struct {
+	Title        string `json:"title"`
+	AlertEventID uint   `json:"alert_event_id"`
+	Fingerprint  string `json:"fingerprint"`
+	ProjectID    uint   `json:"project_id"`
+}
+
+func (s *Service) CreateIncidentFromAlertRef(ctx context.Context, req CreateIncidentFromAlertRefRequest, actor *auth.CurrentUser) (*TicketDetail, error) {
+	if req.AlertEventID > 0 {
+		return s.CreateIncidentFromAlert(ctx, req.AlertEventID, req.Title, actor)
+	}
+	fp := strings.TrimSpace(req.Fingerprint)
+	if fp == "" {
+		return nil, constants.ErrBadRequestWithMsg("需要 alert_event_id 或 fingerprint")
+	}
+	projectID := req.ProjectID
+	var linkedEventID uint
+	if s.alertEventRepo != nil {
+		if ev, err := s.alertEventRepo.GetByFingerprint(ctx, fp); err == nil && ev != nil {
+			linkedEventID = ev.ID
+			if projectID == 0 {
+				projectID = ev.ProjectID
+			}
+		}
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = "告警转工单 " + fp
+	}
+	if linkedEventID > 0 {
+		return s.CreateTicket(ctx, CreateTicketRequest{
+			Domain: model.WorkflowDomainIncident, TicketType: model.WorkflowTicketTypeIncident,
+			ProjectID: projectID,
+			Title:     title, RefType: "alert_event", RefID: linkedEventID,
+			Payload: map[string]any{
+				"alert_event_id": linkedEventID,
+				"fingerprint":    fp,
+				"project_id":     projectID,
+			},
+		}, actor)
+	}
+	return s.CreateTicket(ctx, CreateTicketRequest{
+		Domain: model.WorkflowDomainIncident, TicketType: model.WorkflowTicketTypeIncident,
+		ProjectID: projectID,
+		Title:     title, RefType: "alert_fingerprint", RefID: 0,
+		Payload: map[string]any{"fingerprint": fp, "project_id": projectID},
+	}, actor)
+}
+
 func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*pagination.Result[TicketDetail], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	rows, total, err := s.repo.ListTickets(ctx, repository.WorkflowTicketListParams{

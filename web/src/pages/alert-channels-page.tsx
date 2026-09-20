@@ -608,7 +608,7 @@ export function AlertChannelsPage() {
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
           左侧编辑 Go 模板，右侧模拟钉钉/企微通知气泡实时预览。变量说明与 sample_payload 见下方折叠区。
-          <Link to="/alert-config-center" style={{ marginLeft: 8 }}>策略与联调</Link>
+          <Link to="/alert-monitor-platform/policies" style={{ marginLeft: 8 }}>订阅与联调</Link>
         </Typography.Paragraph>
         <Form form={templateForm} layout="vertical">
           <Form.Item label="当前通道">

@@ -2,11 +2,14 @@
  * 告警配置中心 · 历史告警 Tab（RF-07 拆分产物）
  * 从 alert-config-center-panel.tsx 原地搬迁 JSX。
  */
-import { ReloadOutlined } from "@ant-design/icons";
+import { FileAddOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Input, Popover, Radio, Select, Space, Tag, Typography, message } from "antd";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ResizableTable } from "../../components/resizable-table";
 import { ALERT_ROUTING_TERMS } from "../../constants/alert-routing-terms";
-import { explainAlertByFingerprint, type AlertEventGroupItem, type AlertEventItem, type FingerprintDeliveryExplain } from "../../services/alerts";
+import { createIncidentFromAlert, explainAlertByFingerprint, type AlertEventGroupItem, type AlertEventItem, type FingerprintDeliveryExplain } from "../../services/alerts";
+import { extractApiErrorMessage } from "../../services/http";
 import type { AIAlertExplainResult } from "../../services/ai";
 import {
   ALERT_EVENT_CATEGORY_OPTIONS,
@@ -90,6 +93,27 @@ export function HistoryTab({
   setFpAiResult,
   setFpExplainOpen,
 }: HistoryTabProps) {
+  const navigate = useNavigate();
+  const [ticketLoadingId, setTicketLoadingId] = useState<number | null>(null);
+
+  async function createTicketFromEvent(row: AlertEventItem) {
+    setTicketLoadingId(row.id);
+    try {
+      const ticket = await createIncidentFromAlert({
+        title: row.title ? `告警：${row.title}` : undefined,
+        alert_event_id: row.id,
+        fingerprint: row.fingerprint || undefined,
+        project_id: projectContextId || undefined,
+      });
+      message.success(`已创建故障工单 #${ticket.id}`);
+      navigate(`/workflow/inbox?ticket=${ticket.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "转工单失败"));
+    } finally {
+      setTicketLoadingId(null);
+    }
+  }
+
   return (
     <>
     <Alert
@@ -562,6 +586,23 @@ export function HistoryTab({
           },
         },
         { title: "发送/记录时间", dataIndex: "createdAt", width: 170, render: (v: string) => formatDateTime(v) },
+        {
+          title: "操作",
+          key: "actions",
+          width: 100,
+          fixed: "right",
+          render: (_: unknown, row: AlertEventItem) => (
+            <Button
+              type="link"
+              size="small"
+              icon={<FileAddOutlined />}
+              loading={ticketLoadingId === row.id}
+              onClick={() => void createTicketFromEvent(row)}
+            >
+              转工单
+            </Button>
+          ),
+        },
       ]}
     />
     )}

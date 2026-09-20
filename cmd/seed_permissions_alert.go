@@ -15,6 +15,8 @@ func seedPermissionsAlert() []model.Permission {
 		{Name: "告警事件分组列表", Resource: "/api/v1/alerts/events/grouped", Action: "GET", Description: "List alert events grouped"},
 		{Name: "告警指纹投递追溯", Resource: "/api/v1/alerts/events/by-fingerprint", Action: "GET", Description: "Explain alert delivery by fingerprint"},
 		{Name: "告警证据包", Resource: "/api/v1/alerts/events/evidence", Action: "GET", Description: "Collect alert evidence pack (logs/changes/pod hint)"},
+		{Name: "告警转故障工单", Resource: "/api/v1/alerts/to-ticket", Action: "POST", Description: "Create incident ticket from alert event or fingerprint"},
+		{Name: "告警事件转故障工单", Resource: "/api/v1/alerts/events/:alert_event_id/to-ticket", Action: "POST", Description: "Create incident ticket from alert delivery event"},
 		{Name: "告警历史统计", Resource: "/api/v1/alerts/history/stats", Action: "GET", Description: "Alert history stats"},
 		{Name: "认领告警", Resource: "/api/v1/alerts/acks", Action: "POST", Description: "Acknowledge alert"},
 		{Name: "取消认领告警", Resource: "/api/v1/alerts/acks", Action: "DELETE", Description: "Clear alert ack"},
