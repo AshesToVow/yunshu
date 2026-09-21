@@ -64,6 +64,7 @@ plugins:
     - inspect
     - ai
     - esmgmt
+    - kafkamgmt
 
 # AI：ai.enabled=true 且 plugins 含 ai 时路由/Worker 才生效；密钥优先用数据字典 ai_* 覆盖
 ai:

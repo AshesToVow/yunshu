@@ -37,6 +37,12 @@ type EsmgmtRepo interface {
 	ListSchedules(ctx context.Context, connectionID uint) ([]model.EsmgmtBackupSchedule, error)
 	ListEnabledSchedules(ctx context.Context) ([]model.EsmgmtBackupSchedule, error)
 	UpdateScheduleLastScheduledAt(ctx context.Context, id uint, at time.Time) error
+
+	CreateReindexJob(ctx context.Context, job *model.EsmgmtReindexJob) error
+	ListReindexJobs(ctx context.Context, connectionID uint, limit int) ([]model.EsmgmtReindexJob, error)
+	GetReindexJob(ctx context.Context, id uint) (*model.EsmgmtReindexJob, error)
+	UpdateReindexJobFields(ctx context.Context, id uint, fields map[string]any) error
+	CountRunningReindexJobs(ctx context.Context, connectionID uint, source, dest string) (int64, error)
 }
 
 var _ EsmgmtRepo = (*EsmgmtRepository)(nil)

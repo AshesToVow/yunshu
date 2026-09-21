@@ -46,6 +46,7 @@ type (
 	PlatformTemplateRepository    = repository.PlatformTemplateRepo
 	WorkflowRepository            = repository.WorkflowRepo
 	EsmgmtRepository              = repository.EsmgmtRepo
+	KafkamgmtRepository           = repository.KafkamgmtRepo
 	InspectRepository             = repository.InspectRepo
 	CicdRepository                = repository.CicdRepo
 	AiRepository                  = repository.AiRepo

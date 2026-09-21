@@ -70,6 +70,7 @@ type routeRepositories struct {
 	PlatformTemplate    interfaces.PlatformTemplateRepository
 	Workflow            interfaces.WorkflowRepository
 	Esmgmt              interfaces.EsmgmtRepository
+	Kafkamgmt           interfaces.KafkamgmtRepository
 	Inspect             interfaces.InspectRepository
 	Cicd                interfaces.CicdRepository
 	Ai                  interfaces.AiRepository
@@ -138,6 +139,7 @@ func newRouteRepositories(db *gorm.DB) *routeRepositories {
 		PlatformTemplate:    repository.NewPlatformTemplateRepository(db),
 		Workflow:            repository.NewWorkflowRepository(db),
 		Esmgmt:              repository.NewEsmgmtRepository(db),
+		Kafkamgmt:           repository.NewKafkamgmtRepository(db),
 		Inspect:             repository.NewInspectRepository(db),
 		Cicd:                repository.NewCicdRepository(db),
 		Ai:                  repository.NewAiRepository(db),

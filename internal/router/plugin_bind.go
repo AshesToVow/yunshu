@@ -38,6 +38,8 @@ func bindPluginRoutes(name string, api *gin.RouterGroup, d routedeps.Bundle) err
 		RegisterAIRoutes(api, d)
 	case "esmgmt":
 		RegisterEsmgmtRoutes(api, d)
+	case "kafkamgmt":
+		RegisterKafkamgmtRoutes(api, d)
 	default:
 		return fmt.Errorf("unknown plugin %q", name)
 	}

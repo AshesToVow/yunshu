@@ -141,6 +141,84 @@ export function proxyEsmgmtREST(payload: { connection_id?: number; method: strin
   return getData<{ status: number; body: unknown }>(http.post("/esmgmt/proxy", payload));
 }
 
+export interface EsmgmtDocHit {
+  index: string;
+  id: string;
+  score?: number | null;
+  source: unknown;
+}
+
+export function searchEsmgmtDocs(payload: {
+  connection_id?: number;
+  index: string;
+  query?: string;
+  size?: number;
+  from?: number;
+}) {
+  return getData<{ total: number; hits: EsmgmtDocHit[] }>(http.post("/esmgmt/docs/search", payload));
+}
+
+export function getEsmgmtDoc(index: string, id: string, connectionId?: number) {
+  return getData<{ source: unknown }>(http.get("/esmgmt/docs", { params: { index, id, ...connParams(connectionId) } }));
+}
+
+export function upsertEsmgmtDoc(payload: { connection_id?: number; index: string; id: string; source: unknown }) {
+  return getData<{ ok: boolean }>(http.put("/esmgmt/docs", payload));
+}
+
+export function deleteEsmgmtDoc(payload: { connection_id?: number; index: string; id: string }) {
+  return getData<{ ok: boolean }>(http.delete("/esmgmt/docs", { data: payload }));
+}
+
+export interface EsmgmtIndexTemplate {
+  kind: "legacy" | "composable" | string;
+  name: string;
+  body: unknown;
+}
+
+export function listEsmgmtTemplates(params?: { connection_id?: number; kind?: string }) {
+  return getData<EsmgmtIndexTemplate[]>(http.get("/esmgmt/templates", { params }));
+}
+
+export function putEsmgmtTemplate(payload: { connection_id?: number; kind: string; name: string; body: unknown }) {
+  return getData<{ ok: boolean }>(http.put("/esmgmt/templates", payload));
+}
+
+export function deleteEsmgmtTemplate(payload: { connection_id?: number; kind: string; name: string }) {
+  return getData<{ ok: boolean }>(http.delete("/esmgmt/templates", { data: payload }));
+}
+
+export interface EsmgmtReindexJob {
+  id: number;
+  connection_id?: number;
+  source_index: string;
+  dest_index: string;
+  task_id?: string;
+  status: string;
+  phase?: string;
+  total?: number;
+  created_docs?: number;
+  error_message?: string;
+  created_at?: string;
+}
+
+export function createEsmgmtReindex(payload: {
+  connection_id?: number;
+  source_index: string;
+  dest_index: string;
+  query?: unknown;
+}) {
+  return getData<EsmgmtReindexJob>(http.post("/esmgmt/reindex", payload));
+}
+
+export function listEsmgmtReindex(params?: { connection_id?: number; limit?: number }) {
+  return getData<EsmgmtReindexJob[]>(http.get("/esmgmt/reindex", { params }));
+}
+
+export function cancelEsmgmtReindex(id: number) {
+  return getData<{ ok: boolean }>(http.post(`/esmgmt/reindex/${id}/cancel`, {}));
+}
+
 export function createEsmgmtBackup(payload: { connection_id?: number; index: string; max_docs?: number }) {
   return getData<EsmgmtBackupJob>(http.post("/esmgmt/backups", payload));
 }

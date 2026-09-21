@@ -14,6 +14,7 @@ import (
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 	esmgmtsvc "yunshu/internal/service/esmgmt"
+	kafkamgmtsvc "yunshu/internal/service/kafkamgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 	"yunshu/internal/service/platformtpl"
 	workflowsvc "yunshu/internal/service/workflow"
@@ -107,6 +108,8 @@ type RouteDeps struct {
 	aiHandler          *handler.AIHandler
 	esmgmtSvc          *esmgmtsvc.Service
 	esmgmtHandler      *handler.EsmgmtHandler
+	kafkamgmtSvc       *kafkamgmtsvc.Service
+	kafkamgmtHandler   *handler.KafkamgmtHandler
 	platformFeatures   *handler.PlatformFeaturesHandler
 	workflowHandler    *handler.WorkflowHandler
 	platformTplHandler *handler.PlatformTemplateHandler
@@ -306,6 +309,8 @@ func assembleRouteDeps(
 		aiHandler:          handlers.AI,
 		esmgmtSvc:          svcs.Esmgmt,
 		esmgmtHandler:      handlers.Esmgmt,
+		kafkamgmtSvc:       svcs.Kafkamgmt,
+		kafkamgmtHandler:   handlers.Kafkamgmt,
 		platformFeatures:   handler.NewPlatformFeaturesHandler(svcs.AlertMonitorRule, repos.AlertRuleChange, repos.PromqlSavedQuery, repos.K8sCrTemplate),
 		workflowHandler: handler.NewWorkflowHandler(func() *workflowsvc.Service {
 			wf := workflowsvc.NewService(

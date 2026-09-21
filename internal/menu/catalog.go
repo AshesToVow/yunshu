@@ -164,10 +164,22 @@ func DefaultCatalog() []Spec {
 				{Path: "/esmgmt/overview", Name: "集群概览", Icon: "FundOutlined", Sort: 3, Component: "esmgmt-overview-page", Status: 1},
 				{Path: "/esmgmt/backups", Name: "备份与恢复", Icon: "CloudUploadOutlined", Sort: 4, Component: "esmgmt-backups-page", Status: 1},
 				{Path: "/esmgmt/console", Name: "REST 控制台", Icon: "CodeOutlined", Sort: 5, Component: "esmgmt-console-page", Status: 1},
+				{Path: "/esmgmt/docs", Name: "文档检索", Icon: "FileSearchOutlined", Sort: 6, Component: "esmgmt-docs-page", Status: 1},
+				{Path: "/esmgmt/templates", Name: "索引模板", Icon: "FileTextOutlined", Sort: 7, Component: "esmgmt-templates-page", Status: 1},
+				{Path: "/esmgmt/reindex", Name: "Reindex", Icon: "SwapOutlined", Sort: 8, Component: "esmgmt-reindex-page", Status: 1},
 			},
 		},
 		{
-			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 11, Status: 1,
+			Path: "/kafkamgmt", Name: "Kafka 管理控制台", Icon: "ClusterOutlined", Sort: 11, Status: 1,
+			Children: []Spec{
+				{Path: "/kafkamgmt/connections", Name: "连接管理", Icon: "ApiOutlined", Sort: 1, Component: "kafkamgmt-connections-page", Status: 1},
+				{Path: "/kafkamgmt/topics", Name: "Topic 管理", Icon: "DatabaseOutlined", Sort: 2, Component: "kafkamgmt-topics-page", Status: 1},
+				{Path: "/kafkamgmt/groups", Name: "消费组", Icon: "TeamOutlined", Sort: 3, Component: "kafkamgmt-groups-page", Status: 1},
+				{Path: "/kafkamgmt/brokers", Name: "Broker", Icon: "CloudServerOutlined", Sort: 4, Component: "kafkamgmt-brokers-page", Status: 1},
+			},
+		},
+		{
+			Path: "/kubernetes-crd", Name: "Kubernetes CRD 管理", Icon: "BranchesOutlined", Sort: 12, Status: 1,
 			Children: []Spec{
 				{Path: "/crds", Name: "CRD 管理", Icon: "BranchesOutlined", Sort: 1, Component: "crds-page", Status: 1},
 				{Path: "/crs", Name: "CR 实例管理", Icon: "DatabaseOutlined", Sort: 2, Component: "crs-page", Status: 1},

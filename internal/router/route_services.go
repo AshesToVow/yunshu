@@ -5,6 +5,7 @@ import (
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 	esmgmtsvc "yunshu/internal/service/esmgmt"
+	kafkamgmtsvc "yunshu/internal/service/kafkamgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 	"yunshu/internal/service"
 )
@@ -75,4 +76,5 @@ type routeServices struct {
 	Inspect              *inspectsvc.Service
 	AI                   *aisvc.Service
 	Esmgmt               *esmgmtsvc.Service
+	Kafkamgmt            *kafkamgmtsvc.Service
 }

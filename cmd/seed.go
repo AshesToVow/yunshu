@@ -190,6 +190,7 @@ func defaultPermissions() []model.Permission {
 	out = append(out, seedPermissionsDbmgmt()...)
 	out = append(out, seedPermissionsAI()...)
 	out = append(out, seedPermissionsLog()...)
+	out = append(out, seedPermissionsKafkamgmt()...)
 	out = append(out, seedPermissionsInspect()...)
 	return out
 }

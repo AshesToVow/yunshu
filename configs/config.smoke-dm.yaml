@@ -25,6 +25,7 @@ plugins:
     - inspect
     - ai
     - esmgmt
+    - kafkamgmt
 
 ai:
   enabled: false

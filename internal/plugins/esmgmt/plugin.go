@@ -19,7 +19,7 @@ type module struct {
 
 func (m *module) Name() string { return "esmgmt" }
 func (m *module) Description() string {
-	return "ES 管理控制台：连接管理、集群概览、索引备份与 REST 控制台"
+	return "ES 管理控制台：连接管理、集群概览、文档检索、索引模板、reindex 与备份"
 }
 
 func (m *module) Manifest() plugin.Manifest {
@@ -36,6 +36,7 @@ func (m *module) Models() []any {
 		&model.EsmgmtBackupJob{},
 		&model.EsmgmtBackupSchedule{},
 		&model.EsmgmtRestoreJob{},
+		&model.EsmgmtReindexJob{},
 	}
 }
 

@@ -96,5 +96,6 @@ var HandlerSet = wire.NewSet(
 	handler.NewInspectHandler,
 	handler.NewAIHandler,
 	handler.NewEsmgmtHandler,
+	handler.NewKafkamgmtHandler,
 	wire.Struct(new(routeHandlers), "*"),
 )

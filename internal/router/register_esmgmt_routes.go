@@ -27,6 +27,21 @@ func RegisterEsmgmtRoutes(api *gin.RouterGroup, d EsmgmtRouteDeps) {
 	g.GET("/nodes", h.CatNodes)
 	g.POST("/proxy", h.ProxyREST)
 
+	g.POST("/docs/search", h.SearchDocs)
+	g.GET("/docs", h.GetDoc)
+	g.PUT("/docs", h.UpsertDoc)
+	g.DELETE("/docs", h.DeleteDoc)
+
+	g.GET("/templates", h.ListTemplates)
+	g.GET("/templates/detail", h.GetTemplate)
+	g.PUT("/templates", h.PutTemplate)
+	g.DELETE("/templates", h.DeleteTemplate)
+
+	g.POST("/reindex", h.CreateReindex)
+	g.GET("/reindex", h.ListReindexJobs)
+	g.GET("/reindex/:id", h.GetReindexJob)
+	g.POST("/reindex/:id/cancel", h.CancelReindex)
+
 	g.POST("/backups", h.CreateIndexBackup)
 	g.GET("/backups", h.ListBackupJobs)
 	g.GET("/backups/:id", h.GetBackupJob)

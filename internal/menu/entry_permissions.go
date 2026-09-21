@@ -121,6 +121,14 @@ func DefaultPathBindings() map[string][]EntryPermission {
 		"/esmgmt/overview":    {"/api/v1/esmgmt/cluster/health", "GET"},
 		"/esmgmt/backups":     {"/api/v1/esmgmt/backups", "GET"},
 		"/esmgmt/console":     {"/api/v1/esmgmt/proxy", "POST"},
+		"/esmgmt/docs":        {"/api/v1/esmgmt/docs/search", "POST"},
+		"/esmgmt/templates":   {"/api/v1/esmgmt/templates", "GET"},
+		"/esmgmt/reindex":     {"/api/v1/esmgmt/reindex", "GET"},
+
+		"/kafkamgmt/connections": {"/api/v1/kafkamgmt/connections", "GET"},
+		"/kafkamgmt/topics":      {"/api/v1/kafkamgmt/topics", "GET"},
+		"/kafkamgmt/groups":      {"/api/v1/kafkamgmt/groups", "GET"},
+		"/kafkamgmt/brokers":     {"/api/v1/kafkamgmt/brokers", "GET"},
 
 		"/crds": {"/api/v1/crds", "GET"},
 		"/crs":  {"/api/v1/crs", "GET"},

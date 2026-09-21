@@ -213,3 +213,39 @@ func (r *EsmgmtRepository) UpdateScheduleLastScheduledAt(ctx context.Context, id
 		Where("id = ?", id).
 		Update("last_scheduled_at", at).Error
 }
+
+func (r *EsmgmtRepository) CreateReindexJob(ctx context.Context, job *model.EsmgmtReindexJob) error {
+	return r.db.WithContext(ctx).Create(job).Error
+}
+
+func (r *EsmgmtRepository) ListReindexJobs(ctx context.Context, connectionID uint, limit int) ([]model.EsmgmtReindexJob, error) {
+	q := r.db.WithContext(ctx).Order("id desc").Limit(limit)
+	if connectionID > 0 {
+		q = q.Where("connection_id = ?", connectionID)
+	}
+	var list []model.EsmgmtReindexJob
+	if err := q.Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (r *EsmgmtRepository) GetReindexJob(ctx context.Context, id uint) (*model.EsmgmtReindexJob, error) {
+	var job model.EsmgmtReindexJob
+	if err := r.db.WithContext(ctx).First(&job, id).Error; err != nil {
+		return nil, err
+	}
+	return &job, nil
+}
+
+func (r *EsmgmtRepository) UpdateReindexJobFields(ctx context.Context, id uint, fields map[string]any) error {
+	return r.db.WithContext(ctx).Model(&model.EsmgmtReindexJob{}).Where("id = ?", id).Updates(fields).Error
+}
+
+func (r *EsmgmtRepository) CountRunningReindexJobs(ctx context.Context, connectionID uint, source, dest string) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.EsmgmtReindexJob{}).
+		Where("connection_id = ? AND source_index = ? AND dest_index = ? AND status IN ?", connectionID, source, dest, []string{"pending", "running"}).
+		Count(&n).Error
+	return n, err
+}

@@ -18,4 +18,5 @@ type Bundle interface {
 	InspectRouteDeps
 	AIRouteDeps
 	EsmgmtRouteDeps
+	KafkamgmtRouteDeps
 }

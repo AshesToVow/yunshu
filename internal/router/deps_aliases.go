@@ -12,6 +12,7 @@ type (
 	CoreRouteDeps = routedeps.CoreRouteDeps
 	DbmgmtRouteDeps = routedeps.DbmgmtRouteDeps
 	EsmgmtRouteDeps = routedeps.EsmgmtRouteDeps
+	KafkamgmtRouteDeps = routedeps.KafkamgmtRouteDeps
 	InspectRouteDeps = routedeps.InspectRouteDeps
 	K8sRouteDeps = routedeps.K8sRouteDeps
 	LogPlatformRouteDeps = routedeps.LogPlatformRouteDeps

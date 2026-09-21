@@ -144,49 +144,56 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	if err != nil {
 		return nil, err
 	}
-	service := provideCicdService(routerRouteRepositories.Cicd, routerRouteRepositories.Workflow, v60, v31, v26, v5, v10, v40, v94, db, cicdConfig, sender, appDisplayName, v70, v72)
-	v100 := routerRouteRepositories.MysqlBackup
-	v101, err := provideMysqlBackupService(v100, v60, v31, v5, db, securityEncryptionKey, sender, appDisplayName)
+	v100 := routerRouteRepositories.Cicd
+	v101 := routerRouteRepositories.Workflow
+	service := provideCicdService(v100, v101, v60, v31, v26, v5, v10, v40, v94, db, cicdConfig, sender, appDisplayName, v70, v72)
+	v102 := routerRouteRepositories.MysqlBackup
+	v103, err := provideMysqlBackupService(v102, v60, v31, v5, db, securityEncryptionKey, sender, appDisplayName)
 	if err != nil {
 		return nil, err
 	}
-	v102 := routerRouteRepositories.Dbmgmt
-	v103 := routerRouteRepositories.Workflow
+	v104 := routerRouteRepositories.Dbmgmt
 	dbmgmtConfig := provideDbmgmtConfig(app)
-	dbmgmtService, err := provideDbmgmtService(v102, v60, v31, v10, v26, v5, v40, v103, db, securityEncryptionKey, sender, appDisplayName, dbmgmtConfig)
+	dbmgmtService, err := provideDbmgmtService(v104, v60, v31, v10, v26, v5, v40, v101, db, securityEncryptionKey, sender, appDisplayName, dbmgmtConfig)
 	if err != nil {
 		return nil, err
 	}
-	v104 := routerRouteRepositories.LogIntelligence
-	v105 := provideLogIntelligenceService(v104, v62, v31)
-	v106 := routerRouteRepositories.LogRetention
-	v107 := provideLogRetentionService(v59, v106)
-	v108 := provideKafkaProvider(app)
-	v109 := provideKafkaToESService(v108, v59)
-	v110 := routerRouteRepositories.LoggieAgent
+	v105 := routerRouteRepositories.LogIntelligence
+	v106 := provideLogIntelligenceService(v105, v62, v31)
+	v107 := routerRouteRepositories.LogRetention
+	v108 := provideLogRetentionService(v59, v107)
+	v109 := provideKafkaProvider(app)
+	v110 := provideKafkaToESService(v109, v59)
+	v111 := routerRouteRepositories.LoggieAgent
 	loggieConfig := provideLoggieConfig(app)
-	v111, err := provideLoggieAgentService(v110, v60, v92, v31, v91, v59, v108, securityEncryptionKey, loggieConfig)
+	v112, err := provideLoggieAgentService(v111, v60, v92, v31, v91, v59, v109, securityEncryptionKey, loggieConfig)
 	if err != nil {
 		return nil, err
 	}
-	v112 := routerRouteRepositories.ClusterLog
-	v113 := routerRouteRepositories.LogPipeline
-	v114 := routerRouteRepositories.LogSavedQuery
-	v115 := provideClusterLogService(v112, v113, v114, v61, v31, v59, v108, v67, loggieConfig)
-	v116 := alert.NewAlertReceiverGroupService(v42, v43)
-	v117 := routerRouteRepositories.K8sEventForward
-	v118 := eventforward.NewK8sEventForwardAdminService(v117)
-	v119 := k8s.NewK8sSearchService(v67, v27, v10, v22, v24, v25)
-	v120 := routerRouteRepositories.Inspect
-	v121 := routerRouteRepositories.PlatformTemplate
-	inspectService := provideInspectService(v120, v121, db, client, v65, v31, sender, appDisplayName)
+	v113 := routerRouteRepositories.ClusterLog
+	v114 := routerRouteRepositories.LogPipeline
+	v115 := routerRouteRepositories.LogSavedQuery
+	v116 := provideClusterLogService(v113, v114, v115, v61, v31, v59, v109, v67, loggieConfig)
+	v117 := alert.NewAlertReceiverGroupService(v42, v43)
+	v118 := routerRouteRepositories.K8sEventForward
+	v119 := eventforward.NewK8sEventForwardAdminService(v118)
+	v120 := k8s.NewK8sSearchService(v67, v27, v10, v22, v24, v25)
+	v121 := routerRouteRepositories.Inspect
+	v122 := routerRouteRepositories.PlatformTemplate
+	inspectService := provideInspectService(v121, v122, db, client, v65, v31, sender, appDisplayName)
+	v123 := routerRouteRepositories.Ai
 	aiConfig := provideAIConfig(app)
-	v122 := routerRouteRepositories.Esmgmt
-	esmgmtService, err := provideEsmgmtService(v122, db, securityEncryptionKey, v59)
+	v124 := routerRouteRepositories.Esmgmt
+	esmgmtService, err := provideEsmgmtService(v124, db, securityEncryptionKey, v59)
 	if err != nil {
 		return nil, err
 	}
-	aiService := provideAIService(routerRouteRepositories.Ai, routerRouteRepositories.Workflow, db, aiConfig, securityEncryptionKey, v10, v22, v24, v25, v68, v69, v72, v70, v82, v62, v59, service, v63, v60, v99, dbmgmtService, esmgmtService, v93, v111, v115, v65, v97, v39)
+	aiService := provideAIService(v123, v101, db, aiConfig, securityEncryptionKey, v10, v22, v24, v25, v68, v69, v72, v70, v82, v62, v59, service, v63, v60, v99, dbmgmtService, esmgmtService, v93, v112, v116, v65, v97, v39)
+	v125 := routerRouteRepositories.Kafkamgmt
+	kafkamgmtService, err := provideKafkamgmtService(v125, securityEncryptionKey, v109)
+	if err != nil {
+		return nil, err
+	}
 	routerRouteServices := &routeServices{
 		LoginLog:             v2,
 		OperationLog:         v4,
@@ -237,21 +244,22 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		ChangeEvent:          v97,
 		CMDB:                 v99,
 		Cicd:                 service,
-		MysqlBackup:          v101,
+		MysqlBackup:          v103,
 		Dbmgmt:               dbmgmtService,
 		LogSearch:            v62,
-		LogIntelligence:      v105,
-		LogRetention:         v107,
-		KafkaToES:            v109,
-		LoggieAgent:          v111,
-		ClusterLog:           v115,
-		AlertReceiverGroup:   v116,
-		K8sEventForwardAdmin: v118,
-		K8sSearch:            v119,
+		LogIntelligence:      v106,
+		LogRetention:         v108,
+		KafkaToES:            v110,
+		LoggieAgent:          v112,
+		ClusterLog:           v116,
+		AlertReceiverGroup:   v117,
+		K8sEventForwardAdmin: v119,
+		K8sSearch:            v120,
 		AlertMaintenance:     v45,
 		Inspect:              inspectService,
 		AI:                   aiService,
 		Esmgmt:               esmgmtService,
+		Kafkamgmt:            kafkamgmtService,
 	}
 	systemHandler := provideSystemHandler(app)
 	pluginHandler := handler.NewPluginHandler(pluginsConfig)
@@ -272,12 +280,12 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	dictEntryHandler := handler.NewDictEntryHandler(v37)
 	adminHandler := handler.NewAdminHandler(client)
 	alertHandler := handler.NewAlertHandler(v63)
-	v123 := routerRouteRepositories.AlertConsul
-	v124 := alert.NewAlertConsulService(v123)
-	alertPlatformHandler := handler.NewAlertPlatformHandler(v65, v39, v45, v66, v14, v41, v124)
+	v126 := routerRouteRepositories.AlertConsul
+	v127 := alert.NewAlertConsulService(v126)
+	alertPlatformHandler := handler.NewAlertPlatformHandler(v65, v39, v45, v66, v14, v41, v127)
 	alertSubscriptionHandler := provideAlertSubscriptionHandler(v63)
 	alertInhibitionHandler := provideAlertInhibitionHandler(v63)
-	alertReceiverGroupHandler := handler.NewAlertReceiverGroupHandler(v116)
+	alertReceiverGroupHandler := handler.NewAlertReceiverGroupHandler(v117)
 	cloudExpiryRuleHandler := handler.NewCloudExpiryRuleHandler(v64, v63)
 	clusterHandler := handler.NewClusterHandler(v68)
 	podHandler := handler.NewPodHandler(v69)
@@ -293,26 +301,27 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	k8sHPAHandler := handler.NewK8sHPAHandler(v79)
 	helmHandler := handler.NewHelmHandler(v81)
 	k8sResourceWatchHandler := handler.NewK8sResourceWatchHandler(v67)
-	k8sSearchHandler := handler.NewK8sSearchHandler(v119)
-	k8sEventForwardHandler := handler.NewK8sEventForwardHandler(v118)
+	k8sSearchHandler := handler.NewK8sSearchHandler(v120)
+	k8sEventForwardHandler := handler.NewK8sEventForwardHandler(v119)
 	eventHandler := handler.NewEventHandler(v82)
 	crdHandler := handler.NewCRDHandler(v83)
 	crHandler := handler.NewCRHandler(v84)
 	rbacHandler := handler.NewRBACHandler(v85)
 	serviceAccountHandler := handler.NewServiceAccountHandler(v86)
 	overviewHandler := handler.NewOverviewHandler(v89)
-	projectHandler := handler.NewProjectHandler(v93, v62, v105)
+	projectHandler := handler.NewProjectHandler(v93, v62, v106)
 	projectCatalogHandler := handler.NewProjectCatalogHandler(v96, v97)
 	cmdbHandler := handler.NewCMDBHandler(v99)
-	mysqlBackupHandler := handler.NewMysqlBackupHandler(v101)
+	mysqlBackupHandler := handler.NewMysqlBackupHandler(v103)
 	dbmgmtHandler := handler.NewDbmgmtHandler(dbmgmtService)
 	cicdHandler := handler.NewCicdHandler(service)
-	logPlatformHandler := handler.NewLogPlatformHandler(v107, v109)
-	loggieHandler := handler.NewLoggieHandler(v111)
-	clusterLogHandler := handler.NewClusterLogHandler(v115)
+	logPlatformHandler := handler.NewLogPlatformHandler(v108, v110)
+	loggieHandler := handler.NewLoggieHandler(v112)
+	clusterLogHandler := handler.NewClusterLogHandler(v116)
 	inspectHandler := handler.NewInspectHandler(inspectService)
 	aiHandler := handler.NewAIHandler(aiService)
 	esmgmtHandler := handler.NewEsmgmtHandler(esmgmtService)
+	kafkamgmtHandler := handler.NewKafkamgmtHandler(kafkamgmtService)
 	routerRouteHandlers := &routeHandlers{
 		System:             systemHandler,
 		Plugin:             pluginHandler,
@@ -372,6 +381,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 		Inspect:            inspectHandler,
 		AI:                 aiHandler,
 		Esmgmt:             esmgmtHandler,
+		Kafkamgmt:          kafkamgmtHandler,
 	}
 	routeDeps, err := provideRouteDeps(app, routerRouteRepositories, routerRouteServices, routerRouteHandlers)
 	if err != nil {

@@ -18,6 +18,7 @@ import (
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 	esmgmtsvc "yunshu/internal/service/esmgmt"
+	kafkamgmtsvc "yunshu/internal/service/kafkamgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 	workflowsvc "yunshu/internal/service/workflow"
 
@@ -44,7 +45,7 @@ var repositoryFieldNames = wire.FieldsOf(
 	"CloudExpiryRule", "Overview", "K8sEventForward",
 	"K8sCrTemplate", "K8sWorkloadSnapshot", "HarborMerge",
 	"ServiceCatalog", "ServicePortrait", "ChangeEvent", "ServerAccessGrant",
-	"PlatformTemplate", "Workflow", "Esmgmt", "Inspect", "Cicd", "Ai",
+	"PlatformTemplate", "Workflow", "Esmgmt", "Kafkamgmt", "Inspect", "Cicd", "Ai",
 )
 
 // AppInfraSet extracts infrastructure dependencies from bootstrap.App.
@@ -433,6 +434,14 @@ func provideEsmgmtService(
 	return svc, nil
 }
 
+func provideKafkamgmtService(
+	kafkamgmtRepo interfaces.KafkamgmtRepository,
+	encryptionKey SecurityEncryptionKey,
+	kafka *service.KafkaProvider,
+) (*kafkamgmtsvc.Service, error) {
+	return kafkamgmtsvc.NewService(kafkamgmtRepo, string(encryptionKey), kafka)
+}
+
 func provideK8sHelmService(
 	runtime *service.K8sRuntimeService,
 	harborMerge interfaces.HarborMergeRepository,
@@ -613,6 +622,7 @@ var ServiceSet = wire.NewSet(
 	provideInspectService,
 	provideAIService,
 	provideEsmgmtService,
+	provideKafkamgmtService,
 	provideElasticsearchProvider,
 	provideKafkaProvider,
 	provideKafkaToESService,
