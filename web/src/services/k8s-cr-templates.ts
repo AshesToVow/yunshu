@@ -17,6 +17,10 @@ export function listK8sCrTemplates(params?: { project_id?: number; kind?: string
   return getData<{ list: K8sCrTemplateItem[] }>(http.get("/k8s-cr-templates", { params })).then((r) => r.list || []);
 }
 
+export function getK8sCrTemplate(id: number) {
+  return getData<K8sCrTemplateItem>(http.get(`/k8s-cr-templates/${id}`));
+}
+
 export function createK8sCrTemplate(payload: {
   project_id?: number;
   name: string;

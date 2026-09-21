@@ -148,7 +148,7 @@ export function DbmgmtDatabaseApplyPage() {
         message={
           <>
             审批通过后将自动 CREATE DATABASE 并写入平台授权。进度请到{" "}
-            <Link to="/dbmgmt/workflow/pending">待审核</Link> 查看。
+            <Link to="/workflow/inbox?domain=dbmgmt">我的待办</Link> 查看。
           </>
         }
       />

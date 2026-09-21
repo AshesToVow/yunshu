@@ -121,7 +121,7 @@ type ServerGroupItem struct {
 
 type ServerGroupUpsertRequest struct {
 	ID        *uint  `json:"id,omitempty"`
-	ProjectID uint   `json:"project_id" binding:"required"`
+	ProjectID uint   `json:"project_id"` // 由路径 /projects/:id 注入；body 可省略
 	ParentID  *uint  `json:"parent_id,omitempty"`
 	Name      string `json:"name" binding:"required"`
 	Category  string `json:"category"`

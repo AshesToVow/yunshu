@@ -1,5 +1,5 @@
 /** 离线兜底：与后端 plugin.DefaultEnabled 一致；正常应以后端 /plugins 返回为准 */
-export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect", "ai", "esmgmt"] as const;
+export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect", "ai", "esmgmt", "kafkamgmt"] as const;
 
 export type PluginName = string;
 
@@ -53,7 +53,7 @@ const FALLBACK_PATH_RULES: { plugin: string; prefixes: string[] }[] = [
     plugin: "project",
     prefixes: [
       "/projects", "/project-members", "/project-services", "/service-catalog", "/service-portrait",
-      "/project-logs", "/log-retention", "/loggie-status", "/project-log-sources",
+      "/project-logs", "/log-pipelines", "/log-retention", "/loggie-status", "/project-log-sources",
     ],
   },
   { plugin: "cmdb", prefixes: ["/project-servers", "/server-console"] },
@@ -63,6 +63,7 @@ const FALLBACK_PATH_RULES: { plugin: string; prefixes: string[] }[] = [
   { plugin: "inspect", prefixes: ["/project-inspect"] },
   { plugin: "ai", prefixes: ["/ai"] },
   { plugin: "esmgmt", prefixes: ["/esmgmt"] },
+  { plugin: "kafkamgmt", prefixes: ["/kafkamgmt"] },
 ];
 
 function normalizePath(path: string): string {

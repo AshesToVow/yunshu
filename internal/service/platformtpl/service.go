@@ -9,22 +9,28 @@ import (
 	"strings"
 	"time"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
 
+// ObjectStoreFactory resolves MinIO from dict (injected at Wire; nil skips mirror).
+type ObjectStoreFactory func(ctx context.Context) (*objectstore.Client, error)
+
 // Service 平台模板中心：目录 CRUD、版本、发布、解析。
 type Service struct {
-	db *gorm.DB
+	repo           interfaces.PlatformTemplateRepository
+	newObjectStore ObjectStoreFactory
 }
 
-func NewService(db *gorm.DB) *Service {
-	return &Service{db: db}
+func NewService(repo interfaces.PlatformTemplateRepository, newObjectStore ObjectStoreFactory) *Service {
+	return &Service{repo: repo, newObjectStore: newObjectStore}
 }
 
 type ListQuery struct {
@@ -70,34 +76,21 @@ type ResolveResult struct {
 
 func (s *Service) List(ctx context.Context, q ListQuery) (*pagination.Result[TemplateItem], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	tx := s.db.WithContext(ctx).Model(&model.PlatformTemplate{})
-	if c := strings.TrimSpace(q.Category); c != "" {
-		tx = tx.Where("category = ?", c)
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("template_key LIKE ? OR name LIKE ? OR description LIKE ?", like, like, like)
-	}
-	if q.Status != nil {
-		tx = tx.Where("status = ?", *q.Status)
-	}
-	var total int64
-	if err := tx.Count(&total).Error; err != nil {
-		return nil, bizerrors.Pass(ctx, "platformtpl", "List", err)
-	}
-	var rows []model.PlatformTemplate
-	if err := tx.Order("category ASC, template_key ASC").
-		Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, err := s.repo.List(ctx, repository.PlatformTemplateListParams{
+		Category: strings.TrimSpace(q.Category),
+		Keyword:  strings.TrimSpace(q.Keyword),
+		Status:   q.Status,
+		Offset:   (page - 1) * pageSize,
+		Limit:    pageSize,
+	})
+	if err != nil {
 		return nil, bizerrors.Pass(ctx, "platformtpl", "List", err)
 	}
 	items := make([]TemplateItem, 0, len(rows))
 	for _, row := range rows {
 		item := TemplateItem{PlatformTemplate: row}
 		if row.PublishedVersion > 0 {
-			var ver model.PlatformTemplateVersion
-			if err := s.db.WithContext(ctx).
-				Where("template_id = ? AND version = ?", row.ID, row.PublishedVersion).
-				First(&ver).Error; err == nil {
+			if ver, err := s.repo.GetVersion(ctx, row.ID, row.PublishedVersion); err == nil {
 				item.PublishedChecksum = ver.Checksum
 				item.HasMinIOMirror = strings.TrimSpace(ver.StorageKey) != ""
 			}
@@ -108,19 +101,16 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*pagination.Result[Tem
 }
 
 func (s *Service) Detail(ctx context.Context, id uint) (*TemplateItem, error) {
-	var row model.PlatformTemplate
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "platformtpl", "Detail", err)
 	}
-	item := &TemplateItem{PlatformTemplate: row}
+	item := &TemplateItem{PlatformTemplate: *row}
 	if row.PublishedVersion > 0 {
-		var ver model.PlatformTemplateVersion
-		if err := s.db.WithContext(ctx).
-			Where("template_id = ? AND version = ?", row.ID, row.PublishedVersion).
-			First(&ver).Error; err == nil {
+		if ver, err := s.repo.GetVersion(ctx, row.ID, row.PublishedVersion); err == nil {
 			item.PublishedChecksum = ver.Checksum
 			item.HasMinIOMirror = strings.TrimSpace(ver.StorageKey) != ""
 		}
@@ -153,7 +143,7 @@ func (s *Service) Create(ctx context.Context, req UpsertRequest, actorID uint) (
 		Description: strings.TrimSpace(req.Description),
 		Status:      status,
 	}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := s.repo.Create(ctx, &row); err != nil {
 		return nil, bizerrors.Pass(ctx, "platformtpl", "Create", err)
 	}
 	_ = actorID
@@ -161,8 +151,8 @@ func (s *Service) Create(ctx context.Context, req UpsertRequest, actorID uint) (
 }
 
 func (s *Service) Update(ctx context.Context, id uint, req UpsertRequest) (*TemplateItem, error) {
-	var row model.PlatformTemplate
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
@@ -181,16 +171,15 @@ func (s *Service) Update(ctx context.Context, id uint, req UpsertRequest) (*Temp
 	if req.Status != nil {
 		row.Status = *req.Status
 	}
-	// template_key 创建后不可改，避免破坏引用
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.repo.Save(ctx, row); err != nil {
 		return nil, bizerrors.Pass(ctx, "platformtpl", "Update", err)
 	}
 	return s.Detail(ctx, row.ID)
 }
 
 func (s *Service) Delete(ctx context.Context, id uint) error {
-	var row model.PlatformTemplate
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return constants.ErrNotFound
 		}
@@ -199,18 +188,18 @@ func (s *Service) Delete(ctx context.Context, id uint) error {
 	if row.IsBuiltin {
 		return constants.ErrBadRequestWithMsg("内置模板不可删除，可停用或发布新版本覆盖")
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("template_id = ?", id).Delete(&model.PlatformTemplateVersion{}).Error; err != nil {
+	return s.repo.Transaction(ctx, func(tx interfaces.PlatformTemplateRepository) error {
+		if err := tx.DeleteVersionsByTemplateID(ctx, id); err != nil {
 			return err
 		}
-		return tx.Delete(&row).Error
+		return tx.Delete(ctx, row)
 	})
 }
 
 // SaveDraft 新增一版草稿（未自动发布）。
 func (s *Service) SaveDraft(ctx context.Context, id uint, req SaveDraftRequest, actorID uint) (*VersionItem, error) {
-	var row model.PlatformTemplate
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
@@ -218,9 +207,7 @@ func (s *Service) SaveDraft(ctx context.Context, id uint, req SaveDraftRequest, 
 	}
 	content := req.Content
 	sum := checksum(content)
-	var maxVer int
-	_ = s.db.WithContext(ctx).Model(&model.PlatformTemplateVersion{}).
-		Where("template_id = ?", id).Select("COALESCE(MAX(version),0)").Scan(&maxVer).Error
+	maxVer, _ := s.repo.MaxVersion(ctx, id)
 	ver := model.PlatformTemplateVersion{
 		TemplateID:    id,
 		Version:       maxVer + 1,
@@ -231,7 +218,7 @@ func (s *Service) SaveDraft(ctx context.Context, id uint, req SaveDraftRequest, 
 		CreatedAt:     time.Now(),
 	}
 	ver.StorageKey = s.tryMirrorMinIO(ctx, row.TemplateKey, ver.Version, content, row.Format)
-	if err := s.db.WithContext(ctx).Create(&ver).Error; err != nil {
+	if err := s.repo.CreateVersion(ctx, &ver); err != nil {
 		return nil, bizerrors.Pass(ctx, "platformtpl", "SaveDraft", err)
 	}
 	return &VersionItem{PlatformTemplateVersion: ver, ContentPreview: preview(content)}, nil
@@ -239,39 +226,37 @@ func (s *Service) SaveDraft(ctx context.Context, id uint, req SaveDraftRequest, 
 
 // Publish 将指定版本（或最新草稿）设为发布态。
 func (s *Service) Publish(ctx context.Context, id uint, version int) (*TemplateItem, error) {
-	var row model.PlatformTemplate
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "platformtpl", "Publish", err)
 	}
-	var ver model.PlatformTemplateVersion
-	q := s.db.WithContext(ctx).Where("template_id = ?", id)
+	var ver *model.PlatformTemplateVersion
 	if version > 0 {
-		q = q.Where("version = ?", version)
+		ver, err = s.repo.GetVersion(ctx, id, version)
 	} else {
-		q = q.Order("version DESC")
+		ver, err = s.repo.GetLatestVersion(ctx, id)
 	}
-	if err := q.First(&ver).Error; err != nil {
+	if err != nil {
 		return nil, constants.ErrBadRequestWithMsg("无可发布版本，请先保存草稿")
 	}
 	if strings.TrimSpace(ver.StorageKey) == "" {
 		ver.StorageKey = s.tryMirrorMinIO(ctx, row.TemplateKey, ver.Version, ver.ContentInline, row.Format)
 		if ver.StorageKey != "" {
-			_ = s.db.WithContext(ctx).Model(&ver).Update("storage_key", ver.StorageKey).Error
+			_ = s.repo.UpdateVersionStorageKey(ctx, ver.ID, ver.StorageKey)
 		}
 	}
-	if err := s.db.WithContext(ctx).Model(&row).Update("published_version", ver.Version).Error; err != nil {
+	if err := s.repo.UpdatePublishedVersion(ctx, id, ver.Version); err != nil {
 		return nil, bizerrors.Pass(ctx, "platformtpl", "Publish", err)
 	}
 	return s.Detail(ctx, id)
 }
 
 func (s *Service) ListVersions(ctx context.Context, id uint) ([]VersionItem, error) {
-	var rows []model.PlatformTemplateVersion
-	if err := s.db.WithContext(ctx).Where("template_id = ?", id).
-		Order("version DESC").Find(&rows).Error; err != nil {
+	rows, err := s.repo.ListVersions(ctx, id)
+	if err != nil {
 		return nil, bizerrors.Pass(ctx, "platformtpl", "ListVersions", err)
 	}
 	out := make([]VersionItem, 0, len(rows))
@@ -284,9 +269,8 @@ func (s *Service) ListVersions(ctx context.Context, id uint) ([]VersionItem, err
 }
 
 func (s *Service) GetVersionContent(ctx context.Context, id uint, version int) (*VersionItem, error) {
-	var ver model.PlatformTemplateVersion
-	if err := s.db.WithContext(ctx).
-		Where("template_id = ? AND version = ?", id, version).First(&ver).Error; err != nil {
+	ver, err := s.repo.GetVersion(ctx, id, version)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
@@ -297,7 +281,7 @@ func (s *Service) GetVersionContent(ctx context.Context, id uint, version int) (
 			ver.ContentInline = string(body)
 		}
 	}
-	return &VersionItem{PlatformTemplateVersion: ver}, nil
+	return &VersionItem{PlatformTemplateVersion: *ver}, nil
 }
 
 // ResolvePublished 业务侧解析：已发布正文；无则 builtin 种子内容。
@@ -306,13 +290,10 @@ func (s *Service) ResolvePublished(ctx context.Context, templateKey string) (*Re
 	if key == "" {
 		return nil, constants.ErrBadRequestWithMsg("template_key 必填")
 	}
-	var row model.PlatformTemplate
-	err := s.db.WithContext(ctx).
-		Where("template_key = ? AND status = ?", key, model.PlatformTemplateStatusEnabled).
-		First(&row).Error
+	row, err := s.repo.GetByKeyEnabled(ctx, key)
 	if err == nil && row.PublishedVersion > 0 {
-		ver, err := s.GetVersionContent(ctx, row.ID, row.PublishedVersion)
-		if err == nil && strings.TrimSpace(ver.ContentInline) != "" {
+		ver, verr := s.GetVersionContent(ctx, row.ID, row.PublishedVersion)
+		if verr == nil && strings.TrimSpace(ver.ContentInline) != "" {
 			return &ResolveResult{
 				TemplateKey: key, Version: ver.Version, Format: row.Format,
 				Content: ver.ContentInline, Source: "published",
@@ -332,7 +313,10 @@ func (s *Service) ResolvePublished(ctx context.Context, templateKey string) (*Re
 }
 
 func (s *Service) tryMirrorMinIO(ctx context.Context, templateKey string, version int, content, format string) string {
-	cli, err := objectstore.NewFromDB(ctx, s.db)
+	if s.newObjectStore == nil {
+		return ""
+	}
+	cli, err := s.newObjectStore(ctx)
 	if err != nil || cli == nil {
 		return ""
 	}
@@ -345,7 +329,10 @@ func (s *Service) tryMirrorMinIO(ctx context.Context, templateKey string, versio
 }
 
 func (s *Service) loadMinIO(ctx context.Context, storageKey string) ([]byte, error) {
-	cli, err := objectstore.NewFromDB(ctx, s.db)
+	if s.newObjectStore == nil {
+		return nil, errors.New("object store not configured")
+	}
+	cli, err := s.newObjectStore(ctx)
 	if err != nil {
 		return nil, err
 	}

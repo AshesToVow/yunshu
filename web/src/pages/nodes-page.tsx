@@ -289,6 +289,7 @@ export function NodesPage() {
         description="集群节点状态、资源用量、污点与调度策略"
         needNamespace={false}
         disableMutations
+        watchResource="nodes"
         actionColumnWidth={440}
         columns={columns}
         api={{

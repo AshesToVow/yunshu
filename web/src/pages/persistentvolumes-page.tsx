@@ -37,6 +37,8 @@ export function PersistentVolumesPage() {
     <YamlCrudPage<PersistentVolumeItem, StorageDetail>
       title="存储 - PersistentVolume"
       needNamespace={false}
+      watchResource="persistentvolumes"
+      actionColumnWidth={400}
       columns={columns}
       showEditButton={false}
       api={{

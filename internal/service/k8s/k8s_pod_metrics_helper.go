@@ -34,10 +34,11 @@ func warnMetricsUnavailable(k *kom.Kubectl, gvk schema.GroupVersionKind, compone
 	log.Warn("query metrics failed", fields...)
 }
 
-// podCPUMemUsage 单 Pod 内各容器 usage 之和。
+// podCPUMemUsage 单 Pod 内各容器 usage 之和；按命名空间聚合时含 PodCount。
 type podCPUMemUsage struct {
-	CPU resource.Quantity
-	Mem resource.Quantity
+	CPU      resource.Quantity
+	Mem      resource.Quantity
+	PodCount int
 }
 
 // nodeAllocResources 节点可分配 CPU/内存（用于 Pod 占用节点 alloc 占比）。
@@ -162,6 +163,7 @@ func aggregatePodMetricsUsageByNamespace(ctx context.Context, k *kom.Kubectl) ma
 		agg := out[ns]
 		agg.CPU.Add(cpu)
 		agg.Mem.Add(mem)
+		agg.PodCount++
 		out[ns] = agg
 	}
 	return out

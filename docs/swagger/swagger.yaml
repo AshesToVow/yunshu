@@ -920,7 +920,7 @@ paths:
       summary: 获取完整订阅树
       tags:
       - alert-subscription
-  /api/v1/alerts/webhook/alertmanager:
+  /api/v1/alerts/webhook:
     post:
       consumes:
       - application/json

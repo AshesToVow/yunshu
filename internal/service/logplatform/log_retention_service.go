@@ -145,8 +145,9 @@ func (s *LogRetentionService) StorageStats(ctx context.Context) (*ESStorageStats
 	if err != nil {
 		return nil, constants.ErrBadRequestWithMsg(err.Error())
 	}
-	// 拉全量非系统索引，同时按配置 pattern 做子集汇总
-	indices, err := cli.CatIndices(ctx, "*")
+	// 只拉平台日志索引，避免集群其它索引拖慢 /_cat/indices
+	catPattern := GlobalAgentIndexPattern() + "," + GlobalK8sIndexPattern(cfg.K8sIndexPrefix)
+	indices, err := cli.CatIndices(ctx, catPattern)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "logretention", "StorageStats", err)
 	}

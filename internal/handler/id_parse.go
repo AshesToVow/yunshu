@@ -18,6 +18,14 @@ func parseUintParam(c *gin.Context, key string) (uint, error) {
 	return uint(id), nil
 }
 
+func parseInt64Param(c *gin.Context, key string) (int64, error) {
+	id, err := strconv.ParseInt(c.Param(key), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, constants.ErrInvalidRequestParam
+	}
+	return id, nil
+}
+
 func parseUintQuery(c *gin.Context, key string) (uint, error) {
 	raw := c.Query(key)
 	if raw == "" {

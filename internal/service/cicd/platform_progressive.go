@@ -266,9 +266,11 @@ func (s *Service) loadProgressiveContext(ctx context.Context, projectID, runID u
 	}
 	var dc model.CicdDeployConfig
 	if release.DeployConfigID != nil {
-		if err := s.db.WithContext(ctx).Where("id = ?", *release.DeployConfigID).First(&dc).Error; err != nil {
+		dcRow, err := s.repo.GetDeployConfigByID(ctx, *release.DeployConfigID)
+		if err != nil {
 			return nil, nil, linkedWorkloadExt{}, constants.ErrBadRequestWithMsg("发布配置不存在")
 		}
+		dc = *dcRow
 	} else {
 		return nil, nil, linkedWorkloadExt{}, constants.ErrBadRequestWithMsg("工单未关联发布配置")
 	}
@@ -304,8 +306,9 @@ func (s *Service) loadProgressiveContext(ctx context.Context, projectID, runID u
 
 func (s *Service) saveProgressiveState(ctx context.Context, releaseID uint, st progressiveState) error {
 	b, _ := json.Marshal(st)
-	return s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).Where("id = ?", releaseID).
-		Update("progressive_json", string(b)).Error
+	return s.repo.UpdateReleaseRunFields(ctx, releaseID, map[string]any{
+		"progressive_json": string(b),
+	})
 }
 
 func parseProgressiveState(raw, strategy, stepsJSON string) progressiveState {

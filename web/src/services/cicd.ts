@@ -124,6 +124,7 @@ export interface CicdReleaseRun {
   status: string;
   current_stage_key?: string;
   current_stage_name?: string;
+  submitter_user_id?: number;
   submitter_name?: string;
   image_address?: string;
   artifact_name?: string;

@@ -21,7 +21,7 @@ export function CloudExpiryTab() {
   const ctx = useAlertMonitor();
   return (
 <Space direction="vertical" style={{ width: "100%" }} size="middle">
-                <Space>
+                <Space wrap>
                   <Button type="primary" icon={<PlusOutlined />} onClick={ctx.openCloudExpiryCreate}>
                     新建云到期规则
                   </Button>

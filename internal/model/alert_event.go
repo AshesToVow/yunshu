@@ -41,8 +41,8 @@ type AlertEvent struct {
 	Success            bool           `json:"success" gorm:"not null;default:false;index;comment:通知是否成功"`
 	HTTPStatusCode     int            `json:"httpStatusCode" gorm:"comment:通知响应状态码"`
 	ErrorMessage       string         `json:"errorMessage" gorm:"size:1024;comment:错误信息"`
-	RequestPayload     string         `json:"requestPayload" gorm:"type:longtext;comment:请求载荷"`
-	ResponsePayload    string         `json:"responsePayload" gorm:"type:longtext;comment:响应载荷"`
+	RequestPayload     string         `json:"requestPayload" gorm:"type:text;comment:请求载荷"`
+	ResponsePayload    string         `json:"responsePayload" gorm:"type:text;comment:响应载荷"`
 	CreatedAt          time.Time      `json:"createdAt" gorm:"comment:创建时间;index;index:idx_alert_events_status_created,priority:2;index:idx_alert_events_proj_status_created,priority:3;index:idx_alert_events_del_status_created,priority:3"`
 	UpdatedAt          time.Time      `json:"updatedAt" gorm:"comment:更新时间"`
 	DeletedAt          gorm.DeletedAt `json:"-" gorm:"index;index:idx_alert_events_del_status_created,priority:1;comment:删除时间"`

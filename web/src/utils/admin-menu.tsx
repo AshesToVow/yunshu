@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 import type { MenuItem } from "../services/menus";
+import { resolveTranslatedLabel } from "./i18n-labels";
 
 export type AntdMenuItem = NonNullable<MenuProps["items"]>[number];
 
@@ -12,18 +13,6 @@ function menuIconByName(name?: string): ReactNode {
   const Cmp = (IconComponents as unknown as Record<string, React.ComponentType<object>>)[name.trim()];
   if (!Cmp) return undefined;
   return <Cmp />;
-}
-
-function resolveMenuLabel(path: string | undefined, fallback: string, t?: TFunction): string {
-  if (!t) return fallback;
-  const p = path?.trim();
-  if (!p) return fallback;
-  return t(`menu.routes.${p}`, { defaultValue: fallback });
-}
-
-function resolveGroupLabel(key: string, fallback: string, t?: TFunction): string {
-  if (!t) return fallback;
-  return t(`menu.groups.${key}`, { defaultValue: fallback });
 }
 
 function filterVisible(menus: MenuItem[]): MenuItem[] {
@@ -51,12 +40,12 @@ function toAntdItem(m: MenuItem, t?: TFunction): AntdMenuItem {
     return {
       key,
       icon,
-      label: resolveGroupLabel(key, m.name, t),
+      label: resolveTranslatedLabel(key, m.name, t),
       children,
     };
   }
   const to = m.path?.trim() ?? "/";
-  const label = resolveMenuLabel(to, m.name, t);
+  const label = resolveTranslatedLabel(to, m.name, t);
   return {
     key: to,
     icon,

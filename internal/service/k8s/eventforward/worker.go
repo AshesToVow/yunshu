@@ -138,9 +138,10 @@ func (w *Worker) processBatch() error {
 			if processedIDs[ev.ID] {
 				continue
 			}
-			if ev.Attempts >= maxRetry {
-				forwardLog().Warn("K8s forwarded event exceeded max retries, already claimed",
+			if maxRetry > 0 && ev.Attempts >= maxRetry {
+				forwardLog().Warn("K8s forwarded event exceeded max retries, move to dead letter",
 					"event_id", ev.ID, "cluster_id", ev.ClusterID, "attempts", ev.Attempts)
+				_ = w.repo.MarkEventDead(ctx, ev.ID, fmt.Sprintf("exceeded max retries (%d)", maxRetry))
 				processedIDs[ev.ID] = true
 				continue
 			}
@@ -161,12 +162,12 @@ func (w *Worker) processBatch() error {
 					"cluster_id", clusterID,
 					"error", err)
 				for _, e := range batchEvents {
-					_ = w.repo.IncrementEventAttempts(ctx, e.ID)
-					_ = w.repo.MarkEventProcessed(ctx, e.ID, false)
+					_ = w.repo.MarkEventFailed(ctx, e.ID, err.Error())
 				}
 				continue
 			}
 			for _, e := range batchEvents {
+				_ = w.repo.MarkEventProcessed(ctx, e.ID, true)
 				processedIDs[e.ID] = true
 			}
 		}
@@ -179,8 +180,9 @@ func (w *Worker) processBatch() error {
 		}
 		// 未匹配规则：放回队列，便于后续新增规则命中；过旧事件直接丢弃。
 		if !ev.Timestamp.IsZero() && now.Sub(ev.Timestamp) > unmatchedEventMaxAge {
-			forwardLog().Debug("K8s forwarded event unmatched and stale, keeping processed",
+			forwardLog().Debug("K8s forwarded event unmatched and stale, mark delivered",
 				"event_id", ev.ID, "cluster_id", ev.ClusterID, "namespace", ev.Namespace)
+			_ = w.repo.MarkEventProcessed(ctx, ev.ID, true)
 			processedIDs[ev.ID] = true
 			continue
 		}

@@ -854,13 +854,17 @@ export function AlertConfigCenterPanel({
               ) : null}
             </Space>
           </Card>
-          <Card size="small" title="内部入站联调（K8s Event）" style={{ marginBottom: 12 }}>
+          <Card size="small" title="旁路入站联调（AM 形 Webhook）" style={{ marginBottom: 12 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={12}>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                Alertmanager Webhook 已下线。本面板用于模拟 K8s Event 转发载荷：{" "}
-                <Typography.Text code>POST /api/v1/alerts/ingress/k8s-events</Typography.Text>，携带与配置一致的 Token（
-                <Typography.Text code>X-Alert-Token</Typography.Text> / <Typography.Text code>X-Webhook-Token</Typography.Text>
-                ）。主路径告警请在「规则中心」配置 PromQL。记录出现在「事件台」。
+                主路径是「规则中心」PromQL 评测。本面板仅联调旁路入站：{" "}
+                <Typography.Text code>POST /api/v1/alerts/webhook</Typography.Text>
+                （Alertmanager 兼容载荷），Token 头为{" "}
+                <Typography.Text code>X-Webhook-Token</Typography.Text> /{" "}
+                <Typography.Text code>X-Alert-Token</Typography.Text>
+                。成功后看「事件台 · 投递流水」；K8s Event 请走{" "}
+                <Typography.Text code>/ingress/k8s-events</Typography.Text>
+                （不写 cur_events，勿与本按钮混用）。
               </Typography.Paragraph>
               <Space wrap>
                 <Input
@@ -1009,9 +1013,10 @@ export function AlertConfigCenterPanel({
             },
             {
               title: "操作",
-              width: 120,
+              width: 160,
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, r: AlertReceiverGroup) => (
-                <Space>
+                <Space size={0} wrap className="yunshu-table-actions">
                   <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openReceiverGroupEdit(r)}>
                     编辑
                   </Button>

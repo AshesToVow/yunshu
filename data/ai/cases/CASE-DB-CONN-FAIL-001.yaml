@@ -1,0 +1,18 @@
+case_id: CASE-DB-CONN-FAIL-001
+title: 数据库实例连接失败典型案例
+category: dbmgmt
+technology: mysql
+symptom: 平台连库失败、探测超时、应用报 Access denied / connection refused
+environment: Yunshu 数据库管理
+diagnosis: |
+  1. 确认 project_id
+  2. list_db_instances 查看实例状态与连接模式
+  3. 核对 host/port/SSH 隧道绑定服务器
+root_cause: 地址端口错误、账号权限不足、直连被拦需隧道、实例宕机
+solution: 修正连接参数；切换直连/SSH 隧道；修复账号权限；确认实例存活
+verification: 实例探测成功且只读查询可用
+risk: 错误改密或开公网暴露风险
+related_tools: '["list_db_instances","list_servers"]'
+related_sop: '["sop-dbmgmt-conn-fail"]'
+source: seed
+confidence: 0.86

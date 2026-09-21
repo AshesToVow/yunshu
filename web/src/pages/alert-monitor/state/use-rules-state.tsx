@@ -12,9 +12,10 @@ import {
   EditOutlined,
   CalendarOutlined,
   TeamOutlined,
+  DownOutlined,
 } from "@ant-design/icons";
-import type { TreeSelectProps } from "antd";
-import { Button, Form, Popconfirm, Space, Tag, message } from "antd";
+import type { MenuProps, TreeSelectProps } from "antd";
+import { Button, Dropdown, Form, Popconfirm, Space, Tag, message } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -956,10 +957,11 @@ export function useAlertMonitorRulesState(params: {
     {
       title: "操作",
       key: "actions",
-      width: 120,
+      width: 160,
       fixed: "right" as const,
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: AlertDutyBlockItem) => (
-        <Space>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openBlkEdit(r)}>
             编辑
           </Button>
@@ -1095,10 +1097,33 @@ export function useAlertMonitorRulesState(params: {
         if (String(v || "").trim()) return v;
         const ds = dsList.find((d) => d.id === r.datasource_id);
         if (String(ds?.project_name || "").trim()) return String(ds?.project_name);
-        return r.project_id ? String(r.project_id) : "—";
+        // 日志规则无数据源，按 project_id 从项目列表解析名称（勿直接展示 ID）
+        const p = projects.find((it) => it.id === r.project_id);
+        if (p?.name) return p.name;
+        return r.project_id ? `项目 ${r.project_id}` : "—";
       },
     },
     { title: "名称", dataIndex: "name", width: 160 },
+    {
+      title: "类型",
+      dataIndex: "rule_kind",
+      width: 80,
+      render: (v: string) => {
+        const kind = v || "promql";
+        const color = kind === "log" ? "purple" : kind === "slo" ? "cyan" : "blue";
+        return <Tag color={color}>{kind}</Tag>;
+      },
+    },
+    {
+      title: "来源",
+      dataIndex: "origin",
+      width: 88,
+      render: (v: string) => {
+        if (v === "inspect") return <Tag color="purple">巡检</Tag>;
+        if (v === "template") return <Tag color="blue">模板</Tag>;
+        return <Tag>手工</Tag>;
+      },
+    },
     {
       title: "数据源",
       key: "ds",
@@ -1106,6 +1131,7 @@ export function useAlertMonitorRulesState(params: {
       render: (_: unknown, r: AlertMonitorRuleItem) => {
         const name = String(r.datasource_name || "").trim();
         if (name) return name;
+        if ((r.rule_kind || "promql") === "log") return "日志(ES)";
         const ds = dsList.find((d) => d.id === r.datasource_id);
         return ds ? ds.name : String(r.datasource_id);
       },
@@ -1116,22 +1142,42 @@ export function useAlertMonitorRulesState(params: {
     { title: "启用", dataIndex: "enabled", width: 70, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
     {
       title: "操作",
-      width: 320,
+      width: 200,
       fixed: "right" as const,
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: AlertMonitorRuleItem) => (
-        <Space wrap>
-          <Button type="link" size="small" onClick={() => openSilenceForMonitorRule(r)}>
-            静默
-          </Button>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openRuleEdit(r)}>
             规则
           </Button>
-          <Button type="link" size="small" icon={<TeamOutlined />} onClick={() => void openAssign(r.id)}>
-            处理人
-          </Button>
-          <Button type="link" size="small" icon={<CalendarOutlined />} onClick={() => void openDuty(r.id)}>
-            值班
-          </Button>
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: "silence",
+                  label: "静默",
+                  onClick: () => openSilenceForMonitorRule(r),
+                },
+                {
+                  key: "assign",
+                  icon: <TeamOutlined />,
+                  label: "处理人",
+                  onClick: () => void openAssign(r.id),
+                },
+                {
+                  key: "duty",
+                  icon: <CalendarOutlined />,
+                  label: "值班",
+                  onClick: () => void openDuty(r.id),
+                },
+              ] as MenuProps["items"],
+            }}
+            trigger={["click"]}
+          >
+            <Button type="link" size="small">
+              更多 <DownOutlined />
+            </Button>
+          </Dropdown>
           <Popconfirm title="删除规则？" onConfirm={() => void removeRule(r.id)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               删除

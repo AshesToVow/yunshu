@@ -222,6 +222,21 @@ func (h *AlertHandler) ExplainFingerprintDelivery(c *gin.Context) {
 	response.Success(c, out)
 }
 
+// CollectAlertEvidence 告警证据包：日志采样 + 近期变更 + Pod 诊断提示。
+func (h *AlertHandler) CollectAlertEvidence(c *gin.Context) {
+	fp := strings.TrimSpace(c.Query("fingerprint"))
+	if fp == "" {
+		response.Error(c, constants.ErrBadRequestWithMsg("fingerprint required"))
+		return
+	}
+	out, err := h.svc.CollectEvidence(c.Request.Context(), fp)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, out)
+}
+
 // HistoryStats 处理对应的 HTTP 请求并返回统一响应。
 func (h *AlertHandler) HistoryStats(c *gin.Context) {
 	var q struct {

@@ -305,6 +305,10 @@ func isIndexResourcePath(p string) bool {
 	if first == "" || strings.HasPrefix(first, "_") {
 		return false
 	}
+	// 禁止通过代理直接访问 .security / .kibana 等系统索引
+	if strings.HasPrefix(first, ".") {
+		return false
+	}
 	return true
 }
 

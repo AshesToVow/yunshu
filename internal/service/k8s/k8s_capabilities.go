@@ -39,7 +39,8 @@ func RequiredK8sCapability(perms []model.Permission, routePath, httpMethod, acti
 	if IsK8sNginxRestartRoute(routePath, httpMethod) {
 		return CapRestart
 	}
-	if strings.Contains(pathLower, "exec") || strings.Contains(codeLower, "exec") {
+	if strings.Contains(pathLower, "exec") || strings.Contains(codeLower, "exec") ||
+		strings.HasSuffix(pathLower, "/pods/debug") {
 		return CapExec
 	}
 	if strings.Contains(pathLower, "/pods/file") &&

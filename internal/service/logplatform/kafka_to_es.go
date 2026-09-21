@@ -23,23 +23,32 @@ import (
 )
 
 // KafkaToESService 以消费者组订阅各 Agent Topic，bulk 写入 Elasticsearch。
+//
+// 「消费者」即本服务进程内的 Kafka→ES 消费循环（消费组见 kafka_consumer_group），
+// 不是 Broker 上的 Topic 列表，也不是 Loggie。
 type KafkaToESService struct {
 	kafka *KafkaProvider
 	es    *ElasticsearchProvider
 
-	mu             sync.Mutex
-	cancel         context.CancelFunc
-	running        bool
-	cfgFingerprint string
+	mu               sync.Mutex
+	cancel           context.CancelFunc
+	running          bool // 期望运行（已 start 且未 stop）
+	cfgFingerprint   string
+	topicsFingerprint string
+	pendingTopicsKey  string
+	pendingTopicsSince time.Time
 
 	consumedTotal atomic.Int64
 	writtenTotal  atomic.Int64
 	errorTotal    atomic.Int64
 	lastConsumeAt atomic.Int64
 	lastError     atomic.Value
-	runningFlag   atomic.Bool
+	activeWorkers atomic.Int32 // 实际仍在 consumeLoop 中的 goroutine 数
 	activeTopics  atomic.Value // []string
 }
+
+// topicRestartDebounce Topic 列表仅增删时延迟重启，避免每 15s 因新日切 Topic 反复 rebalance。
+const topicRestartDebounce = 45 * time.Second
 
 func NewKafkaToESService(kafka *KafkaProvider, es *ElasticsearchProvider) *KafkaToESService {
 	s := &KafkaToESService{kafka: kafka, es: es}
@@ -64,6 +73,7 @@ type KafkaQueueStats struct {
 	Topics          []string            `json:"topics,omitempty"`
 	ConsumerGroup   string              `json:"consumer_group"`
 	ConsumerRunning bool                `json:"consumer_running"`
+	ConsumerWorkers int32               `json:"consumer_workers"`
 	LagTotal        int64               `json:"lag_total"`
 	Partitions      []KafkaPartitionLag `json:"partitions,omitempty"`
 	ConsumedTotal   int64               `json:"consumed_total"`
@@ -122,7 +132,9 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 	if !cfg.SinkViaKafka() {
 		s.stopConsumer()
 		s.mu.Lock()
-		s.cfgFingerprint = kafkaFingerprint(cfg, nil)
+		s.cfgFingerprint = kafkaConfigFingerprint(cfg)
+		s.topicsFingerprint = ""
+		s.pendingTopicsKey = ""
 		s.mu.Unlock()
 		return
 	}
@@ -143,19 +155,43 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 		s.setLastError("list topics: " + err.Error())
 		// 仍尝试按已有 fingerprint 继续；无 topic 则停
 	}
-	fp := kafkaFingerprint(cfg, topics)
+	cfgFP := kafkaConfigFingerprint(cfg)
+	topicsKey := strings.Join(topics, ",")
+
 	s.mu.Lock()
-	same := s.running && s.cfgFingerprint == fp
-	s.mu.Unlock()
-	if same {
+	running := s.cancel != nil
+	sameCfg := s.cfgFingerprint == cfgFP
+	sameTopics := s.topicsFingerprint == topicsKey
+	if running && sameCfg && sameTopics {
+		s.pendingTopicsKey = ""
+		s.mu.Unlock()
 		return
 	}
+	// 仅 Topic 列表变化：防抖，减少 rebalance；配置（workers/batch/brokers）变化立即重启
+	if running && sameCfg && !sameTopics {
+		if s.pendingTopicsKey != topicsKey {
+			s.pendingTopicsKey = topicsKey
+			s.pendingTopicsSince = time.Now()
+			s.mu.Unlock()
+			slog.Default().With("component", "kafka-to-es").Info("topic list changed; debounce restart",
+				"topics", len(topics), "debounce", topicRestartDebounce.String())
+			return
+		}
+		if time.Since(s.pendingTopicsSince) < topicRestartDebounce {
+			s.mu.Unlock()
+			return
+		}
+	}
+	s.pendingTopicsKey = ""
+	s.mu.Unlock()
+
 	s.stopConsumer()
 	if len(topics) == 0 {
 		s.setLastError("暂无 Agent Topic（yunshu-agent-{ip}-YYYY.MM.DD），请先引导/热更 Agent")
 		s.activeTopics.Store([]string(nil))
 		s.mu.Lock()
-		s.cfgFingerprint = fp
+		s.cfgFingerprint = cfgFP
+		s.topicsFingerprint = topicsKey
 		s.mu.Unlock()
 		return
 	}
@@ -165,65 +201,83 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 
 func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.KafkaConfig, topics []string) {
 	cfg = cfg.Normalized()
+	workers := cfg.Workers
+	if workers <= 0 {
+		workers = 1
+	}
+	if workers > 16 {
+		workers = 16
+	}
 	runCtx, cancel := context.WithCancel(parent)
 	s.mu.Lock()
 	s.cancel = cancel
 	s.running = true
-	s.cfgFingerprint = kafkaFingerprint(cfg, topics)
+	s.cfgFingerprint = kafkaConfigFingerprint(cfg)
+	s.topicsFingerprint = strings.Join(topics, ",")
 	s.mu.Unlock()
-	s.runningFlag.Store(true)
 	s.activeTopics.Store(append([]string(nil), topics...))
 	s.setLastError("")
 	slog.Default().With("component", "kafka-to-es").Info("kafka consumer starting",
-		"group", cfg.ConsumerGroup, "topics", len(topics), "brokers", len(cfg.Brokers))
+		"group", cfg.ConsumerGroup, "topics", len(topics), "workers", workers,
+		"batch_size", cfg.BatchSize, "brokers", len(cfg.Brokers))
 
-	lifecycle.Go("logplatform.kafka-to-es", func() {
-		defer func() {
-			s.runningFlag.Store(false)
-			s.mu.Lock()
-			s.running = false
-			s.mu.Unlock()
-		}()
-		s.consumeLoop(runCtx, cfg, topics)
-	})
+	for i := range workers {
+		workerID := i
+		lifecycle.Go(fmt.Sprintf("logplatform.kafka-to-es-%d", workerID), func() {
+			s.activeWorkers.Add(1)
+			defer func() {
+				s.activeWorkers.Add(-1)
+				s.mu.Lock()
+				if s.activeWorkers.Load() == 0 {
+					s.running = false
+				}
+				s.mu.Unlock()
+			}()
+			s.consumeLoop(runCtx, cfg, topics, workerID)
+		})
+	}
 }
 
 func (s *KafkaToESService) stopConsumer() {
 	s.mu.Lock()
 	cancel := s.cancel
 	s.cancel = nil
-	s.running = false
+	// 不在此处把 running 直接打成 false：旧协程可能仍在 Fetch/计数，
+	// 状态以 activeWorkers 为准，由 consumeLoop defer 回收。
 	s.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
-	s.runningFlag.Store(false)
 }
 
-func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConfig, topics []string) {
+func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConfig, topics []string, workerID int) {
 	dialer, err := kafkaDialer(cfg)
 	if err != nil {
 		s.setLastError(err.Error())
-		slog.Default().With("component", "kafka-to-es").Error("kafka dialer", "err", err)
+		slog.Default().With("component", "kafka-to-es").Error("kafka dialer", "err", err, "worker", workerID)
 		return
 	}
-	// 必须使用消费者组 + 多 Topic（每 Agent 一个）
+	// 同 GroupID 多 Reader：由 Kafka 在分区维度负载均衡（kafka_workers 真正生效）
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        cfg.Brokers,
 		GroupID:        cfg.ConsumerGroup,
 		GroupTopics:    topics,
 		MinBytes:       1,
 		MaxBytes:       10e6,
-		MaxWait:        time.Second,
+		MaxWait:        200 * time.Millisecond,
 		CommitInterval: 0,
 		Dialer:         dialer,
-		StartOffset:    kafka.LastOffset,
+		StartOffset:    kafka.FirstOffset,
+		QueueCapacity:  256,
 	})
 	defer reader.Close()
 
 	batchSize := cfg.BatchSize
+	if batchSize <= 0 {
+		batchSize = 200
+	}
 	batch := make([]kafka.Message, 0, batchSize)
-	flushInterval := 2 * time.Second
+	flushInterval := time.Second
 	lastFlush := time.Now()
 	prefix := cfg.TopicPrefix
 
@@ -234,22 +288,19 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 		toWrite := append([]kafka.Message(nil), batch...)
 		res, err := s.writeBatch(ctx, toWrite, prefix)
 		if err != nil {
-			// 传输级失败（ES 不可达 / 5xx）：不提交、不清空 batch，下轮重试形成背压。
 			s.errorTotal.Add(1)
 			s.setLastError(err.Error())
-			slog.Default().With("component", "kafka-to-es").Warn("bulk write failed", "err", err, "n", len(toWrite))
+			slog.Default().With("component", "kafka-to-es").Warn("bulk write failed",
+				"err", err, "n", len(toWrite), "worker", workerID)
 			return
 		}
-		// 写入成功（可能含被 ES 拒绝的坏文档）：坏文档重试也无用，好文档已落库；
-		// 必须提交 offset 并清空 batch，否则单条毒消息会让 batch 无限增长（OOM）并永久阻塞该消费组。
 		if res != nil && res.Failed > 0 {
 			s.errorTotal.Add(int64(res.Failed))
 			s.setLastError(fmt.Sprintf("bulk 拒绝 %d 条文档（已跳过）：%s", res.Failed, res.FirstError))
 			slog.Default().With("component", "kafka-to-es").Warn("bulk items rejected; skipping poison docs",
-				"failed", res.Failed, "n", len(toWrite), "sample", res.FirstError)
+				"failed", res.Failed, "n", len(toWrite), "sample", res.FirstError, "worker", workerID)
 		}
 		if err := reader.CommitMessages(ctx, toWrite...); err != nil {
-			// 提交失败：不清空 batch，下轮重写。因文档无固定 _id，重写好文档会产生少量重复，属可接受的 at-least-once。
 			s.errorTotal.Add(1)
 			s.setLastError("commit: " + err.Error())
 			return
@@ -269,7 +320,7 @@ func (s *KafkaToESService) consumeLoop(ctx context.Context, cfg config.KafkaConf
 		if time.Since(lastFlush) >= flushInterval {
 			flush()
 		}
-		msgCtx, cancel := context.WithTimeout(ctx, time.Second)
+		msgCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 		msg, err := reader.FetchMessage(msgCtx)
 		cancel()
 		if err != nil {
@@ -533,11 +584,11 @@ func kafkaDialer(cfg config.KafkaConfig) (*kafka.Dialer, error) {
 	return d, nil
 }
 
-func kafkaFingerprint(cfg config.KafkaConfig, topics []string) string {
+func kafkaConfigFingerprint(cfg config.KafkaConfig) string {
 	cfg = cfg.Normalized()
-	return fmt.Sprintf("%v|%s|%s|%s|%s|%d|%v|%s",
-		cfg.Enabled, strings.Join(cfg.Brokers, ","), cfg.TopicPrefix, cfg.ConsumerGroup,
-		cfg.Username, cfg.BatchSize, cfg.SASLMechanism, strings.Join(topics, ","))
+	return fmt.Sprintf("%v|%s|%s|%s|%s|%s|%d|%d|%v",
+		cfg.Enabled, strings.Join(cfg.Brokers, ","), cfg.TopicPrefix, cfg.K8sTopicPrefix, cfg.ConsumerGroup,
+		cfg.Username, cfg.BatchSize, cfg.Workers, cfg.SASLMechanism)
 }
 
 func (s *KafkaToESService) setLastError(msg string) {
@@ -570,11 +621,13 @@ func (s *KafkaToESService) ConfigPreview(ctx context.Context) (*KafkaConfigPrevi
 }
 
 func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) {
+	workers := s.activeWorkers.Load()
 	out := &KafkaQueueStats{
 		ConsumedTotal:   s.consumedTotal.Load(),
 		WrittenTotal:    s.writtenTotal.Load(),
 		ErrorTotal:      s.errorTotal.Load(),
-		ConsumerRunning: s.runningFlag.Load(),
+		ConsumerWorkers: workers,
+		ConsumerRunning: workers > 0,
 	}
 	if ms := s.lastConsumeAt.Load(); ms > 0 {
 		out.LastConsumeAt = time.UnixMilli(ms).Format(time.RFC3339)
@@ -626,17 +679,21 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	out.Partitions = lags
 	out.LagTotal = lagTotal
 	if out.ConsumerRunning {
-		out.Message = fmt.Sprintf("消费组 %s 运行中，订阅 %d 个 Agent Topic", cfg.ConsumerGroup, len(topics))
+		out.Message = fmt.Sprintf("Yunshu Kafka→ES 消费者运行中（组 %s，订阅 %d 个 Topic，%d worker）", cfg.ConsumerGroup, len(topics), workers)
 		if strings.Contains(out.LastError, "暂无 Agent Topic") {
 			out.LastError = ""
 		}
 	} else if len(topics) == 0 {
 		out.Message = "暂无 Agent Topic，请先引导/热更 Agent（将自动创建 yunshu-agent-{ip}-YYYY.MM.DD）"
 	} else {
-		out.Message = "消费者未运行（请确认 ES 已启用）"
+		out.Message = "Yunshu Kafka→ES 消费者未运行（请确认 elasticsearch_enabled / 已绑定 ES 连接）"
 		if strings.Contains(out.LastError, "暂无 Agent Topic") {
 			out.LastError = ""
 		}
+	}
+	// 提示：积压含历史 Topic 未消费分区；消费者从 earliest 追平后 lag 才会下降
+	if out.LagTotal > 0 && out.ConsumerRunning {
+		out.Message += fmt.Sprintf("；当前积压 %d 条（含历史 Topic 时追平需时间）", out.LagTotal)
 	}
 	return out, nil
 }

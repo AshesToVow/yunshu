@@ -47,7 +47,8 @@ func (c ElasticsearchConfig) Normalized() ElasticsearchConfig {
 		out.MaxSize = 1000
 	}
 	if out.TimeoutSeconds <= 0 {
-		out.TimeoutSeconds = 30
+		// 日志检索可能扫多日索引；过短会导致前端误报超时
+		out.TimeoutSeconds = 90
 	}
 	if out.DefaultRetentionDays <= 0 {
 		out.DefaultRetentionDays = 30

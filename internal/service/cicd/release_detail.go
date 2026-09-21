@@ -36,22 +36,20 @@ type ReleaseRunDetailResponse struct {
 }
 
 func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (*ReleaseRunDetailResponse, error) {
-	var row model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+	row, err := s.repo.GetReleaseRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "view"); err != nil {
 		return nil, err
 	}
-	item := ReleaseRunItem{CicdReleaseRun: row}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err == nil {
-		item.ServiceName = svc.Name
-		item.ServiceIdentifier = svc.Identifier
+	item := ReleaseRunItem{CicdReleaseRun: *row}
+	if brief, err := s.repo.GetServiceBrief(ctx, row.ServiceID); err == nil && brief != nil {
+		item.ServiceName = brief.Name
+		item.ServiceIdentifier = brief.Identifier
 	}
-	var proj model.Project
-	if err := s.db.WithContext(ctx).Select("name").Where("id = ?", projectID).First(&proj).Error; err == nil {
-		item.ProjectName = proj.Name
+	if name, err := s.repo.GetProjectName(ctx, projectID); err == nil {
+		item.ProjectName = name
 	}
 	if row.CurrentStageKey != "" {
 		item.CurrentStageName = stageNameByKey(row.CurrentStageKey)
@@ -63,8 +61,8 @@ func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint
 	}
 	flowText := buildApprovalFlowText(steps)
 	handlers, _ := s.loadCurrentHandlers(ctx, steps)
-	logs := buildReleaseOperationLogs(row, steps, flowText)
-	destHosts, deployName, destPath := s.loadReleaseDeployMeta(ctx, projectID, &row)
+	logs := buildReleaseOperationLogs(*row, steps, flowText)
+	destHosts, deployName, destPath := s.loadReleaseDeployMeta(ctx, projectID, row)
 
 	return &ReleaseRunDetailResponse{
 		ReleaseRunItem:   item,
@@ -79,8 +77,11 @@ func (s *Service) GetReleaseRunDetail(ctx context.Context, projectID, runID uint
 }
 
 func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint) ([]ReleaseApprovalStepItem, error) {
-	var steps []model.CicdReleaseApprovalStep
-	if err := s.db.WithContext(ctx).Where("release_run_id = ?", runID).Order("sort_order ASC, id ASC").Find(&steps).Error; err != nil {
+	if items, ok := s.buildReleaseApprovalStepItemsFromWorkflow(ctx, runID); ok {
+		return items, nil
+	}
+	steps, err := s.repo.ListApprovalStepsByRun(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
 	groupIDs := make([]uint, 0)
@@ -95,14 +96,45 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 	}
 	groupNames := map[uint]string{}
 	if len(groupIDs) > 0 {
-		var groups []model.UserGroup
-		_ = s.db.WithContext(ctx).Select("id, name").Where("id IN ?", groupIDs).Find(&groups).Error
+		groups, _ := s.repo.ListUserGroupsByIDs(ctx, groupIDs)
 		for _, g := range groups {
 			groupNames[g.ID] = g.Name
 		}
 	}
+	// 兼容：workflow 回写曾只写 reviewer_user_id，未写 reviewer_name
+	reviewerIDs := make([]uint, 0)
+	reviewerSeen := map[uint]struct{}{}
+	for _, st := range steps {
+		if strings.TrimSpace(st.ReviewerName) != "" {
+			continue
+		}
+		if st.ReviewerUserID == nil || *st.ReviewerUserID == 0 {
+			continue
+		}
+		id := *st.ReviewerUserID
+		if _, ok := reviewerSeen[id]; ok {
+			continue
+		}
+		reviewerSeen[id] = struct{}{}
+		reviewerIDs = append(reviewerIDs, id)
+	}
+	reviewerNames := map[uint]string{}
+	if len(reviewerIDs) > 0 {
+		users, _ := s.repo.ListUsersByIDs(ctx, reviewerIDs)
+		for _, u := range users {
+			name := strings.TrimSpace(u.Username)
+			if name == "" {
+				name = strings.TrimSpace(u.Nickname)
+			}
+			reviewerNames[u.ID] = name
+		}
+	}
 	items := make([]ReleaseApprovalStepItem, 0, len(steps))
 	for _, st := range steps {
+		name := strings.TrimSpace(st.ReviewerName)
+		if name == "" && st.ReviewerUserID != nil {
+			name = reviewerNames[*st.ReviewerUserID]
+		}
 		item := ReleaseApprovalStepItem{
 			ID:             st.ID,
 			StageKey:       st.StageKey,
@@ -111,7 +143,7 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 			Status:         st.Status,
 			UserGroupID:    st.UserGroupID,
 			ReviewerUserID: st.ReviewerUserID,
-			ReviewerName:   st.ReviewerName,
+			ReviewerName:   name,
 			ReviewComment:  st.ReviewComment,
 		}
 		if st.UserGroupID != nil {
@@ -124,6 +156,39 @@ func (s *Service) buildReleaseApprovalStepItems(ctx context.Context, runID uint)
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func (s *Service) buildReleaseApprovalStepItemsFromWorkflow(ctx context.Context, runID uint) ([]ReleaseApprovalStepItem, bool) {
+	wf := s.workflowEngine()
+	ticket, err := wf.GetTicketByRefType(ctx, model.WorkflowRefCicdReleaseRun, runID, model.WorkflowTicketTypeRelease)
+	if err != nil || ticket == nil {
+		return nil, false
+	}
+	detail, err := wf.TicketDetail(ctx, ticket.ID)
+	if err != nil || detail == nil || len(detail.Steps) == 0 {
+		return nil, false
+	}
+	items := make([]ReleaseApprovalStepItem, 0, len(detail.Steps))
+	for _, st := range detail.Steps {
+		item := ReleaseApprovalStepItem{
+			ID:             st.ID,
+			StageKey:       st.StageKey,
+			StageName:      st.StageName,
+			SortOrder:      st.SortOrder,
+			Status:         st.Status,
+			UserGroupID:    st.UserGroupID,
+			UserGroupName:  st.UserGroupName,
+			ReviewerUserID: st.ReviewerUserID,
+			ReviewerName:   st.ReviewerName,
+			ReviewComment:  st.ReviewComment,
+		}
+		if st.ReviewedAt != nil {
+			ts := st.ReviewedAt.Format("2006-01-02 15:04:05")
+			item.ReviewedAt = &ts
+		}
+		items = append(items, item)
+	}
+	return items, true
 }
 
 func buildApprovalFlowText(steps []ReleaseApprovalStepItem) string {
@@ -156,8 +221,7 @@ func (s *Service) loadCurrentHandlers(ctx context.Context, steps []ReleaseApprov
 		if err != nil || len(userIDs) == 0 {
 			return nil, err
 		}
-		var users []model.User
-		_ = s.db.WithContext(ctx).Select("id, username, nickname").Where("id IN ?", userIDs).Find(&users).Error
+		users, _ := s.repo.ListUsersByIDs(ctx, userIDs)
 		out := make([]ReleaseHandlerItem, 0, len(users))
 		for _, u := range users {
 			name := u.Username
@@ -304,12 +368,12 @@ func (s *Service) loadReleaseDeployMeta(ctx context.Context, projectID uint, rel
 	if release == nil || release.DeployConfigID == nil {
 		return nil, "", ""
 	}
-	var dc model.CicdDeployConfig
-	if err := s.db.WithContext(ctx).Where("id = ?", *release.DeployConfigID).First(&dc).Error; err != nil {
+	dc, err := s.repo.GetDeployConfigByID(ctx, *release.DeployConfigID)
+	if err != nil {
 		return nil, "", ""
 	}
 	destPath := strings.TrimSpace(dc.DestPath)
-	destStr, _ := s.resolveDestIPs(ctx, projectID, &dc)
+	destStr, _ := s.resolveDestIPs(ctx, projectID, dc)
 	var hosts []string
 	if destStr != "" {
 		for _, h := range strings.Split(destStr, ",") {

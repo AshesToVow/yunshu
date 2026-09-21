@@ -9,8 +9,11 @@ import (
 	"strings"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
+
+	"gorm.io/gorm"
 )
 
 type ColumnMaskRuleUpsertRequest struct {
@@ -21,70 +24,107 @@ type ColumnMaskRuleUpsertRequest struct {
 	Pattern    string `json:"pattern"`
 }
 
-func (s *Service) ListColumnMaskRules(ctx context.Context, instanceID uint) ([]model.DbColumnMaskRule, error) {
-	var list []model.DbColumnMaskRule
-	err := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("id ASC").Find(&list).Error
+func (s *Service) ListColumnMaskRules(ctx context.Context, projectID, instanceID uint, actor *auth.CurrentUser) ([]model.DbColumnMaskRule, error) {
+	if _, err := s.repo.GetInstanceInProject(ctx, projectID, instanceID); err != nil {
+		return nil, err
+	}
+	if err := s.requireInstanceManage(ctx, projectID, instanceID, actor); err != nil {
+		return nil, err
+	}
+	list, err := s.repo.ListColumnMaskRules(ctx, instanceID)
 	return list, bizerrors.Pass(ctx, "dbmgmt.mask", "List", err)
 }
 
-func (s *Service) UpsertColumnMaskRule(ctx context.Context, instanceID uint, req ColumnMaskRuleUpsertRequest) (*model.DbColumnMaskRule, error) {
+func (s *Service) UpsertColumnMaskRule(ctx context.Context, projectID, instanceID uint, req ColumnMaskRuleUpsertRequest, actor *auth.CurrentUser) (*model.DbColumnMaskRule, error) {
+	if _, err := s.repo.GetInstanceInProject(ctx, projectID, instanceID); err != nil {
+		return nil, err
+	}
+	if err := s.requireInstanceManage(ctx, projectID, instanceID, actor); err != nil {
+		return nil, err
+	}
 	mt := strings.TrimSpace(strings.ToLower(req.MaskType))
 	if mt == "" {
 		mt = "partial"
 	}
-	var row model.DbColumnMaskRule
-	err := s.db.WithContext(ctx).Where(
-		"instance_id = ? AND schema_name = ? AND table_name = ? AND column_name = ?",
-		instanceID, strings.TrimSpace(req.SchemaName), strings.TrimSpace(req.TableName), strings.TrimSpace(req.ColumnName),
-	).First(&row).Error
+	schema := strings.TrimSpace(req.SchemaName)
+	table := strings.TrimSpace(req.TableName)
+	column := strings.TrimSpace(req.ColumnName)
+	if table == "" || column == "" {
+		return nil, constants.ErrBadRequestWithMsg("table_name 与 column_name 必填")
+	}
+	row, err := s.repo.FindColumnMaskRule(ctx, instanceID, schema, table, column)
 	if err != nil {
-		row = model.DbColumnMaskRule{
+		if err != gorm.ErrRecordNotFound {
+			return nil, bizerrors.Pass(ctx, "dbmgmt.mask", "Find", err)
+		}
+		row = &model.DbColumnMaskRule{
 			InstanceID: instanceID,
-			SchemaName: strings.TrimSpace(req.SchemaName),
-			MaskTable:  strings.TrimSpace(req.TableName),
-			ColumnName: strings.TrimSpace(req.ColumnName),
+			SchemaName: schema,
+			MaskTable:  table,
+			ColumnName: column,
 		}
 	}
 	row.MaskType = mt
 	row.Pattern = strings.TrimSpace(req.Pattern)
 	if row.ID == 0 {
-		err = s.db.WithContext(ctx).Create(&row).Error
+		err = s.repo.CreateColumnMaskRule(ctx, row)
 	} else {
-		err = s.db.WithContext(ctx).Save(&row).Error
+		err = s.repo.UpdateColumnMaskRule(ctx, row)
 	}
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "dbmgmt.mask", "Upsert", err)
 	}
-	return &row, nil
+	return row, nil
 }
 
-func (s *Service) DeleteColumnMaskRule(ctx context.Context, instanceID, id uint) error {
-	res := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Delete(&model.DbColumnMaskRule{}, id)
-	if res.Error != nil {
-		return bizerrors.Pass(ctx, "dbmgmt.mask", "Delete", res.Error)
+func (s *Service) DeleteColumnMaskRule(ctx context.Context, projectID, instanceID, id uint, actor *auth.CurrentUser) error {
+	if _, err := s.repo.GetInstanceInProject(ctx, projectID, instanceID); err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if err := s.requireInstanceManage(ctx, projectID, instanceID, actor); err != nil {
+		return err
+	}
+	err := s.repo.DeleteColumnMaskRule(ctx, instanceID, id)
+	if err == gorm.ErrRecordNotFound {
 		return constants.ErrNotFound
 	}
-	return nil
+	return bizerrors.Pass(ctx, "dbmgmt.mask", "Delete", err)
 }
 
-func (s *Service) applyColumnMasks(ctx context.Context, instanceID uint, database string, cols []string, rows [][]any) {
-	if s == nil || s.db == nil || instanceID == 0 || len(cols) == 0 {
+func (s *Service) applyColumnMasks(ctx context.Context, instanceID uint, database, sqlText string, cols []string, rows [][]any) {
+	if s == nil || s.repo == nil || instanceID == 0 || len(cols) == 0 {
 		return
 	}
-	var rules []model.DbColumnMaskRule
-	_ = s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Find(&rules).Error
-	if len(rules) == 0 {
+	rules, err := s.repo.ListColumnMaskRules(ctx, instanceID)
+	if err != nil || len(rules) == 0 {
 		return
+	}
+	refs := extractQueryTableRefs(sqlText, database)
+	tableSet := map[string]struct{}{}
+	for _, r := range refs {
+		t := strings.ToLower(strings.TrimSpace(r.Table))
+		if t != "" {
+			tableSet[t] = struct{}{}
+		}
 	}
 	colIndex := map[string]int{}
 	for i, c := range cols {
-		colIndex[strings.ToLower(strings.TrimSpace(c))] = i
+		name := strings.ToLower(strings.TrimSpace(c))
+		colIndex[name] = i
+		// 兼容 table.column / alias.column
+		if idx := strings.LastIndex(name, "."); idx >= 0 && idx+1 < len(name) {
+			colIndex[name[idx+1:]] = i
+		}
 	}
 	for _, rule := range rules {
 		if db := strings.TrimSpace(database); db != "" && rule.SchemaName != "" && !strings.EqualFold(rule.SchemaName, db) {
 			continue
+		}
+		maskTable := strings.ToLower(strings.TrimSpace(rule.MaskTable))
+		if maskTable != "" && len(tableSet) > 0 {
+			if _, ok := tableSet[maskTable]; !ok {
+				continue
+			}
 		}
 		idx, ok := colIndex[strings.ToLower(rule.ColumnName)]
 		if !ok {

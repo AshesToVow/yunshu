@@ -20,6 +20,78 @@ jobs:
       - name: Test
         run: go test ./... -short -count=1
 
+  pg-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: yunshu
+          POSTGRES_PASSWORD: yunshu
+          POSTGRES_DB: yunshu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yunshu -d yunshu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: Write smoke config
+        run: |
+          cp configs/config.smoke-pg.yaml /tmp/yunshu-smoke-pg.yaml
+          # CI service 网络：库与 Redis 在 localhost
+          sed -i 's/host: yunshu-postgres/host: 127.0.0.1/' /tmp/yunshu-smoke-pg.yaml
+          sed -i 's/addr: yunshu-redis:6379/addr: 127.0.0.1:6379/' /tmp/yunshu-smoke-pg.yaml
+          sed -i 's/password: "1234"/password: ""/' /tmp/yunshu-smoke-pg.yaml
+          sed -i 's/port: 8080/port: 18080/' /tmp/yunshu-smoke-pg.yaml
+          grep -E '^(  host:|  addr:|  port:|  password:)' /tmp/yunshu-smoke-pg.yaml | head -n 20
+      - name: Build
+        run: go build -o /tmp/yunshu .
+      - name: Migrate
+        run: /tmp/yunshu migrate --config /tmp/yunshu-smoke-pg.yaml
+      - name: Seed
+        run: /tmp/yunshu seed --config /tmp/yunshu-smoke-pg.yaml
+      - name: Server + health
+        run: |
+          /tmp/yunshu server --config /tmp/yunshu-smoke-pg.yaml >/tmp/yunshu-server.log 2>&1 &
+          pid=$!
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18080/api/v1/health >/dev/null; then
+              ok=1
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "server exited early" >&2
+              cat /tmp/yunshu-server.log >&2 || true
+              exit 1
+            fi
+            sleep 1
+          done
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          if [ "$ok" != "1" ]; then
+            echo "health check failed" >&2
+            cat /tmp/yunshu-server.log >&2 || true
+            exit 1
+          fi
+          echo "PG smoke OK"
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

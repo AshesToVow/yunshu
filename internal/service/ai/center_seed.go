@@ -154,34 +154,42 @@ func (s *Service) seedPromptsFromDir(ctx context.Context, dir string) error {
 		case strings.HasPrefix(code, "diagnosis/"):
 			typ = "diagnosis"
 			scene = strings.TrimPrefix(code, "diagnosis/")
+		case strings.HasPrefix(code, "generation/"):
+			typ = "generation"
+			scene = strings.TrimPrefix(code, "generation/")
 		}
 		var prompt model.AiPrompt
-		err := s.db.WithContext(ctx).Where("code = ?", code).First(&prompt).Error
+		promptPtr, err := s.repo.GetPromptByCode(ctx, code)
 		if err == gorm.ErrRecordNotFound {
 			prompt = model.AiPrompt{Code: code, Name: name, Type: typ, Scene: scene, Enabled: true}
-			if err := s.db.WithContext(ctx).Create(&prompt).Error; err != nil {
+			if err := s.repo.CreatePrompt(ctx, &prompt); err != nil {
 				return err
 			}
 		} else if err != nil {
 			return err
+		} else {
+			prompt = *promptPtr
 		}
-		var verCount int64
-		_ = s.db.WithContext(ctx).Model(&model.AiPromptVersion{}).Where("prompt_id = ?", prompt.ID).Count(&verCount).Error
-		if verCount > 0 {
-			continue
-		}
+		verCount, _ := s.repo.CountPromptVersions(ctx, prompt.ID)
 		body, err := os.ReadFile(filepath.Join(dir, e.Name(), "v1.md"))
 		if err != nil {
 			continue
 		}
-		ver := model.AiPromptVersion{
-			PromptID:  prompt.ID,
-			Version:   1,
-			Content:   string(body),
-			Changelog: "seed",
-			IsCurrent: true,
+		content := string(body)
+		if verCount == 0 {
+			if _, err := s.repo.PublishPromptVersion(ctx, prompt.ID, 0, content, "seed"); err != nil {
+				return err
+			}
+			continue
 		}
-		if err := s.db.WithContext(ctx).Create(&ver).Error; err != nil {
+		cur, err := s.repo.GetCurrentPromptVersion(ctx, prompt.ID)
+		if err != nil {
+			continue
+		}
+		if cur.Content == content {
+			continue
+		}
+		if err := s.repo.SeedPromptVersionUpdate(ctx, prompt.ID, content, cur.Version+1); err != nil {
 			return err
 		}
 	}
@@ -199,15 +207,17 @@ func (s *Service) seedKnowledgeFromDir(ctx context.Context, dir string) error {
 		}
 		code := e.Name()
 		var kb model.AiKnowledgeBase
-		err := s.db.WithContext(ctx).Where("code = ?", code).First(&kb).Error
+		kbPtr, err := s.repo.GetKnowledgeBaseByCode(ctx, code)
 		if err == gorm.ErrRecordNotFound {
 			cat := strings.TrimPrefix(code, "kb_")
 			kb = model.AiKnowledgeBase{Code: code, Name: code, Category: cat, Enabled: true}
-			if err := s.db.WithContext(ctx).Create(&kb).Error; err != nil {
+			if err := s.repo.CreateKnowledgeBase(ctx, &kb); err != nil {
 				return err
 			}
 		} else if err != nil {
 			return err
+		} else {
+			kb = *kbPtr
 		}
 		files, _ := os.ReadDir(filepath.Join(dir, e.Name()))
 		for _, f := range files {
@@ -215,8 +225,7 @@ func (s *Service) seedKnowledgeFromDir(ctx context.Context, dir string) error {
 				continue
 			}
 			src := code + "/" + f.Name()
-			var cnt int64
-			_ = s.db.WithContext(ctx).Model(&model.AiKbDocument{}).Where("kb_id = ? AND source = ?", kb.ID, src).Count(&cnt).Error
+			cnt, _ := s.repo.CountKBDocumentBySource(ctx, kb.ID, src)
 			if cnt > 0 {
 				continue
 			}
@@ -228,7 +237,7 @@ func (s *Service) seedKnowledgeFromDir(ctx context.Context, dir string) error {
 				KBID: kb.ID, Title: f.Name(), Source: src, Version: "v1",
 				Enabled: true, Confidence: 0.8, Content: string(raw),
 			}
-			if err := s.db.WithContext(ctx).Create(&doc).Error; err != nil {
+			if err := s.repo.CreateKBDocument(ctx, &doc); err != nil {
 				return err
 			}
 			_ = s.rechunkDocument(ctx, &doc)
@@ -275,8 +284,7 @@ func (s *Service) seedCasesFromDir(ctx context.Context, dir string) error {
 		if c.CaseID == "" {
 			continue
 		}
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiIncidentCase{}).Where("case_id = ?", c.CaseID).Count(&cnt).Error
+		cnt, _ := s.repo.CountIncidentCaseByCaseID(ctx, c.CaseID)
 		if cnt > 0 {
 			continue
 		}
@@ -290,7 +298,7 @@ func (s *Service) seedCasesFromDir(ctx context.Context, dir string) error {
 		if row.Confidence <= 0 {
 			row.Confidence = 0.8
 		}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateIncidentCase(ctx, &row); err != nil {
 			return err
 		}
 	}
@@ -332,8 +340,7 @@ func (s *Service) seedSOPsFromDir(ctx context.Context, dir string) error {
 		if c.Code == "" {
 			continue
 		}
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiSOP{}).Where("code = ?", c.Code).Count(&cnt).Error
+		cnt, _ := s.repo.CountSOPByCode(ctx, c.Code)
 		if cnt > 0 {
 			continue
 		}
@@ -343,7 +350,7 @@ func (s *Service) seedSOPsFromDir(ctx context.Context, dir string) error {
 			VerifySteps: c.VerifySteps, ExceptionHandle: c.ExceptionHandle, Rollback: c.Rollback,
 			Risk: c.Risk, ApprovalNeeded: c.ApprovalNeeded, Enabled: true,
 		}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateSOP(ctx, &row); err != nil {
 			return err
 		}
 	}
@@ -377,8 +384,7 @@ func (s *Service) seedToolsFromDir(ctx context.Context, dir string) error {
 		if err := yaml.Unmarshal(raw, &t); err != nil || t.Name == "" {
 			return nil
 		}
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("name = ?", t.Name).Count(&cnt).Error
+		cnt, _ := s.repo.CountToolsByName(ctx, t.Name)
 		if cnt > 0 {
 			return nil
 		}
@@ -397,7 +403,7 @@ func (s *Service) seedToolsFromDir(ctx context.Context, dir string) error {
 		if row.TimeoutSec <= 0 {
 			row.TimeoutSec = 30
 		}
-		return s.db.WithContext(ctx).Create(&row).Error
+		return s.repo.CreateTool(ctx, &row)
 	})
 }
 
@@ -420,24 +426,40 @@ func (s *Service) seedBuiltinToolDefs(ctx context.Context) error {
 		{Name: "list_namespaces", Description: "列出命名空间", Module: "k8s", Runtime: "builtin", HandlerKey: "list_namespaces", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "list_events", Description: "列出 Events", Module: "k8s", Runtime: "builtin", HandlerKey: "list_events", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "list_runbooks", Description: "列出剧本", Module: "k8s", Runtime: "builtin", HandlerKey: "list_runbooks", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 10},
-		{Name: "search_logs", Description: "检索项目日志", Module: "log", Runtime: "builtin", HandlerKey: "search_logs", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "search_logs", Description: "检索项目日志（含级别/时间等过滤）", Module: "log", Runtime: "builtin", HandlerKey: "search_logs", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "analyze_logs", Description: "分析整理项目日志（签名/级别统计）", Module: "log", Runtime: "builtin", HandlerKey: "analyze_logs", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "list_log_sources", Description: "列出项目日志源", Module: "log", Runtime: "builtin", HandlerKey: "list_log_sources", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "list_loggie_status", Description: "Loggie Agent 状态", Module: "log", Runtime: "builtin", HandlerKey: "list_loggie_status", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "list_cluster_log_rules", Description: "集群日志采集规则", Module: "log", Runtime: "builtin", HandlerKey: "list_cluster_log_rules", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "list_cicd_builds", Description: "列出构建", Module: "cicd", Runtime: "builtin", HandlerKey: "list_cicd_builds", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "get_cicd_build", Description: "构建详情", Module: "cicd", Runtime: "builtin", HandlerKey: "get_cicd_build", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "get_cicd_build_log", Description: "构建日志", Module: "cicd", Runtime: "builtin", HandlerKey: "get_cicd_build_log", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
 		{Name: "list_alerts", Description: "列出告警", Module: "alert", Runtime: "builtin", HandlerKey: "list_alerts", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "explain_alert", Description: "解释告警投递", Module: "alert", Runtime: "builtin", HandlerKey: "explain_alert", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "get_alert_detail", Description: "告警事件详情", Module: "alert", Runtime: "builtin", HandlerKey: "get_alert_detail", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "list_alert_datasources", Description: "列出监控数据源", Module: "monitor", Runtime: "builtin", HandlerKey: "list_alert_datasources", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "query_prometheus", Description: "PromQL 即时查询", Module: "monitor", Runtime: "builtin", HandlerKey: "query_prometheus", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "query_prometheus_range", Description: "PromQL 区间查询", Module: "monitor", Runtime: "builtin", HandlerKey: "query_prometheus_range", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "list_prometheus_active_alerts", Description: "Prometheus active alerts", Module: "monitor", Runtime: "builtin", HandlerKey: "list_prometheus_active_alerts", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "list_servers", Description: "列出 CMDB 服务器", Module: "cmdb", Runtime: "builtin", HandlerKey: "list_servers", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "get_server", Description: "服务器详情", Module: "cmdb", Runtime: "builtin", HandlerKey: "get_server", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "test_server_connectivity", Description: "探测服务器连通性", Module: "cmdb", Runtime: "builtin", HandlerKey: "test_server_connectivity", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "probe_server_metrics", Description: "SSH 远端只读探测磁盘/内存/负载", Module: "cmdb", Runtime: "builtin", HandlerKey: "probe_server_metrics", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 60},
+		{Name: "list_change_events", Description: "查询项目变更时间线", Module: "ops", Runtime: "builtin", HandlerKey: "list_change_events", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "create_alert_silence", Description: "申请告警静默（仅建审批单，通过后生效）", Module: "alert", Runtime: "builtin", HandlerKey: "create_alert_silence", Permission: "WRITE", RiskLevel: "MEDIUM", RequireConfirmation: true, Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "list_db_instances", Description: "列出数据库实例", Module: "dbmgmt", Runtime: "builtin", HandlerKey: "list_db_instances", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
+		{Name: "list_es_connections", Description: "列出 ES 连接", Module: "esmgmt", Runtime: "builtin", HandlerKey: "list_es_connections", Permission: "READ_ONLY", RiskLevel: "LOW", Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "scale_deployment", Description: "扩缩容（审批）", Module: "k8s", Runtime: "builtin", HandlerKey: "scale_deployment", Permission: "WRITE", RiskLevel: "HIGH", RequireConfirmation: true, Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "restart_deployment", Description: "重启 Deployment（审批）", Module: "k8s", Runtime: "builtin", HandlerKey: "restart_deployment", Permission: "WRITE", RiskLevel: "HIGH", RequireConfirmation: true, Enabled: true, AuditRequired: true, TimeoutSec: 30},
 		{Name: "delete_pod", Description: "删除 Pod（审批）", Module: "k8s", Runtime: "builtin", HandlerKey: "delete_pod", Permission: "WRITE", RiskLevel: "HIGH", RequireConfirmation: true, Enabled: true, AuditRequired: true, TimeoutSec: 30},
 	}
 	for _, b := range builtins {
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("name = ?", b.Name).Count(&cnt).Error
+		cnt, _ := s.repo.CountToolsByName(ctx, b.Name)
 		if cnt > 0 {
 			continue
 		}
 		// 填入与 tools.go 一致的 schema 可后续完善；Chat 仍用代码侧完整 schema
-		if err := s.db.WithContext(ctx).Create(&b).Error; err != nil {
+		if err := s.repo.CreateTool(ctx, &b); err != nil {
 			return err
 		}
 	}
@@ -473,8 +495,7 @@ func (s *Service) seedEvalFromDir(ctx context.Context, dir string) error {
 		if err := yaml.Unmarshal(raw, &c); err != nil || c.CaseCode == "" {
 			continue
 		}
-		var cnt int64
-		_ = s.db.WithContext(ctx).Model(&model.AiEvalCase{}).Where("case_code = ?", c.CaseCode).Count(&cnt).Error
+		cnt, _ := s.repo.CountEvalCaseByCaseCode(ctx, c.CaseCode)
 		if cnt > 0 {
 			continue
 		}
@@ -491,7 +512,7 @@ func (s *Service) seedEvalFromDir(ctx context.Context, dir string) error {
 			ExpectKeywords: c.ExpectKeywords, ForbidKeywords: c.ForbidKeywords,
 			ExpectTools: c.ExpectTools, ExpectRisk: c.ExpectRisk, ScoreWeight: w, Enabled: true,
 		}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateEvalCase(ctx, &row); err != nil {
 			return err
 		}
 	}
@@ -502,8 +523,7 @@ func (s *Service) seedPromptsFromDirCounted(ctx context.Context, dir string) (in
 	if err := s.seedPromptsFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiPrompt{}).Count(&n).Error
+	n, _ := s.repo.CountPrompts(ctx)
 	return int(n), nil
 }
 
@@ -511,9 +531,8 @@ func (s *Service) seedKnowledgeFromDirCounted(ctx context.Context, dir string) (
 	if err = s.seedKnowledgeFromDir(ctx, dir); err != nil {
 		return 0, 0, err
 	}
-	var k, d int64
-	_ = s.db.WithContext(ctx).Model(&model.AiKnowledgeBase{}).Count(&k).Error
-	_ = s.db.WithContext(ctx).Model(&model.AiKbDocument{}).Count(&d).Error
+	k, _ := s.repo.CountKnowledgeBases(ctx)
+	d, _ := s.repo.CountKBDocuments(ctx)
 	return int(k), int(d), nil
 }
 
@@ -521,8 +540,7 @@ func (s *Service) seedCasesFromDirCounted(ctx context.Context, dir string) (int,
 	if err := s.seedCasesFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiIncidentCase{}).Count(&n).Error
+	n, _ := s.repo.CountIncidentCases(ctx)
 	return int(n), nil
 }
 
@@ -530,8 +548,7 @@ func (s *Service) seedSOPsFromDirCounted(ctx context.Context, dir string) (int, 
 	if err := s.seedSOPsFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiSOP{}).Count(&n).Error
+	n, _ := s.repo.CountSOPs(ctx)
 	return int(n), nil
 }
 
@@ -539,8 +556,7 @@ func (s *Service) seedToolsFromDirCounted(ctx context.Context, dir string) (int,
 	if err := s.seedToolsFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("runtime = ?", "script").Count(&n).Error
+	n, _ := s.repo.CountToolsByRuntime(ctx, "script")
 	return int(n), nil
 }
 
@@ -548,8 +564,7 @@ func (s *Service) seedBuiltinToolDefsCounted(ctx context.Context) (int, error) {
 	if err := s.seedBuiltinToolDefs(ctx); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiToolDef{}).Where("runtime = ?", "builtin").Count(&n).Error
+	n, _ := s.repo.CountToolsByRuntime(ctx, "builtin")
 	return int(n), nil
 }
 
@@ -557,7 +572,6 @@ func (s *Service) seedEvalFromDirCounted(ctx context.Context, dir string) (int, 
 	if err := s.seedEvalFromDir(ctx, dir); err != nil {
 		return 0, err
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.AiEvalCase{}).Count(&n).Error
+	n, _ := s.repo.CountEvalCases(ctx)
 	return int(n), nil
 }

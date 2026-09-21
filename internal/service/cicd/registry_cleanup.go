@@ -2,6 +2,7 @@ package cicd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +11,9 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/cronutil"
+	"yunshu/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 type CleanupPolicyUpsertRequest struct {
@@ -22,12 +26,12 @@ type CleanupPolicyUpsertRequest struct {
 }
 
 func (s *Service) ListCleanupPolicies(ctx context.Context, registryID uint) ([]model.ImageCleanupPolicy, error) {
-	q := s.db.WithContext(ctx).Model(&model.ImageCleanupPolicy{})
+	p := repository.CicdCleanupPolicyListParams{}
 	if registryID > 0 {
-		q = q.Where("registry_id = ?", registryID)
+		p.RegistryID = &registryID
 	}
-	var rows []model.ImageCleanupPolicy
-	if err := q.Order("id ASC").Find(&rows).Error; err != nil {
+	rows, _, err := s.repo.ListCleanupPolicies(ctx, p)
+	if err != nil {
 		return nil, err
 	}
 	if rows == nil {
@@ -59,9 +63,14 @@ func (s *Service) UpsertCleanupPolicy(ctx context.Context, id uint, req CleanupP
 	}
 	var row model.ImageCleanupPolicy
 	if id > 0 {
-		if err := s.db.WithContext(ctx).Where("id = ?", id).First(&row).Error; err != nil {
-			return nil, constants.ErrNotFound
+		existing, err := s.repo.GetCleanupPolicy(ctx, id)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, constants.ErrNotFound
+			}
+			return nil, err
 		}
+		row = *existing
 	}
 	row.RegistryID = req.RegistryID
 	row.HarborProject = strings.TrimSpace(req.HarborProject)
@@ -70,21 +79,21 @@ func (s *Service) UpsertCleanupPolicy(ctx context.Context, id uint, req CleanupP
 	row.Enabled = enabled
 	row.CronSpec = spec
 	if id == 0 {
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateCleanupPolicy(ctx, &row); err != nil {
 			return nil, err
 		}
-	} else if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	} else if err := s.repo.SaveCleanupPolicy(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
 
 func (s *Service) DeleteCleanupPolicy(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&model.ImageCleanupPolicy{}, id)
-	if res.Error != nil {
-		return res.Error
+	n, err := s.repo.DeleteCleanupPolicy(ctx, id)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFound
 	}
 	return nil
@@ -106,8 +115,7 @@ func (s *Service) RunImageCleanupWorker(ctx context.Context) {
 }
 
 func (s *Service) tickImageCleanup(ctx context.Context, lastByPolicy map[uint]time.Time) {
-	var policies []model.ImageCleanupPolicy
-	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&policies).Error
+	policies, _ := s.repo.ListEnabledCleanupPolicies(ctx)
 	now := time.Now()
 	for _, p := range policies {
 		spec := strings.TrimSpace(p.CronSpec)
@@ -125,11 +133,11 @@ func (s *Service) tickImageCleanup(ctx context.Context, lastByPolicy map[uint]ti
 		}
 		msg := s.runOneCleanupPolicy(ctx, &p)
 		lastByPolicy[p.ID] = now
-		_ = s.db.WithContext(ctx).Model(&model.ImageCleanupPolicy{}).Where("id = ?", p.ID).Updates(map[string]any{
+		_ = s.repo.UpdateCleanupPolicyFields(ctx, p.ID, map[string]any{
 			"last_run_at": now,
 			"last_result": truncate(msg, 1000),
 			"updated_at":  now,
-		}).Error
+		})
 	}
 }
 
@@ -238,18 +246,21 @@ func (s *Service) executeCleanupPolicy(ctx context.Context, p *model.ImageCleanu
 // RunCleanupPolicyNow 手动触发一条策略。dryRun=true 时只预演不删除，且不刷新 last_run_at。
 // 注意：本接口的访问控制目前完全依赖路由层 Casbin（/api/v1/registries 组），service 层未再做平台管理员断言。
 func (s *Service) RunCleanupPolicyNow(ctx context.Context, id uint, dryRun bool) (string, error) {
-	var p model.ImageCleanupPolicy
-	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&p).Error; err != nil {
-		return "", constants.ErrNotFound
+	p, err := s.repo.GetCleanupPolicy(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", constants.ErrNotFound
+		}
+		return "", err
 	}
-	msg := s.executeCleanupPolicy(ctx, &p, dryRun)
+	msg := s.executeCleanupPolicy(ctx, p, dryRun)
 	if dryRun {
 		return msg, nil
 	}
 	now := time.Now()
-	_ = s.db.WithContext(ctx).Model(&p).Updates(map[string]any{
+	_ = s.repo.UpdateCleanupPolicyFields(ctx, id, map[string]any{
 		"last_run_at": now,
 		"last_result": truncate(msg, 1000),
-	}).Error
+	})
 	return msg, nil
 }

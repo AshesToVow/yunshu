@@ -100,6 +100,12 @@ func (r *ServerRepository) GetByProjectProviderInstance(ctx context.Context, pro
 	return &s, nil
 }
 
+func (r *ServerRepository) ListByProject(ctx context.Context, projectID uint) ([]model.Server, error) {
+	var list []model.Server
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&list).Error
+	return list, err
+}
+
 func (r *ServerRepository) ListByProjectWithoutGroup(ctx context.Context, projectID uint) ([]model.Server, error) {
 	var list []model.Server
 	err := r.db.WithContext(ctx).

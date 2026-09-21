@@ -4280,15 +4280,15 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ### 3.2 AlertsWebhook
 
-#### API-ALTWH-001 创建/提交 alerts/webhook/alertmanager
+#### API-ALTWH-001 创建/提交 alerts/webhook
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-ALTWH-001` |
-| 接口名称 | 创建/提交 alerts/webhook/alertmanager |
+| 接口名称 | 创建/提交 alerts/webhook |
 | 请求方式 | `POST` |
-| URL | `/api/v1/alerts/webhook/alertmanager` |
-| Gin 路径 | `/api/v1/alerts/webhook/alertmanager` |
+| URL | `/api/v1/alerts/webhook` |
+| Gin 路径 | `/api/v1/alerts/webhook` |
 | operationId | `post_api_v1_alerts_webhook_alertmanager` |
 
 **请求参数**

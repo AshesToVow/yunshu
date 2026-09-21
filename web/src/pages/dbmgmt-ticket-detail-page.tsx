@@ -186,18 +186,35 @@ export function DbmgmtTicketDetailPage() {
       .catch(() => setOscJobs([]));
   }, [projectId, ticketId, ticket?.status]);
 
-  const handleApprove = async () => {
+  const handleApprove = () => {
     if (!projectId || !ticketId) return;
-    setActionLoading(true);
-    try {
-      await approveDbTicket(projectId, ticketId);
-      message.success("已审批通过");
-      void load();
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "审批失败");
-    } finally {
-      setActionLoading(false);
-    }
+    const commentRef = { current: "" };
+    Modal.confirm({
+      title: "审批通过",
+      content: (
+        <Input.TextArea
+          rows={3}
+          placeholder="审批意见（可选）"
+          onChange={(e) => {
+            commentRef.current = e.target.value;
+          }}
+        />
+      ),
+      okText: "确认通过",
+      onOk: async () => {
+        setActionLoading(true);
+        try {
+          await approveDbTicket(projectId, ticketId, commentRef.current || undefined);
+          message.success("已审批通过");
+          void load();
+        } catch (e) {
+          message.error(e instanceof Error ? e.message : "审批失败");
+          throw e;
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
   };
 
   const handleReject = () => {
@@ -411,6 +428,42 @@ export function DbmgmtTicketDetailPage() {
         <Descriptions.Item label="资源组">{projectName}</Descriptions.Item>
       </Descriptions>
 
+      <DbmgmtSectionTitle>审批记录</DbmgmtSectionTitle>
+      <Table
+        size="small"
+        rowKey={(r) => String(r.id)}
+        dataSource={steps}
+        locale={{ emptyText: "暂无审批节点" }}
+        pagination={false}
+        style={{ marginBottom: 24 }}
+        columns={[
+          { title: "节点", dataIndex: "stage_name", width: 140 },
+          {
+            title: "状态",
+            dataIndex: "status",
+            width: 90,
+            render: (v: string) => {
+              const color = v === "approved" ? "success" : v === "rejected" ? "error" : v === "pending" ? "processing" : "default";
+              const label = v === "approved" ? "通过" : v === "rejected" ? "驳回" : v === "pending" ? "待审" : v || "—";
+              return <Tag color={color}>{label}</Tag>;
+            },
+          },
+          { title: "审批人", dataIndex: "reviewer_name", width: 120, render: (v?: string) => v || "—" },
+          {
+            title: "审批意见",
+            dataIndex: "review_comment",
+            ellipsis: true,
+            render: (v?: string) => v?.trim() || "—",
+          },
+          {
+            title: "审批时间",
+            dataIndex: "reviewed_at",
+            width: 170,
+            render: (v?: string) => (v ? formatDateTime(v) : "—"),
+          },
+        ]}
+      />
+
       <DbmgmtSectionTitle>任务信息</DbmgmtSectionTitle>
       <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
         <Descriptions.Item label="项目名称">{projectName}</Descriptions.Item>
@@ -574,7 +627,7 @@ export function DbmgmtTicketDetailPage() {
         <Space wrap>
           {canApprove ? (
             <>
-              <Button type="primary" icon={<CheckOutlined />} loading={actionLoading} onClick={() => void handleApprove()}>
+              <Button type="primary" icon={<CheckOutlined />} loading={actionLoading} onClick={handleApprove}>
                 审批通过
               </Button>
               <Button danger icon={<CloseOutlined />} loading={actionLoading} onClick={handleReject}>

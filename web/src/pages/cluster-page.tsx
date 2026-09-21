@@ -1,7 +1,5 @@
 import {
   AppstoreOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
@@ -10,7 +8,7 @@ import {
   TableOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Segmented, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Card, Drawer, Dropdown, Form, Input, Modal, Popconfirm, Segmented, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -714,46 +712,53 @@ export function ClusterPage() {
             {
               title: "操作",
               key: "action",
-              width: 420,
+              width: 280,
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, record: ClusterItem) => (
-                <Space>
-                  <Button type="link" icon={<TeamOutlined />} onClick={() => void openAuthDrawer(record)}>
+                <Space size={0} wrap className="yunshu-table-actions">
+                  <Button type="link" size="small" icon={<TeamOutlined />} onClick={() => void openAuthDrawer(record)}>
                     已授权
                   </Button>
                   <Button
                     type="link"
+                    size="small"
                     icon={<SettingOutlined />}
                     onClick={() => {
                       void handleConnectTest(record);
                     }}
                   >
-                    连接测试
+                    测试
                   </Button>
-
-                  <Popconfirm
-                    title={record.status === 1 ? "确认停用该集群吗？停用后将禁止访问该集群。" : "确认启用该集群吗？"}
-                    onConfirm={() => {
-                      void handleToggleStatus(record);
-                    }}
-                  >
-                    <Button
-                      type="link"
-                      danger={record.status === 1}
-                      loading={statusUpdatingID === record.id}
-                      icon={record.status === 1 ? <CloseCircleOutlined /> : <CheckCircleOutlined />}
-                    >
-                      {record.status === 1 ? "停用" : "启用"}
-                    </Button>
-                  </Popconfirm>
-
-                  <Button type="link" icon={<EditOutlined />} onClick={() => void openEdit(record)}>
+                  <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openEdit(record)}>
                     编辑
                   </Button>
-                  <Popconfirm title="确认删除该集群吗？" onConfirm={() => void handleDelete(record)}>
-                    <Button type="link" danger icon={<DeleteOutlined />}>
-                      删除
+                  <Dropdown
+                    trigger={["click"]}
+                    menu={{
+                      items: [
+                        {
+                          key: "toggle",
+                          label: record.status === 1 ? "停用" : "启用",
+                          onClick: () => void handleToggleStatus(record),
+                        },
+                        {
+                          key: "delete",
+                          danger: true,
+                          label: "删除",
+                          onClick: () => {
+                            Modal.confirm({
+                              title: "确认删除该集群吗？",
+                              onOk: () => handleDelete(record),
+                            });
+                          },
+                        },
+                      ],
+                    }}
+                  >
+                    <Button type="link" size="small">
+                      更多
                     </Button>
-                  </Popconfirm>
+                  </Dropdown>
                 </Space>
               ),
             },

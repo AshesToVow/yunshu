@@ -12,21 +12,23 @@ import (
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/jenkins"
 	"yunshu/internal/pkg/mailer"
-
-	"gorm.io/gorm"
 )
 
 type Service struct {
-	db            *gorm.DB
+	repo          interfaces.CicdRepository
+	workflowRepo  interfaces.WorkflowRepository
 	serverRepo    interfaces.ServerRepository
 	projectRepo   interfaces.ProjectRepository
 	userGroupRepo interfaces.UserGroupRepository
 	userRepo      interfaces.UserRepository
 	memberRepo    interfaces.ProjectMemberRepository
+	dutyRepo      interfaces.AlertDutyRepository
+	catalogRepo   interfaces.ServiceCatalogRepository
 	nsEnsurer     K8sNamespaceEnsurer
 	mailer        mailer.Sender
 	appName       string
-	yamlCicd      config.CicdConfig
+	resolveConfig func(ctx context.Context) config.CicdConfig
+	resolveMinio  func(ctx context.Context) dictconfig.MinioConfig
 	syncMu        sync.Mutex
 	// optional post-release verify hooks
 	workloadReadyCheck func(ctx context.Context, clusterID, namespace, kind, name string) (*bool, string)
@@ -35,27 +37,37 @@ type Service struct {
 	k8sProgressive     K8sProgressiveFns
 }
 
-func NewService(db *gorm.DB, serverRepo interfaces.ServerRepository, projectRepo interfaces.ProjectRepository, userGroupRepo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, yamlCicd config.CicdConfig, emailSender mailer.Sender, appName string, nsEnsurer K8sNamespaceEnsurer) *Service {
-	if yamlCicd.RunSyncIntervalSeconds <= 0 {
-		yamlCicd.RunSyncIntervalSeconds = 15
-	}
-	if yamlCicd.ApprovalSlaHours <= 0 {
-		yamlCicd.ApprovalSlaHours = 24
-	}
-	if yamlCicd.ApprovalReminderIntervalHours <= 0 {
-		yamlCicd.ApprovalReminderIntervalHours = 4
-	}
+func NewService(
+	repo interfaces.CicdRepository,
+	workflowRepo interfaces.WorkflowRepository,
+	serverRepo interfaces.ServerRepository,
+	projectRepo interfaces.ProjectRepository,
+	userGroupRepo interfaces.UserGroupRepository,
+	userRepo interfaces.UserRepository,
+	memberRepo interfaces.ProjectMemberRepository,
+	dutyRepo interfaces.AlertDutyRepository,
+	catalogRepo interfaces.ServiceCatalogRepository,
+	resolveConfig func(context.Context) config.CicdConfig,
+	resolveMinio func(context.Context) dictconfig.MinioConfig,
+	emailSender mailer.Sender,
+	appName string,
+	nsEnsurer K8sNamespaceEnsurer,
+) *Service {
 	return &Service{
-		db:            db,
+		repo:          repo,
+		workflowRepo:  workflowRepo,
 		serverRepo:    serverRepo,
 		projectRepo:   projectRepo,
 		userGroupRepo: userGroupRepo,
 		userRepo:      userRepo,
 		memberRepo:    memberRepo,
+		dutyRepo:      dutyRepo,
+		catalogRepo:   catalogRepo,
 		nsEnsurer:     nsEnsurer,
 		mailer:        emailSender,
 		appName:       strings.TrimSpace(appName),
-		yamlCicd:      yamlCicd,
+		resolveConfig: resolveConfig,
+		resolveMinio:  resolveMinio,
 	}
 }
 
@@ -68,12 +80,10 @@ func (s *Service) SetErrorLogSampler(fn func(ctx context.Context, projectID, cic
 }
 
 func (s *Service) resolvedConfig(ctx context.Context) config.CicdConfig {
-	base := s.yamlCicd
-	if base.RunSyncIntervalSeconds <= 0 {
-		base = config.DefaultCicdConfig()
-		base.Jenkins = s.yamlCicd.Jenkins
+	if s.resolveConfig != nil {
+		return s.resolveConfig(ctx)
 	}
-	return dictconfig.ResolveCicdConfig(ctx, s.db, base, dictconfig.DefaultCicdDictTypes())
+	return config.DefaultCicdConfig()
 }
 
 func (s *Service) jenkinsClient(ctx context.Context) (*jenkins.Client, config.CicdConfig, error) {

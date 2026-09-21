@@ -9,10 +9,12 @@ import (
 	"yunshu/internal/handler"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/middleware"
+	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/service"
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 	esmgmtsvc "yunshu/internal/service/esmgmt"
+	kafkamgmtsvc "yunshu/internal/service/kafkamgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 	"yunshu/internal/service/platformtpl"
 	workflowsvc "yunshu/internal/service/workflow"
@@ -99,12 +101,15 @@ type RouteDeps struct {
 	loggieHandler      *handler.LoggieHandler
 	clusterLogHandler  *handler.ClusterLogHandler
 	logRetentionSvc    *service.LogRetentionService
+	logIntelSvc        *service.LogIntelligenceService
 	kafkaToESSvc       *service.KafkaToESService
 	inspectSvc         *inspectsvc.Service
 	inspectHandler     *handler.InspectHandler
 	aiHandler          *handler.AIHandler
 	esmgmtSvc          *esmgmtsvc.Service
 	esmgmtHandler      *handler.EsmgmtHandler
+	kafkamgmtSvc       *kafkamgmtsvc.Service
+	kafkamgmtHandler   *handler.KafkamgmtHandler
 	platformFeatures   *handler.PlatformFeaturesHandler
 	workflowHandler    *handler.WorkflowHandler
 	platformTplHandler *handler.PlatformTemplateHandler
@@ -172,6 +177,14 @@ func (d *RouteDeps) KafkaToESService() *service.KafkaToESService {
 		return nil
 	}
 	return d.kafkaToESSvc
+}
+
+// LogIntelligenceService 供 project 插件日志智能分析 worker 使用。
+func (d *RouteDeps) LogIntelligenceService() *service.LogIntelligenceService {
+	if d == nil {
+		return nil
+	}
+	return d.logIntelSvc
 }
 
 // InspectService 供 inspect 插件调度器使用。
@@ -289,19 +302,30 @@ func assembleRouteDeps(
 		loggieHandler:      handlers.Loggie,
 		clusterLogHandler:  handlers.ClusterLog,
 		logRetentionSvc:    svcs.LogRetention,
+		logIntelSvc:        svcs.LogIntelligence,
 		kafkaToESSvc:       svcs.KafkaToES,
 		inspectSvc:         svcs.Inspect,
 		inspectHandler:     handlers.Inspect,
 		aiHandler:          handlers.AI,
 		esmgmtSvc:          svcs.Esmgmt,
 		esmgmtHandler:      handlers.Esmgmt,
-		platformFeatures:   handler.NewPlatformFeaturesHandler(app.DB, svcs.AlertMonitorRule),
-		workflowHandler: handler.NewWorkflowHandler(workflowsvc.NewService(
-			app.DB, repos.UserGroup, repos.AlertDuty, repos.User,
+		kafkamgmtSvc:       svcs.Kafkamgmt,
+		kafkamgmtHandler:   handlers.Kafkamgmt,
+		platformFeatures:   handler.NewPlatformFeaturesHandler(svcs.AlertMonitorRule, repos.AlertRuleChange, repos.PromqlSavedQuery, repos.K8sCrTemplate),
+		workflowHandler: handler.NewWorkflowHandler(func() *workflowsvc.Service {
+			wf := workflowsvc.NewService(
+				repos.Workflow, repos.UserGroup, repos.AlertDuty, repos.User,
+			)
+			wf.SetAlertEventRepo(repos.AlertEvent)
+			return wf
+		}()),
+		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(
+			repos.PlatformTemplate,
+			func(ctx context.Context) (*objectstore.Client, error) {
+				return objectstore.NewFromDB(ctx, app.DB)
+			},
 		)),
-		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(app.DB)),
 	}
-	wireCicdK8sHooks(deps.cicdSvc, svcs.K8sWorkload)
 	return deps, nil
 }
 

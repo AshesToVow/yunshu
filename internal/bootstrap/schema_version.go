@@ -10,7 +10,7 @@ import (
 
 // ExpectedSchemaVersion 与 migrate 写入的版本对齐；启动校验失败则拒绝起服。
 // 每次改变 AutoMigrate 模型集合或破坏性种子时递增。
-const ExpectedSchemaVersion = 20260829
+const ExpectedSchemaVersion = 20260906
 
 const schemaMetaKey = "schema_version"
 
@@ -49,7 +49,8 @@ func CheckSchemaVersion(db *gorm.DB) error {
 		)
 	}
 	var row SchemaMeta
-	err := db.Where("`key` = ?", schemaMetaKey).First(&row).Error
+	// 用结构体条件，由 GORM 按 dialector 正确引用保留字列名 key（避免 MySQL 反引号在 PG 上失败）。
+	err := db.Where(&SchemaMeta{Key: schemaMetaKey}).First(&row).Error
 	if err != nil {
 		return fmt.Errorf(
 			"schema version missing: %w (run `yunshu migrate`, expected=%d)",

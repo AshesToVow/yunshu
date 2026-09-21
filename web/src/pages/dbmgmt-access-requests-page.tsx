@@ -258,7 +258,7 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
           message={
             <>
               已有查询权限可在 <Link to="/dbmgmt/apply/query-grants">查询权限管理</Link> 查看；审批进度请到{" "}
-              <Link to="/dbmgmt/workflow/pending">待审核</Link>。
+              <Link to="/workflow/inbox?domain=dbmgmt">我的待办</Link>。
             </>
           }
           style={{ marginBottom: 16 }}

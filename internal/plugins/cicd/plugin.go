@@ -60,7 +60,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := rt.Cicd.(*cicdsvc.Service); ok && svc != nil {
+	if svc, ok := plugin.As[*cicdsvc.Service](rt.Cicd); ok && svc != nil {
 		lifecycle.Go("cicd.run-sync", func() { svc.RunSyncWorker(bgCtx) })
 		lifecycle.Go("cicd.image-cleanup", func() { svc.RunImageCleanupWorker(bgCtx) })
 	}

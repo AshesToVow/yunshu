@@ -4,6 +4,7 @@ package inspect
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -27,22 +28,14 @@ type ItemUpsertRequest struct {
 }
 
 func (s *Service) ListItems(ctx context.Context, projectID uint) ([]model.InspectItem, error) {
-	var projectItems []model.InspectItem
-	if err := s.db.WithContext(ctx).
-		Where("project_id = ?", projectID).
-		Order("sort_order ASC, id ASC").
-		Find(&projectItems).Error; err != nil {
+	projectItems, err := s.repo.ListItemsByProject(ctx, projectID)
+	if err != nil {
 		return nil, err
 	}
 	if len(projectItems) > 0 {
 		return projectItems, nil
 	}
-	var globals []model.InspectItem
-	err := s.db.WithContext(ctx).
-		Where("project_id = 0").
-		Order("sort_order ASC, id ASC").
-		Find(&globals).Error
-	return globals, err
+	return s.repo.ListGlobalItems(ctx)
 }
 
 func (s *Service) CreateItem(ctx context.Context, projectID uint, req ItemUpsertRequest) (*model.InspectItem, error) {
@@ -82,16 +75,16 @@ func (s *Service) CreateItem(ctx context.Context, projectID uint, req ItemUpsert
 	if item.Type == "" {
 		item.Type = "自定义"
 	}
-	if err := s.db.WithContext(ctx).Create(&item).Error; err != nil {
+	if err := s.repo.CreateItem(ctx, &item); err != nil {
 		return nil, err
 	}
 	return &item, nil
 }
 
 func (s *Service) UpdateItem(ctx context.Context, projectID, itemID uint, req ItemUpsertRequest) (*model.InspectItem, error) {
-	var item model.InspectItem
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", itemID, projectID).First(&item).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	item, err := s.repo.GetItem(ctx, projectID, itemID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("巡检项不存在或不可修改全局模板（请先同步到项目）")
 		}
 		return nil, err
@@ -120,18 +113,18 @@ func (s *Service) UpdateItem(ctx context.Context, projectID, itemID uint, req It
 	if req.SortOrder != nil {
 		item.SortOrder = *req.SortOrder
 	}
-	if err := s.db.WithContext(ctx).Save(&item).Error; err != nil {
+	if err := s.repo.SaveItem(ctx, item); err != nil {
 		return nil, err
 	}
-	return &item, nil
+	return item, nil
 }
 
 func (s *Service) DeleteItem(ctx context.Context, projectID, itemID uint) error {
-	res := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", itemID, projectID).Delete(&model.InspectItem{})
-	if res.Error != nil {
-		return res.Error
+	n, err := s.repo.DeleteItem(ctx, projectID, itemID)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFoundWithMsg("巡检项不存在")
 	}
 	return nil
@@ -142,12 +135,12 @@ func (s *Service) SyncItemsFromTemplate(ctx context.Context, projectID uint) (in
 	if projectID == 0 {
 		return 0, constants.ErrBadRequestWithMsg("project_id required")
 	}
-	var globals []model.InspectItem
-	if err := s.db.WithContext(ctx).Where("project_id = 0").Order("sort_order ASC, id ASC").Find(&globals).Error; err != nil {
+	globals, err := s.repo.ListGlobalItems(ctx)
+	if err != nil {
 		return 0, err
 	}
-	var existing []model.InspectItem
-	if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&existing).Error; err != nil {
+	existing, err := s.repo.ListItemsByProject(ctx, projectID)
+	if err != nil {
 		return 0, err
 	}
 	have := map[string]bool{}
@@ -165,7 +158,7 @@ func (s *Service) SyncItemsFromTemplate(ctx context.Context, projectID uint) (in
 		cp.ProjectID = projectID
 		cp.CreatedAt = time.Time{}
 		cp.UpdatedAt = time.Time{}
-		if err := s.db.WithContext(ctx).Create(&cp).Error; err != nil {
+		if err := s.repo.CreateItem(ctx, &cp); err != nil {
 			return created, err
 		}
 		created++
@@ -179,7 +172,7 @@ func (s *Service) ResetItemsFromTemplate(ctx context.Context, projectID uint) (i
 	if projectID == 0 {
 		return 0, constants.ErrBadRequestWithMsg("project_id required")
 	}
-	if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).Delete(&model.InspectItem{}).Error; err != nil {
+	if err := s.repo.DeleteItemsByProject(ctx, projectID); err != nil {
 		return 0, err
 	}
 	return s.SyncItemsFromTemplate(ctx, projectID)
@@ -187,32 +180,25 @@ func (s *Service) ResetItemsFromTemplate(ctx context.Context, projectID uint) (i
 
 // effectiveItems 执行时生效的巡检项：优先项目自有启用项，为空则回退全局启用项。
 func (s *Service) effectiveItems(ctx context.Context, projectID uint) ([]model.InspectItem, error) {
-	var projectItems []model.InspectItem
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND enabled = ?", projectID, true).
-		Order("sort_order ASC, id ASC").Find(&projectItems).Error; err != nil {
+	projectItems, err := s.repo.ListEnabledItemsByProject(ctx, projectID)
+	if err != nil {
 		return nil, err
 	}
 	if len(projectItems) > 0 {
 		return projectItems, nil
 	}
-	var globals []model.InspectItem
-	err := s.db.WithContext(ctx).Where("project_id = 0 AND enabled = ?", true).
-		Order("sort_order ASC, id ASC").Find(&globals).Error
-	return globals, err
+	return s.repo.ListEnabledGlobalItems(ctx)
 }
 
 // SeedGlobalTemplates 幂等写入/刷新全局巡检模板项（按 type+name upsert）。
 func (s *Service) SeedGlobalTemplates(ctx context.Context) error {
-	if s == nil || s.db == nil {
+	if s == nil || s.repo == nil {
 		return nil
 	}
 	for _, want := range defaultTemplateItems() {
-		var row model.InspectItem
-		err := s.db.WithContext(ctx).
-			Where("project_id = 0 AND type = ? AND name = ?", want.Type, want.Name).
-			First(&row).Error
-		if err == gorm.ErrRecordNotFound {
-			if err := s.db.WithContext(ctx).Create(&want).Error; err != nil {
+		row, err := s.repo.GetGlobalItemByTypeName(ctx, want.Type, want.Name)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := s.repo.CreateItem(ctx, &want); err != nil {
 				return err
 			}
 			continue
@@ -227,7 +213,7 @@ func (s *Service) SeedGlobalTemplates(ctx context.Context) error {
 		row.Unit = want.Unit
 		row.SortOrder = want.SortOrder
 		// 不覆盖管理员已改的 Enabled
-		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		if err := s.repo.SaveItem(ctx, row); err != nil {
 			return err
 		}
 	}

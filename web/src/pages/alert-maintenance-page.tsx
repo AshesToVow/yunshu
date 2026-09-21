@@ -192,8 +192,9 @@ export function AlertMaintenancePage() {
             title: "操作",
             width: 160,
             fixed: "right",
+            className: "yunshu-table-actions-cell",
             render: (_: unknown, r: AlertMaintenanceWindowItem) => (
-              <Space>
+              <Space size={0} wrap className="yunshu-table-actions">
                 <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
                   编辑
                 </Button>

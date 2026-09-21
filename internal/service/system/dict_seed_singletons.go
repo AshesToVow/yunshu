@@ -21,6 +21,17 @@ func dictSingletonTypes() map[string]struct{} {
 		"password_require_special": {},
 		"password_expiry_days":     {},
 		"password_forbid_username": {},
+		// Auth（登录会话 / 验证码 / 锁定）
+		"auth_jwt_secret":                   {},
+		"auth_access_token_ttl_minutes":     {},
+		"auth_refresh_token_ttl_hours":      {},
+		"auth_cookie_secure":                {},
+		"auth_cookie_domain":                {},
+		"auth_csp_enabled":                  {},
+		"auth_email_code_ttl_seconds":       {},
+		"auth_email_code_cooldown_seconds":  {},
+		"auth_login_max_fail_attempts":      {},
+		"auth_login_lock_seconds":           {},
 		// Alert 运行配置
 		"alert_webhook_token":           {},
 		"alert_enrich_prometheus_url":   {},
@@ -31,6 +42,7 @@ func dictSingletonTypes() map[string]struct{} {
 		"k8s_event_forward_worker_interval_seconds": {},
 		"k8s_event_forward_worker_batch_size":       {},
 		"k8s_event_forward_worker_max_retries":      {},
+		"k8s_pod_debug_image":                       {},
 		// MinIO
 		"minio_endpoint":      {},
 		"minio_access_key":    {},

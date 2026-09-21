@@ -1,5 +1,5 @@
 import { EyeOutlined, TagsOutlined } from "@ant-design/icons";
-import { Button, Descriptions, Divider, Drawer, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Descriptions, Divider, Drawer, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -45,6 +45,8 @@ type Detail = {
 export function NamespacesPage() {
   const navigate = useNavigate();
   const listReloadRef = useRef<() => void>(() => {});
+  const withPodStatsRef = useRef(false);
+  const [withPodStats, setWithPodStats] = useState(false);
   const [metaOpen, setMetaOpen] = useState(false);
   const [metaTitle, setMetaTitle] = useState<"标签" | "注解">("标签");
   const [metaData, setMetaData] = useState<Record<string, string>>({});
@@ -138,6 +140,8 @@ export function NamespacesPage() {
       title="命名空间管理"
       description="命名空间配额、资源用量与元数据"
       needNamespace={false}
+      watchResource="namespaces"
+      actionColumnWidth={400}
       columns={columns}
       extraRowActions={(record, { clusterId }) => (
         <Button
@@ -149,7 +153,8 @@ export function NamespacesPage() {
         </Button>
       )}
       api={{
-        list: async ({ clusterId, keyword }) => await listNamespaces(clusterId, keyword),
+        list: async ({ clusterId, keyword }) =>
+          await listNamespaces(clusterId, keyword, { with_pod_stats: withPodStatsRef.current }),
         detail: async ({ clusterId, name }) => await getNamespaceDetail(clusterId, name),
         apply: async ({ clusterId, manifest }) => await applyNamespace(clusterId, manifest),
         remove: async (args) => await deleteNamespace(args.clusterId, args.name, args),
@@ -157,6 +162,24 @@ export function NamespacesPage() {
       onToolbarReady={(ctx) => {
         listReloadRef.current = ctx.reload;
       }}
+      renderToolbarExtraRight={() => (
+        <Space size={8}>
+          <Tooltip title="命名空间较多时默认用 metrics/Quota 轻量统计；开启后会 List 全部 Pod 计算精确用量（较慢）">
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              精确 Pod 统计
+            </Typography.Text>
+          </Tooltip>
+          <Switch
+            size="small"
+            checked={withPodStats}
+            onChange={(checked) => {
+              withPodStatsRef.current = checked;
+              setWithPodStats(checked);
+              listReloadRef.current();
+            }}
+          />
+        </Space>
+      )}
       renderCreateFormTab={(ctx) => (
         <NamespaceFormCreateDrawer
           embedded

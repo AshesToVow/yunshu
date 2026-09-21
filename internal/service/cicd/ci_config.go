@@ -38,14 +38,14 @@ func (s *Service) FindCiConfig(ctx context.Context, projectID, serviceID uint) (
 	if _, err := s.loadService(ctx, projectID, serviceID); err != nil {
 		return nil, false, err
 	}
-	var row model.CicdCiConfig
-	if err := s.db.WithContext(ctx).Where("service_id = ?", serviceID).First(&row).Error; err != nil {
+	row, err := s.repo.GetCIConfig(ctx, serviceID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, false, nil
 		}
 		return nil, false, err
 	}
-	return &row, true, nil
+	return row, true, nil
 }
 
 // CiConfigView GET ci-config 响应（未配置时 configured=false，不返回 404）。
@@ -89,9 +89,14 @@ func (s *Service) UpsertCiConfig(ctx context.Context, projectID, serviceID uint,
 	if refType == "" {
 		refType = model.CicdRefTypeBranch
 	}
-	var row model.CicdCiConfig
-	err = s.db.WithContext(ctx).Where("service_id = ?", serviceID).First(&row).Error
+	row, err := s.repo.GetCIConfig(ctx, serviceID)
 	isNew := err != nil
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	if row == nil {
+		row = &model.CicdCiConfig{}
+	}
 	row.ServiceID = serviceID
 	row.GitURL = strings.TrimSpace(req.GitURL)
 	row.RefType = refType
@@ -124,20 +129,20 @@ func (s *Service) UpsertCiConfig(ctx context.Context, projectID, serviceID uint,
 	row.PackConfigPaths = strings.TrimSpace(req.PackConfigPaths)
 	row.Description = strings.TrimSpace(req.Description)
 	if isNew {
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateCIConfig(ctx, row); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		if err := s.repo.SaveCIConfig(ctx, row); err != nil {
 			return nil, err
 		}
 	}
-	syncResult, err := s.syncJenkinsJob(ctx, svc, &row)
+	syncResult, err := s.syncJenkinsJob(ctx, svc, row)
 	if err != nil {
 		return &CiConfigUpsertResult{
-			Config:           &row,
+			Config:           row,
 			JenkinsSyncError: jenkins.HumanizeAPIError(err),
 		}, nil
 	}
-	return &CiConfigUpsertResult{Config: &row, JenkinsSync: syncResult}, nil
+	return &CiConfigUpsertResult{Config: row, JenkinsSync: syncResult}, nil
 }

@@ -1,8 +1,18 @@
 import { extractApiErrorMessage } from "../../../services/http";
-import { Alert, Button, Card, Input, Modal, Segmented, Space, Tag, Typography, message } from "antd";
-import { BellOutlined, DownloadOutlined, ReloadOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Dropdown, Input, Modal, Segmented, Space, Tag, Typography, message } from "antd";
+import type { MenuProps } from "antd";
+import {
+  BellOutlined,
+  DownOutlined,
+  DownloadOutlined,
+  ExperimentOutlined,
+  FileAddOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+  StopOutlined,
+} from "@ant-design/icons";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAlertMonitor } from "../context";
 import { AlertEventDetailDrawer, type AlertEventDetailTarget } from "../event-detail-drawer";
 import { AlertAckActionButton } from "../ack-action";
@@ -10,15 +20,19 @@ import { ResizableTable } from "../../../components/resizable-table";
 import {
   acknowledgeAlert,
   clearAlertAck,
+  createIncidentFromAlert,
   listCurEvents,
   listHisEvents,
   exportHisEventsCSV,
   type AlertCurEventItem,
   type AlertHisEventItem,
 } from "../../../services/alerts";
-import { analyzeAlertExplainAI, type AIAlertExplainResult } from "../../../services/ai";
+import { analyzeAlertExplainAI, startAIInvestigation, type AIAlertExplainResult } from "../../../services/ai";
+import { useAiEnabled } from "../../../hooks/use-ai-enabled";
+import { createAlertSilence } from "../../../services/alert-platform";
 import { formatDateTime } from "../../../utils/format";
 import { DEFAULT_PAGE_SIZE, tablePagination } from "../../../utils/table-pagination";
+import dayjs from "dayjs";
 
 const AlertConfigCenterPanel = lazy(async () => {
   const mod = await import("../../alert-config-center-panel");
@@ -29,6 +43,8 @@ type EventView = "current" | "lifecycle" | "delivery";
 
 export function HistoryTab() {
   const ctx = useAlertMonitor();
+  const { enabled: aiEnabled } = useAiEnabled();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const deepFingerprint = String(searchParams.get("fingerprint") || "").trim();
   const [view, setView] = useState<EventView>("current");
@@ -44,7 +60,10 @@ export function HistoryTab() {
   const [loading, setLoading] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiInvestigateLoading, setAiInvestigateLoading] = useState(false);
+  const [silenceLoadingFp, setSilenceLoadingFp] = useState<string>("");
   const [aiTarget, setAiTarget] = useState<AlertCurEventItem | null>(null);
+  const [ticketLoadingFp, setTicketLoadingFp] = useState("");
   const [aiResult, setAiResult] = useState<AIAlertExplainResult | null>(null);
   const [detail, setDetail] = useState<AlertEventDetailTarget | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -167,6 +186,10 @@ export function HistoryTab() {
   }, [deepFingerprint, curRows, hisRows, loading, loadHis]);
 
   async function runAiExplain(row: AlertCurEventItem) {
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     if (!row.fingerprint) {
       message.warning("该告警无指纹，无法 AI 解读");
       return;
@@ -186,6 +209,78 @@ export function HistoryTab() {
       message.error(extractApiErrorMessage(e, "AI 解读失败"));
     } finally {
       setAiLoading(false);
+    }
+  }
+
+  async function runAiInvestigate(row: AlertCurEventItem) {
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
+    if (!row.fingerprint) {
+      message.warning("该告警无指纹，无法发起调查");
+      return;
+    }
+    setAiInvestigateLoading(true);
+    try {
+      const inv = await startAIInvestigation({
+        kind: "alert",
+        title: `告警调查 ${row.alertname || row.fingerprint}`,
+        fingerprint: row.fingerprint,
+        project_id: ctx.projectContextId || row.project_id || undefined,
+      });
+      message.success(`调查已完成 #${inv.id}${inv.status === "awaiting_approval" ? "（待审批）" : ""}`);
+      navigate(`/ai/investigations?id=${inv.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 调查失败"));
+    } finally {
+      setAiInvestigateLoading(false);
+    }
+  }
+
+  async function quickSilence2h(row: AlertCurEventItem) {
+    if (!row.fingerprint) {
+      message.warning("缺少指纹，无法静默");
+      return;
+    }
+    setSilenceLoadingFp(row.fingerprint);
+    try {
+      await createAlertSilence({
+        name: `静默 ${row.alertname || row.fingerprint}（2h）`,
+        matchers_json: JSON.stringify([{ name: "fingerprint", value: row.fingerprint, is_regex: false }]),
+        comment: "告警历史快捷静默 2h（闭环止血）",
+        enabled: true,
+        starts_at: dayjs().toISOString(),
+        ends_at: dayjs().add(2, "hour").toISOString(),
+        project_id: ctx.projectContextId || row.project_id || undefined,
+      });
+      message.success("已静默 2 小时");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "创建静默失败"));
+    } finally {
+      setSilenceLoadingFp("");
+    }
+  }
+
+  async function createTicketFromCur(row: AlertCurEventItem) {
+    if (!row.fingerprint) {
+      message.warning("缺少指纹，无法转工单");
+      return;
+    }
+    setTicketLoadingFp(row.fingerprint);
+    try {
+      const ticket = await createIncidentFromAlert({
+        title: `告警：${row.alertname || row.fingerprint}`,
+        fingerprint: row.fingerprint,
+        project_id: ctx.projectContextId || row.project_id || undefined,
+      });
+      message.success(`已创建故障工单 #${ticket.id}`);
+      navigate(`/workflow/inbox?ticket=${ticket.id}`);
+    } catch (e) {
+      const msg = extractApiErrorMessage(e, "转工单失败");
+      message.error(msg.includes("流程未配置") ? `${msg}；可在流程中心配置 incident 故障单` : msg);
+    } finally {
+      setTicketLoadingFp("");
     }
   }
 
@@ -292,7 +387,7 @@ export function HistoryTab() {
             total: curTotal,
             onChange: (page, pageSize) => void loadCur(page, pageSize, keyword),
           })}
-          scroll={{ x: 1560 }}
+          scroll={{ x: 1400 }}
           onRow={(r) => ({
             onClick: () => openDetail(toDetailFromCur(r)),
             style: { cursor: "pointer" },
@@ -352,37 +447,65 @@ export function HistoryTab() {
             { title: "更新", dataIndex: "updated_at", width: 170, render: (v) => formatDateTime(v) || "-" },
             {
               title: "操作",
-              width: 280,
+              width: 220,
               fixed: "right",
-              render: (_: unknown, r: AlertCurEventItem) => (
-                <Space size={0} onClick={(e) => e.stopPropagation()}>
-                  <AlertAckActionButton
-                    acked={Boolean(r.acked)}
-                    onAck={(minutes) => void toggleAck(r, minutes)}
-                    onClear={() => void toggleAck(r)}
-                  />
-                  <Button type="link" size="small" icon={<BellOutlined />} onClick={() => openDetail(toDetailFromCur(r))}>
-                    通知
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<StopOutlined />}
-                    onClick={() => ctx.openSilenceForEvent?.(toDetailFromCur(r))}
-                  >
-                    静默
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<RobotOutlined />}
-                    disabled={!r.fingerprint}
-                    onClick={() => void runAiExplain(r)}
-                  >
-                    AI
-                  </Button>
-                </Space>
-              ),
+              className: "yunshu-table-actions-cell",
+              render: (_: unknown, r: AlertCurEventItem) => {
+                const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+                const moreItems: MenuProps["items"] = [
+                  {
+                    key: "silence",
+                    icon: <StopOutlined />,
+                    label: "自定义静默",
+                    onClick: () => ctx.openSilenceForEvent?.(toDetailFromCur(r)),
+                  },
+                  {
+                    key: "silence2h",
+                    icon: <StopOutlined />,
+                    label: "静默 2 小时",
+                    disabled: !r.fingerprint,
+                    onClick: () => void quickSilence2h(r),
+                  },
+                  {
+                    key: "ticket",
+                    icon: <FileAddOutlined />,
+                    label: "转工单",
+                    disabled: !r.fingerprint,
+                    onClick: () => void createTicketFromCur(r),
+                  },
+                  {
+                    key: "ai-explain",
+                    icon: <RobotOutlined />,
+                    label: "AI 解读",
+                    disabled: !r.fingerprint,
+                    onClick: () => void runAiExplain(r),
+                  },
+                  {
+                    key: "ai-investigate",
+                    icon: <ExperimentOutlined />,
+                    label: "AI 调查",
+                    disabled: !r.fingerprint,
+                    onClick: () => void runAiInvestigate(r),
+                  },
+                ];
+                return (
+                  <Space size={0} wrap className="yunshu-table-actions" onClick={stop}>
+                    <AlertAckActionButton
+                      acked={Boolean(r.acked)}
+                      onAck={(minutes) => void toggleAck(r, minutes)}
+                      onClear={() => void toggleAck(r)}
+                    />
+                    <Button type="link" size="small" icon={<BellOutlined />} onClick={() => openDetail(toDetailFromCur(r))}>
+                      通知
+                    </Button>
+                    <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
+                      <Button type="link" size="small" onClick={stop}>
+                        更多 <DownOutlined />
+                      </Button>
+                    </Dropdown>
+                  </Space>
+                );
+              },
             },
           ]}
           locale={{ emptyText: "当前没有正在告警的实例" }}
@@ -481,6 +604,14 @@ export function HistoryTab() {
               onClick={() => aiTarget && void runAiExplain(aiTarget)}
             >
               重新解读
+            </Button>
+            <Button
+              icon={<ExperimentOutlined />}
+              loading={aiInvestigateLoading}
+              disabled={!aiTarget?.fingerprint}
+              onClick={() => aiTarget && void runAiInvestigate(aiTarget)}
+            >
+              完整调查
             </Button>
             <Button onClick={() => setAiOpen(false)}>关闭</Button>
           </Space>

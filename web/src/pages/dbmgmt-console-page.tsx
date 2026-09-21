@@ -287,7 +287,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       return;
     }
     try {
-      const res = await checkDbSql(projectId, instanceId, { database, sql });
+      const res = await checkDbSql(projectId, instanceId, { database, sql, audit_mode: auditType });
       setCheckRows(res.rows ?? []);
       setCheckSummary(formatSqlCheckSummary(res));
       setCheckOpen(true);
@@ -312,7 +312,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       return;
     }
     try {
-      const res = await checkDbSql(projectId, instanceId, { database, sql: importSql });
+      const res = await checkDbSql(projectId, instanceId, { database, sql: importSql, audit_mode: auditType });
       setCheckRows(res.rows ?? []);
       setCheckSummary(formatSqlCheckSummary(res));
       setCheckOpen(true);
@@ -533,10 +533,22 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                   <Input placeholder="输入工单名称" value={changeDesc} onChange={(e) => setChangeDesc(e.target.value)} />
                 </Form.Item>
                 <Form.Item label="审核" required>
-                  <Radio.Group value={auditType} onChange={(e) => setAuditType(e.target.value)}>
+                  <Radio.Group
+                    value={auditType}
+                    onChange={(e) => {
+                      setAuditType(e.target.value);
+                      setCheckPassed(false);
+                      setImportCheckPassed(false);
+                    }}
+                  >
                     <Radio value="system">系统审核</Radio>
                     <Radio value="manual">人工审核</Radio>
                   </Radio.Group>
+                  <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12, marginTop: 4 }}>
+                    {auditType === "system"
+                      ? "系统审核：SQL 检测与建单预检走 goInception"
+                      : "人工审核：不连 goInception，由审批人审 SQL；检测仅做平台本地规则"}
+                  </div>
                 </Form.Item>
                 <Form.Item label="备份" required>
                   <Radio.Group value={backupChoice} onChange={(e) => setBackupChoice(e.target.value)}>

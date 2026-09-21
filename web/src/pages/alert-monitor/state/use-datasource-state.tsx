@@ -17,8 +17,8 @@ import { useDictOptions } from "../../../hooks/use-dict-options";
 import {
   createAlertDatasource,
   deleteAlertDatasource,
+  checkAlertDatasourceHealth,
   listAlertDatasources,
-  pingAlertDatasource,
   updateAlertDatasource,
   type AlertDatasourceItem,
 } from "../../../services/alert-platform";
@@ -73,18 +73,29 @@ export function useAlertMonitorDatasourceState(params: {
   async function runDsPing(id: number) {
     setDsPingId(id);
     try {
-      const res = await pingAlertDatasource(id);
-      if (res.ok) {
-        message.success(`连通正常，耗时 ${res.latency_ms} ms`);
+      const res = await checkAlertDatasourceHealth(id);
+      if (res.status === "ok") {
+        message.success(`健康正常，耗时 ${res.latency_ms} ms；up=${res.up_total}`);
+      } else if (res.status === "degraded") {
+        message.warning(res.message || "健康降级");
       } else {
-        message.error(res.message || "连通失败");
+        message.error(res.message || "健康探测失败");
       }
+      await loadDatasources(projectContextId);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "操作失败"));
     } finally {
       setDsPingId(null);
     }
   }
+
+  const healthTag = (r: AlertDatasourceItem) => {
+    const s = (r.last_health_status || "unknown").toLowerCase();
+    if (s === "ok") return <Tag color="success">正常</Tag>;
+    if (s === "degraded") return <Tag color="warning">降级</Tag>;
+    if (s === "down") return <Tag color="error">不可用</Tag>;
+    return <Tag>未探测</Tag>;
+  };
 
   const dsColumns = [
     { title: "ID", dataIndex: "id", width: 70 },
@@ -101,12 +112,25 @@ export function useAlertMonitorDatasourceState(params: {
       },
     },
     { title: "地址", dataIndex: "base_url", ellipsis: true },
+    {
+      title: "采集健康",
+      width: 120,
+      render: (_: unknown, r: AlertDatasourceItem) => (
+        <Space direction="vertical" size={0}>
+          {healthTag(r)}
+          {r.last_health_latency_ms ? (
+            <span style={{ fontSize: 12, color: "#888" }}>{r.last_health_latency_ms} ms</span>
+          ) : null}
+        </Space>
+      ),
+    },
     { title: "启用", dataIndex: "enabled", width: 80, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
     {
       title: "操作",
-      width: 240,
+      width: 220,
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: AlertDatasourceItem) => (
-        <Space wrap>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button
             type="link"
             size="small"
@@ -114,7 +138,7 @@ export function useAlertMonitorDatasourceState(params: {
             loading={dsPingId === r.id}
             onClick={() => void runDsPing(r.id)}
           >
-            连通检测
+            检测
           </Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openDsEdit(r)}>
             编辑
@@ -144,7 +168,6 @@ export function useAlertMonitorDatasourceState(params: {
       name: r.name,
       type: r.type,
       base_url: r.base_url,
-      alertmanager_url: r.alertmanager_url ?? "",
       basic_user: r.basic_user ?? "",
       skip_tls_verify: r.skip_tls_verify,
       enabled: r.enabled,

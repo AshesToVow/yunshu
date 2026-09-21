@@ -151,11 +151,11 @@ func (s *Service) SyncCloudAccount(ctx context.Context, req CloudSyncRequest) (*
 	}
 	ak, err := cryptox.DecryptString(s.aead, *acc.EncAK)
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "cmdb", "SyncCloudAccount", err)
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgCloudCredentialDecryptFailed)
 	}
 	sk, err := cryptox.DecryptString(s.aead, *acc.EncSK)
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "cmdb", "SyncCloudAccount", err)
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgCloudCredentialDecryptFailed)
 	}
 	provider, err := s.providerFor(acc.Provider)
 	if err != nil {

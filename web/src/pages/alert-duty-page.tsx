@@ -479,14 +479,15 @@ export function AlertDutyPage() {
           {
             title: "操作",
             key: "actions",
-            width: 220,
+            width: 200,
             fixed: "right",
+            className: "yunshu-table-actions-cell",
             render: (_, row) => (
-              <Space>
-                <Button type="link" icon={<SwapOutlined />} onClick={() => openHandoff(row)}>
+              <Space size={0} wrap className="yunshu-table-actions">
+                <Button type="link" size="small" icon={<SwapOutlined />} onClick={() => openHandoff(row)}>
                   交接
                 </Button>
-                <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>
+                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
                   编辑
                 </Button>
                 <Popconfirm
@@ -499,7 +500,7 @@ export function AlertDutyPage() {
                     })()
                   }
                 >
-                  <Button type="link" danger icon={<DeleteOutlined />}>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                     删除
                   </Button>
                 </Popconfirm>

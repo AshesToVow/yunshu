@@ -54,6 +54,8 @@ body {
   --ops-border: #e2e8f0;
   --ops-text: #0f172a;
   --ops-text-secondary: #64748b;
+  --ys-link: #0284c7;
+  --ys-link-hover: #0369a1;
   background: var(--admin-bg) !important;
   color: var(--admin-text-main);
 }
@@ -64,14 +66,41 @@ body {
   --admin-surface-elevated: #1f1f1f;
   --admin-border: #303030;
   --admin-text-main: rgba(255, 255, 255, 0.88);
-  --admin-text-muted: rgba(255, 255, 255, 0.55);
+  --admin-text-muted: rgba(255, 255, 255, 0.68);
   --ops-bg-layout: #141414;
   --ops-bg-container: #1f1f1f;
   --ops-border: #303030;
   --ops-text: rgba(255, 255, 255, 0.88);
-  --ops-text-secondary: rgba(255, 255, 255, 0.55);
+  --ops-text-secondary: rgba(255, 255, 255, 0.68);
+  --ys-link: #38bdf8;
+  --ys-link-hover: #7dd3fc;
   background: var(--admin-bg) !important;
   color: var(--admin-text-main);
+}
+
+/* 暗色主题 Alert：避免浅底 + 浅字（antd warning 默认浅黄底） */
+.admin-shell.ops-platform.theme-dark .ant-alert {
+  color: var(--admin-text-main);
+}
+.admin-shell.ops-platform.theme-dark .ant-alert .ant-alert-message,
+.admin-shell.ops-platform.theme-dark .ant-alert .ant-alert-description {
+  color: var(--admin-text-main);
+}
+.admin-shell.ops-platform.theme-dark .ant-alert-warning {
+  background: var(--ops-warning-bg, #2b2111) !important;
+  border-color: #594214 !important;
+}
+.admin-shell.ops-platform.theme-dark .ant-alert-info {
+  background: var(--ops-info-bg, #111a2c) !important;
+  border-color: #15325b !important;
+}
+.admin-shell.ops-platform.theme-dark .ant-alert-success {
+  background: var(--ops-success-bg, #162312) !important;
+  border-color: #274916 !important;
+}
+.admin-shell.ops-platform.theme-dark .ant-alert-error {
+  background: var(--ops-error-bg, #2a1215) !important;
+  border-color: #5c2223 !important;
 }
 
 .admin-shell.ops-platform::before,
@@ -272,7 +301,8 @@ body {
 
 .admin-shell.ops-platform .ant-input::placeholder,
 .admin-shell.ops-platform .ant-select-selection-placeholder {
-  color: #94a3b8 !important;
+  color: var(--admin-text-muted) !important;
+  opacity: 0.85;
 }
 
 /* ── Buttons ── */
@@ -716,4 +746,75 @@ body,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Contrast: neutralize legacy global.css leaks + readable helpers/links ── */
+.admin-shell.ops-platform .table-card .ant-card-head-title,
+.admin-shell.ops-platform .form-card .ant-card-head-title,
+.admin-shell.ops-platform .ant-card-head-title {
+  color: var(--admin-text-main) !important;
+}
+
+.admin-shell.ops-platform .ant-form-item-extra,
+.admin-shell.ops-platform .ant-form-item-explain,
+.admin-shell.ops-platform .ant-typography-secondary,
+.admin-shell.ops-platform .ant-empty-description,
+.admin-shell.ops-platform .inline-muted,
+.admin-shell.ops-platform .admin-settings-tip,
+.admin-shell.ops-platform .stats-card__hint.ant-typography {
+  color: var(--admin-text-muted) !important;
+}
+
+.admin-shell.ops-platform .ant-btn-link:not(.ant-btn-dangerous) {
+  color: var(--ys-link, #0284c7) !important;
+}
+
+.admin-shell.ops-platform .ant-btn-link:not(.ant-btn-dangerous):hover {
+  color: var(--ys-link-hover, #0369a1) !important;
+}
+
+.admin-shell.ops-platform .yunshu-table-actions .ant-btn-link:not(.ant-btn-dangerous) {
+  color: var(--ys-link, #0284c7) !important;
+}
+
+.admin-shell.ops-platform .toolbar__actions .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) {
+  color: var(--admin-text-main) !important;
+  border-color: var(--admin-border) !important;
+  background: var(--admin-surface) !important;
+}
+
+.admin-shell.ops-platform .toolbar__actions .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover {
+  color: var(--admin-text-main) !important;
+  border-color: color-mix(in srgb, var(--admin-accent) 45%, var(--admin-border)) !important;
+  background: color-mix(in srgb, var(--admin-accent) 10%, var(--admin-surface)) !important;
+}
+
+.admin-shell.ops-platform .toolbar__actions .ant-btn-primary {
+  color: #fff !important;
+}
+
+.admin-shell.ops-platform .ant-btn-default:not(.ant-btn-dangerous),
+.admin-shell.ops-platform .ant-btn-dashed:not(.ant-btn-dangerous) {
+  color: var(--admin-text-main);
+}
+
+.admin-shell.ops-platform .ant-btn-text:not(.ant-btn-dangerous):not(.admin-icon-btn) {
+  color: var(--admin-text-main);
+}
+
+.admin-shell.ops-platform .ant-tabs-tab,
+.admin-shell.ops-platform .ant-descriptions-item-label,
+.admin-shell.ops-platform .ant-statistic-title,
+.admin-shell.ops-platform .ant-collapse-header {
+  color: var(--admin-text-muted) !important;
+}
+
+.admin-shell.ops-platform .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--admin-accent) !important;
+}
+
+.admin-shell.ops-platform input::placeholder,
+.admin-shell.ops-platform textarea::placeholder {
+  color: color-mix(in srgb, var(--admin-text-muted) 82%, transparent) !important;
+  opacity: 1;
 }

@@ -12,7 +12,6 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/service/platformtpl"
 )
 
 // ReadReport 按 kind（html/print/pdf/excel）取回报告内容与 Content-Type。
@@ -84,18 +83,16 @@ func (s *Service) readReportBytes(ctx context.Context, run *model.InspectRun, ke
 
 // CleanupExpiredReports 按计划 retain_days 清理成功记录与其报告文件。
 func (s *Service) CleanupExpiredReports(ctx context.Context) (int, error) {
-	var plans []model.InspectPlan
-	if err := s.db.WithContext(ctx).Where("retain_days > 0").Find(&plans).Error; err != nil {
+	plans, err := s.repo.ListPlansWithRetain(ctx)
+	if err != nil {
 		return 0, err
 	}
 	store := s.store(ctx)
 	deleted := 0
 	for _, plan := range plans {
 		cutoff := time.Now().AddDate(0, 0, -plan.RetainDays)
-		var runs []model.InspectRun
-		if err := s.db.WithContext(ctx).
-			Where("project_id = ? AND created_at < ? AND status = ?", plan.ProjectID, cutoff, "success").
-			Find(&runs).Error; err != nil {
+		runs, err := s.repo.ListExpiredSuccessRuns(ctx, plan.ProjectID, cutoff)
+		if err != nil {
 			continue
 		}
 		for i := range runs {
@@ -110,7 +107,7 @@ func (s *Service) CleanupExpiredReports(ctx context.Context) (int, error) {
 					_ = os.Remove(key)
 				}
 			}
-			if err := s.db.WithContext(ctx).Delete(run).Error; err == nil {
+			if err := s.repo.DeleteRun(ctx, run); err == nil {
 				deleted++
 			}
 		}
@@ -131,7 +128,7 @@ func (s *Service) renderReportHTML(ctx context.Context, code, body string, data 
 
 // platformReportOverlay 平台模板中心已发布正文；未发布则空串，继续用 embed。
 func (s *Service) platformReportOverlay(ctx context.Context, code string) string {
-	if s == nil || s.db == nil {
+	if s == nil || s.platformTplRepo == nil {
 		return ""
 	}
 	key := "inspect.report.default"
@@ -145,7 +142,7 @@ func (s *Service) platformReportOverlay(ctx context.Context, code string) string
 	default:
 		key = "inspect.report." + strings.TrimSpace(code)
 	}
-	res, err := platformtpl.NewService(s.db).ResolvePublished(ctx, key)
+	res, err := s.platformTpl().ResolvePublished(ctx, key)
 	if err != nil || res == nil || res.Source != "published" {
 		return ""
 	}

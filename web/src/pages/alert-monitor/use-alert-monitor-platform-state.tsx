@@ -84,10 +84,8 @@ export function useAlertMonitorPlatformState() {
   } = useAlertMonitorDatasourceState({ projectContextId, projects, applyDefaultPromDatasource });
 
   // 静默（silences Tab）：状态与操作已下沉到 state/use-silence-state.tsx
-  // 返回字段名保持不变；`loadSilences` / `loadAmSilences` 仍由本文件的 Tab 副作用调用
+  // 返回字段名保持不变；`loadSilences` 仍由本文件的 Tab 副作用调用
   const {
-    amSilencesLoading,
-    loadAmSilences,
     loadNativeSilAlerts,
     loadSilences,
     nativeAlertsColumns,
@@ -308,11 +306,6 @@ export function useAlertMonitorPlatformState() {
     cloudExpiryKeyword,
   ]);
 
-  useEffect(() => {
-    if (tab !== "silences") return;
-    void loadAmSilences();
-  }, [tab, silenceDatasourceId, loadAmSilences]);
-
   return {
     activeProjectName,
     alertSeverityOpts,
@@ -371,7 +364,6 @@ export function useAlertMonitorPlatformState() {
     loadNativeSilAlerts,
     loadRules,
     onRuleTableChange,
-    loadAmSilences,
     loadSilences,
     loading,
     metricKeyword,
@@ -475,7 +467,6 @@ export function useAlertMonitorPlatformState() {
     silSubmitting,
     silenceDatasource,
     silenceDatasourceId,
-    amSilencesLoading,
     silenceDisplayList,
     silenceList,
     silenceMatcherNameOptions,

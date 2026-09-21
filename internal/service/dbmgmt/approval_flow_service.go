@@ -82,7 +82,7 @@ func normalizeDbStageKey(raw string) (string, error) {
 }
 
 func (s *Service) workflowEngine() *workflowsvc.Service {
-	return workflowsvc.NewService(s.db, s.userGroupRepo, nil, s.userRepo)
+	return s.workflow
 }
 
 func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*ApprovalFlowResponse, error) {
@@ -124,7 +124,7 @@ func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req Ap
 }
 
 func (s *Service) loadEnabledFlowStages(ctx context.Context, projectID uint) ([]model.DbApprovalFlowStage, error) {
-	return workflowsvc.EnabledLegacyDbmgmtStages(ctx, s.db, s.userGroupRepo, projectID)
+	return workflowsvc.EnabledLegacyDbmgmtStagesFrom(ctx, s.workflowEngine(), projectID)
 }
 
 func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.DbApprovalFlowStage) map[uint]string {
@@ -139,15 +139,14 @@ func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.DbApp
 		}
 	}
 	out := map[uint]string{}
-	if len(ids) == 0 {
+	if len(ids) == 0 || s.userGroupRepo == nil {
 		return out
 	}
-	var groups []model.UserGroup
-	_ = s.db.WithContext(ctx).Select("id, name").Where("id IN ?", ids).Find(&groups).Error
-	for _, g := range groups {
-		out[g.ID] = g.Name
+	names, err := s.userGroupRepo.ListNamesByIDs(ctx, ids)
+	if err != nil {
+		return out
 	}
-	return out
+	return names
 }
 
 func (s *Service) userCanApproveStep(ctx context.Context, actor *auth.CurrentUser, groupID *uint) (bool, error) {

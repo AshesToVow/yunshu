@@ -5,6 +5,7 @@ package inspect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"yunshu/internal/model"
@@ -28,13 +29,12 @@ func (s *Service) GetOrCreatePlan(ctx context.Context, projectID uint) (*model.I
 	if projectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("project_id required")
 	}
-	var plan model.InspectPlan
-	err := s.db.WithContext(ctx).Where("project_id = ?", projectID).First(&plan).Error
+	plan, err := s.repo.GetPlanByProject(ctx, projectID)
 	if err != nil {
-		if err != gorm.ErrRecordNotFound {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
-		plan = model.InspectPlan{
+		plan = &model.InspectPlan{
 			ProjectID:      projectID,
 			Enabled:        false,
 			CronSpec:       "0 0 9 * * *",
@@ -42,12 +42,12 @@ func (s *Service) GetOrCreatePlan(ctx context.Context, projectID uint) (*model.I
 			RetainDays:     90,
 			RecipientsJSON: "[]",
 		}
-		if err := s.db.WithContext(ctx).Create(&plan).Error; err != nil {
+		if err := s.repo.CreatePlan(ctx, plan); err != nil {
 			return nil, err
 		}
 	}
-	_ = s.ensurePlanDefaults(ctx, &plan)
-	return &plan, nil
+	_ = s.ensurePlanDefaults(ctx, plan)
+	return plan, nil
 }
 
 // ensurePlanDefaults 首次进入自动绑定数据源、同步模板巡检项，减少手工配置。
@@ -57,23 +57,18 @@ func (s *Service) ensurePlanDefaults(ctx context.Context, plan *model.InspectPla
 	}
 	changed := false
 	if plan.DatasourceID == 0 {
-		var ds model.AlertDatasource
-		err := s.db.WithContext(ctx).
-			Where("project_id = ? AND enabled = ? AND type = ?", plan.ProjectID, true, "prometheus").
-			Order("id ASC").
-			First(&ds).Error
-		if err == nil {
+		ds, err := s.repo.FirstEnabledPrometheusDS(ctx, plan.ProjectID)
+		if err == nil && ds != nil {
 			plan.DatasourceID = ds.ID
 			changed = true
 		}
 	}
 	if changed {
-		if err := s.db.WithContext(ctx).Save(plan).Error; err != nil {
+		if err := s.repo.SavePlan(ctx, plan); err != nil {
 			return err
 		}
 	}
-	var n int64
-	_ = s.db.WithContext(ctx).Model(&model.InspectItem{}).Where("project_id = ?", plan.ProjectID).Count(&n).Error
+	n, _ := s.repo.CountItemsByProject(ctx, plan.ProjectID)
 	if n == 0 {
 		_, _ = s.SyncItemsFromTemplate(ctx, plan.ProjectID)
 	}
@@ -95,8 +90,7 @@ func (s *Service) UpdatePlan(ctx context.Context, projectID uint, req PlanUpsert
 		plan.CronSpec = strings.TrimSpace(req.CronSpec)
 	}
 	if req.DatasourceID > 0 {
-		var ds model.AlertDatasource
-		err := s.db.WithContext(ctx).Where("id = ?", req.DatasourceID).First(&ds).Error
+		ds, err := s.repo.GetDatasource(ctx, req.DatasourceID)
 		if err != nil {
 			return nil, constants.ErrBadRequestWithMsg("数据源不存在")
 		}
@@ -142,19 +136,15 @@ func (s *Service) UpdatePlan(ctx context.Context, projectID uint, req PlanUpsert
 	if plan.Enabled && plan.DatasourceID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("启用定时巡检前请先配置 datasource_id")
 	}
-	if err := s.db.WithContext(ctx).Save(plan).Error; err != nil {
+	if err := s.repo.SavePlan(ctx, plan); err != nil {
 		return nil, err
 	}
 	return plan, nil
 }
 
 func (s *Service) getPlanByRun(ctx context.Context, run *model.InspectRun) (*model.InspectPlan, error) {
-	if s == nil || s.db == nil || run == nil || run.PlanID == 0 {
+	if s == nil || s.repo == nil || run == nil || run.PlanID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("invalid run")
 	}
-	var plan model.InspectPlan
-	if err := s.db.WithContext(ctx).First(&plan, run.PlanID).Error; err != nil {
-		return nil, err
-	}
-	return &plan, nil
+	return s.repo.GetPlanByID(ctx, run.PlanID)
 }

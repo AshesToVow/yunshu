@@ -176,10 +176,12 @@ export function ObjectsTab() {
           },
           {
             title: "操作",
-            width: 280,
+            width: 220,
+            className: "yunshu-table-actions-cell",
             render: (_, r) => (
-              <Space wrap size="small">
+              <Space size={0} wrap className="yunshu-table-actions">
                 <Button
+                  type="link"
                   size="small"
                   onClick={async () => {
                     try {
@@ -193,6 +195,7 @@ export function ObjectsTab() {
                   Ping
                 </Button>
                 <Button
+                  type="link"
                   size="small"
                   icon={<SyncOutlined />}
                   onClick={async () => {
@@ -207,7 +210,7 @@ export function ObjectsTab() {
                 >
                   同步
                 </Button>
-                <Button size="small" onClick={() => openEdit(r)}>
+                <Button type="link" size="small" onClick={() => openEdit(r)}>
                   编辑
                 </Button>
                 <Popconfirm
@@ -222,7 +225,7 @@ export function ObjectsTab() {
                     }
                   }}
                 >
-                  <Button size="small" danger>
+                  <Button type="link" size="small" danger>
                     删除
                   </Button>
                 </Popconfirm>

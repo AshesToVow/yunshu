@@ -28,11 +28,14 @@ import {
   deleteK8sEventForwardRule,
   getK8sEventForwardSettings,
   listK8sEventForwardRules,
+  listK8sForwardedEvents,
+  requeueK8sForwardedEvent,
   updateK8sEventForwardRule,
   updateK8sEventForwardSettings,
   type K8sEventForwardRule,
   type K8sEventForwardRulePayload,
   type K8sEventForwardSetting,
+  type K8sForwardedEventItem,
 } from "../services/k8s-event-forward";
 import { formatDateTime } from "../utils/format";
 
@@ -316,10 +319,11 @@ function RulesPanel() {
     {
       title: "操作",
       key: "actions",
-      width: 120,
+      width: 180,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_, row) => (
-        <Space>
+        <Space size={0} wrap className="yunshu-table-actions">
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
             编辑
           </Button>
@@ -541,6 +545,139 @@ function WorkerSettingsPanel() {
   );
 }
 
+function DeliveryPanel() {
+  const [loading, setLoading] = useState(false);
+  const [list, setList] = useState<K8sForwardedEventItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [status, setStatus] = useState<string | undefined>("dead");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listK8sForwardedEvents({ page, page_size: pageSize, status });
+      setList(res.list || []);
+      setTotal(res.total || 0);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "加载投递记录失败"));
+      setList([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, status]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const columns: ColumnsType<K8sForwardedEventItem> = [
+    { title: "ID", dataIndex: "id", width: 80 },
+    { title: "集群", dataIndex: "cluster_id", width: 90 },
+    { title: "命名空间", dataIndex: "namespace", width: 120 },
+    { title: "对象", dataIndex: "name", width: 160, ellipsis: true },
+    { title: "Reason", dataIndex: "reason", width: 140, ellipsis: true },
+    {
+      title: "状态",
+      dataIndex: "status",
+      width: 100,
+      render: (v: string) => {
+        const color = v === "dead" ? "error" : v === "delivered" ? "success" : v === "inflight" ? "processing" : "default";
+        return <Tag color={color}>{v || "-"}</Tag>;
+      },
+    },
+    { title: "重试", dataIndex: "attempts", width: 70 },
+    {
+      title: "错误",
+      dataIndex: "last_error",
+      ellipsis: true,
+      render: (v?: string) => v || "-",
+    },
+    {
+      title: "时间",
+      dataIndex: "timestamp",
+      width: 170,
+      render: (v: string) => formatDateTime(v),
+    },
+    {
+      title: "操作",
+      key: "action",
+      width: 100,
+      fixed: "right",
+      render: (_, row) =>
+        row.status === "dead" ? (
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              void (async () => {
+                try {
+                  await requeueK8sForwardedEvent(row.id);
+                  message.success("已重新入队");
+                  void load();
+                } catch (e) {
+                  message.error(extractApiErrorMessage(e, "重投失败"));
+                }
+              })();
+            }}
+          >
+            重投
+          </Button>
+        ) : null,
+    },
+  ];
+
+  return (
+    <Card bordered={false} styles={{ body: { paddingTop: 8 } }}>
+      <Space style={{ marginBottom: 12 }} wrap>
+        <Select
+          allowClear
+          placeholder="按状态筛选"
+          style={{ width: 160 }}
+          value={status}
+          onChange={(v) => {
+            setPage(1);
+            setStatus(v);
+          }}
+          options={[
+            { label: "死信 dead", value: "dead" },
+            { label: "待投递 pending", value: "pending" },
+            { label: "投递中 inflight", value: "inflight" },
+            { label: "已投递 delivered", value: "delivered" },
+          ]}
+        />
+        <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+          刷新
+        </Button>
+      </Space>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="死信队列"
+        description="超过最大重试次数的事件会进入 dead 状态，可在此查看失败原因并手动重投。投递中（inflight）超过约 5 分钟未完成会自动回收为 pending。"
+      />
+      <Table
+        rowKey="id"
+        loading={loading}
+        dataSource={list}
+        columns={columns}
+        scroll={{ x: 1100 }}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          showSizeChanger: true,
+          onChange: (p, ps) => {
+            setPage(p);
+            setPageSize(ps);
+          },
+        }}
+      />
+    </Card>
+  );
+}
+
 export function K8sEventForwardPage() {
   return (
     <Card className="table-card" title="K8s Event 多集群转发">
@@ -548,6 +685,7 @@ export function K8sEventForwardPage() {
       <Tabs
         items={[
           { key: "rules", label: "转发规则", children: <RulesPanel /> },
+          { key: "delivery", label: "投递与死信", children: <DeliveryPanel /> },
           { key: "settings", label: "Worker 参数", children: <WorkerSettingsPanel /> },
         ]}
       />

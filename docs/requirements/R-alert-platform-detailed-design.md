@@ -12,7 +12,7 @@
 
 | 能力 | 说明 |
 |------|------|
-| Webhook 接入 | Alertmanager `POST /api/v1/alerts/webhook/alertmanager`，载荷形态兼容 Alertmanager |
+| Webhook 接入 | Alertmanager `POST /api/v1/alerts/webhook`，载荷形态兼容 Alertmanager |
 | 内置监控规则 | 平台配置 PromQL + `for`，后端定时查询 Prometheus，**不经过 Alertmanager** |
 | 订阅树路由 | 弃用旧策略表路径，**仅**订阅树 → 接收组 → 通道 |
 | 静默 / 抑制 | 平台静默表；告警抑制服务（可选） |
@@ -30,7 +30,7 @@
 2. Alertmanager 路由到 webhook，`POST` 云枢（鉴权见 `alert.webhook_token`）。  
 3. `AlertHandler.ReceiveAlertmanager` → `AlertService.ReceiveAlertmanager`。
 
-**路由注册**：`internal/router/router.go` — `alertWebhook.POST("/webhook/alertmanager", ...)`（无通用 auth，token 校验在 handler）。
+**路由注册**：`internal/router/router.go` — `alertWebhook.POST("/webhook", ...)`（无通用 auth，token 校验在 handler）。
 
 ### 2.2 入口 B：平台监控规则（内置）
 
@@ -142,7 +142,7 @@ sequenceDiagram
 
 | 方法与路径 | 说明 |
 |------------|------|
-| `POST /alerts/webhook/alertmanager` | Alertmanager Webhook（token） |
+| `POST /alerts/webhook` | Alertmanager Webhook（token） |
 | `GET/POST/PUT/DELETE .../alerts/channels*` | 告警通道 |
 | `GET /alerts/events`、`GET /alerts/history/stats` | 事件与统计 |
 | `GET/POST/PUT/DELETE .../alerts/datasources*` | 数据源；`GET .../:id/ping` 连通性（PromQL `vector(1)`）；`GET .../prometheus-alerts` 活跃告警；`POST .../query` PromQL |

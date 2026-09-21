@@ -1,6 +1,7 @@
 import {
   CloudUploadOutlined,
   DeleteOutlined,
+  DownOutlined,
   EditOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -10,6 +11,7 @@ import {
   Alert,
   Button,
   Card,
+  Dropdown,
   Form,
   Input,
   Modal,
@@ -543,19 +545,12 @@ export function CicdServicesPage() {
         title: "操作",
         key: "actions",
         fixed: "right",
-        width: 340,
+        width: 200,
+        className: "yunshu-table-actions-cell",
         render: (_, row) => {
           const access = cicdAccess(row);
           return (
-          <Space size={4} wrap>
-            <Button
-              type="link"
-              size="small"
-              disabled={!access.can_manage}
-              onClick={() => openCiConfig(row)}
-            >
-              {row.has_ci_config ? "编辑CI配置" : "新增CI配置"}
-            </Button>
+          <Space size={0} wrap className="yunshu-table-actions">
             <Button
               type="link"
               size="small"
@@ -565,22 +560,35 @@ export function CicdServicesPage() {
             >
               CI打包
             </Button>
-            <Button
-              type="link"
-              size="small"
-              disabled={!access.can_manage}
-              onClick={() => openDeployWizard(row, "regular")}
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  {
+                    key: "ci",
+                    label: row.has_ci_config ? "编辑CI配置" : "新增CI配置",
+                    disabled: !access.can_manage,
+                    onClick: () => openCiConfig(row),
+                  },
+                  {
+                    key: "regular",
+                    label: "非容器化发布",
+                    disabled: !access.can_manage,
+                    onClick: () => openDeployWizard(row, "regular"),
+                  },
+                  {
+                    key: "container",
+                    label: "容器化发布",
+                    disabled: !access.can_manage,
+                    onClick: () => openDeployWizard(row, "container"),
+                  },
+                ],
+              }}
             >
-              非容器化发布
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              disabled={!access.can_manage}
-              onClick={() => openDeployWizard(row, "container")}
-            >
-              容器化发布
-            </Button>
+              <Button type="link" size="small">
+                更多 <DownOutlined />
+              </Button>
+            </Dropdown>
             <Popconfirm
               title="确认删除该应用？"
               disabled={!access.can_manage}
@@ -639,11 +647,12 @@ export function CicdServicesPage() {
           },
           {
             title: "操作",
-            width: 200,
+            width: 180,
+            className: "yunshu-table-actions-cell",
             render: (_, c) => {
               const access = cicdAccess(row);
               return (
-              <Space size={4}>
+              <Space size={0} wrap className="yunshu-table-actions">
                 <Button
                   type="link"
                   size="small"

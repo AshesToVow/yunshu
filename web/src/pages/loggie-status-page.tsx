@@ -277,8 +277,9 @@ export function LoggieStatusPage() {
     { title: "错误", dataIndex: "last_error", ellipsis: true, width: 160 },
     {
       title: "操作",
-      width: 260,
+      width: 360,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_, r) => {
         const busy = (a: AgentAction) => actionLoading === `${a}-${r.server_id}`;
         const more = [
@@ -303,7 +304,7 @@ export function LoggieStatusPage() {
           },
         ];
         return (
-          <Space size={4} wrap={false}>
+          <Space size={4} wrap className="yunshu-table-actions">
             <Button size="small" type="link" icon={<ThunderboltOutlined />} onClick={() => void openBootstrap(r)}>
               引导
             </Button>

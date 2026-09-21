@@ -12,6 +12,7 @@ func seedPermissionsInspect() []model.Permission {
 		{Name: "巡检项删除", Resource: "/api/v1/projects/:id/inspect/items/:itemId", Action: "DELETE", Description: "Delete inspect item"},
 		{Name: "巡检项同步模板", Resource: "/api/v1/projects/:id/inspect/items/sync-template", Action: "POST", Description: "Sync inspect items from global template"},
 		{Name: "巡检项重置模板", Resource: "/api/v1/projects/:id/inspect/items/reset-template", Action: "POST", Description: "Reset inspect items from global template"},
+		{Name: "巡检项转持续告警", Resource: "/api/v1/projects/:id/inspect/items/:itemId/promote-alert", Action: "POST", Description: "Promote inspect item to monitor rule"},
 		{Name: "巡检记录列表", Resource: "/api/v1/projects/:id/inspect/runs", Action: "GET", Description: "List inspect runs"},
 		{Name: "巡检趋势", Resource: "/api/v1/projects/:id/inspect/runs/trends", Action: "GET", Description: "List inspect run trends"},
 		{Name: "巡检报告迁移 MinIO", Resource: "/api/v1/projects/:id/inspect/migrate-reports-to-minio", Action: "POST", Description: "Migrate local inspect reports to MinIO"},

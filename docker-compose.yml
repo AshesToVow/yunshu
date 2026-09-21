@@ -1,11 +1,22 @@
 version: '3.3'
 
-# 默认：MySQL 在宿主机（非容器），仅启动 redis + backend + frontend。
-# 若要用容器 MySQL：docker-compose --profile container-mysql up -d
+# 默认：关系库在宿主机（非容器），仅启动 redis + backend + frontend。
+# 容器 MySQL：docker-compose --profile container-mysql up -d（若已提供该 profile）
+# 容器 PostgreSQL：
+#   1) 将 configs/config.smoke-pg.yaml 内容合并进 config.yaml（或挂载该文件）
+#      database.driver=postgres, host=yunshu-postgres
+#   2) docker-compose --profile container-postgres up -d
+#   3) backend 建议 RUN_MIGRATE=1；entrypoint 会按 driver 等库（WAIT_DB / 兼容 WAIT_MYSQL）
+#
+# 配置唯一入口：configs/config.yaml（挂载到容器 /app/configs）
+#   启动前请按该文件顶部「场景速查」改 database|mysql / redis / 密钥 / app.env。
+#   不要依赖 .env / .env.example。
+#
+# Redis 密码必须与 config.yaml → redis.password 完全一致（下方 --requirepass）。
 #
 # 构建提示：
 #   1) 确保仓库根目录有 .dockerignore（否则 context 可达数百 MB）
-#   2) 可选开启 BuildKit（非必须）：export DOCKER_BUILDKIT=1
+#   2) 可选开启 BuildKit：export DOCKER_BUILDKIT=1
 services:
   redis:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.4.2-alpine
@@ -17,8 +28,9 @@ services:
       - TZ=Asia/Shanghai
     command:
       - redis-server
+      # 与 configs/config.yaml redis.password 保持一致后改此处
       - --requirepass
-      - "${REDIS_PASSWORD:-YunshuRedis@2026Secure!}"
+      - "1234"
       - --maxmemory
       - "96mb"
       - --maxmemory-policy
@@ -38,11 +50,37 @@ services:
     networks:
       - yunshu-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-YunshuRedis@2026Secure!}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "1234", "ping"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 10s
+
+  # 可选：平台主库用 PostgreSQL（与 MySQL 二选一，改 config database.driver）
+  postgres:
+    profiles: ["container-postgres"]
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/postgres:16-alpine
+    container_name: yunshu-postgres
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER=yunshu
+      - POSTGRES_PASSWORD=yunshu
+      - POSTGRES_DB=yunshu
+    ports:
+      - "5432:5432"
+    volumes:
+      - /export/postgres_data:/var/lib/postgresql/data
+    networks:
+      - yunshu-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yunshu -d yunshu"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   backend:
     build:
@@ -52,7 +90,6 @@ services:
         # 华为云镜像路径为 docker.io/library/...（不是 docker.io/golang）
         GO_IMAGE: ${GO_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/golang:1.26.2-alpine}
         ALPINE_IMAGE: ${ALPINE_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/alpine:3.19}
-        WKHTMLTOPDF_IMAGE: ${WKHTMLTOPDF_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/surnet/alpine-wkhtmltopdf:3.23.2-0.12.6-full}
     container_name: yunshu-backend
     restart: unless-stopped
     mem_limit: 384m
@@ -61,21 +98,13 @@ services:
       - "8080:8080"
     environment:
       - GIN_MODE=release
-      - APP_ENV=prod
       - TZ=Asia/Shanghai
-      # 宿主机 MySQL：旧 compose 不支持 host-gateway，默认走 docker0 网关；请在 .env 覆盖为实际 IP
-      - MYSQL_HOST=${MYSQL_HOST:-172.17.0.1}
-      - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_USER=${MYSQL_USER:-root}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-YunshuDB@2026Secure!}
-      - MYSQL_DB_NAME=${MYSQL_DB_NAME:-yunshu}
-      - REDIS_ADDR=yunshu-redis:6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-YunshuRedis@2026Secure!}
-      - JWT_SECRET=${JWT_SECRET:-YunshuJWTSecretKey2026ChangeInProduction}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-32bytes-base64}
+      # 业务配置全部来自挂载的 configs/config.yaml（含 JWT / encryption_key / database|mysql / redis）
       - RUN_SEED=${RUN_SEED:-1}
+      - RUN_MIGRATE=${RUN_MIGRATE:-0}
+      # entrypoint 读 WAIT_DB；未设时回退 WAIT_MYSQL（见 deploy/docker/entrypoint.sh）
+      - WAIT_DB=${WAIT_DB:-1}
       - WAIT_MYSQL=${WAIT_MYSQL:-1}
-      - INSPECT_SERVER_PDF=${INSPECT_SERVER_PDF:-html_only}
     volumes:
       - ./configs:/app/configs:ro
       - ./logs:/app/logs
@@ -85,7 +114,8 @@ services:
     networks:
       - yunshu-network
     # 旧版 docker-compose 不支持 extra_hosts: host-gateway。
-    # 连宿主机 MySQL 请在 .env 设 MYSQL_HOST 为宿主机 IP（如 10.10.10.4），不要用 host.docker.internal。
+    # 连宿主机库：在 config.yaml 设 database.host / mysql.host 为宿主机 IP。
+    # 连本 compose 的 postgres：--profile container-postgres，host=yunshu-postgres。
 
   frontend:
     build:
@@ -104,6 +134,7 @@ services:
         condition: service_started
     networks:
       - yunshu-network
+
 
 networks:
   yunshu-network:

@@ -17,6 +17,7 @@ import (
 	"yunshu/internal/plugingate"
 	"yunshu/internal/service"
 
+	"github.com/casbin/casbin/v2"
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -133,6 +134,9 @@ var seedCmd = &cobra.Command{
 		if err := service.AddRolePolicies(app.Enforcer, adminRole.Code, permissions); err != nil {
 			return err
 		}
+		if err := syncIncrementalAIPolicies(app.Enforcer); err != nil {
+			return err
+		}
 		if err := service.SyncUserRoles(app.Enforcer, adminUser.ID, []model.Role{adminRole}); err != nil {
 			return err
 		}
@@ -186,6 +190,7 @@ func defaultPermissions() []model.Permission {
 	out = append(out, seedPermissionsDbmgmt()...)
 	out = append(out, seedPermissionsAI()...)
 	out = append(out, seedPermissionsLog()...)
+	out = append(out, seedPermissionsKafkamgmt()...)
 	out = append(out, seedPermissionsInspect()...)
 	return out
 }
@@ -195,4 +200,48 @@ func seedMenus(ctx context.Context, db *gorm.DB, cfg *config.PluginsConfig) erro
 		return err
 	}
 	return plugingate.SyncMenuVisibility(ctx, db, cfg)
+}
+
+// syncIncrementalAIPolicies 给已具备相关 AI 能力的角色补齐新增权限（eval/runs、chat/stream），
+// 避免升级后仅权限表有行、Casbin 未授予导致 403。
+func syncIncrementalAIPolicies(enforcer *casbin.SyncedEnforcer) error {
+	if enforcer == nil {
+		return nil
+	}
+	policies := enforcer.GetPolicy()
+	grantEvalRuns := map[string]struct{}{}
+	grantStream := map[string]struct{}{}
+	for _, p := range policies {
+		if len(p) < 3 {
+			continue
+		}
+		role, res, act := p[0], p[1], strings.ToUpper(p[2])
+		switch {
+		case res == "/api/v1/ai/center/overview" && act == "GET",
+			res == "/api/v1/ai/center/eval/run" && act == "POST",
+			res == "/api/v1/ai/center/eval/cases" && act == "GET":
+			grantEvalRuns[role] = struct{}{}
+		}
+		if res == "/api/v1/ai/chat" && act == "POST" {
+			grantStream[role] = struct{}{}
+		}
+	}
+	evalPerms := []model.Permission{
+		{Resource: "/api/v1/ai/center/eval/runs", Action: "GET"},
+		{Resource: "/api/v1/ai/center/eval/runs/:id", Action: "GET"},
+	}
+	for role := range grantEvalRuns {
+		if err := service.AddRolePolicies(enforcer, role, evalPerms); err != nil {
+			return err
+		}
+	}
+	streamPerms := []model.Permission{
+		{Resource: "/api/v1/ai/chat/stream", Action: "POST"},
+	}
+	for role := range grantStream {
+		if err := service.AddRolePolicies(enforcer, role, streamPerms); err != nil {
+			return err
+		}
+	}
+	return nil
 }

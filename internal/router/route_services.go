@@ -5,6 +5,7 @@ import (
 	cicdsvc "yunshu/internal/service/cicd"
 	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 	esmgmtsvc "yunshu/internal/service/esmgmt"
+	kafkamgmtsvc "yunshu/internal/service/kafkamgmt"
 	inspectsvc "yunshu/internal/service/inspect"
 	"yunshu/internal/service"
 )
@@ -63,6 +64,7 @@ type routeServices struct {
 	MysqlBackup          *service.MysqlBackupService
 	Dbmgmt               *dbmgmtsvc.Service
 	LogSearch            *service.LogSearchService
+	LogIntelligence      *service.LogIntelligenceService
 	LogRetention         *service.LogRetentionService
 	KafkaToES            *service.KafkaToESService
 	LoggieAgent          *service.LoggieAgentService
@@ -74,4 +76,5 @@ type routeServices struct {
 	Inspect              *inspectsvc.Service
 	AI                   *aisvc.Service
 	Esmgmt               *esmgmtsvc.Service
+	Kafkamgmt            *kafkamgmtsvc.Service
 }

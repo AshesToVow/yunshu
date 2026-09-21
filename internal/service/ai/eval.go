@@ -10,7 +10,6 @@ import (
 	"yunshu/internal/pkg/auth"
 )
 
-// RunEvalSuite 对启用的评估用例做轻量回归（关键词/禁止项，不强制调 LLM 以降低成本；可选真实 Chat）。
 func (s *Service) RunEvalSuite(ctx context.Context, user *auth.CurrentUser, liveChat bool) (*model.AiEvalRun, error) {
 	s.ensureSeed()
 	var uid uint
@@ -18,11 +17,10 @@ func (s *Service) RunEvalSuite(ctx context.Context, user *auth.CurrentUser, live
 		uid = user.ID
 	}
 	run := model.AiEvalRun{Suite: "default", Status: "running", CreatedBy: uid, CreatedAt: time.Now()}
-	if err := s.db.WithContext(ctx).Create(&run).Error; err != nil {
+	if err := s.repo.CreateEvalRun(ctx, &run); err != nil {
 		return nil, err
 	}
-	var cases []model.AiEvalCase
-	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&cases).Error
+	cases, _ := s.repo.ListEnabledEvalCases(ctx)
 	total, max := 0.0, 0.0
 	for _, c := range cases {
 		max += float64(c.ScoreWeight)
@@ -44,7 +42,6 @@ func (s *Service) RunEvalSuite(ctx context.Context, user *auth.CurrentUser, live
 				reply = "ERROR: " + err.Error()
 			}
 		} else {
-			// 离线：用 RAG + Prompt 存在性做冒烟
 			hits := s.retrieveKnowledge(ctx, c.InputQuestion, 4)
 			parts := make([]string, 0, len(hits))
 			for _, h := range hits {
@@ -57,11 +54,11 @@ func (s *Service) RunEvalSuite(ctx context.Context, user *auth.CurrentUser, live
 		}
 		score, detail := scoreEvalCase(c, reply, toolsUsed)
 		total += score
-		_ = s.db.WithContext(ctx).Create(&model.AiEvalResult{
+		_ = s.repo.CreateEvalResult(ctx, &model.AiEvalResult{
 			RunID: run.ID, CaseID: c.ID, CaseCode: c.CaseCode,
 			Passed: score >= float64(c.ScoreWeight)*0.6, Score: score, MaxScore: float64(c.ScoreWeight),
 			Detail: detail, Reply: truncateStr(reply, 4000),
-		}).Error
+		})
 	}
 	now := time.Now()
 	run.Status = "done"
@@ -71,8 +68,25 @@ func (s *Service) RunEvalSuite(ctx context.Context, user *auth.CurrentUser, live
 	if max > 0 {
 		run.Summary = "score=" + formatFloat(total) + "/" + formatFloat(max)
 	}
-	_ = s.db.WithContext(ctx).Save(&run).Error
+	_ = s.repo.SaveEvalRun(ctx, &run)
 	return &run, nil
+}
+
+func (s *Service) ListEvalRuns(ctx context.Context, limit int) ([]model.AiEvalRun, error) {
+	s.ensureSeed()
+	return s.repo.ListEvalRuns(ctx, limit)
+}
+
+func (s *Service) GetEvalRunDetail(ctx context.Context, id uint) (*model.AiEvalRun, []model.AiEvalResult, error) {
+	run, err := s.repo.GetEvalRunByID(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	results, err := s.repo.ListEvalResultsByRunID(ctx, id)
+	if err != nil {
+		return run, nil, err
+	}
+	return run, results, nil
 }
 
 func formatFloat(f float64) string {

@@ -11,39 +11,33 @@ import (
 
 // PortraitHealth 解释型健康分（告警 / 发布 / Ready 三因子）。
 type PortraitHealth struct {
-	Score       int                  `json:"score"`
-	Grade       string               `json:"grade"`
-	Factors     []PortraitHealthFactor `json:"factors"`
-	CheckedAt   string               `json:"checked_at"`
+	Score     int                    `json:"score"`
+	Grade     string                 `json:"grade"`
+	Factors   []PortraitHealthFactor `json:"factors"`
+	CheckedAt string                 `json:"checked_at"`
 }
 
 type PortraitHealthFactor struct {
-	Key     string `json:"key"`
-	Label   string `json:"label"`
-	Score   int    `json:"score"`
-	Max     int    `json:"max"`
-	Detail  string `json:"detail"`
-	Deduct  int    `json:"deduct"`
+	Key    string `json:"key"`
+	Label  string `json:"label"`
+	Score  int    `json:"score"`
+	Max    int    `json:"max"`
+	Detail string `json:"detail"`
+	Deduct int    `json:"deduct"`
 }
 
 func (s *ServiceCatalogService) buildHealth(ctx context.Context, item *ServiceCatalogItem) *PortraitHealth {
-	if item == nil || s.db == nil {
+	if item == nil || s.portraitRepo == nil {
 		return nil
 	}
 	now := time.Now()
 	since := now.Add(-24 * time.Hour)
-	factors := make([]PortraitHealthFactor, 0, 3)
+	factors := make([]PortraitHealthFactor, 0, 4)
 
 	// 告警因子：满分 40；firing critical -15/条(上限30)，warning -5/条(上限10)
 	alertScore, alertMax := 40, 40
-	var firingCritical, firingWarning int64
-	_ = s.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Where("status = ? AND severity = ? AND created_at >= ?", "firing", "critical", since).
-		Count(&firingCritical).Error
-	_ = s.db.WithContext(ctx).Model(&model.AlertEvent{}).
-		Where("status = ? AND severity = ? AND created_at >= ?", "firing", "warning", since).
-		Count(&firingWarning).Error
-	// 若有 monitor 绑定，优先按 fingerprint 粗过滤不可行时仍用项目级，并在 detail 标明
+	firingCritical, _ := s.portraitRepo.CountFiringAlertsSince(ctx, "critical", since)
+	firingWarning, _ := s.portraitRepo.CountFiringAlertsSince(ctx, "warning", since)
 	deductAlert := int(firingCritical)*15 + int(firingWarning)*5
 	if deductAlert > 40 {
 		deductAlert = 40
@@ -66,14 +60,7 @@ func (s *ServiceCatalogService) buildHealth(ctx context.Context, item *ServiceCa
 	relDetail := "无 CI/CD 绑定，按满分计"
 	if cicdID > 0 {
 		week := now.Add(-7 * 24 * time.Hour)
-		var total, failed int64
-		_ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
-			Where("project_id = ? AND service_id = ? AND created_at >= ?", item.ProjectID, cicdID, week).
-			Count(&total).Error
-		_ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
-			Where("project_id = ? AND service_id = ? AND created_at >= ? AND status IN ?",
-				item.ProjectID, cicdID, week, []string{"failed", "cancelled"}).
-			Count(&failed).Error
+		total, failed, _ := s.portraitRepo.CountReleaseRunsSince(ctx, item.ProjectID, cicdID, week)
 		if total == 0 {
 			relDetail = "近7天无发布"
 		} else {
@@ -98,11 +85,7 @@ func (s *ServiceCatalogService) buildHealth(ctx context.Context, item *ServiceCa
 		}
 	}
 	if hasWL {
-		var failN int64
-		_ = s.db.WithContext(ctx).Model(&model.ChangeEvent{}).
-			Where("project_id = ? AND service_id = ? AND source = ? AND status = ? AND started_at >= ?",
-				item.ProjectID, item.ID, model.ChangeSourceK8s, model.ChangeStatusFailed, since).
-			Count(&failN).Error
+		failN, _ := s.portraitRepo.CountFailedChangesSince(ctx, item.ProjectID, item.ID, model.ChangeSourceK8s, since)
 		if failN > 0 {
 			readyScore = 10
 			readyDetail += fmt.Sprintf("；近24h K8s 失败变更 %d", failN)
@@ -114,7 +97,24 @@ func (s *ServiceCatalogService) buildHealth(ctx context.Context, item *ServiceCa
 		Key: "ready", Label: "Ready", Score: readyScore, Max: readyMax, Deduct: readyMax - readyScore, Detail: readyDetail,
 	})
 
-	score := alertScore + relScore + readyScore
+	// 日志异常因子：满分 10；open critical -4/条(上限8)，warning -2/条(上限4)
+	logScore, logMax := 10, 10
+	openCritical, _ := s.portraitRepo.CountOpenAnomalies(ctx, item.ProjectID, model.LogAnomalySeverityCritical)
+	openWarning, _ := s.portraitRepo.CountOpenAnomalies(ctx, item.ProjectID, model.LogAnomalySeverityWarning)
+	deductLog := int(openCritical)*4 + int(openWarning)*2
+	if deductLog > 10 {
+		deductLog = 10
+	}
+	logScore -= deductLog
+	logDetail := fmt.Sprintf("open 日志异常 critical=%d warning=%d", openCritical, openWarning)
+	factors = append(factors, PortraitHealthFactor{
+		Key: "log", Label: "日志", Score: logScore, Max: logMax, Deduct: deductLog, Detail: logDetail,
+	})
+
+	score := alertScore + relScore + readyScore + logScore
+	if score > 100 {
+		score = 100
+	}
 	grade := "A"
 	switch {
 	case score >= 85:

@@ -2,15 +2,16 @@ package cicd
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/projectacl"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type CicdAccessPerm struct {
@@ -77,18 +78,16 @@ func (s *Service) EffectiveCicdAccess(ctx context.Context, projectID, serviceID 
 	if actor == nil || actor.ID == 0 {
 		return &CicdAccessPerm{}, nil
 	}
-	kind, ref := projectacl.UserPrincipalRef(actor.ID)
-	var g model.CicdAccessGrant
-	err = s.db.WithContext(ctx).
-		Where("project_id = ? AND service_id = ? AND principal_kind = ? AND principal_ref = ?", projectID, serviceID, kind, ref).
-		First(&g).Error
+	grants, err := s.repo.ListAccessGrantsForUser(ctx, projectID, actor.ID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return &CicdAccessPerm{}, nil
-		}
 		return nil, err
 	}
-	return &CicdAccessPerm{CanView: g.CanView, CanBuild: g.CanBuild, CanRelease: g.CanRelease, CanManage: g.CanManage}, nil
+	for _, g := range grants {
+		if g.ServiceID == serviceID {
+			return &CicdAccessPerm{CanView: g.CanView, CanBuild: g.CanBuild, CanRelease: g.CanRelease, CanManage: g.CanManage}, nil
+		}
+	}
+	return &CicdAccessPerm{}, nil
 }
 
 func (s *Service) AssertCicdAccess(ctx context.Context, projectID, serviceID uint, actor *auth.CurrentUser, need string) error {
@@ -139,17 +138,13 @@ func (s *Service) visibleCicdServiceScope(ctx context.Context, projectID uint, a
 	if actor == nil || actor.ID == 0 {
 		return false, []uint{}, nil
 	}
-	kind, ref := projectacl.UserPrincipalRef(actor.ID)
-	var ids []uint
-	err = s.db.WithContext(ctx).Model(&model.CicdAccessGrant{}).
-		Where("project_id = ? AND principal_kind = ? AND principal_ref = ? AND (can_view = ? OR can_build = ? OR can_release = ? OR can_manage = ?)",
-			projectID, kind, ref, true, true, true, true).
-		Pluck("service_id", &ids).Error
+	grants, err := s.repo.ListAccessGrantsForUser(ctx, projectID, actor.ID)
 	if err != nil {
 		return false, nil, err
 	}
-	if ids == nil {
-		ids = []uint{}
+	ids := make([]uint, 0, len(grants))
+	for _, g := range grants {
+		ids = append(ids, g.ServiceID)
 	}
 	return false, ids, nil
 }
@@ -158,29 +153,41 @@ func (s *Service) ListCicdGrants(ctx context.Context, projectID uint, actor *aut
 	if err := s.assertCanManageCicdGrants(ctx, projectID, actor); err != nil {
 		return nil, err
 	}
-	q := s.db.WithContext(ctx).Model(&model.CicdAccessGrant{}).Where("project_id = ?", projectID)
-	if userID > 0 {
-		_, ref := projectacl.UserPrincipalRef(userID)
-		q = q.Where("principal_kind = ? AND principal_ref = ?", model.ResourcePrincipalUser, ref)
-	}
-	if serviceID > 0 {
-		q = q.Where("service_id = ?", serviceID)
-	}
 	var rows []model.CicdAccessGrant
-	if err := q.Order("id DESC").Find(&rows).Error; err != nil {
-		return nil, err
+	var err error
+	if userID > 0 {
+		rows, err = s.repo.ListAccessGrantsForUser(ctx, projectID, userID)
+		if err != nil {
+			return nil, err
+		}
+		if serviceID > 0 {
+			filtered := make([]model.CicdAccessGrant, 0, len(rows))
+			for _, r := range rows {
+				if r.ServiceID == serviceID {
+					filtered = append(filtered, r)
+				}
+			}
+			rows = filtered
+		}
+	} else {
+		rows, _, err = s.repo.ListAccessGrants(ctx, repository.CicdAccessGrantListParams{
+			ProjectID: projectID,
+			ServiceID: serviceID,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	out := make([]CicdGrantItem, 0, len(rows))
 	for _, r := range rows {
 		item := CicdGrantItem{CicdAccessGrant: r}
-		var svc model.CicdService
-		if err := s.db.WithContext(ctx).Select("id", "name").Where("id = ?", r.ServiceID).First(&svc).Error; err == nil {
-			item.ServiceName = svc.Name
+		if brief, err := s.repo.GetServiceBrief(ctx, r.ServiceID); err == nil && brief != nil {
+			item.ServiceName = brief.Name
 		}
 		if uid, ok := projectacl.ParseUserRef(r.PrincipalRef); ok {
-			var u model.User
-			if err := s.db.WithContext(ctx).Select("id", "username", "nickname").Where("id = ?", uid).First(&u).Error; err == nil {
-				item.Username, item.Nickname = u.Username, u.Nickname
+			users, err := s.repo.ListUsersByIDs(ctx, []uint{uid})
+			if err == nil && len(users) > 0 {
+				item.Username, item.Nickname = users[0].Username, users[0].Nickname
 			}
 		}
 		out = append(out, item)
@@ -192,9 +199,8 @@ func (s *Service) UpsertCicdGrant(ctx context.Context, req CicdGrantUpsertReques
 	if err := s.assertCanManageCicdGrants(ctx, req.ProjectID, actor); err != nil {
 		return nil, err
 	}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", req.ServiceID, req.ProjectID).First(&svc).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	if _, err := s.repo.GetService(ctx, req.ProjectID, req.ServiceID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
 		return nil, err
@@ -214,16 +220,26 @@ func (s *Service) UpsertCicdGrant(ctx context.Context, req CicdGrantUpsertReques
 		CanView: canView, CanBuild: req.CanBuild, CanRelease: req.CanRelease, CanManage: req.CanManage,
 		Remark: strings.TrimSpace(req.Remark), CreatedBy: req.CreatedBy,
 	}
-	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "project_id"}, {Name: "service_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-		DoUpdates: clause.AssignmentColumns([]string{"can_view", "can_build", "can_release", "can_manage", "remark", "updated_at"}),
-	}).Create(&row).Error; err != nil {
+	if err := s.repo.UpsertAccessGrant(ctx, &row); err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).
-		Where("project_id = ? AND service_id = ? AND principal_kind = ? AND principal_ref = ?", req.ProjectID, req.ServiceID, kind, ref).
-		First(&row).Error
-	return &row, nil
+	return s.findAccessGrant(ctx, req.ProjectID, req.ServiceID, kind, ref)
+}
+
+func (s *Service) findAccessGrant(ctx context.Context, projectID, serviceID uint, kind, ref string) (*model.CicdAccessGrant, error) {
+	rows, _, err := s.repo.ListAccessGrants(ctx, repository.CicdAccessGrantListParams{
+		ProjectID: projectID,
+		ServiceID: serviceID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		if rows[i].PrincipalKind == kind && rows[i].PrincipalRef == ref {
+			return &rows[i], nil
+		}
+	}
+	return &model.CicdAccessGrant{}, nil
 }
 
 func (s *Service) BulkUpsertCicdGrants(ctx context.Context, req CicdGrantBulkRequest, actor *auth.CurrentUser) (int, error) {
@@ -244,18 +260,14 @@ func (s *Service) BulkUpsertCicdGrants(ctx context.Context, req CicdGrantBulkReq
 	kind, ref := projectacl.UserPrincipalRef(req.UserID)
 	n := 0
 	for _, sid := range req.ServiceIDs {
-		var svc model.CicdService
-		if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", sid, req.ProjectID).First(&svc).Error; err != nil {
+		if _, err := s.repo.GetService(ctx, req.ProjectID, sid); err != nil {
 			continue
 		}
 		row := model.CicdAccessGrant{
 			ProjectID: req.ProjectID, ServiceID: sid, PrincipalKind: kind, PrincipalRef: ref,
 			CanView: canView, CanBuild: canBuild, CanRelease: canRelease, CanManage: canManage, CreatedBy: req.CreatedBy,
 		}
-		if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "project_id"}, {Name: "service_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-			DoUpdates: clause.AssignmentColumns([]string{"can_view", "can_build", "can_release", "can_manage", "updated_at"}),
-		}).Create(&row).Error; err == nil {
+		if err := s.repo.UpsertAccessGrant(ctx, &row); err == nil {
 			n++
 		}
 	}
@@ -266,11 +278,11 @@ func (s *Service) DeleteCicdGrant(ctx context.Context, projectID, grantID uint, 
 	if err := s.assertCanManageCicdGrants(ctx, projectID, actor); err != nil {
 		return err
 	}
-	res := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", grantID, projectID).Delete(&model.CicdAccessGrant{})
-	if res.Error != nil {
-		return res.Error
+	n, err := s.repo.DeleteAccessGrant(ctx, projectID, grantID)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFound
 	}
 	return nil
@@ -280,12 +292,12 @@ func (s *Service) BootstrapCicdGrantsForMembers(ctx context.Context, req Bootstr
 	if err := s.assertCanManageCicdGrants(ctx, req.ProjectID, actor); err != nil {
 		return nil, err
 	}
-	var members []model.ProjectMember
-	if err := s.db.WithContext(ctx).Where("project_id = ?", req.ProjectID).Find(&members).Error; err != nil {
+	members, err := s.repo.ListMemberUserIDs(ctx, req.ProjectID)
+	if err != nil {
 		return nil, err
 	}
-	var services []model.CicdService
-	if err := s.db.WithContext(ctx).Where("project_id = ?", req.ProjectID).Find(&services).Error; err != nil {
+	services, err := s.repo.ListServicesByProject(ctx, req.ProjectID)
+	if err != nil {
 		return nil, err
 	}
 	granted, skipped := 0, 0
@@ -301,10 +313,7 @@ func (s *Service) BootstrapCicdGrantsForMembers(ctx context.Context, req Bootstr
 				ProjectID: req.ProjectID, ServiceID: svc.ID, PrincipalKind: kind, PrincipalRef: ref,
 				CanView: true, CanBuild: false, CanRelease: false, CanManage: false, CreatedBy: req.CreatedBy, Remark: "bootstrap",
 			}
-			if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "project_id"}, {Name: "service_id"}, {Name: "principal_kind"}, {Name: "principal_ref"}},
-				DoUpdates: clause.AssignmentColumns([]string{"can_view", "updated_at"}),
-			}).Create(&row).Error; err == nil {
+			if err := s.repo.UpsertAccessGrant(ctx, &row); err == nil {
 				granted++
 			}
 		}

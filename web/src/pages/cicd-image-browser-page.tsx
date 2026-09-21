@@ -144,7 +144,8 @@ export function CicdImageBrowserPage() {
     },
     {
       title: "操作",
-      width: 100,
+      width: 110,
+      className: "yunshu-table-actions-cell",
       render: (_, row) => {
         const ref = row.tags?.[0] || row.digest;
         if (!ref || !repository) return null;

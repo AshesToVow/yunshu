@@ -107,3 +107,23 @@ type EsmgmtRestoreJob struct {
 }
 
 func (EsmgmtRestoreJob) TableName() string { return "esmgmt_restore_jobs" }
+
+// EsmgmtReindexJob Elasticsearch _reindex 任务（异步、可取消、记录操作人）。
+type EsmgmtReindexJob struct {
+	ID            uint           `json:"id" gorm:"primaryKey"`
+	ConnectionID  uint           `json:"connection_id" gorm:"index"`
+	SourceIndex   string         `json:"source_index" gorm:"size:256;not null"`
+	DestIndex     string         `json:"dest_index" gorm:"size:256;not null"`
+	TaskID        string         `json:"task_id" gorm:"size:128;index"`
+	Status        string         `json:"status" gorm:"size:32;not null;default:pending;index"` // pending|running|success|failed|cancelled
+	Phase         string         `json:"phase" gorm:"size:64"`
+	Total         int            `json:"total"`
+	CreatedDocs   int            `json:"created_docs"`
+	ErrorMessage  string         `json:"error_message" gorm:"size:1024"`
+	CreatedBy     uint           `json:"created_by"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+func (EsmgmtReindexJob) TableName() string { return "esmgmt_reindex_jobs" }

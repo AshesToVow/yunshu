@@ -2,7 +2,7 @@
   .pdf-export-btn {
     position: fixed; right: 20px; bottom: 20px; z-index: 9999;
     padding: 10px 18px; border: none; border-radius: 8px;
-    background: linear-gradient(135deg, #0f766e, #0e7490); color: #fff;
+    background: #0f766e; color: #fff;
     font-size: 14px; font-weight: 600; cursor: pointer;
     box-shadow: 0 4px 14px rgba(15, 118, 110, 0.35);
   }
@@ -54,7 +54,7 @@
         Promise.all(jobs).then(function () {
           setTimeout(function () {
             requestAnimationFrame(function () { requestAnimationFrame(resolve); });
-          }, 500);
+          }, 400);
         });
       }
       if (document.readyState === "complete") go();
@@ -62,59 +62,47 @@
     });
   }
 
-  function capturePdfBlob() {
-    var target = document.querySelector(".page") || document.body;
-    var width = Math.max(target.scrollWidth, target.clientWidth, 960);
-    var height = Math.max(target.scrollHeight, target.clientHeight, 400);
-    var origBody = document.body.style.cssText;
-    var origHtml = document.documentElement.style.cssText;
-    document.body.style.backgroundColor = "#ffffff";
-    document.documentElement.style.backgroundColor = "#ffffff";
-    return html2canvas(target, {
-      scale: 1.5,
+  function captureSheet(el) {
+    return html2canvas(el, {
+      scale: 1.6,
       useCORS: true,
       logging: false,
       backgroundColor: "#ffffff",
-      width: width,
-      height: height,
-      windowWidth: width,
-      windowHeight: height,
       scrollX: 0,
       scrollY: 0,
-      foreignObjectRendering: false,
-      onclone: function (doc) {
-        var b = doc.body, h = doc.documentElement, p = doc.querySelector(".page");
-        if (b) { b.style.backgroundColor = "#fff"; b.style.visibility = "visible"; }
-        if (h) { h.style.backgroundColor = "#fff"; }
-        if (p) { p.style.backgroundColor = "#fff"; p.style.maxWidth = "none"; }
-      }
-    }).then(function (canvas) {
-      document.body.style.cssText = origBody;
-      document.documentElement.style.cssText = origHtml;
-      if (!canvas.width || !canvas.height) throw new Error("截图失败");
-      var jsPDF = window.jspdf.jsPDF;
-      var pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      var pageW = 297, pageH = 210, imgW = pageW;
-      var imgH = (canvas.height * imgW) / canvas.width;
-      var pages = Math.max(1, Math.ceil(imgH / pageH));
-      for (var page = 0; page < pages; page++) {
-        if (page > 0) pdf.addPage();
-        var sy = (canvas.height / pages) * page;
-        var sh = Math.min(canvas.height / pages, canvas.height - sy);
-        var tmp = document.createElement("canvas");
-        tmp.width = canvas.width;
-        tmp.height = sh;
-        tmp.getContext("2d").drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
-        var data = tmp.toDataURL("image/jpeg", 0.92);
-        var ph = (sh * imgW) / canvas.width;
-        pdf.addImage(data, "JPEG", 0, 0, imgW, ph);
-      }
-      return pdf.output("blob");
-    }).catch(function (e) {
-      document.body.style.cssText = origBody;
-      document.documentElement.style.cssText = origHtml;
-      throw e;
+      foreignObjectRendering: false
     });
+  }
+
+  function capturePdfBlob() {
+    var sheets = Array.prototype.slice.call(document.querySelectorAll(".sheet"));
+    if (!sheets.length) {
+      var one = document.querySelector(".page") || document.body;
+      sheets = [one];
+    }
+    var jsPDF = window.jspdf.jsPDF;
+    var pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    var pageW = 210, pageH = 297, margin = 6;
+    var usableW = pageW - margin * 2;
+    var usableH = pageH - margin * 2;
+    var chain = Promise.resolve();
+    sheets.forEach(function (sheet, idx) {
+      chain = chain.then(function () {
+        return captureSheet(sheet).then(function (canvas) {
+          if (!canvas.width || !canvas.height) throw new Error("截图失败");
+          if (idx > 0) pdf.addPage();
+          var imgW = usableW;
+          var imgH = (canvas.height * imgW) / canvas.width;
+          if (imgH > usableH) {
+            imgH = usableH;
+            imgW = (canvas.width * imgH) / canvas.height;
+          }
+          var data = canvas.toDataURL("image/jpeg", 0.92);
+          pdf.addImage(data, "JPEG", margin + (usableW - imgW) / 2, margin, imgW, imgH);
+        });
+      });
+    });
+    return chain.then(function () { return pdf.output("blob"); });
   }
 
   function pdfFileName() {

@@ -228,8 +228,9 @@ export function PlatformTemplatesPage() {
         key: "actions",
         width: 200,
         fixed: "right",
+        className: "yunshu-table-actions-cell",
         render: (_, row) => (
-          <Space size="small">
+          <Space size={0} wrap className="yunshu-table-actions">
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openEditor(row)}>
               编辑正文
             </Button>

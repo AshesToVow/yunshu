@@ -60,7 +60,7 @@ func dropLegacyPermissionUniqueIndexes(db *gorm.DB) error {
 
 func cleanupPermissionsDuplicatesOnBoot(db *gorm.DB) error {
 	dialect := database.DialectName(db)
-	if dialect != "mysql" && dialect != "postgres" {
+	if dialect != "mysql" && dialect != "postgres" && !database.IsDameng(dialect) {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.Permission{}) {
@@ -81,7 +81,7 @@ func cleanupPermissionsDuplicatesOnBoot(db *gorm.DB) error {
 
 func dropIndexIfPresent(db *gorm.DB, table, index string) error {
 	dialect := database.DialectName(db)
-	if dialect != "mysql" && dialect != "postgres" {
+	if dialect != "mysql" && dialect != "postgres" && !database.IsDameng(dialect) {
 		return nil
 	}
 	if !db.Migrator().HasIndex(table, index) {
@@ -119,7 +119,7 @@ func bootstrapPostMigrateCore(db *gorm.DB) error {
 
 func dropDictEntriesLegacyCompositeIndex(db *gorm.DB) error {
 	dialect := database.DialectName(db)
-	if dialect != "mysql" && dialect != "postgres" {
+	if dialect != "mysql" && dialect != "postgres" && !database.IsDameng(dialect) {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.DictEntry{}) {
@@ -138,7 +138,7 @@ func dropDictEntriesLegacyCompositeIndex(db *gorm.DB) error {
 
 func cleanupDictEntriesDuplicatesOnBoot(db *gorm.DB) error {
 	dialect := database.DialectName(db)
-	if dialect != "mysql" && dialect != "postgres" {
+	if dialect != "mysql" && dialect != "postgres" && !database.IsDameng(dialect) {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.DictEntry{}) {

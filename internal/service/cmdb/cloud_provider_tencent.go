@@ -317,7 +317,7 @@ func (p *TencentCloudProvider) QueryInstanceExpireAt(ctx context.Context, ak, sk
 	if t, ok := parseTencentExpiredTime(raw); ok {
 		return &t, nil
 	}
-	return nil, nil
+	return nil, fmt.Errorf("无法解析腾讯云实例到期时间: %q", raw)
 }
 
 func parseTencentExpiredTime(raw string) (time.Time, bool) {

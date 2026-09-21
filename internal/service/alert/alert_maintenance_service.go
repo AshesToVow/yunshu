@@ -149,7 +149,7 @@ func (s *AlertMaintenanceService) FirstMatchingID(ctx context.Context, labels ma
 		if err != nil {
 			continue
 		}
-		if LabelsMatchSilenceMatchers(ms, labels) {
+		if LabelsMatchSilenceMatchers(ms, labels) && silenceProjectScopeOK(row.ProjectID, labels) {
 			return row.ID, true, nil
 		}
 	}

@@ -33,12 +33,12 @@ const (
 )
 
 type AuthService struct {
-	userRepo repositoryAuthReader
-	redis    *redis.Client
-	db       *gorm.DB
-	cfg      config.AuthConfig
-	mailer   mailer.Sender
-	appName  string
+	userRepo       repositoryAuthReader
+	redis          *redis.Client
+	resolvePolicy  PasswordPolicyResolver
+	cfg            config.AuthConfig
+	mailer         mailer.Sender
+	appName        string
 }
 
 type repositoryAuthReader interface {
@@ -55,18 +55,18 @@ type repositoryAuthReader interface {
 func NewAuthService(
 	userRepo repositoryAuthReader,
 	redisClient *redis.Client,
-	db *gorm.DB,
+	resolvePolicy PasswordPolicyResolver,
 	cfg config.AuthConfig,
 	emailSender mailer.Sender,
 	appName string,
 ) *AuthService {
 	return &AuthService{
-		userRepo: userRepo,
-		redis:    redisClient,
-		db:       db,
-		cfg:      cfg,
-		mailer:   emailSender,
-		appName:  appName,
+		userRepo:      userRepo,
+		redis:         redisClient,
+		resolvePolicy: resolvePolicy,
+		cfg:           cfg,
+		mailer:        emailSender,
+		appName:       appName,
 	}
 }
 
@@ -233,7 +233,7 @@ func (s *AuthService) Register(ctx context.Context, req RegisterRequest) (*Regis
 	if err := s.validateEmailCode(ctx, emailCodeSceneRegister, email, req.Code); err != nil {
 		return nil, bizerrors.Pass(ctx, "auth", "Register", err)
 	}
-	if err := enforcePasswordComplexity(ctx, s.db, req.Password, username); err != nil {
+	if err := enforcePasswordComplexity(ctx, s.resolvePolicy, req.Password, username); err != nil {
 		return nil, err
 	}
 
@@ -296,7 +296,7 @@ func (s *AuthService) Me(ctx context.Context, userID uint) (*UserDetailResponse,
 	}
 
 	response := NewUserDetailResponse(*user)
-	if userPasswordExpired(ctx, s.db, user) {
+	if userPasswordExpired(ctx, s.resolvePolicy, user) {
 		response.MustChangePassword = true
 	}
 	return &response, nil
@@ -354,7 +354,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uint, req Chang
 	if strings.TrimSpace(req.NewPassword) == strings.TrimSpace(req.OldPassword) {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg6ca55409b3c2)
 	}
-	if err := enforcePasswordComplexity(ctx, s.db, req.NewPassword, user.Username); err != nil {
+	if err := enforcePasswordComplexity(ctx, s.resolvePolicy, req.NewPassword, user.Username); err != nil {
 		return err
 	}
 
@@ -386,11 +386,11 @@ func (s *AuthService) issueLoginResponse(ctx context.Context, user *model.User) 
 	if err != nil {
 		return nil, err
 	}
-	expired := userPasswordExpired(ctx, s.db, user)
+	expired := userPasswordExpired(ctx, s.resolvePolicy, user)
 	mustChange := user.MustChangePassword || expired
 	hint := ""
 	if mustChange {
-		sum := dictconfig.PasswordPolicySummary(resolvePasswordPolicy(ctx, s.db))
+		sum := dictconfig.PasswordPolicySummary(s.resolvePolicy(ctx))
 		hint, _ = sum["hint"].(string)
 	}
 	return &LoginResponse{
@@ -536,7 +536,7 @@ func (s *AuthService) JWTSecret() string {
 
 // GetPasswordPolicy 返回当前生效的密码策略（数据字典可调）。
 func (s *AuthService) GetPasswordPolicy(ctx context.Context) PasswordPolicyResponse {
-	return passwordPolicyAPIResponse(ctx, s.db)
+	return passwordPolicyAPIResponse(ctx, s.resolvePolicy)
 }
 
 const wsTicketTTLSeconds = 30

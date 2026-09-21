@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"time"
 
-	"yunshu/internal/model"
 	"yunshu/internal/pkg/cronutil"
 )
 
@@ -56,10 +55,8 @@ func (s *Service) tick(ctx context.Context, log *slog.Logger) {
 
 // tickSchedules 由 tick 在持有 leader 锁时调用。
 func (s *Service) tickSchedules(ctx context.Context) {
-	var plans []model.InspectPlan
-	if err := s.db.WithContext(ctx).
-		Where("enabled = ? AND datasource_id > 0 AND cron_spec <> ''", true).
-		Find(&plans).Error; err != nil {
+	plans, err := s.repo.ListEnabledPlans(ctx)
+	if err != nil {
 		return
 	}
 	now := time.Now()
@@ -70,7 +67,7 @@ func (s *Service) tickSchedules(ctx context.Context) {
 		}
 		// 执行前先占位 LastRunAt，避免长任务窗口内重复触发
 		claimed := now
-		if err := s.db.WithContext(ctx).Model(plan).Update("last_run_at", claimed).Error; err != nil {
+		if err := s.repo.UpdatePlanLastRunAt(ctx, plan.ID, claimed); err != nil {
 			continue
 		}
 		plan.LastRunAt = &claimed

@@ -20,8 +20,8 @@ type PipelineTemplateUpsertRequest struct {
 
 func (s *Service) ListPipelineTemplates(ctx context.Context) ([]model.CicdPipelineTemplate, error) {
 	s.ensureDefaultPipelineTemplates(ctx)
-	var rows []model.CicdPipelineTemplate
-	if err := s.db.WithContext(ctx).Where("status = 1").Order("sort ASC, id ASC").Find(&rows).Error; err != nil {
+	rows, err := s.repo.ListEnabledPipelineTemplates(ctx)
+	if err != nil {
 		return nil, err
 	}
 	if rows == nil {
@@ -38,9 +38,11 @@ func (s *Service) UpsertPipelineTemplate(ctx context.Context, id uint, req Pipel
 	}
 	var row model.CicdPipelineTemplate
 	if id > 0 {
-		if err := s.db.WithContext(ctx).Where("id = ?", id).First(&row).Error; err != nil {
+		existing, err := s.repo.GetPipelineTemplate(ctx, id)
+		if err != nil {
 			return nil, constants.ErrNotFound
 		}
+		row = *existing
 	}
 	row.LanguageType = lt
 	row.Name = strings.TrimSpace(req.Name)
@@ -49,10 +51,10 @@ func (s *Service) UpsertPipelineTemplate(ctx context.Context, id uint, req Pipel
 	row.Sort = req.Sort
 	row.Status = status
 	if id == 0 {
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreatePipelineTemplate(ctx, &row); err != nil {
 			return nil, err
 		}
-	} else if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	} else if err := s.repo.SavePipelineTemplate(ctx, &row); err != nil {
 		return nil, err
 	}
 	return &row, nil
@@ -67,11 +69,10 @@ func (s *Service) ensureDefaultPipelineTemplates(ctx context.Context) {
 		{LanguageType: model.CicdLanguageCustom, Name: "自定义", ScriptPath: "", Description: "按服务类型选择 front/backend/k8s Jenkinsfile", Sort: 99, Status: 1},
 	}
 	for _, d := range defaults {
-		var n int64
-		_ = s.db.WithContext(ctx).Model(&model.CicdPipelineTemplate{}).Where("language_type = ?", d.LanguageType).Count(&n).Error
+		n, _ := s.repo.CountPipelineTemplateByLang(ctx, d.LanguageType)
 		if n == 0 {
 			row := d
-			_ = s.db.WithContext(ctx).Create(&row).Error
+			_ = s.repo.CreatePipelineTemplate(ctx, &row)
 		}
 	}
 }
@@ -88,10 +89,7 @@ func (s *Service) ResolveScriptPathForService(ctx context.Context, svc *model.Ci
 	}
 	if lt != "" && lt != model.CicdLanguageCustom {
 		s.ensureDefaultPipelineTemplates(ctx)
-		var tpl model.CicdPipelineTemplate
-		if err := s.db.WithContext(ctx).
-			Where("language_type = ? AND status = 1", lt).
-			First(&tpl).Error; err == nil {
+		if tpl, err := s.repo.GetEnabledPipelineTemplateByLang(ctx, lt); err == nil && tpl != nil {
 			if v := strings.TrimSpace(tpl.ScriptPath); v != "" {
 				return v
 			}

@@ -40,24 +40,15 @@ func (s *Service) syncPendingRuns(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	var buildRuns []model.CicdBuildRun
-	_ = s.db.WithContext(ctx).Where("build_result IN ?", []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}).Limit(50).Find(&buildRuns).Error
+	buildRuns, _ := s.repo.ListActiveBuildRuns(ctx, 50)
 	for _, run := range buildRuns {
 		s.syncOneBuildRun(ctx, client, run)
 	}
-	var releaseRuns []model.CicdReleaseRun
-	_ = s.db.WithContext(ctx).Where("status IN ?", []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}).Limit(50).Find(&releaseRuns).Error
+	releaseRuns, _ := s.repo.ListActiveReleaseRuns(ctx, 50)
 	for _, run := range releaseRuns {
 		s.syncOneReleaseRun(ctx, client, run)
 	}
-	var backfillBuilds []model.CicdBuildRun
-	// 覆盖 package_path 或 image_address 任一为空的成功构建：
-	// 列表接口不再做同步补偿（避免每行拉 Jenkins 控制台日志），补偿职责全部收敛到此后台 worker。
-	_ = s.db.WithContext(ctx).
-		Where("build_result = ? AND (package_path = '' OR package_path IS NULL OR image_address = '' OR image_address IS NULL)", model.CicdRunStatusSuccess).
-		Order("id DESC").
-		Limit(30).
-		Find(&backfillBuilds).Error
+	backfillBuilds, _ := s.repo.ListSuccessfulBuildRunsMissingArtifacts(ctx, 30)
 	for _, run := range backfillBuilds {
 		s.backfillBuildArtifacts(ctx, client, run)
 	}
@@ -73,13 +64,12 @@ func (s *Service) backfillBuildArtifacts(ctx context.Context, client *jenkins.Cl
 	if !needPackage && !needImage {
 		return
 	}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
+	svc, err := s.repo.GetServiceByID(ctx, run.ServiceID)
+	if err != nil {
 		return
 	}
-	var ci model.CicdCiConfig
-	_ = s.db.WithContext(ctx).Where("service_id = ?", run.ServiceID).First(&ci).Error
-	jobName := resolveJenkinsJobName(&svc)
+	ci, _ := s.repo.GetCIConfig(ctx, run.ServiceID)
+	jobName := resolveJenkinsJobName(svc)
 	if jobName == "" {
 		return
 	}
@@ -87,7 +77,11 @@ func (s *Service) backfillBuildArtifacts(ctx context.Context, client *jenkins.Cl
 	if err != nil {
 		return
 	}
-	artifacts := s.resolveBuildArtifactsFromLog(ctx, svc, ci, logText)
+	var ciRow model.CicdCiConfig
+	if ci != nil {
+		ciRow = *ci
+	}
+	artifacts := s.resolveBuildArtifactsFromLog(ctx, *svc, ciRow, logText)
 	updates := map[string]any{}
 	if needPackage && strings.TrimSpace(artifacts.PackagePath) != "" {
 		updates["package_path"] = artifacts.PackagePath
@@ -98,20 +92,19 @@ func (s *Service) backfillBuildArtifacts(ctx context.Context, client *jenkins.Cl
 	if len(updates) == 0 {
 		return
 	}
-	_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Updates(updates).Error
+	_ = s.repo.UpdateBuildRunFields(ctx, run.ID, updates)
 }
 
 func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, run model.CicdBuildRun) {
 	if run.BuildNumber <= 0 {
 		return
 	}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
+	svc, err := s.repo.GetServiceByID(ctx, run.ServiceID)
+	if err != nil {
 		return
 	}
-	var ci model.CicdCiConfig
-	_ = s.db.WithContext(ctx).Where("service_id = ?", run.ServiceID).First(&ci).Error
-	jobName := resolveJenkinsJobName(&svc)
+	ci, _ := s.repo.GetCIConfig(ctx, run.ServiceID)
+	jobName := resolveJenkinsJobName(svc)
 	if jobName == "" {
 		return
 	}
@@ -124,9 +117,13 @@ func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, r
 		"jenkins_build_url": info.URL,
 		"updated_at":        time.Now(),
 	}
+	var ciRow model.CicdCiConfig
+	if ci != nil {
+		ciRow = *ci
+	}
 	if strings.TrimSpace(run.PackagePath) == "" || strings.TrimSpace(run.ImageAddress) == "" {
 		if logText, err := client.GetConsoleLog(ctx, jobName, run.BuildNumber); err == nil {
-			artifacts := s.resolveBuildArtifactsFromLog(ctx, svc, ci, logText)
+			artifacts := s.resolveBuildArtifactsFromLog(ctx, *svc, ciRow, logText)
 			if strings.TrimSpace(run.PackagePath) == "" && strings.TrimSpace(artifacts.PackagePath) != "" {
 				updates["package_path"] = artifacts.PackagePath
 			}
@@ -136,7 +133,7 @@ func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, r
 		}
 	}
 	if status == model.CicdRunStatusRunning {
-		_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).Where("id = ?", run.ID).Updates(updates).Error
+		_ = s.repo.UpdateBuildRunFields(ctx, run.ID, updates)
 		return
 	}
 	now := time.Now()
@@ -145,9 +142,7 @@ func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, r
 		updates["finished_at"] = now
 	}
 	// 条件更新：仅当 DB 内仍是非终态时才写终态，避免与 Jenkins HMAC 回调并发时覆盖已落地结果。
-	_ = s.db.WithContext(ctx).Model(&model.CicdBuildRun{}).
-		Where("id = ? AND build_result IN ?", run.ID, []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}).
-		Updates(updates).Error
+	_, _ = s.repo.UpdateBuildRunFieldsIfStatus(ctx, run.ID, []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}, updates)
 }
 
 // releaseStuckTimeout 发布工单在 running 且构建号仍未落库时，允许的最长补偿窗口。
@@ -155,13 +150,13 @@ func (s *Service) syncOneBuildRun(ctx context.Context, client *jenkins.Client, r
 const releaseStuckTimeout = 30 * time.Minute
 
 func (s *Service) syncOneReleaseRun(ctx context.Context, client *jenkins.Client, run model.CicdReleaseRun) {
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ?", run.ServiceID).First(&svc).Error; err != nil {
+	svc, err := s.repo.GetServiceByID(ctx, run.ServiceID)
+	if err != nil {
 		return
 	}
 	// 构建号未落库（如触发后请求上下文被取消）：先尝试用 queue_url 补偿解析。
 	if run.JenkinsBuildNumber <= 0 {
-		if !s.recoverReleaseBuildNumber(ctx, client, &svc, &run) {
+		if !s.recoverReleaseBuildNumber(ctx, client, svc, &run) {
 			return
 		}
 	}
@@ -183,9 +178,7 @@ func (s *Service) syncOneReleaseRun(ctx context.Context, client *jenkins.Client,
 		updates["finished_at"] = now
 	}
 	// 条件更新：仅当 DB 内仍是非终态时才写终态，避免覆盖回调或人工终止已落地的状态。
-	_ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
-		Where("id = ? AND status IN ?", run.ID, []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}).
-		Updates(updates).Error
+	_, _ = s.repo.UpdateReleaseRunFieldsIfStatus(ctx, run.ID, []string{model.CicdRunStatusRunning, model.CicdRunStatusPending}, updates)
 }
 
 // recoverReleaseBuildNumber 针对构建号未落库的 running 工单做补偿：
@@ -200,9 +193,7 @@ func (s *Service) recoverReleaseBuildNumber(ctx context.Context, client *jenkins
 				"jenkins_build_number": buildNum,
 				"jenkins_build_url":    client.BuildURL(svc.JenkinsJob, buildNum),
 			}
-			if err := s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
-				Where("id = ? AND jenkins_build_number = 0", run.ID).
-				Updates(updates).Error; err == nil {
+			if affected, err := s.repo.UpdateReleaseRunFieldsIfBuildNumberZero(ctx, run.ID, updates); err == nil && affected > 0 {
 				run.JenkinsBuildNumber = buildNum
 				return true
 			}
@@ -215,13 +206,11 @@ func (s *Service) recoverReleaseBuildNumber(ctx context.Context, client *jenkins
 	}
 	if ref != nil && time.Since(*ref) > releaseStuckTimeout {
 		now := time.Now()
-		_ = s.db.WithContext(ctx).Model(&model.CicdReleaseRun{}).
-			Where("id = ? AND jenkins_build_number = 0 AND status = ?", run.ID, model.CicdRunStatusRunning).
-			Updates(map[string]any{
-				"status":      model.CicdRunStatusFailure,
-				"finished_at": now,
-				"updated_at":  now,
-			}).Error
+		_, _ = s.repo.ClaimReleaseRunNoBuildNumber(ctx, run.ID, model.CicdRunStatusRunning, map[string]any{
+			"status":      model.CicdRunStatusFailure,
+			"finished_at": now,
+			"updated_at":  now,
+		})
 	}
 	return false
 }
