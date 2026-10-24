@@ -1,5 +1,19 @@
 import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, FormOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, Modal, Popconfirm, Radio, Select, Space, Table, Tag, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Radio,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useState } from "react";
 import { getRegistrations, reviewRegistration } from "../services/registrations";
 import type { RegistrationRequestItem } from "../services/registrations";
@@ -91,9 +105,7 @@ export function RegistrationsPage() {
             allowClear
             placeholder="搜索用户名/邮箱"
             style={{ width: 240 }}
-            onSearch={(keyword) =>
-              setQuery((prev) => ({ ...prev, keyword, page: 1 }))
-            }
+            onSearch={(keyword) => setQuery((prev) => ({ ...prev, keyword, page: 1 }))}
           />
           <div className="toolbar__actions">
             <Button icon={<ReloadOutlined />} onClick={() => void loadList()}>
@@ -113,8 +125,7 @@ export function RegistrationsPage() {
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50, 100],
             showQuickJumper: true,
-            onChange: (page, pageSize) =>
-              setQuery((prev) => ({ ...prev, page, page_size: pageSize })),
+            onChange: (page, pageSize) => setQuery((prev) => ({ ...prev, page, page_size: pageSize })),
           }}
           columns={[
             { title: "ID", dataIndex: "id", width: 70 },

@@ -94,8 +94,20 @@ export function ComponentStatusPage() {
           loading={loading}
           dataSource={filtered}
           size="small"
-          locale={{ emptyText: <Empty description={selectedClusterId ? "暂无组件状态数据" : "请先选择集群"} image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
-          pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
+          locale={{
+            emptyText: (
+              <Empty
+                description={selectedClusterId ? "暂无组件状态数据" : "请先选择集群"}
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            ),
+          }}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
+            showQuickJumper: true,
+          }}
           scroll={{ x: "max-content" }}
           columns={[
             { title: "名称", dataIndex: "name", width: 220 },
@@ -133,4 +145,3 @@ export function ComponentStatusPage() {
     </Card>
   );
 }
-

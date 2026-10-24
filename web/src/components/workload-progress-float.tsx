@@ -2,17 +2,10 @@ import { CloseOutlined, LinkOutlined } from "@ant-design/icons";
 import { Button, Card, Progress, Space, Tag, Typography } from "antd";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  useWorkloadProgress,
-  type WorkloadProgressTask,
-} from "../contexts/workload-progress-context";
+import { useWorkloadProgress, type WorkloadProgressTask } from "../contexts/workload-progress-context";
 import { listEvents, type EventItem } from "../services/events";
 import { getNodeDrainStatus } from "../services/nodes";
-import {
-  getDeploymentRolloutStatus,
-  listStatefulSetPods,
-  type DeploymentRolloutStatus,
-} from "../services/workloads";
+import { getDeploymentRolloutStatus, listStatefulSetPods, type DeploymentRolloutStatus } from "../services/workloads";
 
 type PanelState = {
   percent: number;
@@ -85,8 +78,7 @@ async function pollTask(task: WorkloadProgressTask): Promise<PanelState> {
 }
 
 function fromRollout(st: DeploymentRolloutStatus, events: EventItem[]): PanelState {
-  const percent =
-    st.replicas > 0 ? Math.round((st.ready_replicas / st.replicas) * 100) : st.complete ? 100 : 0;
+  const percent = st.replicas > 0 ? Math.round((st.ready_replicas / st.replicas) * 100) : st.complete ? 100 : 0;
   return {
     percent,
     status: st.complete ? "success" : "active",
@@ -153,9 +145,7 @@ function TaskCard({ task, onDismiss }: { task: WorkloadProgressTask; onDismiss: 
           </Typography.Text>
         </Space>
       }
-      extra={
-        <Button type="text" size="small" icon={<CloseOutlined />} onClick={onDismiss} />
-      }
+      extra={<Button type="text" size="small" icon={<CloseOutlined />} onClick={onDismiss} />}
       style={{
         width: 360,
         boxShadow: "0 8px 24px rgba(0,0,0,0.18)",

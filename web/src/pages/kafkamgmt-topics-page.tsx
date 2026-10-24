@@ -44,7 +44,9 @@ export function KafkamgmtTopicsPage() {
   const [createForm] = Form.useForm();
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailTopic, setDetailTopic] = useState<string>("");
-  const [detailParts, setDetailParts] = useState<Array<{ id: number; leader: number; replicas: number[]; isr: number[] }>>([]);
+  const [detailParts, setDetailParts] = useState<
+    Array<{ id: number; leader: number; replicas: number[]; isr: number[] }>
+  >([]);
   const [detailConfig, setDetailConfig] = useState<Record<string, string>>({});
   const [produceOpen, setProduceOpen] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
@@ -137,7 +139,13 @@ export function KafkamgmtTopicsPage() {
               options={connections.map((c) => ({ value: c.id, label: c.name }))}
               onChange={setConnectionId}
             />
-            <Input.Search allowClear placeholder="过滤 Topic" onSearch={setKeyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: 200 }} />
+            <Input.Search
+              allowClear
+              placeholder="过滤 Topic"
+              onSearch={setKeyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              style={{ width: 200 }}
+            />
             <Button icon={<ReloadOutlined />} onClick={() => void load()}>
               刷新
             </Button>
@@ -165,10 +173,10 @@ export function KafkamgmtTopicsPage() {
             {
               title: "Topic",
               dataIndex: "name",
-              render: (v: string, row: KafkaTopicInfo) => (
+              render: (v: string, row?: KafkaTopicInfo) => (
                 <Space>
                   <a onClick={() => void openDetail(v)}>{v}</a>
-                  {row.internal ? <Tag>内部</Tag> : null}
+                  {row?.internal ? <Tag>内部</Tag> : null}
                 </Space>
               ),
             },
@@ -247,7 +255,14 @@ export function KafkamgmtTopicsPage() {
         />
       </Card>
 
-      <Modal title="创建 Topic" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={() => void onCreate()} confirmLoading={creating} destroyOnClose>
+      <Modal
+        title="创建 Topic"
+        open={createOpen}
+        onCancel={() => setCreateOpen(false)}
+        onOk={() => void onCreate()}
+        confirmLoading={creating}
+        destroyOnClose
+      >
         <Form form={createForm} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
@@ -361,10 +376,13 @@ export function KafkamgmtTopicsPage() {
             <InputNumber min={1} max={50} />
           </Form.Item>
           <Form.Item name="from" label="起点">
-            <Select style={{ width: 120 }} options={[
-              { value: "latest", label: "latest" },
-              { value: "earliest", label: "earliest" },
-            ]} />
+            <Select
+              style={{ width: 120 }}
+              options={[
+                { value: "latest", label: "latest" },
+                { value: "earliest", label: "earliest" },
+              ]}
+            />
           </Form.Item>
           <Form.Item name="timeout_ms" label="超时ms">
             <InputNumber min={500} max={15000} />

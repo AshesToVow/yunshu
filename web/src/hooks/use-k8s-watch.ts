@@ -59,13 +59,16 @@ export function useK8sWatch({
       if (useEditGuardStore.getState().isEditing) return;
       pendingRefreshRef.current = true;
       if (debounceTimerRef.current) return;
-      debounceTimerRef.current = setTimeout(() => {
-        debounceTimerRef.current = null;
-        if (!pendingRefreshRef.current || cancelled || ac.signal.aborted) return;
-        pendingRefreshRef.current = false;
-        if (useEditGuardStore.getState().isEditing) return;
-        onRefreshRef.current();
-      }, Math.max(300, debounceMs));
+      debounceTimerRef.current = setTimeout(
+        () => {
+          debounceTimerRef.current = null;
+          if (!pendingRefreshRef.current || cancelled || ac.signal.aborted) return;
+          pendingRefreshRef.current = false;
+          if (useEditGuardStore.getState().isEditing) return;
+          onRefreshRef.current();
+        },
+        Math.max(300, debounceMs),
+      );
     };
 
     const handleEvent = (ev: K8sWatchEvent) => {

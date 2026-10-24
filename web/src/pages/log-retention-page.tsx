@@ -112,9 +112,7 @@ export function LogRetentionPage() {
         message="Topic 命名：yunshu-agent-{ip}-日期 / yunshu-k8s-{cluster}-p{project}-日期。积压下降需消费者运行并从 earliest 追平历史分区。"
       />
 
-      {showEmptyTopicHint ? (
-        <Alert type="warning" showIcon message="暂无 Agent Topic，请先引导/热更 Agent" />
-      ) : null}
+      {showEmptyTopicHint ? <Alert type="warning" showIcon message="暂无 Agent Topic，请先引导/热更 Agent" /> : null}
 
       {kafkaStats?.message && !showEmptyTopicHint ? (
         <Alert type={kafkaStats.sink_via_kafka ? "info" : "warning"} showIcon message={kafkaStats.message} />
@@ -161,9 +159,7 @@ export function LogRetentionPage() {
           message="「消费者」= Yunshu 后端 Kafka→ES 消费循环（消费组如下），不是 Topic 列表。"
         />
         <Space wrap size={[16, 8]}>
-          <span>
-            启用：{kafkaCfg?.enabled ? <Tag color="green">true</Tag> : <Tag>false</Tag>}
-          </span>
+          <span>启用：{kafkaCfg?.enabled ? <Tag color="green">true</Tag> : <Tag>false</Tag>}</span>
           <span>
             Yunshu 消费者：
             {kafkaStats?.consumer_running ? (

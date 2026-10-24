@@ -787,18 +787,12 @@ export interface NginxAccessStatsResult {
   latency_hint?: string;
 }
 
-export async function getNginxAccessStats(
-  projectId: number,
-  params: LogSearchParams & { top_n?: number },
-) {
+export async function getNginxAccessStats(projectId: number, params: LogSearchParams & { top_n?: number }) {
   return await getData(
-    http.get<any, ApiResponse<NginxAccessStatsResult>>(
-      `/projects/${projectId}/logs/nginx-access-stats`,
-      {
-        params: { ...params, project_id: projectId },
-        silentErrorToast: true,
-      },
-    ),
+    http.get<any, ApiResponse<NginxAccessStatsResult>>(`/projects/${projectId}/logs/nginx-access-stats`, {
+      params: { ...params, project_id: projectId },
+      silentErrorToast: true,
+    }),
   );
 }
 
@@ -842,9 +836,7 @@ export async function adjustLoggiePipeline(payload: {
   current_yml?: string;
   parse_profile?: string;
 }) {
-  return await getData(
-    http.post<any, ApiResponse<PipelineAdjustResult>>(`/ai/logs/pipeline-adjust`, payload),
-  );
+  return await getData(http.post<any, ApiResponse<PipelineAdjustResult>>(`/ai/logs/pipeline-adjust`, payload));
 }
 
 export async function getProjectLogPatterns(
@@ -892,10 +884,7 @@ export interface LogTopNResult {
   total: number;
 }
 
-export async function getProjectLogTopN(
-  projectId: number,
-  params: LogSearchParams & { dim?: string; size?: number },
-) {
+export async function getProjectLogTopN(projectId: number, params: LogSearchParams & { dim?: string; size?: number }) {
   return await getData(
     http.get<any, ApiResponse<LogTopNResult>>(`/projects/${projectId}/logs/topn`, {
       params: { ...params, project_id: projectId },
@@ -904,10 +893,7 @@ export async function getProjectLogTopN(
   );
 }
 
-export async function analyzeProjectLogs(
-  projectId: number,
-  payload: LogSearchParams & { provider?: string },
-) {
+export async function analyzeProjectLogs(projectId: number, payload: LogSearchParams & { provider?: string }) {
   return await getData(
     http.post<any, ApiResponse<LogAnalyzeResult>>(`/ai/logs/analyze`, {
       project_id: projectId,

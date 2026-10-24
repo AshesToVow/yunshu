@@ -21,7 +21,10 @@ function asStringList(raw: unknown): string[] {
         /* fallthrough */
       }
     }
-    return s.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+    return s
+      .split(/[,;]/)
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
   return [];
 }
@@ -50,13 +53,11 @@ export function explainAlertRecipients(requestPayload?: string | null): Recipien
   if (!payload) {
     return { kind: "unknown", short: "-", detail: "无投递载荷，无法判断收件人来源。" };
   }
-  const mode = String(payload.recipient_mode || "").trim().toLowerCase();
+  const mode = String(payload.recipient_mode || "")
+    .trim()
+    .toLowerCase();
   const assignee = emailsOf(payload, "assignee_emails");
-  const to = [
-    ...emailsOf(payload, "to"),
-    ...emailsOf(payload, "recipients"),
-    ...emailsOf(payload, "emails"),
-  ];
+  const to = [...emailsOf(payload, "to"), ...emailsOf(payload, "recipients"), ...emailsOf(payload, "emails")];
   if (mode === "channel_only") {
     return {
       kind: "channel",

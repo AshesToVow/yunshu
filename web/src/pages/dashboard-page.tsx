@@ -438,7 +438,12 @@ export function DashboardPage() {
             >
               {t("dashboard.refresh")}
             </Button>
-            <Button size="small" icon={<ExpandOutlined />} onClick={enterFullscreen} className="overview-cockpit__action">
+            <Button
+              size="small"
+              icon={<ExpandOutlined />}
+              onClick={enterFullscreen}
+              className="overview-cockpit__action"
+            >
               {t("dashboard.fullscreen")}
             </Button>
           </Space>
@@ -463,7 +468,13 @@ export function DashboardPage() {
       ) : null}
 
       {loadError ? (
-        <Alert type="warning" showIcon style={{ marginBottom: 0 }} message={t("dashboard.loadPartial")} description={loadError} />
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 0 }}
+          message={t("dashboard.loadPartial")}
+          description={loadError}
+        />
       ) : null}
 
       <section className="overview-kpi-domains" aria-busy={loading && !kpi}>
@@ -514,7 +525,11 @@ export function DashboardPage() {
 
         <div className="overview-cockpit__center">
           {hasLaunchChart ? (
-            <Panel className="overview-cockpit__chart" icon={<LineChartOutlined />} title={t("dashboard.projectLaunchTitle")}>
+            <Panel
+              className="overview-cockpit__chart"
+              icon={<LineChartOutlined />}
+              title={t("dashboard.projectLaunchTitle")}
+            >
               <LineChart
                 darkMode
                 labels={projectLaunches!.days}
@@ -627,7 +642,11 @@ export function DashboardPage() {
             )}
           </Panel>
 
-          <Panel icon={<BarChartOutlined />} title={t("dashboard.releaseByPersonTitle")} className="overview-cockpit__person-panel">
+          <Panel
+            icon={<BarChartOutlined />}
+            title={t("dashboard.releaseByPersonTitle")}
+            className="overview-cockpit__person-panel"
+          >
             {releaseByPerson && personBars.length > 0 ? (
               <BarChart darkMode items={personBars} height={180} valueLabel={t("dashboard.releaseCountLabel")} />
             ) : (

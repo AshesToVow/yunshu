@@ -149,7 +149,8 @@ export function ProjectMembersPanel({ projectId }: Props) {
         </Space>
       ) : (
         <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
-          你当前为项目只读或普通成员，无法在此添加/移除成员或调整角色；项目内写操作与成员管理需 owner/admin（超级管理员除外）。
+          你当前为项目只读或普通成员，无法在此添加/移除成员或调整角色；项目内写操作与成员管理需
+          owner/admin（超级管理员除外）。
         </div>
       )}
       <Table<ProjectMemberItem>
@@ -174,7 +175,9 @@ export function ProjectMembersPanel({ projectId }: Props) {
                   onChange={(v) => void onChangeMemberRole(r.id, String(v))}
                 />
               ) : (
-                <span>{PROJECT_ROLE_OPTIONS.find((o) => o.value === (r.role || "member"))?.label ?? (r.role || "member")}</span>
+                <span>
+                  {PROJECT_ROLE_OPTIONS.find((o) => o.value === (r.role || "member"))?.label ?? (r.role || "member")}
+                </span>
               ),
           },
           { title: "邮箱", dataIndex: "email", ellipsis: true, render: (e: string | null | undefined) => e || "—" },
@@ -195,10 +198,12 @@ export function ProjectMembersPanel({ projectId }: Props) {
         ]}
       />
       <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
-        项目内角色（owner/admin/member/readonly）与网关中间件一致：只读成员仅允许 GET/HEAD；修改项目、成员 CRUD 需 owner/admin。全局 RBAC 与 K8s 集群档位仍各自生效。
+        项目内角色（owner/admin/member/readonly）与网关中间件一致：只读成员仅允许 GET/HEAD；修改项目、成员 CRUD 需
+        owner/admin。全局 RBAC 与 K8s 集群档位仍各自生效。
       </div>
       <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
-        项目成员用于权限与资源隔离；普通成员默认不可见项目内全部服务器/CI/CD，需在「资源授权」中按人授予。告警邮件收件人由「告警监控平台 → 监控规则 → 处理人」配置，<strong>不会</strong>自动发给本项目全部成员。
+        项目成员用于权限与资源隔离；普通成员默认不可见项目内全部服务器/CI/CD，需在「资源授权」中按人授予。告警邮件收件人由「告警监控平台
+        → 监控规则 → 处理人」配置，<strong>不会</strong>自动发给本项目全部成员。
       </div>
       <ProjectResourceGrantsDrawer
         open={grantsOpen}

@@ -99,7 +99,12 @@ export function useAlertMonitorDatasourceState(params: {
 
   const dsColumns = [
     { title: "ID", dataIndex: "id", width: 70 },
-    { title: "项目", dataIndex: "project_name", width: 160, render: (v: string, r: AlertDatasourceItem) => v || String(r.project_id || "-") },
+    {
+      title: "项目",
+      dataIndex: "project_name",
+      width: 160,
+      render: (v: string, r: AlertDatasourceItem) => v || String(r.project_id || "-"),
+    },
     { title: "名称", dataIndex: "name" },
     {
       title: "类型",
@@ -124,7 +129,12 @@ export function useAlertMonitorDatasourceState(params: {
         </Space>
       ),
     },
-    { title: "启用", dataIndex: "enabled", width: 80, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
+    {
+      title: "启用",
+      dataIndex: "enabled",
+      width: 80,
+      render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>),
+    },
     {
       title: "操作",
       width: 220,

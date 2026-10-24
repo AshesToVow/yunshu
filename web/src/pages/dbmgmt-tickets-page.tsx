@@ -99,7 +99,12 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
         <Button type="primary" icon={<SearchOutlined />} onClick={() => setSearchText(keyword)}>
           搜索
         </Button>
-        <Select style={{ width: 160 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={setProjectId} />
+        <Select
+          style={{ width: 160 }}
+          value={projectId}
+          options={projects.map((p) => ({ value: p.id, label: p.name }))}
+          onChange={setProjectId}
+        />
       </Space>
       <Table
         rowKey="id"
@@ -127,7 +132,9 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
           {
             title: "是否审核",
             width: 100,
-            render: (_, r) => <Tag color={r.audit_mode === "manual" ? "orange" : "blue"}>{auditModeLabel(r.audit_mode)}</Tag>,
+            render: (_, r) => (
+              <Tag color={r.audit_mode === "manual" ? "orange" : "blue"}>{auditModeLabel(r.audit_mode)}</Tag>
+            ),
           },
           { title: "提交时间", dataIndex: "created_at", width: 170, render: (v) => formatDateTime(v) },
           {
@@ -147,10 +154,18 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
             width: 260,
             render: (_, r) => (
               <Space>
-                <Button size="small" onClick={() => navigate(`/dbmgmt/workflow/tickets/${r.id}?project=${projectId}&tab=info`)}>
+                <Button
+                  size="small"
+                  onClick={() => navigate(`/dbmgmt/workflow/tickets/${r.id}?project=${projectId}&tab=info`)}
+                >
                   查看
                 </Button>
-                <Button size="small" type="primary" style={{ background: "#52c41a", borderColor: "#52c41a" }} onClick={() => navigate(`/dbmgmt/workflow/tickets/${r.id}?project=${projectId}&tab=log`)}>
+                <Button
+                  size="small"
+                  type="primary"
+                  style={{ background: "#52c41a", borderColor: "#52c41a" }}
+                  onClick={() => navigate(`/dbmgmt/workflow/tickets/${r.id}?project=${projectId}&tab=log`)}
+                >
                   详情
                 </Button>
                 {r.status === "pending_execution" ? (

@@ -81,6 +81,15 @@ function nextRequestId(): string {
   }
 }
 
+/** 幂等键：高风险写接口（授权申请、K8s apply、规则创建等）在调用点生成并在重试间复用。 */
+export function newIdempotencyKey(): string {
+  return nextRequestId();
+}
+
+export function idempotencyConfig(idemKey?: string): { headers?: { "Idempotency-Key": string } } {
+  return idemKey ? { headers: { "Idempotency-Key": idemKey } } : {};
+}
+
 /** 登录态相关 401：用于清本地并跳转登录（含「缺少凭证」）。 */
 const sessionExpiredCodes = new Set(["10002", "10008", "10009", "10010", "10011", "10014"]);
 /**
@@ -187,8 +196,7 @@ export async function getData<T>(promise: Promise<ApiResponse<T>>) {
 /** 从 axios 错误中取出后端 Body.Message（与 response.Error 业务话术对齐）；非 axios 时回退 Error.message。 */
 export function extractApiErrorMessage(error: unknown, fallback = "请求失败"): string {
   if (axios.isAxiosError(error)) {
-    const isTimeout =
-      error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
+    const isTimeout = error.code === "ECONNABORTED" || /timeout of \d+ms exceeded/i.test(String(error.message ?? ""));
     if (isTimeout) {
       return timeoutHintForUrl(String(error.config?.url ?? ""));
     }

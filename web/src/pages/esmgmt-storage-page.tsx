@@ -1,10 +1,4 @@
-import {
-  DeleteOutlined,
-  LinkOutlined,
-  PlayCircleOutlined,
-  ReloadOutlined,
-  SaveOutlined,
-} from "@ant-design/icons";
+import { DeleteOutlined, LinkOutlined, PlayCircleOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
 import {
   Alert,
   Button,
@@ -154,7 +148,9 @@ export function EsmgmtStoragePage() {
 
   function canManageESIndex(name: string, matched?: boolean) {
     if (matched) return true;
-    const n = String(name || "").trim().toLowerCase();
+    const n = String(name || "")
+      .trim()
+      .toLowerCase();
     return (n.startsWith("yunshu-agent-") || n.startsWith("yunshu-k8s-")) && !n.startsWith(".");
   }
 
@@ -215,7 +211,9 @@ export function EsmgmtStoragePage() {
             message={
               <Space wrap size={8}>
                 <Tag color={esCfg.source === "managed" ? "purple" : "default"}>
-                  {esCfg.source === "managed" ? `连接 ${esCfg.connection_name || "#" + esCfg.connection_id}` : "数据字典"}
+                  {esCfg.source === "managed"
+                    ? `连接 ${esCfg.connection_name || "#" + esCfg.connection_id}`
+                    : "数据字典"}
                 </Tag>
                 <Tag color={esCfg.enabled ? "green" : "orange"}>{esCfg.enabled ? "enabled" : "disabled"}</Tag>
                 <Tag>{(esCfg.addresses || []).join(", ") || "无地址"}</Tag>
@@ -285,7 +283,12 @@ export function EsmgmtStoragePage() {
                     </Space>
                   ),
                 },
-                { title: "文档", dataIndex: "docs_count", width: 110, render: (n: number) => (n ?? 0).toLocaleString() },
+                {
+                  title: "文档",
+                  dataIndex: "docs_count",
+                  width: 110,
+                  render: (n: number) => (n ?? 0).toLocaleString(),
+                },
                 { title: "占用", dataIndex: "store_human", width: 100 },
                 {
                   title: "操作",
@@ -376,7 +379,14 @@ export function EsmgmtStoragePage() {
                 allowClear
                 size="small"
               />
-              <InputNumber size="small" min={1} max={3650} value={projectDays} onChange={(v) => setProjectDays(v ?? 30)} addonAfter="天" />
+              <InputNumber
+                size="small"
+                min={1}
+                max={3650}
+                value={projectDays}
+                onChange={(v) => setProjectDays(v ?? 30)}
+                addonAfter="天"
+              />
               <span>
                 启用 <Switch size="small" checked={projectEnabled} onChange={setProjectEnabled} />
               </span>

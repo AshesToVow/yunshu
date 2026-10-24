@@ -1,4 +1,11 @@
-import { ApiOutlined, DeleteOutlined, DownOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  ApiOutlined,
+  DeleteOutlined,
+  DownOutlined,
+  EditOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import {
   Button,
   Card,

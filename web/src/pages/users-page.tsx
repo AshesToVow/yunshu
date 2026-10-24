@@ -249,7 +249,12 @@ export function UsersPage() {
         message.info(`已为 ${res.credentials.length} 个用户生成临时密码，请查看接口响应或导出后分发`);
       }
       if (res.errors?.length) {
-        message.warning(`部分行失败：${res.errors.slice(0, 3).map((e) => `第${e.row}行 ${e.message}`).join("；")}`);
+        message.warning(
+          `部分行失败：${res.errors
+            .slice(0, 3)
+            .map((e) => `第${e.row}行 ${e.message}`)
+            .join("；")}`,
+        );
       }
       void loadUsers();
     } catch (err) {
@@ -360,7 +365,11 @@ export function UsersPage() {
       dataIndex: "allow_namespaces",
       ellipsis: true,
       render: (v: string) =>
-        v ? <Typography.Text ellipsis={{ tooltip: v }}>{v}</Typography.Text> : <span className="inline-muted">未配置白名单</span>,
+        v ? (
+          <Typography.Text ellipsis={{ tooltip: v }}>{v}</Typography.Text>
+        ) : (
+          <span className="inline-muted">未配置白名单</span>
+        ),
     },
     { title: "来源", dataIndex: "via", width: 200, ellipsis: true },
   ];
@@ -405,7 +414,13 @@ export function UsersPage() {
             />
           </Space>
           <div className="toolbar__actions">
-            <input ref={(el) => (fileInputRef.current = el)} type="file" accept=".xlsx" style={{ display: "none" }} onChange={handleImportChange} />
+            <input
+              ref={(el) => (fileInputRef.current = el)}
+              type="file"
+              accept=".xlsx"
+              style={{ display: "none" }}
+              onChange={handleImportChange}
+            />
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               新建账号
             </Button>
@@ -447,7 +462,11 @@ export function UsersPage() {
               title: "责任域角色",
               dataIndex: "roles",
               render: (value: RoleItem[]) =>
-                value.length > 0 ? value.map((role) => <Tag key={role.id}>{role.name}</Tag>) : <span className="inline-muted">未分配</span>,
+                value.length > 0 ? (
+                  value.map((role) => <Tag key={role.id}>{role.name}</Tag>)
+                ) : (
+                  <span className="inline-muted">未分配</span>
+                ),
             },
             {
               title: "用户组",
@@ -467,7 +486,11 @@ export function UsersPage() {
                 );
               },
             },
-            { title: "所属部门", dataIndex: "department_name", render: (v: string) => v || <span className="inline-muted">未设置</span> },
+            {
+              title: "所属部门",
+              dataIndex: "department_name",
+              render: (v: string) => v || <span className="inline-muted">未设置</span>,
+            },
             {
               title: "手机号",
               dataIndex: "phone",
@@ -485,10 +508,20 @@ export function UsersPage() {
                   <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
                     详情
                   </Button>
-                  <Button type="link" size="small" icon={<AppstoreOutlined />} onClick={() => openPermissionView(record)}>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<AppstoreOutlined />}
+                    onClick={() => openPermissionView(record)}
+                  >
                     权限查看
                   </Button>
-                  <Button type="link" size="small" icon={<ClusterOutlined />} onClick={() => void openK8sAuthClusters(record)}>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<ClusterOutlined />}
+                    onClick={() => void openK8sAuthClusters(record)}
+                  >
                     授权集群
                   </Button>
                   {isSuperAdmin && currentUser && record.id !== currentUser.id ? (
@@ -523,7 +556,11 @@ export function UsersPage() {
           <Form.Item label="账号名" name="username" rules={[{ required: true, message: "请输入账号名" }]}>
             <Input placeholder="例如：admin01" autoComplete="off" />
           </Form.Item>
-          <Form.Item label="邮箱" name="email" rules={[{ required: true, type: "email", message: "请输入正确的邮箱地址" }]}>
+          <Form.Item
+            label="邮箱"
+            name="email"
+            rules={[{ required: true, type: "email", message: "请输入正确的邮箱地址" }]}
+          >
             <Input placeholder="例如：admin@example.com" autoComplete="off" />
           </Form.Item>
           <Form.Item
@@ -550,11 +587,7 @@ export function UsersPage() {
           <Form.Item label="所属部门" name="department_id">
             <Select allowClear placeholder="可选，选择用户所属部门" options={departmentOptions} />
           </Form.Item>
-          <Form.Item
-            label="密码"
-            name="password"
-            rules={[{ required: true, message: "请输入密码" }]}
-          >
+          <Form.Item label="密码" name="password" rules={[{ required: true, message: "请输入密码" }]}>
             <Input.Password placeholder="请输入密码" autoComplete="new-password" />
           </Form.Item>
           <Form.Item label="状态" name="status" rules={[{ required: true, message: "请选择状态" }]}>
@@ -576,7 +609,8 @@ export function UsersPage() {
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Typography.Text className="inline-muted">
-            使用树形勾选为当前账号分配角色模板，已选 {checkedRoleIds.length} 个角色。保存后将自动进入「授权管理」继续配置 API 权限。
+            使用树形勾选为当前账号分配角色模板，已选 {checkedRoleIds.length}{" "}
+            个角色。保存后将自动进入「授权管理」继续配置 API 权限。
           </Typography.Text>
           <div className="tree-shell">
             <Tree
@@ -686,7 +720,11 @@ export function UsersPage() {
               <Typography.Text strong>责任域角色</Typography.Text>
               <div style={{ marginTop: 8 }}>
                 {permTarget.roles.length > 0 ? (
-                  <Space wrap>{permTarget.roles.map((r) => <Tag key={r.id}>{r.name}</Tag>)}</Space>
+                  <Space wrap>
+                    {permTarget.roles.map((r) => (
+                      <Tag key={r.id}>{r.name}</Tag>
+                    ))}
+                  </Space>
                 ) : (
                   <Typography.Text type="secondary">未分配角色</Typography.Text>
                 )}
@@ -845,7 +883,8 @@ export function UsersPage() {
         }
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          汇总用户直授、责任域角色、用户组在「集群档位」表中的授权；命名空间白名单来自 k8s_namespace_allow_rules。撤销或新增请至「K8s 集群档位」或集群列表「已授权」。
+          汇总用户直授、责任域角色、用户组在「集群档位」表中的授权；命名空间白名单来自
+          k8s_namespace_allow_rules。撤销或新增请至「K8s 集群档位」或集群列表「已授权」。
         </Typography.Paragraph>
         <Table<K8sUserClusterAuthRow>
           rowKey="row_key"

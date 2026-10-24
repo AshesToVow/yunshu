@@ -142,7 +142,9 @@
 .gw-auth-shell .ant-input-affix-wrapper,
 .gw-auth-shell .ant-input {
   border-radius: 8px;
-  transition: border-color var(--ys-duration) var(--ys-ease), box-shadow var(--ys-duration) var(--ys-ease);
+  transition:
+    border-color var(--ys-duration) var(--ys-ease),
+    box-shadow var(--ys-duration) var(--ys-ease);
 }
 
 .gw-auth-shell .ant-input-affix-wrapper:focus-within,
@@ -158,17 +160,27 @@
 .gw-auth-shell .login-submitBtn.ant-btn {
   border-radius: 8px;
   font-weight: 600;
-  transition: background-color var(--ys-duration) var(--ys-ease), border-color var(--ys-duration) var(--ys-ease);
+  transition:
+    background-color var(--ys-duration) var(--ys-ease),
+    border-color var(--ys-duration) var(--ys-ease);
 }
 
 .gw-auth-shell .login-submitBtn.ant-btn:not(:disabled):hover {
   transform: none;
 }
 
-.gw-accent-blue { --login-accent: #2563eb; }
-.gw-accent-violet { --login-accent: #7c3aed; }
-.gw-accent-emerald { --login-accent: #0d9488; }
-.gw-accent-amber { --login-accent: #d97706; }
+.gw-accent-blue {
+  --login-accent: #2563eb;
+}
+.gw-accent-violet {
+  --login-accent: #7c3aed;
+}
+.gw-accent-emerald {
+  --login-accent: #0d9488;
+}
+.gw-accent-amber {
+  --login-accent: #d97706;
+}
 
 /* ---- Admin ops shell — impeccable product register ---- */
 .admin-shell.ops-platform {

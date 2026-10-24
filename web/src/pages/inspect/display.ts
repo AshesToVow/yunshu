@@ -68,7 +68,10 @@ export function parseRecipients(raw?: string): string[] {
     const v = JSON.parse(raw);
     return Array.isArray(v) ? v.map(String) : [];
   } catch {
-    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 }
 

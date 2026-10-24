@@ -1,7 +1,44 @@
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, PlusSquareOutlined, ExpandOutlined, CompressOutlined, CheckCircleOutlined, StopOutlined, ApiOutlined, DownOutlined } from "@ant-design/icons";
-import { Button, Card, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import {
+  PlusOutlined,
+  ReloadOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PlusSquareOutlined,
+  ExpandOutlined,
+  CompressOutlined,
+  CheckCircleOutlined,
+  StopOutlined,
+  ApiOutlined,
+  DownOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Dropdown,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useMemo, useState } from "react";
-import { getAdminMenuTree, createMenu, updateMenu, deleteMenu, batchUpdateMenuStatus, getMenuBindings, replaceMenuBindings, type MenuPermissionBindingItem } from "../services/menus";
+import {
+  getAdminMenuTree,
+  createMenu,
+  updateMenu,
+  deleteMenu,
+  batchUpdateMenuStatus,
+  getMenuBindings,
+  replaceMenuBindings,
+  type MenuPermissionBindingItem,
+} from "../services/menus";
 import type { MenuItem, MenuCreatePayload, MenuUpdatePayload } from "../services/menus";
 import { getAntdIconSelectOptions } from "../utils/antd-icon-options";
 
@@ -232,7 +269,11 @@ export function MenusPage() {
               dataIndex: "status",
               width: 100,
               render: (s: number) =>
-                s === 1 ? <Tag className="status-chip status-chip--ok">启用</Tag> : <Tag className="status-chip status-chip--off">停用</Tag>,
+                s === 1 ? (
+                  <Tag className="status-chip status-chip--ok">启用</Tag>
+                ) : (
+                  <Tag className="status-chip status-chip--off">停用</Tag>
+                ),
             },
             {
               title: "操作",
@@ -290,7 +331,12 @@ export function MenusPage() {
         destroyOnClose
         width={600}
       >
-        <Form form={form} layout="vertical" initialValues={{ status: 1, sort: 0 }} onValuesChange={onMenuFormValuesChange}>
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{ status: 1, sort: 0 }}
+          onValuesChange={onMenuFormValuesChange}
+        >
           <Form.Item label="菜单名称" name="name" rules={[{ required: true, message: "请输入菜单名称" }]}>
             <Input placeholder="例如：系统管理" />
           </Form.Item>
@@ -330,9 +376,20 @@ export function MenusPage() {
           </Form.Item>
           <Space style={{ width: "100%" }} size="middle">
             <Form.Item label="状态" name="status" style={{ flex: 1, marginBottom: 0 }}>
-              <Select options={[{ label: "启用", value: 1 }, { label: "停用", value: 0 }]} />
+              <Select
+                options={[
+                  { label: "启用", value: 1 },
+                  { label: "停用", value: 0 },
+                ]}
+              />
             </Form.Item>
-            <Form.Item label="是否隐藏" name="hidden" valuePropName="checked" style={{ flex: 1, marginBottom: 0 }} initialValue={false}>
+            <Form.Item
+              label="是否隐藏"
+              name="hidden"
+              valuePropName="checked"
+              style={{ flex: 1, marginBottom: 0 }}
+              initialValue={false}
+            >
               <Switch />
             </Form.Item>
           </Space>
@@ -357,11 +414,18 @@ export function MenusPage() {
               <>
                 {fields.map((field) => (
                   <Space key={field.key} align="baseline" style={{ display: "flex", marginBottom: 8 }}>
-                    <Form.Item {...field} name={[field.name, "resource"]} rules={[{ required: true, message: "resource" }]}>
+                    <Form.Item
+                      {...field}
+                      name={[field.name, "resource"]}
+                      rules={[{ required: true, message: "resource" }]}
+                    >
                       <Input placeholder="/api/v1/..." style={{ width: 320 }} />
                     </Form.Item>
                     <Form.Item {...field} name={[field.name, "action"]} rules={[{ required: true }]}>
-                      <Select style={{ width: 100 }} options={["GET", "POST", "PUT", "DELETE"].map((a) => ({ value: a, label: a }))} />
+                      <Select
+                        style={{ width: 100 }}
+                        options={["GET", "POST", "PUT", "DELETE"].map((a) => ({ value: a, label: a }))}
+                      />
                     </Form.Item>
                     <Button type="link" danger onClick={() => remove(field.name)}>
                       删除

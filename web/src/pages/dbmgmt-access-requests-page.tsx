@@ -242,7 +242,12 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
       title={meta.title}
       extra={
         <Space>
-          <Select style={{ width: 200 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={setProjectId} />
+          <Select
+            style={{ width: 200 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={setProjectId}
+          />
           {meta.showList !== false ? <Button icon={<ReloadOutlined />} onClick={() => void load()} /> : null}
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             提交申请
@@ -275,7 +280,11 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
         onOk={() => void submit()}
         width={preset === "query" ? 760 : 680}
       >
-        <Form form={form} layout="vertical" initialValues={{ scope_type: meta.defaultScope, privileges: meta.defaultPrivileges }}>
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{ scope_type: meta.defaultScope, privileges: meta.defaultPrivileges }}
+        >
           <Form.Item name="instance_id" label="实例" rules={[{ required: true }]}>
             <Select
               options={instances.map((i) => ({ value: i.id, label: i.name }))}
@@ -318,15 +327,29 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
           )}
           {scopeType === "table" ? (
             <Form.Item name="table_names" label="目标表" rules={[{ required: true, message: "请选择至少一个表" }]}>
-              <Select mode="multiple" showSearch placeholder="选择表" options={tables.map((t) => ({ value: t, label: t }))} />
+              <Select
+                mode="multiple"
+                showSearch
+                placeholder="选择表"
+                options={tables.map((t) => ({ value: t, label: t }))}
+              />
             </Form.Item>
           ) : null}
-          <Form.Item name="privileges" label="权限项" rules={[{ required: true, message: "请至少选择一项权限" }]} hidden={preset !== "all"}>
+          <Form.Item
+            name="privileges"
+            label="权限项"
+            rules={[{ required: true, message: "请至少选择一项权限" }]}
+            hidden={preset !== "all"}
+          >
             <Select mode="multiple" placeholder="选择需要的 SQL 权限" options={privilegeOptions} />
           </Form.Item>
           {preset === "query" ? (
             <>
-              <Form.Item name="query_limit_num" label="查询行数上限" rules={[{ required: true, message: "请选择行数上限" }]}>
+              <Form.Item
+                name="query_limit_num"
+                label="查询行数上限"
+                rules={[{ required: true, message: "请选择行数上限" }]}
+              >
                 <Select options={QUERY_LIMIT_OPTIONS} placeholder="单次查询最大返回行数" />
               </Form.Item>
               <Form.Item
@@ -348,7 +371,11 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
               <GrantValidityCalendarPicker />
             </Form.Item>
           )}
-          <Form.Item name="reason" label={preset === "database_create" ? "备注" : "申请理由"} rules={[{ required: true }]}>
+          <Form.Item
+            name="reason"
+            label={preset === "database_create" ? "备注" : "申请理由"}
+            rules={[{ required: true }]}
+          >
             <Input.TextArea rows={3} placeholder={preset === "database_create" ? "例如：用户中心业务库" : undefined} />
           </Form.Item>
         </Form>

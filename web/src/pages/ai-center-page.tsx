@@ -324,11 +324,16 @@ export function AiCenterPage() {
             ))}
             {runtimeHealth ? (
               <Tag color={runtimeHealth.ok ? "success" : "error"}>
-                脚本运行时: {runtimeHealth.python_ok ? `Python OK (${String(runtimeHealth.python_version || runtimeHealth.python_bin || "")})` : "Python 缺失"}
+                脚本运行时:{" "}
+                {runtimeHealth.python_ok
+                  ? `Python OK (${String(runtimeHealth.python_version || runtimeHealth.python_bin || "")})`
+                  : "Python 缺失"}
               </Tag>
             ) : null}
           </Space>
-          {runtimeHealth && Array.isArray(runtimeHealth.suggestions) && (runtimeHealth.suggestions as string[]).length > 0 ? (
+          {runtimeHealth &&
+          Array.isArray(runtimeHealth.suggestions) &&
+          (runtimeHealth.suggestions as string[]).length > 0 ? (
             <Typography.Paragraph type="secondary">
               {(runtimeHealth.suggestions as string[]).join("；")}
             </Typography.Paragraph>
@@ -399,7 +404,11 @@ export function AiCenterPage() {
                                 trigger={["click"]}
                                 menu={{
                                   items: [
-                                    { key: "versions", label: "版本", onClick: () => void loadVersions(Number(row.id)) },
+                                    {
+                                      key: "versions",
+                                      label: "版本",
+                                      onClick: () => void loadVersions(Number(row.id)),
+                                    },
                                     {
                                       key: "publish",
                                       label: "发布新版",
@@ -603,36 +612,36 @@ export function AiCenterPage() {
                         新建工具
                       </Button>
                     </Space>
-                  <Table
-                    rowKey="id"
-                    size="small"
-                    dataSource={tools}
-                    pagination={{ pageSize: 20 }}
-                    columns={[
-                      { title: "名称", dataIndex: "name" },
-                      { title: "模块", dataIndex: "module", width: 90 },
-                      { title: "运行时", dataIndex: "runtime", width: 90 },
-                      { title: "权限", dataIndex: "permission", width: 100 },
-                      { title: "风险", dataIndex: "risk_level", width: 90 },
-                      {
-                        title: "启用",
-                        dataIndex: "enabled",
-                        width: 90,
-                        render: (v, row) => (
-                          <Switch
-                            checked={!!v}
-                            onChange={(checked) => {
-                              void updateAICenterTool(Number(row.id), checked)
-                                .then(() => {
-                                  setTools((prev) =>
-                                    prev.map((t) => (t.id === row.id ? { ...t, enabled: checked } : t)),
-                                  );
-                                })
-                                .catch((e) => message.error(extractApiErrorMessage(e, "更新失败")));
-                            }}
-                          />
-                        ),
-                      },
+                    <Table
+                      rowKey="id"
+                      size="small"
+                      dataSource={tools}
+                      pagination={{ pageSize: 20 }}
+                      columns={[
+                        { title: "名称", dataIndex: "name" },
+                        { title: "模块", dataIndex: "module", width: 90 },
+                        { title: "运行时", dataIndex: "runtime", width: 90 },
+                        { title: "权限", dataIndex: "permission", width: 100 },
+                        { title: "风险", dataIndex: "risk_level", width: 90 },
+                        {
+                          title: "启用",
+                          dataIndex: "enabled",
+                          width: 90,
+                          render: (v, row) => (
+                            <Switch
+                              checked={!!v}
+                              onChange={(checked) => {
+                                void updateAICenterTool(Number(row.id), checked)
+                                  .then(() => {
+                                    setTools((prev) =>
+                                      prev.map((t) => (t.id === row.id ? { ...t, enabled: checked } : t)),
+                                    );
+                                  })
+                                  .catch((e) => message.error(extractApiErrorMessage(e, "更新失败")));
+                              }}
+                            />
+                          ),
+                        },
                         {
                           title: "操作",
                           width: 140,
@@ -787,15 +796,15 @@ export function AiCenterPage() {
                         新建案例
                       </Button>
                     </Space>
-                  <Table
-                    rowKey="id"
-                    size="small"
-                    dataSource={cases}
-                    columns={[
-                      { title: "CaseID", dataIndex: "case_id", width: 180 },
-                      { title: "标题", dataIndex: "title" },
-                      { title: "技术", dataIndex: "technology", width: 100 },
-                      { title: "置信度", dataIndex: "confidence", width: 90 },
+                    <Table
+                      rowKey="id"
+                      size="small"
+                      dataSource={cases}
+                      columns={[
+                        { title: "CaseID", dataIndex: "case_id", width: 180 },
+                        { title: "标题", dataIndex: "title" },
+                        { title: "技术", dataIndex: "technology", width: 100 },
+                        { title: "置信度", dataIndex: "confidence", width: 90 },
                         {
                           title: "操作",
                           width: 140,
@@ -930,19 +939,19 @@ export function AiCenterPage() {
                         新建 SOP
                       </Button>
                     </Space>
-                  <Table
-                    rowKey="id"
-                    size="small"
-                    dataSource={sops}
-                    columns={[
-                      { title: "Code", dataIndex: "code", width: 180 },
-                      { title: "标题", dataIndex: "title" },
-                      {
-                        title: "需审批",
-                        dataIndex: "approval_needed",
-                        width: 90,
-                        render: (v) => (v ? "是" : "否"),
-                      },
+                    <Table
+                      rowKey="id"
+                      size="small"
+                      dataSource={sops}
+                      columns={[
+                        { title: "Code", dataIndex: "code", width: 180 },
+                        { title: "标题", dataIndex: "title" },
+                        {
+                          title: "需审批",
+                          dataIndex: "approval_needed",
+                          width: 90,
+                          render: (v) => (v ? "是" : "否"),
+                        },
                         {
                           title: "操作",
                           width: 140,
@@ -1068,14 +1077,14 @@ export function AiCenterPage() {
                         新建知识库
                       </Button>
                     </Space>
-                  <Table
-                    rowKey="id"
-                    size="small"
-                    dataSource={kbs}
-                    columns={[
-                      { title: "Code", dataIndex: "code" },
-                      { title: "名称", dataIndex: "name" },
-                      { title: "分类", dataIndex: "category" },
+                    <Table
+                      rowKey="id"
+                      size="small"
+                      dataSource={kbs}
+                      columns={[
+                        { title: "Code", dataIndex: "code" },
+                        { title: "名称", dataIndex: "name" },
+                        { title: "分类", dataIndex: "category" },
                         {
                           title: "操作",
                           width: 220,
@@ -1384,9 +1393,9 @@ export function AiCenterPage() {
                                 onClick={() =>
                                   confirmDelete(`删除模型「${row.name}」？`, async () => {
                                     await deleteAICenterModel(row.id);
-                                          message.success("已删除");
+                                    message.success("已删除");
                                     await refreshModels();
-                                        })
+                                  })
                                 }
                               >
                                 删除
@@ -1537,19 +1546,21 @@ export function AiCenterPage() {
                           </Button>
                         }
                       >
-                        <pre style={{ margin: 0, fontSize: 12, maxHeight: 280, overflow: "auto", whiteSpace: "pre-wrap" }}>
+                        <pre
+                          style={{ margin: 0, fontSize: 12, maxHeight: 280, overflow: "auto", whiteSpace: "pre-wrap" }}
+                        >
                           {JSON.stringify(evalRunDetail.results || [], null, 2)}
                         </pre>
                       </Card>
                     ) : null}
-                  <Table
-                    rowKey="id"
-                    size="small"
-                    dataSource={evalCases}
-                    columns={[
-                      { title: "Code", dataIndex: "case_code", width: 140 },
-                      { title: "标题", dataIndex: "title" },
-                      { title: "权重", dataIndex: "score_weight", width: 80 },
+                    <Table
+                      rowKey="id"
+                      size="small"
+                      dataSource={evalCases}
+                      columns={[
+                        { title: "Code", dataIndex: "case_code", width: 140 },
+                        { title: "标题", dataIndex: "title" },
+                        { title: "权重", dataIndex: "score_weight", width: 80 },
                         {
                           title: "操作",
                           width: 140,

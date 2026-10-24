@@ -161,10 +161,20 @@ export function useAlertMonitorCloudExpiryState(params: {
         return p;
       },
     },
-    { title: "地域范围", dataIndex: "region_scope", width: 180, render: (v: string) => String(v || "").trim() || "全部" },
+    {
+      title: "地域范围",
+      dataIndex: "region_scope",
+      width: 180,
+      render: (v: string) => String(v || "").trim() || "全部",
+    },
     { title: "提前天数", dataIndex: "advance_days", width: 100 },
     { title: "级别", dataIndex: "severity", width: 90 },
-    { title: "定时", dataIndex: "schedule_enabled", width: 80, render: (v: boolean) => (v !== false ? <Tag color="blue">开</Tag> : <Tag>关</Tag>) },
+    {
+      title: "定时",
+      dataIndex: "schedule_enabled",
+      width: 80,
+      render: (v: boolean) => (v !== false ? <Tag color="blue">开</Tag> : <Tag>关</Tag>),
+    },
     {
       title: "Cron",
       dataIndex: "eval_cron_spec",
@@ -175,7 +185,12 @@ export function useAlertMonitorCloudExpiryState(params: {
         return s ? <span title={s}>{s}</span> : <span style={{ color: "#999" }}>—</span>;
       },
     },
-    { title: "启用", dataIndex: "enabled", width: 80, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
+    {
+      title: "启用",
+      dataIndex: "enabled",
+      width: 80,
+      render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>),
+    },
     { title: "创建时间", dataIndex: "created_at", width: 170, render: (v: string) => (v ? formatDateTime(v) : "-") },
     { title: "更新时间", dataIndex: "updated_at", width: 170, render: (v: string) => (v ? formatDateTime(v) : "-") },
     {

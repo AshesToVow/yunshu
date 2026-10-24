@@ -1,4 +1,11 @@
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+} from "@ant-design/icons";
 import { Alert, Button, Card, Input, Popconfirm, Select, Space, Switch, Table, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -7,11 +14,7 @@ import { ApprovalCenterNav } from "../components/approval-center-nav";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { listUserGroups, type UserGroupItem } from "../services/user-groups";
-import {
-  getWorkflowDefinition,
-  saveWorkflowDefinition,
-  type WorkflowStageItem,
-} from "../services/workflow";
+import { getWorkflowDefinition, saveWorkflowDefinition, type WorkflowStageItem } from "../services/workflow";
 
 type DomainKey = "dbmgmt" | "cicd" | "incident" | "ai";
 
@@ -23,9 +26,17 @@ type StageRow = WorkflowStageItem & {
 };
 
 const DOMAIN_OPTIONS: { label: string; value: DomainKey; hint: string }[] = [
-  { label: "数据库 (dbmgmt)", value: "dbmgmt", hint: "SQL 工单、权限申请、应用用户共用此流程（ticket_type=default）。" },
+  {
+    label: "数据库 (dbmgmt)",
+    value: "dbmgmt",
+    hint: "SQL 工单、权限申请、应用用户共用此流程（ticket_type=default）。",
+  },
   { label: "发布 (cicd)", value: "cicd", hint: "发布审批流；配置变更仅影响新建发布工单。" },
-  { label: "AI (ai)", value: "ai", hint: "AI 高危工具审批（全局 project_id=0，ticket_type=tool_approval，平台角色审批）。" },
+  {
+    label: "AI (ai)",
+    value: "ai",
+    hint: "AI 高危工具审批（全局 project_id=0，ticket_type=tool_approval，平台角色审批）。",
+  },
   { label: "故障 (incident)", value: "incident", hint: "告警转故障单审批；可含值班派单节点。" },
 ];
 
@@ -168,9 +179,7 @@ export function WorkflowDefinitionsPage() {
           <Switch
             checked={row.draftEnabled}
             onChange={(checked) => {
-              setRows((prev) =>
-                prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftEnabled: checked } : r)),
-              );
+              setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftEnabled: checked } : r)));
             }}
           />
         ),
@@ -181,21 +190,19 @@ export function WorkflowDefinitionsPage() {
           row.assignee_rule_type === "platform_role" ? (
             <Typography.Text type="secondary">平台角色（admin / ops-admin / ai-approver）</Typography.Text>
           ) : (
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            style={{ width: 260 }}
-            placeholder={row.draftEnabled ? "请选择用户组" : "未启用"}
-            disabled={!row.draftEnabled || row.assignee_rule_type === "duty"}
-            value={row.draftUserGroupId}
-            options={groupOptions}
-            onChange={(v) => {
-              setRows((prev) =>
-                prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftUserGroupId: v } : r)),
-              );
-            }}
-          />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              style={{ width: 260 }}
+              placeholder={row.draftEnabled ? "请选择用户组" : "未启用"}
+              disabled={!row.draftEnabled || row.assignee_rule_type === "duty"}
+              value={row.draftUserGroupId}
+              options={groupOptions}
+              onChange={(v) => {
+                setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftUserGroupId: v } : r)));
+              }}
+            />
           ),
       },
       {

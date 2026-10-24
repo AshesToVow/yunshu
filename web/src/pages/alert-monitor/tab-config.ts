@@ -32,7 +32,9 @@ export function tabsInGroup(group: AlertMonitorTabGroup) {
 }
 
 export function normalizeAlertMonitorTab(raw?: string | null): AlertMonitorTabKey {
-  const t = String(raw || "").trim().toLowerCase();
+  const t = String(raw || "")
+    .trim()
+    .toLowerCase();
   if (t === "config") return "policies";
   if (ALERT_MONITOR_TABS.some((x) => x.key === t)) {
     return t as AlertMonitorTabKey;

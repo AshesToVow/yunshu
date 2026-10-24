@@ -298,7 +298,9 @@ export function HistoryTab() {
           fingerprint: row.fingerprint,
           ttl_minutes: minutes && minutes > 0 ? minutes : undefined,
         });
-        message.success(minutes && minutes > 0 ? `已认领 ${minutes} 分钟：同指纹通知将暂停` : "已认领：同指纹通知将暂停");
+        message.success(
+          minutes && minutes > 0 ? `已认领 ${minutes} 分钟：同指纹通知将暂停` : "已认领：同指纹通知将暂停",
+        );
       }
       await loadCur(curPage, curPageSize, keyword);
     } catch (e) {
@@ -421,7 +423,10 @@ export function HistoryTab() {
               width: 110,
               render: (_: unknown, r: AlertCurEventItem) =>
                 r.acked ? (
-                  <Tag color="processing" title={r.ack_expires_at ? `至 ${formatDateTime(r.ack_expires_at)}` : undefined}>
+                  <Tag
+                    color="processing"
+                    title={r.ack_expires_at ? `至 ${formatDateTime(r.ack_expires_at)}` : undefined}
+                  >
                     {r.ack_by || "已认领"}
                   </Tag>
                 ) : (
@@ -495,7 +500,12 @@ export function HistoryTab() {
                       onAck={(minutes) => void toggleAck(r, minutes)}
                       onClear={() => void toggleAck(r)}
                     />
-                    <Button type="link" size="small" icon={<BellOutlined />} onClick={() => openDetail(toDetailFromCur(r))}>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<BellOutlined />}
+                      onClick={() => openDetail(toDetailFromCur(r))}
+                    >
                       通知
                     </Button>
                     <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
@@ -544,7 +554,15 @@ export function HistoryTab() {
               width: 90,
               fixed: "right",
               render: (_: unknown, r: AlertHisEventItem) => (
-                <Button type="link" size="small" icon={<BellOutlined />} onClick={(e) => { e.stopPropagation(); openDetail(toDetailFromHis(r)); }}>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<BellOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDetail(toDetailFromHis(r));
+                  }}
+                >
                   通知
                 </Button>
               ),

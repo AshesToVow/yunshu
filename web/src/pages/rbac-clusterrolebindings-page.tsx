@@ -3,7 +3,14 @@ import type { ColumnsType } from "antd/es/table";
 import { useRef } from "react";
 import { RbacClusterRoleBindingFormCreateDrawer } from "../components/k8s/k8s-resource-form-drawers";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
-import { applyRbac, deleteRbac, getRbacDetail, listClusterRoleBindings, type RbacClusterRoleBindingItem, type RbacDetail } from "../services/rbac";
+import {
+  applyRbac,
+  deleteRbac,
+  getRbacDetail,
+  listClusterRoleBindings,
+  type RbacClusterRoleBindingItem,
+  type RbacDetail,
+} from "../services/rbac";
 
 type Item = RbacClusterRoleBindingItem;
 type Detail = RbacDetail;
@@ -34,39 +41,40 @@ export function RbacClusterRoleBindingsPage() {
 
   return (
     <>
-    <YamlCrudPage<Item, Detail>
-      title="RBAC - ClusterRoleBinding"
-      needNamespace={false}
-      columns={columns}
-      onToolbarReady={(ctx) => {
-        listReloadRef.current = ctx.reload;
-      }}
-      renderCreateFormTab={(ctx) => (
-        <RbacClusterRoleBindingFormCreateDrawer
-          embedded
-          open
-          clusterId={ctx.clusterId}
-          onClose={ctx.closeCreateDrawer}
-          onSuccess={() => {
-            listReloadRef.current();
-            ctx.closeCreateDrawer();
-          }}
-        />
-      )}
-      api={{
-        list: async ({ clusterId, keyword }) => (await listClusterRoleBindings(clusterId, keyword)).list,
-        detail: async ({ clusterId, name }) => await getRbacDetail({ cluster_id: clusterId, kind: "ClusterRoleBinding", name }),
-        apply: async ({ clusterId, manifest }) => await applyRbac(clusterId, manifest),
-        remove: async (args) =>
-          await deleteRbac({
-            cluster_id: args.clusterId,
-            kind: "ClusterRoleBinding",
-            name: args.name,
-            grace_period_seconds: args.grace_period_seconds,
-            propagation_policy: args.propagation_policy,
-          }),
-      }}
-      createTemplate={() => `apiVersion: rbac.authorization.k8s.io/v1
+      <YamlCrudPage<Item, Detail>
+        title="RBAC - ClusterRoleBinding"
+        needNamespace={false}
+        columns={columns}
+        onToolbarReady={(ctx) => {
+          listReloadRef.current = ctx.reload;
+        }}
+        renderCreateFormTab={(ctx) => (
+          <RbacClusterRoleBindingFormCreateDrawer
+            embedded
+            open
+            clusterId={ctx.clusterId}
+            onClose={ctx.closeCreateDrawer}
+            onSuccess={() => {
+              listReloadRef.current();
+              ctx.closeCreateDrawer();
+            }}
+          />
+        )}
+        api={{
+          list: async ({ clusterId, keyword }) => (await listClusterRoleBindings(clusterId, keyword)).list,
+          detail: async ({ clusterId, name }) =>
+            await getRbacDetail({ cluster_id: clusterId, kind: "ClusterRoleBinding", name }),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyRbac(clusterId, manifest, idemKey),
+          remove: async (args) =>
+            await deleteRbac({
+              cluster_id: args.clusterId,
+              kind: "ClusterRoleBinding",
+              name: args.name,
+              grace_period_seconds: args.grace_period_seconds,
+              propagation_policy: args.propagation_policy,
+            }),
+        }}
+        createTemplate={() => `apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: demo-clusterrolebinding
@@ -78,8 +86,7 @@ roleRef:
   kind: ClusterRole
   name: demo-clusterrole
 `}
-    />
+      />
     </>
   );
 }
-

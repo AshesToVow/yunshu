@@ -1,4 +1,17 @@
-import { Collapse, Col, Form, Input, Row, Segmented, Select, Space, Table, Tag, Typography, type FormInstance } from "antd";
+import {
+  Collapse,
+  Col,
+  Form,
+  Input,
+  Row,
+  Segmented,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  type FormInstance,
+} from "antd";
 import { useEffect, useRef, useState } from "react";
 import {
   previewAlertChannelTemplate,
@@ -83,7 +96,8 @@ export function AlertNotificationTemplateStudio({
     const fieldName = editingTarget === "resolved" ? "template_resolved" : "template_firing";
     const currentValue = String(form.getFieldValue(fieldName) || "");
     const inputRef = editingTarget === "resolved" ? resolvedTemplateRef?.current : firingTemplateRef?.current;
-    const textarea = (inputRef as { resizableTextArea?: { textArea?: HTMLTextAreaElement } })?.resizableTextArea?.textArea;
+    const textarea = (inputRef as { resizableTextArea?: { textArea?: HTMLTextAreaElement } })?.resizableTextArea
+      ?.textArea;
     if (textarea && Number.isFinite(textarea.selectionStart) && Number.isFinite(textarea.selectionEnd)) {
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
@@ -156,14 +170,22 @@ export function AlertNotificationTemplateStudio({
               <Input.TextArea ref={firingTemplateRef as never} rows={8} placeholder="{{.Title}}" />
             </Form.Item>
             <Form.Item label="触发模板预设">
-              <Select value={firingPreset} options={[...CHANNEL_PRESET_OPTIONS]} onChange={(v) => applyTemplatePreset("firing", v)} />
+              <Select
+                value={firingPreset}
+                options={[...CHANNEL_PRESET_OPTIONS]}
+                onChange={(v) => applyTemplatePreset("firing", v)}
+              />
             </Form.Item>
 
             <Form.Item name="template_resolved" label="告警恢复模板">
               <Input.TextArea ref={resolvedTemplateRef as never} rows={8} placeholder="{{.StartsAt}} ~ {{.EndsAt}}" />
             </Form.Item>
             <Form.Item label="恢复模板预设">
-              <Select value={resolvedPreset} options={[...CHANNEL_PRESET_OPTIONS]} onChange={(v) => applyTemplatePreset("resolved", v)} />
+              <Select
+                value={resolvedPreset}
+                options={[...CHANNEL_PRESET_OPTIONS]}
+                onChange={(v) => applyTemplatePreset("resolved", v)}
+              />
             </Form.Item>
 
             <Form.Item
@@ -217,7 +239,12 @@ export function AlertNotificationTemplateStudio({
                   <div style={{ marginTop: 8 }}>
                     <Space wrap>
                       {availableFields.map((v) => (
-                        <Tag key={v} color="blue" style={{ cursor: "pointer" }} onClick={() => insertTemplateToken(`{{.${v}}}`)}>
+                        <Tag
+                          key={v}
+                          color="blue"
+                          style={{ cursor: "pointer" }}
+                          onClick={() => insertTemplateToken(`{{.${v}}}`)}
+                        >
                           {v}
                         </Tag>
                       ))}
@@ -255,7 +282,11 @@ export function AlertNotificationTemplateStudio({
                   <Typography.Text type="secondary">原始 JSON 顶层字段</Typography.Text>
                   <div style={{ marginTop: 8 }}>
                     <Space wrap>
-                      {rawPayloadFields.length === 0 ? <Tag>（暂无）</Tag> : rawPayloadFields.map((v) => <Tag key={v}>{v}</Tag>)}
+                      {rawPayloadFields.length === 0 ? (
+                        <Tag>（暂无）</Tag>
+                      ) : (
+                        rawPayloadFields.map((v) => <Tag key={v}>{v}</Tag>)
+                      )}
                     </Space>
                   </div>
                 </div>
@@ -270,7 +301,11 @@ export function AlertNotificationTemplateStudio({
                       dataIndex: "name",
                       width: 200,
                       render: (v: string) => (
-                        <Typography.Text code style={{ cursor: "pointer" }} onClick={() => insertTemplateToken(`{{.${v}}}`)}>
+                        <Typography.Text
+                          code
+                          style={{ cursor: "pointer" }}
+                          onClick={() => insertTemplateToken(`{{.${v}}}`)}
+                        >
                           {"{{." + v + "}}"}
                         </Typography.Text>
                       ),

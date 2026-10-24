@@ -34,13 +34,7 @@ export function cicdReleaseStatusLabel(s: string) {
   return label[s] || s;
 }
 
-const CICD_RELEASE_TERMINAL_STATUSES = new Set([
-  "success",
-  "failure",
-  "aborted",
-  "cancelled",
-  "rejected",
-]);
+const CICD_RELEASE_TERMINAL_STATUSES = new Set(["success", "failure", "aborted", "cancelled", "rejected"]);
 
 /** 待办列表状态：终态用工单真实结果；进行中再按 mine_status 区分「待我/我已」 */
 export function cicdTodoStatusLabel(

@@ -13,7 +13,7 @@ import {
   probeToForm,
   safeGet,
   safeParseYaml,
-  toNumberOrUndefined
+  toNumberOrUndefined,
 } from "./helpers";
 import type { DeploymentFormValues } from "./deployment";
 
@@ -83,8 +83,10 @@ export type CronJobFormValues = {
 export function buildCronJobYaml(v: CronJobFormValues): string {
   const envMap = envPairsToMap(v.env_pairs);
   const env = Object.keys(envMap).length ? Object.entries(envMap).map(([name, value]) => ({ name, value })) : undefined;
-  const imagePullSecrets =
-    (v.image_pull_secrets ?? []).filter(Boolean).map((name) => ({ name: String(name).trim() })).filter((s) => !!s.name);
+  const imagePullSecrets = (v.image_pull_secrets ?? [])
+    .filter(Boolean)
+    .map((name) => ({ name: String(name).trim() }))
+    .filter((s) => !!s.name);
 
   const tolerations =
     (v.tolerations ?? [])
@@ -104,18 +106,18 @@ export function buildCronJobYaml(v: CronJobFormValues): string {
         tolerationSeconds: t.tolerationSeconds,
       })) || undefined;
 
-  const volumes =
-    (v.volumes ?? [])
-      .map((it) => {
-        const name = String(it?.name ?? "").trim();
-        if (!name) return null;
-        const type = it?.type || "emptyDir";
-        if (type === "configMap") return { name, configMap: { name: String(it?.source_name ?? "").trim() || name } };
-        if (type === "secret") return { name, secret: { secretName: String(it?.source_name ?? "").trim() || name } };
-        if (type === "pvc") return { name, persistentVolumeClaim: { claimName: String(it?.source_name ?? "").trim() || name } };
-        return { name, emptyDir: {} };
-      })
-      .filter(Boolean);
+  const volumes = (v.volumes ?? [])
+    .map((it) => {
+      const name = String(it?.name ?? "").trim();
+      if (!name) return null;
+      const type = it?.type || "emptyDir";
+      if (type === "configMap") return { name, configMap: { name: String(it?.source_name ?? "").trim() || name } };
+      if (type === "secret") return { name, secret: { secretName: String(it?.source_name ?? "").trim() || name } };
+      if (type === "pvc")
+        return { name, persistentVolumeClaim: { claimName: String(it?.source_name ?? "").trim() || name } };
+      return { name, emptyDir: {} };
+    })
+    .filter(Boolean);
 
   const volumeMounts =
     (v.volume_mounts ?? [])
@@ -156,14 +158,16 @@ export function buildCronJobYaml(v: CronJobFormValues): string {
       successfulJobsHistoryLimit:
         typeof v.successful_jobs_history_limit === "number" ? v.successful_jobs_history_limit : undefined,
       failedJobsHistoryLimit: typeof v.failed_jobs_history_limit === "number" ? v.failed_jobs_history_limit : undefined,
-      startingDeadlineSeconds: typeof v.starting_deadline_seconds === "number" ? v.starting_deadline_seconds : undefined,
+      startingDeadlineSeconds:
+        typeof v.starting_deadline_seconds === "number" ? v.starting_deadline_seconds : undefined,
       jobTemplate: {
         spec: {
           parallelism: typeof v.parallelism === "number" ? v.parallelism : undefined,
           completions: typeof v.completions === "number" ? v.completions : undefined,
           backoffLimit: typeof v.backoff_limit === "number" ? v.backoff_limit : undefined,
           activeDeadlineSeconds: typeof v.active_deadline_seconds === "number" ? v.active_deadline_seconds : undefined,
-          ttlSecondsAfterFinished: typeof v.ttl_seconds_after_finished === "number" ? v.ttl_seconds_after_finished : undefined,
+          ttlSecondsAfterFinished:
+            typeof v.ttl_seconds_after_finished === "number" ? v.ttl_seconds_after_finished : undefined,
           template: {
             spec: {
               restartPolicy: v.restart_policy,
@@ -220,7 +224,8 @@ export function cronJobObjToForm(obj: any): CronJobFormValues | null {
   const resLim = c?.resources?.limits ?? {};
 
   const tolerations =
-    Array.isArray(safeGet(obj, "spec.jobTemplate.spec.template.spec.tolerations")) && safeGet(obj, "spec.jobTemplate.spec.template.spec.tolerations")?.length
+    Array.isArray(safeGet(obj, "spec.jobTemplate.spec.template.spec.tolerations")) &&
+    safeGet(obj, "spec.jobTemplate.spec.template.spec.tolerations")?.length
       ? (safeGet(obj, "spec.jobTemplate.spec.template.spec.tolerations") ?? []).map((t: any) => ({
           key: t?.key,
           operator: (t?.operator || "Equal") as "Equal" | "Exists",
@@ -230,7 +235,8 @@ export function cronJobObjToForm(obj: any): CronJobFormValues | null {
         }))
       : [];
   const volumes =
-    Array.isArray(safeGet(obj, "spec.jobTemplate.spec.template.spec.volumes")) && safeGet(obj, "spec.jobTemplate.spec.template.spec.volumes")?.length
+    Array.isArray(safeGet(obj, "spec.jobTemplate.spec.template.spec.volumes")) &&
+    safeGet(obj, "spec.jobTemplate.spec.template.spec.volumes")?.length
       ? (safeGet(obj, "spec.jobTemplate.spec.template.spec.volumes") ?? []).map((v: any) => ({
           name: v?.name,
           type: v?.configMap ? "configMap" : v?.secret ? "secret" : v?.persistentVolumeClaim ? "pvc" : "emptyDir",
@@ -247,8 +253,11 @@ export function cronJobObjToForm(obj: any): CronJobFormValues | null {
         }))
       : [];
   const imagePullSecrets =
-    Array.isArray(safeGet(obj, "spec.jobTemplate.spec.template.spec.imagePullSecrets")) && safeGet(obj, "spec.jobTemplate.spec.template.spec.imagePullSecrets")?.length
-      ? (safeGet(obj, "spec.jobTemplate.spec.template.spec.imagePullSecrets") ?? []).map((s: any) => String(s?.name ?? "")).filter((x: string) => !!x)
+    Array.isArray(safeGet(obj, "spec.jobTemplate.spec.template.spec.imagePullSecrets")) &&
+    safeGet(obj, "spec.jobTemplate.spec.template.spec.imagePullSecrets")?.length
+      ? (safeGet(obj, "spec.jobTemplate.spec.template.spec.imagePullSecrets") ?? [])
+          .map((s: any) => String(s?.name ?? ""))
+          .filter((x: string) => !!x)
       : [];
 
   const lp = c?.livenessProbe;
@@ -292,4 +301,3 @@ export function cronJobObjToForm(obj: any): CronJobFormValues | null {
     ...probeToForm("startup", sp),
   };
 }
-

@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export interface NamespaceItem {
@@ -55,11 +55,7 @@ export interface NamespaceDetail {
   yaml: string;
 }
 
-export function listNamespaces(
-  clusterId: number,
-  keyword?: string,
-  opts?: { with_pod_stats?: boolean },
-) {
+export function listNamespaces(clusterId: number, keyword?: string, opts?: { with_pod_stats?: boolean }) {
   return getData<NamespaceItem[]>(
     http.get("/namespaces", {
       params: {
@@ -82,7 +78,7 @@ export type ApplyNamespaceOptions = {
   silentErrorToast?: boolean;
 };
 
-export function applyNamespace(clusterId: number, manifest: string, opts?: ApplyNamespaceOptions) {
+export function applyNamespace(clusterId: number, manifest: string, opts?: ApplyNamespaceOptions, idemKey?: string) {
   const failIfExists = opts?.failIfExists;
   const silent = opts?.silentErrorToast;
   return getData<boolean>(
@@ -93,7 +89,7 @@ export function applyNamespace(clusterId: number, manifest: string, opts?: Apply
         manifest,
         ...(failIfExists ? { fail_if_exists: true } : {}),
       },
-      silent ? { silentErrorToast: true } : {},
+      { ...(silent ? { silentErrorToast: true } : {}), ...idempotencyConfig(idemKey) },
     ),
   );
 }

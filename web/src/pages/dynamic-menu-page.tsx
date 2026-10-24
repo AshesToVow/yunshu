@@ -227,7 +227,8 @@ export function DynamicMenuPage() {
           title="未配置前端组件"
           subTitle={
             <span>
-              请在「菜单管理」中为该菜单填写 <Typography.Text code>组件路径</Typography.Text>（例如 <Typography.Text code>containerd-page</Typography.Text>
+              请在「菜单管理」中为该菜单填写 <Typography.Text code>组件路径</Typography.Text>（例如{" "}
+              <Typography.Text code>containerd-page</Typography.Text>
               ），并新增对应文件 <Typography.Text code>src/pages/containerd-page.tsx</Typography.Text>，导出{" "}
               <Typography.Text code>ContainerdPage</Typography.Text>。
             </span>
@@ -248,8 +249,9 @@ export function DynamicMenuPage() {
           title="未找到页面文件"
           subTitle={
             <span>
-              已填写 component 为「{compText || "（空）"}」，但未找到匹配的 <Typography.Text code>src/pages/**/*-page.tsx</Typography.Text>。
-              请新建文件并导出与文件名对应的 PascalCase 组件名。
+              已填写 component 为「{compText || "（空）"}」，但未找到匹配的{" "}
+              <Typography.Text code>src/pages/**/*-page.tsx</Typography.Text>。 请新建文件并导出与文件名对应的
+              PascalCase 组件名。
             </span>
           }
           extra={

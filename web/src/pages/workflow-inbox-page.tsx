@@ -361,8 +361,7 @@ export function WorkflowInboxPage() {
           onRow={(row) => ({
             id: `wf-row-${row.workflow_ticket_id}`,
             style:
-              highlightTicketId &&
-              (row.workflow_ticket_id === highlightTicketId || row.ref_id === highlightTicketId)
+              highlightTicketId && (row.workflow_ticket_id === highlightTicketId || row.ref_id === highlightTicketId)
                 ? { background: "rgba(22, 119, 255, 0.08)" }
                 : undefined,
           })}
@@ -424,7 +423,9 @@ export function WorkflowInboxPage() {
             <Descriptions.Item label="标题">{previewRow.title}</Descriptions.Item>
             <Descriptions.Item label="提交人">{previewRow.submitter_name || "—"}</Descriptions.Item>
             <Descriptions.Item label="当前节点">{previewRow.current_stage_name || "—"}</Descriptions.Item>
-            <Descriptions.Item label="到达">{formatDateTime(previewRow.activated_at || previewRow.created_at)}</Descriptions.Item>
+            <Descriptions.Item label="到达">
+              {formatDateTime(previewRow.activated_at || previewRow.created_at)}
+            </Descriptions.Item>
           </Descriptions>
         ) : null}
 
@@ -440,7 +441,13 @@ export function WorkflowInboxPage() {
             items={previewDetail.steps.map((st) => ({
               title: st.stage_name || st.stage_key,
               status:
-                st.status === "approved" ? "finish" : st.status === "rejected" ? "error" : st.activated_at ? "process" : "wait",
+                st.status === "approved"
+                  ? "finish"
+                  : st.status === "rejected"
+                    ? "error"
+                    : st.activated_at
+                      ? "process"
+                      : "wait",
               description: (
                 <Space direction="vertical" size={0}>
                   <Typography.Text type="secondary">
@@ -484,7 +491,11 @@ export function WorkflowInboxPage() {
           </Typography.Paragraph>
         ) : null}
         <Form form={reviewForm} layout="vertical">
-          <Form.Item name="comment" label="意见" rules={reviewApprove ? [] : [{ required: true, message: "驳回请填写意见" }]}>
+          <Form.Item
+            name="comment"
+            label="意见"
+            rules={reviewApprove ? [] : [{ required: true, message: "驳回请填写意见" }]}
+          >
             <Input.TextArea rows={3} maxLength={512} placeholder={reviewApprove ? "可选" : "请说明驳回原因"} />
           </Form.Item>
         </Form>

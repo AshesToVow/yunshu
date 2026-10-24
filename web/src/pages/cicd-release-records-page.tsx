@@ -1,23 +1,5 @@
-import {
-  DeleteOutlined,
-  EyeOutlined,
-  FileTextOutlined,
-  LinkOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
-import {
-  Button,
-  Card,
-  Input,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import { DeleteOutlined, EyeOutlined, FileTextOutlined, LinkOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Button, Card, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CicdReleaseDetailPanel } from "../components/cicd-release-detail-panel";
@@ -30,7 +12,13 @@ import {
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { useAuth } from "../contexts/auth-context";
-import { deleteReleaseRun, executeReleaseRun, getReleaseRunLog, listReleaseRuns, type CicdReleaseRun } from "../services/cicd";
+import {
+  deleteReleaseRun,
+  executeReleaseRun,
+  getReleaseRunLog,
+  listReleaseRuns,
+  type CicdReleaseRun,
+} from "../services/cicd";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
@@ -182,7 +170,10 @@ export function CicdReleaseRecordsPage() {
             <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => openLog(row)}>
               发布日志
             </Button>
-            <Popconfirm title="确认删除该工单记录？" onConfirm={() => void deleteReleaseRun(projectId!, row.id).then(load)}>
+            <Popconfirm
+              title="确认删除该工单记录？"
+              onConfirm={() => void deleteReleaseRun(projectId!, row.id).then(load)}
+            >
               <Button type="link" size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
           </Space>
@@ -194,7 +185,12 @@ export function CicdReleaseRecordsPage() {
 
   return (
     <div className="page-stack">
-      <PageTelemetryHeader label="[ CD ]" title="CD 历史工单" subtitle="常规发布与容器化发布执行记录" meta={[`TOTAL / ${total}`]} />
+      <PageTelemetryHeader
+        label="[ CD ]"
+        title="CD 历史工单"
+        subtitle="常规发布与容器化发布执行记录"
+        meta={[`TOTAL / ${total}`]}
+      />
       <Card bordered={false} className="yunshu-panel">
         <div className="yunshu-filter-bar" style={{ marginBottom: 16 }}>
           <Space wrap size={[12, 12]}>
@@ -213,15 +209,15 @@ export function CicdReleaseRecordsPage() {
               style={{ width: 140 }}
               placeholder="工单状态"
               value={status}
-            options={[
-              { label: "执行成功", value: "success" },
-              { label: "执行中", value: "running" },
-              { label: "执行失败", value: "failure" },
-              { label: "待审核", value: "pending_approval" },
-              { label: "待执行", value: "pending_execution" },
-              { label: "已驳回", value: "rejected" },
-              { label: "已中止", value: "aborted" },
-            ]}
+              options={[
+                { label: "执行成功", value: "success" },
+                { label: "执行中", value: "running" },
+                { label: "执行失败", value: "failure" },
+                { label: "待审核", value: "pending_approval" },
+                { label: "待执行", value: "pending_execution" },
+                { label: "已驳回", value: "rejected" },
+                { label: "已中止", value: "aborted" },
+              ]}
               onChange={(v) => {
                 setStatus(v);
                 setPage(1);

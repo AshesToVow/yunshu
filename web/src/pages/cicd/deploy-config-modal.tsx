@@ -1,17 +1,5 @@
 import { CloudDownloadOutlined } from "@ant-design/icons";
-import {
-  Alert,
-  Button,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Space,
-  Switch,
-  Tag,
-  Typography,
-} from "antd";
+import { Alert, Button, Form, Input, InputNumber, Modal, Select, Space, Switch, Tag, Typography } from "antd";
 import type { FormInstance } from "antd/es/form";
 import type { ClusterItem } from "../../services/clusters";
 import type { CicdDeployConfig, CicdServiceItem } from "../../services/cicd";
@@ -98,11 +86,21 @@ export function DeployConfigModal({
     >
       <Form form={form} layout="vertical">
         <div style={{ display: deployStep === 0 ? "block" : "none" }}>
-          <Alert type="warning" showIcon message="新建发布配置将按已录入的应用生成新的发布配置信息！" style={{ marginBottom: 16 }} />
+          <Alert
+            type="warning"
+            showIcon
+            message="新建发布配置将按已录入的应用生成新的发布配置信息！"
+            style={{ marginBottom: 16 }}
+          />
           <Form.Item name="name" label="配置名称" rules={[{ required: true, message: "请填写配置名称" }]}>
             <Input placeholder="如 k8s-demo-生产环境" />
           </Form.Item>
-          <Form.Item name="tenv" label="发布环境" rules={[{ required: true }]} extra="同一应用下同类型发布配置每个环境仅允许一条">
+          <Form.Item
+            name="tenv"
+            label="发布环境"
+            rules={[{ required: true }]}
+            extra="同一应用下同类型发布配置每个环境仅允许一条"
+          >
             <Select
               options={tenvOpts.map((o) => ({
                 label: usedTenvSet.has(String(o.value)) ? `${o.label}（已配置）` : o.label,
@@ -144,7 +142,12 @@ export function DeployConfigModal({
               <Input placeholder="default" />
             </Form.Item>
             <Form.Item name="deploy_method" label="部署方式" rules={[{ required: true }]}>
-              <Select options={[{ label: "kubectl", value: "kubectl" }, { label: "helm", value: "helm" }]} />
+              <Select
+                options={[
+                  { label: "kubectl", value: "kubectl" },
+                  { label: "helm", value: "helm" },
+                ]}
+              />
             </Form.Item>
             {deployMethodWatch === "helm" ? (
               <Alert
@@ -162,7 +165,8 @@ export function DeployConfigModal({
                       。默认写入 Consul 注册：注解 <Typography.Text code>consul.register/enabled=true</Typography.Text>
                       、<Typography.Text code>consul.register/service.name</Typography.Text>
                       与标签 <Typography.Text code>yunshu-metrics: tag</Typography.Text>
-                      （不需要时在 values 里关 <Typography.Text code>deployment-base.consulRegister.enabled</Typography.Text>）。
+                      （不需要时在 values 里关{" "}
+                      <Typography.Text code>deployment-base.consulRegister.enabled</Typography.Text>）。
                     </Typography.Text>
                     <Button
                       type="primary"
@@ -181,7 +185,12 @@ export function DeployConfigModal({
                 <Form.Item name="deploy_config_type" label="工作负载类型" rules={[{ required: true }]}>
                   <Select options={K8S_DEPLOY_CONFIG_TYPES.map((o) => ({ label: o.label, value: o.value }))} />
                 </Form.Item>
-                <Form.Item name="deploy_config_template" label="部署模板" rules={[{ required: true }]} extra="共享库 k8s-basic / k8s-skywalking 的 Pod 模板须含 Consul 必填项：consul.register/enabled、service.name、标签 yunshu-metrics=tag">
+                <Form.Item
+                  name="deploy_config_template"
+                  label="部署模板"
+                  rules={[{ required: true }]}
+                  extra="共享库 k8s-basic / k8s-skywalking 的 Pod 模板须含 Consul 必填项：consul.register/enabled、service.name、标签 yunshu-metrics=tag"
+                >
                   <Select options={K8S_DEPLOY_TEMPLATES.map((o) => ({ label: o.label, value: o.value }))} />
                 </Form.Item>
               </>
@@ -276,7 +285,8 @@ export function DeployConfigModal({
                 placeholder="请选择发布主机"
                 tagRender={(props) => {
                   const { value, closable, onClose } = props;
-                  const text = serverLabelById.get(Number(value)) ?? serverOptions.find((o) => o.value === Number(value))?.label;
+                  const text =
+                    serverLabelById.get(Number(value)) ?? serverOptions.find((o) => o.value === Number(value))?.label;
                   return (
                     <Tag closable={closable} onClose={onClose} style={{ marginInlineEnd: 4 }}>
                       {text || String(value)}
@@ -311,7 +321,10 @@ export function DeployConfigModal({
                         rules={[{ required: true, message: "请填写自定义启动脚本" }]}
                         extra="整段 bash 脚本，将写入目标机 destPath/bin/launch.sh"
                       >
-                        <Input.TextArea rows={6} placeholder="#!/bin/bash&#10;..." />
+                        <Input.TextArea
+                          rows={6}
+                          placeholder="#!/bin/bash&#10;..."
+                        />
                       </Form.Item>
                     ) : null
                   }

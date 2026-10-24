@@ -1,4 +1,11 @@
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+} from "@ant-design/icons";
 import { Alert, Button, Card, Input, Popconfirm, Select, Space, Switch, Table, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -134,9 +141,7 @@ export function CicdApprovalFlowPage() {
           <Switch
             checked={row.draftEnabled}
             onChange={(checked) => {
-              setRows((prev) =>
-                prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftEnabled: checked } : r)),
-              );
+              setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftEnabled: checked } : r)));
             }}
           />
         ),
@@ -154,9 +159,7 @@ export function CicdApprovalFlowPage() {
             value={row.draftUserGroupId}
             options={groupOptions}
             onChange={(v) => {
-              setRows((prev) =>
-                prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftUserGroupId: v } : r)),
-              );
+              setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftUserGroupId: v } : r)));
             }}
           />
         ),
@@ -235,11 +238,7 @@ export function CicdApprovalFlowPage() {
 
   return (
     <div className="page-stack">
-      <PageTelemetryHeader
-        label="[ CD ]"
-        title="审批管理"
-        subtitle="按项目配置 CD 多级审批节点与审批用户组"
-      />
+      <PageTelemetryHeader label="[ CD ]" title="审批管理" subtitle="按项目配置 CD 多级审批节点与审批用户组" />
       <Card bordered={false}>
         <Alert
           type="info"
@@ -248,8 +247,10 @@ export function CicdApprovalFlowPage() {
           message="审批流程说明"
           description={
             <Typography.Paragraph style={{ marginBottom: 0 }}>
-              可自定义增删、重排审批节点；发布开启审批后，工单按<strong>启用节点</strong>顺序串行审批。全部通过后进入「待执行」，
-              <strong>仅提交人</strong>可触发 Jenkins 发布。配置变更<strong>仅影响新建工单</strong>，在途工单步骤不变。可在「用户组」菜单中创建审批用户组。
+              可自定义增删、重排审批节点；发布开启审批后，工单按<strong>启用节点</strong>
+              顺序串行审批。全部通过后进入「待执行」，
+              <strong>仅提交人</strong>可触发 Jenkins 发布。配置变更<strong>仅影响新建工单</strong>
+              ，在途工单步骤不变。可在「用户组」菜单中创建审批用户组。
             </Typography.Paragraph>
           }
         />

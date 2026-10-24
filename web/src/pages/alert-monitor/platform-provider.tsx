@@ -14,7 +14,7 @@ const AlertMonitorModals = lazy(async () => {
 export function AlertMonitorPlatformRoot() {
   const state = useAlertMonitorPlatformState();
   return (
-    <AlertMonitorProvider value={state as never}>
+    <AlertMonitorProvider value={state}>
       <AlertMonitorLayout />
       <Suspense
         fallback={

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   AutoComplete,
   Button,
@@ -19,7 +18,7 @@ import {
   message,
 } from "antd";
 import { MinusCircleOutlined, PlusOutlined } from "@ant-design/icons";
-import type { MetricLabelFilter } from "./platform-provider-types";
+import type { MetricLabelFilter, RuleBuilderLogic, RuleComparator } from "./platform-provider-types";
 import { useAlertMonitor } from "./context";
 
 type QuickSilenceTarget = {
@@ -81,7 +80,8 @@ export function AlertMonitorModals() {
             rules={[{ required: true, message: "请输入或从下拉选择 Base URL" }]}
             extra={
               <Typography.Text type="secondary">
-                可直接输入；亦可从下拉选字典项（类型 <Typography.Text code>alert_datasource_base_url</Typography.Text>，「值」存完整 URL）。
+                可直接输入；亦可从下拉选字典项（类型 <Typography.Text code>alert_datasource_base_url</Typography.Text>
+                ，「值」存完整 URL）。
               </Typography.Text>
             }
           >
@@ -104,7 +104,8 @@ export function AlertMonitorModals() {
             label="Basic 用户"
             extra={
               <Typography.Text type="secondary">
-                可直接输入；亦可从下拉选字典项（<Typography.Text code>alert_datasource_basic_user</Typography.Text>）；密码勿入字典。
+                可直接输入；亦可从下拉选字典项（<Typography.Text code>alert_datasource_basic_user</Typography.Text>
+                ）；密码勿入字典。
               </Typography.Text>
             }
           >
@@ -156,10 +157,9 @@ export function AlertMonitorModals() {
             <Input />
           </Form.Item>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-            匹配器：按告警 labels 全部命中即静默。平台规则可用{" "}
-            <Typography.Text code>monitor_rule_id</Typography.Text>（规则 ID）；也可用{" "}
-            <Typography.Text code>alertname</Typography.Text> / <Typography.Text code>cluster</Typography.Text>{" "}
-            等。勾选「正则」时按 Alertmanager matcher 语义。
+            匹配器：按告警 labels 全部命中即静默。平台规则可用 <Typography.Text code>monitor_rule_id</Typography.Text>
+            （规则 ID）；也可用 <Typography.Text code>alertname</Typography.Text> /{" "}
+            <Typography.Text code>cluster</Typography.Text> 等。勾选「正则」时按 Alertmanager matcher 语义。
           </Typography.Paragraph>
           <Form.List name="matchers">
             {(fields, { add, remove }) => (
@@ -196,7 +196,12 @@ export function AlertMonitorModals() {
                   </Space>
                 ))}
                 <Form.Item>
-                  <Button type="dashed" onClick={() => add({ name: "alertname", value: "", is_regex: false })} block icon={<PlusOutlined />}>
+                  <Button
+                    type="dashed"
+                    onClick={() => add({ name: "alertname", value: "", is_regex: false })}
+                    block
+                    icon={<PlusOutlined />}
+                  >
                     添加匹配条件
                   </Button>
                 </Form.Item>
@@ -272,7 +277,9 @@ export function AlertMonitorModals() {
                   showTime
                   value={r.startsAt}
                   onChange={(v) =>
-                    c.setQuickSilenceTargets((prev) => prev.map((it) => (it.key === r.key ? { ...it, startsAt: v ?? it.startsAt } : it)))
+                    c.setQuickSilenceTargets((prev) =>
+                      prev.map((it) => (it.key === r.key ? { ...it, startsAt: v ?? it.startsAt } : it)),
+                    )
                   }
                 />
               ),
@@ -285,7 +292,9 @@ export function AlertMonitorModals() {
                   showTime
                   value={r.endsAt}
                   onChange={(v) =>
-                    c.setQuickSilenceTargets((prev) => prev.map((it) => (it.key === r.key ? { ...it, endsAt: v ?? it.endsAt } : it)))
+                    c.setQuickSilenceTargets((prev) =>
+                      prev.map((it) => (it.key === r.key ? { ...it, endsAt: v ?? it.endsAt } : it)),
+                    )
                   }
                 />
               ),
@@ -359,9 +368,13 @@ export function AlertMonitorModals() {
             ]}
             extra={
               <span>
-                启用「定时自动评估」时<strong>必填</strong>。robfig/cron：<strong>五段</strong>为「分 时 日 月 周」；亦支持<strong>六段</strong>「秒 分 时 日 月 周」及 <code>@every 1m</code> 等描述符。服务约每 5 秒检查一次是否到点，故 Cron 粒度不宜低于该量级。
+                启用「定时自动评估」时<strong>必填</strong>。robfig/cron：<strong>五段</strong>为「分 时 日 月
+                周」；亦支持<strong>六段</strong>「秒 分 时 日 月 周」及 <code>@every 1m</code> 等描述符。服务约每 5
+                秒检查一次是否到点，故 Cron 粒度不宜低于该量级。
                 <br />
-                示例：<code>*/1 * * * *</code> 每分钟；<code>0 * * * *</code> 每小时整点；<code>0 */2 * * *</code> 每 2 小时整点（注意五段里首位是<strong>分</strong>，勿写成 <code>*/2 * * * *</code>，否则表示「每 2 分钟」）；<code>0 9 * * *</code> 每天 9:00。
+                示例：<code>*/1 * * * *</code> 每分钟；<code>0 * * * *</code> 每小时整点；<code>0 */2 * * *</code> 每 2
+                小时整点（注意五段里首位是<strong>分</strong>，勿写成 <code>*/2 * * * *</code>，否则表示「每 2
+                分钟」）；<code>0 9 * * *</code> 每天 9:00。
               </span>
             }
           >
@@ -383,7 +396,7 @@ export function AlertMonitorModals() {
                 validator: async (_, value) => {
                   const normalized = c.normalizeCloudExpiryLabelsJSON(String(value || ""));
                   if (normalized === null) {
-                    throw new Error("labels_json 必须是合法 JSON 对象，例如 {\"biz\":\"payments\"}");
+                    throw new Error('labels_json 必须是合法 JSON 对象，例如 {"biz":"payments"}');
                   }
                 },
               },
@@ -434,7 +447,10 @@ export function AlertMonitorModals() {
         <Form form={c.ruleForm} layout="vertical">
           <Form.Item name="datasource_id" label="数据源" rules={[{ required: true }]}>
             <Select
-              options={(c.projectContextId ? c.dsList.filter((d) => d.project_id === c.projectContextId) : c.dsList).map((d) => ({
+              options={(c.projectContextId
+                ? c.dsList.filter((d) => d.project_id === c.projectContextId)
+                : c.dsList
+              ).map((d) => ({
                 label: d.project_name ? `${d.project_name} / ${d.name}` : d.name,
                 value: d.id,
               }))}
@@ -462,7 +478,11 @@ export function AlertMonitorModals() {
                   value={c.selectedMetric || undefined}
                   options={c.metricOptions.map((m) => ({ label: m, value: m }))}
                   onChange={(v) => c.setSelectedMetric(String(v || ""))}
-                  filterOption={(input, option) => String(option?.value ?? "").toLowerCase().includes(input.toLowerCase())}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? "")
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
                 />
               </Space>
               {c.metricLabelFilters.map((f, idx) => (
@@ -493,7 +513,9 @@ export function AlertMonitorModals() {
                       { label: "反正则 (!~)", value: "!~" },
                     ]}
                     onChange={(v) =>
-                      c.setMetricLabelFilters((prev) => prev.map((it, i) => (i === idx ? { ...it, op: v as MetricLabelFilter["op"] } : it)))
+                      c.setMetricLabelFilters((prev) =>
+                        prev.map((it, i) => (i === idx ? { ...it, op: v as MetricLabelFilter["op"] } : it)),
+                      )
                     }
                   />
                   <AutoComplete
@@ -501,7 +523,9 @@ export function AlertMonitorModals() {
                     value={f.value}
                     options={c.labelValueOptions.map((v) => ({ value: v }))}
                     onChange={(v) =>
-                      c.setMetricLabelFilters((prev) => prev.map((it, i) => (i === idx ? { ...it, value: String(v || "") } : it)))
+                      c.setMetricLabelFilters((prev) =>
+                        prev.map((it, i) => (i === idx ? { ...it, value: String(v || "") } : it)),
+                      )
                     }
                     placeholder="标签值，可手填或拉取候选"
                   />
@@ -518,7 +542,9 @@ export function AlertMonitorModals() {
                 </Space>
               ))}
               <Space wrap>
-                <Button onClick={() => c.setMetricLabelFilters((prev) => [...prev, { key: "", op: "=", value: "" }])}>新增标签过滤</Button>
+                <Button onClick={() => c.setMetricLabelFilters((prev) => [...prev, { key: "", op: "=", value: "" }])}>
+                  新增标签过滤
+                </Button>
                 <Button type="primary" onClick={c.applyMetricSelectorToRuleExpr}>
                   生成并带入 PromQL
                 </Button>
@@ -556,7 +582,12 @@ export function AlertMonitorModals() {
             <Space direction="vertical" style={{ width: "100%" }} size={8}>
               <Space wrap>
                 <Typography.Text type="secondary">组合逻辑</Typography.Text>
-                <Select style={{ width: 180 }} value={c.ruleLogic} options={c.ruleLogicOptions} onChange={(v) => c.setRuleLogic(v as RuleBuilderLogic)} />
+                <Select
+                  style={{ width: 180 }}
+                  value={c.ruleLogic}
+                  options={c.ruleLogicOptions}
+                  onChange={(v) => c.setRuleLogic(v as RuleBuilderLogic)}
+                />
               </Space>
               {c.ruleConditions.map((cond, idx) => (
                 <Space key={`rule-cond-${idx}`} wrap style={{ width: "100%" }}>
@@ -564,7 +595,9 @@ export function AlertMonitorModals() {
                     style={{ minWidth: 320 }}
                     value={cond.metric}
                     onChange={(e) =>
-                      c.setRuleConditions((prev) => prev.map((it, i) => (i === idx ? { ...it, metric: e.target.value } : it)))
+                      c.setRuleConditions((prev) =>
+                        prev.map((it, i) => (i === idx ? { ...it, metric: e.target.value } : it)),
+                      )
                     }
                     placeholder="指标表达式，如 rate(http_requests_total[5m])"
                   />
@@ -573,14 +606,18 @@ export function AlertMonitorModals() {
                     value={cond.comparator}
                     options={c.ruleComparatorOptions}
                     onChange={(v) =>
-                      c.setRuleConditions((prev) => prev.map((it, i) => (i === idx ? { ...it, comparator: v as RuleComparator } : it)))
+                      c.setRuleConditions((prev) =>
+                        prev.map((it, i) => (i === idx ? { ...it, comparator: v as RuleComparator } : it)),
+                      )
                     }
                   />
                   <InputNumber
                     style={{ width: 160 }}
                     value={cond.threshold}
                     onChange={(v) =>
-                      c.setRuleConditions((prev) => prev.map((it, i) => (i === idx ? { ...it, threshold: v ?? null } : it)))
+                      c.setRuleConditions((prev) =>
+                        prev.map((it, i) => (i === idx ? { ...it, threshold: v ?? null } : it)),
+                      )
                     }
                     placeholder="阈值"
                   />
@@ -595,7 +632,13 @@ export function AlertMonitorModals() {
                 </Space>
               ))}
               <Space wrap>
-                <Button onClick={() => c.setRuleConditions((prev) => [...prev, { metric: "", comparator: ">", threshold: null }])}>新增条件</Button>
+                <Button
+                  onClick={() =>
+                    c.setRuleConditions((prev) => [...prev, { metric: "", comparator: ">", threshold: null }])
+                  }
+                >
+                  新增条件
+                </Button>
                 <Button type="primary" onClick={c.applyRuleBuilderToExpr}>
                   生成 PromQL
                 </Button>
@@ -623,7 +666,7 @@ export function AlertMonitorModals() {
                 validator: async (_, value) => {
                   const normalized = c.normalizeCloudExpiryLabelsJSON(String(value ?? ""));
                   if (normalized === null) {
-                    throw new Error("须为合法 JSON 对象，例如 {\"route\":\"prod-warning-email\",\"biz\":\"core\"}");
+                    throw new Error('须为合法 JSON 对象，例如 {"route":"prod-warning-email","biz":"core"}');
                   }
                 },
               },
@@ -666,7 +709,7 @@ export function AlertMonitorModals() {
           <Form.Item
             name="summary_template"
             label="告警摘要模板（summary）"
-            extra='支持占位符：{{$labels.xxx}}、{{$value}}、{{.RuleName}}、{{.Expr}}'
+            extra="支持占位符：{{$labels.xxx}}、{{$value}}、{{.RuleName}}、{{.Expr}}"
             rules={[{ required: true, message: "请填写 summary 模板" }]}
           >
             <Input.TextArea rows={2} placeholder="{{$labels.instance}}: {{.RuleName}} 告警触发，当前值 {{$value}}" />
@@ -674,10 +717,13 @@ export function AlertMonitorModals() {
           <Form.Item
             name="description_template"
             label="告警描述模板（description）"
-            extra='支持占位符：{{$labels.xxx}}、{{$value}}、{{.RuleName}}、{{.Expr}}'
+            extra="支持占位符：{{$labels.xxx}}、{{$value}}、{{.RuleName}}、{{.Expr}}"
             rules={[{ required: true, message: "请填写 description 模板" }]}
           >
-            <Input.TextArea rows={3} placeholder="规则 {{.RuleName}} 触发，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}" />
+            <Input.TextArea
+              rows={3}
+              placeholder="规则 {{.RuleName}} 触发，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}"
+            />
           </Form.Item>
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
@@ -703,10 +749,12 @@ export function AlertMonitorModals() {
         }
       >
         <Typography.Paragraph type="secondary">
-          邮件仅发往「用户」中勾选的人员与下方「邮箱」字段（不含部门子树展开）。部门用于钉钉/企微 @（含子树 ∩ 项目成员）。钉钉/企微手机号无法在企业内解析时会补发邮件；wechat 等也会补发邮件。
+          邮件仅发往「用户」中勾选的人员与下方「邮箱」字段（不含部门子树展开）。部门用于钉钉/企微 @（含子树 ∩
+          项目成员）。钉钉/企微手机号无法在企业内解析时会补发邮件；wechat 等也会补发邮件。
         </Typography.Paragraph>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
-          部门需<strong>手动选择</strong>，保存后按库中配置加载，不会随「用户」自动回填。部门仅用于钉钉/企微 @（项目成员 ∩ 子树 + 部门负责人）；邮件只发上方勾选用户。
+          部门需<strong>手动选择</strong>，保存后按库中配置加载，不会随「用户」自动回填。部门仅用于钉钉/企微 @（项目成员
+          ∩ 子树 + 部门负责人）；邮件只发上方勾选用户。
         </Typography.Paragraph>
         <Form form={c.assignForm} layout="vertical">
           <Form.Item name="user_ids" label="用户">
@@ -722,7 +770,15 @@ export function AlertMonitorModals() {
             label="部门（子树）"
             extra="可选。用于 IM @，不参与邮件收件人。清空后保存即可生效。"
           >
-            <TreeSelect treeData={c.deptTree} treeCheckable showSearch allowClear treeDefaultExpandAll style={{ width: "100%" }} placeholder="可选，用于钉钉/企微 @" />
+            <TreeSelect
+              treeData={c.deptTree}
+              treeCheckable
+              showSearch
+              allowClear
+              treeDefaultExpandAll
+              style={{ width: "100%" }}
+              placeholder="可选，用于钉钉/企微 @"
+            />
           </Form.Item>
           {c.assignUserIds?.length === 1 ? (
             <Form.Item name="profile_email" label="邮箱（可改，保存时写回该用户资料）">
@@ -803,7 +859,14 @@ export function AlertMonitorModals() {
           <Button type="primary" icon={<PlusOutlined />} disabled={!c.dutyRuleId} onClick={c.openBlkCreate}>
             新建班次
           </Button>
-          <Table rowKey="id" columns={c.blkColumns} dataSource={c.blockList} pagination={false} size="small" scroll={{ x: 800 }} />
+          <Table
+            rowKey="id"
+            columns={c.blkColumns}
+            dataSource={c.blockList}
+            pagination={false}
+            size="small"
+            scroll={{ x: 800 }}
+          />
         </Space>
       </Drawer>
 
@@ -829,7 +892,11 @@ export function AlertMonitorModals() {
             <InputNumber />
           </Form.Item>
           <Form.Item name="range" label="起止时间" rules={[{ required: true }]}>
-            <DatePicker.RangePicker showTime={{ format: "HH:mm" }} format="YYYY-MM-DD HH:mm" style={{ width: "100%" }} />
+            <DatePicker.RangePicker
+              showTime={{ format: "HH:mm" }}
+              format="YYYY-MM-DD HH:mm"
+              style={{ width: "100%" }}
+            />
           </Form.Item>
           <Form.Item name="title" label="标题">
             <Input />
@@ -847,7 +914,15 @@ export function AlertMonitorModals() {
             label="部门（子树）"
             extra="当前班次解析仍为部门子树内用户（未按项目成员过滤）；与显式「用户」合并。若需项目交集与负责人，请用规则「处理人」侧配置。"
           >
-            <TreeSelect treeData={c.deptTree} treeCheckable showSearch allowClear treeDefaultExpandAll style={{ width: "100%" }} placeholder="随用户带出，可改" />
+            <TreeSelect
+              treeData={c.deptTree}
+              treeCheckable
+              showSearch
+              allowClear
+              treeDefaultExpandAll
+              style={{ width: "100%" }}
+              placeholder="随用户带出，可改"
+            />
           </Form.Item>
           {c.blkUserIds?.length === 1 ? (
             <Form.Item name="profile_email" label="邮箱（可改，保存班次时写回该用户资料）">

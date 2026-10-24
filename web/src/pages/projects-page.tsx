@@ -1,5 +1,26 @@
-import { DeleteOutlined, EditOutlined, InboxOutlined, PlusOutlined, ReloadOutlined, TeamOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, message } from "antd";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  InboxOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  TeamOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Drawer,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  message,
+} from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/auth-context";
 import { ProjectMembersPanel } from "../components/project-members-panel";
@@ -27,7 +48,13 @@ import {
 import type { DepartmentItem, UserItem } from "../types/api";
 import { formatDateTime } from "../utils/format";
 
-const defaultQuery = { keyword: "", project_type: undefined as string | undefined, lifecycle_status: undefined as string | undefined, page: 1, page_size: 10 };
+const defaultQuery = {
+  keyword: "",
+  project_type: undefined as string | undefined,
+  lifecycle_status: undefined as string | undefined,
+  page: 1,
+  page_size: 10,
+};
 
 const PROJECT_TYPE_LABEL = Object.fromEntries(PROJECT_TYPE_OPTIONS.map((o) => [o.value, o.label]));
 const PROJECT_LIFECYCLE_LABEL = Object.fromEntries(PROJECT_LIFECYCLE_OPTIONS.map((o) => [o.value, o.label]));
@@ -130,7 +157,8 @@ export function ProjectsPage() {
       apollo_meta: record.apollo_meta || undefined,
       apollo_env: record.apollo_env || undefined,
       apollo_namespaces: record.apollo_namespaces || undefined,
-      owner_department_id: record.owner_department_id && record.owner_department_id > 0 ? record.owner_department_id : undefined,
+      owner_department_id:
+        record.owner_department_id && record.owner_department_id > 0 ? record.owner_department_id : undefined,
     });
     try {
       const bind = await getProjectRegistryBinding(record.id);
@@ -323,7 +351,11 @@ export function ProjectsPage() {
                 return <span className="inline-muted">未配</span>;
               }
               const text = [r.apollo_env, r.apollo_meta].filter(Boolean).join(" · ") || r.apollo_namespaces;
-              return <span title={[r.apollo_env, r.apollo_meta, r.apollo_namespaces].filter(Boolean).join("\n")}>{text}</span>;
+              return (
+                <span title={[r.apollo_env, r.apollo_meta, r.apollo_namespaces].filter(Boolean).join("\n")}>
+                  {text}
+                </span>
+              );
             },
           },
           {
@@ -337,7 +369,8 @@ export function ProjectsPage() {
             dataIndex: "lifecycle_status",
             width: 100,
             render: (v: string) => {
-              const color = v === "active" ? "green" : v === "planning" ? "gold" : v === "suspended" ? "orange" : "default";
+              const color =
+                v === "active" ? "green" : v === "planning" ? "gold" : v === "suspended" ? "orange" : "default";
               return <Tag color={color}>{PROJECT_LIFECYCLE_LABEL[v] ?? v ?? "—"}</Tag>;
             },
           },
@@ -373,7 +406,12 @@ export function ProjectsPage() {
                   </Button>
                   <Tooltip title={!canMeta ? needAdminTip : undefined}>
                     <span>
-                      <Button type="link" icon={<EditOutlined />} disabled={!canMeta || archived} onClick={() => canMeta && !archived && openEdit(record)}>
+                      <Button
+                        type="link"
+                        icon={<EditOutlined />}
+                        disabled={!canMeta || archived}
+                        onClick={() => canMeta && !archived && openEdit(record)}
+                      >
                         编辑
                       </Button>
                     </span>
@@ -512,11 +550,7 @@ export function ProjectsPage() {
               ]}
             />
           </Form.Item>
-          <Form.Item
-            label="归属部门"
-            name="owner_department_id"
-            extra="可选；用于组织维度归属。清空并保存将移除归属。"
-          >
+          <Form.Item label="归属部门" name="owner_department_id" extra="可选；用于组织维度归属。清空并保存将移除归属。">
             <Select
               allowClear
               showSearch

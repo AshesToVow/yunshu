@@ -20,9 +20,10 @@ export function loadLogViewerPrefs(): LogViewerPrefs {
     const parsed = JSON.parse(raw) as Partial<LogViewerPrefs>;
     return {
       listMode: parsed.listMode === "compact" ? "compact" : "stacked",
-      visibleFields: Array.isArray(parsed.visibleFields) && parsed.visibleFields.length
-        ? parsed.visibleFields
-        : [...DEFAULT_PREFS.visibleFields],
+      visibleFields:
+        Array.isArray(parsed.visibleFields) && parsed.visibleFields.length
+          ? parsed.visibleFields
+          : [...DEFAULT_PREFS.visibleFields],
       chartMode: parsed.chartMode === "pie" ? "pie" : "timeline",
     };
   } catch {

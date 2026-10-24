@@ -3,12 +3,7 @@
  * 支持标题栏最大化/还原，以及右下角拖拽调整尺寸（运维控制台常见交互）。
  */
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import {
-  CompressOutlined,
-  DownloadOutlined,
-  ExpandOutlined,
-  FileSearchOutlined,
-} from "@ant-design/icons";
+import { CompressOutlined, DownloadOutlined, ExpandOutlined, FileSearchOutlined } from "@ant-design/icons";
 import { Button, Checkbox, Input, Modal, Select, Space, Switch, Tooltip, Typography } from "antd";
 import type { PodItem } from "../../services/pods";
 

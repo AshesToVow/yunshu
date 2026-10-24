@@ -20,46 +20,47 @@ export function RbacRolesPage() {
 
   return (
     <>
-    <YamlCrudPage<Item, Detail>
-      title="RBAC - Role"
-      needNamespace
-      onLoadNamespaces={async (cid) => {
-        const res = await listClusterNamespaces(cid);
-        return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
-      }}
-      columns={columns}
-      onToolbarReady={(ctx) => {
-        listReloadRef.current = ctx.reload;
-      }}
-      renderCreateFormTab={(ctx) => (
-        <RbacRoleFormCreateDrawer
-          embedded
-          open
-          clusterId={ctx.clusterId}
-          namespace={ctx.namespace ?? "default"}
-          onClose={ctx.closeCreateDrawer}
-          onSuccess={() => {
-            listReloadRef.current();
-            ctx.closeCreateDrawer();
-          }}
-        />
-      )}
-      api={{
-        list: async ({ clusterId, namespace, keyword }) => (await listRoles(clusterId, namespace ?? "default", keyword)).list,
-        detail: async ({ clusterId, namespace, name }) =>
-          await getRbacDetail({ cluster_id: clusterId, kind: "Role", namespace: namespace ?? "default", name }),
-        apply: async ({ clusterId, manifest }) => await applyRbac(clusterId, manifest),
-        remove: async (args) =>
-          await deleteRbac({
-            cluster_id: args.clusterId,
-            kind: "Role",
-            namespace: args.namespace ?? "default",
-            name: args.name,
-            grace_period_seconds: args.grace_period_seconds,
-            propagation_policy: args.propagation_policy,
-          }),
-      }}
-      createTemplate={({ namespace }) => `apiVersion: rbac.authorization.k8s.io/v1
+      <YamlCrudPage<Item, Detail>
+        title="RBAC - Role"
+        needNamespace
+        onLoadNamespaces={async (cid) => {
+          const res = await listClusterNamespaces(cid);
+          return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
+        }}
+        columns={columns}
+        onToolbarReady={(ctx) => {
+          listReloadRef.current = ctx.reload;
+        }}
+        renderCreateFormTab={(ctx) => (
+          <RbacRoleFormCreateDrawer
+            embedded
+            open
+            clusterId={ctx.clusterId}
+            namespace={ctx.namespace ?? "default"}
+            onClose={ctx.closeCreateDrawer}
+            onSuccess={() => {
+              listReloadRef.current();
+              ctx.closeCreateDrawer();
+            }}
+          />
+        )}
+        api={{
+          list: async ({ clusterId, namespace, keyword }) =>
+            (await listRoles(clusterId, namespace ?? "default", keyword)).list,
+          detail: async ({ clusterId, namespace, name }) =>
+            await getRbacDetail({ cluster_id: clusterId, kind: "Role", namespace: namespace ?? "default", name }),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyRbac(clusterId, manifest, idemKey),
+          remove: async (args) =>
+            await deleteRbac({
+              cluster_id: args.clusterId,
+              kind: "Role",
+              namespace: args.namespace ?? "default",
+              name: args.name,
+              grace_period_seconds: args.grace_period_seconds,
+              propagation_policy: args.propagation_policy,
+            }),
+        }}
+        createTemplate={({ namespace }) => `apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: demo-role
@@ -69,8 +70,7 @@ rules:
     resources: ["pods"]
     verbs: ["get", "list"]
 `}
-    />
+      />
     </>
   );
 }
-

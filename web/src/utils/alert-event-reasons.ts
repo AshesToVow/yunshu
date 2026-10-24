@@ -6,14 +6,7 @@ import type { AlertEventItem } from "../services/alerts";
  */
 
 export type AlertEventCategory =
-  | "delivery"
-  | "routing"
-  | "silence"
-  | "inhibition"
-  | "timing"
-  | "resolved"
-  | "failure"
-  | "other";
+  "delivery" | "routing" | "silence" | "inhibition" | "timing" | "resolved" | "failure" | "other";
 
 export const ALERT_EVENT_CATEGORY_OPTIONS: { label: string; value: AlertEventCategory }[] = [
   { label: "告警抑制", value: "inhibition" },

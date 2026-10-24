@@ -31,8 +31,8 @@ export function getK8sServiceDetail(clusterId: number, namespace: string, name: 
   return svc.detail(k8sParams(clusterId, { namespace, name }));
 }
 
-export function applyK8sService(clusterId: number, manifest: string) {
-  return svc.apply({ cluster_id: clusterId, manifest });
+export function applyK8sService(clusterId: number, manifest: string, idemKey?: string) {
+  return svc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 
 export function deleteK8sService(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {

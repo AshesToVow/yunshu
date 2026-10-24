@@ -35,7 +35,6 @@ const BREAK_CANDIDATE_SELECTOR = [
 
 async function waitForPageReady(doc: Document) {
   if (doc.readyState !== "complete") {
-
     await new Promise<void>((resolve) => {
       if (doc.readyState === "complete") resolve();
       else doc.defaultView?.addEventListener("load", () => resolve(), { once: true });
@@ -192,14 +191,10 @@ function canvasToPdfBlob(
 
   while (cursorCss < cssHeight - 1 && guard++ < 500) {
     const idealCut = Math.min(cursorCss + idealPageCss, cssHeight);
-    const cutCss =
-      idealCut >= cssHeight ? cssHeight : pickCut(breakOffsets, idealCut, cursorCss + minPageCss);
+    const cutCss = idealCut >= cssHeight ? cssHeight : pickCut(breakOffsets, idealCut, cursorCss + minPageCss);
 
     const sliceTop = Math.round(cursorCss * canvasPerCss);
-    const sliceHeight = Math.min(
-      Math.round((cutCss - cursorCss) * canvasPerCss),
-      canvas.height - sliceTop,
-    );
+    const sliceHeight = Math.min(Math.round((cutCss - cursorCss) * canvasPerCss), canvas.height - sliceTop);
     if (sliceHeight <= 0) break;
 
     const slice = document.createElement("canvas");
@@ -246,7 +241,6 @@ export async function downloadElementAsPdf({
   orientation = "portrait",
   scale = 2,
 }: HtmlToPdfOptions) {
-
   const blob = await renderElementAsPdfBlob(target, orientation, scale);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

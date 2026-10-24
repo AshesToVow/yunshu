@@ -1,5 +1,26 @@
-import { ColumnHeightOutlined, DownOutlined, EyeOutlined, FileTextOutlined, ReloadOutlined, TagsOutlined } from "@ant-design/icons";
-import { Alert, Button, Dropdown, Form, Input, InputNumber, Modal, Progress, Space, Table, Tag, Typography, message } from "antd";
+import {
+  ColumnHeightOutlined,
+  DownOutlined,
+  EyeOutlined,
+  FileTextOutlined,
+  ReloadOutlined,
+  TagsOutlined,
+} from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Dropdown,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Progress,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
@@ -21,7 +42,11 @@ import {
 import { useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { useRelatedPodsDrawer } from "../components/k8s/related-pods-drawer";
-import { RealtimeUsageText, WorkloadCpuUsageBars, WorkloadMemUsageBars } from "../components/k8s/k8s-resource-usage-cells";
+import {
+  RealtimeUsageText,
+  WorkloadCpuUsageBars,
+  WorkloadMemUsageBars,
+} from "../components/k8s/k8s-resource-usage-cells";
 import { useWorkloadFormActions } from "../components/k8s/workload-form-actions";
 import {
   ContainerCommonItems,
@@ -47,7 +72,10 @@ function DaemonSetDetailQuickEdit({
   setDetailYaml: (next: string) => void;
 }) {
   const [detailForm] = Form.useForm<DaemonSetFormValues>();
-  const values = daemonSetYamlToForm(detailYaml || "") ?? daemonSetObjToForm(detail.object) ?? daemonSetYamlToForm(detail.yaml ?? "");
+  const values =
+    daemonSetYamlToForm(detailYaml || "") ??
+    daemonSetObjToForm(detail.object) ??
+    daemonSetYamlToForm(detail.yaml ?? "");
   return (
     <Form
       form={detailForm}
@@ -101,9 +129,13 @@ function DaemonSetDetailQuickEdit({
 export function DaemonsetsPage() {
   const listReloadRef = useRef<() => void>(() => {});
   const [verticalOpen, setVerticalOpen] = useState(false);
-  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
   const [revisionOpen, setRevisionOpen] = useState(false);
-  const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
   const [revisionRows, setRevisionRows] = useState<DeploymentRevisionItem[]>([]);
   const [revisionLoading, setRevisionLoading] = useState(false);
   const [verticalForm] = Form.useForm<{
@@ -129,7 +161,9 @@ export function DaemonsetsPage() {
     }),
   });
 
-  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(async ({ clusterId, namespace, name }) => await listDaemonSetPods(clusterId, namespace, name));
+  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(
+    async ({ clusterId, namespace, name }) => await listDaemonSetPods(clusterId, namespace, name),
+  );
   const { renderKVIcon, viewer } = useKeyValueViewer({ mode: "drawer" });
 
   const columns: ColumnsType<WorkloadItem> = [
@@ -140,15 +174,31 @@ export function DaemonsetsPage() {
       title: "资源汇总",
       dataIndex: "resource_text",
       width: 180,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
-    { title: "注解", key: "annotations", width: 70, align: "center", render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
+    {
+      title: "注解",
+      key: "annotations",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations),
+    },
     {
       title: "容器",
       dataIndex: "containers_text",
       width: 220,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
     {
       title: "实时用量",
@@ -193,23 +243,25 @@ export function DaemonsetsPage() {
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
         }}
         columns={columns}
-        onEdit={(record, ctx) => formActions.openEdit({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }, record)}
+        onEdit={(record, ctx) =>
+          formActions.openEdit(
+            { clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name },
+            record,
+          )
+        }
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;
         }}
         onCreateDrawerOpen={(ctx) => {
           if (!ctx.clusterId) return;
           const ns = ctx.namespace ?? "default";
-          formActions.prepareCreate(
-            { clusterId: ctx.clusterId, namespace: ns },
-            {
-              namespace: ns,
-              name: "",
-              container_name: "",
-              image: "nginx:latest",
-              env_pairs: [{ key: "", value: "" }],
-            } as Partial<DaemonSetFormValues>,
-          );
+          formActions.prepareCreate({ clusterId: ctx.clusterId, namespace: ns }, {
+            namespace: ns,
+            name: "",
+            container_name: "",
+            image: "nginx:latest",
+            env_pairs: [{ key: "", value: "" }],
+          } as Partial<DaemonSetFormValues>);
         }}
         renderCreateFormTab={(ctx) => (
           <WorkloadFormModal<DaemonSetFormValues>
@@ -244,9 +296,11 @@ export function DaemonsetsPage() {
           </WorkloadFormModal>
         )}
         api={{
-          list: async ({ clusterId, namespace, keyword }) => await listDaemonSets(clusterId, namespace ?? "default", keyword),
-          detail: async ({ clusterId, namespace, name }) => await getDaemonSetDetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyDaemonSet(clusterId, manifest),
+          list: async ({ clusterId, namespace, keyword }) =>
+            await listDaemonSets(clusterId, namespace ?? "default", keyword),
+          detail: async ({ clusterId, namespace, name }) =>
+            await getDaemonSetDetail(clusterId, namespace ?? "default", name),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyDaemonSet(clusterId, manifest, idemKey),
           remove: async (args) => await deleteDaemonSet(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: apps/v1
@@ -276,14 +330,19 @@ spec:
                     key: "pods",
                     label: "关联 Pods",
                     icon: <EyeOutlined />,
-                    onClick: () => openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
+                    onClick: () =>
+                      openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
                   },
                   {
                     key: "vertical",
                     label: "垂直扩缩（resources · VPA 类）",
                     icon: <ColumnHeightOutlined />,
                     onClick: () => {
-                      setVerticalTarget({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name });
+                      setVerticalTarget({
+                        clusterId: ctx.clusterId,
+                        namespace: ctx.namespace ?? "default",
+                        name: record.name,
+                      });
                       verticalForm.resetFields();
                       setVerticalOpen(true);
                     },
@@ -341,11 +400,16 @@ spec:
               message.warning("请至少填写一项 requests 或 limits（如 cpu/memory）");
               return;
             }
-            await patchDaemonSetContainerResources(verticalTarget.clusterId, verticalTarget.namespace, verticalTarget.name, {
-              container_name: values.container_name,
-              requests,
-              limits,
-            });
+            await patchDaemonSetContainerResources(
+              verticalTarget.clusterId,
+              verticalTarget.namespace,
+              verticalTarget.name,
+              {
+                container_name: values.container_name,
+                requests,
+                limits,
+              },
+            );
             message.success("已更新容器资源");
             setVerticalOpen(false);
             listReloadRef.current();
@@ -498,4 +562,3 @@ spec:
     </>
   );
 }
-

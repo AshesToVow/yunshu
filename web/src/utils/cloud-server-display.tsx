@@ -11,7 +11,9 @@ export const CLOUD_PROVIDER_LABEL: Record<string, string> = {
 };
 
 export function mapChargeTypeZh(v: string): string {
-  const x = String(v || "").trim().toUpperCase();
+  const x = String(v || "")
+    .trim()
+    .toUpperCase();
   if (!x) return "-";
   const m: Record<string, string> = {
     PREPAID: "包年包月",
@@ -26,7 +28,9 @@ export function mapChargeTypeZh(v: string): string {
 }
 
 export function mapNetworkChargeTypeZh(v: string): string {
-  const x = String(v || "").trim().toUpperCase();
+  const x = String(v || "")
+    .trim()
+    .toUpperCase();
   if (!x) return "-";
   const m: Record<string, string> = {
     PAYBYTRAFFIC: "按流量计费",

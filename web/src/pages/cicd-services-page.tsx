@@ -52,12 +52,7 @@ import {
   type CicdPipelineTemplate,
   type CicdServiceItem,
 } from "../services/cicd";
-import {
-  getProjectServers,
-  getProjects,
-  type ProjectItem,
-  type ServerItem,
-} from "../services/projects";
+import { getProjectServers, getProjects, type ProjectItem, type ServerItem } from "../services/projects";
 import { getClusters, type ClusterItem } from "../services/clusters";
 import { getUsers } from "../services/users";
 import type { UserItem } from "../types/api";
@@ -70,13 +65,7 @@ import { ServiceFormDrawer } from "./cicd/service-form-drawer";
 import { CiConfigDrawer } from "./cicd/ci-config-drawer";
 import { DeployConfigModal } from "./cicd/deploy-config-modal";
 import { ReleaseDrawer } from "./cicd/release-drawer";
-import {
-  buildResultColor,
-  nodesStatusTag,
-  ownerEmailPreview,
-  ownerLabel,
-  serviceTypeLabel,
-} from "./cicd/display";
+import { buildResultColor, nodesStatusTag, ownerEmailPreview, ownerLabel, serviceTypeLabel } from "./cicd/display";
 import { mergeServersWithSelected, parseServerIds, serverOptionLabel } from "./cicd/servers";
 import { defaultCiFormValues } from "./cicd/form-defaults";
 
@@ -104,10 +93,7 @@ export function CicdServicesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const selectedProject = useMemo(
-    () => projects.find((p) => p.id === projectId),
-    [projects, projectId],
-  );
+  const selectedProject = useMemo(() => projects.find((p) => p.id === projectId), [projects, projectId]);
   const canCreateService = useMemo(
     () => Boolean(projectId && canCreateCicdService(isSuper, selectedProject?.my_project_role)),
     [projectId, isSuper, selectedProject?.my_project_role],
@@ -192,11 +178,11 @@ export function CicdServicesPage() {
       message.warning("请先选择项目");
       return;
     }
-    const values = deployForm.getFieldsValue([
-      "image_name",
-      "replicas",
-      "container_port",
-    ]) as { image_name?: string; replicas?: number; container_port?: number };
+    const values = deployForm.getFieldsValue(["image_name", "replicas", "container_port"]) as {
+      image_name?: string;
+      replicas?: number;
+      container_port?: number;
+    };
     const chartName = deployService?.identifier || deployService?.name || "app";
     const imageName = String(values.image_name || chartName).trim();
     const params = {
@@ -237,7 +223,9 @@ export function CicdServicesPage() {
   useEffect(() => {
     void loadProjects();
     void loadUsers();
-    void listPipelineTemplates().then((rows) => setPipelineTemplates(rows || [])).catch(() => setPipelineTemplates([]));
+    void listPipelineTemplates()
+      .then((rows) => setPipelineTemplates(rows || []))
+      .catch(() => setPipelineTemplates([]));
   }, [loadProjects, loadUsers]);
 
   useEffect(() => {
@@ -260,10 +248,7 @@ export function CicdServicesPage() {
     setBuildPreview(null);
     setBuildModalOpen(true);
     try {
-      const [ciView, deploys] = await Promise.all([
-        getCiConfig(projectId, row.id),
-        loadDeployConfigs(row.id),
-      ]);
+      const [ciView, deploys] = await Promise.all([getCiConfig(projectId, row.id), loadDeployConfigs(row.id)]);
       setBuildPreview({
         branch: ciView.config?.ref_name?.trim() || "main",
         tenv: deploys.find((c) => c.tenv)?.tenv || "dev",
@@ -303,11 +288,7 @@ export function CicdServicesPage() {
     void loadServices();
   };
 
-  const openDeployWizard = async (
-    svc: CicdServiceItem,
-    kind: "regular" | "container",
-    editCfg?: CicdDeployConfig,
-  ) => {
+  const openDeployWizard = async (svc: CicdServiceItem, kind: "regular" | "container", editCfg?: CicdDeployConfig) => {
     if (!projectId) return;
     setDeployService(svc);
     setDeployKind(kind);
@@ -327,9 +308,7 @@ export function CicdServicesPage() {
     );
     setServers(mergedServers);
     if (unresolvedIds.length > 0) {
-      message.warning(
-        `发布配置关联的主机不存在或已移除（ID: ${unresolvedIds.join(", ")}），请重新选择发布主机`,
-      );
+      message.warning(`发布配置关联的主机不存在或已移除（ID: ${unresolvedIds.join(", ")}），请重新选择发布主机`);
     }
     setClusters(clusterRes.list ?? []);
     const ciView = await getCiConfig(projectId, svc.id);
@@ -337,7 +316,8 @@ export function CicdServicesPage() {
       name: `${svc.name}-${kind === "regular" ? "常规" : "容器"}`,
       deploy_kind: kind,
       tenv: "dev",
-      dest_path: svc.service_type === "frontend" ? `/export/frontend/${svc.identifier}` : `/export/icity/${svc.identifier}`,
+      dest_path:
+        svc.service_type === "frontend" ? `/export/frontend/${svc.identifier}` : `/export/icity/${svc.identifier}`,
       artifact_retain_count: 10,
       deploy_user: svc.service_type === "frontend" ? "nginx" : "root",
       deploy_group: svc.service_type === "frontend" ? "nginx" : "root",
@@ -452,7 +432,11 @@ export function CicdServicesPage() {
   const openReleaseModal = async (svc: CicdServiceItem, cfg: CicdDeployConfig) => {
     if (!projectId) return;
     const isContainer = cfg.deploy_kind === "container";
-    const defaultOp = isContainer ? "pod_update" : svc.service_type === "frontend" ? "frontend_online" : "backend_update";
+    const defaultOp = isContainer
+      ? "pod_update"
+      : svc.service_type === "frontend"
+        ? "frontend_online"
+        : "backend_update";
     setReleaseService(svc);
     setReleaseDeployConfig(cfg);
     setReleaseArtifacts([]);
@@ -550,53 +534,53 @@ export function CicdServicesPage() {
         render: (_, row) => {
           const access = cicdAccess(row);
           return (
-          <Space size={0} wrap className="yunshu-table-actions">
-            <Button
-              type="link"
-              size="small"
-              icon={<CloudUploadOutlined />}
-              disabled={!access.can_build}
-              onClick={() => void openBuildModal(row)}
-            >
-              CI打包
-            </Button>
-            <Dropdown
-              trigger={["click"]}
-              menu={{
-                items: [
-                  {
-                    key: "ci",
-                    label: row.has_ci_config ? "编辑CI配置" : "新增CI配置",
-                    disabled: !access.can_manage,
-                    onClick: () => openCiConfig(row),
-                  },
-                  {
-                    key: "regular",
-                    label: "非容器化发布",
-                    disabled: !access.can_manage,
-                    onClick: () => openDeployWizard(row, "regular"),
-                  },
-                  {
-                    key: "container",
-                    label: "容器化发布",
-                    disabled: !access.can_manage,
-                    onClick: () => openDeployWizard(row, "container"),
-                  },
-                ],
-              }}
-            >
-              <Button type="link" size="small">
-                更多 <DownOutlined />
+            <Space size={0} wrap className="yunshu-table-actions">
+              <Button
+                type="link"
+                size="small"
+                icon={<CloudUploadOutlined />}
+                disabled={!access.can_build}
+                onClick={() => void openBuildModal(row)}
+              >
+                CI打包
               </Button>
-            </Dropdown>
-            <Popconfirm
-              title="确认删除该应用？"
-              disabled={!access.can_manage}
-              onConfirm={() => void deleteCicdService(projectId!, row.id).then(loadServices)}
-            >
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!access.can_manage} />
-            </Popconfirm>
-          </Space>
+              <Dropdown
+                trigger={["click"]}
+                menu={{
+                  items: [
+                    {
+                      key: "ci",
+                      label: row.has_ci_config ? "编辑CI配置" : "新增CI配置",
+                      disabled: !access.can_manage,
+                      onClick: () => openCiConfig(row),
+                    },
+                    {
+                      key: "regular",
+                      label: "非容器化发布",
+                      disabled: !access.can_manage,
+                      onClick: () => openDeployWizard(row, "regular"),
+                    },
+                    {
+                      key: "container",
+                      label: "容器化发布",
+                      disabled: !access.can_manage,
+                      onClick: () => openDeployWizard(row, "container"),
+                    },
+                  ],
+                }}
+              >
+                <Button type="link" size="small">
+                  更多 <DownOutlined />
+                </Button>
+              </Dropdown>
+              <Popconfirm
+                title="确认删除该应用？"
+                disabled={!access.can_manage}
+                onConfirm={() => void deleteCicdService(projectId!, row.id).then(loadServices)}
+              >
+                <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={!access.can_manage} />
+              </Popconfirm>
+            </Space>
           );
         },
       },
@@ -611,7 +595,9 @@ export function CicdServicesPage() {
       return <Typography.Text type="secondary">加载发布配置…</Typography.Text>;
     }
     if (!configs.length) {
-      return <Typography.Text type="secondary">暂无发布配置，请点击「非容器化发布」或「容器化发布」新建。</Typography.Text>;
+      return (
+        <Typography.Text type="secondary">暂无发布配置，请点击「非容器化发布」或「容器化发布」新建。</Typography.Text>
+      );
     }
     return (
       <Table
@@ -652,37 +638,39 @@ export function CicdServicesPage() {
             render: (_, c) => {
               const access = cicdAccess(row);
               return (
-              <Space size={0} wrap className="yunshu-table-actions">
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<RocketOutlined />}
-                  disabled={!access.can_release}
-                  onClick={() => void openReleaseModal(row, c)}
-                >
-                  发布
-                </Button>
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<EditOutlined />}
-                  disabled={!access.can_manage}
-                  onClick={() => void openDeployWizard(row, c.deploy_kind === "container" ? "container" : "regular", c)}
-                >
-                  编辑
-                </Button>
-                <Popconfirm
-                  title="删除该发布配置？"
-                  disabled={!access.can_manage}
-                  onConfirm={() =>
-                    void deleteDeployConfig(projectId!, row.id, c.id).then(() => loadDeployConfigs(row.id))
-                  }
-                >
-                  <Button type="link" size="small" danger disabled={!access.can_manage}>
-                    删除
+                <Space size={0} wrap className="yunshu-table-actions">
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<RocketOutlined />}
+                    disabled={!access.can_release}
+                    onClick={() => void openReleaseModal(row, c)}
+                  >
+                    发布
                   </Button>
-                </Popconfirm>
-              </Space>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    disabled={!access.can_manage}
+                    onClick={() =>
+                      void openDeployWizard(row, c.deploy_kind === "container" ? "container" : "regular", c)
+                    }
+                  >
+                    编辑
+                  </Button>
+                  <Popconfirm
+                    title="删除该发布配置？"
+                    disabled={!access.can_manage}
+                    onConfirm={() =>
+                      void deleteDeployConfig(projectId!, row.id, c.id).then(() => loadDeployConfigs(row.id))
+                    }
+                  >
+                    <Button type="link" size="small" danger disabled={!access.can_manage}>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
               );
             },
           },
@@ -757,24 +745,24 @@ export function CicdServicesPage() {
         </Space>
 
         <div className="k8s-table-scroll-host">
-        <Table<CicdServiceItem>
-          rowKey="id"
-          loading={loading}
-          columns={columns}
-          dataSource={services}
-          scroll={{ x: 1200 }}
-          expandable={{ expandedRowRender, onExpand: (_, r) => void loadDeployConfigs(r.id) }}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            onChange: (p, ps) => {
-              setPage(p);
-              setPageSize(ps);
-            },
-          }}
-        />
+          <Table<CicdServiceItem>
+            rowKey="id"
+            loading={loading}
+            columns={columns}
+            dataSource={services}
+            scroll={{ x: 1200 }}
+            expandable={{ expandedRowRender, onExpand: (_, r) => void loadDeployConfigs(r.id) }}
+            pagination={{
+              current: page,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              onChange: (p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+              },
+            }}
+          />
         </div>
       </Card>
 
@@ -846,7 +834,12 @@ export function CicdServicesPage() {
         onDownloadHelmScaffold={handleDownloadHelmScaffold}
       />
 
-      <Modal title={`CI 打包 — ${buildService?.name}`} open={buildModalOpen} onCancel={() => setBuildModalOpen(false)} onOk={() => void doTriggerBuild()}>
+      <Modal
+        title={`CI 打包 — ${buildService?.name}`}
+        open={buildModalOpen}
+        onCancel={() => setBuildModalOpen(false)}
+        onOk={() => void doTriggerBuild()}
+      >
         <Alert
           type="info"
           showIcon

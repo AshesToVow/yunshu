@@ -36,7 +36,11 @@ export function OpsPageHeader({ title, description, breadcrumbs, extra, meta }: 
         ) : null}
         {meta ? <div className="ops-page-header__meta">{meta}</div> : null}
       </div>
-      {extra ? <Space wrap className="ops-page-header__extra">{extra}</Space> : null}
+      {extra ? (
+        <Space wrap className="ops-page-header__extra">
+          {extra}
+        </Space>
+      ) : null}
     </header>
   );
 }

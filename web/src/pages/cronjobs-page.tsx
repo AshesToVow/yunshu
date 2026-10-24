@@ -1,10 +1,21 @@
-import { ColumnHeightOutlined, DownOutlined, EyeOutlined, FileTextOutlined, PlayCircleOutlined, TagsOutlined } from "@ant-design/icons";
+import {
+  ColumnHeightOutlined,
+  DownOutlined,
+  EyeOutlined,
+  FileTextOutlined,
+  PlayCircleOutlined,
+  TagsOutlined,
+} from "@ant-design/icons";
 import { Alert, Button, Dropdown, Form, Input, Modal, Progress, Space, Switch, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { useRelatedPodsDrawer } from "../components/k8s/related-pods-drawer";
-import { RealtimeUsageText, WorkloadCpuUsageBars, WorkloadMemUsageBars } from "../components/k8s/k8s-resource-usage-cells";
+import {
+  RealtimeUsageText,
+  WorkloadCpuUsageBars,
+  WorkloadMemUsageBars,
+} from "../components/k8s/k8s-resource-usage-cells";
 import { useWorkloadFormActions } from "../components/k8s/workload-form-actions";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
@@ -46,7 +57,8 @@ function CronJobDetailQuickEdit({
   setDetailYaml: (next: string) => void;
 }) {
   const [detailForm] = Form.useForm<CronJobFormValues>();
-  const values = cronJobYamlToForm(detailYaml || "") ?? cronJobObjToForm(detail.object) ?? cronJobYamlToForm(detail.yaml ?? "");
+  const values =
+    cronJobYamlToForm(detailYaml || "") ?? cronJobObjToForm(detail.object) ?? cronJobYamlToForm(detail.yaml ?? "");
   return (
     <Form
       form={detailForm}
@@ -73,7 +85,12 @@ function CronJobDetailQuickEdit({
           <Input />
         </Form.Item>
         <Form.Item name="restart_policy" label="RestartPolicy" style={{ width: 220 }}>
-          <Select options={[{ label: "Never", value: "Never" }, { label: "OnFailure", value: "OnFailure" }]} />
+          <Select
+            options={[
+              { label: "Never", value: "Never" },
+              { label: "OnFailure", value: "OnFailure" },
+            ]}
+          />
         </Form.Item>
       </Space>
       <Form.Item name="suspend" label="Suspend" valuePropName="checked">
@@ -97,7 +114,9 @@ function CronJobDetailQuickEdit({
 export function CronjobsPage() {
   const listReloadRef = useRef<() => void>(() => {});
   const [verticalOpen, setVerticalOpen] = useState(false);
-  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
   const [verticalForm] = Form.useForm<{
     container_name?: string;
     requests_cpu?: string;
@@ -124,7 +143,9 @@ export function CronjobsPage() {
     }),
   });
 
-  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(async ({ clusterId, namespace, name }) => await listCronJobPods(clusterId, namespace, name));
+  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(
+    async ({ clusterId, namespace, name }) => await listCronJobPods(clusterId, namespace, name),
+  );
   const { renderKVIcon, viewer } = useKeyValueViewer({ mode: "drawer" });
 
   const columns: ColumnsType<CronJobItemV2> = [
@@ -135,15 +156,31 @@ export function CronjobsPage() {
       title: "资源汇总",
       dataIndex: "resource_text",
       width: 180,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
-    { title: "注解", key: "annotations", width: 70, align: "center", render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
+    {
+      title: "注解",
+      key: "annotations",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations),
+    },
     {
       title: "容器",
       dataIndex: "containers_text",
       width: 220,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
     {
       title: "实时用量",
@@ -180,7 +217,12 @@ export function CronjobsPage() {
     },
     { title: "上次调度", dataIndex: "last_schedule_time", width: 180, render: (v?: string) => v || "-" },
     { title: "最近成功", dataIndex: "last_successful_time", width: 180, render: (v?: string) => v || "-" },
-    { title: "Active", dataIndex: "active_count", width: 120, render: (v?: string) => <Tag color={v && Number(v) > 0 ? "red" : "default"}>{v || 0}</Tag> },
+    {
+      title: "Active",
+      dataIndex: "active_count",
+      width: 120,
+      render: (v?: string) => <Tag color={v && Number(v) > 0 ? "red" : "default"}>{v || 0}</Tag>,
+    },
     { title: "运行时长", dataIndex: "age", width: 90, fixed: "right" },
     { title: "创建时间", dataIndex: "creation_time", width: 180, fixed: "right" },
   ];
@@ -196,26 +238,28 @@ export function CronjobsPage() {
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
         }}
         columns={columns}
-        onEdit={(record, ctx) => formActions.openEdit({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }, record)}
+        onEdit={(record, ctx) =>
+          formActions.openEdit(
+            { clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name },
+            record,
+          )
+        }
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;
         }}
         onCreateDrawerOpen={(ctx) => {
           if (!ctx.clusterId) return;
           const ns = ctx.namespace ?? "default";
-          formActions.prepareCreate(
-            { clusterId: ctx.clusterId, namespace: ns },
-            {
-              namespace: ns,
-              name: "",
-              schedule: "*/5 * * * *",
-              suspend: false,
-              restart_policy: "Never",
-              container_name: "",
-              image: "busybox:1.36",
-              env_pairs: [{ key: "", value: "" }],
-            } as Partial<CronJobFormValues>,
-          );
+          formActions.prepareCreate({ clusterId: ctx.clusterId, namespace: ns }, {
+            namespace: ns,
+            name: "",
+            schedule: "*/5 * * * *",
+            suspend: false,
+            restart_policy: "Never",
+            container_name: "",
+            image: "busybox:1.36",
+            env_pairs: [{ key: "", value: "" }],
+          } as Partial<CronJobFormValues>);
         }}
         renderCreateFormTab={(ctx) => (
           <WorkloadFormModal<CronJobFormValues>
@@ -244,26 +288,51 @@ export function CronjobsPage() {
           >
             <NameNamespaceItems />
             <Space style={{ width: "100%" }} align="start">
-              <Form.Item name="schedule" label="Schedule" rules={[{ required: true, message: "请输入 schedule" }]} style={{ flex: 1 }}>
-                <Input placeholder='例如：*/5 * * * *' />
+              <Form.Item
+                name="schedule"
+                label="Schedule"
+                rules={[{ required: true, message: "请输入 schedule" }]}
+                style={{ flex: 1 }}
+              >
+                <Input placeholder="例如：*/5 * * * *" />
               </Form.Item>
-              <Form.Item name="restart_policy" label="RestartPolicy" rules={[{ required: true, message: "请选择" }]} style={{ width: 240 }}>
-                <Select options={[{ label: "Never", value: "Never" }, { label: "OnFailure", value: "OnFailure" }]} />
+              <Form.Item
+                name="restart_policy"
+                label="RestartPolicy"
+                rules={[{ required: true, message: "请选择" }]}
+                style={{ width: 240 }}
+              >
+                <Select
+                  options={[
+                    { label: "Never", value: "Never" },
+                    { label: "OnFailure", value: "OnFailure" },
+                  ]}
+                />
               </Form.Item>
             </Space>
             <Form.Item name="suspend" label="Suspend" valuePropName="checked">
               <Switch checkedChildren="暂停" unCheckedChildren="运行" />
             </Form.Item>
             <Space style={{ width: "100%" }} align="start">
-              <Form.Item name="container_name" label="容器名" rules={[{ required: true, message: "请输入容器名" }]} style={{ flex: 1 }}>
+              <Form.Item
+                name="container_name"
+                label="容器名"
+                rules={[{ required: true, message: "请输入容器名" }]}
+                style={{ flex: 1 }}
+              >
                 <Input />
               </Form.Item>
-              <Form.Item name="image" label="镜像" rules={[{ required: true, message: "请输入镜像" }]} style={{ flex: 2 }}>
+              <Form.Item
+                name="image"
+                label="镜像"
+                rules={[{ required: true, message: "请输入镜像" }]}
+                style={{ flex: 2 }}
+              >
                 <Input placeholder="busybox:1.36" />
               </Form.Item>
             </Space>
             <Form.Item name="command" label="启动命令（可选，sh -c）">
-              <Input placeholder='例如：date; echo cron-run' />
+              <Input placeholder="例如：date; echo cron-run" />
             </Form.Item>
             <Form.Item label="环境变量">
               <EnvPairsFormItem name="env_pairs" />
@@ -274,9 +343,11 @@ export function CronjobsPage() {
           </WorkloadFormModal>
         )}
         api={{
-          list: async ({ clusterId, namespace, keyword }) => await listCronJobsV2(clusterId, namespace ?? "default", keyword),
-          detail: async ({ clusterId, namespace, name }) => await getCronJobDetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyCronJob(clusterId, manifest),
+          list: async ({ clusterId, namespace, keyword }) =>
+            await listCronJobsV2(clusterId, namespace ?? "default", keyword),
+          detail: async ({ clusterId, namespace, name }) =>
+            await getCronJobDetail(clusterId, namespace ?? "default", name),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyCronJob(clusterId, manifest, idemKey),
           remove: async (args) => await deleteCronJob(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: batch/v1
@@ -306,14 +377,19 @@ spec:
                     key: "pods",
                     label: "关联 Pods",
                     icon: <EyeOutlined />,
-                    onClick: () => openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
+                    onClick: () =>
+                      openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
                   },
                   {
                     key: "vertical",
                     label: "垂直扩缩（resources · VPA 类）",
                     icon: <ColumnHeightOutlined />,
                     onClick: () => {
-                      setVerticalTarget({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name });
+                      setVerticalTarget({
+                        clusterId: ctx.clusterId,
+                        namespace: ctx.namespace ?? "default",
+                        name: record.name,
+                      });
                       verticalForm.resetFields();
                       setVerticalOpen(true);
                     },
@@ -367,11 +443,16 @@ spec:
               message.warning("请至少填写一项 requests 或 limits（如 cpu/memory）");
               return;
             }
-            await patchCronJobContainerResources(verticalTarget.clusterId, verticalTarget.namespace, verticalTarget.name, {
-              container_name: values.container_name,
-              requests,
-              limits,
-            });
+            await patchCronJobContainerResources(
+              verticalTarget.clusterId,
+              verticalTarget.namespace,
+              verticalTarget.name,
+              {
+                container_name: values.container_name,
+                requests,
+                limits,
+              },
+            );
             message.success("已更新容器资源");
             setVerticalOpen(false);
             listReloadRef.current();
@@ -436,18 +517,38 @@ spec:
       >
         <NameNamespaceItems />
         <Space style={{ width: "100%" }} align="start">
-          <Form.Item name="schedule" label="Schedule" rules={[{ required: true, message: "请输入 schedule" }]} style={{ flex: 1 }}>
-            <Input placeholder='例如：*/5 * * * *' />
+          <Form.Item
+            name="schedule"
+            label="Schedule"
+            rules={[{ required: true, message: "请输入 schedule" }]}
+            style={{ flex: 1 }}
+          >
+            <Input placeholder="例如：*/5 * * * *" />
           </Form.Item>
-          <Form.Item name="restart_policy" label="RestartPolicy" rules={[{ required: true, message: "请选择" }]} style={{ width: 240 }}>
-            <Select options={[{ label: "Never", value: "Never" }, { label: "OnFailure", value: "OnFailure" }]} />
+          <Form.Item
+            name="restart_policy"
+            label="RestartPolicy"
+            rules={[{ required: true, message: "请选择" }]}
+            style={{ width: 240 }}
+          >
+            <Select
+              options={[
+                { label: "Never", value: "Never" },
+                { label: "OnFailure", value: "OnFailure" },
+              ]}
+            />
           </Form.Item>
         </Space>
         <Form.Item name="suspend" label="Suspend" valuePropName="checked">
           <Switch checkedChildren="暂停" unCheckedChildren="运行" />
         </Form.Item>
         <Space style={{ width: "100%" }} align="start">
-          <Form.Item name="container_name" label="容器名" rules={[{ required: true, message: "请输入容器名" }]} style={{ flex: 1 }}>
+          <Form.Item
+            name="container_name"
+            label="容器名"
+            rules={[{ required: true, message: "请输入容器名" }]}
+            style={{ flex: 1 }}
+          >
             <Input />
           </Form.Item>
           <Form.Item name="image" label="镜像" rules={[{ required: true, message: "请输入镜像" }]} style={{ flex: 2 }}>
@@ -455,7 +556,7 @@ spec:
           </Form.Item>
         </Space>
         <Form.Item name="command" label="启动命令（可选，sh -c）">
-          <Input placeholder='例如：date; echo cron-run' />
+          <Input placeholder="例如：date; echo cron-run" />
         </Form.Item>
         <Form.Item label="环境变量">
           <EnvPairsFormItem name="env_pairs" />
@@ -467,4 +568,3 @@ spec:
     </>
   );
 }
-

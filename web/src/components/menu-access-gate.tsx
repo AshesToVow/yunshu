@@ -4,11 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/auth-context";
 import { useMenuTree } from "../hooks/use-menu-tree";
-import {
-  findMenuByPath,
-  normalizeMenuPath,
-  resolveMenuAccessCandidates,
-} from "../utils/menu-path";
+import { findMenuByPath, normalizeMenuPath, resolveMenuAccessCandidates } from "../utils/menu-path";
 
 /** 登录即可访问、不依赖菜单入口权限的路径。 */
 const ALWAYS_ALLOW = new Set(["/", "/dashboard", "/personal-settings", "/plugins"]);
@@ -57,9 +53,7 @@ export function MenuAccessGate({ children }: MenuAccessGateProps) {
     );
   }
 
-  const menuItem = menus?.length
-    ? accessCandidates.map((c) => findMenuByPath(menus, c)).find(Boolean)
-    : undefined;
+  const menuItem = menus?.length ? accessCandidates.map((c) => findMenuByPath(menus, c)).find(Boolean) : undefined;
   if (!menuItem) {
     return (
       <Result

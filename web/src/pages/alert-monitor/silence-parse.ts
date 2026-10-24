@@ -1,9 +1,5 @@
 import dayjs from "dayjs";
-import type {
-  PromNativeAlertRow,
-  QuickSilenceTarget,
-  SilenceMatcherForm,
-} from "./platform-provider-types";
+import type { PromNativeAlertRow, QuickSilenceTarget, SilenceMatcherForm } from "./platform-provider-types";
 
 export function parseSilenceMatchersForForm(raw?: string): SilenceMatcherForm[] {
   const s = raw?.trim();

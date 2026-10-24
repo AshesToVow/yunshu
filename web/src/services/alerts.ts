@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 import { normalizePagedPayload, parseCommaSeparatedList, parseCommaSeparatedNumbers } from "./alert-mappers";
 
 export interface AlertChannelItem {
@@ -54,16 +54,19 @@ export function listAlertChannels(params?: { keyword?: string }) {
   return getData<{ list: AlertChannelItem[] }>(http.get("/alerts/channels", { params }));
 }
 
-export function createAlertChannel(payload: {
-  name: string;
-  type?: string;
-  url: string;
-  secret?: string;
-  headers_json?: string;
-  enabled?: boolean;
-  timeout_ms?: number;
-}) {
-  return getData<AlertChannelItem>(http.post("/alerts/channels", payload));
+export function createAlertChannel(
+  payload: {
+    name: string;
+    type?: string;
+    url: string;
+    secret?: string;
+    headers_json?: string;
+    enabled?: boolean;
+    timeout_ms?: number;
+  },
+  idemKey?: string,
+) {
+  return getData<AlertChannelItem>(http.post("/alerts/channels", payload, idempotencyConfig(idemKey)));
 }
 
 export function updateAlertChannel(
@@ -454,16 +457,23 @@ export function listPendingMonitorRuleChanges() {
   );
 }
 
-export function proposeMonitorRuleChange(payload: {
-  rule_id: number;
-  payload: Record<string, unknown>;
-  comment?: string;
-}) {
-  return getData<AlertMonitorRuleChangeItem>(http.post("/alerts/monitor-rule-changes", payload));
+export function proposeMonitorRuleChange(
+  payload: {
+    rule_id: number;
+    payload: Record<string, unknown>;
+    comment?: string;
+  },
+  idemKey?: string,
+) {
+  return getData<AlertMonitorRuleChangeItem>(
+    http.post("/alerts/monitor-rule-changes", payload, idempotencyConfig(idemKey)),
+  );
 }
 
-export function approveMonitorRuleChange(id: number) {
-  return getData<Record<string, unknown>>(http.post(`/alerts/monitor-rule-changes/${id}/approve`, {}));
+export function approveMonitorRuleChange(id: number, idemKey?: string) {
+  return getData<Record<string, unknown>>(
+    http.post(`/alerts/monitor-rule-changes/${id}/approve`, {}, idempotencyConfig(idemKey)),
+  );
 }
 
 export function rejectMonitorRuleChange(id: number, comment?: string) {

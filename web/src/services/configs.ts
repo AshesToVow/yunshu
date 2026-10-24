@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export interface ConfigMapItem {
@@ -29,8 +29,10 @@ export function listConfigMaps(clusterId: number, namespace: string, keyword?: s
 export function getConfigMapDetail(clusterId: number, namespace: string, name: string) {
   return getData<ConfigDetail>(http.get("/configmaps/detail", { params: { cluster_id: clusterId, namespace, name } }));
 }
-export function applyConfigMap(clusterId: number, manifest: string) {
-  return getData<boolean>(http.post("/configmaps/apply", { cluster_id: clusterId, manifest }));
+export function applyConfigMap(clusterId: number, manifest: string, idemKey?: string) {
+  return getData<boolean>(
+    http.post("/configmaps/apply", { cluster_id: clusterId, manifest }, idempotencyConfig(idemKey)),
+  );
 }
 export function deleteConfigMap(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return getData<boolean>(
@@ -49,8 +51,8 @@ export function getSecretDetail(clusterId: number, namespace: string, name: stri
 export function revealSecret(clusterId: number, namespace: string, name: string) {
   return getData<ConfigDetail>(http.get("/secrets/reveal", { params: { cluster_id: clusterId, namespace, name } }));
 }
-export function applySecret(clusterId: number, manifest: string) {
-  return getData<boolean>(http.post("/secrets/apply", { cluster_id: clusterId, manifest }));
+export function applySecret(clusterId: number, manifest: string, idemKey?: string) {
+  return getData<boolean>(http.post("/secrets/apply", { cluster_id: clusterId, manifest }, idempotencyConfig(idemKey)));
 }
 export function deleteSecret(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return getData<boolean>(

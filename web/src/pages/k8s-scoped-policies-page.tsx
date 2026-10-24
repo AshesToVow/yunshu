@@ -43,7 +43,6 @@ import type { UserGroupItem } from "../services/user-groups";
 import { DenyRulesCard } from "./k8s-policies/deny-rules-card";
 import { PresetForm } from "./k8s-policies/preset-form";
 import {
-  PRESET_CAPS,
   presetLabel,
   renderCapabilityTags,
   subjectPrincipalRef,
@@ -70,7 +69,6 @@ export function K8sScopedPoliciesPage() {
   const [presetForm] = Form.useForm<{
     cluster_ids: number[];
     preset: "readonly" | "readonly_exec" | "admin";
-    capabilities: string[];
     deny_namespaces?: string[];
     allow_namespaces?: string[];
   }>();
@@ -89,7 +87,6 @@ export function K8sScopedPoliciesPage() {
 
   const watchedPresetClusterIds = Form.useWatch("cluster_ids", presetForm) ?? [];
   const watchedDenyClusterId = Form.useWatch("cluster_id", denyForm);
-  const watchedCapabilities = Form.useWatch("capabilities", presetForm) ?? [];
 
   const capNameByCode = useMemo(() => {
     const m = new Map<string, string>();
@@ -113,7 +110,14 @@ export function K8sScopedPoliciesPage() {
     const raw = Array.isArray(watchedPresetClusterIds) ? watchedPresetClusterIds : [];
     return raw.filter((x): x is number => typeof x === "number" && x > 0);
   }, [watchedPresetClusterIds]);
-  const presetClusterKey = useMemo(() => presetClusterIds.slice().sort((a, b) => a - b).join(","), [presetClusterIds]);
+  const presetClusterKey = useMemo(
+    () =>
+      presetClusterIds
+        .slice()
+        .sort((a, b) => a - b)
+        .join(","),
+    [presetClusterIds],
+  );
 
   useEffect(() => {
     if (presetClusterIds.length === 0) {
@@ -212,10 +216,7 @@ export function K8sScopedPoliciesPage() {
       setUsers(userRes.list ?? []);
       setClusterOptions(clusterData.list.map((c) => ({ id: c.id, name: c.name })));
       setCapCatalog(capRes.list ?? []);
-      presetForm.setFieldsValue({
-        capabilities: PRESET_CAPS.readonly,
-        preset: "readonly",
-      });
+      presetForm.setFieldsValue({ preset: "readonly" });
 
       const kind = pref?.kind ?? subjectKind;
       const nextRoleId = pref?.roleId ?? selectedRoleId ?? roleData.list[0]?.id;
@@ -244,12 +245,7 @@ export function K8sScopedPoliciesPage() {
     }
   }
 
-  async function refreshAccessGrants(
-    kind: SubjectKind,
-    roleId?: number,
-    groupId?: number,
-    userId?: number,
-  ) {
+  async function refreshAccessGrants(kind: SubjectKind, roleId?: number, groupId?: number, userId?: number) {
     if (kind === "role" && roleId) {
       const result = await listK8sPoliciesByRole(roleId);
       setAccessGrants(result.list);
@@ -297,10 +293,9 @@ export function K8sScopedPoliciesPage() {
         const denyList = (Array.isArray(denyRaw) ? denyRaw : []).map((s) => String(s).trim()).filter(Boolean);
         const allowRaw = values.allow_namespaces ?? [];
         const allowList = (Array.isArray(allowRaw) ? allowRaw : []).map((s) => String(s).trim()).filter(Boolean);
-        const caps = Array.isArray(values.capabilities) ? values.capabilities : [];
         const base = {
           cluster_ids: values.cluster_ids ?? [],
-          capabilities: caps,
+          preset: values.preset,
           deny_namespaces: denyList.length ? denyList : undefined,
           allow_namespaces: allowList.length ? allowList : undefined,
         };
@@ -394,7 +389,7 @@ export function K8sScopedPoliciesPage() {
           description={
             linkUsername
               ? `用户「${linkUsername}」所属角色的集群访问在此配置；也可切换为「用户」主体单独直授。`
-              : "选择集群与档位后点击「按档位保存」完成授权。"
+              : "选择集群与档位后点击「保存集群角色」完成授权。"
           }
           onClose={() => setSearchParams({})}
         />
@@ -405,7 +400,17 @@ export function K8sScopedPoliciesPage() {
         loading={loading}
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => void bootstrap({ kind: subjectKind, roleId: selectedRoleId, groupId: selectedGroupId, userId: selectedUserId })}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() =>
+                void bootstrap({
+                  kind: subjectKind,
+                  roleId: selectedRoleId,
+                  groupId: selectedGroupId,
+                  userId: selectedUserId,
+                })
+              }
+            >
               刷新
             </Button>
           </Space>
@@ -522,11 +527,13 @@ export function K8sScopedPoliciesPage() {
                 message="与 API / Casbin 的关系"
                 description={
                   <span>
-                    此处为<strong>主体</strong>（角色模板 / 用户 / 用户组）配置<strong>集群能力包</strong>（可快捷三档或自定义勾选），数据在表{" "}
+                    此处为<strong>主体</strong>（角色模板 / 用户 / 用户组）配置<strong>集群档位</strong>（快捷三档：只读
+                    / 只读+Exec / 集群管理员），数据在表{" "}
                     <Typography.Text code>k8s_cluster_access_grants</Typography.Text>。
-                    <strong>能力包不替代 API 授权</strong>：HTTP 接口能否调用仍由<strong>授权管理</strong>中的 Casbin
-                    API 权限决定；仅勾选变更类能力而没有对应写接口 Casbin 权限时，POST/PUT/DELETE 仍会 403。带{" "}
-                    <Typography.Text code>cluster_id</Typography.Text> 的 K8s 类请求在通过 API 鉴权后，再按此处能力包与<strong>命名空间黑/白名单</strong>校验。
+                    <strong>档位不替代 API 授权</strong>：HTTP 接口能否调用仍由<strong>授权管理</strong>中的 Casbin API
+                    权限决定；仅有档位而没有对应写接口 Casbin 权限时，POST/PUT/DELETE 仍会 403。带{" "}
+                    <Typography.Text code>cluster_id</Typography.Text> 的 K8s 类请求在通过 API 鉴权后，再按此处档位与
+                    <strong>命名空间黑/白名单</strong>校验。
                   </span>
                 }
               />
@@ -535,18 +542,16 @@ export function K8sScopedPoliciesPage() {
                 type="info"
                 showIcon
                 style={{ width: "100%" }}
-                message="能力包下发"
+                message="档位下发"
                 description={
                   <span>
-                    快捷档位会预填能力勾选；也可自行勾选组合（保存时以勾选为准）。未勾「只读浏览」时后端会自动补上，否则无法列表。命名空间黑/白名单可选：须选择<strong>具体集群</strong>。
+                    选择快捷档位后点击「保存集群角色」完成下发。命名空间黑/白名单可选：须选择<strong>具体集群</strong>。
                   </span>
                 }
               />
 
               <PresetForm
                 form={presetForm}
-                watchedCapabilities={watchedCapabilities}
-                capCatalog={capCatalog}
                 clusterOptions={clusterOptions}
                 presetClusterIds={presetClusterIds}
                 presetNsLoading={presetNsLoading}
@@ -562,7 +567,12 @@ export function K8sScopedPoliciesPage() {
               <Table<K8sClusterAccessItem>
                 rowKey="id"
                 dataSource={accessGrants}
-                pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
+                pagination={{
+                  pageSize: 10,
+                  showSizeChanger: true,
+                  pageSizeOptions: [10, 20, 50, 100],
+                  showQuickJumper: true,
+                }}
                 size="small"
                 scroll={{ x: "max-content" }}
                 columns={[
@@ -580,11 +590,7 @@ export function K8sScopedPoliciesPage() {
                     title: "集群",
                     dataIndex: "cluster_id",
                     render: (v: number) =>
-                      v === 0 ? (
-                        <Tag color="blue">全部集群</Tag>
-                      ) : (
-                        <Tag>{clusterNameById.get(v) ?? `集群 #${v}`}</Tag>
-                      ),
+                      v === 0 ? <Tag color="blue">全部集群</Tag> : <Tag>{clusterNameById.get(v) ?? `集群 #${v}`}</Tag>,
                   },
                   {
                     title: "档位",
@@ -720,7 +726,11 @@ export function K8sScopedPoliciesPage() {
           为同一主体在不同命名空间下发不同档位（每行一条 NS + preset），须选择具体集群。
         </Typography.Paragraph>
         <Form form={splitForm} layout="vertical">
-          <Form.Item label="集群" name="cluster_ids" rules={[{ required: true, type: "array", min: 1, message: "请选择集群" }]}>
+          <Form.Item
+            label="集群"
+            name="cluster_ids"
+            rules={[{ required: true, type: "array", min: 1, message: "请选择集群" }]}
+          >
             <Select
               mode="multiple"
               options={clusterOptions.map((c) => ({ label: c.name, value: c.id }))}
@@ -738,19 +748,9 @@ export function K8sScopedPoliciesPage() {
                       rules={[{ required: true, message: "命名空间" }]}
                       style={{ width: 220 }}
                     >
-                      <Select
-                        showSearch
-                        placeholder="命名空间"
-                        options={presetNsOptions}
-                        loading={presetNsLoading}
-                      />
+                      <Select showSearch placeholder="命名空间" options={presetNsOptions} loading={presetNsLoading} />
                     </Form.Item>
-                    <Form.Item
-                      {...field}
-                      name={[field.name, "preset"]}
-                      initialValue="readonly"
-                      style={{ width: 200 }}
-                    >
+                    <Form.Item {...field} name={[field.name, "preset"]} initialValue="readonly" style={{ width: 200 }}>
                       <Select
                         options={[
                           { value: "readonly", label: "只读" },
@@ -759,7 +759,9 @@ export function K8sScopedPoliciesPage() {
                         ]}
                       />
                     </Form.Item>
-                    <Button type="link" onClick={() => remove(field.name)}>删除</Button>
+                    <Button type="link" onClick={() => remove(field.name)}>
+                      删除
+                    </Button>
                   </Space>
                 ))}
                 <Button type="dashed" onClick={() => add({ preset: "readonly" })} block>

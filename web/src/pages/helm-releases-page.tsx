@@ -75,7 +75,9 @@ export function HelmReleasesPage() {
   const endEdit = useEditGuardStore((s) => s.endEdit);
 
   const [namespace, setNamespace] = useState(() => searchParams.get("ns") ?? "");
-  const [namespaceOptions, setNamespaceOptions] = useState<{ label: string; value: string }[]>([{ label: "全部命名空间", value: "" }]);
+  const [namespaceOptions, setNamespaceOptions] = useState<{ label: string; value: string }[]>([
+    { label: "全部命名空间", value: "" },
+  ]);
   const [keyword, setKeyword] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -142,7 +144,10 @@ export function HelmReleasesPage() {
     void (async () => {
       try {
         const res = await listClusterNamespaces(clusterId);
-        const opts = [{ label: "全部命名空间", value: "" }, ...(res.list ?? []).map((n) => ({ label: n.name, value: n.name }))];
+        const opts = [
+          { label: "全部命名空间", value: "" },
+          ...(res.list ?? []).map((n) => ({ label: n.name, value: n.name })),
+        ];
         setNamespaceOptions(opts);
       } catch {
         setNamespaceOptions([{ label: "全部命名空间", value: "" }]);
@@ -370,11 +375,24 @@ export function HelmReleasesPage() {
           Chart 来自 Harbor OCI 仓库（数据字典 cicd_harbor_*）。业务应用回滚建议仍走 CI/CD 工单。
         </Typography.Paragraph>
         <div className="k8s-table-scroll-host">
-          <Table rowKey={(r) => `${r.namespace}/${r.name}`} loading={loading} columns={columns} dataSource={list} pagination={{ pageSize: 20, showSizeChanger: true }} scroll={{ x: 1200 }} tableLayout="fixed" />
+          <Table
+            rowKey={(r) => `${r.namespace}/${r.name}`}
+            loading={loading}
+            columns={columns}
+            dataSource={list}
+            pagination={{ pageSize: 20, showSizeChanger: true }}
+            scroll={{ x: 1200 }}
+            tableLayout="fixed"
+          />
         </div>
       </Card>
 
-      <Drawer title={`历史：${historyTarget?.name ?? ""}`} width={720} open={historyOpen} onClose={() => setHistoryOpen(false)}>
+      <Drawer
+        title={`历史：${historyTarget?.name ?? ""}`}
+        width={720}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      >
         <Table
           rowKey="revision"
           loading={historyLoading}
@@ -391,7 +409,10 @@ export function HelmReleasesPage() {
               width: 100,
               render: (_, h) =>
                 historyTarget && h.revision !== historyTarget.version ? (
-                  <Popconfirm title={`回滚到 revision ${h.revision}？`} onConfirm={() => void doRollback(historyTarget, h.revision)}>
+                  <Popconfirm
+                    title={`回滚到 revision ${h.revision}？`}
+                    onConfirm={() => void doRollback(historyTarget, h.revision)}
+                  >
                     <Button size="small" icon={<RollbackOutlined />}>
                       回滚
                     </Button>
@@ -405,10 +426,22 @@ export function HelmReleasesPage() {
       </Drawer>
 
       <Drawer title="Release Values" width={560} open={valuesOpen} onClose={() => setValuesOpen(false)}>
-        <Input.TextArea value={valuesText} readOnly autoSize={{ minRows: 16, maxRows: 40 }} style={{ fontFamily: "monospace" }} />
+        <Input.TextArea
+          value={valuesText}
+          readOnly
+          autoSize={{ minRows: 16, maxRows: 40 }}
+          style={{ fontFamily: "monospace" }}
+        />
       </Drawer>
 
-      <Modal title="从 Harbor 安装 Chart" open={installOpen} onCancel={() => setInstallOpen(false)} onOk={() => void submitInstall()} confirmLoading={installSubmitting} destroyOnClose>
+      <Modal
+        title="从 Harbor 安装 Chart"
+        open={installOpen}
+        onCancel={() => setInstallOpen(false)}
+        onOk={() => void submitInstall()}
+        confirmLoading={installSubmitting}
+        destroyOnClose
+      >
         <Form form={installForm} layout="vertical">
           <Form.Item name="release_name" label="Release 名称" rules={[{ required: true }]}>
             <Input placeholder="如 springbootdemo-prod" />
@@ -446,7 +479,8 @@ export function HelmReleasesPage() {
         width={560}
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          留空 Chart 版本则沿用当前 Chart；填写新版本将从 Harbor OCI 拉取并升级。Values 留空表示保留现有配置；填写 JSON 将与现有 values 合并覆盖。
+          留空 Chart 版本则沿用当前 Chart；填写新版本将从 Harbor OCI 拉取并升级。Values 留空表示保留现有配置；填写 JSON
+          将与现有 values 合并覆盖。
         </Typography.Paragraph>
         <Form form={upgradeForm} layout="vertical">
           <Form.Item name="release_name" label="Release 名称" rules={[{ required: true }]}>
@@ -471,7 +505,11 @@ export function HelmReleasesPage() {
             <Input placeholder="1.0.1" />
           </Form.Item>
           <Form.Item name="values_json" label="Values 覆盖（可选 JSON）">
-            <Input.TextArea placeholder='{"replicaCount": 2}' autoSize={{ minRows: 4, maxRows: 12 }} style={{ fontFamily: "monospace" }} />
+            <Input.TextArea
+              placeholder='{"replicaCount": 2}'
+              autoSize={{ minRows: 4, maxRows: 12 }}
+              style={{ fontFamily: "monospace" }}
+            />
           </Form.Item>
         </Form>
       </Modal>

@@ -1,5 +1,21 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Segmented, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Segmented,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -11,7 +27,14 @@ import {
   resolveDictCategory,
   type DictCategoryId,
 } from "../constants/dict-types";
-import { createDictEntry, deleteDictEntry, getDictEntries, updateDictEntry, type DictEntryItem, type DictPayload } from "../services/dict";
+import {
+  createDictEntry,
+  deleteDictEntry,
+  getDictEntries,
+  updateDictEntry,
+  type DictEntryItem,
+  type DictPayload,
+} from "../services/dict";
 import { formatDateTime } from "../utils/format";
 
 const defaultQuery = { keyword: "", dict_type: "", category: "all" as DictCategoryId, page: 1, page_size: 10 };
@@ -122,8 +145,7 @@ export function DictEntriesPage() {
 
   function changeCategory(category: DictCategoryId) {
     setQuery((prev) => {
-      const nextDictType =
-        prev.dict_type && !matchesDictCategory(prev.dict_type, category) ? "" : prev.dict_type;
+      const nextDictType = prev.dict_type && !matchesDictCategory(prev.dict_type, category) ? "" : prev.dict_type;
       const next = { ...prev, category, dict_type: nextDictType, page: 1 };
       syncSearchParams(next);
       return next;
@@ -209,7 +231,11 @@ export function DictEntriesPage() {
             style={{ width: 280 }}
             value={query.dict_type || undefined}
             options={groupedDictTypeOptions}
-            filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
+            filterOption={(input, option) =>
+              String(option?.label ?? "")
+                .toLowerCase()
+                .includes(input.toLowerCase())
+            }
             onChange={(v) => {
               setQuery((prev) => {
                 const next = { ...prev, dict_type: String(v || ""), page: 1 };
@@ -255,7 +281,12 @@ export function DictEntriesPage() {
               return <Tag color={meta.color}>{meta.label}</Tag>;
             },
           },
-          { title: "字典类型", dataIndex: "dict_type", width: 220, render: (v: string) => <Tag color="geekblue">{v}</Tag> },
+          {
+            title: "字典类型",
+            dataIndex: "dict_type",
+            width: 220,
+            render: (v: string) => <Tag color="geekblue">{v}</Tag>,
+          },
           { title: "标签", dataIndex: "label", width: 200, ellipsis: true },
           {
             title: "值",
@@ -270,7 +301,12 @@ export function DictEntriesPage() {
             ),
           },
           { title: "排序", dataIndex: "sort", width: 80 },
-          { title: "状态", dataIndex: "status", width: 90, render: (v: number) => (v === 1 ? <Tag color="success">启用</Tag> : <Tag>停用</Tag>) },
+          {
+            title: "状态",
+            dataIndex: "status",
+            width: 90,
+            render: (v: number) => (v === 1 ? <Tag color="success">启用</Tag> : <Tag>停用</Tag>),
+          },
           { title: "备注", dataIndex: "remark", render: (v?: string) => v || "-" },
           { title: "更新时间", dataIndex: "updated_at", width: 180, render: formatDateTime },
           {
@@ -328,7 +364,11 @@ export function DictEntriesPage() {
               showSearch
               placeholder="请选择字典类型"
               options={buildGroupedDictTypeSelectOptions("all", extraDictTypes)}
-              filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
+              filterOption={(input, option) =>
+                String(option?.label ?? "")
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
             />
           </Form.Item>
           <Form.Item label="标签" name="label" rules={[{ required: true, message: "请输入标签" }]}>
@@ -340,7 +380,11 @@ export function DictEntriesPage() {
             rules={[{ required: true, message: "请输入值" }]}
             extra="支持完整 kubeconfig（含证书）；库字段为 MEDIUMTEXT，服务端上限约 16MB。极长内容建议仍用集群管理直接粘贴。"
           >
-            <Input.TextArea rows={4} placeholder="例如 1 / GET / 多行 yaml" style={{ fontFamily: "ui-monospace, Menlo, Consolas, monospace" }} />
+            <Input.TextArea
+              rows={4}
+              placeholder="例如 1 / GET / 多行 yaml"
+              style={{ fontFamily: "ui-monospace, Menlo, Consolas, monospace" }}
+            />
           </Form.Item>
           <Space style={{ width: "100%" }} size="middle">
             <Form.Item
@@ -352,7 +396,12 @@ export function DictEntriesPage() {
               <InputNumber min={0} style={{ width: "100%" }} disabled={autoSortLocked} />
             </Form.Item>
             <Form.Item label="状态" name="status" style={{ width: 160, marginBottom: 0 }}>
-              <Select options={[{ label: "启用", value: 1 }, { label: "停用", value: 0 }]} />
+              <Select
+                options={[
+                  { label: "启用", value: 1 },
+                  { label: "停用", value: 0 },
+                ]}
+              />
             </Form.Item>
           </Space>
           <Form.Item label="备注" name="remark" style={{ marginTop: 12 }}>

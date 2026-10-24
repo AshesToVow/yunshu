@@ -48,9 +48,7 @@ export function SubscriptionsTab(p: SubscriptionsTabProps) {
         <Button icon={<ReloadOutlined />} loading={subLoading} onClick={() => void loadSubscriptions()}>
           刷新
         </Button>
-        <Button onClick={() => setRgDrawerOpen(true)}>
-          {ALERT_ROUTING_TERMS.receiverGroupManage}
-        </Button>
+        <Button onClick={() => setRgDrawerOpen(true)}>{ALERT_ROUTING_TERMS.receiverGroupManage}</Button>
         <Button
           icon={<ThunderboltOutlined />}
           onClick={() => {
@@ -87,7 +85,11 @@ export function SubscriptionsTab(p: SubscriptionsTabProps) {
         <Button type="primary" icon={<PlusOutlined />} onClick={() => void createSubscription(null)}>
           新增根节点
         </Button>
-        <Button disabled={!subSelectedID} icon={<PlusOutlined />} onClick={() => void createSubscription(subSelectedID)}>
+        <Button
+          disabled={!subSelectedID}
+          icon={<PlusOutlined />}
+          onClick={() => void createSubscription(subSelectedID)}
+        >
           新增子节点
         </Button>
         <Popconfirm title="确认删除节点？（有子节点会失败）" onConfirm={() => void removeSubscription()}>

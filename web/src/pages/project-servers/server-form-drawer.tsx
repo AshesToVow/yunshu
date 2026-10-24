@@ -105,7 +105,10 @@ export function ServerFormDrawer({
         <Form.Item label="Tags（逗号分隔）" name="tags">
           <Input />
         </Form.Item>
-        <Form.Item noStyle shouldUpdate={(prev, next) => prev.source_type !== next.source_type || prev.provider !== next.provider}>
+        <Form.Item
+          noStyle
+          shouldUpdate={(prev, next) => prev.source_type !== next.source_type || prev.provider !== next.provider}
+        >
           {({ getFieldValue }) => {
             const sourceType = String(getFieldValue("source_type") || "");
             const provider = String(getFieldValue("provider") || "");
@@ -119,14 +122,18 @@ export function ServerFormDrawer({
                         placeholder="标签键（Tag Key）"
                         value={row.key}
                         onChange={(e) =>
-                          onCloudTagRowsChange((prev) => prev.map((it, i) => (i === idx ? { ...it, key: e.target.value } : it)))
+                          onCloudTagRowsChange((prev) =>
+                            prev.map((it, i) => (i === idx ? { ...it, key: e.target.value } : it)),
+                          )
                         }
                       />
                       <Input
                         placeholder="标签值（Tag Value）"
                         value={row.value}
                         onChange={(e) =>
-                          onCloudTagRowsChange((prev) => prev.map((it, i) => (i === idx ? { ...it, value: e.target.value } : it)))
+                          onCloudTagRowsChange((prev) =>
+                            prev.map((it, i) => (i === idx ? { ...it, value: e.target.value } : it)),
+                          )
                         }
                       />
                       <Button danger onClick={() => onCloudTagRowsChange((prev) => prev.filter((_, i) => i !== idx))}>
@@ -135,7 +142,9 @@ export function ServerFormDrawer({
                     </Space>
                   ))}
                   <Space>
-                    <Button onClick={() => onCloudTagRowsChange((prev) => [...prev, { key: "", value: "" }])}>新增标签</Button>
+                    <Button onClick={() => onCloudTagRowsChange((prev) => [...prev, { key: "", value: "" }])}>
+                      新增标签
+                    </Button>
                     <Typography.Text type="secondary">保存后会回写腾讯云标签并同步到本地。</Typography.Text>
                   </Space>
                 </Space>
@@ -205,7 +214,10 @@ export function ServerFormDrawer({
                     />
                   </Form.Item>
                   <Form.Item label="密码" name="password">
-                    <Input.Password placeholder={current ? "留空表示保留原密码" : undefined} autoComplete="new-password" />
+                    <Input.Password
+                      placeholder={current ? "留空表示保留原密码" : undefined}
+                      autoComplete="new-password"
+                    />
                   </Form.Item>
                 </>
               )

@@ -25,8 +25,8 @@ export function getNetworkPolicyDetail(clusterId: number, namespace: string, nam
   return svc.detail(k8sParams(clusterId, { namespace, name }));
 }
 
-export function applyNetworkPolicy(clusterId: number, manifest: string) {
-  return svc.apply({ cluster_id: clusterId, manifest });
+export function applyNetworkPolicy(clusterId: number, manifest: string, idemKey?: string) {
+  return svc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 
 export function deleteNetworkPolicy(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {

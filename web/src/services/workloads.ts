@@ -95,8 +95,8 @@ export function listDeployments(clusterId: number, namespace: string, keyword?: 
 export function getDeploymentDetail(clusterId: number, namespace: string, name: string) {
   return deploymentsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyDeployment(clusterId: number, manifest: string) {
-  return deploymentsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyDeployment(clusterId: number, manifest: string, idemKey?: string) {
+  return deploymentsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 
 export type WorkloadPreviewResult = {
@@ -198,8 +198,8 @@ export function listStatefulSets(clusterId: number, namespace: string, keyword?:
 export function getStatefulSetDetail(clusterId: number, namespace: string, name: string) {
   return statefulsetsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyStatefulSet(clusterId: number, manifest: string) {
-  return statefulsetsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyStatefulSet(clusterId: number, manifest: string, idemKey?: string) {
+  return statefulsetsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 export function previewApplyStatefulSet(clusterId: number, manifest: string) {
   return statefulsetsSvc.post<WorkloadPreviewResult>("/preview-apply", { cluster_id: clusterId, manifest });
@@ -253,8 +253,8 @@ export function listDaemonSets(clusterId: number, namespace: string, keyword?: s
 export function getDaemonSetDetail(clusterId: number, namespace: string, name: string) {
   return daemonsetsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyDaemonSet(clusterId: number, manifest: string) {
-  return daemonsetsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyDaemonSet(clusterId: number, manifest: string, idemKey?: string) {
+  return daemonsetsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 export function deleteDaemonSet(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return daemonsetsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
@@ -303,8 +303,8 @@ export function listJobs(clusterId: number, namespace: string, keyword?: string)
 export function getJobDetail(clusterId: number, namespace: string, name: string) {
   return jobsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyJob(clusterId: number, manifest: string) {
-  return jobsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyJob(clusterId: number, manifest: string, idemKey?: string) {
+  return jobsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 export function deleteJob(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return jobsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
@@ -343,8 +343,8 @@ export function listCronJobsV2(clusterId: number, namespace: string, keyword?: s
 export function getCronJobDetail(clusterId: number, namespace: string, name: string) {
   return cronjobsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyCronJob(clusterId: number, manifest: string) {
-  return cronjobsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyCronJob(clusterId: number, manifest: string, idemKey?: string) {
+  return cronjobsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 export function deleteCronJob(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return cronjobsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));

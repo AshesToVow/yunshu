@@ -14,7 +14,9 @@ export function parseTemplatePresetPair(raw: string): { summary: string; descrip
   }
 }
 
-export function parseRuleBuilderExpr(exprRaw: string): { conditions: RuleBuilderCondition[]; logic: RuleBuilderLogic } | null {
+export function parseRuleBuilderExpr(
+  exprRaw: string,
+): { conditions: RuleBuilderCondition[]; logic: RuleBuilderLogic } | null {
   const expr = String(exprRaw || "").trim();
   if (!expr) return null;
   const hasOr = /\s+or\s+/i.test(expr);

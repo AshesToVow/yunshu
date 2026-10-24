@@ -17,9 +17,7 @@ const EsmgmtStoragePage = lazy(() =>
 const EsmgmtBackupsPage = lazy(() =>
   import("../../pages/esmgmt-backups-page").then((m) => ({ default: m.EsmgmtBackupsPage })),
 );
-const EsmgmtDocsPage = lazy(() =>
-  import("../../pages/esmgmt-docs-page").then((m) => ({ default: m.EsmgmtDocsPage })),
-);
+const EsmgmtDocsPage = lazy(() => import("../../pages/esmgmt-docs-page").then((m) => ({ default: m.EsmgmtDocsPage })));
 const EsmgmtTemplatesPage = lazy(() =>
   import("../../pages/esmgmt-templates-page").then((m) => ({ default: m.EsmgmtTemplatesPage })),
 );

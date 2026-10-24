@@ -18,19 +18,11 @@ import { deptToTreeData, normalizeCloudExpiryLabelsJSON } from "./platform-helpe
 
 dayjs.locale("zh-cn");
 
-
 export function useAlertMonitorPlatformState() {
   // URL/路由派生状态（Tab、项目上下文、历史事件分类、历史 URL 兼容）
   // 已抽到 state/use-alert-monitor-url-state.ts，返回字段名保持不变
-  const {
-    tab,
-    setTab,
-    projectContextId,
-    setProjectContext,
-    historyEventCategory,
-    openHistoryTab,
-  } = useAlertMonitorUrlState();
-
+  const { tab, setTab, projectContextId, setProjectContext, historyEventCategory, openHistoryTab } =
+    useAlertMonitorUrlState();
 
   // 数据源 Hook 与 PromQL 控制台 Hook 互为依赖（前者加载完要为控制台预选数据源，
   // 后者又要按 dsList 做「当前选中项已失效」兜底），用 ref 转发 setter 打破 Hook
@@ -252,7 +244,11 @@ export function useAlertMonitorPlatformState() {
   useEffect(() => {
     void (async () => {
       try {
-        const [tree, u, projRes] = await Promise.all([getDepartmentTree(), getUsers({ page: 1, page_size: 500 }), getProjects({ page: 1, page_size: 500 })]);
+        const [tree, u, projRes] = await Promise.all([
+          getDepartmentTree(),
+          getUsers({ page: 1, page_size: 500 }),
+          getProjects({ page: 1, page_size: 500 }),
+        ]);
         setDeptTree(deptToTreeData(tree ?? []));
         setUsers(
           (u.list ?? []).map((it) => ({

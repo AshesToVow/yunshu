@@ -24,7 +24,15 @@ function norm(v: unknown): string {
  * - DictFillSelect：只有一个业务字段，直接存字典 value（例如 url、token、agentId）。
  * - DictLabelFillSelect：需要“按 label 选、按 value 存”，并且希望持久化 label 用于稳定回显。
  */
-export function DictFillSelect({ form, fieldName, options, placeholder, allowClear = true, disabled, style }: DictFillSelectProps) {
+export function DictFillSelect({
+  form,
+  fieldName,
+  options,
+  placeholder,
+  allowClear = true,
+  disabled,
+  style,
+}: DictFillSelectProps) {
   const raw = Form.useWatch(fieldName, form);
   const [pickedSensitiveId, setPickedSensitiveId] = useState<number | undefined>();
 

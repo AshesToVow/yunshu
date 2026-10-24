@@ -92,14 +92,24 @@ export function EventsPage() {
   const listColumns: ColumnsType<EventItem> = [
     { title: "时间", dataIndex: "last_time", width: 180, render: (v: string, r) => v || r.creation_time || "-" },
     { title: "命名空间", dataIndex: "namespace", width: 140 },
-    { title: "类型", dataIndex: "type", width: 90, render: (v: string) => <Tag color={v === "Warning" ? "error" : "success"}>{v || "-"}</Tag> },
+    {
+      title: "类型",
+      dataIndex: "type",
+      width: 90,
+      render: (v: string) => <Tag color={v === "Warning" ? "error" : "success"}>{v || "-"}</Tag>,
+    },
     { title: "原因", dataIndex: "reason", width: 160 },
     {
       title: "对象",
       key: "obj",
       width: 240,
       render: (_, r) => (
-        <InvolvedObjectLink clusterId={clusterId} namespace={r.namespace} kind={r.involved_kind} name={r.involved_name} />
+        <InvolvedObjectLink
+          clusterId={clusterId}
+          namespace={r.namespace}
+          kind={r.involved_kind}
+          name={r.involved_name}
+        />
       ),
     },
     { title: "次数", dataIndex: "count", width: 80 },
@@ -114,11 +124,21 @@ export function EventsPage() {
       key: "obj",
       width: 240,
       render: (_, r) => (
-        <InvolvedObjectLink clusterId={clusterId} namespace={r.namespace} kind={r.involved_kind} name={r.involved_name} />
+        <InvolvedObjectLink
+          clusterId={clusterId}
+          namespace={r.namespace}
+          kind={r.involved_kind}
+          name={r.involved_name}
+        />
       ),
     },
     { title: "原因", dataIndex: "reason", width: 140 },
-    { title: "类型", dataIndex: "type", width: 90, render: (v) => <Tag color={v === "Warning" ? "error" : "success"}>{v}</Tag> },
+    {
+      title: "类型",
+      dataIndex: "type",
+      width: 90,
+      render: (v) => <Tag color={v === "Warning" ? "error" : "success"}>{v}</Tag>,
+    },
     { title: "事件条数", dataIndex: "event_count", width: 90 },
     { title: "累计次数", dataIndex: "total_count", width: 90 },
     { title: "最新消息", dataIndex: "message", ellipsis: true },
@@ -161,7 +181,12 @@ export function EventsPage() {
             loading={loading}
             dataSource={data}
             columns={listColumns}
-            pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50, 100],
+              showQuickJumper: true,
+            }}
           />
         ) : (
           <Table

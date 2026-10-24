@@ -38,7 +38,14 @@ export function AlertAckActionButton({ acked, loading, disabled, variant = "link
   const size = "small";
   if (acked) {
     return (
-      <Button type={btnType} size={size} icon={<CheckOutlined />} loading={loading} disabled={disabled} onClick={onClear}>
+      <Button
+        type={btnType}
+        size={size}
+        icon={<CheckOutlined />}
+        loading={loading}
+        disabled={disabled}
+        onClick={onClear}
+      >
         取消认领
       </Button>
     );
@@ -50,7 +57,14 @@ export function AlertAckActionButton({ acked, loading, disabled, variant = "link
   }));
   if (items.length <= 1) {
     return (
-      <Button type={btnType} size={size} icon={<CheckOutlined />} loading={loading} disabled={disabled} onClick={() => onAck(options[0]?.minutes)}>
+      <Button
+        type={btnType}
+        size={size}
+        icon={<CheckOutlined />}
+        loading={loading}
+        disabled={disabled}
+        onClick={() => onAck(options[0]?.minutes)}
+      >
         认领
       </Button>
     );

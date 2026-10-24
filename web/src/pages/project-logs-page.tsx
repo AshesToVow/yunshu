@@ -179,13 +179,19 @@ export function ProjectLogsPage() {
     saveLogViewerPrefs({ listMode, visibleFields, chartMode });
   }, [listMode, visibleFields, chartMode]);
 
-  const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })),
+    [projects],
+  );
   const serverOptions = useMemo(
     () => servers.map((s) => ({ value: s.id, label: `${s.name} ${s.host}:${s.port}` })),
     [servers],
   );
   const serviceOptions = useMemo(() => services.map((s) => ({ value: s.id, label: s.name })), [services]);
-  const sourceOptions = useMemo(() => sources.map((s) => ({ value: s.id, label: `${s.log_type}:${s.path}` })), [sources]);
+  const sourceOptions = useMemo(
+    () => sources.map((s) => ({ value: s.id, label: `${s.log_type}:${s.path}` })),
+    [sources],
+  );
   const clusterOptions = useMemo(() => clusters.map((c) => ({ value: c.id, label: c.name })), [clusters]);
 
   const reloadServers = useCallback(async (projectId?: number) => {
@@ -210,26 +216,26 @@ export function ProjectLogsPage() {
   const [scannedHint, setScannedHint] = useState("");
 
   const buildSearchParams = useCallback((values: SearchForm, page?: number, pageSize?: number) => {
-      const range = values.time_range;
+    const range = values.time_range;
     return {
-          server_id: values.server_id,
-          service_id: values.service_id,
-          log_source_id: values.log_source_id,
+      server_id: values.server_id,
+      service_id: values.service_id,
+      log_source_id: values.log_source_id,
       service_name: values.service_name?.trim() || undefined,
       host: values.host?.trim() || undefined,
-          collector_mode: values.collector_mode || undefined,
-          cluster_id: values.cluster_id,
-          namespace: values.namespace?.trim() || undefined,
-          pod: values.pod?.trim() || undefined,
-          container: values.container?.trim() || undefined,
-          keyword: values.keyword?.trim() || undefined,
-          level: values.level?.trim() || undefined,
+      collector_mode: values.collector_mode || undefined,
+      cluster_id: values.cluster_id,
+      namespace: values.namespace?.trim() || undefined,
+      pod: values.pod?.trim() || undefined,
+      container: values.container?.trim() || undefined,
+      keyword: values.keyword?.trim() || undefined,
+      level: values.level?.trim() || undefined,
       file_path: values.file_path?.trim() || undefined,
       extra_field: values.extra_field?.trim() || undefined,
       extra_value: values.extra_value?.trim() || undefined,
       index_pattern: values.index_pattern?.trim() || undefined,
-          from: range?.[0]?.toISOString(),
-          to: range?.[1]?.toISOString(),
+      from: range?.[0]?.toISOString(),
+      to: range?.[1]?.toISOString(),
       page: page ?? values.page ?? 1,
       page_size: pageSize ?? values.page_size ?? 100,
     };
@@ -316,7 +322,10 @@ export function ProjectLogsPage() {
       const params = buildSearchParams(values);
       const [ov, pat, an, fields] = await Promise.all([
         getProjectLogOverview(values.project_id, params).catch(() => null),
-        getProjectLogPatterns(values.project_id, { ...params, page: 1, page_size: 20 }).catch(() => ({ list: [], total: 0 })),
+        getProjectLogPatterns(values.project_id, { ...params, page: 1, page_size: 20 }).catch(() => ({
+          list: [],
+          total: 0,
+        })),
         getProjectLogAnomalies(values.project_id, { page: 1, page_size: 50 }).catch(() => ({ list: [], total: 0 })),
         getProjectLogFields(values.project_id, params).catch(() => null),
       ]);
@@ -420,9 +429,9 @@ export function ProjectLogsPage() {
         setActivePreset("24h");
       }
       const initial: Partial<SearchForm> = {
-          project_id: defaultProject,
-          page: 1,
-          page_size: 100,
+        project_id: defaultProject,
+        page: 1,
+        page_size: 100,
         time_range: timeRange,
         level: searchParams.get("level") || undefined,
         log_source_id: Number(searchParams.get("log_source_id") || 0) || undefined,
@@ -499,17 +508,14 @@ export function ProjectLogsPage() {
     ];
   }, [facetSearch, levelFacets, serviceFacets, hostFacets, namespaceFacets, podFacets, containerFacets]);
 
-  function applyFacet(
-    field: "level" | "service" | "host" | "namespace" | "pod" | "container",
-    value: string,
-  ) {
+  function applyFacet(field: "level" | "service" | "host" | "namespace" | "pod" | "container", value: string) {
     const toggle = (cur: string | undefined) => (cur === value ? undefined : value);
     if (field === "level") {
       const next = toggle(watchLevel);
       form.setFieldsValue({ level: next });
       void runSearch({ page: 1, level: next });
-                  return;
-                }
+      return;
+    }
     if (field === "service") {
       const next = toggle(watchServiceName);
       form.setFieldsValue({ service_name: next });
@@ -612,8 +618,8 @@ export function ProjectLogsPage() {
     const pid = form.getFieldValue("project_id") as number | undefined;
     if (!pid) {
       message.warning("请选择项目");
-                      return;
-                    }
+      return;
+    }
     const name = window.prompt("收藏名称");
     if (!name?.trim()) return;
     try {
@@ -655,7 +661,7 @@ export function ProjectLogsPage() {
       }
       form.setFieldsValue(patch);
       void runSearch(patch);
-                      } catch {
+    } catch {
       message.error("收藏条件解析失败");
     }
   }
@@ -721,11 +727,11 @@ export function ProjectLogsPage() {
           </Typography.Title>
           <Form form={form} layout="inline" className="project-logs-viewer-query-form">
             <Form.Item name="project_id" rules={[{ required: true }]}>
-                <Select
+              <Select
                 style={{ width: 200 }}
                 placeholder="项目"
-                  options={projectOptions}
-                  onChange={(pid) => {
+                options={projectOptions}
+                onChange={(pid) => {
                   form.setFieldsValue({
                     server_id: undefined,
                     service_id: undefined,
@@ -733,22 +739,18 @@ export function ProjectLogsPage() {
                     service_name: undefined,
                     host: undefined,
                   });
-                    setServers([]);
-                    setServices([]);
-                    setSources([]);
-                    void reloadServers(pid);
+                  setServers([]);
+                  setServices([]);
+                  setSources([]);
+                  void reloadServers(pid);
                   void reloadServices(pid);
                   void reloadSavedQueries(pid);
                   void reloadDropRules(pid);
-                  }}
-                />
-              </Form.Item>
-            <Form.Item name="time_range">
-              <DatePicker.RangePicker
-                showTime
-                allowClear={false}
-                onChange={() => setActivePreset("")}
+                }}
               />
+            </Form.Item>
+            <Form.Item name="time_range">
+              <DatePicker.RangePicker showTime allowClear={false} onChange={() => setActivePreset("")} />
             </Form.Item>
             <Form.Item>
               <Space.Compact size="middle">
@@ -765,11 +767,7 @@ export function ProjectLogsPage() {
             </Form.Item>
             <Form.Item name="keyword">
               <Tooltip title="支持简化 DQL：level:ERROR AND service:api host:node-1">
-                <Input
-                  allowClear
-                  placeholder="关键词 / DQL：level:ERROR service:xxx"
-                  style={{ width: 280 }}
-                />
+                <Input allowClear placeholder="关键词 / DQL：level:ERROR service:xxx" style={{ width: 280 }} />
               </Tooltip>
             </Form.Item>
             <Form.Item name="level" hidden>
@@ -797,7 +795,12 @@ export function ProjectLogsPage() {
               <Input />
             </Form.Item>
             <Form.Item>
-              <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => void runSearch({ page: 1 })}>
+              <Button
+                type="primary"
+                icon={<SearchOutlined />}
+                loading={loading}
+                onClick={() => void runSearch({ page: 1 })}
+              >
                 查询
               </Button>
             </Form.Item>
@@ -877,91 +880,101 @@ export function ProjectLogsPage() {
               <Form form={form} layout="vertical" size="small">
                 <Row gutter={12}>
                   <Col span={4}>
-              <Form.Item label="采集来源" name="collector_mode">
-                <Select
-                  allowClear
-                  placeholder="全部"
-                  options={[
-                    { value: "host", label: "主机 Agent" },
-                    { value: "k8s", label: "集群 K8s" },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label="服务器" name="server_id">
-                <Select
-                  allowClear
-                  disabled={watchCollectorMode === "k8s"}
-                  options={serverOptions}
-                  placeholder="全部"
-                  onChange={(sid) => {
-                    const pid = form.getFieldValue("project_id");
-                    form.setFieldsValue({ service_id: undefined, log_source_id: undefined });
-                    setServices([]);
-                    setSources([]);
-                    void reloadServices(pid, sid);
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label="服务" name="service_id">
-                <Select
-                  allowClear
-                  disabled={watchCollectorMode === "k8s"}
-                  options={serviceOptions}
-                  placeholder="全部"
-                  onChange={(svcId) => {
-                    const pid = form.getFieldValue("project_id");
-                    form.setFieldsValue({ log_source_id: undefined });
-                    setSources([]);
-                    void reloadSources(pid, svcId);
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label="日志源" name="log_source_id">
-                <Select allowClear disabled={watchCollectorMode === "k8s"} options={sourceOptions} placeholder="全部" />
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label="K8s 集群" name="cluster_id">
-                <Select allowClear disabled={watchCollectorMode === "host"} options={clusterOptions} placeholder="全部" />
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label="Namespace" name="namespace">
+                    <Form.Item label="采集来源" name="collector_mode">
+                      <Select
+                        allowClear
+                        placeholder="全部"
+                        options={[
+                          { value: "host", label: "主机 Agent" },
+                          { value: "k8s", label: "集群 K8s" },
+                        ]}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={4}>
+                    <Form.Item label="服务器" name="server_id">
+                      <Select
+                        allowClear
+                        disabled={watchCollectorMode === "k8s"}
+                        options={serverOptions}
+                        placeholder="全部"
+                        onChange={(sid) => {
+                          const pid = form.getFieldValue("project_id");
+                          form.setFieldsValue({ service_id: undefined, log_source_id: undefined });
+                          setServices([]);
+                          setSources([]);
+                          void reloadServices(pid, sid);
+                        }}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={4}>
+                    <Form.Item label="服务" name="service_id">
+                      <Select
+                        allowClear
+                        disabled={watchCollectorMode === "k8s"}
+                        options={serviceOptions}
+                        placeholder="全部"
+                        onChange={(svcId) => {
+                          const pid = form.getFieldValue("project_id");
+                          form.setFieldsValue({ log_source_id: undefined });
+                          setSources([]);
+                          void reloadSources(pid, svcId);
+                        }}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={4}>
+                    <Form.Item label="日志源" name="log_source_id">
+                      <Select
+                        allowClear
+                        disabled={watchCollectorMode === "k8s"}
+                        options={sourceOptions}
+                        placeholder="全部"
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={4}>
+                    <Form.Item label="K8s 集群" name="cluster_id">
+                      <Select
+                        allowClear
+                        disabled={watchCollectorMode === "host"}
+                        options={clusterOptions}
+                        placeholder="全部"
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={4}>
+                    <Form.Item label="Namespace" name="namespace">
                       <Input allowClear disabled={watchCollectorMode === "host"} />
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label="Pod" name="pod">
+                    </Form.Item>
+                  </Col>
+                  <Col span={4}>
+                    <Form.Item label="Pod" name="pod">
                       <Input allowClear disabled={watchCollectorMode === "host"} />
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label="容器" name="container">
+                    </Form.Item>
+                  </Col>
+                  <Col span={4}>
+                    <Form.Item label="容器" name="container">
                       <Input allowClear disabled={watchCollectorMode === "host"} />
-              </Form.Item>
-            </Col>
+                    </Form.Item>
+                  </Col>
                   <Col span={8}>
                     <Form.Item label="文件名" name="file_path">
                       <Input allowClear placeholder="748.log / server.log" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
+                    </Form.Item>
+                  </Col>
+                  <Col span={8}>
                     <Form.Item
                       label="索引 Pattern"
                       name="index_pattern"
                       tooltip="可选，覆盖默认索引（多数据流）。留空则按采集模式自动选择。"
                     >
                       <Input allowClear placeholder="例如 logs-app-* / k8s-logs-*" />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Form>
             ),
           },
         ]}
@@ -1064,7 +1077,7 @@ export function ProjectLogsPage() {
                 <Typography.Text type="secondary" className="project-logs-facet-empty">
                   检索后展示字段
                 </Typography.Text>
-        ) : null}
+              ) : null}
             </div>
           </div>
         </aside>
@@ -1089,10 +1102,18 @@ export function ProjectLogsPage() {
                 ) : null}
               </Space>
               <Space size={4}>
-                <Button size="small" type={chartMode === "timeline" ? "primary" : "default"} onClick={() => setChartMode("timeline")}>
+                <Button
+                  size="small"
+                  type={chartMode === "timeline" ? "primary" : "default"}
+                  onClick={() => setChartMode("timeline")}
+                >
                   时序图
                 </Button>
-                <Button size="small" type={chartMode === "pie" ? "primary" : "default"} onClick={() => setChartMode("pie")}>
+                <Button
+                  size="small"
+                  type={chartMode === "pie" ? "primary" : "default"}
+                  onClick={() => setChartMode("pie")}
+                >
                   饼图
                 </Button>
               </Space>
@@ -1166,22 +1187,22 @@ export function ProjectLogsPage() {
                           key: "all",
                           label: "全部日志",
                           children: (
-          <Table
-            rowKey={(r, i) => `${r.timestamp}-${i}`}
-            loading={loading}
+                            <Table
+                              rowKey={(r, i) => `${r.timestamp}-${i}`}
+                              loading={loading}
                               columns={logColumns}
-            dataSource={rows}
-            size="small"
+                              dataSource={rows}
+                              size="small"
                               className={`project-logs-compact-table${listMode === "stacked" ? " is-stacked" : ""}`}
-            pagination={{
-              current: form.getFieldValue("page") ?? 1,
-              pageSize: form.getFieldValue("page_size") ?? 100,
-              total,
-              showSizeChanger: true,
-              pageSizeOptions: ["50", "100", "200", "500"],
+                              pagination={{
+                                current: form.getFieldValue("page") ?? 1,
+                                pageSize: form.getFieldValue("page_size") ?? 100,
+                                total,
+                                showSizeChanger: true,
+                                pageSizeOptions: ["50", "100", "200", "500"],
                                 showTotal: (t) => `共 ${t.toLocaleString()} 条`,
-              onChange: (page, pageSize) => void runSearch({ page, page_size: pageSize }),
-            }}
+                                onChange: (page, pageSize) => void runSearch({ page, page_size: pageSize }),
+                              }}
                               scroll={{ x: 900 }}
                             />
                           ),
@@ -1196,7 +1217,12 @@ export function ProjectLogsPage() {
                               dataSource={patterns}
                               pagination={false}
                               columns={[
-                                { title: "级别", dataIndex: "level", width: 80, render: (v: string) => <Tag>{v || "-"}</Tag> },
+                                {
+                                  title: "级别",
+                                  dataIndex: "level",
+                                  width: 80,
+                                  render: (v: string) => <Tag>{v || "-"}</Tag>,
+                                },
                                 { title: "命中", dataIndex: "hit_count", width: 80 },
                                 { title: "服务", dataIndex: "service_name", width: 120 },
                                 {
@@ -1278,7 +1304,11 @@ export function ProjectLogsPage() {
                       { title: "级别", dataIndex: "level", width: 80, render: (v: string) => <Tag>{v || "-"}</Tag> },
                       { title: "命中", dataIndex: "hit_count", width: 80 },
                       { title: "服务", dataIndex: "service_name", width: 120 },
-                      { title: "签名", dataIndex: "signature", render: (v: string) => <Typography.Text code>{v}</Typography.Text> },
+                      {
+                        title: "签名",
+                        dataIndex: "signature",
+                        render: (v: string) => <Typography.Text code>{v}</Typography.Text>,
+                      },
                       { title: "样例", dataIndex: "sample", ellipsis: true },
                     ]}
                   />
@@ -1312,7 +1342,13 @@ export function ProjectLogsPage() {
                         width: 100,
                         render: (v: string) => {
                           const color =
-                            v === "open" ? " magentared" : v === "resolved" ? "success" : v === "muted" ? "default" : "processing";
+                            v === "open"
+                              ? " magentared"
+                              : v === "resolved"
+                                ? "success"
+                                : v === "muted"
+                                  ? "default"
+                                  : "processing";
                           return <Tag color={color === " magentared" ? "magenta" : color}>{v}</Tag>;
                         },
                       },
@@ -1327,8 +1363,7 @@ export function ProjectLogsPage() {
                         title: "签名",
                         dataIndex: "signature",
                         width: 160,
-                        render: (v: string) =>
-                          v ? <Typography.Text code>{v.slice(0, 40)}</Typography.Text> : "-",
+                        render: (v: string) => (v ? <Typography.Text code>{v.slice(0, 40)}</Typography.Text> : "-"),
                       },
                       { title: "时间", dataIndex: "detected_at", width: 160, render: (v: string) => formatDateTime(v) },
                       {
@@ -1427,7 +1462,7 @@ export function ProjectLogsPage() {
             ]}
           />
         </main>
-        </div>
+      </div>
 
       <Modal
         title="指派负责人"
@@ -1449,9 +1484,7 @@ export function ProjectLogsPage() {
             try {
               await updateProjectLogAnomaly(pid, assignAnomaly.id, {
                 assignee_id: assignUserId ?? 0,
-                assignee_name: member
-                  ? member.nickname || member.username
-                  : "",
+                assignee_name: member ? member.nickname || member.username : "",
               });
               message.success(assignUserId ? "已指派" : "已清空负责人");
               setAssignOpen(false);
@@ -1824,7 +1857,13 @@ function LogLineCell({
 }) {
   const level = normalizeLogLevel(row.level || extractLogLevel(row.message));
   const color =
-    level === "ERROR" || level === "FATAL" ? "#cf1322" : level === "WARN" ? "#d48806" : level === "INFO" ? "#1677ff" : "#595959";
+    level === "ERROR" || level === "FATAL"
+      ? "#cf1322"
+      : level === "WARN"
+        ? "#d48806"
+        : level === "INFO"
+          ? "#1677ff"
+          : "#595959";
   const fields = row.fields || {};
   const pick = (name: string) => {
     if (fields[name]) return fields[name];
@@ -1960,7 +1999,10 @@ function LogAnalysisPanel({
                 <div key={lv} className="project-logs-level-row">
                   <Tag>{lv}</Tag>
                   <div className="project-logs-level-bar-track">
-                    <div className="project-logs-level-bar-fill" style={{ width: `${Math.round((cnt / max) * 100)}%` }} />
+                    <div
+                      className="project-logs-level-bar-fill"
+                      style={{ width: `${Math.round((cnt / max) * 100)}%` }}
+                    />
                   </div>
                   <span className="project-logs-level-count">{cnt.toLocaleString()}</span>
                 </div>
@@ -2154,8 +2196,7 @@ function LogHistogramChart({
           return (
             <g key={`${b.time}-${i}`} style={{ cursor: "pointer" }} onClick={() => onBucketClick?.(b)}>
               <title>
-                {`${formatDateTime(b.time)}: ${b.count}` +
-                  ordered.map((lv) => `\n${lv}=${levels[lv]}`).join("")}
+                {`${formatDateTime(b.time)}: ${b.count}` + ordered.map((lv) => `\n${lv}=${levels[lv]}`).join("")}
               </title>
               {ordered.map((lv) => {
                 const cnt = levels[lv] || 0;
@@ -2200,7 +2241,9 @@ function sanitizeLogHighlight(input: string): string {
 }
 
 function normalizeLogLevel(level?: string) {
-  const v = String(level || "").trim().toUpperCase();
+  const v = String(level || "")
+    .trim()
+    .toUpperCase();
   if (!v) return "";
   return v === "WARNING" ? "WARN" : v;
 }

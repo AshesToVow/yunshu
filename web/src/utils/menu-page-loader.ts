@@ -41,7 +41,9 @@ function resolveGlobKey(componentField: string): string | undefined {
   }
 
   const expectedId = normalized.endsWith("-page") ? normalized : `${normalized}-page`;
-  const key = Object.keys(pageLoaders).find((k) => k.replace(/^\.\.\/pages\//, "").replace(/\.tsx$/i, "") === expectedId);
+  const key = Object.keys(pageLoaders).find(
+    (k) => k.replace(/^\.\.\/pages\//, "").replace(/\.tsx$/i, "") === expectedId,
+  );
   return key;
 }
 
@@ -54,7 +56,10 @@ export function createLazyMenuPage(componentField: string): LazyExoticComponent<
     return null;
   }
 
-  const fileBase = key.split("/").pop()!.replace(/\.tsx$/i, "");
+  const fileBase = key
+    .split("/")
+    .pop()!
+    .replace(/\.tsx$/i, "");
   const exportName = toExportNameFromFilename(fileBase);
 
   return lazy(async () => {

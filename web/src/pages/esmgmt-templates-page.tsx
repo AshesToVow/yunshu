@@ -92,7 +92,7 @@ export function EsmgmtTemplatesPage() {
       />
       <Card className="table-card">
         <Table
-          rowKey={(r) => `${r.kind}-${r.name}`}
+          rowKey={(r) => (r ? `${r.kind}-${r.name}` : "")}
           loading={loading}
           dataSource={rows}
           pagination={{ pageSize: 20 }}
@@ -123,7 +123,11 @@ export function EsmgmtTemplatesPage() {
                           title: `删除模板 ${row.name}？`,
                           onOk: async () => {
                             try {
-                              await deleteEsmgmtTemplate({ connection_id: connectionId, kind: row.kind, name: row.name });
+                              await deleteEsmgmtTemplate({
+                                connection_id: connectionId,
+                                kind: row.kind,
+                                name: row.name,
+                              });
                               message.success("已删除");
                               void load();
                             } catch (e) {

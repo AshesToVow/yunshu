@@ -648,8 +648,12 @@
   background:
     linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.18) 50%) no-repeat,
     linear-gradient(135deg, transparent 65%, rgba(0, 0, 0, 0.18) 65%) no-repeat;
-  background-position: right 2px bottom 2px, right 2px bottom 2px;
-  background-size: 12px 12px, 8px 8px;
+  background-position:
+    right 2px bottom 2px,
+    right 2px bottom 2px;
+  background-size:
+    12px 12px,
+    8px 8px;
   opacity: 0.7;
 }
 
@@ -661,8 +665,12 @@
   background:
     linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.28) 50%) no-repeat,
     linear-gradient(135deg, transparent 65%, rgba(255, 255, 255, 0.28) 65%) no-repeat;
-  background-position: right 2px bottom 2px, right 2px bottom 2px;
-  background-size: 12px 12px, 8px 8px;
+  background-position:
+    right 2px bottom 2px,
+    right 2px bottom 2px;
+  background-size:
+    12px 12px,
+    8px 8px;
 }
 
 .k8s-summary-row-wrap {

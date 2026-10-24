@@ -3,10 +3,7 @@ import type { AntdMenuItem } from "../utils/admin-menu";
 import { isPathAllowedByPlugins } from "./plugin-path";
 
 /** 按后端启用的业务插件过滤菜单树；父目录关闭时提升已放行的子菜单 */
-export function filterMenuTreeByPlugins(
-  menus: MenuItem[],
-  isPluginEnabled: (name: string) => boolean,
-): MenuItem[] {
+export function filterMenuTreeByPlugins(menus: MenuItem[], isPluginEnabled: (name: string) => boolean): MenuItem[] {
   const walk = (nodes: MenuItem[]): MenuItem[] => {
     const out: MenuItem[] = [];
     for (const m of nodes) {
@@ -16,7 +13,7 @@ export function filterMenuTreeByPlugins(
         if (children?.length) out.push(...children);
         continue;
       }
-      if (m.children?.length && !(children?.length)) {
+      if (m.children?.length && !children?.length) {
         continue;
       }
       out.push({ ...m, children });
@@ -27,10 +24,7 @@ export function filterMenuTreeByPlugins(
 }
 
 /** 过滤 Ant Design 侧栏菜单（兜底菜单等） */
-export function filterAntdMenuItems(
-  items: AntdMenuItem[],
-  isPluginEnabled: (name: string) => boolean,
-): AntdMenuItem[] {
+export function filterAntdMenuItems(items: AntdMenuItem[], isPluginEnabled: (name: string) => boolean): AntdMenuItem[] {
   const walk = (nodes: AntdMenuItem[]): AntdMenuItem[] => {
     const out: AntdMenuItem[] = [];
     for (const node of nodes) {

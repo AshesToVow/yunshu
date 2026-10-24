@@ -1,8 +1,24 @@
 import { extractApiErrorMessage } from "../../../services/http";
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Segmented, Select, Space, Switch, Table, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Segmented,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Typography,
+  message,
+} from "antd";
 import { PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useAlertMonitor } from "../context";
+import { useIdempotencyKey } from "../../../hooks/use-idempotency-key";
 import { tablePagination } from "../../../utils/table-pagination";
 import {
   approveMonitorRuleChange,
@@ -20,6 +36,7 @@ import {
 
 export function RulesTab() {
   const ctx = useAlertMonitor();
+  const { key: approveIdemKey, rotate: rotateApproveIdemKey } = useIdempotencyKey();
   const [tplOpen, setTplOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [tplLoading, setTplLoading] = useState(false);
@@ -54,10 +71,7 @@ export function RulesTab() {
     return Array.from(set);
   }, [templates]);
 
-  const filtered = useMemo(
-    () => (group ? templates.filter((t) => t.group === group) : templates),
-    [templates, group],
-  );
+  const filtered = useMemo(() => (group ? templates.filter((t) => t.group === group) : templates), [templates, group]);
 
   async function openTemplates() {
     setTplOpen(true);
@@ -148,7 +162,9 @@ export function RulesTab() {
         </Button>
         <Button
           icon={<ReloadOutlined />}
-          onClick={() => void Promise.all([ctx.loadRules(ctx.projectContextId), ctx.loadDatasources(ctx.projectContextId)])}
+          onClick={() =>
+            void Promise.all([ctx.loadRules(ctx.projectContextId), ctx.loadDatasources(ctx.projectContextId)])
+          }
         >
           刷新
         </Button>
@@ -170,9 +186,10 @@ export function RulesTab() {
         </Typography.Text>
       </Space>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        规则中心是平台主告警入口：PromQL / SLO 燃尽 / 日志告警（ERROR 计数与突增）统一评估后，经屏蔽 / 抑制 / 订阅树投递。Alertmanager Webhook 仍可接入，但带
-        <Typography.Text code>monitor_rule_id</Typography.Text> / <Typography.Text code>source=prometheus_monitor</Typography.Text>{" "}
-        的事件会被跳过，避免双发。
+        规则中心是平台主告警入口：PromQL / SLO 燃尽 / 日志告警（ERROR 计数与突增）统一评估后，经屏蔽 / 抑制 /
+        订阅树投递。Alertmanager Webhook 仍可接入，但带
+        <Typography.Text code>monitor_rule_id</Typography.Text> /{" "}
+        <Typography.Text code>source=prometheus_monitor</Typography.Text> 的事件会被跳过，避免双发。
       </Typography.Paragraph>
       <Alert
         type="info"
@@ -200,7 +217,12 @@ export function RulesTab() {
           size="small"
           title={`待审批规则变更 (${pendingChanges.length})`}
           extra={
-            <Button size="small" icon={<ReloadOutlined />} loading={pendingLoading} onClick={() => void loadPendingChanges()}>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={pendingLoading}
+              onClick={() => void loadPendingChanges()}
+            >
               刷新
             </Button>
           }
@@ -239,7 +261,8 @@ export function RulesTab() {
                       size="small"
                       type="link"
                       onClick={() =>
-                        void approveMonitorRuleChange(r.id).then(async () => {
+                        void approveMonitorRuleChange(r.id, approveIdemKey).then(async () => {
+                          rotateApproveIdemKey();
                           message.success("已批准并应用");
                           await loadPendingChanges();
                           await ctx.loadRules(ctx.projectContextId);
@@ -446,7 +469,12 @@ export function RulesTab() {
             rules={[{ required: true, message: "请粘贴 YAML" }]}
             extra="支持标准 groups[].rules[].alert；recording 规则自动跳过。"
           >
-            <Input.TextArea rows={12} placeholder={"groups:\n  - name: example\n    rules:\n      - alert: InstanceDown\n        expr: up == 0\n        for: 2m\n        labels:\n          severity: critical"} />
+            <Input.TextArea
+              rows={12}
+              placeholder={
+                "groups:\n  - name: example\n    rules:\n      - alert: InstanceDown\n        expr: up == 0\n        for: 2m\n        labels:\n          severity: critical"
+              }
+            />
           </Form.Item>
         </Form>
         {importPreview.length > 0 ? (

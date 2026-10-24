@@ -229,11 +229,6 @@ export function promActiveAlerts(id: number) {
   return getData<{ data: unknown }>(http.get(`/alerts/datasources/${id}/prometheus-alerts`)).then((r) => r.data);
 }
 
-/** @deprecated Alertmanager 静默已下线；保留空实现以免旧调用方崩溃。 */
-export function alertmanagerSilences(_id: number): Promise<unknown> {
-  return Promise.resolve([]);
-}
-
 export interface AlertConsulEndpointItem {
   id: number;
   project_id: number;
@@ -365,10 +360,7 @@ export interface AlertSilenceBatchItem {
   project_id?: number;
 }
 
-export function createAlertSilencesBatch(payload: {
-  items: AlertSilenceBatchItem[];
-  project_id?: number;
-}) {
+export function createAlertSilencesBatch(payload: { items: AlertSilenceBatchItem[]; project_id?: number }) {
   return getData<{ created: number }>(http.post("/alerts/silences/batch", payload));
 }
 

@@ -2,12 +2,7 @@ import { CheckOutlined, CloseOutlined, PlayCircleOutlined, ReloadOutlined } from
 import { Alert, Button, Card, Select, Space, Table, Tag, Typography, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import {
-  executeAIApproval,
-  listAIApprovals,
-  reviewAIApproval,
-  type AIApprovalItem,
-} from "../services/ai";
+import { executeAIApproval, listAIApprovals, reviewAIApproval, type AIApprovalItem } from "../services/ai";
 import { getClusters, type ClusterItem } from "../services/clusters";
 import { extractApiErrorMessage } from "../services/http";
 
@@ -98,8 +93,7 @@ export function AiApprovalsPage() {
         style={{ marginBottom: 12 }}
         message={
           <Typography.Text>
-            日常审批请到{" "}
-            <Link to="/workflow/inbox?domain=ai">审批中心 → 我的待办</Link>
+            日常审批请到 <Link to="/workflow/inbox?domain=ai">审批中心 → 我的待办</Link>
             ；本页保留为 AI 高危操作的执行台（批准后执行 / 重试）。
           </Typography.Text>
         }
@@ -137,10 +131,7 @@ export function AiApprovalsPage() {
           if (!row) return {};
           return {
             id: `ai-approval-row-${row.id}`,
-            style:
-              highlightId > 0 && row.id === highlightId
-                ? { background: "rgba(22, 119, 255, 0.08)" }
-                : undefined,
+            style: highlightId > 0 && row.id === highlightId ? { background: "rgba(22, 119, 255, 0.08)" } : undefined,
           };
         }}
         columns={[
@@ -165,13 +156,24 @@ export function AiApprovalsPage() {
                 <Space>
                   {row.status === "pending" ? (
                     <>
-                      <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => void review(row.id, true, true)}>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<CheckOutlined />}
+                        onClick={() => void review(row.id, true, true)}
+                      >
                         批准并执行
                       </Button>
                       <Button type="link" size="small" onClick={() => void review(row.id, true, false)}>
                         仅批准
                       </Button>
-                      <Button type="link" size="small" danger icon={<CloseOutlined />} onClick={() => void review(row.id, false)}>
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        icon={<CloseOutlined />}
+                        onClick={() => void review(row.id, false)}
+                      >
                         驳回
                       </Button>
                     </>

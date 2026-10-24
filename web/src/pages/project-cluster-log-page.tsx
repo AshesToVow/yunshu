@@ -1,5 +1,19 @@
 import { CloudUploadOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from "antd";
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  message,
+} from "antd";
 import { useEffect, useState } from "react";
 import { getClusters, type ClusterItem } from "../services/clusters";
 import {
@@ -77,10 +91,7 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
     if (!projectId) return;
     setLoading(true);
     try {
-      const [r, a] = await Promise.all([
-        listClusterLogRules(projectId, clusterId),
-        listClusterLogAgents(projectId),
-      ]);
+      const [r, a] = await Promise.all([listClusterLogRules(projectId, clusterId), listClusterLogAgents(projectId)]);
       setRules(r?.list || []);
       setAgents(a?.list || []);
       const cur = (a?.list || []).find((x) => x.cluster_id === clusterId);
@@ -229,7 +240,13 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
         />
         <span>
           项目限流 QPS{" "}
-          <InputNumber min={100} max={100000} step={100} value={rateLimitQps} onChange={(v) => setRateLimitQps(Number(v) || 2000)} />
+          <InputNumber
+            min={100}
+            max={100000}
+            step={100}
+            value={rateLimitQps}
+            onChange={(v) => setRateLimitQps(Number(v) || 2000)}
+          />
         </span>
         <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
           刷新
@@ -237,17 +254,19 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
         <Button disabled={!clusterId || !projectId} onClick={() => void onPreview()}>
           编辑 Pipeline
         </Button>
-        <Button type="primary" icon={<CloudUploadOutlined />} disabled={!clusterId || !projectId} onClick={() => void onDeploy()}>
+        <Button
+          type="primary"
+          icon={<CloudUploadOutlined />}
+          disabled={!clusterId || !projectId}
+          onClick={() => void onDeploy()}
+        >
           部署/同步 DaemonSet
         </Button>
         <Button icon={<PlusOutlined />} disabled={!clusterId || !projectId} onClick={openCreate}>
           新建规则
         </Button>
       </Space>
-      <Card
-        size="small"
-        title="采集规则（按 Namespace / Workload；宽采排除系统 ns；未填 QPS 的规则均分项目配额）"
-      >
+      <Card size="small" title="采集规则（按 Namespace / Workload；宽采排除系统 ns；未填 QPS 的规则均分项目配额）">
         <Table
           size="small"
           rowKey="id"
@@ -328,8 +347,7 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
             {
               title: "副本",
               width: 100,
-              render: (_: unknown, r?: ClusterLogAgent) =>
-                `${r?.ready_replicas ?? 0}/${r?.desired_replicas ?? 0}`,
+              render: (_: unknown, r?: ClusterLogAgent) => `${r?.ready_replicas ?? 0}/${r?.desired_replicas ?? 0}`,
             },
             { title: "限流 QPS", dataIndex: "rate_limit_qps", width: 100, render: (v?: number) => v ?? "—" },
             { title: "错误", dataIndex: "last_error", ellipsis: true, render: (v: string) => v || "—" },
@@ -343,9 +361,11 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
                     size="small"
                     onClick={() =>
                       projectId
-                        ? void refreshClusterLogStatus(projectId, r.cluster_id).then(load).catch((e) => {
-                            message.error(extractApiErrorMessage(e, "刷新失败"));
-                          })
+                        ? void refreshClusterLogStatus(projectId, r.cluster_id)
+                            .then(load)
+                            .catch((e) => {
+                              message.error(extractApiErrorMessage(e, "刷新失败"));
+                            })
                         : undefined
                     }
                   >
@@ -442,7 +462,8 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
           style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 12 }}
         />
         <div style={{ marginTop: 8, color: "rgba(0,0,0,0.45)", fontSize: 12 }}>
-          自定义模式下规则变更不会自动覆盖本文件；索引/Topic 前缀见数据字典 elasticsearch_k8s_index_prefix、kafka_k8s_topic_prefix。
+          自定义模式下规则变更不会自动覆盖本文件；索引/Topic 前缀见数据字典
+          elasticsearch_k8s_index_prefix、kafka_k8s_topic_prefix。
         </div>
       </Modal>
     </Space>

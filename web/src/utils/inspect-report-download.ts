@@ -54,9 +54,7 @@ export function downloadInspectPdf(projectId: number, runId: number, projectName
   void (async () => {
     try {
       const st = await checkInspectReportPdf(projectId, runId);
-      const filename =
-        (st.filename && st.filename.trim()) ||
-        buildInspectReportFilename(projectName, runId, "pdf");
+      const filename = (st.filename && st.filename.trim()) || buildInspectReportFilename(projectName, runId, "pdf");
       if (st.exists) {
         const raw: unknown = await http.get(inspectReportPdfUrl(projectId, runId), {
           responseType: "blob",
@@ -78,7 +76,10 @@ export function downloadInspectPdf(projectId: number, runId: number, projectName
 /** 生成可读报告文件名：项目名-巡检-{runId}.ext */
 export function buildInspectReportFilename(projectName: string | undefined, runId: number, ext: string) {
   const safeExt = (ext || "bin").replace(/^\./, "");
-  let base = (projectName || "").trim().replace(/[\\/:*?"<>|]/g, "_").replace(/[.\s]+$/g, "");
+  let base = (projectName || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/[.\s]+$/g, "");
   if (!base) {
     base = `inspect-run-${runId}`;
   } else if (runId > 0) {

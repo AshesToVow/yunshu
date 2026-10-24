@@ -255,10 +255,21 @@ export function EsmgmtBackupsPage() {
                         >
                           下载
                         </Button>
-                        <Button type="link" size="small" disabled={row.status !== "success"} onClick={() => void onRestore(row)}>
+                        <Button
+                          type="link"
+                          size="small"
+                          disabled={row.status !== "success"}
+                          onClick={() => void onRestore(row)}
+                        >
                           恢复
                         </Button>
-                        <Button type="link" size="small" danger disabled={row.status !== "success"} onClick={() => openRestoreModal(row)}>
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          disabled={row.status !== "success"}
+                          onClick={() => openRestoreModal(row)}
+                        >
                           覆盖恢复
                         </Button>
                       </Space>
@@ -361,10 +372,20 @@ export function EsmgmtBackupsPage() {
           },
         ]}
       />
-      <Modal title="新建定时备份" open={scheduleOpen} onCancel={() => setScheduleOpen(false)} onOk={() => void onCreateSchedule()} destroyOnClose>
+      <Modal
+        title="新建定时备份"
+        open={scheduleOpen}
+        onCancel={() => setScheduleOpen(false)}
+        onOk={() => void onCreateSchedule()}
+        destroyOnClose
+      >
         <Form form={scheduleForm} layout="vertical">
           <Form.Item name="index_name" label="索引名" rules={[{ required: true }]}>
-            <Select showSearch options={indices.map((i) => ({ value: i.name, label: i.name }))} placeholder="选择索引" />
+            <Select
+              showSearch
+              options={indices.map((i) => ({ value: i.name, label: i.name }))}
+              placeholder="选择索引"
+            />
           </Form.Item>
           <Form.Item name="cron_spec" label="Cron（支持五/六段）" rules={[{ required: true }]}>
             <Input placeholder="0 2 * * *" />

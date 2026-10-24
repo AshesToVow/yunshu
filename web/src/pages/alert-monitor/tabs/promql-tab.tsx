@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   Alert,
   Button,
@@ -17,6 +16,7 @@ import {
 import { DeleteOutlined, PlusOutlined, ReloadOutlined, StarOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useState } from "react";
 import { useAlertMonitor } from "../context";
+import type { AlertDatasourceItem } from "../../../services/alert-platform";
 import { tablePagination } from "../../../utils/table-pagination";
 import {
   createPromqlSavedQuery,
@@ -89,14 +89,19 @@ export function PromqlTab() {
           placeholder="数据源"
           value={ctx.promDsId}
           onChange={(v) => ctx.setPromDsId(v)}
-          options={ctx.dsList.map((d) => ({ label: d.name, value: d.id }))}
+          options={ctx.dsList.map((d: AlertDatasourceItem) => ({ label: d.name, value: d.id }))}
         />
         <Radio.Group value={ctx.promMode} onChange={(e) => ctx.setPromMode(e.target.value)}>
           <Radio.Button value="instant">即时</Radio.Button>
           <Radio.Button value="range">范围</Radio.Button>
         </Radio.Group>
       </Space>
-      <Input.TextArea rows={4} value={ctx.promQuery} onChange={(e) => ctx.setPromQuery(e.target.value)} placeholder="PromQL" />
+      <Input.TextArea
+        rows={4}
+        value={ctx.promQuery}
+        onChange={(e) => ctx.setPromQuery(e.target.value)}
+        placeholder="PromQL"
+      />
       {ctx.promMode === "instant" ? (
         <Space wrap>
           <Input
@@ -122,12 +127,18 @@ export function PromqlTab() {
             value={ctx.promEnd}
             onChange={(e) => ctx.setPromEnd(e.target.value)}
           />
-          <Input style={{ width: 100 }} placeholder="step" value={ctx.promStep} onChange={(e) => ctx.setPromStep(e.target.value)} />
+          <Input
+            style={{ width: 100 }}
+            placeholder="step"
+            value={ctx.promStep}
+            onChange={(e) => ctx.setPromStep(e.target.value)}
+          />
           <Button onClick={ctx.fillPromRangeLastHour}>最近1小时</Button>
         </Space>
       )}
       <Typography.Text type="secondary">
-        说明：评估时间是“在哪个时刻执行这条 PromQL”。留空默认当前时间；范围查询需填写 ctx.start/ctx.end（RFC3339），step 可填 30s/1m/5m。
+        说明：评估时间是“在哪个时刻执行这条 PromQL”。留空默认当前时间；范围查询需填写 ctx.start/ctx.end（RFC3339），step
+        可填 30s/1m/5m。
       </Typography.Text>
       <Space wrap>
         <Button type="primary" loading={ctx.promLoading} onClick={() => void ctx.runProm()}>
@@ -176,7 +187,10 @@ export function PromqlTab() {
                   <Button type="link" size="small" onClick={() => applySaved(row)}>
                     应用
                   </Button>
-                  <Popconfirm title="删除该收藏？" onConfirm={() => void deletePromqlSavedQuery(row.id).then(loadSaved)}>
+                  <Popconfirm
+                    title="删除该收藏？"
+                    onConfirm={() => void deletePromqlSavedQuery(row.id).then(loadSaved)}
+                  >
                     <Button type="link" size="small" danger icon={<DeleteOutlined />} />
                   </Popconfirm>
                 </Space>

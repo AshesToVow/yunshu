@@ -105,8 +105,18 @@ export function EsmgmtDocsPage() {
               options={connections.map((c) => ({ value: c.id, label: c.name }))}
               onChange={setConnectionId}
             />
-            <Input style={{ width: 220 }} placeholder="索引，如 app-logs-*" value={index} onChange={(e) => setIndex(e.target.value)} />
-            <Input style={{ width: 220 }} placeholder="query_string，空则 match_all" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Input
+              style={{ width: 220 }}
+              placeholder="索引，如 app-logs-*"
+              value={index}
+              onChange={(e) => setIndex(e.target.value)}
+            />
+            <Input
+              style={{ width: 220 }}
+              placeholder="query_string，空则 match_all"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
             <Button icon={<ReloadOutlined />} onClick={() => void load()}>
               检索
             </Button>
@@ -126,7 +136,7 @@ export function EsmgmtDocsPage() {
       />
       <Card className="table-card">
         <Table
-          rowKey={(r) => `${r.index}-${r.id}`}
+          rowKey={(r) => (r ? `${r.index}-${r.id}` : "")}
           loading={loading}
           dataSource={hits}
           pagination={false}

@@ -4,7 +4,7 @@ import type { ColumnType, ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import YAML from "yaml";
 import type { K8sDeleteOptions } from "../../services/service-factory";
-import { extractApiErrorMessage } from "../../services/http";
+import { extractApiErrorMessage, newIdempotencyKey } from "../../services/http";
 import { K8sPageToolbar } from "../ops/k8s-page-toolbar";
 import { OpsPageHeader } from "../ops/ops-page-header";
 import { useK8sClusterTier } from "../../hooks/use-k8s-cluster-tier";
@@ -45,6 +45,8 @@ export type YamlCrudDetailArgs = {
 export type YamlCrudApplyArgs = {
   clusterId: number;
   manifest: string;
+  /** 幂等键：同一次逻辑提交（含失败重试）复用，成功后由 YamlCrudPage 轮换 */
+  idemKey?: string;
 };
 
 export type YamlCrudPreviewResult = {
@@ -93,7 +95,10 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   onLoadNamespaces?: (clusterId: number) => Promise<NamespaceOption[]>;
   columns: ColumnsType<TItem>;
   api: YamlCrudApi<TItem, TDetail>;
-  extraRowActions?: (record: TItem, ctx: { clusterId: number; namespace?: string; reload: () => void }) => React.ReactNode;
+  extraRowActions?: (
+    record: TItem,
+    ctx: { clusterId: number; namespace?: string; reload: () => void },
+  ) => React.ReactNode;
   onEdit?: (record: TItem, ctx: { clusterId: number; namespace?: string; reload: () => void }) => void;
   detailExtra?: (detail: TDetail, yamlCtx?: { yaml: string; setYaml: (v: string) => void }) => React.ReactNode;
   createTemplate?: (ctx: { namespace?: string }) => string;
@@ -124,7 +129,9 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   tableScrollX?: number | string;
 }
 
-export function YamlCrudPage<TItem extends { name: string }, TDetail extends { yaml: string }>(props: YamlCrudPageProps<TItem, TDetail>) {
+export function YamlCrudPage<TItem extends { name: string }, TDetail extends { yaml: string }>(
+  props: YamlCrudPageProps<TItem, TDetail>,
+) {
   const {
     title,
     needNamespace,
@@ -151,14 +158,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     renderSummary,
     tableScrollX,
   } = props;
-  const {
-    clusterId,
-    namespace,
-    setClusterId,
-    setNamespace,
-    clusterOptions,
-    namespaceOptions,
-  } = useK8sContext({
+  const { clusterId, namespace, setClusterId, setNamespace, clusterOptions, namespaceOptions } = useK8sContext({
     needNamespace: Boolean(needNamespace),
     syncUrl: true,
     onLoadNamespaces,
@@ -188,6 +188,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
 
   const closeCreateDrawer = useCallback(() => setCreateDrawerOpen(false), []);
   const reloadSeqRef = useRef(0);
+  const applyIdemKeyRef = useRef(newIdempotencyKey());
 
   /** silent=true：Watch 触发的后台刷新，不亮 Table loading，避免闪烁 */
   async function reload(overrideKeyword?: string, opts?: { silent?: boolean }) {
@@ -288,10 +289,10 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
                 if (status === 403) {
                   message.error({ content: "无访问权限", key: "forbidden" });
                 } else {
-                message.error({
-                  content: e instanceof Error ? e.message : "加载详情失败",
-                  key: "yaml-crud-detail",
-                });
+                  message.error({
+                    content: e instanceof Error ? e.message : "加载详情失败",
+                    key: "yaml-crud-detail",
+                  });
                 }
               } finally {
                 setDetailLoading(false);
@@ -375,8 +376,9 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
       setApplyLoading(true);
       setDetailApplyLoading(true);
       try {
-        await applyFn({ clusterId, manifest: manifestText });
+        await applyFn({ clusterId, manifest: manifestText, idemKey: applyIdemKeyRef.current });
         message.success("应用成功");
+        applyIdemKeyRef.current = newIdempotencyKey();
         await onSuccess?.();
       } finally {
         setApplyLoading(false);
@@ -467,7 +469,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
           const n = md?.name;
           if (n) {
             targetName = String(n);
-            targetNamespace = md?.namespace ? String(md.namespace) : namespace ?? "default";
+            targetNamespace = md?.namespace ? String(md.namespace) : (namespace ?? "default");
             break;
           }
         }
@@ -546,7 +548,8 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
   const yamlCreatePanel = (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        支持直接粘贴 Kubernetes YAML（底层使用 Kom SDK 的 apply）。打开时已预填模板（若有），可清空后自行编写，或用 AI 按描述生成。
+        支持直接粘贴 Kubernetes YAML（底层使用 Kom SDK 的 apply）。打开时已预填模板（若有），可清空后自行编写，或用 AI
+        按描述生成。
       </Typography.Paragraph>
       <AiYamlGeneratePanel
         resourceKind={resolvedAiKind}
@@ -579,198 +582,201 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     <div className="page-stack">
       <OpsPageHeader title={title} description={description} extra={headerExtra} />
       <Card className="table-card yaml-crud-card" bordered={false}>
-      <K8sPageToolbar
-        clusterId={clusterId}
-        namespace={namespace}
-        clusterOptions={clusterOptions}
-        namespaceOptions={namespaceOptions}
-        needNamespace={needNamespace}
-        onClusterChange={setClusterId}
-        onNamespaceChange={setNamespace}
-        onSearch={(v) => {
-          setKeyword(v);
-          void reload(v);
-        }}
-        onRefresh={() => void reload()}
-        watchLive={watchResource ? watchLive : undefined}
-        onWatchChange={watchResource ? setWatchLive : undefined}
-        extraRight={renderToolbarExtraRight ? renderToolbarExtraRight(toolbarCtx) : undefined}
-        primaryAction={
-          canOpenCreate ? (
-            <Button type="primary" icon={<PlusOutlined />} disabled={!clusterId} onClick={handleOpenCreateDrawer}>
-              创建
-            </Button>
-          ) : undefined
-        }
-      />
-      {listError ? (
-        <Alert
-          type="error"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="列表加载失败"
-          description={listError}
-          action={
-            <Button size="small" onClick={() => void reload()}>
-              重试
-            </Button>
+        <K8sPageToolbar
+          clusterId={clusterId}
+          namespace={namespace}
+          clusterOptions={clusterOptions}
+          namespaceOptions={namespaceOptions}
+          needNamespace={needNamespace}
+          onClusterChange={setClusterId}
+          onNamespaceChange={setNamespace}
+          onSearch={(v) => {
+            setKeyword(v);
+            void reload(v);
+          }}
+          onRefresh={() => void reload()}
+          watchLive={watchResource ? watchLive : undefined}
+          onWatchChange={watchResource ? setWatchLive : undefined}
+          extraRight={renderToolbarExtraRight ? renderToolbarExtraRight(toolbarCtx) : undefined}
+          primaryAction={
+            canOpenCreate ? (
+              <Button type="primary" icon={<PlusOutlined />} disabled={!clusterId} onClick={handleOpenCreateDrawer}>
+                创建
+              </Button>
+            ) : undefined
           }
         />
-      ) : null}
-      {clusterId && !tierLoading && !canMutate && !disableMutations ? (
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="当前集群档位为只读（或只读+Exec），已隐藏创建/编辑/删除；变更需 admin 档位"
-        />
-      ) : null}
+        {listError ? (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="列表加载失败"
+            description={listError}
+            action={
+              <Button size="small" onClick={() => void reload()}>
+                重试
+              </Button>
+            }
+          />
+        ) : null}
+        {clusterId && !tierLoading && !canMutate && !disableMutations ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="当前集群档位为只读（或只读+Exec），已隐藏创建/编辑/删除；变更需 admin 档位"
+          />
+        ) : null}
 
-      {renderSummary ? <div className="k8s-summary-row-wrap">{renderSummary(data, toolbarCtx)}</div> : null}
+        {renderSummary ? <div className="k8s-summary-row-wrap">{renderSummary(data, toolbarCtx)}</div> : null}
 
-      <div className="k8s-table-scroll-host">
-        <Table
-          rowKey={(r) => (r as any).name}
-          loading={loading}
-          dataSource={data}
-          pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
-          columns={[...columns, actionCol]}
-          scroll={{ x: resolvedScrollX }}
-          tableLayout="fixed"
-        />
-      </div>
+        <div className="k8s-table-scroll-host">
+          <Table
+            rowKey={(r) => (r as any).name}
+            loading={loading}
+            dataSource={data}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50, 100],
+              showQuickJumper: true,
+            }}
+            columns={[...columns, actionCol]}
+            scroll={{ x: resolvedScrollX }}
+            tableLayout="fixed"
+          />
+        </div>
 
-      {!mutationsDisabled && (hasFormTab || hasYamlTab) ? (
+        {!mutationsDisabled && (hasFormTab || hasYamlTab) ? (
+          <Drawer
+            title={
+              <Space direction="vertical" size={0}>
+                <span>创建</span>
+                {needNamespace ? (
+                  <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: "normal" }}>
+                    目标命名空间：{namespace ?? "—"}
+                  </Typography.Text>
+                ) : null}
+              </Space>
+            }
+            placement="right"
+            width={960}
+            open={createDrawerOpen}
+            onClose={closeCreateDrawer}
+            destroyOnClose
+            maskClosable={false}
+            styles={{ body: { paddingBottom: 24 } }}
+            zIndex={1200}
+            extra={<Button onClick={closeCreateDrawer}>取消</Button>}
+          >
+            {hasFormTab && hasYamlTab ? (
+              <Tabs
+                defaultActiveKey="form"
+                items={[
+                  { key: "form", label: "表单创建", children: renderCreateFormTab?.(createCtx) },
+                  { key: "yaml", label: "YAML 创建", children: yamlCreatePanel },
+                ]}
+              />
+            ) : hasYamlTab ? (
+              yamlCreatePanel
+            ) : (
+              renderCreateFormTab?.(createCtx)
+            )}
+          </Drawer>
+        ) : null}
+
         <Drawer
-          title={
-            <Space direction="vertical" size={0}>
-              <span>创建</span>
-              {needNamespace ? (
-                <Typography.Text type="secondary" style={{ fontSize: 13, fontWeight: "normal" }}>
-                  目标命名空间：{namespace ?? "—"}
-                </Typography.Text>
-              ) : null}
-            </Space>
-          }
-          placement="right"
-          width={960}
-          open={createDrawerOpen}
-          onClose={closeCreateDrawer}
+          title={`${title} - 详情${detailName ? `：${detailName}` : ""}`}
+          open={detailOpen}
+          onClose={() => {
+            setDetailOpen(false);
+          }}
           destroyOnClose
-          maskClosable={false}
-          styles={{ body: { paddingBottom: 24 } }}
-          zIndex={1200}
-          extra={<Button onClick={closeCreateDrawer}>取消</Button>}
+          width={920}
+          zIndex={1300}
+          className="detail-edit-drawer"
+          extra={
+            canApplyDetailYaml ? (
+              <Button type="primary" loading={detailApplyLoading} onClick={() => void submitDetailYaml()}>
+                应用 YAML
+              </Button>
+            ) : null
+          }
         >
-          {hasFormTab && hasYamlTab ? (
-            <Tabs
-              defaultActiveKey="form"
-              items={[
-                { key: "form", label: "表单创建", children: renderCreateFormTab?.(createCtx) },
-                { key: "yaml", label: "YAML 创建", children: yamlCreatePanel },
-              ]}
-            />
-          ) : hasYamlTab ? (
-            yamlCreatePanel
+          {detailLoading ? (
+            <Typography.Text type="secondary">加载中...</Typography.Text>
+          ) : detail ? (
+            <Space direction="vertical" style={{ width: "100%" }} size="middle">
+              {detailExtra?.(detail, { yaml: detailYaml, setYaml: setDetailYaml })}
+              {renderDetail ? renderDetail(detail) : null}
+              {!renderDetail && !detailExtra ? (
+                <Typography.Paragraph copyable style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
+                  {detail.yaml}
+                </Typography.Paragraph>
+              ) : null}
+              <Collapse
+                defaultActiveKey={["yaml"]}
+                items={[
+                  {
+                    key: "yaml",
+                    label: "YAML",
+                    children: (
+                      <Space direction="vertical" style={{ width: "100%" }} size="middle">
+                        {canApplyDetailYaml ? (
+                          <AiYamlGeneratePanel
+                            resourceKind={resolvedAiKind}
+                            namespace={namespace}
+                            clusterId={clusterId}
+                            hintYaml={detailYaml}
+                            onGenerated={setDetailYaml}
+                          />
+                        ) : null}
+                        <MonacoYamlEditor
+                          value={detailYaml}
+                          onChange={canApplyDetailYaml ? setDetailYaml : undefined}
+                          readOnly={!canApplyDetailYaml}
+                          height={480}
+                        />
+                      </Space>
+                    ),
+                  },
+                ]}
+              />
+            </Space>
           ) : (
-            renderCreateFormTab?.(createCtx)
+            <Typography.Text type="secondary">暂无数据</Typography.Text>
           )}
         </Drawer>
-      ) : null}
 
-      <Drawer
-        title={`${title} - 详情${detailName ? `：${detailName}` : ""}`}
-        open={detailOpen}
-        onClose={() => {
-          setDetailOpen(false);
-        }}
-        destroyOnClose
-        width={920}
-        zIndex={1300}
-        className="detail-edit-drawer"
-        extra={
-          canApplyDetailYaml ? (
-            <Button type="primary" loading={detailApplyLoading} onClick={() => void submitDetailYaml()}>
-              应用 YAML
-            </Button>
-          ) : null
-        }
-      >
-        {detailLoading ? (
-          <Typography.Text type="secondary">加载中...</Typography.Text>
-        ) : detail ? (
-          <Space direction="vertical" style={{ width: "100%" }} size="middle">
-            {detailExtra?.(detail, { yaml: detailYaml, setYaml: setDetailYaml })}
-            {renderDetail ? renderDetail(detail) : null}
-            {!renderDetail && !detailExtra ? (
-              <Typography.Paragraph copyable style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>
-                {detail.yaml}
-              </Typography.Paragraph>
-            ) : null}
-            <Collapse
-              defaultActiveKey={["yaml"]}
-              items={[
-                {
-                  key: "yaml",
-                  label: "YAML",
-                  children: (
-                    <Space direction="vertical" style={{ width: "100%" }} size="middle">
-                      {canApplyDetailYaml ? (
-                        <AiYamlGeneratePanel
-                          resourceKind={resolvedAiKind}
-                          namespace={namespace}
-                          clusterId={clusterId}
-                          hintYaml={detailYaml}
-                          onGenerated={setDetailYaml}
-                        />
-                      ) : null}
-                      <MonacoYamlEditor
-                        value={detailYaml}
-                        onChange={canApplyDetailYaml ? setDetailYaml : undefined}
-                        readOnly={!canApplyDetailYaml}
-                        height={480}
-                      />
-                    </Space>
-                  ),
-                },
-              ]}
-            />
-          </Space>
-        ) : (
-          <Typography.Text type="secondary">暂无数据</Typography.Text>
-        )}
-      </Drawer>
-
-      <K8sDeleteDialog
-        open={deleteDialogOpen}
-        resourceName={deleteTarget?.name ?? ""}
-        loading={deleteLoading}
-        onCancel={() => {
-          setDeleteDialogOpen(false);
-          setDeleteTarget(null);
-        }}
-        onConfirm={async (deleteOpts) => {
-          if (!clusterId || !deleteTarget) return;
-          setDeleteLoading(true);
-          try {
-            await api.remove?.({
-              clusterId,
-              namespace,
-              name: deleteTarget.name,
-              ...deleteOpts,
-            });
-            message.success("删除成功");
+        <K8sDeleteDialog
+          open={deleteDialogOpen}
+          resourceName={deleteTarget?.name ?? ""}
+          loading={deleteLoading}
+          onCancel={() => {
             setDeleteDialogOpen(false);
             setDeleteTarget(null);
-            await reload();
-          } finally {
-            setDeleteLoading(false);
-          }
-        }}
-      />
-
+          }}
+          onConfirm={async (deleteOpts) => {
+            if (!clusterId || !deleteTarget) return;
+            setDeleteLoading(true);
+            try {
+              await api.remove?.({
+                clusterId,
+                namespace,
+                name: deleteTarget.name,
+                ...deleteOpts,
+              });
+              message.success("删除成功");
+              setDeleteDialogOpen(false);
+              setDeleteTarget(null);
+              await reload();
+            } finally {
+              setDeleteLoading(false);
+            }
+          }}
+        />
       </Card>
     </div>
   );
 }
-

@@ -42,7 +42,9 @@ export function useAlertMonitorUrlState() {
   }, [searchParams]);
 
   const historyEventCategory = useMemo((): AlertEventCategory | undefined => {
-    const raw = String(searchParams.get("event_category") || "").trim().toLowerCase();
+    const raw = String(searchParams.get("event_category") || "")
+      .trim()
+      .toLowerCase();
     return (HISTORY_EVENT_CATEGORIES as string[]).includes(raw) ? (raw as AlertEventCategory) : undefined;
   }, [searchParams]);
 

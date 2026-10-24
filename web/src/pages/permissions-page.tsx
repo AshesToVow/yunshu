@@ -1,9 +1,40 @@
-import { PlusOutlined, ReloadOutlined, SafetyCertificateOutlined, EyeOutlined, DeleteOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from "antd";
+import {
+  PlusOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  EyeOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Drawer,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatusTag } from "../components/status-tag";
-import { createPermission, deletePermission, getPermissions, getPermission, updatePermission, batchSetPermissionK8sScope, listAllPermissions } from "../services/permissions";
+import {
+  createPermission,
+  deletePermission,
+  getPermissions,
+  getPermission,
+  updatePermission,
+  batchSetPermissionK8sScope,
+  listAllPermissions,
+} from "../services/permissions";
 import { getRoleOptions } from "../services/roles";
 import { grantPolicy } from "../services/policies";
 import { API_CATALOG_GROUPS, type ApiCatalogRow } from "../constants/api-catalog";
@@ -189,9 +220,7 @@ export function PermissionsPage() {
     if (!assignTarget) return;
     setSubmitting(true);
     try {
-      const promises = checkedRoleIds.map((roleId) =>
-        grantPolicy({ role_id: roleId, permission_id: assignTarget.id })
-      );
+      const promises = checkedRoleIds.map((roleId) => grantPolicy({ role_id: roleId, permission_id: assignTarget.id }));
       await Promise.all(promises);
       message.success("角色权限已更新");
       setAssignOpen(false);
@@ -275,7 +304,7 @@ export function PermissionsPage() {
       message.success(
         enabled
           ? `已为 ${result.affected} 条 K8s 集群资源接口纳入范围校验`
-          : `已关闭 ${result.affected} 条 K8s 集群资源接口的范围校验`
+          : `已关闭 ${result.affected} 条 K8s 集群资源接口的范围校验`,
       );
       await loadPermissions();
     } finally {
@@ -335,10 +364,12 @@ export function PermissionsPage() {
               title="确认一键纳入？"
               description={
                 <span>
-                  仅作用于已挂载 <Typography.Text code>K8sScopeAuthorize</Typography.Text> 的集群资源接口（pods、deployments、clusters 等，与「仅 K8s 集群资源」筛选一致）。
+                  仅作用于已挂载 <Typography.Text code>K8sScopeAuthorize</Typography.Text>{" "}
+                  的集群资源接口（pods、deployments、clusters 等，与「仅 K8s 集群资源」筛选一致）。
                   <br />
                   <Typography.Text type="secondary">
-                    不包含：k8s-policies（档位配置）、k8s-namespace-*（命名空间黑/白名单）等平台管理接口——它们只走 Casbin，打开开关无实际效果。
+                    不包含：k8s-policies（档位配置）、k8s-namespace-*（命名空间黑/白名单）等平台管理接口——它们只走
+                    Casbin，打开开关无实际效果。
                   </Typography.Text>
                 </span>
               }
@@ -376,18 +407,23 @@ export function PermissionsPage() {
           message="接口目录与前端入口"
           description={
             <span>
-              「一键补全接口」按 <Typography.Text code>constants/api-catalog.ts</Typography.Text> 中「告警中心」等分组补全缺失的权限记录（能力名称取各行的{" "}
-              <Typography.Text code>summary</Typography.Text>，须与 <Typography.Text code>cmd/seed.go</Typography.Text> 中 Casbin 的{" "}
-              <Typography.Text code>Name</Typography.Text> 一致）。数据源、静默、监控规则、处理人、值班、PromQL 与「策略与联调」（Webhook、策略、历史、模板）均在{" "}
-              <Link to="/alert-monitor-platform/datasources">告警监控平台</Link>
-              （<Link to="/alert-monitor-platform/policies">告警路由</Link>）。
+              「一键补全接口」按 <Typography.Text code>constants/api-catalog.ts</Typography.Text>{" "}
+              中「告警中心」等分组补全缺失的权限记录（能力名称取各行的 <Typography.Text code>summary</Typography.Text>
+              ，须与 <Typography.Text code>cmd/seed.go</Typography.Text> 中 Casbin 的{" "}
+              <Typography.Text code>Name</Typography.Text> 一致）。数据源、静默、监控规则、处理人、值班、PromQL
+              与「策略与联调」（Webhook、策略、历史、模板）均在{" "}
+              <Link to="/alert-monitor-platform/datasources">告警监控平台</Link>（
+              <Link to="/alert-monitor-platform/policies">告警路由</Link>）。
               <br />
               <Typography.Text type="secondary">
-                「K8s 范围校验」开关：标记该接口是否进入 <Typography.Text code>K8sScopeAuthorize</Typography.Text> 三元中间件目录（见权限设计文档 §0）；不等于角色授权。
-                「一键纳入/关闭」与筛选「仅 K8s 集群资源」范围一致（pods、deployments、clusters…共约 150 条）。
-                <strong>不在范围内</strong>：<Typography.Text code>/api/v1/k8s-policies/*</Typography.Text>（档位/矩阵配置）、
+                「K8s 范围校验」开关：标记该接口是否进入 <Typography.Text code>K8sScopeAuthorize</Typography.Text>{" "}
+                三元中间件目录（见权限设计文档 §0）；不等于角色授权。 「一键纳入/关闭」与筛选「仅 K8s
+                集群资源」范围一致（pods、deployments、clusters…共约 150 条）。
+                <strong>不在范围内</strong>：<Typography.Text code>/api/v1/k8s-policies/*</Typography.Text>
+                （档位/矩阵配置）、
                 <Typography.Text code>/api/v1/k8s-namespace-deny-rules</Typography.Text>、
-                <Typography.Text code>/api/v1/k8s-namespace-allow-rules</Typography.Text>——仅 Casbin 鉴权，请求通常不带 cluster_id，保持「未纳入」即可。
+                <Typography.Text code>/api/v1/k8s-namespace-allow-rules</Typography.Text>——仅 Casbin 鉴权，请求通常不带
+                cluster_id，保持「未纳入」即可。
               </Typography.Text>
             </span>
           }
@@ -438,32 +474,32 @@ export function PermissionsPage() {
               key: "action",
               render: (_: unknown, record?: PermissionItem) =>
                 record ? (
-                <Space>
-                  <Button type="link" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
-                    详情
-                  </Button>
-                  <Button type="link" icon={<SafetyCertificateOutlined />} onClick={() => openAssignRoles(record)}>
-                    分配角色
-                  </Button>
-                  <Tooltip title={k8sScopeSwitchTooltip(record.resource)}>
-                    <Switch
-                      size="small"
-                      disabled={isK8sScopeNotApplicable(record.resource)}
-                      checked={Boolean(record.k8s_scope_enabled)}
-                      checkedChildren="开"
-                      unCheckedChildren="关"
-                      onChange={(checked) => {
-                        void handleToggleK8sScope(record, checked);
-                      }}
-                    />
-                  </Tooltip>
-                  <Popconfirm title="确认删除该能力项吗？" onConfirm={() => void handleDelete(record)}>
-                    <Button type="link" danger icon={<DeleteOutlined />}>
-                      删除
+                  <Space>
+                    <Button type="link" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
+                      详情
                     </Button>
-                  </Popconfirm>
-                </Space>
-              ) : null,
+                    <Button type="link" icon={<SafetyCertificateOutlined />} onClick={() => openAssignRoles(record)}>
+                      分配角色
+                    </Button>
+                    <Tooltip title={k8sScopeSwitchTooltip(record.resource)}>
+                      <Switch
+                        size="small"
+                        disabled={isK8sScopeNotApplicable(record.resource)}
+                        checked={Boolean(record.k8s_scope_enabled)}
+                        checkedChildren="开"
+                        unCheckedChildren="关"
+                        onChange={(checked) => {
+                          void handleToggleK8sScope(record, checked);
+                        }}
+                      />
+                    </Tooltip>
+                    <Popconfirm title="确认删除该能力项吗？" onConfirm={() => void handleDelete(record)}>
+                      <Button type="link" danger icon={<DeleteOutlined />}>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                ) : null,
             },
           ]}
         />
@@ -524,7 +560,12 @@ export function PermissionsPage() {
           <Table
             rowKey="id"
             dataSource={roles}
-            pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50, 100],
+              showQuickJumper: true,
+            }}
             rowSelection={{
               selectedRowKeys: checkedRoleIds,
               onChange: (keys) => setCheckedRoleIds(keys as number[]),

@@ -49,7 +49,9 @@ export function AiYamlGeneratePanel({
 
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="small">
-      <Typography.Text type="secondary">AI 生成：用自然语言描述需求，生成后写入下方编辑器，请人工核对再创建。</Typography.Text>
+      <Typography.Text type="secondary">
+        AI 生成：用自然语言描述需求，生成后写入下方编辑器，请人工核对再创建。
+      </Typography.Text>
       <Input.TextArea
         value={desc}
         onChange={(e) => setDesc(e.target.value)}

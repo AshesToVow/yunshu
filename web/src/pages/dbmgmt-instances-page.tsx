@@ -1,5 +1,20 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -71,7 +86,11 @@ export function DbmgmtInstancesPage() {
   }, [load, projectId]);
 
   const columns: ColumnsType<DbInstance> = [
-    { title: "名称", dataIndex: "name", render: (v, r) => <Link to={`/dbmgmt/instances/${r.id}?project=${projectId ?? ""}`}>{v}</Link> },
+    {
+      title: "名称",
+      dataIndex: "name",
+      render: (v, r) => <Link to={`/dbmgmt/instances/${r.id}?project=${projectId ?? ""}`}>{v}</Link>,
+    },
     { title: "环境", dataIndex: "env", render: (v) => <Tag>{envLabel(v)}</Tag> },
     {
       title: "库角色",
@@ -87,22 +106,39 @@ export function DbmgmtInstancesPage() {
       title: "关联主库",
       width: 120,
       ellipsis: true,
-      render: (_, r) => (r.role === "replica" ? r.primary_instance_name || (r.primary_instance_id ? `#${r.primary_instance_id}` : "—") : "—"),
+      render: (_, r) =>
+        r.role === "replica"
+          ? r.primary_instance_name || (r.primary_instance_id ? `#${r.primary_instance_id}` : "—")
+          : "—",
     },
     {
       title: "状态",
       dataIndex: "status",
-      render: (_, r) => <Tag color={r.last_ping_ok ? "green" : "default"}>{r.last_ping_ok ? "正常" : r.status || "未知"}</Tag>,
+      render: (_, r) => (
+        <Tag color={r.last_ping_ok ? "green" : "default"}>{r.last_ping_ok ? "正常" : r.status || "未知"}</Tag>
+      ),
     },
     { title: "最近探活", dataIndex: "last_ping_at", render: (v) => (v ? formatDateTime(v) : "—") },
     {
       title: "操作",
       render: (_, r) => (
         <Space>
-          <Button size="small" icon={<ThunderboltOutlined />} onClick={() => void pingDbInstance(projectId!, r.id).then(load)}>
+          <Button
+            size="small"
+            icon={<ThunderboltOutlined />}
+            onClick={() => void pingDbInstance(projectId!, r.id).then(load)}
+          >
             探活
           </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue({ ...r, role: r.role ?? "primary" }); setOpen(true); }}>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => {
+              setEditing(r);
+              form.setFieldsValue({ ...r, role: r.role ?? "primary" });
+              setOpen(true);
+            }}
+          >
             编辑
           </Button>
           {r.driver === "mysql" && r.backup_link ? <Link to={r.backup_link}>备份</Link> : null}
@@ -143,17 +179,48 @@ export function DbmgmtInstancesPage() {
       title="数据库实例"
       extra={
         <Space>
-          <Select style={{ width: 200 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={setProjectId} />
+          <Select
+            style={{ width: 200 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={setProjectId}
+          />
           <Button icon={<ReloadOutlined />} onClick={() => void load()} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); setOpen(true); }}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditing(null);
+              form.resetFields();
+              setOpen(true);
+            }}
+          >
             新建
           </Button>
         </Space>
       }
     >
       <Table rowKey="id" loading={loading} columns={columns} dataSource={rows} pagination={false} />
-      <Modal title={editing ? "编辑实例" : "新建实例"} open={open} onCancel={() => setOpen(false)} onOk={() => void submit()} width={720}>
-        <Form form={form} layout="vertical" initialValues={{ env: "dev", driver: "mysql", connect_mode: "direct", port: 3306, ssl_mode: "disable", require_ticket_for_dml: true, role: "primary" }}>
+      <Modal
+        title={editing ? "编辑实例" : "新建实例"}
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={() => void submit()}
+        width={720}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{
+            env: "dev",
+            driver: "mysql",
+            connect_mode: "direct",
+            port: 3306,
+            ssl_mode: "disable",
+            require_ticket_for_dml: true,
+            role: "primary",
+          }}
+        >
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -182,14 +249,32 @@ export function DbmgmtInstancesPage() {
             </Form.Item>
           ) : null}
           <Form.Item name="driver" label="驱动">
-            <Select options={[{ value: "mysql", label: "MySQL" }, { value: "postgres", label: "PostgreSQL" }]} />
+            <Select
+              options={[
+                { value: "mysql", label: "MySQL" },
+                { value: "postgres", label: "PostgreSQL" },
+              ]}
+            />
           </Form.Item>
           <Form.Item name="connect_mode" label="连接模式" extra="直连：应用直接连数据库；SSH 隧道：经跳板机转发">
-            <Select options={[{ value: "direct", label: "直连" }, { value: "ssh_tunnel", label: "SSH 隧道" }]} />
+            <Select
+              options={[
+                { value: "direct", label: "直连" },
+                { value: "ssh_tunnel", label: "SSH 隧道" },
+              ]}
+            />
           </Form.Item>
           {connectMode === "ssh_tunnel" ? (
-            <Form.Item name="server_id" label="CMDB 跳板机" rules={[{ required: true, message: "SSH 隧道须选择 CMDB 服务器" }]}>
-              <Select allowClear options={servers.map((s) => ({ value: s.id, label: s.name }))} placeholder="选择项目内已纳管服务器" />
+            <Form.Item
+              name="server_id"
+              label="CMDB 跳板机"
+              rules={[{ required: true, message: "SSH 隧道须选择 CMDB 服务器" }]}
+            >
+              <Select
+                allowClear
+                options={servers.map((s) => ({ value: s.id, label: s.name }))}
+                placeholder="选择项目内已纳管服务器"
+              />
             </Form.Item>
           ) : (
             <Typography.Text type="secondary" style={{ display: "block", marginBottom: 16 }}>

@@ -1,5 +1,28 @@
-import { BellOutlined, ClockCircleOutlined, FileSearchOutlined, MedicineBoxOutlined, QuestionCircleOutlined, RobotOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Drawer, Dropdown, Input, Space, Spin, Steps, Tag, Timeline, Typography, message } from "antd";
+import {
+  BellOutlined,
+  ClockCircleOutlined,
+  FileSearchOutlined,
+  MedicineBoxOutlined,
+  QuestionCircleOutlined,
+  RobotOutlined,
+  StopOutlined,
+} from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Drawer,
+  Dropdown,
+  Input,
+  Space,
+  Spin,
+  Steps,
+  Tag,
+  Timeline,
+  Typography,
+  message,
+} from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -170,17 +193,22 @@ export function AlertEventDetailDrawer({
     const steps: Array<{ title: string; description: string; status: "wait" | "process" | "finish" | "error" }> = [];
     const skips = explain?.skip_summary ?? [];
     const hasSilence = skips.some((s) => /silence|静默/i.test(`${s.category} ${s.error_message} ${s.hint}`));
-    const hasRoute = skips.some((s) => /no_channel|routing|route|策略/i.test(`${s.category} ${s.error_message} ${s.hint}`));
-    const hasTiming = skips.some((s) => /timing|group_wait|aggregate|ack/i.test(`${s.category} ${s.error_message} ${s.hint}`));
+    const hasRoute = skips.some((s) =>
+      /no_channel|routing|route|策略/i.test(`${s.category} ${s.error_message} ${s.hint}`),
+    );
+    const hasTiming = skips.some((s) =>
+      /timing|group_wait|aggregate|ack/i.test(`${s.category} ${s.error_message} ${s.hint}`),
+    );
     const delivered = Boolean(explain?.firing_delivered) || events.some((e) => e.success);
 
     steps.push({
       title: "是否被静默/认领抑制",
-      description: hasSilence || acked
-        ? acked
-          ? `当前认领中${ackBy ? `（${ackBy}）` : ""}${ackExpires ? `，至 ${formatDateTime(ackExpires)}` : ""}`
-          : skips.find((s) => /silence|静默/i.test(`${s.category} ${s.hint}`))?.hint || "命中静默"
-        : "未命中静默/认领抑制",
+      description:
+        hasSilence || acked
+          ? acked
+            ? `当前认领中${ackBy ? `（${ackBy}）` : ""}${ackExpires ? `，至 ${formatDateTime(ackExpires)}` : ""}`
+            : skips.find((s) => /silence|静默/i.test(`${s.category} ${s.hint}`))?.hint || "命中静默"
+          : "未命中静默/认领抑制",
       status: hasSilence || acked ? "error" : "finish",
     });
     steps.push({
@@ -309,12 +337,12 @@ export function AlertEventDetailDrawer({
   const st = statusLabel(target?.status, target?.resolved_at);
   const firing = allowSilence && st.text === "正在告警";
   const dimTags = evidence?.dims
-    ? [
+    ? ([
         evidence.dims.cluster ? { key: "cluster", label: `cluster: ${evidence.dims.cluster}` } : null,
         evidence.dims.namespace ? { key: "ns", label: `ns: ${evidence.dims.namespace}` } : null,
         evidence.dims.pod ? { key: "pod", label: `pod: ${evidence.dims.pod}` } : null,
         evidence.dims.service ? { key: "svc", label: `service: ${evidence.dims.service}` } : null,
-      ].filter(Boolean) as Array<{ key: string; label: string }>
+      ].filter(Boolean) as Array<{ key: string; label: string }>)
     : [];
   const logSamples = (evidence?.log_samples ?? []).slice(0, 5);
   const levelCounts = evidence?.log_overview?.level_counts;
@@ -475,9 +503,7 @@ export function AlertEventDetailDrawer({
               type="warning"
               showIcon
               message="有通知被策略跳过"
-              description={explain.skip_summary
-                .map((s) => `${s.hint || s.error_message}（${s.count} 次）`)
-                .join("；")}
+              description={explain.skip_summary.map((s) => `${s.hint || s.error_message}（${s.count} 次）`).join("；")}
             />
           ) : null}
 
@@ -515,7 +541,10 @@ export function AlertEventDetailDrawer({
                   <div key={`${s.timestamp}-${i}`} style={{ fontSize: 12 }}>
                     <Typography.Text type="secondary">{formatDateTime(s.timestamp) || s.timestamp}</Typography.Text>
                     {s.level ? (
-                      <Tag style={{ marginLeft: 6 }} color={String(s.level).toLowerCase().includes("err") ? "red" : undefined}>
+                      <Tag
+                        style={{ marginLeft: 6 }}
+                        color={String(s.level).toLowerCase().includes("err") ? "red" : undefined}
+                      >
                         {s.level}
                       </Tag>
                     ) : null}
@@ -596,9 +625,7 @@ export function AlertEventDetailDrawer({
             <BellOutlined /> 通知记录
           </Typography.Text>
           {!loading && events.length === 0 && !explain?.events?.length ? (
-            <Typography.Text type="secondary">
-              还没有通知记录。可能仍在等待同组合并，或尚未匹配到通道。
-            </Typography.Text>
+            <Typography.Text type="secondary">还没有通知记录。可能仍在等待同组合并，或尚未匹配到通道。</Typography.Text>
           ) : events.length ? (
             <Timeline
               items={events.map((ev) => {

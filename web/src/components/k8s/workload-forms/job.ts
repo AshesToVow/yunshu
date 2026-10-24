@@ -13,7 +13,7 @@ import {
   probeToForm,
   safeGet,
   safeParseYaml,
-  toNumberOrUndefined
+  toNumberOrUndefined,
 } from "./helpers";
 import type { DeploymentFormValues } from "./deployment";
 
@@ -77,9 +77,7 @@ export type JobFormValues = {
 
 export function buildJobYaml(v: JobFormValues): string {
   const envMap = envPairsToMap(v.env_pairs);
-  const env = Object.keys(envMap).length
-    ? Object.entries(envMap).map(([name, value]) => ({ name, value }))
-    : undefined;
+  const env = Object.keys(envMap).length ? Object.entries(envMap).map(([name, value]) => ({ name, value })) : undefined;
   const tolerations =
     (v.tolerations ?? [])
       .map((t) => ({
@@ -98,24 +96,23 @@ export function buildJobYaml(v: JobFormValues): string {
         tolerationSeconds: t.tolerationSeconds,
       })) || undefined;
 
-  const volumes =
-    (v.volumes ?? [])
-      .map((it) => {
-        const name = String(it?.name ?? "").trim();
-        if (!name) return null;
-        const type = it?.type || "emptyDir";
-        if (type === "configMap") {
-          return { name, configMap: { name: String(it?.source_name ?? "").trim() || name } };
-        }
-        if (type === "secret") {
-          return { name, secret: { secretName: String(it?.source_name ?? "").trim() || name } };
-        }
-        if (type === "pvc") {
-          return { name, persistentVolumeClaim: { claimName: String(it?.source_name ?? "").trim() || name } };
-        }
-        return { name, emptyDir: {} };
-      })
-      .filter(Boolean);
+  const volumes = (v.volumes ?? [])
+    .map((it) => {
+      const name = String(it?.name ?? "").trim();
+      if (!name) return null;
+      const type = it?.type || "emptyDir";
+      if (type === "configMap") {
+        return { name, configMap: { name: String(it?.source_name ?? "").trim() || name } };
+      }
+      if (type === "secret") {
+        return { name, secret: { secretName: String(it?.source_name ?? "").trim() || name } };
+      }
+      if (type === "pvc") {
+        return { name, persistentVolumeClaim: { claimName: String(it?.source_name ?? "").trim() || name } };
+      }
+      return { name, emptyDir: {} };
+    })
+    .filter(Boolean);
 
   const volumeMounts =
     (v.volume_mounts ?? [])
@@ -152,7 +149,8 @@ export function buildJobYaml(v: JobFormValues): string {
       completions: typeof v.completions === "number" ? v.completions : undefined,
       backoffLimit: typeof v.backoff_limit === "number" ? v.backoff_limit : undefined,
       activeDeadlineSeconds: typeof v.active_deadline_seconds === "number" ? v.active_deadline_seconds : undefined,
-      ttlSecondsAfterFinished: typeof v.ttl_seconds_after_finished === "number" ? v.ttl_seconds_after_finished : undefined,
+      ttlSecondsAfterFinished:
+        typeof v.ttl_seconds_after_finished === "number" ? v.ttl_seconds_after_finished : undefined,
       template: {
         spec: {
           restartPolicy: v.restart_policy,
@@ -245,7 +243,9 @@ export function jobYamlToForm(yaml: string): JobFormValues | null {
     volumes,
     volume_mounts: volumeMounts,
     node_selector_pairs: mapToKvPairs(safeGet(obj, "spec.template.spec.nodeSelector")),
-    affinity_yaml: safeGet(obj, "spec.template.spec.affinity") ? YAML.stringify(safeGet(obj, "spec.template.spec.affinity")) : undefined,
+    affinity_yaml: safeGet(obj, "spec.template.spec.affinity")
+      ? YAML.stringify(safeGet(obj, "spec.template.spec.affinity"))
+      : undefined,
     parallelism: toNumberOrUndefined(safeGet(obj, "spec.parallelism")),
     completions: toNumberOrUndefined(safeGet(obj, "spec.completions")),
     backoff_limit: toNumberOrUndefined(safeGet(obj, "spec.backoffLimit")),
@@ -275,7 +275,8 @@ export function jobObjToForm(obj: any): JobFormValues | null {
   const resReq = c?.resources?.requests ?? {};
   const resLim = c?.resources?.limits ?? {};
   const tolerations =
-    Array.isArray(safeGet(obj, "spec.template.spec.tolerations")) && safeGet(obj, "spec.template.spec.tolerations")?.length
+    Array.isArray(safeGet(obj, "spec.template.spec.tolerations")) &&
+    safeGet(obj, "spec.template.spec.tolerations")?.length
       ? (safeGet(obj, "spec.template.spec.tolerations") ?? []).map((t: any) => ({
           key: t?.key,
           operator: (t?.operator || "Equal") as "Equal" | "Exists",
@@ -325,4 +326,3 @@ export function jobObjToForm(obj: any): JobFormValues | null {
     ...probeToForm("startup", sp),
   };
 }
-

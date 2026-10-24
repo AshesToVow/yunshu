@@ -296,7 +296,9 @@ body {
 .admin-shell.ops-platform .ant-select-selector,
 .admin-shell.ops-platform .ant-picker {
   border-radius: var(--ys-radius) !important;
-  transition: border-color var(--ys-duration) var(--ys-ease), box-shadow var(--ys-duration) var(--ys-ease);
+  transition:
+    border-color var(--ys-duration) var(--ys-ease),
+    box-shadow var(--ys-duration) var(--ys-ease);
 }
 
 .admin-shell.ops-platform .ant-input::placeholder,
@@ -430,8 +432,16 @@ body {
 
 .gw-auth-shell::before {
   background:
-    radial-gradient(circle at 18% 22%, color-mix(in srgb, var(--login-accent, var(--ys-brand)) 12%, transparent), transparent 34%),
-    radial-gradient(circle at 82% 78%, color-mix(in srgb, var(--login-accent, var(--ys-brand)) 8%, transparent), transparent 38%) !important;
+    radial-gradient(
+      circle at 18% 22%,
+      color-mix(in srgb, var(--login-accent, var(--ys-brand)) 12%, transparent),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 82% 78%,
+      color-mix(in srgb, var(--login-accent, var(--ys-brand)) 8%, transparent),
+      transparent 38%
+    ) !important;
 }
 
 .gw-auth-brand__logoDot {
@@ -482,10 +492,18 @@ body {
   border-color: #334155;
 }
 
-.gw-accent-blue { --login-accent: #2563eb; }
-.gw-accent-violet { --login-accent: #7c3aed; }
-.gw-accent-emerald { --login-accent: #0d9488; }
-.gw-accent-amber { --login-accent: #d97706; }
+.gw-accent-blue {
+  --login-accent: #2563eb;
+}
+.gw-accent-violet {
+  --login-accent: #7c3aed;
+}
+.gw-accent-emerald {
+  --login-accent: #0d9488;
+}
+.gw-accent-amber {
+  --login-accent: #d97706;
+}
 
 /* ── Legacy page headers → product style ── */
 .admin-shell.ops-platform .page-telemetry {

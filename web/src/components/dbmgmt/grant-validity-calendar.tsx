@@ -152,7 +152,11 @@ export function GrantValidityCalendarPicker({
     <div className="grant-validity-calendar">
       <Space wrap style={{ marginBottom: 10 }}>
         {PRESETS.map((p) => (
-          <Tag.CheckableTag key={p.label} checked={activePreset === p.label} onChange={(checked) => checked && applyPreset(p)}>
+          <Tag.CheckableTag
+            key={p.label}
+            checked={activePreset === p.label}
+            onChange={(checked) => checked && applyPreset(p)}
+          >
             {p.label}
           </Tag.CheckableTag>
         ))}

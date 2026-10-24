@@ -186,7 +186,13 @@ export function AlertQualityPage({ embedded, projectContextId }: Props) {
               type="dashboard"
               percent={report?.quality_score ?? 0}
               format={(p) => `${p}`}
-              status={(report?.quality_score ?? 0) >= 80 ? "success" : (report?.quality_score ?? 0) >= 60 ? "normal" : "exception"}
+              status={
+                (report?.quality_score ?? 0) >= 80
+                  ? "success"
+                  : (report?.quality_score ?? 0) >= 60
+                    ? "normal"
+                    : "exception"
+              }
             />
             <Typography.Text type="secondary">
               {report ? `${formatDateTime(report.from)} → ${formatDateTime(report.to)}` : "-"}

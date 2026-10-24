@@ -1,13 +1,45 @@
-import { DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, SnippetsOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Empty, Form, Input, Modal, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  FileAddOutlined,
+  ReloadOutlined,
+  SnippetsOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  Modal,
+  Select,
+  Space,
+  Table,
+  Tag,
+  TreeSelect,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { AiYamlGeneratePanel } from "../components/k8s/ai-yaml-generate-panel";
 import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { getClusters, listNamespaces as listClusterNamespaces, type ClusterItem } from "../services/clusters";
 import type { K8sDeleteOptions } from "../services/service-factory";
-import { applyCr, deleteCr, getCrDetail, listCrResources, listCrs, type CrDetail, type CrItem, type CrResourceItem } from "../services/crs";
+import {
+  applyCr,
+  deleteCr,
+  getCrDetail,
+  listCrResources,
+  listCrs,
+  type CrDetail,
+  type CrItem,
+  type CrResourceItem,
+} from "../services/crs";
 import { getK8sCrTemplate, listK8sCrTemplates, type K8sCrTemplateItem } from "../services/k8s-cr-templates";
+import { useIdempotencyKey } from "../hooks/use-idempotency-key";
 import { materializeCrTemplateBody } from "../utils/cr-template";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -47,6 +79,7 @@ export function CrsPage() {
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
   const [manifest, setManifest] = useState("");
+  const { key: applyIdemKey, rotate: rotateApplyIdemKey } = useIdempotencyKey();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetName, setDeleteTargetName] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -248,7 +281,7 @@ export function CrsPage() {
     }
   }
 
-  function useTemplate(tpl: K8sCrTemplateItem) {
+  function applyTemplate(tpl: K8sCrTemplateItem) {
     const apiVersion = selectedResource
       ? `${selectedResource.group}/${selectedResource.version}`
       : tpl.gvk_group
@@ -329,9 +362,7 @@ export function CrsPage() {
         const tpl = await getK8sCrTemplate(pendingTemplateId);
         if (cancelled) return;
         if (tpl.project_id > 0) {
-          const preferred = clusters.find(
-            (c) => c.status === 1 && c.owning_project_id === tpl.project_id,
-          );
+          const preferred = clusters.find((c) => c.status === 1 && c.owning_project_id === tpl.project_id);
           if (preferred && preferred.id !== clusterId) {
             setClusterId(preferred.id);
             return; // wait for resources reload on new cluster
@@ -357,7 +388,10 @@ export function CrsPage() {
 
   return (
     <Card className="table-card" title="CR 实例管理">
-      <div className="ops-filter-bar" style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
+      <div
+        className="ops-filter-bar"
+        style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12 }}
+      >
         <Space wrap>
           <Select
             placeholder="选择集群"
@@ -409,7 +443,9 @@ export function CrsPage() {
             icon={<FileAddOutlined />}
             onClick={() => {
               const defaultNs = selectedResource?.namespaced ? `  namespace: ${namespace || "default"}\n` : "";
-              const apiVersion = selectedResource ? `${selectedResource.group}/${selectedResource.version}` : "example.com/v1";
+              const apiVersion = selectedResource
+                ? `${selectedResource.group}/${selectedResource.version}`
+                : "example.com/v1";
               const kind = selectedResource?.kind || "Example";
               setManifest(`apiVersion: ${apiVersion}
 kind: ${kind}
@@ -489,7 +525,8 @@ ${defaultNs}spec: {}
                 setDetailSubmitting(true);
                 void (async () => {
                   try {
-                    await applyCr(clusterId, detailYaml);
+                    await applyCr(clusterId, detailYaml, applyIdemKey);
+                    rotateApplyIdemKey();
                     message.success("详情修改已保存");
                     const latest = await getCrDetail({
                       clusterId,
@@ -521,7 +558,14 @@ ${defaultNs}spec: {}
               <Input value={detailName} readOnly />
             </Form.Item>
             <Form.Item label="资源类型">
-              <Input value={selectedResource ? `${selectedResource.kind} (${selectedResource.group}/${selectedResource.version})` : "-"} readOnly />
+              <Input
+                value={
+                  selectedResource
+                    ? `${selectedResource.kind} (${selectedResource.group}/${selectedResource.version})`
+                    : "-"
+                }
+                readOnly
+              />
             </Form.Item>
             <Form.Item label="命名空间">
               <Input value={selectedResource?.namespaced ? namespace : "Cluster Scope"} readOnly />
@@ -535,7 +579,11 @@ ${defaultNs}spec: {}
                   hintYaml={detailYaml}
                   onGenerated={setDetailYaml}
                 />
-                <Input.TextArea value={detailYaml} onChange={(e) => setDetailYaml(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
+                <Input.TextArea
+                  value={detailYaml}
+                  onChange={(e) => setDetailYaml(e.target.value)}
+                  autoSize={{ minRows: 20, maxRows: 28 }}
+                />
               </Space>
             </Form.Item>
           </Form>
@@ -556,7 +604,8 @@ ${defaultNs}spec: {}
           setApplyLoading(true);
           void (async () => {
             try {
-              await applyCr(clusterId, manifest);
+              await applyCr(clusterId, manifest, applyIdemKey);
+              rotateApplyIdemKey();
               message.success("应用成功");
               setApplyOpen(false);
               await reload();
@@ -574,7 +623,11 @@ ${defaultNs}spec: {}
             hintYaml={manifest}
             onGenerated={setManifest}
           />
-          <Input.TextArea value={manifest} onChange={(e) => setManifest(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
+          <Input.TextArea
+            value={manifest}
+            onChange={(e) => setManifest(e.target.value)}
+            autoSize={{ minRows: 20, maxRows: 28 }}
+          />
         </Space>
       </Modal>
 
@@ -613,14 +666,13 @@ ${defaultNs}spec: {}
               ? `已按当前类型筛选：${selectedResource.kind}（${selectedResource.group}/${selectedResource.version}）`
               : "未选择 CR 类型时将展示全部模板；建议先选择左侧 CR 类型"}
             {currentCluster?.owning_project_id ? (
-              <>
-                {" "}
-                · 含项目 #{currentCluster.owning_project_id} 与全局模板
-              </>
+              <> · 含项目 #{currentCluster.owning_project_id} 与全局模板</>
             ) : (
               " · 含全局模板"
             )}
-            <Link to="/k8s-cr-templates" style={{ marginLeft: 8 }}>管理模板库</Link>
+            <Link to="/k8s-cr-templates" style={{ marginLeft: 8 }}>
+              管理模板库
+            </Link>
           </Typography.Paragraph>
           <Input.Search
             allowClear
@@ -665,7 +717,7 @@ ${defaultNs}spec: {}
                 title: "操作",
                 width: 90,
                 render: (_: unknown, r: K8sCrTemplateItem) => (
-                  <Button type="link" size="small" onClick={() => useTemplate(r)}>
+                  <Button type="link" size="small" onClick={() => applyTemplate(r)}>
                     使用
                   </Button>
                 ),

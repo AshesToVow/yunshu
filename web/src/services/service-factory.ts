@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 
 /** 对应 Kubernetes DeleteOptions 的可选字段 */
 export type K8sDeleteOptions = {
@@ -25,7 +25,8 @@ export function createK8sResourceService<Item, Detail>(basePath: string) {
   return {
     list: (params: Record<string, any>) => getData<Item[]>(http.get(basePath, { params })),
     detail: (params: Record<string, any>) => getData<Detail>(http.get(`${basePath}/detail`, { params })),
-    apply: (body: Record<string, any>) => getData<boolean>(http.post(`${basePath}/apply`, body)),
+    apply: (body: Record<string, any>, idemKey?: string) =>
+      getData<boolean>(http.post(`${basePath}/apply`, body, idempotencyConfig(idemKey))),
     remove: (params: Record<string, any>) => getData<boolean>(http.delete(basePath, { params })),
     get: <T>(subPath: string, params: Record<string, any>) => getData<T>(http.get(`${basePath}${subPath}`, { params })),
     post: <T>(subPath: string, body: Record<string, any>) => getData<T>(http.post(`${basePath}${subPath}`, body)),

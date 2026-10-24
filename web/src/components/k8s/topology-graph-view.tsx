@@ -101,7 +101,12 @@ function assignNodeDepths(graph: TopologyGraph): Map<string, number> {
   return depth;
 }
 
-function layoutGraph(graph: TopologyGraph | null | undefined): { nodes: LayoutNode[]; edges: TopologyEdge[]; width: number; height: number } {
+function layoutGraph(graph: TopologyGraph | null | undefined): {
+  nodes: LayoutNode[];
+  edges: TopologyEdge[];
+  width: number;
+  height: number;
+} {
   if (!graph?.nodes?.length) {
     return { nodes: [], edges: graph?.edges ?? [], width: 640, height: 240 };
   }
@@ -151,7 +156,9 @@ export function TopologyGraphView({ graph, loading, emptyText = "暂无拓扑数
   }
 
   return (
-    <div style={{ overflow: "auto", maxHeight: 520, border: "1px solid #f0f0f0", borderRadius: 8, background: "#fafafa" }}>
+    <div
+      style={{ overflow: "auto", maxHeight: 520, border: "1px solid #f0f0f0", borderRadius: 8, background: "#fafafa" }}
+    >
       <svg width={layout.width} height={layout.height} style={{ display: "block", minWidth: "100%" }}>
         {layout.edges.map((e) => {
           const from = pos.get(e.from);
@@ -164,7 +171,13 @@ export function TopologyGraphView({ graph, loading, emptyText = "暂无拓扑数
           const mx = (x1 + x2) / 2;
           return (
             <g key={`${e.from}-${e.to}`}>
-              <path d={`M${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} fill="none" stroke="#bfbfbf" strokeWidth={1.5} markerEnd="url(#arrow)" />
+              <path
+                d={`M${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                fill="none"
+                stroke="#bfbfbf"
+                strokeWidth={1.5}
+                markerEnd="url(#arrow)"
+              />
               {e.kind ? (
                 <text x={mx} y={(y1 + y2) / 2 - 4} textAnchor="middle" fontSize={10} fill="#8c8c8c">
                   {e.kind}

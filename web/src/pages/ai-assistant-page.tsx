@@ -425,9 +425,7 @@ export function AiAssistantPage() {
               if (ev.tool_step) {
                 steps.push(ev.tool_step);
                 setLastSteps([...steps]);
-                pushTimeline(
-                  `工具 ${ev.tool_step.name} ${ev.tool_step.ok === false ? "失败" : "完成"}`,
-                );
+                pushTimeline(`工具 ${ev.tool_step.name} ${ev.tool_step.ok === false ? "失败" : "完成"}`);
               }
               break;
             case "reply":
@@ -566,9 +564,7 @@ export function AiAssistantPage() {
                 AI 运维助手
               </Typography.Title>
               {status ? (
-                <Tag color={status.enabled ? "success" : "default"}>
-                  {status.enabled ? "已启用" : "未启用"}
-                </Tag>
+                <Tag color={status.enabled ? "success" : "default"}>{status.enabled ? "已启用" : "未启用"}</Tag>
               ) : null}
               {sessionId ? <Tag>会话 #{sessionId}</Tag> : null}
               <Link to="/ai/investigations">调查记录</Link>
@@ -677,7 +673,8 @@ export function AiAssistantPage() {
           >
             {messages.length === 0 ? (
               <Typography.Text type="secondary">
-                示例：某主机不通怎么查；某服务 ERROR 日志怎么处理；某告警为何触发。请先选项目（日志/监控），K8s 问题再选集群与命名空间。
+                示例：某主机不通怎么查；某服务 ERROR 日志怎么处理；某告警为何触发。请先选项目（日志/监控），K8s
+                问题再选集群与命名空间。
               </Typography.Text>
             ) : (
               <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -731,7 +728,15 @@ export function AiAssistantPage() {
           </div>
 
           {!sending && liveTimeline.length > 0 ? (
-            <Card size="small" title="执行轨迹" extra={<Button type="link" size="small" onClick={() => setLiveTimeline([])}>清除</Button>}>
+            <Card
+              size="small"
+              title="执行轨迹"
+              extra={
+                <Button type="link" size="small" onClick={() => setLiveTimeline([])}>
+                  清除
+                </Button>
+              }
+            >
               <pre style={{ margin: 0, fontSize: 12, maxHeight: 140, overflow: "auto", whiteSpace: "pre-wrap" }}>
                 {liveTimeline.join("\n")}
               </pre>
@@ -748,7 +753,9 @@ export function AiAssistantPage() {
                     showIcon
                     message={s.name}
                     description={
-                      <pre style={{ margin: 0, maxHeight: 120, overflow: "auto", whiteSpace: "pre-wrap", fontSize: 12 }}>
+                      <pre
+                        style={{ margin: 0, maxHeight: 120, overflow: "auto", whiteSpace: "pre-wrap", fontSize: 12 }}
+                      >
                         {s.error || s.result || s.args}
                       </pre>
                     }

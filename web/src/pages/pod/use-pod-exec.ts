@@ -57,8 +57,7 @@ export function usePodExec({
 
     const term = new Terminal({
       cursorBlink: true,
-      fontFamily:
-        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
       fontSize: 12,
       theme: { background: "#141414" },
       scrollback: 5000,

@@ -1,6 +1,43 @@
-import { BugOutlined, CodeOutlined, DeleteOutlined, DownOutlined, DownloadOutlined, EditOutlined, FileSearchOutlined, FileTextOutlined, FolderOpenOutlined, MedicineBoxOutlined, PlusOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
+import {
+  BugOutlined,
+  CodeOutlined,
+  DeleteOutlined,
+  DownOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  FileSearchOutlined,
+  FileTextOutlined,
+  FolderOpenOutlined,
+  MedicineBoxOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  UndoOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
 import type { MenuProps } from "antd";
-import { Alert, Button, Card, Checkbox, Divider, Drawer, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Tooltip, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Divider,
+  Drawer,
+  Dropdown,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Tabs,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { K8sPageToolbar } from "../components/ops/k8s-page-toolbar";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
@@ -16,7 +53,28 @@ import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { validateYaml } from "../components/k8s/monaco-yaml-editor";
 import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
-import { createPodByYAML, createPodSimple, debugPodEphemeral, deletePod, downloadPodLogs, getPodDebugImageDefault, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, restartPod, updatePodSimple, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
+import {
+  createPodByYAML,
+  createPodSimple,
+  debugPodEphemeral,
+  deletePod,
+  downloadPodLogs,
+  getPodDebugImageDefault,
+  getPodDetail,
+  getPodDiagnose,
+  getPodEvents,
+  getPodLogs,
+  getPods,
+  listPodFiles,
+  restartPod,
+  updatePodSimple,
+  type PodDetail,
+  type PodDiagnoseResult,
+  type PodEventItem,
+  type PodFileItem,
+  type PodItem,
+  type PodLogsQuery,
+} from "../services/pods";
 import { analyzePodDiagnoseAI, startAIInvestigation, type AIPodDiagnoseResult } from "../services/ai";
 import { useAiEnabled } from "../hooks/use-ai-enabled";
 import { useNavigate } from "react-router-dom";
@@ -416,7 +474,6 @@ export function PodPage() {
     }
   }
 
-
   async function handleRestartPod(record: PodItem) {
     if (!clusterId) return;
     await restartPod({ cluster_id: clusterId, namespace: record.namespace, name: record.name });
@@ -491,7 +548,7 @@ export function PodPage() {
         message.success("Pod 已更新并重建");
       } else {
         await createPodSimple(payload);
-      message.success("Pod 创建成功");
+        message.success("Pod 创建成功");
       }
       setCreateOpen(false);
       await loadPods();
@@ -554,7 +611,8 @@ export function PodPage() {
         breadcrumbs={[{ title: "Kubernetes" }, { title: "Pod" }]}
         meta={
           <span>
-            {clusterId ? `集群 #${clusterId} · ${namespace}` : "未选择集群"} · {loading ? "加载中" : `${pods.length} 条`}
+            {clusterId ? `集群 #${clusterId} · ${namespace}` : "未选择集群"} ·{" "}
+            {loading ? "加载中" : `${pods.length} 条`}
           </span>
         }
       />
@@ -717,7 +775,12 @@ export function PodPage() {
                   ].filter(Boolean) as MenuProps["items"];
                   return (
                     <Space size={0} wrap onClick={stop}>
-                      <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => void openPodLogsInline(record)}>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<FileTextOutlined />}
+                        onClick={() => void openPodLogsInline(record)}
+                      >
                         日志
                       </Button>
                       <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
@@ -804,7 +867,12 @@ export function PodPage() {
       {selected && detailTab === "logs" ? (
         <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
           需要关键字、时间范围等高级筛选？
-          <Button type="link" size="small" style={{ paddingInline: 4 }} onClick={() => void handleViewLogs(selected, "modal")}>
+          <Button
+            type="link"
+            size="small"
+            style={{ paddingInline: 4 }}
+            onClick={() => void handleViewLogs(selected, "modal")}
+          >
             打开日志对话框
           </Button>
         </Typography.Paragraph>
@@ -1032,7 +1100,9 @@ export function PodPage() {
                   rows={3}
                   value={
                     detail.labels && Object.keys(detail.labels).length > 0
-                      ? Object.entries(detail.labels).map(([k, v]) => `${k}=${v}`).join("\n")
+                      ? Object.entries(detail.labels)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join("\n")
                       : "-"
                   }
                   readOnly
@@ -1043,7 +1113,9 @@ export function PodPage() {
                   rows={3}
                   value={
                     detail.node_selector && Object.keys(detail.node_selector).length > 0
-                      ? Object.entries(detail.node_selector).map(([k, v]) => `${k}=${v}`).join("\n")
+                      ? Object.entries(detail.node_selector)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join("\n")
                       : "-"
                   }
                   readOnly
@@ -1054,7 +1126,9 @@ export function PodPage() {
                   rows={3}
                   value={
                     detail.annotations && Object.keys(detail.annotations).length > 0
-                      ? Object.entries(detail.annotations).map(([k, v]) => `${k}=${v}`).join("\n")
+                      ? Object.entries(detail.annotations)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join("\n")
                       : "-"
                   }
                   readOnly
@@ -1113,7 +1187,11 @@ export function PodPage() {
                   title: "详情",
                   render: (_: unknown, v: any) => (
                     <Typography.Text ellipsis={{ tooltip: JSON.stringify(v) }} style={{ maxWidth: 320 }}>
-                      {v.configMap?.name || v.secret?.secretName || v.persistentVolumeClaim?.claimName || v.hostPath?.path || "-"}
+                      {v.configMap?.name ||
+                        v.secret?.secretName ||
+                        v.persistentVolumeClaim?.claimName ||
+                        v.hostPath?.path ||
+                        "-"}
                     </Typography.Text>
                   ),
                 },

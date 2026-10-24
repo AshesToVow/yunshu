@@ -9,7 +9,14 @@ import {
   type GrantValidityPeriod,
 } from "../components/dbmgmt/grant-validity-calendar";
 import { formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
-import { deleteDbGrant, listDbGrants, listDbInstances, updateDbGrant, type DbGrant, type DbInstance } from "../services/dbmgmt";
+import {
+  deleteDbGrant,
+  listDbGrants,
+  listDbInstances,
+  updateDbGrant,
+  type DbGrant,
+  type DbInstance,
+} from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { getUsers } from "../services/users";
 import type { UserItem } from "../types/api";
@@ -154,10 +161,22 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
           <Button type="primary" icon={<SearchOutlined />} onClick={() => setSearchText(keyword)}>
             搜索
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => { setKeyword(""); setSearchText(""); void load(); }}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              setKeyword("");
+              setSearchText("");
+              void load();
+            }}
+          >
             刷新重置
           </Button>
-          <Select style={{ width: 180 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={setProjectId} />
+          <Select
+            style={{ width: 180 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={setProjectId}
+          />
         </Space>
         <Table
           rowKey="id"
@@ -172,7 +191,10 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
               render: (_: unknown, r: DbGrant) => (r.table_names?.length ? "TABLE" : "DATABASE"),
             },
             { title: "数据库", dataIndex: "database_name", render: (v?: string) => v || "—" },
-            { title: "表", render: (_: unknown, r: DbGrant) => (r.table_names?.length ? r.table_names.join(", ") : "—") },
+            {
+              title: "表",
+              render: (_: unknown, r: DbGrant) => (r.table_names?.length ? r.table_names.join(", ") : "—"),
+            },
             { title: "结果集", dataIndex: "query_limit_num", width: 90, render: (v?: number) => v ?? 1000 },
             { title: "有效时间", dataIndex: "expires_at", width: 120, render: (v?: string) => formatExpiry(v) },
             {
@@ -183,7 +205,10 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
                   <Button size="small" type="primary" icon={<EditOutlined />} onClick={() => openEdit(r)}>
                     编辑
                   </Button>
-                  <Popconfirm title="删除该查询权限？" onConfirm={() => void deleteDbGrant(projectId!, r.id).then(load)}>
+                  <Popconfirm
+                    title="删除该查询权限？"
+                    onConfirm={() => void deleteDbGrant(projectId!, r.id).then(load)}
+                  >
                     <Button size="small" danger icon={<DeleteOutlined />} />
                   </Popconfirm>
                 </Space>
@@ -191,7 +216,14 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
             },
           ]}
         />
-        <Modal title="编辑查询权限" open={editOpen} onCancel={() => setEditOpen(false)} onOk={() => void submitEdit()} destroyOnClose width={760}>
+        <Modal
+          title="编辑查询权限"
+          open={editOpen}
+          onCancel={() => setEditOpen(false)}
+          onOk={() => void submitEdit()}
+          destroyOnClose
+          width={760}
+        >
           {editing ? (
             <Form form={editForm} layout="vertical">
               <Form.Item label="用户">
@@ -228,7 +260,12 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
       title="授权管理"
       extra={
         <Space>
-          <Select style={{ width: 200 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={setProjectId} />
+          <Select
+            style={{ width: 200 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={setProjectId}
+          />
           <Button icon={<ReloadOutlined />} onClick={() => void load()} />
         </Space>
       }

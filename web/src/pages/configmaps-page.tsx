@@ -3,7 +3,14 @@ import { useRef } from "react";
 import { ConfigMapFormCreateDrawer } from "../components/k8s/k8s-resource-form-drawers";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
-import { applyConfigMap, deleteConfigMap, getConfigMapDetail, listConfigMaps, type ConfigDetail, type ConfigMapItem } from "../services/configs";
+import {
+  applyConfigMap,
+  deleteConfigMap,
+  getConfigMapDetail,
+  listConfigMaps,
+  type ConfigDetail,
+  type ConfigMapItem,
+} from "../services/configs";
 
 export function ConfigmapsPage() {
   const listReloadRef = useRef<() => void>(() => {});
@@ -42,9 +49,11 @@ export function ConfigmapsPage() {
           />
         )}
         api={{
-          list: async ({ clusterId, namespace, keyword }) => await listConfigMaps(clusterId, namespace ?? "default", keyword),
-          detail: async ({ clusterId, namespace, name }) => await getConfigMapDetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyConfigMap(clusterId, manifest),
+          list: async ({ clusterId, namespace, keyword }) =>
+            await listConfigMaps(clusterId, namespace ?? "default", keyword),
+          detail: async ({ clusterId, namespace, name }) =>
+            await getConfigMapDetail(clusterId, namespace ?? "default", name),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyConfigMap(clusterId, manifest, idemKey),
           remove: async (args) => await deleteConfigMap(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: v1

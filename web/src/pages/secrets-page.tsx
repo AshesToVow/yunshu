@@ -55,13 +55,14 @@ export function SecretsPage() {
           />
         )}
         api={{
-          list: async ({ clusterId, namespace, keyword }) => await listSecrets(clusterId, namespace ?? "default", keyword),
+          list: async ({ clusterId, namespace, keyword }) =>
+            await listSecrets(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => {
             setRevealed(null);
             setRevealCtx({ clusterId, namespace: namespace ?? "default", name });
             return await getSecretDetail(clusterId, namespace ?? "default", name);
           },
-          apply: async ({ clusterId, manifest }) => await applySecret(clusterId, manifest),
+          apply: async ({ clusterId, manifest, idemKey }) => await applySecret(clusterId, manifest, idemKey),
           remove: async (args) => await deleteSecret(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: v1

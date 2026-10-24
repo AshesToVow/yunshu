@@ -67,13 +67,21 @@ body:has(.gw-auth-shell.is-light) {
 
 .gw-auth-shell.is-dark {
   background:
-    radial-gradient(ellipse 90% 70% at 12% 20%, color-mix(in srgb, var(--login-accent, #0d9488) 12%, #0f172a 88%), transparent 58%),
+    radial-gradient(
+      ellipse 90% 70% at 12% 20%,
+      color-mix(in srgb, var(--login-accent, #0d9488) 12%, #0f172a 88%),
+      transparent 58%
+    ),
     linear-gradient(155deg, #070b14 0%, #0f172a 45%, #111827 100%) !important;
 }
 
 .gw-auth-shell.is-light {
   background:
-    radial-gradient(ellipse 85% 65% at 10% 18%, color-mix(in srgb, var(--login-accent, #0d9488) 10%, #f8fafc 90%), transparent 55%),
+    radial-gradient(
+      ellipse 85% 65% at 10% 18%,
+      color-mix(in srgb, var(--login-accent, #0d9488) 10%, #f8fafc 90%),
+      transparent 55%
+    ),
     linear-gradient(155deg, #f8fafc 0%, #eef2f7 50%, #e8eef5 100%) !important;
 }
 
@@ -84,8 +92,16 @@ body:has(.gw-auth-shell.is-light) {
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 24% 28%, color-mix(in srgb, var(--login-accent, #0d9488) 8%, transparent), transparent 40%),
-    radial-gradient(circle at 76% 72%, color-mix(in srgb, var(--login-accent, #0d9488) 6%, transparent), transparent 44%);
+    radial-gradient(
+      circle at 24% 28%,
+      color-mix(in srgb, var(--login-accent, #0d9488) 8%, transparent),
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 76% 72%,
+      color-mix(in srgb, var(--login-accent, #0d9488) 6%, transparent),
+      transparent 44%
+    );
   animation: gw-auth-bg-shift 22s var(--ys-ease, ease) infinite;
 }
 
@@ -144,8 +160,12 @@ body:has(.gw-auth-shell.is-light) {
   border-radius: 50% !important;
 }
 
-.gw-auth-shell.is-dark .gw-auth-toolbar__btn { color: #cbd5e1 !important; }
-.gw-auth-shell.is-light .gw-auth-toolbar__btn { color: #64748b !important; }
+.gw-auth-shell.is-dark .gw-auth-toolbar__btn {
+  color: #cbd5e1 !important;
+}
+.gw-auth-shell.is-light .gw-auth-toolbar__btn {
+  color: #64748b !important;
+}
 
 .gw-auth-toolbar__btn:hover,
 .gw-auth-toolbar__btn.is-active {
@@ -327,8 +347,12 @@ body:has(.gw-auth-shell.is-light) {
   color: var(--ys-text-muted, #64748b) !important;
 }
 
-.gw-auth-shell.is-dark .gw-auth-card__title { color: #f1f5f9 !important; }
-.gw-auth-shell.is-dark .gw-auth-card__sub { color: #94a3b8 !important; }
+.gw-auth-shell.is-dark .gw-auth-card__title {
+  color: #f1f5f9 !important;
+}
+.gw-auth-shell.is-dark .gw-auth-card__sub {
+  color: #94a3b8 !important;
+}
 
 /* Login tabs — inside card, left-aligned underline (not fat side-by-side pills) */
 .gw-auth-tabs {
@@ -424,10 +448,18 @@ body:has(.gw-auth-shell.is-light) {
 }
 
 /* Accent tokens — fixed hex */
-.gw-auth-shell.gw-accent-blue { --login-accent: #2563eb; }
-.gw-auth-shell.gw-accent-violet { --login-accent: #7c3aed; }
-.gw-auth-shell.gw-accent-emerald { --login-accent: #0d9488; }
-.gw-auth-shell.gw-accent-amber { --login-accent: #d97706; }
+.gw-auth-shell.gw-accent-blue {
+  --login-accent: #2563eb;
+}
+.gw-auth-shell.gw-accent-violet {
+  --login-accent: #7c3aed;
+}
+.gw-auth-shell.gw-accent-emerald {
+  --login-accent: #0d9488;
+}
+.gw-auth-shell.gw-accent-amber {
+  --login-accent: #d97706;
+}
 
 .gw-auth-dot {
   width: 16px !important;
@@ -449,13 +481,23 @@ body:has(.gw-auth-shell.is-light) {
 }
 
 @keyframes gw-auth-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 @keyframes ys-auth-orb-drift {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(2%, -2%) scale(1.03); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(2%, -2%) scale(1.03);
+  }
 }
 
 @media (max-width: 992px) {
@@ -498,6 +540,10 @@ body:has(.gw-auth-shell.is-light) {
     -webkit-backdrop-filter: none !important;
   }
 
-  .gw-auth-shell.is-light .gw-auth-card { background: #fff !important; }
-  .gw-auth-shell.is-dark .gw-auth-card { background: #0f172a !important; }
+  .gw-auth-shell.is-light .gw-auth-card {
+    background: #fff !important;
+  }
+  .gw-auth-shell.is-dark .gw-auth-card {
+    background: #0f172a !important;
+  }
 }

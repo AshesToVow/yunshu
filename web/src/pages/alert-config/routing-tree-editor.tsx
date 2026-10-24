@@ -76,7 +76,12 @@ export function RoutingTreeEditor({
             <Form.Item name="enabled" label="启用" valuePropName="checked" style={{ marginBottom: 0 }}>
               <Switch />
             </Form.Item>
-            <Form.Item name="continue" label={ALERT_ROUTING_TERMS.continueMatchChildren} valuePropName="checked" style={{ marginBottom: 0 }}>
+            <Form.Item
+              name="continue"
+              label={ALERT_ROUTING_TERMS.continueMatchChildren}
+              valuePropName="checked"
+              style={{ marginBottom: 0 }}
+            >
               <Switch />
             </Form.Item>
             <Form.Item name="notify_resolved" label="恢复通知" valuePropName="checked" style={{ marginBottom: 0 }}>
@@ -91,12 +96,7 @@ export function RoutingTreeEditor({
             label={`${ALERT_ROUTING_TERMS.matchSeverity}（可选，多选）`}
             extra="告警 labels.severity 命中任一即通过；不选表示不按级别过滤。"
           >
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="不选则不限级别"
-              options={subscriptionSeverityOptions}
-            />
+            <Select mode="multiple" allowClear placeholder="不选则不限级别" options={subscriptionSeverityOptions} />
           </Form.Item>
           <Form.Item
             name="receiver_group_ids"
@@ -117,7 +117,8 @@ export function RoutingTreeEditor({
             ]}
             extra={
               <>
-                根节点可留空：仅作路由分流，通知由子节点上的接收组发出。处理人邮件：wechat 等补发；钉钉/企微在无法 @ 时补发。请先点击上方「
+                根节点可留空：仅作路由分流，通知由子节点上的接收组发出。处理人邮件：wechat 等补发；钉钉/企微在无法 @
+                时补发。请先点击上方「
                 {ALERT_ROUTING_TERMS.receiverGroupManage}」创建接收组并绑定通道。
               </>
             }

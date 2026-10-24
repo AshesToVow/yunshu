@@ -535,11 +535,7 @@ export function createLogPipeline(
   return getData<LogPipelineItem>(http.post(`/projects/${projectId}/log-pipelines`, payload));
 }
 
-export function updateLogPipeline(
-  projectId: number,
-  pipelineId: number,
-  payload: Record<string, unknown>,
-) {
+export function updateLogPipeline(projectId: number, pipelineId: number, payload: Record<string, unknown>) {
   return getData<LogPipelineItem>(http.put(`/projects/${projectId}/log-pipelines/${pipelineId}`, payload));
 }
 
@@ -589,10 +585,7 @@ export function rollbackLogPipelineVersion(projectId: number, pipelineId: number
   );
 }
 
-export function deployLoggieCustomYAML(
-  projectId: number,
-  payload: { server_id: number; pipelines_yml: string },
-) {
+export function deployLoggieCustomYAML(projectId: number, payload: { server_id: number; pipelines_yml: string }) {
   return getData<{ success: boolean; message?: string }>(
     http.post(`/projects/${projectId}/loggie/deploy-yaml`, payload),
   );

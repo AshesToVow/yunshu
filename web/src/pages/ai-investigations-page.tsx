@@ -245,7 +245,9 @@ export function AiInvestigationsPage() {
               style={{ marginBottom: 12 }}
             />
           ) : null}
-          {selected.error_msg ? <Alert type="error" showIcon message={selected.error_msg} style={{ marginBottom: 12 }} /> : null}
+          {selected.error_msg ? (
+            <Alert type="error" showIcon message={selected.error_msg} style={{ marginBottom: 12 }} />
+          ) : null}
           {report ? (
             <Space direction="vertical" style={{ width: "100%" }} size="middle">
               <Alert type="info" showIcon message="摘要" description={report.summary || "（无）"} />

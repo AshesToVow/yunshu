@@ -24,7 +24,12 @@ export function K8sResourceTopologyPage() {
   const [graph, setGraph] = useState<Awaited<ReturnType<typeof getWorkloadTopology>> | null>(null);
 
   const clusterOptions = useMemo(
-    () => clusters.map((c) => ({ label: c.status === 1 ? c.name : `${c.name}（已停用）`, value: c.id, disabled: c.status !== 1 })),
+    () =>
+      clusters.map((c) => ({
+        label: c.status === 1 ? c.name : `${c.name}（已停用）`,
+        value: c.id,
+        disabled: c.status !== 1,
+      })),
     [clusters],
   );
 
@@ -68,17 +73,32 @@ export function K8sResourceTopologyPage() {
   }
 
   return (
-    <Card
-      title="资源拓扑图"
-      extra={
-        <TypographyHint />
-      }
-    >
+    <Card title="资源拓扑图" extra={<TypographyHint />}>
       <Space wrap style={{ marginBottom: 16 }}>
-        <Select placeholder="集群" style={{ minWidth: 220 }} value={clusterId} options={clusterOptions} onChange={setClusterId} />
-        <Select placeholder="命名空间" style={{ minWidth: 180 }} value={namespace} options={namespaceOptions} onChange={setNamespace} showSearch optionFilterProp="label" />
+        <Select
+          placeholder="集群"
+          style={{ minWidth: 220 }}
+          value={clusterId}
+          options={clusterOptions}
+          onChange={setClusterId}
+        />
+        <Select
+          placeholder="命名空间"
+          style={{ minWidth: 180 }}
+          value={namespace}
+          options={namespaceOptions}
+          onChange={setNamespace}
+          showSearch
+          optionFilterProp="label"
+        />
         <Select style={{ width: 160 }} value={kind} options={KIND_OPTIONS} onChange={setKind} />
-        <Input placeholder="资源名称" style={{ width: 220 }} value={name} onChange={(e) => setName(e.target.value)} onPressEnter={() => void load()} />
+        <Input
+          placeholder="资源名称"
+          style={{ width: 220 }}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onPressEnter={() => void load()}
+        />
         <Button type="primary" icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
           查询拓扑
         </Button>
@@ -89,5 +109,7 @@ export function K8sResourceTopologyPage() {
 }
 
 function TypographyHint() {
-  return <span style={{ color: "#8c8c8c", fontSize: 13 }}>入口到 Pod：Ingress → Service → Workload → ReplicaSet → Pod</span>;
+  return (
+    <span style={{ color: "#8c8c8c", fontSize: 13 }}>入口到 Pod：Ingress → Service → Workload → ReplicaSet → Pod</span>
+  );
 }

@@ -207,9 +207,7 @@ export function PlatformTemplatesPage() {
         title: "状态",
         dataIndex: "status",
         width: 80,
-        render: (v: number) => (
-          <Tag color={v === 1 ? "green" : "default"}>{v === 1 ? "启用" : "停用"}</Tag>
-        ),
+        render: (v: number) => <Tag color={v === 1 ? "green" : "default"}>{v === 1 ? "启用" : "停用"}</Tag>,
       },
       {
         title: "更新",
@@ -253,7 +251,11 @@ export function PlatformTemplatesPage() {
 
   return (
     <div>
-      <PageTelemetryHeader label="Templates" title="模板中心" subtitle="CI/CD 片段 · 告警 · 巡检 · Loggie（MySQL 权威 + MinIO 镜像）" />
+      <PageTelemetryHeader
+        label="Templates"
+        title="模板中心"
+        subtitle="CI/CD 片段 · 告警 · 巡检 · Loggie（MySQL 权威 + MinIO 镜像）"
+      />
       <Card>
         <Space wrap style={{ marginBottom: 16 }}>
           <Select
@@ -282,7 +284,8 @@ export function PlatformTemplatesPage() {
           </Button>
         </Space>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          业务侧通过稳定 <Typography.Text code>template_key</Typography.Text> 引用；发布后才生效。未发布时解析回退内置种子。
+          业务侧通过稳定 <Typography.Text code>template_key</Typography.Text>{" "}
+          引用；发布后才生效。未发布时解析回退内置种子。
         </Typography.Paragraph>
         <Table
           rowKey="id"

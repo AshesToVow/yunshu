@@ -31,9 +31,7 @@ export async function mergeServersWithSelected(
   }
   // 探测请求不弹全局 toast，由调用方汇总成「发布主机」场景提示，避免重复弹窗
   const details = await Promise.all(
-    missing.map((id) =>
-      getProjectServerDetail(projectId, id, { silentErrorToast: true }).catch(() => null),
-    ),
+    missing.map((id) => getProjectServerDetail(projectId, id, { silentErrorToast: true }).catch(() => null)),
   );
   for (const d of details) {
     if (d) {

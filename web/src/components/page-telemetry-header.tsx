@@ -10,14 +10,7 @@ export interface PageTelemetryHeaderProps {
   className?: string;
 }
 
-export function PageTelemetryHeader({
-  label,
-  title,
-  subtitle,
-  meta,
-  extra,
-  className,
-}: PageTelemetryHeaderProps) {
+export function PageTelemetryHeader({ label, title, subtitle, meta, extra, className }: PageTelemetryHeaderProps) {
   const rootClass = ["page-telemetry", className].filter(Boolean).join(" ");
 
   return (
@@ -33,7 +26,7 @@ export function PageTelemetryHeader({
           </Typography.Paragraph>
         ) : null}
       </div>
-      {(meta?.length || extra) ? (
+      {meta?.length || extra ? (
         <div className="page-telemetry__aside">
           {meta?.length ? (
             <div className="page-telemetry__meta">

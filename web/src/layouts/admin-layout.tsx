@@ -23,7 +23,21 @@ import {
   DownOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
-import { Avatar, Button, Drawer, Dropdown, Layout, Menu, Select, Space, Spin, Switch, Tabs, Tag, Typography } from "antd";
+import {
+  Avatar,
+  Button,
+  Drawer,
+  Dropdown,
+  Layout,
+  Menu,
+  Select,
+  Space,
+  Spin,
+  Switch,
+  Tabs,
+  Tag,
+  Typography,
+} from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -126,10 +140,7 @@ export function AdminLayout() {
     return matchMenuSelectedKey(pathname, items);
   }, [pathname, siderItems]);
 
-  const defaultOpenKeys = useMemo(
-    () => defaultOpenKeysFor((siderItems ?? []) as AntdMenuItem[]),
-    [siderItems],
-  );
+  const defaultOpenKeys = useMemo(() => defaultOpenKeysFor((siderItems ?? []) as AntdMenuItem[]), [siderItems]);
   const menuTheme = themeMode === "dark" ? "dark" : "light";
   const layoutClassName = [
     "admin-shell",
@@ -300,7 +311,12 @@ export function AdminLayout() {
                 {themeMode === "dark" ? <BulbOutlined /> : <BulbFilled />}
               </Button>
             ) : null}
-            <Button type="text" className="admin-icon-btn" onClick={() => setGlobalSearchOpen(true)} title={`${t("app.search")} (Ctrl+K)`}>
+            <Button
+              type="text"
+              className="admin-icon-btn"
+              onClick={() => setGlobalSearchOpen(true)}
+              title={`${t("app.search")} (Ctrl+K)`}
+            >
               <SearchOutlined />
             </Button>
             <Select
@@ -318,7 +334,12 @@ export function AdminLayout() {
                 setMenuEpoch((n) => n + 1);
               }}
             />
-            <Button type="text" className="admin-icon-btn" onClick={() => setSettingsOpen(true)} title={t("app.settings")}>
+            <Button
+              type="text"
+              className="admin-icon-btn"
+              onClick={() => setSettingsOpen(true)}
+              title={t("app.settings")}
+            >
               <SettingOutlined />
             </Button>
           </div>
@@ -334,7 +355,9 @@ export function AdminLayout() {
                       {user?.nickname?.slice(0, 1) || user?.username?.slice(0, 1) || "Y"}
                     </Avatar>
                     <div className="user-header-dropdown-panel__text">
-                      <div className="user-header-dropdown-panel__name">{user?.nickname || user?.username || t("app.notLoggedIn")}</div>
+                      <div className="user-header-dropdown-panel__name">
+                        {user?.nickname || user?.username || t("app.notLoggedIn")}
+                      </div>
                       {user?.username ? (
                         <div className="user-header-dropdown-panel__account">{user.username}</div>
                       ) : null}
@@ -358,7 +381,9 @@ export function AdminLayout() {
                   <Avatar className="user-header-trigger__avatar" size={30}>
                     {user?.nickname?.slice(0, 1) || user?.username?.slice(0, 1) || "Y"}
                   </Avatar>
-                  <span className="user-header-trigger__name">{user?.nickname || user?.username || t("app.notLoggedIn")}</span>
+                  <span className="user-header-trigger__name">
+                    {user?.nickname || user?.username || t("app.notLoggedIn")}
+                  </span>
                   <DownOutlined className="user-header-trigger__caret" />
                 </span>
               </Button>
@@ -429,7 +454,19 @@ export function AdminLayout() {
                     <div className="admin-settings-section">
                       <Typography.Text className="admin-settings-label">{t("app.accentColor")}</Typography.Text>
                       <div className="admin-accent-grid">
-                        {["#0d9488", "#14b8a6", "#0ea5e9", "#10b981", "#eab308", "#6366f1", "#7c3aed", "#f97316", "#dc2626", "#4b5563", "#050505"].map((item) => (
+                        {[
+                          "#0d9488",
+                          "#14b8a6",
+                          "#0ea5e9",
+                          "#10b981",
+                          "#eab308",
+                          "#6366f1",
+                          "#7c3aed",
+                          "#f97316",
+                          "#dc2626",
+                          "#4b5563",
+                          "#050505",
+                        ].map((item) => (
                           <button
                             key={item}
                             type="button"
@@ -452,27 +489,51 @@ export function AdminLayout() {
                     <Typography.Text className="admin-settings-label">{t("app.headerShortcuts")}</Typography.Text>
                     <div className="admin-setting-row">
                       <span>{t("app.showRefresh")}</span>
-                      <Switch size="small" checked={uiPreferences.showRefresh} onChange={(checked) => patchUIPreferences({ showRefresh: checked })} />
+                      <Switch
+                        size="small"
+                        checked={uiPreferences.showRefresh}
+                        onChange={(checked) => patchUIPreferences({ showRefresh: checked })}
+                      />
                     </div>
                     <div className="admin-setting-row">
                       <span>{t("app.showFullscreen")}</span>
-                      <Switch size="small" checked={uiPreferences.showFullscreen} onChange={(checked) => patchUIPreferences({ showFullscreen: checked })} />
+                      <Switch
+                        size="small"
+                        checked={uiPreferences.showFullscreen}
+                        onChange={(checked) => patchUIPreferences({ showFullscreen: checked })}
+                      />
                     </div>
                     <div className="admin-setting-row">
                       <span>{t("app.showThemeToggle")}</span>
-                      <Switch size="small" checked={uiPreferences.showThemeToggle} onChange={(checked) => patchUIPreferences({ showThemeToggle: checked })} />
+                      <Switch
+                        size="small"
+                        checked={uiPreferences.showThemeToggle}
+                        onChange={(checked) => patchUIPreferences({ showThemeToggle: checked })}
+                      />
                     </div>
                     <div className="admin-setting-row">
                       <span>{t("app.compactContent")}</span>
-                      <Switch size="small" checked={uiPreferences.compactContent} onChange={(checked) => patchUIPreferences({ compactContent: checked })} />
+                      <Switch
+                        size="small"
+                        checked={uiPreferences.compactContent}
+                        onChange={(checked) => patchUIPreferences({ compactContent: checked })}
+                      />
                     </div>
                     <div className="admin-setting-row">
                       <span>{t("app.darkSider")}</span>
-                      <Switch size="small" checked={uiPreferences.darkSider} onChange={(checked) => patchUIPreferences({ darkSider: checked })} />
+                      <Switch
+                        size="small"
+                        checked={uiPreferences.darkSider}
+                        onChange={(checked) => patchUIPreferences({ darkSider: checked })}
+                      />
                     </div>
                     <div className="admin-setting-row">
                       <span>{t("app.darkHeader")}</span>
-                      <Switch size="small" checked={uiPreferences.darkHeader} onChange={(checked) => patchUIPreferences({ darkHeader: checked })} />
+                      <Switch
+                        size="small"
+                        checked={uiPreferences.darkHeader}
+                        onChange={(checked) => patchUIPreferences({ darkHeader: checked })}
+                      />
                     </div>
                   </div>
                 ),

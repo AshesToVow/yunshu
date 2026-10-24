@@ -356,11 +356,13 @@ function RulesPanel() {
         message="转发说明"
         description={
           <span>
-            K8s Event 标准类型为 <Typography.Text code>Normal</Typography.Text> / <Typography.Text code>Warning</Typography.Text>，仅{" "}
-            <Typography.Text code>Normal</Typography.Text> 不转发；告警自动携带集群归属项目的 <Typography.Text code>project_id</Typography.Text>，走项目订阅路由（请在集群管理设置「归属项目」）。Webhook 留空或填{" "}
-            <Typography.Text code>internal</Typography.Text> / <Typography.Text code>alertmanager</Typography.Text> 时，将 POST 到告警平台{" "}
-            <Typography.Text code>/api/v1/alerts/ingress/k8s-events</Typography.Text>（鉴权使用数据字典{" "}
-            <Typography.Text code>alert_webhook_token</Typography.Text>）。全局开关请在{" "}
+            K8s Event 标准类型为 <Typography.Text code>Normal</Typography.Text> /{" "}
+            <Typography.Text code>Warning</Typography.Text>，仅 <Typography.Text code>Normal</Typography.Text>{" "}
+            不转发；告警自动携带集群归属项目的 <Typography.Text code>project_id</Typography.Text>
+            ，走项目订阅路由（请在集群管理设置「归属项目」）。Webhook 留空或填{" "}
+            <Typography.Text code>internal</Typography.Text> / <Typography.Text code>alertmanager</Typography.Text>{" "}
+            时，将 POST 到告警平台 <Typography.Text code>/api/v1/alerts/ingress/k8s-events</Typography.Text>
+            （鉴权使用数据字典 <Typography.Text code>alert_webhook_token</Typography.Text>）。全局开关请在{" "}
             <Link to="/dict-entries?keyword=k8s_event_forward_">数据字典</Link> 维护{" "}
             <Typography.Text code>k8s_event_forward_*</Typography.Text>。
           </span>
@@ -435,7 +437,12 @@ function RulesPanel() {
           <Form.Item name="enabled" label="启用规则" valuePropName="checked">
             <Switch checkedChildren="启用" unCheckedChildren="停用" />
           </Form.Item>
-          <Form.Item name="rule_reverse" label="反选过滤" valuePropName="checked" extra="开启后：不匹配下列条件的才转发">
+          <Form.Item
+            name="rule_reverse"
+            label="反选过滤"
+            valuePropName="checked"
+            extra="开启后：不匹配下列条件的才转发"
+          >
             <Switch />
           </Form.Item>
           <Form.Item
@@ -582,7 +589,8 @@ function DeliveryPanel() {
       dataIndex: "status",
       width: 100,
       render: (v: string) => {
-        const color = v === "dead" ? "error" : v === "delivered" ? "success" : v === "inflight" ? "processing" : "default";
+        const color =
+          v === "dead" ? "error" : v === "delivered" ? "success" : v === "inflight" ? "processing" : "default";
         return <Tag color={color}>{v || "-"}</Tag>;
       },
     },

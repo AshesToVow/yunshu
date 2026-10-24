@@ -152,7 +152,7 @@ export function useDictOptions(dictType: string, enabled = true, refreshKey = 0)
           }
           return { label: item.label, value: item.value, id: item.id, sensitive };
         });
-        setOptions(next.length ? next : fallbackMap[dictType] ?? []);
+        setOptions(next.length ? next : (fallbackMap[dictType] ?? []));
       } catch {
         if (!cancelled) {
           setOptions(fallbackMap[dictType] ?? []);

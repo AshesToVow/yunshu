@@ -11,10 +11,7 @@ type HeaderCellProps = ThHTMLAttributes<HTMLTableCellElement> & {
   onResize?: (width: number) => void;
 };
 
-const ResizableHeaderCell = forwardRef<HTMLTableCellElement, HeaderCellProps>(function ResizableHeaderCell(
-  props,
-  ref,
-) {
+const ResizableHeaderCell = forwardRef<HTMLTableCellElement, HeaderCellProps>(function ResizableHeaderCell(props, ref) {
   const { onResize, width, children, style, onClick, ...rest } = props;
   const handleMouseDown = (e: MouseEvent<HTMLSpanElement>) => {
     if (!onResize || width == null) return;

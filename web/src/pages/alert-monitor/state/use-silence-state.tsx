@@ -173,64 +173,64 @@ export function useAlertMonitorSilenceState(params: {
   );
 
   const silColumns = [
-      {
-        title: "ID",
-        dataIndex: "id",
-        width: 80,
+    {
+      title: "ID",
+      dataIndex: "id",
+      width: 80,
+    },
+    { title: "名称", dataIndex: "name" },
+    {
+      title: "说明",
+      dataIndex: "comment",
+      width: 140,
+      ellipsis: true,
+      render: (c: string) => (c && String(c).trim() ? c : "—"),
+    },
+    {
+      title: "匹配摘要",
+      key: "m",
+      width: 200,
+      ellipsis: true,
+      render: (_: unknown, r: SilenceDisplayRow) => {
+        if (r.matchers?.length) {
+          return r.matchers.map((x) => `${x.name ?? ""}=${x.value ?? ""}`).join(", ");
+        }
+        return r.matchers_json?.slice(0, 80) ?? "—";
       },
-      { title: "名称", dataIndex: "name" },
-      {
-        title: "说明",
-        dataIndex: "comment",
-        width: 140,
-        ellipsis: true,
-        render: (c: string) => (c && String(c).trim() ? c : "—"),
+    },
+    { title: "开始", dataIndex: "starts_at", width: 170, render: (t: string) => formatDateTime(t) },
+    { title: "结束", dataIndex: "ends_at", width: 170, render: (t: string) => formatDateTime(t) },
+    {
+      title: "状态",
+      key: "status",
+      width: 100,
+      render: (_: unknown, r: SilenceDisplayRow) => {
+        const expired = dayjs(r.ends_at).isBefore(dayjs());
+        if (expired) return <Tag color="red">已过期</Tag>;
+        return r.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>;
       },
-      {
-        title: "匹配摘要",
-        key: "m",
-        width: 200,
-        ellipsis: true,
-        render: (_: unknown, r: SilenceDisplayRow) => {
-          if (r.matchers?.length) {
-            return r.matchers.map((x) => `${x.name ?? ""}=${x.value ?? ""}`).join(", ");
-          }
-          return r.matchers_json?.slice(0, 80) ?? "—";
-        },
-      },
-      { title: "开始", dataIndex: "starts_at", width: 170, render: (t: string) => formatDateTime(t) },
-      { title: "结束", dataIndex: "ends_at", width: 170, render: (t: string) => formatDateTime(t) },
-      {
-        title: "状态",
-        key: "status",
-        width: 100,
-        render: (_: unknown, r: SilenceDisplayRow) => {
-          const expired = dayjs(r.ends_at).isBefore(dayjs());
-          if (expired) return <Tag color="red">已过期</Tag>;
-          return r.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>;
-        },
-      },
-      {
-        title: "操作",
-        width: 200,
-        className: "yunshu-table-actions-cell",
-        render: (_: unknown, r: SilenceDisplayRow) => (
-            <Space size={0} wrap className="yunshu-table-actions">
-              <Button type="link" size="small" disabled={!r.enabled} onClick={() => void releaseSingleSilence(r)}>
-                解除
-              </Button>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openSilEdit(r)}>
-                编辑
-              </Button>
-              <Popconfirm title="删除静默？" onConfirm={() => void removeSil(r.id)}>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  删除
-                </Button>
-              </Popconfirm>
-            </Space>
-          ),
-      },
-    ];
+    },
+    {
+      title: "操作",
+      width: 200,
+      className: "yunshu-table-actions-cell",
+      render: (_: unknown, r: SilenceDisplayRow) => (
+        <Space size={0} wrap className="yunshu-table-actions">
+          <Button type="link" size="small" disabled={!r.enabled} onClick={() => void releaseSingleSilence(r)}>
+            解除
+          </Button>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openSilEdit(r)}>
+            编辑
+          </Button>
+          <Popconfirm title="删除静默？" onConfirm={() => void removeSil(r.id)}>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   function openSilCreate() {
     setSilCurrent(null);
@@ -245,7 +245,6 @@ export function useAlertMonitorSilenceState(params: {
     });
     setSilModalOpen(true);
   }
-
 
   /** 为平台内置监控规则预填静默（monitor_rule_id + alertname），与 Prometheus 活跃告警列表无关。 */
   function openSilenceForMonitorRule(r: AlertMonitorRuleItem) {
@@ -466,5 +465,3 @@ export function useAlertMonitorSilenceState(params: {
     submitSil,
   };
 }
-
-

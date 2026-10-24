@@ -139,7 +139,11 @@ export function EsmgmtReindexPage() {
               width: 110,
               render: (v: string) => <Tag color={STATUS_COLOR[v] || "default"}>{v}</Tag>,
             },
-            { title: "进度", width: 120, render: (_: unknown, r: EsmgmtReindexJob) => `${r.created_docs || 0}/${r.total || 0}` },
+            {
+              title: "进度",
+              width: 120,
+              render: (_: unknown, r?: EsmgmtReindexJob) => `${r?.created_docs || 0}/${r?.total || 0}`,
+            },
             { title: "错误", dataIndex: "error_message", ellipsis: true },
             {
               title: "操作",

@@ -56,8 +56,10 @@ export function DenyRulesCard({
       loading={denyLoading}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-        若某<strong>主体</strong>（角色 / 用户 / 组）在指定集群下配置了禁止的命名空间，则即使用户拥有该集群档位，也会在请求进入集群前被拒绝。对已纳入 K8s 范围校验的接口，含
-        super-admin 也会被拦截。白名单规则见接口 <Typography.Text code>/api/v1/k8s-namespace-allow-rules</Typography.Text>。
+        若某<strong>主体</strong>（角色 / 用户 /
+        组）在指定集群下配置了禁止的命名空间，则即使用户拥有该集群档位，也会在请求进入集群前被拒绝。对已纳入 K8s
+        范围校验的接口，含 super-admin 也会被拦截。白名单规则见接口{" "}
+        <Typography.Text code>/api/v1/k8s-namespace-allow-rules</Typography.Text>。
       </Typography.Paragraph>
       {activeSubjectReady ? (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -117,7 +119,7 @@ export function DenyRulesCard({
                 title: "集群",
                 dataIndex: "cluster_id",
                 width: 140,
-                render: (v: number) => (v === 0 ? <Tag color="blue">全部</Tag> : clusterNameById.get(v) ?? `#${v}`),
+                render: (v: number) => (v === 0 ? <Tag color="blue">全部</Tag> : (clusterNameById.get(v) ?? `#${v}`)),
               },
               { title: "命名空间", dataIndex: "namespace" },
               {
@@ -126,10 +128,7 @@ export function DenyRulesCard({
                 width: 110,
                 className: "yunshu-table-actions-cell",
                 render: (_, r) => (
-                  <Popconfirm
-                    title="确定删除该黑名单规则？"
-                    onConfirm={() => void onDeleteDenyRule(r)}
-                  >
+                  <Popconfirm title="确定删除该黑名单规则？" onConfirm={() => void onDeleteDenyRule(r)}>
                     <Button type="link" danger size="small" icon={<DeleteOutlined />}>
                       删除
                     </Button>

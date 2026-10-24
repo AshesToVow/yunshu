@@ -38,7 +38,8 @@ export function BarChart({ items, height = 320, darkMode = false, valueLabel = "
 
   const bars = useMemo(() => {
     const plotW = contentWidth - padding.left - padding.right;
-    const barWidth = items.length > 0 ? Math.min(48, Math.max(minBarWidth, plotW / items.length - barGap)) : minBarWidth;
+    const barWidth =
+      items.length > 0 ? Math.min(48, Math.max(minBarWidth, plotW / items.length - barGap)) : minBarWidth;
     const totalBarsWidth = items.length * barWidth + Math.max(0, items.length - 1) * barGap;
     const startX = padding.left + Math.max(0, (plotW - totalBarsWidth) / 2);
     return items.map((item, i) => {
@@ -61,7 +62,14 @@ export function BarChart({ items, height = 320, darkMode = false, valueLabel = "
           const y = padding.top + plotH * (1 - val / yMax);
           return (
             <g key={`tick-${val}`}>
-              <line x1={padding.left} x2={contentWidth - padding.right} y1={y} y2={y} stroke={gridColor} strokeWidth={1} />
+              <line
+                x1={padding.left}
+                x2={contentWidth - padding.right}
+                y1={y}
+                y2={y}
+                stroke={gridColor}
+                strokeWidth={1}
+              />
               <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize={11} fill={textColor}>
                 {val}
               </text>
@@ -80,7 +88,14 @@ export function BarChart({ items, height = 320, darkMode = false, valueLabel = "
               opacity={0.92}
             />
             {bar.value > 0 ? (
-              <text x={bar.x + bar.barWidth / 2} y={bar.y - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill={valueColor}>
+              <text
+                x={bar.x + bar.barWidth / 2}
+                y={bar.y - 8}
+                textAnchor="middle"
+                fontSize={12}
+                fontWeight={700}
+                fill={valueColor}
+              >
                 {bar.value}
               </text>
             ) : null}

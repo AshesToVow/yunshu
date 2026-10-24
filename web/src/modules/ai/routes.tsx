@@ -7,9 +7,7 @@ const AiAssistantPage = lazy(() =>
 const AiApprovalsPage = lazy(() =>
   import("../../pages/ai-approvals-page").then((m) => ({ default: m.AiApprovalsPage })),
 );
-const AiCenterPage = lazy(() =>
-  import("../../pages/ai-center-page").then((m) => ({ default: m.AiCenterPage })),
-);
+const AiCenterPage = lazy(() => import("../../pages/ai-center-page").then((m) => ({ default: m.AiCenterPage })));
 const AiInvestigationsPage = lazy(() =>
   import("../../pages/ai-investigations-page").then((m) => ({ default: m.AiInvestigationsPage })),
 );

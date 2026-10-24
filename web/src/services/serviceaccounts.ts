@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export type ServiceAccountItem = {
@@ -35,8 +35,10 @@ export function getServiceAccountDetail(clusterId: number, namespace: string, na
   );
 }
 
-export function applyServiceAccount(clusterId: number, manifest: string) {
-  return getData<boolean>(http.post("/serviceaccounts/apply", { cluster_id: clusterId, manifest }));
+export function applyServiceAccount(clusterId: number, manifest: string, idemKey?: string) {
+  return getData<boolean>(
+    http.post("/serviceaccounts/apply", { cluster_id: clusterId, manifest }, idempotencyConfig(idemKey)),
+  );
 }
 
 export function deleteServiceAccount(

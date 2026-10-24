@@ -105,10 +105,12 @@ export function DbmgmtAppUserApplyPage() {
         if (cancelled) return;
         let privs = (res.privileges ?? []).map((p) => p.toUpperCase());
         if (privs.length === 0 && selectedUser?.grant_lines?.length) {
-          privs = [...parseMysqlGrantPrivileges(selectedUser.grant_lines, {
-            level: privLevel as "global" | "database",
-            database: databaseName,
-          })];
+          privs = [
+            ...parseMysqlGrantPrivileges(selectedUser.grant_lines, {
+              level: privLevel as "global" | "database",
+              database: databaseName,
+            }),
+          ];
         }
         setHeldPrivs(privs);
         setPrivsLoaded(true);
@@ -135,7 +137,10 @@ export function DbmgmtAppUserApplyPage() {
     };
   }, [projectId, instanceId, isExistingUser, mysqlUserKey, showPrivs, privLevel, databaseName, mysqlUsers]);
 
-  const instanceOptions = useMemo(() => instances.map((i) => ({ value: i.id, label: formatInstanceLabel(i) })), [instances]);
+  const instanceOptions = useMemo(
+    () => instances.map((i) => ({ value: i.id, label: formatInstanceLabel(i) })),
+    [instances],
+  );
   const userOptions = useMemo(
     () => mysqlUsers.map((u) => ({ value: `${u.username}@${u.host}`, label: `${u.username}@${u.host}` })),
     [mysqlUsers],
@@ -244,7 +249,14 @@ export function DbmgmtAppUserApplyPage() {
             optionType="button"
             buttonStyle="solid"
             options={APPLY_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-            onChange={() => form.setFieldsValue({ mysql_user: undefined, mysql_user_key: undefined, privileges: [], database_name: undefined })}
+            onChange={() =>
+              form.setFieldsValue({
+                mysql_user: undefined,
+                mysql_user_key: undefined,
+                privileges: [],
+                database_name: undefined,
+              })
+            }
           />
         </Form.Item>
 
@@ -392,11 +404,7 @@ export function DbmgmtAppUserApplyPage() {
         ) : null}
 
         {isNewUser ? (
-          <Form.Item
-            name="grant_hosts"
-            label="授权IP"
-            extra="可选；多个主机以 | 分隔。留空则默认 %"
-          >
+          <Form.Item name="grant_hosts" label="授权IP" extra="可选；多个主机以 | 分隔。留空则默认 %">
             <Input placeholder="例如：192.168.8.12|172.16.%" />
           </Form.Item>
         ) : null}

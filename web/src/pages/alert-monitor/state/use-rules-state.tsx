@@ -7,13 +7,7 @@
  *
  * `promqlLabelKeyOpts` 由主 Hook 传入（静默 Tab 也用同一字典，避免重复请求）。
  */
-import {
-  DeleteOutlined,
-  EditOutlined,
-  CalendarOutlined,
-  TeamOutlined,
-  DownOutlined,
-} from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, CalendarOutlined, TeamOutlined, DownOutlined } from "@ant-design/icons";
 import type { MenuProps, TreeSelectProps } from "antd";
 import { Button, Dropdown, Form, Popconfirm, Space, Tag, message } from "antd";
 import type { Dayjs } from "dayjs";
@@ -74,14 +68,7 @@ export function useAlertMonitorRulesState(params: {
   /** 规则列表操作列「静默」入口，来自 silences Hook */
   openSilenceForMonitorRule: (r: AlertMonitorRuleItem) => void;
 }) {
-  const {
-    projectContextId,
-    projects,
-    setTab,
-    dsList,
-    promqlLabelKeyOpts,
-    openSilenceForMonitorRule,
-  } = params;
+  const { projectContextId, projects, setTab, dsList, promqlLabelKeyOpts, openSilenceForMonitorRule } = params;
   // users / deptTree / promDsId 由调用方传入以保持与搬迁前闭包一致；表单 JSX 在主 Provider 消费方读取，本 Hook 内不直接引用。
   void params.users;
   void params.deptTree;
@@ -113,13 +100,14 @@ export function useAlertMonitorRulesState(params: {
   const [copyDutyLoading, setCopyDutyLoading] = useState(false);
   const [dutyCopyRuleOptions, setDutyCopyRuleOptions] = useState<Array<{ label: string; value: number }>>([]);
 
-
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [ruleCurrent, setRuleCurrent] = useState<AlertMonitorRuleItem | null>(null);
   const [ruleForm] = Form.useForm();
   const [ruleSubmitting, setRuleSubmitting] = useState(false);
   const [ruleLogic, setRuleLogic] = useState<RuleBuilderLogic>("and");
-  const [ruleConditions, setRuleConditions] = useState<RuleBuilderCondition[]>([{ metric: "", comparator: ">", threshold: null }]);
+  const [ruleConditions, setRuleConditions] = useState<RuleBuilderCondition[]>([
+    { metric: "", comparator: ">", threshold: null },
+  ]);
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignRuleId, setAssignRuleId] = useState<number | null>(null);
@@ -127,7 +115,9 @@ export function useAlertMonitorRulesState(params: {
   const [assignSubmitting, setAssignSubmitting] = useState(false);
   const assignUserIds = Form.useWatch("user_ids", assignForm) as number[] | undefined;
   const assignSyncedKeyRef = useRef("");
-  const [assignProfileOriginal, setAssignProfileOriginal] = useState<{ email: string; department_id?: number } | null>(null);
+  const [assignProfileOriginal, setAssignProfileOriginal] = useState<{ email: string; department_id?: number } | null>(
+    null,
+  );
   const [assignUsersHint, setAssignUsersHint] = useState("");
 
   const [blkModalOpen, setBlkModalOpen] = useState(false);
@@ -136,7 +126,9 @@ export function useAlertMonitorRulesState(params: {
   const [blkSubmitting, setBlkSubmitting] = useState(false);
   const blkUserIds = Form.useWatch("user_ids", blkForm) as number[] | undefined;
   const dutySyncedKeyRef = useRef<string>("");
-  const [dutyProfileOriginal, setDutyProfileOriginal] = useState<{ email: string; department_id?: number } | null>(null);
+  const [dutyProfileOriginal, setDutyProfileOriginal] = useState<{ email: string; department_id?: number } | null>(
+    null,
+  );
   const [dutyUsersHint, setDutyUsersHint] = useState<string>("");
 
   const ruleComparatorOptions = useMemo(
@@ -162,12 +154,17 @@ export function useAlertMonitorRulesState(params: {
   const [metricLoading, setMetricLoading] = useState(false);
   const [metricOptions, setMetricOptions] = useState<string[]>([]);
   const [selectedMetric, setSelectedMetric] = useState("");
-  const [metricLabelFilters, setMetricLabelFilters] = useState<MetricLabelFilter[]>([{ key: "instance", op: "=", value: "" }]);
+  const [metricLabelFilters, setMetricLabelFilters] = useState<MetricLabelFilter[]>([
+    { key: "instance", op: "=", value: "" },
+  ]);
   const [labelValueLoading, setLabelValueLoading] = useState(false);
   const [labelValueOptions, setLabelValueOptions] = useState<string[]>([]);
   const [selectedPromFunc, setSelectedPromFunc] = useState<string>("none");
 
-  const projectOptions = useMemo(() => projects.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id })), [projects]);
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id })),
+    [projects],
+  );
   const activeProjectName = useMemo(() => {
     if (!projectContextId) return "";
     const p = projects.find((it) => it.id === projectContextId);
@@ -181,7 +178,21 @@ export function useAlertMonitorRulesState(params: {
     return [...base, { label: `${s}（当前规则）`, value: s }];
   }, [alertSeverityOpts, ruleCurrent?.severity]);
   const commonLabelKeyOptions = useMemo(() => {
-    const defaults = ["instance", "job", "cluster", "namespace", "pod", "service", "node", "severity", "alertname", "path", "device", "fstype", "mountpoint"];
+    const defaults = [
+      "instance",
+      "job",
+      "cluster",
+      "namespace",
+      "pod",
+      "service",
+      "node",
+      "severity",
+      "alertname",
+      "path",
+      "device",
+      "fstype",
+      "mountpoint",
+    ];
     const merged = new Set<string>(defaults);
     promqlLabelKeyOpts.forEach((o) => merged.add(String(o.value || "").trim()));
     return Array.from(merged)
@@ -226,24 +237,62 @@ export function useAlertMonitorRulesState(params: {
       { label: "磁盘资源", value: "disk" },
     ];
     const custom = ruleTemplatePresetDictOpts
-      .map((o) => ({ label: `自定义 · ${String(o.label || "").trim() || String(o.value || "").trim()}`, value: `custom:${String(o.value || "")}` }))
+      .map((o) => ({
+        label: `自定义 · ${String(o.label || "").trim() || String(o.value || "").trim()}`,
+        value: `custom:${String(o.value || "")}`,
+      }))
       .filter((o) => String(o.value).trim() !== "custom:");
     return [...base, ...custom];
   }, [ruleTemplatePresetDictOpts]);
   const promFunctionTemplates = useMemo(
     () => [
-      { key: "none", label: "不使用函数", template: "__METRIC__", desc: "直接使用指标与标签过滤，不包裹 Prometheus 函数。" },
-      { key: "rate", label: "rate()", template: "rate(__METRIC__[5m])", desc: "计算窗口内每秒增长率，常用于 counter 指标。" },
-      { key: "irate", label: "irate()", template: "irate(__METRIC__[5m])", desc: "基于最近两点计算瞬时速率，波动更灵敏。" },
+      {
+        key: "none",
+        label: "不使用函数",
+        template: "__METRIC__",
+        desc: "直接使用指标与标签过滤，不包裹 Prometheus 函数。",
+      },
+      {
+        key: "rate",
+        label: "rate()",
+        template: "rate(__METRIC__[5m])",
+        desc: "计算窗口内每秒增长率，常用于 counter 指标。",
+      },
+      {
+        key: "irate",
+        label: "irate()",
+        template: "irate(__METRIC__[5m])",
+        desc: "基于最近两点计算瞬时速率，波动更灵敏。",
+      },
       { key: "increase", label: "increase()", template: "increase(__METRIC__[5m])", desc: "计算窗口内增长总量。" },
       { key: "ceil", label: "ceil()", template: "ceil(__METRIC__)", desc: "向上取整。" },
       { key: "floor", label: "floor()", template: "floor(__METRIC__)", desc: "向下取整。" },
       { key: "round", label: "round()", template: "round(__METRIC__, 0.1)", desc: "按给定精度四舍五入。" },
-      { key: "avg_over_time", label: "avg_over_time()", template: "avg_over_time(__METRIC__[5m])", desc: "时间窗口平均值，适合平滑抖动。" },
-      { key: "max_over_time", label: "max_over_time()", template: "max_over_time(__METRIC__[5m])", desc: "时间窗口最大值。" },
-      { key: "min_over_time", label: "min_over_time()", template: "min_over_time(__METRIC__[5m])", desc: "时间窗口最小值。" },
+      {
+        key: "avg_over_time",
+        label: "avg_over_time()",
+        template: "avg_over_time(__METRIC__[5m])",
+        desc: "时间窗口平均值，适合平滑抖动。",
+      },
+      {
+        key: "max_over_time",
+        label: "max_over_time()",
+        template: "max_over_time(__METRIC__[5m])",
+        desc: "时间窗口最大值。",
+      },
+      {
+        key: "min_over_time",
+        label: "min_over_time()",
+        template: "min_over_time(__METRIC__[5m])",
+        desc: "时间窗口最小值。",
+      },
       { key: "sum_by", label: "sum by()", template: "sum by (instance) (__METRIC__)", desc: "按标签聚合求和。" },
-      { key: "histogram_quantile", label: "histogram_quantile()", template: "histogram_quantile(0.95, sum by (le) (__METRIC__))", desc: "直方图分位数计算（如 P95）。" },
+      {
+        key: "histogram_quantile",
+        label: "histogram_quantile()",
+        template: "histogram_quantile(0.95, sum by (le) (__METRIC__))",
+        desc: "直方图分位数计算（如 P95）。",
+      },
     ],
     [],
   );
@@ -267,7 +316,9 @@ export function useAlertMonitorRulesState(params: {
       message.warning("请至少添加一个条件");
       return;
     }
-    if (ruleConditions.some((c) => !String(c.metric || "").trim() || c.threshold === null || Number.isNaN(c.threshold))) {
+    if (
+      ruleConditions.some((c) => !String(c.metric || "").trim() || c.threshold === null || Number.isNaN(c.threshold))
+    ) {
       message.warning("请完善每个条件的指标表达式和阈值");
       return;
     }
@@ -486,15 +537,18 @@ export function useAlertMonitorRulesState(params: {
     const builtinMap: Record<string, { summary: string; description: string }> = {
       cpu: {
         summary: "{{$labels.instance}} CPU 使用率过高（{{$value}}）",
-        description: "实例 {{$labels.instance}} CPU 连续超过阈值，请检查负载。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "实例 {{$labels.instance}} CPU 连续超过阈值，请检查负载。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       memory: {
         summary: "{{$labels.instance}} 内存使用率过高（{{$value}}）",
-        description: "实例 {{$labels.instance}} 内存连续超过阈值，请检查进程占用。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "实例 {{$labels.instance}} 内存连续超过阈值，请检查进程占用。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       disk: {
         summary: "{{$labels.instance}} 磁盘使用率过高（{{$value}}）",
-        description: "实例 {{$labels.instance}} 磁盘告警，建议检查挂载点 {{$labels.mountpoint}}。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "实例 {{$labels.instance}} 磁盘告警，建议检查挂载点 {{$labels.mountpoint}}。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       generic: {
         summary: "{{$labels.instance}}: {{.RuleName}} 告警触发（{{$value}}）",
@@ -502,27 +556,33 @@ export function useAlertMonitorRulesState(params: {
       },
       availability: {
         summary: "{{$labels.instance}} 可用性异常（{{$value}}）",
-        description: "组件/实例可用性异常，请检查健康状态。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
+        description:
+          "组件/实例可用性异常，请检查健康状态。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
       },
       error_rate: {
         summary: "{{$labels.instance}} 错误率异常（{{$value}}）",
-        description: "错误率超过阈值，建议检查日志与上游依赖。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
+        description:
+          "错误率超过阈值，建议检查日志与上游依赖。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
       },
       latency: {
         summary: "{{$labels.instance}} 延迟异常（{{$value}}）",
-        description: "响应时间超过阈值，建议检查慢请求、下游依赖和资源瓶颈。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "响应时间超过阈值，建议检查慢请求、下游依赖和资源瓶颈。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       queue_lag: {
         summary: "{{$labels.instance}} 队列积压异常（{{$value}}）",
-        description: "消费延迟/积压升高，请检查消费者处理能力与上游流量。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "消费延迟/积压升高，请检查消费者处理能力与上游流量。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       traffic: {
         summary: "{{$labels.instance}} 流量波动异常（{{$value}}）",
-        description: "流量突增或突降，请结合发布与入口流量排查。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "流量突增或突降，请结合发布与入口流量排查。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       certificate: {
         summary: "{{$labels.instance}} 证书到期预警（{{$value}}）",
-        description: "证书有效期接近阈值，请及时续期。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
+        description:
+          "证书有效期接近阈值，请及时续期。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
       },
     };
     for (const [k, v] of Object.entries(builtinMap)) {
@@ -551,15 +611,18 @@ export function useAlertMonitorRulesState(params: {
     const map: Record<string, { summary: string; description: string }> = {
       cpu: {
         summary: "{{$labels.instance}} CPU 使用率过高（{{$value}}）",
-        description: "实例 {{$labels.instance}} CPU 连续超过阈值，请检查负载。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "实例 {{$labels.instance}} CPU 连续超过阈值，请检查负载。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       memory: {
         summary: "{{$labels.instance}} 内存使用率过高（{{$value}}）",
-        description: "实例 {{$labels.instance}} 内存连续超过阈值，请检查进程占用。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "实例 {{$labels.instance}} 内存连续超过阈值，请检查进程占用。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       disk: {
         summary: "{{$labels.instance}} 磁盘使用率过高（{{$value}}）",
-        description: "实例 {{$labels.instance}} 磁盘告警，建议检查挂载点 {{$labels.mountpoint}}。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "实例 {{$labels.instance}} 磁盘告警，建议检查挂载点 {{$labels.mountpoint}}。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       generic: {
         summary: "{{$labels.instance}}: {{.RuleName}} 告警触发（{{$value}}）",
@@ -567,27 +630,33 @@ export function useAlertMonitorRulesState(params: {
       },
       availability: {
         summary: "{{$labels.instance}} 可用性异常（{{$value}}）",
-        description: "组件/实例可用性异常，请检查健康状态。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
+        description:
+          "组件/实例可用性异常，请检查健康状态。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
       },
       error_rate: {
         summary: "{{$labels.instance}} 错误率异常（{{$value}}）",
-        description: "错误率超过阈值，建议检查日志与上游依赖。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
+        description:
+          "错误率超过阈值，建议检查日志与上游依赖。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
       },
       latency: {
         summary: "{{$labels.instance}} 延迟异常（{{$value}}）",
-        description: "响应时间超过阈值，建议检查慢请求、下游依赖和资源瓶颈。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "响应时间超过阈值，建议检查慢请求、下游依赖和资源瓶颈。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       queue_lag: {
         summary: "{{$labels.instance}} 队列积压异常（{{$value}}）",
-        description: "消费延迟/积压升高，请检查消费者处理能力与上游流量。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "消费延迟/积压升高，请检查消费者处理能力与上游流量。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       traffic: {
         summary: "{{$labels.instance}} 流量波动异常（{{$value}}）",
-        description: "流量突增或突降，请结合发布与入口流量排查。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
+        description:
+          "流量突增或突降，请结合发布与入口流量排查。规则={{.RuleName}}，PromQL={{.Expr}}，当前值={{$value}}",
       },
       certificate: {
         summary: "{{$labels.instance}} 证书到期预警（{{$value}}）",
-        description: "证书有效期接近阈值，请及时续期。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
+        description:
+          "证书有效期接近阈值，请及时续期。规则={{.RuleName}}，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
       },
     };
     const next = map[selected] || map.generic;
@@ -614,7 +683,9 @@ export function useAlertMonitorRulesState(params: {
       threshold_unit: r.threshold_unit || "raw",
       labels_json: stringifyPrettyJSON(r.labels ?? {}, "{}"),
       summary_template: summaryTemplate || "{{$labels.instance}}: {{.RuleName}} 告警触发，当前值 {{$value}}",
-      description_template: descriptionTemplate || "规则 {{.RuleName}} 触发，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
+      description_template:
+        descriptionTemplate ||
+        "规则 {{.RuleName}} 触发，PromQL={{.Expr}}，实例={{$labels.instance}}，当前值={{$value}}",
       rule_template_preset: presetKey,
       enabled: r.enabled,
     });
@@ -647,11 +718,7 @@ export function useAlertMonitorRulesState(params: {
       const outer = (r as { data?: unknown }).data ?? r;
       const inner = unwrapPrometheusQueryData(outer) as { result?: Array<{ metric?: Record<string, string> }> };
       const names = Array.from(
-        new Set(
-          (inner?.result ?? [])
-            .map((it) => String(it?.metric?.__name__ ?? "").trim())
-            .filter(Boolean),
-        ),
+        new Set((inner?.result ?? []).map((it) => String(it?.metric?.__name__ ?? "").trim()).filter(Boolean)),
       ).sort((a, b) => a.localeCompare(b));
       setMetricOptions(names);
       if (names.length === 0) message.warning("未检索到指标，请调整关键字");
@@ -689,11 +756,7 @@ export function useAlertMonitorRulesState(params: {
       const outer = (r as { data?: unknown }).data ?? r;
       const inner = unwrapPrometheusQueryData(outer) as { result?: Array<{ metric?: Record<string, string> }> };
       const vals = Array.from(
-        new Set(
-          (inner?.result ?? [])
-            .map((it) => String(it?.metric?.[key] ?? "").trim())
-            .filter(Boolean),
-        ),
+        new Set((inner?.result ?? []).map((it) => String(it?.metric?.[key] ?? "").trim()).filter(Boolean)),
       ).sort((a, b) => a.localeCompare(b));
       setLabelValueOptions(vals);
       if (!vals.length) message.warning("未检索到可用标签值");
@@ -757,7 +820,9 @@ export function useAlertMonitorRulesState(params: {
       ruleConditions.length > 0
         ? ruleConditions.map((it, i) => (i === 0 ? { ...it, metric: metricExpr } : it))
         : [{ metric: metricExpr, comparator: ">" as RuleComparator, threshold: null as number | null }];
-    if (nextConditions.some((c) => !String(c.metric || "").trim() || c.threshold === null || Number.isNaN(c.threshold))) {
+    if (
+      nextConditions.some((c) => !String(c.metric || "").trim() || c.threshold === null || Number.isNaN(c.threshold))
+    ) {
       setRuleConditions(nextConditions);
       message.warning("请完成第3步：填写阈值后再生成最终 PromQL");
       return;
@@ -770,7 +835,12 @@ export function useAlertMonitorRulesState(params: {
     setRuleSubmitting(true);
     try {
       const v = await ruleForm.validateFields();
-      const normalizedUnit = String(v.threshold_unit || "raw").trim().toLowerCase() === "precent" ? "percent" : v.threshold_unit;
+      const normalizedUnit =
+        String(v.threshold_unit || "raw")
+          .trim()
+          .toLowerCase() === "precent"
+          ? "percent"
+          : v.threshold_unit;
       const labelsNorm = normalizeCloudExpiryLabelsJSON(String(v.labels_json ?? "{}"));
       if (labelsNorm === null) {
         message.error("附加 Labels 须为合法 JSON 对象");
@@ -898,9 +968,7 @@ export function useAlertMonitorRulesState(params: {
       ]);
       setBlockList(blocks.list ?? []);
       setDutyCopyRuleOptions(
-        (rules.list ?? [])
-          .filter((r) => r.id !== ruleId)
-          .map((r) => ({ label: r.name, value: r.id })),
+        (rules.list ?? []).filter((r) => r.id !== ruleId).map((r) => ({ label: r.name, value: r.id })),
       );
     } catch {
       setBlockList([]);
@@ -1086,7 +1154,6 @@ export function useAlertMonitorRulesState(params: {
     }
   }
 
-
   const ruleColumns = [
     { title: "ID", dataIndex: "id", width: 70 },
     {
@@ -1139,7 +1206,12 @@ export function useAlertMonitorRulesState(params: {
     { title: "级别", dataIndex: "severity", width: 90 },
     { title: "for(s)", dataIndex: "for_seconds", width: 80 },
     { title: "间隔(s)", dataIndex: "eval_interval_seconds", width: 90 },
-    { title: "启用", dataIndex: "enabled", width: 70, render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>) },
+    {
+      title: "启用",
+      dataIndex: "enabled",
+      width: 70,
+      render: (v: boolean) => (v ? <Tag color="green">是</Tag> : <Tag>否</Tag>),
+    },
     {
       title: "操作",
       width: 200,
@@ -1187,8 +1259,6 @@ export function useAlertMonitorRulesState(params: {
       ),
     },
   ];
-
-
 
   const ruleDisplayList = ruleList;
 

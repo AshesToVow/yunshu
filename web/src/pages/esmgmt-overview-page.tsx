@@ -1,5 +1,19 @@
 import { CloudUploadOutlined, DownOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Dropdown, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Dropdown,
+  Form,
+  Input,
+  Modal,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -234,8 +248,16 @@ export function EsmgmtOverviewPage() {
                       trigger={["click"]}
                       menu={{
                         items: [
-                          { key: "open", label: "打开", onClick: () => void openEsmgmtIndex(row.name, connectionId).then(load) },
-                          { key: "close", label: "关闭", onClick: () => void closeEsmgmtIndex(row.name, connectionId).then(load) },
+                          {
+                            key: "open",
+                            label: "打开",
+                            onClick: () => void openEsmgmtIndex(row.name, connectionId).then(load),
+                          },
+                          {
+                            key: "close",
+                            label: "关闭",
+                            onClick: () => void closeEsmgmtIndex(row.name, connectionId).then(load),
+                          },
                           {
                             key: "delete",
                             danger: true,

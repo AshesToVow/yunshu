@@ -1,4 +1,18 @@
-import { Alert, Button, Card, Col, Divider, Drawer, Form, Input, InputNumber, Row, Select, Space, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Divider,
+  Drawer,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Typography,
+} from "antd";
 import type { FormInstance } from "antd";
 import {
   EnvPair,
@@ -14,7 +28,7 @@ import {
   probeToForm,
   safeGet,
   safeParseYaml,
-  toNumberOrUndefined
+  toNumberOrUndefined,
 } from "./helpers";
 
 export function EnvPairsFormItem({ name }: { name: string }) {
@@ -24,7 +38,11 @@ export function EnvPairsFormItem({ name }: { name: string }) {
         <Space direction="vertical" style={{ width: "100%" }}>
           {fields.map((f) => (
             <Space key={f.key} style={{ display: "flex" }} align="baseline">
-              <Form.Item name={[f.name, "key"]} rules={[{ required: true, message: "Key 必填" }]} style={{ marginBottom: 0 }}>
+              <Form.Item
+                name={[f.name, "key"]}
+                rules={[{ required: true, message: "Key 必填" }]}
+                style={{ marginBottom: 0 }}
+              >
                 <Input placeholder="KEY" style={{ width: 220 }} />
               </Form.Item>
               <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}>
@@ -87,7 +105,11 @@ export function WorkloadFormModal<T extends object>(props: {
       extra={
         <Space>
           <Button onClick={onCancel}>取消</Button>
-          <Button type="primary" loading={loading} onClick={() => void form.validateFields().then((v) => void onSubmit(v))}>
+          <Button
+            type="primary"
+            loading={loading}
+            onClick={() => void form.validateFields().then((v) => void onSubmit(v))}
+          >
             确定
           </Button>
         </Space>
@@ -161,7 +183,7 @@ export function ContainerCommonItems(opts?: { showPort?: boolean; showRestartPol
         ) : null}
       </Row>
       <Form.Item name="command" label="启动命令" extra="sh -c 执行；可不填">
-        <Input placeholder='例如：echo hello && sleep 5' />
+        <Input placeholder="例如：echo hello && sleep 5" />
       </Form.Item>
       <Form.Item label="环境变量">
         <EnvPairsFormItem name="env_pairs" />
@@ -212,10 +234,12 @@ export function WorkloadAdvancedItems() {
         </Col>
       </Row>
 
-      <Divider orientation="left" style={{ marginTop: 0 }}>容忍（Tolerations）</Divider>
+      <Divider orientation="left" style={{ marginTop: 0 }}>
+        容忍（Tolerations）
+      </Divider>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-        容忍本身是合理的，用来让 Pod 可以调度到带 `taint` 的节点上。
-        `tolerationSeconds` 仅在 `effect=NoExecute` 时有意义，表示 Pod 被驱逐前还能继续保留多少秒；不填通常表示一直容忍。
+        容忍本身是合理的，用来让 Pod 可以调度到带 `taint` 的节点上。 `tolerationSeconds` 仅在 `effect=NoExecute`
+        时有意义，表示 Pod 被驱逐前还能继续保留多少秒；不填通常表示一直容忍。
       </Typography.Paragraph>
       <Form.List name="tolerations">
         {(fields, { add, remove }) => (
@@ -229,7 +253,12 @@ export function WorkloadAdvancedItems() {
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={4}>
-                    <Form.Item name={[f.name, "operator"]} label="Operator" initialValue="Equal" style={{ marginBottom: 12 }}>
+                    <Form.Item
+                      name={[f.name, "operator"]}
+                      label="Operator"
+                      initialValue="Equal"
+                      style={{ marginBottom: 12 }}
+                    >
                       <Select
                         options={[
                           { label: "Equal", value: "Equal" },
@@ -256,7 +285,12 @@ export function WorkloadAdvancedItems() {
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={4}>
-                    <Form.Item name={[f.name, "toleration_seconds"]} label="持续秒数" tooltip="仅 NoExecute 时常用" style={{ marginBottom: 12 }}>
+                    <Form.Item
+                      name={[f.name, "toleration_seconds"]}
+                      label="持续秒数"
+                      tooltip="仅 NoExecute 时常用"
+                      style={{ marginBottom: 12 }}
+                    >
                       <InputNumber placeholder="3600" style={{ width: "100%" }} min={0} />
                     </Form.Item>
                   </Col>
@@ -277,12 +311,22 @@ export function WorkloadAdvancedItems() {
               <Card key={f.key} size="small">
                 <Row gutter={12}>
                   <Col xs={24} md={7}>
-                    <Form.Item name={[f.name, "name"]} label="卷名" rules={[{ required: true, message: "卷名必填" }]} style={{ marginBottom: 12 }}>
+                    <Form.Item
+                      name={[f.name, "name"]}
+                      label="卷名"
+                      rules={[{ required: true, message: "卷名必填" }]}
+                      style={{ marginBottom: 12 }}
+                    >
                       <Input placeholder="config-volume" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={5}>
-                    <Form.Item name={[f.name, "type"]} label="类型" initialValue="emptyDir" style={{ marginBottom: 12 }}>
+                    <Form.Item
+                      name={[f.name, "type"]}
+                      label="类型"
+                      initialValue="emptyDir"
+                      style={{ marginBottom: 12 }}
+                    >
                       <Select
                         options={[
                           { label: "emptyDir", value: "emptyDir" },
@@ -294,7 +338,12 @@ export function WorkloadAdvancedItems() {
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={12}>
-                    <Form.Item name={[f.name, "source_name"]} label="来源名称" tooltip="configMap / secret / pvc 时填写" style={{ marginBottom: 12 }}>
+                    <Form.Item
+                      name={[f.name, "source_name"]}
+                      label="来源名称"
+                      tooltip="configMap / secret / pvc 时填写"
+                      style={{ marginBottom: 12 }}
+                    >
                       <Input placeholder="source name (cm/secret/pvc)" />
                     </Form.Item>
                   </Col>
@@ -315,12 +364,22 @@ export function WorkloadAdvancedItems() {
               <Card key={f.key} size="small">
                 <Row gutter={12}>
                   <Col xs={24} md={6}>
-                    <Form.Item name={[f.name, "name"]} label="卷名" rules={[{ required: true, message: "卷名必填" }]} style={{ marginBottom: 12 }}>
+                    <Form.Item
+                      name={[f.name, "name"]}
+                      label="卷名"
+                      rules={[{ required: true, message: "卷名必填" }]}
+                      style={{ marginBottom: 12 }}
+                    >
                       <Input placeholder="volume name" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={8}>
-                    <Form.Item name={[f.name, "mount_path"]} label="挂载路径" rules={[{ required: true, message: "挂载路径必填" }]} style={{ marginBottom: 12 }}>
+                    <Form.Item
+                      name={[f.name, "mount_path"]}
+                      label="挂载路径"
+                      rules={[{ required: true, message: "挂载路径必填" }]}
+                      style={{ marginBottom: 12 }}
+                    >
                       <Input placeholder="/data" />
                     </Form.Item>
                   </Col>
@@ -330,7 +389,12 @@ export function WorkloadAdvancedItems() {
                     </Form.Item>
                   </Col>
                   <Col xs={24} md={5}>
-                    <Form.Item name={[f.name, "read_only"]} label="权限" initialValue={false} style={{ marginBottom: 12 }}>
+                    <Form.Item
+                      name={[f.name, "read_only"]}
+                      label="权限"
+                      initialValue={false}
+                      style={{ marginBottom: 12 }}
+                    >
                       <Select
                         options={[
                           { label: "读写", value: false },
@@ -376,7 +440,10 @@ export function WorkloadPolicyItems(opts?: {
         <EnvPairsFormItem name="node_selector_pairs" />
       </Form.Item>
       <Form.Item name="affinity_yaml" label="Affinity YAML（可选）">
-        <Input.TextArea rows={4} placeholder={"nodeAffinity:\n  requiredDuringSchedulingIgnoredDuringExecution:\n    nodeSelectorTerms: []"} />
+        <Input.TextArea
+          rows={4}
+          placeholder={"nodeAffinity:\n  requiredDuringSchedulingIgnoredDuringExecution:\n    nodeSelectorTerms: []"}
+        />
       </Form.Item>
       {opts?.showDeployStrategy ? (
         <>
@@ -395,7 +462,13 @@ export function WorkloadPolicyItems(opts?: {
           <Row gutter={16}>
             <Col xs={24} md={7}>
               <Form.Item name="strategy_type" label="部署策略">
-                <Select allowClear options={[{ label: "RollingUpdate", value: "RollingUpdate" }, { label: "Recreate", value: "Recreate" }]} />
+                <Select
+                  allowClear
+                  options={[
+                    { label: "RollingUpdate", value: "RollingUpdate" },
+                    { label: "Recreate", value: "Recreate" },
+                  ]}
+                />
               </Form.Item>
             </Col>
             <Col xs={24} md={5}>
@@ -404,7 +477,11 @@ export function WorkloadPolicyItems(opts?: {
               </Form.Item>
             </Col>
             <Col xs={24} md={5}>
-              <Form.Item name="rolling_update_max_unavailable" label="maxUnavailable" tooltip="更新时允许不可用的 Pod 数，零中断建议 0">
+              <Form.Item
+                name="rolling_update_max_unavailable"
+                label="maxUnavailable"
+                tooltip="更新时允许不可用的 Pod 数，零中断建议 0"
+              >
                 <Input placeholder="0" />
               </Form.Item>
             </Col>
@@ -432,7 +509,13 @@ export function WorkloadPolicyItems(opts?: {
         <Row gutter={16}>
           <Col xs={24} md={8}>
             <Form.Item name="update_strategy_type" label="StatefulSet UpdateStrategy">
-              <Select allowClear options={[{ label: "RollingUpdate", value: "RollingUpdate" }, { label: "OnDelete", value: "OnDelete" }]} />
+              <Select
+                allowClear
+                options={[
+                  { label: "RollingUpdate", value: "RollingUpdate" },
+                  { label: "OnDelete", value: "OnDelete" },
+                ]}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
@@ -451,7 +534,13 @@ export function WorkloadPolicyItems(opts?: {
         <Row gutter={16}>
           <Col xs={24} md={7}>
             <Form.Item name="update_strategy_type" label="更新策略">
-              <Select allowClear options={[{ label: "RollingUpdate", value: "RollingUpdate" }, { label: "OnDelete", value: "OnDelete" }]} />
+              <Select
+                allowClear
+                options={[
+                  { label: "RollingUpdate", value: "RollingUpdate" },
+                  { label: "OnDelete", value: "OnDelete" },
+                ]}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} md={5}>
@@ -473,19 +562,62 @@ export function WorkloadPolicyItems(opts?: {
       ) : null}
       {opts?.showCronJobPolicy ? (
         <Row gutter={16}>
-          <Col xs={24} md={6}><Form.Item name="concurrency_policy" label="concurrencyPolicy"><Select allowClear options={[{ label: "Allow", value: "Allow" }, { label: "Forbid", value: "Forbid" }, { label: "Replace", value: "Replace" }]} /></Form.Item></Col>
-          <Col xs={24} md={6}><Form.Item name="successful_jobs_history_limit" label="successfulJobsHistoryLimit"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
-          <Col xs={24} md={6}><Form.Item name="failed_jobs_history_limit" label="failedJobsHistoryLimit"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
-          <Col xs={24} md={6}><Form.Item name="starting_deadline_seconds" label="startingDeadlineSeconds"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
+          <Col xs={24} md={6}>
+            <Form.Item name="concurrency_policy" label="concurrencyPolicy">
+              <Select
+                allowClear
+                options={[
+                  { label: "Allow", value: "Allow" },
+                  { label: "Forbid", value: "Forbid" },
+                  { label: "Replace", value: "Replace" },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={6}>
+            <Form.Item name="successful_jobs_history_limit" label="successfulJobsHistoryLimit">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={6}>
+            <Form.Item name="failed_jobs_history_limit" label="failedJobsHistoryLimit">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={6}>
+            <Form.Item name="starting_deadline_seconds" label="startingDeadlineSeconds">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
         </Row>
       ) : null}
       {opts?.showCronJobPolicy || opts?.showJobPolicy ? (
         <Row gutter={16}>
-          <Col xs={24} md={5}><Form.Item name="parallelism" label="parallelism"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
-          <Col xs={24} md={5}><Form.Item name="completions" label="completions"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
-          <Col xs={24} md={5}><Form.Item name="backoff_limit" label="backoffLimit"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
-          <Col xs={24} md={5}><Form.Item name="active_deadline_seconds" label="activeDeadlineSeconds"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
-          <Col xs={24} md={4}><Form.Item name="ttl_seconds_after_finished" label="ttlSecondsAfterFinished"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
+          <Col xs={24} md={5}>
+            <Form.Item name="parallelism" label="parallelism">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={5}>
+            <Form.Item name="completions" label="completions">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={5}>
+            <Form.Item name="backoff_limit" label="backoffLimit">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={5}>
+            <Form.Item name="active_deadline_seconds" label="activeDeadlineSeconds">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={4}>
+            <Form.Item name="ttl_seconds_after_finished" label="ttlSecondsAfterFinished">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
         </Row>
       ) : null}
     </Card>
@@ -501,7 +633,11 @@ export function DeploymentHealthAndImagePullSecretsItems() {
             <Space direction="vertical" style={{ width: "100%" }}>
               {fields.map((f) => (
                 <Space key={f.key} style={{ display: "flex" }} align="baseline">
-                  <Form.Item name={f.name} rules={[{ required: true, message: "请输入 Secret 名称" }]} style={{ marginBottom: 0 }}>
+                  <Form.Item
+                    name={f.name}
+                    rules={[{ required: true, message: "请输入 Secret 名称" }]}
+                    style={{ marginBottom: 0 }}
+                  >
                     <Input placeholder="my-image-pull-secret" style={{ width: 260 }} />
                   </Form.Item>
                   <Button onClick={() => remove(f.name)}>删除</Button>
@@ -655,7 +791,6 @@ export function DeploymentHealthAndImagePullSecretsItems() {
       <Divider orientation="left">Startup Probe（启动探针）</Divider>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
         启动探针通常用于启动慢的容器，避免应用还没真正启动完成时就被 liveness 误杀。
-        当前先开放基础参数输入，后续我会把它连到完整的 YAML 构建与回填。
       </Typography.Paragraph>
       <Space style={{ width: "100%" }} align="start">
         <Form.Item name="startup_probe_type" label="探针类型" style={{ width: 220 }}>
@@ -677,7 +812,13 @@ export function DeploymentHealthAndImagePullSecretsItems() {
           <Input placeholder="8080 或 http" />
         </Form.Item>
         <Form.Item name="startup_http_scheme" label="HTTP scheme" style={{ width: 180 }}>
-          <Select allowClear options={[{ label: "HTTP", value: "HTTP" }, { label: "HTTPS", value: "HTTPS" }]} />
+          <Select
+            allowClear
+            options={[
+              { label: "HTTP", value: "HTTP" },
+              { label: "HTTPS", value: "HTTPS" },
+            ]}
+          />
         </Form.Item>
         <Form.Item name="startup_tcp_port" label="TCP port" style={{ width: 180 }} extra="数字或端口名">
           <Input placeholder="8080 或 http" />
@@ -720,4 +861,3 @@ export function DeploymentHealthAndImagePullSecretsItems() {
     </Card>
   );
 }
-

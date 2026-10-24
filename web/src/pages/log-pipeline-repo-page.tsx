@@ -461,9 +461,7 @@ export function LogPipelineRepoPage() {
         destroyOnClose
         footer={
           <Space>
-            {editing ? (
-              <Button onClick={() => void openVersionHistory()}>版本历史</Button>
-            ) : null}
+            {editing ? <Button onClick={() => void openVersionHistory()}>版本历史</Button> : null}
             <Button icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>
               AI 调整
             </Button>

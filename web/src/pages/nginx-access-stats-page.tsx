@@ -1,18 +1,5 @@
 import { BarChartOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  DatePicker,
-  Row,
-  Select,
-  Space,
-  Statistic,
-  Table,
-  Typography,
-  message,
-} from "antd";
+import { Alert, Button, Card, Col, DatePicker, Row, Select, Space, Statistic, Table, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -91,10 +78,7 @@ export function NginxAccessStatsPage() {
     () => servers.map((s) => ({ value: s.id, label: `${s.name || s.host} (${s.host})` })),
     [servers],
   );
-  const serviceOptions = useMemo(
-    () => services.map((s) => ({ value: s.id, label: s.name })),
-    [services],
-  );
+  const serviceOptions = useMemo(() => services.map((s) => ({ value: s.id, label: s.name })), [services]);
   const sourceOptions = useMemo(
     () =>
       sources.map((s) => ({
@@ -325,7 +309,9 @@ export function NginxAccessStatsPage() {
               <Text code>$request_time</Text>
               ，例如：
               <Text code>
-                {"$remote_addr - $remote_user [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\" $request_time"}
+                {
+                  '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_time'
+                }
               </Text>
               。修改后需重新下发 Agent。
             </Paragraph>
@@ -420,8 +406,7 @@ export function NginxAccessStatsPage() {
 
 function AccessHistogram({ buckets }: { buckets: LogHistogramBucket[] }) {
   const sorted = [...buckets].sort((a, b) => a.time.localeCompare(b.time));
-  const sampled =
-    sorted.length > 60 ? sorted.filter((_, i) => i % Math.ceil(sorted.length / 60) === 0) : sorted;
+  const sampled = sorted.length > 60 ? sorted.filter((_, i) => i % Math.ceil(sorted.length / 60) === 0) : sorted;
   const max = Math.max(1, ...sampled.map((b) => b.count));
   if (!sampled.length) {
     return <Text type="secondary">无时间分布数据</Text>;

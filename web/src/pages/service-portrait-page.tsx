@@ -82,7 +82,13 @@ export function ServicePortraitPage() {
               服务目录
             </Button>
             <Select style={{ width: 240 }} value={projectId} onChange={setProjectId} options={projectOptions} />
-            <Select style={{ width: 260 }} value={catalogId} onChange={setCatalogId} options={serviceOptions} placeholder="选择服务" />
+            <Select
+              style={{ width: 260 }}
+              value={catalogId}
+              onChange={setCatalogId}
+              options={serviceOptions}
+              placeholder="选择服务"
+            />
             <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
               刷新
             </Button>
@@ -105,7 +111,11 @@ export function ServicePortraitPage() {
               {portrait?.health ? (
                 <Descriptions.Item label="健康分" span={2}>
                   <Space>
-                    <Tag color={portrait.health.grade === "A" ? "green" : portrait.health.grade === "B" ? "blue" : "orange"}>
+                    <Tag
+                      color={
+                        portrait.health.grade === "A" ? "green" : portrait.health.grade === "B" ? "blue" : "orange"
+                      }
+                    >
                       {portrait.health.score} / {portrait.health.grade}
                     </Tag>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -124,7 +134,11 @@ export function ServicePortraitPage() {
                 dataSource={portrait.health.factors}
                 columns={[
                   { title: "因子", dataIndex: "label", width: 100 },
-                  { title: "得分", width: 100, render: (_: unknown, r: { score: number; max: number }) => `${r.score}/${r.max}` },
+                  {
+                    title: "得分",
+                    width: 100,
+                    render: (_: unknown, r: { score: number; max: number }) => `${r.score}/${r.max}`,
+                  },
                   { title: "扣分", dataIndex: "deduct", width: 80 },
                   { title: "说明", dataIndex: "detail" },
                 ]}
@@ -145,11 +159,7 @@ export function ServicePortraitPage() {
                   <Space>
                     <Tag>{it.kind}</Tag>
                     <Link
-                      to={
-                        projectId
-                          ? `${it.path}${it.path.includes("?") ? "&" : "?"}project_id=${projectId}`
-                          : it.path
-                      }
+                      to={projectId ? `${it.path}${it.path.includes("?") ? "&" : "?"}project_id=${projectId}` : it.path}
                     >
                       <LinkOutlined /> {it.label}
                     </Link>
@@ -186,9 +196,7 @@ export function ServicePortraitPage() {
                   </Tag>
                   <Tag>模板 {portrait.log_summary.pattern_count}</Tag>
                   {projectId ? (
-                    <Link to={buildProjectLogsUrl({ project_id: projectId, tab: "anomalies" })}>
-                      查看异常
-                    </Link>
+                    <Link to={buildProjectLogsUrl({ project_id: projectId, tab: "anomalies" })}>查看异常</Link>
                   ) : null}
                 </Space>
                 <List
@@ -230,7 +238,13 @@ export function ServicePortraitPage() {
                   width: 100,
                   render: (_: unknown, r: { id: number; started_at: string }) =>
                     projectId ? (
-                      <Link to={buildChangeLogContextUrl({ project_id: projectId, change_id: r.id, started_at: r.started_at })}>
+                      <Link
+                        to={buildChangeLogContextUrl({
+                          project_id: projectId,
+                          change_id: r.id,
+                          started_at: r.started_at,
+                        })}
+                      >
                         关联日志
                       </Link>
                     ) : null,

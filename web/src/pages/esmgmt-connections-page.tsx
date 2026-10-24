@@ -1,4 +1,10 @@
-import { DeleteOutlined, CloudDownloadOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  CloudDownloadOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  ThunderboltOutlined,
+} from "@ant-design/icons";
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, message } from "antd";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -164,32 +170,32 @@ export function EsmgmtConnectionsPage() {
               width: 220,
               render: (_: unknown, row?: EsmgmtConnection) =>
                 row ? (
-                <Space>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<ThunderboltOutlined />}
-                    onClick={async () => {
-                      try {
-                        const res = await pingEsmgmtConnection(row.id);
-                        if (res?.ok) message.success("连通成功");
-                        else message.error(res?.message || "连通失败");
-                      } catch (e) {
-                        message.error(extractApiErrorMessage(e, "连通失败"));
-                      }
-                    }}
-                  >
-                    探测
-                  </Button>
-                  <Button type="link" size="small" onClick={() => openEdit(row)}>
-                    编辑
-                  </Button>
-                  <Popconfirm title="确认删除？" onConfirm={() => void deleteEsmgmtConnection(row.id).then(load)}>
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      删除
+                  <Space>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<ThunderboltOutlined />}
+                      onClick={async () => {
+                        try {
+                          const res = await pingEsmgmtConnection(row.id);
+                          if (res?.ok) message.success("连通成功");
+                          else message.error(res?.message || "连通失败");
+                        } catch (e) {
+                          message.error(extractApiErrorMessage(e, "连通失败"));
+                        }
+                      }}
+                    >
+                      探测
                     </Button>
-                  </Popconfirm>
-                </Space>
+                    <Button type="link" size="small" onClick={() => openEdit(row)}>
+                      编辑
+                    </Button>
+                    <Popconfirm title="确认删除？" onConfirm={() => void deleteEsmgmtConnection(row.id).then(load)}>
+                      <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
                 ) : null,
             },
           ]}

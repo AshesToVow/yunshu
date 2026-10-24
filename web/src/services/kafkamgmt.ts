@@ -134,11 +134,7 @@ export function deleteKafkamgmtTopic(payload: { connection_id?: number; topic: s
   return getData<{ ok: boolean }>(http.delete("/kafkamgmt/topics", { data: payload }));
 }
 
-export function createKafkamgmtPartitions(payload: {
-  connection_id?: number;
-  topic: string;
-  total_count: number;
-}) {
+export function createKafkamgmtPartitions(payload: { connection_id?: number; topic: string; total_count: number }) {
   return getData<{ ok: boolean }>(http.post("/kafkamgmt/topics/partitions", payload));
 }
 

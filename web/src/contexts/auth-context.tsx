@@ -6,8 +6,6 @@ import { clearAuthStorage, clearToken, getUser, setUser } from "../services/stor
 
 interface AuthContextValue {
   user: UserItem | null;
-  /** @deprecated Cookie 会话下恒为空；保留字段避免调用方编译失败 */
-  token: string;
   loading: boolean;
   isAuthenticated: boolean;
   passwordLoginAction: (payload: PasswordLoginPayload) => Promise<void>;
@@ -108,7 +106,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
     <AuthContext.Provider
       value={{
         user,
-        token: "",
         loading,
         isAuthenticated,
         passwordLoginAction,

@@ -8,11 +8,7 @@ function translateOrEmpty(t: TFunction, key: string): string {
 }
 
 /** Resolve menu/group label: path key first, then Chinese name map, else fallback. */
-export function resolveTranslatedLabel(
-  path: string | undefined,
-  fallback: string,
-  t?: TFunction,
-): string {
+export function resolveTranslatedLabel(path: string | undefined, fallback: string, t?: TFunction): string {
   if (!t) return fallback;
   const p = path?.trim();
   if (p) {
@@ -37,8 +33,7 @@ export function resolveRouteTitle(pathname: string, t: TFunction): string {
   if (exactMenu) return exactMenu;
 
   const bundle = i18n.getResourceBundle(i18n.language, "translation") as
-    | { menu?: { routes?: Record<string, string> }; layout?: { routes?: Record<string, string> } }
-    | undefined;
+    { menu?: { routes?: Record<string, string> }; layout?: { routes?: Record<string, string> } } | undefined;
   const routeMap: Record<string, string> = {
     ...(bundle?.layout?.routes ?? {}),
     ...(bundle?.menu?.routes ?? {}),

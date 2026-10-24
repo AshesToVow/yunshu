@@ -1,4 +1,11 @@
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+} from "@ant-design/icons";
 import { Alert, Button, Card, Input, Popconfirm, Select, Space, Switch, Table, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -128,9 +135,7 @@ export function DbmgmtApprovalFlowPage() {
           <Switch
             checked={row.draftEnabled}
             onChange={(checked) => {
-              setRows((prev) =>
-                prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftEnabled: checked } : r)),
-              );
+              setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftEnabled: checked } : r)));
             }}
           />
         ),
@@ -148,9 +153,7 @@ export function DbmgmtApprovalFlowPage() {
             value={row.draftUserGroupId}
             options={groupOptions}
             onChange={(v) => {
-              setRows((prev) =>
-                prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftUserGroupId: v } : r)),
-              );
+              setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftUserGroupId: v } : r)));
             }}
           />
         ),
@@ -257,7 +260,8 @@ export function DbmgmtApprovalFlowPage() {
         message="审批流程说明"
         description={
           <Typography.Paragraph style={{ marginBottom: 0 }}>
-            数据库权限申请、SQL 工单与应用用户申请共用此审批流。可自定义增删、重排节点；关闭开关即跳过该环节，启用须绑定审批用户组。
+            数据库权限申请、SQL
+            工单与应用用户申请共用此审批流。可自定义增删、重排节点；关闭开关即跳过该环节，启用须绑定审批用户组。
             配置变更<strong>仅影响新建工单</strong>。审批人须为对应用户组成员（超级管理员除外）。
           </Typography.Paragraph>
         }

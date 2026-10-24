@@ -1,6 +1,7 @@
 export type DictTypeOption = { label: string; value: string };
 
-export type DictCategoryId = "all" | "system" | "alert" | "log" | "k8s" | "cmdb" | "backup" | "dbmgmt" | "cicd" | "ai" | "other";
+export type DictCategoryId =
+  "all" | "system" | "alert" | "log" | "k8s" | "cmdb" | "backup" | "dbmgmt" | "cicd" | "ai" | "other";
 
 type DictCategoryMeta = {
   id: Exclude<DictCategoryId, "all">;
@@ -60,14 +61,34 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "密码过期天数（password_expiry_days）", value: "password_expiry_days", category: "system" },
   { label: "禁止包含用户名（password_forbid_username）", value: "password_forbid_username", category: "system" },
   { label: "JWT 签名密钥（auth_jwt_secret）", value: "auth_jwt_secret", category: "system" },
-  { label: "Access Token 有效期分钟（auth_access_token_ttl_minutes）", value: "auth_access_token_ttl_minutes", category: "system" },
-  { label: "Refresh Token 有效期小时（auth_refresh_token_ttl_hours）", value: "auth_refresh_token_ttl_hours", category: "system" },
+  {
+    label: "Access Token 有效期分钟（auth_access_token_ttl_minutes）",
+    value: "auth_access_token_ttl_minutes",
+    category: "system",
+  },
+  {
+    label: "Refresh Token 有效期小时（auth_refresh_token_ttl_hours）",
+    value: "auth_refresh_token_ttl_hours",
+    category: "system",
+  },
   { label: "Cookie Secure（auth_cookie_secure）", value: "auth_cookie_secure", category: "system" },
   { label: "Cookie Domain（auth_cookie_domain）", value: "auth_cookie_domain", category: "system" },
   { label: "启用 CSP（auth_csp_enabled）", value: "auth_csp_enabled", category: "system" },
-  { label: "邮箱验证码有效期秒（auth_email_code_ttl_seconds）", value: "auth_email_code_ttl_seconds", category: "system" },
-  { label: "邮箱验证码冷却秒（auth_email_code_cooldown_seconds）", value: "auth_email_code_cooldown_seconds", category: "system" },
-  { label: "登录失败锁定次数（auth_login_max_fail_attempts）", value: "auth_login_max_fail_attempts", category: "system" },
+  {
+    label: "邮箱验证码有效期秒（auth_email_code_ttl_seconds）",
+    value: "auth_email_code_ttl_seconds",
+    category: "system",
+  },
+  {
+    label: "邮箱验证码冷却秒（auth_email_code_cooldown_seconds）",
+    value: "auth_email_code_cooldown_seconds",
+    category: "system",
+  },
+  {
+    label: "登录失败锁定次数（auth_login_max_fail_attempts）",
+    value: "auth_login_max_fail_attempts",
+    category: "system",
+  },
   { label: "登录锁定时长秒（auth_login_lock_seconds）", value: "auth_login_lock_seconds", category: "system" },
 
   { label: "告警通道类型（alert_channel_type）", value: "alert_channel_type", category: "alert" },
@@ -80,8 +101,16 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "告警认领时长分钟（alert_ack_ttl_minutes）", value: "alert_ack_ttl_minutes", category: "alert" },
   { label: "告警规则文案预设（alert_rule_template_preset）", value: "alert_rule_template_preset", category: "alert" },
   { label: "告警 Webhook Token（alert_webhook_token）", value: "alert_webhook_token", category: "alert" },
-  { label: "告警 Prometheus URL（alert_enrich_prometheus_url）", value: "alert_enrich_prometheus_url", category: "alert" },
-  { label: "告警 Prometheus Token（alert_enrich_prometheus_token）", value: "alert_enrich_prometheus_token", category: "alert" },
+  {
+    label: "告警 Prometheus URL（alert_enrich_prometheus_url）",
+    value: "alert_enrich_prometheus_url",
+    category: "alert",
+  },
+  {
+    label: "告警 Prometheus Token（alert_enrich_prometheus_token）",
+    value: "alert_enrich_prometheus_token",
+    category: "alert",
+  },
   { label: "企业微信 Webhook URL（wecom_webhook_url）", value: "wecom_webhook_url", category: "alert" },
   { label: "企业微信通知模式（wecom_notify_mode）", value: "wecom_notify_mode", category: "alert" },
   { label: "企业微信 corpID（wecom_corp_id）", value: "wecom_corp_id", category: "alert" },
@@ -97,9 +126,17 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "日志源类型（log_source_type）", value: "log_source_type", category: "log" },
   { label: "启用 ES（elasticsearch_enabled）", value: "elasticsearch_enabled", category: "log" },
   { label: "ES 地址（elasticsearch_addresses）", value: "elasticsearch_addresses", category: "log" },
-  { label: "日志平台 ES 连接 ID（elasticsearch_connection_id）", value: "elasticsearch_connection_id", category: "log" },
+  {
+    label: "日志平台 ES 连接 ID（elasticsearch_connection_id）",
+    value: "elasticsearch_connection_id",
+    category: "log",
+  },
   { label: "ES 索引模式-主机（elasticsearch_index_pattern）", value: "elasticsearch_index_pattern", category: "log" },
-  { label: "ES 索引前缀-集群（elasticsearch_k8s_index_prefix）", value: "elasticsearch_k8s_index_prefix", category: "log" },
+  {
+    label: "ES 索引前缀-集群（elasticsearch_k8s_index_prefix）",
+    value: "elasticsearch_k8s_index_prefix",
+    category: "log",
+  },
   { label: "启用 Kafka 中转（kafka_enabled）", value: "kafka_enabled", category: "log" },
   { label: "Kafka Brokers（kafka_brokers）", value: "kafka_brokers", category: "log" },
   { label: "Kafka Topic 前缀-主机（kafka_topic_prefix）", value: "kafka_topic_prefix", category: "log" },
@@ -113,14 +150,38 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "Kafka 消费并发（kafka_workers）", value: "kafka_workers", category: "log" },
   { label: "ES 用户名（elasticsearch_username）", value: "elasticsearch_username", category: "log" },
   { label: "ES 密码（elasticsearch_password）", value: "elasticsearch_password", category: "log" },
-  { label: "ES 默认保留天数（elasticsearch_default_retention_days）", value: "elasticsearch_default_retention_days", category: "log" },
-  { label: "ES 清理 Cron（elasticsearch_cleanup_cron_spec）", value: "elasticsearch_cleanup_cron_spec", category: "log" },
+  {
+    label: "ES 默认保留天数（elasticsearch_default_retention_days）",
+    value: "elasticsearch_default_retention_days",
+    category: "log",
+  },
+  {
+    label: "ES 清理 Cron（elasticsearch_cleanup_cron_spec）",
+    value: "elasticsearch_cleanup_cron_spec",
+    category: "log",
+  },
 
   { label: "K8s Event 转发开关（k8s_event_forward_enabled）", value: "k8s_event_forward_enabled", category: "k8s" },
-  { label: "K8s Event 缓冲（k8s_event_forward_watcher_buffer_size）", value: "k8s_event_forward_watcher_buffer_size", category: "k8s" },
-  { label: "K8s Event 批处理周期秒（k8s_event_forward_worker_interval_seconds）", value: "k8s_event_forward_worker_interval_seconds", category: "k8s" },
-  { label: "K8s Event 批大小（k8s_event_forward_worker_batch_size）", value: "k8s_event_forward_worker_batch_size", category: "k8s" },
-  { label: "K8s Event 最大重试（k8s_event_forward_worker_max_retries）", value: "k8s_event_forward_worker_max_retries", category: "k8s" },
+  {
+    label: "K8s Event 缓冲（k8s_event_forward_watcher_buffer_size）",
+    value: "k8s_event_forward_watcher_buffer_size",
+    category: "k8s",
+  },
+  {
+    label: "K8s Event 批处理周期秒（k8s_event_forward_worker_interval_seconds）",
+    value: "k8s_event_forward_worker_interval_seconds",
+    category: "k8s",
+  },
+  {
+    label: "K8s Event 批大小（k8s_event_forward_worker_batch_size）",
+    value: "k8s_event_forward_worker_batch_size",
+    category: "k8s",
+  },
+  {
+    label: "K8s Event 最大重试（k8s_event_forward_worker_max_retries）",
+    value: "k8s_event_forward_worker_max_retries",
+    category: "k8s",
+  },
   { label: "Pod 调试镜像（k8s_pod_debug_image）", value: "k8s_pod_debug_image", category: "k8s" },
   { label: "Kubeconfig 模板（k8s_kubeconfig_template）", value: "k8s_kubeconfig_template", category: "k8s" },
   { label: "K8s 直连配置键（k8s_direct_config）", value: "k8s_direct_config", category: "k8s" },
@@ -137,13 +198,37 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "腾讯云 SK（cloud_tencent_sk）", value: "cloud_tencent_sk", category: "cmdb" },
   { label: "京东云 AK（cloud_jd_ak）", value: "cloud_jd_ak", category: "cmdb" },
   { label: "京东云 SK（cloud_jd_sk）", value: "cloud_jd_sk", category: "cmdb" },
-  { label: "阿里云服务器用户名（server_cloud_alibaba_username）", value: "server_cloud_alibaba_username", category: "cmdb" },
-  { label: "阿里云服务器密码（server_cloud_alibaba_password）", value: "server_cloud_alibaba_password", category: "cmdb" },
-  { label: "阿里云服务器私钥（server_cloud_alibaba_private_key）", value: "server_cloud_alibaba_private_key", category: "cmdb" },
+  {
+    label: "阿里云服务器用户名（server_cloud_alibaba_username）",
+    value: "server_cloud_alibaba_username",
+    category: "cmdb",
+  },
+  {
+    label: "阿里云服务器密码（server_cloud_alibaba_password）",
+    value: "server_cloud_alibaba_password",
+    category: "cmdb",
+  },
+  {
+    label: "阿里云服务器私钥（server_cloud_alibaba_private_key）",
+    value: "server_cloud_alibaba_private_key",
+    category: "cmdb",
+  },
   { label: "阿里云服务器端口（server_cloud_alibaba_port）", value: "server_cloud_alibaba_port", category: "cmdb" },
-  { label: "腾讯云服务器用户名（server_cloud_tencent_username）", value: "server_cloud_tencent_username", category: "cmdb" },
-  { label: "腾讯云服务器密码（server_cloud_tencent_password）", value: "server_cloud_tencent_password", category: "cmdb" },
-  { label: "腾讯云服务器私钥（server_cloud_tencent_private_key）", value: "server_cloud_tencent_private_key", category: "cmdb" },
+  {
+    label: "腾讯云服务器用户名（server_cloud_tencent_username）",
+    value: "server_cloud_tencent_username",
+    category: "cmdb",
+  },
+  {
+    label: "腾讯云服务器密码（server_cloud_tencent_password）",
+    value: "server_cloud_tencent_password",
+    category: "cmdb",
+  },
+  {
+    label: "腾讯云服务器私钥（server_cloud_tencent_private_key）",
+    value: "server_cloud_tencent_private_key",
+    category: "cmdb",
+  },
   { label: "腾讯云服务器端口（server_cloud_tencent_port）", value: "server_cloud_tencent_port", category: "cmdb" },
   { label: "京东云服务器用户名（server_cloud_jd_username）", value: "server_cloud_jd_username", category: "cmdb" },
   { label: "京东云服务器密码（server_cloud_jd_password）", value: "server_cloud_jd_password", category: "cmdb" },
@@ -158,20 +243,52 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "MinIO SSL（minio_use_ssl）", value: "minio_use_ssl", category: "backup" },
   { label: "MinIO Region（minio_region）", value: "minio_region", category: "backup" },
   { label: "MinIO 备份前缀（minio_backup_prefix）", value: "minio_backup_prefix", category: "backup" },
-  { label: "MySQL 备份 Worker 开关（mysql_backup_scheduler_enabled）", value: "mysql_backup_scheduler_enabled", category: "backup" },
-  { label: "MySQL 备份调度 Cron（mysql_backup_scheduler_tick_spec）", value: "mysql_backup_scheduler_tick_spec", category: "backup" },
-  { label: "ES 备份调度开关（esmgmt_backup_scheduler_enabled）", value: "esmgmt_backup_scheduler_enabled", category: "backup" },
-  { label: "ES 备份调度 Cron（esmgmt_backup_scheduler_tick_spec）", value: "esmgmt_backup_scheduler_tick_spec", category: "backup" },
+  {
+    label: "MySQL 备份 Worker 开关（mysql_backup_scheduler_enabled）",
+    value: "mysql_backup_scheduler_enabled",
+    category: "backup",
+  },
+  {
+    label: "MySQL 备份调度 Cron（mysql_backup_scheduler_tick_spec）",
+    value: "mysql_backup_scheduler_tick_spec",
+    category: "backup",
+  },
+  {
+    label: "ES 备份调度开关（esmgmt_backup_scheduler_enabled）",
+    value: "esmgmt_backup_scheduler_enabled",
+    category: "backup",
+  },
+  {
+    label: "ES 备份调度 Cron（esmgmt_backup_scheduler_tick_spec）",
+    value: "esmgmt_backup_scheduler_tick_spec",
+    category: "backup",
+  },
 
-  { label: "SQL 查询超时秒（dbmgmt_query_timeout_seconds）", value: "dbmgmt_query_timeout_seconds", category: "dbmgmt" },
+  {
+    label: "SQL 查询超时秒（dbmgmt_query_timeout_seconds）",
+    value: "dbmgmt_query_timeout_seconds",
+    category: "dbmgmt",
+  },
   { label: "查询最大行数（dbmgmt_max_rows）", value: "dbmgmt_max_rows", category: "dbmgmt" },
   { label: "SQL 导入上限 MB（dbmgmt_max_import_file_mb）", value: "dbmgmt_max_import_file_mb", category: "dbmgmt" },
   { label: "生产强制审批（dbmgmt_prod_force_approval）", value: "dbmgmt_prod_force_approval", category: "dbmgmt" },
   { label: "禁止自审自批（dbmgmt_forbid_self_approve）", value: "dbmgmt_forbid_self_approve", category: "dbmgmt" },
   { label: "审批超时小时（dbmgmt_approval_sla_hours）", value: "dbmgmt_approval_sla_hours", category: "dbmgmt" },
-  { label: "审批提醒间隔小时（dbmgmt_approval_reminder_interval_hours）", value: "dbmgmt_approval_reminder_interval_hours", category: "dbmgmt" },
-  { label: "实例探活间隔秒（dbmgmt_ping_interval_seconds）", value: "dbmgmt_ping_interval_seconds", category: "dbmgmt" },
-  { label: "单实例最大并发（dbmgmt_max_concurrent_per_instance）", value: "dbmgmt_max_concurrent_per_instance", category: "dbmgmt" },
+  {
+    label: "审批提醒间隔小时（dbmgmt_approval_reminder_interval_hours）",
+    value: "dbmgmt_approval_reminder_interval_hours",
+    category: "dbmgmt",
+  },
+  {
+    label: "实例探活间隔秒（dbmgmt_ping_interval_seconds）",
+    value: "dbmgmt_ping_interval_seconds",
+    category: "dbmgmt",
+  },
+  {
+    label: "单实例最大并发（dbmgmt_max_concurrent_per_instance）",
+    value: "dbmgmt_max_concurrent_per_instance",
+    category: "dbmgmt",
+  },
   { label: "启用 goInception（dbmgmt_goinception_enabled）", value: "dbmgmt_goinception_enabled", category: "dbmgmt" },
   { label: "goInception 地址（dbmgmt_goinception_host）", value: "dbmgmt_goinception_host", category: "dbmgmt" },
   { label: "goInception 端口（dbmgmt_goinception_port）", value: "dbmgmt_goinception_port", category: "dbmgmt" },
@@ -189,7 +306,11 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "K8s Jenkinsfile（cicd_jenkinsfile_k8s）", value: "cicd_jenkinsfile_k8s", category: "cicd" },
   { label: "共享库名称（cicd_shared_library_name）", value: "cicd_shared_library_name", category: "cicd" },
   { label: "Git 凭据 ID（cicd_git_credential_id）", value: "cicd_git_credential_id", category: "cicd" },
-  { label: "SSH 部署凭据 ID（cicd_ssh_deploy_credential_id）", value: "cicd_ssh_deploy_credential_id", category: "cicd" },
+  {
+    label: "SSH 部署凭据 ID（cicd_ssh_deploy_credential_id）",
+    value: "cicd_ssh_deploy_credential_id",
+    category: "cicd",
+  },
   { label: "MinIO 凭据 ID（cicd_minio_credential_id）", value: "cicd_minio_credential_id", category: "cicd" },
   { label: "Harbor 凭据 ID（cicd_harbor_credential_id）", value: "cicd_harbor_credential_id", category: "cicd" },
   { label: "Harbor 地址（cicd_harbor_url）", value: "cicd_harbor_url", category: "cicd" },
@@ -203,17 +324,33 @@ const DICT_TYPE_DEFS: DictTypeDef[] = [
   { label: "mc 路径（cicd_mc_bin）", value: "cicd_mc_bin", category: "cicd" },
   { label: "mc 别名（cicd_mc_alias）", value: "cicd_mc_alias", category: "cicd" },
   { label: "手动发布超时（cicd_default_wait_mins）", value: "cicd_default_wait_mins", category: "cicd" },
-  { label: "制品保留数（cicd_default_artifact_retain_count）", value: "cicd_default_artifact_retain_count", category: "cicd" },
-  { label: "Run 同步间隔（cicd_run_sync_interval_seconds）", value: "cicd_run_sync_interval_seconds", category: "cicd" },
+  {
+    label: "制品保留数（cicd_default_artifact_retain_count）",
+    value: "cicd_default_artifact_retain_count",
+    category: "cicd",
+  },
+  {
+    label: "Run 同步间隔（cicd_run_sync_interval_seconds）",
+    value: "cicd_run_sync_interval_seconds",
+    category: "cicd",
+  },
   { label: "审批超时阈值（cicd_approval_sla_hours）", value: "cicd_approval_sla_hours", category: "cicd" },
-  { label: "审批提醒间隔（cicd_approval_reminder_interval_hours）", value: "cicd_approval_reminder_interval_hours", category: "cicd" },
+  {
+    label: "审批提醒间隔（cicd_approval_reminder_interval_hours）",
+    value: "cicd_approval_reminder_interval_hours",
+    category: "cicd",
+  },
   { label: "禁止自审自批（cicd_forbid_self_approve）", value: "cicd_forbid_self_approve", category: "cicd" },
   { label: "生产强制审批（cicd_prod_force_audit）", value: "cicd_prod_force_audit", category: "cicd" },
   { label: "启用 SonarQube（cicd_sonar_enabled）", value: "cicd_sonar_enabled", category: "cicd" },
   { label: "SonarQube 地址（cicd_sonar_url）", value: "cicd_sonar_url", category: "cicd" },
   { label: "SonarQube Token（cicd_sonar_token）", value: "cicd_sonar_token", category: "cicd" },
   { label: "门禁失败拦截（cicd_sonar_gate_block）", value: "cicd_sonar_gate_block", category: "cicd" },
-  { label: "Jenkins 回调 HMAC（cicd_jenkins_callback_hmac_secret）", value: "cicd_jenkins_callback_hmac_secret", category: "cicd" },
+  {
+    label: "Jenkins 回调 HMAC（cicd_jenkins_callback_hmac_secret）",
+    value: "cicd_jenkins_callback_hmac_secret",
+    category: "cicd",
+  },
   { label: "Jenkins 回调 URL（cicd_jenkins_callback_url）", value: "cicd_jenkins_callback_url", category: "cicd" },
   { label: "MinIO AccessKey Yunshu（cicd_minio_access_key）", value: "cicd_minio_access_key", category: "cicd" },
   { label: "MinIO SecretKey Yunshu（cicd_minio_secret_key）", value: "cicd_minio_secret_key", category: "cicd" },
@@ -255,7 +392,9 @@ const DICT_TYPE_CATEGORY_MAP = new Map<string, Exclude<DictCategoryId, "all">>(
 
 /** 按命名规则推断分类；未命中注册表时用前缀规则兜底。 */
 export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "all"> {
-  const key = String(dictType || "").trim().toLowerCase();
+  const key = String(dictType || "")
+    .trim()
+    .toLowerCase();
   if (!key) return "other";
   const registered = DICT_TYPE_CATEGORY_MAP.get(key);
   if (registered) return registered;
@@ -275,19 +414,10 @@ export function resolveDictCategory(dictType: string): Exclude<DictCategoryId, "
     return "log";
   }
   if (key.startsWith("k8s_")) return "k8s";
-  if (
-    key.startsWith("minio_") ||
-    key.startsWith("mysql_backup_") ||
-    key.startsWith("esmgmt_")
-  ) {
+  if (key.startsWith("minio_") || key.startsWith("mysql_backup_") || key.startsWith("esmgmt_")) {
     return "backup";
   }
-  if (
-    key.startsWith("mail_") ||
-    key.startsWith("password_") ||
-    key.startsWith("auth_") ||
-    key === "common_status"
-  ) {
+  if (key.startsWith("mail_") || key.startsWith("password_") || key.startsWith("auth_") || key === "common_status") {
     return "system";
   }
   return "other";

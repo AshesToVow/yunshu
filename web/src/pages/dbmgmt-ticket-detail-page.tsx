@@ -2,7 +2,12 @@ import { CheckOutlined, CloseOutlined, DownloadOutlined, PlayCircleOutlined, Rel
 import { Alert, Button, Card, Descriptions, Input, Modal, Select, Space, Table, Tabs, Tag, message } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { DbmgmtSectionTitle, auditModeLabel, formatInstanceLabel, ticketTypeLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
+import {
+  DbmgmtSectionTitle,
+  auditModeLabel,
+  formatInstanceLabel,
+  ticketTypeLabel,
+} from "../components/dbmgmt/dbmgmt-ui-shared";
 import {
   approveDbTicket,
   controlDbTicketOsc,
@@ -377,7 +382,10 @@ export function DbmgmtTicketDetailPage() {
       );
       return;
     }
-    const sql = rows.map((r) => r.rollback_sql).filter(Boolean).join("\n\n");
+    const sql = rows
+      .map((r) => r.rollback_sql)
+      .filter(Boolean)
+      .join("\n\n");
     downloadTextFile(`rollback-ticket-${ticketId}.sql`, sql);
     message.success("回滚 SQL 已下载");
   };
@@ -417,10 +425,18 @@ export function DbmgmtTicketDetailPage() {
           <Tag color="blue">{ticket.current_stage_name || "默认流程"}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="提交时间">{formatDateTime(ticket.created_at)}</Descriptions.Item>
-        <Descriptions.Item label="开始时间">{ticket.updated_at && ticket.status !== "pending_approval" ? formatDateTime(ticket.updated_at) : "—"}</Descriptions.Item>
-        <Descriptions.Item label="完成时间">{ticket.status === "success" || ticket.status === "failed" ? formatDateTime(ticket.updated_at ?? ticket.created_at) : "—"}</Descriptions.Item>
+        <Descriptions.Item label="开始时间">
+          {ticket.updated_at && ticket.status !== "pending_approval" ? formatDateTime(ticket.updated_at) : "—"}
+        </Descriptions.Item>
+        <Descriptions.Item label="完成时间">
+          {ticket.status === "success" || ticket.status === "failed"
+            ? formatDateTime(ticket.updated_at ?? ticket.created_at)
+            : "—"}
+        </Descriptions.Item>
         <Descriptions.Item label="当前审批">
-          {pendingStep ? `${pendingStep.stage_name}${pendingStep.reviewer_name ? ` · ${pendingStep.reviewer_name}` : ""}` : "—"}
+          {pendingStep
+            ? `${pendingStep.stage_name}${pendingStep.reviewer_name ? ` · ${pendingStep.reviewer_name}` : ""}`
+            : "—"}
         </Descriptions.Item>
         <Descriptions.Item label="当前状态">
           <Tag color="blue">{ticketStatusLabel(ticket.status)}</Tag>
@@ -443,7 +459,8 @@ export function DbmgmtTicketDetailPage() {
             dataIndex: "status",
             width: 90,
             render: (v: string) => {
-              const color = v === "approved" ? "success" : v === "rejected" ? "error" : v === "pending" ? "processing" : "default";
+              const color =
+                v === "approved" ? "success" : v === "rejected" ? "error" : v === "pending" ? "processing" : "default";
               const label = v === "approved" ? "通过" : v === "rejected" ? "驳回" : v === "pending" ? "待审" : v || "—";
               return <Tag color={color}>{label}</Tag>;
             },
@@ -471,14 +488,18 @@ export function DbmgmtTicketDetailPage() {
         <Descriptions.Item label="实例别名">
           <Tag color="blue">{instance?.name || "—"}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="实例名称">{instance ? formatInstanceLabel(instance) : ticket.instance_name}</Descriptions.Item>
+        <Descriptions.Item label="实例名称">
+          {instance ? formatInstanceLabel(instance) : ticket.instance_name}
+        </Descriptions.Item>
         <Descriptions.Item label="数据库名">{ticket.database_name || "—"}</Descriptions.Item>
         <Descriptions.Item label="sql类型">{syntaxLabel(ticket.syntax_type)}</Descriptions.Item>
         <Descriptions.Item label="是否备份">{ticket.is_backup ? "是" : "否"}</Descriptions.Item>
         <Descriptions.Item label="审核方式">
           <Tag color={ticket.audit_mode === "manual" ? "orange" : "green"}>{auditModeLabel(ticket.audit_mode)}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="sql格式">{ticket.sql_file_ref ? `文件（${ticket.sql_file_ref}）` : "文本"}</Descriptions.Item>
+        <Descriptions.Item label="sql格式">
+          {ticket.sql_file_ref ? `文件（${ticket.sql_file_ref}）` : "文本"}
+        </Descriptions.Item>
       </Descriptions>
 
       <DbmgmtSectionTitle>审核结果</DbmgmtSectionTitle>
@@ -503,7 +524,17 @@ export function DbmgmtTicketDetailPage() {
       <Table
         size="small"
         rowKey={(_, i) => String(i)}
-        dataSource={executeRows.length ? executeRows : [{ order_id: 1, sql: ticket.sql_file_ref ? "详见SQL文件" : ticket.sql_excerpt, stage_status: ticket.status }]}
+        dataSource={
+          executeRows.length
+            ? executeRows
+            : [
+                {
+                  order_id: 1,
+                  sql: ticket.sql_file_ref ? "详见SQL文件" : ticket.sql_excerpt,
+                  stage_status: ticket.status,
+                },
+              ]
+        }
         pagination={false}
         columns={[
           { title: "ID", dataIndex: "order_id", width: 60, render: (v, _, i) => v ?? i + 1 },
@@ -512,7 +543,9 @@ export function DbmgmtTicketDetailPage() {
             title: "执行状态",
             dataIndex: "stage_status",
             width: 100,
-            render: (v?: string) => <Tag color={ticket.status === "success" ? "blue" : "default"}>{v || ticket.status}</Tag>,
+            render: (v?: string) => (
+              <Tag color={ticket.status === "success" ? "blue" : "default"}>{v || ticket.status}</Tag>
+            ),
           },
           { title: "影响行数", dataIndex: "affected_rows", width: 90, render: (v?: number) => (v != null ? v : "—") },
           { title: "错误信息", dataIndex: "error_message", ellipsis: true, render: (v?: string) => v || "—" },
@@ -541,13 +574,26 @@ export function DbmgmtTicketDetailPage() {
                 width: 200,
                 render: (_, row) => (
                   <Space size={4}>
-                    <Button size="small" loading={actionLoading} onClick={() => void handleOscControl(row.sqlsha1, "pause")}>
+                    <Button
+                      size="small"
+                      loading={actionLoading}
+                      onClick={() => void handleOscControl(row.sqlsha1, "pause")}
+                    >
                       暂停
                     </Button>
-                    <Button size="small" loading={actionLoading} onClick={() => void handleOscControl(row.sqlsha1, "resume")}>
+                    <Button
+                      size="small"
+                      loading={actionLoading}
+                      onClick={() => void handleOscControl(row.sqlsha1, "resume")}
+                    >
                       恢复
                     </Button>
-                    <Button size="small" danger loading={actionLoading} onClick={() => void handleOscControl(row.sqlsha1, "kill")}>
+                    <Button
+                      size="small"
+                      danger
+                      loading={actionLoading}
+                      onClick={() => void handleOscControl(row.sqlsha1, "kill")}
+                    >
                       终止
                     </Button>
                   </Space>
@@ -559,7 +605,7 @@ export function DbmgmtTicketDetailPage() {
         </>
       ) : null}
 
-      {(ticket.sql_file_ref || ticket.sql_text) ? (
+      {ticket.sql_file_ref || ticket.sql_text ? (
         <>
           <DbmgmtSectionTitle>SQL文件信息</DbmgmtSectionTitle>
           <Space style={{ marginBottom: 24 }}>
@@ -590,7 +636,12 @@ export function DbmgmtTicketDetailPage() {
                 提交回滚工单
               </Button>
             ) : null}
-            <Button type="link" icon={<DownloadOutlined />} style={{ color: "#52c41a", padding: 0 }} onClick={() => void downloadRollback()}>
+            <Button
+              type="link"
+              icon={<DownloadOutlined />}
+              style={{ color: "#52c41a", padding: 0 }}
+              onClick={() => void downloadRollback()}
+            >
               回滚信息下载
             </Button>
           </Space>
@@ -636,13 +687,29 @@ export function DbmgmtTicketDetailPage() {
             </>
           ) : null}
           {canExecute ? (
-            <Button type="primary" icon={<PlayCircleOutlined />} loading={actionLoading} onClick={() => void handleExecute()}>
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
+              loading={actionLoading}
+              onClick={() => void handleExecute()}
+            >
               执行工单
             </Button>
           ) : null}
-          <Select style={{ width: 180 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={onProjectChange} />
+          <Select
+            style={{ width: 180 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={onProjectChange}
+          />
           <Button icon={<ReloadOutlined />} onClick={() => void load()} />
-          <Button onClick={() => navigate(projectId ? `/dbmgmt/workflow/history?project=${projectId}` : "/dbmgmt/workflow/history")}>返回历史工单</Button>
+          <Button
+            onClick={() =>
+              navigate(projectId ? `/dbmgmt/workflow/history?project=${projectId}` : "/dbmgmt/workflow/history")
+            }
+          >
+            返回历史工单
+          </Button>
         </Space>
       }
     >
@@ -664,7 +731,13 @@ export function DbmgmtTicketDetailPage() {
         <Alert type="warning" message="工单不存在或无权查看，请确认右上角项目选择与工单所属项目一致" />
       ) : null}
 
-      <Modal title={`回滚 SQL · 工单 #${ticketId}`} open={rollbackOpen} onCancel={() => setRollbackOpen(false)} footer={null} width={900}>
+      <Modal
+        title={`回滚 SQL · 工单 #${ticketId}`}
+        open={rollbackOpen}
+        onCancel={() => setRollbackOpen(false)}
+        footer={null}
+        width={900}
+      >
         <Table
           size="small"
           rowKey={(_, i) => String(i)}
@@ -675,7 +748,9 @@ export function DbmgmtTicketDetailPage() {
             {
               title: "回滚 SQL",
               dataIndex: "rollback_sql",
-              render: (v: string) => <pre style={{ margin: 0, whiteSpace: "pre-wrap", maxHeight: 120, overflow: "auto" }}>{v}</pre>,
+              render: (v: string) => (
+                <pre style={{ margin: 0, whiteSpace: "pre-wrap", maxHeight: 120, overflow: "auto" }}>{v}</pre>
+              ),
             },
           ]}
         />
