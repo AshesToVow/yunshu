@@ -12,23 +12,6 @@ import (
 	workflowsvc "yunshu/internal/service/workflow"
 )
 
-func (s *Service) linkChangeTicket(ctx context.Context, releaseID, changeTicketID uint) error {
-	release, err := s.repo.GetReleaseRunByID(ctx, releaseID)
-	if err != nil {
-		return err
-	}
-	ticket, err := s.workflowRepo.GetTicket(ctx, changeTicketID)
-	if err != nil {
-		return err
-	}
-	if ticket.TicketType != model.WorkflowTicketTypeChange {
-		return constants.ErrBadRequestWithMsg("目标工单不是变更单")
-	}
-	return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
-		"change_workflow_ticket_id": changeTicketID,
-	})
-}
-
 func (s *Service) createReleaseWorkflowTickets(ctx context.Context, release *model.CicdReleaseRun) error {
 	if release == nil || release.ID == 0 {
 		return constants.ErrBadRequestWithMsg("工单不存在")
@@ -70,9 +53,9 @@ func (s *Service) createReleaseWorkflowTickets(ctx context.Context, release *mod
 		stageKey = active.StageKey
 	}
 	return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
-		"workflow_ticket_id":          releaseTicket.ID,
-		"change_workflow_ticket_id":   changeTicket.ID,
-		"current_stage_key":           stageKey,
+		"workflow_ticket_id":        releaseTicket.ID,
+		"change_workflow_ticket_id": changeTicket.ID,
+		"current_stage_key":         stageKey,
 	})
 }
 

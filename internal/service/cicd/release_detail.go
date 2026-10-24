@@ -224,10 +224,6 @@ func (s *Service) loadCurrentHandlers(ctx context.Context, steps []ReleaseApprov
 		users, _ := s.repo.ListUsersByIDs(ctx, userIDs)
 		out := make([]ReleaseHandlerItem, 0, len(users))
 		for _, u := range users {
-			name := u.Username
-			if name == "" {
-				name = u.Nickname
-			}
 			out = append(out, ReleaseHandlerItem{
 				UserID:   u.ID,
 				Username: u.Username,

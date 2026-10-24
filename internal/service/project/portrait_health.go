@@ -115,7 +115,7 @@ func (s *ServiceCatalogService) buildHealth(ctx context.Context, item *ServiceCa
 	if score > 100 {
 		score = 100
 	}
-	grade := "A"
+	var grade string
 	switch {
 	case score >= 85:
 		grade = "A"

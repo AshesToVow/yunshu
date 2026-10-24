@@ -31,18 +31,6 @@ func DefaultIncidentStages() []StageItem {
 	}
 }
 
-func stageItemsToUpsert(items []StageItem) []StageUpsertItem {
-	out := make([]StageUpsertItem, 0, len(items))
-	for _, it := range items {
-		out = append(out, StageUpsertItem{
-			StageKey: it.StageKey, StageName: it.StageName, SortOrder: it.SortOrder,
-			Enabled: it.Enabled, AssigneeRuleType: it.AssigneeRuleType,
-			UserGroupID: it.UserGroupID, DutyMonitorRuleID: it.DutyMonitorRuleID,
-		})
-	}
-	return out
-}
-
 func workflowStageToLegacyDbmgmt(st model.WorkflowStage) model.DbApprovalFlowStage {
 	return model.DbApprovalFlowStage{
 		ProjectID: 0, StageKey: st.StageKey, StageName: st.StageName,

@@ -139,45 +139,6 @@ func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req Ap
 	return s.GetApprovalFlow(ctx, projectID)
 }
 
-func (s *Service) loadEnabledFlowStages(ctx context.Context, projectID uint) ([]model.CicdApprovalFlowStage, error) {
-	return workflowsvc.EnabledLegacyCicdStagesFrom(ctx, s.workflowEngine(), projectID)
-}
-
-func (s *Service) initReleaseApprovalSteps(ctx context.Context, release *model.CicdReleaseRun) error {
-	if release == nil {
-		return constants.ErrBadRequestWithMsg("工单不存在")
-	}
-	stages, err := s.loadEnabledFlowStages(ctx, release.ProjectID)
-	if err != nil {
-		return err
-	}
-	if len(stages) == 0 {
-		return constants.ErrBadRequestWithMsg("请先在「审批流配置」中启用至少一级审批后再提交发布")
-	}
-	steps := make([]model.CicdReleaseApprovalStep, 0, len(stages))
-	now := time.Now()
-	for i, st := range stages {
-		step := model.CicdReleaseApprovalStep{
-			ReleaseRunID: release.ID,
-			StageKey:     st.StageKey,
-			StageName:    st.StageName,
-			SortOrder:    st.SortOrder,
-			Status:       model.CicdApprovalStepPending,
-			UserGroupID:  st.UserGroupID,
-		}
-		if i == 0 {
-			step.ActivatedAt = &now
-		}
-		steps = append(steps, step)
-	}
-	if err := s.repo.CreateApprovalSteps(ctx, steps); err != nil {
-		return err
-	}
-	return s.repo.UpdateReleaseRunFields(ctx, release.ID, map[string]any{
-		"current_stage_key": stages[0].StageKey,
-	})
-}
-
 func (s *Service) getCurrentPendingStep(ctx context.Context, releaseRunID uint) (*model.CicdReleaseApprovalStep, error) {
 	return s.repo.GetPendingApprovalStep(ctx, releaseRunID)
 }
@@ -238,28 +199,6 @@ func (s *Service) ListReleaseApprovalSteps(ctx context.Context, projectID, runID
 		return nil, err
 	}
 	return s.buildReleaseApprovalStepItems(ctx, runID)
-}
-
-func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.CicdApprovalFlowStage) map[uint]string {
-	ids := make([]uint, 0)
-	seen := map[uint]struct{}{}
-	for _, st := range stages {
-		if st.UserGroupID != nil && *st.UserGroupID > 0 {
-			if _, ok := seen[*st.UserGroupID]; !ok {
-				seen[*st.UserGroupID] = struct{}{}
-				ids = append(ids, *st.UserGroupID)
-			}
-		}
-	}
-	out := map[uint]string{}
-	if len(ids) == 0 {
-		return out
-	}
-	groups, _ := s.repo.ListUserGroupsByIDs(ctx, ids)
-	for _, g := range groups {
-		out[g.ID] = g.Name
-	}
-	return out
 }
 
 // backfillPendingReleaseSteps 为历史待审工单补建统一工单（不再写入遗留步骤表）。

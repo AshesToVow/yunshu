@@ -621,6 +621,9 @@ func (s *KafkaToESService) ConfigPreview(ctx context.Context) (*KafkaConfigPrevi
 }
 
 func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) {
+	if s == nil {
+		return &KafkaQueueStats{Message: "Kafka 未配置"}, nil
+	}
 	workers := s.activeWorkers.Load()
 	out := &KafkaQueueStats{
 		ConsumedTotal:   s.consumedTotal.Load(),
@@ -638,7 +641,7 @@ func (s *KafkaToESService) Stats(ctx context.Context) (*KafkaQueueStats, error) 
 	if topics, ok := s.activeTopics.Load().([]string); ok {
 		out.Topics = append([]string(nil), topics...)
 	}
-	if s == nil || s.kafka == nil {
+	if s.kafka == nil {
 		out.Message = "Kafka 未配置"
 		return out, nil
 	}

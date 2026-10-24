@@ -131,7 +131,7 @@ func (s *Service) platformReportOverlay(ctx context.Context, code string) string
 	if s == nil || s.platformTplRepo == nil {
 		return ""
 	}
-	key := "inspect.report.default"
+	var key string
 	switch strings.TrimSpace(code) {
 	case "executive":
 		key = "inspect.report.executive"

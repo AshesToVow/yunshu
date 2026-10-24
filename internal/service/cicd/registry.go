@@ -3,12 +3,10 @@ package cicd
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -357,17 +355,4 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
-}
-
-func encodeHarborRepo(name string) string {
-	// Harbor API 要求 repository 名中的 / 编码为 %2F
-	return url.PathEscape(strings.TrimPrefix(name, "/"))
-}
-
-func decodeJSONList[T any](raw string) ([]T, error) {
-	var out []T
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return nil, err
-	}
-	return out, nil
 }

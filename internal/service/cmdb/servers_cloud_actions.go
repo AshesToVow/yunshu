@@ -9,7 +9,6 @@ import (
 	"yunshu/internal/pkg/constants"
 	cryptox "yunshu/internal/pkg/crypto"
 	bizerrors "yunshu/internal/pkg/errors"
-	"yunshu/internal/pkg/sshclient"
 
 	"gorm.io/gorm"
 )
@@ -138,39 +137,4 @@ func (s *Service) RunCloudServerAction(ctx context.Context, projectID, serverID 
 	default:
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg1707715d174a)
 	}
-}
-
-func (s *Service) detectRemoteOSAndArch(ctx context.Context, cli *sshclient.Client) (string, string, string) {
-	// Linux/macOS path
-	if res, err := cli.Exec(ctx, "uname -s && uname -m && uname -a", 8192); err == nil && res.ExitCode == 0 {
-		lines := strings.Split(strings.TrimSpace(res.Stdout), "\n")
-		osType := "linux"
-		if len(lines) > 0 {
-			v := strings.ToLower(strings.TrimSpace(lines[0]))
-			if strings.Contains(v, "darwin") {
-				osType = "darwin"
-			} else if strings.Contains(v, "linux") {
-				osType = "linux"
-			}
-		}
-		arch := ""
-		if len(lines) > 1 {
-			arch = strings.TrimSpace(lines[1])
-		}
-		msg := strings.TrimSpace(res.Stdout)
-		return osType, arch, msg
-	}
-
-	// Windows path (OpenSSH + powershell)
-	psCmd := "powershell -NoProfile -Command \"[System.Runtime.InteropServices.RuntimeInformation]::OSDescription; [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture\""
-	if res, err := cli.Exec(ctx, psCmd, 8192); err == nil && res.ExitCode == 0 {
-		lines := strings.Split(strings.TrimSpace(res.Stdout), "\n")
-		arch := ""
-		if len(lines) > 1 {
-			arch = strings.TrimSpace(lines[len(lines)-1])
-		}
-		return "windows", arch, strings.TrimSpace(res.Stdout)
-	}
-
-	return "", "", "connected"
 }

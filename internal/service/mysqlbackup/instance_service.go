@@ -276,13 +276,6 @@ func validateMysqlBackupScope(scope, dbName, tableName, databaseNames string) er
 	return nil
 }
 
-func (s *MysqlBackupService) decryptInstancePassword(inst *model.MysqlBackupInstance) (string, error) {
-	if inst == nil || inst.EncPassword == "" {
-		return "", constants.ErrBadRequestWithMsg("未配置 MySQL 密码，无法执行备份")
-	}
-	return cryptox.DecryptString(s.aead, inst.EncPassword)
-}
-
 func (s *MysqlBackupService) loadInstanceSecrets(ctx context.Context, projectID, instanceID uint) (*model.MysqlBackupInstance, string, error) {
 	inst, err := s.backupRepo.GetInstanceInProject(ctx, projectID, instanceID)
 	if err != nil {

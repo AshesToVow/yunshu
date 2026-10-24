@@ -53,10 +53,6 @@ func ReadPDFLib(name string) ([]byte, error) {
 	return pdfLibFS.ReadFile("static/" + name)
 }
 
-func readPDFLib(name string) ([]byte, error) {
-	return ReadPDFLib(name)
-}
-
 var errPDFLibNotFound = errInspectPDFLibNotFound{}
 
 type errInspectPDFLibNotFound struct{}

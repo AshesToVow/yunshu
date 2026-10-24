@@ -37,17 +37,9 @@ func (r *AiRepository) firstByID(ctx context.Context, dest any, id uint) error {
 	return r.dbq(ctx).First(dest, id).Error
 }
 
-func (r *AiRepository) reloadByID(ctx context.Context, dest any, id uint) error {
-	return r.dbq(ctx).First(dest, id).Error
-}
-
 func (r *AiRepository) deleteByID(ctx context.Context, model any, id uint) (int64, error) {
 	res := r.dbq(ctx).Delete(model, id)
 	return res.RowsAffected, res.Error
-}
-
-func (r *AiRepository) updateModel(ctx context.Context, id uint, dest any, updates map[string]any) error {
-	return r.dbq(ctx).Model(dest).Where("id = ?", id).Updates(updates).Error
 }
 
 func (r *AiRepository) countModel(ctx context.Context, model any) (int64, error) {

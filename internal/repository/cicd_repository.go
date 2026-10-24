@@ -399,7 +399,3 @@ func (r *CicdRepository) CountChangeEventsByRelease(ctx context.Context, release
 func (r *CicdRepository) UpdateWorkflowTicketStepFields(ctx context.Context, stepID uint, fields map[string]any) error {
 	return r.dbq(ctx).Model(&model.WorkflowTicketStep{}).Where("id = ?", stepID).Updates(fields).Error
 }
-
-func isNotFound(err error) bool {
-	return errors.Is(err, gorm.ErrRecordNotFound)
-}

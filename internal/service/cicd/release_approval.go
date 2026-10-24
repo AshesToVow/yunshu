@@ -26,9 +26,9 @@ type releaseRequestSnapshot struct {
 }
 
 type preparedRelease struct {
-	svc         *model.CicdService
-	ci          *model.CicdCiConfig
-	dc          *model.CicdDeployConfig
+	svc          *model.CicdService
+	ci           *model.CicdCiConfig
+	dc           *model.CicdDeployConfig
 	artifactName string
 	imageAddress string
 	publishMode  string
@@ -61,7 +61,7 @@ func (s *Service) prepareRelease(
 
 	artifactName := strings.TrimSpace(req.ArtifactName)
 	imageAddress := strings.TrimSpace(req.ImageAddress)
-	publishMode := strings.TrimSpace(req.PublishMode)
+	var publishMode string
 	releaseOp := strings.TrimSpace(req.ReleaseOperation)
 	if releaseOp == "" {
 		releaseOp = strings.TrimSpace(req.ReleaseType)
@@ -270,11 +270,11 @@ func (s *Service) executeReleaseRun(ctx context.Context, release *model.CicdRele
 	persistCtx := context.WithoutCancel(ctx)
 	now := time.Now()
 	updates := map[string]any{
-		"status":        model.CicdRunStatusRunning,
-		"params_json":   ParamsJSON(params),
-		"started_at":    now,
-		"image_address": p.imageAddress,
-		"artifact_name": p.artifactName,
+		"status":            model.CicdRunStatusRunning,
+		"params_json":       ParamsJSON(params),
+		"started_at":        now,
+		"image_address":     p.imageAddress,
+		"artifact_name":     p.artifactName,
 		"jenkins_queue_url": strings.TrimSpace(queuePath),
 	}
 	if err := s.repo.UpdateReleaseRunFields(persistCtx, release.ID, updates); err != nil {

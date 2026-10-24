@@ -70,10 +70,6 @@ func (s *AlertService) firingGroupAggregateSpec() groupAggregateSpec {
 	}
 }
 
-func (s *AlertService) clearGroupResolvedState(ctx context.Context, groupKey string) error {
-	return s.clearGroupAggregateStateBySpec(ctx, s.resolvedGroupAggregateSpec(), groupKey)
-}
-
 func (s *AlertService) logSuppressedResolvedAggregate(ctx context.Context, title, severity, status, groupKey string, payload map[string]any) {
 	s.logSuppressedGroupAggregateBySpec(ctx, s.resolvedGroupAggregateSpec(), title, severity, status, groupKey, payload)
 }

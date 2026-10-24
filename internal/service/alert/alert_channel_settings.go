@@ -11,12 +11,10 @@ import (
 	neturl "net/url"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
-	"yunshu/internal/alertdispatch"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/parseutil"
 	"yunshu/internal/pkg/validateutil"
@@ -24,44 +22,6 @@ import (
 
 func validateHeadersJSON(v string) error {
 	return validateutil.ValidateJSONObjectString(v, "headers_json")
-}
-
-func validateChannelMessageTemplates(headersJSON string) error {
-	settings, err := parseChannelSettings(headersJSON)
-	if err != nil {
-		return bizerrors.Pass(context.Background(), "alert.channel", "validateChannelMessageTemplates", err)
-	}
-	validateOne := func(fieldKey, fieldLabel string) error {
-		raw, ok := settings[fieldKey]
-		if !ok {
-			return nil
-		}
-		tplRaw := strings.TrimSpace(fmt.Sprintf("%v", raw))
-		if tplRaw == "" || tplRaw == "<nil>" {
-			return nil
-		}
-		tpl, parseErr := template.New(fieldKey).Option("missingkey=zero").Parse(tplRaw)
-		if parseErr != nil {
-			return constants.ErrBadRequestWithMsg(fmt.Sprintf(constants.ErrFmt3664a9ad8a57, fieldLabel, parseErr))
-		}
-		sample := alertdispatch.BuildChannelTemplateData(
-			"preview", "warning", "firing",
-			map[string]any{"summary": "preview", "description": "preview"},
-			"demo",
-		)
-		var buf strings.Builder
-		if execErr := tpl.Execute(&buf, sample); execErr != nil {
-			return constants.ErrBadRequestWithMsg(fmt.Sprintf("%s 执行失败: %v", fieldLabel, execErr))
-		}
-		return nil
-	}
-	if err = validateOne("messageTemplateFiring", "触发模板(messageTemplateFiring)"); err != nil {
-		return bizerrors.Pass(context.Background(), "alert.channel", "validateChannelMessageTemplates", err)
-	}
-	if err = validateOne("messageTemplateResolved", "恢复模板(messageTemplateResolved)"); err != nil {
-		return bizerrors.Pass(context.Background(), "alert.channel", "validateChannelMessageTemplates", err)
-	}
-	return nil
 }
 
 func requiresWebhookURL(channelType, headersJSON string) bool {
@@ -150,10 +110,6 @@ func validateEmailChannelRecipients(enabled bool, chType, headersJSON string) er
 	return nil
 }
 
-func splitEmailRecipientString(s string) []string {
-	return validateutil.SplitRecipientString(s)
-}
-
 func normalizeRecipientList(v any) []string {
 	return validateutil.NormalizeRecipientList(v)
 }
@@ -223,18 +179,6 @@ func buildWebhookURL(channel *model.AlertChannel, settings map[string]any, body 
 	q.Set("sign", sign)
 	parsed.RawQuery = q.Encode()
 	return parsed.String()
-}
-
-func parseStringList(v any) []string {
-	return parseutil.ParseStringList(v)
-}
-
-func parseBool(v any) bool {
-	return parseutil.ParseBool(v)
-}
-
-func uniqueStrings(items []string) []string {
-	return parseutil.UniqueStrings(items)
 }
 
 func maxInt(a, b int) int {
