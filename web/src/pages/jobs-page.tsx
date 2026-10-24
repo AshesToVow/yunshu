@@ -1,10 +1,35 @@
-import { ColumnHeightOutlined, DownOutlined, EyeOutlined, FileTextOutlined, PlayCircleOutlined, TagsOutlined } from "@ant-design/icons";
-import { Alert, Button, Dropdown, Form, Input, InputNumber, Modal, Progress, Select, Space, Tag, Typography, message } from "antd";
+import {
+  ColumnHeightOutlined,
+  DownOutlined,
+  EyeOutlined,
+  FileTextOutlined,
+  PlayCircleOutlined,
+  TagsOutlined,
+} from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Dropdown,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Progress,
+  Select,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { useRelatedPodsDrawer } from "../components/k8s/related-pods-drawer";
-import { RealtimeUsageText, WorkloadCpuUsageBars, WorkloadMemUsageBars } from "../components/k8s/k8s-resource-usage-cells";
+import {
+  RealtimeUsageText,
+  WorkloadCpuUsageBars,
+  WorkloadMemUsageBars,
+} from "../components/k8s/k8s-resource-usage-cells";
 import { useWorkloadFormActions } from "../components/k8s/workload-form-actions";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
@@ -68,7 +93,12 @@ function JobDetailQuickEdit({
       </Space>
       <Space style={{ width: "100%" }} align="start">
         <Form.Item name="restart_policy" label="RestartPolicy" style={{ width: 220 }}>
-          <Select options={[{ label: "Never", value: "Never" }, { label: "OnFailure", value: "OnFailure" }]} />
+          <Select
+            options={[
+              { label: "Never", value: "Never" },
+              { label: "OnFailure", value: "OnFailure" },
+            ]}
+          />
         </Form.Item>
         <Form.Item name="parallelism" label="并行数" style={{ width: 160 }}>
           <InputNumber min={0} style={{ width: "100%" }} />
@@ -95,7 +125,9 @@ function JobDetailQuickEdit({
 export function JobsPage() {
   const listReloadRef = useRef<() => void>(() => {});
   const [verticalOpen, setVerticalOpen] = useState(false);
-  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
   const [verticalForm] = Form.useForm<{
     container_name?: string;
     requests_cpu?: string;
@@ -120,7 +152,9 @@ export function JobsPage() {
     }),
   });
 
-  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(async ({ clusterId, namespace, name }) => await listJobPods(clusterId, namespace, name));
+  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(
+    async ({ clusterId, namespace, name }) => await listJobPods(clusterId, namespace, name),
+  );
   const { renderKVIcon, viewer } = useKeyValueViewer({ mode: "drawer" });
 
   const columns: ColumnsType<WorkloadItem> = [
@@ -131,15 +165,31 @@ export function JobsPage() {
       title: "资源汇总",
       dataIndex: "resource_text",
       width: 180,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
-    { title: "注解", key: "annotations", width: 70, align: "center", render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
+    {
+      title: "注解",
+      key: "annotations",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations),
+    },
     {
       title: "容器",
       dataIndex: "containers_text",
       width: 220,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
     {
       title: "实时用量",
@@ -188,11 +238,16 @@ export function JobsPage() {
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
         }}
         columns={columns}
-        onEdit={(record, ctx) => formActions.openEdit({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }, record)}
+        onEdit={(record, ctx) =>
+          formActions.openEdit(
+            { clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name },
+            record,
+          )
+        }
         api={{
           list: async ({ clusterId, namespace, keyword }) => await listJobs(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getJobDetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyJob(clusterId, manifest),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyJob(clusterId, manifest, idemKey),
           remove: async (args) => await deleteJob(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
@@ -201,17 +256,14 @@ export function JobsPage() {
         onCreateDrawerOpen={(ctx) => {
           if (!ctx.clusterId) return;
           const ns = ctx.namespace ?? "default";
-          formActions.prepareCreate(
-            { clusterId: ctx.clusterId, namespace: ns },
-            {
-              namespace: ns,
-              name: "",
-              restart_policy: "Never",
-              container_name: "",
-              image: "busybox:1.36",
-              env_pairs: [{ key: "", value: "" }],
-            } as Partial<JobFormValues>,
-          );
+          formActions.prepareCreate({ clusterId: ctx.clusterId, namespace: ns }, {
+            namespace: ns,
+            name: "",
+            restart_policy: "Never",
+            container_name: "",
+            image: "busybox:1.36",
+            env_pairs: [{ key: "", value: "" }],
+          } as Partial<JobFormValues>);
         }}
         renderCreateFormTab={(ctx) => (
           <WorkloadFormModal<JobFormValues>
@@ -279,14 +331,19 @@ spec:
                     key: "pods",
                     label: "关联 Pods",
                     icon: <EyeOutlined />,
-                    onClick: () => openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
+                    onClick: () =>
+                      openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
                   },
                   {
                     key: "vertical",
                     label: "垂直扩缩（resources · VPA 类）",
                     icon: <ColumnHeightOutlined />,
                     onClick: () => {
-                      setVerticalTarget({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name });
+                      setVerticalTarget({
+                        clusterId: ctx.clusterId,
+                        namespace: ctx.namespace ?? "default",
+                        name: record.name,
+                      });
                       verticalForm.resetFields();
                       setVerticalOpen(true);
                     },
@@ -415,4 +472,3 @@ spec:
     </>
   );
 }
-

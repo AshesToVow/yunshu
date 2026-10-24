@@ -23,7 +23,16 @@ import {
   type DbSqlExecution,
 } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
-import { downloadQueryResultCsv, formatSqlCheckFailure, formatSqlCheckSummary, guessSqlRiskLevel, quoteSqlIdent, riskLevelColor, riskLevelLabel, sanitizeQuerySql } from "../utils/dbmgmt-console";
+import {
+  downloadQueryResultCsv,
+  formatSqlCheckFailure,
+  formatSqlCheckSummary,
+  guessSqlRiskLevel,
+  quoteSqlIdent,
+  riskLevelColor,
+  riskLevelLabel,
+  sanitizeQuerySql,
+} from "../utils/dbmgmt-console";
 import { formatDateTime } from "../utils/format";
 
 export type DbmgmtConsoleMode = "all" | "query" | "audit";
@@ -31,7 +40,10 @@ export type DbmgmtConsoleMode = "all" | "query" | "audit";
 function formatSqlBasic(sql: string) {
   return sql
     .replace(/\s+/g, " ")
-    .replace(/\b(SELECT|FROM|WHERE|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|GROUP BY|ORDER BY|LIMIT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b/gi, "\n$1")
+    .replace(
+      /\b(SELECT|FROM|WHERE|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|GROUP BY|ORDER BY|LIMIT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\b/gi,
+      "\n$1",
+    )
     .trim();
 }
 
@@ -59,7 +71,9 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const [columnDefs, setColumnDefs] = useState<{ title: string; dataIndex: string }[]>([]);
   const [rawRows, setRawRows] = useState<unknown[][]>([]);
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
-  const [tableColumns, setTableColumns] = useState<{ name: string; data_type: string; nullable: boolean; comment?: string }[]>([]);
+  const [tableColumns, setTableColumns] = useState<
+    { name: string; data_type: string; nullable: boolean; comment?: string }[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [perm, setPerm] = useState<DbEffectivePermission | null>(null);
   const [permLoaded, setPermLoaded] = useState(false);
@@ -82,12 +96,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const writeRisk = useMemo(() => guessSqlRiskLevel(sql), [sql]);
   const isReadOnlySql = writeRisk === "low";
   const canWriteSql = useMemo(
-    () =>
-      Boolean(
-        permLoaded &&
-          perm &&
-          (perm.can_manage || perm.can_dml || perm.can_ddl || perm.can_import),
-      ),
+    () => Boolean(permLoaded && perm && (perm.can_manage || perm.can_dml || perm.can_ddl || perm.can_import)),
     [perm, permLoaded],
   );
   const canQuerySql = useMemo(
@@ -136,7 +145,11 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               return {
                 title: d.name,
                 key: `db:${inst.id}:${d.name}`,
-                children: (tables ?? []).map((t) => ({ title: t.name, key: `table:${inst.id}:${d.name}.${t.name}`, isLeaf: true })),
+                children: (tables ?? []).map((t) => ({
+                  title: t.name,
+                  key: `table:${inst.id}:${d.name}.${t.name}`,
+                  isLeaf: true,
+                })),
               };
             }),
           );
@@ -287,7 +300,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       return;
     }
     try {
-      const res = await checkDbSql(projectId, instanceId, { database, sql });
+      const res = await checkDbSql(projectId, instanceId, { database, sql, audit_mode: auditType });
       setCheckRows(res.rows ?? []);
       setCheckSummary(formatSqlCheckSummary(res));
       setCheckOpen(true);
@@ -312,7 +325,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       return;
     }
     try {
-      const res = await checkDbSql(projectId, instanceId, { database, sql: importSql });
+      const res = await checkDbSql(projectId, instanceId, { database, sql: importSql, audit_mode: auditType });
       setCheckRows(res.rows ?? []);
       setCheckSummary(formatSqlCheckSummary(res));
       setCheckOpen(true);
@@ -441,7 +454,9 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
     <Card title={pageTitle}>
       <div className="dbmgmt-console-layout">
         <div className="dbmgmt-console-tree">
-          <div style={{ marginBottom: 8, fontWeight: 600 }}>{mode === "audit" ? "数据库列表" : "请选择数据库（层级最右端可查看表）"}</div>
+          <div style={{ marginBottom: 8, fontWeight: 600 }}>
+            {mode === "audit" ? "数据库列表" : "请选择数据库（层级最右端可查看表）"}
+          </div>
           <Select
             style={{ width: "100%", marginBottom: 8 }}
             value={projectId}
@@ -502,7 +517,14 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               />
               <div style={{ marginBottom: 8 }}>当前选择的库：{selectedDbPath}</div>
               {auditTab === "sql" ? (
-                <MonacoSqlEditor value={sql} onChange={(v) => { setSql(v); setCheckPassed(false); }} height={220} />
+                <MonacoSqlEditor
+                  value={sql}
+                  onChange={(v) => {
+                    setSql(v);
+                    setCheckPassed(false);
+                  }}
+                  height={220}
+                />
               ) : (
                 <Space direction="vertical" style={{ width: "100%" }} size="middle">
                   <Upload
@@ -530,13 +552,29 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               )}
               <Form layout="horizontal" labelCol={{ span: 4 }} wrapperCol={{ span: 16 }} style={{ marginTop: 16 }}>
                 <Form.Item label="变更描述" required>
-                  <Input placeholder="输入工单名称" value={changeDesc} onChange={(e) => setChangeDesc(e.target.value)} />
+                  <Input
+                    placeholder="输入工单名称"
+                    value={changeDesc}
+                    onChange={(e) => setChangeDesc(e.target.value)}
+                  />
                 </Form.Item>
                 <Form.Item label="审核" required>
-                  <Radio.Group value={auditType} onChange={(e) => setAuditType(e.target.value)}>
+                  <Radio.Group
+                    value={auditType}
+                    onChange={(e) => {
+                      setAuditType(e.target.value);
+                      setCheckPassed(false);
+                      setImportCheckPassed(false);
+                    }}
+                  >
                     <Radio value="system">系统审核</Radio>
                     <Radio value="manual">人工审核</Radio>
                   </Radio.Group>
+                  <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12, marginTop: 4 }}>
+                    {auditType === "system"
+                      ? "系统审核：SQL 检测与建单预检走 goInception"
+                      : "人工审核：不连 goInception，由审批人审 SQL；检测仅做平台本地规则"}
+                  </div>
                 </Form.Item>
                 <Form.Item label="备份" required>
                   <Radio.Group value={backupChoice} onChange={(e) => setBackupChoice(e.target.value)}>
@@ -546,7 +584,12 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                 </Form.Item>
               </Form>
               {perm && !canWriteSql && mode === "audit" ? (
-                <Alert type="warning" showIcon message="当前账号无 SQL 变更权限，请先在「权限申请」中申请 DML/DDL 或导入权限。" style={{ marginBottom: 12 }} />
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="当前账号无 SQL 变更权限，请先在「权限申请」中申请 DML/DDL 或导入权限。"
+                  style={{ marginBottom: 12 }}
+                />
               ) : null}
               {auditTab === "sql" && isReadOnlySql ? (
                 <Alert
@@ -559,7 +602,11 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               <Space style={{ marginTop: 8 }} wrap>
                 {auditTab === "sql" ? (
                   <>
-                    <Button type="primary" style={{ background: "#fa8c16", borderColor: "#fa8c16" }} onClick={() => void runCheck()}>
+                    <Button
+                      type="primary"
+                      style={{ background: "#fa8c16", borderColor: "#fa8c16" }}
+                      onClick={() => void runCheck()}
+                    >
                       sql检测
                     </Button>
                     <Button
@@ -572,12 +619,18 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                   </>
                 ) : (
                   <>
-                    <Button type="primary" style={{ background: "#fa8c16", borderColor: "#fa8c16" }} onClick={() => void runImportCheck()}>
+                    <Button
+                      type="primary"
+                      style={{ background: "#fa8c16", borderColor: "#fa8c16" }}
+                      onClick={() => void runImportCheck()}
+                    >
                       sql检测
                     </Button>
                     <Button
                       type="primary"
-                      disabled={!importCheckPassed || !database || !importSql.trim() || !changeDesc.trim() || !canWriteSql}
+                      disabled={
+                        !importCheckPassed || !database || !importSql.trim() || !changeDesc.trim() || !canWriteSql
+                      }
                       onClick={() => void submitImport()}
                     >
                       提交
@@ -586,8 +639,12 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                 )}
               </Space>
               <div style={{ marginTop: 24 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>正确建表样例:（标记红词句必须有, 否则通不过审核!）</div>
-                <pre style={{ background: "#f5f5f5", padding: 12, borderRadius: 6, fontSize: 12 }}>{CREATE_TABLE_SAMPLE}</pre>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                  正确建表样例:（标记红词句必须有, 否则通不过审核!）
+                </div>
+                <pre style={{ background: "#f5f5f5", padding: 12, borderRadius: 6, fontSize: 12 }}>
+                  {CREATE_TABLE_SAMPLE}
+                </pre>
                 <div style={{ fontWeight: 600, marginTop: 12 }}>基本规范</div>
                 <ol style={{ paddingLeft: 20, color: "#666" }}>
                   {SQL_AUDIT_RULES.map((r) => (
@@ -604,12 +661,12 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               <Space style={{ marginTop: 12 }} wrap>
                 {isQueryMode ? (
                   <Button
-                  type="primary"
-                  icon={<PlayCircleOutlined />}
-                  loading={loading}
-                  disabled={!canQuerySql}
-                  onClick={() => void runQuery()}
-                >
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    loading={loading}
+                    disabled={!canQuerySql}
+                    onClick={() => void runQuery()}
+                  >
                     查询
                   </Button>
                 ) : null}
@@ -648,7 +705,13 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                         <Button type="primary" onClick={() => void loadHistory()}>
                           搜索
                         </Button>
-                        <Button icon={<ReloadOutlined />} onClick={() => { setHistoryKeyword(""); void loadHistory(); }}>
+                        <Button
+                          icon={<ReloadOutlined />}
+                          onClick={() => {
+                            setHistoryKeyword("");
+                            void loadHistory();
+                          }}
+                        >
                           刷新重置
                         </Button>
                       </Space>
@@ -673,7 +736,12 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                         }}
                         columns={[
                           { title: "ID", dataIndex: "id", width: 60 },
-                          { title: "开始时间", dataIndex: "created_at", width: 170, render: (v?: string) => (v ? formatDateTime(v) : "—") },
+                          {
+                            title: "开始时间",
+                            dataIndex: "created_at",
+                            width: 170,
+                            render: (v?: string) => (v ? formatDateTime(v) : "—"),
+                          },
                           {
                             title: "实例名称",
                             width: 200,
@@ -718,21 +786,22 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                 {
                   key: "structure",
                   label: "查询表结构",
-                  children: selectedTable && database ? (
-                    <Table
-                      size="small"
-                      rowKey="name"
-                      dataSource={tableColumns}
-                      columns={[
-                        { title: "字段", dataIndex: "name" },
-                        { title: "类型", dataIndex: "data_type" },
-                        { title: "可空", dataIndex: "nullable", render: (v: boolean) => (v ? "是" : "否") },
-                        { title: "注释", dataIndex: "comment", render: (v?: string) => v || "—" },
-                      ]}
-                    />
-                  ) : (
-                    <Alert type="info" message="请在左侧树中选择表以查看结构" />
-                  ),
+                  children:
+                    selectedTable && database ? (
+                      <Table
+                        size="small"
+                        rowKey="name"
+                        dataSource={tableColumns}
+                        columns={[
+                          { title: "字段", dataIndex: "name" },
+                          { title: "类型", dataIndex: "data_type" },
+                          { title: "可空", dataIndex: "nullable", render: (v: boolean) => (v ? "是" : "否") },
+                          { title: "注释", dataIndex: "comment", render: (v?: string) => v || "—" },
+                        ]}
+                      />
+                    ) : (
+                      <Alert type="info" message="请在左侧树中选择表以查看结构" />
+                    ),
                 },
               ]}
             />
@@ -742,7 +811,16 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
             <Alert type="info" showIcon message="正在校验数据库权限…" style={{ marginBottom: 12 }} />
           ) : null}
           {permLoaded && !canQuerySql && isQueryMode && mode === "query" ? (
-            <Alert type="warning" showIcon message={<>无查询权限，可 <Link to="/dbmgmt/apply/query">申请查询权限</Link></>} style={{ marginTop: 12 }} />
+            <Alert
+              type="warning"
+              showIcon
+              message={
+                <>
+                  无查询权限，可 <Link to="/dbmgmt/apply/query">申请查询权限</Link>
+                </>
+              }
+              style={{ marginTop: 12 }}
+            />
           ) : null}
           {riskMsg ? <Alert type="info" showIcon message={riskMsg} style={{ marginTop: 12 }} /> : null}
         </div>
@@ -771,7 +849,14 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                 title: "级别",
                 dataIndex: "error_level",
                 width: 72,
-                render: (v: number) => (v === 2 ? <Tag color="red">错误</Tag> : v === 1 ? <Tag color="orange">警告</Tag> : <Tag color="green">通过</Tag>),
+                render: (v: number) =>
+                  v === 2 ? (
+                    <Tag color="red">错误</Tag>
+                  ) : v === 1 ? (
+                    <Tag color="orange">警告</Tag>
+                  ) : (
+                    <Tag color="green">通过</Tag>
+                  ),
               },
               { title: "信息", dataIndex: "error_message", ellipsis: true },
               { title: "SQL", dataIndex: "sql", ellipsis: true },

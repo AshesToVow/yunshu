@@ -92,6 +92,21 @@ func (r *UserGroupRepository) List(ctx context.Context, params UserGroupListPara
 	return list, total, nil
 }
 
+func (r *UserGroupRepository) ListNamesByIDs(ctx context.Context, ids []uint) (map[uint]string, error) {
+	out := map[uint]string{}
+	if r == nil || r.db == nil || len(ids) == 0 {
+		return out, nil
+	}
+	var groups []model.UserGroup
+	if err := r.db.WithContext(ctx).Select("id, name").Where("id IN ?", ids).Find(&groups).Error; err != nil {
+		return out, err
+	}
+	for _, g := range groups {
+		out[g.ID] = g.Name
+	}
+	return out, nil
+}
+
 func (r *UserGroupRepository) ListMemberUserIDs(ctx context.Context, groupID uint) ([]uint, error) {
 	if r == nil || r.db == nil || groupID == 0 {
 		return nil, nil

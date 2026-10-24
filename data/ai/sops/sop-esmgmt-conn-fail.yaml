@@ -1,0 +1,17 @@
+code: sop-esmgmt-conn-fail
+title: ES 连接失败排查 SOP
+scenario: ES 管理连接不可达或认证失败
+preconditions: 具备 ES 管理查看权限
+input_params: connection_name
+check_steps: |
+  1. list_es_connections
+  2. 核对 addresses/username/is_default
+exec_steps: |
+  1. 修正地址与认证
+  2. 切换默认连接到健康集群
+  3. 确认网络与证书
+verify_steps: 连接可用且可浏览索引
+exception_handle: 无连接时先在 ES 管理台创建连接
+rollback: 恢复误改默认连接
+risk: 写操作指向错误集群
+approval_needed: false

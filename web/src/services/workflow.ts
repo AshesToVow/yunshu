@@ -18,6 +18,8 @@ export type PendingTicketItem = {
   activated_at?: string;
   created_at: string;
   mine_status: "mine_pending" | "mine_done";
+  /** review=审批；execute=发布执行；execute_sql=SQL 执行 */
+  action?: "review" | "execute" | "execute_sql" | string;
 };
 
 export type PendingListQuery = {
@@ -51,8 +53,45 @@ export async function reviewWorkflowStep(ticketId: number, stepId: number, appro
 }
 
 export async function getWorkflowTicket(id: number) {
-  return getData(http.get(`/workflow/tickets/${id}`) as unknown as Promise<ApiResponse<unknown>>);
+  return getData<WorkflowTicketDetail>(
+    http.get(`/workflow/tickets/${id}`) as unknown as Promise<ApiResponse<WorkflowTicketDetail>>,
+  );
 }
+
+export type WorkflowTicketStep = {
+  id: number;
+  ticket_id: number;
+  stage_key: string;
+  stage_name: string;
+  sort_order: number;
+  status: string;
+  assignee_rule_type?: string;
+  user_group_id?: number;
+  user_group_name?: string;
+  assignee_user_id?: number;
+  assignee_name?: string;
+  reviewer_user_id?: number;
+  reviewer_name?: string;
+  review_comment?: string;
+  activated_at?: string;
+  reviewed_at?: string;
+};
+
+export type WorkflowTicketDetail = {
+  id: number;
+  domain: string;
+  ticket_type: string;
+  project_id: number;
+  title: string;
+  status: string;
+  submitter_user_id?: number;
+  ref_type?: string;
+  ref_id?: number;
+  remark?: string;
+  created_at?: string;
+  closed_at?: string;
+  steps?: WorkflowTicketStep[];
+};
 
 export type WorkflowStageItem = {
   stage_key: string;

@@ -62,4 +62,5 @@ type routeHandlers struct {
 	Inspect             *handler.InspectHandler
 	AI                  *handler.AIHandler
 	Esmgmt              *handler.EsmgmtHandler
+	Kafkamgmt           *handler.KafkamgmtHandler
 }

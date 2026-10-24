@@ -47,9 +47,7 @@ export function LineChart({
   const [hoverClient, setHoverClient] = useState<{ x: number; y: number } | null>(null);
 
   const normalizedSeries: LineSeries[] =
-    series && series.length > 0
-      ? series
-      : [{ name: undefined, data: data ?? [], color: "#2563eb" }];
+    series && series.length > 0 ? series : [{ name: undefined, data: data ?? [], color: "#2563eb" }];
 
   const nPoints = useMemo(() => Math.max(...normalizedSeries.map((s) => s.data.length), 0), [normalizedSeries]);
 
@@ -117,7 +115,13 @@ export function LineChart({
             return (
               <div
                 key={idx}
-                style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: darkMode ? "#94a3b8" : "#475569" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12,
+                  color: darkMode ? "#94a3b8" : "#475569",
+                }}
               >
                 <span style={{ width: 10, height: 10, borderRadius: 999, background: color }} />
                 <span>{s.name || `Series ${idx + 1}`}</span>
@@ -153,12 +157,19 @@ export function LineChart({
               const color = s.color || ["#2563eb", "#10b981", "#f59e0b", "#ef4444"][sIdx % 4];
               const v = s.data[hoverIndex];
               return (
-                <div key={sIdx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div
+                  key={sIdx}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
+                >
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 100 }}>
                     <span style={{ width: 8, height: 8, borderRadius: 999, background: color }} />
-                    <span style={{ fontSize: 12, color: darkMode ? "#94a3b8" : "#334155" }}>{s.name || `Series ${sIdx + 1}`}</span>
+                    <span style={{ fontSize: 12, color: darkMode ? "#94a3b8" : "#334155" }}>
+                      {s.name || `Series ${sIdx + 1}`}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 13, color: valueColor, fontWeight: 700 }}>{typeof v === "number" ? v : "-"}</span>
+                  <span style={{ fontSize: 13, color: valueColor, fontWeight: 700 }}>
+                    {typeof v === "number" ? v : "-"}
+                  </span>
                 </div>
               );
             })}
@@ -205,7 +216,14 @@ export function LineChart({
         })}
 
         {/* Y 轴标题 */}
-        <text x={12} y={PLOT.top + plotH / 2} fontSize={11} fill={textColor} transform={`rotate(-90, 12, ${PLOT.top + plotH / 2})`} textAnchor="middle">
+        <text
+          x={12}
+          y={PLOT.top + plotH / 2}
+          fontSize={11}
+          fill={textColor}
+          transform={`rotate(-90, 12, ${PLOT.top + plotH / 2})`}
+          textAnchor="middle"
+        >
           {yAxisLabel}
         </text>
 
@@ -215,7 +233,15 @@ export function LineChart({
           const label = safeLabels?.[i] ?? `${i + 1}`;
           return (
             <g key={`x-${i}`}>
-              <line x1={x} x2={x} y1={PLOT.top + plotH} y2={PLOT.top + plotH + 4} stroke={textColor} strokeWidth={1} opacity={0.5} />
+              <line
+                x1={x}
+                x2={x}
+                y1={PLOT.top + plotH}
+                y2={PLOT.top + plotH + 4}
+                stroke={textColor}
+                strokeWidth={1}
+                opacity={0.5}
+              />
               <text
                 x={x}
                 y={height - 10}
@@ -254,14 +280,23 @@ export function LineChart({
 
         {normalizedSeries.map((s, sIdx) => {
           const color = s.color || ["#2563eb", "#10b981", "#f59e0b", "#ef4444"][sIdx % 4];
-          const pts = s.data.map((v, i) => {
-            const p = toXY(v, i, s.data.length);
-            return `${p.x},${p.y}`;
-          }).join(" ");
+          const pts = s.data
+            .map((v, i) => {
+              const p = toXY(v, i, s.data.length);
+              return `${p.x},${p.y}`;
+            })
+            .join(" ");
 
           return (
             <g key={sIdx}>
-              <polyline fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" points={pts} />
+              <polyline
+                fill="none"
+                stroke={color}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                points={pts}
+              />
               {s.data.map((v, idx) => {
                 const p = toXY(v, idx, s.data.length);
                 const isHover = hoverIndex === idx;

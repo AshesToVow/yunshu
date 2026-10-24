@@ -125,6 +125,33 @@ func (s *K8sEventForwardAdminService) UpdateSettings(ctx context.Context, st *mo
 	return nil
 }
 
+type K8sForwardedEventListQuery struct {
+	Page      int    `form:"page"`
+	PageSize  int    `form:"page_size"`
+	Status    string `form:"status"`
+	ClusterID string `form:"cluster_id"`
+}
+
+func (s *K8sEventForwardAdminService) ListForwardedEvents(ctx context.Context, q K8sForwardedEventListQuery) (*pagination.Result[model.K8sForwardedEvent], error) {
+	res, err := s.repo.ListForwardedEvents(ctx, repository.K8sForwardedEventListFilter{
+		Page: q.Page, PageSize: q.PageSize, Status: q.Status, ClusterID: q.ClusterID,
+	})
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "k8s.event-forward", "ListForwardedEvents", err)
+	}
+	return res, nil
+}
+
+func (s *K8sEventForwardAdminService) RequeueDeadEvent(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return constants.ErrBadRequestWithMsg("无效事件 ID")
+	}
+	if err := s.repo.RequeueDeadEvent(ctx, id); err != nil {
+		return bizerrors.Pass(ctx, "k8s.event-forward", "RequeueDeadEvent", err)
+	}
+	return nil
+}
+
 func notifyEventForwardRulesChanged() {
 	if m := Active(); m != nil {
 		m.EnsureRunning()

@@ -31,6 +31,10 @@ func (s *AlertSubscriptionService) ApplyRoutingWizard(ctx context.Context, req A
 	if s == nil || s.groups == nil {
 		return nil, constants.ErrInternal
 	}
+	// 向导节点落在全局树（project_id=0），按业务项目标签匹配；ACL 以业务项目为准。
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, req.ProjectID); err != nil {
+		return nil, err
+	}
 	channelIDs := uniquePositiveUints(req.ChannelIDs)
 	if len(channelIDs) == 0 {
 		return nil, constants.ErrBadRequestWithMsg("请至少选择一个通知通道")
@@ -83,7 +87,7 @@ func (s *AlertSubscriptionService) ApplyRoutingWizard(ctx context.Context, req A
 		labelsJSON = string(b)
 	}
 	notifyResolved := true
-	node, err := s.CreateNode(ctx, AlertSubscriptionNodeUpsertRequest{
+	node, err := s.createNodeCore(ctx, AlertSubscriptionNodeUpsertRequest{
 		ProjectID:            routingWizardTreeProjectID,
 		ParentID:             &parentID,
 		Name:                 name,
@@ -117,7 +121,7 @@ func (s *AlertSubscriptionService) ensureGlobalRoutingRoot(ctx context.Context) 
 	}
 	enabled := true
 	notifyResolved := true
-	root, err := s.CreateNode(ctx, AlertSubscriptionNodeUpsertRequest{
+	root, err := s.createNodeCore(ctx, AlertSubscriptionNodeUpsertRequest{
 		ProjectID:            routingWizardTreeProjectID,
 		Name:                 "全局根",
 		Enabled:              &enabled,

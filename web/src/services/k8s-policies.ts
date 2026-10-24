@@ -15,6 +15,8 @@ export type K8sClusterAccessItem = {
   role_code?: string;
   cluster_id: number;
   preset: string;
+  namespaces?: string;
+  blacklist_namespaces?: string;
   capabilities?: string[];
 };
 

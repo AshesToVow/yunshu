@@ -9,12 +9,31 @@ import {
   ScissorOutlined,
   TagsOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Progress, Space, Table, Tag, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Dropdown,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Progress,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { useRelatedPodsDrawer } from "../components/k8s/related-pods-drawer";
-import { RealtimeUsageText, WorkloadCpuUsageBars, WorkloadMemUsageBars } from "../components/k8s/k8s-resource-usage-cells";
+import {
+  RealtimeUsageText,
+  WorkloadCpuUsageBars,
+  WorkloadMemUsageBars,
+} from "../components/k8s/k8s-resource-usage-cells";
 import { useWorkloadFormActions } from "../components/k8s/workload-form-actions";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { InputNumber as AntdInputNumber } from "antd";
@@ -23,8 +42,10 @@ import { listNamespaces as listClusterNamespaces } from "../services/clusters";
 import { TopologyGraphView } from "../components/k8s/topology-graph-view";
 import { getWorkloadTopology, type TopologyGraph } from "../services/k8s-topology";
 import { formatDateTime } from "../utils/format";
+import { extractApiErrorMessage } from "../services/http";
 import {
   applyDeployment,
+  previewApplyDeployment,
   buildCpuMemoryResourceMaps,
   deleteDeployment,
   getDeploymentDetail,
@@ -65,7 +86,10 @@ function DeploymentDetailQuickEdit({
   setDetailYaml: (next: string) => void;
 }) {
   const [detailForm] = Form.useForm<DeploymentFormValues>();
-  const values = deploymentYamlToForm(detailYaml || "") ?? deploymentObjToForm(detail.object) ?? deploymentYamlToForm(detail.yaml ?? "");
+  const values =
+    deploymentYamlToForm(detailYaml || "") ??
+    deploymentObjToForm(detail.object) ??
+    deploymentYamlToForm(detail.yaml ?? "");
   const liveness = detail.object?.spec?.template?.spec?.containers?.[0]?.livenessProbe;
   const readiness = detail.object?.spec?.template?.spec?.containers?.[0]?.readinessProbe;
   const formatProbe = (probe: any): string => {
@@ -132,7 +156,9 @@ function DeploymentDetailQuickEdit({
             <Input />
           </Form.Item>
         </Space>
-        <Typography.Text type="secondary">探针摘要：Liveness {formatProbe(liveness)}；Readiness {formatProbe(readiness)}</Typography.Text>
+        <Typography.Text type="secondary">
+          探针摘要：Liveness {formatProbe(liveness)}；Readiness {formatProbe(readiness)}
+        </Typography.Text>
       </Card>
     </Form>
   );
@@ -162,12 +188,18 @@ export function DeploymentsPage() {
   const [scaleValue, setScaleValue] = useState<number>(1);
   const [scaleTarget, setScaleTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
   const [verticalOpen, setVerticalOpen] = useState(false);
-  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
   const [rolloutOpen, setRolloutOpen] = useState(false);
-  const [rolloutTarget, setRolloutTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [rolloutTarget, setRolloutTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
   const [rolloutStatus, setRolloutStatus] = useState<DeploymentRolloutStatus | null>(null);
   const [revisionOpen, setRevisionOpen] = useState(false);
-  const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
   const [revisionRows, setRevisionRows] = useState<DeploymentRevisionItem[]>([]);
   const [revisionLoading, setRevisionLoading] = useState(false);
   const [verticalForm] = Form.useForm<{
@@ -177,7 +209,9 @@ export function DeploymentsPage() {
     limits_cpu?: string;
     limits_memory?: string;
   }>();
-  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(async ({ clusterId, namespace, name }) => await listDeploymentPods(clusterId, namespace, name));
+  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(
+    async ({ clusterId, namespace, name }) => await listDeploymentPods(clusterId, namespace, name),
+  );
   const [topoOpen, setTopoOpen] = useState(false);
   const [topoLoading, setTopoLoading] = useState(false);
   const [topoGraph, setTopoGraph] = useState<TopologyGraph | null>(null);
@@ -216,7 +250,11 @@ export function DeploymentsPage() {
     let cancelled = false;
     const poll = async () => {
       try {
-        const st = await getDeploymentRolloutStatus(rolloutTarget.clusterId, rolloutTarget.namespace, rolloutTarget.name);
+        const st = await getDeploymentRolloutStatus(
+          rolloutTarget.clusterId,
+          rolloutTarget.namespace,
+          rolloutTarget.name,
+        );
         if (!cancelled) setRolloutStatus(st);
       } catch {
         // ignore transient errors while rolling
@@ -245,15 +283,31 @@ export function DeploymentsPage() {
       title: "资源汇总",
       dataIndex: "resource_text",
       width: 180,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
-    { title: "注解", key: "annotations", width: 70, align: "center", render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
+    {
+      title: "注解",
+      key: "annotations",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations),
+    },
     {
       title: "容器",
       dataIndex: "containers_text",
       width: 220,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
     {
       title: "实时用量",
@@ -299,33 +353,38 @@ export function DeploymentsPage() {
         }}
         columns={columns}
         api={{
-          list: async ({ clusterId, namespace, keyword }) => await listDeployments(clusterId, namespace ?? "default", keyword),
-          detail: async ({ clusterId, namespace, name }) => await getDeploymentDetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyDeployment(clusterId, manifest),
+          list: async ({ clusterId, namespace, keyword }) =>
+            await listDeployments(clusterId, namespace ?? "default", keyword),
+          detail: async ({ clusterId, namespace, name }) =>
+            await getDeploymentDetail(clusterId, namespace ?? "default", name),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyDeployment(clusterId, manifest, idemKey),
+          previewApply: async ({ clusterId, manifest }) => await previewApplyDeployment(clusterId, manifest),
           remove: async (args) => await deleteDeployment(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
-        onEdit={(record, ctx) => formActions.openEdit({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }, record)}
+        onEdit={(record, ctx) =>
+          formActions.openEdit(
+            { clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name },
+            record,
+          )
+        }
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;
         }}
         onCreateDrawerOpen={(ctx) => {
           if (!ctx.clusterId) return;
-          formActions.prepareCreate(
-            { clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default" },
-            {
-              namespace: ctx.namespace ?? "default",
-              replicas: 1,
-              env_pairs: [{ key: "", value: "" }],
-              name: "",
-              container_name: "",
-              image: "nginx:latest",
-              strategy_type: "RollingUpdate",
-              rolling_update_max_surge: "1",
-              rolling_update_max_unavailable: "0",
-              min_ready_seconds: 5,
-              progress_deadline_seconds: 600,
-            } as Partial<DeploymentFormValues>,
-          );
+          formActions.prepareCreate({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default" }, {
+            namespace: ctx.namespace ?? "default",
+            replicas: 1,
+            env_pairs: [{ key: "", value: "" }],
+            name: "",
+            container_name: "",
+            image: "nginx:latest",
+            strategy_type: "RollingUpdate",
+            rolling_update_max_surge: "1",
+            rolling_update_max_unavailable: "0",
+            min_ready_seconds: 5,
+            progress_deadline_seconds: 600,
+          } as Partial<DeploymentFormValues>);
         }}
         renderCreateFormTab={(ctx) => (
           <WorkloadFormModal<DeploymentFormValues>
@@ -354,7 +413,12 @@ export function DeploymentsPage() {
           >
             <NameNamespaceItems />
             <Space style={{ width: "100%" }} align="start">
-              <Form.Item name="replicas" label="副本数" rules={[{ required: true, message: "请输入副本数" }]} style={{ width: 240 }}>
+              <Form.Item
+                name="replicas"
+                label="副本数"
+                rules={[{ required: true, message: "请输入副本数" }]}
+                style={{ width: 240 }}
+              >
                 <AntdInputNumber min={0} />
               </Form.Item>
             </Space>
@@ -416,7 +480,8 @@ spec:
                     key: "pods",
                     label: "关联 Pods",
                     icon: <EyeOutlined />,
-                    onClick: () => openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
+                    onClick: () =>
+                      openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
                   },
                   {
                     key: "topology",
@@ -429,7 +494,11 @@ spec:
                     label: "水平扩缩（副本 · HPA / scale 类）",
                     icon: <ScissorOutlined />,
                     onClick: () => {
-                      setScaleTarget({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name });
+                      setScaleTarget({
+                        clusterId: ctx.clusterId,
+                        namespace: ctx.namespace ?? "default",
+                        name: record.name,
+                      });
                       setScaleValue(Number(record.replicas ?? 1) || 1);
                       setScaleOpen(true);
                     },
@@ -439,7 +508,11 @@ spec:
                     label: "垂直扩缩（resources · VPA 类）",
                     icon: <ColumnHeightOutlined />,
                     onClick: () => {
-                      setVerticalTarget({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name });
+                      setVerticalTarget({
+                        clusterId: ctx.clusterId,
+                        namespace: ctx.namespace ?? "default",
+                        name: record.name,
+                      });
                       verticalForm.resetFields();
                       setVerticalOpen(true);
                     },
@@ -449,7 +522,11 @@ spec:
                     label: "发布进度",
                     icon: <EyeOutlined />,
                     onClick: () => {
-                      setRolloutTarget({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name });
+                      setRolloutTarget({
+                        clusterId: ctx.clusterId,
+                        namespace: ctx.namespace ?? "default",
+                        name: record.name,
+                      });
                       setRolloutStatus(null);
                       setRolloutOpen(true);
                     },
@@ -460,17 +537,25 @@ spec:
                     icon: <ReloadOutlined />,
                     onClick: () => {
                       void (async () => {
+                        if (!ctx.clusterId) {
+                          message.error("请先选择集群");
+                          return;
+                        }
                         const ns = ctx.namespace ?? "default";
-                        await restartDeployment(ctx.clusterId, ns, record.name);
-                        message.success("已触发滚动重启");
-                        progress?.track({
-                          kind: "Deployment",
-                          clusterId: ctx.clusterId,
-                          namespace: ns,
-                          name: record.name,
-                          title: `重启 ${record.name}`,
-                        });
-                        ctx.reload();
+                        try {
+                          await restartDeployment(ctx.clusterId, ns, record.name);
+                          message.success("已触发滚动重启");
+                          progress?.track({
+                            kind: "Deployment",
+                            clusterId: ctx.clusterId,
+                            namespace: ns,
+                            name: record.name,
+                            title: `重启 ${record.name}`,
+                          });
+                          ctx.reload();
+                        } catch (e) {
+                          message.error(extractApiErrorMessage(e, "重启失败"));
+                        }
                       })();
                     },
                   },
@@ -538,7 +623,8 @@ spec:
               format={() => `就绪 ${rolloutStatus.ready_replicas}/${rolloutStatus.replicas}`}
             />
             <Typography.Text type="secondary">
-              已更新 {rolloutStatus.updated_replicas} · 可用 {rolloutStatus.available_replicas} · 不可用 {rolloutStatus.unavailable_replicas}
+              已更新 {rolloutStatus.updated_replicas} · 可用 {rolloutStatus.available_replicas} · 不可用{" "}
+              {rolloutStatus.unavailable_replicas}
               {rolloutStatus.complete ? " · 发布完成" : rolloutStatus.progressing ? " · 滚动中" : ""}
             </Typography.Text>
             {rolloutStatus.conditions?.length ? (
@@ -573,7 +659,12 @@ spec:
               width: 90,
               render: (_: unknown, r: DeploymentRevisionItem) => (r.current ? <Tag color="blue">当前</Tag> : null),
             },
-            { title: "副本", key: "replicas", width: 100, render: (_: unknown, r: DeploymentRevisionItem) => `${r.ready}/${r.replicas}` },
+            {
+              title: "副本",
+              key: "replicas",
+              width: 100,
+              render: (_: unknown, r: DeploymentRevisionItem) => `${r.ready}/${r.replicas}`,
+            },
             {
               title: "创建时间",
               dataIndex: "created_at",
@@ -657,11 +748,16 @@ spec:
               message.warning("请至少填写一项 requests 或 limits（如 cpu/memory）");
               return;
             }
-            await patchDeploymentContainerResources(verticalTarget.clusterId, verticalTarget.namespace, verticalTarget.name, {
-              container_name: values.container_name,
-              requests,
-              limits,
-            });
+            await patchDeploymentContainerResources(
+              verticalTarget.clusterId,
+              verticalTarget.namespace,
+              verticalTarget.name,
+              {
+                container_name: values.container_name,
+                requests,
+                limits,
+              },
+            );
             message.success("已更新容器资源");
             setVerticalOpen(false);
             listReloadRef.current();
@@ -719,7 +815,12 @@ spec:
       >
         <NameNamespaceItems />
         <Space style={{ width: "100%" }} align="start">
-          <Form.Item name="replicas" label="副本数" rules={[{ required: true, message: "请输入副本数" }]} style={{ width: 240 }}>
+          <Form.Item
+            name="replicas"
+            label="副本数"
+            rules={[{ required: true, message: "请输入副本数" }]}
+            style={{ width: 240 }}
+          >
             <AntdInputNumber min={0} />
           </Form.Item>
         </Space>
@@ -739,11 +840,16 @@ spec:
           }}
         </Form.Item>
       </WorkloadFormModal>
-      <Modal title="Deployment 资源拓扑（Ingress → Service → Workload → Pod）" open={topoOpen} onCancel={() => setTopoOpen(false)} footer={null} width={900}>
+      <Modal
+        title="Deployment 资源拓扑（Ingress → Service → Workload → Pod）"
+        open={topoOpen}
+        onCancel={() => setTopoOpen(false)}
+        footer={null}
+        width={900}
+      >
         {topoLoading ? <Typography.Text>加载中…</Typography.Text> : <TopologyGraphView graph={topoGraph} />}
       </Modal>
       {viewer}
     </>
   );
 }
-

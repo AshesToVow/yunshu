@@ -21,6 +21,8 @@ type InspectItem struct {
 	LabelsJSON    string  `json:"labels_json" gorm:"type:text;comment:标签JSON"`
 	Enabled       bool    `json:"enabled" gorm:"not null;default:true;index;comment:是否启用"`
 	SortOrder     int     `json:"sort_order" gorm:"not null;default:0;comment:排序"`
+	// LinkedRuleID 已转为持续告警的 alert_monitor_rules.id；0=未关联。
+	LinkedRuleID uint `json:"linked_rule_id" gorm:"not null;default:0;index;comment:关联持续告警规则ID"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

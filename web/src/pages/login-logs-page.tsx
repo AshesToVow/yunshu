@@ -26,7 +26,7 @@ export function LoginLogsPage() {
   const [loading, setLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const [filters, setFilters] = useState({ username: "", status: undefined as number | undefined, source: "" });
-  const fileRef = (null as unknown) as HTMLInputElement | null;
+  const fileRef = null as unknown as HTMLInputElement | null;
 
   useEffect(() => {
     void loadList();
@@ -170,10 +170,19 @@ export function LoginLogsPage() {
               title: "状态",
               dataIndex: "status",
               width: 90,
-              render: (v: number) =>
-                v === 1 ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>,
+              render: (v: number) => (v === 1 ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>),
             },
-            { title: "详情", dataIndex: "detail", width: 320, ellipsis: true, render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }} style={{ maxWidth: 300 }}>{v || "-"}</Typography.Text> },
+            {
+              title: "详情",
+              dataIndex: "detail",
+              width: 320,
+              ellipsis: true,
+              render: (v: string) => (
+                <Typography.Text ellipsis={{ tooltip: v }} style={{ maxWidth: 300 }}>
+                  {v || "-"}
+                </Typography.Text>
+              ),
+            },
             {
               title: "浏览器/设备",
               dataIndex: "user_agent",
@@ -194,8 +203,9 @@ export function LoginLogsPage() {
             {
               title: "操作",
               key: "action",
-              width: 90,
+              width: 110,
               fixed: "right",
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, record: LoginLogItem) => (
                 <Popconfirm title="确定删除？" onConfirm={() => void handleDelete(record.id)}>
                   <Button type="link" size="small" danger icon={<DeleteOutlined />}>

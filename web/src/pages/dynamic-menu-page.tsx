@@ -3,7 +3,7 @@ import { Suspense, useMemo } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useMenuTree } from "../hooks/use-menu-tree";
 import { createLazyMenuPage } from "../utils/menu-page-loader";
-import { findMenuByPath, normalizeMenuPath } from "../utils/menu-path";
+import { findMenuByPath, normalizeMenuPath, resolveMenuAccessCandidates } from "../utils/menu-path";
 import { usePlugins } from "../contexts/plugin-context";
 import { isPathAllowedByPlugins } from "../modules/plugin-path";
 
@@ -79,9 +79,19 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/ai/assistant": "ai-assistant-page",
   "/ai/approvals": "ai-approvals-page",
   "/ai/center": "ai-center-page",
+  "/ai/investigations": "ai-investigations-page",
   "/esmgmt/connections": "esmgmt-connections-page",
+  "/esmgmt/storage": "esmgmt-storage-page",
   "/esmgmt/overview": "esmgmt-overview-page",
+  "/esmgmt/backups": "esmgmt-backups-page",
   "/esmgmt/console": "esmgmt-console-page",
+  "/esmgmt/docs": "esmgmt-docs-page",
+  "/esmgmt/templates": "esmgmt-templates-page",
+  "/esmgmt/reindex": "esmgmt-reindex-page",
+  "/kafkamgmt/connections": "kafkamgmt-connections-page",
+  "/kafkamgmt/topics": "kafkamgmt-topics-page",
+  "/kafkamgmt/groups": "kafkamgmt-groups-page",
+  "/kafkamgmt/brokers": "kafkamgmt-brokers-page",
   "/workflow/inbox": "workflow-inbox-page",
   "/workflow/tickets": "workflow-tickets-page",
   "/workflow/definitions": "workflow-definitions-page",
@@ -96,6 +106,8 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/project-services": "project-collect-config-page",
   "/project-members": "project-members-page",
   "/project-logs": "project-logs-page",
+  "/nginx-access-stats": "nginx-access-stats-page",
+  "/log-pipelines": "log-pipeline-repo-page",
   "/log-retention": "log-retention-page",
   "/loggie-status": "loggie-status-page",
   "/project-log-sources": "project-collect-config-page",
@@ -113,10 +125,7 @@ const PATH_COMPONENT_FALLBACK: Record<string, string> = {
   "/server-console": "server-console-page",
 };
 
-/** 辅助页：无独立菜单时继承父级入口权限（如 CR 模板库 ← CR 实例管理） */
-const AUX_MENU_PARENT: Record<string, string> = {
-  "/k8s-cr-templates": "/crs",
-};
+/** 辅助页继承父级入口：见 utils/menu-path.ts 的 AUX_MENU_PARENT */
 
 function RouteFallback() {
   return (
@@ -135,10 +144,9 @@ export function DynamicMenuPage() {
     if (!menus?.length) return undefined;
     const found = findMenuByPath(menus, location.pathname);
     if (found) return found;
-    const normalizedPath = normalizeMenuPath(location.pathname);
-    const parentPath = AUX_MENU_PARENT[normalizedPath];
-    if (parentPath && PATH_COMPONENT_FALLBACK[normalizedPath]) {
-      return findMenuByPath(menus, parentPath);
+    for (const accessPath of resolveMenuAccessCandidates(location.pathname)) {
+      const via = findMenuByPath(menus, accessPath);
+      if (via) return via;
     }
     return undefined;
   }, [menus, location.pathname]);
@@ -157,7 +165,7 @@ export function DynamicMenuPage() {
   const hasPathFallback = Boolean(PATH_COMPONENT_FALLBACK[normalizedPath]);
 
   if (normalizedPath === "/log-kafka") {
-    return <Navigate to="/log-retention?tab=kafka" replace />;
+    return <Navigate to="/log-retention" replace />;
   }
 
   if (!pluginsLoading && !isPathAllowedByPlugins(location.pathname, isPluginEnabled)) {
@@ -219,7 +227,8 @@ export function DynamicMenuPage() {
           title="未配置前端组件"
           subTitle={
             <span>
-              请在「菜单管理」中为该菜单填写 <Typography.Text code>组件路径</Typography.Text>（例如 <Typography.Text code>containerd-page</Typography.Text>
+              请在「菜单管理」中为该菜单填写 <Typography.Text code>组件路径</Typography.Text>（例如{" "}
+              <Typography.Text code>containerd-page</Typography.Text>
               ），并新增对应文件 <Typography.Text code>src/pages/containerd-page.tsx</Typography.Text>，导出{" "}
               <Typography.Text code>ContainerdPage</Typography.Text>。
             </span>
@@ -240,8 +249,9 @@ export function DynamicMenuPage() {
           title="未找到页面文件"
           subTitle={
             <span>
-              已填写 component 为「{compText || "（空）"}」，但未找到匹配的 <Typography.Text code>src/pages/**/*-page.tsx</Typography.Text>。
-              请新建文件并导出与文件名对应的 PascalCase 组件名。
+              已填写 component 为「{compText || "（空）"}」，但未找到匹配的{" "}
+              <Typography.Text code>src/pages/**/*-page.tsx</Typography.Text>。 请新建文件并导出与文件名对应的
+              PascalCase 组件名。
             </span>
           }
           extra={

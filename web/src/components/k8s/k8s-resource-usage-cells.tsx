@@ -44,9 +44,7 @@ export function PodCpuUsageBars({ row }: { row: PodUsageMetricsRow }) {
   const hasRt = Boolean(row.cpu_usage && row.cpu_usage !== "-");
   const reqZero = !row.cpu_pct_request || row.cpu_pct_request === 0;
   const hint =
-    hasRt && reqZero
-      ? "已有实时 CPU 用量；未设置 requests 或 requests 极小时「请求用量占比」可能为 0"
-      : undefined;
+    hasRt && reqZero ? "已有实时 CPU 用量；未设置 requests 或 requests 极小时「请求用量占比」可能为 0" : undefined;
   const inner = (
     <div style={{ minWidth: 152 }}>
       <MiniUsageBar label="请求用量占比" pct={row.cpu_pct_request} />
@@ -90,7 +88,7 @@ export function WorkloadMemUsageBars({ row }: { row: WorkloadUsageMetricsRow }) 
 export function RealtimeUsageText({ cpu, mem }: { cpu?: string; mem?: string }) {
   return (
     <Typography.Text style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-      {(cpu && cpu !== "-" ? cpu : "-")} / {(mem && mem !== "-" ? mem : "-")}
+      {cpu && cpu !== "-" ? cpu : "-"} / {mem && mem !== "-" ? mem : "-"}
     </Typography.Text>
   );
 }

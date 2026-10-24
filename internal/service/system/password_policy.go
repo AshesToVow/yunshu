@@ -8,27 +8,24 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/password"
-
-	"gorm.io/gorm"
 )
 
-func resolvePasswordPolicy(ctx context.Context, db *gorm.DB) dictconfig.PasswordPolicyConfig {
-	return dictconfig.ResolvePasswordPolicy(ctx, db)
-}
+// PasswordPolicyResolver 由装配层注入，避免 Service 直持 *gorm.DB 读字典。
+type PasswordPolicyResolver func(ctx context.Context) dictconfig.PasswordPolicyConfig
 
-func enforcePasswordComplexity(ctx context.Context, db *gorm.DB, raw, username string) error {
-	cfg := resolvePasswordPolicy(ctx, db)
+func enforcePasswordComplexity(ctx context.Context, resolve PasswordPolicyResolver, raw, username string) error {
+	cfg := resolve(ctx)
 	if err := password.ValidateComplexity(raw, username, cfg); err != nil {
 		return constants.ErrBadRequestWithMsg(err.Error())
 	}
 	return nil
 }
 
-func userPasswordExpired(ctx context.Context, db *gorm.DB, user *model.User) bool {
+func userPasswordExpired(ctx context.Context, resolve PasswordPolicyResolver, user *model.User) bool {
 	if user == nil {
 		return false
 	}
-	cfg := resolvePasswordPolicy(ctx, db)
+	cfg := resolve(ctx)
 	return password.IsExpired(user.PasswordChangedAt, user.CreatedAt, cfg.ExpiryDays, time.Now())
 }
 
@@ -41,8 +38,8 @@ func touchPasswordChanged(user *model.User) {
 	user.MustChangePassword = false
 }
 
-func passwordPolicyAPIResponse(ctx context.Context, db *gorm.DB) PasswordPolicyResponse {
-	cfg := resolvePasswordPolicy(ctx, db)
+func passwordPolicyAPIResponse(ctx context.Context, resolve PasswordPolicyResolver) PasswordPolicyResponse {
+	cfg := resolve(ctx)
 	sum := dictconfig.PasswordPolicySummary(cfg)
 	hint, _ := sum["hint"].(string)
 	expiryHint, _ := sum["expiry_hint"].(string)

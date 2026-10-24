@@ -32,3 +32,15 @@ func TestResolveCaseInsensitive(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestResolveAuthAndCmdb(t *testing.T) {
+	if got := Resolve("auth_jwt_secret"); got != "system" {
+		t.Fatalf("auth got %q", got)
+	}
+	if got := Resolve("cmdb_max_transfer_file_mb"); got != "cmdb" {
+		t.Fatalf("cmdb got %q", got)
+	}
+	if got := Resolve("esmgmt_backup_scheduler_enabled"); got != "backup" {
+		t.Fatalf("esmgmt got %q", got)
+	}
+}

@@ -15,22 +15,9 @@ type Props = {
   onOk: () => void | Promise<void>;
 };
 
-export function ServiceFormDrawer({
-  open,
-  editingService,
-  form,
-  pipelineTypes,
-  userOptions,
-  onCancel,
-  onOk,
-}: Props) {
+export function ServiceFormDrawer({ open, editingService, form, pipelineTypes, userOptions, onCancel, onOk }: Props) {
   return (
-    <Modal
-      title={editingService ? "编辑应用" : "新建应用"}
-      open={open}
-      onCancel={onCancel}
-      onOk={() => void onOk()}
-    >
+    <Modal title={editingService ? "编辑应用" : "新建应用"} open={open} onCancel={onCancel} onOk={() => void onOk()}>
       <Form form={form} layout="vertical">
         <Form.Item name="identifier" label="唯一标识符" rules={[{ required: true }]}>
           <Input placeholder="cityos-account" disabled={!!editingService} />

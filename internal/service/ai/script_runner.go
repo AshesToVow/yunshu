@@ -57,7 +57,11 @@ func (s *Service) runScriptTool(ctx context.Context, def toolDefRow, argsJSON st
 		}
 		cmd = exec.CommandContext(cctx, shell, absFull)
 	case "go":
-		cmd = exec.CommandContext(cctx, absFull)
+		goBin, err := exec.LookPath("go")
+		if err != nil {
+			return "", fmt.Errorf("未找到 go 工具链: %w", err)
+		}
+		cmd = exec.CommandContext(cctx, goBin, "run", absFull)
 	default:
 		return "", fmt.Errorf("不支持的 script_lang: %s", def.ScriptLang)
 	}

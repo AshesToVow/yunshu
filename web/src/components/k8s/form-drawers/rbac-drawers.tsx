@@ -221,9 +221,19 @@ export function RbacRoleBindingFormCreateDrawer(props: {
       </Form.Item>
       <Space style={{ width: "100%" }} align="start">
         <Form.Item name="role_kind" label="引用类型" rules={[{ required: true }]} style={{ width: 200 }}>
-          <Select options={[{ label: "Role", value: "Role" }, { label: "ClusterRole", value: "ClusterRole" }]} />
+          <Select
+            options={[
+              { label: "Role", value: "Role" },
+              { label: "ClusterRole", value: "ClusterRole" },
+            ]}
+          />
         </Form.Item>
-        <Form.Item name="role_name" label="角色名称" rules={[{ required: true, message: "请输入角色名" }]} style={{ flex: 1 }}>
+        <Form.Item
+          name="role_name"
+          label="角色名称"
+          rules={[{ required: true, message: "请输入角色名" }]}
+          style={{ flex: 1 }}
+        >
           <Input placeholder="demo-role" />
         </Form.Item>
       </Space>
@@ -303,7 +313,11 @@ export function RbacClusterRoleBindingFormCreateDrawer(props: {
       <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
         <Input placeholder="demo-crb" />
       </Form.Item>
-      <Form.Item name="role_name" label="ClusterRole 名称" rules={[{ required: true, message: "请输入 ClusterRole 名" }]}>
+      <Form.Item
+        name="role_name"
+        label="ClusterRole 名称"
+        rules={[{ required: true, message: "请输入 ClusterRole 名" }]}
+      >
         <Input />
       </Form.Item>
       <Form.Item name="subject_kind" label="主体类型" rules={[{ required: true }]}>

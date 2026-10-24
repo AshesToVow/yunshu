@@ -1,13 +1,7 @@
 import * as IconComponents from "@ant-design/icons";
 import { createElement, type ComponentType, type ReactNode } from "react";
 
-const EXCLUDE = new Set([
-  "default",
-  "createFromIconfontCN",
-  "IconProvider",
-  "getTwoToneColor",
-  "setTwoToneColor",
-]);
+const EXCLUDE = new Set(["default", "createFromIconfontCN", "IconProvider", "getTwoToneColor", "setTwoToneColor"]);
 
 export function listAntdIconNames(): string[] {
   return Object.keys(IconComponents)

@@ -11,17 +11,20 @@ const (
 	WorkflowDomainCicd     = "cicd"
 	WorkflowDomainIncident = "incident"
 	WorkflowDomainOps      = "ops"
+	WorkflowDomainAI       = "ai"
 
-	WorkflowTicketTypeDefault   = "default"
-	WorkflowTicketTypeSql       = "sql_ticket"
-	WorkflowTicketTypeAccess    = "access_request"
-	WorkflowTicketTypeAppUser   = "app_user_apply"
-	WorkflowTicketTypeRelease   = "release"
-	WorkflowTicketTypeIncident  = "incident"
-	WorkflowTicketTypeChange    = "change"
+	WorkflowTicketTypeDefault      = "default"
+	WorkflowTicketTypeSql          = "sql_ticket"
+	WorkflowTicketTypeAccess       = "access_request"
+	WorkflowTicketTypeAppUser      = "app_user_apply"
+	WorkflowTicketTypeRelease      = "release"
+	WorkflowTicketTypeIncident     = "incident"
+	WorkflowTicketTypeChange       = "change"
+	WorkflowTicketTypeToolApproval = "tool_approval"
 
-	WorkflowAssigneeUserGroup = "user_group"
-	WorkflowAssigneeDuty      = "duty"
+	WorkflowAssigneeUserGroup    = "user_group"
+	WorkflowAssigneeDuty         = "duty"
+	WorkflowAssigneePlatformRole = "platform_role"
 
 	WorkflowTicketStatusDraft          = "draft"
 	WorkflowTicketStatusPending        = "pending"
@@ -41,6 +44,7 @@ const (
 	WorkflowRefCicdReleaseRun    = "cicd_release_run"
 	WorkflowRefCicdReleaseChange = "cicd_release_change"
 	WorkflowRefAlertEvent       = "alert_event"
+	WorkflowRefAiToolApproval   = "ai_tool_approval"
 )
 
 // WorkflowDefinition 跨域工单流程定义（按 domain + project + ticket_type 唯一）。
@@ -114,6 +118,7 @@ type WorkflowTicketStep struct {
 	ReviewerUserID   *uint          `json:"reviewer_user_id,omitempty" gorm:"index"`
 	ReviewComment    string         `json:"review_comment" gorm:"size:512"`
 	ActivatedAt      *time.Time     `json:"activated_at,omitempty"`
+	LastRemindedAt   *time.Time     `json:"last_reminded_at,omitempty" gorm:"comment:上次 SLA 提醒邮件时间"`
 	ReviewedAt       *time.Time     `json:"reviewed_at,omitempty"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`

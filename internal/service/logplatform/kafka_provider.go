@@ -6,14 +6,14 @@ import (
 	"sync"
 
 	"yunshu/internal/config"
-	"yunshu/internal/dictconfig"
-
-	"gorm.io/gorm"
 )
+
+// KafkaConfigResolver 解析运行期字典覆盖后的 Kafka 配置（由 Wire 注入，避免 Provider 持有 *gorm.DB）。
+type KafkaConfigResolver func(ctx context.Context) config.KafkaConfig
 
 // KafkaProvider 运行时从数据字典 + YAML 解析 Kafka 配置。
 type KafkaProvider struct {
-	db       *gorm.DB
+	resolve  KafkaConfigResolver
 	yamlBase config.KafkaConfig
 
 	mu     sync.RWMutex
@@ -21,15 +21,20 @@ type KafkaProvider struct {
 	has    bool
 }
 
-func NewKafkaProvider(db *gorm.DB, yamlBase config.KafkaConfig) *KafkaProvider {
-	return &KafkaProvider{db: db, yamlBase: yamlBase.Normalized()}
+func NewKafkaProvider(resolve KafkaConfigResolver, yamlBase config.KafkaConfig) *KafkaProvider {
+	return &KafkaProvider{resolve: resolve, yamlBase: yamlBase.Normalized()}
 }
 
 func (p *KafkaProvider) Resolve(ctx context.Context) (config.KafkaConfig, error) {
 	if p == nil {
 		return config.KafkaConfig{}, fmt.Errorf("kafka provider nil")
 	}
-	cfg := dictconfig.ResolveKafkaConfig(ctx, p.db, p.yamlBase)
+	var cfg config.KafkaConfig
+	if p.resolve != nil {
+		cfg = p.resolve(ctx)
+	} else {
+		cfg = p.yamlBase
+	}
 	p.mu.Lock()
 	p.cached = cfg
 	p.has = true

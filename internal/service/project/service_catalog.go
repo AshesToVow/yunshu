@@ -15,17 +15,17 @@ import (
 )
 
 type ServiceCatalogService struct {
-	repo        interfaces.ServiceCatalogRepository
-	projectRepo interfaces.ProjectRepository
-	db          *gorm.DB
+	repo         interfaces.ServiceCatalogRepository
+	projectRepo  interfaces.ProjectRepository
+	portraitRepo interfaces.ServicePortraitRepository
 }
 
 func NewServiceCatalogService(
 	repo interfaces.ServiceCatalogRepository,
 	projectRepo interfaces.ProjectRepository,
-	db *gorm.DB,
+	portraitRepo interfaces.ServicePortraitRepository,
 ) *ServiceCatalogService {
-	return &ServiceCatalogService{repo: repo, projectRepo: projectRepo, db: db}
+	return &ServiceCatalogService{repo: repo, projectRepo: projectRepo, portraitRepo: portraitRepo}
 }
 
 type ServiceCatalogListQuery struct {
@@ -254,15 +254,13 @@ func validLinkType(t string) bool {
 type ChangeEventService struct {
 	repo        interfaces.ChangeEventRepository
 	projectRepo interfaces.ProjectRepository
-	db          *gorm.DB
 }
 
 func NewChangeEventService(
 	repo interfaces.ChangeEventRepository,
 	projectRepo interfaces.ProjectRepository,
-	db *gorm.DB,
 ) *ChangeEventService {
-	return &ChangeEventService{repo: repo, projectRepo: projectRepo, db: db}
+	return &ChangeEventService{repo: repo, projectRepo: projectRepo}
 }
 
 type ChangeEventListQuery struct {

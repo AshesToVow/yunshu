@@ -14,10 +14,9 @@ import (
 	cryptox "yunshu/internal/pkg/crypto"
 	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/pkg/mailer"
-	"yunshu/internal/repository"
+	"yunshu/internal/service/logplatform"
 
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 )
 
 // 历史 monitor_pipeline 取值 prometheus/platform 仍可能存在于旧数据；新写入以数据源为主，见 resolveAlertDatasourceMeta。
@@ -95,7 +94,6 @@ type AlertManagerAlert struct {
 }
 
 type AlertService struct {
-	db          *gorm.DB
 	redis       *redis.Client
 	mailer      mailer.Sender
 	cfg         config.AlertConfig
@@ -125,16 +123,38 @@ type AlertService struct {
 	metricsUpdater    *AlertMetricsUpdater
 	timingLeaderToken string
 
-	eventRepo          interfaces.AlertEventRepository
-	channelRepo        interfaces.AlertChannelRepository
-	monitorRuleRepo    interfaces.AlertMonitorRuleRepository
-	datasourceRepo     interfaces.AlertDatasourceRepository
-	projectRepo        interfaces.ProjectRepository
-	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository
-	cloudExpiryRepo    interfaces.CloudExpiryRuleRepository
-	cloudAccountRepo   interfaces.CloudAccountRepository
+	eventRepo            interfaces.AlertEventRepository
+	channelRepo          interfaces.AlertChannelRepository
+	monitorRuleRepo      interfaces.AlertMonitorRuleRepository
+	datasourceRepo       interfaces.AlertDatasourceRepository
+	projectRepo          interfaces.ProjectRepository
+	firingDeliveryRepo   interfaces.AlertFiringDeliveryRepository
+	cloudExpiryRepo      interfaces.CloudExpiryRuleRepository
+	cloudAccountRepo     interfaces.CloudAccountRepository
+	ackRepo              interfaces.AlertAckRepository
+	progressNoteRepo     interfaces.AlertProgressNoteRepository
+	curHisRepo           interfaces.AlertCurHisRepository
+	promqlSavedQueryRepo interfaces.PromqlSavedQueryRepository
+	changeEventRepo      interfaces.ChangeEventRepository
+	dictEntryRepo        interfaces.DictEntryRepository
+	receiverGroupRepo    interfaces.AlertReceiverGroupRepository
 
 	alertStateSvc AlertStateService
+
+	// 可选：证据包拉取项目日志采样
+	logSearch *logplatform.LogSearchService
+
+	// Redis 不可用时的进程内分组节流与升级队列
+	localMu sync.Mutex
+	local   *processLocalAlertState
+}
+
+// SetLogSearch 注入日志检索（证据包）；可在 DI 后置绑定。
+func (s *AlertService) SetLogSearch(ls *logplatform.LogSearchService) {
+	if s == nil {
+		return
+	}
+	s.logSearch = ls
 }
 
 // AlertServiceOptions 可选依赖：静默、处理人、内置规则评估。
@@ -146,18 +166,27 @@ type AlertServiceOptions struct {
 	// ReceiverGroupCache 与 AlertReceiverGroupService 共用，避免 CRUD 失效与投递缓存不一致。
 	ReceiverGroupCache *ReceiverGroupCache
 	// EncryptionKey 与项目/云账号凭据加密一致；非空时用于云到期规则解密云账号 AK/SK。
-	EncryptionKey      string
-	EventRepo          interfaces.AlertEventRepository
-	ChannelRepo        interfaces.AlertChannelRepository
-	MonitorRuleRepo    interfaces.AlertMonitorRuleRepository
-	DatasourceRepo     interfaces.AlertDatasourceRepository
-	ProjectRepo        interfaces.ProjectRepository
-	FiringDeliveryRepo interfaces.AlertFiringDeliveryRepository
-	CloudExpiryRepo    interfaces.CloudExpiryRuleRepository
-	CloudAccountRepo   interfaces.CloudAccountRepository
-	StateSvc           AlertStateService
-	SubscriptionRepo   interfaces.AlertSubscriptionRepository
-	InhibitionRuleRepo interfaces.AlertInhibitionRuleRepository
+	EncryptionKey        string
+	EventRepo            interfaces.AlertEventRepository
+	ChannelRepo          interfaces.AlertChannelRepository
+	MonitorRuleRepo      interfaces.AlertMonitorRuleRepository
+	DatasourceRepo       interfaces.AlertDatasourceRepository
+	ProjectRepo          interfaces.ProjectRepository
+	FiringDeliveryRepo   interfaces.AlertFiringDeliveryRepository
+	CloudExpiryRepo      interfaces.CloudExpiryRuleRepository
+	CloudAccountRepo     interfaces.CloudAccountRepository
+	StateSvc             AlertStateService
+	SubscriptionRepo     interfaces.AlertSubscriptionRepository
+	InhibitionRuleRepo   interfaces.AlertInhibitionRuleRepository
+	AckRepo              interfaces.AlertAckRepository
+	ProgressNoteRepo     interfaces.AlertProgressNoteRepository
+	CurHisRepo           interfaces.AlertCurHisRepository
+	PromqlSavedQueryRepo interfaces.PromqlSavedQueryRepository
+	ChangeEventRepo      interfaces.ChangeEventRepository
+	DictEntryRepo        interfaces.DictEntryRepository
+	ReceiverGroupRepo    interfaces.AlertReceiverGroupRepository
+	LogSearch            *logplatform.LogSearchService
+	MemberRepo           interfaces.ProjectMemberRepository
 }
 
 type promEnrichTask struct {
@@ -165,133 +194,67 @@ type promEnrichTask struct {
 	GeneratorURL string
 }
 
-// NewAlertService 创建相关逻辑。
-func NewAlertService(db *gorm.DB, redisClient *redis.Client, sender mailer.Sender, cfg config.AlertConfig, opts *AlertServiceOptions) *AlertService {
-	if cfg.DefaultTimeoutMS <= 0 {
-		cfg.DefaultTimeoutMS = 5000
+// NewAlertService 创建相关逻辑。依赖经 opts 注入仓库，不再持有 *gorm.DB。
+func NewAlertService(redisClient *redis.Client, sender mailer.Sender, cfg config.AlertConfig, opts *AlertServiceOptions) *AlertService {
+	if opts == nil {
+		panic("alert: AlertServiceOptions is required")
 	}
-	if cfg.MaxPayloadChars <= 0 {
-		cfg.MaxPayloadChars = 8000
+	cfg.ApplyDefaults()
+
+	receiverCache := opts.ReceiverGroupCache
+	if receiverCache == nil && opts.ReceiverGroupRepo != nil {
+		receiverCache = NewReceiverGroupCache(opts.ReceiverGroupRepo)
 	}
-	if cfg.DedupTTLSeconds <= 0 {
-		cfg.DedupTTLSeconds = 86400
-	}
-	if cfg.PromQueryTimeout <= 0 {
-		cfg.PromQueryTimeout = 5
-	}
-	if cfg.GroupWaitSeconds < 0 {
-		cfg.GroupWaitSeconds = 0
-	}
-	if cfg.GroupIntervalSeconds <= 0 {
-		cfg.GroupIntervalSeconds = 60
-	}
-	if cfg.RepeatIntervalSeconds <= 0 {
-		cfg.RepeatIntervalSeconds = 300
-	}
-	if cfg.AggregateTTLSeconds <= 0 {
-		cfg.AggregateTTLSeconds = 86400
-	}
-	if cfg.WebhookQueueMaxLen <= 0 {
-		cfg.WebhookQueueMaxLen = 10000
-	}
-	if cfg.MonitorEvalLeaderLockSeconds <= 0 {
-		cfg.MonitorEvalLeaderLockSeconds = 30
-	}
-	if len(cfg.GroupBy) == 0 {
-		cfg.GroupBy = []string{"alertname", "cluster", "namespace", "severity", "receiver"}
-	}
-	if len(cfg.DigestBy) == 0 {
-		cfg.DigestBy = []string{"instance", "pod", "node", "host", "mountpoint", "device", "fqdn", "job"}
-	}
-	if cfg.PlatformLimits.DingdingMaxChars <= 0 {
-		cfg.PlatformLimits.DingdingMaxChars = 4500
-	}
-	if cfg.PlatformLimits.WeComMaxChars <= 0 {
-		cfg.PlatformLimits.WeComMaxChars = 3500
-	}
-	if cfg.PlatformLimits.GenericMaxChars <= 0 {
-		cfg.PlatformLimits.GenericMaxChars = 8000
-	}
-	receiverCache := (*ReceiverGroupCache)(nil)
-	if opts != nil && opts.ReceiverGroupCache != nil {
-		receiverCache = opts.ReceiverGroupCache
-	}
-	if receiverCache == nil {
-		receiverCache = NewReceiverGroupCache(repository.NewAlertReceiverGroupRepository(db))
-	}
-	subRepo := interfaces.AlertSubscriptionRepository(repository.NewAlertSubscriptionRepository(db))
-	inhibRepo := interfaces.AlertInhibitionRuleRepository(repository.NewAlertInhibitionRuleRepository(db))
-	if opts != nil {
-		if opts.SubscriptionRepo != nil {
-			subRepo = opts.SubscriptionRepo
-		}
-		if opts.InhibitionRuleRepo != nil {
-			inhibRepo = opts.InhibitionRuleRepo
-		}
-	}
+
 	svc := &AlertService{
-		db:                 db,
-		redis:              redisClient,
-		mailer:             sender,
-		cfg:                cfg,
-		cloudExpiryState:   make(map[string]bool),
-		inhibitionSvc:      NewAlertInhibitionServiceWithRepo(inhibRepo, redisClient),
-		subscriptionSvc:    NewAlertSubscriptionService(subRepo),
-		receiverGroupCache: receiverCache,
-		metrics:            NewAlertMetrics(),
-		timingLeaderToken:  fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano()),
+		redis:                redisClient,
+		mailer:               sender,
+		cfg:                  cfg,
+		cloudExpiryState:     make(map[string]bool),
+		inhibitionSvc:        NewAlertInhibitionServiceWithRepo(opts.InhibitionRuleRepo, redisClient),
+		subscriptionSvc:      NewAlertSubscriptionService(opts.SubscriptionRepo),
+		receiverGroupCache:   receiverCache,
+		metrics:              NewAlertMetrics(),
+		timingLeaderToken:    fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano()),
+		silenceSvc:           opts.SilenceSvc,
+		maintenanceSvc:       opts.MaintenanceSvc,
+		assigneeSvc:          opts.AssigneeSvc,
+		dutySvc:              opts.DutySvc,
+		eventRepo:            opts.EventRepo,
+		channelRepo:          opts.ChannelRepo,
+		monitorRuleRepo:      opts.MonitorRuleRepo,
+		datasourceRepo:       opts.DatasourceRepo,
+		projectRepo:          opts.ProjectRepo,
+		firingDeliveryRepo:   opts.FiringDeliveryRepo,
+		cloudExpiryRepo:      opts.CloudExpiryRepo,
+		cloudAccountRepo:     opts.CloudAccountRepo,
+		ackRepo:              opts.AckRepo,
+		progressNoteRepo:     opts.ProgressNoteRepo,
+		curHisRepo:           opts.CurHisRepo,
+		promqlSavedQueryRepo: opts.PromqlSavedQueryRepo,
+		changeEventRepo:      opts.ChangeEventRepo,
+		dictEntryRepo:        opts.DictEntryRepo,
+		receiverGroupRepo:    opts.ReceiverGroupRepo,
+		alertStateSvc:        opts.StateSvc,
+		logSearch:            opts.LogSearch,
 	}
-	svc.subscriptionSvc.AttachReceiverGroups(NewAlertReceiverGroupService(
-		repository.NewAlertReceiverGroupRepository(db),
-		receiverCache,
-	))
+	if svc.subscriptionSvc != nil {
+		svc.subscriptionSvc.SetMemberRepo(opts.MemberRepo)
+	}
+	if opts.ReceiverGroupRepo != nil {
+		svc.subscriptionSvc.AttachReceiverGroups(NewAlertReceiverGroupService(
+			opts.ReceiverGroupRepo,
+			receiverCache,
+		))
+	}
 
 	// 初始化指标更新器并启动
 	svc.metricsUpdater = NewAlertMetricsUpdater(svc.metrics, svc.inhibitionSvc)
 	svc.metricsUpdater.Start()
 
-	svc.eventRepo = interfaces.AlertEventRepository(repository.NewAlertEventRepository(db))
-	svc.channelRepo = interfaces.AlertChannelRepository(repository.NewAlertChannelRepository(db))
-	svc.monitorRuleRepo = interfaces.AlertMonitorRuleRepository(repository.NewAlertMonitorRuleRepository(db))
-	svc.datasourceRepo = interfaces.AlertDatasourceRepository(repository.NewAlertDatasourceRepository(db))
-	svc.projectRepo = interfaces.ProjectRepository(repository.NewProjectRepository(db))
-	svc.firingDeliveryRepo = interfaces.AlertFiringDeliveryRepository(repository.NewAlertFiringDeliveryRepository(db))
-	svc.cloudExpiryRepo = interfaces.CloudExpiryRuleRepository(repository.NewCloudExpiryRuleRepository(db))
-	svc.cloudAccountRepo = interfaces.CloudAccountRepository(repository.NewCloudAccountRepository(db))
-	if opts != nil {
-		svc.silenceSvc = opts.SilenceSvc
-		svc.maintenanceSvc = opts.MaintenanceSvc
-		svc.assigneeSvc = opts.AssigneeSvc
-		svc.dutySvc = opts.DutySvc
-		if opts.EventRepo != nil {
-			svc.eventRepo = opts.EventRepo
-		}
-		if opts.ChannelRepo != nil {
-			svc.channelRepo = opts.ChannelRepo
-		}
-		if opts.MonitorRuleRepo != nil {
-			svc.monitorRuleRepo = opts.MonitorRuleRepo
-		}
-		if opts.DatasourceRepo != nil {
-			svc.datasourceRepo = opts.DatasourceRepo
-		}
-		if opts.ProjectRepo != nil {
-			svc.projectRepo = opts.ProjectRepo
-		}
-		if opts.FiringDeliveryRepo != nil {
-			svc.firingDeliveryRepo = opts.FiringDeliveryRepo
-		}
-		if opts.CloudExpiryRepo != nil {
-			svc.cloudExpiryRepo = opts.CloudExpiryRepo
-		}
-		if opts.CloudAccountRepo != nil {
-			svc.cloudAccountRepo = opts.CloudAccountRepo
-		}
-		svc.alertStateSvc = opts.StateSvc
-		if key := strings.TrimSpace(opts.EncryptionKey); key != "" {
-			if aead, err := cryptox.NewAESGCMFromKeyString(key); err == nil {
-				svc.aead = aead
-			}
+	if key := strings.TrimSpace(opts.EncryptionKey); key != "" {
+		if aead, err := cryptox.NewAESGCMFromKeyString(key); err == nil {
+			svc.aead = aead
 		}
 	}
 	return svc

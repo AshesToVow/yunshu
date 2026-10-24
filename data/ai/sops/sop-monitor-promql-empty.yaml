@@ -1,0 +1,17 @@
+code: sop-monitor-promql-empty
+title: Prometheus 查询为空 SOP
+scenario: PromQL 无数据或助手监控工具返回空
+preconditions: 已选择项目；具备告警数据源权限
+input_params: project_id, datasource_id, query
+check_steps: |
+  1. list_alert_datasources
+  2. query_prometheus（先用 up）
+  3. list_prometheus_active_alerts
+exec_steps: |
+  1. 修正数据源或查询语句（人工）
+  2. 无需写工具审批
+verify_steps: 简单 PromQL 有序列返回
+exception_handle: 数据源不可达时检查网络与鉴权
+rollback: 无
+risk: 低（只读）
+approval_needed: false

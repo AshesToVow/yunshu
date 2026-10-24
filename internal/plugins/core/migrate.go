@@ -3,11 +3,10 @@ package core
 import (
 	"context"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/database"
-	"yunshu/internal/service/platformtpl"
-	workflowsvc "yunshu/internal/service/workflow"
 
 	"gorm.io/gorm"
 )
@@ -60,7 +59,7 @@ func dropLegacyPermissionUniqueIndexes(db *gorm.DB) error {
 
 func cleanupPermissionsDuplicatesOnBoot(db *gorm.DB) error {
 	dialect := database.DialectName(db)
-	if dialect != "mysql" && dialect != "postgres" {
+	if dialect != "mysql" && dialect != "postgres" && !database.IsDameng(dialect) {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.Permission{}) {
@@ -81,7 +80,7 @@ func cleanupPermissionsDuplicatesOnBoot(db *gorm.DB) error {
 
 func dropIndexIfPresent(db *gorm.DB, table, index string) error {
 	dialect := database.DialectName(db)
-	if dialect != "mysql" && dialect != "postgres" {
+	if dialect != "mysql" && dialect != "postgres" && !database.IsDameng(dialect) {
 		return nil
 	}
 	if !db.Migrator().HasIndex(table, index) {
@@ -108,18 +107,18 @@ func bootstrapPostMigrateCore(db *gorm.DB) error {
 	if err := migrateFixWecomNotifyModeDictTypo(db); err != nil {
 		return err
 	}
-	if err := workflowsvc.MigrateLegacyDefinitions(context.Background(), db); err != nil {
+	if err := service.MigrateLegacyDefinitions(context.Background(), db); err != nil {
 		return err
 	}
-	if err := workflowsvc.MigrateLegacyTickets(context.Background(), db); err != nil {
+	if err := service.MigrateLegacyTickets(context.Background(), db); err != nil {
 		return err
 	}
-	return platformtpl.EnsureSeeded(context.Background(), db)
+	return service.EnsureSeeded(context.Background(), db)
 }
 
 func dropDictEntriesLegacyCompositeIndex(db *gorm.DB) error {
 	dialect := database.DialectName(db)
-	if dialect != "mysql" && dialect != "postgres" {
+	if dialect != "mysql" && dialect != "postgres" && !database.IsDameng(dialect) {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.DictEntry{}) {
@@ -138,7 +137,7 @@ func dropDictEntriesLegacyCompositeIndex(db *gorm.DB) error {
 
 func cleanupDictEntriesDuplicatesOnBoot(db *gorm.DB) error {
 	dialect := database.DialectName(db)
-	if dialect != "mysql" && dialect != "postgres" {
+	if dialect != "mysql" && dialect != "postgres" && !database.IsDameng(dialect) {
 		return nil
 	}
 	if !db.Migrator().HasTable(&model.DictEntry{}) {

@@ -10,7 +10,7 @@ import (
 
 // rechunkDocument 按 Markdown 标题切片。
 func (s *Service) rechunkDocument(ctx context.Context, doc *model.AiKbDocument) error {
-	_ = s.db.WithContext(ctx).Where("document_id = ?", doc.ID).Delete(&model.AiKbChunk{}).Error
+	_ = s.repo.DeleteChunksByDocumentID(ctx, doc.ID)
 	parts := splitMarkdownChunks(doc.Content)
 	for i, p := range parts {
 		ch := model.AiKbChunk{
@@ -20,7 +20,7 @@ func (s *Service) rechunkDocument(ctx context.Context, doc *model.AiKbDocument) 
 			HeadingPath: p.heading,
 			Content:     p.body,
 		}
-		if err := s.db.WithContext(ctx).Create(&ch).Error; err != nil {
+		if err := s.repo.CreateChunk(ctx, &ch); err != nil {
 			return err
 		}
 	}

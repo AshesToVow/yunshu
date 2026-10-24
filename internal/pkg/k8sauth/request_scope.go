@@ -1,6 +1,10 @@
 package k8sauth
 
-import "context"
+import (
+	"context"
+
+	"yunshu/internal/model"
+)
 
 type scopeCtxKey struct{}
 
@@ -11,6 +15,11 @@ type RequestScope struct {
 	Pack       PrincipalPack
 	Intent     AccessIntent
 	AccessRank int
+	// Grants 当前主体在该集群上的 k8m 授权行（含 cluster_id=0）。
+	Grants []model.K8sClusterAccessGrant
+	// BypassAuth 平台超管，对齐 k8m RolePlatformAdmin。
+	BypassAuth bool
+	Username   string
 }
 
 // WithRequestScope 写入请求范围（中间件在解析 cluster_id / namespace 后调用）。

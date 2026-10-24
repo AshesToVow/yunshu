@@ -69,6 +69,77 @@ func TestSQLDropIndexIfExists_SanitizesIdent(t *testing.T) {
 	}
 }
 
+func TestSQLCSVContainsID(t *testing.T) {
+	if got := SQLCSVContainsID("mysql", "n.id", "e.matched_policy_ids"); !containsAll(got, "FIND_IN_SET(n.id, e.matched_policy_ids)") {
+		t.Fatalf("mysql csv: %q", got)
+	}
+	if got := SQLCSVContainsID("postgres", "n.id", "e.matched_policy_ids"); !containsAll(got, "string_to_array", "ANY") {
+		t.Fatalf("postgres csv: %q", got)
+	}
+	if got := SQLCSVContainsID("dm", "n.id", "e.matched_policy_ids"); !containsAll(got, "INSTR", "CAST(n.id AS VARCHAR)") {
+		t.Fatalf("dameng csv: %q", got)
+	}
+}
+
+func TestSQLStaleTimestampBefore(t *testing.T) {
+	if got := SQLStaleTimestampBefore("mysql", "claimed_at", "5 MINUTE"); !containsAll(got, "DATE_SUB", "5 MINUTE") {
+		t.Fatalf("mysql stale: %q", got)
+	}
+	if got := SQLStaleTimestampBefore("postgres", "claimed_at", "5 MINUTE"); !containsAll(got, "NOW() - INTERVAL", "5 minutes") {
+		t.Fatalf("postgres stale: %q", got)
+	}
+	if got := SQLStaleTimestampBefore("dameng", "claimed_at", "5 MINUTE"); !containsAll(got, "DATEADD", "MINUTE", "SYSDATE") {
+		t.Fatalf("dameng stale: %q", got)
+	}
+}
+
+func TestSQLOnConflictChanged(t *testing.T) {
+	if got := SQLOnConflictChanged("mysql", "type", "reason"); !containsAll(got, "VALUES(`type`)", "VALUES(`reason`)") {
+		t.Fatalf("mysql onconflict: %q", got)
+	}
+	if got := SQLOnConflictChanged("postgres", "type", "reason"); !containsAll(got, "EXCLUDED.type", "IS DISTINCT FROM") {
+		t.Fatalf("postgres onconflict: %q", got)
+	}
+	if got := SQLOnConflictChanged("dm", "type", "reason"); !containsAll(got, `"excluded"."type"`, `"excluded"."reason"`) {
+		t.Fatalf("dameng onconflict: %q", got)
+	}
+}
+
+func TestSQLBackfillAlertEventProject(t *testing.T) {
+	if got := SQLBackfillAlertEventProjectFromDatasource("postgres"); !containsAll(got, "FROM alert_datasources", "SET project_id") {
+		t.Fatalf("postgres datasource backfill: %q", got)
+	}
+	if got := SQLBackfillAlertEventProjectFromDatasource("mysql"); !containsAll(got, "INNER JOIN alert_datasources", "SET e.project_id") {
+		t.Fatalf("mysql datasource backfill: %q", got)
+	}
+	if got := SQLBackfillAlertEventProjectFromDatasource("dm"); !containsAll(got, "SELECT d.project_id FROM alert_datasources", "EXISTS") {
+		t.Fatalf("dameng datasource backfill: %q", got)
+	}
+	if got := SQLBackfillAlertEventProjectFromSubscriptions("postgres"); !containsAll(got, "string_to_array", "FROM alert_subscription_nodes") {
+		t.Fatalf("postgres subscription backfill: %q", got)
+	}
+	if got := SQLBackfillAlertEventProjectFromSubscriptions("mysql"); !containsAll(got, "FIND_IN_SET", "INNER JOIN alert_subscription_nodes") {
+		t.Fatalf("mysql subscription backfill: %q", got)
+	}
+	if got := SQLBackfillAlertEventProjectFromSubscriptions("dameng"); !containsAll(got, "INSTR", "alert_subscription_nodes") {
+		t.Fatalf("dameng subscription backfill: %q", got)
+	}
+}
+
+func TestSQLDeleteDictDuplicatesDameng(t *testing.T) {
+	if got := SQLDeleteDictDuplicatesByLabel("dm"); !containsAll(got, "EXISTS", "dict_entries") {
+		t.Fatalf("dameng label dedupe: %q", got)
+	}
+}
+
+func TestNormalizeDriverDameng(t *testing.T) {
+	for _, in := range []string{"dameng", "DM", "dm8"} {
+		if got := NormalizeDriver(in); got != "dameng" {
+			t.Fatalf("NormalizeDriver(%q)=%q, want dameng", in, got)
+		}
+	}
+}
+
 func containsAll(s string, parts ...string) bool {
 	for _, p := range parts {
 		if !strings.Contains(s, p) {
@@ -77,3 +148,4 @@ func containsAll(s string, parts ...string) bool {
 	}
 	return true
 }
+

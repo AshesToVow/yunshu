@@ -45,9 +45,7 @@ export function humanizeMatchedPolicyName(raw: string): string {
 /** 列表展示：去掉根路由噪音，多条用顿号。原始名放 tooltip。 */
 export function formatMatchedPolicyNamesDisplay(raw?: string | string[] | null): { text: string; title: string } {
   const rawList = splitMatchedPolicyNames(raw);
-  const human = rawList
-    .map(humanizeMatchedPolicyName)
-    .filter((n) => n && n !== "全局根路由");
+  const human = rawList.map(humanizeMatchedPolicyName).filter((n) => n && n !== "全局根路由");
   const text = human.length ? human.join("、") : rawList.length ? "全局默认路由" : "-";
   return { text, title: rawList.join("，") || text };
 }

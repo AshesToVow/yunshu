@@ -70,6 +70,7 @@ func seedPermissionsSystem() []model.Permission {
 		{Name: "查看封禁 IP 列表", Resource: "/api/v1/security/banned-ips", Action: "GET", Description: "View banned IPs list"},
 		{Name: "解除封禁 IP", Resource: "/api/v1/security/banned-ips/unban", Action: "POST", Description: "Unban IP"},
 		{Name: "总览页面", Resource: "/api/v1/overview", Action: "GET", Description: "Get system overview metrics"},
+		{Name: "总览大屏聚合", Resource: "/api/v1/overview/screen", Action: "GET", Description: "Ops command-center screen aggregate"},
 		{Name: "总览项目上线统计", Resource: "/api/v1/overview/project-launches", Action: "GET", Description: "Get project launch stats for last 30 days"},
 		{Name: "总览工单按人统计", Resource: "/api/v1/overview/release-by-person", Action: "GET", Description: "Get release runs by submitter for last 30 days"},
 		{Name: "插件列表", Resource: "/api/v1/plugins", Action: "GET", Description: "List enabled plugins"},

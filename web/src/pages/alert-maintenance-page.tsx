@@ -1,5 +1,20 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  DatePicker,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  message,
+} from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -39,7 +54,10 @@ export function AlertMaintenancePage() {
   const [current, setCurrent] = useState<AlertMaintenanceWindowItem | null>(null);
   const [form] = Form.useForm();
 
-  const projectOptions = useMemo(() => projects.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id })), [projects]);
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id })),
+    [projects],
+  );
 
   async function loadProjects() {
     const res = await getProjects({ page: 1, page_size: 500 });
@@ -135,7 +153,14 @@ export function AlertMaintenancePage() {
       title="告警维护窗口"
       extra={
         <Space wrap>
-          <Select allowClear style={{ width: 220 }} placeholder="按项目筛选" options={projectOptions} value={projectId} onChange={setProjectId} />
+          <Select
+            allowClear
+            style={{ width: 220 }}
+            placeholder="按项目筛选"
+            options={projectOptions}
+            value={projectId}
+            onChange={setProjectId}
+          />
           <Input.Search allowClear style={{ width: 240 }} placeholder="名称/说明" onSearch={setKeyword} />
           <Button icon={<ReloadOutlined />} onClick={() => void load(page, pageSize)}>
             刷新
@@ -146,7 +171,12 @@ export function AlertMaintenancePage() {
         </Space>
       }
     >
-      <Alert type="info" showIcon style={{ marginBottom: 12 }} message="维护窗口内匹配的告警将被抑制投递（与平台静默独立，常用于计划内变更）。" />
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="维护窗口内匹配的告警将被抑制投递（与平台静默独立，常用于计划内变更）。"
+      />
       <Table
         rowKey="id"
         loading={loading}
@@ -192,12 +222,16 @@ export function AlertMaintenancePage() {
             title: "操作",
             width: 160,
             fixed: "right",
+            className: "yunshu-table-actions-cell",
             render: (_: unknown, r: AlertMaintenanceWindowItem) => (
-              <Space>
+              <Space size={0} wrap className="yunshu-table-actions">
                 <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>
                   编辑
                 </Button>
-                <Popconfirm title="删除该维护窗口？" onConfirm={() => void deleteMaintenanceWindow(r.id).then(() => load(page, pageSize))}>
+                <Popconfirm
+                  title="删除该维护窗口？"
+                  onConfirm={() => void deleteMaintenanceWindow(r.id).then(() => load(page, pageSize))}
+                >
                   <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                     删除
                   </Button>
@@ -208,7 +242,14 @@ export function AlertMaintenancePage() {
         ]}
       />
 
-      <Modal title={current ? "编辑维护窗口" : "新建维护窗口"} open={open} onCancel={() => setOpen(false)} onOk={() => void submit()} confirmLoading={saving} width={640}>
+      <Modal
+        title={current ? "编辑维护窗口" : "新建维护窗口"}
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={() => void submit()}
+        confirmLoading={saving}
+        width={640}
+      >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
             <Input />

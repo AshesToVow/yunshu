@@ -28,6 +28,9 @@ func extractWriteTableRefs(sqlText, defaultDB string) []queryTableRef {
 	if reInstanceDDL.MatchString(strings.TrimSpace(sqlText)) {
 		return nil
 	}
+	if refs, ok := extractTableRefsAST(sqlText, defaultDB); ok && len(refs) > 0 {
+		return refs
+	}
 	seen := map[string]struct{}{}
 	var refs []queryTableRef
 	add := func(schema, table string) {

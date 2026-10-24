@@ -3,19 +3,19 @@ package handler
 import (
 	"strconv"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	esmgmtsvc "yunshu/internal/service/esmgmt"
 
 	"github.com/gin-gonic/gin"
 )
 
 type EsmgmtHandler struct {
-	svc *esmgmtsvc.Service
+	svc *service.EsmgmtService
 }
 
-func NewEsmgmtHandler(svc *esmgmtsvc.Service) *EsmgmtHandler {
+func NewEsmgmtHandler(svc *service.EsmgmtService) *EsmgmtHandler {
 	return &EsmgmtHandler{svc: svc}
 }
 
@@ -34,12 +34,21 @@ func (h *EsmgmtHandler) ListConnections(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) CreateConnection(c *gin.Context) {
-	var req esmgmtsvc.ConnectionUpsertRequest
+	var req service.EsmgmtConnectionUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
 	}
 	item, err := h.svc.CreateConnection(c.Request.Context(), req, actorFrom(c))
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, item)
+}
+
+func (h *EsmgmtHandler) ImportConnectionFromDict(c *gin.Context) {
+	item, err := h.svc.ImportConnectionFromDict(c.Request.Context(), actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -53,7 +62,7 @@ func (h *EsmgmtHandler) UpdateConnection(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req esmgmtsvc.ConnectionUpsertRequest
+	var req service.EsmgmtConnectionUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -94,7 +103,7 @@ func (h *EsmgmtHandler) PingConnection(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) TestConnection(c *gin.Context) {
-	var req esmgmtsvc.TestConnectionRequest
+	var req service.EsmgmtTestConnectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -129,12 +138,12 @@ func (h *EsmgmtHandler) ListIndices(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) CreateIndex(c *gin.Context) {
-	var req esmgmtsvc.CreateIndexRequest
+	var req service.CreateIndexRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.CreateIndex(c.Request.Context(), req); err != nil {
+	if err := h.svc.CreateIndex(c.Request.Context(), req, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -145,7 +154,7 @@ func (h *EsmgmtHandler) DeleteIndex(c *gin.Context) {
 	connID := parseOptionalUintQuery(c, "connection_id")
 	name := strings.TrimSpace(c.Param("name"))
 	force := parseBoolQuery(c, "force")
-	if err := h.svc.DeleteIndex(c.Request.Context(), connID, name, force); err != nil {
+	if err := h.svc.DeleteIndex(c.Request.Context(), connID, name, force, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -155,7 +164,7 @@ func (h *EsmgmtHandler) DeleteIndex(c *gin.Context) {
 func (h *EsmgmtHandler) OpenIndex(c *gin.Context) {
 	connID := parseOptionalUintQuery(c, "connection_id")
 	name := strings.TrimSpace(c.Param("name"))
-	if err := h.svc.OpenIndex(c.Request.Context(), connID, name); err != nil {
+	if err := h.svc.OpenIndex(c.Request.Context(), connID, name, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -165,7 +174,7 @@ func (h *EsmgmtHandler) OpenIndex(c *gin.Context) {
 func (h *EsmgmtHandler) CloseIndex(c *gin.Context) {
 	connID := parseOptionalUintQuery(c, "connection_id")
 	name := strings.TrimSpace(c.Param("name"))
-	if err := h.svc.CloseIndex(c.Request.Context(), connID, name); err != nil {
+	if err := h.svc.CloseIndex(c.Request.Context(), connID, name, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -184,7 +193,7 @@ func (h *EsmgmtHandler) CatNodes(c *gin.Context) {
 
 func (h *EsmgmtHandler) ProxyREST(c *gin.Context) {
 	connID := parseOptionalUintQuery(c, "connection_id")
-	var req esmgmtsvc.ProxyRequest
+	var req service.ProxyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -198,7 +207,7 @@ func (h *EsmgmtHandler) ProxyREST(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) CreateIndexBackup(c *gin.Context) {
-	var req esmgmtsvc.BackupIndexRequest
+	var req service.BackupIndexRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -248,7 +257,7 @@ func (h *EsmgmtHandler) DownloadBackup(c *gin.Context) {
 		return
 	}
 	artifact := strings.TrimSpace(c.Query("artifact"))
-	out, err := h.svc.PresignBackupDownload(c.Request.Context(), id, artifact)
+	out, err := h.svc.PresignBackupDownload(c.Request.Context(), id, artifact, actorFrom(c))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -257,7 +266,7 @@ func (h *EsmgmtHandler) DownloadBackup(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) CreateIndexRestore(c *gin.Context) {
-	var req esmgmtsvc.RestoreIndexRequest
+	var req service.RestoreIndexRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -311,7 +320,7 @@ func (h *EsmgmtHandler) ListSchedules(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) CreateSchedule(c *gin.Context) {
-	var req esmgmtsvc.ScheduleUpsertRequest
+	var req service.ScheduleUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -330,7 +339,7 @@ func (h *EsmgmtHandler) UpdateSchedule(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req esmgmtsvc.ScheduleUpsertRequest
+	var req service.ScheduleUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -349,7 +358,7 @@ func (h *EsmgmtHandler) DeleteSchedule(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.DeleteSchedule(c.Request.Context(), id); err != nil {
+	if err := h.svc.DeleteSchedule(c.Request.Context(), id, actorFrom(c)); err != nil {
 		response.Error(c, err)
 		return
 	}

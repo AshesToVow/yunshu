@@ -7,27 +7,34 @@ import {
   ScissorOutlined,
   TagsOutlined,
 } from "@ant-design/icons";
-import { Button, Form, Input, InputNumber, Modal, Progress, Space, Tag, Typography, message } from "antd";
+import { Button, Form, Input, InputNumber, Modal, Progress, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { useRelatedPodsDrawer } from "../components/k8s/related-pods-drawer";
-import { RealtimeUsageText, WorkloadCpuUsageBars, WorkloadMemUsageBars } from "../components/k8s/k8s-resource-usage-cells";
+import {
+  RealtimeUsageText,
+  WorkloadCpuUsageBars,
+  WorkloadMemUsageBars,
+} from "../components/k8s/k8s-resource-usage-cells";
 import { useWorkloadFormActions } from "../components/k8s/workload-form-actions";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
 import { useWorkloadProgressOptional } from "../contexts/workload-progress-context";
 import {
   applyStatefulSet,
+  previewApplyStatefulSet,
   buildCpuMemoryResourceMaps,
   deleteStatefulSet,
   getStatefulSetDetail,
   listStatefulSets,
   listStatefulSetPods,
+  listStatefulSetRevisions,
   patchStatefulSetContainerResources,
   restartStatefulSet,
   rolloutUndoStatefulSet,
   scaleStatefulSet,
+  type DeploymentRevisionItem,
   type WorkloadDetail,
   type WorkloadItem,
 } from "../services/workloads";
@@ -56,7 +63,10 @@ function StatefulSetDetailQuickEdit({
   setDetailYaml: (next: string) => void;
 }) {
   const [detailForm] = Form.useForm<StatefulSetFormValues>();
-  const values = statefulSetYamlToForm(detailYaml || "") ?? statefulSetObjToForm(detail.object) ?? statefulSetYamlToForm(detail.yaml ?? "");
+  const values =
+    statefulSetYamlToForm(detailYaml || "") ??
+    statefulSetObjToForm(detail.object) ??
+    statefulSetYamlToForm(detail.yaml ?? "");
   return (
     <Form
       form={detailForm}
@@ -126,7 +136,9 @@ export function StatefulsetsPage() {
   const [scaleValue, setScaleValue] = useState<number>(1);
   const [scaleTarget, setScaleTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
   const [verticalOpen, setVerticalOpen] = useState(false);
-  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const [verticalTarget, setVerticalTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
   const [verticalForm] = Form.useForm<{
     container_name?: string;
     requests_cpu?: string;
@@ -134,7 +146,15 @@ export function StatefulsetsPage() {
     limits_cpu?: string;
     limits_memory?: string;
   }>();
-  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(async ({ clusterId, namespace, name }) => await listStatefulSetPods(clusterId, namespace, name));
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  const [revisionLoading, setRevisionLoading] = useState(false);
+  const [revisionRows, setRevisionRows] = useState<DeploymentRevisionItem[]>([]);
+  const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
+    null,
+  );
+  const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(
+    async ({ clusterId, namespace, name }) => await listStatefulSetPods(clusterId, namespace, name),
+  );
   const { renderKVIcon, viewer } = useKeyValueViewer();
 
   const columns: ColumnsType<WorkloadItem> = [
@@ -145,15 +165,31 @@ export function StatefulsetsPage() {
       title: "资源汇总",
       dataIndex: "resource_text",
       width: 180,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
-    { title: "注解", key: "annotations", width: 70, align: "center", render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
+    {
+      title: "注解",
+      key: "annotations",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations),
+    },
     {
       title: "容器",
       dataIndex: "containers_text",
       width: 220,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
     {
       title: "实时用量",
@@ -198,11 +234,19 @@ export function StatefulsetsPage() {
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
         }}
         columns={columns}
-        onEdit={(record, ctx) => formActions.openEdit({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }, record)}
+        onEdit={(record, ctx) =>
+          formActions.openEdit(
+            { clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name },
+            record,
+          )
+        }
         api={{
-          list: async ({ clusterId, namespace, keyword }) => await listStatefulSets(clusterId, namespace ?? "default", keyword),
-          detail: async ({ clusterId, namespace, name }) => await getStatefulSetDetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyStatefulSet(clusterId, manifest),
+          list: async ({ clusterId, namespace, keyword }) =>
+            await listStatefulSets(clusterId, namespace ?? "default", keyword),
+          detail: async ({ clusterId, namespace, name }) =>
+            await getStatefulSetDetail(clusterId, namespace ?? "default", name),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyStatefulSet(clusterId, manifest, idemKey),
+          previewApply: async ({ clusterId, manifest }) => await previewApplyStatefulSet(clusterId, manifest),
           remove: async (args) => await deleteStatefulSet(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
@@ -211,18 +255,15 @@ export function StatefulsetsPage() {
         onCreateDrawerOpen={(ctx) => {
           if (!ctx.clusterId) return;
           const ns = ctx.namespace ?? "default";
-          formActions.prepareCreate(
-            { clusterId: ctx.clusterId, namespace: ns },
-            {
-              namespace: ns,
-              replicas: 1,
-              service_name: "",
-              env_pairs: [{ key: "", value: "" }],
-              name: "",
-              container_name: "",
-              image: "nginx:latest",
-            } as Partial<StatefulSetFormValues>,
-          );
+          formActions.prepareCreate({ clusterId: ctx.clusterId, namespace: ns }, {
+            namespace: ns,
+            replicas: 1,
+            service_name: "",
+            env_pairs: [{ key: "", value: "" }],
+            name: "",
+            container_name: "",
+            image: "nginx:latest",
+          } as Partial<StatefulSetFormValues>);
         }}
         renderCreateFormTab={(ctx) => (
           <WorkloadFormModal<StatefulSetFormValues>
@@ -250,10 +291,19 @@ export function StatefulsetsPage() {
             }}
           >
             <NameNamespaceItems />
-            <Form.Item name="service_name" label="ServiceName（Headless）" rules={[{ required: true, message: "请输入 serviceName" }]}>
+            <Form.Item
+              name="service_name"
+              label="ServiceName（Headless）"
+              rules={[{ required: true, message: "请输入 serviceName" }]}
+            >
               <Input placeholder="demo-headless" />
             </Form.Item>
-            <Form.Item name="replicas" label="副本数" rules={[{ required: true, message: "请输入副本数" }]} style={{ width: 240 }}>
+            <Form.Item
+              name="replicas"
+              label="副本数"
+              rules={[{ required: true, message: "请输入副本数" }]}
+              style={{ width: 240 }}
+            >
               <InputNumber min={0} />
             </Form.Item>
             <ContainerCommonItems showPort />
@@ -302,14 +352,19 @@ spec:
                     key: "pods",
                     label: "关联 Pods",
                     icon: <EyeOutlined />,
-                    onClick: () => openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
+                    onClick: () =>
+                      openPods({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name }),
                   },
                   {
                     key: "scale",
                     label: "水平扩缩（副本 · HPA / scale 类）",
                     icon: <ScissorOutlined />,
                     onClick: () => {
-                      setScaleTarget({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name });
+                      setScaleTarget({
+                        clusterId: ctx.clusterId,
+                        namespace: ctx.namespace ?? "default",
+                        name: record.name,
+                      });
                       setScaleValue(Number(record.replicas ?? 1) || 1);
                       setScaleOpen(true);
                     },
@@ -319,7 +374,11 @@ spec:
                     label: "垂直扩缩（resources · VPA 类）",
                     icon: <ColumnHeightOutlined />,
                     onClick: () => {
-                      setVerticalTarget({ clusterId: ctx.clusterId, namespace: ctx.namespace ?? "default", name: record.name });
+                      setVerticalTarget({
+                        clusterId: ctx.clusterId,
+                        namespace: ctx.namespace ?? "default",
+                        name: record.name,
+                      });
                       verticalForm.resetFields();
                       setVerticalOpen(true);
                     },
@@ -345,23 +404,19 @@ spec:
                     },
                   },
                   {
-                    key: "undo",
-                    label: "回滚标记",
-                    icon: <ReloadOutlined />,
+                    key: "revisions",
+                    label: "历史版本 / 回滚",
+                    icon: <FileTextOutlined />,
                     onClick: () => {
-                      void (async () => {
-                        const ns = ctx.namespace ?? "default";
-                        await rolloutUndoStatefulSet(ctx.clusterId, ns, record.name);
-                        message.success("已标记 StatefulSet 回滚");
-                        progress?.track({
-                          kind: "StatefulSet",
-                          clusterId: ctx.clusterId,
-                          namespace: ns,
-                          name: record.name,
-                          title: `回滚 ${record.name}`,
-                        });
-                        ctx.reload();
-                      })();
+                      const ns = ctx.namespace ?? "default";
+                      setRevisionTarget({ clusterId: ctx.clusterId, namespace: ns, name: record.name });
+                      setRevisionOpen(true);
+                      setRevisionLoading(true);
+                      setRevisionRows([]);
+                      void listStatefulSetRevisions(ctx.clusterId, ns, record.name)
+                        .then((rows) => setRevisionRows(rows || []))
+                        .catch(() => message.error("加载历史版本失败"))
+                        .finally(() => setRevisionLoading(false));
                     },
                   },
                 ],
@@ -376,6 +431,101 @@ spec:
       />
 
       {viewer}
+
+      <Modal
+        title={`StatefulSet 历史版本${revisionTarget ? `：${revisionTarget.name}` : ""}`}
+        open={revisionOpen}
+        onCancel={() => setRevisionOpen(false)}
+        footer={null}
+        destroyOnClose
+        width={720}
+      >
+        <Table
+          rowKey={(r) => String(r.revision)}
+          loading={revisionLoading}
+          dataSource={revisionRows}
+          pagination={false}
+          columns={[
+            { title: "Revision", dataIndex: "revision", width: 100 },
+            {
+              title: "当前",
+              dataIndex: "current",
+              width: 80,
+              render: (v: boolean) => (v ? <Tag color="green">是</Tag> : "-"),
+            },
+            {
+              title: "创建时间",
+              dataIndex: "created_at",
+              render: (v?: string) => v || "-",
+            },
+            {
+              title: "操作",
+              key: "action",
+              width: 120,
+              render: (_, row) =>
+                row.current ? null : (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      if (!revisionTarget) return;
+                      void (async () => {
+                        try {
+                          await rolloutUndoStatefulSet(
+                            revisionTarget.clusterId,
+                            revisionTarget.namespace,
+                            revisionTarget.name,
+                            row.revision,
+                          );
+                          message.success(`已标记回滚到 revision ${row.revision}`);
+                          progress?.track({
+                            kind: "StatefulSet",
+                            clusterId: revisionTarget.clusterId,
+                            namespace: revisionTarget.namespace,
+                            name: revisionTarget.name,
+                            title: `回滚 ${revisionTarget.name}`,
+                          });
+                          setRevisionOpen(false);
+                          listReloadRef.current();
+                        } catch {
+                          /* interceptor */
+                        }
+                      })();
+                    }}
+                  >
+                    回滚到此版
+                  </Button>
+                ),
+            },
+          ]}
+        />
+        <Space style={{ marginTop: 12 }}>
+          <Button
+            onClick={() => {
+              if (!revisionTarget) return;
+              void (async () => {
+                try {
+                  await rolloutUndoStatefulSet(revisionTarget.clusterId, revisionTarget.namespace, revisionTarget.name);
+                  message.success("已标记回滚到上一版本");
+                  progress?.track({
+                    kind: "StatefulSet",
+                    clusterId: revisionTarget.clusterId,
+                    namespace: revisionTarget.namespace,
+                    name: revisionTarget.name,
+                    title: `回滚 ${revisionTarget.name}`,
+                  });
+                  setRevisionOpen(false);
+                  listReloadRef.current();
+                } catch {
+                  /* interceptor */
+                }
+              })();
+            }}
+          >
+            回滚到上一版
+          </Button>
+        </Space>
+      </Modal>
 
       <Modal
         title={`StatefulSet 水平扩缩（HPA / scale 子资源类）${scaleTarget ? `：${scaleTarget.name}` : ""}`}
@@ -414,11 +564,16 @@ spec:
               message.warning("请至少填写一项 requests 或 limits（如 cpu/memory）");
               return;
             }
-            await patchStatefulSetContainerResources(verticalTarget.clusterId, verticalTarget.namespace, verticalTarget.name, {
-              container_name: values.container_name,
-              requests,
-              limits,
-            });
+            await patchStatefulSetContainerResources(
+              verticalTarget.clusterId,
+              verticalTarget.namespace,
+              verticalTarget.name,
+              {
+                container_name: values.container_name,
+                requests,
+                limits,
+              },
+            );
             message.success("已更新容器资源");
             setVerticalOpen(false);
             listReloadRef.current();
@@ -475,10 +630,19 @@ spec:
         }}
       >
         <NameNamespaceItems />
-        <Form.Item name="service_name" label="ServiceName（Headless）" rules={[{ required: true, message: "请输入 serviceName" }]}>
+        <Form.Item
+          name="service_name"
+          label="ServiceName（Headless）"
+          rules={[{ required: true, message: "请输入 serviceName" }]}
+        >
           <Input placeholder="demo-headless" />
         </Form.Item>
-        <Form.Item name="replicas" label="副本数" rules={[{ required: true, message: "请输入副本数" }]} style={{ width: 240 }}>
+        <Form.Item
+          name="replicas"
+          label="副本数"
+          rules={[{ required: true, message: "请输入副本数" }]}
+          style={{ width: 240 }}
+        >
           <InputNumber min={0} />
         </Form.Item>
         <ContainerCommonItems showPort />
@@ -500,4 +664,3 @@ spec:
     </>
   );
 }
-

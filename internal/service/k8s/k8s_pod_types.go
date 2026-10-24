@@ -57,11 +57,11 @@ type PodDiagnoseResult struct {
 }
 
 type PodFileQuery struct {
-	ClusterID uint   `form:"cluster_id" binding:"required"`
-	Namespace string `form:"namespace" binding:"required"`
-	Name      string `form:"name" binding:"required"`
-	Container string `form:"container"`
-	Path      string `form:"path"`
+	ClusterID uint   `json:"cluster_id" form:"cluster_id" binding:"required"`
+	Namespace string `json:"namespace" form:"namespace" binding:"required"`
+	Name      string `json:"name" form:"name" binding:"required"`
+	Container string `json:"container" form:"container"`
+	Path      string `json:"path" form:"path"`
 }
 
 type PodExecRequest struct {
@@ -153,30 +153,32 @@ type PodContainerInfo struct {
 	Ready        bool   `json:"ready"`
 	RestartCount int32  `json:"restart_count"`
 	State        string `json:"state"`
+	Ephemeral    bool   `json:"ephemeral,omitempty"`
 }
 
 type PodDetail struct {
-	Name              string                `json:"name"`
-	Namespace         string                `json:"namespace"`
-	UID               string                `json:"uid"`
-	Phase             string                `json:"phase"`
-	NodeName          string                `json:"node_name"`
-	ServiceAccount    string                `json:"service_account"`
-	PodIP             string                `json:"pod_ip"`
-	HostIP            string                `json:"host_ip"`
-	QOSClass          string                `json:"qos_class"`
-	Labels            map[string]string     `json:"labels"`
-	Annotations       map[string]string     `json:"annotations"`
-	Containers        []PodContainerInfo    `json:"containers"`
-	InitContainers    []PodContainerInfo    `json:"init_containers"`
-	Conditions        []corev1.PodCondition `json:"conditions"`
-	Volumes           []corev1.Volume       `json:"volumes"`
-	Tolerations       []corev1.Toleration   `json:"tolerations"`
-	NodeSelector      map[string]string     `json:"node_selector"`
-	PriorityClassName string                `json:"priority_class_name"`
-	Affinity          *corev1.Affinity      `json:"affinity"`
-	StartTime         time.Time             `json:"start_time"`
-	CreationTime      time.Time             `json:"creation_time"`
+	Name                 string                `json:"name"`
+	Namespace            string                `json:"namespace"`
+	UID                  string                `json:"uid"`
+	Phase                string                `json:"phase"`
+	NodeName             string                `json:"node_name"`
+	ServiceAccount       string                `json:"service_account"`
+	PodIP                string                `json:"pod_ip"`
+	HostIP               string                `json:"host_ip"`
+	QOSClass             string                `json:"qos_class"`
+	Labels               map[string]string     `json:"labels"`
+	Annotations          map[string]string     `json:"annotations"`
+	Containers           []PodContainerInfo    `json:"containers"`
+	InitContainers       []PodContainerInfo    `json:"init_containers"`
+	EphemeralContainers  []PodContainerInfo    `json:"ephemeral_containers"`
+	Conditions           []corev1.PodCondition `json:"conditions"`
+	Volumes              []corev1.Volume       `json:"volumes"`
+	Tolerations          []corev1.Toleration   `json:"tolerations"`
+	NodeSelector         map[string]string     `json:"node_selector"`
+	PriorityClassName    string                `json:"priority_class_name"`
+	Affinity             *corev1.Affinity      `json:"affinity"`
+	StartTime            time.Time             `json:"start_time"`
+	CreationTime         time.Time             `json:"creation_time"`
 }
 
 type PodEventItem struct {

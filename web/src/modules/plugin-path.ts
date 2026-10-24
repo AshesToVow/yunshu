@@ -1,5 +1,18 @@
 /** 离线兜底：与后端 plugin.DefaultEnabled 一致；正常应以后端 /plugins 返回为准 */
-export const DEFAULT_ENABLED_PLUGINS = ["core", "k8s", "alert", "project", "cmdb", "backup", "cicd", "dbmgmt", "inspect", "ai", "esmgmt"] as const;
+export const DEFAULT_ENABLED_PLUGINS = [
+  "core",
+  "k8s",
+  "alert",
+  "project",
+  "cmdb",
+  "backup",
+  "cicd",
+  "dbmgmt",
+  "inspect",
+  "ai",
+  "esmgmt",
+  "kafkamgmt",
+] as const;
 
 export type PluginName = string;
 
@@ -32,28 +45,76 @@ const FALLBACK_PATH_RULES: { plugin: string; prefixes: string[] }[] = [
   {
     plugin: "core",
     prefixes: [
-      "/users", "/departments", "/roles", "/permissions", "/policies", "/registrations",
-      "/menus", "/login-logs", "/operation-logs", "/banned-ips", "/dict-entries",
-      "/personal-settings", "/user-groups", "/plugins",
+      "/users",
+      "/departments",
+      "/roles",
+      "/permissions",
+      "/policies",
+      "/registrations",
+      "/menus",
+      "/login-logs",
+      "/operation-logs",
+      "/banned-ips",
+      "/dict-entries",
+      "/personal-settings",
+      "/user-groups",
+      "/plugins",
+      "/platform-templates",
+      "/workflow",
     ],
   },
   {
     plugin: "k8s",
     prefixes: [
-      "/clusters", "/cluster", "/pods", "/namespaces", "/nodes", "/component-status",
-      "/cluster-api-resources", "/horizontal-pod-autoscalers", "/helm/releases", "/helm/charts",
-      "/k8s-resource-topology", "/deployments", "/statefulsets", "/daemonsets", "/cronjobs", "/jobs",
-      "/configmaps", "/secrets", "/ingresses", "/ingress-classes", "/events", "/k8s-services",
-      "/persistentvolumes", "/persistentvolumeclaims", "/storageclasses", "/crds", "/crs", "/k8s-cr-templates", "/rbac",
-      "/serviceaccounts", "/k8s-scoped-policies", "/network-policies", "/k8s/",
+      "/clusters",
+      "/cluster",
+      "/pods",
+      "/namespaces",
+      "/nodes",
+      "/component-status",
+      "/cluster-api-resources",
+      "/horizontal-pod-autoscalers",
+      "/helm/releases",
+      "/helm/charts",
+      "/k8s-resource-topology",
+      "/deployments",
+      "/statefulsets",
+      "/daemonsets",
+      "/cronjobs",
+      "/jobs",
+      "/configmaps",
+      "/secrets",
+      "/ingresses",
+      "/ingress-classes",
+      "/events",
+      "/k8s-services",
+      "/persistentvolumes",
+      "/persistentvolumeclaims",
+      "/storageclasses",
+      "/crds",
+      "/crs",
+      "/k8s-cr-templates",
+      "/rbac",
+      "/serviceaccounts",
+      "/k8s-scoped-policies",
+      "/network-policies",
+      "/k8s/",
     ],
   },
   { plugin: "alert", prefixes: ["/alert-"] },
   {
     plugin: "project",
     prefixes: [
-      "/projects", "/project-members", "/project-services", "/service-catalog", "/service-portrait",
-      "/project-logs", "/log-retention", "/loggie-status", "/project-log-sources",
+      "/projects",
+      "/project-members",
+      "/project-services",
+      "/service-catalog",
+      "/service-portrait",
+      "/project-logs",
+      "/log-pipelines",
+      "/log-retention",
+      "/loggie-status",
+      "/project-log-sources",
     ],
   },
   { plugin: "cmdb", prefixes: ["/project-servers", "/server-console"] },
@@ -63,6 +124,7 @@ const FALLBACK_PATH_RULES: { plugin: string; prefixes: string[] }[] = [
   { plugin: "inspect", prefixes: ["/project-inspect"] },
   { plugin: "ai", prefixes: ["/ai"] },
   { plugin: "esmgmt", prefixes: ["/esmgmt"] },
+  { plugin: "kafkamgmt", prefixes: ["/kafkamgmt"] },
 ];
 
 function normalizePath(path: string): string {
@@ -100,13 +162,15 @@ export function resolvePathPlugin(path: string): PluginName | null {
   const normalized = normalizePath(path);
   if (normalized === "/") return "k8s";
   for (const rule of pathRules()) {
-    if (rule.prefixes.some((p) => {
-      const prefix = normalizePath(p);
-      if (prefix.endsWith("-")) {
-        return normalized === prefix || normalized.startsWith(prefix);
-      }
-      return normalized === prefix || normalized.startsWith(`${prefix}/`);
-    })) {
+    if (
+      rule.prefixes.some((p) => {
+        const prefix = normalizePath(p);
+        if (prefix.endsWith("-")) {
+          return normalized === prefix || normalized.startsWith(prefix);
+        }
+        return normalized === prefix || normalized.startsWith(`${prefix}/`);
+      })
+    ) {
       return rule.plugin;
     }
   }
@@ -166,17 +230,44 @@ export function resolveAPIResourcePlugin(resource: string): PluginName | null {
     {
       plugin: "core",
       prefixes: [
-        "/api/v1/users", "/api/v1/departments", "/api/v1/roles", "/api/v1/permissions",
-        "/api/v1/policies", "/api/v1/registrations", "/api/v1/menus", "/api/v1/login-logs",
-        "/api/v1/operation-logs", "/api/v1/security", "/api/v1/dict-entries", "/api/v1/user-groups",
-        "/api/v1/plugins", "/api/v1/overview",
+        "/api/v1/users",
+        "/api/v1/departments",
+        "/api/v1/roles",
+        "/api/v1/permissions",
+        "/api/v1/policies",
+        "/api/v1/registrations",
+        "/api/v1/menus",
+        "/api/v1/login-logs",
+        "/api/v1/operation-logs",
+        "/api/v1/security",
+        "/api/v1/dict-entries",
+        "/api/v1/user-groups",
+        "/api/v1/plugins",
+        "/api/v1/overview",
+        "/api/v1/workflow",
+        "/api/v1/platform-templates",
       ],
     },
-    { plugin: "k8s", prefixes: ["/api/v1/clusters", "/api/v1/pods", "/api/v1/namespaces", "/api/v1/nodes", "/api/v1/k8s-policies", "/api/v1/k8s/", "/api/v1/helm/"] },
+    {
+      plugin: "k8s",
+      prefixes: [
+        "/api/v1/clusters",
+        "/api/v1/pods",
+        "/api/v1/namespaces",
+        "/api/v1/nodes",
+        "/api/v1/k8s-policies",
+        "/api/v1/k8s/",
+        "/api/v1/helm/",
+      ],
+    },
     { plugin: "alert", prefixes: ["/api/v1/alerts"] },
     { plugin: "project", prefixes: ["/api/v1/projects"] },
     { plugin: "cmdb", prefixes: ["/api/v1/servers", "/api/v1/cloud-accounts", "/api/v1/server-groups"] },
     { plugin: "backup", prefixes: ["/api/v1/mysql-backup"] },
+    { plugin: "cicd", prefixes: ["/api/v1/registries", "/api/v1/pipeline-templates"] },
+    { plugin: "ai", prefixes: ["/api/v1/ai"] },
+    { plugin: "esmgmt", prefixes: ["/api/v1/esmgmt"] },
+    { plugin: "kafkamgmt", prefixes: ["/api/v1/kafkamgmt"] },
   ];
   for (const rule of fallback) {
     if (rule.prefixes.some((p) => r === p || r.startsWith(`${p}/`))) return rule.plugin;
@@ -184,10 +275,7 @@ export function resolveAPIResourcePlugin(resource: string): PluginName | null {
   return null;
 }
 
-export function isAPIResourceAllowedByPlugins(
-  resource: string,
-  isPluginEnabled: (name: string) => boolean,
-): boolean {
+export function isAPIResourceAllowedByPlugins(resource: string, isPluginEnabled: (name: string) => boolean): boolean {
   const plugin = resolveAPIResourcePlugin(resource);
   if (!plugin) return true;
   return pluginAndDepsEnabled(plugin, isPluginEnabled);

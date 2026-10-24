@@ -238,6 +238,7 @@ func (w *Watcher) fromK8sEvent(clusterID string, evt *eventsv1.Event) *model.K8s
 		Message:   evt.Note,
 		Timestamp: ts,
 		Processed: false,
+		Status:    model.K8sFwdStatusPending,
 	}
 }
 
@@ -269,6 +270,7 @@ func (w *Watcher) fromCoreV1Event(clusterID string, evt *corev1.Event) *model.K8
 		Message:   evt.Message,
 		Timestamp: ts,
 		Processed: false,
+		Status:    model.K8sFwdStatusPending,
 	}
 }
 

@@ -23,8 +23,12 @@ func (r *AlertMonitorRuleRepository) List(ctx context.Context, f AlertMonitorRul
 		tx = tx.Where("datasource_id = ?", *f.DatasourceID)
 	}
 	if f.ProjectID != nil && *f.ProjectID > 0 {
-		tx = tx.Where("datasource_id IN (?)",
-			r.db.WithContext(ctx).Model(&model.AlertDatasource{}).Select("id").Where("project_id = ?", *f.ProjectID),
+		pid := *f.ProjectID
+		// 日志规则无 datasource，靠 project_id；PromQL 规则靠数据源归属项目。
+		tx = tx.Where(
+			"(project_id = ?) OR (datasource_id IN (?))",
+			pid,
+			r.db.WithContext(ctx).Model(&model.AlertDatasource{}).Select("id").Where("project_id = ? AND deleted_at IS NULL", pid),
 		)
 	}
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
@@ -51,11 +55,12 @@ func (r *AlertMonitorRuleRepository) ListEnabled(ctx context.Context) ([]model.A
 
 func (r *AlertMonitorRuleRepository) ListEnabledWithProject(ctx context.Context) ([]EvalMonitorRule, error) {
 	var rules []EvalMonitorRule
+	// LEFT JOIN：日志规则无 datasource；project_id 优先取规则列，否则取数据源。
 	err := r.db.WithContext(ctx).
 		Table("alert_monitor_rules amr").
-		Select("amr.*, ad.project_id AS project_id").
-		Joins("JOIN alert_datasources ad ON ad.id = amr.datasource_id AND ad.deleted_at IS NULL").
-		Where("amr.enabled = ?", true).
+		Select("amr.*, COALESCE(NULLIF(amr.project_id, 0), ad.project_id, 0) AS project_id").
+		Joins("LEFT JOIN alert_datasources ad ON ad.id = amr.datasource_id AND ad.deleted_at IS NULL").
+		Where("amr.enabled = ? AND amr.deleted_at IS NULL", true).
 		Find(&rules).Error
 	return rules, err
 }

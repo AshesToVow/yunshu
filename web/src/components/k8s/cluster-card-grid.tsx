@@ -24,10 +24,7 @@ export type ClusterCardGridProps = {
   onOpenPods?: (record: ClusterItem) => void;
 };
 
-function renderConnection(
-  record: ClusterItem,
-  statusByID: ClusterCardGridProps["statusByID"],
-) {
+function renderConnection(record: ClusterItem, statusByID: ClusterCardGridProps["statusByID"]) {
   if (record.status !== 1) return <Tag>disabled</Tag>;
   const st = statusByID[record.id];
   const state = (st?.connection_state || "unknown").toLowerCase();

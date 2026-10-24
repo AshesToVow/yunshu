@@ -13,7 +13,7 @@ import {
   probeToForm,
   safeGet,
   safeParseYaml,
-  toNumberOrUndefined
+  toNumberOrUndefined,
 } from "./helpers";
 
 export type DeploymentFormValues = {
@@ -95,12 +95,12 @@ export type DeploymentFormValues = {
 
 export function buildDeploymentYaml(v: DeploymentFormValues): string {
   const envMap = envPairsToMap(v.env_pairs);
-  const env = Object.keys(envMap).length
-    ? Object.entries(envMap).map(([name, value]) => ({ name, value }))
-    : undefined;
+  const env = Object.keys(envMap).length ? Object.entries(envMap).map(([name, value]) => ({ name, value })) : undefined;
 
-  const imagePullSecrets =
-    (v.image_pull_secrets ?? []).filter(Boolean).map((name) => ({ name: String(name).trim() })).filter((s) => !!s.name);
+  const imagePullSecrets = (v.image_pull_secrets ?? [])
+    .filter(Boolean)
+    .map((name) => ({ name: String(name).trim() }))
+    .filter((s) => !!s.name);
   const tolerations =
     (v.tolerations ?? [])
       .map((t) => ({
@@ -119,24 +119,23 @@ export function buildDeploymentYaml(v: DeploymentFormValues): string {
         tolerationSeconds: t.tolerationSeconds,
       })) || undefined;
 
-  const volumes =
-    (v.volumes ?? [])
-      .map((it) => {
-        const name = String(it.name ?? "").trim();
-        if (!name) return null;
-        const type = it.type || "emptyDir";
-        if (type === "configMap") {
-          return { name, configMap: { name: String(it.source_name ?? "").trim() || name } };
-        }
-        if (type === "secret") {
-          return { name, secret: { secretName: String(it.source_name ?? "").trim() || name } };
-        }
-        if (type === "pvc") {
-          return { name, persistentVolumeClaim: { claimName: String(it.source_name ?? "").trim() || name } };
-        }
-        return { name, emptyDir: {} };
-      })
-      .filter(Boolean);
+  const volumes = (v.volumes ?? [])
+    .map((it) => {
+      const name = String(it.name ?? "").trim();
+      if (!name) return null;
+      const type = it.type || "emptyDir";
+      if (type === "configMap") {
+        return { name, configMap: { name: String(it.source_name ?? "").trim() || name } };
+      }
+      if (type === "secret") {
+        return { name, secret: { secretName: String(it.source_name ?? "").trim() || name } };
+      }
+      if (type === "pvc") {
+        return { name, persistentVolumeClaim: { claimName: String(it.source_name ?? "").trim() || name } };
+      }
+      return { name, emptyDir: {} };
+    })
+    .filter(Boolean);
 
   const volumeMounts =
     (v.volume_mounts ?? [])
@@ -186,7 +185,8 @@ export function buildDeploymentYaml(v: DeploymentFormValues): string {
           }
         : undefined,
       minReadySeconds: typeof v.min_ready_seconds === "number" ? v.min_ready_seconds : undefined,
-      progressDeadlineSeconds: typeof v.progress_deadline_seconds === "number" ? v.progress_deadline_seconds : undefined,
+      progressDeadlineSeconds:
+        typeof v.progress_deadline_seconds === "number" ? v.progress_deadline_seconds : undefined,
       revisionHistoryLimit: typeof v.revision_history_limit === "number" ? v.revision_history_limit : undefined,
       selector: { matchLabels: { app: v.name } },
       template: {
@@ -197,17 +197,19 @@ export function buildDeploymentYaml(v: DeploymentFormValues): string {
               name: v.container_name || v.name,
               image: v.image,
               imagePullPolicy: v.image_pull_policy || undefined,
-              ports: v.port ? [{ name: String(v.port_name ?? "").trim() || undefined, containerPort: v.port }] : undefined,
+              ports: v.port
+                ? [{ name: String(v.port_name ?? "").trim() || undefined, containerPort: v.port }]
+                : undefined,
               command: v.command?.trim() ? ["sh", "-c", v.command.trim()] : undefined,
               env,
               resources: Object.keys(resources).length ? resources : undefined,
               volumeMounts,
-                  ...(livenessProbe ? { livenessProbe } : {}),
-                  ...(readinessProbe ? { readinessProbe } : {}),
-                  ...(startupProbe ? { startupProbe } : {}),
+              ...(livenessProbe ? { livenessProbe } : {}),
+              ...(readinessProbe ? { readinessProbe } : {}),
+              ...(startupProbe ? { startupProbe } : {}),
             },
           ],
-              imagePullSecrets: imagePullSecrets.length ? imagePullSecrets : undefined,
+          imagePullSecrets: imagePullSecrets.length ? imagePullSecrets : undefined,
           volumes: volumes.length ? volumes : undefined,
           tolerations: tolerations?.length ? tolerations : undefined,
           nodeSelector: Object.keys(nodeSelector).length ? nodeSelector : undefined,
@@ -294,9 +296,14 @@ export function deploymentYamlToForm(yaml: string): DeploymentFormValues | null 
     node_selector_pairs: mapToKvPairs(obj?.spec?.template?.spec?.nodeSelector),
     affinity_yaml: obj?.spec?.template?.spec?.affinity ? YAML.stringify(obj.spec.template.spec.affinity) : undefined,
     strategy_type: obj?.spec?.strategy?.type as DeploymentFormValues["strategy_type"],
-    rolling_update_max_surge: obj?.spec?.strategy?.rollingUpdate?.maxSurge != null ? String(obj.spec.strategy.rollingUpdate.maxSurge) : undefined,
+    rolling_update_max_surge:
+      obj?.spec?.strategy?.rollingUpdate?.maxSurge != null
+        ? String(obj.spec.strategy.rollingUpdate.maxSurge)
+        : undefined,
     rolling_update_max_unavailable:
-      obj?.spec?.strategy?.rollingUpdate?.maxUnavailable != null ? String(obj.spec.strategy.rollingUpdate.maxUnavailable) : undefined,
+      obj?.spec?.strategy?.rollingUpdate?.maxUnavailable != null
+        ? String(obj.spec.strategy.rollingUpdate.maxUnavailable)
+        : undefined,
     revision_history_limit: toNumberOrUndefined(obj?.spec?.revisionHistoryLimit),
     ...probeToForm("liveness", lp),
     ...probeToForm("readiness", rp),
@@ -323,7 +330,8 @@ export function deploymentObjToForm(obj: any): DeploymentFormValues | null {
   const resReq = c?.resources?.requests ?? {};
   const resLim = c?.resources?.limits ?? {};
   const tolerations =
-    Array.isArray(safeGet(obj, "spec.template.spec.tolerations")) && safeGet(obj, "spec.template.spec.tolerations").length
+    Array.isArray(safeGet(obj, "spec.template.spec.tolerations")) &&
+    safeGet(obj, "spec.template.spec.tolerations").length
       ? safeGet(obj, "spec.template.spec.tolerations").map((t: any) => ({
           key: t?.key,
           operator: (t?.operator || "Equal") as "Equal" | "Exists",
@@ -351,8 +359,11 @@ export function deploymentObjToForm(obj: any): DeploymentFormValues | null {
       : [];
 
   const imagePullSecrets =
-    Array.isArray(safeGet(obj, "spec.template.spec.imagePullSecrets")) && safeGet(obj, "spec.template.spec.imagePullSecrets")?.length
-      ? (safeGet(obj, "spec.template.spec.imagePullSecrets") ?? []).map((s: any) => String(s?.name ?? "")).filter((x: string) => !!x)
+    Array.isArray(safeGet(obj, "spec.template.spec.imagePullSecrets")) &&
+    safeGet(obj, "spec.template.spec.imagePullSecrets")?.length
+      ? (safeGet(obj, "spec.template.spec.imagePullSecrets") ?? [])
+          .map((s: any) => String(s?.name ?? ""))
+          .filter((x: string) => !!x)
       : [];
 
   const lp = c?.livenessProbe;
@@ -379,11 +390,18 @@ export function deploymentObjToForm(obj: any): DeploymentFormValues | null {
     volumes,
     volume_mounts: volumeMounts,
     node_selector_pairs: mapToKvPairs(safeGet(obj, "spec.template.spec.nodeSelector")),
-    affinity_yaml: safeGet(obj, "spec.template.spec.affinity") ? YAML.stringify(safeGet(obj, "spec.template.spec.affinity")) : undefined,
+    affinity_yaml: safeGet(obj, "spec.template.spec.affinity")
+      ? YAML.stringify(safeGet(obj, "spec.template.spec.affinity"))
+      : undefined,
     strategy_type: safeGet(obj, "spec.strategy.type") as DeploymentFormValues["strategy_type"],
-    rolling_update_max_surge: safeGet(obj, "spec.strategy.rollingUpdate.maxSurge") != null ? String(safeGet(obj, "spec.strategy.rollingUpdate.maxSurge")) : undefined,
+    rolling_update_max_surge:
+      safeGet(obj, "spec.strategy.rollingUpdate.maxSurge") != null
+        ? String(safeGet(obj, "spec.strategy.rollingUpdate.maxSurge"))
+        : undefined,
     rolling_update_max_unavailable:
-      safeGet(obj, "spec.strategy.rollingUpdate.maxUnavailable") != null ? String(safeGet(obj, "spec.strategy.rollingUpdate.maxUnavailable")) : undefined,
+      safeGet(obj, "spec.strategy.rollingUpdate.maxUnavailable") != null
+        ? String(safeGet(obj, "spec.strategy.rollingUpdate.maxUnavailable"))
+        : undefined,
     min_ready_seconds: toNumberOrUndefined(safeGet(obj, "spec.minReadySeconds")),
     progress_deadline_seconds: toNumberOrUndefined(safeGet(obj, "spec.progressDeadlineSeconds")),
     revision_history_limit: toNumberOrUndefined(safeGet(obj, "spec.revisionHistoryLimit")),
@@ -393,7 +411,9 @@ export function deploymentObjToForm(obj: any): DeploymentFormValues | null {
   };
 }
 
-export function qosFromResources(v: Pick<DeploymentFormValues, "requests_cpu" | "requests_memory" | "limits_cpu" | "limits_memory">): "BestEffort" | "Burstable" | "Guaranteed" {
+export function qosFromResources(
+  v: Pick<DeploymentFormValues, "requests_cpu" | "requests_memory" | "limits_cpu" | "limits_memory">,
+): "BestEffort" | "Burstable" | "Guaranteed" {
   const rc = String(v.requests_cpu ?? "").trim();
   const rm = String(v.requests_memory ?? "").trim();
   const lc = String(v.limits_cpu ?? "").trim();
@@ -404,4 +424,3 @@ export function qosFromResources(v: Pick<DeploymentFormValues, "requests_cpu" | 
   const guaranteed = rc && rm && lc && lm && rc === lc && rm === lm;
   return guaranteed ? "Guaranteed" : "Burstable";
 }
-

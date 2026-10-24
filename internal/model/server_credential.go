@@ -19,9 +19,9 @@ type ServerCredential struct {
 	PasswordDictLabel   *string `json:"password_dict_label,omitempty" gorm:"size:191;comment:字典密码模板标签"`
 	PrivateKeyDictLabel *string `json:"private_key_dict_label,omitempty" gorm:"size:191;comment:字典私钥模板标签"`
 
-	EncPassword    *string `json:"-" gorm:"type:longtext;comment:加密后的密码"`
-	EncPrivateKey  *string `json:"-" gorm:"type:longtext;comment:加密后的私钥"`
-	EncPassphrase  *string `json:"-" gorm:"type:longtext;comment:加密后的私钥口令"`
+	EncPassword    *string `json:"-" gorm:"type:text;comment:加密后的密码"`
+	EncPrivateKey  *string `json:"-" gorm:"type:text;comment:加密后的私钥"`
+	EncPassphrase  *string `json:"-" gorm:"type:text;comment:加密后的私钥口令"`
 	KeyVersion     int     `json:"key_version" gorm:"not null;default:1;comment:密钥版本号"`
 	FingerprintSHA string  `json:"fingerprint_sha" gorm:"size:64;index;comment:凭据指纹SHA"` // optional: for audit / rotation
 

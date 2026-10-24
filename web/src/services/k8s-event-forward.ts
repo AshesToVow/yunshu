@@ -64,3 +64,35 @@ export function getK8sEventForwardSettings() {
 export function updateK8sEventForwardSettings(payload: K8sEventForwardSetting) {
   return getData<K8sEventForwardSetting>(http.put("/k8s/event-forward/settings", payload));
 }
+
+export interface K8sForwardedEventItem {
+  id: number;
+  evt_key: string;
+  cluster_id: string;
+  namespace: string;
+  name: string;
+  type: string;
+  reason: string;
+  message?: string;
+  timestamp: string;
+  status: string;
+  attempts: number;
+  last_error?: string;
+  claimed_at?: string;
+  processed?: boolean;
+}
+
+export function listK8sForwardedEvents(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  cluster_id?: string;
+}) {
+  return getData<{ list: K8sForwardedEventItem[]; total: number; page: number; page_size: number }>(
+    http.get("/k8s/event-forward/events", { params }),
+  );
+}
+
+export function requeueK8sForwardedEvent(id: number) {
+  return getData<{ requeued: boolean }>(http.post(`/k8s/event-forward/events/${id}/requeue`));
+}

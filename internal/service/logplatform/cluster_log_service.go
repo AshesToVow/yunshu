@@ -22,19 +22,25 @@ const defaultClusterLogNamespace = "yunshu-logging"
 
 // ClusterLogService K8s 集群日志采集（DaemonSet + 规则）。
 type ClusterLogService struct {
-	db          *gorm.DB
-	projectRepo interfaces.ProjectRepository
-	esProvider  *ElasticsearchProvider
-	kafkaProvider *KafkaProvider
-	k8sRuntime  *k8ssvc.K8sRuntimeService
-	dyn         *k8ssvc.DynamicResourceService
-	loggieCfg   config.LoggieConfig
-	daemonImage string
+	clusterRepo    interfaces.ClusterLogRepository
+	pipelineRepo   interfaces.LogPipelineRepository
+	savedQueryRepo interfaces.LogSavedQueryRepository
+	dropRuleRepo   interfaces.LogDropRuleRepository
+	projectRepo    interfaces.ProjectRepository
+	esProvider     *ElasticsearchProvider
+	kafkaProvider  *KafkaProvider
+	k8sRuntime     *k8ssvc.K8sRuntimeService
+	dyn            *k8ssvc.DynamicResourceService
+	loggieCfg      config.LoggieConfig
+	daemonImage    string
 }
 
 // NewClusterLogService 创建集群采集服务。
 func NewClusterLogService(
-	db *gorm.DB,
+	clusterRepo interfaces.ClusterLogRepository,
+	pipelineRepo interfaces.LogPipelineRepository,
+	savedQueryRepo interfaces.LogSavedQueryRepository,
+	dropRuleRepo interfaces.LogDropRuleRepository,
 	projectRepo interfaces.ProjectRepository,
 	esProvider *ElasticsearchProvider,
 	kafkaProvider *KafkaProvider,
@@ -51,14 +57,17 @@ func NewClusterLogService(
 		dyn = k8ssvc.NewDynamicResourceService(k8sRuntime)
 	}
 	return &ClusterLogService{
-		db:            db,
-		projectRepo:   projectRepo,
-		esProvider:    esProvider,
-		kafkaProvider: kafkaProvider,
-		k8sRuntime:    k8sRuntime,
-		dyn:           dyn,
-		loggieCfg:     loggieCfg.Normalized(),
-		daemonImage:   img,
+		clusterRepo:    clusterRepo,
+		pipelineRepo:   pipelineRepo,
+		savedQueryRepo: savedQueryRepo,
+		dropRuleRepo:   dropRuleRepo,
+		projectRepo:    projectRepo,
+		esProvider:     esProvider,
+		kafkaProvider:  kafkaProvider,
+		k8sRuntime:     k8sRuntime,
+		dyn:            dyn,
+		loggieCfg:      loggieCfg.Normalized(),
+		daemonImage:    img,
 	}
 }
 
@@ -130,11 +139,11 @@ func (s *ClusterLogService) ListRules(ctx context.Context, projectID, clusterID 
 
 func (s *ClusterLogService) agentRateLimitQPS(ctx context.Context, projectID, clusterID uint) int {
 	rateQPS := defaultClusterLogRateLimitQPS
-	if clusterID == 0 {
+	if clusterID == 0 || s.clusterRepo == nil {
 		return rateQPS
 	}
-	var existing model.ClusterLogAgent
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&existing).Error; err == nil && existing.RateLimitQPS > 0 {
+	existing, err := s.clusterRepo.GetAgent(ctx, projectID, clusterID)
+	if err == nil && existing.RateLimitQPS > 0 {
 		return existing.RateLimitQPS
 	}
 	return rateQPS
@@ -144,15 +153,10 @@ func (s *ClusterLogService) listRuleModels(ctx context.Context, projectID, clust
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return nil, err
 	}
-	q := s.db.WithContext(ctx).Where("project_id = ?", projectID).Order("id desc")
-	if clusterID > 0 {
-		q = q.Where("cluster_id = ?", clusterID)
+	if s.clusterRepo == nil {
+		return nil, constants.ErrBadRequestWithMsg("数据库不可用")
 	}
-	var list []model.ClusterLogRule
-	if err := q.Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return list, nil
+	return s.clusterRepo.ListRules(ctx, projectID, clusterID)
 }
 
 // ClusterLogRuleItem 规则列表项（含后端计算的生效 QPS）。
@@ -202,7 +206,7 @@ func (s *ClusterLogService) CreateRule(ctx context.Context, projectID uint, req 
 	if req.RateLimitQPS != nil && *req.RateLimitQPS > 0 {
 		row.RateLimitQPS = *req.RateLimitQPS
 	}
-	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+	if err := s.clusterRepo.CreateRule(ctx, row); err != nil {
 		return nil, err
 	}
 	s.maybeResyncAgent(ctx, projectID, row.ClusterID)
@@ -213,8 +217,8 @@ func (s *ClusterLogService) UpdateRule(ctx context.Context, projectID, ruleID ui
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return nil, err
 	}
-	var row model.ClusterLogRule
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", ruleID, projectID).First(&row).Error; err != nil {
+	row, err := s.clusterRepo.GetRuleByIDInProject(ctx, projectID, ruleID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
@@ -250,29 +254,29 @@ func (s *ClusterLogService) UpdateRule(ctx context.Context, projectID, ruleID ui
 	if req.Remark != nil {
 		row.Remark = strings.TrimSpace(*req.Remark)
 	}
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.clusterRepo.SaveRule(ctx, row); err != nil {
 		return nil, err
 	}
 	s.maybeResyncAgent(ctx, projectID, row.ClusterID)
-	return &row, nil
+	return row, nil
 }
 
 func (s *ClusterLogService) DeleteRule(ctx context.Context, projectID, ruleID uint) error {
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return err
 	}
-	var row model.ClusterLogRule
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", ruleID, projectID).First(&row).Error; err != nil {
+	row, err := s.clusterRepo.GetRuleByIDInProject(ctx, projectID, ruleID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return constants.ErrNotFound
 		}
 		return err
 	}
-	res := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", ruleID, projectID).Delete(&model.ClusterLogRule{})
-	if res.Error != nil {
-		return res.Error
+	n, err := s.clusterRepo.DeleteRuleByIDInProject(ctx, projectID, ruleID)
+	if err != nil {
+		return err
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return constants.ErrNotFound
 	}
 	s.maybeResyncAgent(ctx, projectID, row.ClusterID)
@@ -283,11 +287,7 @@ func (s *ClusterLogService) ListAgents(ctx context.Context, projectID uint) ([]m
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return nil, err
 	}
-	var list []model.ClusterLogAgent
-	if err := s.db.WithContext(ctx).Where("project_id = ?", projectID).Order("id desc").Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return list, nil
+	return s.clusterRepo.ListAgents(ctx, projectID)
 }
 
 // ClusterPipelinesPreview pipelines 预览（含是否自定义覆盖）。
@@ -314,7 +314,8 @@ func (s *ClusterLogService) PreviewPipelines(ctx context.Context, projectID, clu
 		IsCustom:      false,
 	}
 	var existing model.ClusterLogAgent
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&existing).Error; err == nil {
+	if agent, err := s.clusterRepo.GetAgent(ctx, projectID, clusterID); err == nil {
+		existing = *agent
 		if existing.PipelinesCustom && strings.TrimSpace(existing.PipelinesYAML) != "" {
 			out.IsCustom = true
 			out.PipelinesYAML = existing.PipelinesYAML
@@ -340,19 +341,19 @@ func (s *ClusterLogService) SavePipelines(ctx context.Context, projectID uint, r
 	if req.ClusterID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("cluster_id 无效")
 	}
-	var agent model.ClusterLogAgent
-	err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, req.ClusterID).First(&agent).Error
+	agent, err := s.clusterRepo.GetAgent(ctx, projectID, req.ClusterID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		agent = model.ClusterLogAgent{
+		created := model.ClusterLogAgent{
 			ProjectID:    projectID,
 			ClusterID:    req.ClusterID,
 			Namespace:    defaultClusterLogNamespace,
 			Status:       "unknown",
 			RateLimitQPS: defaultClusterLogRateLimitQPS,
 		}
-		if err := s.db.WithContext(ctx).Create(&agent).Error; err != nil {
+		if err := s.clusterRepo.CreateAgent(ctx, &created); err != nil {
 			return nil, err
 		}
+		agent = &created
 	} else if err != nil {
 		return nil, err
 	}
@@ -377,7 +378,7 @@ func (s *ClusterLogService) SavePipelines(ctx context.Context, projectID uint, r
 	if req.RateLimitQPS > 0 {
 		agent.RateLimitQPS = req.RateLimitQPS
 	}
-	if err := s.db.WithContext(ctx).Save(&agent).Error; err != nil {
+	if err := s.clusterRepo.SaveAgent(ctx, agent); err != nil {
 		return nil, err
 	}
 	if req.Apply {
@@ -397,8 +398,7 @@ func (s *ClusterLogService) generatePipelinesYAML(ctx context.Context, projectID
 	qps := rateLimitQPS
 	if qps <= 0 {
 		qps = defaultClusterLogRateLimitQPS
-		var existing model.ClusterLogAgent
-		if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&existing).Error; err == nil && existing.RateLimitQPS > 0 {
+		if existing, err := s.clusterRepo.GetAgent(ctx, projectID, clusterID); err == nil && existing.RateLimitQPS > 0 {
 			qps = existing.RateLimitQPS
 		}
 	}
@@ -445,9 +445,8 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 		return nil, err
 	}
 	var existing *model.ClusterLogAgent
-	var prev model.ClusterLogAgent
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&prev).Error; err == nil {
-		existing = &prev
+	if prev, err := s.clusterRepo.GetAgent(ctx, projectID, clusterID); err == nil {
+		existing = prev
 	}
 	qps := resolveProjectRateLimitQPS(rateLimitQPS, existing)
 	esCfg, kafkaCfg := s.resolveSinkConfigs(ctx)
@@ -492,11 +491,11 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 }
 
 func (s *ClusterLogService) maybeResyncAgent(ctx context.Context, projectID, clusterID uint) {
-	if projectID == 0 || clusterID == 0 || s.dyn == nil {
+	if projectID == 0 || clusterID == 0 || s.dyn == nil || s.clusterRepo == nil {
 		return
 	}
-	var agent model.ClusterLogAgent
-	if err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&agent).Error; err != nil {
+	agent, err := s.clusterRepo.GetAgent(ctx, projectID, clusterID)
+	if err != nil {
 		return
 	}
 	st := strings.ToLower(strings.TrimSpace(agent.Status))
@@ -524,8 +523,7 @@ func (s *ClusterLogService) RefreshStatus(ctx context.Context, projectID, cluste
 	if err := s.ensureProject(ctx, projectID); err != nil {
 		return nil, err
 	}
-	var agent model.ClusterLogAgent
-	err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&agent).Error
+	agent, err := s.clusterRepo.GetAgent(ctx, projectID, clusterID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFoundWithMsg("尚未部署集群采集")
@@ -569,10 +567,9 @@ func (s *ClusterLogService) upsertAgentStatus(
 	if rateLimitQPS <= 0 {
 		rateLimitQPS = defaultClusterLogRateLimitQPS
 	}
-	var agent model.ClusterLogAgent
-	err := s.db.WithContext(ctx).Where("project_id = ? AND cluster_id = ?", projectID, clusterID).First(&agent).Error
+	agent, err := s.clusterRepo.GetAgent(ctx, projectID, clusterID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		agent = model.ClusterLogAgent{
+		created := model.ClusterLogAgent{
 			ProjectID:       projectID,
 			ClusterID:       clusterID,
 			Namespace:       namespace,
@@ -584,10 +581,10 @@ func (s *ClusterLogService) upsertAgentStatus(
 			LastError:       truncateErr(lastErr),
 			LastSyncAt:      &now,
 		}
-		if err := s.db.WithContext(ctx).Create(&agent).Error; err != nil {
+		if err := s.clusterRepo.CreateAgent(ctx, &created); err != nil {
 			return nil, err
 		}
-		return &agent, nil
+		return &created, nil
 	}
 	if err != nil {
 		return nil, err
@@ -600,10 +597,10 @@ func (s *ClusterLogService) upsertAgentStatus(
 	agent.RateLimitQPS = rateLimitQPS
 	agent.LastError = truncateErr(lastErr)
 	agent.LastSyncAt = &now
-	if err := s.db.WithContext(ctx).Save(&agent).Error; err != nil {
+	if err := s.clusterRepo.SaveAgent(ctx, agent); err != nil {
 		return nil, err
 	}
-	return &agent, nil
+	return agent, nil
 }
 
 func truncateErr(s string) string {

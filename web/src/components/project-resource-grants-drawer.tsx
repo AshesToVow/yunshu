@@ -191,7 +191,11 @@ export function ProjectResourceGrantsDrawer({ open, projectId, members, onClose 
             onChange={(vals) =>
               setCaps((c) => ({
                 ...c,
-                view: vals.includes("view") || vals.includes("build") || vals.includes("release") || vals.includes("manage"),
+                view:
+                  vals.includes("view") ||
+                  vals.includes("build") ||
+                  vals.includes("release") ||
+                  vals.includes("manage"),
                 build: vals.includes("build") || vals.includes("manage"),
                 release: vals.includes("release") || vals.includes("manage"),
                 manage: vals.includes("manage"),
@@ -214,8 +218,15 @@ export function ProjectResourceGrantsDrawer({ open, projectId, members, onClose 
           dataSource={serverGrants}
           pagination={{ pageSize: 10 }}
           columns={[
-            { title: "成员", render: (_: unknown, r: ServerAccessGrantItem) => r.nickname || r.username || r.principal_ref },
-            { title: "服务器", render: (_: unknown, r: ServerAccessGrantItem) => `${r.server_name || r.server_id} ${r.server_host || ""}` },
+            {
+              title: "成员",
+              render: (_: unknown, r: ServerAccessGrantItem) => r.nickname || r.username || r.principal_ref,
+            },
+            {
+              title: "服务器",
+              render: (_: unknown, r: ServerAccessGrantItem) =>
+                `${r.server_name || r.server_id} ${r.server_host || ""}`,
+            },
             {
               title: "权限",
               render: (_: unknown, r: ServerAccessGrantItem) =>
@@ -225,7 +236,10 @@ export function ProjectResourceGrantsDrawer({ open, projectId, members, onClose 
               title: "操作",
               width: 80,
               render: (_: unknown, r: ServerAccessGrantItem) => (
-                <Popconfirm title="删除该授权？" onConfirm={() => void deleteServerAccessGrant(projectId, r.id).then(reload)}>
+                <Popconfirm
+                  title="删除该授权？"
+                  onConfirm={() => void deleteServerAccessGrant(projectId, r.id).then(reload)}
+                >
                   <Button type="link" danger size="small">
                     删除
                   </Button>
@@ -242,7 +256,10 @@ export function ProjectResourceGrantsDrawer({ open, projectId, members, onClose 
           dataSource={cicdGrants}
           pagination={{ pageSize: 10 }}
           columns={[
-            { title: "成员", render: (_: unknown, r: CicdAccessGrantItem) => r.nickname || r.username || r.principal_ref },
+            {
+              title: "成员",
+              render: (_: unknown, r: CicdAccessGrantItem) => r.nickname || r.username || r.principal_ref,
+            },
             { title: "应用", render: (_: unknown, r: CicdAccessGrantItem) => r.service_name || r.service_id },
             {
               title: "权限",
@@ -255,7 +272,10 @@ export function ProjectResourceGrantsDrawer({ open, projectId, members, onClose 
               title: "操作",
               width: 80,
               render: (_: unknown, r: CicdAccessGrantItem) => (
-                <Popconfirm title="删除该授权？" onConfirm={() => void deleteCicdAccessGrant(projectId, r.id).then(reload)}>
+                <Popconfirm
+                  title="删除该授权？"
+                  onConfirm={() => void deleteCicdAccessGrant(projectId, r.id).then(reload)}
+                >
                   <Button type="link" danger size="small">
                     删除
                   </Button>

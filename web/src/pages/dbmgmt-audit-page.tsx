@@ -67,7 +67,9 @@ export function DbmgmtAuditPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>();
-  const [instances, setInstances] = useState<{ id: number; name: string; host: string; port: number; driver?: string }[]>([]);
+  const [instances, setInstances] = useState<
+    { id: number; name: string; host: string; port: number; driver?: string }[]
+  >([]);
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
@@ -106,7 +108,10 @@ export function DbmgmtAuditPage() {
   }, [load]);
 
   const instanceOptions = useMemo(
-    () => [{ value: undefined as number | undefined, label: "全部实例" }, ...instances.map((i) => ({ value: i.id, label: i.name || `${i.host}:${i.port}` }))],
+    () => [
+      { value: undefined as number | undefined, label: "全部实例" },
+      ...instances.map((i) => ({ value: i.id, label: i.name || `${i.host}:${i.port}` })),
+    ],
     [instances],
   );
 
@@ -115,9 +120,36 @@ export function DbmgmtAuditPage() {
       title="审计日志"
       extra={
         <Space wrap>
-          <Select style={{ width: 200 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={(v) => { setProjectId(v); setInstanceId(undefined); setPage(1); }} />
-          <Select allowClear placeholder="实例" style={{ width: 200 }} value={instanceId} options={instanceOptions} onChange={(v) => { setInstanceId(v); setPage(1); }} />
-          <Select style={{ width: 160 }} value={actionFilter} options={AUDIT_ACTION_OPTIONS as unknown as { value: string; label: string }[]} onChange={(v) => { setActionFilter(v); setPage(1); }} />
+          <Select
+            style={{ width: 200 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={(v) => {
+              setProjectId(v);
+              setInstanceId(undefined);
+              setPage(1);
+            }}
+          />
+          <Select
+            allowClear
+            placeholder="实例"
+            style={{ width: 200 }}
+            value={instanceId}
+            options={instanceOptions}
+            onChange={(v) => {
+              setInstanceId(v);
+              setPage(1);
+            }}
+          />
+          <Select
+            style={{ width: 160 }}
+            value={actionFilter}
+            options={AUDIT_ACTION_OPTIONS as unknown as { value: string; label: string }[]}
+            onChange={(v) => {
+              setActionFilter(v);
+              setPage(1);
+            }}
+          />
           <Button icon={<ReloadOutlined />} onClick={() => void load()} />
         </Space>
       }
@@ -135,7 +167,12 @@ export function DbmgmtAuditPage() {
           { title: "时间", dataIndex: "created_at", width: 170, render: (v?: string) => formatDateTime(v) },
           { title: "操作人", dataIndex: "actor_name", width: 120 },
           { title: "操作", dataIndex: "action", width: 140, render: (v: string) => auditActionLabel(v) },
-          { title: "实例", width: 180, render: (_, row) => row.instance_label || row.instance_name || (row.instance_id ? `#${row.instance_id}` : "—") },
+          {
+            title: "实例",
+            width: 180,
+            render: (_, row) =>
+              row.instance_label || row.instance_name || (row.instance_id ? `#${row.instance_id}` : "—"),
+          },
           { title: "详情", render: (_, row) => formatAuditDetail(row) },
         ]}
       />

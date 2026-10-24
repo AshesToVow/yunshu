@@ -54,6 +54,8 @@ func toAccessRequestMetaItem(m accessRequestMeta) *AccessRequestMetaItem {
 var mysqlCharsetCollations = map[string][]string{
 	"utf8":    {"utf8_general_ci", "utf8_bin"},
 	"utf8mb4": {"utf8mb4_general_ci", "utf8mb4_bin", "utf8mb4_unicode_ci"},
+	"latin1":  {"latin1_swedish_ci", "latin1_bin"},
+	"gbk":     {"gbk_chinese_ci", "gbk_bin"},
 }
 
 func validateDatabaseCreateMeta(charset, collation string) error {
@@ -63,7 +65,7 @@ func validateDatabaseCreateMeta(charset, collation string) error {
 	}
 	allowed, ok := mysqlCharsetCollations[cs]
 	if !ok {
-		return constants.ErrBadRequestWithMsg("字符集仅支持 utf8、utf8mb4")
+		return constants.ErrBadRequestWithMsg("字符集仅支持 utf8、utf8mb4、latin1、gbk")
 	}
 	col := strings.TrimSpace(collation)
 	if col == "" {
@@ -78,11 +80,16 @@ func validateDatabaseCreateMeta(charset, collation string) error {
 }
 
 func defaultCollationForCharset(charset string) string {
-	cs := strings.ToLower(strings.TrimSpace(charset))
-	if cs == "utf8" {
+	switch strings.ToLower(strings.TrimSpace(charset)) {
+	case "utf8":
 		return "utf8_general_ci"
+	case "latin1":
+		return "latin1_swedish_ci"
+	case "gbk":
+		return "gbk_chinese_ci"
+	default:
+		return "utf8mb4_general_ci"
 	}
-	return "utf8mb4_general_ci"
 }
 
 func isAllowedDbCharset(charset string) bool {

@@ -154,3 +154,16 @@ func (h *ProjectCatalogHandler) GetPortrait(c *gin.Context) {
 	}
 	response.Success(c, portrait)
 }
+
+// ListChangeEvents 项目变更时间线。
+func (h *ProjectCatalogHandler) ListChangeEvents(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeQuery(c, func(ctx context.Context, q service.ChangeEventListQuery) (*pagination.Result[model.ChangeEvent], error) {
+		q.ProjectID = projectID
+		return h.changes.List(ctx, q)
+	})
+}

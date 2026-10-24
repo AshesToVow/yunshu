@@ -69,7 +69,7 @@ func (s *Service) syncJenkinsJob(ctx context.Context, svc *model.CicdService, ci
 		Created:    !existsBefore,
 	}
 	if strings.TrimSpace(svc.JenkinsJob) == "" {
-		_ = s.db.WithContext(ctx).Model(svc).Update("jenkins_job", jobName).Error
+		_ = s.repo.UpdateServiceJenkinsJob(ctx, svc.ID, jobName)
 	}
 	return result, nil
 }
@@ -276,8 +276,7 @@ func (s *Service) buildImageNameHint(ctx context.Context, svc model.CicdService)
 			return strings.ToLower(v)
 		}
 	}
-	var ci model.CicdCiConfig
-	if err := s.db.WithContext(ctx).Where("service_id = ?", svc.ID).First(&ci).Error; err == nil {
+	if ci, err := s.repo.GetCIConfig(ctx, svc.ID); err == nil && ci != nil {
 		if v := strings.TrimSpace(ci.ProjectName); v != "" {
 			return strings.ToLower(v)
 		}

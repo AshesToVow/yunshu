@@ -5,6 +5,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/pagination"
 )
 
 // K8sClusterRepo is implemented by *K8sClusterRepository.
@@ -25,6 +26,8 @@ type K8sClusterAccessRepo interface {
 	ListGrantsApplyingToCluster(ctx context.Context, clusterID uint) ([]model.K8sClusterAccessGrant, error)
 	ListByPrincipal(ctx context.Context, kind string, ref string) ([]model.K8sClusterAccessGrant, error)
 	ListByRoleCode(ctx context.Context, roleCode string) ([]model.K8sClusterAccessGrant, error)
+	ListForPack(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) ([]model.K8sClusterAccessGrant, error)
+	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) (error)
 	GetByID(ctx context.Context, id uint) (*model.K8sClusterAccessGrant, error)
 	DeleteByID(ctx context.Context, id uint) (error)
 	EffectiveTier(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) (int)
@@ -60,4 +63,51 @@ type K8sNamespaceDenyRepo interface {
 }
 
 var _ K8sNamespaceDenyRepo = (*K8sNamespaceDenyRepository)(nil)
+
+// K8sCrTemplateListFilter filters CR/YAML templates.
+type K8sCrTemplateListFilter struct {
+	ProjectID uint
+	Kind      string
+}
+
+// K8sCrTemplateRepo is implemented by *K8sCrTemplateRepository.
+type K8sCrTemplateRepo interface {
+	List(ctx context.Context, f K8sCrTemplateListFilter) ([]model.K8sCrTemplate, error)
+	GetByID(ctx context.Context, id uint) (*model.K8sCrTemplate, error)
+	Create(ctx context.Context, row *model.K8sCrTemplate) error
+	Save(ctx context.Context, row *model.K8sCrTemplate) error
+	DeleteByID(ctx context.Context, id uint) (rowsAffected int64, err error)
+}
+
+var _ K8sCrTemplateRepo = (*K8sCrTemplateRepository)(nil)
+
+// K8sWorkloadSnapshotListParams filters workload snapshots with pagination.
+type K8sWorkloadSnapshotListParams struct {
+	ProjectID uint
+	ClusterID uint
+	Namespace string
+	Kind      string
+	Name      string
+	Page      int
+	PageSize  int
+}
+
+// K8sWorkloadSnapshotRepo is implemented by *K8sWorkloadSnapshotRepository.
+type K8sWorkloadSnapshotRepo interface {
+	Create(ctx context.Context, row *model.K8sWorkloadSnapshot) error
+	GetByID(ctx context.Context, id uint) (*model.K8sWorkloadSnapshot, error)
+	List(ctx context.Context, p K8sWorkloadSnapshotListParams) (*pagination.Result[model.K8sWorkloadSnapshot], error)
+}
+
+var _ K8sWorkloadSnapshotRepo = (*K8sWorkloadSnapshotRepository)(nil)
+
+// HarborMergeRepo reads image registry / project Harbor fields for Helm Harbor resolution.
+type HarborMergeRepo interface {
+	GetDefaultEnabledHarborRegistry(ctx context.Context) (*model.ImageRegistry, error)
+	GetProjectRegistryBinding(ctx context.Context, projectID uint) (*model.ProjectRegistryBinding, error)
+	GetImageRegistryByID(ctx context.Context, id uint) (*model.ImageRegistry, error)
+	GetProjectHarborFields(ctx context.Context, projectID uint) (harborURL, harborProject string, err error)
+}
+
+var _ HarborMergeRepo = (*HarborMergeRepository)(nil)
 

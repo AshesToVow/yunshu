@@ -3,11 +3,11 @@ package handler
 import (
 	"context"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/cicd"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +15,7 @@ import (
 // --- Image registries (platform) ---
 
 func (h *CicdHandler) ListRegistries(c *gin.Context) {
-	ServeQuery(c, func(ctx context.Context, q cicd.RegistryListQuery) (*pagination.Result[cicd.RegistryItem], error) {
+	ServeQuery(c, func(ctx context.Context, q service.RegistryListQuery) (*pagination.Result[service.RegistryItem], error) {
 		return h.svc.ListRegistries(ctx, q)
 	})
 }
@@ -35,7 +35,7 @@ func (h *CicdHandler) GetRegistry(c *gin.Context) {
 }
 
 func (h *CicdHandler) CreateRegistry(c *gin.Context) {
-	ServeJSON201(c, func(ctx context.Context, req cicd.RegistryUpsertRequest) (*cicd.RegistryItem, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.RegistryUpsertRequest) (*service.RegistryItem, error) {
 		return h.svc.UpsertRegistry(ctx, 0, req)
 	})
 }
@@ -46,7 +46,7 @@ func (h *CicdHandler) UpdateRegistry(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req cicd.RegistryUpsertRequest) (*cicd.RegistryItem, error) {
+	ServeJSON(c, func(ctx context.Context, req service.RegistryUpsertRequest) (*service.RegistryItem, error) {
 		return h.svc.UpsertRegistry(ctx, id, req)
 	})
 }
@@ -98,7 +98,7 @@ func (h *CicdHandler) UpsertProjectRegistryBinding(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req cicd.ProjectRegistryBindingRequest) (*model.ProjectRegistryBinding, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ProjectRegistryBindingRequest) (*model.ProjectRegistryBinding, error) {
 		return h.svc.UpsertProjectRegistryBinding(ctx, projectID, req)
 	})
 }
@@ -189,7 +189,7 @@ func (h *CicdHandler) ListCleanupPolicies(c *gin.Context) {
 }
 
 func (h *CicdHandler) CreateCleanupPolicy(c *gin.Context) {
-	ServeJSON201(c, func(ctx context.Context, req cicd.CleanupPolicyUpsertRequest) (*model.ImageCleanupPolicy, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.CleanupPolicyUpsertRequest) (*model.ImageCleanupPolicy, error) {
 		return h.svc.UpsertCleanupPolicy(ctx, 0, req)
 	})
 }
@@ -200,7 +200,7 @@ func (h *CicdHandler) UpdateCleanupPolicy(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req cicd.CleanupPolicyUpsertRequest) (*model.ImageCleanupPolicy, error) {
+	ServeJSON(c, func(ctx context.Context, req service.CleanupPolicyUpsertRequest) (*model.ImageCleanupPolicy, error) {
 		return h.svc.UpsertCleanupPolicy(ctx, id, req)
 	})
 }
@@ -244,7 +244,7 @@ func (h *CicdHandler) ListPipelineTemplates(c *gin.Context) {
 }
 
 func (h *CicdHandler) CreatePipelineTemplate(c *gin.Context) {
-	ServeJSON201(c, func(ctx context.Context, req cicd.PipelineTemplateUpsertRequest) (*model.CicdPipelineTemplate, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.PipelineTemplateUpsertRequest) (*model.CicdPipelineTemplate, error) {
 		return h.svc.UpsertPipelineTemplate(ctx, 0, req)
 	})
 }
@@ -255,7 +255,7 @@ func (h *CicdHandler) UpdatePipelineTemplate(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req cicd.PipelineTemplateUpsertRequest) (*model.CicdPipelineTemplate, error) {
+	ServeJSON(c, func(ctx context.Context, req service.PipelineTemplateUpsertRequest) (*model.CicdPipelineTemplate, error) {
 		return h.svc.UpsertPipelineTemplate(ctx, id, req)
 	})
 }

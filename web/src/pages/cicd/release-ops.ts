@@ -30,5 +30,7 @@ export const K8S_DEPLOY_TEMPLATES = [
 ] as const;
 
 export function releaseOpLabel(op: string) {
-  return [...FRONTEND_RELEASE_OPS, ...BACKEND_RELEASE_OPS, ...CONTAINER_RELEASE_OPS].find((o) => o.value === op)?.label ?? op;
+  return (
+    [...FRONTEND_RELEASE_OPS, ...BACKEND_RELEASE_OPS, ...CONTAINER_RELEASE_OPS].find((o) => o.value === op)?.label ?? op
+  );
 }

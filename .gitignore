@@ -3,6 +3,11 @@
 # Local temp
 .tmp/
 
+# 可选本地覆盖（业务配置以 configs/config.yaml 为准，勿再维护 .env.example）
+.env
+.env.local
+.env.*.local
+
 # Go build artifacts
 *.exe
 *.dll

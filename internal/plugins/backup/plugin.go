@@ -40,7 +40,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := rt.MysqlBackup.(*service.MysqlBackupService); ok && svc != nil {
+	if svc, ok := plugin.As[*service.MysqlBackupService](rt.MysqlBackup); ok && svc != nil {
 		lifecycle.Go("backup.mysql-scheduler", func() { svc.RunMysqlBackupScheduler(bgCtx) })
 	}
 	return nil

@@ -143,50 +143,20 @@ sequenceDiagram
 | 项 | 现状 |
 |----|------|
 | 专用 `POST .../webhook/alertmanager` | **已下线**，路由不存在 |
-| 现有入站 | `POST /api/v1/alerts/ingress/k8s-events`（设计给 **K8s Event 转发**） |
-| 载荷形态 | 仍兼容 **Alertmanager Webhook JSON**（传输格式复用） |
+| Alertmanager 正式入站 | `POST /api/v1/alerts/webhook`（写入当前告警） |
+| K8s Event 入站 | `POST /api/v1/alerts/ingress/k8s-events`（仅 K8s Event；**勿**给 AM 用） |
 
-因此：
-
-- **不是**「官方推荐再把 AM 接回 Yunshu」。  
-- **但是**：若你在 `alertmanager.yml` 里把 receiver 指到上述入站地址，并带上 `X-Alert-Token` / Bearer（与字典 `alert_webhook_token` 一致），**Prometheus → AM 产生的告警可以进 Yunshu 投递流水**，再走订阅树与渠道。
+AM → Yunshu 应使用 **`/api/v1/alerts/webhook`**，并带 Token。不要把 AM 指到 k8s-events（会跳过 cur_events）。
 
 ```text
-【旁路 · 不推荐当主路径】
-
-  Prom rules/*.yml
-        │
-        ▼
-  Alertmanager（group_wait 用 alertmanager.yml，如 30s）
-        │
-        │  webhook_configs:
-        │    url: http://<yunshu>:8080/api/v1/alerts/ingress/k8s-events
-        │    http_config / 头: X-Alert-Token: <token>
-        ▼
-  Yunshu ReceiveK8sEventIngress
-        │  （按 AM 形态解析 → 静默/抑制/订阅/渠道）
-        ▼
-  事件台「投递流水」+ 渠道通知
-        │
-        ✗ 一般不会写入「当前告警」表
-          （当前告警主要来自平台规则评测）
-```
-
-```mermaid
-flowchart LR
-  PR[Prom rules] --> AM[Alertmanager]
-  AM -->|Webhook + Token| IN["/alerts/ingress/k8s-events"]
-  IN --> PIPE[Yunshu 入站管道]
-  PIPE --> CH[渠道]
-  PIPE --> EV[投递流水]
-  note1[当前告警表通常仍空 / 不靠此路径]
+Prom rules → Alertmanager → POST /api/v1/alerts/webhook → 当前告警 + 投递流水
 ```
 
 ### 3.2 和路径 B 对比（避免「为什么没记录」）
 
 | 现象 | 路径 B 平台规则 | 路径 A AM→入站 |
 |------|-----------------|----------------|
-| 当前告警 | 有（firing 时） | **通常没有**（不走规则评测写 cur） |
+| 当前告警 | 有（firing 时） | **有**（走 `/alerts/webhook` 时写入 cur_events） |
 | 投递流水 | 有（含等待留痕） | **有**（进管道后） |
 | Prom Alerts | 无 | **有** |
 | 节流 | Yunshu `group_*` | **先** AM `group_wait`，进 Yunshu 后可能再按入口策略 |
@@ -197,7 +167,7 @@ flowchart LR
 
 1. **主用路径 B**：规则只在 Yunshu 配。  
 2. **不要**为了「让平台有记录」再把 AM webhook 接回来（双通道、双节流、难排障）。  
-3. 若短期必须保留 Prom rules：可暂时 AM 自通知；或明确旁路接 `k8s-events` 入站，并在文档/变更里标明「遗留」。  
+3. 若短期必须保留 Prom rules：AM 接到 `/api/v1/alerts/webhook`（带 Token）；不要接到 `k8s-events`。  
 4. 迁完后关掉 Prom `rule_files` + AM。
 
 ---

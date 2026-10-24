@@ -132,7 +132,7 @@ const fallbackMap: Record<string, Option[]> = {
   server_cloud_jd_port: [],
 };
 
-export function useDictOptions(dictType: string, enabled = true) {
+export function useDictOptions(dictType: string, enabled = true, refreshKey = 0) {
   const [options, setOptions] = useState<Option[]>(fallbackMap[dictType] ?? []);
 
   useEffect(() => {
@@ -152,7 +152,7 @@ export function useDictOptions(dictType: string, enabled = true) {
           }
           return { label: item.label, value: item.value, id: item.id, sensitive };
         });
-        setOptions(next.length ? next : fallbackMap[dictType] ?? []);
+        setOptions(next.length ? next : (fallbackMap[dictType] ?? []));
       } catch {
         if (!cancelled) {
           setOptions(fallbackMap[dictType] ?? []);
@@ -162,7 +162,7 @@ export function useDictOptions(dictType: string, enabled = true) {
     return () => {
       cancelled = true;
     };
-  }, [dictType, enabled]);
+  }, [dictType, enabled, refreshKey]);
 
   return useMemo(() => options, [options]);
 }

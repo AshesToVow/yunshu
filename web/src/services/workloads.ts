@@ -95,8 +95,27 @@ export function listDeployments(clusterId: number, namespace: string, keyword?: 
 export function getDeploymentDetail(clusterId: number, namespace: string, name: string) {
   return deploymentsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyDeployment(clusterId: number, manifest: string) {
-  return deploymentsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyDeployment(clusterId: number, manifest: string, idemKey?: string) {
+  return deploymentsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
+}
+
+export type WorkloadPreviewResult = {
+  dry_run_ok: boolean;
+  message?: string;
+  diffs?: Array<{
+    kind: string;
+    namespace: string;
+    name: string;
+    exists: boolean;
+    before?: string;
+    after?: string;
+    unified?: string;
+  }>;
+  impact?: Record<string, unknown>;
+};
+
+export function previewApplyDeployment(clusterId: number, manifest: string) {
+  return deploymentsSvc.post<WorkloadPreviewResult>("/preview-apply", { cluster_id: clusterId, manifest });
 }
 export function deleteDeployment(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return deploymentsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
@@ -179,8 +198,11 @@ export function listStatefulSets(clusterId: number, namespace: string, keyword?:
 export function getStatefulSetDetail(clusterId: number, namespace: string, name: string) {
   return statefulsetsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyStatefulSet(clusterId: number, manifest: string) {
-  return statefulsetsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyStatefulSet(clusterId: number, manifest: string, idemKey?: string) {
+  return statefulsetsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
+}
+export function previewApplyStatefulSet(clusterId: number, manifest: string) {
+  return statefulsetsSvc.post<WorkloadPreviewResult>("/preview-apply", { cluster_id: clusterId, manifest });
 }
 export function deleteStatefulSet(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return statefulsetsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
@@ -217,6 +239,10 @@ export function rolloutUndoStatefulSet(clusterId: number, namespace: string, nam
   });
 }
 
+export function listStatefulSetRevisions(clusterId: number, namespace: string, name: string) {
+  return statefulsetsSvc.get<DeploymentRevisionItem[]>("/revisions", k8sParams(clusterId, { namespace, name }));
+}
+
 export function listStatefulSetPods(clusterId: number, namespace: string, name: string) {
   return statefulsetsSvc.get<RelatedPodItem[]>("/pods", k8sParams(clusterId, { namespace, name }));
 }
@@ -227,14 +253,27 @@ export function listDaemonSets(clusterId: number, namespace: string, keyword?: s
 export function getDaemonSetDetail(clusterId: number, namespace: string, name: string) {
   return daemonsetsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyDaemonSet(clusterId: number, manifest: string) {
-  return daemonsetsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyDaemonSet(clusterId: number, manifest: string, idemKey?: string) {
+  return daemonsetsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 export function deleteDaemonSet(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return daemonsetsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
 }
 export function restartDaemonSet(clusterId: number, namespace: string, name: string) {
   return daemonsetsSvc.post<boolean>("/restart", { cluster_id: clusterId, namespace, name });
+}
+
+export function listDaemonSetRevisions(clusterId: number, namespace: string, name: string) {
+  return daemonsetsSvc.get<DeploymentRevisionItem[]>("/revisions", k8sParams(clusterId, { namespace, name }));
+}
+
+export function rolloutUndoDaemonSet(clusterId: number, namespace: string, name: string, revision?: number) {
+  return daemonsetsSvc.post<Record<string, unknown>>("/rollout-undo", {
+    cluster_id: clusterId,
+    namespace,
+    name,
+    revision: revision ?? 0,
+  });
 }
 
 /** DaemonSet 仅支持垂直扩缩（修改 Pod 模板 resources）；不支持水平副本扩缩（与 HPA scale 语义一致）。 */
@@ -264,8 +303,8 @@ export function listJobs(clusterId: number, namespace: string, keyword?: string)
 export function getJobDetail(clusterId: number, namespace: string, name: string) {
   return jobsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyJob(clusterId: number, manifest: string) {
-  return jobsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyJob(clusterId: number, manifest: string, idemKey?: string) {
+  return jobsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 export function deleteJob(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return jobsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));
@@ -304,8 +343,8 @@ export function listCronJobsV2(clusterId: number, namespace: string, keyword?: s
 export function getCronJobDetail(clusterId: number, namespace: string, name: string) {
   return cronjobsSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
-export function applyCronJob(clusterId: number, manifest: string) {
-  return cronjobsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyCronJob(clusterId: number, manifest: string, idemKey?: string) {
+  return cronjobsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 export function deleteCronJob(clusterId: number, namespace: string, name: string, deleteOpts?: K8sDeleteOptions) {
   return cronjobsSvc.remove(k8sParams(clusterId, { namespace, name }, pickK8sDeleteOpts(deleteOpts ?? {})));

@@ -1,5 +1,37 @@
-import { CopyOutlined, DeleteOutlined, EditOutlined, MinusCircleOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import { Alert, AutoComplete, Button, Card, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Popover, Radio, Select, Space, Statistic, Steps, Switch, Table, Tabs, Tag, Tree, Typography, message } from "antd";
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  MinusCircleOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  ThunderboltOutlined,
+} from "@ant-design/icons";
+import {
+  Alert,
+  AutoComplete,
+  Button,
+  Card,
+  Drawer,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Popover,
+  Radio,
+  Select,
+  Space,
+  Statistic,
+  Steps,
+  Switch,
+  Table,
+  Tabs,
+  Tag,
+  Tree,
+  Typography,
+  message,
+} from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getAlertHistoryStats,
@@ -18,11 +50,7 @@ import { analyzeAlertExplainAI, type AIAlertExplainResult } from "../services/ai
 import { extractApiErrorMessage } from "../services/http";
 import { useDictOptions } from "../hooks/use-dict-options";
 import { revealDictEntryValue } from "../services/dict";
-import {
-  CHART_ERROR,
-  CHART_INFO,
-  CHART_SUCCESS,
-} from "../constants/chart-colors";
+import { CHART_ERROR, CHART_INFO, CHART_SUCCESS } from "../constants/chart-colors";
 import { formatDateTime } from "../utils/format";
 import { formatMatchedPolicyNamesDisplay } from "../utils/alert-policy-display";
 import { explainAlertRecipients } from "../utils/alert-recipient-reason";
@@ -35,7 +63,11 @@ import {
   summarizeAlertEventHint,
   type AlertEventCategory,
 } from "../utils/alert-event-reasons";
-import { ALERT_ROUTING_TERMS, formatReceiverGroupLabel, formatRouteNodeTreeTitle } from "../constants/alert-routing-terms";
+import {
+  ALERT_ROUTING_TERMS,
+  formatReceiverGroupLabel,
+  formatRouteNodeTreeTitle,
+} from "../constants/alert-routing-terms";
 import { listAlertDatasources, type AlertDatasourceItem } from "../services/alert-platform";
 import { getProjects } from "../services/projects";
 import {
@@ -174,14 +206,16 @@ export function AlertConfigCenterPanel({
   const [webhookSending, setWebhookSending] = useState(false);
   const [routingDebugLoading, setRoutingDebugLoading] = useState(false);
   const [routingDebugResult, setRoutingDebugResult] = useState<AlertRoutingDebugResult | null>(null);
-  const [routingLabelsJSON, setRoutingLabelsJSON] = useState('{"alertname":"DemoAlert","severity":"warning","cluster":"demo"}');
+  const [routingLabelsJSON, setRoutingLabelsJSON] = useState(
+    '{"alertname":"DemoAlert","severity":"warning","cluster":"demo"}',
+  );
   const [routingSeverity, setRoutingSeverity] = useState("warning");
   const [webhookToken, setWebhookToken] = useState("");
   const [webhookTokenSensitivePickId, setWebhookTokenSensitivePickId] = useState<number | undefined>();
-  const [webhookTemplate, setWebhookTemplate] = useState<"warning_prod" | "critical_prod" | "resolved_prod">("warning_prod");
-  const [webhookPayload, setWebhookPayload] = useState(
-    JSON.stringify(webhookPayloadTemplates.warning_prod, null, 2),
+  const [webhookTemplate, setWebhookTemplate] = useState<"warning_prod" | "critical_prod" | "resolved_prod">(
+    "warning_prod",
   );
+  const [webhookPayload, setWebhookPayload] = useState(JSON.stringify(webhookPayloadTemplates.warning_prod, null, 2));
   const webhookTokenOptions = useDictOptions("alert_webhook_token");
   const promqlLabelKeyOptions = useDictOptions("alert_promql_label_key");
   const webhookTokenPick = useMemo(() => {
@@ -193,24 +227,19 @@ export function AlertConfigCenterPanel({
   }, [webhookToken, webhookTokenOptions, webhookTokenSensitivePickId]);
 
   const channelOptions = useMemo(() => channels.map((c) => ({ label: c.name, value: c.id })), [channels]);
-  const labelKeyAutoCompleteOptions = useMemo(
-    () => {
-      return promqlLabelKeyOptions
-        .map((opt) => {
-          const value = String(opt.value ?? "").trim();
-          const label = String(opt.label ?? "").trim() || value;
-          return { value, label: `${label} (${value})` };
-        })
-        .filter((it) => it.value)
-        .sort((a, b) => a.value.localeCompare(b.value, "zh-CN"));
-    },
-    [promqlLabelKeyOptions],
-  );
+  const labelKeyAutoCompleteOptions = useMemo(() => {
+    return promqlLabelKeyOptions
+      .map((opt) => {
+        const value = String(opt.value ?? "").trim();
+        const label = String(opt.label ?? "").trim() || value;
+        return { value, label: `${label} (${value})` };
+      })
+      .filter((it) => it.value)
+      .sort((a, b) => a.value.localeCompare(b.value, "zh-CN"));
+  }, [promqlLabelKeyOptions]);
 
   const alertIPOptions = useMemo(() => {
-    const fromPage = (events ?? [])
-      .map((it) => String(it.alertIP || "").trim())
-      .filter(Boolean);
+    const fromPage = (events ?? []).map((it) => String(it.alertIP || "").trim()).filter(Boolean);
     const merged = Array.from(new Set([...fromPage])).sort((a, b) => a.localeCompare(b, "zh-CN"));
     return merged.map((v) => ({ label: v, value: v }));
   }, [events]);
@@ -232,9 +261,9 @@ export function AlertConfigCenterPanel({
       push(name, `ds:${id}`);
     }
     if (opts.length <= 2) {
-    for (const row of stats?.datasource_filter_options ?? []) {
-      const id = Number(row?.id);
-      if (!Number.isFinite(id) || id <= 0) continue;
+      for (const row of stats?.datasource_filter_options ?? []) {
+        const id = Number(row?.id);
+        if (!Number.isFinite(id) || id <= 0) continue;
         const name = String(row?.name ?? "").trim() || `数据源 ${id}`;
         push(name, `ds:${id}`);
       }
@@ -275,7 +304,9 @@ export function AlertConfigCenterPanel({
     try {
       const res = await getProjects({ page: 1, page_size: 200 });
       const list = (res?.list ?? []) as Array<{ id: number; name: string }>;
-      const normalized = list.map((it) => ({ id: Number((it as any).id), name: String((it as any).name || "") })).filter((it) => it.id > 0);
+      const normalized = list
+        .map((it) => ({ id: Number((it as any).id), name: String((it as any).name || "") }))
+        .filter((it) => it.id > 0);
       setProjects(normalized);
     } catch {
       // http 拦截器已 toast
@@ -369,7 +400,13 @@ export function AlertConfigCenterPanel({
   function openReceiverGroupCreate() {
     setRgEditingId(null);
     rgForm.resetFields();
-    rgForm.setFieldsValue({ enabled: true, channel_ids: [], email_recipients: [], escalation_level: 0, escalation_delay_seconds: 900 });
+    rgForm.setFieldsValue({
+      enabled: true,
+      channel_ids: [],
+      email_recipients: [],
+      escalation_level: 0,
+      escalation_delay_seconds: 900,
+    });
     setRgModalOpen(true);
   }
 
@@ -492,14 +529,19 @@ export function AlertConfigCenterPanel({
       match_labels_json: String(v.match_labels_json || "{}"),
       match_regex_json: String(v.match_regex_json || "{}"),
       match_severity: Array.isArray(v.match_severity)
-        ? (v.match_severity as string[]).map((x) => String(x).trim()).filter(Boolean).join(",")
+        ? (v.match_severity as string[])
+            .map((x) => String(x).trim())
+            .filter(Boolean)
+            .join(",")
         : String(v.match_severity || "")
             .trim()
             .split(/[,，;|]/)
             .map((s) => s.trim())
             .filter(Boolean)
             .join(","),
-      receiver_group_ids_json: JSON.stringify((v.receiver_group_ids ?? []).map((x: any) => Number(x)).filter((x: number) => x > 0)),
+      receiver_group_ids_json: JSON.stringify(
+        (v.receiver_group_ids ?? []).map((x: any) => Number(x)).filter((x: number) => x > 0),
+      ),
       silence_seconds: Number(v.silence_seconds || 0),
       notify_resolved: !!v.notify_resolved,
     };
@@ -565,7 +607,16 @@ export function AlertConfigCenterPanel({
         if (seq === loadEventsSeqRef.current) setEventsLoading(false);
       }
     },
-    [eventKeyword, eventAlertIP, eventStatus, eventSourceFilter, eventGroupKey, eventFingerprint, eventCategory, effectiveProjectId],
+    [
+      eventKeyword,
+      eventAlertIP,
+      eventStatus,
+      eventSourceFilter,
+      eventGroupKey,
+      eventFingerprint,
+      eventCategory,
+      effectiveProjectId,
+    ],
   );
 
   const loadEventsGrouped = useCallback(
@@ -626,7 +677,13 @@ export function AlertConfigCenterPanel({
       return;
     }
     const delay =
-      eventKeyword || eventAlertIP || eventStatus || eventSourceFilter || eventGroupKey || eventFingerprint || eventCategory
+      eventKeyword ||
+      eventAlertIP ||
+      eventStatus ||
+      eventSourceFilter ||
+      eventGroupKey ||
+      eventFingerprint ||
+      eventCategory
         ? 300
         : 0;
     const timer = window.setTimeout(() => {
@@ -810,8 +867,19 @@ export function AlertConfigCenterPanel({
               <Typography.Text type="secondary">
                 模拟标签命中全局订阅树，查看接收组、通道与静默/维护窗口抑制。
               </Typography.Text>
-              <Input value={routingSeverity} onChange={(e) => setRoutingSeverity(e.target.value)} placeholder="severity" style={{ width: 160 }} addonBefore="级别" />
-              <Input.TextArea rows={4} value={routingLabelsJSON} onChange={(e) => setRoutingLabelsJSON(e.target.value)} placeholder='{"alertname":"..."}' />
+              <Input
+                value={routingSeverity}
+                onChange={(e) => setRoutingSeverity(e.target.value)}
+                placeholder="severity"
+                style={{ width: 160 }}
+                addonBefore="级别"
+              />
+              <Input.TextArea
+                rows={4}
+                value={routingLabelsJSON}
+                onChange={(e) => setRoutingLabelsJSON(e.target.value)}
+                placeholder='{"alertname":"..."}'
+              />
               <Button
                 type="primary"
                 loading={routingDebugLoading}
@@ -824,7 +892,12 @@ export function AlertConfigCenterPanel({
                     return;
                   }
                   setRoutingDebugLoading(true);
-                  void debugAlertRouting({ project_id: GLOBAL_ROUTING_PROJECT_ID, labels, severity: routingSeverity, status: "firing" })
+                  void debugAlertRouting({
+                    project_id: GLOBAL_ROUTING_PROJECT_ID,
+                    labels,
+                    severity: routingSeverity,
+                    status: "firing",
+                  })
                     .then(setRoutingDebugResult)
                     .finally(() => setRoutingDebugLoading(false));
                 }}
@@ -854,13 +927,16 @@ export function AlertConfigCenterPanel({
               ) : null}
             </Space>
           </Card>
-          <Card size="small" title="内部入站联调（K8s Event）" style={{ marginBottom: 12 }}>
+          <Card size="small" title="旁路入站联调（AM 形 Webhook）" style={{ marginBottom: 12 }}>
             <Space direction="vertical" style={{ width: "100%" }} size={12}>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                Alertmanager Webhook 已下线。本面板用于模拟 K8s Event 转发载荷：{" "}
-                <Typography.Text code>POST /api/v1/alerts/ingress/k8s-events</Typography.Text>，携带与配置一致的 Token（
-                <Typography.Text code>X-Alert-Token</Typography.Text> / <Typography.Text code>X-Webhook-Token</Typography.Text>
-                ）。主路径告警请在「规则中心」配置 PromQL。记录出现在「事件台」。
+                主路径是「规则中心」PromQL 评测。本面板仅联调旁路入站：{" "}
+                <Typography.Text code>POST /api/v1/alerts/webhook</Typography.Text>
+                （Alertmanager 兼容载荷），Token 头为 <Typography.Text code>X-Webhook-Token</Typography.Text> /{" "}
+                <Typography.Text code>X-Alert-Token</Typography.Text>
+                。成功后看「事件台 · 投递流水」；K8s Event 请走{" "}
+                <Typography.Text code>/ingress/k8s-events</Typography.Text>
+                （不写 cur_events，勿与本按钮混用）。
               </Typography.Paragraph>
               <Space wrap>
                 <Input
@@ -919,7 +995,8 @@ export function AlertConfigCenterPanel({
                 <Button onClick={() => applyWebhookTemplate(webhookTemplate)}>套用模板</Button>
               </Space>
               <Typography.Text type="secondary">
-                已选择模板会立即同步到下方 JSON；发送前请确认 status 和 alerts[0].status 是否符合预期（firing/resolved）。
+                已选择模板会立即同步到下方 JSON；发送前请确认 status 和 alerts[0].status
+                是否符合预期（firing/resolved）。
               </Typography.Text>
               <Input.TextArea
                 rows={8}
@@ -949,7 +1026,12 @@ export function AlertConfigCenterPanel({
           </Button>
         }
       >
-        <Alert type="info" showIcon style={{ marginBottom: 12 }} message={ALERT_ROUTING_TERMS.receiverGroupManageHint} />
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={ALERT_ROUTING_TERMS.receiverGroupManageHint}
+        />
         {receiverGroupDuplicateCount > 0 ? (
           <Alert
             type="warning"
@@ -967,15 +1049,18 @@ export function AlertConfigCenterPanel({
           pagination={false}
           columns={[
             { title: "ID", dataIndex: "id", width: 72 },
-            { title: "名称", dataIndex: "name", width: 180, render: (n: string, r: AlertReceiverGroup) => formatReceiverGroupLabel(n, r.id) },
+            {
+              title: "名称",
+              dataIndex: "name",
+              width: 180,
+              render: (n: string, r: AlertReceiverGroup) => formatReceiverGroupLabel(n, r.id),
+            },
             {
               title: "告警通道",
               render: (_: unknown, r: AlertReceiverGroup) => {
                 const ids = parseReceiverGroupChannelIds(r);
                 if (!ids.length) return <Typography.Text type="secondary">未绑定</Typography.Text>;
-                return ids
-                  .map((id) => channels.find((c) => c.id === id)?.name ?? `#${id}`)
-                  .join("、");
+                return ids.map((id) => channels.find((c) => c.id === id)?.name ?? `#${id}`).join("、");
               },
             },
             {
@@ -1009,9 +1094,10 @@ export function AlertConfigCenterPanel({
             },
             {
               title: "操作",
-              width: 120,
+              width: 160,
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, r: AlertReceiverGroup) => (
-                <Space>
+                <Space size={0} wrap className="yunshu-table-actions">
                   <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openReceiverGroupEdit(r)}>
                     编辑
                   </Button>
@@ -1258,7 +1344,9 @@ export function AlertConfigCenterPanel({
           <Form.Item name="source_project_id" label="源项目（已调配好的模板）" rules={[{ required: true }]}>
             <Select options={projects.map((p) => ({ label: p.name, value: p.id }))} showSearch />
           </Form.Item>
-          <Typography.Paragraph type="secondary">将复制到<strong>平台全局路由树</strong>（本页正在编辑的树）。</Typography.Paragraph>
+          <Typography.Paragraph type="secondary">
+            将复制到<strong>平台全局路由树</strong>（本页正在编辑的树）。
+          </Typography.Paragraph>
           <Form.Item name="replace_cluster" label="覆盖 cluster（可选，写入 match_labels）">
             <Input placeholder="例如 腾讯云告警链路" />
           </Form.Item>
@@ -1396,7 +1484,6 @@ export function AlertConfigCenterPanel({
           </Space>
         ) : null}
       </Modal>
-
     </>
   );
 
@@ -1433,4 +1520,3 @@ export function AlertConfigCenterPanel({
     </Card>
   );
 }
-

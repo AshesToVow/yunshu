@@ -77,34 +77,18 @@ func (s *AlertService) fillAlertEventProjectID(ctx context.Context, event *model
 
 // ensureAlertEventProjectBackfill 一次性回填历史事件的 project_id（数据源 / 命中订阅节点）。
 func (s *AlertService) ensureAlertEventProjectBackfill(ctx context.Context) {
-	if s == nil || s.db == nil {
+	if s == nil || s.eventRepo == nil {
 		return
 	}
 	alertEventProjectBackfillOnce.Do(func() {
-		_ = s.db.WithContext(ctx).Exec(`
-UPDATE alert_events e
-INNER JOIN alert_datasources d ON e.datasource_id = d.id AND d.deleted_at IS NULL
-SET e.project_id = d.project_id
-WHERE IFNULL(e.project_id, 0) = 0
-  AND e.datasource_id > 0
-  AND d.project_id > 0
-  AND e.deleted_at IS NULL`).Error
-		_ = s.db.WithContext(ctx).Exec(`
-UPDATE alert_events e
-INNER JOIN alert_subscription_nodes n
-  ON n.deleted_at IS NULL AND n.project_id > 0
- AND FIND_IN_SET(n.id, e.matched_policy_ids)
-SET e.project_id = n.project_id
-WHERE IFNULL(e.project_id, 0) = 0
-  AND e.matched_policy_ids IS NOT NULL
-  AND TRIM(e.matched_policy_ids) <> ''
-  AND e.deleted_at IS NULL`).Error
+		_ = s.eventRepo.BackfillProjectIDFromDatasource(ctx)
+		_ = s.eventRepo.BackfillProjectIDFromSubscriptions(ctx)
 	})
 }
 
 func projectIDFromMatchedPolicyIDs(ctx context.Context, s *AlertService, raw string) uint {
 	raw = strings.TrimSpace(raw)
-	if raw == "" || s == nil || s.db == nil {
+	if raw == "" || s == nil || s.eventRepo == nil {
 		return 0
 	}
 	parts := strings.Split(raw, ",")
@@ -123,10 +107,7 @@ func projectIDFromMatchedPolicyIDs(ctx context.Context, s *AlertService, raw str
 	if len(ids) == 0 {
 		return 0
 	}
-	var pid uint
-	_ = s.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).
-		Select("project_id").Where("id IN ? AND project_id > 0", ids).
-		Order("project_id ASC").Limit(1).Scan(&pid)
+	pid, _ := s.eventRepo.FirstProjectIDBySubscriptionIDs(ctx, ids)
 	return pid
 }
 

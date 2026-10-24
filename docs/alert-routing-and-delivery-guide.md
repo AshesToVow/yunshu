@@ -31,7 +31,7 @@ flowchart TB
   subgraph A["二、入口 A：Prometheus 规则"]
     P1["prometheus.yml\nrules + alerting"] --> P2["Prometheus 评估 for+expr"]
     P2 --> P3["Alertmanager\n聚合/静默/路由"]
-    P3 --> P4["POST\n/api/v1/alerts/webhook/alertmanager"]
+    P3 --> P4["POST\n/api/v1/alerts/webhook"]
   end
 
   subgraph B["二、入口 B：平台监控规则"]
@@ -223,7 +223,7 @@ sequenceDiagram
 
 ```text
 [触发]
-  Prometheus 规则(for+expr) → Alertmanager → POST /api/v1/alerts/webhook/alertmanager
+  Prometheus 规则(for+expr) → Alertmanager → POST /api/v1/alerts/webhook
   或
   平台规则(PromQL+for_seconds+Redis) → 内部 ReceiveAlertmanager(receiver=platform-monitor)
 

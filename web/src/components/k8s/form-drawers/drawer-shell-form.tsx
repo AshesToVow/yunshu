@@ -28,7 +28,14 @@ export function DrawerShellForm(props: {
 }) {
   const { title, open, width = 720, form, onClose, loading, onSubmit, children, initialValues, embedded } = props;
   const formNode = (
-    <Form form={form} layout="vertical" requiredMark="optional" preserve={false} scrollToFirstError initialValues={initialValues}>
+    <Form
+      form={form}
+      layout="vertical"
+      requiredMark="optional"
+      preserve={false}
+      scrollToFirstError
+      initialValues={initialValues}
+    >
       {children}
     </Form>
   );

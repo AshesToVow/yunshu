@@ -206,7 +206,8 @@ export function NodesPage() {
       title: "节点角色",
       dataIndex: "roles",
       width: 150,
-      render: (v?: string[]) => (v?.length ? v.map((x) => <Tag key={x}>{x}</Tag>) : <span className="inline-muted">-</span>),
+      render: (v?: string[]) =>
+        v?.length ? v.map((x) => <Tag key={x}>{x}</Tag>) : <span className="inline-muted">-</span>,
     },
     {
       title: "污点",
@@ -217,10 +218,20 @@ export function NodesPage() {
         renderKVIcon(
           "查看污点",
           <EyeOutlined />,
-          Object.fromEntries((r.taints ?? []).map((t, i) => [`${t.key}/${t.effect || "-"}#${i}`, `${t.value || "-"} @ ${t.time_added || "-"}`])),
+          Object.fromEntries(
+            (r.taints ?? []).map((t, i) => [
+              `${t.key}/${t.effect || "-"}#${i}`,
+              `${t.value || "-"} @ ${t.time_added || "-"}`,
+            ]),
+          ),
         ),
     },
-    { title: "状态", dataIndex: "status", width: 100, render: (v: string) => <Tag color={v === "Ready" ? "green" : "red"}>{v || "-"}</Tag> },
+    {
+      title: "状态",
+      dataIndex: "status",
+      width: 100,
+      render: (v: string) => <Tag color={v === "Ready" ? "green" : "red"}>{v || "-"}</Tag>,
+    },
     {
       title: "调度",
       key: "sched",
@@ -261,7 +272,13 @@ export function NodesPage() {
         const p = typeof r.cpu_usage_percent === "number" ? r.cpu_usage_percent : undefined;
         const extra = `${r.cpu_requests || "-"}/${r.cpu_limits || "-"}`;
         if (!p || p <= 0) return <span className="inline-muted">{`${r.cpu_usage || "-"} | ${extra}`}</span>;
-        return <Progress percent={Math.min(100, Math.round(p))} size="small" format={() => `${r.cpu_usage || "-"} | ${extra}`} />;
+        return (
+          <Progress
+            percent={Math.min(100, Math.round(p))}
+            size="small"
+            format={() => `${r.cpu_usage || "-"} | ${extra}`}
+          />
+        );
       },
     },
     {
@@ -272,7 +289,13 @@ export function NodesPage() {
         const p = typeof r.mem_usage_percent === "number" ? r.mem_usage_percent : undefined;
         const extra = `${r.mem_requests || "-"}/${r.mem_limits || "-"}`;
         if (!p || p <= 0) return <span className="inline-muted">{`${r.mem_usage || "-"} | ${extra}`}</span>;
-        return <Progress percent={Math.min(100, Math.round(p))} size="small" format={() => `${r.mem_usage || "-"} | ${extra}`} />;
+        return (
+          <Progress
+            percent={Math.min(100, Math.round(p))}
+            size="small"
+            format={() => `${r.mem_usage || "-"} | ${extra}`}
+          />
+        );
       },
     },
     { title: "K8s版本", dataIndex: "kubelet", width: 120 },
@@ -289,6 +312,7 @@ export function NodesPage() {
         description="集群节点状态、资源用量、污点与调度策略"
         needNamespace={false}
         disableMutations
+        watchResource="nodes"
         actionColumnWidth={440}
         columns={columns}
         api={{
@@ -297,7 +321,12 @@ export function NodesPage() {
         }}
         extraRowActions={(record, { clusterId, reload }) => (
           <Space size={0} wrap>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openTaintEditor(clusterId, record, reload)}>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openTaintEditor(clusterId, record, reload)}
+            >
               污点
             </Button>
             {!record.unschedulable ? (
@@ -337,7 +366,13 @@ export function NodesPage() {
                 </Button>
               </Popconfirm>
             )}
-            <Button type="link" size="small" danger icon={<ExportOutlined />} onClick={() => openDrain(clusterId, record, reload)}>
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<ExportOutlined />}
+              onClick={() => openDrain(clusterId, record, reload)}
+            >
               Drain
             </Button>
           </Space>
@@ -355,20 +390,21 @@ export function NodesPage() {
                 <Input value={d.item.unschedulable ? "禁止调度（Cordon）" : "可调度"} readOnly />
               </Form.Item>
               <Form.Item label="节点信息">
-                <Input value={`架构 ${d.item.architecture || "-"} | 内核 ${d.item.kernel || "-"} | Kubelet ${d.item.kubelet || "-"} | 运行时 ${d.item.container_runtime || "-"}`} readOnly />
+                <Input
+                  value={`架构 ${d.item.architecture || "-"} | 内核 ${d.item.kernel || "-"} | Kubelet ${d.item.kubelet || "-"} | 运行时 ${d.item.container_runtime || "-"}`}
+                  readOnly
+                />
               </Form.Item>
             </Form>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 6 }}>
               地址：
-              {d.addresses?.length ? (
-                d.addresses.map((a) => (
-                  <Tag key={`${a.type}-${a.address}`} style={{ marginLeft: 8 }}>
-                    {a.type}:{a.address}
-                  </Tag>
-                ))
-              ) : (
-                " -"
-              )}
+              {d.addresses?.length
+                ? d.addresses.map((a) => (
+                    <Tag key={`${a.type}-${a.address}`} style={{ marginLeft: 8 }}>
+                      {a.type}:{a.address}
+                    </Tag>
+                  ))
+                : " -"}
             </Typography.Paragraph>
             <Divider style={{ margin: "10px 0" }} />
             <Typography.Text strong>资源（Capacity / Allocatable）</Typography.Text>
@@ -420,7 +456,9 @@ export function NodesPage() {
                   title: "状态",
                   dataIndex: "status",
                   width: 100,
-                  render: (v: string) => <Tag color={v === "True" ? "green" : v === "False" ? "red" : "default"}>{v}</Tag>,
+                  render: (v: string) => (
+                    <Tag color={v === "True" ? "green" : v === "False" ? "red" : "default"}>{v}</Tag>
+                  ),
                 },
                 { title: "原因", dataIndex: "reason", width: 180, render: (v?: string) => v || "-" },
                 { title: "心跳时间", dataIndex: "last_heartbeat_time", width: 170, render: (v?: string) => v || "-" },
@@ -537,7 +575,8 @@ export function NodesPage() {
         destroyOnClose
       >
         <Typography.Paragraph type="secondary">
-          将先 <strong>Cordon</strong> 禁止调度，再按 Eviction API 驱逐可迁移 Pod（默认跳过 DaemonSet）。完成后请在右下角进度浮窗观察剩余 Pod。
+          将先 <strong>Cordon</strong> 禁止调度，再按 Eviction API 驱逐可迁移 Pod（默认跳过
+          DaemonSet）。完成后请在右下角进度浮窗观察剩余 Pod。
         </Typography.Paragraph>
         <Checkbox checked={drainForce} onChange={(e) => setDrainForce(e.target.checked)} style={{ marginBottom: 12 }}>
           force：同时驱逐无控制器的裸 Pod

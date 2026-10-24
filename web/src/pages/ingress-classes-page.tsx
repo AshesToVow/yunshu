@@ -3,7 +3,14 @@ import { Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
-import { applyIngressClass, deleteIngressClass, getIngressClassDetail, listIngressClasses, type IngressClassDetail, type IngressClassItem } from "../services/ingresses";
+import {
+  applyIngressClass,
+  deleteIngressClass,
+  getIngressClassDetail,
+  listIngressClasses,
+  type IngressClassDetail,
+  type IngressClassItem,
+} from "../services/ingresses";
 
 export function IngressClassesPage() {
   const { renderKVIcon, viewer } = useKeyValueViewer();
@@ -18,8 +25,20 @@ export function IngressClassesPage() {
       width: 110,
       render: (v: boolean) => <Tag color={v ? "green" : "default"}>{v ? "是" : "否"}</Tag>,
     },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
-    { title: "注解", key: "annotations", width: 70, align: "center", render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
+    {
+      title: "注解",
+      key: "annotations",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations),
+    },
     { title: "存在时长", dataIndex: "age", width: 100, fixed: "right", render: (v?: string) => v || "-" },
     { title: "创建时间", dataIndex: "creation_time", width: 180, fixed: "right" },
   ];
@@ -32,7 +51,7 @@ export function IngressClassesPage() {
         api={{
           list: async ({ clusterId, keyword }) => await listIngressClasses(clusterId, keyword),
           detail: async ({ clusterId, name }) => await getIngressClassDetail(clusterId, name),
-          apply: async ({ clusterId, manifest }) => await applyIngressClass(clusterId, manifest),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyIngressClass(clusterId, manifest, idemKey),
           remove: async (args) => await deleteIngressClass(args.clusterId, args.name, args),
         }}
         createTemplate={() => `apiVersion: networking.k8s.io/v1
@@ -50,4 +69,3 @@ spec:
     </>
   );
 }
-

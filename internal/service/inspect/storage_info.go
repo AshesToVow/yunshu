@@ -18,8 +18,8 @@ type ReportStorageInfo struct {
 	MinioReason  string `json:"minio_reason,omitempty"`  // MinIO 不可用时原因
 }
 
-// resolveReportStorageInfo 判定当前巡检报告会写入 MinIO 还是本地。
-func resolveReportStorageInfo(ctx context.Context, db *gorm.DB, localRoot string) ReportStorageInfo {
+// ResolveReportStorageInfo 判定当前巡检报告会写入 MinIO 还是本地（由 Wire 注入工厂）。
+func ResolveReportStorageInfo(ctx context.Context, db *gorm.DB, localRoot string) ReportStorageInfo {
 	info := ReportStorageInfo{
 		Backend:   StorageLocal,
 		LocalRoot: localRoot,

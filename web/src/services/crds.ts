@@ -25,8 +25,8 @@ export function getCrdDetail(clusterId: number, name: string) {
   return crdsSvc.detail(k8sParams(clusterId, { name }));
 }
 
-export function applyCrd(clusterId: number, manifest: string) {
-  return crdsSvc.apply({ cluster_id: clusterId, manifest });
+export function applyCrd(clusterId: number, manifest: string, idemKey?: string) {
+  return crdsSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 
 export function deleteCrd(clusterId: number, name: string, deleteOpts?: K8sDeleteOptions) {

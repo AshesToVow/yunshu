@@ -1,5 +1,6 @@
 {
   "files.associations": {
     "**/internal/service/inspect/templates/*.html": "gohtml"
-  }
+  },
+  "files.autoSave": "onWindowChange"
 }

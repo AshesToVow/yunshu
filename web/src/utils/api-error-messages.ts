@@ -93,7 +93,10 @@ const API_ERROR_MESSAGES: Record<string, string> = {
  * @param serverMessage 响应体 message
  * @returns 用于展示的非空字符串；无可用信息时返回 undefined
  */
-export function resolveApiErrorDisplayMessage(errorCode: string | undefined, serverMessage: string | undefined): string | undefined {
+export function resolveApiErrorDisplayMessage(
+  errorCode: string | undefined,
+  serverMessage: string | undefined,
+): string | undefined {
   const code = typeof errorCode === "string" ? errorCode.trim() : "";
   if (code && API_ERROR_MESSAGES[code]) {
     return API_ERROR_MESSAGES[code];

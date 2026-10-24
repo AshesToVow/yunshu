@@ -34,8 +34,7 @@ export function ClusterApiResourcesPage() {
     }
     setLoading(true);
     try {
-      const ns =
-        nsFilter === "all" ? null : nsFilter === "true" ? true : false;
+      const ns = nsFilter === "all" ? null : nsFilter === "true" ? true : false;
       const data = await listClusterAPIResources(clusterId, ns);
       setRows(data.list ?? []);
     } finally {

@@ -10,12 +10,13 @@ import (
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/model"
 
+	dameng "github.com/godoes/gorm-dameng"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-// Open 按配置驱动（mysql / postgres）建立 GORM 连接并完成关联表注册与连接池设置。
+// Open 按配置驱动（mysql / postgres / dameng）建立 GORM 连接并完成关联表注册与连接池设置。
 func Open(cfg config.DatabaseConfig, sqlLogger *logx.Logger, logLevel string) (*gorm.DB, error) {
 	if sqlLogger == nil {
 		return nil, fmt.Errorf("logger is required for database")
@@ -52,6 +53,8 @@ func NormalizeDriver(driver string) string {
 		return "mysql"
 	case "postgres", "postgresql", "pg":
 		return "postgres"
+	case "dameng", "dm", "dm8":
+		return "dameng"
 	default:
 		return strings.ToLower(strings.TrimSpace(driver))
 	}
@@ -73,8 +76,13 @@ func openDialector(driver string, cfg config.DatabaseConfig) (gorm.Dialector, er
 		return mysql.Open(dsn), nil
 	case "postgres":
 		return postgres.Open(buildPostgresDSN(cfg)), nil
+	case "dameng":
+		return dameng.New(dameng.Config{
+			DSN:                     buildDamengDSN(cfg),
+			VarcharSizeIsCharLength: true,
+		}), nil
 	default:
-		return nil, fmt.Errorf("unsupported database driver %q (supported: mysql, postgres)", cfg.Driver)
+		return nil, fmt.Errorf("unsupported database driver %q (supported: mysql, postgres, dameng)", cfg.Driver)
 	}
 }
 
@@ -97,6 +105,23 @@ func buildPostgresDSN(cfg config.DatabaseConfig) string {
 	q.Set("TimeZone", cfg.TimeZone)
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+func buildDamengDSN(cfg config.DatabaseConfig) string {
+	opts := map[string]string{
+		"appName": "yunshu",
+	}
+	schema := strings.TrimSpace(cfg.Schema)
+	if schema == "" {
+		schema = strings.TrimSpace(cfg.DBName)
+	}
+	if schema == "" {
+		schema = strings.TrimSpace(cfg.User)
+	}
+	if schema != "" {
+		opts["schema"] = schema
+	}
+	return dameng.BuildUrl(cfg.User, cfg.Password, cfg.Host, cfg.Port, opts)
 }
 
 // SetupJoinTables 注册带扩展字段的 user_roles / user_group_users 关联表。

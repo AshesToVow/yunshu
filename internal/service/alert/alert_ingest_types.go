@@ -110,7 +110,37 @@ func (s *AlertService) receiveCanonicalSync(ctx context.Context, items ...Canoni
 }
 
 func (s *AlertService) receiveAlertmanagerPayloadSync(ctx context.Context, payload AlertManagerPayload) error {
-	return s.receiveCanonicalSync(ctx, CanonicalAlertsFromAlertmanagerPayload(payload)...)
+	items := CanonicalAlertsFromAlertmanagerPayload(payload)
+	filtered := make([]CanonicalIngressAlert, 0, len(items))
+	skipped := 0
+	for _, it := range items {
+		if s.shouldSkipAlertmanagerAsPlatformDuplicate(it) {
+			skipped++
+			continue
+		}
+		filtered = append(filtered, it)
+	}
+	if skipped > 0 {
+		s.logWebhookWarn("skipped alertmanager alerts already owned by platform monitor",
+			"skipped", skipped, "kept", len(filtered), "receiver", payload.Receiver)
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return s.receiveCanonicalSync(ctx, filtered...)
+}
+
+// shouldSkipAlertmanagerAsPlatformDuplicate 避免平台规则与 AM 双路径对同一规则二次投递。
+// 判定：labels 带 source=prometheus_monitor / monitor_rule_id，或 receiver=platform-monitor。
+func (s *AlertService) shouldSkipAlertmanagerAsPlatformDuplicate(ca CanonicalIngressAlert) bool {
+	labels := mergeStringMaps(ca.CommonLabels, ca.Alert.Labels)
+	if s.isPlatformMonitor(labels, ca.PayloadReceiver) {
+		return true
+	}
+	if labels != nil && strings.TrimSpace(labels["monitor_rule_id"]) != "" {
+		return true
+	}
+	return false
 }
 
 // applyIngressGroupTimingPolicy 按告警入口决定是否走 Yunshu 第二层 group timing：

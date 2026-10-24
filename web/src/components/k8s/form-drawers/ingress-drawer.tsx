@@ -8,6 +8,7 @@
 import { Button, Form, Input, InputNumber, Select, Space, Typography, message } from "antd";
 import { useState } from "react";
 import YAML from "yaml";
+import { useIdempotencyKey } from "../../../hooks/use-idempotency-key";
 import { applyIngress } from "../../../services/ingresses";
 import { DrawerShellForm } from "./drawer-shell-form";
 import { pathTypes } from "./options";
@@ -38,6 +39,7 @@ export function IngressFormCreateDrawer(props: {
     }>;
   }>();
   const [loading, setLoading] = useState(false);
+  const { key: idemKey, rotate: rotateIdemKey } = useIdempotencyKey();
 
   async function submit() {
     if (!clusterId) return;
@@ -59,25 +61,24 @@ export function IngressFormCreateDrawer(props: {
         .map((r) => ({
           host: String(r.host ?? "").trim(),
           http: {
-            paths:
-              (r.paths ?? [])
-                .map((p) => {
-                  const serviceName = String(p.service_name ?? "").trim();
-                  const portName = String(p.service_port_name ?? "").trim();
-                  const portNumber = typeof p.service_port_number === "number" ? p.service_port_number : undefined;
-                  if (!serviceName) return null;
-                  return {
-                    path: String(p.path ?? "/").trim() || "/",
-                    pathType: p.path_type || "Prefix",
-                    backend: {
-                      service: {
-                        name: serviceName,
-                        port: portName ? { name: portName } : { number: portNumber || 80 },
-                      },
+            paths: (r.paths ?? [])
+              .map((p) => {
+                const serviceName = String(p.service_name ?? "").trim();
+                const portName = String(p.service_port_name ?? "").trim();
+                const portNumber = typeof p.service_port_number === "number" ? p.service_port_number : undefined;
+                if (!serviceName) return null;
+                return {
+                  path: String(p.path ?? "/").trim() || "/",
+                  pathType: p.path_type || "Prefix",
+                  backend: {
+                    service: {
+                      name: serviceName,
+                      port: portName ? { name: portName } : { number: portNumber || 80 },
                     },
-                  };
-                })
-                .filter(Boolean),
+                  },
+                };
+              })
+              .filter(Boolean),
           },
         }))
         .filter((r) => r.host && r.http.paths.length) || undefined;
@@ -97,7 +98,8 @@ export function IngressFormCreateDrawer(props: {
     };
     setLoading(true);
     try {
-      await applyIngress(clusterId, YAML.stringify(doc));
+      await applyIngress(clusterId, YAML.stringify(doc), idemKey);
+      rotateIdemKey();
       message.success("Ingress 已创建");
       onSuccess();
       onClose();
@@ -182,7 +184,12 @@ export function IngressFormCreateDrawer(props: {
             {ruleFields.map((rf) => (
               <div key={rf.key} style={{ border: "1px solid #f0f0f0", padding: 12, borderRadius: 8 }}>
                 <Space style={{ width: "100%" }} align="start">
-                  <Form.Item name={[rf.name, "host"]} label="域名 (Host)" rules={[{ required: true, message: "请输入域名" }]} style={{ flex: 1 }}>
+                  <Form.Item
+                    name={[rf.name, "host"]}
+                    label="域名 (Host)"
+                    rules={[{ required: true, message: "请输入域名" }]}
+                    style={{ flex: 1 }}
+                  >
                     <Input placeholder="app.example.com" />
                   </Form.Item>
                   <Button onClick={() => removeRule(rf.name)}>删除 Rule</Button>
@@ -202,25 +209,53 @@ export function IngressFormCreateDrawer(props: {
                             <Button onClick={() => removePath(pf.name)}>删除 Path</Button>
                           </Space>
                           <Space style={{ width: "100%" }} align="start">
-                            <Form.Item name={[pf.name, "service_name"]} label="后端 Service 名称" rules={[{ required: true, message: "请输入 Service" }]} style={{ flex: 1 }}>
+                            <Form.Item
+                              name={[pf.name, "service_name"]}
+                              label="后端 Service 名称"
+                              rules={[{ required: true, message: "请输入 Service" }]}
+                              style={{ flex: 1 }}
+                            >
                               <Input placeholder="my-service" />
                             </Form.Item>
-                            <Form.Item name={[pf.name, "service_port_name"]} label="Service 端口名" style={{ width: 220 }}>
+                            <Form.Item
+                              name={[pf.name, "service_port_name"]}
+                              label="Service 端口名"
+                              style={{ width: 220 }}
+                            >
                               <Input placeholder="http" />
                             </Form.Item>
-                            <Form.Item name={[pf.name, "service_port_number"]} label="Service 端口号" style={{ width: 220 }}>
+                            <Form.Item
+                              name={[pf.name, "service_port_number"]}
+                              label="Service 端口号"
+                              style={{ width: 220 }}
+                            >
                               <InputNumber min={1} max={65535} style={{ width: "100%" }} />
                             </Form.Item>
                           </Space>
                         </div>
                       ))}
-                      <Button onClick={() => addPath({ path: "/", path_type: "Prefix", service_name: "", service_port_number: 80 })}>添加 Path</Button>
+                      <Button
+                        onClick={() =>
+                          addPath({ path: "/", path_type: "Prefix", service_name: "", service_port_number: 80 })
+                        }
+                      >
+                        添加 Path
+                      </Button>
                     </Space>
                   )}
                 </Form.List>
               </div>
             ))}
-            <Button onClick={() => addRule({ host: "", paths: [{ path: "/", path_type: "Prefix", service_name: "", service_port_number: 80 }] })}>添加 Rule</Button>
+            <Button
+              onClick={() =>
+                addRule({
+                  host: "",
+                  paths: [{ path: "/", path_type: "Prefix", service_name: "", service_port_number: 80 }],
+                })
+              }
+            >
+              添加 Rule
+            </Button>
           </Space>
         )}
       </Form.List>

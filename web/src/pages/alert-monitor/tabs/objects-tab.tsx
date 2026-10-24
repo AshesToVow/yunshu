@@ -1,5 +1,19 @@
 import { extractApiErrorMessage } from "../../../services/http";
-import { Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { PlusOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { useCallback, useEffect, useState } from "react";
 import { useAlertMonitor } from "../context";
@@ -46,24 +60,27 @@ export function ObjectsTab() {
     }
   }, [ctx.projectContextId]);
 
-  const loadObjects = useCallback(async (page: number, pageSize: number) => {
-    setObjLoading(true);
-    try {
-      const r = await listMonitorObjects({
-        project_id: ctx.projectContextId || undefined,
-        page,
-        page_size: pageSize,
-      });
-      setObjs(r.list ?? []);
-      setObjTotal(Number(r.total) || 0);
-      setObjPage(r.page ?? page);
-      setObjPageSize(r.page_size ?? pageSize);
-    } catch (e) {
-      message.error(extractApiErrorMessage(e, "加载监控对象失败"));
-    } finally {
-      setObjLoading(false);
-    }
-  }, [ctx.projectContextId]);
+  const loadObjects = useCallback(
+    async (page: number, pageSize: number) => {
+      setObjLoading(true);
+      try {
+        const r = await listMonitorObjects({
+          project_id: ctx.projectContextId || undefined,
+          page,
+          page_size: pageSize,
+        });
+        setObjs(r.list ?? []);
+        setObjTotal(Number(r.total) || 0);
+        setObjPage(r.page ?? page);
+        setObjPageSize(r.page_size ?? pageSize);
+      } catch (e) {
+        message.error(extractApiErrorMessage(e, "加载监控对象失败"));
+      } finally {
+        setObjLoading(false);
+      }
+    },
+    [ctx.projectContextId],
+  );
 
   useEffect(() => {
     void load();
@@ -145,10 +162,7 @@ export function ObjectsTab() {
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
           新建 Consul 端点
         </Button>
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={() => void Promise.all([load(), loadObjects(objPage, objPageSize)])}
-        >
+        <Button icon={<ReloadOutlined />} onClick={() => void Promise.all([load(), loadObjects(objPage, objPageSize)])}>
           刷新
         </Button>
       </Space>
@@ -176,10 +190,12 @@ export function ObjectsTab() {
           },
           {
             title: "操作",
-            width: 280,
+            width: 220,
+            className: "yunshu-table-actions-cell",
             render: (_, r) => (
-              <Space wrap size="small">
+              <Space size={0} wrap className="yunshu-table-actions">
                 <Button
+                  type="link"
                   size="small"
                   onClick={async () => {
                     try {
@@ -193,6 +209,7 @@ export function ObjectsTab() {
                   Ping
                 </Button>
                 <Button
+                  type="link"
                   size="small"
                   icon={<SyncOutlined />}
                   onClick={async () => {
@@ -207,7 +224,7 @@ export function ObjectsTab() {
                 >
                   同步
                 </Button>
-                <Button size="small" onClick={() => openEdit(r)}>
+                <Button type="link" size="small" onClick={() => openEdit(r)}>
                   编辑
                 </Button>
                 <Popconfirm
@@ -222,7 +239,7 @@ export function ObjectsTab() {
                     }
                   }}
                 >
-                  <Button size="small" danger>
+                  <Button type="link" size="small" danger>
                     删除
                   </Button>
                 </Popconfirm>
@@ -271,9 +288,7 @@ export function ObjectsTab() {
                 type="link"
                 size="small"
                 onClick={() => {
-                  const fn = ctx.openRuleCreateFromObject as
-                    | ((obj: AlertMonitorObjectItem) => void)
-                    | undefined;
+                  const fn = ctx.openRuleCreateFromObject as ((obj: AlertMonitorObjectItem) => void) | undefined;
                   if (typeof fn === "function") {
                     fn(r);
                   } else {
@@ -297,12 +312,7 @@ export function ObjectsTab() {
       >
         <Form form={form} layout="vertical">
           <Form.Item name="project_id" label="项目名称" rules={[{ required: true, message: "请选择项目" }]}>
-            <Select
-              options={ctx.projectOptions}
-              placeholder="请选择项目"
-              showSearch
-              optionFilterProp="label"
-            />
+            <Select options={ctx.projectOptions} placeholder="请选择项目" showSearch optionFilterProp="label" />
           </Form.Item>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />

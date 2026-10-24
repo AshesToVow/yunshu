@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/consulclient"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
-
-	"gorm.io/gorm"
+	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 )
 
 type AlertConsulEndpointListQuery struct {
@@ -51,11 +51,11 @@ type AlertConsulSyncResult struct {
 }
 
 type AlertConsulService struct {
-	db *gorm.DB
+	repo interfaces.AlertConsulRepository
 }
 
-func NewAlertConsulService(db *gorm.DB) *AlertConsulService {
-	return &AlertConsulService{db: db}
+func NewAlertConsulService(repo interfaces.AlertConsulRepository) *AlertConsulService {
+	return &AlertConsulService{repo: repo}
 }
 
 func (s *AlertConsulService) mask(ep *model.AlertConsulEndpoint) {
@@ -66,20 +66,11 @@ func (s *AlertConsulService) mask(ep *model.AlertConsulEndpoint) {
 
 func (s *AlertConsulService) ListEndpoints(ctx context.Context, q AlertConsulEndpointListQuery) ([]model.AlertConsulEndpoint, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	db := s.db.WithContext(ctx).Model(&model.AlertConsulEndpoint{})
-	if q.ProjectID > 0 {
-		db = db.Where("project_id = ?", q.ProjectID)
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		db = db.Where("name LIKE ? OR address LIKE ?", like, like)
-	}
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.consul", "ListEndpoints", err)
-	}
-	var list []model.AlertConsulEndpoint
-	if err := db.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+	list, total, err := s.repo.ListEndpoints(ctx, repository.AlertConsulEndpointListFilter{
+		ProjectID: q.ProjectID,
+		Keyword:   q.Keyword,
+	}, (page-1)*pageSize, pageSize)
+	if err != nil {
 		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.consul", "ListEndpoints", err)
 	}
 	for i := range list {
@@ -107,7 +98,7 @@ func (s *AlertConsulService) CreateEndpoint(ctx context.Context, req AlertConsul
 		Enabled:    enabled,
 		Remark:     strings.TrimSpace(req.Remark),
 	}
-	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+	if err := s.repo.CreateEndpoint(ctx, row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.consul", "CreateEndpoint", err)
 	}
 	s.mask(row)
@@ -115,8 +106,8 @@ func (s *AlertConsulService) CreateEndpoint(ctx context.Context, req AlertConsul
 }
 
 func (s *AlertConsulService) UpdateEndpoint(ctx context.Context, id uint, req AlertConsulEndpointUpsertRequest) (*model.AlertConsulEndpoint, error) {
-	var row model.AlertConsulEndpoint
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetEndpointByID(ctx, id)
+	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.consul", "UpdateEndpoint", err)
 	}
 	row.ProjectID = req.ProjectID
@@ -137,23 +128,18 @@ func (s *AlertConsulService) UpdateEndpoint(ctx context.Context, id uint, req Al
 	} else if t := strings.TrimSpace(req.Token); t != "" && t != "***" {
 		row.Token = t
 	}
-	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+	if err := s.repo.SaveEndpoint(ctx, row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.consul", "UpdateEndpoint", err)
 	}
-	s.mask(&row)
-	return &row, nil
+	s.mask(row)
+	return row, nil
 }
 
 func (s *AlertConsulService) DeleteEndpoint(ctx context.Context, id uint) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("endpoint_id = ?", id).Delete(&model.AlertMonitorObject{}).Error; err != nil {
-			return bizerrors.Pass(ctx, "alert.consul", "DeleteEndpoint.objects", err)
-		}
-		if err := tx.Delete(&model.AlertConsulEndpoint{}, id).Error; err != nil {
-			return bizerrors.Pass(ctx, "alert.consul", "DeleteEndpoint", err)
-		}
-		return nil
-	})
+	if err := s.repo.DeleteEndpointWithObjects(ctx, id); err != nil {
+		return bizerrors.Pass(ctx, "alert.consul", "DeleteEndpoint", err)
+	}
+	return nil
 }
 
 func (s *AlertConsulService) PingEndpoint(ctx context.Context, id uint) error {
@@ -169,35 +155,22 @@ func (s *AlertConsulService) PingEndpoint(ctx context.Context, id uint) error {
 }
 
 func (s *AlertConsulService) loadEndpointRaw(ctx context.Context, id uint) (*model.AlertConsulEndpoint, error) {
-	var row model.AlertConsulEndpoint
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetEndpointByID(ctx, id)
+	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.consul", "loadEndpoint", err)
 	}
-	return &row, nil
+	return row, nil
 }
 
 func (s *AlertConsulService) ListObjects(ctx context.Context, q AlertMonitorObjectListQuery) ([]model.AlertMonitorObject, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	db := s.db.WithContext(ctx).Model(&model.AlertMonitorObject{})
-	if q.ProjectID > 0 {
-		db = db.Where("project_id = ?", q.ProjectID)
-	}
-	if q.EndpointID > 0 {
-		db = db.Where("endpoint_id = ?", q.EndpointID)
-	}
-	if role := strings.TrimSpace(q.ExporterRole); role != "" {
-		db = db.Where("exporter_role = ?", role)
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		db = db.Where("service_name LIKE ? OR service_id LIKE ? OR address LIKE ? OR yunshu_project LIKE ?", like, like, like, like)
-	}
-	var total int64
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.consul", "ListObjects", err)
-	}
-	var list []model.AlertMonitorObject
-	if err := db.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+	list, total, err := s.repo.ListObjects(ctx, repository.AlertMonitorObjectListFilter{
+		ProjectID:    q.ProjectID,
+		EndpointID:   q.EndpointID,
+		ExporterRole: q.ExporterRole,
+		Keyword:      q.Keyword,
+	}, (page-1)*pageSize, pageSize)
+	if err != nil {
 		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.consul", "ListObjects", err)
 	}
 	return list, total, page, pageSize, nil
@@ -214,9 +187,9 @@ func (s *AlertConsulService) SyncEndpoint(ctx context.Context, id uint) (*AlertC
 	cli := &consulclient.Client{Address: ep.Address, Token: ep.Token, Datacenter: ep.Datacenter}
 	names, err := cli.ListServiceNames(ctx)
 	if err != nil {
-		_ = s.db.WithContext(ctx).Model(ep).Updates(map[string]any{
+		_ = s.repo.UpdateEndpointMeta(ctx, ep.ID, map[string]any{
 			"last_error": truncateConsulErr(err.Error()),
-		}).Error
+		})
 		return nil, constants.ErrBadRequestWithMsg("列出 Consul 服务失败: " + err.Error())
 	}
 
@@ -225,7 +198,7 @@ func (s *AlertConsulService) SyncEndpoint(ctx context.Context, id uint) (*AlertC
 	removed := 0
 	keepKeys := map[string]struct{}{}
 
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.repo.Transaction(ctx, func(txRepo repository.AlertConsulRepo) error {
 		for svcName := range names {
 			instances, err := cli.ListServiceInstances(ctx, svcName)
 			if err != nil {
@@ -249,46 +222,38 @@ func (s *AlertConsulService) SyncEndpoint(ctx context.Context, id uint) (*AlertC
 				key := sname + "\x00" + sid
 				keepKeys[key] = struct{}{}
 
-				var row model.AlertMonitorObject
-				qerr := tx.Unscoped().Where("endpoint_id = ? AND service_name = ? AND service_id = ?", ep.ID, sname, sid).First(&row).Error
-				row.EndpointID = ep.ID
-				row.ProjectID = ep.ProjectID
-				row.ServiceName = sname
-				row.ServiceID = sid
-				row.Node = strings.TrimSpace(inst.Node)
-				row.Address = strings.TrimSpace(inst.Address)
-				row.Port = inst.ServicePort
-				row.TagsJSON = string(tagsJSON)
-				row.MetaJSON = string(metaJSON)
-				row.ExporterRole = strings.TrimSpace(meta["exporter_role"])
-				row.YunshuProject = strings.TrimSpace(firstMeta(meta, "yunshu_project", "project"))
-				row.Health = consulclient.AggregateHealth(inst.Checks)
-				row.ProbeURL = strings.TrimSpace(firstMeta(meta, "probe_url", "probe_host"))
-				row.SyncedAt = now
-				row.DeletedAt = gorm.DeletedAt{}
-				if qerr == gorm.ErrRecordNotFound {
-					if err := tx.Create(&row).Error; err != nil {
-						return err
-					}
-				} else if qerr != nil {
-					return qerr
-				} else {
-					if err := tx.Save(&row).Error; err != nil {
-						return err
-					}
+				row := &model.AlertMonitorObject{
+					EndpointID:    ep.ID,
+					ProjectID:     ep.ProjectID,
+					ServiceName:   sname,
+					ServiceID:     sid,
+					Node:          strings.TrimSpace(inst.Node),
+					Address:       strings.TrimSpace(inst.Address),
+					Port:          inst.ServicePort,
+					TagsJSON:      string(tagsJSON),
+					MetaJSON:      string(metaJSON),
+					ExporterRole:  strings.TrimSpace(meta["exporter_role"]),
+					YunshuProject: strings.TrimSpace(firstMeta(meta, "yunshu_project", "project")),
+					Health:        consulclient.AggregateHealth(inst.Checks),
+					ProbeURL:      strings.TrimSpace(firstMeta(meta, "probe_url", "probe_host")),
+					SyncedAt:      now,
+				}
+				if err := txRepo.UpsertMonitorObject(ctx, row); err != nil {
+					return err
 				}
 				upserted++
 			}
 		}
 
-		var existing []model.AlertMonitorObject
-		if err := tx.Where("endpoint_id = ?", ep.ID).Find(&existing).Error; err != nil {
+		existing, err := txRepo.ListObjectsByEndpoint(ctx, ep.ID)
+		if err != nil {
 			return err
 		}
-		for _, old := range existing {
+		for i := range existing {
+			old := &existing[i]
 			key := old.ServiceName + "\x00" + old.ServiceID
 			if _, ok := keepKeys[key]; !ok {
-				if err := tx.Delete(&old).Error; err != nil {
+				if err := txRepo.DeleteObject(ctx, old); err != nil {
 					return err
 				}
 				removed++
@@ -297,16 +262,16 @@ func (s *AlertConsulService) SyncEndpoint(ctx context.Context, id uint) (*AlertC
 		return nil
 	})
 	if err != nil {
-		_ = s.db.WithContext(ctx).Model(ep).Updates(map[string]any{
+		_ = s.repo.UpdateEndpointMeta(ctx, ep.ID, map[string]any{
 			"last_error": truncateConsulErr(err.Error()),
-		}).Error
+		})
 		return nil, constants.ErrBadRequestWithMsg("同步 Consul 失败: " + err.Error())
 	}
 
-	_ = s.db.WithContext(ctx).Model(ep).Updates(map[string]any{
+	_ = s.repo.UpdateEndpointMeta(ctx, ep.ID, map[string]any{
 		"last_sync_at": now,
 		"last_error":   "",
-	}).Error
+	})
 
 	return &AlertConsulSyncResult{
 		EndpointID: ep.ID,

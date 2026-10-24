@@ -7,22 +7,33 @@ import (
 	"gorm.io/gorm"
 )
 
+// Forwarded event delivery status.
+const (
+	K8sFwdStatusPending   = "pending"
+	K8sFwdStatusInflight  = "inflight"
+	K8sFwdStatusDelivered = "delivered"
+	K8sFwdStatusDead      = "dead"
+)
+
 // K8sForwardedEvent 持久化的待转发 K8s 事件（参考 k8m k8s_events；Normal 不转发）。
 type K8sForwardedEvent struct {
-	ID        int64     `json:"id" gorm:"primaryKey;autoIncrement"`
-	EvtKey    string    `json:"evt_key" gorm:"size:255;uniqueIndex:idx_k8s_fwd_evt_key"`
-	ClusterID string    `json:"cluster_id" gorm:"size:32;index:idx_k8s_fwd_cluster"`
-	Namespace string    `json:"namespace" gorm:"size:64;index:idx_k8s_fwd_namespace"`
-	Name      string    `json:"name" gorm:"size:255"`
-	Type      string    `json:"type" gorm:"size:16"`
-	Reason    string    `json:"reason" gorm:"size:128"`
-	Level     string    `json:"level" gorm:"size:16"`
-	Message   string    `json:"message" gorm:"type:text"`
-	Timestamp time.Time `json:"timestamp" gorm:"index:idx_k8s_fwd_timestamp"`
-	Processed bool      `json:"processed" gorm:"default:false;index:idx_k8s_fwd_processed"`
-	Attempts  int       `json:"-" gorm:"default:0"`
-	CreatedAt time.Time `json:"created_at" gorm:"<-:create"`
-	UpdatedAt time.Time `json:"-"`
+	ID        int64      `json:"id" gorm:"primaryKey;autoIncrement"`
+	EvtKey    string     `json:"evt_key" gorm:"size:255;uniqueIndex:idx_k8s_fwd_evt_key"`
+	ClusterID string     `json:"cluster_id" gorm:"size:32;index:idx_k8s_fwd_cluster"`
+	Namespace string     `json:"namespace" gorm:"size:64;index:idx_k8s_fwd_namespace"`
+	Name      string     `json:"name" gorm:"size:255"`
+	Type      string     `json:"type" gorm:"size:16"`
+	Reason    string     `json:"reason" gorm:"size:128"`
+	Level     string     `json:"level" gorm:"size:16"`
+	Message   string     `json:"message" gorm:"type:text"`
+	Timestamp time.Time  `json:"timestamp" gorm:"index:idx_k8s_fwd_timestamp"`
+	Processed bool       `json:"processed" gorm:"default:false;index:idx_k8s_fwd_processed"` // 兼容字段：delivered/dead 时为 true
+	Status    string     `json:"status" gorm:"size:16;default:pending;index:idx_k8s_fwd_status"`
+	Attempts  int        `json:"attempts" gorm:"default:0"`
+	LastError string     `json:"last_error,omitempty" gorm:"type:text"`
+	ClaimedAt *time.Time `json:"claimed_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at" gorm:"<-:create"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 func (K8sForwardedEvent) TableName() string { return "k8s_forwarded_events" }
@@ -33,6 +44,21 @@ func (e *K8sForwardedEvent) ShouldForward() bool {
 		return false
 	}
 	return !strings.EqualFold(strings.TrimSpace(e.Type), "Normal")
+}
+
+// NormalizeStatus 兼容旧行（仅 processed、无 status）。
+func (e *K8sForwardedEvent) NormalizeStatus() string {
+	if e == nil {
+		return K8sFwdStatusPending
+	}
+	st := strings.TrimSpace(e.Status)
+	if st != "" {
+		return st
+	}
+	if e.Processed {
+		return K8sFwdStatusDelivered
+	}
+	return K8sFwdStatusPending
 }
 
 // K8sEventForwardRule 多集群事件转发规则（参考 k8m k8s_event_config）。

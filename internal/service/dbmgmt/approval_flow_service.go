@@ -42,25 +42,8 @@ type ApprovalFlowStageUpsertItem struct {
 }
 
 var (
-	defaultDbApprovalStages = []struct {
-		Key, Name string
-		Sort      int
-	}{
-		{model.DbApprovalStageDBALead, "DBA 负责人", 1},
-		{model.DbApprovalStageSecurityLead, "安全负责人", 2},
-		{model.DbApprovalStageOpsLead, "运维负责人", 3},
-	}
 	dbStageKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`)
 )
-
-func dbStageNameByKey(key string) string {
-	for _, d := range defaultDbApprovalStages {
-		if d.Key == key {
-			return d.Name
-		}
-	}
-	return key
-}
 
 func generateDbStageKey() (string, error) {
 	var b [4]byte
@@ -82,7 +65,7 @@ func normalizeDbStageKey(raw string) (string, error) {
 }
 
 func (s *Service) workflowEngine() *workflowsvc.Service {
-	return workflowsvc.NewService(s.db, s.userGroupRepo, nil, s.userRepo)
+	return s.workflow
 }
 
 func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*ApprovalFlowResponse, error) {
@@ -121,33 +104,6 @@ func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req Ap
 		return nil, err
 	}
 	return s.GetApprovalFlow(ctx, projectID)
-}
-
-func (s *Service) loadEnabledFlowStages(ctx context.Context, projectID uint) ([]model.DbApprovalFlowStage, error) {
-	return workflowsvc.EnabledLegacyDbmgmtStages(ctx, s.db, s.userGroupRepo, projectID)
-}
-
-func (s *Service) loadUserGroupNameMap(ctx context.Context, stages []model.DbApprovalFlowStage) map[uint]string {
-	ids := make([]uint, 0)
-	seen := map[uint]struct{}{}
-	for _, st := range stages {
-		if st.UserGroupID != nil && *st.UserGroupID > 0 {
-			if _, ok := seen[*st.UserGroupID]; !ok {
-				seen[*st.UserGroupID] = struct{}{}
-				ids = append(ids, *st.UserGroupID)
-			}
-		}
-	}
-	out := map[uint]string{}
-	if len(ids) == 0 {
-		return out
-	}
-	var groups []model.UserGroup
-	_ = s.db.WithContext(ctx).Select("id, name").Where("id IN ?", ids).Find(&groups).Error
-	for _, g := range groups {
-		out[g.ID] = g.Name
-	}
-	return out
 }
 
 func (s *Service) userCanApproveStep(ctx context.Context, actor *auth.CurrentUser, groupID *uint) (bool, error) {

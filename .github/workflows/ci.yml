@@ -18,7 +18,134 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test ./... -short -count=1
+        run: go test ./... -short -count=1 -coverprofile=coverage.out -covermode=atomic
+      - name: Coverage gate
+        run: |
+          total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
+          echo "total coverage: ${total}%"
+          # 基线（2026-10 实测 10.6%）：只防回退，不设高门槛；提升覆盖率时同步上调本阈值
+          awk -v t="$total" 'BEGIN { exit !(t >= 10.0) }' || { echo "coverage ${total}% below 10% gate" >&2; exit 1; }
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage.out
+          retention-days: 7
+
+  golangci-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.7.2
+          # 存量债(errcheck 50 / staticcheck 50, 基线 2026-10)只在新代码上拦截
+          only-new-issues: true
+          args: --timeout=10m
+
+  docs-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML
+        run: pip install pyyaml
+      - name: Regenerate docs
+        run: |
+          go run ./tools/genopenapi -out docs/apipost/permission-system.openapi.yaml
+          python tools/gen_api_design_md.py
+          go run ./tools/generrno
+      - name: Check drift
+        run: |
+          if ! git diff --quiet -- docs/apipost/permission-system.openapi.yaml docs/API接口设计说明书.md docs/错误码清单.md; then
+            echo "文档与代码漂移：请本地运行 make genopenapi generrno 并提交生成结果" >&2
+            git diff --stat -- docs/apipost/permission-system.openapi.yaml docs/API接口设计说明书.md docs/错误码清单.md
+            exit 1
+          fi
+          echo "docs in sync"
+
+  pg-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: yunshu
+          POSTGRES_PASSWORD: yunshu
+          POSTGRES_DB: yunshu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yunshu -d yunshu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: Write smoke config
+        run: |
+          cp configs/config.smoke-pg.yaml /tmp/yunshu-smoke-pg.yaml
+          # CI service 网络：库与 Redis 在 localhost
+          sed -i 's/host: yunshu-postgres/host: 127.0.0.1/' /tmp/yunshu-smoke-pg.yaml
+          sed -i 's/addr: yunshu-redis:6379/addr: 127.0.0.1:6379/' /tmp/yunshu-smoke-pg.yaml
+          sed -i 's/password: "1234"/password: ""/' /tmp/yunshu-smoke-pg.yaml
+          sed -i 's/port: 8080/port: 18080/' /tmp/yunshu-smoke-pg.yaml
+          grep -E '^(  host:|  addr:|  port:|  password:)' /tmp/yunshu-smoke-pg.yaml | head -n 20
+      - name: Build
+        run: go build -o /tmp/yunshu .
+      - name: Migrate
+        run: /tmp/yunshu migrate --config /tmp/yunshu-smoke-pg.yaml
+      - name: Seed
+        run: /tmp/yunshu seed --config /tmp/yunshu-smoke-pg.yaml
+      - name: Server + health
+        run: |
+          /tmp/yunshu server --config /tmp/yunshu-smoke-pg.yaml >/tmp/yunshu-server.log 2>&1 &
+          pid=$!
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18080/api/v1/health >/dev/null; then
+              ok=1
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "server exited early" >&2
+              cat /tmp/yunshu-server.log >&2 || true
+              exit 1
+            fi
+            sleep 1
+          done
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          if [ "$ok" != "1" ]; then
+            echo "health check failed" >&2
+            cat /tmp/yunshu-server.log >&2 || true
+            exit 1
+          fi
+          echo "PG smoke OK"
 
   frontend:
     runs-on: ubuntu-latest

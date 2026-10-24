@@ -1,0 +1,77 @@
+# 达梦 DM8 平台主库示例（需自备达梦实例；无官方公共 Docker 镜像）。
+# 用法：
+#   1) 在达梦中创建模式/用户（示例 schema=YUNSHU）
+#   2) 将本文件合并进 configs/config.yaml，或：
+#      yunshu migrate --config configs/config.smoke-dm.yaml
+#      yunshu seed --config configs/config.smoke-dm.yaml
+#      yunshu server --config configs/config.smoke-dm.yaml
+#   3) Docker 部署时 entrypoint 会按 driver=dameng 等待 5236 端口
+
+app:
+  name: yunshu-cmdb
+  env: dev
+  port: 8080
+
+plugins:
+  enabled:
+    - core
+    - k8s
+    - alert
+    - project
+    - cmdb
+    - backup
+    - cicd
+    - dbmgmt
+    - inspect
+    - ai
+    - esmgmt
+    - kafkamgmt
+
+ai:
+  enabled: false
+
+database:
+  driver: dameng
+  host: 127.0.0.1
+  port: 5236
+  user: SYSDBA
+  password: "SYSDBA001"
+  db_name: YUNSHU
+  schema: YUNSHU
+  max_idle_conns: 5
+  max_open_conns: 20
+  conn_max_lifetime_seconds: 3600
+
+redis:
+  addr: 127.0.0.1:6379
+  password: "1234"
+  db: 0
+  pool_size: 10
+
+auth:
+  jwt_secret: "YunshuJWTSecretKey2026MustBeAtLeast32BytesLong!!"
+  access_token_ttl_minutes: 15
+  refresh_token_ttl_hours: 168
+
+security:
+  encryption_key: "dGVzdC1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE="
+
+casbin:
+  model_path: configs/casbin_model.conf
+  auto_load_interval_seconds: 0
+
+http:
+  read_header_timeout_seconds: 5
+  read_timeout_seconds: 60
+  write_timeout_seconds: 60
+  idle_timeout_seconds: 60
+  shutdown_timeout_seconds: 10
+
+log:
+  level: info
+  format: json
+  output: console
+
+swagger:
+  enabled: false
+  path: /swagger/*any

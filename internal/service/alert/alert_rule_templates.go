@@ -29,8 +29,10 @@ type AlertRuleTemplate struct {
 
 type CreateFromTemplateRequest struct {
 	TemplateID   string            `json:"template_id" binding:"required"`
-	DatasourceID uint              `json:"datasource_id" binding:"required"`
+	DatasourceID uint              `json:"datasource_id"`
+	ProjectID    *uint             `json:"project_id"`
 	Name         string            `json:"name"`
+	Severity     string            `json:"severity"` // 可选覆盖模板默认级别
 	Params       map[string]string `json:"params"`
 	Enabled      *bool             `json:"enabled"`
 }
@@ -150,6 +152,46 @@ func BuiltinAlertRuleTemplates() []AlertRuleTemplate {
 			Labels:        map[string]string{"category": "batch", "collector": "pushgateway"},
 			Annotations:   map[string]string{"summary": "批任务指标过久未推送"},
 		},
+		{
+			ID: "slo-burn-fast", Group: "slo", Name: "SLO 燃尽（快窗口）",
+			Description:  "多窗口燃尽：短窗错误率超过 14.4×预算（默认 30m），用于快速告警。需替换 job/sli 指标名。",
+			ExprTemplate: `(sum(rate({{error_metric}}{job="{{job}}"}[30m])) / sum(rate({{total_metric}}{job="{{job}}"}[30m]))) > ({{budget}} * 14.4)`,
+			ForSeconds:   120, EvalIntervalSec: 30, Severity: "critical", ThresholdUnit: "ratio",
+			DefaultParams: map[string]string{
+				"job": "my-service", "error_metric": "http_requests_total", "total_metric": "http_requests_total", "budget": "0.001",
+			},
+			Labels:      map[string]string{"category": "slo", "rule_kind": "slo", "slo_window": "fast"},
+			Annotations: map[string]string{"summary": "SLO 快窗口燃尽", "description": "job={{job}} 30m 错误率超过 14.4× 预算"},
+		},
+		{
+			ID: "slo-burn-slow", Group: "slo", Name: "SLO 燃尽（慢窗口）",
+			Description:  "多窗口燃尽：长窗错误率超过 3×预算（默认 6h），用于趋势告警。",
+			ExprTemplate: `(sum(rate({{error_metric}}{job="{{job}}"}[6h])) / sum(rate({{total_metric}}{job="{{job}}"}[6h]))) > ({{budget}} * 3)`,
+			ForSeconds:   600, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "ratio",
+			DefaultParams: map[string]string{
+				"job": "my-service", "error_metric": "http_requests_total", "total_metric": "http_requests_total", "budget": "0.001",
+			},
+			Labels:      map[string]string{"category": "slo", "rule_kind": "slo", "slo_window": "slow"},
+			Annotations: map[string]string{"summary": "SLO 慢窗口燃尽", "description": "job={{job}} 6h 错误率超过 3× 预算"},
+		},
+		{
+			ID: "log-error-count", Group: "log", Name: "日志 ERROR 计数超阈",
+			Description:  "近 N 分钟 ERROR（或指定级别）条数超过阈值。创建后请将 rule_kind 设为 log，Expr 为 JSON 配置。",
+			ExprTemplate: `{"mode":"error_count","level":"ERROR","window_minutes":{{window}},"threshold":{{threshold}}}`,
+			ForSeconds:   0, EvalIntervalSec: 60, Severity: "warning", ThresholdUnit: "count",
+			DefaultParams: map[string]string{"window": "5", "threshold": "20"},
+			Labels:        map[string]string{"category": "log", "rule_kind": "log"},
+			Annotations:   map[string]string{"summary": "日志 ERROR 超阈"},
+		},
+		{
+			ID: "log-error-spike", Group: "log", Name: "日志 ERROR 突增",
+			Description:  "当前窗口 ERROR 相对基线窗口突增（默认 3 倍）且不低于绝对阈值。",
+			ExprTemplate: `{"mode":"error_spike","level":"ERROR","window_minutes":{{window}},"baseline_minutes":{{baseline}},"threshold":{{threshold}},"spike_ratio":{{ratio}}}`,
+			ForSeconds:   0, EvalIntervalSec: 60, Severity: "critical", ThresholdUnit: "count",
+			DefaultParams: map[string]string{"window": "5", "baseline": "30", "threshold": "10", "ratio": "3"},
+			Labels:        map[string]string{"category": "log", "rule_kind": "log"},
+			Annotations:   map[string]string{"summary": "日志 ERROR 突增"},
+		},
 	}
 }
 
@@ -220,17 +262,40 @@ func (s *AlertMonitorRuleService) CreateFromTemplate(ctx context.Context, req Cr
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
+	kind := model.AlertRuleKindPromQL
+	if v := strings.TrimSpace(labels["rule_kind"]); v != "" {
+		kind = normalizeRuleKind(v)
+	}
+	sev := strings.TrimSpace(tpl.Severity)
+	if v := strings.TrimSpace(req.Severity); v != "" {
+		sev = v
+	}
+	if sev == "" {
+		sev = "warning"
+	}
 	upsert := AlertMonitorRuleUpsertRequest{
 		DatasourceID:        req.DatasourceID,
+		ProjectID:           req.ProjectID,
 		Name:                name,
+		RuleKind:            kind,
 		Expr:                expr,
 		ForSeconds:          tpl.ForSeconds,
 		EvalIntervalSeconds: tpl.EvalIntervalSec,
-		Severity:            tpl.Severity,
+		Severity:            sev,
 		ThresholdUnit:       tpl.ThresholdUnit,
 		LabelsJSON:          string(labelsJSON),
 		AnnotationsJSON:     string(annJSON),
 		Enabled:             &enabled,
 	}
-	return s.Create(ctx, upsert)
+	row, err := s.Create(ctx, upsert)
+	if err != nil {
+		return nil, err
+	}
+	if row != nil && row.ID > 0 {
+		row.Origin = model.AlertRuleOriginTemplate
+		if saveErr := s.ruleRepo.Save(ctx, row); saveErr != nil {
+			return row, nil // 规则已创建，来源标记失败不阻断
+		}
+	}
+	return row, nil
 }

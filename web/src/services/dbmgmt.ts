@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 
 export type DbInstance = {
   id: number;
@@ -154,7 +154,11 @@ export type DbSqlCheckResult = {
   error?: string;
 };
 
-export async function checkDbSql(projectId: number, instanceId: number, body: { database?: string; sql: string }) {
+export async function checkDbSql(
+  projectId: number,
+  instanceId: number,
+  body: { database?: string; sql: string; audit_mode?: "system" | "manual" },
+) {
   return getData<DbSqlCheckResult>(http.post(`${base(projectId)}/instances/${instanceId}/check`, body));
 }
 
@@ -170,8 +174,8 @@ export async function listDbGrants(projectId: number, instanceId?: number) {
   );
 }
 
-export async function createDbGrant(projectId: number, payload: DbGrantPayload) {
-  return getData<DbGrant>(http.post(`${base(projectId)}/grants`, payload));
+export async function createDbGrant(projectId: number, payload: DbGrantPayload, idemKey?: string) {
+  return getData<DbGrant>(http.post(`${base(projectId)}/grants`, payload, idempotencyConfig(idemKey)));
 }
 
 export async function deleteDbGrant(projectId: number, grantId: number) {

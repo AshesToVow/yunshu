@@ -12,12 +12,12 @@ type rule struct {
 }
 
 var rules = map[string]rule{
-	"system": {prefixes: []string{"mail_", "password_"}, exact: []string{"common_status"}},
+	"system": {prefixes: []string{"mail_", "password_", "auth_"}, exact: []string{"common_status"}},
 	"alert":  {prefixes: []string{"alert_", "wecom_", "dingtalk_"}},
-	"log":    {prefixes: []string{"log_", "elasticsearch_", "kafka_"}},
+	"log":    {prefixes: []string{"log_", "loggie_", "elasticsearch_", "kafka_"}},
 	"k8s":    {prefixes: []string{"k8s_"}},
-	"cmdb":   {prefixes: []string{"server_", "cloud_"}},
-	"backup": {prefixes: []string{"minio_", "mysql_backup_"}},
+	"cmdb":   {prefixes: []string{"cmdb_", "server_", "cloud_"}},
+	"backup": {prefixes: []string{"minio_", "mysql_backup_", "esmgmt_"}},
 	"dbmgmt": {prefixes: []string{"dbmgmt_"}},
 	"cicd":   {prefixes: []string{"cicd_"}},
 	"ai":     {prefixes: []string{"ai_"}},

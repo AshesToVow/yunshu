@@ -26,9 +26,9 @@ type ClusterNamespaceOptionalKeywordQuery struct {
 }
 
 type ClusterNamespaceNameQuery struct {
-	ClusterID uint   `form:"cluster_id" binding:"required"`
-	Namespace string `form:"namespace" binding:"required"`
-	Name      string `form:"name" binding:"required"`
+	ClusterID uint   `json:"cluster_id" form:"cluster_id" binding:"required"`
+	Namespace string `json:"namespace" form:"namespace" binding:"required"`
+	Name      string `json:"name" form:"name" binding:"required"`
 	K8sDeleteOptions
 }
 

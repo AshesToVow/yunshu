@@ -1,5 +1,29 @@
-import { CheckOutlined, CloseOutlined, CopyOutlined, EyeOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Descriptions, Form, Input, Modal, Segmented, Select, Space, Spin, Table, Tabs, Tag, Typography, Alert, message } from "antd";
+import {
+  CheckOutlined,
+  CloseOutlined,
+  CopyOutlined,
+  EyeOutlined,
+  PlayCircleOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  Modal,
+  Segmented,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  Alert,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -132,7 +156,10 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
   const scopeOptions = useMemo(
     () => [
       { label: "全部", value: "all" as const },
-      { label: tab === "ticket" && status === "pending_execution" ? "待我执行" : "待我审批", value: "pending" as const },
+      {
+        label: tab === "ticket" && status === "pending_execution" ? "待我执行" : "待我审批",
+        value: "pending" as const,
+      },
       { label: tab === "ticket" && status === "pending_execution" ? "我已执行" : "我已审批", value: "done" as const },
     ],
     [tab, status],
@@ -175,12 +202,17 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
     setPage(1);
   }, [tab, projectId, mineScope, status]);
 
-  const openReview = (type: "access" | "app_user" | "ticket", id: number, isApprove: boolean, accessRow?: DbAccessRequest) => {
+  const openReview = (
+    type: "access" | "app_user" | "ticket",
+    id: number,
+    isApprove: boolean,
+    accessRow?: DbAccessRequest,
+  ) => {
     setReviewType(type);
     setReviewId(id);
     setApprove(isApprove);
     setReviewTicket(null);
-    setReviewAccess(type === "access" ? accessRow ?? null : null);
+    setReviewAccess(type === "access" ? (accessRow ?? null) : null);
     setReviewTicketLoading(type === "ticket");
     form.resetFields();
     if (type === "access" && isApprove && accessRow) {
@@ -273,7 +305,7 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
             : undefined;
         const payload: { comment?: string; expires_at?: string } = { comment };
         if (period !== undefined) {
-          payload.expires_at = period === null ? "" : grantPeriodToExpiresAt(period ?? null) ?? "";
+          payload.expires_at = period === null ? "" : (grantPeriodToExpiresAt(period ?? null) ?? "");
         }
         await approveDbAccessRequest(projectId, reviewId, payload);
       } else await rejectDbAccessRequest(projectId, reviewId, comment);
@@ -328,7 +360,12 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       render: (_, r) =>
         isAccessPending(r) ? (
           <Space>
-            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => openReview("access", r.id, true, r)} />
+            <Button
+              size="small"
+              type="primary"
+              icon={<CheckOutlined />}
+              onClick={() => openReview("access", r.id, true, r)}
+            />
             <Button size="small" danger icon={<CloseOutlined />} onClick={() => openReview("access", r.id, false, r)} />
           </Space>
         ) : (
@@ -361,7 +398,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       title: "状态",
       dataIndex: "status",
       render: (v, row) => {
-        const color = v === "success" || v === "approved" ? "green" : v === "rejected" || v === "failed" ? "red" : "orange";
+        const color =
+          v === "success" || v === "approved" ? "green" : v === "rejected" || v === "failed" ? "red" : "orange";
         let label = accessRequestStatusLabel(v);
         if (v === "pending" && row.mine_status === "mine_done") label = "待下一环节";
         return <Tag color={color}>{label}</Tag>;
@@ -373,7 +411,12 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       render: (_, r) =>
         isAppUserPending(r) ? (
           <Space>
-            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => openReview("app_user", r.id, true)} />
+            <Button
+              size="small"
+              type="primary"
+              icon={<CheckOutlined />}
+              onClick={() => openReview("app_user", r.id, true)}
+            />
             <Button size="small" danger icon={<CloseOutlined />} onClick={() => openReview("app_user", r.id, false)} />
           </Space>
         ) : (
@@ -385,16 +428,27 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
   const ticketCols: ColumnsType<DbTicket> = [
     { title: "类型", dataIndex: "ticket_type", render: (v: string) => ticketTypeLabel(v) },
     { title: "实例", dataIndex: "instance_name" },
-    { title: "风险", dataIndex: "risk_level", render: (v) => <Tag color={riskLevelColor(v ?? "")}>{riskLevelLabel(v ?? "")}</Tag> },
+    {
+      title: "风险",
+      dataIndex: "risk_level",
+      render: (v) => <Tag color={riskLevelColor(v ?? "")}>{riskLevelLabel(v ?? "")}</Tag>,
+    },
     { title: "提交人", dataIndex: "submitter_name" },
-    { title: "SQL", dataIndex: "sql_excerpt", ellipsis: true, render: (v: string | undefined, r) => (
-      <Space size={4}>
-        <Typography.Text ellipsis style={{ maxWidth: 180 }}>{v || "—"}</Typography.Text>
-        <Button type="link" size="small" style={{ padding: 0 }} onClick={() => openSqlView(r.id)}>
-          查看
-        </Button>
-      </Space>
-    ) },
+    {
+      title: "SQL",
+      dataIndex: "sql_excerpt",
+      ellipsis: true,
+      render: (v: string | undefined, r) => (
+        <Space size={4}>
+          <Typography.Text ellipsis style={{ maxWidth: 180 }}>
+            {v || "—"}
+          </Typography.Text>
+          <Button type="link" size="small" style={{ padding: 0 }} onClick={() => openSqlView(r.id)}>
+            查看
+          </Button>
+        </Space>
+      ),
+    },
     {
       title: "当前环节",
       dataIndex: "current_stage_name",
@@ -409,7 +463,13 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       dataIndex: "status",
       render: (v, row) => {
         const color =
-          v === "success" ? "green" : v === "rejected" || v === "failed" ? "red" : v === "pending_execution" ? "blue" : "orange";
+          v === "success"
+            ? "green"
+            : v === "rejected" || v === "failed"
+              ? "red"
+              : v === "pending_execution"
+                ? "blue"
+                : "orange";
         let label = ticketStatusLabel(v);
         if (v === "pending_approval" && row.mine_status === "mine_done") label = "待下一环节";
         return <Tag color={color}>{label}</Tag>;
@@ -424,7 +484,12 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
           </Button>
           {isTicketApprovalPending(r) ? (
             <>
-              <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => openReview("ticket", r.id, true)} />
+              <Button
+                size="small"
+                type="primary"
+                icon={<CheckOutlined />}
+                onClick={() => openReview("ticket", r.id, true)}
+              />
               <Button size="small" danger icon={<CloseOutlined />} onClick={() => openReview("ticket", r.id, false)} />
             </>
           ) : null}
@@ -444,21 +509,29 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
               执行
             </Button>
           ) : null}
-          {!isTicketApprovalPending(r) && !isTicketExecutionPending(r) ? <span style={{ color: "#999" }}>—</span> : null}
+          {!isTicketApprovalPending(r) && !isTicketExecutionPending(r) ? (
+            <span style={{ color: "#999" }}>—</span>
+          ) : null}
         </Space>
       ),
     },
   ];
 
   const total = tab === "access" ? accessTotal : tab === "app_user" ? appUserTotal : ticketTotal;
-  const statusOptions = tab === "access" ? ACCESS_STATUS_OPTIONS : tab === "app_user" ? APP_USER_STATUS_OPTIONS : TICKET_STATUS_OPTIONS;
+  const statusOptions =
+    tab === "access" ? ACCESS_STATUS_OPTIONS : tab === "app_user" ? APP_USER_STATUS_OPTIONS : TICKET_STATUS_OPTIONS;
 
   return (
     <Card
       title={mode === "pending" ? "待审核" : "审批待办"}
       extra={
         <Space>
-          <Select style={{ width: 200 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={setProjectId} />
+          <Select
+            style={{ width: 200 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={setProjectId}
+          />
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
             刷新
           </Button>

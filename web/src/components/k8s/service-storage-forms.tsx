@@ -2,7 +2,13 @@ import { AutoComplete, Button, Form, Input, InputNumber, Select, Space } from "a
 import YAML from "yaml";
 
 export type KVPair = { key?: string; value?: string };
-export type PortPair = { name?: string; protocol?: "TCP" | "UDP" | "SCTP"; port?: number; targetPort?: string; nodePort?: number };
+export type PortPair = {
+  name?: string;
+  protocol?: "TCP" | "UDP" | "SCTP";
+  port?: number;
+  targetPort?: string;
+  nodePort?: number;
+};
 
 function pairsToMap(pairs?: KVPair[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -97,8 +103,11 @@ export function serviceYamlToForm(yaml: string): ServiceFormValues | null {
       sessionAffinity: obj?.spec?.sessionAffinity as ServiceFormValues["sessionAffinity"],
       externalTrafficPolicy: obj?.spec?.externalTrafficPolicy as ServiceFormValues["externalTrafficPolicy"],
       internalTrafficPolicy: obj?.spec?.internalTrafficPolicy as ServiceFormValues["internalTrafficPolicy"],
-      loadBalancerSourceRanges: Array.isArray(obj?.spec?.loadBalancerSourceRanges) ? obj.spec.loadBalancerSourceRanges.map((x: any) => String(x ?? "")) : [],
-      healthCheckNodePort: typeof obj?.spec?.healthCheckNodePort === "number" ? obj.spec.healthCheckNodePort : undefined,
+      loadBalancerSourceRanges: Array.isArray(obj?.spec?.loadBalancerSourceRanges)
+        ? obj.spec.loadBalancerSourceRanges.map((x: any) => String(x ?? ""))
+        : [],
+      healthCheckNodePort:
+        typeof obj?.spec?.healthCheckNodePort === "number" ? obj.spec.healthCheckNodePort : undefined,
       ipFamilyPolicy: obj?.spec?.ipFamilyPolicy as ServiceFormValues["ipFamilyPolicy"],
       ipFamilies: Array.isArray(obj?.spec?.ipFamilies) ? obj.spec.ipFamilies : undefined,
       selector_pairs: selector_pairs.length ? selector_pairs : [{ key: "app", value: "" }],
@@ -257,7 +266,8 @@ export function pvYamlToForm(yaml: string): PersistentVolumeFormValues | null {
       storageClassName: obj?.spec?.storageClassName ? String(obj.spec.storageClassName) : undefined,
       accessModes: Array.isArray(obj?.spec?.accessModes) ? obj.spec.accessModes : ["ReadWriteOnce"],
       capacityStorage: String(obj?.spec?.capacity?.storage ?? "1Gi"),
-      reclaimPolicy: (obj?.spec?.persistentVolumeReclaimPolicy || "Delete") as PersistentVolumeFormValues["reclaimPolicy"],
+      reclaimPolicy: (obj?.spec?.persistentVolumeReclaimPolicy ||
+        "Delete") as PersistentVolumeFormValues["reclaimPolicy"],
       volumeSourceType: obj?.spec?.nfs ? "nfs" : obj?.spec?.local ? "local" : "hostPath",
       hostPath: obj?.spec?.hostPath?.path ? String(obj.spec.hostPath.path) : undefined,
       nfsServer: obj?.spec?.nfs?.server ? String(obj.spec.nfs.server) : undefined,
@@ -308,7 +318,11 @@ export function ServicePortsFormList(props?: { recommendedPortNames?: string[] }
                   options={portNameOptions}
                   placeholder="name"
                   style={{ width: 140 }}
-                  filterOption={(input, option) => String(option?.value ?? "").toLowerCase().includes(input.toLowerCase())}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? "")
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
                 />
               </Form.Item>
               <Form.Item name={[f.name, "protocol"]} initialValue="TCP" style={{ marginBottom: 0 }}>
@@ -321,7 +335,11 @@ export function ServicePortsFormList(props?: { recommendedPortNames?: string[] }
                   ]}
                 />
               </Form.Item>
-              <Form.Item name={[f.name, "port"]} rules={[{ required: true, message: "port" }]} style={{ marginBottom: 0 }}>
+              <Form.Item
+                name={[f.name, "port"]}
+                rules={[{ required: true, message: "port" }]}
+                style={{ marginBottom: 0 }}
+              >
                 <InputNumber placeholder="port" min={1} max={65535} style={{ width: 100 }} />
               </Form.Item>
               <Form.Item name={[f.name, "targetPort"]} style={{ marginBottom: 0 }} extra="可填端口名">
@@ -329,7 +347,11 @@ export function ServicePortsFormList(props?: { recommendedPortNames?: string[] }
                   options={portNameOptions}
                   placeholder="targetPort，如 8080 或 http"
                   style={{ width: 180 }}
-                  filterOption={(input, option) => String(option?.value ?? "").toLowerCase().includes(input.toLowerCase())}
+                  filterOption={(input, option) =>
+                    String(option?.value ?? "")
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
                 />
               </Form.Item>
               <Form.Item name={[f.name, "nodePort"]} style={{ marginBottom: 0 }}>
@@ -344,4 +366,3 @@ export function ServicePortsFormList(props?: { recommendedPortNames?: string[] }
     </Form.List>
   );
 }
-

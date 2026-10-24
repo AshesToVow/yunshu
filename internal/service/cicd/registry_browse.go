@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"yunshu/internal/model"
@@ -23,18 +22,18 @@ type HarborRepoItem struct {
 }
 
 type HarborTagItem struct {
-	Digest    string             `json:"digest"`
-	Tags      []string           `json:"tags"`
-	Size      int64              `json:"size"`
-	PushTime  string             `json:"push_time"`
-	Linked    []LinkedBuildBrief `json:"linked_build_runs,omitempty"`
+	Digest   string             `json:"digest"`
+	Tags     []string           `json:"tags"`
+	Size     int64              `json:"size"`
+	PushTime string             `json:"push_time"`
+	Linked   []LinkedBuildBrief `json:"linked_build_runs,omitempty"`
 }
 
 type LinkedBuildBrief struct {
-	ID          uint   `json:"id"`
-	ProjectID   uint   `json:"project_id"`
-	ServiceID   uint   `json:"service_id"`
-	BuildNumber int    `json:"build_number"`
+	ID           uint   `json:"id"`
+	ProjectID    uint   `json:"project_id"`
+	ServiceID    uint   `json:"service_id"`
+	BuildNumber  int    `json:"build_number"`
 	ImageAddress string `json:"image_address"`
 }
 
@@ -172,15 +171,8 @@ func (s *Service) ListHarborArtifacts(ctx context.Context, registryID, projectID
 		return items, nil
 	}
 
-	encodedRepo := url.PathEscape(repo)
 	// Harbor 双层 PathEscape：foo/bar → foo%252Fbar 在部分版本；优先 %2F
 	path := fmt.Sprintf(
-		"/api/v2.0/projects/%s/repositories/%s/artifacts?page_size=100&with_tag=true",
-		url.PathEscape(harborProject),
-		strings.ReplaceAll(encodedRepo, "%2F", "%252F"),
-	)
-	// 更通用：repository 名用 double-encode of /
-	path = fmt.Sprintf(
 		"/api/v2.0/projects/%s/repositories/%s/artifacts?page_size=100&with_tag=true",
 		url.PathEscape(harborProject),
 		encodeHarborRepoPath(repo),
@@ -286,16 +278,10 @@ func (s *Service) DeleteHarborArtifact(ctx context.Context, registryID, projectI
 
 func (s *Service) findLinkedBuilds(ctx context.Context, imageAddress string) []LinkedBuildBrief {
 	imageAddress = strings.TrimSpace(imageAddress)
-	if imageAddress == "" || s.db == nil {
+	if imageAddress == "" {
 		return nil
 	}
-	var rows []model.CicdBuildRun
-	_ = s.db.WithContext(ctx).
-		Select("id", "project_id", "service_id", "build_number", "image_address").
-		Where("image_address = ? OR image_address LIKE ?", imageAddress, imageAddress+"%").
-		Order("id DESC").
-		Limit(20).
-		Find(&rows).Error
+	rows, _ := s.repo.ListBuildRunsByImageAddress(ctx, imageAddress, 20)
 	out := make([]LinkedBuildBrief, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, LinkedBuildBrief{
@@ -320,9 +306,4 @@ func dedupeLinked(in []LinkedBuildBrief) []LinkedBuildBrief {
 		out = append(out, it)
 	}
 	return out
-}
-
-func parseInt64Loose(s string) int64 {
-	n, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
-	return n
 }

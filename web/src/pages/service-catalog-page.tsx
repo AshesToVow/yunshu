@@ -7,12 +7,7 @@ import { listCicdServices } from "../services/cicd";
 import { getClusters } from "../services/clusters";
 import { listDbInstances } from "../services/dbmgmt";
 import { listNamespaces } from "../services/namespaces";
-import {
-  getProjectLogSources,
-  getProjectServices,
-  getProjects,
-  type ProjectItem,
-} from "../services/projects";
+import { getProjectLogSources, getProjectServices, getProjects, type ProjectItem } from "../services/projects";
 import {
   addServiceCatalogLink,
   deleteServiceCatalog,
@@ -156,7 +151,9 @@ export function ServiceCatalogPage() {
     try {
       const [res, cicd] = await Promise.all([
         listServiceCatalog(projectId, { page: 1, page_size: 200 }),
-        listCicdServices(projectId, { page: 1, page_size: 500 }).catch(() => ({ list: [] as { product_line?: string }[] })),
+        listCicdServices(projectId, { page: 1, page_size: 500 }).catch(() => ({
+          list: [] as { product_line?: string }[],
+        })),
       ]);
       setList(res.list);
       const lines = new Set<string>();
@@ -283,7 +280,13 @@ export function ServiceCatalogPage() {
       title="服务目录"
       extra={
         <Space wrap>
-          <Select style={{ width: 260 }} value={projectId} onChange={setProjectId} options={projectOptions} placeholder="选择项目" />
+          <Select
+            style={{ width: 260 }}
+            value={projectId}
+            onChange={setProjectId}
+            options={projectOptions}
+            placeholder="选择项目"
+          />
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
             刷新
           </Button>
@@ -331,16 +334,21 @@ export function ServiceCatalogPage() {
           },
           {
             title: "操作",
-            width: 220,
+            width: 200,
+            className: "yunshu-table-actions-cell",
             render: (_: unknown, row: ServiceCatalogItem) => (
-              <Space>
-                <Button type="link" onClick={() => openEdit(row)}>
+              <Space size={0} wrap className="yunshu-table-actions">
+                <Button type="link" size="small" onClick={() => openEdit(row)}>
                   编辑
                 </Button>
-                <Button type="link" onClick={() => navigate(`/service-portrait?project_id=${projectId}&catalog_id=${row.id}`)}>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => navigate(`/service-portrait?project_id=${projectId}&catalog_id=${row.id}`)}
+                >
                   画像
                 </Button>
-                <Button type="link" icon={<LinkOutlined />} onClick={() => openLink(row)}>
+                <Button type="link" size="small" icon={<LinkOutlined />} onClick={() => openLink(row)}>
                   绑定
                 </Button>
                 <Popconfirm
@@ -353,7 +361,7 @@ export function ServiceCatalogPage() {
                     })
                   }
                 >
-                  <Button type="link" danger icon={<DeleteOutlined />}>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                     删除
                   </Button>
                 </Popconfirm>
@@ -363,9 +371,20 @@ export function ServiceCatalogPage() {
         ]}
       />
 
-      <Modal title={current ? "编辑服务" : "新建服务"} open={editorOpen} onOk={() => void onSubmit()} onCancel={() => setEditorOpen(false)} destroyOnClose>
+      <Modal
+        title={current ? "编辑服务" : "新建服务"}
+        open={editorOpen}
+        onOk={() => void onSubmit()}
+        onCancel={() => setEditorOpen(false)}
+        destroyOnClose
+      >
         <Form form={form} layout="vertical">
-          <Form.Item name="identifier" label="标识" rules={[{ required: true }]} extra="建议与 CI/CD 应用 identifier 一致，作为跨模块统一服务名">
+          <Form.Item
+            name="identifier"
+            label="标识"
+            rules={[{ required: true }]}
+            extra="建议与 CI/CD 应用 identifier 一致，作为跨模块统一服务名"
+          >
             <Input disabled={!!current} placeholder="如 springbootDemo" />
           </Form.Item>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
@@ -395,9 +414,21 @@ export function ServiceCatalogPage() {
         </Form>
       </Modal>
 
-      <Modal title={`绑定关联：${current?.name || ""}`} open={linkOpen} onOk={() => void onLinkSubmit()} onCancel={() => setLinkOpen(false)} destroyOnClose width={560}>
+      <Modal
+        title={`绑定关联：${current?.name || ""}`}
+        open={linkOpen}
+        onOk={() => void onLinkSubmit()}
+        onCancel={() => setLinkOpen(false)}
+        destroyOnClose
+        width={560}
+      >
         <Form form={linkForm} layout="vertical">
-          <Form.Item name="link_type" label="类型" rules={[{ required: true }]} extra="把该业务服务挂到具体发布/日志/K8s/库表等实体上">
+          <Form.Item
+            name="link_type"
+            label="类型"
+            rules={[{ required: true }]}
+            extra="把该业务服务挂到具体发布/日志/K8s/库表等实体上"
+          >
             <Select
               options={LINK_TYPE_OPTIONS}
               onChange={() => {
@@ -449,7 +480,12 @@ export function ServiceCatalogPage() {
               <Form.Item name="k8s_kind" label="工作负载类型" rules={[{ required: true }]}>
                 <Select options={K8S_KIND_OPTIONS} onChange={() => linkForm.setFieldsValue({ k8s_name: undefined })} />
               </Form.Item>
-              <Form.Item name="k8s_name" label="工作负载名称" rules={[{ required: true }]} extra="将保存为 clusterId/ns/kind/name">
+              <Form.Item
+                name="k8s_name"
+                label="工作负载名称"
+                rules={[{ required: true }]}
+                extra="将保存为 clusterId/ns/kind/name"
+              >
                 <Select showSearch options={workloadOptions} optionFilterProp="label" />
               </Form.Item>
             </>

@@ -156,9 +156,7 @@ export function CicdTodoPage() {
         title: "状态",
         dataIndex: "status",
         width: 100,
-        render: (_, row) => (
-          <Tag color={cicdTodoStatusTagColor(row)}>{cicdTodoStatusLabel(row, tab)}</Tag>
-        ),
+        render: (_, row) => <Tag color={cicdTodoStatusTagColor(row)}>{cicdTodoStatusLabel(row, tab)}</Tag>,
       },
       {
         title: "操作",
@@ -273,8 +271,7 @@ export function CicdTodoPage() {
                   selectedRowKeys,
                   onChange: (keys) => setSelectedRowKeys(keys.map(Number)),
                   getCheckboxProps: (row) => ({
-                    disabled:
-                      tab === "pending_approval" ? !isApprovalPending(row) : !isExecutionPending(row),
+                    disabled: tab === "pending_approval" ? !isApprovalPending(row) : !isExecutionPending(row),
                   }),
                 }
               : undefined

@@ -13,7 +13,7 @@ import {
   probeToForm,
   safeGet,
   safeParseYaml,
-  toNumberOrUndefined
+  toNumberOrUndefined,
 } from "./helpers";
 import type { DeploymentFormValues } from "./deployment";
 
@@ -79,8 +79,10 @@ export type DaemonSetFormValues = {
 export function buildDaemonSetYaml(v: DaemonSetFormValues): string {
   const envMap = envPairsToMap(v.env_pairs);
   const env = Object.keys(envMap).length ? Object.entries(envMap).map(([name, value]) => ({ name, value })) : undefined;
-  const imagePullSecrets =
-    (v.image_pull_secrets ?? []).filter(Boolean).map((name) => ({ name: String(name).trim() })).filter((s) => !!s.name);
+  const imagePullSecrets = (v.image_pull_secrets ?? [])
+    .filter(Boolean)
+    .map((name) => ({ name: String(name).trim() }))
+    .filter((s) => !!s.name);
 
   const tolerations =
     (v.tolerations ?? [])
@@ -100,18 +102,18 @@ export function buildDaemonSetYaml(v: DaemonSetFormValues): string {
         tolerationSeconds: t.tolerationSeconds,
       })) || undefined;
 
-  const volumes =
-    (v.volumes ?? [])
-      .map((it) => {
-        const name = String(it?.name ?? "").trim();
-        if (!name) return null;
-        const type = it?.type || "emptyDir";
-        if (type === "configMap") return { name, configMap: { name: String(it?.source_name ?? "").trim() || name } };
-        if (type === "secret") return { name, secret: { secretName: String(it?.source_name ?? "").trim() || name } };
-        if (type === "pvc") return { name, persistentVolumeClaim: { claimName: String(it?.source_name ?? "").trim() || name } };
-        return { name, emptyDir: {} };
-      })
-      .filter(Boolean);
+  const volumes = (v.volumes ?? [])
+    .map((it) => {
+      const name = String(it?.name ?? "").trim();
+      if (!name) return null;
+      const type = it?.type || "emptyDir";
+      if (type === "configMap") return { name, configMap: { name: String(it?.source_name ?? "").trim() || name } };
+      if (type === "secret") return { name, secret: { secretName: String(it?.source_name ?? "").trim() || name } };
+      if (type === "pvc")
+        return { name, persistentVolumeClaim: { claimName: String(it?.source_name ?? "").trim() || name } };
+      return { name, emptyDir: {} };
+    })
+    .filter(Boolean);
 
   const volumeMounts =
     (v.volume_mounts ?? [])
@@ -174,7 +176,9 @@ export function buildDaemonSetYaml(v: DaemonSetFormValues): string {
               name: v.container_name || v.name,
               image: v.image,
               imagePullPolicy: v.image_pull_policy || undefined,
-              ports: v.port ? [{ name: String(v.port_name ?? "").trim() || undefined, containerPort: v.port }] : undefined,
+              ports: v.port
+                ? [{ name: String(v.port_name ?? "").trim() || undefined, containerPort: v.port }]
+                : undefined,
               command: v.command?.trim() ? ["sh", "-c", v.command.trim()] : undefined,
               env,
               resources: Object.keys(resources).length ? resources : undefined,
@@ -214,7 +218,8 @@ export function daemonSetObjToForm(obj: any): DaemonSetFormValues | null {
   const resReq = c?.resources?.requests ?? {};
   const resLim = c?.resources?.limits ?? {};
   const tolerations =
-    Array.isArray(safeGet(obj, "spec.template.spec.tolerations")) && safeGet(obj, "spec.template.spec.tolerations")?.length
+    Array.isArray(safeGet(obj, "spec.template.spec.tolerations")) &&
+    safeGet(obj, "spec.template.spec.tolerations")?.length
       ? (safeGet(obj, "spec.template.spec.tolerations") ?? []).map((t: any) => ({
           key: t?.key,
           operator: (t?.operator || "Equal") as "Equal" | "Exists",
@@ -241,8 +246,11 @@ export function daemonSetObjToForm(obj: any): DaemonSetFormValues | null {
         }))
       : [];
   const imagePullSecrets =
-    Array.isArray(safeGet(obj, "spec.template.spec.imagePullSecrets")) && safeGet(obj, "spec.template.spec.imagePullSecrets")?.length
-      ? (safeGet(obj, "spec.template.spec.imagePullSecrets") ?? []).map((s: any) => String(s?.name ?? "")).filter((x: string) => !!x)
+    Array.isArray(safeGet(obj, "spec.template.spec.imagePullSecrets")) &&
+    safeGet(obj, "spec.template.spec.imagePullSecrets")?.length
+      ? (safeGet(obj, "spec.template.spec.imagePullSecrets") ?? [])
+          .map((s: any) => String(s?.name ?? ""))
+          .filter((x: string) => !!x)
       : [];
 
   const lp = c?.livenessProbe;
@@ -265,11 +273,18 @@ export function daemonSetObjToForm(obj: any): DaemonSetFormValues | null {
     limits_cpu: resLim?.cpu ? String(resLim.cpu) : undefined,
     limits_memory: resLim?.memory ? String(resLim.memory) : undefined,
     node_selector_pairs: mapToKvPairs(safeGet(obj, "spec.template.spec.nodeSelector")),
-    affinity_yaml: safeGet(obj, "spec.template.spec.affinity") ? YAML.stringify(safeGet(obj, "spec.template.spec.affinity")) : undefined,
+    affinity_yaml: safeGet(obj, "spec.template.spec.affinity")
+      ? YAML.stringify(safeGet(obj, "spec.template.spec.affinity"))
+      : undefined,
     update_strategy_type: safeGet(obj, "spec.updateStrategy.type") as DaemonSetFormValues["update_strategy_type"],
-    rolling_update_max_surge: safeGet(obj, "spec.updateStrategy.rollingUpdate.maxSurge") != null ? String(safeGet(obj, "spec.updateStrategy.rollingUpdate.maxSurge")) : undefined,
+    rolling_update_max_surge:
+      safeGet(obj, "spec.updateStrategy.rollingUpdate.maxSurge") != null
+        ? String(safeGet(obj, "spec.updateStrategy.rollingUpdate.maxSurge"))
+        : undefined,
     rolling_update_max_unavailable:
-      safeGet(obj, "spec.updateStrategy.rollingUpdate.maxUnavailable") != null ? String(safeGet(obj, "spec.updateStrategy.rollingUpdate.maxUnavailable")) : undefined,
+      safeGet(obj, "spec.updateStrategy.rollingUpdate.maxUnavailable") != null
+        ? String(safeGet(obj, "spec.updateStrategy.rollingUpdate.maxUnavailable"))
+        : undefined,
     revision_history_limit: toNumberOrUndefined(safeGet(obj, "spec.revisionHistoryLimit")),
     tolerations,
     volumes,
@@ -279,4 +294,3 @@ export function daemonSetObjToForm(obj: any): DaemonSetFormValues | null {
     ...probeToForm("startup", sp),
   };
 }
-

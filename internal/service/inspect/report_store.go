@@ -138,8 +138,8 @@ func (s *minioReportStore) Delete(ctx context.Context, key string) error {
 	return s.cli.RemoveObject(ctx, key)
 }
 
-// resolveReportStore 优先 MinIO，配置不完整时降级本地。
-func resolveReportStore(ctx context.Context, db *gorm.DB, localRoot string) ReportStore {
+// ResolveReportStore 优先 MinIO，配置不完整时降级本地（由 Wire 注入工厂，Service 不持 DB）。
+func ResolveReportStore(ctx context.Context, db *gorm.DB, localRoot string) ReportStore {
 	local := newLocalReportStore(localRoot)
 	if db == nil {
 		return local

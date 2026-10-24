@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"yunshu/internal/config"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/platformhttp"
 
-	"gorm.io/gorm"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -24,14 +24,28 @@ import (
 	"helm.sh/helm/v3/pkg/storage/driver"
 )
 
+// CicdConfigResolver 由装配层注入，避免 Service 直持 *gorm.DB 读字典。
+type CicdConfigResolver func(ctx context.Context) config.CicdConfig
+
 type K8sHelmService struct {
-	runtime  *K8sRuntimeService
-	db       *gorm.DB
-	cicdBase config.CicdConfig
+	runtime     *K8sRuntimeService
+	harborMerge interfaces.HarborMergeRepository
+	resolveCicd CicdConfigResolver
+	cicdBase    config.CicdConfig
 }
 
-func NewK8sHelmService(runtime *K8sRuntimeService, db *gorm.DB, cicdBase config.CicdConfig) *K8sHelmService {
-	return &K8sHelmService{runtime: runtime, db: db, cicdBase: cicdBase}
+func NewK8sHelmService(
+	runtime *K8sRuntimeService,
+	harborMerge interfaces.HarborMergeRepository,
+	resolveCicd CicdConfigResolver,
+	cicdBase config.CicdConfig,
+) *K8sHelmService {
+	return &K8sHelmService{
+		runtime:     runtime,
+		harborMerge: harborMerge,
+		resolveCicd: resolveCicd,
+		cicdBase:    cicdBase,
+	}
 }
 
 type HelmReleaseItem struct {

@@ -3,18 +3,15 @@ package cicd
 import (
 	"context"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
-	"yunshu/internal/repository"
-
-	"gorm.io/gorm"
 )
 
 // syncCicdToServiceCatalog 将 CI/CD 服务同步到统一服务目录并绑定 cicd_service link。
-func syncCicdToServiceCatalog(ctx context.Context, db *gorm.DB, cicd *model.CicdService) {
-	if db == nil || cicd == nil || cicd.ProjectID == 0 || cicd.Identifier == "" {
+func syncCicdToServiceCatalog(ctx context.Context, repo interfaces.ServiceCatalogRepository, cicd *model.CicdService) {
+	if repo == nil || cicd == nil || cicd.ProjectID == 0 || cicd.Identifier == "" {
 		return
 	}
-	repo := repository.NewServiceCatalogRepository(db)
 	row := &model.ServiceCatalog{
 		ProjectID:   cicd.ProjectID,
 		Identifier:  cicd.Identifier,

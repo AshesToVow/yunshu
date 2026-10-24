@@ -18,23 +18,43 @@ type QuickCommand = {
 const QUICK_COMMANDS: QuickCommand[] = [
   { label: "集群健康", method: "GET", path: "/_cluster/health" },
   { label: "集群设置", method: "GET", path: "/_cluster/settings?include_defaults=true" },
-	{ label: "节点列表", method: "GET", path: "/_cat/nodes?v&format=json" },
+  { label: "节点列表", method: "GET", path: "/_cat/nodes?v&format=json" },
   { label: "索引列表", method: "GET", path: "/_cat/indices?v&format=json" },
   { label: "分片列表", method: "GET", path: "/_cat/shards?v&format=json" },
   { label: "别名列表", method: "GET", path: "/_cat/aliases?v&format=json" },
   { label: "节点统计", method: "GET", path: "/_nodes/stats" },
   { label: "索引 Mapping", method: "GET", path: "/my-index/_mapping" },
   { label: "索引 Settings", method: "GET", path: "/my-index/_settings" },
-  { label: "搜索文档", method: "POST", path: "/my-index/_search", body: '{\n  "query": { "match_all": {} },\n  "size": 10\n}' },
-  { label: "创建/更新索引", method: "PUT", path: "/my-index", body: '{\n  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },\n  "mappings": { "properties": { "title": { "type": "text" } } }\n}' },
-  { label: "更新 Settings", method: "PUT", path: "/my-index/_settings", body: '{\n  "index": { "number_of_replicas": 0 }\n}' },
+  {
+    label: "搜索文档",
+    method: "POST",
+    path: "/my-index/_search",
+    body: '{\n  "query": { "match_all": {} },\n  "size": 10\n}',
+  },
+  {
+    label: "创建/更新索引",
+    method: "PUT",
+    path: "/my-index",
+    body: '{\n  "settings": { "number_of_shards": 1, "number_of_replicas": 0 },\n  "mappings": { "properties": { "title": { "type": "text" } } }\n}',
+  },
+  {
+    label: "更新 Settings",
+    method: "PUT",
+    path: "/my-index/_settings",
+    body: '{\n  "index": { "number_of_replicas": 0 }\n}',
+  },
   { label: "写入文档", method: "PUT", path: "/my-index/_doc/1", body: '{\n  "title": "hello"\n}' },
   { label: "删除文档", method: "DELETE", path: "/my-index/_doc/1" },
   { label: "删除索引", method: "DELETE", path: "/my-index" },
   { label: "刷新索引", method: "POST", path: "/my-index/_refresh" },
   { label: "打开索引", method: "POST", path: "/my-index/_open" },
   { label: "关闭索引", method: "POST", path: "/my-index/_close" },
-  { label: "管理别名", method: "POST", path: "/_aliases", body: '{\n  "actions": [\n    { "add": { "index": "my-index", "alias": "my-alias" } }\n  ]\n}' },
+  {
+    label: "管理别名",
+    method: "POST",
+    path: "/_aliases",
+    body: '{\n  "actions": [\n    { "add": { "index": "my-index", "alias": "my-alias" } }\n  ]\n}',
+  },
 ];
 
 export function EsmgmtConsolePage() {
@@ -90,58 +110,60 @@ export function EsmgmtConsolePage() {
         extra={
           <Space>
             <Link to="/esmgmt/overview">集群概览</Link>
+            <Link to="/esmgmt/backups">备份与恢复</Link>
             <Link to="/esmgmt/connections">连接管理</Link>
           </Space>
         }
       />
       <Card className="table-card">
-      <Space direction="vertical" style={{ width: "100%" }} size="middle">
-        <Typography.Text type="secondary">
-          支持 GET / POST / PUT / DELETE / HEAD。允许集群探查、索引与文档读写、别名与模板等管理操作；禁止脚本执行与节点关机。
-        </Typography.Text>
-        <Select
-          style={{ width: "100%", maxWidth: 560 }}
-          placeholder="常用命令（选择后可再改路径/Body）"
-          allowClear
-          options={QUICK_COMMANDS.map((c) => ({
-            value: `${c.method} ${c.path}`,
-            label: `${c.label} · ${c.method} ${c.path}`,
-          }))}
-          onChange={(v) => {
-            if (typeof v === "string") applyQuickCommand(v);
-          }}
-        />
-        <Space wrap style={{ width: "100%" }}>
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <Typography.Text type="secondary">
+            支持 GET / POST / PUT / DELETE /
+            HEAD。允许集群探查、索引与文档读写、别名与模板等管理操作；禁止脚本执行与节点关机。
+          </Typography.Text>
           <Select
-            style={{ minWidth: 200 }}
-            placeholder="连接"
-            value={connectionId}
-            options={connections.map((c) => ({ value: c.id, label: c.name }))}
-            onChange={setConnectionId}
+            style={{ width: "100%", maxWidth: 560 }}
+            placeholder="常用命令（选择后可再改路径/Body）"
             allowClear
+            options={QUICK_COMMANDS.map((c) => ({
+              value: `${c.method} ${c.path}`,
+              label: `${c.label} · ${c.method} ${c.path}`,
+            }))}
+            onChange={(v) => {
+              if (typeof v === "string") applyQuickCommand(v);
+            }}
           />
-          <Select
-            style={{ width: 110 }}
-            value={method}
-            options={METHODS.map((m) => ({ value: m, label: m }))}
-            onChange={setMethod}
+          <Space wrap style={{ width: "100%" }}>
+            <Select
+              style={{ minWidth: 200 }}
+              placeholder="连接"
+              value={connectionId}
+              options={connections.map((c) => ({ value: c.id, label: c.name }))}
+              onChange={setConnectionId}
+              allowClear
+            />
+            <Select
+              style={{ width: 110 }}
+              value={method}
+              options={METHODS.map((m) => ({ value: m, label: m }))}
+              onChange={setMethod}
+            />
+            <Input style={{ minWidth: 320, flex: 1 }} value={path} onChange={(e) => setPath(e.target.value)} />
+            <Button type="primary" icon={<PlayCircleOutlined />} loading={loading} onClick={() => void run()}>
+              执行
+            </Button>
+          </Space>
+          <Input.TextArea
+            rows={6}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="可选 JSON Body（POST / PUT 常用；DELETE 一般为空）"
           />
-          <Input style={{ minWidth: 320, flex: 1 }} value={path} onChange={(e) => setPath(e.target.value)} />
-          <Button type="primary" icon={<PlayCircleOutlined />} loading={loading} onClick={() => void run()}>
-            执行
-          </Button>
+          <pre className="code-block-panel" style={{ minHeight: 280, margin: 0 }}>
+            {result || "响应将显示在这里"}
+          </pre>
         </Space>
-        <Input.TextArea
-          rows={6}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="可选 JSON Body（POST / PUT 常用；DELETE 一般为空）"
-        />
-        <pre className="code-block-panel" style={{ minHeight: 280, margin: 0 }}>
-          {result || "响应将显示在这里"}
-        </pre>
-      </Space>
-    </Card>
+      </Card>
     </div>
   );
 }

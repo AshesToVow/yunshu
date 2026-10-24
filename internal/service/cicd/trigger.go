@@ -76,7 +76,7 @@ func (s *Service) TriggerBuild(ctx context.Context, projectID, serviceID uint, r
 	if run.BranchName == "" && ci != nil {
 		run.BranchName = strings.TrimSpace(ci.RefName)
 	}
-	if err := s.db.WithContext(ctx).Create(&run).Error; err != nil {
+	if err := s.repo.CreateBuildRun(ctx, &run); err != nil {
 		return nil, err
 	}
 
@@ -100,11 +100,11 @@ func (s *Service) TriggerBuild(ctx context.Context, projectID, serviceID uint, r
 	lastNum, _ := client.GetLastBuildNumber(ctx, svc.JenkinsJob)
 	queuePath, err := client.BuildWithParameters(ctx, svc.JenkinsJob, params)
 	if err != nil {
-		_ = s.db.WithContext(ctx).Model(&run).Updates(map[string]any{
+		_ = s.repo.UpdateBuildRunFields(ctx, run.ID, map[string]any{
 			"build_result": model.CicdRunStatusFailure,
 			"params_json":  ParamsJSON(params),
 			"finished_at":  time.Now(),
-		}).Error
+		})
 		return nil, fmt.Errorf("trigger jenkins build: %w", err)
 	}
 	updates := map[string]any{
@@ -119,13 +119,14 @@ func (s *Service) TriggerBuild(ctx context.Context, projectID, serviceID uint, r
 		updates["build_number"] = buildNum
 		updates["jenkins_build_url"] = client.BuildURL(svc.JenkinsJob, buildNum)
 	}
-	if err := s.db.WithContext(ctx).Model(&run).Updates(updates).Error; err != nil {
+	if err := s.repo.UpdateBuildRunFields(ctx, run.ID, updates); err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Where("id = ?", run.ID).First(&run).Error; err != nil {
+	updated, err := s.repo.GetBuildRunByID(ctx, run.ID)
+	if err != nil {
 		return nil, err
 	}
-	return &run, nil
+	return updated, nil
 }
 
 func (s *Service) TriggerRelease(ctx context.Context, projectID, serviceID uint, req TriggerReleaseRequest, submitterUserID *uint, submitterName string) (*model.CicdReleaseRun, error) {
@@ -160,18 +161,19 @@ func (s *Service) TriggerRelease(ctx context.Context, projectID, serviceID uint,
 		RequestJSON:     snapshotJSON(p),
 		StartedAt:       &now,
 	}
-	if err := s.db.WithContext(ctx).Create(&release).Error; err != nil {
+	if err := s.repo.CreateReleaseRun(ctx, &release); err != nil {
 		return nil, err
 	}
 	if err := s.executeReleaseRun(ctx, &release, submitterUserID); err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Where("id = ?", release.ID).First(&release).Error; err != nil {
+	updated, err := s.repo.GetReleaseRunByID(ctx, release.ID)
+	if err != nil {
 		return nil, err
 	}
-	recordReleaseChange(ctx, s.db, &release, "release_create", model.ChangeStatusStarted,
-		fmt.Sprintf("创建并执行发布 #%d：%s", release.ID, release.Title))
-	return &release, nil
+	recordReleaseChange(ctx, s.catalogRepo, updated, "release_create", model.ChangeStatusStarted,
+		fmt.Sprintf("创建并执行发布 #%d：%s", updated.ID, updated.Title))
+	return updated, nil
 }
 
 func (s *Service) resolveDestIPs(ctx context.Context, projectID uint, dc *model.CicdDeployConfig) (string, error) {

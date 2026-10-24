@@ -203,8 +203,12 @@ function networkPolicyYamlToForm(text: string): NetworkPolicyFormValues | null {
       namespace: String(obj?.metadata?.namespace ?? "default"),
       policy_types: Array.isArray(obj?.spec?.policyTypes) ? obj.spec.policyTypes : undefined,
       pod_selector_pairs: mapToPairs(obj?.spec?.podSelector?.matchLabels),
-      ingress: ingress.length ? ingress : [{ peers: [{ pod_selector_pairs: [{ key: "", value: "" }] }], ports: [{ protocol: "TCP", port: "80" }] }],
-      egress: egress.length ? egress : [{ peers: [{ ip_cidr: "0.0.0.0/0" }], ports: [{ protocol: "TCP", port: "443" }] }],
+      ingress: ingress.length
+        ? ingress
+        : [{ peers: [{ pod_selector_pairs: [{ key: "", value: "" }] }], ports: [{ protocol: "TCP", port: "80" }] }],
+      egress: egress.length
+        ? egress
+        : [{ peers: [{ ip_cidr: "0.0.0.0/0" }], ports: [{ protocol: "TCP", port: "443" }] }],
     };
   } catch {
     return null;
@@ -227,7 +231,12 @@ function RuleFormList({ name, peerLabel }: { name: "ingress" | "egress"; peerLab
                 {(peerFields, { add: addPeer, remove: removePeer }) => (
                   <Space direction="vertical" style={{ width: "100%" }}>
                     {peerFields.map((peerField) => (
-                      <Card key={peerField.key} size="small" title={`${peerLabel} Peer`} extra={<Button onClick={() => removePeer(peerField.name)}>删除 Peer</Button>}>
+                      <Card
+                        key={peerField.key}
+                        size="small"
+                        title={`${peerLabel} Peer`}
+                        extra={<Button onClick={() => removePeer(peerField.name)}>删除 Peer</Button>}
+                      >
                         <Row gutter={12}>
                           <Col span={12}>
                             <Form.Item label="IPBlock CIDR" name={[peerField.name, "ip_cidr"]}>
@@ -241,14 +250,29 @@ function RuleFormList({ name, peerLabel }: { name: "ingress" | "egress"; peerLab
                           </Col>
                         </Row>
                         <Form.Item label="Pod Selector">
-                          <LabelsFormList name={[ruleField.name, "peers", peerField.name, "pod_selector_pairs"] as any} addLabel="新增 PodSelector" />
+                          <LabelsFormList
+                            name={[ruleField.name, "peers", peerField.name, "pod_selector_pairs"] as any}
+                            addLabel="新增 PodSelector"
+                          />
                         </Form.Item>
                         <Form.Item label="Namespace Selector">
-                          <LabelsFormList name={[ruleField.name, "peers", peerField.name, "namespace_selector_pairs"] as any} addLabel="新增 NamespaceSelector" />
+                          <LabelsFormList
+                            name={[ruleField.name, "peers", peerField.name, "namespace_selector_pairs"] as any}
+                            addLabel="新增 NamespaceSelector"
+                          />
                         </Form.Item>
                       </Card>
                     ))}
-                    <Button onClick={() => addPeer({ pod_selector_pairs: [{ key: "", value: "" }], namespace_selector_pairs: [{ key: "", value: "" }] })}>新增 Peer</Button>
+                    <Button
+                      onClick={() =>
+                        addPeer({
+                          pod_selector_pairs: [{ key: "", value: "" }],
+                          namespace_selector_pairs: [{ key: "", value: "" }],
+                        })
+                      }
+                    >
+                      新增 Peer
+                    </Button>
                   </Space>
                 )}
               </Form.List>
@@ -258,7 +282,14 @@ function RuleFormList({ name, peerLabel }: { name: "ingress" | "egress"; peerLab
                     {portFields.map((portField) => (
                       <Space key={portField.key} align="start" wrap>
                         <Form.Item label="协议" name={[portField.name, "protocol"]} style={{ width: 120 }}>
-                          <Select allowClear options={[{ label: "TCP", value: "TCP" }, { label: "UDP", value: "UDP" }, { label: "SCTP", value: "SCTP" }]} />
+                          <Select
+                            allowClear
+                            options={[
+                              { label: "TCP", value: "TCP" },
+                              { label: "UDP", value: "UDP" },
+                              { label: "SCTP", value: "SCTP" },
+                            ]}
+                          />
                         </Form.Item>
                         <Form.Item label="端口（数字或名称）" name={[portField.name, "port"]} style={{ width: 200 }}>
                           <Input placeholder="80 或 http" />
@@ -277,7 +308,16 @@ function RuleFormList({ name, peerLabel }: { name: "ingress" | "egress"; peerLab
               </Form.List>
             </Card>
           ))}
-          <Button onClick={() => addRule({ peers: [{ pod_selector_pairs: [{ key: "", value: "" }], namespace_selector_pairs: [{ key: "", value: "" }] }], ports: [{ protocol: "TCP", port: "80" }] })}>
+          <Button
+            onClick={() =>
+              addRule({
+                peers: [
+                  { pod_selector_pairs: [{ key: "", value: "" }], namespace_selector_pairs: [{ key: "", value: "" }] },
+                ],
+                ports: [{ protocol: "TCP", port: "80" }],
+              })
+            }
+          >
             新增 {name === "ingress" ? "Ingress" : "Egress"} 规则
           </Button>
         </Space>
@@ -302,8 +342,20 @@ export function NetworkPoliciesPage() {
     { title: "Pod选择器数", dataIndex: "pod_selector_count", width: 110 },
     { title: "Ingress规则数", dataIndex: "ingress_rule_count", width: 120 },
     { title: "Egress规则数", dataIndex: "egress_rule_count", width: 120 },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
-    { title: "注解", key: "annotations", width: 70, align: "center", render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
+    {
+      title: "注解",
+      key: "annotations",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations),
+    },
     { title: "存在时长", dataIndex: "age", width: 90, fixed: "right" },
     { title: "创建时间", dataIndex: "creation_time", width: 170, fixed: "right" },
   ];
@@ -314,6 +366,7 @@ export function NetworkPoliciesPage() {
         title="网络策略管理"
         needNamespace
         watchResource="networkpolicies"
+        actionColumnWidth={400}
         onLoadNamespaces={async (cid) => {
           const res = await listClusterNamespaces(cid);
           return (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
@@ -321,10 +374,13 @@ export function NetworkPoliciesPage() {
         showEditButton={false}
         columns={columns}
         api={{
-          list: async ({ clusterId, namespace, keyword }) => await listNetworkPolicies(clusterId, namespace ?? "default", keyword),
-          detail: async ({ clusterId, namespace, name }) => await getNetworkPolicyDetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyNetworkPolicy(clusterId, manifest),
-          remove: async (args) => await deleteNetworkPolicy(args.clusterId, args.namespace ?? "default", args.name, args),
+          list: async ({ clusterId, namespace, keyword }) =>
+            await listNetworkPolicies(clusterId, namespace ?? "default", keyword),
+          detail: async ({ clusterId, namespace, name }) =>
+            await getNetworkPolicyDetail(clusterId, namespace ?? "default", name),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyNetworkPolicy(clusterId, manifest, idemKey),
+          remove: async (args) =>
+            await deleteNetworkPolicy(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;
@@ -338,7 +394,18 @@ export function NetworkPoliciesPage() {
             namespace: ctx.namespace ?? "default",
             policy_types: ["Ingress", "Egress"],
             pod_selector_pairs: [{ key: "app", value: "" }],
-            ingress: [{ peers: [{ namespace_selector_pairs: [{ key: "kubernetes.io/metadata.name", value: ctx.namespace ?? "default" }] }], ports: [{ protocol: "TCP", port: "80" }] }],
+            ingress: [
+              {
+                peers: [
+                  {
+                    namespace_selector_pairs: [
+                      { key: "kubernetes.io/metadata.name", value: ctx.namespace ?? "default" },
+                    ],
+                  },
+                ],
+                ports: [{ protocol: "TCP", port: "80" }],
+              },
+            ],
             egress: [{ peers: [{ ip_cidr: "0.0.0.0/0" }], ports: [{ protocol: "TCP", port: "443" }] }],
           });
         }}
@@ -379,7 +446,14 @@ export function NetworkPoliciesPage() {
               </Col>
             </Row>
             <Form.Item name="policy_types" label="PolicyTypes">
-              <Select mode="multiple" allowClear options={[{ label: "Ingress", value: "Ingress" }, { label: "Egress", value: "Egress" }]} />
+              <Select
+                mode="multiple"
+                allowClear
+                options={[
+                  { label: "Ingress", value: "Ingress" },
+                  { label: "Egress", value: "Egress" },
+                ]}
+              />
             </Form.Item>
             <Form.Item label="Pod Selector（受控 Pod）">
               <LabelsFormList name={"pod_selector_pairs" as any} addLabel="新增 PodSelector" />
@@ -479,7 +553,14 @@ spec:
           </Col>
         </Row>
         <Form.Item name="policy_types" label="PolicyTypes">
-          <Select mode="multiple" allowClear options={[{ label: "Ingress", value: "Ingress" }, { label: "Egress", value: "Egress" }]} />
+          <Select
+            mode="multiple"
+            allowClear
+            options={[
+              { label: "Ingress", value: "Ingress" },
+              { label: "Egress", value: "Egress" },
+            ]}
+          />
         </Form.Item>
         <Form.Item label="Pod Selector（受控 Pod）">
           <LabelsFormList name={"pod_selector_pairs" as any} addLabel="新增 PodSelector" />

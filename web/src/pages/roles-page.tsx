@@ -1,5 +1,20 @@
 import { PlusOutlined, ReloadOutlined, UserOutlined, EyeOutlined, DeleteOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Tree, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Drawer,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tree,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useState } from "react";
 import { StatusTag } from "../components/status-tag";
 import { createRole, deleteRole, getRoles, getRole, updateRole } from "../services/roles";
@@ -81,9 +96,7 @@ export function RolesPage() {
 
   function openAssignUsers(record: RoleItem) {
     setAssignTarget(record);
-    const userIds = users
-      .filter((user) => user.roles.some((role) => role.id === record.id))
-      .map((user) => user.id);
+    const userIds = users.filter((user) => user.roles.some((role) => role.id === record.id)).map((user) => user.id);
     setCheckedUserIds(userIds);
     setAssignOpen(true);
   }
@@ -243,7 +256,12 @@ export function RolesPage() {
           <Table
             rowKey="id"
             dataSource={users}
-            pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showQuickJumper: true }}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50, 100],
+              showQuickJumper: true,
+            }}
             rowSelection={{
               selectedRowKeys: checkedUserIds,
               onChange: (keys) => setCheckedUserIds(keys as number[]),

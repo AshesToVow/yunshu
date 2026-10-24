@@ -12,10 +12,12 @@ interface PageHeroProps {
 }
 
 export function PageHero({ title, subtitle, label, breadcrumbItems, meta, extra }: PageHeroProps) {
-  const crumb =
-    breadcrumbItems?.length
-      ? breadcrumbItems.map((item) => String(item?.title ?? "")).filter(Boolean).join(" / ")
-      : "";
+  const crumb = breadcrumbItems?.length
+    ? breadcrumbItems
+        .map((item) => String(item?.title ?? ""))
+        .filter(Boolean)
+        .join(" / ")
+    : "";
   const mergedMeta = [...(crumb ? [`PATH / ${crumb}`] : []), ...(meta ?? [])];
 
   return (

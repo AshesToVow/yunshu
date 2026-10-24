@@ -6,13 +6,9 @@ import (
 	"sync"
 
 	"yunshu/internal/config"
-	"yunshu/internal/dictconfig"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
-	"yunshu/internal/repository"
 	"yunshu/internal/service/k8s"
-
-	"gorm.io/gorm"
 )
 
 // RuntimeConfig 运行期合并字典/YAML 与 DB 规则表全局参数。
@@ -26,19 +22,22 @@ type RuntimeConfig struct {
 	UseInternalAlertWebhook bool
 }
 
+// EventForwardConfigResolver 由装配层注入，避免 Manager 直持 *gorm.DB 读字典。
+type EventForwardConfigResolver func(ctx context.Context) config.K8sEventForwardConfig
+
 // Manager 协调 Watcher 与 Worker（参考 k8m eventhandler）。
 type Manager struct {
-	repo     interfaces.K8sEventForwardRepository
-	dictDB   *gorm.DB
-	runtime  *k8s.K8sRuntimeService
-	watcher  *Watcher
-	worker   *Worker
-	client   *WebhookClient
-	enabled  bool
-	yamlBase config.K8sEventForwardConfig
-	appPort  int
-	runMu    sync.Mutex
-	running  bool
+	repo          interfaces.K8sEventForwardRepository
+	resolveConfig EventForwardConfigResolver
+	runtime       *k8s.K8sRuntimeService
+	watcher       *Watcher
+	worker        *Worker
+	client        *WebhookClient
+	enabled       bool
+	yamlBase      config.K8sEventForwardConfig
+	appPort       int
+	runMu         sync.Mutex
+	running       bool
 }
 
 func NewManager(
@@ -47,13 +46,16 @@ func NewManager(
 	yamlBase config.K8sEventForwardConfig,
 	alertCfg config.AlertConfig,
 	appPort int,
-	dbForDict *gorm.DB,
+	resolveConfig EventForwardConfigResolver,
 ) (*Manager, error) {
 	ctx := context.Background()
-	resolved := dictconfig.ResolveK8sEventForwardConfig(ctx, dbForDict, yamlBase, dictconfig.DefaultK8sEventForwardDictTypes())
+	resolved := yamlBase
+	if resolveConfig != nil {
+		resolved = resolveConfig(ctx)
+	}
 
 	if repo == nil {
-		repo = repository.NewK8sEventForwardRepository(dbForDict)
+		return nil, fmt.Errorf("k8s event forward repository is required")
 	}
 	defaults := model.K8sEventForwardSetting{
 		ID:                     1,
@@ -73,13 +75,13 @@ func NewManager(
 
 	client := NewWebhookClient(alertCfg.WebhookToken, 0)
 	mgr := &Manager{
-		repo:     repo,
-		runtime:  runtime,
-		client:   client,
-		enabled:  resolved.Enabled,
-		yamlBase: yamlBase,
-		appPort:  appPort,
-		dictDB:   dbForDict,
+		repo:          repo,
+		runtime:       runtime,
+		client:        client,
+		enabled:       resolved.Enabled,
+		yamlBase:      yamlBase,
+		appPort:       appPort,
+		resolveConfig: resolveConfig,
 	}
 	mgr.watcher = NewWatcher(mgr.repo, mgr.runtime, rt)
 	mgr.worker = NewWorker(mgr.repo, mgr.client, rt)
@@ -89,11 +91,11 @@ func NewManager(
 }
 
 func (m *Manager) reloadRuntimeConfig() {
-	if m == nil || m.dictDB == nil {
+	if m == nil || m.resolveConfig == nil {
 		return
 	}
 	ctx := context.Background()
-	resolved := dictconfig.ResolveK8sEventForwardConfig(ctx, m.dictDB, m.yamlBase, dictconfig.DefaultK8sEventForwardDictTypes())
+	resolved := m.resolveConfig(ctx)
 	m.enabled = resolved.Enabled
 	rt, err := loadRuntimeConfig(m.repo, resolved, m.appPort)
 	if err != nil {

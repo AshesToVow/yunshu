@@ -1,6 +1,43 @@
-import { CodeOutlined, DeleteOutlined, DownOutlined, DownloadOutlined, EditOutlined, FileSearchOutlined, FileTextOutlined, FolderOpenOutlined, MedicineBoxOutlined, PlusOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from "@ant-design/icons";
+import {
+  BugOutlined,
+  CodeOutlined,
+  DeleteOutlined,
+  DownOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  FileSearchOutlined,
+  FileTextOutlined,
+  FolderOpenOutlined,
+  MedicineBoxOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  UndoOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
 import type { MenuProps } from "antd";
-import { Alert, Button, Card, Checkbox, Divider, Drawer, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Tabs, Tooltip, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Divider,
+  Drawer,
+  Dropdown,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Tabs,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { K8sPageToolbar } from "../components/ops/k8s-page-toolbar";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
@@ -16,8 +53,31 @@ import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { validateYaml } from "../components/k8s/monaco-yaml-editor";
 import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
-import { createPodByYAML, createPodSimple, deletePod, downloadPodLogs, getPodDetail, getPodDiagnose, getPodEvents, getPodLogs, getPods, listPodFiles, restartPod, updatePodSimple, type PodDetail, type PodDiagnoseResult, type PodEventItem, type PodFileItem, type PodItem, type PodLogsQuery } from "../services/pods";
-import { analyzePodDiagnoseAI, type AIPodDiagnoseResult } from "../services/ai";
+import {
+  createPodByYAML,
+  createPodSimple,
+  debugPodEphemeral,
+  deletePod,
+  downloadPodLogs,
+  getPodDebugImageDefault,
+  getPodDetail,
+  getPodDiagnose,
+  getPodEvents,
+  getPodLogs,
+  getPods,
+  listPodFiles,
+  restartPod,
+  updatePodSimple,
+  type PodDetail,
+  type PodDiagnoseResult,
+  type PodEventItem,
+  type PodFileItem,
+  type PodItem,
+  type PodLogsQuery,
+} from "../services/pods";
+import { analyzePodDiagnoseAI, startAIInvestigation, type AIPodDiagnoseResult } from "../services/ai";
+import { useAiEnabled } from "../hooks/use-ai-enabled";
+import { useNavigate } from "react-router-dom";
 import { openAuthenticatedWebSocket } from "../services/ws-auth";
 import { extractApiErrorMessage } from "../services/http";
 import {
@@ -34,6 +94,7 @@ import { PodFilesDrawer } from "./pod/pod-files-drawer";
 import { PodFormDrawer } from "./pod/pod-form-drawer";
 
 export function PodPage() {
+  const { enabled: aiEnabled } = useAiEnabled();
   const rfc1123Subdomain = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/;
   const rfc1123Label = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
   const {
@@ -78,10 +139,17 @@ export function PodPage() {
   const [diagnoseResult, setDiagnoseResult] = useState<PodDiagnoseResult | null>(null);
   const [aiDiagnoseLoading, setAiDiagnoseLoading] = useState(false);
   const [aiDiagnoseResult, setAiDiagnoseResult] = useState<AIPodDiagnoseResult | null>(null);
+  const [aiInvestigateLoading, setAiInvestigateLoading] = useState(false);
+  const navigate = useNavigate();
   const streamAbortRef = useRef<AbortController | null>(null);
   const prevPodKeyRef = useRef("");
   const [streaming, setStreaming] = useState(false);
   const [execOpen, setExecOpen] = useState(false);
+  const [preferredExecContainer, setPreferredExecContainer] = useState<string | undefined>();
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugTarget, setDebugTarget] = useState<PodItem | null>(null);
+  const [debugImage, setDebugImage] = useState("busybox:1.36");
+  const [debugSubmitting, setDebugSubmitting] = useState(false);
   const [fileOpen, setFileOpen] = useState(false);
   const [filePath, setFilePath] = useState("/");
   const [fileList, setFileList] = useState<PodFileItem[]>([]);
@@ -100,6 +168,7 @@ export function PodPage() {
     selected,
     detail,
     execCommand,
+    preferredContainer: preferredExecContainer,
     execTermHostRef,
   });
   const [createOpen, setCreateOpen] = useState(false);
@@ -109,13 +178,14 @@ export function PodPage() {
   const [simpleForm] = Form.useForm<PodSimpleFormValues>();
   const [yamlForm] = Form.useForm<{ manifest: string }>();
 
-  const loadPods = useCallback(async (overrideKeyword?: string) => {
+  const loadPods = useCallback(async (overrideKeyword?: string, opts?: { silent?: boolean }) => {
     const { clusterId: cid, namespace: ns, keyword: kw } = filterRef.current;
     if (!cid) {
       setPods([]);
       return;
     }
-    setLoading(true);
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoading(true);
     try {
       const effectiveKeyword = (overrideKeyword ?? kw).trim();
       const res = await getPods({ cluster_id: cid, namespace: ns, keyword: effectiveKeyword || undefined });
@@ -123,7 +193,7 @@ export function PodPage() {
     } catch {
       // http 拦截器已 toast
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -136,12 +206,12 @@ export function PodPage() {
     clusterId,
     namespace,
     resource: "pods",
-    onRefresh: loadPods,
+    onRefresh: () => void loadPods(undefined, { silent: true }),
     onDisabled: () => setWatchLive(false),
   });
 
   const anyPanelOpen =
-    createOpen || execOpen || detailOpen || logsOpen || diagnoseOpen || fileOpen || deleteDialogOpen;
+    createOpen || execOpen || detailOpen || logsOpen || diagnoseOpen || fileOpen || deleteDialogOpen || debugOpen;
   const pauseWatch = anyPanelOpen || (detailTab === "logs" && streaming);
 
   useEffect(() => {
@@ -249,6 +319,10 @@ export function PodPage() {
 
   async function handleAIDiagnose() {
     if (!clusterId || !selected || aiDiagnoseLoading) return;
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     setAiDiagnoseLoading(true);
     try {
       const res = await analyzePodDiagnoseAI({
@@ -262,6 +336,30 @@ export function PodPage() {
       message.error(extractApiErrorMessage(e, "AI 分析失败"));
     } finally {
       setAiDiagnoseLoading(false);
+    }
+  }
+
+  async function handleAIInvestigate() {
+    if (!clusterId || !selected || aiInvestigateLoading) return;
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
+    setAiInvestigateLoading(true);
+    try {
+      const inv = await startAIInvestigation({
+        kind: "pod",
+        title: `Pod 调查 ${selected.namespace}/${selected.name}`,
+        cluster_id: clusterId,
+        namespace: selected.namespace,
+        resource: selected.name,
+      });
+      message.success(`调查已完成 #${inv.id}${inv.status === "awaiting_approval" ? "（待审批）" : ""}`);
+      navigate(`/ai/investigations?id=${inv.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 调查失败"));
+    } finally {
+      setAiInvestigateLoading(false);
     }
   }
 
@@ -376,7 +474,6 @@ export function PodPage() {
     }
   }
 
-
   async function handleRestartPod(record: PodItem) {
     if (!clusterId) return;
     await restartPod({ cluster_id: clusterId, namespace: record.namespace, name: record.name });
@@ -388,14 +485,29 @@ export function PodPage() {
     if (!clusterId) return;
     setFileLoading(true);
     try {
+      let container: string | undefined;
+      try {
+        const detailRes = await getPodDetail({
+          cluster_id: clusterId,
+          namespace: target.namespace,
+          name: target.name,
+        });
+        container = detailRes.containers?.[0]?.name;
+      } catch {
+        /* 容器名可选，后端会再解析 */
+      }
       const res = await listPodFiles({
         cluster_id: clusterId,
         namespace: target.namespace,
         name: target.name,
         path: path || "/",
+        container,
       });
       setFileList(res.list || []);
       setFilePath(path || "/");
+    } catch (e) {
+      setFileList([]);
+      message.error(extractApiErrorMessage(e, "加载 Pod 文件失败"));
     } finally {
       setFileLoading(false);
     }
@@ -436,7 +548,7 @@ export function PodPage() {
         message.success("Pod 已更新并重建");
       } else {
         await createPodSimple(payload);
-      message.success("Pod 创建成功");
+        message.success("Pod 创建成功");
       }
       setCreateOpen(false);
       await loadPods();
@@ -499,7 +611,8 @@ export function PodPage() {
         breadcrumbs={[{ title: "Kubernetes" }, { title: "Pod" }]}
         meta={
           <span>
-            {clusterId ? `集群 #${clusterId} · ${namespace}` : "未选择集群"} · {loading ? "加载中" : `${pods.length} 条`}
+            {clusterId ? `集群 #${clusterId} · ${namespace}` : "未选择集群"} ·{" "}
+            {loading ? "加载中" : `${pods.length} 条`}
           </span>
         }
       />
@@ -613,8 +726,28 @@ export function PodPage() {
                           icon: <CodeOutlined />,
                           label: "Exec",
                           onClick: () => {
+                            setPreferredExecContainer(undefined);
                             setSelected(record);
                             setExecOpen(true);
+                          },
+                        }
+                      : null,
+                    canExec
+                      ? {
+                          key: "debug",
+                          icon: <BugOutlined />,
+                          label: "临时调试容器",
+                          onClick: () => {
+                            setDebugTarget(record);
+                            setDebugOpen(true);
+                            setDebugImage("busybox:1.36");
+                            void getPodDebugImageDefault()
+                              .then((r) => {
+                                if (r?.image) setDebugImage(r.image);
+                              })
+                              .catch(() => {
+                                /* keep default */
+                              });
                           },
                         }
                       : null,
@@ -642,7 +775,12 @@ export function PodPage() {
                   ].filter(Boolean) as MenuProps["items"];
                   return (
                     <Space size={0} wrap onClick={stop}>
-                      <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => void openPodLogsInline(record)}>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<FileTextOutlined />}
+                        onClick={() => void openPodLogsInline(record)}
+                      >
                         日志
                       </Button>
                       <Dropdown menu={{ items: moreItems }} trigger={["click"]}>
@@ -689,6 +827,7 @@ export function PodPage() {
             onExec={
               selected && canExec
                 ? () => {
+                    setPreferredExecContainer(undefined);
                     setExecOpen(true);
                   }
                 : undefined
@@ -728,7 +867,12 @@ export function PodPage() {
       {selected && detailTab === "logs" ? (
         <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
           需要关键字、时间范围等高级筛选？
-          <Button type="link" size="small" style={{ paddingInline: 4 }} onClick={() => void handleViewLogs(selected, "modal")}>
+          <Button
+            type="link"
+            size="small"
+            style={{ paddingInline: 4 }}
+            onClick={() => void handleViewLogs(selected, "modal")}
+          >
             打开日志对话框
           </Button>
         </Typography.Paragraph>
@@ -775,6 +919,8 @@ export function PodPage() {
         aiDiagnoseLoading={aiDiagnoseLoading}
         aiDiagnoseResult={aiDiagnoseResult}
         handleAIDiagnose={handleAIDiagnose}
+        aiInvestigateLoading={aiInvestigateLoading}
+        handleAIInvestigate={handleAIInvestigate}
       />
 
       <PodFilesDrawer
@@ -791,6 +937,59 @@ export function PodPage() {
         fileInputRef={fileInputRef}
         loadFiles={loadFiles}
       />
+
+      <Modal
+        title={debugTarget ? `注入临时调试容器：${debugTarget.namespace}/${debugTarget.name}` : "注入临时调试容器"}
+        open={debugOpen}
+        confirmLoading={debugSubmitting}
+        okText="注入并打开终端"
+        onCancel={() => {
+          setDebugOpen(false);
+          setDebugTarget(null);
+        }}
+        onOk={() => {
+          if (!clusterId || !debugTarget) return;
+          setDebugSubmitting(true);
+          void (async () => {
+            try {
+              const res = await debugPodEphemeral({
+                cluster_id: clusterId,
+                namespace: debugTarget.namespace,
+                name: debugTarget.name,
+                image: debugImage.trim() || undefined,
+              });
+              message.success(res.message || `已注入 ${res.ephemeral_container}（${res.image}）`);
+              setPreferredExecContainer(res.ephemeral_container);
+              setSelected(debugTarget);
+              const d = await getPodDetail({
+                cluster_id: clusterId,
+                namespace: debugTarget.namespace,
+                name: debugTarget.name,
+              });
+              setDetail(d);
+              setDebugOpen(false);
+              setDebugTarget(null);
+              setExecOpen(true);
+            } catch {
+              /* interceptor */
+            } finally {
+              setDebugSubmitting(false);
+            }
+          })();
+        }}
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          默认镜像来自数据字典 <Typography.Text code>k8s_pod_debug_image</Typography.Text>
+          ；内网请改为可拉取的 Harbor / 私有仓库地址。本次可临时覆盖。
+        </Typography.Paragraph>
+        <Input
+          value={debugImage}
+          onChange={(e) => setDebugImage(e.target.value)}
+          placeholder="例如 harbor.example.com/library/busybox:1.36"
+          allowClear
+        />
+      </Modal>
 
       <Drawer
         title={selected ? `Exec 进入容器 - ${selected.namespace}/${selected.name}` : "Exec 进入容器"}
@@ -901,7 +1100,9 @@ export function PodPage() {
                   rows={3}
                   value={
                     detail.labels && Object.keys(detail.labels).length > 0
-                      ? Object.entries(detail.labels).map(([k, v]) => `${k}=${v}`).join("\n")
+                      ? Object.entries(detail.labels)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join("\n")
                       : "-"
                   }
                   readOnly
@@ -912,7 +1113,9 @@ export function PodPage() {
                   rows={3}
                   value={
                     detail.node_selector && Object.keys(detail.node_selector).length > 0
-                      ? Object.entries(detail.node_selector).map(([k, v]) => `${k}=${v}`).join("\n")
+                      ? Object.entries(detail.node_selector)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join("\n")
                       : "-"
                   }
                   readOnly
@@ -923,7 +1126,9 @@ export function PodPage() {
                   rows={3}
                   value={
                     detail.annotations && Object.keys(detail.annotations).length > 0
-                      ? Object.entries(detail.annotations).map(([k, v]) => `${k}=${v}`).join("\n")
+                      ? Object.entries(detail.annotations)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join("\n")
                       : "-"
                   }
                   readOnly
@@ -982,7 +1187,11 @@ export function PodPage() {
                   title: "详情",
                   render: (_: unknown, v: any) => (
                     <Typography.Text ellipsis={{ tooltip: JSON.stringify(v) }} style={{ maxWidth: 320 }}>
-                      {v.configMap?.name || v.secret?.secretName || v.persistentVolumeClaim?.claimName || v.hostPath?.path || "-"}
+                      {v.configMap?.name ||
+                        v.secret?.secretName ||
+                        v.persistentVolumeClaim?.claimName ||
+                        v.hostPath?.path ||
+                        "-"}
                     </Typography.Text>
                   ),
                 },
@@ -1009,6 +1218,7 @@ export function PodPage() {
         createOpen={createOpen}
         setCreateOpen={setCreateOpen}
         namespace={namespace}
+        clusterId={clusterId}
         simpleMode={simpleMode}
         setSimpleMode={setSimpleMode}
         editTarget={editTarget}

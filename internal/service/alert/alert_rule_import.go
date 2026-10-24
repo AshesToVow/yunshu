@@ -75,6 +75,9 @@ func parsePrometheusForDuration(s string) int {
 }
 
 func (s *AlertMonitorRuleService) ImportPrometheusYAML(ctx context.Context, req ImportPrometheusRulesRequest) (*ImportPrometheusRulesResult, error) {
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, projectIDPtr(req.ProjectID)); err != nil {
+		return nil, err
+	}
 	ds, err := s.dsRepo.GetByID(ctx, req.DatasourceID)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.rule", "ImportPrometheusYAML.ds", err)
@@ -145,6 +148,9 @@ func (s *AlertMonitorRuleService) ImportPrometheusYAML(ctx context.Context, req 
 				LabelsJSON:          string(labelsJSON),
 				AnnotationsJSON:     string(annJSON),
 				Enabled:             enabled,
+			}
+			if req.ProjectID != nil {
+				row.ProjectID = *req.ProjectID
 			}
 			if err := s.ruleRepo.Create(ctx, row); err != nil {
 				out.Errors = append(out.Errors, fmt.Sprintf("%s/%s: %v", g.Name, name, err))

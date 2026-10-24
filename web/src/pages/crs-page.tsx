@@ -1,40 +1,47 @@
-import { DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, SnippetsOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Empty, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  FileAddOutlined,
+  ReloadOutlined,
+  SnippetsOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  Modal,
+  Select,
+  Space,
+  Table,
+  Tag,
+  TreeSelect,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
+import { AiYamlGeneratePanel } from "../components/k8s/ai-yaml-generate-panel";
 import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { getClusters, listNamespaces as listClusterNamespaces, type ClusterItem } from "../services/clusters";
 import type { K8sDeleteOptions } from "../services/service-factory";
-import { applyCr, deleteCr, getCrDetail, listCrResources, listCrs, type CrDetail, type CrItem, type CrResourceItem } from "../services/crs";
-import { listK8sCrTemplates, type K8sCrTemplateItem } from "../services/k8s-cr-templates";
-import { Link } from "react-router-dom";
-
-function materializeCrTemplateBody(
-  body: string,
-  opts: {
-    namespace?: string;
-    apiVersion?: string;
-    kind?: string;
-  },
-): string {
-  let out = body.trim();
-  if (opts.apiVersion) {
-    out = out.replace(/^apiVersion:\s*.*$/m, `apiVersion: ${opts.apiVersion}`);
-  }
-  if (opts.kind) {
-    out = out.replace(/^kind:\s*.*$/m, `kind: ${opts.kind}`);
-  }
-  if (opts.namespace) {
-    if (/^\s*namespace:\s*.+$/m.test(out)) {
-      out = out.replace(/^\s*namespace:\s*.*$/m, `  namespace: ${opts.namespace}`);
-    } else if (/^metadata:\s*$/m.test(out)) {
-      out = out.replace(/^metadata:\s*$/m, `metadata:\n  namespace: ${opts.namespace}`);
-    } else if (/^metadata:\s*\n/m.test(out)) {
-      out = out.replace(/^(metadata:\s*\n)/m, `$1  namespace: ${opts.namespace}\n`);
-    }
-  }
-  return out;
-}
+import {
+  applyCr,
+  deleteCr,
+  getCrDetail,
+  listCrResources,
+  listCrs,
+  type CrDetail,
+  type CrItem,
+  type CrResourceItem,
+} from "../services/crs";
+import { getK8sCrTemplate, listK8sCrTemplates, type K8sCrTemplateItem } from "../services/k8s-cr-templates";
+import { useIdempotencyKey } from "../hooks/use-idempotency-key";
+import { materializeCrTemplateBody } from "../utils/cr-template";
+import { Link, useSearchParams } from "react-router-dom";
 
 function templateMatchesResource(tpl: K8sCrTemplateItem, res?: CrResourceItem): boolean {
   if (!res) return true;
@@ -47,6 +54,7 @@ function templateMatchesResource(tpl: K8sCrTemplateItem, res?: CrResourceItem): 
 }
 
 export function CrsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
   const [clusterId, setClusterId] = useState<number>();
   const [resources, setResources] = useState<CrResourceItem[]>([]);
@@ -56,6 +64,10 @@ export function CrsPage() {
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<CrItem[]>([]);
+  const [pendingTemplateId, setPendingTemplateId] = useState<number>(() => {
+    const n = Number(searchParams.get("template_id") || 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  });
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -67,6 +79,7 @@ export function CrsPage() {
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
   const [manifest, setManifest] = useState("");
+  const { key: applyIdemKey, rotate: rotateApplyIdemKey } = useIdempotencyKey();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetName, setDeleteTargetName] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -123,19 +136,21 @@ export function CrsPage() {
     {
       title: "操作",
       key: "action",
-      width: 240,
+      width: 200,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, record: CrItem) => (
-        <Space>
-          <Button type="link" icon={<EyeOutlined />} onClick={() => void openDetail(record.name)}>
+        <Space size={0} wrap className="yunshu-table-actions">
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(record.name)}>
             详情
           </Button>
-          <Button type="link" icon={<EditOutlined />} onClick={() => void openEdit(record.name)}>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openEdit(record.name)}>
             编辑
           </Button>
           <Button
             danger
             type="link"
+            size="small"
             icon={<DeleteOutlined />}
             onClick={() => {
               setDeleteTargetName(record.name);
@@ -154,9 +169,39 @@ export function CrsPage() {
     const list = res.list ?? [];
     setClusters(list);
     if (!clusterId) {
+      const fromQuery = Number(searchParams.get("cluster_id") || 0);
+      if (Number.isFinite(fromQuery) && fromQuery > 0 && list.some((c) => c.id === fromQuery && c.status === 1)) {
+        setClusterId(fromQuery);
+        return;
+      }
       const first = list.find((c) => c.status === 1);
       if (first) setClusterId(first.id);
     }
+  }
+
+  function applyTemplateToForm(tpl: K8sCrTemplateItem, resList: CrResourceItem[], ns: string) {
+    const match =
+      resList.find((r) => templateMatchesResource(tpl, r)) ||
+      resList.find((r) => r.kind.toLowerCase() === (tpl.gvk_kind || "").toLowerCase());
+    if (match) {
+      setSelectedResourceName(match.name);
+    }
+    const apiVersion = match
+      ? `${match.group}/${match.version}`
+      : tpl.gvk_group
+        ? `${tpl.gvk_group}/${tpl.gvk_version || "v1"}`
+        : tpl.gvk_version || "v1";
+    const kind = match?.kind || tpl.gvk_kind;
+    const namespaced = match ? match.namespaced : true;
+    setManifest(
+      materializeCrTemplateBody(tpl.body, {
+        namespace: namespaced ? ns || "default" : undefined,
+        apiVersion,
+        kind,
+      }),
+    );
+    setApplyOpen(true);
+    message.success(`已载入模板「${tpl.name}」，请确认 YAML 后应用`);
   }
 
   async function loadResources(cid: number) {
@@ -236,7 +281,7 @@ export function CrsPage() {
     }
   }
 
-  function useTemplate(tpl: K8sCrTemplateItem) {
+  function applyTemplate(tpl: K8sCrTemplateItem) {
     const apiVersion = selectedResource
       ? `${selectedResource.group}/${selectedResource.version}`
       : tpl.gvk_group
@@ -308,9 +353,45 @@ export function CrsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId, selectedResourceName, namespace]);
 
+  // Deep-link: /crs?template_id=&cluster_id= → load template and open Apply
+  useEffect(() => {
+    if (!pendingTemplateId || !clusterId || resources.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const tpl = await getK8sCrTemplate(pendingTemplateId);
+        if (cancelled) return;
+        if (tpl.project_id > 0) {
+          const preferred = clusters.find((c) => c.status === 1 && c.owning_project_id === tpl.project_id);
+          if (preferred && preferred.id !== clusterId) {
+            setClusterId(preferred.id);
+            return; // wait for resources reload on new cluster
+          }
+        }
+        applyTemplateToForm(tpl, resources, namespace);
+        setPendingTemplateId(0);
+        const next = new URLSearchParams(searchParams);
+        next.delete("template_id");
+        setSearchParams(next, { replace: true });
+      } catch (e) {
+        if (!cancelled) {
+          message.error(e instanceof Error ? e.message : "载入模板失败");
+          setPendingTemplateId(0);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTemplateId, clusterId, resources]);
+
   return (
     <Card className="table-card" title="CR 实例管理">
-      <div className="ops-filter-bar" style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
+      <div
+        className="ops-filter-bar"
+        style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12 }}
+      >
         <Space wrap>
           <Select
             placeholder="选择集群"
@@ -362,7 +443,9 @@ export function CrsPage() {
             icon={<FileAddOutlined />}
             onClick={() => {
               const defaultNs = selectedResource?.namespaced ? `  namespace: ${namespace || "default"}\n` : "";
-              const apiVersion = selectedResource ? `${selectedResource.group}/${selectedResource.version}` : "example.com/v1";
+              const apiVersion = selectedResource
+                ? `${selectedResource.group}/${selectedResource.version}`
+                : "example.com/v1";
               const kind = selectedResource?.kind || "Example";
               setManifest(`apiVersion: ${apiVersion}
 kind: ${kind}
@@ -442,7 +525,8 @@ ${defaultNs}spec: {}
                 setDetailSubmitting(true);
                 void (async () => {
                   try {
-                    await applyCr(clusterId, detailYaml);
+                    await applyCr(clusterId, detailYaml, applyIdemKey);
+                    rotateApplyIdemKey();
                     message.success("详情修改已保存");
                     const latest = await getCrDetail({
                       clusterId,
@@ -474,13 +558,33 @@ ${defaultNs}spec: {}
               <Input value={detailName} readOnly />
             </Form.Item>
             <Form.Item label="资源类型">
-              <Input value={selectedResource ? `${selectedResource.kind} (${selectedResource.group}/${selectedResource.version})` : "-"} readOnly />
+              <Input
+                value={
+                  selectedResource
+                    ? `${selectedResource.kind} (${selectedResource.group}/${selectedResource.version})`
+                    : "-"
+                }
+                readOnly
+              />
             </Form.Item>
             <Form.Item label="命名空间">
               <Input value={selectedResource?.namespaced ? namespace : "Cluster Scope"} readOnly />
             </Form.Item>
             <Form.Item label="YAML">
-              <Input.TextArea value={detailYaml} onChange={(e) => setDetailYaml(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
+              <Space direction="vertical" style={{ width: "100%" }} size="middle">
+                <AiYamlGeneratePanel
+                  resourceKind={selectedResource?.kind || "CustomResource"}
+                  namespace={selectedResource?.namespaced ? namespace : undefined}
+                  clusterId={clusterId}
+                  hintYaml={detailYaml}
+                  onGenerated={setDetailYaml}
+                />
+                <Input.TextArea
+                  value={detailYaml}
+                  onChange={(e) => setDetailYaml(e.target.value)}
+                  autoSize={{ minRows: 20, maxRows: 28 }}
+                />
+              </Space>
             </Form.Item>
           </Form>
         )}
@@ -500,7 +604,8 @@ ${defaultNs}spec: {}
           setApplyLoading(true);
           void (async () => {
             try {
-              await applyCr(clusterId, manifest);
+              await applyCr(clusterId, manifest, applyIdemKey);
+              rotateApplyIdemKey();
               message.success("应用成功");
               setApplyOpen(false);
               await reload();
@@ -510,7 +615,20 @@ ${defaultNs}spec: {}
           })();
         }}
       >
-        <Input.TextArea value={manifest} onChange={(e) => setManifest(e.target.value)} autoSize={{ minRows: 20, maxRows: 28 }} />
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <AiYamlGeneratePanel
+            resourceKind={selectedResource?.kind || "CustomResource"}
+            namespace={selectedResource?.namespaced ? namespace : undefined}
+            clusterId={clusterId}
+            hintYaml={manifest}
+            onGenerated={setManifest}
+          />
+          <Input.TextArea
+            value={manifest}
+            onChange={(e) => setManifest(e.target.value)}
+            autoSize={{ minRows: 20, maxRows: 28 }}
+          />
+        </Space>
       </Modal>
 
       <K8sDeleteDialog
@@ -548,14 +666,13 @@ ${defaultNs}spec: {}
               ? `已按当前类型筛选：${selectedResource.kind}（${selectedResource.group}/${selectedResource.version}）`
               : "未选择 CR 类型时将展示全部模板；建议先选择左侧 CR 类型"}
             {currentCluster?.owning_project_id ? (
-              <>
-                {" "}
-                · 含项目 #{currentCluster.owning_project_id} 与全局模板
-              </>
+              <> · 含项目 #{currentCluster.owning_project_id} 与全局模板</>
             ) : (
               " · 含全局模板"
             )}
-            <Link to="/k8s-cr-templates" style={{ marginLeft: 8 }}>管理模板库</Link>
+            <Link to="/k8s-cr-templates" style={{ marginLeft: 8 }}>
+              管理模板库
+            </Link>
           </Typography.Paragraph>
           <Input.Search
             allowClear
@@ -600,7 +717,7 @@ ${defaultNs}spec: {}
                 title: "操作",
                 width: 90,
                 render: (_: unknown, r: K8sCrTemplateItem) => (
-                  <Button type="link" size="small" onClick={() => useTemplate(r)}>
+                  <Button type="link" size="small" onClick={() => applyTemplate(r)}>
                     使用
                   </Button>
                 ),

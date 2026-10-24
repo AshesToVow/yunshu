@@ -144,7 +144,8 @@ export function CicdImageBrowserPage() {
     },
     {
       title: "操作",
-      width: 100,
+      width: 110,
+      className: "yunshu-table-actions-cell",
       render: (_, row) => {
         const ref = row.tags?.[0] || row.digest;
         if (!ref || !repository) return null;
@@ -216,7 +217,13 @@ export function CicdImageBrowserPage() {
         {!registryId ? (
           <Typography.Text type="secondary">请先在「镜像仓库注册中心」创建仓库</Typography.Text>
         ) : (
-          <Table rowKey={(r) => r.digest || r.tags?.join(",") || Math.random().toString()} loading={loading} columns={columns} dataSource={artifacts} pagination={{ pageSize: 20 }} />
+          <Table
+            rowKey={(r) => r.digest || r.tags?.join(",") || Math.random().toString()}
+            loading={loading}
+            columns={columns}
+            dataSource={artifacts}
+            pagination={{ pageSize: 20 }}
+          />
         )}
       </Card>
     </div>

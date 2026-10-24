@@ -35,7 +35,7 @@ type UserService struct {
 	projectMemberRepo interfaces.ProjectMemberRepository
 	assigneeSvc       *alert.AlertRuleAssigneeService
 	enforcer          *casbin.SyncedEnforcer
-	db                *gorm.DB
+	resolvePolicy     PasswordPolicyResolver
 }
 
 // NewUserService 创建相关逻辑。
@@ -46,7 +46,7 @@ func NewUserService(
 	enforcer *casbin.SyncedEnforcer,
 	projectMemberRepo interfaces.ProjectMemberRepository,
 	assigneeSvc *alert.AlertRuleAssigneeService,
-	db *gorm.DB,
+	resolvePolicy PasswordPolicyResolver,
 ) *UserService {
 	return &UserService{
 		userRepo:          userRepo,
@@ -55,7 +55,7 @@ func NewUserService(
 		projectMemberRepo: projectMemberRepo,
 		assigneeSvc:       assigneeSvc,
 		enforcer:          enforcer,
-		db:                db,
+		resolvePolicy:     resolvePolicy,
 	}
 }
 
@@ -99,7 +99,7 @@ func (s *UserService) Create(ctx context.Context, req UserCreateRequest) (*UserD
 	if len(req.RoleIDs) > 0 && len(roles) != len(req.RoleIDs) {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgbc90b8ad5f29)
 	}
-	if err := enforcePasswordComplexity(ctx, s.db, req.Password, strings.TrimSpace(req.Username)); err != nil {
+	if err := enforcePasswordComplexity(ctx, s.resolvePolicy, req.Password, strings.TrimSpace(req.Username)); err != nil {
 		return nil, err
 	}
 
@@ -210,7 +210,7 @@ func (s *UserService) Update(ctx context.Context, id uint, req UserUpdateRequest
 		user.Phone = strings.TrimSpace(*req.Phone)
 	}
 	if req.Password != nil && *req.Password != "" {
-		if err := enforcePasswordComplexity(ctx, s.db, *req.Password, user.Username); err != nil {
+		if err := enforcePasswordComplexity(ctx, s.resolvePolicy, *req.Password, user.Username); err != nil {
 			return nil, err
 		}
 		user.Password, err = password.Hash(*req.Password)

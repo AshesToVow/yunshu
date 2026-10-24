@@ -9,12 +9,29 @@ import {
   SyncOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Table, Tag, Tree, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tree,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { DataNode } from "antd/es/tree";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { extractApiErrorMessage } from "../services/http";
+import { createDictEntry } from "../services/dict";
 import {
   batchTestProjectServers,
   syncProjectServers,
@@ -120,7 +137,12 @@ export function ProjectServersPage() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const [batchTesting, setBatchTesting] = useState(false);
   const [batchSyncing, setBatchSyncing] = useState(false);
-  const [batchModal, setBatchModal] = useState<{ total: number; success: number; failed: number; results: { server_id: number; ok: boolean; message: string }[] } | null>(null);
+  const [batchModal, setBatchModal] = useState<{
+    total: number;
+    success: number;
+    failed: number;
+    results: { server_id: number; ok: boolean; message: string }[];
+  } | null>(null);
 
   const [groups, setGroups] = useState<ServerGroupItem[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<number>();
@@ -128,11 +150,25 @@ export function ProjectServersPage() {
   const [groupEditorOpen, setGroupEditorOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<ServerGroupItem | null>(null);
   const [groupForm] = Form.useForm<{ name: string; category: string; provider: string }>();
+  const [categoryTypeModalOpen, setCategoryTypeModalOpen] = useState(false);
+  const [categoryTypeSubmitting, setCategoryTypeSubmitting] = useState(false);
+  const [categoryDictRefreshKey, setCategoryDictRefreshKey] = useState(0);
+  const [categoryTypeForm] = Form.useForm<{ label: string; value: string; remark?: string }>();
 
   const [cloudAccounts, setCloudAccounts] = useState<CloudAccountItem[]>([]);
-  const [syncResultByAccount, setSyncResultByAccount] = useState<Record<number, { added: number; updated: number; disabled: number; unchanged: number }>>({});
+  const [syncResultByAccount, setSyncResultByAccount] = useState<
+    Record<number, { added: number; updated: number; disabled: number; unchanged: number }>
+  >({});
   const [cloudSubmitting, setCloudSubmitting] = useState(false);
-  const [cloudForm] = Form.useForm<{ id?: number; account_name: string; region_scope: string[]; ak: string; sk: string; ak_dict_label?: string; sk_dict_label?: string }>();
+  const [cloudForm] = Form.useForm<{
+    id?: number;
+    account_name: string;
+    region_scope: string[];
+    ak: string;
+    sk: string;
+    ak_dict_label?: string;
+    sk_dict_label?: string;
+  }>();
   const [editingCloudAccount, setEditingCloudAccount] = useState<CloudAccountItem | null>(null);
   const [cloudAccountEditorOpen, setCloudAccountEditorOpen] = useState(false);
   const [cloudAccountFilter, setCloudAccountFilter] = useState("");
@@ -150,7 +186,12 @@ export function ProjectServersPage() {
     if (!selectedCloudAccountId) return list;
     const acc = cloudAccounts.find((a) => a.id === selectedCloudAccountId);
     if (!acc) return list;
-    const regions = new Set(String(acc.region_scope || "").split(",").map((x) => x.trim()).filter(Boolean));
+    const regions = new Set(
+      String(acc.region_scope || "")
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean),
+    );
     if (regions.size === 0) {
       return list.filter((s) => (s.provider || "") === acc.provider);
     }
@@ -159,7 +200,10 @@ export function ProjectServersPage() {
 
   function findAccountForServer(s: ServerItem) {
     for (const acc of cloudAccounts) {
-      const regions = String(acc.region_scope || "").split(",").map((x) => x.trim()).filter(Boolean);
+      const regions = String(acc.region_scope || "")
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
       if (regions.length && regions.includes((s.cloud_region || "").trim())) return acc;
       if ((s.name || "").toLowerCase().includes((acc.account_name || "").toLowerCase())) return acc;
     }
@@ -179,11 +223,15 @@ export function ProjectServersPage() {
 
   const isCloudCategory = selectedGroup?.category === "cloud";
   const isCloudProviderNode = isCloudCategory && selectedGroup?.provider !== "custom";
-  const cloudProviderLabel = CLOUD_PROVIDER_LABEL[(selectedGroup?.provider || "").trim()] || (selectedGroup?.provider || "-");
+  const cloudProviderLabel =
+    CLOUD_PROVIDER_LABEL[(selectedGroup?.provider || "").trim()] || selectedGroup?.provider || "-";
   const regionOptions = CLOUD_REGION_OPTIONS[(selectedGroup?.provider || "").trim()] || [];
 
-  const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
-  const serverGroupCategoryOptions = useDictOptions("server_group_category");
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })),
+    [projects],
+  );
+  const serverGroupCategoryOptions = useDictOptions("server_group_category", true, categoryDictRefreshKey);
   const serverOsOptions = useDictOptions("server_os_type");
   const serverAuthOptions = useDictOptions("server_auth_type");
   const serverPortDict = useDictOptions("server_port");
@@ -207,7 +255,8 @@ export function ProjectServersPage() {
   const cloudJdPwdDict = useDictOptions("server_cloud_jd_password", isCloudCategory);
   const cloudJdKeyDict = useDictOptions("server_cloud_jd_private_key", isCloudCategory);
   const cloudJdPortDict = useDictOptions("server_cloud_jd_port", isCloudCategory);
-  const formProvider = (Form.useWatch("provider", form) as string | undefined) || current?.provider || selectedGroup?.provider || "";
+  const formProvider =
+    (Form.useWatch("provider", form) as string | undefined) || current?.provider || selectedGroup?.provider || "";
   const currentCloudDictKey = CLOUD_DICT_BY_PROVIDER[(formProvider || "").trim()];
   const cloudAKDictOptions = useMemo(() => {
     const p = (selectedGroup?.provider || "").trim();
@@ -314,7 +363,8 @@ export function ProjectServersPage() {
         ...query,
         group_id: isCloudCategory && selectedGroup?.provider === "custom" ? undefined : selectedGroupId,
         source_type: isCloudCategory ? "cloud" : "self_hosted",
-        provider: isCloudCategory && selectedGroup?.provider !== "custom" ? (selectedGroup?.provider || undefined) : undefined,
+        provider:
+          isCloudCategory && selectedGroup?.provider !== "custom" ? selectedGroup?.provider || undefined : undefined,
         cloud_account_id: selectedCloudAccountId,
       });
       setList(data.list || []);
@@ -344,7 +394,10 @@ export function ProjectServersPage() {
     }));
   }
 
-  function removeNode(items: ServerGroupItem[], id: number): { tree: ServerGroupItem[]; removed: ServerGroupItem | null } {
+  function removeNode(
+    items: ServerGroupItem[],
+    id: number,
+  ): { tree: ServerGroupItem[]; removed: ServerGroupItem | null } {
     let removed: ServerGroupItem | null = null;
     const walk = (arr: ServerGroupItem[]): ServerGroupItem[] => {
       const out: ServerGroupItem[] = [];
@@ -360,7 +413,13 @@ export function ProjectServersPage() {
     return { tree: walk(items), removed };
   }
 
-  function insertNode(items: ServerGroupItem[], targetID: number, node: ServerGroupItem, dropToGap: boolean, dropAfter: boolean): ServerGroupItem[] {
+  function insertNode(
+    items: ServerGroupItem[],
+    targetID: number,
+    node: ServerGroupItem,
+    dropToGap: boolean,
+    dropAfter: boolean,
+  ): ServerGroupItem[] {
     const walk = (arr: ServerGroupItem[]): ServerGroupItem[] => {
       const out: ServerGroupItem[] = [];
       for (let i = 0; i < arr.length; i++) {
@@ -558,7 +617,10 @@ export function ProjectServersPage() {
     message.success(`已导入 ${res.imported} 条，跳过 ${res.skipped} 条，失败 ${res.errors?.length ?? 0} 条`);
     if (res.errors?.length) {
       message.warning(
-        res.errors.slice(0, 3).map((e) => `第${e.row}行 ${e.name}: ${e.message}`).join("；"),
+        res.errors
+          .slice(0, 3)
+          .map((e) => `第${e.row}行 ${e.name}: ${e.message}`)
+          .join("；"),
       );
     }
     void loadServers();
@@ -567,12 +629,14 @@ export function ProjectServersPage() {
   async function onSaveGroup() {
     if (!projectId) return;
     const values = await groupForm.validateFields();
+    const category = String(values.category || "").trim();
     await upsertProjectServerGroup(projectId, {
       id: editingGroup?.id,
       name: values.name,
-      category: values.category,
-      provider: values.provider,
-      parent_id: editingGroup?.parent_id ?? (values.category === "cloud" && selectedGroup ? selectedGroup.id : undefined),
+      category,
+      provider: category === "cloud" ? values.provider : values.provider || "custom",
+      // 云类型挂到当前选中节点下；自建/自定义类型默认作为根分组
+      parent_id: editingGroup?.parent_id ?? (category === "cloud" && selectedGroup ? selectedGroup.id : undefined),
       sort: editingGroup?.sort,
       status: editingGroup?.status ?? 1,
     });
@@ -580,6 +644,38 @@ export function ProjectServersPage() {
     setEditingGroup(null);
     setGroupEditorOpen(false);
     await loadGroups();
+  }
+
+  async function onCreateCategoryType() {
+    const values = await categoryTypeForm.validateFields();
+    const label = String(values.label || "").trim();
+    const value = String(values.value || "")
+      .trim()
+      .toLowerCase();
+    if (value === "self_hosted" || value === "cloud") {
+      message.error("不能占用内置标识 self_hosted / cloud");
+      return;
+    }
+    setCategoryTypeSubmitting(true);
+    try {
+      await createDictEntry({
+        dict_type: "server_group_category",
+        label,
+        value,
+        sort: 100,
+        status: 1,
+        remark: values.remark?.trim() || "自定义服务器分组类型",
+      });
+      message.success("分组类型已新增");
+      setCategoryDictRefreshKey((k) => k + 1);
+      groupForm.setFieldsValue({ category: value, provider: "custom" });
+      setCategoryTypeModalOpen(false);
+      categoryTypeForm.resetFields();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "新增类型失败"));
+    } finally {
+      setCategoryTypeSubmitting(false);
+    }
   }
 
   async function onDeleteGroup() {
@@ -623,7 +719,9 @@ export function ProjectServersPage() {
       ...prev,
       [accountId]: { added: res.added, updated: res.updated, disabled: res.disabled, unchanged: res.unchanged },
     }));
-    message.success(`同步完成：发现 ${res.total}，新增 ${res.added}，更新 ${res.updated}，停用 ${res.disabled}，不变 ${res.unchanged}`);
+    message.success(
+      `同步完成：发现 ${res.total}，新增 ${res.added}，更新 ${res.updated}，停用 ${res.disabled}，不变 ${res.unchanged}`,
+    );
     await Promise.all([loadCloudAccounts(), loadServers()]);
   }
 
@@ -711,7 +809,10 @@ export function ProjectServersPage() {
     const values = await resetPasswordForm.validateFields();
     setCloudActionSubmitting(true);
     try {
-      const res = await runProjectCloudServerAction(projectId, resetPasswordTarget.id, { action: "reset_password", new_password: values.new_password });
+      const res = await runProjectCloudServerAction(projectId, resetPasswordTarget.id, {
+        action: "reset_password",
+        new_password: values.new_password,
+      });
       message.success(res.message || "密码重置请求已提交");
       setResetPasswordTarget(null);
       resetPasswordForm.resetFields();
@@ -727,8 +828,17 @@ export function ProjectServersPage() {
     { title: "Port", dataIndex: "port", width: 72 },
     { title: "区域", dataIndex: "cloud_region", width: 140, ellipsis: true, render: (v: string) => v || "-" },
     { title: "标签", dataIndex: "tags", width: 200, ellipsis: true, render: (v: string) => v || "-" },
-    { title: "OS / 架构", width: 130, render: (_: unknown, r: ServerItem) => `${r.os_type || "-"} / ${r.os_arch || "-"}` },
-    { title: "启用", dataIndex: "status", width: 88, render: (v: number) => (v === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>) },
+    {
+      title: "OS / 架构",
+      width: 130,
+      render: (_: unknown, r: ServerItem) => `${r.os_type || "-"} / ${r.os_arch || "-"}`,
+    },
+    {
+      title: "启用",
+      dataIndex: "status",
+      width: 88,
+      render: (v: number) => (v === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+    },
     {
       title: "连通",
       width: 96,
@@ -737,14 +847,25 @@ export function ProjectServersPage() {
         return r.last_test_error ? <Tag color="error">异常</Tag> : <Tag color="success">正常</Tag>;
       },
     },
-    { title: "上次测试", dataIndex: "last_test_at", width: 170, render: (v?: string | null) => (v ? formatDateTime(v) : "-") },
-    { title: "测试错误", dataIndex: "last_test_error", ellipsis: true, render: (v?: string | null) => (v ? <span title={v}>{v}</span> : "-") },
+    {
+      title: "上次测试",
+      dataIndex: "last_test_at",
+      width: 170,
+      render: (v?: string | null) => (v ? formatDateTime(v) : "-"),
+    },
+    {
+      title: "测试错误",
+      dataIndex: "last_test_error",
+      ellipsis: true,
+      render: (v?: string | null) => (v ? <span title={v}>{v}</span> : "-"),
+    },
     {
       title: "操作",
-      width: 220,
+      width: 300,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: ServerItem) => (
-        <Space size={6} wrap>
+        <Space size={6} wrap className="yunshu-table-actions">
           <Button
             size="small"
             icon={<LinkOutlined />}
@@ -761,7 +882,11 @@ export function ProjectServersPage() {
             onClick={() =>
               projectId &&
               testProjectServer(projectId, r.id).then((x) => {
-                x.ok ? message.success(x.message || "连通性 OK") : message.error(x.message || "连通性失败");
+                if (x.ok) {
+                  message.success(x.message || "连通性 OK");
+                } else {
+                  message.error(x.message || "连通性失败");
+                }
                 void loadServers();
               })
             }
@@ -803,7 +928,12 @@ export function ProjectServersPage() {
     { title: "云OS", dataIndex: "cloud_os_name", width: 180, render: (v: string) => v || "-" },
     { title: "网络信息", dataIndex: "cloud_network_info", width: 180, render: (v: string) => v || "-" },
     { title: "实例计费", dataIndex: "cloud_charge_type", width: 140, render: (v: string) => mapChargeTypeZh(v) },
-    { title: "网络计费", dataIndex: "cloud_network_charge_type", width: 140, render: (v: string) => mapNetworkChargeTypeZh(v) },
+    {
+      title: "网络计费",
+      dataIndex: "cloud_network_charge_type",
+      width: 140,
+      render: (v: string) => mapNetworkChargeTypeZh(v),
+    },
     { title: "标签", dataIndex: "cloud_tags_json", width: 220, render: (v: string) => renderCloudTags(v) },
     { title: "公网IP", dataIndex: "cloud_public_ip", width: 140, render: (v: string) => v || "-" },
     { title: "内网IP", dataIndex: "cloud_private_ip", width: 140, render: (v: string) => v || "-" },
@@ -819,8 +949,17 @@ export function ProjectServersPage() {
         return <Tag color="default">{v}</Tag>;
       },
     },
-    { title: "OS / 架构", width: 150, render: (_: unknown, r: ServerItem) => `${r.os_type || "-"} / ${r.os_arch || "-"}` },
-    { title: "启用状态", dataIndex: "status", width: 100, render: (v: number) => (v === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>) },
+    {
+      title: "OS / 架构",
+      width: 150,
+      render: (_: unknown, r: ServerItem) => `${r.os_type || "-"} / ${r.os_arch || "-"}`,
+    },
+    {
+      title: "启用状态",
+      dataIndex: "status",
+      width: 100,
+      render: (v: number) => (v === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+    },
     {
       title: "连通状态",
       width: 120,
@@ -829,14 +968,25 @@ export function ProjectServersPage() {
         return r.last_test_error ? <Tag color="error">异常</Tag> : <Tag color="success">正常</Tag>;
       },
     },
-    { title: "上次测试", dataIndex: "last_test_at", width: 180, render: (v?: string | null) => (v ? formatDateTime(v) : "-") },
-    { title: "测试错误", dataIndex: "last_test_error", ellipsis: true, render: (v?: string | null) => (v ? <span title={v}>{v}</span> : "-") },
+    {
+      title: "上次测试",
+      dataIndex: "last_test_at",
+      width: 180,
+      render: (v?: string | null) => (v ? formatDateTime(v) : "-"),
+    },
+    {
+      title: "测试错误",
+      dataIndex: "last_test_error",
+      ellipsis: true,
+      render: (v?: string | null) => (v ? <span title={v}>{v}</span> : "-"),
+    },
     {
       title: "操作",
-      width: 260,
+      width: 420,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_: unknown, r: ServerItem) => (
-        <Space size={6} wrap>
+        <Space size={6} wrap className="yunshu-table-actions">
           <Button
             size="small"
             icon={<LinkOutlined />}
@@ -853,7 +1003,11 @@ export function ProjectServersPage() {
             onClick={() =>
               projectId &&
               testProjectServer(projectId, r.id).then((x) => {
-                x.ok ? message.success(x.message || "连通性 OK") : message.error(x.message || "连通性失败");
+                if (x.ok) {
+                  message.success(x.message || "连通性 OK");
+                } else {
+                  message.error(x.message || "连通性失败");
+                }
                 void loadServers();
               })
             }
@@ -896,14 +1050,33 @@ export function ProjectServersPage() {
   ];
 
   return (
-    <Card title="服务器管理" style={{ height: "calc(100vh - 130px)" }} bodyStyle={{ height: "100%", paddingBottom: 12 }}>
+    <Card
+      title="服务器管理"
+      style={{ height: "calc(100vh - 130px)" }}
+      bodyStyle={{ height: "100%", paddingBottom: 12 }}
+    >
       <Row gutter={16} align="stretch" style={{ height: "100%" }}>
         <Col span={6} style={{ height: "100%", display: "flex" }}>
           <Card
             size="small"
             style={{ height: "100%", width: "100%" }}
             title="分组树"
-            extra={<Space><Button size="small" icon={<PlusOutlined />} onClick={() => { setEditingGroup(null); groupForm.setFieldsValue({ name: "", category: "self_hosted", provider: "custom" }); setGroupEditorOpen(true); }}>新增</Button><Button size="small" icon={<ReloadOutlined />} onClick={() => void loadGroups()} /></Space>}
+            extra={
+              <Space>
+                <Button
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setEditingGroup(null);
+                    groupForm.setFieldsValue({ name: "", category: "self_hosted", provider: "custom" });
+                    setGroupEditorOpen(true);
+                  }}
+                >
+                  新增
+                </Button>
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => void loadGroups()} />
+              </Space>
+            }
           >
             <div style={{ maxHeight: "calc(100vh - 310px)", overflow: "auto", paddingRight: 4 }}>
               <Tree
@@ -965,7 +1138,9 @@ export function ProjectServersPage() {
                   编辑/重命名
                 </Button>
                 <Popconfirm title="确认删除该分组？" onConfirm={() => void onDeleteGroup()}>
-                  <Button size="small" danger icon={<DeleteOutlined />}>删除分组</Button>
+                  <Button size="small" danger icon={<DeleteOutlined />}>
+                    删除分组
+                  </Button>
                 </Popconfirm>
               </Space>
             ) : null}
@@ -974,60 +1149,89 @@ export function ProjectServersPage() {
         <Col span={18} style={{ height: "100%", display: "flex" }}>
           <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
             {isCloudProviderNode ? (
-              <Card size="small" title={`云账号与同步（${cloudProviderLabel}）`} extra={<Button type="primary" size="small" onClick={() => void openNewCloudAccount()}>新增云账号</Button>}>
+              <Card
+                size="small"
+                title={`云账号与同步（${cloudProviderLabel}）`}
+                extra={
+                  <Button type="primary" size="small" onClick={() => void openNewCloudAccount()}>
+                    新增云账号
+                  </Button>
+                }
+              >
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <Input.Search allowClear placeholder="搜索云账号/区域" value={cloudAccountFilter} onChange={(e) => setCloudAccountFilter(e.target.value)} style={{ width: 260 }} />
+                  <Input.Search
+                    allowClear
+                    placeholder="搜索云账号/区域"
+                    value={cloudAccountFilter}
+                    onChange={(e) => setCloudAccountFilter(e.target.value)}
+                    style={{ width: 260 }}
+                  />
                 </div>
                 <div style={{ overflowX: "auto" }}>
-                <Table
-                  style={{ marginTop: 12 }}
-                  rowKey="id"
-                  pagination={false}
-                  dataSource={filteredCloudAccounts}
-                  scroll={{ x: 900 }}
-                  columns={[
-                    { title: "账号", dataIndex: "account_name" },
-                    { title: "厂商", dataIndex: "provider", width: 100 },
-                    { title: "区域", dataIndex: "region_scope", width: 220, render: (v: string) => v || "默认" },
-                    { title: "最近同步", dataIndex: "last_sync_at", width: 180, render: (v?: string | null) => (v ? formatDateTime(v) : "-") },
-                    {
-                      title: "最近结果",
-                      width: 250,
-                      render: (_: unknown, r: CloudAccountItem) => {
-                        const stat = syncResultByAccount[r.id];
-                        if (!stat) return "-";
-                        return (
-                          <Space size={4} wrap>
-                            <Tag color="success">新增 {stat.added}</Tag>
-                            <Tag color="processing">更新 {stat.updated}</Tag>
-                            <Tag color="warning">停用 {stat.disabled}</Tag>
-                            <Tag>不变 {stat.unchanged}</Tag>
-                          </Space>
-                        );
+                  <Table
+                    style={{ marginTop: 12 }}
+                    rowKey="id"
+                    pagination={false}
+                    dataSource={filteredCloudAccounts}
+                    scroll={{ x: 900 }}
+                    columns={[
+                      { title: "账号", dataIndex: "account_name" },
+                      { title: "厂商", dataIndex: "provider", width: 100 },
+                      { title: "区域", dataIndex: "region_scope", width: 220, render: (v: string) => v || "默认" },
+                      {
+                        title: "最近同步",
+                        dataIndex: "last_sync_at",
+                        width: 180,
+                        render: (v?: string | null) => (v ? formatDateTime(v) : "-"),
                       },
-                    },
-                    { title: "同步错误", dataIndex: "last_sync_error", ellipsis: true, render: (v?: string | null) => v || "-" },
-                    {
-                      title: "操作",
-                      width: 160,
-                      render: (_: unknown, r: CloudAccountItem) => (
-                        <Space size={6} wrap>
-                          <Button size="small" icon={<EditOutlined />} onClick={() => editCloudAccount(r)}>
-                            编辑
-                          </Button>
-                          <Button size="small" icon={<SyncOutlined />} onClick={() => void onSync(r.id)}>
-                            同步
-                          </Button>
-                          <Popconfirm title="确认删除该云账号？" onConfirm={() => void onDeleteCloudAccount(r.id)} okText="删除" cancelText="取消">
-                            <Button size="small" danger icon={<DeleteOutlined />}>
-                              删除
+                      {
+                        title: "最近结果",
+                        width: 250,
+                        render: (_: unknown, r: CloudAccountItem) => {
+                          const stat = syncResultByAccount[r.id];
+                          if (!stat) return "-";
+                          return (
+                            <Space size={4} wrap>
+                              <Tag color="success">新增 {stat.added}</Tag>
+                              <Tag color="processing">更新 {stat.updated}</Tag>
+                              <Tag color="warning">停用 {stat.disabled}</Tag>
+                              <Tag>不变 {stat.unchanged}</Tag>
+                            </Space>
+                          );
+                        },
+                      },
+                      {
+                        title: "同步错误",
+                        dataIndex: "last_sync_error",
+                        ellipsis: true,
+                        render: (v?: string | null) => v || "-",
+                      },
+                      {
+                        title: "操作",
+                        width: 160,
+                        render: (_: unknown, r: CloudAccountItem) => (
+                          <Space size={6} wrap>
+                            <Button size="small" icon={<EditOutlined />} onClick={() => editCloudAccount(r)}>
+                              编辑
                             </Button>
-                          </Popconfirm>
-                        </Space>
-                      ),
-                    },
-                  ]}
-                />
+                            <Button size="small" icon={<SyncOutlined />} onClick={() => void onSync(r.id)}>
+                              同步
+                            </Button>
+                            <Popconfirm
+                              title="确认删除该云账号？"
+                              onConfirm={() => void onDeleteCloudAccount(r.id)}
+                              okText="删除"
+                              cancelText="取消"
+                            >
+                              <Button size="small" danger icon={<DeleteOutlined />}>
+                                删除
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        ),
+                      },
+                    ]}
+                  />
                 </div>
               </Card>
             ) : null}
@@ -1039,71 +1243,236 @@ export function ProjectServersPage() {
               extra={
                 <Space wrap>
                   {isCloudCategory ? (
-                  <Select
-                    allowClear
-                    showSearch
-                    placeholder="按云账号过滤"
-                    options={cloudAccounts.map((a) => ({ label: a.account_name || String(a.id), value: a.id }))}
-                    style={{ width: 220 }}
-                    value={selectedCloudAccountId}
-                    onChange={(v) => setSelectedCloudAccountId(v)}
-                    filterOption={(input, option) => (option?.label || "").toLowerCase().includes((input || "").toLowerCase())}
-                  />
+                    <Select
+                      allowClear
+                      showSearch
+                      placeholder="按云账号过滤"
+                      options={cloudAccounts.map((a) => ({ label: a.account_name || String(a.id), value: a.id }))}
+                      style={{ width: 220 }}
+                      value={selectedCloudAccountId}
+                      onChange={(v) => setSelectedCloudAccountId(v)}
+                      filterOption={(input, option) =>
+                        (option?.label || "").toLowerCase().includes((input || "").toLowerCase())
+                      }
+                    />
                   ) : null}
-                  <Input.Search allowClear placeholder="搜索 name/host/tags" onSearch={(keyword) => setQuery((q) => ({ ...q, keyword, page: 1 }))} style={{ width: 220 }} />
-                  <Button icon={<ReloadOutlined />} onClick={() => void loadServers()} loading={loading}>刷新</Button>
-                  <Button icon={<ApiOutlined />} onClick={() => void onBatchTest()} disabled={selectedRowKeys.length === 0} loading={batchTesting}>批量测试</Button>
-                  <Button icon={<SyncOutlined />} onClick={() => void onBatchSync()} loading={batchSyncing} title={selectedRowKeys.length === 0 ? "未勾选时同步项目下全部服务器" : "同步所选服务器连通状态"}>
+                  <Input.Search
+                    allowClear
+                    placeholder="搜索 name/host/tags"
+                    onSearch={(keyword) => setQuery((q) => ({ ...q, keyword, page: 1 }))}
+                    style={{ width: 220 }}
+                  />
+                  <Button icon={<ReloadOutlined />} onClick={() => void loadServers()} loading={loading}>
+                    刷新
+                  </Button>
+                  <Button
+                    icon={<ApiOutlined />}
+                    onClick={() => void onBatchTest()}
+                    disabled={selectedRowKeys.length === 0}
+                    loading={batchTesting}
+                  >
+                    批量测试
+                  </Button>
+                  <Button
+                    icon={<SyncOutlined />}
+                    onClick={() => void onBatchSync()}
+                    loading={batchSyncing}
+                    title={selectedRowKeys.length === 0 ? "未勾选时同步项目下全部服务器" : "同步所选服务器连通状态"}
+                  >
                     同步连通
                   </Button>
                   {!isCloudCategory ? (
                     <>
-                      <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>导入</Button>
-                      <Button icon={<DownloadOutlined />} onClick={() => projectId && downloadProjectServersImportTemplate(projectId).then((blob) => { const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = "servers-import-template.xlsx"; a.click(); URL.revokeObjectURL(u); })}>模板</Button>
-                      <Button icon={<DownloadOutlined />} onClick={() => projectId && exportProjectServers(projectId, { keyword: query.keyword }).then((blob) => { const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = `project-${projectId}-servers.xlsx`; a.click(); URL.revokeObjectURL(u); })}>导出</Button>
+                      <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+                        导入
+                      </Button>
+                      <Button
+                        icon={<DownloadOutlined />}
+                        onClick={() =>
+                          projectId &&
+                          downloadProjectServersImportTemplate(projectId).then((blob) => {
+                            const u = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = u;
+                            a.download = "servers-import-template.xlsx";
+                            a.click();
+                            URL.revokeObjectURL(u);
+                          })
+                        }
+                      >
+                        模板
+                      </Button>
+                      <Button
+                        icon={<DownloadOutlined />}
+                        onClick={() =>
+                          projectId &&
+                          exportProjectServers(projectId, { keyword: query.keyword }).then((blob) => {
+                            const u = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = u;
+                            a.download = `project-${projectId}-servers.xlsx`;
+                            a.click();
+                            URL.revokeObjectURL(u);
+                          })
+                        }
+                      >
+                        导出
+                      </Button>
                     </>
                   ) : null}
-                  <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增</Button>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                    新增
+                  </Button>
                 </Space>
               }
             >
-              <Select style={{ width: 280, marginBottom: 12, flexShrink: 0 }} placeholder="选择项目" value={projectId} onChange={setProjectId} options={projectOptions} />
-              <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void onImport(f); e.target.value = ""; }} />
+              <Select
+                style={{ width: 280, marginBottom: 12, flexShrink: 0 }}
+                placeholder="选择项目"
+                value={projectId}
+                onChange={setProjectId}
+                options={projectOptions}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onImport(f);
+                  e.target.value = "";
+                }}
+              />
               <div style={{ overflowX: "auto", flex: 1 }}>
                 <Table
-                style={{ flex: 1, minHeight: 0 }}
-                rowKey="id"
+                  style={{ flex: 1, minHeight: 0 }}
+                  rowKey="id"
                   dataSource={filteredServers}
-                loading={loading}
-                scroll={{ x: isCloudCategory ? 2200 : 1280, y: tableScrollY }}
-                rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as number[]) }}
-                pagination={{
-                  current: query.page,
-                  pageSize: query.page_size,
-                  total: isCloudCategory && selectedCloudAccountId ? filteredServers.length : total,
-                  showSizeChanger: true,
-                  pageSizeOptions: [10, 20, 50, 100],
-                  showQuickJumper: true,
-                  onChange: (page, pageSize) => setQuery((q) => ({ ...q, page, page_size: pageSize })),
-                }}
-                columns={isCloudCategory ? cloudColumns : selfHostedColumns}
-              />
+                  loading={loading}
+                  scroll={{ x: isCloudCategory ? 2200 : 1280, y: tableScrollY }}
+                  rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as number[]) }}
+                  pagination={{
+                    current: query.page,
+                    pageSize: query.page_size,
+                    total: isCloudCategory && selectedCloudAccountId ? filteredServers.length : total,
+                    showSizeChanger: true,
+                    pageSizeOptions: [10, 20, 50, 100],
+                    showQuickJumper: true,
+                    onChange: (page, pageSize) => setQuery((q) => ({ ...q, page, page_size: pageSize })),
+                  }}
+                  columns={isCloudCategory ? cloudColumns : selfHostedColumns}
+                />
               </div>
             </Card>
           </div>
         </Col>
       </Row>
 
-      <Modal title={editingGroup ? "编辑分组" : "新增分组"} open={groupEditorOpen} onCancel={() => { setGroupEditorOpen(false); setEditingGroup(null); }} onOk={() => void onSaveGroup()} destroyOnClose>
+      <Modal
+        title={editingGroup ? "编辑分组" : "新增分组"}
+        open={groupEditorOpen}
+        onCancel={() => {
+          setGroupEditorOpen(false);
+          setEditingGroup(null);
+        }}
+        onOk={() => void onSaveGroup()}
+        destroyOnClose
+      >
         <Form form={groupForm} layout="vertical" initialValues={{ category: "self_hosted", provider: "custom" }}>
           <Form.Item label="名称" name="name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item label="类型" name="category" rules={[{ required: true }]}>
-            <Select options={serverGroupCategoryOptions} />
+          <Form.Item label="类型" required extra="内置：自建 / 云。自定义类型按自建语义管理服务器，不走云账号同步。">
+            <Space.Compact style={{ width: "100%" }}>
+              <Form.Item name="category" noStyle rules={[{ required: true, message: "请选择类型" }]}>
+                <Select
+                  style={{ width: "100%" }}
+                  options={serverGroupCategoryOptions}
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="选择分组类型"
+                />
+              </Form.Item>
+              <Button
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  categoryTypeForm.setFieldsValue({ label: "", value: "", remark: "" });
+                  setCategoryTypeModalOpen(true);
+                }}
+              >
+                新增类型
+              </Button>
+            </Space.Compact>
           </Form.Item>
-          <Form.Item label="厂商标识" name="provider">
-            <Input placeholder="custom / alibaba / tencent / jd" />
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.category !== cur.category}>
+            {() =>
+              groupForm.getFieldValue("category") === "cloud" ? (
+                <Form.Item label="厂商标识" name="provider" extra="cloud 类型用于云同步：alibaba / tencent / jd">
+                  <Input placeholder="alibaba / tencent / jd" />
+                </Form.Item>
+              ) : (
+                <Form.Item name="provider" hidden>
+                  <Input />
+                </Form.Item>
+              )
+            }
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="新增分组类型"
+        open={categoryTypeModalOpen}
+        onCancel={() => {
+          setCategoryTypeModalOpen(false);
+          categoryTypeForm.resetFields();
+        }}
+        onOk={() => void onCreateCategoryType()}
+        confirmLoading={categoryTypeSubmitting}
+        destroyOnClose
+      >
+        <Form form={categoryTypeForm} layout="vertical">
+          <Form.Item
+            label="显示名称"
+            name="label"
+            rules={[{ required: true, message: "请输入显示名称" }]}
+            extra="例如：托管机房、边缘节点"
+          >
+            <Input
+              placeholder="托管机房"
+              onChange={(e) => {
+                const label = e.target.value;
+                const cur = categoryTypeForm.getFieldValue("value");
+                if (cur) return;
+                const slug = label
+                  .trim()
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "_")
+                  .replace(/^_+|_+$/g, "")
+                  .slice(0, 32);
+                if (slug && /^[a-z]/.test(slug)) {
+                  categoryTypeForm.setFieldsValue({ value: slug });
+                }
+              }}
+            />
+          </Form.Item>
+          <Form.Item
+            label="类型标识"
+            name="value"
+            rules={[
+              { required: true, message: "请输入类型标识" },
+              {
+                pattern: /^[a-z][a-z0-9_]{0,31}$/,
+                message: "须以小写字母开头，仅含 a-z / 0-9 / _，最长 32",
+              },
+            ]}
+            extra="写入数据字典 server_group_category；不可用 self_hosted、cloud"
+          >
+            <Input placeholder="idc" />
+          </Form.Item>
+          <Form.Item label="备注" name="remark">
+            <Input.TextArea rows={2} placeholder="可选" />
           </Form.Item>
         </Form>
       </Modal>
@@ -1152,7 +1521,13 @@ export function ProjectServersPage() {
         </Form>
       </Modal>
 
-      <Modal title={batchModal ? `批量测试结果（成功 ${batchModal.success} / 失败 ${batchModal.failed}）` : "批量测试结果"} open={!!batchModal} onCancel={() => setBatchModal(null)} footer={null} width={720}>
+      <Modal
+        title={batchModal ? `批量测试结果（成功 ${batchModal.success} / 失败 ${batchModal.failed}）` : "批量测试结果"}
+        open={!!batchModal}
+        onCancel={() => setBatchModal(null)}
+        footer={null}
+        width={720}
+      >
         {batchModal ? (
           <Table
             size="small"
@@ -1161,14 +1536,35 @@ export function ProjectServersPage() {
             dataSource={batchModal.results}
             columns={[
               { title: "ServerID", dataIndex: "server_id", width: 90 },
-              { title: "结果", dataIndex: "ok", width: 90, render: (v: boolean) => (v ? <Tag color="success">OK</Tag> : <Tag color="error">FAIL</Tag>) },
-              { title: "说明", dataIndex: "message", render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }}>{v || "-"}</Typography.Text> },
+              {
+                title: "结果",
+                dataIndex: "ok",
+                width: 90,
+                render: (v: boolean) => (v ? <Tag color="success">OK</Tag> : <Tag color="error">FAIL</Tag>),
+              },
+              {
+                title: "说明",
+                dataIndex: "message",
+                render: (v: string) => <Typography.Text ellipsis={{ tooltip: v }}>{v || "-"}</Typography.Text>,
+              },
             ]}
           />
         ) : null}
       </Modal>
 
-      <Modal title={editingCloudAccount ? "编辑云账号" : "新增云账号"} open={cloudAccountEditorOpen} onCancel={() => { setCloudAccountEditorOpen(false); setEditingCloudAccount(null); cloudForm.resetFields(); }} onOk={() => void onSaveCloudAccount()} confirmLoading={cloudSubmitting} destroyOnClose width={720}>
+      <Modal
+        title={editingCloudAccount ? "编辑云账号" : "新增云账号"}
+        open={cloudAccountEditorOpen}
+        onCancel={() => {
+          setCloudAccountEditorOpen(false);
+          setEditingCloudAccount(null);
+          cloudForm.resetFields();
+        }}
+        onOk={() => void onSaveCloudAccount()}
+        confirmLoading={cloudSubmitting}
+        destroyOnClose
+        width={720}
+      >
         <Form form={cloudForm} layout="vertical" autoComplete="off">
           <Form.Item name="id" hidden>
             <Input />

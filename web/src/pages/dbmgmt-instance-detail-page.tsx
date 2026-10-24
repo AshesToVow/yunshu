@@ -1,5 +1,27 @@
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, message } from "antd";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  message,
+} from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { DbmgmtSectionTitle, formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
@@ -172,15 +194,21 @@ export function DbmgmtInstanceDetailPage() {
               <Link to={`/dbmgmt/instances/${instance.primary_instance_id}?project=${projectId ?? ""}`}>
                 {instance.primary_instance_name}
               </Link>
+            ) : instance.primary_instance_id ? (
+              `#${instance.primary_instance_id}`
             ) : (
-              instance.primary_instance_id ? `#${instance.primary_instance_id}` : "—"
+              "—"
             )}
           </Descriptions.Item>
         ) : null}
         <Descriptions.Item label="只读">{instance.read_only ? "是" : "否"}</Descriptions.Item>
         <Descriptions.Item label="DML需工单">{instance.require_ticket_for_dml ? "是" : "否"}</Descriptions.Item>
         {instance.tags ? <Descriptions.Item label="标签">{instance.tags}</Descriptions.Item> : null}
-        {instance.remark ? <Descriptions.Item label="备注" span={3}>{instance.remark}</Descriptions.Item> : null}
+        {instance.remark ? (
+          <Descriptions.Item label="备注" span={3}>
+            {instance.remark}
+          </Descriptions.Item>
+        ) : null}
       </Descriptions>
 
       <DbmgmtSectionTitle>项目环境</DbmgmtSectionTitle>
@@ -200,9 +228,15 @@ export function DbmgmtInstanceDetailPage() {
         <Descriptions.Item label="写入能力">
           <Tag color={instance.read_only ? "default" : "green"}>{instance.read_only ? "只读" : "可写"}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="创建时间">{instance.created_at ? formatDateTime(instance.created_at) : "—"}</Descriptions.Item>
-        <Descriptions.Item label="更新时间">{instance.updated_at ? formatDateTime(instance.updated_at) : "—"}</Descriptions.Item>
-        <Descriptions.Item label="最近探活">{instance.last_ping_at ? formatDateTime(instance.last_ping_at) : "—"}</Descriptions.Item>
+        <Descriptions.Item label="创建时间">
+          {instance.created_at ? formatDateTime(instance.created_at) : "—"}
+        </Descriptions.Item>
+        <Descriptions.Item label="更新时间">
+          {instance.updated_at ? formatDateTime(instance.updated_at) : "—"}
+        </Descriptions.Item>
+        <Descriptions.Item label="最近探活">
+          {instance.last_ping_at ? formatDateTime(instance.last_ping_at) : "—"}
+        </Descriptions.Item>
       </Descriptions>
 
       {instance.backup_link ? (
@@ -222,12 +256,23 @@ export function DbmgmtInstanceDetailPage() {
         <Button type="primary" icon={<PlusOutlined />} disabled>
           创建数据库
         </Button>
-        <Input placeholder="请输入名称进行搜索" value={dbKeyword} onChange={(e) => setDbKeyword(e.target.value)} style={{ width: 200 }} />
+        <Input
+          placeholder="请输入名称进行搜索"
+          value={dbKeyword}
+          onChange={(e) => setDbKeyword(e.target.value)}
+          style={{ width: 200 }}
+        />
         <Select defaultValue="all" style={{ width: 100 }} options={[{ value: "all", label: "全部" }]} />
         <Button type="primary" icon={<SearchOutlined />}>
           查询
         </Button>
-        <Button icon={<ReloadOutlined />} onClick={() => { setDbKeyword(""); void load(); }}>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => {
+            setDbKeyword("");
+            void load();
+          }}
+        >
           刷新重置
         </Button>
       </Space>
@@ -268,12 +313,23 @@ export function DbmgmtInstanceDetailPage() {
           <Button type="primary" icon={<PlusOutlined />} disabled>
             创建用户
           </Button>
-          <Input placeholder="请输入用户名称进行搜索" value={userKeyword} onChange={(e) => setUserKeyword(e.target.value)} style={{ width: 220 }} />
+          <Input
+            placeholder="请输入用户名称进行搜索"
+            value={userKeyword}
+            onChange={(e) => setUserKeyword(e.target.value)}
+            style={{ width: 220 }}
+          />
           <Select defaultValue="all" style={{ width: 100 }} options={[{ value: "all", label: "全部" }]} />
           <Button type="primary" icon={<SearchOutlined />}>
             搜索
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => { setUserKeyword(""); void loadUsers(); }}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              setUserKeyword("");
+              void loadUsers();
+            }}
+          >
             刷新重置
           </Button>
         </Space>
@@ -418,7 +474,12 @@ export function DbmgmtInstanceDetailPage() {
       title={instance ? `实例详情 · ${formatInstanceLabel(instance)}` : "实例详情"}
       extra={
         <Space>
-          <Select style={{ width: 200 }} value={projectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={onProjectChange} />
+          <Select
+            style={{ width: 200 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={onProjectChange}
+          />
           <Link to="/dbmgmt/instances">
             <Button>返回列表</Button>
           </Link>

@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"yunshu/internal/ai/runbooks"
-	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/k8sauth"
@@ -16,7 +15,6 @@ import (
 	"yunshu/internal/service/alert"
 	cicdsvc "yunshu/internal/service/cicd"
 	"yunshu/internal/service/k8s"
-	"yunshu/internal/service/logplatform"
 )
 
 type toolContext struct {
@@ -38,8 +36,7 @@ func (s *Service) toolDefinitions(includeWrite bool) []llm.ToolDefinition {
 	s.ensureSeed()
 	defs := s.builtinToolDefinitions(includeWrite)
 	// 追加已启用的脚本工具
-	var scripts []model.AiToolDef
-	_ = s.db.Where("enabled = ? AND runtime = ?", true, "script").Find(&scripts).Error
+	scripts, _ := s.repo.ListEnabledScriptTools(context.Background())
 	for _, t := range scripts {
 		schema := map[string]any{"type": "object", "properties": map[string]any{}}
 		if strings.TrimSpace(t.InputSchemaJSON) != "" {
@@ -160,18 +157,27 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 			map[string]any{"type": "object", "properties": map[string]any{}}),
 		// --- log ---
 		llm.NewFunctionTool("search_logs",
-			"检索项目日志平台（ES）。必须有 project_id；用于应用日志/错误关键字，与 get_pod_logs（kubectl 实时日志）互补。",
+			"检索项目日志平台（ES）原始命中列表。需要 project_id；keyword 建议填写。支持 level/from/to/service_name/namespace/pod 等过滤。复杂排障优先 analyze_logs；与 get_pod_logs（kubectl 实时日志）互补。",
 			map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"project_id": map[string]any{"type": "integer", "description": "必填；来自助手页所选项目或用户提供"},
-					"keyword":    map[string]any{"type": "string", "description": "检索关键字，如 error、Exception"},
-					"namespace":  map[string]any{"type": "string"},
-					"pod":        map[string]any{"type": "string"},
-					"cluster_id": map[string]any{"type": "integer"},
-					"page_size":  map[string]any{"type": "integer", "description": "默认 20，最大 50"},
+					"project_id":     map[string]any{"type": "integer", "description": "必填；来自助手页所选项目或用户提供"},
+					"keyword":        map[string]any{"type": "string", "description": "检索关键字，如 error、Exception"},
+					"level":          map[string]any{"type": "string", "description": "ERROR/WARN/INFO 等"},
+					"service_name":   map[string]any{"type": "string"},
+					"namespace":      map[string]any{"type": "string"},
+					"pod":            map[string]any{"type": "string"},
+					"container":      map[string]any{"type": "string"},
+					"collector_mode": map[string]any{"type": "string", "description": "host|k8s"},
+					"cluster_id":     map[string]any{"type": "integer"},
+					"server_id":      map[string]any{"type": "integer"},
+					"log_source_id":  map[string]any{"type": "integer"},
+					"file_path":      map[string]any{"type": "string"},
+					"from":           map[string]any{"type": "string"},
+					"to":             map[string]any{"type": "string"},
+					"page_size":      map[string]any{"type": "integer", "description": "默认 20，最大 50"},
 				},
-				"required": []string{"project_id", "keyword"},
+				"required": []string{"project_id"},
 			}),
 		// --- cicd ---
 		llm.NewFunctionTool("list_cicd_builds",
@@ -228,8 +234,24 @@ func (s *Service) builtinToolDefinitions(includeWrite bool) []llm.ToolDefinition
 				"required": []string{"fingerprint"},
 			}),
 	}
+	defs = append(defs, s.monitorToolDefinitions()...)
+	defs = append(defs, s.platformToolDefinitions()...)
+	defs = append(defs, s.logToolDefinitions()...)
 	if includeWrite {
 		defs = append(defs,
+			llm.NewFunctionTool("create_alert_silence",
+				"申请告警静默（止血）：仅创建审批单，通过后才会生效。需 project_id + fingerprint；默认 2 小时。",
+				map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"project_id":  map[string]any{"type": "integer"},
+						"fingerprint": map[string]any{"type": "string"},
+						"hours":       map[string]any{"type": "integer", "description": "静默时长小时，默认 2，最大 72"},
+						"comment":     map[string]any{"type": "string"},
+						"alertname":   map[string]any{"type": "string"},
+					},
+					"required": []string{"project_id", "fingerprint"},
+				}),
 			llm.NewFunctionTool("scale_deployment",
 				"申请扩缩容 Deployment：仅创建审批单，不会立即执行。调用前确认 cluster/namespace/name/replicas。",
 				map[string]any{
@@ -277,8 +299,8 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 	s.ensureSeed()
 
 	// 注册表：禁用 / 脚本工具
-	var reg model.AiToolDef
-	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&reg).Error; err == nil {
+	reg, regErr := s.repo.GetToolByName(ctx, name)
+	if regErr == nil && reg != nil {
 		if !reg.Enabled {
 			step.OK = false
 			step.Error = "工具已禁用"
@@ -296,11 +318,18 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 				return step
 			}
 			if scriptToolRequiresApproval(reg.RiskLevel, reg.Permission) {
-				err := errScriptNeedsApproval(name)
-				step.OK = false
-				step.Error = err.Error()
-				step.Result = step.Error
-				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
+				out, err := s.createToolApproval(ctx, userID, name, argsJSON, tc.ClusterID, tc.Namespace, name, "脚本写/高危工具")
+				if err != nil {
+					step.OK = false
+					step.Error = err.Error()
+					step.Result = err.Error()
+					s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, err.Error())
+					return step
+				}
+				raw, _ := json.Marshal(out)
+				step.OK = true
+				step.Result = truncateStr(string(raw), 24_000)
+				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, true, "created approval")
 				return step
 			}
 			out, err := s.runScriptTool(ctx, toolDefRow{
@@ -531,23 +560,10 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			err = fmt.Errorf("日志检索服务不可用")
 			break
 		}
-		ps := int(getUint("page_size", 20))
-		if ps <= 0 || ps > 50 {
-			ps = 20
-		}
-		q := logplatform.LogSearchQuery{
-			ProjectID: projectID,
-			Keyword:   getStr("keyword"),
-			Namespace: getStr("namespace"),
-			Pod:       getStr("pod"),
-			Page:      1,
-			PageSize:  ps,
-		}
-		if clusterID > 0 {
-			cid := clusterID
-			q.ClusterID = &cid
-		}
+		q := s.buildLogSearchQuery(getUint, getStr, projectID, clusterID)
 		out, err = s.logSearch.Search(ctx, q)
+	case "analyze_logs", "list_log_sources", "list_loggie_status", "list_cluster_log_rules":
+		out, err = s.executeLogTool(ctx, name, getUint, getStr, projectID, clusterID, requireProject, actor)
 	case "list_cicd_builds":
 		if err = requireProject(); err != nil {
 			break
@@ -620,8 +636,35 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			break
 		}
 		out, err = s.alertSvc.ExplainFingerprintDelivery(ctx, getStr("fingerprint"))
+	case "list_alert_datasources", "query_prometheus", "query_prometheus_range", "list_prometheus_active_alerts", "get_alert_detail":
+		out, err = s.executeMonitorTool(ctx, name, getUint, getStr, projectID, actor, requireProject, requireActor)
+	case "list_servers", "get_server", "test_server_connectivity", "probe_server_metrics", "list_change_events", "list_db_instances", "list_es_connections":
+		out, err = s.executePlatformTool(ctx, name, args, getUint, getStr, projectID, actor, requireProject, requireActor)
+	case "create_alert_silence":
+		if err = requireActor(); err != nil {
+			break
+		}
+		if err = requireProject(); err != nil {
+			break
+		}
+		if getStr("fingerprint") == "" {
+			err = fmt.Errorf("fingerprint 必填")
+			break
+		}
+		if projectID == 0 {
+			err = fmt.Errorf("project_id 必填")
+			break
+		}
+		// 确保 ArgsJSON 含校验后的 project_id，避免执行阶段缺参
+		args["project_id"] = projectID
+		args["fingerprint"] = getStr("fingerprint")
+		fixedArgs, _ := json.Marshal(args)
+		out, err = s.createToolApproval(ctx, userID, name, string(fixedArgs), clusterID, "", getStr("fingerprint"), getStr("comment"))
 	case "scale_deployment", "restart_deployment", "delete_pod":
 		if err = requireK8sAdmin(); err != nil {
+			break
+		}
+		if err = checkWriteToolPolicy(name, argsJSON, namespace, getStr("reason")); err != nil {
 			break
 		}
 		out, err = s.createToolApproval(ctx, userID, name, argsJSON, clusterID, namespace, getStr("name"), getStr("reason"))

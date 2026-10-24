@@ -8,6 +8,7 @@ import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 )
 
 // --- Build / Release Records ---
@@ -29,13 +30,14 @@ type BuildRunItem struct {
 
 func (s *Service) ListBuildRuns(ctx context.Context, q BuildRunListQuery) (*pagination.Result[BuildRunItem], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	dbq := s.db.WithContext(ctx).Model(&model.CicdBuildRun{})
-	if q.ProjectID > 0 {
-		dbq = dbq.Where("project_id = ?", q.ProjectID)
+	params := repository.CicdBuildRunListParams{
+		ProjectID: q.ProjectID,
+		ServiceID: q.ServiceID,
+		Keyword:   q.Keyword,
+		Offset:    (page - 1) * pageSize,
+		Limit:     pageSize,
 	}
-	if q.ServiceID > 0 {
-		dbq = dbq.Where("service_id = ?", q.ServiceID)
-	} else if q.ProjectID > 0 && q.Actor != nil {
+	if q.ServiceID == 0 && q.ProjectID > 0 && q.Actor != nil {
 		unrestricted, ids, err := s.visibleCicdServiceScope(ctx, q.ProjectID, q.Actor)
 		if err != nil {
 			return nil, err
@@ -44,19 +46,12 @@ func (s *Service) ListBuildRuns(ctx context.Context, q BuildRunListQuery) (*pagi
 			if len(ids) == 0 {
 				return &pagination.Result[BuildRunItem]{List: []BuildRunItem{}, Total: 0, Page: page, PageSize: pageSize}, nil
 			}
-			dbq = dbq.Where("service_id IN ?", ids)
+			params.RestrictSvc = true
+			params.ServiceIDs = ids
 		}
 	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		dbq = dbq.Where("builder_name LIKE ? OR branch_name LIKE ?", like, like)
-	}
-	var total int64
-	if err := dbq.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.CicdBuildRun
-	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, err := s.repo.ListBuildRuns(ctx, params)
+	if err != nil {
 		return nil, err
 	}
 	svcNames := s.loadServiceNameMap(ctx, rows)
@@ -108,13 +103,23 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 	if q.ProjectID > 0 && strings.TrimSpace(q.Status) == model.CicdRunStatusPendingApproval {
 		_ = s.backfillPendingReleaseSteps(ctx, q.ProjectID)
 	}
-	dbq := s.db.WithContext(ctx).Model(&model.CicdReleaseRun{})
-	if q.ProjectID > 0 {
-		dbq = dbq.Where("project_id = ?", q.ProjectID)
+	params := repository.CicdReleaseRunListParams{
+		ProjectID:           q.ProjectID,
+		ServiceID:           q.ServiceID,
+		Status:              q.Status,
+		ReleaseType:         q.ReleaseType,
+		Tenv:                q.Tenv,
+		Keyword:             q.Keyword,
+		ApproverUserID:      q.ApproverUserID,
+		ApprovalDoneUserID:  q.ApprovalDoneUserID,
+		ApprovalMineUserID:  q.ApprovalMineUserID,
+		ExecutionUserID:     q.ExecutorUserID,
+		ExecutionDoneUserID: q.ExecutionDoneUserID,
+		ExecutionMineUserID: q.ExecutionMineUserID,
+		Offset:              (page - 1) * pageSize,
+		Limit:               pageSize,
 	}
-	if q.ServiceID > 0 {
-		dbq = dbq.Where("service_id = ?", q.ServiceID)
-	} else if q.ProjectID > 0 && q.Actor != nil {
+	if q.ServiceID == 0 && q.ProjectID > 0 && q.Actor != nil {
 		unrestricted, ids, err := s.visibleCicdServiceScope(ctx, q.ProjectID, q.Actor)
 		if err != nil {
 			return nil, err
@@ -123,47 +128,12 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 			if len(ids) == 0 {
 				return &pagination.Result[ReleaseRunItem]{List: []ReleaseRunItem{}, Total: 0, Page: page, PageSize: pageSize}, nil
 			}
-			dbq = dbq.Where("service_id IN ?", ids)
+			params.RestrictSvc = true
+			params.ServiceIDs = ids
 		}
 	}
-	if st := strings.TrimSpace(q.Status); st != "" {
-		dbq = dbq.Where("status = ?", st)
-	}
-	if rt := strings.TrimSpace(q.ReleaseType); rt != "" {
-		dbq = dbq.Where("release_type = ?", rt)
-	}
-	if env := strings.TrimSpace(q.Tenv); env != "" {
-		dbq = dbq.Where("tenv = ?", env)
-	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		dbq = dbq.Where("title LIKE ? OR submitter_name LIKE ?", like, like)
-	}
-	if q.ApproverUserID != nil && *q.ApproverUserID > 0 {
-		dbq = s.filterReleaseRunsForApprover(dbq, *q.ApproverUserID)
-	}
-	if q.ApprovalDoneUserID != nil && *q.ApprovalDoneUserID > 0 {
-		dbq = s.filterReleaseRunsApprovalDone(dbq, *q.ApprovalDoneUserID)
-	}
-	if q.ApprovalMineUserID != nil && *q.ApprovalMineUserID > 0 {
-		dbq = s.filterReleaseRunsApprovalMine(dbq, *q.ApprovalMineUserID)
-	}
-	if q.ExecutorUserID != nil && *q.ExecutorUserID > 0 {
-		dbq = dbq.Where("status = ?", model.CicdRunStatusPendingExecution).
-			Where("submitter_user_id = ?", *q.ExecutorUserID)
-	}
-	if q.ExecutionDoneUserID != nil && *q.ExecutionDoneUserID > 0 {
-		dbq = s.filterReleaseRunsExecutionDone(dbq, *q.ExecutionDoneUserID)
-	}
-	if q.ExecutionMineUserID != nil && *q.ExecutionMineUserID > 0 {
-		dbq = s.filterReleaseRunsExecutionMine(dbq, *q.ExecutionMineUserID)
-	}
-	var total int64
-	if err := dbq.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.CicdReleaseRun
-	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, err := s.repo.ListReleaseRuns(ctx, params)
+	if err != nil {
 		return nil, err
 	}
 	svcMap := make(map[uint]model.CicdService)
@@ -175,8 +145,7 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 		ids = append(ids, id)
 	}
 	if len(ids) > 0 {
-		var svcs []model.CicdService
-		_ = s.db.WithContext(ctx).Where("id IN ?", ids).Find(&svcs).Error
+		svcs, _ := s.repo.ListServicesByIDs(ctx, ids)
 		for _, svc := range svcs {
 			svcMap[svc.ID] = svc
 		}
@@ -184,9 +153,8 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 	items := make([]ReleaseRunItem, 0, len(rows))
 	projectName := ""
 	if q.ProjectID > 0 {
-		var proj model.Project
-		if err := s.db.WithContext(ctx).Select("name").Where("id = ?", q.ProjectID).First(&proj).Error; err == nil {
-			projectName = proj.Name
+		if name, err := s.repo.GetProjectName(ctx, q.ProjectID); err == nil {
+			projectName = name
 		}
 	}
 	for _, row := range rows {
@@ -207,16 +175,15 @@ func (s *Service) ListReleaseRuns(ctx context.Context, q ReleaseRunListQuery) (*
 }
 
 func (s *Service) GetBuildRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (*BuildRunItem, error) {
-	var row model.CicdBuildRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+	row, err := s.repo.GetBuildRun(ctx, projectID, runID)
+	if err != nil {
 		return nil, constants.ErrNotFound
 	}
 	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "view"); err != nil {
 		return nil, err
 	}
-	item := BuildRunItem{CicdBuildRun: row}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err == nil {
+	item := BuildRunItem{CicdBuildRun: *row}
+	if svc, err := s.repo.GetServiceByID(ctx, row.ServiceID); err == nil {
 		item.ServiceName = svc.Name
 		item.ServiceIdentifier = svc.Identifier
 	}
@@ -231,8 +198,8 @@ func (s *Service) GetBuildRunLog(ctx context.Context, projectID, runID uint, act
 	if row.BuildNumber <= 0 {
 		return "", constants.ErrBadRequestWithMsg("构建编号尚未就绪")
 	}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err != nil {
+	svc, err := s.repo.GetServiceByID(ctx, row.ServiceID)
+	if err != nil {
 		return "", err
 	}
 	client, _, err := s.jenkinsClient(ctx)
@@ -243,8 +210,8 @@ func (s *Service) GetBuildRunLog(ctx context.Context, projectID, runID uint, act
 }
 
 func (s *Service) GetReleaseRunLog(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) (string, error) {
-	var row model.CicdReleaseRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+	row, err := s.repo.GetReleaseRun(ctx, projectID, runID)
+	if err != nil {
 		return "", constants.ErrNotFound
 	}
 	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "view"); err != nil {
@@ -253,8 +220,8 @@ func (s *Service) GetReleaseRunLog(ctx context.Context, projectID, runID uint, a
 	if row.JenkinsBuildNumber <= 0 {
 		return "", nil
 	}
-	var svc model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ?", row.ServiceID).First(&svc).Error; err != nil {
+	svc, err := s.repo.GetServiceByID(ctx, row.ServiceID)
+	if err != nil {
 		return "", err
 	}
 	client, _, err := s.jenkinsClient(ctx)
@@ -265,14 +232,14 @@ func (s *Service) GetReleaseRunLog(ctx context.Context, projectID, runID uint, a
 }
 
 func (s *Service) DeleteBuildRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) error {
-	var row model.CicdBuildRun
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&row).Error; err != nil {
+	row, err := s.repo.GetBuildRun(ctx, projectID, runID)
+	if err != nil {
 		return constants.ErrNotFound
 	}
 	if err := s.AssertCicdAccess(ctx, projectID, row.ServiceID, actor, "manage"); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).Delete(&model.CicdBuildRun{}).Error
+	return s.repo.DeleteBuildRun(ctx, projectID, runID)
 }
 
 func (s *Service) DeleteReleaseRun(ctx context.Context, projectID, runID uint, actor *auth.CurrentUser) error {
@@ -281,7 +248,7 @@ func (s *Service) DeleteReleaseRun(ctx context.Context, projectID, runID uint, a
 		return err
 	}
 	_ = release
-	return s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).Delete(&model.CicdReleaseRun{}).Error
+	return s.repo.DeleteReleaseRun(ctx, projectID, runID)
 }
 
 type serviceMeta struct {
@@ -303,8 +270,7 @@ func (s *Service) loadServiceNameMap(ctx context.Context, runs []model.CicdBuild
 		seen[r.ServiceID] = struct{}{}
 		ids = append(ids, r.ServiceID)
 	}
-	var svcs []model.CicdService
-	_ = s.db.WithContext(ctx).Where("id IN ?", ids).Find(&svcs).Error
+	svcs, _ := s.repo.ListServicesByIDs(ctx, ids)
 	for _, svc := range svcs {
 		out[svc.ID] = serviceMeta{Name: svc.Name, Identifier: svc.Identifier}
 	}

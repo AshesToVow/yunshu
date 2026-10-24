@@ -22,6 +22,8 @@ type ServiceCatalogRepo interface {
 	AddLink(ctx context.Context, link *model.ServiceLink) error
 	DeleteLink(ctx context.Context, serviceID, linkID uint) error
 	FindLink(ctx context.Context, serviceID uint, linkType string, refID *uint, refKey string) (*model.ServiceLink, error)
+	// FindServiceIDByLinkRef resolves catalog service_id from a reverse link (e.g. cicd_service → catalog).
+	FindServiceIDByLinkRef(ctx context.Context, projectID uint, linkType string, refID uint) (uint, error)
 }
 
 type ServiceCatalogListParams struct {
@@ -144,9 +146,29 @@ func (r *ServiceCatalogRepository) FindLink(
 	return &row, nil
 }
 
+func (r *ServiceCatalogRepository) FindServiceIDByLinkRef(
+	ctx context.Context,
+	projectID uint,
+	linkType string,
+	refID uint,
+) (uint, error) {
+	var link model.ServiceLink
+	err := r.db.WithContext(ctx).
+		Joins("JOIN service_catalog sc ON sc.id = service_links.service_id AND sc.project_id = ? AND sc.deleted_at IS NULL", projectID).
+		Where("service_links.link_type = ? AND service_links.ref_id = ? AND service_links.deleted_at IS NULL",
+			linkType, refID).
+		Order("service_links.id DESC").
+		First(&link).Error
+	if err != nil {
+		return 0, err
+	}
+	return link.ServiceID, nil
+}
+
 type ChangeEventRepo interface {
 	List(ctx context.Context, p ChangeEventListParams) ([]model.ChangeEvent, int64, error)
 	Create(ctx context.Context, row *model.ChangeEvent) error
+	ListByProjectInRange(ctx context.Context, projectID uint, from, to time.Time, limit int) ([]model.ChangeEvent, error)
 }
 
 type ChangeEventListParams struct {
@@ -169,6 +191,18 @@ func NewChangeEventRepository(db *gorm.DB) ChangeEventRepo {
 
 func (r *ChangeEventRepository) Create(ctx context.Context, row *model.ChangeEvent) error {
 	return r.db.WithContext(ctx).Create(row).Error
+}
+
+func (r *ChangeEventRepository) ListByProjectInRange(ctx context.Context, projectID uint, from, to time.Time, limit int) ([]model.ChangeEvent, error) {
+	var list []model.ChangeEvent
+	tx := r.db.WithContext(ctx).
+		Where("project_id = ? AND started_at >= ? AND started_at <= ?", projectID, from, to).
+		Order("id DESC")
+	if limit > 0 {
+		tx = tx.Limit(limit)
+	}
+	err := tx.Find(&list).Error
+	return list, err
 }
 
 func (r *ChangeEventRepository) List(ctx context.Context, p ChangeEventListParams) ([]model.ChangeEvent, int64, error) {

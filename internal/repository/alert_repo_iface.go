@@ -61,11 +61,42 @@ type AlertDatasourceFilterOption struct {
 type AlertEventRepo interface {
 	Create(ctx context.Context, event *model.AlertEvent) error
 	GetByFingerprint(ctx context.Context, fingerprint string) (*model.AlertEvent, error)
+	GetByID(ctx context.Context, id uint) (*model.AlertEvent, error)
 	UpdateStatus(ctx context.Context, fingerprint, status string) error
 	List(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]model.AlertEvent, int64, error)
 	ListGroupedByGroupKey(ctx context.Context, f AlertEventListFilter, offset, limit int) ([]AlertEventGroupRow, int64, error)
 	ListFiringByGroupKeys(ctx context.Context, groupKeys []string) ([]model.AlertEvent, error)
 	HistoryStats(ctx context.Context, projectID uint, dayStart, dayEnd time.Time) (*AlertHistoryStatsRow, error)
+	BackfillProjectIDFromDatasource(ctx context.Context) error
+	BackfillProjectIDFromSubscriptions(ctx context.Context) error
+	FirstProjectIDBySubscriptionIDs(ctx context.Context, ids []uint) (uint, error)
+	// QualityWindowStats aggregates noise/repeat metrics for the quality report window.
+	QualityWindowStats(ctx context.Context, from, to time.Time, projectID uint) (*AlertQualityWindowStats, error)
+}
+
+// AlertQualityNoiseRow is a noise Top-N aggregation row.
+type AlertQualityNoiseRow struct {
+	Title       string
+	Severity    string
+	Count       int64
+	Fingerprint string
+	Alertname   string
+}
+
+// AlertQualityRepeatRow is a repeat-fingerprint aggregation row.
+type AlertQualityRepeatRow struct {
+	Fingerprint string
+	Title       string
+	Count       int64
+	Severity    string
+}
+
+// AlertQualityWindowStats is the event-side slice of alert quality governance.
+type AlertQualityWindowStats struct {
+	Total   int64
+	Failed  int64
+	Noise   []AlertQualityNoiseRow
+	Repeats []AlertQualityRepeatRow
 }
 
 // AlertChannelRepo is implemented by *AlertChannelRepository.

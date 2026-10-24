@@ -14,7 +14,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const redisKeyAlertWebhookQueue = "alert:webhook:queue"
+const (
+	redisKeyAlertWebhookQueue      = "alert:webhook:queue"
+	redisKeyAlertWebhookProcessing = "alert:webhook:processing"
+	redisKeyAlertWebhookDead       = "alert:webhook:dead"
+)
 
 // 原子入队：在队列长度未达上限时 RPush，避免 LLen+RPush 竞态突破 maxLen。
 var luaEnqueueAlertWebhook = redis.NewScript(`
@@ -85,7 +89,7 @@ func (s *AlertService) logWebhookInfo(msg string, attrs ...any) {
 	alertLog().Info(msg, attrs...)
 }
 
-func (s *AlertService) ingestWebhookPayloadWithRetry(ctx context.Context, payload AlertManagerPayload) {
+func (s *AlertService) ingestWebhookPayloadWithRetry(ctx context.Context, payload AlertManagerPayload) error {
 	var lastErr error
 	for attempt := 1; attempt <= alertWebhookMaxAttempts; attempt++ {
 		lastErr = s.receiveAlertmanagerPayloadSync(ctx, payload)
@@ -94,7 +98,7 @@ func (s *AlertService) ingestWebhookPayloadWithRetry(ctx context.Context, payloa
 				s.logWebhookInfo("Alert webhook ingest succeeded after retry",
 					append(webhookPayloadLogAttrs(payload), "attempt", attempt)...)
 			}
-			return
+			return nil
 		}
 		s.logWebhookWarn("Failed to ingest alert webhook payload",
 			append(webhookPayloadLogAttrs(payload), "attempt", attempt, "error", lastErr)...)
@@ -103,12 +107,63 @@ func (s *AlertService) ingestWebhookPayloadWithRetry(ctx context.Context, payloa
 		}
 	}
 	s.logWebhookError(lastErr, "Alert webhook ingest exhausted retries", webhookPayloadLogAttrs(payload)...)
+	return lastErr
+}
+
+// reclaimWebhookProcessing 将上次崩溃遗留在 processing 列表的消息拨回主队列。
+func (s *AlertService) reclaimWebhookProcessing(ctx context.Context) {
+	if s.redis == nil {
+		return
+	}
+	reclaimed := 0
+	for {
+		raw, err := s.redis.RPopLPush(ctx, redisKeyAlertWebhookProcessing, redisKeyAlertWebhookQueue).Result()
+		if errors.Is(err, redis.Nil) || raw == "" {
+			break
+		}
+		if err != nil {
+			s.logWebhookWarn("Alert webhook reclaim processing failed", "error", err)
+			break
+		}
+		reclaimed++
+		if reclaimed >= 10000 {
+			s.logWebhookWarn("Alert webhook reclaim capped", "reclaimed", reclaimed)
+			break
+		}
+	}
+	if reclaimed > 0 {
+		s.logWebhookInfo("Alert webhook reclaimed processing messages", "count", reclaimed)
+	}
+}
+
+func (s *AlertService) ackWebhookProcessing(ctx context.Context, raw string) {
+	if s.redis == nil || raw == "" {
+		return
+	}
+	if err := s.redis.LRem(ctx, redisKeyAlertWebhookProcessing, 1, raw).Err(); err != nil {
+		s.logWebhookWarn("Alert webhook ack processing failed", "error", err)
+	}
+}
+
+func (s *AlertService) deadLetterWebhook(ctx context.Context, raw string) {
+	if s.redis == nil || raw == "" {
+		return
+	}
+	_ = s.redis.LRem(ctx, redisKeyAlertWebhookProcessing, 1, raw).Err()
+	if err := s.redis.RPush(ctx, redisKeyAlertWebhookDead, raw).Err(); err != nil {
+		s.logWebhookWarn("Alert webhook dead-letter push failed", "error", err)
+		// 保底：塞回主队列，避免彻底丢失
+		_ = s.redis.RPush(ctx, redisKeyAlertWebhookQueue, raw).Err()
+		return
+	}
+	s.logWebhookWarn("Alert webhook moved to dead letter", "bytes", len(raw))
 }
 
 func (s *AlertService) runAlertWebhookIngestWorker(ctx context.Context) {
 	if s.redis == nil || s.cfg.WebhookAsyncDisabled {
 		return
 	}
+	s.reclaimWebhookProcessing(ctx)
 	s.logWebhookInfo("Started alert webhook async worker")
 	lifecycle.Go("alert.webhook-ingest", func() {
 		defer func() {
@@ -120,7 +175,8 @@ func (s *AlertService) runAlertWebhookIngestWorker(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			res, err := s.redis.BRPop(ctx, alertWebhookBRPopWait, redisKeyAlertWebhookQueue).Result()
+			// BRPOPLPUSH：弹出后先落入 processing，崩溃不丢消息
+			raw, err := s.redis.BRPopLPush(ctx, redisKeyAlertWebhookQueue, redisKeyAlertWebhookProcessing, alertWebhookBRPopWait).Result()
 			if ctx.Err() != nil {
 				return
 			}
@@ -128,22 +184,27 @@ func (s *AlertService) runAlertWebhookIngestWorker(ctx context.Context) {
 				if errors.Is(err, redis.Nil) {
 					continue
 				}
-				s.logWebhookWarn("Alert webhook queue BRPop failed", "error", err)
+				s.logWebhookWarn("Alert webhook queue BRPopLPush failed", "error", err)
 				time.Sleep(time.Second)
 				continue
 			}
-			if len(res) < 2 {
+			if raw == "" {
 				continue
 			}
-			raw := res[1]
 			var payload AlertManagerPayload
 			if err := json.Unmarshal([]byte(raw), &payload); err != nil {
 				s.logWebhookWarn("Failed to unmarshal alert webhook queue payload", "error", err, "bytes", len(raw))
+				s.deadLetterWebhook(context.Background(), raw)
 				continue
 			}
 			procCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			s.ingestWebhookPayloadWithRetry(procCtx, payload)
+			ingestErr := s.ingestWebhookPayloadWithRetry(procCtx, payload)
 			cancel()
+			if ingestErr != nil {
+				s.deadLetterWebhook(context.Background(), raw)
+				continue
+			}
+			s.ackWebhookProcessing(context.Background(), raw)
 		}
 	})
 }

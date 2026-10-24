@@ -23,8 +23,7 @@ const RENDER_WIDTH_PX = 960;
 function mountHtmlInIframe(html: string): { cleanup: () => void; root: HTMLElement } {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText =
-    `position:fixed;left:0;top:0;width:${RENDER_WIDTH_PX}px;height:100%;border:0;z-index:-1;opacity:0;pointer-events:none;`;
+  iframe.style.cssText = `position:fixed;left:0;top:0;width:${RENDER_WIDTH_PX}px;height:100%;border:0;z-index:-1;opacity:0;pointer-events:none;`;
   document.body.appendChild(iframe);
   const doc = iframe.contentDocument;
   if (!doc) {
@@ -63,11 +62,7 @@ export async function uploadInspectReportPdf(projectId: number, runId: number, b
 /**
  * html2canvas + jsPDF 生成 PDF，下载并上传到服务端（邮件/API 复用同一份）。
  */
-export async function downloadInspectReportPdf(
-  projectId: number,
-  apiHtmlPath: string,
-  filename: string,
-) {
+export async function downloadInspectReportPdf(projectId: number, apiHtmlPath: string, filename: string) {
   const html = await fetchReportHtml(apiHtmlPath);
   const { root, cleanup } = mountHtmlInIframe(html);
   try {

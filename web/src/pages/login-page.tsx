@@ -11,6 +11,7 @@ import {
 import type { InputRef } from "antd";
 import { Button, Form, Input, Modal, message } from "antd";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { sendEmailCode, sendPasswordLoginCode, registerByEmail } from "../services/auth";
 import { extractApiErrorMessage } from "../services/http";
@@ -22,7 +23,7 @@ import type {
   SendPasswordLoginCodeResult,
 } from "../types/api";
 import { useAuth } from "../contexts/auth-context";
-import { BRAND_DESCRIPTION } from "../constants/brand";
+import { resolveAppLocale } from "../i18n";
 import { resolveEmailFromForm } from "../utils/form-email";
 import loginHeroImage from "../assets/login-hero.svg";
 import { useAdminThemeStore } from "../stores/admin-theme-store";
@@ -80,9 +81,10 @@ export function LoginPage() {
   const storeAccent = useAdminThemeStore((s) => s.accent);
   const setStoreAccent = useAdminThemeStore((s) => s.setAccent);
   const darkMode = themeMode !== "light";
-  const [langMode, setLangMode] = useState<"zh" | "en">("zh");
+  const { t, i18n } = useTranslation();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const accent = accentKeyFromHex(storeAccent);
+  const isZh = resolveAppLocale(i18n.language) === "zh-CN";
 
   const [passwordForm] = Form.useForm<PasswordLoginPayload>();
   const [emailForm] = Form.useForm<EmailLoginPayload>();
@@ -109,7 +111,7 @@ export function LoginPage() {
     const silent = options?.silent === true;
     const requireUsername = options?.requireUsername !== false;
     const afterLoginFailure = options?.afterLoginFailure === true;
-    const zh = langMode === "zh";
+    const zh = isZh;
     try {
       const username = passwordForm.getFieldValue("username");
       if (!username) {
@@ -251,15 +253,12 @@ export function LoginPage() {
     }
   }
 
-  const isZh = langMode === "zh";
-  const submitButtonLabel = isZh ? "登录" : "Login";
-  const cardTitle = isZh ? "欢迎回来" : "Welcome back";
-  const cardSubTitle = isZh
-    ? "登录云枢运维平台，继续你的值班与发布工作"
-    : "Sign in to Yunshu Ops to continue on-call and release work.";
-  const appTitle = isZh ? "云枢运维平台" : "Yunshu Ops Platform";
-  const introTitle = isZh ? "云原生运维，一站治理" : "Cloud-native ops, unified control";
-  const introDesc = isZh ? "权限、资源编排、发布与告警在同一平台完成，为值班与变更而设计。" : BRAND_DESCRIPTION;
+  const submitButtonLabel = t("login.submit");
+  const cardTitle = t("login.welcome");
+  const cardSubTitle = t("login.welcomeSub");
+  const appTitle = t("brand.name");
+  const introTitle = t("login.introTitle");
+  const introDesc = t("login.introDesc");
   const introFeatures = isZh
     ? ["Kubernetes 资源编排", "项目管理", "CI/CD 发布流水线", "日志平台", "CMDB 资产治理", "告警与值班联动"]
     : [
@@ -273,7 +272,7 @@ export function LoginPage() {
 
   function renderAuthTabs() {
     return (
-      <div className="gw-auth-tabs" role="tablist" aria-label={isZh ? "登录方式" : "Login method"}>
+      <div className="gw-auth-tabs" role="tablist" aria-label={t("login.method")}>
         <button
           type="button"
           className={`gw-auth-tabs__item ${tab === "account" ? "is-active" : ""}`}
@@ -281,7 +280,7 @@ export function LoginPage() {
           role="tab"
           aria-selected={tab === "account"}
         >
-          {isZh ? "用户名密码登录" : "Account Login"}
+          {t("login.accountLogin")}
         </button>
         <button
           type="button"
@@ -290,7 +289,7 @@ export function LoginPage() {
           role="tab"
           aria-selected={tab === "email"}
         >
-          {isZh ? "邮箱验证码登录" : "Email Login"}
+          {t("login.emailLogin")}
         </button>
       </div>
     );
@@ -298,7 +297,7 @@ export function LoginPage() {
 
   function renderFormCard() {
     return (
-      <section className="gw-auth-card" role="region" aria-label="登录面板">
+      <section className="gw-auth-card" role="region" aria-label={t("login.panel")}>
         <div className="gw-auth-card__header">
           <div className="gw-auth-card__title">{cardTitle}</div>
           <div className="gw-auth-card__sub">{cardSubTitle}</div>
@@ -307,13 +306,7 @@ export function LoginPage() {
         {renderAuthTabs()}
 
         <div className="login-light-card__hint">
-          {tab === "account"
-            ? isZh
-              ? "适用于平台账号直接登录"
-              : "Direct platform account login"
-            : isZh
-              ? "适用于通过邮箱验证码快速登录"
-              : "Quick login with email code"}
+          {tab === "account" ? t("login.accountHint") : t("login.emailHint")}
         </div>
 
         {tab === "account" ? (
@@ -494,7 +487,13 @@ export function LoginPage() {
         <button
           type="button"
           className="gw-auth-toolbar__btn"
-          onClick={() => setLangMode((v) => (v === "zh" ? "en" : "zh"))}
+          title={t("app.language")}
+          onClick={() => {
+            const next = isZh ? "en-US" : "zh-CN";
+            window.localStorage.setItem("app-locale", next);
+            document.documentElement.lang = next === "en-US" ? "en" : "zh-CN";
+            void i18n.changeLanguage(next);
+          }}
         >
           <TranslationOutlined />
         </button>

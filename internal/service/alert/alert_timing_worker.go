@@ -197,11 +197,11 @@ func (s *AlertService) groupTimingAlreadySent(ctx context.Context, groupKey stri
 
 func (s *AlertService) curEventStillFiring(ctx context.Context, fingerprint string) bool {
 	fp := strings.TrimSpace(fingerprint)
-	if s == nil || s.db == nil || fp == "" {
+	if s == nil || s.curHisRepo == nil || fp == "" {
 		return true
 	}
-	var n int64
-	if err := s.db.WithContext(ctx).Model(&model.AlertCurEvent{}).Where("fingerprint = ?", fp).Count(&n).Error; err != nil {
+	n, err := s.curHisRepo.CountCurByFingerprint(ctx, fp)
+	if err != nil {
 		alertLog().Warn("cur event existence check failed", "error", err, "fingerprint", fp)
 		return true
 	}

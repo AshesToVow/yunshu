@@ -32,7 +32,7 @@ export const pathTypes: SelectOption[] = [
  * 核心组的 value 必须是空字符串 ""（K8s 约定），label 里的 (\"\") 只是给用户的提示。
  */
 export const apiGroupOptions: SelectOption[] = [
-  { label: "核心组 (\"\")", value: "" },
+  { label: '核心组 ("")', value: "" },
   { label: "apps", value: "apps" },
   { label: "batch", value: "batch" },
   { label: "networking.k8s.io", value: "networking.k8s.io" },

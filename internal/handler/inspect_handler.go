@@ -7,22 +7,23 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	inspectsvc "yunshu/internal/service/inspect"
 
 	"github.com/gin-gonic/gin"
 )
 
 type InspectHandler struct {
-	svc *inspectsvc.Service
+	svc *service.InspectService
 }
 
-func NewInspectHandler(svc *inspectsvc.Service) *InspectHandler {
+func NewInspectHandler(svc *service.InspectService) *InspectHandler {
 	return &InspectHandler{svc: svc}
 }
 
@@ -54,7 +55,7 @@ func (h *InspectHandler) UpdatePlan(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req inspectsvc.PlanUpsertRequest
+	var req service.PlanUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -87,7 +88,7 @@ func (h *InspectHandler) CreateItem(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req inspectsvc.ItemUpsertRequest) (*model.InspectItem, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.ItemUpsertRequest) (*model.InspectItem, error) {
 		return h.svc.CreateItem(ctx, projectID, req)
 	})
 }
@@ -103,7 +104,7 @@ func (h *InspectHandler) UpdateItem(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req inspectsvc.ItemUpsertRequest
+	var req service.ItemUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -162,13 +163,29 @@ func (h *InspectHandler) ResetItems(c *gin.Context) {
 	response.Success(c, gin.H{"created": n})
 }
 
+func (h *InspectHandler) PromoteItemAlert(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	itemID, err := parseUintParam(c, "itemId")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.PromoteAlertRequest) (any, error) {
+		return h.svc.PromoteItemToAlert(ctx, projectID, itemID, req)
+	})
+}
+
 func (h *InspectHandler) ListRuns(c *gin.Context) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	ServeQuery(c, func(ctx context.Context, q inspectsvc.RunListQuery) (*pagination.Result[model.InspectRun], error) {
+	ServeQuery(c, func(ctx context.Context, q service.RunListQuery) (*pagination.Result[model.InspectRun], error) {
 		return h.svc.ListRuns(ctx, projectID, q)
 	})
 }
@@ -179,7 +196,7 @@ func (h *InspectHandler) CreateRun(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req inspectsvc.RunCreateRequest
+	var req service.RunCreateRequest
 	_ = c.ShouldBindJSON(&req)
 	actor, _ := auth.CurrentUserFromContext(c)
 	var uid uint
@@ -252,13 +269,14 @@ func (h *InspectHandler) serveReport(c *gin.Context, kind string) {
 	}
 	if kind == "html" || kind == "print" {
 		uploadURL := fmt.Sprintf("/api/v1/projects/%d/inspect/runs/%d/report.pdf", projectID, runID)
-		body = inspectsvc.EnhanceReportHTML(body, "/api/v1/inspect/pdf-libs", uploadURL)
+		body = service.EnhanceReportHTML(body, "/api/v1/inspect/pdf-libs", uploadURL)
 	}
+	downloadName := h.svc.ReportDownloadFilename(c.Request.Context(), projectID, runID, kind)
 	if kind == "excel" {
-		c.Header("Content-Disposition", `attachment; filename="inspect-run-`+c.Param("runId")+`.xlsx"`)
+		c.Header("Content-Disposition", exportutil.ContentDispositionAttachment(downloadName))
 	}
 	if kind == "pdf" && strings.HasPrefix(ctype, "application/pdf") {
-		c.Header("Content-Disposition", `attachment; filename="inspect-run-`+c.Param("runId")+`.pdf"`)
+		c.Header("Content-Disposition", exportutil.ContentDispositionAttachment(downloadName))
 	}
 	c.Data(http.StatusOK, ctype, body)
 }
@@ -322,7 +340,7 @@ func (h *InspectHandler) CheckReportPDF(c *gin.Context) {
 
 func (h *InspectHandler) ServePDFLib(c *gin.Context) {
 	name := c.Param("name")
-	body, err := inspectsvc.ReadPDFLib(name)
+	body, err := service.ReadPDFLib(name)
 	if err != nil {
 		response.Error(c, constants.ErrNotFoundWithMsg("资源不存在"))
 		return
@@ -351,7 +369,7 @@ func (h *InspectHandler) CreateReportTemplate(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req inspectsvc.ReportTemplateUpsertRequest) (*model.InspectReportTemplate, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.ReportTemplateUpsertRequest) (*model.InspectReportTemplate, error) {
 		return h.svc.CreateReportTemplate(ctx, projectID, req)
 	})
 }
@@ -367,7 +385,7 @@ func (h *InspectHandler) UpdateReportTemplate(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req inspectsvc.ReportTemplateUpsertRequest
+	var req service.ReportTemplateUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -429,7 +447,7 @@ func (h *InspectHandler) PreviewReportTemplate(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req inspectsvc.ReportPreviewRequest
+	var req service.ReportPreviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

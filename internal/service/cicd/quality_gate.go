@@ -19,13 +19,14 @@ func (s *Service) assertBuildQualityGate(ctx context.Context, projectID, service
 	if !cfg.Sonar.Enabled || !cfg.Sonar.GateBlock {
 		return nil
 	}
-	var br model.CicdBuildRun
-	if err := s.db.WithContext(ctx).
-		Where("id = ? AND service_id = ? AND project_id = ?", buildRunID, serviceID, projectID).
-		First(&br).Error; err != nil {
+	br, err := s.repo.GetBuildRun(ctx, projectID, buildRunID)
+	if err != nil {
 		return constants.ErrNotFound
 	}
-	return qualityGateBlockReason(cfg, &br)
+	if br.ServiceID != serviceID {
+		return constants.ErrNotFound
+	}
+	return qualityGateBlockReason(cfg, br)
 }
 
 func qualityGateBlockReason(cfg config.CicdConfig, br *model.CicdBuildRun) error {

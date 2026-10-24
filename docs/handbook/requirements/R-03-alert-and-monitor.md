@@ -6,13 +6,13 @@
 
 与实现对齐的详细需求与设计（模型、API、`ReceiveAlertmanager` 流水线、Redis key）：见 [R-alert-platform-detailed-design.md](../../requirements/R-alert-platform-detailed-design.md)。
 
-## 2. 路径定位（混合架构）
+## 2. 路径定位（夜莺式主路径）
 
 | 路径 | 定位 | 说明 |
 |------|------|------|
-| **Prometheus + Alertmanager → Webhook** | **主评估路径** | 生产核心告警（节点/应用/SLO 等）应写在 Prometheus 规则文件并由 AM 推送；云枢负责订阅树路由、通道、静默/抑制、值班与历史 |
-| **平台内监控规则（PromQL 评估器）** | **轻量补充** | 适合快速试验、少量临时规则、或尚未纳入 GitOps 的场景；**不**替代 Prometheus 规则文件管理 |
-| **云资源到期等** | **非 Prom 自研** | 无 Prometheus 指标时继续由平台评估 |
+| **平台规则中心（PromQL / SLO / 日志）** | **主评估路径** | Prometheus/VM 只存指标；规则评测、静默/抑制、订阅树与通道均在云枢（见 `deploy/monitoring/ALERT-PATH.md`） |
+| **Alertmanager → Webhook** | **旁路 / 兼容** | 仍可 `POST /alerts/webhook` 接入存量 AM；**不是**推荐主路径，且平台规则与 AM 双发会去重跳过 |
+| **云资源到期等** | **非 Prom 自研** | 无 Prometheus 指标时由平台评估 |
 
 **不要下线**：订阅树、接收组、通道、静默、抑制、值班、历史事件——它们是统一通知中枢，与评估路径无关。
 
@@ -39,7 +39,7 @@
 
 | 项 | 说明 |
 |----|------|
-| 主路径 | 生产核心告警优先 Prometheus+AM；平台规则为补充，勿把全量生产规则迁入平台评估器 |
+| 主路径 | 生产核心告警优先写入平台规则中心；AM Webhook 仅作旁路兼容，避免长期双通道 |
 | 规则模板 | 内置分组包 → 创建 `alert_monitor_rules`；带 `category`（cpu/disk/…）便于订阅树按类路由 |
 | 项目绑定 | 规则项目从数据源推导；**组织部门**通过用户 `department_id` 关联，项目仅可选 `owner_department_id` 标注，**不**自动决定成员 |
 | 规则启用 | `enabled=false` 不评估 PromQL；列表 Tab 可筛「全部/启用/停用」 |

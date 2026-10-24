@@ -1,6 +1,7 @@
 import { SearchOutlined } from "@ant-design/icons";
 import { Input, List, Modal, Tag, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { searchK8s, type K8sSearchItem } from "../services/k8s-search";
 
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export function GlobalSearchModal({ open, onClose }: Props) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,11 +56,11 @@ export function GlobalSearchModal({ open, onClose }: Props) {
   }
 
   return (
-    <Modal title="多集群搜索" open={open} onCancel={onClose} footer={null} width={640} destroyOnClose>
+    <Modal title={t("app.search")} open={open} onCancel={onClose} footer={null} width={640} destroyOnClose>
       <Input
         autoFocus
         prefix={<SearchOutlined />}
-        placeholder="搜索 Pod / Service / Ingress / Event（至少 2 个字符）"
+        placeholder={t("app.searchPlaceholder")}
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
@@ -66,7 +68,9 @@ export function GlobalSearchModal({ open, onClose }: Props) {
         style={{ marginTop: 12, maxHeight: 420, overflow: "auto" }}
         loading={loading}
         dataSource={items}
-        locale={{ emptyText: q.trim().length < 2 ? "输入关键词开始搜索" : "无匹配结果" }}
+        locale={{
+          emptyText: q.trim().length < 2 ? t("app.searchHint") : t("app.searchEmpty"),
+        }}
         renderItem={(it) => (
           <List.Item style={{ cursor: "pointer" }} onClick={() => openItem(it)}>
             <List.Item.Meta
@@ -79,7 +83,6 @@ export function GlobalSearchModal({ open, onClose }: Props) {
                   </Typography.Text>
                 </span>
               }
-              description={it.extra || it.status}
             />
           </List.Item>
         )}

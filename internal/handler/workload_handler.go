@@ -228,6 +228,18 @@ func (h *WorkloadHandler) ListDeploymentRevisions(c *gin.Context) {
 	ServeQuery(c, h.svc.ListDeploymentRevisions)
 }
 
+func (h *WorkloadHandler) ListDaemonSetRevisions(c *gin.Context) {
+	ServeQuery(c, h.svc.ListDaemonSetRevisions)
+}
+
+func (h *WorkloadHandler) ListStatefulSetRevisions(c *gin.Context) {
+	ServeQuery(c, h.svc.ListStatefulSetRevisions)
+}
+
 func (h *WorkloadHandler) StatefulSetRolloutUndo(c *gin.Context) {
 	ServeJSON(c, h.svc.StatefulSetRolloutUndo)
+}
+
+func (h *WorkloadHandler) DaemonSetRolloutUndo(c *gin.Context) {
+	ServeJSON(c, h.svc.DaemonSetRolloutUndo)
 }

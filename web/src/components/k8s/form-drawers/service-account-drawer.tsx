@@ -59,9 +59,7 @@ export function ServiceAccountFormCreateDrawer(props: {
     const v = await form.validateFields();
     const name = String(v.name || "").trim();
     const labels = Object.fromEntries(
-      (v.labels ?? [])
-        .map((p) => [String(p?.key ?? "").trim(), String(p?.value ?? "")] as const)
-        .filter(([k]) => !!k),
+      (v.labels ?? []).map((p) => [String(p?.key ?? "").trim(), String(p?.value ?? "")] as const).filter(([k]) => !!k),
     );
     const annotations = Object.fromEntries(
       (v.annotations ?? [])
@@ -185,8 +183,12 @@ export function ServiceAccountFormCreateDrawer(props: {
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             {fields.map((f) => (
               <Space key={f.key} align="baseline">
-                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}><Input placeholder="label key" style={{ width: 220 }} /></Form.Item>
-                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}><Input placeholder="label value" style={{ width: 240 }} /></Form.Item>
+                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="label key" style={{ width: 220 }} />
+                </Form.Item>
+                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="label value" style={{ width: 240 }} />
+                </Form.Item>
                 <Button onClick={() => remove(f.name)}>删除</Button>
               </Space>
             ))}
@@ -201,8 +203,12 @@ export function ServiceAccountFormCreateDrawer(props: {
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             {fields.map((f) => (
               <Space key={f.key} align="baseline">
-                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}><Input placeholder="annotation key" style={{ width: 220 }} /></Form.Item>
-                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}><Input placeholder="annotation value" style={{ width: 240 }} /></Form.Item>
+                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="annotation key" style={{ width: 220 }} />
+                </Form.Item>
+                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="annotation value" style={{ width: 240 }} />
+                </Form.Item>
                 <Button onClick={() => remove(f.name)}>删除</Button>
               </Space>
             ))}
@@ -223,10 +229,19 @@ export function ServiceAccountFormCreateDrawer(props: {
                   <Input placeholder="默认：<sa>-binding" />
                 </Form.Item>
                 <Form.Item name="role_kind" label="引用类型" style={{ width: 200 }}>
-                  <Select options={[{ label: "Role", value: "Role" }, { label: "ClusterRole", value: "ClusterRole" }]} />
+                  <Select
+                    options={[
+                      { label: "Role", value: "Role" },
+                      { label: "ClusterRole", value: "ClusterRole" },
+                    ]}
+                  />
                 </Form.Item>
               </Space>
-              <Form.Item name="role_name" label={roleKind === "ClusterRole" ? "ClusterRole 名称" : "Role 名称"} rules={[{ required: true, message: "请选择角色名称" }]}>
+              <Form.Item
+                name="role_name"
+                label={roleKind === "ClusterRole" ? "ClusterRole 名称" : "Role 名称"}
+                rules={[{ required: true, message: "请选择角色名称" }]}
+              >
                 <Select
                   showSearch
                   allowClear
@@ -244,14 +259,21 @@ export function ServiceAccountFormCreateDrawer(props: {
       <Form.Item name="with_cluster_role_binding" label="同时创建 ClusterRoleBinding" valuePropName="checked">
         <Switch onChange={() => void preloadRoleOptions()} />
       </Form.Item>
-      <Form.Item noStyle shouldUpdate={(prev, curr) => prev.with_cluster_role_binding !== curr.with_cluster_role_binding}>
+      <Form.Item
+        noStyle
+        shouldUpdate={(prev, curr) => prev.with_cluster_role_binding !== curr.with_cluster_role_binding}
+      >
         {({ getFieldValue }) =>
           getFieldValue("with_cluster_role_binding") ? (
             <Space direction="vertical" style={{ width: "100%" }}>
               <Form.Item name="cluster_role_binding_name" label="ClusterRoleBinding 名称">
                 <Input placeholder="默认：<sa>-cluster-binding" />
               </Form.Item>
-              <Form.Item name="cluster_role_name" label="ClusterRole 名称" rules={[{ required: true, message: "请选择 ClusterRole 名称" }]}>
+              <Form.Item
+                name="cluster_role_name"
+                label="ClusterRole 名称"
+                rules={[{ required: true, message: "请选择 ClusterRole 名称" }]}
+              >
                 <Select
                   showSearch
                   allowClear

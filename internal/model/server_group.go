@@ -21,7 +21,7 @@ type ServerGroup struct {
 	ParentID  *uint `json:"parent_id,omitempty" gorm:"index;comment:父分组ID"`
 
 	Name     string `json:"name" gorm:"size:128;not null;comment:分组名称"`
-	Category string `json:"category" gorm:"size:24;not null;default:'self_hosted';index;comment:分组类型"` // self_hosted | cloud
+	Category string `json:"category" gorm:"size:32;not null;default:'self_hosted';index;comment:分组类型"` // self_hosted | cloud | 自定义（字典）
 	Provider string `json:"provider" gorm:"size:32;not null;default:'';index;comment:云厂商标识"`           // alibaba/tencent/jd/custom
 	Sort     int    `json:"sort" gorm:"not null;default:0;comment:排序值"`
 	Status   int    `json:"status" gorm:"not null;default:1;comment:状态 1启用 0禁用"`

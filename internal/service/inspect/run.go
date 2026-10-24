@@ -4,6 +4,7 @@ package inspect
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -23,13 +25,11 @@ type RunListQuery struct {
 
 func (s *Service) ListRuns(ctx context.Context, projectID uint, q RunListQuery) (*pagination.Result[model.InspectRun], error) {
 	page, size := pagination.Normalize(q.Page, q.PageSize)
-	var total int64
-	db := s.db.WithContext(ctx).Model(&model.InspectRun{}).Where("project_id = ?", projectID)
-	if err := db.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.InspectRun
-	err := db.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&rows).Error
+	rows, total, err := s.repo.ListRuns(ctx, repository.InspectRunListParams{
+		ProjectID: projectID,
+		Offset:    (page - 1) * size,
+		Limit:     size,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -37,12 +37,11 @@ func (s *Service) ListRuns(ctx context.Context, projectID uint, q RunListQuery) 
 }
 
 func (s *Service) GetRun(ctx context.Context, projectID, runID uint) (*model.InspectRun, error) {
-	var run model.InspectRun
-	err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", runID, projectID).First(&run).Error
-	if err == gorm.ErrRecordNotFound {
+	run, err := s.repo.GetRun(ctx, projectID, runID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, constants.ErrNotFoundWithMsg("巡检记录不存在")
 	}
-	return &run, err
+	return run, err
 }
 
 type RunCreateRequest struct {
@@ -87,7 +86,7 @@ func (s *Service) enqueueNewRun(ctx context.Context, plan *model.InspectPlan, da
 		CreatedBy:      userID,
 		OperatorName:   strings.TrimSpace(operatorName),
 	}
-	if err := s.db.WithContext(ctx).Create(&run).Error; err != nil {
+	if err := s.repo.CreateRun(ctx, &run); err != nil {
 		return nil, err
 	}
 	s.enqueueRun(run.ID)
@@ -120,8 +119,17 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	if ds.ProjectID != plan.ProjectID {
 		return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("数据源不属于当前项目"))
 	}
+	healthNote := ""
+	if health, herr := s.dsSvc.CheckHealth(ctx, run.DatasourceID); herr == nil && health != nil {
+		switch health.Status {
+		case model.DatasourceHealthDown:
+			return s.failRun(dbCtx, run, constants.ErrBadRequestWithMsg("数据源不可用，已中止巡检："+health.Message))
+		case model.DatasourceHealthDegraded:
+			healthNote = "采集健康降级：" + health.Message + "。"
+		}
+	}
 
-	storInfo := resolveReportStorageInfo(dbCtx, s.db, s.reportDir)
+	storInfo := s.ReportStorageInfo(dbCtx)
 	if storInfo.RequireMinIO && !storInfo.MinioReady {
 		reason := strings.TrimSpace(storInfo.MinioReason)
 		if reason == "" {
@@ -140,10 +148,15 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 		operator = "系统定时"
 	}
 	data := buildReportData(projectName, ds.Name, operator, plan.ReportListMode, collected)
+	if healthNote != "" {
+		data.Summary = healthNote + data.Summary
+	}
 
 	// 风险台账期次对比：回填「新增/持续/已恢复」与上期的责任人、整改期限，
 	// 再落库作为下一期的比对基线。落库失败只告警，不阻断报告生成。
 	data.Ledger, data.Diff = s.applyPeriodDiff(dbCtx, plan.ProjectID, run.ID, data.Timestamp, data.Ledger)
+	data.RiskTiers = buildRiskTierSummary(data.Ledger)
+	data.Conclusion = buildLeadershipConclusion(&data)
 	if err := s.saveFindings(dbCtx, plan.ProjectID, run.ID, data.Timestamp, data.Ledger, data.Diff); err != nil {
 		slog.Default().With("component", "inspect.run", "run_id", run.ID, "project_id", plan.ProjectID).
 			Warn("inspect findings persist failed", "error", err)
@@ -233,11 +246,11 @@ func (s *Service) performRun(ctx context.Context, plan *model.InspectPlan, run *
 	run.ReportTemplateID = tpl.ID
 	run.ReportTemplateCode = tpl.Code
 	run.FinishedAt = &finished
-	if err := s.db.WithContext(dbCtx).Save(run).Error; err != nil {
+	if err := s.repo.SaveRun(dbCtx, run); err != nil {
 		return nil, err
 	}
 	plan.LastRunAt = &finished
-	_ = s.db.WithContext(dbCtx).Model(plan).Update("last_run_at", finished).Error
+	_ = s.repo.UpdatePlanLastRunAt(dbCtx, plan.ID, finished)
 
 	_ = s.sendRunEmail(dbCtx, plan, run, data, htmlBytes, pdfBytes)
 	if run.CriticalCount > 0 || run.Status == "failed" {
@@ -259,11 +272,11 @@ func (s *Service) failRun(ctx context.Context, run *model.InspectRun, err error)
 	// 但仍加超时上限，避免 DB/SMTP 挂死时 worker 卡住。
 	dbCtx, cancel := context.WithTimeout(context.Background(), inspectFailRunTimeout)
 	defer cancel()
-	_ = s.db.WithContext(dbCtx).Model(&model.InspectRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+	_ = s.repo.UpdateRunFields(dbCtx, run.ID, map[string]any{
 		"status":        "failed",
 		"error_message": msg,
 		"finished_at":   finished,
-	}).Error
+	})
 	run.Status = "failed"
 	run.ErrorMessage = msg
 	run.FinishedAt = &finished

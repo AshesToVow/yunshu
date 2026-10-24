@@ -56,9 +56,9 @@ type LogConfig struct {
 	Compress   bool   `mapstructure:"compress"`     // 轮转后是否 gzip 压缩
 }
 
-// DatabaseConfig 关系型数据库连接（支持 mysql、postgres）。
+// DatabaseConfig 关系型数据库连接（支持 mysql、postgres、dameng）。
 type DatabaseConfig struct {
-	Driver                 string `mapstructure:"driver"` // mysql（默认）、postgres
+	Driver                 string `mapstructure:"driver"` // mysql（默认）、postgres、dameng
 	Host                   string `mapstructure:"host"`
 	Port                   int    `mapstructure:"port"`
 	User                   string `mapstructure:"user"`
@@ -68,6 +68,8 @@ type DatabaseConfig struct {
 	Loc                    string `mapstructure:"loc"`      // MySQL parseTime loc
 	SSLMode                string `mapstructure:"sslmode"`  // PostgreSQL
 	TimeZone               string `mapstructure:"timezone"` // PostgreSQL
+	// Schema 达梦登录后当前模式（缺省用 db_name，再回退 user，常见 SYSDBA）。
+	Schema string `mapstructure:"schema"`
 	MaxIdleConns           int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns           int    `mapstructure:"max_open_conns"`
 	ConnMaxLifetimeSeconds int    `mapstructure:"conn_max_lifetime_seconds"`
@@ -186,7 +188,9 @@ func Load(path string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
 	v.SetConfigType("yaml")
+	//同名键覆盖yaml配置
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	//自动绑定环境变量
 	v.AutomaticEnv()
 	if err := bindEnv(v); err != nil {
 		return nil, err
@@ -200,165 +204,27 @@ func Load(path string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
-	if cfg.Auth.AccessTokenTTLMinutes <= 0 {
-		cfg.Auth.AccessTokenTTLMinutes = 15
-	}
-	if cfg.Auth.RefreshTokenTTLHours <= 0 {
-		cfg.Auth.RefreshTokenTTLHours = 168 // 7d
-	}
-	if cfg.Auth.EmailCodeTTLSeconds <= 0 {
-		cfg.Auth.EmailCodeTTLSeconds = 600
-	}
-	if cfg.Auth.EmailCodeCooldownSeconds <= 0 {
-		cfg.Auth.EmailCodeCooldownSeconds = 60
-	}
-	if cfg.Auth.LoginMaxFailAttempts <= 0 {
-		cfg.Auth.LoginMaxFailAttempts = 5
-	}
-	if cfg.Auth.LoginLockSeconds <= 0 {
-		cfg.Auth.LoginLockSeconds = 900
-	}
-	if cfg.Auth.CSPEnabled == nil {
-		v := true
-		cfg.Auth.CSPEnabled = &v
-	}
-	if cfg.Auth.CookieSecure == nil {
-		e := strings.ToLower(strings.TrimSpace(cfg.App.Env))
-		v := e == "prod" || e == "production"
-		cfg.Auth.CookieSecure = &v
-	}
-	if strings.TrimSpace(cfg.Log.FilePath) == "" {
-		cfg.Log.FilePath = "./logs"
-	}
-	if cfg.Log.MaxSizeMB <= 0 {
-		cfg.Log.MaxSizeMB = 100
-	}
-	if cfg.Log.MaxAgeDays <= 0 {
-		cfg.Log.MaxAgeDays = 30
-	}
-	if cfg.Log.MaxBackups <= 0 {
-		cfg.Log.MaxBackups = 10
-	}
-	if !v.IsSet("log.compress") {
-		cfg.Log.Compress = true
-	}
-	if cfg.Alert.DefaultTimeoutMS <= 0 {
-		cfg.Alert.DefaultTimeoutMS = 5000
-	}
-	if cfg.Alert.MaxPayloadChars <= 0 {
-		cfg.Alert.MaxPayloadChars = 8000
-	}
-	if cfg.Alert.DedupTTLSeconds <= 0 {
-		cfg.Alert.DedupTTLSeconds = 86400
-	}
-	if cfg.Alert.PromQueryTimeout <= 0 {
-		cfg.Alert.PromQueryTimeout = 5
-	}
-	if cfg.Alert.PrometheusEnrichQueueSize <= 0 {
-		cfg.Alert.PrometheusEnrichQueueSize = 1024
-	}
-	if cfg.Alert.PrometheusEnrichWorkers <= 0 {
-		cfg.Alert.PrometheusEnrichWorkers = 4
-	}
-	if cfg.Alert.GroupWaitSeconds < 0 {
-		cfg.Alert.GroupWaitSeconds = 0
-	}
-	if cfg.Alert.GroupIntervalSeconds <= 0 {
-		cfg.Alert.GroupIntervalSeconds = 60
-	}
-	if cfg.Alert.RepeatIntervalSeconds <= 0 {
-		cfg.Alert.RepeatIntervalSeconds = 300
-	}
-	if cfg.Alert.AggregateTTLSeconds <= 0 {
-		cfg.Alert.AggregateTTLSeconds = 86400
-	}
+	cfg.applyLoadedDefaults(v)
+	normalizeDatabaseConfig(&cfg)
+	return &cfg, nil
+}
+
+// applyLoadedDefaults 按域补齐零值；依赖 viper.IsSet 的项在此统一处理。
+func (cfg *Config) applyLoadedDefaults(v *viper.Viper) {
+	cfg.Auth.ApplyDefaults(cfg.App.Env)
+	cfg.Log.ApplyDefaults(v.IsSet("log.compress"))
+	cfg.Alert.ApplyDefaults()
 	// 未显式配置时默认 true：外部 AM 已做 group_wait/interval/repeat，避免 Yunshu 二次节流。
 	if !v.IsSet("alert.webhook_skip_group_timing") {
 		cfg.Alert.WebhookSkipGroupTiming = true
 	}
-	if cfg.Alert.WebhookQueueMaxLen <= 0 {
-		cfg.Alert.WebhookQueueMaxLen = 10000
-	}
-	if cfg.Alert.MonitorEvalLeaderLockSeconds <= 0 {
-		cfg.Alert.MonitorEvalLeaderLockSeconds = 30
-	}
-	if strings.TrimSpace(cfg.Alert.MonitorEvalCronSpec) == "" {
-		cfg.Alert.MonitorEvalCronSpec = "*/5 * * * * *"
-	}
-	if len(cfg.Alert.GroupBy) == 0 {
-		cfg.Alert.GroupBy = []string{"alertname", "cluster", "namespace", "severity", "receiver"}
-	}
-	if len(cfg.Alert.DigestBy) == 0 {
-		cfg.Alert.DigestBy = []string{"instance", "pod", "node", "host", "mountpoint", "device", "fqdn", "job"}
-	}
-	// 平台长度限制：预留空间给 @ 和格式控制，默认值偏保守。
-	if cfg.Alert.PlatformLimits.DingdingMaxChars <= 0 {
-		cfg.Alert.PlatformLimits.DingdingMaxChars = 4500
-	}
-	if cfg.Alert.PlatformLimits.WeComMaxChars <= 0 {
-		cfg.Alert.PlatformLimits.WeComMaxChars = 3500
-	}
-	if cfg.Alert.PlatformLimits.GenericMaxChars <= 0 {
-		cfg.Alert.PlatformLimits.GenericMaxChars = 8000
-	}
 	cfg.K8sEventForward.ApplyDefaults()
-	defCicd := DefaultCicdConfig()
-	if !cfg.Cicd.Enabled && !v.IsSet("cicd.enabled") {
-		cfg.Cicd.Enabled = defCicd.Enabled
-	}
-	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Repo) == "" {
-		cfg.Cicd.Jenkinsfile.Repo = defCicd.Jenkinsfile.Repo
-	}
-	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Branch) == "" {
-		cfg.Cicd.Jenkinsfile.Branch = defCicd.Jenkinsfile.Branch
-	}
-	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Front) == "" {
-		cfg.Cicd.Jenkinsfile.Front = defCicd.Jenkinsfile.Front
-	}
-	if strings.TrimSpace(cfg.Cicd.Jenkinsfile.Backend) == "" {
-		cfg.Cicd.Jenkinsfile.Backend = defCicd.Jenkinsfile.Backend
-	}
-	if cfg.Cicd.RunSyncIntervalSeconds <= 0 {
-		cfg.Cicd.RunSyncIntervalSeconds = defCicd.RunSyncIntervalSeconds
-	}
-	if cfg.Cicd.DefaultWaitMins <= 0 {
-		cfg.Cicd.DefaultWaitMins = defCicd.DefaultWaitMins
-	}
-	if cfg.Cicd.DefaultArtifactRetain <= 0 {
-		cfg.Cicd.DefaultArtifactRetain = defCicd.DefaultArtifactRetain
-	}
-	defAI := DefaultAIConfig()
+	cfg.Cicd.ApplyDefaults(v.IsSet("cicd.enabled"))
 	cfg.AI.ApplyDefaults()
 	if !cfg.AI.Enabled && !v.IsSet("ai.enabled") {
-		cfg.AI.Enabled = defAI.Enabled
+		cfg.AI.Enabled = DefaultAIConfig().Enabled
 	}
-	defDbmgmt := DefaultDbmgmtConfig()
-	if cfg.Dbmgmt.QueryTimeoutSeconds <= 0 {
-		cfg.Dbmgmt.QueryTimeoutSeconds = defDbmgmt.QueryTimeoutSeconds
-	}
-	if cfg.Dbmgmt.MaxResultRows <= 0 {
-		cfg.Dbmgmt.MaxResultRows = defDbmgmt.MaxResultRows
-	}
-	if cfg.Dbmgmt.MaxImportFileMB <= 0 {
-		cfg.Dbmgmt.MaxImportFileMB = defDbmgmt.MaxImportFileMB
-	}
-	if cfg.Dbmgmt.ApprovalSlaHours <= 0 {
-		cfg.Dbmgmt.ApprovalSlaHours = defDbmgmt.ApprovalSlaHours
-	}
-	if cfg.Dbmgmt.ApprovalReminderIntervalHours <= 0 {
-		cfg.Dbmgmt.ApprovalReminderIntervalHours = defDbmgmt.ApprovalReminderIntervalHours
-	}
-	if len(cfg.Dbmgmt.AllowedDrivers) == 0 {
-		cfg.Dbmgmt.AllowedDrivers = defDbmgmt.AllowedDrivers
-	}
-	if cfg.Dbmgmt.PingIntervalSeconds <= 0 {
-		cfg.Dbmgmt.PingIntervalSeconds = defDbmgmt.PingIntervalSeconds
-	}
-	if cfg.Dbmgmt.MaxConcurrentPerInstance <= 0 {
-		cfg.Dbmgmt.MaxConcurrentPerInstance = defDbmgmt.MaxConcurrentPerInstance
-	}
-	normalizeDatabaseConfig(&cfg)
-	return &cfg, nil
+	cfg.Dbmgmt.ApplyDefaults()
 }
 
 func normalizeDatabaseConfig(cfg *Config) {
@@ -380,10 +246,14 @@ func normalizeDatabaseConfig(cfg *Config) {
 	if strings.TrimSpace(db.Driver) == "" {
 		db.Driver = "mysql"
 	}
+	db.Driver = NormalizeDatabaseDriver(db.Driver)
 	if db.Port <= 0 {
-		if NormalizeDatabaseDriver(db.Driver) == "postgres" {
+		switch db.Driver {
+		case "postgres":
 			db.Port = 5432
-		} else {
+		case "dameng":
+			db.Port = 5236
+		default:
 			db.Port = 3306
 		}
 	}
@@ -399,6 +269,13 @@ func normalizeDatabaseConfig(cfg *Config) {
 	if strings.TrimSpace(db.TimeZone) == "" {
 		db.TimeZone = "Asia/Shanghai"
 	}
+	if db.Driver == "dameng" && strings.TrimSpace(db.Schema) == "" {
+		if s := strings.TrimSpace(db.DBName); s != "" {
+			db.Schema = s
+		} else {
+			db.Schema = strings.TrimSpace(db.User)
+		}
+	}
 	cfg.Database = db
 	cfg.MySQL = db
 }
@@ -410,6 +287,8 @@ func NormalizeDatabaseDriver(driver string) string {
 		return "mysql"
 	case "postgres", "postgresql", "pg":
 		return "postgres"
+	case "dameng", "dm", "dm8":
+		return "dameng"
 	default:
 		return strings.ToLower(strings.TrimSpace(driver))
 	}
@@ -438,6 +317,7 @@ func bindEnv(v *viper.Viper) error {
 		"database.user":                            nil,
 		"database.password":                        nil,
 		"database.db_name":                         nil,
+		"database.schema":                          nil,
 		"database.charset":                         nil,
 		"database.loc":                             nil,
 		"database.sslmode":                         nil,

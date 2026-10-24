@@ -128,6 +128,8 @@ func (s *Service) CreateAppUserRequest(ctx context.Context, projectID uint, body
 		return nil, err
 	}
 	if err := s.initAppUserRequestSteps(ctx, req); err != nil {
+		req.Status = model.DbAccessRequestStatusRejected
+		_ = s.repo.UpdateAppUserRequest(ctx, req)
 		return nil, err
 	}
 	iid := body.InstanceID
@@ -141,28 +143,20 @@ func (s *Service) CreateAppUserRequest(ctx context.Context, projectID uint, body
 func (s *Service) ListAppUserRequests(ctx context.Context, q AppUserRequestListQuery) (*pagination.Result[AppUserRequestItem], error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	if q.Mine && q.MineViewer != nil {
-		dbq := s.db.WithContext(ctx).Model(&model.DbAppUserRequest{}).Where("project_id = ?", q.ProjectID)
-		if st := strings.TrimSpace(q.Status); st != "" {
-			dbq = dbq.Where("status = ?", st)
-		}
 		scope := strings.TrimSpace(q.MineScope)
 		if scope == "" {
 			scope = "all"
 		}
-		switch scope {
-		case "pending":
-			dbq = s.filterAppUserRequestsApprovalPending(dbq, q.MineViewer)
-		case "done":
-			dbq = s.filterAppUserRequestsApprovalDone(dbq, actorUserID(q.MineViewer))
-		default:
-			dbq = s.filterAppUserRequestsApprovalMine(dbq, q.MineViewer)
-		}
-		var total int64
-		if err := dbq.Count(&total).Error; err != nil {
-			return nil, err
-		}
-		var list []model.DbAppUserRequest
-		if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&list).Error; err != nil {
+		list, total, err := s.repo.ListAppUserRequestsMine(ctx, repository.DbMineListParams{
+			ProjectID:    q.ProjectID,
+			Status:       q.Status,
+			Scope:        scope,
+			UserID:       actorUserID(q.MineViewer),
+			IsSuperAdmin: auth.IsSuperAdminRole(q.MineViewer.RoleCodes),
+			Page:         page,
+			PageSize:     pageSize,
+		})
+		if err != nil {
 			return nil, err
 		}
 		items := make([]AppUserRequestItem, 0, len(list))
@@ -552,5 +546,9 @@ func (s *Service) RevealInstanceAccountPassword(ctx context.Context, projectID, 
 	if acc.EncPassword == "" {
 		return "", constants.ErrBadRequestWithMsg("该账号无平台托管密码")
 	}
-	return cryptox.DecryptString(s.aead, acc.EncPassword)
+	pw, err := cryptox.DecryptString(s.aead, acc.EncPassword)
+	if err != nil {
+		return "", constants.ErrBadRequestWithMsg(constants.ErrMsgDbInstancePasswordDecryptFailed)
+	}
+	return pw, nil
 }

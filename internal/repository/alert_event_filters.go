@@ -1,9 +1,11 @@
 package repository
 
 import (
+	"fmt"
 	"strings"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/database"
 
 	"gorm.io/gorm"
 )
@@ -15,15 +17,16 @@ func applyAlertEventProjectFilter(tx *gorm.DB, db *gorm.DB, projectID uint) *gor
 	dsSub := db.Model(&model.AlertDatasource{}).Select("id").Where("project_id = ?", projectID)
 	// Prefer project_id column (backfilled on read). Avoid LIKE on request_payload longtext —
 	// that full-scans ~10k+ rows and makes /history/stats time out (UI shows all zeros).
-	// 优先 project_id 列（已回填）；仅历史未解析行才走 datasource / 策略关联，避免 FIND_IN_SET 扫全表。
+	// 优先 project_id 列（已回填）；仅历史未解析行才走 datasource / 策略关联，避免 CSV 匹配扫全表。
+	contains := database.SQLCSVContainsID(database.DialectName(db), "n.id", "alert_events.matched_policy_ids")
 	return tx.Where(
-		`project_id = ?
-OR (IFNULL(project_id, 0) = 0 AND datasource_id IN (?))
-OR (IFNULL(project_id, 0) = 0 AND matched_policy_ids <> '' AND EXISTS (
+		fmt.Sprintf(`project_id = ?
+OR (COALESCE(project_id, 0) = 0 AND datasource_id IN (?))
+OR (COALESCE(project_id, 0) = 0 AND matched_policy_ids <> '' AND EXISTS (
 	SELECT 1 FROM alert_subscription_nodes n
 	WHERE n.project_id = ? AND n.deleted_at IS NULL
-	  AND FIND_IN_SET(n.id, alert_events.matched_policy_ids)
-))`,
+	  AND %s
+))`, contains),
 		projectID,
 		dsSub,
 		projectID,

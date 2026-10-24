@@ -1,5 +1,19 @@
 import { DeleteOutlined, PlusOutlined, ReloadOutlined, TeamOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Card, Drawer, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Drawer,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useState } from "react";
 import { StatusTag } from "../components/status-tag";
 import {
@@ -32,10 +46,21 @@ export function UserGroupsPage() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
-  const [form] = Form.useForm<{ name: string; code: string; description?: string; status: number; scope_project_id?: number }>();
+  const [form] = Form.useForm<{
+    name: string;
+    code: string;
+    description?: string;
+    status: number;
+    scope_project_id?: number;
+  }>();
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<UserGroupDetail | null>(null);
-  const [detailForm] = Form.useForm<{ name: string; description?: string; status: number; scope_project_id?: number }>();
+  const [detailForm] = Form.useForm<{
+    name: string;
+    description?: string;
+    status: number;
+    scope_project_id?: number;
+  }>();
   const [projectOptions, setProjectOptions] = useState<{ id: number; name: string }[]>([]);
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberGroup, setMemberGroup] = useState<UserGroupItem | null>(null);
@@ -202,8 +227,8 @@ export function UserGroupsPage() {
         }
       >
         <Typography.Paragraph type="secondary">
-          用户组编码用于 K8s 集群权限主体（<Typography.Text code>principal_kind=group</Typography.Text>）。成员在登录后通过 JWT 上下文参与鉴权；请在「K8s
-          集群访问档位」中按组编码下发策略。
+          用户组编码用于 K8s 集群权限主体（<Typography.Text code>principal_kind=group</Typography.Text>
+          ）。成员在登录后通过 JWT 上下文参与鉴权；请在「K8s 集群访问档位」中按组编码下发策略。
         </Typography.Paragraph>
         <Space style={{ marginBottom: 12 }} wrap>
           <Input.Search
@@ -293,7 +318,14 @@ export function UserGroupsPage() {
         />
       </Card>
 
-      <Modal title="新建用户组" open={open} onCancel={() => setOpen(false)} onOk={() => void submitCreate()} confirmLoading={submitting} destroyOnClose>
+      <Modal
+        title="新建用户组"
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={() => void submitCreate()}
+        confirmLoading={submitting}
+        destroyOnClose
+      >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
             <Input placeholder="显示名称" />

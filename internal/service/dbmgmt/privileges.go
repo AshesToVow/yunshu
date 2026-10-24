@@ -5,14 +5,6 @@ import (
 	"strings"
 )
 
-// 标准权限码（对齐常见开源 SQL 审核平台：库/表级 + 细粒度 DML/DDL）。
-var standardPrivileges = []string{
-	"select", "insert", "update", "delete",
-	"create", "alter", "drop", "truncate", "index",
-	"create_database", "drop_database",
-	"export", "import",
-}
-
 func normalizePrivileges(list []string) []string {
 	seen := map[string]struct{}{}
 	var out []string
@@ -115,22 +107,4 @@ func hasPrivilege(list []string, code string) bool {
 		}
 	}
 	return false
-}
-
-func privilegeLabels(list []string) []string {
-	labels := map[string]string{
-		"select": "SELECT", "insert": "INSERT", "update": "UPDATE", "delete": "DELETE",
-		"create": "CREATE", "alter": "ALTER", "drop": "DROP", "truncate": "TRUNCATE", "index": "INDEX",
-		"create_database": "CREATE DATABASE", "drop_database": "DROP DATABASE",
-		"export": "导出", "import": "导入",
-	}
-	var out []string
-	for _, p := range normalizePrivileges(list) {
-		if lbl, ok := labels[p]; ok {
-			out = append(out, lbl)
-		} else {
-			out = append(out, strings.ToUpper(p))
-		}
-	}
-	return out
 }

@@ -80,7 +80,7 @@ func (s *Service) CreateIndexRestore(ctx context.Context, req RestoreIndexReques
 		Phase:          "queued",
 		CreatedBy:      actorID(actor),
 	}
-	if err := s.db.WithContext(ctx).Create(job).Error; err != nil {
+	if err := s.repo.CreateRestoreJob(ctx, job); err != nil {
 		return nil, err
 	}
 	go s.runRestoreJob(job.ID)
@@ -94,64 +94,50 @@ func (s *Service) ListRestoreJobs(ctx context.Context, connectionID uint, limit 
 	if limit > 200 {
 		limit = 200
 	}
-	q := s.db.WithContext(ctx).Order("id desc").Limit(limit)
-	if connectionID > 0 {
-		q = q.Where("connection_id = ?", connectionID)
-	}
-	var list []model.EsmgmtRestoreJob
-	if err := q.Find(&list).Error; err != nil {
-		return nil, err
-	}
-	return list, nil
+	return s.repo.ListRestoreJobs(ctx, connectionID, limit)
 }
 
 func (s *Service) GetRestoreJob(ctx context.Context, id uint) (*model.EsmgmtRestoreJob, error) {
 	if id == 0 {
 		return nil, constants.ErrBadRequestWithMsg("任务 ID 无效")
 	}
-	var job model.EsmgmtRestoreJob
-	if err := s.db.WithContext(ctx).First(&job, id).Error; err != nil {
-		return nil, err
-	}
-	return &job, nil
+	return s.repo.GetRestoreJob(ctx, id)
 }
 
 func (s *Service) runRestoreJob(jobID uint) {
 	defer func() {
 		if r := recover(); r != nil {
-			_ = s.db.WithContext(context.Background()).Model(&model.EsmgmtRestoreJob{}).
-				Where("id = ?", jobID).
-				Updates(map[string]any{"status": "failed", "phase": "panic", "error_message": "job panic"}).Error
+			_ = s.repo.UpdateRestoreJobFields(context.Background(), jobID, map[string]any{
+				"status": "failed", "phase": "panic", "error_message": "job panic",
+			})
 		}
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	defer cancel()
 
-	var job model.EsmgmtRestoreJob
-	if err := s.db.WithContext(ctx).First(&job, jobID).Error; err != nil {
+	job, err := s.repo.GetRestoreJob(ctx, jobID)
+	if err != nil {
 		return
 	}
-	_ = s.db.WithContext(ctx).Model(&job).Updates(map[string]any{
+	_ = s.repo.UpdateRestoreJobFields(ctx, jobID, map[string]any{
 		"status": "running",
 		"phase":  "download",
-	}).Error
+	})
 
 	fail := func(phase string, err error) {
 		msg := err.Error()
 		if len(msg) > 1000 {
 			msg = msg[:1000]
 		}
-		_ = s.db.WithContext(context.Background()).Model(&model.EsmgmtRestoreJob{}).
-			Where("id = ?", jobID).
-			Updates(map[string]any{
-				"status":        "failed",
-				"phase":         phase,
-				"error_message": msg,
-			}).Error
+		_ = s.repo.UpdateRestoreJobFields(context.Background(), jobID, map[string]any{
+			"status":        "failed",
+			"phase":         phase,
+			"error_message": msg,
+		})
 	}
 
-	var backup model.EsmgmtBackupJob
-	if err := s.db.WithContext(ctx).First(&backup, job.BackupJobID).Error; err != nil {
+	backup, err := s.repo.GetBackupJob(ctx, job.BackupJobID)
+	if err != nil {
 		fail("download", err)
 		return
 	}
@@ -182,7 +168,7 @@ func (s *Service) runRestoreJob(jobID uint) {
 		return
 	}
 
-	_ = s.db.WithContext(ctx).Model(&job).Update("phase", "create_index").Error
+	_ = s.repo.UpdateRestoreJobFields(ctx, jobID, map[string]any{"phase": "create_index"})
 	exists, err := cli.IndexExists(ctx, job.TargetIndex)
 	if err != nil {
 		fail("create_index", err)
@@ -209,21 +195,19 @@ func (s *Service) runRestoreJob(jobID uint) {
 		return
 	}
 
-	_ = s.db.WithContext(ctx).Model(&job).Update("phase", "data").Error
+	_ = s.repo.UpdateRestoreJobFields(ctx, jobID, map[string]any{"phase": "data"})
 	docCount, err := bulkRestoreDocs(ctx, cli, job.TargetIndex, dataBytes)
 	if err != nil {
 		fail("data", err)
 		return
 	}
 
-	_ = s.db.WithContext(context.Background()).Model(&model.EsmgmtRestoreJob{}).
-		Where("id = ?", jobID).
-		Updates(map[string]any{
-			"status":        "success",
-			"phase":         "done",
-			"doc_count":     docCount,
-			"error_message": "",
-		}).Error
+	_ = s.repo.UpdateRestoreJobFields(context.Background(), jobID, map[string]any{
+		"status":        "success",
+		"phase":         "done",
+		"doc_count":     docCount,
+		"error_message": "",
+	})
 }
 
 func buildRestoreCreateBody(analysisBytes, mappingBytes []byte, sourceIndex string) (map[string]any, error) {

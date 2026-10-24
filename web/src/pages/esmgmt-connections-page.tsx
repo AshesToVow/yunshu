@@ -1,4 +1,10 @@
-import { DeleteOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  CloudDownloadOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  ThunderboltOutlined,
+} from "@ant-design/icons";
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Space, Switch, Table, Tag, message } from "antd";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -6,6 +12,7 @@ import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
   createEsmgmtConnection,
   deleteEsmgmtConnection,
+  importEsmgmtConnectionFromDict,
   listEsmgmtConnections,
   pingEsmgmtConnection,
   testEsmgmtConnection,
@@ -17,6 +24,7 @@ import { extractApiErrorMessage } from "../services/http";
 export function EsmgmtConnectionsPage() {
   const [list, setList] = useState<EsmgmtConnection[]>([]);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [open, setOpen] = useState(false);
   const [testing, setTesting] = useState(false);
   const [current, setCurrent] = useState<EsmgmtConnection | null>(null);
@@ -36,6 +44,19 @@ export function EsmgmtConnectionsPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  async function onImportFromDict() {
+    setImporting(true);
+    try {
+      const row = await importEsmgmtConnectionFromDict();
+      message.success(`已从数据字典导入：${row?.name || "连接"}（#${row?.id}）`);
+      void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "从字典导入失败"));
+    } finally {
+      setImporting(false);
+    }
+  }
 
   function openCreate() {
     setCurrent(null);
@@ -102,14 +123,19 @@ export function EsmgmtConnectionsPage() {
     <div className="page-stack">
       <OpsPageHeader
         title="ES 连接管理"
-        description="在此维护 Elasticsearch 连接（密码加密存储）。集群概览与 REST 控制台共用这些连接，请勿再通过数据字典配置第二套同名连接。"
+        description="在此维护 Elasticsearch 连接（密码加密存储）。可从数据字典 elasticsearch_* 一键导入；日志平台可下拉选择此处连接，而不必再依赖字典地址。"
         breadcrumbs={[{ title: "ES 管理控制台" }, { title: "连接管理" }]}
         extra={
           <Space>
             <Link to="/esmgmt/overview">集群概览</Link>
+            <Link to="/esmgmt/backups">备份与恢复</Link>
+            <Link to="/esmgmt/storage">日志存储</Link>
             <Link to="/esmgmt/console">REST 控制台</Link>
             <Button icon={<ReloadOutlined />} onClick={() => void load()}>
               刷新
+            </Button>
+            <Button icon={<CloudDownloadOutlined />} loading={importing} onClick={() => void onImportFromDict()}>
+              从数据字典导入
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               新建连接
@@ -144,32 +170,32 @@ export function EsmgmtConnectionsPage() {
               width: 220,
               render: (_: unknown, row?: EsmgmtConnection) =>
                 row ? (
-                <Space>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<ThunderboltOutlined />}
-                    onClick={async () => {
-                      try {
-                        const res = await pingEsmgmtConnection(row.id);
-                        if (res?.ok) message.success("连通成功");
-                        else message.error(res?.message || "连通失败");
-                      } catch (e) {
-                        message.error(extractApiErrorMessage(e, "连通失败"));
-                      }
-                    }}
-                  >
-                    探测
-                  </Button>
-                  <Button type="link" size="small" onClick={() => openEdit(row)}>
-                    编辑
-                  </Button>
-                  <Popconfirm title="确认删除？" onConfirm={() => void deleteEsmgmtConnection(row.id).then(load)}>
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      删除
+                  <Space>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<ThunderboltOutlined />}
+                      onClick={async () => {
+                        try {
+                          const res = await pingEsmgmtConnection(row.id);
+                          if (res?.ok) message.success("连通成功");
+                          else message.error(res?.message || "连通失败");
+                        } catch (e) {
+                          message.error(extractApiErrorMessage(e, "连通失败"));
+                        }
+                      }}
+                    >
+                      探测
                     </Button>
-                  </Popconfirm>
-                </Space>
+                    <Button type="link" size="small" onClick={() => openEdit(row)}>
+                      编辑
+                    </Button>
+                    <Popconfirm title="确认删除？" onConfirm={() => void deleteEsmgmtConnection(row.id).then(load)}>
+                      <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
                 ) : null,
             },
           ]}

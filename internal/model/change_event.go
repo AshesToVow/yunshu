@@ -34,7 +34,7 @@ type ChangeEvent struct {
 	Status       string         `json:"status" gorm:"size:32;not null;default:'started';index"`
 	ActorUserID  *uint          `json:"actor_user_id"`
 	Summary      string         `json:"summary" gorm:"size:512;not null"`
-	PayloadJSON  string         `json:"payload_json" gorm:"type:longtext"`
+	PayloadJSON  string         `json:"payload_json" gorm:"type:text"`
 	StartedAt    time.Time      `json:"started_at" gorm:"index:idx_change_proj_time,priority:2"`
 	FinishedAt   *time.Time     `json:"finished_at"`
 	RollbackRef  string         `json:"rollback_ref" gorm:"size:256"`

@@ -38,6 +38,7 @@ type UserGroupRepo interface {
 	Save(ctx context.Context, g *model.UserGroup) (error)
 	Delete(ctx context.Context, g *model.UserGroup) (error)
 	List(ctx context.Context, params UserGroupListParams) ([]model.UserGroup, int64, error)
+	ListNamesByIDs(ctx context.Context, ids []uint) (map[uint]string, error)
 	ListMemberUserIDs(ctx context.Context, groupID uint) ([]uint, error)
 	CountMembers(ctx context.Context, groupID uint) (int64, error)
 	ReplaceMemberUserIDs(ctx context.Context, groupID uint, userIDs []uint) (error)

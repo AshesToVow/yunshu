@@ -10,6 +10,7 @@ import { Button, Form, Input, Select, Space, Switch, Typography, message } from 
 import { useState } from "react";
 import YAML from "yaml";
 import { extractApiErrorMessage } from "../../../services/http";
+import { useIdempotencyKey } from "../../../hooks/use-idempotency-key";
 import { applyNamespace } from "../../../services/namespaces";
 import { applyConfigMap, applySecret } from "../../../services/configs";
 import { DrawerShellForm } from "./drawer-shell-form";
@@ -109,6 +110,7 @@ export function ConfigMapFormCreateDrawer(props: {
     pairs: { key: string; value: string }[];
   }>();
   const [loading, setLoading] = useState(false);
+  const { key: idemKey, rotate: rotateIdemKey } = useIdempotencyKey();
 
   async function submit() {
     if (!clusterId) return;
@@ -149,7 +151,8 @@ export function ConfigMapFormCreateDrawer(props: {
     };
     setLoading(true);
     try {
-      await applyConfigMap(clusterId, YAML.stringify(doc));
+      await applyConfigMap(clusterId, YAML.stringify(doc), idemKey);
+      rotateIdemKey();
       message.success("ConfigMap 已创建");
       onSuccess();
       onClose();
@@ -169,7 +172,11 @@ export function ConfigMapFormCreateDrawer(props: {
       onClose={onClose}
       loading={loading}
       onSubmit={() => void submit()}
-      initialValues={{ pairs: [{ key: "", value: "" }], label_pairs: [{ key: "", value: "" }], annotation_pairs: [{ key: "", value: "" }] }}
+      initialValues={{
+        pairs: [{ key: "", value: "" }],
+        label_pairs: [{ key: "", value: "" }],
+        annotation_pairs: [{ key: "", value: "" }],
+      }}
     >
       <Form.Item label="目标命名空间">
         <Input value={namespace} readOnly />
@@ -186,8 +193,12 @@ export function ConfigMapFormCreateDrawer(props: {
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             {fields.map((f) => (
               <Space key={f.key} align="baseline">
-                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}><Input placeholder="label key" style={{ width: 200 }} /></Form.Item>
-                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}><Input placeholder="label value" style={{ width: 220 }} /></Form.Item>
+                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="label key" style={{ width: 200 }} />
+                </Form.Item>
+                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="label value" style={{ width: 220 }} />
+                </Form.Item>
                 <Button onClick={() => remove(f.name)}>删除</Button>
               </Space>
             ))}
@@ -201,8 +212,12 @@ export function ConfigMapFormCreateDrawer(props: {
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             {fields.map((f) => (
               <Space key={f.key} align="baseline">
-                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}><Input placeholder="annotation key" style={{ width: 200 }} /></Form.Item>
-                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}><Input placeholder="annotation value" style={{ width: 220 }} /></Form.Item>
+                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="annotation key" style={{ width: 200 }} />
+                </Form.Item>
+                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="annotation value" style={{ width: 220 }} />
+                </Form.Item>
                 <Button onClick={() => remove(f.name)}>删除</Button>
               </Space>
             ))}
@@ -216,7 +231,11 @@ export function ConfigMapFormCreateDrawer(props: {
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             {fields.map((f) => (
               <Space key={f.key} align="start" style={{ width: "100%" }}>
-                <Form.Item name={[f.name, "key"]} rules={[{ required: true, message: "键必填" }]} style={{ marginBottom: 0 }}>
+                <Form.Item
+                  name={[f.name, "key"]}
+                  rules={[{ required: true, message: "键必填" }]}
+                  style={{ marginBottom: 0 }}
+                >
                   <Input placeholder="键" style={{ width: 200 }} />
                 </Form.Item>
                 <Form.Item name={[f.name, "value"]} style={{ flex: 1, marginBottom: 0, minWidth: 200 }}>
@@ -252,6 +271,7 @@ export function SecretFormCreateDrawer(props: {
     pairs: { key: string; value: string }[];
   }>();
   const [loading, setLoading] = useState(false);
+  const { key: idemKey, rotate: rotateIdemKey } = useIdempotencyKey();
 
   async function submit() {
     if (!clusterId) return;
@@ -296,7 +316,8 @@ export function SecretFormCreateDrawer(props: {
     };
     setLoading(true);
     try {
-      await applySecret(clusterId, YAML.stringify(doc));
+      await applySecret(clusterId, YAML.stringify(doc), idemKey);
+      rotateIdemKey();
       message.success("Secret 已创建");
       onSuccess();
       onClose();
@@ -334,7 +355,12 @@ export function SecretFormCreateDrawer(props: {
         <Select options={secretTypes} showSearch optionFilterProp="label" />
       </Form.Item>
       <Form.Item name="data_mode" label="数据模式" rules={[{ required: true }]}>
-        <Select options={[{ label: "stringData（明文输入）", value: "stringData" }, { label: "data（base64）", value: "data" }]} />
+        <Select
+          options={[
+            { label: "stringData（明文输入）", value: "stringData" },
+            { label: "data（base64）", value: "data" },
+          ]}
+        />
       </Form.Item>
       <Form.Item name="immutable" label="Immutable" valuePropName="checked">
         <Switch />
@@ -345,8 +371,12 @@ export function SecretFormCreateDrawer(props: {
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             {fields.map((f) => (
               <Space key={f.key} align="baseline">
-                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}><Input placeholder="label key" style={{ width: 200 }} /></Form.Item>
-                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}><Input placeholder="label value" style={{ width: 220 }} /></Form.Item>
+                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="label key" style={{ width: 200 }} />
+                </Form.Item>
+                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="label value" style={{ width: 220 }} />
+                </Form.Item>
                 <Button onClick={() => remove(f.name)}>删除</Button>
               </Space>
             ))}
@@ -360,8 +390,12 @@ export function SecretFormCreateDrawer(props: {
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             {fields.map((f) => (
               <Space key={f.key} align="baseline">
-                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}><Input placeholder="annotation key" style={{ width: 200 }} /></Form.Item>
-                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}><Input placeholder="annotation value" style={{ width: 220 }} /></Form.Item>
+                <Form.Item name={[f.name, "key"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="annotation key" style={{ width: 200 }} />
+                </Form.Item>
+                <Form.Item name={[f.name, "value"]} style={{ marginBottom: 0 }}>
+                  <Input placeholder="annotation value" style={{ width: 220 }} />
+                </Form.Item>
                 <Button onClick={() => remove(f.name)}>删除</Button>
               </Space>
             ))}
@@ -375,7 +409,11 @@ export function SecretFormCreateDrawer(props: {
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             {fields.map((f) => (
               <Space key={f.key} align="start" style={{ width: "100%" }}>
-                <Form.Item name={[f.name, "key"]} rules={[{ required: true, message: "键必填" }]} style={{ marginBottom: 0 }}>
+                <Form.Item
+                  name={[f.name, "key"]}
+                  rules={[{ required: true, message: "键必填" }]}
+                  style={{ marginBottom: 0 }}
+                >
                   <Input placeholder="键" style={{ width: 200 }} />
                 </Form.Item>
                 <Form.Item name={[f.name, "value"]} style={{ flex: 1, marginBottom: 0 }}>

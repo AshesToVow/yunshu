@@ -27,7 +27,7 @@
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
-| POST | `/api/v1/alerts/webhook/alertmanager` | 否（可配 token） | 外部推送 |
+| POST | `/api/v1/alerts/webhook` | 否（可配 token） | 外部推送 |
 | GET/POST/PUT/DELETE | `/api/v1/alerts/channels`、`/:id` | 是 | 通道 |
 | POST | `/api/v1/alerts/channels/:id/test` | 是 | 测试投递 |
 | POST | `/api/v1/alerts/channels/preview-template` | 是 | 模板预览 |

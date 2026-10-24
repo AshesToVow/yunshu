@@ -38,8 +38,17 @@ func TestUserCanAccessMenuEmptyBindings(t *testing.T) {
 func TestDefaultPathBindings_AIAssistant(t *testing.T) {
 	t.Parallel()
 	eps := DefaultPathBindings()["/ai/assistant"]
-	if len(eps) < 2 {
-		t.Fatalf("ai/assistant should bind chat+sessions, got %#v", eps)
+	if len(eps) < 3 {
+		t.Fatalf("ai/assistant should bind chat+stream+sessions, got %#v", eps)
+	}
+	var hasStream bool
+	for _, e := range eps {
+		if e.Resource == "/api/v1/ai/chat/stream" && e.Action == "POST" {
+			hasStream = true
+		}
+	}
+	if !hasStream {
+		t.Fatalf("ai/assistant missing chat/stream binding: %#v", eps)
 	}
 }
 

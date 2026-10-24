@@ -1,6 +1,22 @@
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AiYamlGeneratePanel } from "../components/k8s/ai-yaml-generate-panel";
 import { MonacoYamlEditor } from "../components/k8s/monaco-yaml-editor";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
@@ -14,6 +30,7 @@ import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
 export function K8sCrTemplatesPage() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>(0);
   const [kindFilter, setKindFilter] = useState<string>("");
@@ -23,6 +40,8 @@ export function K8sCrTemplatesPage() {
   const [current, setCurrent] = useState<K8sCrTemplateItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  const watchedKind = Form.useWatch("gvk_kind", form) as string | undefined;
+  const watchedBody = Form.useWatch("body", form) as string | undefined;
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((r) => setProjects(r.list || []));
@@ -81,6 +100,10 @@ data:
     setOpen(true);
   }
 
+  function applyToCluster(row: K8sCrTemplateItem) {
+    navigate(`/crs?template_id=${row.id}`);
+  }
+
   async function onSubmit() {
     const values = await form.validateFields();
     setSubmitting(true);
@@ -111,115 +134,127 @@ data:
   }
 
   return (
-  <>
-    <OpsPageHeader
-      title="K8s CR/YAML 模板库"
-      description="预置常用 CR 清单，可在自定义资源页复制 body 后应用；project_id=0 为全局模板。"
-      extra={
-        <Space>
-          <Select
-            allowClear
-            placeholder="项目筛选"
-            style={{ width: 200 }}
-            value={projectId > 0 ? projectId : undefined}
-            onChange={(v) => setProjectId(v ?? 0)}
-            options={[
-              { label: "全部（含全局）", value: 0 },
-              ...projects.map((p) => ({ label: p.name, value: p.id })),
-            ]}
-          />
-          <Input
-            allowClear
-            placeholder="Kind 筛选"
-            style={{ width: 140 }}
-            value={kindFilter}
-            onChange={(e) => setKindFilter(e.target.value)}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新建模板
-          </Button>
-        </Space>
-      }
-    />
-    <Card className="table-card">
-      <Table
-        rowKey="id"
-        loading={loading}
-        dataSource={list}
-        pagination={{ pageSize: 15, showTotal: (t) => `共 ${t} 条` }}
-        columns={[
-          { title: "名称", dataIndex: "name", width: 180, ellipsis: true },
-          {
-            title: "项目",
-            dataIndex: "project_id",
-            width: 100,
-            render: (v: number) => (v === 0 ? <Tag>全局</Tag> : v),
-          },
-          { title: "Kind", dataIndex: "gvk_kind", width: 120 },
-          { title: "Group", dataIndex: "gvk_group", width: 160, ellipsis: true, render: (v?: string) => v || "—" },
-          { title: "Version", dataIndex: "gvk_version", width: 80 },
-          { title: "排序", dataIndex: "sort_order", width: 70 },
-          { title: "创建时间", dataIndex: "created_at", width: 180, render: (v: string) => formatDateTime(v) },
-          {
-            title: "操作",
-            width: 160,
-            render: (_: unknown, row: K8sCrTemplateItem) => (
-              <Space>
-                <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>
-                  编辑
-                </Button>
-                <Popconfirm title="删除该模板？" onConfirm={() => void deleteK8sCrTemplate(row.id).then(load)}>
-                  <Button type="link" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
-              </Space>
-            ),
-          },
-        ]}
-      />
-    </Card>
-
-    <Modal
-      title={current ? "编辑 CR 模板" : "新建 CR 模板"}
-      open={open}
-      onCancel={() => setOpen(false)}
-      onOk={() => void onSubmit()}
-      confirmLoading={submitting}
-      width={880}
-      destroyOnClose
-    >
-      <Form form={form} layout="vertical">
-        <Space wrap style={{ width: "100%" }}>
-          <Form.Item label="归属项目" name="project_id" style={{ width: 220 }}>
+    <>
+      <OpsPageHeader
+        title="K8s CR/YAML 模板库"
+        description="预置常用 CR 清单；可一键跳转「自定义资源」页载入并 Apply。project_id=0 为全局模板。"
+        extra={
+          <Space>
             <Select
+              allowClear
+              placeholder="项目筛选"
+              style={{ width: 200 }}
+              value={projectId > 0 ? projectId : undefined}
+              onChange={(v) => setProjectId(v ?? 0)}
               options={[
-                { label: "全局 (0)", value: 0 },
+                { label: "全部（含全局）", value: 0 },
                 ...projects.map((p) => ({ label: p.name, value: p.id })),
               ]}
             />
+            <Input
+              allowClear
+              placeholder="Kind 筛选"
+              style={{ width: 140 }}
+              value={kindFilter}
+              onChange={(e) => setKindFilter(e.target.value)}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => void load()} />
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              新建模板
+            </Button>
+          </Space>
+        }
+      />
+      <Card className="table-card">
+        <Table
+          rowKey="id"
+          loading={loading}
+          dataSource={list}
+          pagination={{ pageSize: 15, showTotal: (t) => `共 ${t} 条` }}
+          columns={[
+            { title: "名称", dataIndex: "name", width: 180, ellipsis: true },
+            {
+              title: "项目",
+              dataIndex: "project_id",
+              width: 100,
+              render: (v: number) => (v === 0 ? <Tag>全局</Tag> : v),
+            },
+            { title: "Kind", dataIndex: "gvk_kind", width: 120 },
+            { title: "Group", dataIndex: "gvk_group", width: 160, ellipsis: true, render: (v?: string) => v || "—" },
+            { title: "Version", dataIndex: "gvk_version", width: 80 },
+            { title: "排序", dataIndex: "sort_order", width: 70 },
+            { title: "创建时间", dataIndex: "created_at", width: 180, render: (v: string) => formatDateTime(v) },
+            {
+              title: "操作",
+              width: 200,
+              className: "yunshu-table-actions-cell",
+              render: (_: unknown, row: K8sCrTemplateItem) => (
+                <Space size={0} wrap className="yunshu-table-actions">
+                  <Button type="link" size="small" icon={<RocketOutlined />} onClick={() => applyToCluster(row)}>
+                    应用
+                  </Button>
+                  <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
+                    编辑
+                  </Button>
+                  <Popconfirm title="删除该模板？" onConfirm={() => void deleteK8sCrTemplate(row.id).then(load)}>
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Card>
+
+      <Modal
+        title={current ? "编辑 CR 模板" : "新建 CR 模板"}
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={() => void onSubmit()}
+        confirmLoading={submitting}
+        width={880}
+        destroyOnClose
+      >
+        <Form form={form} layout="vertical">
+          <Space wrap style={{ width: "100%" }}>
+            <Form.Item label="归属项目" name="project_id" style={{ width: 220 }}>
+              <Select
+                options={[{ label: "全局 (0)", value: 0 }, ...projects.map((p) => ({ label: p.name, value: p.id }))]}
+              />
+            </Form.Item>
+            <Form.Item label="名称" name="name" rules={[{ required: true }]} style={{ width: 220 }}>
+              <Input />
+            </Form.Item>
+            <Form.Item label="Kind" name="gvk_kind" rules={[{ required: true }]} style={{ width: 160 }}>
+              <Input placeholder="ConfigMap" />
+            </Form.Item>
+            <Form.Item label="Group" name="gvk_group" style={{ width: 200 }}>
+              <Input placeholder="可选" allowClear />
+            </Form.Item>
+            <Form.Item label="Version" name="gvk_version" style={{ width: 100 }}>
+              <Input />
+            </Form.Item>
+            <Form.Item label="排序" name="sort_order" style={{ width: 100 }}>
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+          </Space>
+          <Form.Item label="YAML 正文" required>
+            <Space direction="vertical" style={{ width: "100%" }} size="middle">
+              <AiYamlGeneratePanel
+                resourceKind={(watchedKind || "").trim() || "CustomResource"}
+                hintYaml={watchedBody}
+                onGenerated={(yaml) => form.setFieldsValue({ body: yaml })}
+              />
+              <Form.Item name="body" rules={[{ required: true, message: "请填写 YAML 正文" }]} noStyle>
+                <MonacoYamlEditor height={360} />
+              </Form.Item>
+            </Space>
           </Form.Item>
-          <Form.Item label="名称" name="name" rules={[{ required: true }]} style={{ width: 220 }}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="Kind" name="gvk_kind" rules={[{ required: true }]} style={{ width: 160 }}>
-            <Input placeholder="ConfigMap" />
-          </Form.Item>
-          <Form.Item label="Group" name="gvk_group" style={{ width: 200 }}>
-            <Input placeholder="可选" allowClear />
-          </Form.Item>
-          <Form.Item label="Version" name="gvk_version" style={{ width: 100 }}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="排序" name="sort_order" style={{ width: 100 }}>
-            <InputNumber min={0} style={{ width: "100%" }} />
-          </Form.Item>
-        </Space>
-        <Form.Item label="YAML 正文" name="body" rules={[{ required: true }]}>
-          <MonacoYamlEditor height={360} />
-        </Form.Item>
-        <Typography.Text type="secondary">保存后可在「自定义资源」页复制应用；不会自动下发到集群。</Typography.Text>
-      </Form>
-    </Modal>
-  </>
+          <Typography.Text type="secondary">
+            保存后可在本页点「应用到集群」，或在「自定义资源」页使用「从模板创建」。
+          </Typography.Text>
+        </Form>
+      </Modal>
+    </>
   );
 }

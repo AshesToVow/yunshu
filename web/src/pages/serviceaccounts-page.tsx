@@ -48,21 +48,32 @@ export function ServiceaccountsPage() {
         />
       )}
       api={{
-        list: async ({ clusterId, namespace, keyword }) => await listServiceAccounts(clusterId, namespace ?? "default", keyword),
-        detail: async ({ clusterId, namespace, name }) => await getServiceAccountDetail(clusterId, namespace ?? "default", name),
-        apply: async ({ clusterId, manifest }) => await applyServiceAccount(clusterId, manifest),
-        remove: async (args) => await deleteServiceAccount(args.clusterId, args.namespace ?? "default", args.name, args),
+        list: async ({ clusterId, namespace, keyword }) =>
+          await listServiceAccounts(clusterId, namespace ?? "default", keyword),
+        detail: async ({ clusterId, namespace, name }) =>
+          await getServiceAccountDetail(clusterId, namespace ?? "default", name),
+        apply: async ({ clusterId, manifest, idemKey }) => await applyServiceAccount(clusterId, manifest, idemKey),
+        remove: async (args) =>
+          await deleteServiceAccount(args.clusterId, args.namespace ?? "default", args.name, args),
       }}
       detailExtra={(detail) => (
         <Space direction="vertical" style={{ width: "100%" }} size={10}>
           <Space wrap>
             <Typography.Text type="secondary">Secrets:</Typography.Text>
-            {detail.secrets?.length ? detail.secrets.map((it) => <Tag key={it}>{it}</Tag>) : <span className="inline-muted">-</span>}
+            {detail.secrets?.length ? (
+              detail.secrets.map((it) => <Tag key={it}>{it}</Tag>)
+            ) : (
+              <span className="inline-muted">-</span>
+            )}
           </Space>
           <Space wrap>
             <Typography.Text type="secondary">ImagePullSecrets:</Typography.Text>
             {detail.image_pull_secrets?.length ? (
-              detail.image_pull_secrets.map((it) => <Tag key={it} color="blue">{it}</Tag>)
+              detail.image_pull_secrets.map((it) => (
+                <Tag key={it} color="blue">
+                  {it}
+                </Tag>
+              ))
             ) : (
               <span className="inline-muted">-</span>
             )}

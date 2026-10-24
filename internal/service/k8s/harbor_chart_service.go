@@ -12,13 +12,11 @@ import (
 	"time"
 
 	"yunshu/internal/config"
-	"yunshu/internal/dictconfig"
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/platformhttp"
-
-	"gorm.io/gorm"
 )
 
 type HarborChartSummary struct {
@@ -61,17 +59,19 @@ type harborChartVersionItem struct {
 
 func (s *K8sHelmService) resolveHarbor(ctx context.Context, projectID ...uint) (config.HarborConfig, error) {
 	cfg := s.cicdBase.Harbor
-	if s.db != nil {
-		cfg = dictconfig.ResolveCicdConfig(ctx, s.db, s.cicdBase, dictconfig.DefaultCicdDictTypes()).Harbor
+	if s.resolveCicd != nil {
+		cfg = s.resolveCicd(ctx).Harbor
 	}
 	var pid uint
 	if len(projectID) > 0 {
 		pid = projectID[0]
 	}
-	if pid > 0 && s.db != nil {
-		cfg = mergeHarborFromProjectRegistry(ctx, s.db, pid, cfg)
-	} else if s.db != nil {
-		cfg = mergeHarborFromDefaultRegistry(ctx, s.db, cfg)
+	if s.harborMerge != nil {
+		if pid > 0 {
+			cfg = mergeHarborFromProjectRegistry(ctx, s.harborMerge, pid, cfg)
+		} else {
+			cfg = mergeHarborFromDefaultRegistry(ctx, s.harborMerge, cfg)
+		}
 	}
 	if strings.TrimSpace(cfg.URL) == "" {
 		return cfg, constants.ErrBadRequestWithMsg("Harbor 地址未配置，请在数据字典设置 cicd_harbor_url 或配置镜像仓库注册中心")
@@ -82,37 +82,38 @@ func (s *K8sHelmService) resolveHarbor(ctx context.Context, projectID ...uint) (
 	return cfg, nil
 }
 
-func mergeHarborFromDefaultRegistry(ctx context.Context, db *gorm.DB, cfg config.HarborConfig) config.HarborConfig {
-	var reg model.ImageRegistry
-	if err := db.WithContext(ctx).
-		Where("is_default = ? AND status = 1 AND type = ?", true, model.ImageRegistryTypeHarbor).
-		Order("id ASC").First(&reg).Error; err != nil {
+func mergeHarborFromDefaultRegistry(ctx context.Context, repo interfaces.HarborMergeRepository, cfg config.HarborConfig) config.HarborConfig {
+	if repo == nil {
 		return cfg
 	}
-	return applyImageRegistryToHarbor(cfg, reg, "")
+	reg, err := repo.GetDefaultEnabledHarborRegistry(ctx)
+	if err != nil || reg == nil {
+		return cfg
+	}
+	return applyImageRegistryToHarbor(cfg, *reg, "")
 }
 
-func mergeHarborFromProjectRegistry(ctx context.Context, db *gorm.DB, projectID uint, cfg config.HarborConfig) config.HarborConfig {
-	var bind model.ProjectRegistryBinding
-	if err := db.WithContext(ctx).Where("project_id = ?", projectID).First(&bind).Error; err == nil && bind.RegistryID > 0 {
-		var reg model.ImageRegistry
-		if err := db.WithContext(ctx).Where("id = ?", bind.RegistryID).First(&reg).Error; err == nil {
-			return applyImageRegistryToHarbor(cfg, reg, bind.HarborProject)
+func mergeHarborFromProjectRegistry(ctx context.Context, repo interfaces.HarborMergeRepository, projectID uint, cfg config.HarborConfig) config.HarborConfig {
+	if repo == nil {
+		return cfg
+	}
+	if bind, err := repo.GetProjectRegistryBinding(ctx, projectID); err == nil && bind != nil && bind.RegistryID > 0 {
+		if reg, err := repo.GetImageRegistryByID(ctx, bind.RegistryID); err == nil && reg != nil {
+			return applyImageRegistryToHarbor(cfg, *reg, bind.HarborProject)
 		}
 	}
-	var p model.Project
-	if err := db.WithContext(ctx).Select("harbor_url", "harbor_project").Where("id = ?", projectID).First(&p).Error; err == nil {
-		if v := strings.TrimSpace(p.HarborURL); v != "" {
+	if url, project, err := repo.GetProjectHarborFields(ctx, projectID); err == nil {
+		if v := strings.TrimSpace(url); v != "" {
 			cfg.URL = v
 		}
-		if v := strings.TrimSpace(p.HarborProject); v != "" {
+		if v := strings.TrimSpace(project); v != "" {
 			cfg.ProjectGroup = v
 		}
 		if strings.TrimSpace(cfg.URL) != "" {
 			return cfg
 		}
 	}
-	return mergeHarborFromDefaultRegistry(ctx, db, cfg)
+	return mergeHarborFromDefaultRegistry(ctx, repo, cfg)
 }
 
 func applyImageRegistryToHarbor(cfg config.HarborConfig, reg model.ImageRegistry, harborProjectOverride string) config.HarborConfig {

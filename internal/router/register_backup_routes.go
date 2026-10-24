@@ -7,22 +7,22 @@ import (
 )
 
 // RegisterBackupRoutes MySQL 备份（挂在项目作用域下）。
-func RegisterBackupRoutes(api *gin.RouterGroup, d *RouteDeps) {
+func RegisterBackupRoutes(api *gin.RouterGroup, d BackupRouteDeps) {
 	projectRoutes := api.Group("/projects")
-	projectRoutes.Use(d.authMiddleware, d.authorize, d.opAudit)
-	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.projectMemberRepo, d.projectRepo, d.app.Logger))
+	projectRoutes.Use(d.AuthMiddleware(), d.Authorize(), d.OpAudit())
+	projectScoped := projectRoutes.Group("/:id", middleware.RequireProjectMemberAccess(d.ProjectMemberRepo(), d.ProjectRepo(), d.AppLogger()))
 
 	mysqlBackup := projectScoped.Group("/mysql-backup")
-	mysqlBackup.GET("/mysqldump-options", d.mysqlBackupHandler.ListMysqldumpOptions)
-	mysqlBackup.GET("/instances", d.mysqlBackupHandler.ListInstances)
-	mysqlBackup.POST("/instances", d.mysqlBackupHandler.CreateInstance)
-	mysqlBackup.PUT("/instances/:instanceId", d.mysqlBackupHandler.UpdateInstance)
-	mysqlBackup.DELETE("/instances/:instanceId", d.mysqlBackupHandler.DeleteInstance)
-	mysqlBackup.POST("/instances/:instanceId/ping", d.mysqlBackupHandler.PingInstance)
-	mysqlBackup.POST("/instances/:instanceId/check-remote", d.mysqlBackupHandler.CheckRemote)
-	mysqlBackup.POST("/instances/:instanceId/run", d.mysqlBackupHandler.RunBackup)
-	mysqlBackup.GET("/jobs", d.mysqlBackupHandler.ListJobs)
-	mysqlBackup.POST("/jobs/:jobId/stop", d.mysqlBackupHandler.StopJob)
-	mysqlBackup.DELETE("/jobs/:jobId", d.mysqlBackupHandler.DeleteJob)
-	mysqlBackup.GET("/jobs/:jobId/presign", d.mysqlBackupHandler.PresignJob)
+	mysqlBackup.GET("/mysqldump-options", d.MysqlBackupHandler().ListMysqldumpOptions)
+	mysqlBackup.GET("/instances", d.MysqlBackupHandler().ListInstances)
+	mysqlBackup.POST("/instances", d.MysqlBackupHandler().CreateInstance)
+	mysqlBackup.PUT("/instances/:instanceId", d.MysqlBackupHandler().UpdateInstance)
+	mysqlBackup.DELETE("/instances/:instanceId", d.MysqlBackupHandler().DeleteInstance)
+	mysqlBackup.POST("/instances/:instanceId/ping", d.MysqlBackupHandler().PingInstance)
+	mysqlBackup.POST("/instances/:instanceId/check-remote", d.MysqlBackupHandler().CheckRemote)
+	mysqlBackup.POST("/instances/:instanceId/run", d.MysqlBackupHandler().RunBackup)
+	mysqlBackup.GET("/jobs", d.MysqlBackupHandler().ListJobs)
+	mysqlBackup.POST("/jobs/:jobId/stop", d.MysqlBackupHandler().StopJob)
+	mysqlBackup.DELETE("/jobs/:jobId", d.MysqlBackupHandler().DeleteJob)
+	mysqlBackup.GET("/jobs/:jobId/presign", d.MysqlBackupHandler().PresignJob)
 }

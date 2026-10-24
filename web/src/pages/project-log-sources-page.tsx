@@ -1,5 +1,20 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, DeploymentUnitOutlined } from "@ant-design/icons";
-import { AutoComplete, Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from "antd";
+import {
+  AutoComplete,
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  message,
+} from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -30,12 +45,29 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
   const [submitting, setSubmitting] = useState(false);
   const [fileOptions, setFileOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [current, setCurrent] = useState<LogSourceItem | null>(null);
-  const [form] = Form.useForm<{ id?: number; service_id: number; log_type: string; path: string; log_dir?: string; include_regex?: string; exclude_regex?: string; multiline_rule?: string; status: number }>();
+  const [form] = Form.useForm<{
+    id?: number;
+    service_id: number;
+    log_type: string;
+    path: string;
+    log_dir?: string;
+    include_regex?: string;
+    exclude_regex?: string;
+    multiline_rule?: string;
+    status: number;
+  }>();
   const logTypeOptions = useDictOptions("log_source_type");
   const logSourceStatusOptions = useDictOptions("common_status");
 
-  const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
-  const serverOptions = useMemo(() => servers.map((s) => ({ value: s.id, label: `${s.name} ${s.host}:${s.port} (${s.os_type}/${s.os_arch || "-"})` })), [servers]);
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })),
+    [projects],
+  );
+  const serverOptions = useMemo(
+    () =>
+      servers.map((s) => ({ value: s.id, label: `${s.name} ${s.host}:${s.port} (${s.os_type}/${s.os_arch || "-"})` })),
+    [servers],
+  );
   const serviceOptions = useMemo(() => services.map((s) => ({ value: s.id, label: s.name })), [services]);
 
   useEffect(() => {
@@ -161,9 +193,29 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
 
   const toolbar = (
     <Space wrap>
-      <Select style={{ width: 240 }} value={projectId} onChange={setProjectId} options={projectOptions} placeholder="项目" />
-      <Select style={{ width: 300 }} value={serverId} onChange={setServerId} options={serverOptions} placeholder="服务器" allowClear />
-      <Select style={{ width: 220 }} value={serviceId} onChange={setServiceId} options={serviceOptions} placeholder="服务" allowClear />
+      <Select
+        style={{ width: 240 }}
+        value={projectId}
+        onChange={setProjectId}
+        options={projectOptions}
+        placeholder="项目"
+      />
+      <Select
+        style={{ width: 300 }}
+        value={serverId}
+        onChange={setServerId}
+        options={serverOptions}
+        placeholder="服务器"
+        allowClear
+      />
+      <Select
+        style={{ width: 220 }}
+        value={serviceId}
+        onChange={setServiceId}
+        options={serviceOptions}
+        placeholder="服务"
+        allowClear
+      />
       <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
         刷新
       </Button>
@@ -189,7 +241,12 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
           { title: "路径/Unit", dataIndex: "path" },
           { title: "include", dataIndex: "include_regex", render: (v?: string | null) => v || "-" },
           { title: "exclude", dataIndex: "exclude_regex", render: (v?: string | null) => v || "-" },
-          { title: "状态", dataIndex: "status", width: 90, render: (v: number) => (v === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>) },
+          {
+            title: "状态",
+            dataIndex: "status",
+            width: 90,
+            render: (v: number) => (v === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
+          },
           {
             title: "操作",
             width: 200,
@@ -218,7 +275,14 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
         ]}
       />
 
-      <Modal open={editorOpen} title={current ? "编辑日志源" : "新增日志源"} onCancel={() => setEditorOpen(false)} onOk={() => void onSubmit()} confirmLoading={submitting} width={920}>
+      <Modal
+        open={editorOpen}
+        title={current ? "编辑日志源" : "新增日志源"}
+        onCancel={() => setEditorOpen(false)}
+        onOk={() => void onSubmit()}
+        confirmLoading={submitting}
+        width={920}
+      >
         <Form form={form} layout="vertical">
           <Form.Item name="id" hidden>
             <Input />
@@ -257,7 +321,11 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
                   allowClear
                   options={fileOptions}
                   placeholder="可从扫描结果选择，也可手动输入"
-                  filterOption={(input, option) => (String(option?.label ?? "")).toLowerCase().includes(input.toLowerCase())}
+                  filterOption={(input, option) =>
+                    String(option?.label ?? "")
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
                 />
               </Form.Item>
             </Col>
@@ -315,4 +383,3 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
     </Card>
   );
 }
-

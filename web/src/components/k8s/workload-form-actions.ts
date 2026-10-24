@@ -52,7 +52,9 @@ export function useWorkloadFormActions<FV>(opts: UseWorkloadFormActionsOptions<F
           // namespace follows toolbar namespace when present
           opts.form.setFieldsValue({ ...(fv as any), namespace: next.namespace } as any);
         } else {
-          opts.form.setFieldsValue(opts.buildFallbackValues({ recordName: next.name, namespace: next.namespace, record }) as any);
+          opts.form.setFieldsValue(
+            opts.buildFallbackValues({ recordName: next.name, namespace: next.namespace, record }) as any,
+          );
         }
       } finally {
         setLoading(false);
@@ -62,4 +64,3 @@ export function useWorkloadFormActions<FV>(opts: UseWorkloadFormActionsOptions<F
 
   return { open, loading, ctx, mode, setMode, prepareCreate, openCreate, openEdit, close, setOpen, setLoading, setCtx };
 }
-

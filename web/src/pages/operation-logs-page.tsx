@@ -1,7 +1,25 @@
 import { DeleteOutlined, EyeOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Card, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useState } from "react";
-import { batchDeleteOperationLogs, deleteOperationLog, getOperationLogs, exportOperationLogs } from "../services/operation-logs";
+import {
+  batchDeleteOperationLogs,
+  deleteOperationLog,
+  getOperationLogs,
+  exportOperationLogs,
+} from "../services/operation-logs";
 import type { OperationLogItem, OperationLogQuery } from "../services/operation-logs";
 import { formatDateTime } from "../utils/format";
 
@@ -75,7 +93,11 @@ export function OperationLogsPage() {
 
   async function handleExport() {
     try {
-      const res = await exportOperationLogs({ method: filters.method, path: filters.path, status_code: filters.status_code });
+      const res = await exportOperationLogs({
+        method: filters.method,
+        path: filters.path,
+        status_code: filters.status_code,
+      });
       const blob = res;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -240,8 +262,9 @@ export function OperationLogsPage() {
             {
               title: "操作",
               key: "action",
-              width: 90,
+              width: 110,
               fixed: "right",
+              className: "yunshu-table-actions-cell",
               render: (_: unknown, record: OperationLogItem) => (
                 <Popconfirm title="确定删除？" onConfirm={() => void handleDelete(record.id)}>
                   <Button type="link" size="small" danger icon={<DeleteOutlined />}>
@@ -254,13 +277,7 @@ export function OperationLogsPage() {
         />
       </Card>
 
-      <Modal
-        title={bodyModal?.title}
-        open={!!bodyModal}
-        onCancel={() => setBodyModal(null)}
-        footer={null}
-        width={700}
-      >
+      <Modal title={bodyModal?.title} open={!!bodyModal} onCancel={() => setBodyModal(null)} footer={null} width={700}>
         {bodyModal && (
           <pre style={{ maxHeight: 400, overflow: "auto", background: "#f5f5f5", padding: 12, borderRadius: 4 }}>
             {bodyModal.content}

@@ -11,8 +11,8 @@ export interface AlertQualityReport {
   notify_fail_rate: number;
   notify_failed: number;
   quality_score: number;
-  noise_top: { title: string; severity: string; count: number }[];
-  repeat_fingerprints: { fingerprint: string; title: string; count: number }[];
+  noise_top: { title: string; severity: string; count: number; fingerprint?: string; alertname?: string }[];
+  repeat_fingerprints: { fingerprint: string; title: string; count: number; severity?: string; alertname?: string }[];
   recent_changes_hint?: ChangeEventItem[];
 }
 

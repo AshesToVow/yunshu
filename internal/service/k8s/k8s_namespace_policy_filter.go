@@ -2,13 +2,15 @@ package k8s
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/k8srole"
 )
 
-// FilterNamespaceNamesByPolicy 按命名空间黑名单（优先）与白名单（若对该集群生效）过滤名称列表，与 K8sScopeAuthorize 语义对齐。
+// FilterNamespaceNamesByPolicy 优先使用请求上下文中的 k8m 授权行；无 Grants 时回退独立 NS 表。
 func FilterNamespaceNamesByPolicy(
 	ctx context.Context,
 	deny interfaces.K8sNamespaceDenyRepository,
@@ -19,6 +21,21 @@ func FilterNamespaceNamesByPolicy(
 ) ([]string, error) {
 	if clusterID == 0 || len(names) == 0 {
 		return names, nil
+	}
+	if k8sauth.SkipNamespacePolicy(ctx) {
+		return names, nil
+	}
+	if scope, ok := k8sauth.RequestScopeFromContext(ctx); ok {
+		if scope.BypassAuth {
+			return names, nil
+		}
+		if len(scope.Grants) > 0 {
+			user := scope.Username
+			if user == "" {
+				user = k8sauth.UserRefString(scope.Pack.UserID)
+			}
+			return k8srole.FilterNamespaces(scope.Grants, strconv.FormatUint(uint64(clusterID), 10), user, names), nil
+		}
 	}
 	if len(pack.PrincipalRows()) == 0 {
 		return names, nil

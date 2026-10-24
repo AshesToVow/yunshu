@@ -1,5 +1,20 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, PlusSquareOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, TreeSelect, Typography, message } from "antd";
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  TreeSelect,
+  Typography,
+  message,
+} from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { createDepartment, deleteDepartment, getDepartmentTree, updateDepartment } from "../services/departments";
 import { getUsers } from "../services/users";
@@ -149,14 +164,25 @@ export function DepartmentsPage() {
             ),
           },
           { title: "负责人", dataIndex: "leader_name", render: (v: string) => v || "-" },
-          { title: "成员数", dataIndex: "user_count", width: 100, align: "center" as const, render: (v: number) => v ?? 0 },
+          {
+            title: "成员数",
+            dataIndex: "user_count",
+            width: 100,
+            align: "center" as const,
+            render: (v: number) => v ?? 0,
+          },
           { title: "层级", dataIndex: "level", width: 80, align: "center" as const },
           { title: "排序", dataIndex: "sort", width: 80, align: "center" as const },
           {
             title: "状态",
             dataIndex: "status",
             width: 90,
-            render: (v: number) => (v === 1 ? <Tag className="status-chip status-chip--ok">启用</Tag> : <Tag className="status-chip status-chip--off">停用</Tag>),
+            render: (v: number) =>
+              v === 1 ? (
+                <Tag className="status-chip status-chip--ok">启用</Tag>
+              ) : (
+                <Tag className="status-chip status-chip--off">停用</Tag>
+              ),
           },
           {
             title: "操作",
@@ -201,21 +227,42 @@ export function DepartmentsPage() {
               />
             </Form.Item>
             <Form.Item label="负责人" name="leader_id" style={{ flex: 1, marginBottom: 0 }}>
-              <Select allowClear showSearch optionFilterProp="label" options={leaderOptions} placeholder="请选择负责人" />
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={leaderOptions}
+                placeholder="请选择负责人"
+              />
             </Form.Item>
           </Space>
 
           <Space style={{ width: "100%" }} size="middle">
-            <Form.Item label="部门名称" name="name" rules={[{ required: true, message: "请输入部门名称" }]} style={{ flex: 1, marginBottom: 0 }}>
+            <Form.Item
+              label="部门名称"
+              name="name"
+              rules={[{ required: true, message: "请输入部门名称" }]}
+              style={{ flex: 1, marginBottom: 0 }}
+            >
               <Input placeholder="例如：研发中心" />
             </Form.Item>
-            <Form.Item label="部门编码" name="code" rules={[{ required: true, message: "请输入部门编码" }]} style={{ flex: 1, marginBottom: 0 }}>
+            <Form.Item
+              label="部门编码"
+              name="code"
+              rules={[{ required: true, message: "请输入部门编码" }]}
+              style={{ flex: 1, marginBottom: 0 }}
+            >
               <Input placeholder="例如：RND-CENTER" />
             </Form.Item>
           </Space>
 
           <Space style={{ width: "100%" }} size="middle">
-            <Form.Item label="联系邮箱" name="email" rules={[{ type: "email", message: "请输入正确邮箱地址" }]} style={{ flex: 1, marginBottom: 0 }}>
+            <Form.Item
+              label="联系邮箱"
+              name="email"
+              rules={[{ type: "email", message: "请输入正确邮箱地址" }]}
+              style={{ flex: 1, marginBottom: 0 }}
+            >
               <Input placeholder="例如：rd@example.com" />
             </Form.Item>
             <Form.Item label="联系电话" name="phone" style={{ flex: 1, marginBottom: 0 }}>

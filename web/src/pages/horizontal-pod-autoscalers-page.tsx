@@ -35,7 +35,13 @@ export function HorizontalPodAutoscalersPage() {
       ellipsis: true,
       render: (v?: string) => <Typography.Text style={{ fontSize: 12 }}>{v || "-"}</Typography.Text>,
     },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
     { title: "存在时长", dataIndex: "age", width: 90 },
     { title: "创建时间", dataIndex: "creation_time", width: 170 },
   ];
@@ -54,7 +60,7 @@ export function HorizontalPodAutoscalersPage() {
         api={{
           list: async ({ clusterId, namespace, keyword }) => await listHPA(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => await getHPADetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyHPA(clusterId, manifest),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyHPA(clusterId, manifest, idemKey),
           remove: async (args) => await deleteHPA(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         createTemplate={({ namespace }) => `apiVersion: autoscaling/v2

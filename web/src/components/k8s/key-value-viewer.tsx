@@ -46,8 +46,21 @@ export function useKeyValueViewer(options?: UseKeyValueViewerOptions) {
       dataSource={Object.entries(data).map(([key, value]) => ({ key, value }))}
       locale={{ emptyText: typeof emptyText === "function" ? emptyText(title) : emptyText }}
       columns={[
-        { title: "Key", dataIndex: "key", width: 260, render: (v: string) => <Typography.Text copyable>{v}</Typography.Text> },
-        { title: "Value", dataIndex: "value", render: (v: string) => <Typography.Text copyable style={{ whiteSpace: "pre-wrap" }}>{v}</Typography.Text> },
+        {
+          title: "Key",
+          dataIndex: "key",
+          width: 260,
+          render: (v: string) => <Typography.Text copyable>{v}</Typography.Text>,
+        },
+        {
+          title: "Value",
+          dataIndex: "value",
+          render: (v: string) => (
+            <Typography.Text copyable style={{ whiteSpace: "pre-wrap" }}>
+              {v}
+            </Typography.Text>
+          ),
+        },
       ]}
     />
   );
@@ -58,7 +71,14 @@ export function useKeyValueViewer(options?: UseKeyValueViewerOptions) {
         {content}
       </Drawer>
     ) : (
-      <Modal title={title} open={open} onCancel={() => setOpen(false)} footer={null} width={width} destroyOnClose={destroyOnClose}>
+      <Modal
+        title={title}
+        open={open}
+        onCancel={() => setOpen(false)}
+        footer={null}
+        width={width}
+        destroyOnClose={destroyOnClose}
+      >
         {content}
       </Modal>
     );

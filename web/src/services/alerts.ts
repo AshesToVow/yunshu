@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 import { normalizePagedPayload, parseCommaSeparatedList, parseCommaSeparatedNumbers } from "./alert-mappers";
 
 export interface AlertChannelItem {
@@ -54,16 +54,19 @@ export function listAlertChannels(params?: { keyword?: string }) {
   return getData<{ list: AlertChannelItem[] }>(http.get("/alerts/channels", { params }));
 }
 
-export function createAlertChannel(payload: {
-  name: string;
-  type?: string;
-  url: string;
-  secret?: string;
-  headers_json?: string;
-  enabled?: boolean;
-  timeout_ms?: number;
-}) {
-  return getData<AlertChannelItem>(http.post("/alerts/channels", payload));
+export function createAlertChannel(
+  payload: {
+    name: string;
+    type?: string;
+    url: string;
+    secret?: string;
+    headers_json?: string;
+    enabled?: boolean;
+    timeout_ms?: number;
+  },
+  idemKey?: string,
+) {
+  return getData<AlertChannelItem>(http.post("/alerts/channels", payload, idempotencyConfig(idemKey)));
 }
 
 export function updateAlertChannel(
@@ -259,12 +262,69 @@ export function explainAlertByFingerprint(fingerprint: string) {
   return getData<FingerprintDeliveryExplain>(http.get("/alerts/events/by-fingerprint", { params: { fingerprint } }));
 }
 
+export type AlertEvidenceResult = {
+  fingerprint: string;
+  project_id?: number;
+  alertname?: string;
+  severity?: string;
+  status?: string;
+  starts_at?: string;
+  labels?: Record<string, string>;
+  dims?: {
+    cluster?: string;
+    namespace?: string;
+    pod?: string;
+    service?: string;
+    node?: string;
+    container?: string;
+  };
+  recent_changes?: Array<{
+    id: number;
+    source?: string;
+    action?: string;
+    summary?: string;
+    started_at?: string;
+  }>;
+  log_overview?: { total?: number; level_counts?: Record<string, number> };
+  log_samples?: Array<{
+    timestamp: string;
+    level?: string;
+    message: string;
+    host?: string;
+    pod?: string;
+  }>;
+  log_hint?: string;
+  pod_diagnose_hint?: {
+    cluster_id?: number;
+    cluster_name?: string;
+    namespace?: string;
+    pod?: string;
+    available?: boolean;
+    reason?: string;
+  };
+};
+
+export function collectAlertEvidence(fingerprint: string) {
+  return getData<AlertEvidenceResult>(http.get("/alerts/events/evidence", { params: { fingerprint } }));
+}
+
+/** 告警转故障工单：投递事件 ID 或当前告警指纹均可。 */
+export function createIncidentFromAlert(payload: {
+  title?: string;
+  alert_event_id?: number;
+  fingerprint?: string;
+  project_id?: number;
+}) {
+  return getData<{ id: number; title?: string; deep_link?: string }>(http.post("/alerts/to-ticket", payload));
+}
+
 export function sendAlertmanagerWebhook(payload: Record<string, unknown>, token?: string) {
   const headers: Record<string, string> = {};
   if ((token || "").trim()) {
     headers["X-Webhook-Token"] = String(token).trim();
   }
-  return getData<{ message: string }>(http.post("/alerts/ingress/k8s-events", payload, { headers }));
+  // Alertmanager 正式入口；勿打 k8s-events（会跳过当前告警 cur_events）
+  return getData<{ message: string }>(http.post("/alerts/webhook", payload, { headers }));
 }
 
 export interface AlertCurEventItem {
@@ -397,16 +457,23 @@ export function listPendingMonitorRuleChanges() {
   );
 }
 
-export function proposeMonitorRuleChange(payload: {
-  rule_id: number;
-  payload: Record<string, unknown>;
-  comment?: string;
-}) {
-  return getData<AlertMonitorRuleChangeItem>(http.post("/alerts/monitor-rule-changes", payload));
+export function proposeMonitorRuleChange(
+  payload: {
+    rule_id: number;
+    payload: Record<string, unknown>;
+    comment?: string;
+  },
+  idemKey?: string,
+) {
+  return getData<AlertMonitorRuleChangeItem>(
+    http.post("/alerts/monitor-rule-changes", payload, idempotencyConfig(idemKey)),
+  );
 }
 
-export function approveMonitorRuleChange(id: number) {
-  return getData<Record<string, unknown>>(http.post(`/alerts/monitor-rule-changes/${id}/approve`, {}));
+export function approveMonitorRuleChange(id: number, idemKey?: string) {
+  return getData<Record<string, unknown>>(
+    http.post(`/alerts/monitor-rule-changes/${id}/approve`, {}, idempotencyConfig(idemKey)),
+  );
 }
 
 export function rejectMonitorRuleChange(id: number, comment?: string) {

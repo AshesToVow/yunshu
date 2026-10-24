@@ -10,7 +10,6 @@ import (
 
 	"yunshu/internal/ai/knowledge"
 	"yunshu/internal/ai/runbooks"
-	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 )
 
@@ -43,10 +42,10 @@ func (s *Service) retrieveFromDB(ctx context.Context, query string, modules []st
 	if len(tokens) == 0 {
 		return nil
 	}
+	queryVec := s.queryEmbedding(ctx, query)
 	var out []ragHit
 	// 故障案例优先
-	var cases []model.AiIncidentCase
-	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Limit(200).Find(&cases).Error
+	cases, _ := s.repo.ListEnabledIncidentCases(ctx, 200)
 	for _, c := range cases {
 		blob := strings.ToLower(c.Title + " " + c.Symptom + " " + c.RootCause + " " + c.Solution + " " + c.Category + " " + c.Technology)
 		sc := scoreTokens(blob, tokens)
@@ -66,12 +65,21 @@ func (s *Service) retrieveFromDB(ctx context.Context, query string, modules []st
 			"\n方案：" + truncateRunesStr(c.Solution, 400)
 		out = append(out, ragHit{Source: "case:" + c.CaseID, Module: "case", Content: content, Score: sc + c.Confidence})
 	}
-	// KB chunks
-	var chunks []model.AiKbChunk
-	_ = s.db.WithContext(ctx).Order("id DESC").Limit(500).Find(&chunks).Error
+	// KB chunks（词法 + 可选语义混合）
+	chunks, _ := s.repo.ListRecentChunks(ctx, 500)
 	for _, ch := range chunks {
 		blob := strings.ToLower(ch.HeadingPath + " " + ch.Content)
 		sc := scoreTokens(blob, tokens)
+		if sc <= 0 && len(queryVec) == 0 {
+			continue
+		}
+		if sc <= 0 && len(ch.Embedding) == 0 {
+			continue
+		}
+		if sc <= 0 {
+			sc = 0.1 // 仅语义命中时给弱词法底分
+		}
+		sc = applyHybridChunkScore(ch, sc, queryVec)
 		if sc <= 0 {
 			continue
 		}
@@ -83,8 +91,7 @@ func (s *Service) retrieveFromDB(ctx context.Context, query string, modules []st
 		})
 	}
 	// SOP
-	var sops []model.AiSOP
-	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Limit(100).Find(&sops).Error
+	sops, _ := s.repo.ListEnabledSOPs(ctx, 100)
 	for _, sp := range sops {
 		blob := strings.ToLower(sp.Title + " " + sp.Scenario + " " + sp.CheckSteps + " " + sp.ExecSteps)
 		sc := scoreTokens(blob, tokens)
@@ -385,14 +392,12 @@ func (s *Service) SyncKnowledgeBase(ctx context.Context) (*KnowledgeSyncReport, 
 	}
 
 	kbCodeByID := map[uint]string{}
-	var kbs []model.AiKnowledgeBase
-	_ = s.db.WithContext(ctx).Find(&kbs).Error
+	kbs, _ := s.repo.ListKnowledgeBases(ctx)
 	for _, kb := range kbs {
 		kbCodeByID[kb.ID] = kb.Code
 	}
 
-	var docs []model.AiKbDocument
-	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&docs).Error
+	docs, _ := s.repo.ListEnabledKBDocuments(ctx)
 	for i, d := range docs {
 		mod := moduleFromKBCode(kbCodeByID[d.KBID])
 		if mod == "" {
@@ -406,8 +411,7 @@ func (s *Service) SyncKnowledgeBase(ctx context.Context) (*KnowledgeSyncReport, 
 			"source": d.Source, "module": mod, "title": d.Title, "content": d.Content, "seq": i,
 		})
 	}
-	var cases []model.AiIncidentCase
-	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&cases).Error
+	cases, _ := s.repo.ListEnabledIncidentCases(ctx, 0)
 	for i, c := range cases {
 		mod := moduleFromText(c.Category + " " + c.Technology + " " + c.Title + " " + c.CaseID)
 		if mod == "" {
@@ -418,8 +422,7 @@ func (s *Service) SyncKnowledgeBase(ctx context.Context) (*KnowledgeSyncReport, 
 			"source": "case:" + c.CaseID, "module": mod, "title": c.Title, "content": content, "seq": i,
 		})
 	}
-	var sops []model.AiSOP
-	_ = s.db.WithContext(ctx).Where("enabled = ?", true).Find(&sops).Error
+	sops, _ := s.repo.ListEnabledSOPs(ctx, 0)
 	for i, sp := range sops {
 		mod := moduleFromText(sp.Code + " " + sp.Title + " " + sp.Scenario)
 		if mod == "" {

@@ -24,13 +24,6 @@ type PeriodDiff struct {
 }
 
 // applyPeriodDiff 用上一期台账回填本期条目的期次状态与整改字段，并给出对比结论。
-//
-// 规则：
-//   - 上期存在且本期仍在 → persisting，沿用 Owner/DueDate/FirstSeen（不覆盖人工填写）
-//   - 上期不存在 → new，FirstSeen 记为本期
-//   - 上期存在但本期消失 → recovered，仅落库与展示，不进入本期风险清单
-//
-// 无上一期成功巡检时（首次巡检），全部记为 new 且不输出对比章节。
 func (s *Service) applyPeriodDiff(ctx context.Context, projectID, runID uint, now time.Time, entries []LedgerEntry) ([]LedgerEntry, PeriodDiff) {
 	diff := PeriodDiff{}
 	prev, prevRun := s.loadPreviousFindings(ctx, projectID, runID)
@@ -98,21 +91,16 @@ func (s *Service) applyPeriodDiff(ctx context.Context, projectID, runID uint, no
 
 // loadPreviousFindings 取该项目上一次有台账记录的巡检，返回其非 recovered 条目。
 func (s *Service) loadPreviousFindings(ctx context.Context, projectID, runID uint) (map[string]model.InspectFinding, *model.InspectRun) {
-	if s.db == nil || projectID == 0 {
+	if s.repo == nil || projectID == 0 {
 		return map[string]model.InspectFinding{}, nil
 	}
-	var prevRunID uint
-	err := s.db.WithContext(ctx).Model(&model.InspectFinding{}).
-		Where("project_id = ? AND run_id <> ?", projectID, runID).
-		Order("run_id DESC").Limit(1).Pluck("run_id", &prevRunID).Error
+	prevRunID, err := s.repo.PluckPreviousFindingRunID(ctx, projectID, runID)
 	if err != nil || prevRunID == 0 {
 		return map[string]model.InspectFinding{}, nil
 	}
 
-	var rows []model.InspectFinding
-	if err := s.db.WithContext(ctx).
-		Where("project_id = ? AND run_id = ? AND state <> ?", projectID, prevRunID, "recovered").
-		Find(&rows).Error; err != nil {
+	rows, err := s.repo.ListFindingsByRun(ctx, projectID, prevRunID)
+	if err != nil {
 		return map[string]model.InspectFinding{}, nil
 	}
 	out := make(map[string]model.InspectFinding, len(rows))
@@ -120,16 +108,16 @@ func (s *Service) loadPreviousFindings(ctx context.Context, projectID, runID uin
 		out[r.Fingerprint] = r
 	}
 
-	var prevRun model.InspectRun
-	if err := s.db.WithContext(ctx).Where("id = ?", prevRunID).First(&prevRun).Error; err != nil {
+	prevRun, err := s.repo.GetRunByID(ctx, prevRunID)
+	if err != nil {
 		return out, nil
 	}
-	return out, &prevRun
+	return out, prevRun
 }
 
 // saveFindings 落库本期台账（含已恢复条目）。失败只告警不阻断报告生成。
 func (s *Service) saveFindings(ctx context.Context, projectID, runID uint, now time.Time, entries []LedgerEntry, diff PeriodDiff) error {
-	if s.db == nil || projectID == 0 || runID == 0 {
+	if s.repo == nil || projectID == 0 || runID == 0 {
 		return nil
 	}
 	rows := make([]model.InspectFinding, 0, len(entries)+len(diff.Recovered))
@@ -181,7 +169,7 @@ func (s *Service) saveFindings(ctx context.Context, projectID, runID uint, now t
 	if len(rows) == 0 {
 		return nil
 	}
-	return s.db.WithContext(ctx).CreateInBatches(rows, 100).Error
+	return s.repo.CreateFindingsBatch(ctx, rows)
 }
 
 func buildDiffSummary(d PeriodDiff) string {

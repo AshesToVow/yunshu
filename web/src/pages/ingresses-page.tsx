@@ -11,7 +11,15 @@ import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { listNamespaces as listClusterNamespaces } from "../services/clusters";
 import { diagnoseIngress, type IngressDiagnoseResult } from "../services/ingress-diagnose";
 import { getWorkloadTopology, type TopologyGraph } from "../services/k8s-topology";
-import { applyIngress, deleteIngress, getIngressDetail, listIngresses, restartIngressNginxPods, type IngressDetail, type IngressItem } from "../services/ingresses";
+import {
+  applyIngress,
+  deleteIngress,
+  getIngressDetail,
+  listIngresses,
+  restartIngressNginxPods,
+  type IngressDetail,
+  type IngressItem,
+} from "../services/ingresses";
 
 export function IngressesPage() {
   const listReloadRef = useRef<() => void>(() => {});
@@ -59,10 +67,24 @@ export function IngressesPage() {
       title: "访问规则",
       dataIndex: "rules_text",
       width: 320,
-      render: (v?: string) => <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>,
+      render: (v?: string) => (
+        <Typography.Text style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{v || "-"}</Typography.Text>
+      ),
     },
-    { title: "标签", key: "labels", width: 70, align: "center", render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels) },
-    { title: "注解", key: "annotations", width: 70, align: "center", render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations) },
+    {
+      title: "标签",
+      key: "labels",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("标签", <TagsOutlined />, r.labels),
+    },
+    {
+      title: "注解",
+      key: "annotations",
+      width: 70,
+      align: "center",
+      render: (_, r) => renderKVIcon("注解", <FileTextOutlined />, r.annotations),
+    },
     { title: "入口控制器", dataIndex: "class_name", width: 180, render: (v?: string) => v || "-" },
     { title: "LB地址", dataIndex: "load_balancer", width: 180, render: (v?: string) => v || "-" },
     { title: "存在时长", dataIndex: "age", width: 90, fixed: "right", render: (v?: string) => v || "-" },
@@ -117,9 +139,11 @@ export function IngressesPage() {
         }}
         columns={columns}
         api={{
-          list: async ({ clusterId, namespace, keyword }) => await listIngresses(clusterId, namespace ?? "default", keyword),
-          detail: async ({ clusterId, namespace, name }) => await getIngressDetail(clusterId, namespace ?? "default", name),
-          apply: async ({ clusterId, manifest }) => await applyIngress(clusterId, manifest),
+          list: async ({ clusterId, namespace, keyword }) =>
+            await listIngresses(clusterId, namespace ?? "default", keyword),
+          detail: async ({ clusterId, namespace, name }) =>
+            await getIngressDetail(clusterId, namespace ?? "default", name),
+          apply: async ({ clusterId, manifest, idemKey }) => await applyIngress(clusterId, manifest, idemKey),
           remove: async (args) => await deleteIngress(args.clusterId, args.namespace ?? "default", args.name, args),
         }}
         onToolbarReady={(ctx) => {
@@ -146,7 +170,8 @@ export function IngressesPage() {
               if (!ctx.clusterId) return;
               Modal.confirm({
                 title: "重启 Ingress-Nginx Controller Pods",
-                content: "将删除 ingress-nginx controller Pods 以触发自动重建，用于刷新默认证书等运行态资源。确认继续吗？",
+                content:
+                  "将删除 ingress-nginx controller Pods 以触发自动重建，用于刷新默认证书等运行态资源。确认继续吗？",
                 okText: "确认重启",
                 cancelText: "取消",
                 onOk: async () => {
@@ -205,7 +230,13 @@ spec:
         />
       </Drawer>
 
-      <Modal title="Ingress 资源拓扑（Ingress → Service → Workload → Pod）" open={topoOpen} onCancel={() => setTopoOpen(false)} footer={null} width={900}>
+      <Modal
+        title="Ingress 资源拓扑（Ingress → Service → Workload → Pod）"
+        open={topoOpen}
+        onCancel={() => setTopoOpen(false)}
+        footer={null}
+        width={900}
+      >
         {topoLoading ? <Typography.Text>加载中…</Typography.Text> : <TopologyGraphView graph={topoGraph} />}
       </Modal>
 

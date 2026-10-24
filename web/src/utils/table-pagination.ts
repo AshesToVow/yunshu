@@ -28,7 +28,7 @@ export function tablePagination(opts: TablePaginationInput = {}): TablePaginatio
       ? undefined
       : typeof opts.showTotal === "function"
         ? opts.showTotal
-        : ((t: number) => `共 ${t} 条`);
+        : (t: number) => `共 ${t} 条`;
 
   return {
     current: opts.current,

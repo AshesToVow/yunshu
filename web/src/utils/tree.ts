@@ -134,9 +134,7 @@ export function collectGrantedPermissionIds(nodes: PermissionTreeNode[]): number
 
 export function normalizeCheckedKeys(checkedKeys: Parameters<NonNullable<TreeProps["onCheck"]>>[0]): number[] {
   const rawKeys = Array.isArray(checkedKeys) ? checkedKeys : checkedKeys.checked;
-  return rawKeys
-    .map((item) => Number(item))
-    .filter((item) => Number.isInteger(item));
+  return rawKeys.map((item) => Number(item)).filter((item) => Number.isInteger(item));
 }
 
 function getModuleName(resource: string) {

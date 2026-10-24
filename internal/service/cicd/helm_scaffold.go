@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/service/cicd/helmscaffold"
 )
@@ -33,12 +32,8 @@ func (s *Service) BuildHelmScaffoldZip(ctx context.Context, projectID, serviceID
 		ServicePort:     q.ServicePort,
 	}
 	if opts.ImageRepository == "" || opts.ReplicaCount <= 0 || opts.ContainerPort <= 0 {
-		var cfg model.CicdDeployConfig
-		_ = s.db.WithContext(ctx).
-			Where("service_id = ? AND deploy_kind = ?", serviceID, "container").
-			Order("id DESC").
-			First(&cfg).Error
-		if opts.ImageRepository == "" && strings.TrimSpace(cfg.ImageName) != "" {
+		cfg, _ := s.repo.GetFirstContainerDeploy(ctx, serviceID)
+		if cfg != nil && opts.ImageRepository == "" && strings.TrimSpace(cfg.ImageName) != "" {
 			opts.ImageRepository = strings.TrimSpace(cfg.ImageName)
 			if !strings.Contains(opts.ImageRepository, "/") {
 				harborURL, harborProject := s.loadProjectHarbor(ctx, projectID)
@@ -56,11 +51,13 @@ func (s *Service) BuildHelmScaffoldZip(ctx context.Context, projectID, serviceID
 				opts.ImageRepository = fmt.Sprintf("%s/%s/%s", stripHarborHost(harborURL), harborProject, opts.ImageRepository)
 			}
 		}
-		if opts.ReplicaCount <= 0 && cfg.Replicas > 0 {
-			opts.ReplicaCount = cfg.Replicas
-		}
-		if opts.ContainerPort <= 0 && cfg.ContainerPort > 0 {
-			opts.ContainerPort = cfg.ContainerPort
+		if cfg != nil {
+			if opts.ReplicaCount <= 0 && cfg.Replicas > 0 {
+				opts.ReplicaCount = cfg.Replicas
+			}
+			if opts.ContainerPort <= 0 && cfg.ContainerPort > 0 {
+				opts.ContainerPort = cfg.ContainerPort
+			}
 		}
 	}
 	filename, data, err = helmscaffold.BuildZip(opts)

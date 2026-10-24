@@ -191,7 +191,7 @@ func (p *JdCloudProvider) QueryInstanceExpireAt(ctx context.Context, ak, sk, reg
 	if t, parseErr := time.Parse(time.RFC3339, raw); parseErr == nil {
 		return &t, nil
 	}
-	return nil, nil
+	return nil, fmt.Errorf("无法解析京东云实例到期时间: %q", raw)
 }
 
 func (p *JdCloudProvider) SyncInstanceTags(ctx context.Context, ak, sk, region, instanceID string, oldTags, newTags map[string]string) error {

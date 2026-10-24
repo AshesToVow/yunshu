@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 
-	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 
@@ -31,8 +30,8 @@ func (s *Service) assertConnectionManage(ctx context.Context, connectionID uint,
 	if isSuperAdmin(actor) {
 		return nil
 	}
-	var row model.EsmgmtConnection
-	if err := s.db.WithContext(ctx).Select("id", "owner_user_id").First(&row, connectionID).Error; err != nil {
+	row, err := s.repo.GetConnectionOwner(ctx, connectionID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return constants.ErrNotFound
 		}
@@ -56,12 +55,11 @@ func (s *Service) assertConnectionWrite(ctx context.Context, connectionID uint, 
 		if actorID(actor) == 0 {
 			return constants.ErrForbidden
 		}
-		var def model.EsmgmtConnection
-		err := s.db.WithContext(ctx).Select("id").Where("is_default = ?", true).First(&def).Error
+		def, err := s.repo.GetDefaultConnection(ctx)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				// 无默认连接时仅允许已登录用户走字典回退（只读场景由上层 API 约束）
-				return nil
+				// 无默认连接时禁止写操作走字典回退（避免 Owner 模型被绕过）
+				return constants.ErrForbiddenWithMsg("未配置默认 ES 连接，请指定 connection_id")
 			}
 			return err
 		}

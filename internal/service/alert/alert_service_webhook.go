@@ -2,6 +2,7 @@ package alert
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -153,7 +154,8 @@ func (s *AlertService) ValidateWebhookToken(token string) bool {
 	token = strings.TrimSpace(token)
 	token = strings.TrimPrefix(token, "Bearer ")
 	token = strings.TrimPrefix(token, "bearer ")
-	return strings.TrimSpace(token) == expected
+	token = strings.TrimSpace(token)
+	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
 }
 
 // ValidateK8sEventIngressToken 校验 K8s Event 入站令牌。
@@ -167,7 +169,7 @@ func (s *AlertService) ValidateK8sEventIngressToken(token, clientIP string) bool
 	if expected == "" {
 		return token == "" && isLoopbackIP(clientIP)
 	}
-	return token == expected
+	return subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1
 }
 
 func isLoopbackIP(raw string) bool {

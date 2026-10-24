@@ -4,8 +4,9 @@ scenario: search_logs 无结果
 preconditions: 已知 project_id
 input_params: project_id, keyword
 check_steps: |
-  1. search_logs（明确 keyword，可加 namespace/pod）
-  2. 仍空则核对采集规则与索引前缀
+  1. analyze_logs 或 search_logs（明确 keyword/level，可加 namespace/pod/from/to）
+  2. 仍空则 list_log_sources，再按 host/k8s 分别 list_loggie_status / list_cluster_log_rules
+  3. 核对索引前缀与 Kafka Topic
 exec_steps: |
   1. 调整检索条件与时间范围
   2. 检查 Loggie/集群采集是否启用

@@ -15,7 +15,7 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/k8sauth"
-	"yunshu/internal/pkg/k8scaps"
+	"yunshu/internal/pkg/k8srole"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
@@ -68,26 +68,6 @@ func (c *k8sScopeCatalogCache) get(ctx context.Context, routePath, method string
 	return strings.TrimSpace(actionByKey[key]), true
 }
 
-func (c *k8sScopeCatalogCache) permissions() []model.Permission {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if c.perms == nil {
-		return nil
-	}
-	out := make([]model.Permission, len(c.perms))
-	copy(out, c.perms)
-	return out
-}
-
-func (c *k8sScopeCatalogCache) unavailable() bool {
-	if c == nil || c.repo == nil {
-		return false
-	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.loadedAt.IsZero() && c.loadErr != nil
-}
-
 func (c *k8sScopeCatalogCache) refresh(ctx context.Context) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -119,10 +99,10 @@ func (c *k8sScopeCatalogCache) refresh(ctx context.Context) {
 	c.loadedAt = time.Now()
 }
 
-// K8sScopeAuthorize:
-// 1) 只要请求带具体 namespace：始终做 NS deny/allow（含未纳入目录的 GET；super-admin 仍受约束）
-// 2) 纳入目录 / forceTier / K8s 只读路径：再做集群档位校验
-// 3) 档位由 DB 表 k8s_cluster_access_grants 控制（不经 Casbin）
+// K8sScopeAuthorize 对齐 k8m CheckPermissionLogic：
+// 1) 解析 cluster_id / namespace 后加载 k8s_cluster_access_grants
+// 2) 平台超管旁路（与 k8m RolePlatformAdmin 一致）
+// 3) 其余用户按三角色 + 授权行上的 NS 黑白名单校验（写操作含重启均需 cluster_admin）
 func K8sScopeAuthorize(
 	logger *logx.Logger,
 	permRepo interfaces.PermissionRepository,
@@ -137,9 +117,10 @@ func K8sScopeAuthorize(
 			routePath = c.Request.URL.Path
 		}
 		method := c.Request.Method
-		actionCode, tracked := catalog.get(c.Request.Context(), routePath, method)
+		_, tracked := catalog.get(c.Request.Context(), routePath, method)
 		forceTier := k8sScopeForceTierCheck(routePath, method)
-		needTier := tracked || forceTier ||
+		grantRequiredWrite := k8sScopeRequiresClusterGrant(routePath, method)
+		needTier := tracked || forceTier || grantRequiredWrite ||
 			(strings.EqualFold(method, "GET") && service.IsK8sReadAPIPath(routePath))
 
 		clusterID, namespace := extractClusterNamespaceFromRequest(c)
@@ -162,30 +143,37 @@ func K8sScopeAuthorize(
 		if strings.EqualFold(method, "GET") && service.IsK8sReadAPIPath(routePath) && !forceTier {
 			intent = k8sauth.AccessIntentRead
 		}
-		if forceTier && strings.Contains(strings.TrimSpace(routePath), "exec") {
+		if forceTier && k8sRouteIsExecLike(routePath) {
 			intent = k8sauth.AccessIntentExec
 		}
 		if strings.EqualFold(method, "GET") && !forceTier && !tracked {
 			intent = k8sauth.AccessIntentRead
 		}
-		c.Request = c.Request.WithContext(k8sauth.WithRequestScope(c.Request.Context(), k8sauth.RequestScope{
-			ClusterID: clusterID,
-			Namespace: concreteNS,
-			Pack:      pack,
-			Intent:    intent,
-		}))
+		bypass := auth.IsSuperAdminRole(user.RoleCodes)
+		scope := k8sauth.RequestScope{
+			ClusterID:  clusterID,
+			Namespace:  concreteNS,
+			Pack:       pack,
+			Intent:     intent,
+			BypassAuth: bypass,
+			Username:   strings.TrimSpace(user.Username),
+		}
+		if scope.Username == "" {
+			scope.Username = k8sauth.UserRefString(user.ID)
+		}
+		c.Request = c.Request.WithContext(k8sauth.WithRequestScope(c.Request.Context(), scope))
 		// 从 body 提取 confirm 供高危操作
 		if m := extractConfirmFromRequest(c); m {
 			c.Request = c.Request.WithContext(k8sauth.WithDestructiveConfirm(c.Request.Context(), true))
 		}
 
 		if clusterID == 0 {
-			if forceTier {
+			if forceTier || grantRequiredWrite {
 				msg := "须在请求中携带 cluster_id，以便集群档位校验"
 				if strings.HasSuffix(strings.TrimSpace(routePath), "/ingresses/nginx/restart") {
 					msg = "重启 Ingress-Nginx 须在请求体中携带 cluster_id，且需集群 admin 档位"
-				} else if strings.Contains(strings.TrimSpace(routePath), "exec") {
-					msg = "Pod Exec 须在请求中携带 cluster_id（及 namespace），以便集群档位校验"
+				} else if k8sRouteIsExecLike(routePath) {
+					msg = "Pod Exec / 文件操作须在请求中携带 cluster_id（及 namespace），以便集群档位校验"
 				}
 				response.Error(c, constants.ErrBadRequestWithMsg(msg))
 				c.Abort()
@@ -196,68 +184,15 @@ func K8sScopeAuthorize(
 		}
 
 		if concreteNS == "" {
-			if forceTier && strings.Contains(strings.TrimSpace(routePath), "exec") {
-				response.Error(c, constants.ErrBadRequestWithMsg("Pod Exec 须指定 namespace"))
+			if forceTier && k8sRouteIsExecLike(routePath) {
+				response.Error(c, constants.ErrBadRequestWithMsg("Pod Exec / 文件操作须指定 namespace"))
 				c.Abort()
 				return
 			}
 		}
 
-		if needNS {
-			if nsDenyRepo != nil {
-				denied, err := nsDenyRepo.IsDenied(c.Request.Context(), pack, clusterID, concreteNS)
-				if err != nil {
-					logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace deny check failed", "error", err)
-					response.Error(c, constants.ErrInternal)
-					c.Abort()
-					return
-				}
-				if denied {
-					response.Error(c, constants.ErrForbiddenWithMsg("当前主体在此集群下禁止访问命名空间「"+concreteNS+"」"))
-					c.Abort()
-					return
-				}
-			}
-			if nsAllowRepo != nil {
-				active, err := nsAllowRepo.WhitelistActiveForCluster(c.Request.Context(), pack, clusterID)
-				if err != nil {
-					logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace allow check failed", "error", err)
-					response.Error(c, constants.ErrInternal)
-					c.Abort()
-					return
-				}
-				if active {
-					ok, err := nsAllowRepo.NamespaceAllowed(c.Request.Context(), pack, clusterID, concreteNS)
-					if err != nil {
-						logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("namespace allow match failed", "error", err)
-						response.Error(c, constants.ErrInternal)
-						c.Abort()
-						return
-					}
-					if !ok {
-						response.Error(c, constants.ErrForbiddenWithMsg("当前主体在此集群下仅允许访问白名单内的命名空间"))
-						c.Abort()
-						return
-					}
-				}
-			}
-		}
-
-		if !needTier {
+		if bypass {
 			c.Next()
-			return
-		}
-
-		for _, rc := range user.RoleCodes {
-			if strings.TrimSpace(rc) == "super-admin" {
-				c.Next()
-				return
-			}
-		}
-
-		if catalog.unavailable() {
-			response.Error(c, constants.ErrInternal)
-			c.Abort()
 			return
 		}
 		if accessRepo == nil {
@@ -265,22 +200,43 @@ func K8sScopeAuthorize(
 			c.Abort()
 			return
 		}
-
-		perms := catalog.permissions()
-		needCap := service.RequiredK8sCapability(perms, routePath, method, actionCode)
-		haveCaps := accessRepo.EffectiveCapabilities(c.Request.Context(), pack, clusterID)
-		if !k8scaps.Has(haveCaps, needCap) {
-			response.Error(c, constants.ErrForbiddenWithMsg("当前主体缺少集群能力："+needCap+"（请在 K8s 集群访问授权中勾选对应能力包）"))
+		grants, err := accessRepo.ListForPack(c.Request.Context(), pack, clusterID)
+		if err != nil {
+			logx.With(c.Request.Context(), "component", "http.k8s_scope").Error("list k8s grants failed", "error", err)
+			response.Error(c, constants.ErrInternal)
 			c.Abort()
 			return
 		}
-		rank := k8scaps.Rank(haveCaps)
-		if scope, ok := k8sauth.RequestScopeFromContext(c.Request.Context()); ok {
-			scope.AccessRank = rank
-			c.Request = c.Request.WithContext(k8sauth.WithRequestScope(c.Request.Context(), scope))
-		}
+		scope.Grants = grants
+		scope.AccessRank = k8srole.RankFromGrants(grants)
+		c.Request = c.Request.WithContext(k8sauth.WithRequestScope(c.Request.Context(), scope))
 
+		var nsList []string
+		if needNS {
+			nsList = []string{concreteNS}
+		}
+		action := k8srole.ActionFromHTTP(method, routePath)
+		if err := k8srole.Check(grants, strconv.FormatUint(uint64(clusterID), 10), scope.Username, action, nsList); err != nil {
+			response.Error(c, constants.ErrForbiddenWithMsg(err.Error()))
+			c.Abort()
+			return
+		}
 		c.Next()
+	}
+}
+
+// k8sScopeRequiresClusterGrant 将 K8s 资源写操作统一纳入集群档位校验，避免未登记到权限目录的路由绕过授权。
+// /clusters 下的接口管理平台中的集群连接记录，由 Casbin 控制，不属于目标集群资源操作。
+func k8sScopeRequiresClusterGrant(routePath, method string) bool {
+	p := strings.TrimSpace(routePath)
+	if strings.Contains(p, "/clusters") {
+		return false
+	}
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case "POST", "PUT", "PATCH", "DELETE":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -291,6 +247,7 @@ func k8sScopeForceTierCheck(routePath, method string) bool {
 	switch m {
 	case "POST":
 		if strings.HasSuffix(p, "/pods/exec") ||
+			strings.HasSuffix(p, "/pods/debug") ||
 			strings.HasSuffix(p, "/ingresses/nginx/restart") ||
 			strings.HasSuffix(p, "/nodes/drain") ||
 			strings.HasSuffix(p, "/rbac/apply") {
@@ -310,6 +267,18 @@ func k8sScopeForceTierCheck(routePath, method string) bool {
 	default:
 		return false
 	}
+}
+
+// k8sRouteIsExecLike Pod 终端与容器文件变更同属 exec 档位意图。
+func k8sRouteIsExecLike(routePath string) bool {
+	p := strings.TrimSpace(routePath)
+	if p == "" {
+		return false
+	}
+	if strings.Contains(p, "exec") || strings.HasSuffix(p, "/pods/debug") {
+		return true
+	}
+	return strings.Contains(p, "/pods/file/upload") || strings.Contains(p, "/pods/file/delete")
 }
 
 func extractConfirmFromRequest(c *gin.Context) bool {

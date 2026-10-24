@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -168,7 +169,13 @@ func (s *AlertService) evaluateOneCloudExpiryRule(ctx context.Context, rule *mod
 				}
 			}
 			expireAt, err := provider.QueryInstanceExpireAt(ctx, ak, sk, region, instanceID)
-			if err != nil || expireAt == nil {
+			if err != nil {
+				slog.Default().With("component", "alert.cloud_expiry").Warn(
+					"query instance expire failed", "instance_id", instanceID, "error", err,
+				)
+				continue
+			}
+			if expireAt == nil {
 				continue
 			}
 			instScanned++

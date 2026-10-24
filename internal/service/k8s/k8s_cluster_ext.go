@@ -9,9 +9,9 @@ import (
 	"net/url"
 	"strings"
 
+	"log/slog"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
-	"log/slog"
 
 	"gorm.io/gorm"
 	"k8s.io/client-go/rest"
@@ -105,10 +105,6 @@ func isMaskedSecretValue(s string) bool {
 
 // resolveClusterKubeconfig 解析集群连接配置：直连模式从 direct_config 实时生成（保证 Token 与库内 JSON 一致）。
 // 库内字段可能为 AES-GCM 密文，需经 OpenCredential 解密（无 runtime 时仅兼容明文）。
-func resolveClusterKubeconfig(cluster *model.K8sCluster) (string, error) {
-	return resolveClusterKubeconfigWithOpener(cluster, nil)
-}
-
 func (s *K8sRuntimeService) resolveClusterKubeconfig(cluster *model.K8sCluster) (string, error) {
 	return resolveClusterKubeconfigWithOpener(cluster, s)
 }

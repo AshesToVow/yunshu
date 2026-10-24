@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 
 export type RbacRoleItem = {
@@ -64,8 +64,10 @@ export function getRbacDetail(params: { cluster_id: number; kind: string; name: 
   return getData<RbacDetail>(http.get("/rbac/detail", { params }));
 }
 
-export function applyRbac(clusterId: number, manifest: string) {
-  return getData<boolean>(http.post("/rbac/apply", { cluster_id: clusterId, manifest, confirm: true }));
+export function applyRbac(clusterId: number, manifest: string, idemKey?: string) {
+  return getData<boolean>(
+    http.post("/rbac/apply", { cluster_id: clusterId, manifest, confirm: true }, idempotencyConfig(idemKey)),
+  );
 }
 
 export function deleteRbac(

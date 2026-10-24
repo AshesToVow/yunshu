@@ -101,7 +101,7 @@ labels:
 
 若再在 JSON 里写 `severity`，会与表单级别合并覆盖——保持与 **匹配级别** 一致即可。
 
-**注意**：平台监控规则依赖后端 **Redis** 做评估节拍与状态；Redis 不可用时规则不会进入 firing。生产核心告警仍应以 **Prometheus + Alertmanager Webhook** 为主路径，平台评估器为轻量补充。
+**注意**：平台监控规则优先用 Redis 做评估节拍与 `for` 状态；Redis 不可用时走进程内降级（`evaluateMonitorRuleNoRedis`，详见 `docs/alert-redis-degradation.md`），多副本下重复评估风险升高。生产主路径为**平台规则中心**；AM Webhook 仅为旁路兼容。
 
 ---
 

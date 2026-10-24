@@ -49,7 +49,12 @@ export function useRelatedPodsDrawer(
   };
 
   const viewer = (
-    <Drawer title={`${titlePrefix}${target ? `：${target.name}` : ""}`} open={open} onClose={() => setOpen(false)} width={width}>
+    <Drawer
+      title={`${titlePrefix}${target ? `：${target.name}` : ""}`}
+      open={open}
+      onClose={() => setOpen(false)}
+      width={width}
+    >
       <Table
         rowKey={(r) => `${r.namespace}/${r.name}`}
         loading={loading}
@@ -57,7 +62,12 @@ export function useRelatedPodsDrawer(
         pagination={{ pageSize: 10 }}
         columns={[
           { title: "Pod 名称", dataIndex: "name" },
-          { title: "状态", dataIndex: "phase", width: 120, render: (v: string) => <Tag color={v === "Running" ? "green" : "default"}>{v || "-"}</Tag> },
+          {
+            title: "状态",
+            dataIndex: "phase",
+            width: 120,
+            render: (v: string) => <Tag color={v === "Running" ? "green" : "default"}>{v || "-"}</Tag>,
+          },
           { title: "节点", dataIndex: "node_name", width: 160 },
           { title: "PodIP", dataIndex: "pod_ip", width: 140 },
           { title: "重启", dataIndex: "restart_count", width: 90 },

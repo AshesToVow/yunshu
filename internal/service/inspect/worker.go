@@ -89,8 +89,8 @@ func (s *Service) processQueuedRun(runID uint) {
 	}()
 
 	dbCtx := context.Background()
-	var run model.InspectRun
-	if err := s.db.WithContext(dbCtx).First(&run, runID).Error; err != nil {
+	run, err := s.repo.GetRunByID(dbCtx, runID)
+	if err != nil {
 		log.Warn("load run failed", "error", err.Error())
 		return
 	}
@@ -102,24 +102,19 @@ func (s *Service) processQueuedRun(runID uint) {
 		return
 	}
 
-	var plan model.InspectPlan
-	if err := s.db.WithContext(dbCtx).First(&plan, run.PlanID).Error; err != nil {
-		_, _ = s.failRun(dbCtx, &run, fmt.Errorf("加载巡检计划失败: %w", err))
+	plan, err := s.repo.GetPlanByID(dbCtx, run.PlanID)
+	if err != nil {
+		_, _ = s.failRun(dbCtx, run, fmt.Errorf("加载巡检计划失败: %w", err))
 		return
 	}
 
 	now := time.Now()
-	res := s.db.WithContext(dbCtx).Model(&model.InspectRun{}).
-		Where("id = ? AND status IN ?", runID, []string{"pending", "running"}).
-		Updates(map[string]any{
-			"status":     "running",
-			"started_at": now,
-		})
-	if res.Error != nil {
-		log.Warn("mark running failed", "error", res.Error.Error())
+	n, err := s.repo.MarkRunRunning(dbCtx, runID, now)
+	if err != nil {
+		log.Warn("mark running failed", "error", err.Error())
 		return
 	}
-	if res.RowsAffected == 0 {
+	if n == 0 {
 		return
 	}
 	run.Status = "running"
@@ -127,14 +122,14 @@ func (s *Service) processQueuedRun(runID uint) {
 
 	runCtx, cancel := context.WithTimeout(context.Background(), inspectRunTimeout)
 	defer cancel()
-	if _, err := s.performRun(runCtx, &plan, &run); err != nil {
+	if _, err := s.performRun(runCtx, plan, run); err != nil {
 		log.Warn("inspect run failed", "error", err.Error())
 	}
 }
 
 // reclaimOrphanRuns 进程重启后：pending 重新入队；遗留 running 标记失败，避免永远「执行中」。
 func (s *Service) reclaimOrphanRuns(ctx context.Context) {
-	if s == nil || s.db == nil {
+	if s == nil || s.repo == nil {
 		return
 	}
 	log := slog.Default().With("component", "inspect.worker")
@@ -142,19 +137,13 @@ func (s *Service) reclaimOrphanRuns(ctx context.Context) {
 	// 阈值必须 >= inspectRunTimeout：否则一次仍在正常执行（未超时）的巡检会被误判为「重启遗留」而标记失败。
 	// 进程重启场景下 started_at 本就早于此刻，用 inspectRunTimeout 作阈值不会漏收。
 	staleBefore := finished.Add(-inspectRunTimeout)
-	res := s.db.WithContext(ctx).Model(&model.InspectRun{}).
-		Where("status = ? AND (started_at IS NULL OR started_at < ?)", "running", staleBefore).
-		Updates(map[string]any{
-			"status":        "failed",
-			"error_message": "巡检中断（服务重启或上次请求超时），请重新执行",
-			"finished_at":   finished,
-		})
-	if res.Error == nil && res.RowsAffected > 0 {
-		log.Warn("reclaimed orphan running inspect runs", "count", res.RowsAffected)
+	n, err := s.repo.ReclaimOrphanRunning(ctx, staleBefore, finished, "巡检中断（服务重启或上次请求超时），请重新执行")
+	if err == nil && n > 0 {
+		log.Warn("reclaimed orphan running inspect runs", "count", n)
 	}
 
-	var pending []model.InspectRun
-	if err := s.db.WithContext(ctx).Where("status = ?", "pending").Order("id ASC").Limit(200).Find(&pending).Error; err != nil {
+	pending, err := s.repo.ListPendingRuns(ctx, 200)
+	if err != nil {
 		return
 	}
 	for _, r := range pending {
@@ -167,16 +156,10 @@ func (s *Service) reclaimOrphanRuns(ctx context.Context) {
 
 // reclaimStaleRunning 定时回收长时间卡在 running 的任务。
 func (s *Service) reclaimStaleRunning(ctx context.Context) {
-	if s == nil || s.db == nil {
+	if s == nil || s.repo == nil {
 		return
 	}
 	cutoff := time.Now().Add(-inspectStaleRunningAfter)
 	finished := time.Now()
-	_ = s.db.WithContext(ctx).Model(&model.InspectRun{}).
-		Where("status = ? AND started_at IS NOT NULL AND started_at < ?", "running", cutoff).
-		Updates(map[string]any{
-			"status":        "failed",
-			"error_message": "巡检超时未完成，已自动标记失败，请重新执行",
-			"finished_at":   finished,
-		}).Error
+	_ = s.repo.ReclaimStaleRunning(ctx, cutoff, finished, "巡检超时未完成，已自动标记失败，请重新执行")
 }

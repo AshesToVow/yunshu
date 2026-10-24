@@ -6,6 +6,8 @@ import (
 	"io/fs"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/objectstore"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -88,7 +90,9 @@ func EnsureSeeded(ctx context.Context, db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
-	svc := NewService(db)
+	svc := NewService(repository.NewPlatformTemplateRepository(db), func(ctx context.Context) (*objectstore.Client, error) {
+		return objectstore.NewFromDB(ctx, db)
+	})
 	for _, d := range seedCatalog {
 		var n int64
 		if err := db.WithContext(ctx).Model(&model.PlatformTemplate{}).

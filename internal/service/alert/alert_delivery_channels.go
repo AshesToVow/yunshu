@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"net/http"
 	neturl "net/url"
@@ -61,7 +62,10 @@ func (s *AlertService) notifyWeComWebhook(ctx context.Context, channel *model.Al
 	atMobiles = appendAssigneePhonesToAtMobiles(atMobiles, payload)
 	atUsers := parseutil.ParseStringList(settings["atUserIds"])
 	if len(atMobiles) > 0 {
-		resolved, _ := s.resolveWeComUserIDsByMobiles(ctx, settings, atMobiles)
+		resolved, err := s.resolveWeComUserIDsByMobiles(ctx, settings, atMobiles)
+		if err != nil {
+			slog.Default().With("component", "alert.delivery").Warn("wecom mobile resolve failed", "error", err)
+		}
 		if len(resolved) > 0 {
 			atUsers = append(atUsers, resolved...)
 		}
@@ -107,7 +111,10 @@ func (s *AlertService) notifyWeComApp(ctx context.Context, channel *model.AlertC
 	atMobiles = appendAssigneePhonesToAtMobiles(atMobiles, payload)
 	atUsers := parseutil.ParseStringList(settings["atUserIds"])
 	if len(atMobiles) > 0 {
-		resolved, _ := s.resolveWeComUserIDsByMobiles(ctx, settings, atMobiles)
+		resolved, err := s.resolveWeComUserIDsByMobiles(ctx, settings, atMobiles)
+		if err != nil {
+			slog.Default().With("component", "alert.delivery").Warn("wecom mobile resolve failed", "error", err)
+		}
 		if len(resolved) > 0 {
 			atUsers = append(atUsers, resolved...)
 		}
@@ -151,7 +158,10 @@ func (s *AlertService) notifyDingTalkAppChat(ctx context.Context, channel *model
 	atMobiles = appendAssigneePhonesToAtMobiles(atMobiles, payload)
 	atUsers := parseutil.ParseStringList(settings["atUserIds"])
 	if len(atMobiles) > 0 {
-		resolved, _ := s.resolveDingTalkUserIDsByMobiles(ctx, token, atMobiles)
+		resolved, err := s.resolveDingTalkUserIDsByMobiles(ctx, token, atMobiles)
+		if err != nil {
+			slog.Default().With("component", "alert.delivery").Warn("dingtalk mobile resolve failed", "error", err)
+		}
 		if len(resolved) > 0 {
 			atUsers = append(atUsers, resolved...)
 		}

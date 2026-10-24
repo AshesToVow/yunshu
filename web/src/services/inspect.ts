@@ -37,6 +37,7 @@ export interface InspectItem {
   unit?: string;
   enabled: boolean;
   sort_order: number;
+  linked_rule_id?: number;
 }
 
 export interface InspectRun {
@@ -140,6 +141,22 @@ export function syncInspectItems(projectId: number) {
 
 export function resetInspectItems(projectId: number) {
   return getData<{ created: number }>(http.post(`/projects/${projectId}/inspect/items/reset-template`));
+}
+
+export function promoteInspectItemToAlert(
+  projectId: number,
+  itemId: number,
+  payload?: {
+    datasource_id?: number;
+    for_seconds?: number;
+    eval_interval_seconds?: number;
+    severity?: string;
+    enabled?: boolean;
+  },
+) {
+  return getData<{ id: number; name: string; expr: string; origin?: string }>(
+    http.post(`/projects/${projectId}/inspect/items/${itemId}/promote-alert`, payload ?? {}),
+  );
 }
 
 export function listInspectRuns(projectId: number, params?: { page?: number; page_size?: number }) {

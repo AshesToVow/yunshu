@@ -1,4 +1,4 @@
-import { getData, http } from "./http";
+import { getData, http, idempotencyConfig } from "./http";
 import { pickK8sDeleteOpts, type K8sDeleteOptions } from "./service-factory";
 import type { UserItem } from "../types/api";
 
@@ -106,31 +106,28 @@ export function deleteStorageClass(clusterId: number, name: string, deleteOpts?:
   );
 }
 
-export function applyPersistentVolume(clusterId: number, manifest: string) {
-  return getData<boolean>(http.post("/persistentvolumes/apply", { cluster_id: clusterId, manifest }));
+export function applyPersistentVolume(clusterId: number, manifest: string, idemKey?: string) {
+  return getData<boolean>(
+    http.post("/persistentvolumes/apply", { cluster_id: clusterId, manifest }, idempotencyConfig(idemKey)),
+  );
 }
 
-export function applyPersistentVolumeClaim(clusterId: number, manifest: string) {
-  return getData<boolean>(http.post("/persistentvolumeclaims/apply", { cluster_id: clusterId, manifest }));
+export function applyPersistentVolumeClaim(clusterId: number, manifest: string, idemKey?: string) {
+  return getData<boolean>(
+    http.post("/persistentvolumeclaims/apply", { cluster_id: clusterId, manifest }, idempotencyConfig(idemKey)),
+  );
 }
 
-export function applyStorageClass(clusterId: number, manifest: string) {
-  return getData<boolean>(http.post("/storageclasses/apply", { cluster_id: clusterId, manifest }));
+export function applyStorageClass(clusterId: number, manifest: string, idemKey?: string) {
+  return getData<boolean>(
+    http.post("/storageclasses/apply", { cluster_id: clusterId, manifest }, idempotencyConfig(idemKey)),
+  );
 }
 
 const TOKEN_KEY = "permission-system-token";
 const USER_KEY = "permission-system-user";
 
-/** @deprecated JWT 已迁至 HttpOnly Cookie；保留空实现兼容旧调用。 */
-export function getToken() {
-  return "";
-}
-
-/** @deprecated no-op：不再把 JWT 写入 localStorage。 */
-export function setToken(_token: string) {
-  window.localStorage.removeItem(TOKEN_KEY);
-}
-
+/** 清除历史 localStorage 里的 JWT 残留（会话已迁至 HttpOnly Cookie）。 */
 export function clearToken() {
   window.localStorage.removeItem(TOKEN_KEY);
 }

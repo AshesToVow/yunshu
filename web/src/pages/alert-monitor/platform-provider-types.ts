@@ -24,22 +24,7 @@ export type QuickSilenceTarget = {
   endsAt: Dayjs;
 };
 
-export type AlertmanagerSilenceRow = {
-  rowKey: string;
-  source: "alertmanager";
-  amId: string;
-  name: string;
-  comment?: string;
-  matchers?: Array<{ name: string; value: string; is_regex?: boolean }>;
-  starts_at: string;
-  ends_at: string;
-  state: string;
-  enabled: boolean;
-};
-
-export type SilenceDisplayRow =
-  | (AlertSilenceItem & { source: "platform"; rowKey: string })
-  | AlertmanagerSilenceRow;
+export type SilenceDisplayRow = AlertSilenceItem & { source: "platform"; rowKey: string };
 
 export type RuleComparator = ">" | ">=" | "<" | "<=" | "==" | "!=";
 export type RuleBuilderLogic = "and" | "or";

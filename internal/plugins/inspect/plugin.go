@@ -2,11 +2,11 @@ package inspect
 
 import (
 	"context"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
-	inspectsvc "yunshu/internal/service/inspect"
 )
 
 func init() {
@@ -43,7 +43,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := rt.Inspect.(*inspectsvc.Service); ok && svc != nil {
+	if svc, ok := plugin.As[*service.InspectService](rt.Inspect); ok && svc != nil {
 		_ = svc.SeedGlobalTemplates(bgCtx)
 		_ = svc.SeedReportTemplates(bgCtx)
 		lifecycle.Go("inspect.scheduler", func() { svc.RunScheduler(bgCtx) })

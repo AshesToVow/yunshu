@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/database"
 
 	"gorm.io/gorm"
 )
@@ -23,12 +24,27 @@ func (r *AlertEventRepository) Create(ctx context.Context, event *model.AlertEve
 }
 
 func (r *AlertEventRepository) GetByFingerprint(ctx context.Context, fingerprint string) (*model.AlertEvent, error) {
+	fp := strings.TrimSpace(fingerprint)
+	if fp == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
 	var event model.AlertEvent
 	err := r.db.WithContext(ctx).
-		Where("group_key = ? OR labels_digest = ?", fingerprint, fingerprint).
+		Where("fingerprint = ?", fp).
 		Order("id DESC").
 		First(&event).Error
 	if err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+func (r *AlertEventRepository) GetByID(ctx context.Context, id uint) (*model.AlertEvent, error) {
+	if id == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var event model.AlertEvent
+	if err := r.db.WithContext(ctx).First(&event, id).Error; err != nil {
 		return nil, err
 	}
 	return &event, nil
@@ -222,6 +238,90 @@ COALESCE(SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END), 0)
 		Group("datasource_id").Order("id DESC").Limit(200).
 		Scan(&stats.DatasourceFilterOptions).Error
 	return stats, nil
+}
+
+func (r *AlertEventRepository) BackfillProjectIDFromDatasource(ctx context.Context) error {
+	sql := database.SQLBackfillAlertEventProjectFromDatasource(database.DialectName(r.db))
+	return r.db.WithContext(ctx).Exec(sql).Error
+}
+
+func (r *AlertEventRepository) BackfillProjectIDFromSubscriptions(ctx context.Context) error {
+	sql := database.SQLBackfillAlertEventProjectFromSubscriptions(database.DialectName(r.db))
+	return r.db.WithContext(ctx).Exec(sql).Error
+}
+
+func (r *AlertEventRepository) FirstProjectIDBySubscriptionIDs(ctx context.Context, ids []uint) (uint, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	var pid uint
+	err := r.db.WithContext(ctx).Model(&model.AlertSubscriptionNode{}).
+		Select("project_id").Where("id IN ? AND project_id > 0", ids).
+		Order("project_id ASC").Limit(1).Scan(&pid).Error
+	return pid, err
+}
+
+func (r *AlertEventRepository) QualityWindowStats(ctx context.Context, from, to time.Time, projectID uint) (*AlertQualityWindowStats, error) {
+	out := &AlertQualityWindowStats{}
+	scope := func() *gorm.DB {
+		tx := r.db.WithContext(ctx).Model(&model.AlertEvent{}).
+			Where("created_at >= ? AND created_at <= ?", from, to)
+		if projectID > 0 {
+			tx = tx.Where("project_id = ?", projectID)
+		}
+		return tx
+	}
+	if err := scope().Count(&out.Total).Error; err != nil {
+		return nil, err
+	}
+	if err := scope().Where("success = ?", false).Count(&out.Failed).Error; err != nil {
+		return nil, err
+	}
+
+	type noiseRow struct {
+		Title       string
+		Severity    string
+		Count       int64
+		Fingerprint string
+		Alertname   string
+	}
+	var noise []noiseRow
+	if err := scope().
+		Select("title, severity, COUNT(*) as count, MAX(fingerprint) as fingerprint").
+		Group("title, severity").Order("count DESC").Limit(10).
+		Scan(&noise).Error; err != nil {
+		return nil, err
+	}
+	out.Noise = make([]AlertQualityNoiseRow, 0, len(noise))
+	for _, n := range noise {
+		out.Noise = append(out.Noise, AlertQualityNoiseRow{
+			Title: n.Title, Severity: n.Severity, Count: n.Count,
+			Fingerprint: n.Fingerprint, Alertname: n.Alertname,
+		})
+	}
+
+	type fpRow struct {
+		Fingerprint string
+		Title       string
+		Count       int64
+		Severity    string
+	}
+	var fps []fpRow
+	if err := scope().
+		Select("fingerprint, MAX(title) as title, COUNT(*) as count, MAX(severity) as severity").
+		Where("fingerprint <> ''").
+		Group("fingerprint").Having("COUNT(*) >= ?", 3).
+		Order("count DESC").Limit(10).
+		Scan(&fps).Error; err != nil {
+		return nil, err
+	}
+	out.Repeats = make([]AlertQualityRepeatRow, 0, len(fps))
+	for _, f := range fps {
+		out.Repeats = append(out.Repeats, AlertQualityRepeatRow{
+			Fingerprint: f.Fingerprint, Title: f.Title, Count: f.Count, Severity: f.Severity,
+		})
+	}
+	return out, nil
 }
 
 var _ AlertEventRepo = (*AlertEventRepository)(nil)

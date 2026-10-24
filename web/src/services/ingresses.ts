@@ -49,8 +49,8 @@ export function getIngressDetail(clusterId: number, namespace: string, name: str
   return ingressesSvc.detail(k8sParams(clusterId, { namespace, name }));
 }
 
-export function applyIngress(clusterId: number, manifest: string) {
-  return ingressesSvc.apply({ cluster_id: clusterId, manifest });
+export function applyIngress(clusterId: number, manifest: string, idemKey?: string) {
+  return ingressesSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 
 export function restartIngressNginxPods(clusterId: number, namespace?: string, selector?: string) {
@@ -74,8 +74,8 @@ export function getIngressClassDetail(clusterId: number, name: string) {
   return ingressClassesSvc.detail(k8sParams(clusterId, { name }));
 }
 
-export function applyIngressClass(clusterId: number, manifest: string) {
-  return ingressClassesSvc.apply({ cluster_id: clusterId, manifest });
+export function applyIngressClass(clusterId: number, manifest: string, idemKey?: string) {
+  return ingressClassesSvc.apply({ cluster_id: clusterId, manifest }, idemKey);
 }
 
 export function deleteIngressClass(clusterId: number, name: string, deleteOpts?: K8sDeleteOptions) {

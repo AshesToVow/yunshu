@@ -1,6 +1,5 @@
 import YAML from "yaml";
 
-
 export type EnvPair = { key?: string; value?: string };
 
 export function envPairsToMap(pairs?: EnvPair[]): Record<string, string> {
@@ -155,7 +154,13 @@ export function probeFromForm(prefix: "liveness" | "readiness" | "startup", v: a
 export function probeToForm(prefix: "liveness" | "readiness" | "startup", probe: any): Record<string, unknown> {
   if (!probe) return {};
   const out: Record<string, unknown> = {};
-  const type: ProbeType | undefined = probe?.httpGet ? "httpGet" : probe?.tcpSocket ? "tcpSocket" : probe?.exec ? "exec" : undefined;
+  const type: ProbeType | undefined = probe?.httpGet
+    ? "httpGet"
+    : probe?.tcpSocket
+      ? "tcpSocket"
+      : probe?.exec
+        ? "exec"
+        : undefined;
   if (!type) return out;
   out[`${prefix}_probe_type`] = type;
   if (type === "httpGet") {
@@ -176,4 +181,3 @@ export function probeToForm(prefix: "liveness" | "readiness" | "startup", probe:
   out[`${prefix}_success_threshold`] = toNumberOrUndefined(probe?.successThreshold);
   return out;
 }
-

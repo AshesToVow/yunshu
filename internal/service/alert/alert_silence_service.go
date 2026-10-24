@@ -11,9 +11,11 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/service/changeevent"
 
 	"gorm.io/gorm"
 )
@@ -43,6 +45,7 @@ type AlertSilenceUpsertRequest struct {
 }
 
 type AlertSilenceBatchItem struct {
+	ProjectID    uint      `json:"project_id"` // 可选；非 0 时覆盖请求级 project_id
 	Name         string    `json:"name" binding:"required,max=128"`
 	MatchersJSON string    `json:"matchers_json" binding:"required"`
 	StartsAt     time.Time `json:"starts_at" binding:"required"`
@@ -52,15 +55,42 @@ type AlertSilenceBatchItem struct {
 }
 
 type AlertSilenceBatchRequest struct {
-	Items []AlertSilenceBatchItem `json:"items" binding:"required,min=1"`
+	ProjectID uint                     `json:"project_id"` // 应用到所有 items；单项可覆盖
+	Items     []AlertSilenceBatchItem `json:"items" binding:"required,min=1"`
 }
 
 type AlertSilenceService struct {
-	repo interfaces.AlertSilenceRepository
+	repo       interfaces.AlertSilenceRepository
+	memberRepo interfaces.ProjectMemberRepository
 }
 
-func NewAlertSilenceService(repo interfaces.AlertSilenceRepository) *AlertSilenceService {
-	return &AlertSilenceService{repo: repo}
+func NewAlertSilenceService(repo interfaces.AlertSilenceRepository, memberRepo interfaces.ProjectMemberRepository) *AlertSilenceService {
+	return &AlertSilenceService{repo: repo, memberRepo: memberRepo}
+}
+
+func (s *AlertSilenceService) assertSilenceProjectAccess(ctx context.Context, actor *auth.CurrentUser, projectID uint) error {
+	if projectID == 0 {
+		// 全局静默仅超管
+		if actor != nil && auth.IsSuperAdminRole(actor.RoleCodes) {
+			return nil
+		}
+		return constants.ErrForbiddenWithMsg("全局静默（project_id=0）仅超级管理员可操作")
+	}
+	if actor != nil && auth.IsSuperAdminRole(actor.RoleCodes) {
+		return nil
+	}
+	if s.memberRepo == nil || actor == nil || actor.ID == 0 {
+		return constants.ErrForbidden
+	}
+	m, err := s.memberRepo.GetByProjectAndUser(ctx, projectID, actor.ID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrForbiddenWithMsg("非项目成员，无法操作该项目静默")
+		}
+		return err
+	}
+	_ = m
+	return nil
 }
 
 // disableExpiredSilences 将已过期但仍启用的静默自动停用，避免 UI 显示“启用”造成误解。
@@ -75,11 +105,14 @@ func (s *AlertSilenceService) disableExpiredSilences(ctx context.Context, now ti
 func ParseSilenceMatchersJSON(raw string) ([]SilenceMatcher, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "[]" {
-		return nil, nil
+		return nil, constants.ErrBadRequestWithMsg("静默 matchers 不能为空")
 	}
 	var ms []SilenceMatcher
 	if err := json.Unmarshal([]byte(raw), &ms); err != nil {
 		return nil, bizerrors.Pass(context.Background(), "alert.silence", "ParseSilenceMatchersJSON", err)
+	}
+	if len(ms) == 0 {
+		return nil, constants.ErrBadRequestWithMsg("静默 matchers 不能为空")
 	}
 	for _, m := range ms {
 		if strings.TrimSpace(m.Name) == "" {
@@ -132,10 +165,10 @@ func (s *AlertSilenceService) hasEnabledUnexpiredDuplicate(ctx context.Context, 
 	return false, nil
 }
 
-// LabelsMatchSilenceMatchers 全部 matcher 命中 labels 时返回 true；matchers 为空视为匹配全部。
+// LabelsMatchSilenceMatchers 全部 matcher 命中 labels 时返回 true；matchers 为空不匹配任何告警。
 func LabelsMatchSilenceMatchers(ms []SilenceMatcher, labels map[string]string) bool {
 	if len(ms) == 0 {
-		return true
+		return false
 	}
 	get := func(k string) string {
 		if labels == nil {
@@ -177,6 +210,17 @@ func (s *AlertSilenceService) ListActiveAt(ctx context.Context, t time.Time) ([]
 	return list, bizerrors.Pass(ctx, "alert.silence", "ListActiveAt", err)
 }
 
+// silenceProjectScopeOK：ProjectID==0 为全局静默，可匹配任意告警；>0 时要求 labels["project_id"] 等于该项目。
+func silenceProjectScopeOK(projectID uint, labels map[string]string) bool {
+	if projectID == 0 {
+		return true
+	}
+	if labels == nil {
+		return false
+	}
+	return parseLabelUintOrZero(labels["project_id"]) == projectID
+}
+
 func (s *AlertSilenceService) FirstMatchingSilenceID(ctx context.Context, labels map[string]string, t time.Time) (uint, bool, error) {
 	list, err := s.ListActiveAt(ctx, t)
 	if err != nil {
@@ -187,16 +231,27 @@ func (s *AlertSilenceService) FirstMatchingSilenceID(ctx context.Context, labels
 		if err != nil {
 			continue
 		}
-		if LabelsMatchSilenceMatchers(ms, labels) {
+		if LabelsMatchSilenceMatchers(ms, labels) && silenceProjectScopeOK(sil.ProjectID, labels) {
 			return sil.ID, true, nil
 		}
 	}
 	return 0, false, nil
 }
 
-func (s *AlertSilenceService) Create(ctx context.Context, userID uint, req AlertSilenceUpsertRequest) (*model.AlertSilence, error) {
-	if _, err := ParseSilenceMatchersJSON(req.MatchersJSON); err != nil {
+func (s *AlertSilenceService) Create(ctx context.Context, actor *auth.CurrentUser, req AlertSilenceUpsertRequest) (*model.AlertSilence, error) {
+	if err := s.assertSilenceProjectAccess(ctx, actor, req.ProjectID); err != nil {
+		return nil, err
+	}
+	userID := uint(0)
+	if actor != nil {
+		userID = actor.ID
+	}
+	ms, err := ParseSilenceMatchersJSON(req.MatchersJSON)
+	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.silence", "Create", err)
+	}
+	if len(ms) == 0 {
+		return nil, constants.ErrBadRequestWithMsg("静默 matchers 不能为空")
 	}
 	if !req.EndsAt.After(req.StartsAt) {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgc1f741f96c03)
@@ -221,10 +276,23 @@ func (s *AlertSilenceService) Create(ctx context.Context, userID uint, req Alert
 	if err := s.repo.Create(ctx, &row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.silence", "Create", err)
 	}
+	if row.ProjectID > 0 {
+		changeevent.Record(ctx, changeevent.Input{
+			ProjectID: row.ProjectID,
+			Source:    model.ChangeSourceAlert,
+			Action:    "silence_create",
+			RiskLevel: model.ChangeRiskLow,
+			Status:    model.ChangeStatusSucceeded,
+			Summary:   fmt.Sprintf("创建告警静默「%s」至 %s", row.Name, row.EndsAt.Format(time.RFC3339)),
+			Payload: map[string]any{
+				"silence_id": row.ID, "name": row.Name, "ends_at": row.EndsAt,
+			},
+		})
+	}
 	return &row, nil
 }
 
-func (s *AlertSilenceService) Update(ctx context.Context, id uint, req AlertSilenceUpsertRequest) (*model.AlertSilence, error) {
+func (s *AlertSilenceService) Update(ctx context.Context, id uint, actor *auth.CurrentUser, req AlertSilenceUpsertRequest) (*model.AlertSilence, error) {
 	row, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -232,9 +300,20 @@ func (s *AlertSilenceService) Update(ctx context.Context, id uint, req AlertSile
 		}
 		return nil, bizerrors.Pass(ctx, "alert.silence", "Update", err)
 	}
+	projectID := row.ProjectID
+	if req.ProjectID > 0 {
+		projectID = req.ProjectID
+	}
+	if err := s.assertSilenceProjectAccess(ctx, actor, projectID); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(req.MatchersJSON) != "" {
-		if _, err := ParseSilenceMatchersJSON(req.MatchersJSON); err != nil {
+		ms, err := ParseSilenceMatchersJSON(req.MatchersJSON)
+		if err != nil {
 			return nil, bizerrors.Pass(ctx, "alert.silence", "Update", err)
+		}
+		if len(ms) == 0 {
+			return nil, constants.ErrBadRequestWithMsg("静默 matchers 不能为空")
 		}
 		row.MatchersJSON = strings.TrimSpace(req.MatchersJSON)
 	}
@@ -254,6 +333,9 @@ func (s *AlertSilenceService) Update(ctx context.Context, id uint, req AlertSile
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
+	if req.ProjectID > 0 {
+		row.ProjectID = req.ProjectID
+	}
 	if err := s.repo.Save(ctx, row); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.silence", "Update", err)
 	}
@@ -271,23 +353,48 @@ func (s *AlertSilenceService) GetByID(ctx context.Context, id uint) (*model.Aler
 	return row, nil
 }
 
-func (s *AlertSilenceService) Delete(ctx context.Context, id uint) error {
+func (s *AlertSilenceService) Delete(ctx context.Context, id uint, actor *auth.CurrentUser) error {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrAlertSilenceNotFound
+		}
+		return bizerrors.Pass(ctx, "alert.silence", "Delete", err)
+	}
+	if err := s.assertSilenceProjectAccess(ctx, actor, row.ProjectID); err != nil {
+		return err
+	}
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return bizerrors.Pass(ctx, "alert.silence", "Delete", err)
 	}
 	return nil
 }
 
-func (s *AlertSilenceService) CreateBatch(ctx context.Context, userID uint, req AlertSilenceBatchRequest) (int, error) {
+func (s *AlertSilenceService) CreateBatch(ctx context.Context, actor *auth.CurrentUser, req AlertSilenceBatchRequest) (int, error) {
 	n := 0
+	userID := uint(0)
+	if actor != nil {
+		userID = actor.ID
+	}
 	for _, it := range req.Items {
-		if _, err := ParseSilenceMatchersJSON(it.MatchersJSON); err != nil {
+		ms, err := ParseSilenceMatchersJSON(it.MatchersJSON)
+		if err != nil {
 			return n, bizerrors.Pass(ctx, "alert.silence", "CreateBatch", err)
+		}
+		if len(ms) == 0 {
+			return n, constants.ErrBadRequestWithMsg("静默 matchers 不能为空")
 		}
 		if !it.EndsAt.After(it.StartsAt) {
 			return n, constants.ErrBadRequestWithMsg(fmt.Sprintf(constants.ErrFmtAlertSilenceBatchEndsAt, it.Name))
 		}
-		dup, err := s.hasEnabledUnexpiredDuplicate(ctx, 0, it.MatchersJSON, time.Now())
+		projectID := req.ProjectID
+		if it.ProjectID > 0 {
+			projectID = it.ProjectID
+		}
+		if err := s.assertSilenceProjectAccess(ctx, actor, projectID); err != nil {
+			return n, err
+		}
+		dup, err := s.hasEnabledUnexpiredDuplicate(ctx, projectID, it.MatchersJSON, time.Now())
 		if err != nil {
 			return n, bizerrors.Pass(ctx, "alert.silence", "CreateBatch", err)
 		}
@@ -301,6 +408,7 @@ func (s *AlertSilenceService) CreateBatch(ctx context.Context, userID uint, req 
 			EndsAt:       it.EndsAt,
 			Comment:      strings.TrimSpace(it.Comment),
 			CreatedBy:    userID,
+			ProjectID:    projectID,
 			Enabled:      it.Enabled == nil || *it.Enabled,
 		}
 		if err := s.repo.Create(ctx, &row); err != nil {

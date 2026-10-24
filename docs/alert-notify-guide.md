@@ -87,7 +87,7 @@ route:
 receivers:
 - name: "yunshu-webhook"
   webhook_configs:
-  - url: "http://<host>:8080/api/v1/alerts/webhook/alertmanager"
+  - url: "http://<host>:8080/api/v1/alerts/webhook"
     http_config:
       headers:
         X-Alert-Token: "change-me-alert-token"

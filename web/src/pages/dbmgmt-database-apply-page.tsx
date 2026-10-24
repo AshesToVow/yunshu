@@ -10,6 +10,8 @@ import type { UserItem } from "../types/api";
 const CHARSET_OPTIONS = [
   { value: "utf8mb4", label: "utf8mb4" },
   { value: "utf8", label: "utf8" },
+  { value: "latin1", label: "latin1" },
+  { value: "gbk", label: "gbk" },
 ];
 
 const COLLATION_BY_CHARSET: Record<string, { value: string; label: string }[]> = {
@@ -21,6 +23,14 @@ const COLLATION_BY_CHARSET: Record<string, { value: string; label: string }[]> =
   utf8: [
     { value: "utf8_general_ci", label: "utf8_general_ci" },
     { value: "utf8_bin", label: "utf8_bin" },
+  ],
+  latin1: [
+    { value: "latin1_swedish_ci", label: "latin1_swedish_ci" },
+    { value: "latin1_bin", label: "latin1_bin" },
+  ],
+  gbk: [
+    { value: "gbk_chinese_ci", label: "gbk_chinese_ci" },
+    { value: "gbk_bin", label: "gbk_bin" },
   ],
 };
 
@@ -87,10 +97,7 @@ export function DbmgmtDatabaseApplyPage() {
 
   const collationOptions = useMemo(() => COLLATION_BY_CHARSET[charset] ?? COLLATION_BY_CHARSET.utf8mb4, [charset]);
 
-  const userOptions = useMemo(
-    () => users.map((u) => ({ value: u.id, label: userLabel(u) })),
-    [users],
-  );
+  const userOptions = useMemo(() => users.map((u) => ({ value: u.id, label: userLabel(u) })), [users]);
 
   const instanceOptions = useMemo(
     () => instances.map((i) => ({ value: i.id, label: formatInstanceLabel(i) })),
@@ -148,7 +155,7 @@ export function DbmgmtDatabaseApplyPage() {
         message={
           <>
             审批通过后将自动 CREATE DATABASE 并写入平台授权。进度请到{" "}
-            <Link to="/dbmgmt/workflow/pending">待审核</Link> 查看。
+            <Link to="/workflow/inbox?domain=dbmgmt">我的待办</Link> 查看。
           </>
         }
       />
@@ -217,7 +224,11 @@ export function DbmgmtDatabaseApplyPage() {
             <Form.Item name="collation" label="校验规则" rules={[{ required: true, message: "请选择校验规则" }]}>
               <Select options={collationOptions} placeholder="选择相对应的排序字符集" />
             </Form.Item>
-            <Form.Item name="dev_owner_user_id" label="开发负责人" rules={[{ required: true, message: "请选择开发负责人" }]}>
+            <Form.Item
+              name="dev_owner_user_id"
+              label="开发负责人"
+              rules={[{ required: true, message: "请选择开发负责人" }]}
+            >
               <Select showSearch optionFilterProp="label" placeholder="请选择开发负责人" options={userOptions} />
             </Form.Item>
             <Form.Item name="dba_user_id" label="DBA" rules={[{ required: true, message: "请选择 DBA" }]}>
@@ -232,7 +243,10 @@ export function DbmgmtDatabaseApplyPage() {
               rules={[{ required: true, message: "请填写授权 IP" }]}
               extra="多个主机以 | 分隔，例如：192.168.8.12|172.16.%"
             >
-              <Input.TextArea rows={3} placeholder="允许访问数据库应用的 IP 地址，多个主机以 | 分隔符分隔，例如：192.168.8.12|172.16.%" />
+              <Input.TextArea
+                rows={3}
+                placeholder="允许访问数据库应用的 IP 地址，多个主机以 | 分隔符分隔，例如：192.168.8.12|172.16.%"
+              />
             </Form.Item>
             <Form.Item wrapperCol={{ offset: 5, span: 16 }}>
               <Space size="middle">

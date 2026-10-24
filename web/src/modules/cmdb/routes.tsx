@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import type { RouteObject } from "react-router-dom";
+import { Navigate, useLocation, type RouteObject } from "react-router-dom";
 
 const ServerConsolePage = lazy(() =>
   import("../../pages/server-console-page").then((m) => ({ default: m.ServerConsolePage })),
@@ -7,4 +7,12 @@ const ServerConsolePage = lazy(() =>
 
 export const CMDB_PLUGIN = "cmdb";
 
-export const cmdbRoutes: RouteObject[] = [{ path: "server-console", element: <ServerConsolePage /> }];
+function ServerConsoleUnderscoreRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/server-console${search}`} replace />;
+}
+
+export const cmdbRoutes: RouteObject[] = [
+  { path: "server-console", element: <ServerConsolePage /> },
+  { path: "server_console", element: <ServerConsoleUnderscoreRedirect /> },
+];

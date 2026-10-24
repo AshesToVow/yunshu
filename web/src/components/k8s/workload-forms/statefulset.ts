@@ -13,7 +13,7 @@ import {
   probeToForm,
   safeGet,
   safeParseYaml,
-  toNumberOrUndefined
+  toNumberOrUndefined,
 } from "./helpers";
 import type { DeploymentFormValues } from "./deployment";
 
@@ -45,9 +45,7 @@ export type StatefulSetFormValues = {
 
 export function buildStatefulSetYaml(v: StatefulSetFormValues): string {
   const envMap = envPairsToMap(v.env_pairs);
-  const env = Object.keys(envMap).length
-    ? Object.entries(envMap).map(([name, value]) => ({ name, value }))
-    : undefined;
+  const env = Object.keys(envMap).length ? Object.entries(envMap).map(([name, value]) => ({ name, value })) : undefined;
 
   const tolerations =
     (v.tolerations ?? [])
@@ -67,24 +65,23 @@ export function buildStatefulSetYaml(v: StatefulSetFormValues): string {
         tolerationSeconds: t.tolerationSeconds,
       })) || undefined;
 
-  const volumes =
-    (v.volumes ?? [])
-      .map((it) => {
-        const name = String(it?.name ?? "").trim();
-        if (!name) return null;
-        const type = it?.type || "emptyDir";
-        if (type === "configMap") {
-          return { name, configMap: { name: String(it?.source_name ?? "").trim() || name } };
-        }
-        if (type === "secret") {
-          return { name, secret: { secretName: String(it?.source_name ?? "").trim() || name } };
-        }
-        if (type === "pvc") {
-          return { name, persistentVolumeClaim: { claimName: String(it?.source_name ?? "").trim() || name } };
-        }
-        return { name, emptyDir: {} };
-      })
-      .filter(Boolean);
+  const volumes = (v.volumes ?? [])
+    .map((it) => {
+      const name = String(it?.name ?? "").trim();
+      if (!name) return null;
+      const type = it?.type || "emptyDir";
+      if (type === "configMap") {
+        return { name, configMap: { name: String(it?.source_name ?? "").trim() || name } };
+      }
+      if (type === "secret") {
+        return { name, secret: { secretName: String(it?.source_name ?? "").trim() || name } };
+      }
+      if (type === "pvc") {
+        return { name, persistentVolumeClaim: { claimName: String(it?.source_name ?? "").trim() || name } };
+      }
+      return { name, emptyDir: {} };
+    })
+    .filter(Boolean);
 
   const volumeMounts =
     (v.volume_mounts ?? [])
@@ -135,7 +132,9 @@ export function buildStatefulSetYaml(v: StatefulSetFormValues): string {
               name: v.container_name || v.name,
               image: v.image,
               imagePullPolicy: v.image_pull_policy || undefined,
-              ports: v.port ? [{ name: String(v.port_name ?? "").trim() || undefined, containerPort: v.port }] : undefined,
+              ports: v.port
+                ? [{ name: String(v.port_name ?? "").trim() || undefined, containerPort: v.port }]
+                : undefined,
               command: v.command?.trim() ? ["sh", "-c", v.command.trim()] : undefined,
               env,
               resources: Object.keys(resources).length ? resources : undefined,
@@ -240,7 +239,8 @@ export function statefulSetObjToForm(obj: any): StatefulSetFormValues | null {
   const resReq = c?.resources?.requests ?? {};
   const resLim = c?.resources?.limits ?? {};
   const tolerations =
-    Array.isArray(safeGet(obj, "spec.template.spec.tolerations")) && safeGet(obj, "spec.template.spec.tolerations")?.length
+    Array.isArray(safeGet(obj, "spec.template.spec.tolerations")) &&
+    safeGet(obj, "spec.template.spec.tolerations")?.length
       ? (safeGet(obj, "spec.template.spec.tolerations") ?? []).map((t: any) => ({
           key: t?.key,
           operator: (t?.operator || "Equal") as "Equal" | "Exists",
@@ -283,7 +283,9 @@ export function statefulSetObjToForm(obj: any): StatefulSetFormValues | null {
     limits_cpu: resLim?.cpu ? String(resLim.cpu) : undefined,
     limits_memory: resLim?.memory ? String(resLim.memory) : undefined,
     node_selector_pairs: mapToKvPairs(safeGet(obj, "spec.template.spec.nodeSelector")),
-    affinity_yaml: safeGet(obj, "spec.template.spec.affinity") ? YAML.stringify(safeGet(obj, "spec.template.spec.affinity")) : undefined,
+    affinity_yaml: safeGet(obj, "spec.template.spec.affinity")
+      ? YAML.stringify(safeGet(obj, "spec.template.spec.affinity"))
+      : undefined,
     update_strategy_type: safeGet(obj, "spec.updateStrategy.type") as StatefulSetFormValues["update_strategy_type"],
     rolling_update_partition: toNumberOrUndefined(safeGet(obj, "spec.updateStrategy.rollingUpdate.partition")),
     revision_history_limit: toNumberOrUndefined(safeGet(obj, "spec.revisionHistoryLimit")),
@@ -292,4 +294,3 @@ export function statefulSetObjToForm(obj: any): StatefulSetFormValues | null {
     volume_mounts: volumeMounts,
   };
 }
-

@@ -78,6 +78,8 @@ var (
 	ErrIncludeRegexInvalid = BizError(http.StatusBadRequest, 11001, "「包含」筛选条件格式不正确，请检查正则表达式")
 	ErrExcludeRegexInvalid = BizError(http.StatusBadRequest, 11002, "「排除」筛选条件格式不正确，请检查正则表达式")
 	ErrInvalidRequestParam = BizError(http.StatusBadRequest, 11003, "请求参数不合法，请检查后重试")
+	// ErrIdempotencyConflict 同一 Idempotency-Key 的写请求正在处理或已处理（未缓存到结果）。
+	ErrIdempotencyConflict = BizError(http.StatusConflict, 11004, "重复的请求正在处理中，请勿重复提交")
 )
 
 // —— 认证与账号 20xxx ——
@@ -184,4 +186,8 @@ const (
 	ErrMsgSSHConnectFailedPrefix  = "远程连接失败（SSH）："
 	ErrMsgSSHExecFailedPrefix     = "远程命令执行失败："
 	ErrMsgCloudSDKPrefix          = "云平台返回异常："
+	// ErrMsgSSHCredentialDecryptFailed 常见于 security.encryption_key 变更后旧密文无法解密。
+	ErrMsgSSHCredentialDecryptFailed = "服务器 SSH 凭据解密失败（可能 encryption_key 已变更），请到「服务器管理」重新保存该服务器的 SSH 密码或私钥"
+	ErrMsgDbInstancePasswordDecryptFailed = "数据库实例密码解密失败（可能 encryption_key 已变更），请重新编辑实例并保存密码"
+	ErrMsgCloudCredentialDecryptFailed    = "云账号 AK/SK 解密失败（可能 encryption_key 已变更），请重新保存该云账号凭据"
 )

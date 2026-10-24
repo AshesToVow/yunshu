@@ -320,6 +320,9 @@ func (s *Service) ExecuteQuery(ctx context.Context, projectID, instanceID uint, 
 	dur := time.Since(start).Milliseconds()
 	truncated := len(data) >= rowLimit
 
+	// 先脱敏再落库，避免执行历史泄露敏感列明文
+	s.applyColumnMasks(ctx, instanceID, req.Database, sqlText, cols, data)
+
 	preview, _ := json.Marshal(map[string]any{"columns": cols, "rows": data})
 	ex := &model.DbSqlExecution{
 		ProjectID: projectID, InstanceID: instanceID,
@@ -332,9 +335,8 @@ func (s *Service) ExecuteQuery(ctx context.Context, projectID, instanceID uint, 
 	_ = s.writeAudit(ctx, projectID, &instanceID, actor, "console_query", map[string]any{
 		"database": req.Database,
 		"sql":      truncateSQL(sqlText, 500),
+		"masked":   true,
 	})
-
-	s.applyColumnMasks(ctx, instanceID, req.Database, cols, data)
 
 	return &QueryResult{Columns: nonNilCols(cols), Rows: nonNilRows(data), RowCount: len(data), DurationMs: dur, Truncated: truncated}, nil
 }

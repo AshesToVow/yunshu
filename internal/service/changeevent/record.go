@@ -10,24 +10,27 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
-
-	"gorm.io/gorm"
 )
+
+// Recorder persists change events (best-effort). Implemented by ChangeEventRepository.
+type Recorder interface {
+	Create(ctx context.Context, row *model.ChangeEvent) error
+}
 
 var (
 	mu     sync.RWMutex
-	bound  *gorm.DB
+	bound  Recorder
 	logger = slog.Default().With("component", "changeevent")
 )
 
-// BindDB 在应用启动时绑定全局 DB，供各域写路径 best-effort 埋点。
-func BindDB(db *gorm.DB) {
+// BindRepo binds a ChangeEvent repository for package-level Record helpers.
+func BindRepo(repo Recorder) {
 	mu.Lock()
 	defer mu.Unlock()
-	bound = db
+	bound = repo
 }
 
-func db() *gorm.DB {
+func recorder() Recorder {
 	mu.RLock()
 	defer mu.RUnlock()
 	return bound
@@ -51,8 +54,8 @@ type Input struct {
 
 // Record 写入 change_events；失败仅打日志，不阻断主流程。
 func Record(ctx context.Context, in Input) {
-	d := db()
-	if d == nil || in.ProjectID == 0 {
+	rec := recorder()
+	if rec == nil || in.ProjectID == 0 {
 		return
 	}
 	source := strings.TrimSpace(in.Source)
@@ -107,7 +110,7 @@ func Record(ctx context.Context, in Input) {
 		FinishedAt:  finished,
 		RollbackRef: strings.TrimSpace(in.RollbackRef),
 	}
-	if err := d.WithContext(ctx).Create(&row).Error; err != nil {
+	if err := rec.Create(ctx, &row); err != nil {
 		logger.Warn("record change event failed", "error", err, "source", source, "action", action)
 	}
 }

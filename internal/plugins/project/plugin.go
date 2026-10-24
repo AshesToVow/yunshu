@@ -29,10 +29,10 @@ func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		MenuPathPrefixes: []string{
 			"/projects", "/project-members", "/project-services", "/service-catalog",
-			"/service-portrait", "/project-logs", "/project-log-sources", "/log-retention", "/loggie-status",
+			"/service-portrait", "/project-logs", "/project-log-sources", "/log-retention", "/loggie-status", "/log-pipelines",
 		},
 		APIPrefixes: []string{"/api/v1/projects"},
-		Workers:     []string{"log_retention", "kafka_to_es"},
+		Workers:     []string{"log_retention", "kafka_to_es", "log_intelligence"},
 	}
 }
 
@@ -46,6 +46,11 @@ func (m *module) Models() []any {
 		&model.LoggieAgent{},
 		&model.ClusterLogAgent{},
 		&model.ClusterLogRule{},
+		&model.LogPipeline{},
+		&model.LogPipelineVersion{},
+		&model.LogDropRule{},
+		&model.LogPattern{},
+		&model.LogAnomaly{},
 		&model.ServiceCatalog{},
 		&model.ServiceLink{},
 		&model.ChangeEvent{},
@@ -60,14 +65,19 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := rt.LogRetention.(*service.LogRetentionService); ok && svc != nil && rt.Config != nil {
+	if svc, ok := plugin.As[*service.LogRetentionService](rt.LogRetention); ok && svc != nil && rt.Config != nil {
 		lifecycle.Go("project.log-retention", func() {
 			service.RunLogRetentionScheduler(bgCtx, svc, config.ElasticsearchConfig{})
 		})
 	}
-	if kafkaSvc, ok := rt.KafkaToES.(*service.KafkaToESService); ok && kafkaSvc != nil {
+	if kafkaSvc, ok := plugin.As[*service.KafkaToESService](rt.KafkaToES); ok && kafkaSvc != nil {
 		lifecycle.Go("project.kafka-to-es-reconcile", func() {
 			kafkaSvc.Run(bgCtx)
+		})
+	}
+	if logIntel, ok := plugin.As[*service.LogIntelligenceService](rt.LogIntelligence); ok && logIntel != nil {
+		lifecycle.Go("project.log-intelligence", func() {
+			service.RunLogIntelligenceWorker(bgCtx, logIntel)
 		})
 	}
 	return nil

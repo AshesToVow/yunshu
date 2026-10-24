@@ -100,72 +100,4757 @@ python tools/gen_api_design_md.py
 
 ## 2. 接口目录总览
 
-合计 **410** 个路径、**526** 个操作，按 Tag 分组如下。
+合计 **617** 个路径、**811** 个操作，按 Tag 分组如下。
 
 | Tag | 接口数 | 编号前缀 |
 |-----|--------|----------|
-| Alerts | 67 | API-ALT-* |
+| Ai | 73 | API-AI-* |
+| Alerts | 97 | API-ALT-* |
 | AlertsWebhook | 1 | API-ALTWH-* |
-| Auth | 11 | API-AUTH-* |
+| Auth | 13 | API-AUTH-* |
+| Cicd | 1 | API-CICD-* |
 | Clusters | 10 | API-CLS-* |
 | Configmaps | 4 | API-CONFIG-* |
 | Crds | 4 | API-CRDS-* |
 | Cronjobs | 9 | API-CRONJO-* |
 | Crs | 5 | API-CRS-* |
-| Daemonsets | 7 | API-DAEMON-* |
+| Daemonsets | 9 | API-DAEMON-* |
 | Departments | 5 | API-DEPT-* |
-| Deployments | 12 | API-DEP-* |
+| Deployments | 14 | API-DEP-* |
 | Dict | 6 | API-DICT-* |
+| Esmgmt | 38 | API-ESMGMT-* |
 | Events | 2 | API-EVENTS-* |
 | Helm | 11 | API-HELM-* |
 | Horizontal-pod-autoscalers | 4 | API-HORIZO-* |
 | Ingresses | 10 | API-INGRES-* |
+| Inspect | 1 | API-INSPEC-* |
 | Jobs | 7 | API-JOBS-* |
 | K8s | 3 | API-K8S-* |
+| K8s-cr-templates | 5 | API-K8SCRT-* |
 | K8s-namespace-allow-rules | 3 | API-K8SNAM-* |
 | K8s-namespace-deny-rules | 3 | API-K8SNAM-* |
 | K8s-services | 4 | API-K8SSER-* |
-| K8sEventForward | 7 | API-K8SEF-* |
-| K8sScopedPolicy | 9 | API-K8SP-* |
-| LogPlatform | 10 | API-LOG-* |
+| K8sEventForward | 9 | API-K8SEF-* |
+| K8sScopedPolicy | 11 | API-K8SP-* |
+| Kafkamgmt | 20 | API-KAFKAM-* |
+| LogPlatform | 11 | API-LOG-* |
 | Loggie | 1 | API-LGG-* |
 | Login-logs | 4 | API-LOGINL-* |
-| Menus | 7 | API-MENU-* |
+| Menus | 8 | API-MENU-* |
 | Namespaces | 4 | API-NS-* |
 | Network-policies | 4 | API-NETWOR-* |
-| Nodes | 4 | API-NODE-* |
+| Nodes | 6 | API-NODE-* |
 | Operation-logs | 4 | API-OPERAT-* |
-| Overview | 3 | API-OVW-* |
-| Permissions | 6 | API-PERM-* |
+| Overview | 4 | API-OVW-* |
+| Permissions | 7 | API-PERM-* |
 | Persistentvolumeclaims | 4 | API-PERSIS-* |
 | Persistentvolumes | 4 | API-PERSIS-* |
+| Pipeline-templates | 3 | API-PIPELI-* |
+| Platform-templates | 10 | API-PLATFO-* |
 | Plugins | 1 | API-PLG-* |
-| Pods | 19 | API-POD-* |
+| Pods | 21 | API-POD-* |
 | Policies | 9 | API-POL-* |
-| Projects | 185 | API-PRJ-* |
+| Projects | 245 | API-PRJ-* |
 | Rbac | 7 | API-RBAC-* |
+| Ready | 1 | API-READY-* |
 | Registrations | 2 | API-REGIST-* |
+| Registries | 15 | API-REGIST-* |
 | Roles | 5 | API-ROLE-* |
-| Secrets | 4 | API-SECRET-* |
+| Secrets | 5 | API-SECRET-* |
 | Security | 2 | API-SECURI-* |
 | Serviceaccounts | 4 | API-SERVIC-* |
-| Statefulsets | 9 | API-STATEF-* |
+| Statefulsets | 11 | API-STATEF-* |
 | Storageclasses | 4 | API-STORAG-* |
 | System | 1 | API-SYS-* |
 | User-groups | 6 | API-USERGR-* |
 | Users | 9 | API-USR-* |
+| Workflow | 7 | API-WORKFL-* |
 
 ---
 
 ## 3. 接口明细
 
-### 3.1 Alerts
+### 3.1 Ai
 
-#### API-ALT-001 查询 v1/alerts/channels
+#### API-AI-001 创建/提交 ai/alert/explain
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-001` |
+| 接口名称 | 创建/提交 ai/alert/explain |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/alert/explain` |
+| Gin 路径 | `/api/v1/ai/alert/explain` |
+| operationId | `post_api_v1_ai_alert_explain` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/alert/explain, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-002 查询 v1/ai/approvals
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-002` |
+| 接口名称 | 查询 v1/ai/approvals |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/approvals` |
+| Gin 路径 | `/api/v1/ai/approvals` |
+| operationId | `get_api_v1_ai_approvals` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/approvals, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-003 创建/提交 ai/approvals/execute
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-003` |
+| 接口名称 | 创建/提交 ai/approvals/execute |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/approvals/{id}/execute` |
+| Gin 路径 | `/api/v1/ai/approvals/:id/execute` |
+| operationId | `post_api_v1_ai_approvals_id__execute` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/approvals/:id/execute, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-004 创建/提交 ai/approvals/review
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-004` |
+| 接口名称 | 创建/提交 ai/approvals/review |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/approvals/{id}/review` |
+| Gin 路径 | `/api/v1/ai/approvals/:id/review` |
+| operationId | `post_api_v1_ai_approvals_id__review` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/approvals/:id/review, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-005 查询 ai/center/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-005` |
+| 接口名称 | 查询 ai/center/cases |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/cases` |
+| Gin 路径 | `/api/v1/ai/center/cases` |
+| operationId | `get_api_v1_ai_center_cases` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/cases, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-006 创建/提交 ai/center/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-006` |
+| 接口名称 | 创建/提交 ai/center/cases |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/cases` |
+| Gin 路径 | `/api/v1/ai/center/cases` |
+| operationId | `post_api_v1_ai_center_cases` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/cases, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-007 删除 ai/center/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-007` |
+| 接口名称 | 删除 ai/center/cases |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/center/cases/{id}` |
+| Gin 路径 | `/api/v1/ai/center/cases/:id` |
+| operationId | `delete_api_v1_ai_center_cases_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/cases/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-008 查询 ai/center/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-008` |
+| 接口名称 | 查询 ai/center/cases |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/cases/{id}` |
+| Gin 路径 | `/api/v1/ai/center/cases/:id` |
+| operationId | `get_api_v1_ai_center_cases_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/cases/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-009 更新 ai/center/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-009` |
+| 接口名称 | 更新 ai/center/cases |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/ai/center/cases/{id}` |
+| Gin 路径 | `/api/v1/ai/center/cases/:id` |
+| operationId | `put_api_v1_ai_center_cases_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/cases/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-010 查询 center/eval/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-010` |
+| 接口名称 | 查询 center/eval/cases |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/eval/cases` |
+| Gin 路径 | `/api/v1/ai/center/eval/cases` |
+| operationId | `get_api_v1_ai_center_eval_cases` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/eval/cases, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-011 创建/提交 center/eval/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-011` |
+| 接口名称 | 创建/提交 center/eval/cases |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/eval/cases` |
+| Gin 路径 | `/api/v1/ai/center/eval/cases` |
+| operationId | `post_api_v1_ai_center_eval_cases` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/eval/cases, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-012 删除 center/eval/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-012` |
+| 接口名称 | 删除 center/eval/cases |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/center/eval/cases/{id}` |
+| Gin 路径 | `/api/v1/ai/center/eval/cases/:id` |
+| operationId | `delete_api_v1_ai_center_eval_cases_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/eval/cases/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-013 查询 center/eval/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-013` |
+| 接口名称 | 查询 center/eval/cases |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/eval/cases/{id}` |
+| Gin 路径 | `/api/v1/ai/center/eval/cases/:id` |
+| operationId | `get_api_v1_ai_center_eval_cases_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/eval/cases/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-014 更新 center/eval/cases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-014` |
+| 接口名称 | 更新 center/eval/cases |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/ai/center/eval/cases/{id}` |
+| Gin 路径 | `/api/v1/ai/center/eval/cases/:id` |
+| operationId | `put_api_v1_ai_center_eval_cases_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/eval/cases/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-015 创建/提交 center/eval/run
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-015` |
+| 接口名称 | 创建/提交 center/eval/run |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/eval/run` |
+| Gin 路径 | `/api/v1/ai/center/eval/run` |
+| operationId | `post_api_v1_ai_center_eval_run` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/eval/run, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-016 查询 center/eval/runs
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-016` |
+| 接口名称 | 查询 center/eval/runs |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/eval/runs` |
+| Gin 路径 | `/api/v1/ai/center/eval/runs` |
+| operationId | `get_api_v1_ai_center_eval_runs` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/eval/runs, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-017 查询 center/eval/runs
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-017` |
+| 接口名称 | 查询 center/eval/runs |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/eval/runs/{id}` |
+| Gin 路径 | `/api/v1/ai/center/eval/runs/:id` |
+| operationId | `get_api_v1_ai_center_eval_runs_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/eval/runs/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-018 查询 ai/center/kb-documents
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-018` |
+| 接口名称 | 查询 ai/center/kb-documents |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/kb-documents` |
+| Gin 路径 | `/api/v1/ai/center/kb-documents` |
+| operationId | `get_api_v1_ai_center_kb-documents` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/kb-documents, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-019 创建/提交 ai/center/kb-documents
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-019` |
+| 接口名称 | 创建/提交 ai/center/kb-documents |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/kb-documents` |
+| Gin 路径 | `/api/v1/ai/center/kb-documents` |
+| operationId | `post_api_v1_ai_center_kb-documents` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/kb-documents, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-020 删除 ai/center/kb-documents
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-020` |
+| 接口名称 | 删除 ai/center/kb-documents |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/center/kb-documents/{id}` |
+| Gin 路径 | `/api/v1/ai/center/kb-documents/:id` |
+| operationId | `delete_api_v1_ai_center_kb-documents_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/kb-documents/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-021 查询 ai/center/kb-documents
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-021` |
+| 接口名称 | 查询 ai/center/kb-documents |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/kb-documents/{id}` |
+| Gin 路径 | `/api/v1/ai/center/kb-documents/:id` |
+| operationId | `get_api_v1_ai_center_kb-documents_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/kb-documents/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-022 更新 ai/center/kb-documents
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-022` |
+| 接口名称 | 更新 ai/center/kb-documents |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/ai/center/kb-documents/{id}` |
+| Gin 路径 | `/api/v1/ai/center/kb-documents/:id` |
+| operationId | `put_api_v1_ai_center_kb-documents_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/kb-documents/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-023 查询 ai/center/knowledge-bases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-023` |
+| 接口名称 | 查询 ai/center/knowledge-bases |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/knowledge-bases` |
+| Gin 路径 | `/api/v1/ai/center/knowledge-bases` |
+| operationId | `get_api_v1_ai_center_knowledge-bases` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/knowledge-bases, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-024 创建/提交 ai/center/knowledge-bases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-024` |
+| 接口名称 | 创建/提交 ai/center/knowledge-bases |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/knowledge-bases` |
+| Gin 路径 | `/api/v1/ai/center/knowledge-bases` |
+| operationId | `post_api_v1_ai_center_knowledge-bases` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/knowledge-bases, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-025 删除 ai/center/knowledge-bases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-025` |
+| 接口名称 | 删除 ai/center/knowledge-bases |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/center/knowledge-bases/{id}` |
+| Gin 路径 | `/api/v1/ai/center/knowledge-bases/:id` |
+| operationId | `delete_api_v1_ai_center_knowledge-bases_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/knowledge-bases/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-026 更新 ai/center/knowledge-bases
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-026` |
+| 接口名称 | 更新 ai/center/knowledge-bases |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/ai/center/knowledge-bases/{id}` |
+| Gin 路径 | `/api/v1/ai/center/knowledge-bases/:id` |
+| operationId | `put_api_v1_ai_center_knowledge-bases_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/knowledge-bases/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-027 查询 ai/center/models
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-027` |
+| 接口名称 | 查询 ai/center/models |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/models` |
+| Gin 路径 | `/api/v1/ai/center/models` |
+| operationId | `get_api_v1_ai_center_models` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/models, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-028 创建/提交 ai/center/models
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-028` |
+| 接口名称 | 创建/提交 ai/center/models |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/models` |
+| Gin 路径 | `/api/v1/ai/center/models` |
+| operationId | `post_api_v1_ai_center_models` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/models, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-029 删除 ai/center/models
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-029` |
+| 接口名称 | 删除 ai/center/models |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/center/models/{id}` |
+| Gin 路径 | `/api/v1/ai/center/models/:id` |
+| operationId | `delete_api_v1_ai_center_models_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/models/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-030 更新 ai/center/models
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-030` |
+| 接口名称 | 更新 ai/center/models |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/ai/center/models/{id}` |
+| Gin 路径 | `/api/v1/ai/center/models/:id` |
+| operationId | `put_api_v1_ai_center_models_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/models/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-031 创建/提交 center/models/default
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-031` |
+| 接口名称 | 创建/提交 center/models/default |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/models/{id}/default` |
+| Gin 路径 | `/api/v1/ai/center/models/:id/default` |
+| operationId | `post_api_v1_ai_center_models_id__default` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/models/:id/default, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-032 查询 ai/center/overview
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-032` |
+| 接口名称 | 查询 ai/center/overview |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/overview` |
+| Gin 路径 | `/api/v1/ai/center/overview` |
+| operationId | `get_api_v1_ai_center_overview` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/overview, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-033 查询 ai/center/prompts
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-033` |
+| 接口名称 | 查询 ai/center/prompts |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/prompts` |
+| Gin 路径 | `/api/v1/ai/center/prompts` |
+| operationId | `get_api_v1_ai_center_prompts` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/prompts, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-034 创建/提交 ai/center/prompts
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-034` |
+| 接口名称 | 创建/提交 ai/center/prompts |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/prompts` |
+| Gin 路径 | `/api/v1/ai/center/prompts` |
+| operationId | `post_api_v1_ai_center_prompts` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/prompts, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-035 删除 ai/center/prompts
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-035` |
+| 接口名称 | 删除 ai/center/prompts |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/center/prompts/{id}` |
+| Gin 路径 | `/api/v1/ai/center/prompts/:id` |
+| operationId | `delete_api_v1_ai_center_prompts_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/prompts/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-036 查询 ai/center/prompts
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-036` |
+| 接口名称 | 查询 ai/center/prompts |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/prompts/{id}` |
+| Gin 路径 | `/api/v1/ai/center/prompts/:id` |
+| operationId | `get_api_v1_ai_center_prompts_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/prompts/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-037 更新 ai/center/prompts
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-037` |
+| 接口名称 | 更新 ai/center/prompts |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/ai/center/prompts/{id}` |
+| Gin 路径 | `/api/v1/ai/center/prompts/:id` |
+| operationId | `put_api_v1_ai_center_prompts_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/prompts/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-038 创建/提交 center/prompts/publish
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-038` |
+| 接口名称 | 创建/提交 center/prompts/publish |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/prompts/{id}/publish` |
+| Gin 路径 | `/api/v1/ai/center/prompts/:id/publish` |
+| operationId | `post_api_v1_ai_center_prompts_id__publish` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/prompts/:id/publish, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-039 查询 center/prompts/versions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-039` |
+| 接口名称 | 查询 center/prompts/versions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/prompts/{id}/versions` |
+| Gin 路径 | `/api/v1/ai/center/prompts/:id/versions` |
+| operationId | `get_api_v1_ai_center_prompts_id__versions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/prompts/:id/versions, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-040 创建/提交 prompts/versions/rollback
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-040` |
+| 接口名称 | 创建/提交 prompts/versions/rollback |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/prompts/{id}/versions/{vid}/rollback` |
+| Gin 路径 | `/api/v1/ai/center/prompts/:id/versions/:vid/rollback` |
+| operationId | `post_api_v1_ai_center_prompts_id__versions_vid__rollback` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `vid` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/prompts/:id/versions/:vid/rollback, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-041 创建/提交 ai/center/reseed
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-041` |
+| 接口名称 | 创建/提交 ai/center/reseed |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/reseed` |
+| Gin 路径 | `/api/v1/ai/center/reseed` |
+| operationId | `post_api_v1_ai_center_reseed` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/reseed, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-042 查询 ai/center/sops
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-042` |
+| 接口名称 | 查询 ai/center/sops |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/sops` |
+| Gin 路径 | `/api/v1/ai/center/sops` |
+| operationId | `get_api_v1_ai_center_sops` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/sops, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-043 创建/提交 ai/center/sops
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-043` |
+| 接口名称 | 创建/提交 ai/center/sops |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/sops` |
+| Gin 路径 | `/api/v1/ai/center/sops` |
+| operationId | `post_api_v1_ai_center_sops` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/sops, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-044 删除 ai/center/sops
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-044` |
+| 接口名称 | 删除 ai/center/sops |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/center/sops/{id}` |
+| Gin 路径 | `/api/v1/ai/center/sops/:id` |
+| operationId | `delete_api_v1_ai_center_sops_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/sops/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-045 查询 ai/center/sops
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-045` |
+| 接口名称 | 查询 ai/center/sops |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/sops/{id}` |
+| Gin 路径 | `/api/v1/ai/center/sops/:id` |
+| operationId | `get_api_v1_ai_center_sops_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/sops/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-046 更新 ai/center/sops
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-046` |
+| 接口名称 | 更新 ai/center/sops |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/ai/center/sops/{id}` |
+| Gin 路径 | `/api/v1/ai/center/sops/:id` |
+| operationId | `put_api_v1_ai_center_sops_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/sops/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-047 查询 ai/center/tool-runtime-health
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-047` |
+| 接口名称 | 查询 ai/center/tool-runtime-health |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/tool-runtime-health` |
+| Gin 路径 | `/api/v1/ai/center/tool-runtime-health` |
+| operationId | `get_api_v1_ai_center_tool-runtime-health` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/tool-runtime-health, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-048 查询 ai/center/tools
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-048` |
+| 接口名称 | 查询 ai/center/tools |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/tools` |
+| Gin 路径 | `/api/v1/ai/center/tools` |
+| operationId | `get_api_v1_ai_center_tools` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/tools, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-049 创建/提交 ai/center/tools
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-049` |
+| 接口名称 | 创建/提交 ai/center/tools |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/center/tools` |
+| Gin 路径 | `/api/v1/ai/center/tools` |
+| operationId | `post_api_v1_ai_center_tools` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/tools, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-050 删除 ai/center/tools
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-050` |
+| 接口名称 | 删除 ai/center/tools |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/center/tools/{id}` |
+| Gin 路径 | `/api/v1/ai/center/tools/:id` |
+| operationId | `delete_api_v1_ai_center_tools_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/tools/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-051 查询 ai/center/tools
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-051` |
+| 接口名称 | 查询 ai/center/tools |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/center/tools/{id}` |
+| Gin 路径 | `/api/v1/ai/center/tools/:id` |
+| operationId | `get_api_v1_ai_center_tools_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/tools/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-052 部分更新 ai/center/tools
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-052` |
+| 接口名称 | 部分更新 ai/center/tools |
+| 请求方式 | `PATCH` |
+| URL | `/api/v1/ai/center/tools/{id}` |
+| Gin 路径 | `/api/v1/ai/center/tools/:id` |
+| operationId | `patch_api_v1_ai_center_tools_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/tools/:id, PATCH)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-053 更新 ai/center/tools
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-053` |
+| 接口名称 | 更新 ai/center/tools |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/ai/center/tools/{id}` |
+| Gin 路径 | `/api/v1/ai/center/tools/:id` |
+| operationId | `put_api_v1_ai_center_tools_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/center/tools/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-054 创建/提交 v1/ai/chat
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-054` |
+| 接口名称 | 创建/提交 v1/ai/chat |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/chat` |
+| Gin 路径 | `/api/v1/ai/chat` |
+| operationId | `post_api_v1_ai_chat` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/chat, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-055 创建/提交 ai/chat/stream
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-055` |
+| 接口名称 | 创建/提交 ai/chat/stream |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/chat/stream` |
+| Gin 路径 | `/api/v1/ai/chat/stream` |
+| operationId | `post_api_v1_ai_chat_stream` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/chat/stream, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-056 创建/提交 ai/cicd/build-fail
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-056` |
+| 接口名称 | 创建/提交 ai/cicd/build-fail |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/cicd/build-fail` |
+| Gin 路径 | `/api/v1/ai/cicd/build-fail` |
+| operationId | `post_api_v1_ai_cicd_build-fail` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/cicd/build-fail, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-057 查询 v1/ai/investigations
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-057` |
+| 接口名称 | 查询 v1/ai/investigations |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/investigations` |
+| Gin 路径 | `/api/v1/ai/investigations` |
+| operationId | `get_api_v1_ai_investigations` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/investigations, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-058 创建/提交 v1/ai/investigations
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-058` |
+| 接口名称 | 创建/提交 v1/ai/investigations |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/investigations` |
+| Gin 路径 | `/api/v1/ai/investigations` |
+| operationId | `post_api_v1_ai_investigations` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/investigations, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-059 查询 v1/ai/investigations
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-059` |
+| 接口名称 | 查询 v1/ai/investigations |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/investigations/{id}` |
+| Gin 路径 | `/api/v1/ai/investigations/:id` |
+| operationId | `get_api_v1_ai_investigations_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/investigations/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-060 创建/提交 ai/k8s/generate-yaml
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-060` |
+| 接口名称 | 创建/提交 ai/k8s/generate-yaml |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/k8s/generate-yaml` |
+| Gin 路径 | `/api/v1/ai/k8s/generate-yaml` |
+| operationId | `post_api_v1_ai_k8s_generate-yaml` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/k8s/generate-yaml, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-061 创建/提交 ai/k8s/pod-diagnose
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-061` |
+| 接口名称 | 创建/提交 ai/k8s/pod-diagnose |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/k8s/pod-diagnose` |
+| Gin 路径 | `/api/v1/ai/k8s/pod-diagnose` |
+| operationId | `post_api_v1_ai_k8s_pod-diagnose` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/k8s/pod-diagnose, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-062 创建/提交 ai/knowledge/embed
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-062` |
+| 接口名称 | 创建/提交 ai/knowledge/embed |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/knowledge/embed` |
+| Gin 路径 | `/api/v1/ai/knowledge/embed` |
+| operationId | `post_api_v1_ai_knowledge_embed` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/knowledge/embed, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-063 创建/提交 ai/knowledge/sync
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-063` |
+| 接口名称 | 创建/提交 ai/knowledge/sync |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/knowledge/sync` |
+| Gin 路径 | `/api/v1/ai/knowledge/sync` |
+| operationId | `post_api_v1_ai_knowledge_sync` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/knowledge/sync, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-064 创建/提交 ai/logs/analyze
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-064` |
+| 接口名称 | 创建/提交 ai/logs/analyze |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/logs/analyze` |
+| Gin 路径 | `/api/v1/ai/logs/analyze` |
+| operationId | `post_api_v1_ai_logs_analyze` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/logs/analyze, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-065 创建/提交 ai/logs/pipeline-adjust
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-065` |
+| 接口名称 | 创建/提交 ai/logs/pipeline-adjust |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/logs/pipeline-adjust` |
+| Gin 路径 | `/api/v1/ai/logs/pipeline-adjust` |
+| operationId | `post_api_v1_ai_logs_pipeline-adjust` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/logs/pipeline-adjust, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-066 创建/提交 v1/ai/ping
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-066` |
+| 接口名称 | 创建/提交 v1/ai/ping |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/ping` |
+| Gin 路径 | `/api/v1/ai/ping` |
+| operationId | `post_api_v1_ai_ping` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/ping, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-067 查询 v1/ai/sessions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-067` |
+| 接口名称 | 查询 v1/ai/sessions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/sessions` |
+| Gin 路径 | `/api/v1/ai/sessions` |
+| operationId | `get_api_v1_ai_sessions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/sessions, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-068 创建/提交 v1/ai/sessions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-068` |
+| 接口名称 | 创建/提交 v1/ai/sessions |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/sessions` |
+| Gin 路径 | `/api/v1/ai/sessions` |
+| operationId | `post_api_v1_ai_sessions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/sessions, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-069 删除 v1/ai/sessions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-069` |
+| 接口名称 | 删除 v1/ai/sessions |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/ai/sessions/{id}` |
+| Gin 路径 | `/api/v1/ai/sessions/:id` |
+| operationId | `delete_api_v1_ai_sessions_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/sessions/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-070 查询 v1/ai/sessions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-070` |
+| 接口名称 | 查询 v1/ai/sessions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/sessions/{id}` |
+| Gin 路径 | `/api/v1/ai/sessions/:id` |
+| operationId | `get_api_v1_ai_sessions_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/sessions/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-071 部分更新 v1/ai/sessions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-071` |
+| 接口名称 | 部分更新 v1/ai/sessions |
+| 请求方式 | `PATCH` |
+| URL | `/api/v1/ai/sessions/{id}` |
+| Gin 路径 | `/api/v1/ai/sessions/:id` |
+| operationId | `patch_api_v1_ai_sessions_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/sessions/:id, PATCH)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-072 创建/提交 ai/sessions/clear
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-072` |
+| 接口名称 | 创建/提交 ai/sessions/clear |
+| 请求方式 | `POST` |
+| URL | `/api/v1/ai/sessions/{id}/clear` |
+| Gin 路径 | `/api/v1/ai/sessions/:id/clear` |
+| operationId | `post_api_v1_ai_sessions_id__clear` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/sessions/:id/clear, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AI-073 查询 v1/ai/status
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AI-073` |
+| 接口名称 | 查询 v1/ai/status |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ai/status` |
+| Gin 路径 | `/api/v1/ai/status` |
+| operationId | `get_api_v1_ai_status` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ai/status, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.2 Alerts
+
+#### API-ALT-001 删除 v1/alerts/acks
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-ALT-001` |
+| 接口名称 | 删除 v1/alerts/acks |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/alerts/acks` |
+| Gin 路径 | `/api/v1/alerts/acks` |
+| operationId | `delete_api_v1_alerts_acks` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/acks, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-002 查询 v1/alerts/acks
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-002` |
+| 接口名称 | 查询 v1/alerts/acks |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/acks` |
+| Gin 路径 | `/api/v1/alerts/acks` |
+| operationId | `get_api_v1_alerts_acks` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/acks, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-003 创建/提交 v1/alerts/acks
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-003` |
+| 接口名称 | 创建/提交 v1/alerts/acks |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/acks` |
+| Gin 路径 | `/api/v1/alerts/acks` |
+| operationId | `post_api_v1_alerts_acks` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/acks, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-004 查询 v1/alerts/channels
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-004` |
 | 接口名称 | 查询 v1/alerts/channels |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/channels` |
@@ -222,11 +4907,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-002 创建/提交 v1/alerts/channels
+#### API-ALT-005 创建/提交 v1/alerts/channels
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-002` |
+| 接口编号 | `API-ALT-005` |
 | 接口名称 | 创建/提交 v1/alerts/channels |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/channels` |
@@ -283,11 +4968,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-003 创建/提交 alerts/channels/preview-template
+#### API-ALT-006 创建/提交 alerts/channels/preview-template
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-003` |
+| 接口编号 | `API-ALT-006` |
 | 接口名称 | 创建/提交 alerts/channels/preview-template |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/channels/preview-template` |
@@ -344,11 +5029,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-004 删除 v1/alerts/channels
+#### API-ALT-007 删除 v1/alerts/channels
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-004` |
+| 接口编号 | `API-ALT-007` |
 | 接口名称 | 删除 v1/alerts/channels |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/channels/{id}` |
@@ -406,11 +5091,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-005 更新 v1/alerts/channels
+#### API-ALT-008 更新 v1/alerts/channels
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-005` |
+| 接口编号 | `API-ALT-008` |
 | 接口名称 | 更新 v1/alerts/channels |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/channels/{id}` |
@@ -468,11 +5153,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-006 创建/提交 alerts/channels/test
+#### API-ALT-009 创建/提交 alerts/channels/test
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-006` |
+| 接口编号 | `API-ALT-009` |
 | 接口名称 | 创建/提交 alerts/channels/test |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/channels/{id}/test` |
@@ -530,11 +5215,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-007 查询 v1/alerts/cloud-expiry-rules
+#### API-ALT-010 查询 v1/alerts/cloud-expiry-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-007` |
+| 接口编号 | `API-ALT-010` |
 | 接口名称 | 查询 v1/alerts/cloud-expiry-rules |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/cloud-expiry-rules` |
@@ -591,11 +5276,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-008 创建/提交 v1/alerts/cloud-expiry-rules
+#### API-ALT-011 创建/提交 v1/alerts/cloud-expiry-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-008` |
+| 接口编号 | `API-ALT-011` |
 | 接口名称 | 创建/提交 v1/alerts/cloud-expiry-rules |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/cloud-expiry-rules` |
@@ -652,11 +5337,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-009 创建/提交 alerts/cloud-expiry-rules/evaluate-now
+#### API-ALT-012 创建/提交 alerts/cloud-expiry-rules/evaluate-now
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-009` |
+| 接口编号 | `API-ALT-012` |
 | 接口名称 | 创建/提交 alerts/cloud-expiry-rules/evaluate-now |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/cloud-expiry-rules/evaluate-now` |
@@ -713,11 +5398,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-010 删除 v1/alerts/cloud-expiry-rules
+#### API-ALT-013 删除 v1/alerts/cloud-expiry-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-010` |
+| 接口编号 | `API-ALT-013` |
 | 接口名称 | 删除 v1/alerts/cloud-expiry-rules |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/cloud-expiry-rules/{id}` |
@@ -775,11 +5460,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-011 更新 v1/alerts/cloud-expiry-rules
+#### API-ALT-014 更新 v1/alerts/cloud-expiry-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-011` |
+| 接口编号 | `API-ALT-014` |
 | 接口名称 | 更新 v1/alerts/cloud-expiry-rules |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/cloud-expiry-rules/{id}` |
@@ -837,11 +5522,442 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-012 查询 v1/alerts/datasources
+#### API-ALT-015 查询 v1/alerts/consul-endpoints
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-012` |
+| 接口编号 | `API-ALT-015` |
+| 接口名称 | 查询 v1/alerts/consul-endpoints |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/consul-endpoints` |
+| Gin 路径 | `/api/v1/alerts/consul-endpoints` |
+| operationId | `get_api_v1_alerts_consul-endpoints` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/consul-endpoints, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-016 创建/提交 v1/alerts/consul-endpoints
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-016` |
+| 接口名称 | 创建/提交 v1/alerts/consul-endpoints |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/consul-endpoints` |
+| Gin 路径 | `/api/v1/alerts/consul-endpoints` |
+| operationId | `post_api_v1_alerts_consul-endpoints` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/consul-endpoints, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-017 删除 v1/alerts/consul-endpoints
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-017` |
+| 接口名称 | 删除 v1/alerts/consul-endpoints |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/alerts/consul-endpoints/{id}` |
+| Gin 路径 | `/api/v1/alerts/consul-endpoints/:id` |
+| operationId | `delete_api_v1_alerts_consul-endpoints_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/consul-endpoints/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-018 更新 v1/alerts/consul-endpoints
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-018` |
+| 接口名称 | 更新 v1/alerts/consul-endpoints |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/alerts/consul-endpoints/{id}` |
+| Gin 路径 | `/api/v1/alerts/consul-endpoints/:id` |
+| operationId | `put_api_v1_alerts_consul-endpoints_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/consul-endpoints/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-019 查询 alerts/consul-endpoints/ping
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-019` |
+| 接口名称 | 查询 alerts/consul-endpoints/ping |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/consul-endpoints/{id}/ping` |
+| Gin 路径 | `/api/v1/alerts/consul-endpoints/:id/ping` |
+| operationId | `get_api_v1_alerts_consul-endpoints_id__ping` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/consul-endpoints/:id/ping, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-020 创建/提交 alerts/consul-endpoints/sync
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-020` |
+| 接口名称 | 创建/提交 alerts/consul-endpoints/sync |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/consul-endpoints/{id}/sync` |
+| Gin 路径 | `/api/v1/alerts/consul-endpoints/:id/sync` |
+| operationId | `post_api_v1_alerts_consul-endpoints_id__sync` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/consul-endpoints/:id/sync, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-021 查询 v1/alerts/cur-events
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-021` |
+| 接口名称 | 查询 v1/alerts/cur-events |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/cur-events` |
+| Gin 路径 | `/api/v1/alerts/cur-events` |
+| operationId | `get_api_v1_alerts_cur-events` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/cur-events, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-022 查询 v1/alerts/datasources
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-022` |
 | 接口名称 | 查询 v1/alerts/datasources |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/datasources` |
@@ -898,11 +6014,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-013 创建/提交 v1/alerts/datasources
+#### API-ALT-023 创建/提交 v1/alerts/datasources
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-013` |
+| 接口编号 | `API-ALT-023` |
 | 接口名称 | 创建/提交 v1/alerts/datasources |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/datasources` |
@@ -959,11 +6075,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-014 删除 v1/alerts/datasources
+#### API-ALT-024 查询 alerts/datasources/health
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-014` |
+| 接口编号 | `API-ALT-024` |
+| 接口名称 | 查询 alerts/datasources/health |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/datasources/health` |
+| Gin 路径 | `/api/v1/alerts/datasources/health` |
+| operationId | `get_api_v1_alerts_datasources_health` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/datasources/health, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-025 删除 v1/alerts/datasources
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-025` |
 | 接口名称 | 删除 v1/alerts/datasources |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/datasources/{id}` |
@@ -1021,11 +6198,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-015 更新 v1/alerts/datasources
+#### API-ALT-026 更新 v1/alerts/datasources
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-015` |
+| 接口编号 | `API-ALT-026` |
 | 接口名称 | 更新 v1/alerts/datasources |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/datasources/{id}` |
@@ -1083,16 +6260,16 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-016 查询 alerts/datasources/alertmanager-silences
+#### API-ALT-027 查询 alerts/datasources/health
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-016` |
-| 接口名称 | 查询 alerts/datasources/alertmanager-silences |
+| 接口编号 | `API-ALT-027` |
+| 接口名称 | 查询 alerts/datasources/health |
 | 请求方式 | `GET` |
-| URL | `/api/v1/alerts/datasources/{id}/alertmanager-silences` |
-| Gin 路径 | `/api/v1/alerts/datasources/:id/alertmanager-silences` |
-| operationId | `get_api_v1_alerts_datasources_id__alertmanager-silences` |
+| URL | `/api/v1/alerts/datasources/{id}/health` |
+| Gin 路径 | `/api/v1/alerts/datasources/:id/health` |
+| operationId | `get_api_v1_alerts_datasources_id__health` |
 
 **请求参数**
 
@@ -1141,15 +6318,77 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 **权限要求**
 
-JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/datasources/:id/alertmanager-silences, GET)`；写操作：`OperationAudit` 审计
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/datasources/:id/health, GET)`；写操作：`OperationAudit` 审计
 
 ---
 
-#### API-ALT-017 查询 alerts/datasources/ping
+#### API-ALT-028 创建/提交 alerts/datasources/health-check
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-017` |
+| 接口编号 | `API-ALT-028` |
+| 接口名称 | 创建/提交 alerts/datasources/health-check |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/datasources/{id}/health-check` |
+| Gin 路径 | `/api/v1/alerts/datasources/:id/health-check` |
+| operationId | `post_api_v1_alerts_datasources_id__health-check` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/datasources/:id/health-check, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-029 查询 alerts/datasources/ping
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-029` |
 | 接口名称 | 查询 alerts/datasources/ping |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/datasources/{id}/ping` |
@@ -1207,11 +6446,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-018 查询 alerts/datasources/prometheus-alerts
+#### API-ALT-030 查询 alerts/datasources/prometheus-alerts
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-018` |
+| 接口编号 | `API-ALT-030` |
 | 接口名称 | 查询 alerts/datasources/prometheus-alerts |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/datasources/{id}/prometheus-alerts` |
@@ -1269,11 +6508,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-019 创建/提交 alerts/datasources/query
+#### API-ALT-031 创建/提交 alerts/datasources/query
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-019` |
+| 接口编号 | `API-ALT-031` |
 | 接口名称 | 创建/提交 alerts/datasources/query |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/datasources/{id}/query` |
@@ -1331,11 +6570,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-020 创建/提交 alerts/datasources/query_range
+#### API-ALT-032 创建/提交 alerts/datasources/query_range
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-020` |
+| 接口编号 | `API-ALT-032` |
 | 接口名称 | 创建/提交 alerts/datasources/query_range |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/datasources/{id}/query_range` |
@@ -1393,11 +6632,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-021 查询 v1/alerts/duty-blocks
+#### API-ALT-033 查询 v1/alerts/duty-blocks
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-021` |
+| 接口编号 | `API-ALT-033` |
 | 接口名称 | 查询 v1/alerts/duty-blocks |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/duty-blocks` |
@@ -1454,11 +6693,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-022 创建/提交 v1/alerts/duty-blocks
+#### API-ALT-034 创建/提交 v1/alerts/duty-blocks
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-022` |
+| 接口编号 | `API-ALT-034` |
 | 接口名称 | 创建/提交 v1/alerts/duty-blocks |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/duty-blocks` |
@@ -1515,11 +6754,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-023 查询 alerts/duty-blocks/calendar
+#### API-ALT-035 查询 alerts/duty-blocks/calendar
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-023` |
+| 接口编号 | `API-ALT-035` |
 | 接口名称 | 查询 alerts/duty-blocks/calendar |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/duty-blocks/calendar` |
@@ -1576,11 +6815,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-024 创建/提交 alerts/duty-blocks/validate
+#### API-ALT-036 创建/提交 alerts/duty-blocks/validate
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-024` |
+| 接口编号 | `API-ALT-036` |
 | 接口名称 | 创建/提交 alerts/duty-blocks/validate |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/duty-blocks/validate` |
@@ -1637,11 +6876,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-025 删除 v1/alerts/duty-blocks
+#### API-ALT-037 删除 v1/alerts/duty-blocks
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-025` |
+| 接口编号 | `API-ALT-037` |
 | 接口名称 | 删除 v1/alerts/duty-blocks |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/duty-blocks/{id}` |
@@ -1699,11 +6938,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-026 更新 v1/alerts/duty-blocks
+#### API-ALT-038 更新 v1/alerts/duty-blocks
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-026` |
+| 接口编号 | `API-ALT-038` |
 | 接口名称 | 更新 v1/alerts/duty-blocks |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/duty-blocks/{id}` |
@@ -1761,11 +7000,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-027 创建/提交 alerts/duty-blocks/handoff
+#### API-ALT-039 创建/提交 alerts/duty-blocks/handoff
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-027` |
+| 接口编号 | `API-ALT-039` |
 | 接口名称 | 创建/提交 alerts/duty-blocks/handoff |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/duty-blocks/{id}/handoff` |
@@ -1823,11 +7062,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-028 查询 v1/alerts/events
+#### API-ALT-040 查询 v1/alerts/events
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-028` |
+| 接口编号 | `API-ALT-040` |
 | 接口名称 | 查询 v1/alerts/events |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/events` |
@@ -1884,11 +7123,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-029 查询 alerts/events/by-fingerprint
+#### API-ALT-041 查询 alerts/events/by-fingerprint
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-029` |
+| 接口编号 | `API-ALT-041` |
 | 接口名称 | 查询 alerts/events/by-fingerprint |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/events/by-fingerprint` |
@@ -1945,11 +7184,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-030 查询 alerts/events/grouped
+#### API-ALT-042 查询 alerts/events/evidence
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-030` |
+| 接口编号 | `API-ALT-042` |
+| 接口名称 | 查询 alerts/events/evidence |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/events/evidence` |
+| Gin 路径 | `/api/v1/alerts/events/evidence` |
+| operationId | `get_api_v1_alerts_events_evidence` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/events/evidence, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-043 查询 alerts/events/grouped
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-043` |
 | 接口名称 | 查询 alerts/events/grouped |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/events/grouped` |
@@ -2006,11 +7306,195 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-031 查询 alerts/history/stats
+#### API-ALT-044 创建/提交 alerts/events/to-ticket
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-031` |
+| 接口编号 | `API-ALT-044` |
+| 接口名称 | 创建/提交 alerts/events/to-ticket |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/events/{alert_event_id}/to-ticket` |
+| Gin 路径 | `/api/v1/alerts/events/:alert_event_id/to-ticket` |
+| operationId | `post_api_v1_alerts_events_alert_event_id__to-ticket` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `alert_event_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/events/:alert_event_id/to-ticket, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-045 查询 v1/alerts/his-events
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-045` |
+| 接口名称 | 查询 v1/alerts/his-events |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/his-events` |
+| Gin 路径 | `/api/v1/alerts/his-events` |
+| operationId | `get_api_v1_alerts_his-events` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/his-events, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-046 查询 alerts/his-events/export.csv
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-046` |
+| 接口名称 | 查询 alerts/his-events/export.csv |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/his-events/export.csv` |
+| Gin 路径 | `/api/v1/alerts/his-events/export.csv` |
+| operationId | `get_api_v1_alerts_his-events_export.csv` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/his-events/export.csv, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-047 查询 alerts/history/stats
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-047` |
 | 接口名称 | 查询 alerts/history/stats |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/history/stats` |
@@ -2067,11 +7551,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-032 查询 v1/alerts/inhibition-rules
+#### API-ALT-048 创建/提交 alerts/ingress/k8s-events
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-032` |
+| 接口编号 | `API-ALT-048` |
+| 接口名称 | 创建/提交 alerts/ingress/k8s-events |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/ingress/k8s-events` |
+| Gin 路径 | `/api/v1/alerts/ingress/k8s-events` |
+| operationId | `post_api_v1_alerts_ingress_k8s-events` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/ingress/k8s-events, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-049 查询 v1/alerts/inhibition-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-049` |
 | 接口名称 | 查询 v1/alerts/inhibition-rules |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/inhibition-rules` |
@@ -2128,11 +7673,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-033 创建/提交 v1/alerts/inhibition-rules
+#### API-ALT-050 创建/提交 v1/alerts/inhibition-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-033` |
+| 接口编号 | `API-ALT-050` |
 | 接口名称 | 创建/提交 v1/alerts/inhibition-rules |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/inhibition-rules` |
@@ -2189,11 +7734,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-034 创建/提交 alerts/inhibition-rules/refresh-cache
+#### API-ALT-051 创建/提交 alerts/inhibition-rules/refresh-cache
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-034` |
+| 接口编号 | `API-ALT-051` |
 | 接口名称 | 创建/提交 alerts/inhibition-rules/refresh-cache |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/inhibition-rules/refresh-cache` |
@@ -2250,11 +7795,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-035 删除 v1/alerts/inhibition-rules
+#### API-ALT-052 删除 v1/alerts/inhibition-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-035` |
+| 接口编号 | `API-ALT-052` |
 | 接口名称 | 删除 v1/alerts/inhibition-rules |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/inhibition-rules/{id}` |
@@ -2312,11 +7857,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-036 更新 v1/alerts/inhibition-rules
+#### API-ALT-053 更新 v1/alerts/inhibition-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-036` |
+| 接口编号 | `API-ALT-053` |
 | 接口名称 | 更新 v1/alerts/inhibition-rules |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/inhibition-rules/{id}` |
@@ -2374,11 +7919,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-037 查询 v1/alerts/maintenance-windows
+#### API-ALT-054 查询 v1/alerts/maintenance-windows
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-037` |
+| 接口编号 | `API-ALT-054` |
 | 接口名称 | 查询 v1/alerts/maintenance-windows |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/maintenance-windows` |
@@ -2435,11 +7980,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-038 创建/提交 v1/alerts/maintenance-windows
+#### API-ALT-055 创建/提交 v1/alerts/maintenance-windows
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-038` |
+| 接口编号 | `API-ALT-055` |
 | 接口名称 | 创建/提交 v1/alerts/maintenance-windows |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/maintenance-windows` |
@@ -2496,11 +8041,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-039 删除 v1/alerts/maintenance-windows
+#### API-ALT-056 删除 v1/alerts/maintenance-windows
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-039` |
+| 接口编号 | `API-ALT-056` |
 | 接口名称 | 删除 v1/alerts/maintenance-windows |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/maintenance-windows/{id}` |
@@ -2558,11 +8103,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-040 更新 v1/alerts/maintenance-windows
+#### API-ALT-057 更新 v1/alerts/maintenance-windows
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-040` |
+| 接口编号 | `API-ALT-057` |
 | 接口名称 | 更新 v1/alerts/maintenance-windows |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/maintenance-windows/{id}` |
@@ -2620,11 +8165,318 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-041 查询 v1/alerts/monitor-rules
+#### API-ALT-058 查询 v1/alerts/monitor-objects
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-041` |
+| 接口编号 | `API-ALT-058` |
+| 接口名称 | 查询 v1/alerts/monitor-objects |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/monitor-objects` |
+| Gin 路径 | `/api/v1/alerts/monitor-objects` |
+| operationId | `get_api_v1_alerts_monitor-objects` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/monitor-objects, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-059 查询 v1/alerts/monitor-rule-changes
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-059` |
+| 接口名称 | 查询 v1/alerts/monitor-rule-changes |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/monitor-rule-changes` |
+| Gin 路径 | `/api/v1/alerts/monitor-rule-changes` |
+| operationId | `get_api_v1_alerts_monitor-rule-changes` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/monitor-rule-changes, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-060 创建/提交 v1/alerts/monitor-rule-changes
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-060` |
+| 接口名称 | 创建/提交 v1/alerts/monitor-rule-changes |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/monitor-rule-changes` |
+| Gin 路径 | `/api/v1/alerts/monitor-rule-changes` |
+| operationId | `post_api_v1_alerts_monitor-rule-changes` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/monitor-rule-changes, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-061 创建/提交 alerts/monitor-rule-changes/approve
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-061` |
+| 接口名称 | 创建/提交 alerts/monitor-rule-changes/approve |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/monitor-rule-changes/{id}/approve` |
+| Gin 路径 | `/api/v1/alerts/monitor-rule-changes/:id/approve` |
+| operationId | `post_api_v1_alerts_monitor-rule-changes_id__approve` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/monitor-rule-changes/:id/approve, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-062 创建/提交 alerts/monitor-rule-changes/reject
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-062` |
+| 接口名称 | 创建/提交 alerts/monitor-rule-changes/reject |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/monitor-rule-changes/{id}/reject` |
+| Gin 路径 | `/api/v1/alerts/monitor-rule-changes/:id/reject` |
+| operationId | `post_api_v1_alerts_monitor-rule-changes_id__reject` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/monitor-rule-changes/:id/reject, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-063 查询 v1/alerts/monitor-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-063` |
 | 接口名称 | 查询 v1/alerts/monitor-rules |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/monitor-rules` |
@@ -2681,11 +8533,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-042 创建/提交 v1/alerts/monitor-rules
+#### API-ALT-064 创建/提交 v1/alerts/monitor-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-042` |
+| 接口编号 | `API-ALT-064` |
 | 接口名称 | 创建/提交 v1/alerts/monitor-rules |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/monitor-rules` |
@@ -2742,11 +8594,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-043 创建/提交 alerts/monitor-rules/from-template
+#### API-ALT-065 创建/提交 alerts/monitor-rules/from-template
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-043` |
+| 接口编号 | `API-ALT-065` |
 | 接口名称 | 创建/提交 alerts/monitor-rules/from-template |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/monitor-rules/from-template` |
@@ -2803,11 +8655,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-044 删除 v1/alerts/monitor-rules
+#### API-ALT-066 创建/提交 alerts/monitor-rules/import-prometheus-yaml
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-044` |
+| 接口编号 | `API-ALT-066` |
+| 接口名称 | 创建/提交 alerts/monitor-rules/import-prometheus-yaml |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/monitor-rules/import-prometheus-yaml` |
+| Gin 路径 | `/api/v1/alerts/monitor-rules/import-prometheus-yaml` |
+| operationId | `post_api_v1_alerts_monitor-rules_import-prometheus-yaml` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/monitor-rules/import-prometheus-yaml, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-067 删除 v1/alerts/monitor-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-067` |
 | 接口名称 | 删除 v1/alerts/monitor-rules |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/monitor-rules/{id}` |
@@ -2865,11 +8778,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-045 更新 v1/alerts/monitor-rules
+#### API-ALT-068 更新 v1/alerts/monitor-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-045` |
+| 接口编号 | `API-ALT-068` |
 | 接口名称 | 更新 v1/alerts/monitor-rules |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/monitor-rules/{id}` |
@@ -2927,11 +8840,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-046 查询 alerts/monitor-rules/assignees
+#### API-ALT-069 查询 alerts/monitor-rules/assignees
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-046` |
+| 接口编号 | `API-ALT-069` |
 | 接口名称 | 查询 alerts/monitor-rules/assignees |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/monitor-rules/{id}/assignees` |
@@ -2989,11 +8902,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-047 更新 alerts/monitor-rules/assignees
+#### API-ALT-070 更新 alerts/monitor-rules/assignees
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-047` |
+| 接口编号 | `API-ALT-070` |
 | 接口名称 | 更新 alerts/monitor-rules/assignees |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/monitor-rules/{id}/assignees` |
@@ -3051,11 +8964,317 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-048 查询 v1/alerts/quality-report
+#### API-ALT-071 查询 v1/alerts/notes
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-048` |
+| 接口编号 | `API-ALT-071` |
+| 接口名称 | 查询 v1/alerts/notes |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/notes` |
+| Gin 路径 | `/api/v1/alerts/notes` |
+| operationId | `get_api_v1_alerts_notes` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/notes, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-072 创建/提交 v1/alerts/notes
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-072` |
+| 接口名称 | 创建/提交 v1/alerts/notes |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/notes` |
+| Gin 路径 | `/api/v1/alerts/notes` |
+| operationId | `post_api_v1_alerts_notes` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/notes, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-073 查询 v1/alerts/promql-saved-queries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-073` |
+| 接口名称 | 查询 v1/alerts/promql-saved-queries |
+| 请求方式 | `GET` |
+| URL | `/api/v1/alerts/promql-saved-queries` |
+| Gin 路径 | `/api/v1/alerts/promql-saved-queries` |
+| operationId | `get_api_v1_alerts_promql-saved-queries` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/promql-saved-queries, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-074 创建/提交 v1/alerts/promql-saved-queries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-074` |
+| 接口名称 | 创建/提交 v1/alerts/promql-saved-queries |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/promql-saved-queries` |
+| Gin 路径 | `/api/v1/alerts/promql-saved-queries` |
+| operationId | `post_api_v1_alerts_promql-saved-queries` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/promql-saved-queries, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-075 删除 v1/alerts/promql-saved-queries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-075` |
+| 接口名称 | 删除 v1/alerts/promql-saved-queries |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/alerts/promql-saved-queries/{id}` |
+| Gin 路径 | `/api/v1/alerts/promql-saved-queries/:id` |
+| operationId | `delete_api_v1_alerts_promql-saved-queries_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/promql-saved-queries/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-076 查询 v1/alerts/quality-report
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-076` |
 | 接口名称 | 查询 v1/alerts/quality-report |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/quality-report` |
@@ -3112,11 +9331,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-049 查询 v1/alerts/receiver-groups
+#### API-ALT-077 查询 v1/alerts/receiver-groups
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-049` |
+| 接口编号 | `API-ALT-077` |
 | 接口名称 | 查询 v1/alerts/receiver-groups |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/receiver-groups` |
@@ -3173,11 +9392,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-050 创建/提交 v1/alerts/receiver-groups
+#### API-ALT-078 创建/提交 v1/alerts/receiver-groups
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-050` |
+| 接口编号 | `API-ALT-078` |
 | 接口名称 | 创建/提交 v1/alerts/receiver-groups |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/receiver-groups` |
@@ -3234,11 +9453,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-051 删除 v1/alerts/receiver-groups
+#### API-ALT-079 删除 v1/alerts/receiver-groups
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-051` |
+| 接口编号 | `API-ALT-079` |
 | 接口名称 | 删除 v1/alerts/receiver-groups |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/receiver-groups/{id}` |
@@ -3296,11 +9515,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-052 更新 v1/alerts/receiver-groups
+#### API-ALT-080 更新 v1/alerts/receiver-groups
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-052` |
+| 接口编号 | `API-ALT-080` |
 | 接口名称 | 更新 v1/alerts/receiver-groups |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/receiver-groups/{id}` |
@@ -3358,11 +9577,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-053 创建/提交 alerts/routing/debug
+#### API-ALT-081 创建/提交 alerts/routing/debug
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-053` |
+| 接口编号 | `API-ALT-081` |
 | 接口名称 | 创建/提交 alerts/routing/debug |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/routing/debug` |
@@ -3419,11 +9638,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-054 查询 v1/alerts/rule-templates
+#### API-ALT-082 查询 v1/alerts/rule-templates
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-054` |
+| 接口编号 | `API-ALT-082` |
 | 接口名称 | 查询 v1/alerts/rule-templates |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/rule-templates` |
@@ -3480,11 +9699,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-055 查询 v1/alerts/silences
+#### API-ALT-083 查询 v1/alerts/silences
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-055` |
+| 接口编号 | `API-ALT-083` |
 | 接口名称 | 查询 v1/alerts/silences |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/silences` |
@@ -3541,11 +9760,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-056 创建/提交 v1/alerts/silences
+#### API-ALT-084 创建/提交 v1/alerts/silences
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-056` |
+| 接口编号 | `API-ALT-084` |
 | 接口名称 | 创建/提交 v1/alerts/silences |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/silences` |
@@ -3602,11 +9821,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-057 创建/提交 alerts/silences/batch
+#### API-ALT-085 创建/提交 alerts/silences/batch
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-057` |
+| 接口编号 | `API-ALT-085` |
 | 接口名称 | 创建/提交 alerts/silences/batch |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/silences/batch` |
@@ -3663,11 +9882,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-058 删除 v1/alerts/silences
+#### API-ALT-086 删除 v1/alerts/silences
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-058` |
+| 接口编号 | `API-ALT-086` |
 | 接口名称 | 删除 v1/alerts/silences |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/silences/{id}` |
@@ -3725,11 +9944,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-059 更新 v1/alerts/silences
+#### API-ALT-087 更新 v1/alerts/silences
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-059` |
+| 接口编号 | `API-ALT-087` |
 | 接口名称 | 更新 v1/alerts/silences |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/silences/{id}` |
@@ -3787,11 +10006,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-060 查询 v1/alerts/subscriptions
+#### API-ALT-088 查询 v1/alerts/subscriptions
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-060` |
+| 接口编号 | `API-ALT-088` |
 | 接口名称 | 查询 v1/alerts/subscriptions |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/subscriptions` |
@@ -3848,11 +10067,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-061 创建/提交 v1/alerts/subscriptions
+#### API-ALT-089 创建/提交 v1/alerts/subscriptions
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-061` |
+| 接口编号 | `API-ALT-089` |
 | 接口名称 | 创建/提交 v1/alerts/subscriptions |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/subscriptions` |
@@ -3909,11 +10128,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-062 创建/提交 alerts/subscriptions/clone-from-project
+#### API-ALT-090 创建/提交 alerts/subscriptions/clone-from-project
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-062` |
+| 接口编号 | `API-ALT-090` |
 | 接口名称 | 创建/提交 alerts/subscriptions/clone-from-project |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/subscriptions/clone-from-project` |
@@ -3970,11 +10189,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-063 创建/提交 alerts/subscriptions/migrate-from-policies
+#### API-ALT-091 创建/提交 alerts/subscriptions/migrate-from-policies
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-063` |
+| 接口编号 | `API-ALT-091` |
 | 接口名称 | 创建/提交 alerts/subscriptions/migrate-from-policies |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/subscriptions/migrate-from-policies` |
@@ -4031,11 +10250,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-064 查询 alerts/subscriptions/tree
+#### API-ALT-092 查询 alerts/subscriptions/tree
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-064` |
+| 接口编号 | `API-ALT-092` |
 | 接口名称 | 查询 alerts/subscriptions/tree |
 | 请求方式 | `GET` |
 | URL | `/api/v1/alerts/subscriptions/tree` |
@@ -4092,11 +10311,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-065 删除 v1/alerts/subscriptions
+#### API-ALT-093 创建/提交 alerts/subscriptions/wizard
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-065` |
+| 接口编号 | `API-ALT-093` |
+| 接口名称 | 创建/提交 alerts/subscriptions/wizard |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/subscriptions/wizard` |
+| Gin 路径 | `/api/v1/alerts/subscriptions/wizard` |
+| operationId | `post_api_v1_alerts_subscriptions_wizard` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/subscriptions/wizard, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ALT-094 删除 v1/alerts/subscriptions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALT-094` |
 | 接口名称 | 删除 v1/alerts/subscriptions |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/alerts/subscriptions/{id}` |
@@ -4154,11 +10434,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-066 更新 v1/alerts/subscriptions
+#### API-ALT-095 更新 v1/alerts/subscriptions
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-066` |
+| 接口编号 | `API-ALT-095` |
 | 接口名称 | 更新 v1/alerts/subscriptions |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/alerts/subscriptions/{id}` |
@@ -4216,11 +10496,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-ALT-067 创建/提交 alerts/subscriptions/move
+#### API-ALT-096 创建/提交 alerts/subscriptions/move
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALT-067` |
+| 接口编号 | `API-ALT-096` |
 | 接口名称 | 创建/提交 alerts/subscriptions/move |
 | 请求方式 | `POST` |
 | URL | `/api/v1/alerts/subscriptions/{id}/move` |
@@ -4278,26 +10558,22 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.2 AlertsWebhook
-
-#### API-ALTWH-001 创建/提交 alerts/webhook/alertmanager
+#### API-ALT-097 创建/提交 v1/alerts/to-ticket
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-ALTWH-001` |
-| 接口名称 | 创建/提交 alerts/webhook/alertmanager |
+| 接口编号 | `API-ALT-097` |
+| 接口名称 | 创建/提交 v1/alerts/to-ticket |
 | 请求方式 | `POST` |
-| URL | `/api/v1/alerts/webhook/alertmanager` |
-| Gin 路径 | `/api/v1/alerts/webhook/alertmanager` |
-| operationId | `post_api_v1_alerts_webhook_alertmanager` |
+| URL | `/api/v1/alerts/to-ticket` |
+| Gin 路径 | `/api/v1/alerts/to-ticket` |
+| operationId | `post_api_v1_alerts_to-ticket` |
 
 **请求参数**
 
 | 位置 | 名称 | 类型 | 必填 | 说明 |
 |------|------|------|------|------|
 | body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
-| header | `X-Alert-Token` | string | 是* | 与 `Authorization: Bearer` 二选一 |
-| body | Alertmanager webhook payload | object | 是 | 标准 AM JSON |
 
 **响应结构**
 
@@ -4339,11 +10615,74 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 **权限要求**
 
-Webhook Token（请求头 `X-Alert-Token` 或 `Authorization: Bearer <token>`）；无需 JWT
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/to-ticket, POST)`；写操作：`OperationAudit` 审计
 
 ---
 
-### 3.3 Auth
+### 3.3 AlertsWebhook
+
+#### API-ALTWH-001 创建/提交 v1/alerts/webhook
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ALTWH-001` |
+| 接口名称 | 创建/提交 v1/alerts/webhook |
+| 请求方式 | `POST` |
+| URL | `/api/v1/alerts/webhook` |
+| Gin 路径 | `/api/v1/alerts/webhook` |
+| operationId | `post_api_v1_alerts_webhook` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/alerts/webhook, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.4 Auth
 
 #### API-AUTH-001 创建/提交 v1/auth/email-login
 
@@ -4841,11 +11180,133 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-AUTH-009 创建/提交 v1/auth/register
+#### API-AUTH-009 查询 v1/auth/password-policy
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-AUTH-009` |
+| 接口名称 | 查询 v1/auth/password-policy |
+| 请求方式 | `GET` |
+| URL | `/api/v1/auth/password-policy` |
+| Gin 路径 | `/api/v1/auth/password-policy` |
+| operationId | `get_api_v1_auth_password-policy` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/auth/password-policy, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AUTH-010 创建/提交 v1/auth/refresh
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AUTH-010` |
+| 接口名称 | 创建/提交 v1/auth/refresh |
+| 请求方式 | `POST` |
+| URL | `/api/v1/auth/refresh` |
+| Gin 路径 | `/api/v1/auth/refresh` |
+| operationId | `post_api_v1_auth_refresh` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/auth/refresh, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-AUTH-011 创建/提交 v1/auth/register
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-AUTH-011` |
 | 接口名称 | 创建/提交 v1/auth/register |
 | 请求方式 | `POST` |
 | URL | `/api/v1/auth/register` |
@@ -4902,11 +11363,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-AUTH-010 创建/提交 v1/auth/verification-code
+#### API-AUTH-012 创建/提交 v1/auth/verification-code
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-AUTH-010` |
+| 接口编号 | `API-AUTH-012` |
 | 接口名称 | 创建/提交 v1/auth/verification-code |
 | 请求方式 | `POST` |
 | URL | `/api/v1/auth/verification-code` |
@@ -4963,11 +11424,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-AUTH-011 创建/提交 v1/auth/ws-ticket
+#### API-AUTH-013 创建/提交 v1/auth/ws-ticket
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-AUTH-011` |
+| 接口编号 | `API-AUTH-013` |
 | 接口名称 | 创建/提交 v1/auth/ws-ticket |
 | 请求方式 | `POST` |
 | URL | `/api/v1/auth/ws-ticket` |
@@ -5024,7 +11485,70 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.4 Clusters
+### 3.5 Cicd
+
+#### API-CICD-001 创建/提交 cicd/jenkins/callback
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-CICD-001` |
+| 接口名称 | 创建/提交 cicd/jenkins/callback |
+| 请求方式 | `POST` |
+| URL | `/api/v1/cicd/jenkins/callback` |
+| Gin 路径 | `/api/v1/cicd/jenkins/callback` |
+| operationId | `post_api_v1_cicd_jenkins_callback` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/cicd/jenkins/callback, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.6 Clusters
 
 #### API-CLS-001 查询 api/v1/clusters
 
@@ -5644,7 +12168,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.5 Configmaps
+### 3.7 Configmaps
 
 #### API-CONFIG-001 删除 api/v1/configmaps
 
@@ -5890,7 +12414,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.6 Crds
+### 3.8 Crds
 
 #### API-CRDS-001 删除 api/v1/crds
 
@@ -6136,7 +12660,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.7 Cronjobs
+### 3.9 Cronjobs
 
 #### API-CRONJO-001 删除 api/v1/cronjobs
 
@@ -6687,7 +13211,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.8 Crs
+### 3.10 Crs
 
 #### API-CRS-001 删除 api/v1/crs
 
@@ -6994,7 +13518,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.9 Daemonsets
+### 3.11 Daemonsets
 
 #### API-DAEMON-001 删除 api/v1/daemonsets
 
@@ -7423,7 +13947,129 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.10 Departments
+#### API-DAEMON-008 查询 v1/daemonsets/revisions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-DAEMON-008` |
+| 接口名称 | 查询 v1/daemonsets/revisions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/daemonsets/revisions` |
+| Gin 路径 | `/api/v1/daemonsets/revisions` |
+| operationId | `get_api_v1_daemonsets_revisions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/daemonsets/revisions, GET)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-DAEMON-009 创建/提交 v1/daemonsets/rollout-undo
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-DAEMON-009` |
+| 接口名称 | 创建/提交 v1/daemonsets/rollout-undo |
+| 请求方式 | `POST` |
+| URL | `/api/v1/daemonsets/rollout-undo` |
+| Gin 路径 | `/api/v1/daemonsets/rollout-undo` |
+| operationId | `post_api_v1_daemonsets_rollout-undo` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/daemonsets/rollout-undo, POST)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+### 3.12 Departments
 
 #### API-DEPT-001 创建/提交 api/v1/departments
 
@@ -7733,7 +14379,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.11 Deployments
+### 3.13 Deployments
 
 #### API-DEP-001 删除 api/v1/deployments
 
@@ -8223,11 +14869,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-DEP-009 查询 v1/deployments/rollout-status
+#### API-DEP-009 查询 v1/deployments/revisions
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-DEP-009` |
+| 接口名称 | 查询 v1/deployments/revisions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/deployments/revisions` |
+| Gin 路径 | `/api/v1/deployments/revisions` |
+| operationId | `get_api_v1_deployments_revisions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/deployments/revisions, GET)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-DEP-010 查询 v1/deployments/rollout-status
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-DEP-010` |
 | 接口名称 | 查询 v1/deployments/rollout-status |
 | 请求方式 | `GET` |
 | URL | `/api/v1/deployments/rollout-status` |
@@ -8284,11 +14991,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-DEP-010 创建/提交 v1/deployments/scale
+#### API-DEP-011 创建/提交 v1/deployments/rollout-undo
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-DEP-010` |
+| 接口编号 | `API-DEP-011` |
+| 接口名称 | 创建/提交 v1/deployments/rollout-undo |
+| 请求方式 | `POST` |
+| URL | `/api/v1/deployments/rollout-undo` |
+| Gin 路径 | `/api/v1/deployments/rollout-undo` |
+| operationId | `post_api_v1_deployments_rollout-undo` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/deployments/rollout-undo, POST)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-DEP-012 创建/提交 v1/deployments/scale
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-DEP-012` |
 | 接口名称 | 创建/提交 v1/deployments/scale |
 | 请求方式 | `POST` |
 | URL | `/api/v1/deployments/scale` |
@@ -8345,11 +15113,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-DEP-011 查询 v1/deployments/snapshots
+#### API-DEP-013 查询 v1/deployments/snapshots
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-DEP-011` |
+| 接口编号 | `API-DEP-013` |
 | 接口名称 | 查询 v1/deployments/snapshots |
 | 请求方式 | `GET` |
 | URL | `/api/v1/deployments/snapshots` |
@@ -8406,11 +15174,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-DEP-012 创建/提交 deployments/snapshots/rollback
+#### API-DEP-014 创建/提交 deployments/snapshots/rollback
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-DEP-012` |
+| 接口编号 | `API-DEP-014` |
 | 接口名称 | 创建/提交 deployments/snapshots/rollback |
 | 请求方式 | `POST` |
 | URL | `/api/v1/deployments/snapshots/rollback` |
@@ -8467,7 +15235,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.12 Dict
+### 3.14 Dict
 
 #### API-DICT-001 查询 v1/dict/entries
 
@@ -8839,7 +15607,2340 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.13 Events
+### 3.15 Esmgmt
+
+#### API-ESMGMT-001 查询 v1/esmgmt/backups
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-001` |
+| 接口名称 | 查询 v1/esmgmt/backups |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/backups` |
+| Gin 路径 | `/api/v1/esmgmt/backups` |
+| operationId | `get_api_v1_esmgmt_backups` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/backups, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-002 创建/提交 v1/esmgmt/backups
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-002` |
+| 接口名称 | 创建/提交 v1/esmgmt/backups |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/backups` |
+| Gin 路径 | `/api/v1/esmgmt/backups` |
+| operationId | `post_api_v1_esmgmt_backups` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/backups, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-003 查询 v1/esmgmt/backups
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-003` |
+| 接口名称 | 查询 v1/esmgmt/backups |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/backups/{id}` |
+| Gin 路径 | `/api/v1/esmgmt/backups/:id` |
+| operationId | `get_api_v1_esmgmt_backups_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/backups/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-004 查询 esmgmt/backups/download
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-004` |
+| 接口名称 | 查询 esmgmt/backups/download |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/backups/{id}/download` |
+| Gin 路径 | `/api/v1/esmgmt/backups/:id/download` |
+| operationId | `get_api_v1_esmgmt_backups_id__download` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/backups/:id/download, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-005 查询 esmgmt/cluster/health
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-005` |
+| 接口名称 | 查询 esmgmt/cluster/health |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/cluster/health` |
+| Gin 路径 | `/api/v1/esmgmt/cluster/health` |
+| operationId | `get_api_v1_esmgmt_cluster_health` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/cluster/health, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-006 查询 v1/esmgmt/connections
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-006` |
+| 接口名称 | 查询 v1/esmgmt/connections |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/connections` |
+| Gin 路径 | `/api/v1/esmgmt/connections` |
+| operationId | `get_api_v1_esmgmt_connections` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/connections, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-007 创建/提交 v1/esmgmt/connections
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-007` |
+| 接口名称 | 创建/提交 v1/esmgmt/connections |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/connections` |
+| Gin 路径 | `/api/v1/esmgmt/connections` |
+| operationId | `post_api_v1_esmgmt_connections` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/connections, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-008 创建/提交 esmgmt/connections/import-from-dict
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-008` |
+| 接口名称 | 创建/提交 esmgmt/connections/import-from-dict |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/connections/import-from-dict` |
+| Gin 路径 | `/api/v1/esmgmt/connections/import-from-dict` |
+| operationId | `post_api_v1_esmgmt_connections_import-from-dict` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/connections/import-from-dict, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-009 创建/提交 esmgmt/connections/test
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-009` |
+| 接口名称 | 创建/提交 esmgmt/connections/test |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/connections/test` |
+| Gin 路径 | `/api/v1/esmgmt/connections/test` |
+| operationId | `post_api_v1_esmgmt_connections_test` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/connections/test, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-010 删除 v1/esmgmt/connections
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-010` |
+| 接口名称 | 删除 v1/esmgmt/connections |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/esmgmt/connections/{id}` |
+| Gin 路径 | `/api/v1/esmgmt/connections/:id` |
+| operationId | `delete_api_v1_esmgmt_connections_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/connections/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-011 更新 v1/esmgmt/connections
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-011` |
+| 接口名称 | 更新 v1/esmgmt/connections |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/esmgmt/connections/{id}` |
+| Gin 路径 | `/api/v1/esmgmt/connections/:id` |
+| operationId | `put_api_v1_esmgmt_connections_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/connections/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-012 创建/提交 esmgmt/connections/ping
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-012` |
+| 接口名称 | 创建/提交 esmgmt/connections/ping |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/connections/{id}/ping` |
+| Gin 路径 | `/api/v1/esmgmt/connections/:id/ping` |
+| operationId | `post_api_v1_esmgmt_connections_id__ping` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/connections/:id/ping, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-013 删除 v1/esmgmt/docs
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-013` |
+| 接口名称 | 删除 v1/esmgmt/docs |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/esmgmt/docs` |
+| Gin 路径 | `/api/v1/esmgmt/docs` |
+| operationId | `delete_api_v1_esmgmt_docs` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/docs, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-014 查询 v1/esmgmt/docs
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-014` |
+| 接口名称 | 查询 v1/esmgmt/docs |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/docs` |
+| Gin 路径 | `/api/v1/esmgmt/docs` |
+| operationId | `get_api_v1_esmgmt_docs` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/docs, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-015 更新 v1/esmgmt/docs
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-015` |
+| 接口名称 | 更新 v1/esmgmt/docs |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/esmgmt/docs` |
+| Gin 路径 | `/api/v1/esmgmt/docs` |
+| operationId | `put_api_v1_esmgmt_docs` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/docs, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-016 创建/提交 esmgmt/docs/search
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-016` |
+| 接口名称 | 创建/提交 esmgmt/docs/search |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/docs/search` |
+| Gin 路径 | `/api/v1/esmgmt/docs/search` |
+| operationId | `post_api_v1_esmgmt_docs_search` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/docs/search, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-017 查询 v1/esmgmt/indices
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-017` |
+| 接口名称 | 查询 v1/esmgmt/indices |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/indices` |
+| Gin 路径 | `/api/v1/esmgmt/indices` |
+| operationId | `get_api_v1_esmgmt_indices` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/indices, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-018 创建/提交 v1/esmgmt/indices
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-018` |
+| 接口名称 | 创建/提交 v1/esmgmt/indices |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/indices` |
+| Gin 路径 | `/api/v1/esmgmt/indices` |
+| operationId | `post_api_v1_esmgmt_indices` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/indices, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-019 删除 v1/esmgmt/indices
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-019` |
+| 接口名称 | 删除 v1/esmgmt/indices |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/esmgmt/indices/{name}` |
+| Gin 路径 | `/api/v1/esmgmt/indices/:name` |
+| operationId | `delete_api_v1_esmgmt_indices_name_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `name` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/indices/:name, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-020 创建/提交 esmgmt/indices/close
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-020` |
+| 接口名称 | 创建/提交 esmgmt/indices/close |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/indices/{name}/close` |
+| Gin 路径 | `/api/v1/esmgmt/indices/:name/close` |
+| operationId | `post_api_v1_esmgmt_indices_name__close` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `name` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/indices/:name/close, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-021 创建/提交 esmgmt/indices/open
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-021` |
+| 接口名称 | 创建/提交 esmgmt/indices/open |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/indices/{name}/open` |
+| Gin 路径 | `/api/v1/esmgmt/indices/:name/open` |
+| operationId | `post_api_v1_esmgmt_indices_name__open` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `name` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/indices/:name/open, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-022 查询 v1/esmgmt/nodes
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-022` |
+| 接口名称 | 查询 v1/esmgmt/nodes |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/nodes` |
+| Gin 路径 | `/api/v1/esmgmt/nodes` |
+| operationId | `get_api_v1_esmgmt_nodes` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/nodes, GET)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-023 创建/提交 v1/esmgmt/proxy
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-023` |
+| 接口名称 | 创建/提交 v1/esmgmt/proxy |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/proxy` |
+| Gin 路径 | `/api/v1/esmgmt/proxy` |
+| operationId | `post_api_v1_esmgmt_proxy` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/proxy, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-024 查询 v1/esmgmt/reindex
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-024` |
+| 接口名称 | 查询 v1/esmgmt/reindex |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/reindex` |
+| Gin 路径 | `/api/v1/esmgmt/reindex` |
+| operationId | `get_api_v1_esmgmt_reindex` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/reindex, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-025 创建/提交 v1/esmgmt/reindex
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-025` |
+| 接口名称 | 创建/提交 v1/esmgmt/reindex |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/reindex` |
+| Gin 路径 | `/api/v1/esmgmt/reindex` |
+| operationId | `post_api_v1_esmgmt_reindex` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/reindex, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-026 查询 v1/esmgmt/reindex
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-026` |
+| 接口名称 | 查询 v1/esmgmt/reindex |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/reindex/{id}` |
+| Gin 路径 | `/api/v1/esmgmt/reindex/:id` |
+| operationId | `get_api_v1_esmgmt_reindex_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/reindex/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-027 创建/提交 esmgmt/reindex/cancel
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-027` |
+| 接口名称 | 创建/提交 esmgmt/reindex/cancel |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/reindex/{id}/cancel` |
+| Gin 路径 | `/api/v1/esmgmt/reindex/:id/cancel` |
+| operationId | `post_api_v1_esmgmt_reindex_id__cancel` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/reindex/:id/cancel, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-028 查询 v1/esmgmt/restores
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-028` |
+| 接口名称 | 查询 v1/esmgmt/restores |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/restores` |
+| Gin 路径 | `/api/v1/esmgmt/restores` |
+| operationId | `get_api_v1_esmgmt_restores` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/restores, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-029 创建/提交 v1/esmgmt/restores
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-029` |
+| 接口名称 | 创建/提交 v1/esmgmt/restores |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/restores` |
+| Gin 路径 | `/api/v1/esmgmt/restores` |
+| operationId | `post_api_v1_esmgmt_restores` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/restores, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-030 查询 v1/esmgmt/restores
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-030` |
+| 接口名称 | 查询 v1/esmgmt/restores |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/restores/{id}` |
+| Gin 路径 | `/api/v1/esmgmt/restores/:id` |
+| operationId | `get_api_v1_esmgmt_restores_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/restores/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-031 查询 v1/esmgmt/schedules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-031` |
+| 接口名称 | 查询 v1/esmgmt/schedules |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/schedules` |
+| Gin 路径 | `/api/v1/esmgmt/schedules` |
+| operationId | `get_api_v1_esmgmt_schedules` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/schedules, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-032 创建/提交 v1/esmgmt/schedules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-032` |
+| 接口名称 | 创建/提交 v1/esmgmt/schedules |
+| 请求方式 | `POST` |
+| URL | `/api/v1/esmgmt/schedules` |
+| Gin 路径 | `/api/v1/esmgmt/schedules` |
+| operationId | `post_api_v1_esmgmt_schedules` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/schedules, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-033 删除 v1/esmgmt/schedules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-033` |
+| 接口名称 | 删除 v1/esmgmt/schedules |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/esmgmt/schedules/{id}` |
+| Gin 路径 | `/api/v1/esmgmt/schedules/:id` |
+| operationId | `delete_api_v1_esmgmt_schedules_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/schedules/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-034 更新 v1/esmgmt/schedules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-034` |
+| 接口名称 | 更新 v1/esmgmt/schedules |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/esmgmt/schedules/{id}` |
+| Gin 路径 | `/api/v1/esmgmt/schedules/:id` |
+| operationId | `put_api_v1_esmgmt_schedules_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/schedules/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-035 删除 v1/esmgmt/templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-035` |
+| 接口名称 | 删除 v1/esmgmt/templates |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/esmgmt/templates` |
+| Gin 路径 | `/api/v1/esmgmt/templates` |
+| operationId | `delete_api_v1_esmgmt_templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/templates, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-036 查询 v1/esmgmt/templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-036` |
+| 接口名称 | 查询 v1/esmgmt/templates |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/templates` |
+| Gin 路径 | `/api/v1/esmgmt/templates` |
+| operationId | `get_api_v1_esmgmt_templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/templates, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-037 更新 v1/esmgmt/templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-037` |
+| 接口名称 | 更新 v1/esmgmt/templates |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/esmgmt/templates` |
+| Gin 路径 | `/api/v1/esmgmt/templates` |
+| operationId | `put_api_v1_esmgmt_templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/templates, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-ESMGMT-038 查询 esmgmt/templates/detail
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-ESMGMT-038` |
+| 接口名称 | 查询 esmgmt/templates/detail |
+| 请求方式 | `GET` |
+| URL | `/api/v1/esmgmt/templates/detail` |
+| Gin 路径 | `/api/v1/esmgmt/templates/detail` |
+| operationId | `get_api_v1_esmgmt_templates_detail` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/esmgmt/templates/detail, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.16 Events
 
 #### API-EVENTS-001 查询 api/v1/events
 
@@ -8963,7 +18064,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.14 Helm
+### 3.17 Helm
 
 #### API-HELM-001 查询 helm/harbor/charts
 
@@ -9636,7 +18737,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.15 Horizontal-pod-autoscalers
+### 3.18 Horizontal-pod-autoscalers
 
 #### API-HORIZO-001 删除 api/v1/horizontal-pod-autoscalers
 
@@ -9882,7 +18983,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.16 Ingresses
+### 3.19 Ingresses
 
 #### API-INGRES-001 删除 api/v1/ingresses
 
@@ -10494,7 +19595,71 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.17 Jobs
+### 3.20 Inspect
+
+#### API-INSPEC-001 查询 v1/inspect/pdf-libs
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-INSPEC-001` |
+| 接口名称 | 查询 v1/inspect/pdf-libs |
+| 请求方式 | `GET` |
+| URL | `/api/v1/inspect/pdf-libs/{name}` |
+| Gin 路径 | `/api/v1/inspect/pdf-libs/:name` |
+| operationId | `get_api_v1_inspect_pdf-libs_name_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `name` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/inspect/pdf-libs/:name, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.21 Jobs
 
 #### API-JOBS-001 删除 api/v1/jobs
 
@@ -10923,7 +20088,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.18 K8s
+### 3.22 K8s
 
 #### API-K8S-001 查询 k8s/resource-watch/stream
 
@@ -11108,7 +20273,317 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.19 K8s-namespace-allow-rules
+### 3.23 K8s-cr-templates
+
+#### API-K8SCRT-001 查询 api/v1/k8s-cr-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SCRT-001` |
+| 接口名称 | 查询 api/v1/k8s-cr-templates |
+| 请求方式 | `GET` |
+| URL | `/api/v1/k8s-cr-templates` |
+| Gin 路径 | `/api/v1/k8s-cr-templates` |
+| operationId | `get_api_v1_k8s-cr-templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s-cr-templates, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-K8SCRT-002 创建/提交 api/v1/k8s-cr-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SCRT-002` |
+| 接口名称 | 创建/提交 api/v1/k8s-cr-templates |
+| 请求方式 | `POST` |
+| URL | `/api/v1/k8s-cr-templates` |
+| Gin 路径 | `/api/v1/k8s-cr-templates` |
+| operationId | `post_api_v1_k8s-cr-templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s-cr-templates, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-K8SCRT-003 删除 api/v1/k8s-cr-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SCRT-003` |
+| 接口名称 | 删除 api/v1/k8s-cr-templates |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/k8s-cr-templates/{id}` |
+| Gin 路径 | `/api/v1/k8s-cr-templates/:id` |
+| operationId | `delete_api_v1_k8s-cr-templates_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s-cr-templates/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-K8SCRT-004 查询 api/v1/k8s-cr-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SCRT-004` |
+| 接口名称 | 查询 api/v1/k8s-cr-templates |
+| 请求方式 | `GET` |
+| URL | `/api/v1/k8s-cr-templates/{id}` |
+| Gin 路径 | `/api/v1/k8s-cr-templates/:id` |
+| operationId | `get_api_v1_k8s-cr-templates_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s-cr-templates/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-K8SCRT-005 更新 api/v1/k8s-cr-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SCRT-005` |
+| 接口名称 | 更新 api/v1/k8s-cr-templates |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/k8s-cr-templates/{id}` |
+| Gin 路径 | `/api/v1/k8s-cr-templates/:id` |
+| operationId | `put_api_v1_k8s-cr-templates_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s-cr-templates/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.24 K8s-namespace-allow-rules
 
 #### API-K8SNAM-001 查询 api/v1/k8s-namespace-allow-rules
 
@@ -11294,7 +20769,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.20 K8s-namespace-deny-rules
+### 3.25 K8s-namespace-deny-rules
 
 #### API-K8SNAM-001 查询 api/v1/k8s-namespace-deny-rules
 
@@ -11480,7 +20955,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.21 K8s-services
+### 3.26 K8s-services
 
 #### API-K8SSER-001 删除 api/v1/k8s-services
 
@@ -11726,13 +21201,136 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.22 K8sEventForward
+### 3.27 K8sEventForward
 
-#### API-K8SEF-001 查询 k8s/event-forward/rules
+#### API-K8SEF-001 查询 k8s/event-forward/events
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-K8SEF-001` |
+| 接口名称 | 查询 k8s/event-forward/events |
+| 请求方式 | `GET` |
+| URL | `/api/v1/k8s/event-forward/events` |
+| Gin 路径 | `/api/v1/k8s/event-forward/events` |
+| operationId | `get_api_v1_k8s_event-forward_events` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s/event-forward/events, GET)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-K8SEF-002 创建/提交 event-forward/events/requeue
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SEF-002` |
+| 接口名称 | 创建/提交 event-forward/events/requeue |
+| 请求方式 | `POST` |
+| URL | `/api/v1/k8s/event-forward/events/{id}/requeue` |
+| Gin 路径 | `/api/v1/k8s/event-forward/events/:id/requeue` |
+| operationId | `post_api_v1_k8s_event-forward_events_id__requeue` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s/event-forward/events/:id/requeue, POST)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-K8SEF-003 查询 k8s/event-forward/rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SEF-003` |
 | 接口名称 | 查询 k8s/event-forward/rules |
 | 请求方式 | `GET` |
 | URL | `/api/v1/k8s/event-forward/rules` |
@@ -11789,11 +21387,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SEF-002 创建/提交 k8s/event-forward/rules
+#### API-K8SEF-004 创建/提交 k8s/event-forward/rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SEF-002` |
+| 接口编号 | `API-K8SEF-004` |
 | 接口名称 | 创建/提交 k8s/event-forward/rules |
 | 请求方式 | `POST` |
 | URL | `/api/v1/k8s/event-forward/rules` |
@@ -11850,11 +21448,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SEF-003 删除 k8s/event-forward/rules
+#### API-K8SEF-005 删除 k8s/event-forward/rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SEF-003` |
+| 接口编号 | `API-K8SEF-005` |
 | 接口名称 | 删除 k8s/event-forward/rules |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/k8s/event-forward/rules/{id}` |
@@ -11912,11 +21510,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SEF-004 查询 k8s/event-forward/rules
+#### API-K8SEF-006 查询 k8s/event-forward/rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SEF-004` |
+| 接口编号 | `API-K8SEF-006` |
 | 接口名称 | 查询 k8s/event-forward/rules |
 | 请求方式 | `GET` |
 | URL | `/api/v1/k8s/event-forward/rules/{id}` |
@@ -11974,11 +21572,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SEF-005 更新 k8s/event-forward/rules
+#### API-K8SEF-007 更新 k8s/event-forward/rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SEF-005` |
+| 接口编号 | `API-K8SEF-007` |
 | 接口名称 | 更新 k8s/event-forward/rules |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/k8s/event-forward/rules/{id}` |
@@ -12036,11 +21634,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SEF-006 查询 k8s/event-forward/settings
+#### API-K8SEF-008 查询 k8s/event-forward/settings
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SEF-006` |
+| 接口编号 | `API-K8SEF-008` |
 | 接口名称 | 查询 k8s/event-forward/settings |
 | 请求方式 | `GET` |
 | URL | `/api/v1/k8s/event-forward/settings` |
@@ -12097,11 +21695,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SEF-007 更新 k8s/event-forward/settings
+#### API-K8SEF-009 更新 k8s/event-forward/settings
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SEF-007` |
+| 接口编号 | `API-K8SEF-009` |
 | 接口名称 | 更新 k8s/event-forward/settings |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/k8s/event-forward/settings` |
@@ -12158,7 +21756,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.23 K8sScopedPolicy
+### 3.28 K8sScopedPolicy
 
 #### API-K8SP-001 查询 api/v1/k8s-policies
 
@@ -12282,11 +21880,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SP-003 查询 v1/k8s-policies/cluster-auth-matrix
+#### API-K8SP-003 查询 v1/k8s-policies/capabilities
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-K8SP-003` |
+| 接口名称 | 查询 v1/k8s-policies/capabilities |
+| 请求方式 | `GET` |
+| URL | `/api/v1/k8s-policies/capabilities` |
+| Gin 路径 | `/api/v1/k8s-policies/capabilities` |
+| operationId | `get_api_v1_k8s-policies_capabilities` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s-policies/capabilities, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-K8SP-004 查询 v1/k8s-policies/cluster-auth-matrix
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SP-004` |
 | 接口名称 | 查询 v1/k8s-policies/cluster-auth-matrix |
 | 请求方式 | `GET` |
 | URL | `/api/v1/k8s-policies/cluster-auth-matrix` |
@@ -12343,11 +22002,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SP-004 创建/提交 k8s-policies/cluster-grants/batch-delete
+#### API-K8SP-005 创建/提交 k8s-policies/cluster-grants/batch-delete
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SP-004` |
+| 接口编号 | `API-K8SP-005` |
 | 接口名称 | 创建/提交 k8s-policies/cluster-grants/batch-delete |
 | 请求方式 | `POST` |
 | URL | `/api/v1/k8s-policies/cluster-grants/batch-delete` |
@@ -12404,11 +22063,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SP-005 删除 v1/k8s-policies/cluster-grants
+#### API-K8SP-006 删除 v1/k8s-policies/cluster-grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SP-005` |
+| 接口编号 | `API-K8SP-006` |
 | 接口名称 | 删除 v1/k8s-policies/cluster-grants |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/k8s-policies/cluster-grants/{id}` |
@@ -12466,11 +22125,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SP-006 创建/提交 v1/k8s-policies/grant-preset
+#### API-K8SP-007 创建/提交 v1/k8s-policies/grant-preset
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SP-006` |
+| 接口编号 | `API-K8SP-007` |
 | 接口名称 | 创建/提交 v1/k8s-policies/grant-preset |
 | 请求方式 | `POST` |
 | URL | `/api/v1/k8s-policies/grant-preset` |
@@ -12527,11 +22186,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SP-007 查询 v1/k8s-policies/my-access
+#### API-K8SP-008 查询 v1/k8s-policies/my-access
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SP-007` |
+| 接口编号 | `API-K8SP-008` |
 | 接口名称 | 查询 v1/k8s-policies/my-access |
 | 请求方式 | `GET` |
 | URL | `/api/v1/k8s-policies/my-access` |
@@ -12588,11 +22247,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SP-008 查询 v1/k8s-policies/paths
+#### API-K8SP-009 查询 v1/k8s-policies/paths
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SP-008` |
+| 接口编号 | `API-K8SP-009` |
 | 接口名称 | 查询 v1/k8s-policies/paths |
 | 请求方式 | `GET` |
 | URL | `/api/v1/k8s-policies/paths` |
@@ -12649,11 +22308,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-K8SP-009 查询 v1/k8s-policies/user-cluster-auth
+#### API-K8SP-010 创建/提交 v1/k8s-policies/split-by-namespaces
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-K8SP-009` |
+| 接口编号 | `API-K8SP-010` |
+| 接口名称 | 创建/提交 v1/k8s-policies/split-by-namespaces |
+| 请求方式 | `POST` |
+| URL | `/api/v1/k8s-policies/split-by-namespaces` |
+| Gin 路径 | `/api/v1/k8s-policies/split-by-namespaces` |
+| operationId | `post_api_v1_k8s-policies_split-by-namespaces` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/k8s-policies/split-by-namespaces, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-K8SP-011 查询 v1/k8s-policies/user-cluster-auth
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-K8SP-011` |
 | 接口名称 | 查询 v1/k8s-policies/user-cluster-auth |
 | 请求方式 | `GET` |
 | URL | `/api/v1/k8s-policies/user-cluster-auth` |
@@ -12710,7 +22430,1232 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.24 LogPlatform
+### 3.29 Kafkamgmt
+
+#### API-KAFKAM-001 查询 v1/kafkamgmt/brokers
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-001` |
+| 接口名称 | 查询 v1/kafkamgmt/brokers |
+| 请求方式 | `GET` |
+| URL | `/api/v1/kafkamgmt/brokers` |
+| Gin 路径 | `/api/v1/kafkamgmt/brokers` |
+| operationId | `get_api_v1_kafkamgmt_brokers` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/brokers, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-002 查询 v1/kafkamgmt/connections
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-002` |
+| 接口名称 | 查询 v1/kafkamgmt/connections |
+| 请求方式 | `GET` |
+| URL | `/api/v1/kafkamgmt/connections` |
+| Gin 路径 | `/api/v1/kafkamgmt/connections` |
+| operationId | `get_api_v1_kafkamgmt_connections` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/connections, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-003 创建/提交 v1/kafkamgmt/connections
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-003` |
+| 接口名称 | 创建/提交 v1/kafkamgmt/connections |
+| 请求方式 | `POST` |
+| URL | `/api/v1/kafkamgmt/connections` |
+| Gin 路径 | `/api/v1/kafkamgmt/connections` |
+| operationId | `post_api_v1_kafkamgmt_connections` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/connections, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-004 创建/提交 kafkamgmt/connections/import-from-dict
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-004` |
+| 接口名称 | 创建/提交 kafkamgmt/connections/import-from-dict |
+| 请求方式 | `POST` |
+| URL | `/api/v1/kafkamgmt/connections/import-from-dict` |
+| Gin 路径 | `/api/v1/kafkamgmt/connections/import-from-dict` |
+| operationId | `post_api_v1_kafkamgmt_connections_import-from-dict` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/connections/import-from-dict, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-005 创建/提交 kafkamgmt/connections/test
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-005` |
+| 接口名称 | 创建/提交 kafkamgmt/connections/test |
+| 请求方式 | `POST` |
+| URL | `/api/v1/kafkamgmt/connections/test` |
+| Gin 路径 | `/api/v1/kafkamgmt/connections/test` |
+| operationId | `post_api_v1_kafkamgmt_connections_test` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/connections/test, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-006 删除 v1/kafkamgmt/connections
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-006` |
+| 接口名称 | 删除 v1/kafkamgmt/connections |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/kafkamgmt/connections/{id}` |
+| Gin 路径 | `/api/v1/kafkamgmt/connections/:id` |
+| operationId | `delete_api_v1_kafkamgmt_connections_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/connections/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-007 更新 v1/kafkamgmt/connections
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-007` |
+| 接口名称 | 更新 v1/kafkamgmt/connections |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/kafkamgmt/connections/{id}` |
+| Gin 路径 | `/api/v1/kafkamgmt/connections/:id` |
+| operationId | `put_api_v1_kafkamgmt_connections_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/connections/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-008 创建/提交 kafkamgmt/connections/ping
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-008` |
+| 接口名称 | 创建/提交 kafkamgmt/connections/ping |
+| 请求方式 | `POST` |
+| URL | `/api/v1/kafkamgmt/connections/{id}/ping` |
+| Gin 路径 | `/api/v1/kafkamgmt/connections/:id/ping` |
+| operationId | `post_api_v1_kafkamgmt_connections_id__ping` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/connections/:id/ping, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-009 删除 v1/kafkamgmt/groups
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-009` |
+| 接口名称 | 删除 v1/kafkamgmt/groups |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/kafkamgmt/groups` |
+| Gin 路径 | `/api/v1/kafkamgmt/groups` |
+| operationId | `delete_api_v1_kafkamgmt_groups` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/groups, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-010 查询 v1/kafkamgmt/groups
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-010` |
+| 接口名称 | 查询 v1/kafkamgmt/groups |
+| 请求方式 | `GET` |
+| URL | `/api/v1/kafkamgmt/groups` |
+| Gin 路径 | `/api/v1/kafkamgmt/groups` |
+| operationId | `get_api_v1_kafkamgmt_groups` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/groups, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-011 查询 kafkamgmt/groups/lag
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-011` |
+| 接口名称 | 查询 kafkamgmt/groups/lag |
+| 请求方式 | `GET` |
+| URL | `/api/v1/kafkamgmt/groups/lag` |
+| Gin 路径 | `/api/v1/kafkamgmt/groups/lag` |
+| operationId | `get_api_v1_kafkamgmt_groups_lag` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/groups/lag, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-012 查询 kafkamgmt/groups/members
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-012` |
+| 接口名称 | 查询 kafkamgmt/groups/members |
+| 请求方式 | `GET` |
+| URL | `/api/v1/kafkamgmt/groups/members` |
+| Gin 路径 | `/api/v1/kafkamgmt/groups/members` |
+| operationId | `get_api_v1_kafkamgmt_groups_members` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/groups/members, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-013 删除 v1/kafkamgmt/topics
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-013` |
+| 接口名称 | 删除 v1/kafkamgmt/topics |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/kafkamgmt/topics` |
+| Gin 路径 | `/api/v1/kafkamgmt/topics` |
+| operationId | `delete_api_v1_kafkamgmt_topics` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/topics, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-014 查询 v1/kafkamgmt/topics
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-014` |
+| 接口名称 | 查询 v1/kafkamgmt/topics |
+| 请求方式 | `GET` |
+| URL | `/api/v1/kafkamgmt/topics` |
+| Gin 路径 | `/api/v1/kafkamgmt/topics` |
+| operationId | `get_api_v1_kafkamgmt_topics` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/topics, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-015 创建/提交 v1/kafkamgmt/topics
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-015` |
+| 接口名称 | 创建/提交 v1/kafkamgmt/topics |
+| 请求方式 | `POST` |
+| URL | `/api/v1/kafkamgmt/topics` |
+| Gin 路径 | `/api/v1/kafkamgmt/topics` |
+| operationId | `post_api_v1_kafkamgmt_topics` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/topics, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-016 查询 kafkamgmt/topics/config
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-016` |
+| 接口名称 | 查询 kafkamgmt/topics/config |
+| 请求方式 | `GET` |
+| URL | `/api/v1/kafkamgmt/topics/config` |
+| Gin 路径 | `/api/v1/kafkamgmt/topics/config` |
+| operationId | `get_api_v1_kafkamgmt_topics_config` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/topics/config, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-017 创建/提交 kafkamgmt/topics/consume
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-017` |
+| 接口名称 | 创建/提交 kafkamgmt/topics/consume |
+| 请求方式 | `POST` |
+| URL | `/api/v1/kafkamgmt/topics/consume` |
+| Gin 路径 | `/api/v1/kafkamgmt/topics/consume` |
+| operationId | `post_api_v1_kafkamgmt_topics_consume` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/topics/consume, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-018 查询 kafkamgmt/topics/detail
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-018` |
+| 接口名称 | 查询 kafkamgmt/topics/detail |
+| 请求方式 | `GET` |
+| URL | `/api/v1/kafkamgmt/topics/detail` |
+| Gin 路径 | `/api/v1/kafkamgmt/topics/detail` |
+| operationId | `get_api_v1_kafkamgmt_topics_detail` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/topics/detail, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-019 创建/提交 kafkamgmt/topics/partitions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-019` |
+| 接口名称 | 创建/提交 kafkamgmt/topics/partitions |
+| 请求方式 | `POST` |
+| URL | `/api/v1/kafkamgmt/topics/partitions` |
+| Gin 路径 | `/api/v1/kafkamgmt/topics/partitions` |
+| operationId | `post_api_v1_kafkamgmt_topics_partitions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/topics/partitions, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-KAFKAM-020 创建/提交 kafkamgmt/topics/produce
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-KAFKAM-020` |
+| 接口名称 | 创建/提交 kafkamgmt/topics/produce |
+| 请求方式 | `POST` |
+| URL | `/api/v1/kafkamgmt/topics/produce` |
+| Gin 路径 | `/api/v1/kafkamgmt/topics/produce` |
+| operationId | `post_api_v1_kafkamgmt_topics_produce` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/kafkamgmt/topics/produce, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.30 LogPlatform
 
 #### API-LOG-001 查询 v1/log-platform/es-config
 
@@ -12773,11 +23718,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-002 删除 v1/log-platform/es-indices
+#### API-LOG-002 更新 v1/log-platform/es-connection
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-LOG-002` |
+| 接口名称 | 更新 v1/log-platform/es-connection |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/log-platform/es-connection` |
+| Gin 路径 | `/api/v1/log-platform/es-connection` |
+| operationId | `put_api_v1_log-platform_es-connection` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/log-platform/es-connection, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-LOG-003 删除 v1/log-platform/es-indices
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-LOG-003` |
 | 接口名称 | 删除 v1/log-platform/es-indices |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/log-platform/es-indices/{index}` |
@@ -12835,11 +23841,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-003 查询 v1/log-platform/es-storage
+#### API-LOG-004 查询 v1/log-platform/es-storage
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-LOG-003` |
+| 接口编号 | `API-LOG-004` |
 | 接口名称 | 查询 v1/log-platform/es-storage |
 | 请求方式 | `GET` |
 | URL | `/api/v1/log-platform/es-storage` |
@@ -12896,11 +23902,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-004 查询 v1/log-platform/kafka-config
+#### API-LOG-005 查询 v1/log-platform/kafka-config
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-LOG-004` |
+| 接口编号 | `API-LOG-005` |
 | 接口名称 | 查询 v1/log-platform/kafka-config |
 | 请求方式 | `GET` |
 | URL | `/api/v1/log-platform/kafka-config` |
@@ -12957,11 +23963,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-005 查询 v1/log-platform/kafka-stats
+#### API-LOG-006 查询 v1/log-platform/kafka-stats
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-LOG-005` |
+| 接口编号 | `API-LOG-006` |
 | 接口名称 | 查询 v1/log-platform/kafka-stats |
 | 请求方式 | `GET` |
 | URL | `/api/v1/log-platform/kafka-stats` |
@@ -13018,11 +24024,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-006 删除 v1/log-platform/kafka-topics
+#### API-LOG-007 删除 v1/log-platform/kafka-topics
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-LOG-006` |
+| 接口编号 | `API-LOG-007` |
 | 接口名称 | 删除 v1/log-platform/kafka-topics |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/log-platform/kafka-topics/{topic}` |
@@ -13080,11 +24086,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-007 查询 v1/log-platform/retention
+#### API-LOG-008 查询 v1/log-platform/retention
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-LOG-007` |
+| 接口编号 | `API-LOG-008` |
 | 接口名称 | 查询 v1/log-platform/retention |
 | 请求方式 | `GET` |
 | URL | `/api/v1/log-platform/retention` |
@@ -13141,11 +24147,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-008 更新 v1/log-platform/retention
+#### API-LOG-009 更新 v1/log-platform/retention
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-LOG-008` |
+| 接口编号 | `API-LOG-009` |
 | 接口名称 | 更新 v1/log-platform/retention |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/log-platform/retention` |
@@ -13202,11 +24208,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-009 创建/提交 log-platform/retention/cleanup
+#### API-LOG-010 创建/提交 log-platform/retention/cleanup
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-LOG-009` |
+| 接口编号 | `API-LOG-010` |
 | 接口名称 | 创建/提交 log-platform/retention/cleanup |
 | 请求方式 | `POST` |
 | URL | `/api/v1/log-platform/retention/cleanup` |
@@ -13263,11 +24269,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-LOG-010 查询 log-platform/retention/list
+#### API-LOG-011 查询 log-platform/retention/list
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-LOG-010` |
+| 接口编号 | `API-LOG-011` |
 | 接口名称 | 查询 log-platform/retention/list |
 | 请求方式 | `GET` |
 | URL | `/api/v1/log-platform/retention/list` |
@@ -13324,7 +24330,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.25 Loggie
+### 3.31 Loggie
 
 #### API-LGG-001 创建/提交 loggie/heartbeat/report
 
@@ -13387,7 +24393,7 @@ Agent 心跳上报（公开接口，按部署网络隔离）
 
 ---
 
-### 3.26 Login-logs
+### 3.32 Login-logs
 
 #### API-LOGINL-001 查询 api/v1/login-logs
 
@@ -13634,13 +24640,74 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.27 Menus
+### 3.33 Menus
 
-#### API-MENU-001 创建/提交 api/v1/menus
+#### API-MENU-001 查询 api/v1/menus
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-MENU-001` |
+| 接口名称 | 查询 api/v1/menus |
+| 请求方式 | `GET` |
+| URL | `/api/v1/menus` |
+| Gin 路径 | `/api/v1/menus` |
+| operationId | `get_api_v1_menus` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/menus, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-MENU-002 创建/提交 api/v1/menus
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-MENU-002` |
 | 接口名称 | 创建/提交 api/v1/menus |
 | 请求方式 | `POST` |
 | URL | `/api/v1/menus` |
@@ -13697,11 +24764,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-MENU-002 更新 v1/menus/status
+#### API-MENU-003 更新 v1/menus/status
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-MENU-002` |
+| 接口编号 | `API-MENU-003` |
 | 接口名称 | 更新 v1/menus/status |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/menus/status` |
@@ -13758,11 +24825,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-MENU-003 查询 v1/menus/tree
+#### API-MENU-004 查询 v1/menus/tree
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-MENU-003` |
+| 接口编号 | `API-MENU-004` |
 | 接口名称 | 查询 v1/menus/tree |
 | 请求方式 | `GET` |
 | URL | `/api/v1/menus/tree` |
@@ -13819,11 +24886,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-MENU-004 删除 api/v1/menus
+#### API-MENU-005 删除 api/v1/menus
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-MENU-004` |
+| 接口编号 | `API-MENU-005` |
 | 接口名称 | 删除 api/v1/menus |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/menus/{id}` |
@@ -13881,11 +24948,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-MENU-005 更新 api/v1/menus
+#### API-MENU-006 更新 api/v1/menus
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-MENU-005` |
+| 接口编号 | `API-MENU-006` |
 | 接口名称 | 更新 api/v1/menus |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/menus/{id}` |
@@ -13943,11 +25010,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-MENU-006 查询 v1/menus/bindings
+#### API-MENU-007 查询 v1/menus/bindings
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-MENU-006` |
+| 接口编号 | `API-MENU-007` |
 | 接口名称 | 查询 v1/menus/bindings |
 | 请求方式 | `GET` |
 | URL | `/api/v1/menus/{id}/bindings` |
@@ -14005,11 +25072,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-MENU-007 更新 v1/menus/bindings
+#### API-MENU-008 更新 v1/menus/bindings
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-MENU-007` |
+| 接口编号 | `API-MENU-008` |
 | 接口名称 | 更新 v1/menus/bindings |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/menus/{id}/bindings` |
@@ -14067,7 +25134,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.28 Namespaces
+### 3.34 Namespaces
 
 #### API-NS-001 删除 api/v1/namespaces
 
@@ -14313,7 +25380,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.29 Network-policies
+### 3.35 Network-policies
 
 #### API-NETWOR-001 删除 api/v1/network-policies
 
@@ -14559,7 +25626,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.30 Nodes
+### 3.36 Nodes
 
 #### API-NODE-001 查询 api/v1/nodes
 
@@ -14683,11 +25750,133 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-NODE-003 创建/提交 v1/nodes/schedulability
+#### API-NODE-003 创建/提交 v1/nodes/drain
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-NODE-003` |
+| 接口名称 | 创建/提交 v1/nodes/drain |
+| 请求方式 | `POST` |
+| URL | `/api/v1/nodes/drain` |
+| Gin 路径 | `/api/v1/nodes/drain` |
+| operationId | `post_api_v1_nodes_drain` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/nodes/drain, POST)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-NODE-004 查询 v1/nodes/drain-status
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-NODE-004` |
+| 接口名称 | 查询 v1/nodes/drain-status |
+| 请求方式 | `GET` |
+| URL | `/api/v1/nodes/drain-status` |
+| Gin 路径 | `/api/v1/nodes/drain-status` |
+| operationId | `get_api_v1_nodes_drain-status` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/nodes/drain-status, GET)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-NODE-005 创建/提交 v1/nodes/schedulability
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-NODE-005` |
 | 接口名称 | 创建/提交 v1/nodes/schedulability |
 | 请求方式 | `POST` |
 | URL | `/api/v1/nodes/schedulability` |
@@ -14744,11 +25933,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-NODE-004 更新 v1/nodes/taints
+#### API-NODE-006 更新 v1/nodes/taints
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-NODE-004` |
+| 接口编号 | `API-NODE-006` |
 | 接口名称 | 更新 v1/nodes/taints |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/nodes/taints` |
@@ -14805,7 +25994,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.31 Operation-logs
+### 3.37 Operation-logs
 
 #### API-OPERAT-001 查询 api/v1/operation-logs
 
@@ -15052,7 +26241,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.32 Overview
+### 3.38 Overview
 
 #### API-OVW-001 查询 api/v1/overview
 
@@ -15237,7 +26426,68 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.33 Permissions
+#### API-OVW-004 查询 v1/overview/screen
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-OVW-004` |
+| 接口名称 | 查询 v1/overview/screen |
+| 请求方式 | `GET` |
+| URL | `/api/v1/overview/screen` |
+| Gin 路径 | `/api/v1/overview/screen` |
+| operationId | `get_api_v1_overview_screen` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/overview/screen, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.39 Permissions
 
 #### API-PERM-001 查询 api/v1/permissions
 
@@ -15422,11 +26672,72 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PERM-004 删除 api/v1/permissions
+#### API-PERM-004 创建/提交 v1/permissions/sync-routes
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-PERM-004` |
+| 接口名称 | 创建/提交 v1/permissions/sync-routes |
+| 请求方式 | `POST` |
+| URL | `/api/v1/permissions/sync-routes` |
+| Gin 路径 | `/api/v1/permissions/sync-routes` |
+| operationId | `post_api_v1_permissions_sync-routes` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/permissions/sync-routes, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PERM-005 删除 api/v1/permissions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PERM-005` |
 | 接口名称 | 删除 api/v1/permissions |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/permissions/{id}` |
@@ -15484,11 +26795,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PERM-005 查询 api/v1/permissions
+#### API-PERM-006 查询 api/v1/permissions
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PERM-005` |
+| 接口编号 | `API-PERM-006` |
 | 接口名称 | 查询 api/v1/permissions |
 | 请求方式 | `GET` |
 | URL | `/api/v1/permissions/{id}` |
@@ -15546,11 +26857,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PERM-006 更新 api/v1/permissions
+#### API-PERM-007 更新 api/v1/permissions
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PERM-006` |
+| 接口编号 | `API-PERM-007` |
 | 接口名称 | 更新 api/v1/permissions |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/permissions/{id}` |
@@ -15608,7 +26919,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.34 Persistentvolumeclaims
+### 3.40 Persistentvolumeclaims
 
 #### API-PERSIS-001 删除 api/v1/persistentvolumeclaims
 
@@ -15854,7 +27165,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.35 Persistentvolumes
+### 3.41 Persistentvolumes
 
 #### API-PERSIS-001 删除 api/v1/persistentvolumes
 
@@ -16100,7 +27411,814 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.36 Plugins
+### 3.42 Pipeline-templates
+
+#### API-PIPELI-001 查询 api/v1/pipeline-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PIPELI-001` |
+| 接口名称 | 查询 api/v1/pipeline-templates |
+| 请求方式 | `GET` |
+| URL | `/api/v1/pipeline-templates` |
+| Gin 路径 | `/api/v1/pipeline-templates` |
+| operationId | `get_api_v1_pipeline-templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/pipeline-templates, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PIPELI-002 创建/提交 api/v1/pipeline-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PIPELI-002` |
+| 接口名称 | 创建/提交 api/v1/pipeline-templates |
+| 请求方式 | `POST` |
+| URL | `/api/v1/pipeline-templates` |
+| Gin 路径 | `/api/v1/pipeline-templates` |
+| operationId | `post_api_v1_pipeline-templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/pipeline-templates, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PIPELI-003 更新 api/v1/pipeline-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PIPELI-003` |
+| 接口名称 | 更新 api/v1/pipeline-templates |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/pipeline-templates/{templateId}` |
+| Gin 路径 | `/api/v1/pipeline-templates/:templateId` |
+| operationId | `put_api_v1_pipeline-templates_templateId_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `templateId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/pipeline-templates/:templateId, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.43 Platform-templates
+
+#### API-PLATFO-001 查询 api/v1/platform-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-001` |
+| 接口名称 | 查询 api/v1/platform-templates |
+| 请求方式 | `GET` |
+| URL | `/api/v1/platform-templates` |
+| Gin 路径 | `/api/v1/platform-templates` |
+| operationId | `get_api_v1_platform-templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-002 创建/提交 api/v1/platform-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-002` |
+| 接口名称 | 创建/提交 api/v1/platform-templates |
+| 请求方式 | `POST` |
+| URL | `/api/v1/platform-templates` |
+| Gin 路径 | `/api/v1/platform-templates` |
+| operationId | `post_api_v1_platform-templates` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-003 查询 v1/platform-templates/resolve
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-003` |
+| 接口名称 | 查询 v1/platform-templates/resolve |
+| 请求方式 | `GET` |
+| URL | `/api/v1/platform-templates/resolve/{template_key}` |
+| Gin 路径 | `/api/v1/platform-templates/resolve/:template_key` |
+| operationId | `get_api_v1_platform-templates_resolve_template_key_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `template_key` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates/resolve/:template_key, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-004 删除 api/v1/platform-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-004` |
+| 接口名称 | 删除 api/v1/platform-templates |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/platform-templates/{id}` |
+| Gin 路径 | `/api/v1/platform-templates/:id` |
+| operationId | `delete_api_v1_platform-templates_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates/:id, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-005 查询 api/v1/platform-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-005` |
+| 接口名称 | 查询 api/v1/platform-templates |
+| 请求方式 | `GET` |
+| URL | `/api/v1/platform-templates/{id}` |
+| Gin 路径 | `/api/v1/platform-templates/:id` |
+| operationId | `get_api_v1_platform-templates_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-006 更新 api/v1/platform-templates
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-006` |
+| 接口名称 | 更新 api/v1/platform-templates |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/platform-templates/{id}` |
+| Gin 路径 | `/api/v1/platform-templates/:id` |
+| operationId | `put_api_v1_platform-templates_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates/:id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-007 创建/提交 v1/platform-templates/drafts
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-007` |
+| 接口名称 | 创建/提交 v1/platform-templates/drafts |
+| 请求方式 | `POST` |
+| URL | `/api/v1/platform-templates/{id}/drafts` |
+| Gin 路径 | `/api/v1/platform-templates/:id/drafts` |
+| operationId | `post_api_v1_platform-templates_id__drafts` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates/:id/drafts, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-008 创建/提交 v1/platform-templates/publish
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-008` |
+| 接口名称 | 创建/提交 v1/platform-templates/publish |
+| 请求方式 | `POST` |
+| URL | `/api/v1/platform-templates/{id}/publish` |
+| Gin 路径 | `/api/v1/platform-templates/:id/publish` |
+| operationId | `post_api_v1_platform-templates_id__publish` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates/:id/publish, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-009 查询 v1/platform-templates/versions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-009` |
+| 接口名称 | 查询 v1/platform-templates/versions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/platform-templates/{id}/versions` |
+| Gin 路径 | `/api/v1/platform-templates/:id/versions` |
+| operationId | `get_api_v1_platform-templates_id__versions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates/:id/versions, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PLATFO-010 查询 v1/platform-templates/versions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PLATFO-010` |
+| 接口名称 | 查询 v1/platform-templates/versions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/platform-templates/{id}/versions/{version}` |
+| Gin 路径 | `/api/v1/platform-templates/:id/versions/:version` |
+| operationId | `get_api_v1_platform-templates_id__versions_version_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `version` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/platform-templates/:id/versions/:version, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.44 Plugins
 
 #### API-PLG-001 查询 api/v1/plugins
 
@@ -16163,7 +28281,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.37 Pods
+### 3.45 Pods
 
 #### API-POD-001 删除 api/v1/pods
 
@@ -16409,11 +28527,133 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-005 查询 v1/pods/detail
+#### API-POD-005 创建/提交 v1/pods/debug
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-POD-005` |
+| 接口名称 | 创建/提交 v1/pods/debug |
+| 请求方式 | `POST` |
+| URL | `/api/v1/pods/debug` |
+| Gin 路径 | `/api/v1/pods/debug` |
+| operationId | `post_api_v1_pods_debug` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/pods/debug, POST)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-POD-006 查询 pods/debug/image
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-POD-006` |
+| 接口名称 | 查询 pods/debug/image |
+| 请求方式 | `GET` |
+| URL | `/api/v1/pods/debug/image` |
+| Gin 路径 | `/api/v1/pods/debug/image` |
+| operationId | `get_api_v1_pods_debug_image` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/pods/debug/image, GET)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-POD-007 查询 v1/pods/detail
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-POD-007` |
 | 接口名称 | 查询 v1/pods/detail |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/detail` |
@@ -16470,11 +28710,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-006 查询 v1/pods/diagnose
+#### API-POD-008 查询 v1/pods/diagnose
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-006` |
+| 接口编号 | `API-POD-008` |
 | 接口名称 | 查询 v1/pods/diagnose |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/diagnose` |
@@ -16531,11 +28771,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-007 查询 v1/pods/events
+#### API-POD-009 查询 v1/pods/events
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-007` |
+| 接口编号 | `API-POD-009` |
 | 接口名称 | 查询 v1/pods/events |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/events` |
@@ -16592,11 +28832,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-008 创建/提交 v1/pods/exec
+#### API-POD-010 创建/提交 v1/pods/exec
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-008` |
+| 接口编号 | `API-POD-010` |
 | 接口名称 | 创建/提交 v1/pods/exec |
 | 请求方式 | `POST` |
 | URL | `/api/v1/pods/exec` |
@@ -16653,11 +28893,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-009 查询 pods/exec/ws
+#### API-POD-011 查询 pods/exec/ws
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-009` |
+| 接口编号 | `API-POD-011` |
 | 接口名称 | 查询 pods/exec/ws |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/exec/ws` |
@@ -16714,11 +28954,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-010 查询 v1/pods/file
+#### API-POD-012 查询 v1/pods/file
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-010` |
+| 接口编号 | `API-POD-012` |
 | 接口名称 | 查询 v1/pods/file |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/file` |
@@ -16775,11 +29015,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-011 创建/提交 pods/file/delete
+#### API-POD-013 创建/提交 pods/file/delete
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-011` |
+| 接口编号 | `API-POD-013` |
 | 接口名称 | 创建/提交 pods/file/delete |
 | 请求方式 | `POST` |
 | URL | `/api/v1/pods/file/delete` |
@@ -16836,11 +29076,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-012 查询 pods/file/download
+#### API-POD-014 查询 pods/file/download
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-012` |
+| 接口编号 | `API-POD-014` |
 | 接口名称 | 查询 pods/file/download |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/file/download` |
@@ -16897,11 +29137,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-013 创建/提交 pods/file/upload
+#### API-POD-015 创建/提交 pods/file/upload
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-013` |
+| 接口编号 | `API-POD-015` |
 | 接口名称 | 创建/提交 pods/file/upload |
 | 请求方式 | `POST` |
 | URL | `/api/v1/pods/file/upload` |
@@ -16958,11 +29198,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-014 查询 v1/pods/files
+#### API-POD-016 查询 v1/pods/files
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-014` |
+| 接口编号 | `API-POD-016` |
 | 接口名称 | 查询 v1/pods/files |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/files` |
@@ -17019,11 +29259,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-015 查询 v1/pods/logs
+#### API-POD-017 查询 v1/pods/logs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-015` |
+| 接口编号 | `API-POD-017` |
 | 接口名称 | 查询 v1/pods/logs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/logs` |
@@ -17080,11 +29320,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-016 查询 pods/logs/download
+#### API-POD-018 查询 pods/logs/download
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-016` |
+| 接口编号 | `API-POD-018` |
 | 接口名称 | 查询 pods/logs/download |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/logs/download` |
@@ -17141,11 +29381,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-017 查询 pods/logs/stream
+#### API-POD-019 查询 pods/logs/stream
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-017` |
+| 接口编号 | `API-POD-019` |
 | 接口名称 | 查询 pods/logs/stream |
 | 请求方式 | `GET` |
 | URL | `/api/v1/pods/logs/stream` |
@@ -17202,11 +29442,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-018 创建/提交 v1/pods/restart
+#### API-POD-020 创建/提交 v1/pods/restart
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-018` |
+| 接口编号 | `API-POD-020` |
 | 接口名称 | 创建/提交 v1/pods/restart |
 | 请求方式 | `POST` |
 | URL | `/api/v1/pods/restart` |
@@ -17263,11 +29503,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-POD-019 创建/提交 pods/update/simple
+#### API-POD-021 创建/提交 pods/update/simple
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-POD-019` |
+| 接口编号 | `API-POD-021` |
 | 接口名称 | 创建/提交 pods/update/simple |
 | 请求方式 | `POST` |
 | URL | `/api/v1/pods/update/simple` |
@@ -17324,7 +29564,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.38 Policies
+### 3.46 Policies
 
 #### API-POL-001 删除 api/v1/policies
 
@@ -17875,7 +30115,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.39 Projects
+### 3.47 Projects
 
 #### API-PRJ-001 查询 api/v1/projects
 
@@ -18123,11 +30363,135 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-005 查询 v1/projects/cicd-access-grants
+#### API-PRJ-005 创建/提交 v1/projects/archive
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-PRJ-005` |
+| 接口名称 | 创建/提交 v1/projects/archive |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/archive` |
+| Gin 路径 | `/api/v1/projects/:id/archive` |
+| operationId | `post_api_v1_projects_id__archive` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/archive, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-006 查询 v1/projects/change-events
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-006` |
+| 接口名称 | 查询 v1/projects/change-events |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/change-events` |
+| Gin 路径 | `/api/v1/projects/:id/change-events` |
+| operationId | `get_api_v1_projects_id__change-events` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/change-events, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-007 查询 v1/projects/cicd-access-grants
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-007` |
 | 接口名称 | 查询 v1/projects/cicd-access-grants |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd-access-grants` |
@@ -18185,11 +30549,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-006 创建/提交 v1/projects/cicd-access-grants
+#### API-PRJ-008 创建/提交 v1/projects/cicd-access-grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-006` |
+| 接口编号 | `API-PRJ-008` |
 | 接口名称 | 创建/提交 v1/projects/cicd-access-grants |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd-access-grants` |
@@ -18247,11 +30611,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-007 创建/提交 projects/cicd-access-grants/bootstrap
+#### API-PRJ-009 创建/提交 projects/cicd-access-grants/bootstrap
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-007` |
+| 接口编号 | `API-PRJ-009` |
 | 接口名称 | 创建/提交 projects/cicd-access-grants/bootstrap |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd-access-grants/bootstrap` |
@@ -18309,11 +30673,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-008 创建/提交 projects/cicd-access-grants/bulk
+#### API-PRJ-010 创建/提交 projects/cicd-access-grants/bulk
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-008` |
+| 接口编号 | `API-PRJ-010` |
 | 接口名称 | 创建/提交 projects/cicd-access-grants/bulk |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd-access-grants/bulk` |
@@ -18371,11 +30735,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-009 删除 v1/projects/cicd-access-grants
+#### API-PRJ-011 删除 v1/projects/cicd-access-grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-009` |
+| 接口编号 | `API-PRJ-011` |
 | 接口名称 | 删除 v1/projects/cicd-access-grants |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/cicd-access-grants/{grantId}` |
@@ -18434,11 +30798,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-010 查询 projects/cicd/approval-flow
+#### API-PRJ-012 查询 projects/cicd/approval-flow
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-010` |
+| 接口编号 | `API-PRJ-012` |
 | 接口名称 | 查询 projects/cicd/approval-flow |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/approval-flow` |
@@ -18496,11 +30860,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-011 更新 projects/cicd/approval-flow
+#### API-PRJ-013 更新 projects/cicd/approval-flow
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-011` |
+| 接口编号 | `API-PRJ-013` |
 | 接口名称 | 更新 projects/cicd/approval-flow |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/cicd/approval-flow` |
@@ -18558,11 +30922,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-012 查询 projects/cicd/build-runs
+#### API-PRJ-014 查询 projects/cicd/build-runs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-012` |
+| 接口编号 | `API-PRJ-014` |
 | 接口名称 | 查询 projects/cicd/build-runs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/build-runs` |
@@ -18620,11 +30984,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-013 删除 projects/cicd/build-runs
+#### API-PRJ-015 删除 projects/cicd/build-runs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-013` |
+| 接口编号 | `API-PRJ-015` |
 | 接口名称 | 删除 projects/cicd/build-runs |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/cicd/build-runs/{runId}` |
@@ -18683,11 +31047,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-014 查询 projects/cicd/build-runs
+#### API-PRJ-016 查询 projects/cicd/build-runs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-014` |
+| 接口编号 | `API-PRJ-016` |
 | 接口名称 | 查询 projects/cicd/build-runs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/build-runs/{runId}` |
@@ -18746,11 +31110,74 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-015 查询 cicd/build-runs/log
+#### API-PRJ-017 查询 cicd/build-runs/artifacts-meta
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-015` |
+| 接口编号 | `API-PRJ-017` |
+| 接口名称 | 查询 cicd/build-runs/artifacts-meta |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/cicd/build-runs/{runId}/artifacts-meta` |
+| Gin 路径 | `/api/v1/projects/:id/cicd/build-runs/:runId/artifacts-meta` |
+| operationId | `get_api_v1_projects_id__cicd_build-runs_runId__artifacts-meta` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `runId` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cicd/build-runs/:runId/artifacts-meta, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：CICD 服务级 `AssertCicdAccess`（详情/日志需 view）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-018 查询 cicd/build-runs/log
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-018` |
 | 接口名称 | 查询 cicd/build-runs/log |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/build-runs/{runId}/log` |
@@ -18809,11 +31236,74 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-016 查询 projects/cicd/helm-scaffold
+#### API-PRJ-019 查询 cicd/build-runs/stages
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-016` |
+| 接口编号 | `API-PRJ-019` |
+| 接口名称 | 查询 cicd/build-runs/stages |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/cicd/build-runs/{runId}/stages` |
+| Gin 路径 | `/api/v1/projects/:id/cicd/build-runs/:runId/stages` |
+| operationId | `get_api_v1_projects_id__cicd_build-runs_runId__stages` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `runId` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cicd/build-runs/:runId/stages, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：CICD 服务级 `AssertCicdAccess`（详情/日志需 view）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-020 查询 projects/cicd/helm-scaffold
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-020` |
 | 接口名称 | 查询 projects/cicd/helm-scaffold |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/helm-scaffold` |
@@ -18871,11 +31361,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-017 查询 projects/cicd/release-runs
+#### API-PRJ-021 查询 projects/cicd/release-runs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-017` |
+| 接口编号 | `API-PRJ-021` |
 | 接口名称 | 查询 projects/cicd/release-runs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs` |
@@ -18933,11 +31423,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-018 创建/提交 cicd/release-runs/batch-approve
+#### API-PRJ-022 创建/提交 cicd/release-runs/batch-approve
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-018` |
+| 接口编号 | `API-PRJ-022` |
 | 接口名称 | 创建/提交 cicd/release-runs/batch-approve |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/batch-approve` |
@@ -18995,11 +31485,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-019 创建/提交 cicd/release-runs/batch-execute
+#### API-PRJ-023 创建/提交 cicd/release-runs/batch-execute
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-019` |
+| 接口编号 | `API-PRJ-023` |
 | 接口名称 | 创建/提交 cicd/release-runs/batch-execute |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/batch-execute` |
@@ -19057,11 +31547,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-020 创建/提交 cicd/release-runs/batch-reject
+#### API-PRJ-024 创建/提交 cicd/release-runs/batch-reject
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-020` |
+| 接口编号 | `API-PRJ-024` |
 | 接口名称 | 创建/提交 cicd/release-runs/batch-reject |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/batch-reject` |
@@ -19119,11 +31609,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-021 创建/提交 cicd/release-runs/batch-terminate
+#### API-PRJ-025 创建/提交 cicd/release-runs/batch-terminate
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-021` |
+| 接口编号 | `API-PRJ-025` |
 | 接口名称 | 创建/提交 cicd/release-runs/batch-terminate |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/batch-terminate` |
@@ -19181,11 +31671,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-022 删除 projects/cicd/release-runs
+#### API-PRJ-026 删除 projects/cicd/release-runs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-022` |
+| 接口编号 | `API-PRJ-026` |
 | 接口名称 | 删除 projects/cicd/release-runs |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}` |
@@ -19244,11 +31734,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-023 查询 projects/cicd/release-runs
+#### API-PRJ-027 查询 projects/cicd/release-runs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-023` |
+| 接口编号 | `API-PRJ-027` |
 | 接口名称 | 查询 projects/cicd/release-runs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}` |
@@ -19307,11 +31797,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-024 查询 cicd/release-runs/approval-steps
+#### API-PRJ-028 查询 cicd/release-runs/approval-steps
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-024` |
+| 接口编号 | `API-PRJ-028` |
 | 接口名称 | 查询 cicd/release-runs/approval-steps |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/approval-steps` |
@@ -19370,11 +31860,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-025 创建/提交 cicd/release-runs/approve
+#### API-PRJ-029 创建/提交 cicd/release-runs/approve
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-025` |
+| 接口编号 | `API-PRJ-029` |
 | 接口名称 | 创建/提交 cicd/release-runs/approve |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/approve` |
@@ -19433,11 +31923,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-026 创建/提交 cicd/release-runs/execute
+#### API-PRJ-030 创建/提交 cicd/release-runs/execute
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-026` |
+| 接口编号 | `API-PRJ-030` |
 | 接口名称 | 创建/提交 cicd/release-runs/execute |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/execute` |
@@ -19496,11 +31986,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-027 查询 cicd/release-runs/log
+#### API-PRJ-031 查询 cicd/release-runs/log
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-027` |
+| 接口编号 | `API-PRJ-031` |
 | 接口名称 | 查询 cicd/release-runs/log |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/log` |
@@ -19559,11 +32049,200 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-028 创建/提交 cicd/release-runs/reject
+#### API-PRJ-032 创建/提交 cicd/release-runs/platform-rollback
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-028` |
+| 接口编号 | `API-PRJ-032` |
+| 接口名称 | 创建/提交 cicd/release-runs/platform-rollback |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/platform-rollback` |
+| Gin 路径 | `/api/v1/projects/:id/cicd/release-runs/:runId/platform-rollback` |
+| operationId | `post_api_v1_projects_id__cicd_release-runs_runId__platform-rollback` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `runId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cicd/release-runs/:runId/platform-rollback, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：CICD 服务级 `AssertCicdAccess`（详情/日志需 view）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-033 创建/提交 release-runs/progressive/abort
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-033` |
+| 接口名称 | 创建/提交 release-runs/progressive/abort |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/progressive/abort` |
+| Gin 路径 | `/api/v1/projects/:id/cicd/release-runs/:runId/progressive/abort` |
+| operationId | `post_api_v1_projects_id__cicd_release-runs_runId__progressive_abort` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `runId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cicd/release-runs/:runId/progressive/abort, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：CICD 服务级 `AssertCicdAccess`（详情/日志需 view）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-034 创建/提交 release-runs/progressive/promote
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-034` |
+| 接口名称 | 创建/提交 release-runs/progressive/promote |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/progressive/promote` |
+| Gin 路径 | `/api/v1/projects/:id/cicd/release-runs/:runId/progressive/promote` |
+| operationId | `post_api_v1_projects_id__cicd_release-runs_runId__progressive_promote` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `runId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cicd/release-runs/:runId/progressive/promote, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：CICD 服务级 `AssertCicdAccess`（详情/日志需 view）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-035 创建/提交 cicd/release-runs/reject
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-035` |
 | 接口名称 | 创建/提交 cicd/release-runs/reject |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/reject` |
@@ -19622,11 +32301,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-029 创建/提交 cicd/release-runs/terminate
+#### API-PRJ-036 创建/提交 cicd/release-runs/terminate
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-029` |
+| 接口编号 | `API-PRJ-036` |
 | 接口名称 | 创建/提交 cicd/release-runs/terminate |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/terminate` |
@@ -19685,11 +32364,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-030 创建/提交 cicd/release-runs/verify
+#### API-PRJ-037 创建/提交 cicd/release-runs/verify
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-030` |
+| 接口编号 | `API-PRJ-037` |
 | 接口名称 | 创建/提交 cicd/release-runs/verify |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/release-runs/{runId}/verify` |
@@ -19748,11 +32427,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-031 查询 projects/cicd/services
+#### API-PRJ-038 查询 projects/cicd/services
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-031` |
+| 接口编号 | `API-PRJ-038` |
 | 接口名称 | 查询 projects/cicd/services |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/services` |
@@ -19810,11 +32489,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-032 创建/提交 projects/cicd/services
+#### API-PRJ-039 创建/提交 projects/cicd/services
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-032` |
+| 接口编号 | `API-PRJ-039` |
 | 接口名称 | 创建/提交 projects/cicd/services |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/services` |
@@ -19872,11 +32551,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-033 删除 projects/cicd/services
+#### API-PRJ-040 删除 projects/cicd/services
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-033` |
+| 接口编号 | `API-PRJ-040` |
 | 接口名称 | 删除 projects/cicd/services |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}` |
@@ -19935,11 +32614,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-034 查询 projects/cicd/services
+#### API-PRJ-041 查询 projects/cicd/services
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-034` |
+| 接口编号 | `API-PRJ-041` |
 | 接口名称 | 查询 projects/cicd/services |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}` |
@@ -19998,11 +32677,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-035 更新 projects/cicd/services
+#### API-PRJ-042 更新 projects/cicd/services
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-035` |
+| 接口编号 | `API-PRJ-042` |
 | 接口名称 | 更新 projects/cicd/services |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}` |
@@ -20061,11 +32740,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-036 查询 cicd/services/artifacts
+#### API-PRJ-043 查询 cicd/services/artifacts
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-036` |
+| 接口编号 | `API-PRJ-043` |
 | 接口名称 | 查询 cicd/services/artifacts |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/artifacts` |
@@ -20124,11 +32803,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-037 创建/提交 cicd/services/builds
+#### API-PRJ-044 创建/提交 cicd/services/builds
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-037` |
+| 接口编号 | `API-PRJ-044` |
 | 接口名称 | 创建/提交 cicd/services/builds |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/builds` |
@@ -20187,11 +32866,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-038 查询 cicd/services/ci-config
+#### API-PRJ-045 查询 cicd/services/ci-config
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-038` |
+| 接口编号 | `API-PRJ-045` |
 | 接口名称 | 查询 cicd/services/ci-config |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/ci-config` |
@@ -20250,11 +32929,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-039 更新 cicd/services/ci-config
+#### API-PRJ-046 更新 cicd/services/ci-config
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-039` |
+| 接口编号 | `API-PRJ-046` |
 | 接口名称 | 更新 cicd/services/ci-config |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/ci-config` |
@@ -20313,11 +32992,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-040 查询 cicd/services/deploy-configs
+#### API-PRJ-047 查询 cicd/services/deploy-configs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-040` |
+| 接口编号 | `API-PRJ-047` |
 | 接口名称 | 查询 cicd/services/deploy-configs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/deploy-configs` |
@@ -20376,11 +33055,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-041 创建/提交 cicd/services/deploy-configs
+#### API-PRJ-048 创建/提交 cicd/services/deploy-configs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-041` |
+| 接口编号 | `API-PRJ-048` |
 | 接口名称 | 创建/提交 cicd/services/deploy-configs |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/deploy-configs` |
@@ -20439,11 +33118,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-042 删除 cicd/services/deploy-configs
+#### API-PRJ-049 删除 cicd/services/deploy-configs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-042` |
+| 接口编号 | `API-PRJ-049` |
 | 接口名称 | 删除 cicd/services/deploy-configs |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/deploy-configs/{configId}` |
@@ -20503,11 +33182,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-043 更新 cicd/services/deploy-configs
+#### API-PRJ-050 更新 cicd/services/deploy-configs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-043` |
+| 接口编号 | `API-PRJ-050` |
 | 接口名称 | 更新 cicd/services/deploy-configs |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/deploy-configs/{configId}` |
@@ -20567,11 +33246,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-044 查询 cicd/services/helm-scaffold
+#### API-PRJ-051 查询 cicd/services/helm-scaffold
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-044` |
+| 接口编号 | `API-PRJ-051` |
 | 接口名称 | 查询 cicd/services/helm-scaffold |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/helm-scaffold` |
@@ -20630,11 +33309,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-045 创建/提交 cicd/services/releases
+#### API-PRJ-052 创建/提交 cicd/services/releases
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-045` |
+| 接口编号 | `API-PRJ-052` |
 | 接口名称 | 创建/提交 cicd/services/releases |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cicd/services/{serviceId}/releases` |
@@ -20693,11 +33372,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-046 查询 v1/projects/cloud-accounts
+#### API-PRJ-053 查询 v1/projects/cloud-accounts
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-046` |
+| 接口编号 | `API-PRJ-053` |
 | 接口名称 | 查询 v1/projects/cloud-accounts |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/cloud-accounts` |
@@ -20755,11 +33434,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-047 创建/提交 v1/projects/cloud-accounts
+#### API-PRJ-054 创建/提交 v1/projects/cloud-accounts
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-047` |
+| 接口编号 | `API-PRJ-054` |
 | 接口名称 | 创建/提交 v1/projects/cloud-accounts |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/cloud-accounts` |
@@ -20817,11 +33496,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-048 删除 v1/projects/cloud-accounts
+#### API-PRJ-055 删除 v1/projects/cloud-accounts
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-048` |
+| 接口编号 | `API-PRJ-055` |
 | 接口名称 | 删除 v1/projects/cloud-accounts |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/cloud-accounts/{accountId}` |
@@ -20880,11 +33559,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-049 更新 v1/projects/cloud-accounts
+#### API-PRJ-056 更新 v1/projects/cloud-accounts
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-049` |
+| 接口编号 | `API-PRJ-056` |
 | 接口名称 | 更新 v1/projects/cloud-accounts |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/cloud-accounts/{accountId}` |
@@ -20943,11 +33622,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-050 更新 projects/cloud-accounts/sync
+#### API-PRJ-057 更新 projects/cloud-accounts/sync
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-050` |
+| 接口编号 | `API-PRJ-057` |
 | 接口名称 | 更新 projects/cloud-accounts/sync |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/cloud-accounts/{accountId}/sync` |
@@ -21006,11 +33685,571 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-051 查询 projects/dbmgmt/access-requests
+#### API-PRJ-058 查询 projects/cluster-log/agents
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-051` |
+| 接口编号 | `API-PRJ-058` |
+| 接口名称 | 查询 projects/cluster-log/agents |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/cluster-log/agents` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/agents` |
+| operationId | `get_api_v1_projects_id__cluster-log_agents` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/agents, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-059 创建/提交 projects/cluster-log/deploy
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-059` |
+| 接口名称 | 创建/提交 projects/cluster-log/deploy |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/cluster-log/deploy` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/deploy` |
+| operationId | `post_api_v1_projects_id__cluster-log_deploy` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/deploy, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-060 更新 projects/cluster-log/pipelines
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-060` |
+| 接口名称 | 更新 projects/cluster-log/pipelines |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/projects/{id}/cluster-log/pipelines` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/pipelines` |
+| operationId | `put_api_v1_projects_id__cluster-log_pipelines` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/pipelines, PUT)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-061 查询 cluster-log/pipelines/preview
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-061` |
+| 接口名称 | 查询 cluster-log/pipelines/preview |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/cluster-log/pipelines/preview` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/pipelines/preview` |
+| operationId | `get_api_v1_projects_id__cluster-log_pipelines_preview` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/pipelines/preview, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-062 查询 projects/cluster-log/rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-062` |
+| 接口名称 | 查询 projects/cluster-log/rules |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/cluster-log/rules` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/rules` |
+| operationId | `get_api_v1_projects_id__cluster-log_rules` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/rules, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-063 创建/提交 projects/cluster-log/rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-063` |
+| 接口名称 | 创建/提交 projects/cluster-log/rules |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/cluster-log/rules` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/rules` |
+| operationId | `post_api_v1_projects_id__cluster-log_rules` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/rules, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-064 删除 projects/cluster-log/rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-064` |
+| 接口名称 | 删除 projects/cluster-log/rules |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/projects/{id}/cluster-log/rules/{rule_id}` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/rules/:rule_id` |
+| operationId | `delete_api_v1_projects_id__cluster-log_rules_rule_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `rule_id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/rules/:rule_id, DELETE)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-065 更新 projects/cluster-log/rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-065` |
+| 接口名称 | 更新 projects/cluster-log/rules |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/projects/{id}/cluster-log/rules/{rule_id}` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/rules/:rule_id` |
+| operationId | `put_api_v1_projects_id__cluster-log_rules_rule_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `rule_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/rules/:rule_id, PUT)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-066 查询 projects/cluster-log/status
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-066` |
+| 接口名称 | 查询 projects/cluster-log/status |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/cluster-log/status` |
+| Gin 路径 | `/api/v1/projects/:id/cluster-log/status` |
+| operationId | `get_api_v1_projects_id__cluster-log_status` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/cluster-log/status, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-067 查询 projects/dbmgmt/access-requests
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-067` |
 | 接口名称 | 查询 projects/dbmgmt/access-requests |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/access-requests` |
@@ -21068,11 +34307,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-052 创建/提交 projects/dbmgmt/access-requests
+#### API-PRJ-068 创建/提交 projects/dbmgmt/access-requests
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-052` |
+| 接口编号 | `API-PRJ-068` |
 | 接口名称 | 创建/提交 projects/dbmgmt/access-requests |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/access-requests` |
@@ -21130,11 +34369,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-053 创建/提交 dbmgmt/access-requests/approve
+#### API-PRJ-069 创建/提交 dbmgmt/access-requests/approve
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-053` |
+| 接口编号 | `API-PRJ-069` |
 | 接口名称 | 创建/提交 dbmgmt/access-requests/approve |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/access-requests/{requestId}/approve` |
@@ -21193,11 +34432,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-054 创建/提交 dbmgmt/access-requests/reject
+#### API-PRJ-070 创建/提交 dbmgmt/access-requests/reject
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-054` |
+| 接口编号 | `API-PRJ-070` |
 | 接口名称 | 创建/提交 dbmgmt/access-requests/reject |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/access-requests/{requestId}/reject` |
@@ -21256,11 +34495,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-055 查询 projects/dbmgmt/app-user-requests
+#### API-PRJ-071 查询 projects/dbmgmt/app-user-requests
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-055` |
+| 接口编号 | `API-PRJ-071` |
 | 接口名称 | 查询 projects/dbmgmt/app-user-requests |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/app-user-requests` |
@@ -21318,11 +34557,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-056 创建/提交 projects/dbmgmt/app-user-requests
+#### API-PRJ-072 创建/提交 projects/dbmgmt/app-user-requests
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-056` |
+| 接口编号 | `API-PRJ-072` |
 | 接口名称 | 创建/提交 projects/dbmgmt/app-user-requests |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/app-user-requests` |
@@ -21380,11 +34619,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-057 创建/提交 dbmgmt/app-user-requests/approve
+#### API-PRJ-073 创建/提交 dbmgmt/app-user-requests/approve
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-057` |
+| 接口编号 | `API-PRJ-073` |
 | 接口名称 | 创建/提交 dbmgmt/app-user-requests/approve |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/app-user-requests/{requestId}/approve` |
@@ -21443,11 +34682,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-058 创建/提交 dbmgmt/app-user-requests/reject
+#### API-PRJ-074 创建/提交 dbmgmt/app-user-requests/reject
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-058` |
+| 接口编号 | `API-PRJ-074` |
 | 接口名称 | 创建/提交 dbmgmt/app-user-requests/reject |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/app-user-requests/{requestId}/reject` |
@@ -21506,11 +34745,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-059 查询 projects/dbmgmt/approval-flow
+#### API-PRJ-075 查询 projects/dbmgmt/approval-flow
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-059` |
+| 接口编号 | `API-PRJ-075` |
 | 接口名称 | 查询 projects/dbmgmt/approval-flow |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/approval-flow` |
@@ -21568,11 +34807,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-060 更新 projects/dbmgmt/approval-flow
+#### API-PRJ-076 更新 projects/dbmgmt/approval-flow
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-060` |
+| 接口编号 | `API-PRJ-076` |
 | 接口名称 | 更新 projects/dbmgmt/approval-flow |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/dbmgmt/approval-flow` |
@@ -21630,11 +34869,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-061 查询 projects/dbmgmt/audit-logs
+#### API-PRJ-077 查询 projects/dbmgmt/audit-logs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-061` |
+| 接口编号 | `API-PRJ-077` |
 | 接口名称 | 查询 projects/dbmgmt/audit-logs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/audit-logs` |
@@ -21692,11 +34931,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-062 查询 projects/dbmgmt/executions
+#### API-PRJ-078 查询 projects/dbmgmt/executions
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-062` |
+| 接口编号 | `API-PRJ-078` |
 | 接口名称 | 查询 projects/dbmgmt/executions |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/executions` |
@@ -21754,11 +34993,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-063 查询 projects/dbmgmt/grants
+#### API-PRJ-079 查询 projects/dbmgmt/grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-063` |
+| 接口编号 | `API-PRJ-079` |
 | 接口名称 | 查询 projects/dbmgmt/grants |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/grants` |
@@ -21816,11 +35055,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-064 创建/提交 projects/dbmgmt/grants
+#### API-PRJ-080 创建/提交 projects/dbmgmt/grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-064` |
+| 接口编号 | `API-PRJ-080` |
 | 接口名称 | 创建/提交 projects/dbmgmt/grants |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/grants` |
@@ -21878,11 +35117,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-065 查询 dbmgmt/grants/effective
+#### API-PRJ-081 查询 dbmgmt/grants/effective
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-065` |
+| 接口编号 | `API-PRJ-081` |
 | 接口名称 | 查询 dbmgmt/grants/effective |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/grants/effective` |
@@ -21940,11 +35179,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-066 删除 projects/dbmgmt/grants
+#### API-PRJ-082 删除 projects/dbmgmt/grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-066` |
+| 接口编号 | `API-PRJ-082` |
 | 接口名称 | 删除 projects/dbmgmt/grants |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/dbmgmt/grants/{grantId}` |
@@ -22003,11 +35242,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-067 更新 projects/dbmgmt/grants
+#### API-PRJ-083 更新 projects/dbmgmt/grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-067` |
+| 接口编号 | `API-PRJ-083` |
 | 接口名称 | 更新 projects/dbmgmt/grants |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/dbmgmt/grants/{grantId}` |
@@ -22066,11 +35305,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-068 查询 projects/dbmgmt/instances
+#### API-PRJ-084 查询 projects/dbmgmt/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-068` |
+| 接口编号 | `API-PRJ-084` |
 | 接口名称 | 查询 projects/dbmgmt/instances |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances` |
@@ -22128,11 +35367,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-069 创建/提交 projects/dbmgmt/instances
+#### API-PRJ-085 创建/提交 projects/dbmgmt/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-069` |
+| 接口编号 | `API-PRJ-085` |
 | 接口名称 | 创建/提交 projects/dbmgmt/instances |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances` |
@@ -22190,11 +35429,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-070 删除 projects/dbmgmt/instances
+#### API-PRJ-086 删除 projects/dbmgmt/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-070` |
+| 接口编号 | `API-PRJ-086` |
 | 接口名称 | 删除 projects/dbmgmt/instances |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}` |
@@ -22253,11 +35492,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-071 查询 projects/dbmgmt/instances
+#### API-PRJ-087 查询 projects/dbmgmt/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-071` |
+| 接口编号 | `API-PRJ-087` |
 | 接口名称 | 查询 projects/dbmgmt/instances |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}` |
@@ -22316,11 +35555,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-072 更新 projects/dbmgmt/instances
+#### API-PRJ-088 更新 projects/dbmgmt/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-072` |
+| 接口编号 | `API-PRJ-088` |
 | 接口名称 | 更新 projects/dbmgmt/instances |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}` |
@@ -22379,11 +35618,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-073 查询 instances/accounts/password
+#### API-PRJ-089 查询 instances/accounts/password
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-073` |
+| 接口编号 | `API-PRJ-089` |
 | 接口名称 | 查询 instances/accounts/password |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/accounts/{accountId}/password` |
@@ -22443,11 +35682,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-074 创建/提交 dbmgmt/instances/check
+#### API-PRJ-090 创建/提交 dbmgmt/instances/check
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-074` |
+| 接口编号 | `API-PRJ-090` |
 | 接口名称 | 创建/提交 dbmgmt/instances/check |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/check` |
@@ -22506,11 +35745,201 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-075 创建/提交 dbmgmt/instances/execute
+#### API-PRJ-091 查询 dbmgmt/instances/column-mask-rules
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-075` |
+| 接口编号 | `API-PRJ-091` |
+| 接口名称 | 查询 dbmgmt/instances/column-mask-rules |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/column-mask-rules` |
+| Gin 路径 | `/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules` |
+| operationId | `get_api_v1_projects_id__dbmgmt_instances_instanceId__column-mask-rules` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `instanceId` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：库表授权 / 有效权限（`db_access_grants` 等）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-092 创建/提交 dbmgmt/instances/column-mask-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-092` |
+| 接口名称 | 创建/提交 dbmgmt/instances/column-mask-rules |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/column-mask-rules` |
+| Gin 路径 | `/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules` |
+| operationId | `post_api_v1_projects_id__dbmgmt_instances_instanceId__column-mask-rules` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `instanceId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：库表授权 / 有效权限（`db_access_grants` 等）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-093 删除 dbmgmt/instances/column-mask-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-093` |
+| 接口名称 | 删除 dbmgmt/instances/column-mask-rules |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/column-mask-rules/{ruleId}` |
+| Gin 路径 | `/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules/:ruleId` |
+| operationId | `delete_api_v1_projects_id__dbmgmt_instances_instanceId__column-mask-rules_ruleId_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `instanceId` | string | 是 | 路径参数 |
+| path | `ruleId` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules/:ruleId, DELETE)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：库表授权 / 有效权限（`db_access_grants` 等）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-094 创建/提交 dbmgmt/instances/execute
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-094` |
 | 接口名称 | 创建/提交 dbmgmt/instances/execute |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/execute` |
@@ -22569,11 +35998,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-076 创建/提交 dbmgmt/instances/import
+#### API-PRJ-095 创建/提交 dbmgmt/instances/import
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-076` |
+| 接口编号 | `API-PRJ-095` |
 | 接口名称 | 创建/提交 dbmgmt/instances/import |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/import` |
@@ -22632,11 +36061,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-077 查询 instances/metadata/columns
+#### API-PRJ-096 查询 instances/metadata/columns
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-077` |
+| 接口编号 | `API-PRJ-096` |
 | 接口名称 | 查询 instances/metadata/columns |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/metadata/columns` |
@@ -22695,11 +36124,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-078 查询 instances/metadata/databases
+#### API-PRJ-097 查询 instances/metadata/databases
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-078` |
+| 接口编号 | `API-PRJ-097` |
 | 接口名称 | 查询 instances/metadata/databases |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/metadata/databases` |
@@ -22758,11 +36187,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-079 查询 instances/metadata/tables
+#### API-PRJ-098 查询 instances/metadata/tables
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-079` |
+| 接口编号 | `API-PRJ-098` |
 | 接口名称 | 查询 instances/metadata/tables |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/metadata/tables` |
@@ -22821,11 +36250,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-080 查询 dbmgmt/instances/mysql-user-privileges
+#### API-PRJ-099 查询 dbmgmt/instances/mysql-user-privileges
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-080` |
+| 接口编号 | `API-PRJ-099` |
 | 接口名称 | 查询 dbmgmt/instances/mysql-user-privileges |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/mysql-user-privileges` |
@@ -22884,11 +36313,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-081 查询 dbmgmt/instances/mysql-users
+#### API-PRJ-100 查询 dbmgmt/instances/mysql-users
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-081` |
+| 接口编号 | `API-PRJ-100` |
 | 接口名称 | 查询 dbmgmt/instances/mysql-users |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/mysql-users` |
@@ -22947,11 +36376,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-082 创建/提交 dbmgmt/instances/ping
+#### API-PRJ-101 创建/提交 dbmgmt/instances/ping
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-082` |
+| 接口编号 | `API-PRJ-101` |
 | 接口名称 | 创建/提交 dbmgmt/instances/ping |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/ping` |
@@ -23010,11 +36439,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-083 创建/提交 dbmgmt/instances/query
+#### API-PRJ-102 创建/提交 dbmgmt/instances/query
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-083` |
+| 接口编号 | `API-PRJ-102` |
 | 接口名称 | 创建/提交 dbmgmt/instances/query |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/query` |
@@ -23073,11 +36502,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-084 查询 projects/dbmgmt/tickets
+#### API-PRJ-103 查询 projects/dbmgmt/tickets
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-084` |
+| 接口编号 | `API-PRJ-103` |
 | 接口名称 | 查询 projects/dbmgmt/tickets |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets` |
@@ -23135,11 +36564,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-085 查询 projects/dbmgmt/tickets
+#### API-PRJ-104 查询 projects/dbmgmt/tickets
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-085` |
+| 接口编号 | `API-PRJ-104` |
 | 接口名称 | 查询 projects/dbmgmt/tickets |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}` |
@@ -23198,11 +36627,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-086 创建/提交 dbmgmt/tickets/approve
+#### API-PRJ-105 创建/提交 dbmgmt/tickets/approve
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-086` |
+| 接口编号 | `API-PRJ-105` |
 | 接口名称 | 创建/提交 dbmgmt/tickets/approve |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/approve` |
@@ -23261,11 +36690,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-087 创建/提交 dbmgmt/tickets/execute
+#### API-PRJ-106 创建/提交 dbmgmt/tickets/execute
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-087` |
+| 接口编号 | `API-PRJ-106` |
 | 接口名称 | 创建/提交 dbmgmt/tickets/execute |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/execute` |
@@ -23324,11 +36753,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-088 查询 dbmgmt/tickets/osc
+#### API-PRJ-107 查询 dbmgmt/tickets/osc
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-088` |
+| 接口编号 | `API-PRJ-107` |
 | 接口名称 | 查询 dbmgmt/tickets/osc |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/osc` |
@@ -23387,11 +36816,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-089 查询 dbmgmt/tickets/osc
+#### API-PRJ-108 查询 dbmgmt/tickets/osc
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-089` |
+| 接口编号 | `API-PRJ-108` |
 | 接口名称 | 查询 dbmgmt/tickets/osc |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/osc/{sqlsha1}` |
@@ -23451,11 +36880,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-090 创建/提交 tickets/osc/control
+#### API-PRJ-109 创建/提交 tickets/osc/control
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-090` |
+| 接口编号 | `API-PRJ-109` |
 | 接口名称 | 创建/提交 tickets/osc/control |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/osc/{sqlsha1}/control` |
@@ -23515,11 +36944,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-091 创建/提交 dbmgmt/tickets/reject
+#### API-PRJ-110 创建/提交 dbmgmt/tickets/reject
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-091` |
+| 接口编号 | `API-PRJ-110` |
 | 接口名称 | 创建/提交 dbmgmt/tickets/reject |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/reject` |
@@ -23578,11 +37007,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-092 查询 dbmgmt/tickets/rollback
+#### API-PRJ-111 查询 dbmgmt/tickets/rollback
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-092` |
+| 接口编号 | `API-PRJ-111` |
 | 接口名称 | 查询 dbmgmt/tickets/rollback |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/rollback` |
@@ -23641,11 +37070,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-093 查询 tickets/rollback/preview
+#### API-PRJ-112 查询 tickets/rollback/preview
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-093` |
+| 接口编号 | `API-PRJ-112` |
 | 接口名称 | 查询 tickets/rollback/preview |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/rollback/preview` |
@@ -23704,11 +37133,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-094 创建/提交 tickets/rollback/submit
+#### API-PRJ-113 创建/提交 tickets/rollback/submit
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-094` |
+| 接口编号 | `API-PRJ-113` |
 | 接口名称 | 创建/提交 tickets/rollback/submit |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/rollback/submit` |
@@ -23767,11 +37196,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-095 查询 dbmgmt/tickets/steps
+#### API-PRJ-114 查询 dbmgmt/tickets/steps
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-095` |
+| 接口编号 | `API-PRJ-114` |
 | 接口名称 | 查询 dbmgmt/tickets/steps |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/dbmgmt/tickets/{ticketId}/steps` |
@@ -23830,11 +37259,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-096 查询 projects/inspect/items
+#### API-PRJ-115 查询 projects/inspect/items
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-096` |
+| 接口编号 | `API-PRJ-115` |
 | 接口名称 | 查询 projects/inspect/items |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/items` |
@@ -23892,11 +37321,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-097 创建/提交 projects/inspect/items
+#### API-PRJ-116 创建/提交 projects/inspect/items
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-097` |
+| 接口编号 | `API-PRJ-116` |
 | 接口名称 | 创建/提交 projects/inspect/items |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/inspect/items` |
@@ -23954,11 +37383,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-098 创建/提交 inspect/items/reset-template
+#### API-PRJ-117 创建/提交 inspect/items/reset-template
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-098` |
+| 接口编号 | `API-PRJ-117` |
 | 接口名称 | 创建/提交 inspect/items/reset-template |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/inspect/items/reset-template` |
@@ -24016,11 +37445,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-099 创建/提交 inspect/items/sync-template
+#### API-PRJ-118 创建/提交 inspect/items/sync-template
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-099` |
+| 接口编号 | `API-PRJ-118` |
 | 接口名称 | 创建/提交 inspect/items/sync-template |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/inspect/items/sync-template` |
@@ -24078,11 +37507,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-100 删除 projects/inspect/items
+#### API-PRJ-119 删除 projects/inspect/items
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-100` |
+| 接口编号 | `API-PRJ-119` |
 | 接口名称 | 删除 projects/inspect/items |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/inspect/items/{itemId}` |
@@ -24141,11 +37570,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-101 更新 projects/inspect/items
+#### API-PRJ-120 更新 projects/inspect/items
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-101` |
+| 接口编号 | `API-PRJ-120` |
 | 接口名称 | 更新 projects/inspect/items |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/inspect/items/{itemId}` |
@@ -24204,11 +37633,136 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-102 查询 projects/inspect/plan
+#### API-PRJ-121 创建/提交 inspect/items/promote-alert
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-102` |
+| 接口编号 | `API-PRJ-121` |
+| 接口名称 | 创建/提交 inspect/items/promote-alert |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/inspect/items/{itemId}/promote-alert` |
+| Gin 路径 | `/api/v1/projects/:id/inspect/items/:itemId/promote-alert` |
+| operationId | `post_api_v1_projects_id__inspect_items_itemId__promote-alert` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `itemId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/inspect/items/:itemId/promote-alert, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-122 创建/提交 projects/inspect/migrate-reports-to-minio
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-122` |
+| 接口名称 | 创建/提交 projects/inspect/migrate-reports-to-minio |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/inspect/migrate-reports-to-minio` |
+| Gin 路径 | `/api/v1/projects/:id/inspect/migrate-reports-to-minio` |
+| operationId | `post_api_v1_projects_id__inspect_migrate-reports-to-minio` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/inspect/migrate-reports-to-minio, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-123 查询 projects/inspect/plan
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-123` |
 | 接口名称 | 查询 projects/inspect/plan |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/plan` |
@@ -24266,11 +37820,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-103 更新 projects/inspect/plan
+#### API-PRJ-124 更新 projects/inspect/plan
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-103` |
+| 接口编号 | `API-PRJ-124` |
 | 接口名称 | 更新 projects/inspect/plan |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/inspect/plan` |
@@ -24328,11 +37882,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-104 查询 projects/inspect/report-templates
+#### API-PRJ-125 查询 projects/inspect/report-templates
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-104` |
+| 接口编号 | `API-PRJ-125` |
 | 接口名称 | 查询 projects/inspect/report-templates |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/report-templates` |
@@ -24390,11 +37944,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-105 创建/提交 projects/inspect/report-templates
+#### API-PRJ-126 创建/提交 projects/inspect/report-templates
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-105` |
+| 接口编号 | `API-PRJ-126` |
 | 接口名称 | 创建/提交 projects/inspect/report-templates |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/inspect/report-templates` |
@@ -24452,11 +38006,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-106 创建/提交 inspect/report-templates/copy
+#### API-PRJ-127 创建/提交 inspect/report-templates/copy
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-106` |
+| 接口编号 | `API-PRJ-127` |
 | 接口名称 | 创建/提交 inspect/report-templates/copy |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/inspect/report-templates/copy` |
@@ -24514,11 +38068,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-107 创建/提交 inspect/report-templates/preview
+#### API-PRJ-128 创建/提交 inspect/report-templates/preview
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-107` |
+| 接口编号 | `API-PRJ-128` |
 | 接口名称 | 创建/提交 inspect/report-templates/preview |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/inspect/report-templates/preview` |
@@ -24576,11 +38130,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-108 删除 projects/inspect/report-templates
+#### API-PRJ-129 删除 projects/inspect/report-templates
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-108` |
+| 接口编号 | `API-PRJ-129` |
 | 接口名称 | 删除 projects/inspect/report-templates |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/inspect/report-templates/{templateId}` |
@@ -24639,11 +38193,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-109 更新 projects/inspect/report-templates
+#### API-PRJ-130 更新 projects/inspect/report-templates
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-109` |
+| 接口编号 | `API-PRJ-130` |
 | 接口名称 | 更新 projects/inspect/report-templates |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/inspect/report-templates/{templateId}` |
@@ -24702,11 +38256,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-110 查询 projects/inspect/runs
+#### API-PRJ-131 查询 projects/inspect/runs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-110` |
+| 接口编号 | `API-PRJ-131` |
 | 接口名称 | 查询 projects/inspect/runs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/runs` |
@@ -24764,11 +38318,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-111 创建/提交 projects/inspect/runs
+#### API-PRJ-132 创建/提交 projects/inspect/runs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-111` |
+| 接口编号 | `API-PRJ-132` |
 | 接口名称 | 创建/提交 projects/inspect/runs |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/inspect/runs` |
@@ -24826,11 +38380,73 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-112 查询 projects/inspect/runs
+#### API-PRJ-133 查询 inspect/runs/trends
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-112` |
+| 接口编号 | `API-PRJ-133` |
+| 接口名称 | 查询 inspect/runs/trends |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/inspect/runs/trends` |
+| Gin 路径 | `/api/v1/projects/:id/inspect/runs/trends` |
+| operationId | `get_api_v1_projects_id__inspect_runs_trends` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/inspect/runs/trends, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-134 查询 projects/inspect/runs
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-134` |
 | 接口名称 | 查询 projects/inspect/runs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/runs/{runId}` |
@@ -24889,11 +38505,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-113 查询 inspect/runs/report.html
+#### API-PRJ-135 查询 inspect/runs/report.html
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-113` |
+| 接口编号 | `API-PRJ-135` |
 | 接口名称 | 查询 inspect/runs/report.html |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/runs/{runId}/report.html` |
@@ -24952,11 +38568,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-114 查询 inspect/runs/report.pdf
+#### API-PRJ-136 查询 inspect/runs/report.pdf
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-114` |
+| 接口编号 | `API-PRJ-136` |
 | 接口名称 | 查询 inspect/runs/report.pdf |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/runs/{runId}/report.pdf` |
@@ -25015,11 +38631,137 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-115 查询 inspect/runs/report.print.html
+#### API-PRJ-137 创建/提交 inspect/runs/report.pdf
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-115` |
+| 接口编号 | `API-PRJ-137` |
+| 接口名称 | 创建/提交 inspect/runs/report.pdf |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/inspect/runs/{runId}/report.pdf` |
+| Gin 路径 | `/api/v1/projects/:id/inspect/runs/:runId/report.pdf` |
+| operationId | `post_api_v1_projects_id__inspect_runs_runId__report.pdf` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `runId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/inspect/runs/:runId/report.pdf, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-138 查询 runs/report.pdf/check
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-138` |
+| 接口名称 | 查询 runs/report.pdf/check |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/inspect/runs/{runId}/report.pdf/check` |
+| Gin 路径 | `/api/v1/projects/:id/inspect/runs/:runId/report.pdf/check` |
+| operationId | `get_api_v1_projects_id__inspect_runs_runId__report.pdf_check` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `runId` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/inspect/runs/:runId/report.pdf/check, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-139 查询 inspect/runs/report.print.html
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-139` |
 | 接口名称 | 查询 inspect/runs/report.print.html |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/runs/{runId}/report.print.html` |
@@ -25078,11 +38820,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-116 查询 inspect/runs/report.xlsx
+#### API-PRJ-140 查询 inspect/runs/report.xlsx
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-116` |
+| 接口编号 | `API-PRJ-140` |
 | 接口名称 | 查询 inspect/runs/report.xlsx |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/inspect/runs/{runId}/report.xlsx` |
@@ -25141,11 +38883,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-117 创建/提交 inspect/runs/resend-email
+#### API-PRJ-141 创建/提交 inspect/runs/resend-email
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-117` |
+| 接口编号 | `API-PRJ-141` |
 | 接口名称 | 创建/提交 inspect/runs/resend-email |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/inspect/runs/{runId}/resend-email` |
@@ -25204,11 +38946,950 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-118 删除 v1/projects/log-retention
+#### API-PRJ-142 查询 projects/inspect/storage-info
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-118` |
+| 接口编号 | `API-PRJ-142` |
+| 接口名称 | 查询 projects/inspect/storage-info |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/inspect/storage-info` |
+| Gin 路径 | `/api/v1/projects/:id/inspect/storage-info` |
+| operationId | `get_api_v1_projects_id__inspect_storage-info` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/inspect/storage-info, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-143 查询 v1/projects/log-drop-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-143` |
+| 接口名称 | 查询 v1/projects/log-drop-rules |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/log-drop-rules` |
+| Gin 路径 | `/api/v1/projects/:id/log-drop-rules` |
+| operationId | `get_api_v1_projects_id__log-drop-rules` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-drop-rules, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-144 创建/提交 v1/projects/log-drop-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-144` |
+| 接口名称 | 创建/提交 v1/projects/log-drop-rules |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/log-drop-rules` |
+| Gin 路径 | `/api/v1/projects/:id/log-drop-rules` |
+| operationId | `post_api_v1_projects_id__log-drop-rules` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-drop-rules, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-145 删除 v1/projects/log-drop-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-145` |
+| 接口名称 | 删除 v1/projects/log-drop-rules |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/projects/{id}/log-drop-rules/{rule_id}` |
+| Gin 路径 | `/api/v1/projects/:id/log-drop-rules/:rule_id` |
+| operationId | `delete_api_v1_projects_id__log-drop-rules_rule_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `rule_id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-drop-rules/:rule_id, DELETE)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-146 更新 v1/projects/log-drop-rules
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-146` |
+| 接口名称 | 更新 v1/projects/log-drop-rules |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/projects/{id}/log-drop-rules/{rule_id}` |
+| Gin 路径 | `/api/v1/projects/:id/log-drop-rules/:rule_id` |
+| operationId | `put_api_v1_projects_id__log-drop-rules_rule_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `rule_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-drop-rules/:rule_id, PUT)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-147 查询 v1/projects/log-parse-profiles
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-147` |
+| 接口名称 | 查询 v1/projects/log-parse-profiles |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/log-parse-profiles` |
+| Gin 路径 | `/api/v1/projects/:id/log-parse-profiles` |
+| operationId | `get_api_v1_projects_id__log-parse-profiles` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-parse-profiles, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-148 查询 v1/projects/log-pipelines
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-148` |
+| 接口名称 | 查询 v1/projects/log-pipelines |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/log-pipelines` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines` |
+| operationId | `get_api_v1_projects_id__log-pipelines` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-149 创建/提交 v1/projects/log-pipelines
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-149` |
+| 接口名称 | 创建/提交 v1/projects/log-pipelines |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/log-pipelines` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines` |
+| operationId | `post_api_v1_projects_id__log-pipelines` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-150 创建/提交 projects/log-pipelines/sync-from-cluster
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-150` |
+| 接口名称 | 创建/提交 projects/log-pipelines/sync-from-cluster |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/log-pipelines/sync-from-cluster` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines/sync-from-cluster` |
+| operationId | `post_api_v1_projects_id__log-pipelines_sync-from-cluster` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines/sync-from-cluster, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-151 删除 v1/projects/log-pipelines
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-151` |
+| 接口名称 | 删除 v1/projects/log-pipelines |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/projects/{id}/log-pipelines/{pipeline_id}` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines/:pipeline_id` |
+| operationId | `delete_api_v1_projects_id__log-pipelines_pipeline_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `pipeline_id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines/:pipeline_id, DELETE)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-152 查询 v1/projects/log-pipelines
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-152` |
+| 接口名称 | 查询 v1/projects/log-pipelines |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/log-pipelines/{pipeline_id}` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines/:pipeline_id` |
+| operationId | `get_api_v1_projects_id__log-pipelines_pipeline_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `pipeline_id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines/:pipeline_id, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-153 更新 v1/projects/log-pipelines
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-153` |
+| 接口名称 | 更新 v1/projects/log-pipelines |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/projects/{id}/log-pipelines/{pipeline_id}` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines/:pipeline_id` |
+| operationId | `put_api_v1_projects_id__log-pipelines_pipeline_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `pipeline_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines/:pipeline_id, PUT)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-154 创建/提交 projects/log-pipelines/apply
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-154` |
+| 接口名称 | 创建/提交 projects/log-pipelines/apply |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/log-pipelines/{pipeline_id}/apply` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines/:pipeline_id/apply` |
+| operationId | `post_api_v1_projects_id__log-pipelines_pipeline_id__apply` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `pipeline_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines/:pipeline_id/apply, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-155 查询 projects/log-pipelines/versions
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-155` |
+| 接口名称 | 查询 projects/log-pipelines/versions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/log-pipelines/{pipeline_id}/versions` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines/:pipeline_id/versions` |
+| operationId | `get_api_v1_projects_id__log-pipelines_pipeline_id__versions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `pipeline_id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines/:pipeline_id/versions, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-156 创建/提交 log-pipelines/versions/rollback
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-156` |
+| 接口名称 | 创建/提交 log-pipelines/versions/rollback |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/log-pipelines/{pipeline_id}/versions/{version_id}/rollback` |
+| Gin 路径 | `/api/v1/projects/:id/log-pipelines/:pipeline_id/versions/:version_id/rollback` |
+| operationId | `post_api_v1_projects_id__log-pipelines_pipeline_id__versions_version_id__rollback` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `pipeline_id` | string | 是 | 路径参数 |
+| path | `version_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-pipelines/:pipeline_id/versions/:version_id/rollback, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-157 删除 v1/projects/log-retention
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-157` |
 | 接口名称 | 删除 v1/projects/log-retention |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/log-retention` |
@@ -25266,11 +39947,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-119 查询 v1/projects/log-retention
+#### API-PRJ-158 查询 v1/projects/log-retention
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-119` |
+| 接口编号 | `API-PRJ-158` |
 | 接口名称 | 查询 v1/projects/log-retention |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/log-retention` |
@@ -25328,11 +40009,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-120 更新 v1/projects/log-retention
+#### API-PRJ-159 更新 v1/projects/log-retention
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-120` |
+| 接口编号 | `API-PRJ-159` |
 | 接口名称 | 更新 v1/projects/log-retention |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/log-retention` |
@@ -25390,11 +40071,198 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-121 查询 v1/projects/log-sources
+#### API-PRJ-160 查询 v1/projects/log-saved-queries
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-121` |
+| 接口编号 | `API-PRJ-160` |
+| 接口名称 | 查询 v1/projects/log-saved-queries |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/log-saved-queries` |
+| Gin 路径 | `/api/v1/projects/:id/log-saved-queries` |
+| operationId | `get_api_v1_projects_id__log-saved-queries` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-saved-queries, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-161 创建/提交 v1/projects/log-saved-queries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-161` |
+| 接口名称 | 创建/提交 v1/projects/log-saved-queries |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/log-saved-queries` |
+| Gin 路径 | `/api/v1/projects/:id/log-saved-queries` |
+| operationId | `post_api_v1_projects_id__log-saved-queries` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-saved-queries, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-162 删除 v1/projects/log-saved-queries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-162` |
+| 接口名称 | 删除 v1/projects/log-saved-queries |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/projects/{id}/log-saved-queries/{query_id}` |
+| Gin 路径 | `/api/v1/projects/:id/log-saved-queries/:query_id` |
+| operationId | `delete_api_v1_projects_id__log-saved-queries_query_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `query_id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/log-saved-queries/:query_id, DELETE)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-163 查询 v1/projects/log-sources
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-163` |
 | 接口名称 | 查询 v1/projects/log-sources |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/log-sources` |
@@ -25452,11 +40320,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-122 创建/提交 v1/projects/log-sources
+#### API-PRJ-164 创建/提交 v1/projects/log-sources
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-122` |
+| 接口编号 | `API-PRJ-164` |
 | 接口名称 | 创建/提交 v1/projects/log-sources |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/log-sources` |
@@ -25514,11 +40382,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-123 删除 v1/projects/log-sources
+#### API-PRJ-165 删除 v1/projects/log-sources
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-123` |
+| 接口编号 | `API-PRJ-165` |
 | 接口名称 | 删除 v1/projects/log-sources |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/log-sources/{logSourceId}` |
@@ -25577,11 +40445,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-124 创建/提交 projects/loggie/bootstrap
+#### API-PRJ-166 创建/提交 projects/loggie/bootstrap
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-124` |
+| 接口编号 | `API-PRJ-166` |
 | 接口名称 | 创建/提交 projects/loggie/bootstrap |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/loggie/bootstrap` |
@@ -25639,11 +40507,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-125 查询 projects/loggie/bootstrap-sources
+#### API-PRJ-167 查询 projects/loggie/bootstrap-sources
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-125` |
+| 接口编号 | `API-PRJ-167` |
 | 接口名称 | 查询 projects/loggie/bootstrap-sources |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/loggie/bootstrap-sources` |
@@ -25701,11 +40569,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-126 创建/提交 projects/loggie/deploy
+#### API-PRJ-168 创建/提交 projects/loggie/deploy
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-126` |
+| 接口编号 | `API-PRJ-168` |
 | 接口名称 | 创建/提交 projects/loggie/deploy |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/loggie/deploy` |
@@ -25763,11 +40631,73 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-127 创建/提交 projects/loggie/install
+#### API-PRJ-169 创建/提交 projects/loggie/deploy-yaml
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-127` |
+| 接口编号 | `API-PRJ-169` |
+| 接口名称 | 创建/提交 projects/loggie/deploy-yaml |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/loggie/deploy-yaml` |
+| Gin 路径 | `/api/v1/projects/:id/loggie/deploy-yaml` |
+| operationId | `post_api_v1_projects_id__loggie_deploy-yaml` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/loggie/deploy-yaml, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-170 创建/提交 projects/loggie/install
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-170` |
 | 接口名称 | 创建/提交 projects/loggie/install |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/loggie/install` |
@@ -25825,11 +40755,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-128 查询 loggie/pipeline/download
+#### API-PRJ-171 查询 loggie/pipeline/download
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-128` |
+| 接口编号 | `API-PRJ-171` |
 | 接口名称 | 查询 loggie/pipeline/download |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/loggie/pipeline/download` |
@@ -25887,11 +40817,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-129 创建/提交 projects/loggie/restart
+#### API-PRJ-172 创建/提交 projects/loggie/restart
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-129` |
+| 接口编号 | `API-PRJ-172` |
 | 接口名称 | 创建/提交 projects/loggie/restart |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/loggie/restart` |
@@ -25949,11 +40879,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-130 创建/提交 projects/loggie/start
+#### API-PRJ-173 创建/提交 projects/loggie/start
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-130` |
+| 接口编号 | `API-PRJ-173` |
 | 接口名称 | 创建/提交 projects/loggie/start |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/loggie/start` |
@@ -26011,11 +40941,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-131 查询 projects/loggie/status
+#### API-PRJ-174 查询 projects/loggie/status
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-131` |
+| 接口编号 | `API-PRJ-174` |
 | 接口名称 | 查询 projects/loggie/status |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/loggie/status` |
@@ -26073,11 +41003,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-132 创建/提交 projects/loggie/stop
+#### API-PRJ-175 创建/提交 projects/loggie/stop
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-132` |
+| 接口编号 | `API-PRJ-175` |
 | 接口名称 | 创建/提交 projects/loggie/stop |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/loggie/stop` |
@@ -26135,11 +41065,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-133 创建/提交 projects/loggie/sync
+#### API-PRJ-176 创建/提交 projects/loggie/sync
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-133` |
+| 接口编号 | `API-PRJ-176` |
 | 接口名称 | 创建/提交 projects/loggie/sync |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/loggie/sync` |
@@ -26197,11 +41127,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-134 创建/提交 projects/loggie/uninstall
+#### API-PRJ-177 创建/提交 projects/loggie/uninstall
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-134` |
+| 接口编号 | `API-PRJ-177` |
 | 接口名称 | 创建/提交 projects/loggie/uninstall |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/loggie/uninstall` |
@@ -26259,11 +41189,198 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-135 查询 projects/logs/export
+#### API-PRJ-178 查询 projects/logs/anomalies
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-135` |
+| 接口编号 | `API-PRJ-178` |
+| 接口名称 | 查询 projects/logs/anomalies |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/logs/anomalies` |
+| Gin 路径 | `/api/v1/projects/:id/logs/anomalies` |
+| operationId | `get_api_v1_projects_id__logs_anomalies` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/logs/anomalies, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-179 更新 projects/logs/anomalies
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-179` |
+| 接口名称 | 更新 projects/logs/anomalies |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/projects/{id}/logs/anomalies/{anomaly_id}` |
+| Gin 路径 | `/api/v1/projects/:id/logs/anomalies/:anomaly_id` |
+| operationId | `put_api_v1_projects_id__logs_anomalies_anomaly_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `anomaly_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/logs/anomalies/:anomaly_id, PUT)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-180 查询 projects/logs/context
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-180` |
+| 接口名称 | 查询 projects/logs/context |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/logs/context` |
+| Gin 路径 | `/api/v1/projects/:id/logs/context` |
+| operationId | `get_api_v1_projects_id__logs_context` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/logs/context, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-181 查询 projects/logs/export
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-181` |
 | 接口名称 | 查询 projects/logs/export |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/logs/export` |
@@ -26321,11 +41438,259 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-136 查询 projects/logs/search
+#### API-PRJ-182 查询 projects/logs/fields
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-136` |
+| 接口编号 | `API-PRJ-182` |
+| 接口名称 | 查询 projects/logs/fields |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/logs/fields` |
+| Gin 路径 | `/api/v1/projects/:id/logs/fields` |
+| operationId | `get_api_v1_projects_id__logs_fields` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/logs/fields, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-183 查询 projects/logs/nginx-access-stats
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-183` |
+| 接口名称 | 查询 projects/logs/nginx-access-stats |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/logs/nginx-access-stats` |
+| Gin 路径 | `/api/v1/projects/:id/logs/nginx-access-stats` |
+| operationId | `get_api_v1_projects_id__logs_nginx-access-stats` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/logs/nginx-access-stats, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-184 查询 projects/logs/overview
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-184` |
+| 接口名称 | 查询 projects/logs/overview |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/logs/overview` |
+| Gin 路径 | `/api/v1/projects/:id/logs/overview` |
+| operationId | `get_api_v1_projects_id__logs_overview` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/logs/overview, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-185 查询 projects/logs/patterns
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-185` |
+| 接口名称 | 查询 projects/logs/patterns |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/logs/patterns` |
+| Gin 路径 | `/api/v1/projects/:id/logs/patterns` |
+| operationId | `get_api_v1_projects_id__logs_patterns` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/logs/patterns, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-186 查询 projects/logs/search
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-186` |
 | 接口名称 | 查询 projects/logs/search |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/logs/search` |
@@ -26383,11 +41748,73 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-137 查询 v1/projects/members
+#### API-PRJ-187 查询 projects/logs/topn
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-137` |
+| 接口编号 | `API-PRJ-187` |
+| 接口名称 | 查询 projects/logs/topn |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/logs/topn` |
+| Gin 路径 | `/api/v1/projects/:id/logs/topn` |
+| operationId | `get_api_v1_projects_id__logs_topn` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/logs/topn, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-188 查询 v1/projects/members
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-188` |
 | 接口名称 | 查询 v1/projects/members |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/members` |
@@ -26445,11 +41872,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-138 创建/提交 v1/projects/members
+#### API-PRJ-189 创建/提交 v1/projects/members
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-138` |
+| 接口编号 | `API-PRJ-189` |
 | 接口名称 | 创建/提交 v1/projects/members |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/members` |
@@ -26507,11 +41934,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-139 删除 v1/projects/members
+#### API-PRJ-190 删除 v1/projects/members
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-139` |
+| 接口编号 | `API-PRJ-190` |
 | 接口名称 | 删除 v1/projects/members |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/members/{memberId}` |
@@ -26570,11 +41997,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-140 更新 v1/projects/members
+#### API-PRJ-191 更新 v1/projects/members
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-140` |
+| 接口编号 | `API-PRJ-191` |
 | 接口名称 | 更新 v1/projects/members |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/members/{memberId}` |
@@ -26633,11 +42060,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-141 查询 projects/mysql-backup/instances
+#### API-PRJ-192 查询 projects/mysql-backup/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-141` |
+| 接口编号 | `API-PRJ-192` |
 | 接口名称 | 查询 projects/mysql-backup/instances |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/mysql-backup/instances` |
@@ -26695,11 +42122,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-142 创建/提交 projects/mysql-backup/instances
+#### API-PRJ-193 创建/提交 projects/mysql-backup/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-142` |
+| 接口编号 | `API-PRJ-193` |
 | 接口名称 | 创建/提交 projects/mysql-backup/instances |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/mysql-backup/instances` |
@@ -26757,11 +42184,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-143 删除 projects/mysql-backup/instances
+#### API-PRJ-194 删除 projects/mysql-backup/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-143` |
+| 接口编号 | `API-PRJ-194` |
 | 接口名称 | 删除 projects/mysql-backup/instances |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/mysql-backup/instances/{instanceId}` |
@@ -26820,11 +42247,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-144 更新 projects/mysql-backup/instances
+#### API-PRJ-195 更新 projects/mysql-backup/instances
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-144` |
+| 接口编号 | `API-PRJ-195` |
 | 接口名称 | 更新 projects/mysql-backup/instances |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/mysql-backup/instances/{instanceId}` |
@@ -26883,11 +42310,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-145 创建/提交 mysql-backup/instances/check-remote
+#### API-PRJ-196 创建/提交 mysql-backup/instances/check-remote
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-145` |
+| 接口编号 | `API-PRJ-196` |
 | 接口名称 | 创建/提交 mysql-backup/instances/check-remote |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/mysql-backup/instances/{instanceId}/check-remote` |
@@ -26946,11 +42373,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-146 创建/提交 mysql-backup/instances/ping
+#### API-PRJ-197 创建/提交 mysql-backup/instances/ping
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-146` |
+| 接口编号 | `API-PRJ-197` |
 | 接口名称 | 创建/提交 mysql-backup/instances/ping |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/mysql-backup/instances/{instanceId}/ping` |
@@ -27009,11 +42436,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-147 创建/提交 mysql-backup/instances/run
+#### API-PRJ-198 创建/提交 mysql-backup/instances/run
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-147` |
+| 接口编号 | `API-PRJ-198` |
 | 接口名称 | 创建/提交 mysql-backup/instances/run |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/mysql-backup/instances/{instanceId}/run` |
@@ -27072,11 +42499,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-148 查询 projects/mysql-backup/jobs
+#### API-PRJ-199 查询 projects/mysql-backup/jobs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-148` |
+| 接口编号 | `API-PRJ-199` |
 | 接口名称 | 查询 projects/mysql-backup/jobs |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/mysql-backup/jobs` |
@@ -27134,11 +42561,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-149 删除 projects/mysql-backup/jobs
+#### API-PRJ-200 删除 projects/mysql-backup/jobs
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-149` |
+| 接口编号 | `API-PRJ-200` |
 | 接口名称 | 删除 projects/mysql-backup/jobs |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/mysql-backup/jobs/{jobId}` |
@@ -27197,11 +42624,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-150 查询 mysql-backup/jobs/presign
+#### API-PRJ-201 查询 mysql-backup/jobs/presign
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-150` |
+| 接口编号 | `API-PRJ-201` |
 | 接口名称 | 查询 mysql-backup/jobs/presign |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/mysql-backup/jobs/{jobId}/presign` |
@@ -27260,11 +42687,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-151 创建/提交 mysql-backup/jobs/stop
+#### API-PRJ-202 创建/提交 mysql-backup/jobs/stop
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-151` |
+| 接口编号 | `API-PRJ-202` |
 | 接口名称 | 创建/提交 mysql-backup/jobs/stop |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/mysql-backup/jobs/{jobId}/stop` |
@@ -27323,11 +42750,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-152 查询 projects/mysql-backup/mysqldump-options
+#### API-PRJ-203 查询 projects/mysql-backup/mysqldump-options
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-152` |
+| 接口编号 | `API-PRJ-203` |
 | 接口名称 | 查询 projects/mysql-backup/mysqldump-options |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/mysql-backup/mysqldump-options` |
@@ -27385,11 +42812,259 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-153 查询 v1/projects/server-access-grants
+#### API-PRJ-204 删除 v1/projects/registry-binding
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-153` |
+| 接口编号 | `API-PRJ-204` |
+| 接口名称 | 删除 v1/projects/registry-binding |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/projects/{id}/registry-binding` |
+| Gin 路径 | `/api/v1/projects/:id/registry-binding` |
+| operationId | `delete_api_v1_projects_id__registry-binding` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/registry-binding, DELETE)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-205 查询 v1/projects/registry-binding
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-205` |
+| 接口名称 | 查询 v1/projects/registry-binding |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/registry-binding` |
+| Gin 路径 | `/api/v1/projects/:id/registry-binding` |
+| operationId | `get_api_v1_projects_id__registry-binding` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/registry-binding, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-206 更新 v1/projects/registry-binding
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-206` |
+| 接口名称 | 更新 v1/projects/registry-binding |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/projects/{id}/registry-binding` |
+| Gin 路径 | `/api/v1/projects/:id/registry-binding` |
+| operationId | `put_api_v1_projects_id__registry-binding` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/registry-binding, PUT)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-207 创建/提交 v1/projects/restore
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-207` |
+| 接口名称 | 创建/提交 v1/projects/restore |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/restore` |
+| Gin 路径 | `/api/v1/projects/:id/restore` |
+| operationId | `post_api_v1_projects_id__restore` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/restore, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-208 查询 v1/projects/server-access-grants
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-208` |
 | 接口名称 | 查询 v1/projects/server-access-grants |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/server-access-grants` |
@@ -27447,11 +43122,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-154 创建/提交 v1/projects/server-access-grants
+#### API-PRJ-209 创建/提交 v1/projects/server-access-grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-154` |
+| 接口编号 | `API-PRJ-209` |
 | 接口名称 | 创建/提交 v1/projects/server-access-grants |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/server-access-grants` |
@@ -27509,11 +43184,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-155 创建/提交 projects/server-access-grants/bootstrap
+#### API-PRJ-210 创建/提交 projects/server-access-grants/bootstrap
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-155` |
+| 接口编号 | `API-PRJ-210` |
 | 接口名称 | 创建/提交 projects/server-access-grants/bootstrap |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/server-access-grants/bootstrap` |
@@ -27571,11 +43246,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-156 创建/提交 projects/server-access-grants/bulk
+#### API-PRJ-211 创建/提交 projects/server-access-grants/bulk
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-156` |
+| 接口编号 | `API-PRJ-211` |
 | 接口名称 | 创建/提交 projects/server-access-grants/bulk |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/server-access-grants/bulk` |
@@ -27633,11 +43308,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-157 删除 v1/projects/server-access-grants
+#### API-PRJ-212 删除 v1/projects/server-access-grants
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-157` |
+| 接口编号 | `API-PRJ-212` |
 | 接口名称 | 删除 v1/projects/server-access-grants |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/server-access-grants/{grantId}` |
@@ -27696,11 +43371,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-158 创建/提交 v1/projects/server-groups
+#### API-PRJ-213 创建/提交 v1/projects/server-groups
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-158` |
+| 接口编号 | `API-PRJ-213` |
 | 接口名称 | 创建/提交 v1/projects/server-groups |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/server-groups` |
@@ -27758,11 +43433,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-159 查询 projects/server-groups/tree
+#### API-PRJ-214 查询 projects/server-groups/tree
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-159` |
+| 接口编号 | `API-PRJ-214` |
 | 接口名称 | 查询 projects/server-groups/tree |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/server-groups/tree` |
@@ -27820,11 +43495,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-160 删除 v1/projects/server-groups
+#### API-PRJ-215 删除 v1/projects/server-groups
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-160` |
+| 接口编号 | `API-PRJ-215` |
 | 接口名称 | 删除 v1/projects/server-groups |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/server-groups/{groupId}` |
@@ -27883,11 +43558,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-161 更新 v1/projects/server-groups
+#### API-PRJ-216 更新 v1/projects/server-groups
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-161` |
+| 接口编号 | `API-PRJ-216` |
 | 接口名称 | 更新 v1/projects/server-groups |
 | 请求方式 | `PUT` |
 | URL | `/api/v1/projects/{id}/server-groups/{groupId}` |
@@ -27946,11 +43621,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-162 查询 v1/projects/servers
+#### API-PRJ-217 查询 v1/projects/servers
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-162` |
+| 接口编号 | `API-PRJ-217` |
 | 接口名称 | 查询 v1/projects/servers |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/servers` |
@@ -28008,11 +43683,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-163 创建/提交 v1/projects/servers
+#### API-PRJ-218 创建/提交 v1/projects/servers
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-163` |
+| 接口编号 | `API-PRJ-218` |
 | 接口名称 | 创建/提交 v1/projects/servers |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/servers` |
@@ -28070,11 +43745,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-164 查询 projects/servers/export
+#### API-PRJ-219 查询 projects/servers/export
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-164` |
+| 接口编号 | `API-PRJ-219` |
 | 接口名称 | 查询 projects/servers/export |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/servers/export` |
@@ -28132,11 +43807,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-165 创建/提交 projects/servers/import
+#### API-PRJ-220 创建/提交 projects/servers/import
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-165` |
+| 接口编号 | `API-PRJ-220` |
 | 接口名称 | 创建/提交 projects/servers/import |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/servers/import` |
@@ -28194,11 +43869,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-166 查询 projects/servers/import-template
+#### API-PRJ-221 查询 projects/servers/import-template
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-166` |
+| 接口编号 | `API-PRJ-221` |
 | 接口名称 | 查询 projects/servers/import-template |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/servers/import-template` |
@@ -28256,11 +43931,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-167 创建/提交 projects/servers/sync
+#### API-PRJ-222 创建/提交 projects/servers/sync
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-167` |
+| 接口编号 | `API-PRJ-222` |
 | 接口名称 | 创建/提交 projects/servers/sync |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/servers/sync` |
@@ -28318,11 +43993,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-168 创建/提交 projects/servers/test
+#### API-PRJ-223 创建/提交 projects/servers/test
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-168` |
+| 接口编号 | `API-PRJ-223` |
 | 接口名称 | 创建/提交 projects/servers/test |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/servers/test` |
@@ -28380,11 +44055,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-169 创建/提交 servers/test/batch
+#### API-PRJ-224 创建/提交 servers/test/batch
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-169` |
+| 接口编号 | `API-PRJ-224` |
 | 接口名称 | 创建/提交 servers/test/batch |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/servers/test/batch` |
@@ -28442,11 +44117,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-170 删除 v1/projects/servers
+#### API-PRJ-225 删除 v1/projects/servers
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-170` |
+| 接口编号 | `API-PRJ-225` |
 | 接口名称 | 删除 v1/projects/servers |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/servers/{serverId}` |
@@ -28505,11 +44180,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-171 查询 v1/projects/servers
+#### API-PRJ-226 查询 v1/projects/servers
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-171` |
+| 接口编号 | `API-PRJ-226` |
 | 接口名称 | 查询 v1/projects/servers |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/servers/{serverId}` |
@@ -28568,11 +44243,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-172 创建/提交 projects/servers/cloud-actions
+#### API-PRJ-227 创建/提交 projects/servers/cloud-actions
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-172` |
+| 接口编号 | `API-PRJ-227` |
 | 接口名称 | 创建/提交 projects/servers/cloud-actions |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/servers/{serverId}/cloud-actions` |
@@ -28631,11 +44306,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-173 创建/提交 projects/servers/exec
+#### API-PRJ-228 创建/提交 projects/servers/exec
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-173` |
+| 接口编号 | `API-PRJ-228` |
 | 接口名称 | 创建/提交 projects/servers/exec |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/servers/{serverId}/exec` |
@@ -28694,11 +44369,263 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-174 查询 projects/servers/my-access
+#### API-PRJ-229 查询 projects/servers/files
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-174` |
+| 接口编号 | `API-PRJ-229` |
+| 接口名称 | 查询 projects/servers/files |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/servers/{serverId}/files` |
+| Gin 路径 | `/api/v1/projects/:id/servers/:serverId/files` |
+| operationId | `get_api_v1_projects_id__servers_serverId__files` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `serverId` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/servers/:serverId/files, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-230 创建/提交 servers/files/delete
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-230` |
+| 接口名称 | 创建/提交 servers/files/delete |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/servers/{serverId}/files/delete` |
+| Gin 路径 | `/api/v1/projects/:id/servers/:serverId/files/delete` |
+| operationId | `post_api_v1_projects_id__servers_serverId__files_delete` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `serverId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/servers/:serverId/files/delete, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-231 查询 servers/files/download
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-231` |
+| 接口名称 | 查询 servers/files/download |
+| 请求方式 | `GET` |
+| URL | `/api/v1/projects/{id}/servers/{serverId}/files/download` |
+| Gin 路径 | `/api/v1/projects/:id/servers/:serverId/files/download` |
+| operationId | `get_api_v1_projects_id__servers_serverId__files_download` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `serverId` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/servers/:serverId/files/download, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-232 创建/提交 servers/files/upload
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-232` |
+| 接口名称 | 创建/提交 servers/files/upload |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/servers/{serverId}/files/upload` |
+| Gin 路径 | `/api/v1/projects/:id/servers/:serverId/files/upload` |
+| operationId | `post_api_v1_projects_id__servers_serverId__files_upload` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `serverId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/servers/:serverId/files/upload, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-233 查询 projects/servers/my-access
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-233` |
 | 接口名称 | 查询 projects/servers/my-access |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/servers/{serverId}/my-access` |
@@ -28757,11 +44684,74 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-175 查询 servers/terminal/ws
+#### API-PRJ-234 创建/提交 projects/servers/probe
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-175` |
+| 接口编号 | `API-PRJ-234` |
+| 接口名称 | 创建/提交 projects/servers/probe |
+| 请求方式 | `POST` |
+| URL | `/api/v1/projects/{id}/servers/{serverId}/probe` |
+| Gin 路径 | `/api/v1/projects/:id/servers/:serverId/probe` |
+| operationId | `post_api_v1_projects_id__servers_serverId__probe` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `serverId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/servers/:serverId/probe, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-PRJ-235 查询 servers/terminal/ws
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-PRJ-235` |
 | 接口名称 | 查询 servers/terminal/ws |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/servers/{serverId}/terminal/ws` |
@@ -28820,11 +44810,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-176 查询 v1/projects/service-catalog
+#### API-PRJ-236 查询 v1/projects/service-catalog
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-176` |
+| 接口编号 | `API-PRJ-236` |
 | 接口名称 | 查询 v1/projects/service-catalog |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/service-catalog` |
@@ -28882,11 +44872,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-177 创建/提交 v1/projects/service-catalog
+#### API-PRJ-237 创建/提交 v1/projects/service-catalog
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-177` |
+| 接口编号 | `API-PRJ-237` |
 | 接口名称 | 创建/提交 v1/projects/service-catalog |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/service-catalog` |
@@ -28944,11 +44934,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-178 删除 v1/projects/service-catalog
+#### API-PRJ-238 删除 v1/projects/service-catalog
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-178` |
+| 接口编号 | `API-PRJ-238` |
 | 接口名称 | 删除 v1/projects/service-catalog |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/service-catalog/{catalogId}` |
@@ -29007,11 +44997,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-179 查询 v1/projects/service-catalog
+#### API-PRJ-239 查询 v1/projects/service-catalog
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-179` |
+| 接口编号 | `API-PRJ-239` |
 | 接口名称 | 查询 v1/projects/service-catalog |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/service-catalog/{catalogId}` |
@@ -29070,11 +45060,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-180 创建/提交 projects/service-catalog/links
+#### API-PRJ-240 创建/提交 projects/service-catalog/links
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-180` |
+| 接口编号 | `API-PRJ-240` |
 | 接口名称 | 创建/提交 projects/service-catalog/links |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/service-catalog/{catalogId}/links` |
@@ -29133,11 +45123,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-181 删除 projects/service-catalog/links
+#### API-PRJ-241 删除 projects/service-catalog/links
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-181` |
+| 接口编号 | `API-PRJ-241` |
 | 接口名称 | 删除 projects/service-catalog/links |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/service-catalog/{catalogId}/links/{linkId}` |
@@ -29197,11 +45187,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-182 查询 projects/service-catalog/portrait
+#### API-PRJ-242 查询 projects/service-catalog/portrait
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-182` |
+| 接口编号 | `API-PRJ-242` |
 | 接口名称 | 查询 projects/service-catalog/portrait |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/service-catalog/{catalogId}/portrait` |
@@ -29260,11 +45250,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-183 查询 v1/projects/services
+#### API-PRJ-243 查询 v1/projects/services
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-183` |
+| 接口编号 | `API-PRJ-243` |
 | 接口名称 | 查询 v1/projects/services |
 | 请求方式 | `GET` |
 | URL | `/api/v1/projects/{id}/services` |
@@ -29322,11 +45312,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-184 创建/提交 v1/projects/services
+#### API-PRJ-244 创建/提交 v1/projects/services
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-184` |
+| 接口编号 | `API-PRJ-244` |
 | 接口名称 | 创建/提交 v1/projects/services |
 | 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/services` |
@@ -29384,11 +45374,11 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-185 删除 v1/projects/services
+#### API-PRJ-245 删除 v1/projects/services
 
 | 项 | 内容 |
 |----|------|
-| 接口编号 | `API-PRJ-185` |
+| 接口编号 | `API-PRJ-245` |
 | 接口名称 | 删除 v1/projects/services |
 | 请求方式 | `DELETE` |
 | URL | `/api/v1/projects/{id}/services/{serviceId}` |
@@ -29447,7 +45437,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.40 Rbac
+### 3.48 Rbac
 
 #### API-RBAC-001 删除 api/v1/rbac
 
@@ -29876,7 +45866,70 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.41 Registrations
+### 3.49 Ready
+
+#### API-READY-001 查询 api/v1/ready
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-READY-001` |
+| 接口名称 | 查询 api/v1/ready |
+| 请求方式 | `GET` |
+| URL | `/api/v1/ready` |
+| Gin 路径 | `/api/v1/ready` |
+| operationId | `get_api_v1_ready` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/ready, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.50 Registrations
 
 #### API-REGIST-001 查询 api/v1/registrations
 
@@ -30001,7 +46054,931 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.42 Roles
+### 3.51 Registries
+
+#### API-REGIST-001 查询 api/v1/registries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-001` |
+| 接口名称 | 查询 api/v1/registries |
+| 请求方式 | `GET` |
+| URL | `/api/v1/registries` |
+| Gin 路径 | `/api/v1/registries` |
+| operationId | `get_api_v1_registries` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-002 创建/提交 api/v1/registries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-002` |
+| 接口名称 | 创建/提交 api/v1/registries |
+| 请求方式 | `POST` |
+| URL | `/api/v1/registries` |
+| Gin 路径 | `/api/v1/registries` |
+| operationId | `post_api_v1_registries` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-003 查询 registries/browse/artifacts
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-003` |
+| 接口名称 | 查询 registries/browse/artifacts |
+| 请求方式 | `GET` |
+| URL | `/api/v1/registries/browse/artifacts` |
+| Gin 路径 | `/api/v1/registries/browse/artifacts` |
+| operationId | `get_api_v1_registries_browse_artifacts` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/browse/artifacts, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-004 创建/提交 browse/artifacts/delete
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-004` |
+| 接口名称 | 创建/提交 browse/artifacts/delete |
+| 请求方式 | `POST` |
+| URL | `/api/v1/registries/browse/artifacts/delete` |
+| Gin 路径 | `/api/v1/registries/browse/artifacts/delete` |
+| operationId | `post_api_v1_registries_browse_artifacts_delete` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/browse/artifacts/delete, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-005 查询 registries/browse/projects
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-005` |
+| 接口名称 | 查询 registries/browse/projects |
+| 请求方式 | `GET` |
+| URL | `/api/v1/registries/browse/projects` |
+| Gin 路径 | `/api/v1/registries/browse/projects` |
+| operationId | `get_api_v1_registries_browse_projects` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/browse/projects, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-006 查询 registries/browse/repositories
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-006` |
+| 接口名称 | 查询 registries/browse/repositories |
+| 请求方式 | `GET` |
+| URL | `/api/v1/registries/browse/repositories` |
+| Gin 路径 | `/api/v1/registries/browse/repositories` |
+| operationId | `get_api_v1_registries_browse_repositories` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/browse/repositories, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-007 查询 v1/registries/cleanup-policies
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-007` |
+| 接口名称 | 查询 v1/registries/cleanup-policies |
+| 请求方式 | `GET` |
+| URL | `/api/v1/registries/cleanup-policies` |
+| Gin 路径 | `/api/v1/registries/cleanup-policies` |
+| operationId | `get_api_v1_registries_cleanup-policies` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/cleanup-policies, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-008 创建/提交 v1/registries/cleanup-policies
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-008` |
+| 接口名称 | 创建/提交 v1/registries/cleanup-policies |
+| 请求方式 | `POST` |
+| URL | `/api/v1/registries/cleanup-policies` |
+| Gin 路径 | `/api/v1/registries/cleanup-policies` |
+| operationId | `post_api_v1_registries_cleanup-policies` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/cleanup-policies, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-009 删除 v1/registries/cleanup-policies
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-009` |
+| 接口名称 | 删除 v1/registries/cleanup-policies |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/registries/cleanup-policies/{policyId}` |
+| Gin 路径 | `/api/v1/registries/cleanup-policies/:policyId` |
+| operationId | `delete_api_v1_registries_cleanup-policies_policyId_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `policyId` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/cleanup-policies/:policyId, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-010 更新 v1/registries/cleanup-policies
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-010` |
+| 接口名称 | 更新 v1/registries/cleanup-policies |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/registries/cleanup-policies/{policyId}` |
+| Gin 路径 | `/api/v1/registries/cleanup-policies/:policyId` |
+| operationId | `put_api_v1_registries_cleanup-policies_policyId_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `policyId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/cleanup-policies/:policyId, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-011 创建/提交 registries/cleanup-policies/run
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-011` |
+| 接口名称 | 创建/提交 registries/cleanup-policies/run |
+| 请求方式 | `POST` |
+| URL | `/api/v1/registries/cleanup-policies/{policyId}/run` |
+| Gin 路径 | `/api/v1/registries/cleanup-policies/:policyId/run` |
+| operationId | `post_api_v1_registries_cleanup-policies_policyId__run` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `policyId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/cleanup-policies/:policyId/run, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-012 删除 api/v1/registries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-012` |
+| 接口名称 | 删除 api/v1/registries |
+| 请求方式 | `DELETE` |
+| URL | `/api/v1/registries/{registryId}` |
+| Gin 路径 | `/api/v1/registries/:registryId` |
+| operationId | `delete_api_v1_registries_registryId_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `registryId` | string | 是 | 路径参数 |
+| body | JSON（可选） | object | 否 | 部分删除接口可带 JSON；以 Handler 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/:registryId, DELETE)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-013 查询 api/v1/registries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-013` |
+| 接口名称 | 查询 api/v1/registries |
+| 请求方式 | `GET` |
+| URL | `/api/v1/registries/{registryId}` |
+| Gin 路径 | `/api/v1/registries/:registryId` |
+| operationId | `get_api_v1_registries_registryId_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `registryId` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/:registryId, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-014 更新 api/v1/registries
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-014` |
+| 接口名称 | 更新 api/v1/registries |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/registries/{registryId}` |
+| Gin 路径 | `/api/v1/registries/:registryId` |
+| operationId | `put_api_v1_registries_registryId_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `registryId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/:registryId, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-REGIST-015 创建/提交 v1/registries/ping
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-REGIST-015` |
+| 接口名称 | 创建/提交 v1/registries/ping |
+| 请求方式 | `POST` |
+| URL | `/api/v1/registries/{registryId}/ping` |
+| Gin 路径 | `/api/v1/registries/:registryId/ping` |
+| operationId | `post_api_v1_registries_registryId__ping` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `registryId` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/registries/:registryId/ping, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.52 Roles
 
 #### API-ROLE-001 查询 api/v1/roles
 
@@ -30311,7 +47288,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.43 Secrets
+### 3.53 Secrets
 
 #### API-SECRET-001 删除 api/v1/secrets
 
@@ -30557,7 +47534,68 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.44 Security
+#### API-SECRET-005 查询 v1/secrets/reveal
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-SECRET-005` |
+| 接口名称 | 查询 v1/secrets/reveal |
+| 请求方式 | `GET` |
+| URL | `/api/v1/secrets/reveal` |
+| Gin 路径 | `/api/v1/secrets/reveal` |
+| operationId | `get_api_v1_secrets_reveal` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/secrets/reveal, GET)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+### 3.54 Security
 
 #### API-SECURI-001 查询 v1/security/banned-ips
 
@@ -30681,7 +47719,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.45 Serviceaccounts
+### 3.55 Serviceaccounts
 
 #### API-SERVIC-001 删除 api/v1/serviceaccounts
 
@@ -30927,7 +47965,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.46 Statefulsets
+### 3.56 Statefulsets
 
 #### API-STATEF-001 删除 api/v1/statefulsets
 
@@ -31417,11 +48455,133 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-STATEF-009 创建/提交 v1/statefulsets/scale
+#### API-STATEF-009 查询 v1/statefulsets/revisions
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-STATEF-009` |
+| 接口名称 | 查询 v1/statefulsets/revisions |
+| 请求方式 | `GET` |
+| URL | `/api/v1/statefulsets/revisions` |
+| Gin 路径 | `/api/v1/statefulsets/revisions` |
+| operationId | `get_api_v1_statefulsets_revisions` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/statefulsets/revisions, GET)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-STATEF-010 创建/提交 v1/statefulsets/rollout-undo
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-STATEF-010` |
+| 接口名称 | 创建/提交 v1/statefulsets/rollout-undo |
+| 请求方式 | `POST` |
+| URL | `/api/v1/statefulsets/rollout-undo` |
+| Gin 路径 | `/api/v1/statefulsets/rollout-undo` |
+| operationId | `post_api_v1_statefulsets_rollout-undo` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/statefulsets/rollout-undo, POST)`；K8s 作用域：`K8sScopeAuthorize`（集群档位 + NS 规则）；写操作：`OperationAudit` 审计
+
+---
+
+#### API-STATEF-011 创建/提交 v1/statefulsets/scale
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-STATEF-011` |
 | 接口名称 | 创建/提交 v1/statefulsets/scale |
 | 请求方式 | `POST` |
 | URL | `/api/v1/statefulsets/scale` |
@@ -31478,7 +48638,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.47 Storageclasses
+### 3.57 Storageclasses
 
 #### API-STORAG-001 删除 api/v1/storageclasses
 
@@ -31724,7 +48884,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.48 System
+### 3.58 System
 
 #### API-SYS-001 查询 api/v1/health
 
@@ -31787,7 +48947,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.49 User-groups
+### 3.59 User-groups
 
 #### API-USERGR-001 查询 api/v1/user-groups
 
@@ -32159,7 +49319,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-### 3.50 Users
+### 3.60 Users
 
 #### API-USR-001 查询 api/v1/users
 
@@ -32711,6 +49871,442 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 **权限要求**
 
 JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/users/:id/roles, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+### 3.61 Workflow
+
+#### API-WORKFL-001 查询 workflow/definitions/projects
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-WORKFL-001` |
+| 接口名称 | 查询 workflow/definitions/projects |
+| 请求方式 | `GET` |
+| URL | `/api/v1/workflow/definitions/{domain}/projects/{project_id}` |
+| Gin 路径 | `/api/v1/workflow/definitions/:domain/projects/:project_id` |
+| operationId | `get_api_v1_workflow_definitions_domain__projects_project_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `domain` | string | 是 | 路径参数 |
+| path | `project_id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/workflow/definitions/:domain/projects/:project_id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-WORKFL-002 更新 workflow/definitions/projects
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-WORKFL-002` |
+| 接口名称 | 更新 workflow/definitions/projects |
+| 请求方式 | `PUT` |
+| URL | `/api/v1/workflow/definitions/{domain}/projects/{project_id}` |
+| Gin 路径 | `/api/v1/workflow/definitions/:domain/projects/:project_id` |
+| operationId | `put_api_v1_workflow_definitions_domain__projects_project_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `domain` | string | 是 | 路径参数 |
+| path | `project_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/workflow/definitions/:domain/projects/:project_id, PUT)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-WORKFL-003 查询 v1/workflow/tickets
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-WORKFL-003` |
+| 接口名称 | 查询 v1/workflow/tickets |
+| 请求方式 | `GET` |
+| URL | `/api/v1/workflow/tickets` |
+| Gin 路径 | `/api/v1/workflow/tickets` |
+| operationId | `get_api_v1_workflow_tickets` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/workflow/tickets, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-WORKFL-004 创建/提交 v1/workflow/tickets
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-WORKFL-004` |
+| 接口名称 | 创建/提交 v1/workflow/tickets |
+| 请求方式 | `POST` |
+| URL | `/api/v1/workflow/tickets` |
+| Gin 路径 | `/api/v1/workflow/tickets` |
+| operationId | `post_api_v1_workflow_tickets` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/workflow/tickets, POST)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-WORKFL-005 查询 workflow/tickets/pending
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-WORKFL-005` |
+| 接口名称 | 查询 workflow/tickets/pending |
+| 请求方式 | `GET` |
+| URL | `/api/v1/workflow/tickets/pending` |
+| Gin 路径 | `/api/v1/workflow/tickets/pending` |
+| operationId | `get_api_v1_workflow_tickets_pending` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/workflow/tickets/pending, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-WORKFL-006 查询 v1/workflow/tickets
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-WORKFL-006` |
+| 接口名称 | 查询 v1/workflow/tickets |
+| 请求方式 | `GET` |
+| URL | `/api/v1/workflow/tickets/{id}` |
+| Gin 路径 | `/api/v1/workflow/tickets/:id` |
+| operationId | `get_api_v1_workflow_tickets_id_` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| query | `page` / `page_size` 等 | — | 否 | 列表类接口常见分页；以 Handler `form`/`binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/workflow/tickets/:id, GET)`；写操作：`OperationAudit` 审计
+
+---
+
+#### API-WORKFL-007 创建/提交 tickets/steps/review
+
+| 项 | 内容 |
+|----|------|
+| 接口编号 | `API-WORKFL-007` |
+| 接口名称 | 创建/提交 tickets/steps/review |
+| 请求方式 | `POST` |
+| URL | `/api/v1/workflow/tickets/{id}/steps/{step_id}/review` |
+| Gin 路径 | `/api/v1/workflow/tickets/:id/steps/:step_id/review` |
+| operationId | `post_api_v1_workflow_tickets_id__steps_step_id__review` |
+
+**请求参数**
+
+| 位置 | 名称 | 类型 | 必填 | 说明 |
+|------|------|------|------|------|
+| path | `id` | string | 是 | 路径参数 |
+| path | `step_id` | string | 是 | 路径参数 |
+| body | JSON | object | 视接口 | `Content-Type: application/json`；字段以 Handler 请求 DTO / `binding` 为准 |
+
+**响应结构**
+
+**成功（HTTP 200/201）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+`data` 结构因接口而异（列表多为 `{ "list": [], "total": 0, "page": 1, "page_size": 20 }` 或领域 DTO）。
+
+**失败（HTTP 4xx/5xx，经 ErrorHandler）**
+
+```json
+{
+  "code": 401,
+  "reason": "...",
+  "message": "产品话术",
+  "error_code": "10002",
+  "metadata": {}
+}
+```
+
+**错误码**
+
+| HTTP | error_code | 说明 |
+|------|------------|------|
+| 400 | 10001 / 11003 / 11020 | 参数无效 / 绑定失败 |
+| 401 | 10002 / 10008–10015 | 未登录、Token/Session/WS ticket 无效 |
+| 403 | 10003 / 10012 / 11022 | Casbin/项目/资源拒绝；账号禁用 |
+| 404 | 10004 / 11021 | 资源不存在 |
+| 409 | 10005 / 11024 | 状态冲突 |
+| 429 | 10007 / 10902 | 限流 |
+| 500 | 10006 / 10901 | 内部错误 |
+
+**权限要求**
+
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/workflow/tickets/:id/steps/:step_id/review, POST)`；写操作：`OperationAudit` 审计
 
 ---
 

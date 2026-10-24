@@ -53,6 +53,7 @@ import {
   listInspectRuns,
   migrateInspectReportsToMinio,
   previewInspectReportTemplate,
+  promoteInspectItemToAlert,
   resendInspectEmail,
   resetInspectItems,
   startInspectRun,
@@ -100,6 +101,8 @@ export function ProjectInspectPage() {
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [itemTypeFilter, setItemTypeFilter] = useState<string | undefined>();
+  const [itemPage, setItemPage] = useState(1);
+  const [itemPageSize, setItemPageSize] = useState(20);
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InspectItem | null>(null);
   const [tplModalOpen, setTplModalOpen] = useState(false);
@@ -219,6 +222,11 @@ export function ProjectInspectPage() {
     () => (itemTypeFilter ? items.filter((i) => i.type === itemTypeFilter) : items),
     [items, itemTypeFilter],
   );
+
+  useEffect(() => {
+    setItemPage(1);
+  }, [itemTypeFilter, projectId]);
+
   const projectName = projects.find((p) => p.id === projectId)?.name;
   const recipients = parseRecipients(plan?.recipients_json);
   const dsName =
@@ -246,8 +254,17 @@ export function ProjectInspectPage() {
       {
         title: "来源",
         width: 96,
+        render: (_, r) => (r.project_id === 0 ? <Tag>全局模板</Tag> : <Tag color="blue">项目定制</Tag>),
+      },
+      {
+        title: "持续告警",
+        width: 100,
         render: (_, r) =>
-          r.project_id === 0 ? <Tag>全局模板</Tag> : <Tag color="blue">项目定制</Tag>,
+          r.linked_rule_id ? (
+            <Tag color="purple">规则 #{r.linked_rule_id}</Tag>
+          ) : (
+            <Typography.Text type="secondary">—</Typography.Text>
+          ),
       },
       {
         title: "阈值",
@@ -255,8 +272,7 @@ export function ProjectInspectPage() {
         render: (_, r) => (
           <Tooltip title={THRESHOLD_TYPE_LABEL[r.threshold_type] || r.threshold_type}>
             <span>
-              {THRESHOLD_TYPE_LABEL[r.threshold_type]?.split(" ")[0] || r.threshold_type}{" "}
-              {r.threshold}
+              {THRESHOLD_TYPE_LABEL[r.threshold_type]?.split(" ")[0] || r.threshold_type} {r.threshold}
               {r.unit || ""}
             </span>
           </Tooltip>
@@ -279,7 +295,11 @@ export function ProjectInspectPage() {
         width: 88,
         render: (_, r) =>
           r.project_id === 0 ? (
-            r.enabled ? <Tag color="success">是</Tag> : <Tag>否</Tag>
+            r.enabled ? (
+              <Tag color="success">是</Tag>
+            ) : (
+              <Tag>否</Tag>
+            )
           ) : (
             <Switch
               size="small"
@@ -306,12 +326,12 @@ export function ProjectInspectPage() {
       },
       {
         title: "操作",
-        width: 130,
+        width: 210,
         render: (_, r) =>
           r.project_id === 0 ? (
             <Typography.Text type="secondary">只读</Typography.Text>
           ) : (
-            <Space>
+            <Space wrap>
               <Button
                 type="link"
                 size="small"
@@ -323,6 +343,28 @@ export function ProjectInspectPage() {
               >
                 编辑
               </Button>
+              <Popconfirm
+                title={
+                  r.linked_rule_id ? "同步更新已关联的持续告警规则？" : "转为持续告警规则（走规则中心评测与通知）？"
+                }
+                onConfirm={async () => {
+                  try {
+                    const rule = await promoteInspectItemToAlert(projectId, r.id, {
+                      datasource_id: plan?.datasource_id || undefined,
+                      for_seconds: 300,
+                      severity: "warning",
+                    });
+                    message.success(r.linked_rule_id ? `已更新规则 #${rule.id}` : `已创建规则 #${rule.id}`);
+                    void refresh(projectId);
+                  } catch (e) {
+                    message.error(extractApiErrorMessage(e, "转换失败"));
+                  }
+                }}
+              >
+                <Button type="link" size="small">
+                  {r.linked_rule_id ? "同步告警" : "转持续告警"}
+                </Button>
+              </Popconfirm>
               <Popconfirm
                 title="删除该巡检项？"
                 onConfirm={async () => {
@@ -343,7 +385,7 @@ export function ProjectInspectPage() {
           ),
       },
     ],
-    [itemForm, projectId, refresh],
+    [itemForm, plan?.datasource_id, projectId, refresh],
   );
 
   const runColumns: ColumnsType<InspectRun> = [
@@ -371,7 +413,9 @@ export function ProjectInspectPage() {
           <Typography.Text strong style={{ color: gradeColor(r.grade) }}>
             {r.score}
           </Typography.Text>
-          {r.grade ? <Tag color={r.grade === "A" ? "success" : r.grade === "D" ? "error" : "default"}>{r.grade}</Tag> : null}
+          {r.grade ? (
+            <Tag color={r.grade === "A" ? "success" : r.grade === "D" ? "error" : "default"}>{r.grade}</Tag>
+          ) : null}
         </Space>
       ),
     },
@@ -409,9 +453,7 @@ export function ProjectInspectPage() {
     {
       title: "存储",
       width: 72,
-      render: (_, r) => (
-        <Tag color={storageColor(r.storage)}>{storageLabel(r.storage)}</Tag>
-      ),
+      render: (_, r) => <Tag color={storageColor(r.storage)}>{storageLabel(r.storage)}</Tag>,
     },
     {
       title: "时间",
@@ -448,7 +490,7 @@ export function ProjectInspectPage() {
               type="link"
               size="small"
               disabled={r.status !== "success"}
-              onClick={() => downloadInspectPdf(projectId, r.id)}
+              onClick={() => downloadInspectPdf(projectId, r.id, projectName)}
             >
               PDF
             </Button>
@@ -529,9 +571,7 @@ export function ProjectInspectPage() {
           projectId ? (
             <Space wrap size="small">
               <Tag>{projectName || `项目 #${projectId}`}</Tag>
-              <Tag color={plan?.enabled ? "success" : "default"}>
-                {plan?.enabled ? "定时已启用" : "定时未启用"}
-              </Tag>
+              <Tag color={plan?.enabled ? "success" : "default"}>{plan?.enabled ? "定时已启用" : "定时未启用"}</Tag>
               <Tag>数据源 · {dsName}</Tag>
               {plan?.last_run_at ? <Tag>最近执行 · {formatDateTime(plan.last_run_at)}</Tag> : <Tag>尚未执行</Tag>}
               {recipients.length ? <Tag color="blue">邮件 · {recipients.length} 人</Tag> : <Tag>未配置收件人</Tag>}
@@ -585,21 +625,20 @@ export function ProjectInspectPage() {
                 <span>
                   {storageInfo.require_minio ? (
                     <>
-                      数据字典 <Typography.Text code>inspect_report.require_minio</Typography.Text> 已启用，须配置 MinIO。
+                      数据字典 <Typography.Text code>inspect_report.require_minio</Typography.Text> 已启用，须配置
+                      MinIO。
                     </>
                   ) : (
-                    <>请在数据字典启用并填写 MinIO 配置（minio_endpoint、minio_access_key、minio_secret_key、minio_bucket）。</>
+                    <>
+                      请在数据字典启用并填写 MinIO
+                      配置（minio_endpoint、minio_access_key、minio_secret_key、minio_bucket）。
+                    </>
                   )}
                   当前路径：
                   <Typography.Text code copyable>
                     {storageInfo.local_root || "logs/inspect-reports"}
                   </Typography.Text>
-                  {storageInfo.minio_reason ? (
-                    <>
-                      {" "}
-                      原因：{storageInfo.minio_reason}
-                    </>
-                  ) : null}
+                  {storageInfo.minio_reason ? <> 原因：{storageInfo.minio_reason}</> : null}
                   {storageInfo.minio_ready ? (
                     <div style={{ marginTop: 8 }}>
                       <Button size="small" loading={migratingReports} onClick={() => void handleMigrateReports()}>
@@ -716,7 +755,10 @@ export function ProjectInspectPage() {
                       dsList={dsList}
                       reportTemplates={reportTemplates}
                       onSaved={() => void refresh(projectId)}
-                      onGoToItems={() => setActiveTab("items")}
+                      onGoToItems={() => {
+                        setActiveTab("items");
+                        setItemPage(1);
+                      }}
                       onGoToRuns={() => setActiveTab("runs")}
                     />
                   </Card>
@@ -728,7 +770,6 @@ export function ProjectInspectPage() {
                 children: (
                   <Card
                     className="table-card"
-                    loading={loading}
                     extra={
                       <Space wrap>
                         <Select
@@ -791,9 +832,27 @@ export function ProjectInspectPage() {
                     <Table
                       rowKey="id"
                       size="small"
+                      loading={loading}
                       columns={itemColumns}
                       dataSource={filteredItems}
-                      pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 项` }}
+                      pagination={{
+                        current: itemPage,
+                        pageSize: itemPageSize,
+                        total: filteredItems.length,
+                        showSizeChanger: true,
+                        pageSizeOptions: ["10", "20", "50", "100"],
+                        showTotal: (t) => `共 ${t} 项`,
+                      }}
+                      onChange={(pag) => {
+                        const nextSize = Number(pag.pageSize) || itemPageSize;
+                        const nextPage = Number(pag.current) || 1;
+                        if (nextSize !== itemPageSize) {
+                          setItemPageSize(nextSize);
+                          setItemPage(1);
+                          return;
+                        }
+                        setItemPage(nextPage);
+                      }}
                       locale={{
                         emptyText: (
                           <Empty
@@ -810,10 +869,11 @@ export function ProjectInspectPage() {
                 key: "runs",
                 label: `历史 (${runTotal})`,
                 children: (
-                  <Card className="table-card" loading={loading}>
+                  <Card className="table-card">
                     <Table
                       rowKey="id"
                       size="small"
+                      loading={loading}
                       columns={runColumns}
                       dataSource={runs}
                       onRow={(r) => ({
@@ -829,11 +889,18 @@ export function ProjectInspectPage() {
                         pageSize: runPageSize,
                         total: runTotal,
                         showSizeChanger: true,
+                        pageSizeOptions: ["10", "20", "50", "100"],
                         showTotal: (t) => `共 ${t} 次`,
-                        onChange: (page, size) => {
-                          setRunPage(page);
-                          setRunPageSize(size);
-                        },
+                      }}
+                      onChange={(pag) => {
+                        const nextSize = Number(pag.pageSize) || runPageSize;
+                        const nextPage = Number(pag.current) || 1;
+                        if (nextSize !== runPageSize) {
+                          setRunPageSize(nextSize);
+                          setRunPage(1);
+                          return;
+                        }
+                        setRunPage(nextPage);
                       }}
                       locale={{
                         emptyText: (
@@ -841,7 +908,11 @@ export function ProjectInspectPage() {
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
                             description="暂无巡检记录，点击右上角「立即巡检」开始"
                           >
-                            <Button type="primary" icon={<ThunderboltOutlined />} onClick={() => void handleImmediateRun()}>
+                            <Button
+                              type="primary"
+                              icon={<ThunderboltOutlined />}
+                              onClick={() => void handleImmediateRun()}
+                            >
                               立即巡检
                             </Button>
                           </Empty>
@@ -875,8 +946,7 @@ export function ProjectInspectPage() {
                         {
                           title: "范围",
                           width: 100,
-                          render: (_, r) =>
-                            r.project_id === 0 ? <Tag>全局</Tag> : <Tag color="blue">项目</Tag>,
+                          render: (_, r) => (r.project_id === 0 ? <Tag>全局</Tag> : <Tag color="blue">项目</Tag>),
                         },
                         {
                           title: "说明",
@@ -997,10 +1067,7 @@ export function ProjectInspectPage() {
             <div className="project-inspect-page__drawer-score">
               <div>
                 <Typography.Text type="secondary">健康分</Typography.Text>
-                <div
-                  className="project-inspect-page__drawer-score-num"
-                  style={{ color: gradeColor(runDetail.grade) }}
-                >
+                <div className="project-inspect-page__drawer-score-num" style={{ color: gradeColor(runDetail.grade) }}>
                   {runDetail.score}
                   {runDetail.grade ? <span> / {runDetail.grade}</span> : null}
                 </div>
@@ -1021,12 +1088,10 @@ export function ProjectInspectPage() {
                 {runDetail.datasource_name || `#${runDetail.datasource_id}`}
               </Descriptions.Item>
               <Descriptions.Item label="样本统计">
-                严重 {runDetail.critical_count} · 警告 {runDetail.warning_count} · 正常{" "}
-                {runDetail.normal_count} · 合计 {runDetail.total_count}
+                严重 {runDetail.critical_count} · 警告 {runDetail.warning_count} · 正常 {runDetail.normal_count} · 合计{" "}
+                {runDetail.total_count}
               </Descriptions.Item>
-              <Descriptions.Item label="版式">
-                {runDetail.report_template_code || "default"}
-              </Descriptions.Item>
+              <Descriptions.Item label="版式">{runDetail.report_template_code || "default"}</Descriptions.Item>
               <Descriptions.Item label="存储">
                 <Tag color={storageColor(runDetail.storage)}>{storageLabel(runDetail.storage)}</Tag>
               </Descriptions.Item>
@@ -1068,18 +1133,12 @@ export function ProjectInspectPage() {
               ) : null}
             </Descriptions>
             <Space wrap>
-              <Button onClick={() => openAuthorized(inspectReportHtmlUrl(projectId, runDetail.id))}>
-                HTML
-              </Button>
-              <Button onClick={() => openAuthorized(inspectReportPrintUrl(projectId, runDetail.id))}>
-                打印版
-              </Button>
+              <Button onClick={() => openAuthorized(inspectReportHtmlUrl(projectId, runDetail.id))}>HTML</Button>
+              <Button onClick={() => openAuthorized(inspectReportPrintUrl(projectId, runDetail.id))}>打印版</Button>
               <Tooltip title="html2canvas + jsPDF 按 HTML 样式导出（与 PromAI 相同方案）">
-                <Button onClick={() => downloadInspectPdf(projectId, runDetail.id)}>PDF</Button>
+                <Button onClick={() => downloadInspectPdf(projectId, runDetail.id, projectName)}>PDF</Button>
               </Tooltip>
-              <Button onClick={() => openAuthorized(inspectReportExcelUrl(projectId, runDetail.id))}>
-                Excel
-              </Button>
+              <Button onClick={() => openAuthorized(inspectReportExcelUrl(projectId, runDetail.id))}>Excel</Button>
               <Button
                 icon={<MailOutlined />}
                 disabled={!recipients.length}

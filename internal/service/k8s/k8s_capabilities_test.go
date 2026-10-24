@@ -40,8 +40,8 @@ func TestGrantCapabilitySetFallsBackPreset(t *testing.T) {
 	}
 	g2 := model.K8sClusterAccessGrant{Preset: "readonly", Capabilities: `["read","scale"]`}
 	caps2 := k8scaps.FromGrant(g2)
-	if !k8scaps.Has(caps2, CapScale) || k8scaps.Has(caps2, CapExec) {
-		t.Fatalf("got %v", caps2)
+	if !k8scaps.Has(caps2, CapRead) || k8scaps.Has(caps2, CapScale) {
+		t.Fatalf("role preset wins over capabilities json, got %v", caps2)
 	}
 }
 

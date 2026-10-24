@@ -1,19 +1,9 @@
 import { Alert, Form, Input, Modal, Select } from "antd";
 import type { FormInstance } from "antd/es/form";
-import type {
-  CicdArtifactItem,
-  CicdBuildRun,
-  CicdDeployConfig,
-  CicdServiceItem,
-} from "../../services/cicd";
+import type { CicdArtifactItem, CicdBuildRun, CicdDeployConfig, CicdServiceItem } from "../../services/cicd";
 import type { UserItem } from "../../types/api";
 import { ownerEmailPreview } from "./display";
-import {
-  BACKEND_RELEASE_OPS,
-  CONTAINER_RELEASE_OPS,
-  FRONTEND_RELEASE_OPS,
-  releaseOpLabel,
-} from "./release-ops";
+import { BACKEND_RELEASE_OPS, CONTAINER_RELEASE_OPS, FRONTEND_RELEASE_OPS, releaseOpLabel } from "./release-ops";
 
 type Props = {
   open: boolean;
@@ -52,7 +42,7 @@ export function ReleaseDrawer({
             type="warning"
             showIcon
             message="该环境已开启发布审核"
-            description="提交后将进入「待办列表 → 待审核」，审批通过后再进入「待执行」由审核人/运维执行 Jenkins 发布。"
+            description="提交后进入「工单中心 → 我的待办」审批；全部通过后由提交人在「CD 历史工单」详情中点击「执行发布」触发 Jenkins。"
             style={{ marginBottom: 16 }}
           />
         ) : null}
@@ -109,7 +99,13 @@ export function ReleaseDrawer({
                         <Select
                           showSearch
                           loading={releaseBuildRunsLoading}
-                          placeholder={releaseBuildRunsLoading ? "加载构建记录…" : releaseBuildRuns.length ? "选择镜像" : "暂无可用镜像，请先 CI 打包"}
+                          placeholder={
+                            releaseBuildRunsLoading
+                              ? "加载构建记录…"
+                              : releaseBuildRuns.length
+                                ? "选择镜像"
+                                : "暂无可用镜像，请先 CI 打包"
+                          }
                           options={releaseBuildRuns.map((r) => ({
                             value: r.id,
                             label: `#${r.build_number} ${r.image_address}${r.branch_name ? ` · ${r.branch_name}` : ""}`,
@@ -164,12 +160,22 @@ export function ReleaseDrawer({
                   <Select
                     showSearch
                     loading={releaseArtifactsLoading}
-                    placeholder={releaseArtifactsLoading ? "加载制品列表…" : releaseArtifacts.length ? "选择制品" : "暂无制品，请先 CI 打包"}
+                    placeholder={
+                      releaseArtifactsLoading
+                        ? "加载制品列表…"
+                        : releaseArtifacts.length
+                          ? "选择制品"
+                          : "暂无制品，请先 CI 打包"
+                    }
                     options={releaseArtifacts.map((a) => ({
                       value: a.name,
                       label: `${a.name}${a.last_modified ? ` · ${a.last_modified}` : ""}`,
                     }))}
-                    filterOption={(input, option) => String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())}
+                    filterOption={(input, option) =>
+                      String(option?.label ?? "")
+                        .toLowerCase()
+                        .includes(input.toLowerCase())
+                    }
                   />
                 </Form.Item>
               </>

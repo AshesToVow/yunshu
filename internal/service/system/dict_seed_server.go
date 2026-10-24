@@ -14,5 +14,6 @@ func serverDictSeeds() []DictEntryCreateRequest {
 		{DictType: "server_ssh_password", Label: "默认密码模板（示例）", Value: "change-me-password", Sort: intRef(1), Status: 1, Remark: "服务器 SSH 密码模板，生产建议改为真实值"},
 		{DictType: "server_port", Label: "SSH 默认端口 22", Value: "22", Sort: intRef(1), Status: 1, Remark: "服务器连接端口模板"},
 		{DictType: "server_port", Label: "RDP 默认端口 3389", Value: "3389", Sort: intRef(2), Status: 1, Remark: "服务器连接端口模板"},
+		{DictType: "cmdb_max_transfer_file_mb", Label: "服务器文件传输上限(MB)", Value: "50", Sort: intRef(1), Status: 1, Remark: "服务器操作台 SFTP 上传/下载单文件上限"},
 	}
 }

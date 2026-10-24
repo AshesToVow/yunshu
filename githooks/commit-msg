@@ -1,0 +1,20 @@
+#!/bin/sh
+# Commit message 规范：Conventional Commits
+# 格式：type(scope): subject，subject 为中文/英文，不超过 200 字符。
+# 例外：Merge/Revert/初始提交。
+
+commit_msg=$(cat "$1")
+
+# 允许 Merge / Revert / GitHub 自动合并消息
+if echo "$commit_msg" | grep -qE '^(Merge|Revert|Auto merge)'; then
+  exit 0
+fi
+
+if ! echo "$commit_msg" | head -1 | grep -qE '^(feat|fix|docs|refactor|style|test|chore|ci|build|perf|revert)(\([a-zA-Z0-9_,./-]+\))?: .{1,200}$'; then
+  echo "提交信息不符合规范，请使用 Conventional Commits 格式：" >&2
+  echo "  type(scope): subject" >&2
+  echo "type 取值：feat / fix / docs / refactor / style / test / chore / ci / build / perf / revert" >&2
+  echo "示例：feat(k8s): 新增多集群统一搜索" >&2
+  echo "例外：Merge / Revert 提交不受此限制" >&2
+  exit 1
+fi

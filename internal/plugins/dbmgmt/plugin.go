@@ -2,11 +2,11 @@ package dbmgmt
 
 import (
 	"context"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 )
 
 func init() {
@@ -52,7 +52,7 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := rt.Dbmgmt.(*dbmgmtsvc.Service); ok && svc != nil {
+	if svc, ok := plugin.As[*service.DbmgmtService](rt.Dbmgmt); ok && svc != nil {
 		lifecycle.Go("dbmgmt.background-workers", func() { svc.RunBackgroundWorkers(bgCtx) })
 	}
 	return nil

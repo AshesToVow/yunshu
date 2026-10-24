@@ -1,5 +1,19 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Drawer, Form, Input, InputNumber, Popconfirm, Space, Switch, Table, Tag, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Drawer,
+  Form,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { Link } from "react-router-dom";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
@@ -199,7 +213,10 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
       render: (_, row) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
-          <Popconfirm title="确定删除该抑制规则？" onConfirm={() => void deleteInhibitionRule(row.id).then(() => load())}>
+          <Popconfirm
+            title="确定删除该抑制规则？"
+            onConfirm={() => void deleteInhibitionRule(row.id).then(() => load())}
+          >
             <Button type="link" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -221,16 +238,22 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
         description={
           <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
             <li>
-              <strong>抑制</strong>：类似 Alertmanager <Typography.Text code>inhibit_rules</Typography.Text>。当<strong>源告警</strong>（source 匹配）处于 firing 时，在 Redis 中记录；<strong>目标告警</strong>（target 匹配）且与源在 <Typography.Text code>equal_labels</Typography.Text> 上取值一致时，不向通道外发。源告警 resolved 后清除记录。
+              <strong>抑制</strong>：类似 Alertmanager <Typography.Text code>inhibit_rules</Typography.Text>。当
+              <strong>源告警</strong>（source 匹配）处于 firing 时，在 Redis 中记录；<strong>目标告警</strong>（target
+              匹配）且与源在 <Typography.Text code>equal_labels</Typography.Text> 上取值一致时，不向通道外发。源告警
+              resolved 后清除记录。
             </li>
             <li>
-              <strong>平台静默</strong>：单条告警入站即拦截，见「平台静默」Tab（<Typography.Text code>silence_suppressed</Typography.Text>）。
+              <strong>平台静默</strong>：单条告警入站即拦截，见「平台静默」Tab（
+              <Typography.Text code>silence_suppressed</Typography.Text>）。
             </li>
             <li>
-              <strong>订阅静默</strong>：命中订阅节点后的 groupKey 窗口（<Typography.Text code>subscription_suppressed</Typography.Text>）。
+              <strong>订阅静默</strong>：命中订阅节点后的 groupKey 窗口（
+              <Typography.Text code>subscription_suppressed</Typography.Text>）。
             </li>
             <li>
-              <strong>通知合并</strong>：firing 的 group_wait / repeat 等（<Typography.Text code>group_*_suppressed</Typography.Text>），与抑制无关。
+              <strong>通知合并</strong>：firing 的 group_wait / repeat 等（
+              <Typography.Text code>group_*_suppressed</Typography.Text>），与抑制无关。
             </li>
             <li>
               <strong>依赖</strong>：抑制运行时依赖 Redis；无 Redis 时规则可配置但不会生效。

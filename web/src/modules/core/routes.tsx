@@ -3,11 +3,17 @@ import { Navigate, type RouteObject } from "react-router-dom";
 
 const DashboardPage = lazy(() => import("../../pages/dashboard-page").then((m) => ({ default: m.DashboardPage })));
 const UsersPage = lazy(() => import("../../pages/users-page").then((m) => ({ default: m.UsersPage })));
-const DepartmentsPage = lazy(() => import("../../pages/departments-page").then((m) => ({ default: m.DepartmentsPage })));
+const DepartmentsPage = lazy(() =>
+  import("../../pages/departments-page").then((m) => ({ default: m.DepartmentsPage })),
+);
 const RolesPage = lazy(() => import("../../pages/roles-page").then((m) => ({ default: m.RolesPage })));
-const PermissionsPage = lazy(() => import("../../pages/permissions-page").then((m) => ({ default: m.PermissionsPage })));
+const PermissionsPage = lazy(() =>
+  import("../../pages/permissions-page").then((m) => ({ default: m.PermissionsPage })),
+);
 const PoliciesPage = lazy(() => import("../../pages/policies-page").then((m) => ({ default: m.PoliciesPage })));
-const RegistrationsPage = lazy(() => import("../../pages/registrations-page").then((m) => ({ default: m.RegistrationsPage })));
+const RegistrationsPage = lazy(() =>
+  import("../../pages/registrations-page").then((m) => ({ default: m.RegistrationsPage })),
+);
 const MenusPage = lazy(() => import("../../pages/menus-page").then((m) => ({ default: m.MenusPage })));
 const LoginLogsPage = lazy(() => import("../../pages/login-logs-page").then((m) => ({ default: m.LoginLogsPage })));
 const OperationLogsPage = lazy(() =>

@@ -70,14 +70,18 @@ export function parsePromSelectorExpr(raw: string): { metric: string; filters: M
   while ((match = re.exec(body)) !== null) {
     const key = String(match[1] || "").trim();
     const op = (match[2] as MetricLabelFilter["op"]) || "=";
-    const value = String(match[3] || "").replace(/\\"/g, '"').trim();
+    const value = String(match[3] || "")
+      .replace(/\\"/g, '"')
+      .trim();
     filters.push({ key, op, value });
   }
   return { metric, filters: filters.length ? filters : [{ key: "instance", op: "=", value: "" }] };
 }
 
 export function detectPromFunctionKeyFromExpr(exprRaw: string): string | null {
-  const s = String(exprRaw || "").trim().toLowerCase();
+  const s = String(exprRaw || "")
+    .trim()
+    .toLowerCase();
   if (!s) return null;
   if (/^histogram_quantile\s*\(/.test(s)) return "histogram_quantile";
   if (/^sum\s+by\s*\(/.test(s)) return "sum_by";

@@ -16,7 +16,7 @@ type InspectReportTemplate struct {
 	Name      string `json:"name" gorm:"size:128;not null;comment:展示名称"`
 	Engine    string `json:"engine" gorm:"size:32;not null;default:go_html;comment:渲染引擎"`
 	// Body 自定义模板全文；内置且为空时使用 embed 文件 templates/{code}.html
-	Body      string `json:"body" gorm:"type:longtext;comment:HTML模板正文"`
+	Body      string `json:"body" gorm:"type:text;comment:HTML模板正文"`
 	IsBuiltin bool   `json:"is_builtin" gorm:"not null;default:false;comment:是否内置"`
 	Status    int    `json:"status" gorm:"not null;default:1;index;comment:1启用0停用"`
 	Remark    string `json:"remark" gorm:"size:255;comment:备注"`

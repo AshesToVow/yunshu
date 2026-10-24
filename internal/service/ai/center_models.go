@@ -18,7 +18,7 @@ type LLMModelUpsertRequest struct {
 	Name          string   `json:"name" binding:"required,max=128"`
 	Provider      string   `json:"provider" binding:"required,max=64"`
 	BaseURL       string   `json:"base_url"`
-	APIKey        string   `json:"api_key"` // 明文；更新时可空表示不改
+	APIKey        string   `json:"api_key"`
 	ModelName     string   `json:"model_name" binding:"required,max=128"`
 	ModelType     string   `json:"model_type"`
 	ModelVersion  string   `json:"model_version"`
@@ -64,7 +64,7 @@ func normalizeLLMProvider(p string) string {
 	case "claude", "claude_code":
 		return config.AIProviderAnthropic
 	case "qwen", "tongyi":
-		return "qwen" // OpenAI 兼容协议
+		return "qwen"
 	default:
 		return p
 	}
@@ -110,18 +110,7 @@ func (s *Service) CreateLLMModel(ctx context.Context, req LLMModelUpsertRequest)
 	if row.BaseURL == "" {
 		row.BaseURL = defaultBaseURL(provider)
 	}
-	tx := s.db.WithContext(ctx).Begin()
-	if row.IsDefault {
-		if err := tx.Model(&model.AiLLMModel{}).Where("is_default = ?", true).Update("is_default", false).Error; err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-	}
-	if err := tx.Create(&row).Error; err != nil {
-		tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit().Error; err != nil {
+	if err := s.repo.CreateLLMModel(ctx, &row, row.IsDefault); err != nil {
 		return nil, err
 	}
 	row.HasAPIKey = row.APIKeyEnc != ""
@@ -143,19 +132,19 @@ func defaultBaseURL(provider string) string {
 }
 
 func (s *Service) UpdateLLMModel(ctx context.Context, id uint, req LLMModelUpsertRequest) (*model.AiLLMModel, error) {
-	var row model.AiLLMModel
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	row, err := s.repo.GetLLMModelByID(ctx, id)
+	if err != nil {
 		return nil, constants.ErrNotFoundWithMsg("模型不存在")
 	}
 	updates := map[string]any{
-		"name":           strings.TrimSpace(req.Name),
-		"provider":       normalizeLLMProvider(req.Provider),
-		"base_url":       strings.TrimSpace(req.BaseURL),
-		"model_name":     strings.TrimSpace(req.ModelName),
-		"model_type":     coalesce(req.ModelType, row.ModelType),
-		"model_version":  strings.TrimSpace(req.ModelVersion),
-		"remark":         strings.TrimSpace(req.Remark),
-		"is_default":     req.IsDefault,
+		"name":          strings.TrimSpace(req.Name),
+		"provider":      normalizeLLMProvider(req.Provider),
+		"base_url":      strings.TrimSpace(req.BaseURL),
+		"model_name":    strings.TrimSpace(req.ModelName),
+		"model_type":    coalesce(req.ModelType, row.ModelType),
+		"model_version": strings.TrimSpace(req.ModelVersion),
+		"remark":        strings.TrimSpace(req.Remark),
+		"is_default":    req.IsDefault,
 	}
 	if req.Temperature != nil {
 		updates["temperature"] = *req.Temperature
@@ -176,86 +165,64 @@ func (s *Service) UpdateLLMModel(ctx context.Context, id uint, req LLMModelUpser
 		}
 		updates["api_key_enc"] = enc
 	}
-	tx := s.db.WithContext(ctx).Begin()
-	if req.IsDefault {
-		if err := tx.Model(&model.AiLLMModel{}).Where("id <> ? AND is_default = ?", id, true).Update("is_default", false).Error; err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-	}
-	if err := tx.Model(&row).Updates(updates).Error; err != nil {
-		tx.Rollback()
+	if err := s.repo.UpdateLLMModel(ctx, id, updates, req.IsDefault); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit().Error; err != nil {
+	row, err = s.repo.GetLLMModelByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).First(&row, id).Error
 	row.HasAPIKey = row.APIKeyEnc != ""
 	row.APIKeyEnc = ""
-	return &row, nil
+	return row, nil
 }
 
 func (s *Service) DeleteLLMModel(ctx context.Context, id uint) error {
-	res := s.db.WithContext(ctx).Delete(&model.AiLLMModel{}, id)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return constants.ErrNotFoundWithMsg("模型不存在")
+	if err := s.repo.DeleteLLMModel(ctx, id); err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg("模型不存在")
+		}
+		return err
 	}
 	return nil
 }
 
 func (s *Service) SetDefaultLLMModel(ctx context.Context, id uint) error {
-	var row model.AiLLMModel
-	if err := s.db.WithContext(ctx).First(&row, id).Error; err != nil {
+	if _, err := s.repo.GetLLMModelByID(ctx, id); err != nil {
 		return constants.ErrNotFoundWithMsg("模型不存在")
 	}
-	tx := s.db.WithContext(ctx).Begin()
-	if err := tx.Model(&model.AiLLMModel{}).Where("is_default = ?", true).Update("is_default", false).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	if err := tx.Model(&row).Updates(map[string]any{"is_default": true, "enabled": true}).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit().Error
+	return s.repo.SetDefaultLLMModel(ctx, id)
 }
 
-// findLLMModelForChat 按名称或 provider 查找启用模型；优先精确 name，其次默认，再次同 provider。
 func (s *Service) findLLMModelForChat(ctx context.Context, selector string) (*model.AiLLMModel, error) {
 	selector = strings.TrimSpace(selector)
-	var row model.AiLLMModel
 	if selector != "" {
-		err := s.db.WithContext(ctx).Where("enabled = ? AND name = ?", true, selector).First(&row).Error
+		row, err := s.repo.FindLLMModelByName(ctx, selector)
 		if err == nil {
-			return &row, nil
+			return row, nil
 		}
 		if err != gorm.ErrRecordNotFound {
 			return nil, err
 		}
 		prov := normalizeLLMProvider(selector)
-		err = s.db.WithContext(ctx).Where("enabled = ? AND provider = ?", true, prov).
-			Order("is_default DESC, id ASC").First(&row).Error
+		row, err = s.repo.FindLLMModelByProvider(ctx, prov)
 		if err == nil {
-			return &row, nil
+			return row, nil
 		}
 		if err != gorm.ErrRecordNotFound {
 			return nil, err
 		}
 	}
-	err := s.db.WithContext(ctx).Where("enabled = ? AND is_default = ?", true, true).First(&row).Error
+	row, err := s.repo.FindDefaultLLMModel(ctx)
 	if err == nil {
-		return &row, nil
+		return row, nil
 	}
 	if err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
-	err = s.db.WithContext(ctx).Where("enabled = ?", true).Order("id ASC").First(&row).Error
+	row, err = s.repo.FindFirstEnabledLLMModel(ctx)
 	if err == nil {
-		return &row, nil
+		return row, nil
 	}
 	return nil, err
 }
@@ -276,7 +243,6 @@ func (s *Service) clientFromDBModel(row *model.AiLLMModel, timeoutSec int) (llm.
 	case config.AIProviderDeepSeek:
 		return llm.NewOpenAICompatClient(config.AIProviderDeepSeek, pcfg.BaseURL, pcfg.APIKey, pcfg.Model, timeoutSec), row.Name, pcfg, nil
 	default:
-		// qwen / openai_compat 等走兼容协议
 		name := prov
 		if name == "" || name == "qwen" {
 			name = config.AIProviderOpenAICompat

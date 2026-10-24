@@ -96,6 +96,49 @@ func (h *AlertPlatformHandler) PingDatasource(c *gin.Context) {
 	response.Success(c, res)
 }
 
+// ListDatasourceHealth GET — 项目下数据源健康缓存列表。
+func (h *AlertPlatformHandler) ListDatasourceHealth(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q struct {
+		ProjectID uint `form:"project_id" binding:"required"`
+	}) (gin.H, error) {
+		list, err := h.ds.ListHealth(ctx, q.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"list": list, "items": list}, nil
+	})
+}
+
+// GetDatasourceHealth GET — 读取数据源最近一次健康探测。
+func (h *AlertPlatformHandler) GetDatasourceHealth(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	res, err := h.ds.GetHealth(c.Request.Context(), id)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
+// CheckDatasourceHealth POST — 即时探测并写回健康缓存。
+func (h *AlertPlatformHandler) CheckDatasourceHealth(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	res, err := h.ds.CheckHealth(c.Request.Context(), id)
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, res)
+}
+
 func (h *AlertPlatformHandler) PromQuery(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
@@ -227,13 +270,15 @@ func (h *AlertPlatformHandler) ListSilences(c *gin.Context) {
 
 func (h *AlertPlatformHandler) CreateSilence(c *gin.Context) {
 	ServeJSON(c, func(ctx context.Context, req service.AlertSilenceUpsertRequest) (any, error) {
-		return h.silence.Create(ctx, alertPlatformUserID(c), req)
+		actor, _ := auth.CurrentUserFromContext(c)
+		return h.silence.Create(ctx, actor, req)
 	})
 }
 
 func (h *AlertPlatformHandler) CreateSilenceBatch(c *gin.Context) {
 	ServeJSON(c, func(ctx context.Context, req service.AlertSilenceBatchRequest) (gin.H, error) {
-		n, err := h.silence.CreateBatch(ctx, alertPlatformUserID(c), req)
+		actor, _ := auth.CurrentUserFromContext(c)
+		n, err := h.silence.CreateBatch(ctx, actor, req)
 		if err != nil {
 			return nil, err
 		}
@@ -248,7 +293,8 @@ func (h *AlertPlatformHandler) UpdateSilence(c *gin.Context) {
 		return
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertSilenceUpsertRequest) (any, error) {
-		return h.silence.Update(ctx, id, req)
+		actor, _ := auth.CurrentUserFromContext(c)
+		return h.silence.Update(ctx, id, actor, req)
 	})
 }
 
@@ -258,7 +304,8 @@ func (h *AlertPlatformHandler) DeleteSilence(c *gin.Context) {
 		abortService(c, err)
 		return
 	}
-	if err := h.silence.Delete(c.Request.Context(), id); err != nil {
+	actor, _ := auth.CurrentUserFromContext(c)
+	if err := h.silence.Delete(c.Request.Context(), id, actor); err != nil {
 		abortService(c, err)
 		return
 	}

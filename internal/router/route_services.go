@@ -1,11 +1,6 @@
 package router
 
 import (
-	aisvc "yunshu/internal/service/ai"
-	cicdsvc "yunshu/internal/service/cicd"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
-	esmgmtsvc "yunshu/internal/service/esmgmt"
-	inspectsvc "yunshu/internal/service/inspect"
 	"yunshu/internal/service"
 )
 
@@ -59,10 +54,11 @@ type routeServices struct {
 	ServiceCatalog       *service.ServiceCatalogService
 	ChangeEvent          *service.ChangeEventService
 	CMDB                 *service.CMDBService
-	Cicd                 *cicdsvc.Service
+	Cicd                 *service.CicdService
 	MysqlBackup          *service.MysqlBackupService
-	Dbmgmt               *dbmgmtsvc.Service
+	Dbmgmt               *service.DbmgmtService
 	LogSearch            *service.LogSearchService
+	LogIntelligence      *service.LogIntelligenceService
 	LogRetention         *service.LogRetentionService
 	KafkaToES            *service.KafkaToESService
 	LoggieAgent          *service.LoggieAgentService
@@ -71,7 +67,8 @@ type routeServices struct {
 	K8sEventForwardAdmin *service.K8sEventForwardAdminService
 	K8sSearch            *service.K8sSearchService
 	AlertMaintenance     *service.AlertMaintenanceService
-	Inspect              *inspectsvc.Service
-	AI                   *aisvc.Service
-	Esmgmt               *esmgmtsvc.Service
+	Inspect              *service.InspectService
+	AI                   *service.AIService
+	Esmgmt               *service.EsmgmtService
+	Kafkamgmt            *service.KafkamgmtService
 }

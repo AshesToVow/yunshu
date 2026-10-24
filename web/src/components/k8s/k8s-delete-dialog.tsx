@@ -32,7 +32,9 @@ export function K8sDeleteDialog({ open, resourceName, loading, onCancel, onConfi
       confirmLoading={loading}
       destroyOnClose
       onCancel={onCancel}
-      onOk={() => onConfirm(pickK8sDeleteOpts({ grace_period_seconds: gracePeriod, propagation_policy: propagationPolicy }))}
+      onOk={() =>
+        onConfirm(pickK8sDeleteOpts({ grace_period_seconds: gracePeriod, propagation_policy: propagationPolicy }))
+      }
     >
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>

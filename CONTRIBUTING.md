@@ -126,6 +126,9 @@ MinIO 有两套键：`minio_*`（备份）与 `cicd_minio_*`（CI/CD 制品）�
 ## 7. 测试与构建
 
 ```bash
+# 统一入口（等价命令见 Makefile）
+make help
+
 # 后端单元测试
 go test ./internal/... -count=1
 
@@ -135,8 +138,27 @@ go test ./internal/plugin/... ./internal/pkg/mysqlbackup/...
 # 编译
 go build -o yunshu .
 
-# 前端
+# 前端（lint 覆盖全 src，build 含 tsc -b 类型检查）
 cd web && npm run build && npm run lint
+```
+
+---
+
+## 7.1 提交规范与钩子
+
+- 提交信息遵循 Conventional Commits：`type(scope): subject`，type 取值
+  `feat / fix / docs / refactor / style / test / chore / ci / build / perf / revert`。
+  示例：`feat(k8s): 新增多集群统一搜索`、`fix(dbmgmt): 修复授权重复申请`。
+- 启用仓库钩子（commit-msg 规范校验 + pre-commit gofmt 检查）：
+
+```bash
+sh scripts/install-hooks.sh   # 或 make hooks
+```
+
+- 发布时用 git-chglog 生成变更日志（配置见 `.chglog/`）：
+
+```bash
+git-chglog -o CHANGELOG.md
 ```
 
 ---
@@ -148,6 +170,7 @@ cd web && npm run build && npm run lint
 - [ ] 插件 path 规则前后端已同步
 - [ ] 未引入 `svcerr` / `svclog` / `apperror`（已废弃）
 - [ ] Service 层无新增裸 SQL（走 repository）
+- [ ] Handler 统一 `import "yunshu/internal/service"`（不直引子包）
 - [ ] 敏感信息未写入日志或提交物
 
 ---

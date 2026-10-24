@@ -54,7 +54,12 @@ export function CiConfigDrawer({
           <Input placeholder="git@gitee.com:org/repo.git" />
         </Form.Item>
         <Form.Item name="ref_type" label="分支或 TAG">
-          <Select options={[{ label: "branch", value: "branch" }, { label: "tag", value: "tag" }]} />
+          <Select
+            options={[
+              { label: "branch", value: "branch" },
+              { label: "tag", value: "tag" },
+            ]}
+          />
         </Form.Item>
         <Form.Item
           name="ref_name"

@@ -11,6 +11,7 @@ import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -52,30 +53,26 @@ func (s *Service) ListServices(ctx context.Context, q ServiceListQuery) (*pagina
 		return nil, err
 	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	dbq := s.db.WithContext(ctx).Model(&model.CicdService{}).Where("project_id = ?", q.ProjectID)
 	unrestricted, ids, err := s.visibleCicdServiceScope(ctx, q.ProjectID, q.Actor)
 	if err != nil {
 		return nil, err
+	}
+	params := repository.CicdServiceListParams{
+		ProjectID:   q.ProjectID,
+		Keyword:     q.Keyword,
+		ServiceType: q.ServiceType,
+		Offset:      (page - 1) * pageSize,
+		Limit:       pageSize,
 	}
 	if !unrestricted {
 		if len(ids) == 0 {
 			return &pagination.Result[ServiceItem]{List: []ServiceItem{}, Total: 0, Page: page, PageSize: pageSize}, nil
 		}
-		dbq = dbq.Where("id IN ?", ids)
+		params.IDs = ids
+		params.RestrictIDs = true
 	}
-	if kw := strings.TrimSpace(q.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		dbq = dbq.Where("name LIKE ? OR identifier LIKE ?", like, like)
-	}
-	if st := strings.TrimSpace(q.ServiceType); st != "" {
-		dbq = dbq.Where("service_type = ?", st)
-	}
-	var total int64
-	if err := dbq.Count(&total).Error; err != nil {
-		return nil, err
-	}
-	var rows []model.CicdService
-	if err := dbq.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rows).Error; err != nil {
+	rows, total, err := s.repo.ListServices(ctx, params)
+	if err != nil {
 		return nil, err
 	}
 	serviceIDs := make([]uint, len(rows))
@@ -86,32 +83,15 @@ func (s *Service) ListServices(ctx context.Context, q ServiceListQuery) (*pagina
 	deployCnt := map[uint]int{}
 	lastBuild := map[uint]model.CicdBuildRun{}
 	if len(serviceIDs) > 0 {
-		var ciIDs []uint
-		_ = s.db.WithContext(ctx).Model(&model.CicdCiConfig{}).
-			Where("service_id IN ?", serviceIDs).
-			Distinct("service_id").
-			Pluck("service_id", &ciIDs).Error
+		ciIDs, _ := s.repo.PluckServiceIDsWithCI(ctx, serviceIDs)
 		for _, id := range ciIDs {
 			hasCI[id] = true
 		}
-		type deployRow struct {
-			ServiceID uint
-			Cnt       int64
-		}
-		var deployRows []deployRow
-		_ = s.db.WithContext(ctx).Model(&model.CicdDeployConfig{}).
-			Select("service_id, COUNT(*) AS cnt").
-			Where("service_id IN ? AND status = 1", serviceIDs).
-			Group("service_id").
-			Scan(&deployRows).Error
+		deployRows, _ := s.repo.CountDeployConfigsByServiceIDs(ctx, serviceIDs)
 		for _, d := range deployRows {
 			deployCnt[d.ServiceID] = int(d.Cnt)
 		}
-		var builds []model.CicdBuildRun
-		_ = s.db.WithContext(ctx).
-			Where("service_id IN ?", serviceIDs).
-			Order("id DESC").
-			Find(&builds).Error
+		builds, _ := s.repo.ListLatestBuildsByServiceIDs(ctx, serviceIDs)
 		for _, b := range builds {
 			if _, ok := lastBuild[b.ServiceID]; !ok {
 				lastBuild[b.ServiceID] = b
@@ -166,8 +146,7 @@ func (s *Service) GetService(ctx context.Context, projectID, serviceID uint, act
 			break
 		}
 	}
-	var ciCnt int64
-	_ = s.db.WithContext(ctx).Model(&model.CicdCiConfig{}).Where("service_id = ?", serviceID).Count(&ciCnt).Error
+	ciCnt, _ := s.repo.CountCIByService(ctx, serviceID)
 	item.HasCiConfig = ciCnt > 0
 	return &item, nil
 }
@@ -198,16 +177,17 @@ func (s *Service) UpsertService(ctx context.Context, serviceID uint, req Service
 	}
 	var row model.CicdService
 	if serviceID > 0 {
-		if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", serviceID, req.ProjectID).First(&row).Error; err != nil {
+		existing, err := s.repo.GetService(ctx, req.ProjectID, serviceID)
+		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, constants.ErrNotFound
 			}
 			return nil, err
 		}
+		row = *existing
 	} else {
-		var exists int64
-		if err := s.db.WithContext(ctx).Model(&model.CicdService{}).
-			Where("project_id = ? AND identifier = ?", req.ProjectID, identifier).Count(&exists).Error; err != nil {
+		exists, err := s.repo.CountDuplicateServiceIdentifier(ctx, req.ProjectID, 0, identifier)
+		if err != nil {
 			return nil, err
 		}
 		if exists > 0 {
@@ -224,15 +204,15 @@ func (s *Service) UpsertService(ctx context.Context, serviceID uint, req Service
 	row.Status = status
 	row.JenkinsJob = jenkinsJob
 	if serviceID > 0 {
-		if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
+		if err := s.repo.SaveService(ctx, &row); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+		if err := s.repo.CreateService(ctx, &row); err != nil {
 			return nil, err
 		}
 	}
-	syncCicdToServiceCatalog(ctx, s.db, &row)
+	syncCicdToServiceCatalog(ctx, s.catalogRepo, &row)
 	return &row, nil
 }
 
@@ -240,30 +220,16 @@ func (s *Service) DeleteService(ctx context.Context, projectID, serviceID uint) 
 	if _, err := s.loadService(ctx, projectID, serviceID); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("service_id = ?", serviceID).Delete(&model.CicdCiConfig{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("service_id = ?", serviceID).Delete(&model.CicdDeployConfig{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("service_id = ?", serviceID).Delete(&model.CicdBuildRun{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("service_id = ?", serviceID).Delete(&model.CicdReleaseRun{}).Error; err != nil {
-			return err
-		}
-		return tx.Where("id = ? AND project_id = ?", serviceID, projectID).Delete(&model.CicdService{}).Error
-	})
+	return s.repo.DeleteServiceCascade(ctx, projectID, serviceID)
 }
 
 func (s *Service) loadService(ctx context.Context, projectID, serviceID uint) (*model.CicdService, error) {
-	var row model.CicdService
-	if err := s.db.WithContext(ctx).Where("id = ? AND project_id = ?", serviceID, projectID).First(&row).Error; err != nil {
+	row, err := s.repo.GetService(ctx, projectID, serviceID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrNotFound
 		}
 		return nil, err
 	}
-	return &row, nil
+	return row, nil
 }

@@ -1,8 +1,24 @@
 import { extractApiErrorMessage } from "../../../services/http";
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Segmented, Select, Space, Switch, Table, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Segmented,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Typography,
+  message,
+} from "antd";
 import { PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useAlertMonitor } from "../context";
+import { useIdempotencyKey } from "../../../hooks/use-idempotency-key";
 import { tablePagination } from "../../../utils/table-pagination";
 import {
   approveMonitorRuleChange,
@@ -20,6 +36,7 @@ import {
 
 export function RulesTab() {
   const ctx = useAlertMonitor();
+  const { key: approveIdemKey, rotate: rotateApproveIdemKey } = useIdempotencyKey();
   const [tplOpen, setTplOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [tplLoading, setTplLoading] = useState(false);
@@ -54,10 +71,7 @@ export function RulesTab() {
     return Array.from(set);
   }, [templates]);
 
-  const filtered = useMemo(
-    () => (group ? templates.filter((t) => t.group === group) : templates),
-    [templates, group],
-  );
+  const filtered = useMemo(() => (group ? templates.filter((t) => t.group === group) : templates), [templates, group]);
 
   async function openTemplates() {
     setTplOpen(true);
@@ -75,10 +89,12 @@ export function RulesTab() {
 
   useEffect(() => {
     if (!selected) return;
+    const defaults = selected.default_params || {};
     form.setFieldsValue({
-      datasource_id: datasources[0]?.id,
+      datasource_id: selected.group === "log" ? undefined : datasources[0]?.id,
       name: selected.name,
-      threshold: selected.default_params?.threshold,
+      severity: selected.severity || "warning",
+      ...defaults,
     });
   }, [selected, datasources, form]);
 
@@ -87,16 +103,32 @@ export function RulesTab() {
     try {
       const v = await form.validateFields();
       const params: Record<string, string> = {};
-      if (v.threshold != null && String(v.threshold).trim() !== "") {
-        params.threshold = String(v.threshold);
+      const keys = Object.keys(selected.default_params || {});
+      for (const k of keys) {
+        if (v[k] != null && String(v[k]).trim() !== "") {
+          params[k] = String(v[k]);
+        }
+      }
+      const isLog = selected.group === "log" || selected.labels?.rule_kind === "log";
+      if (isLog && !ctx.projectContextId) {
+        message.warning("请先选择顶栏项目上下文，再创建日志告警规则");
+        return;
       }
       await createAlertMonitorRuleFromTemplate({
         template_id: selected.id,
-        datasource_id: Number(v.datasource_id),
+        datasource_id: isLog ? undefined : Number(v.datasource_id),
+        project_id: ctx.projectContextId || undefined,
         name: v.name,
+        severity: v.severity,
         params,
       });
-      message.success("已从模板创建规则（含 category label，可在订阅树按 category 路由）");
+      message.success(
+        isLog
+          ? "已创建日志告警规则（rule_kind=log，由日志评估器执行）"
+          : selected.group === "slo"
+            ? "已创建 SLO 燃尽规则（PromQL 多窗口模板）"
+            : "已从模板创建规则（含 category label，可在订阅树按 category 路由）",
+      );
       setTplOpen(false);
       setSelected(null);
       await ctx.loadRules(ctx.projectContextId);
@@ -130,7 +162,9 @@ export function RulesTab() {
         </Button>
         <Button
           icon={<ReloadOutlined />}
-          onClick={() => void Promise.all([ctx.loadRules(ctx.projectContextId), ctx.loadDatasources(ctx.projectContextId)])}
+          onClick={() =>
+            void Promise.all([ctx.loadRules(ctx.projectContextId), ctx.loadDatasources(ctx.projectContextId)])
+          }
         >
           刷新
         </Button>
@@ -152,7 +186,10 @@ export function RulesTab() {
         </Typography.Text>
       </Space>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        规则中心是唯一告警产生入口：平台定时对数据源执行 PromQL，命中后经屏蔽 / 抑制 / 订阅树投递到钉钉、企微、邮件等。可「新建规则」或「从模板创建」（含 Telegraf、blackbox、Pushgateway）。规则级「处理人」与值班表当前班次邮箱会在 outgoing 中合并去重。
+        规则中心是平台主告警入口：PromQL / SLO 燃尽 / 日志告警（ERROR 计数与突增）统一评估后，经屏蔽 / 抑制 /
+        订阅树投递。Alertmanager Webhook 仍可接入，但带
+        <Typography.Text code>monitor_rule_id</Typography.Text> /{" "}
+        <Typography.Text code>source=prometheus_monitor</Typography.Text> 的事件会被跳过，避免双发。
       </Typography.Paragraph>
       <Alert
         type="info"
@@ -180,7 +217,12 @@ export function RulesTab() {
           size="small"
           title={`待审批规则变更 (${pendingChanges.length})`}
           extra={
-            <Button size="small" icon={<ReloadOutlined />} loading={pendingLoading} onClick={() => void loadPendingChanges()}>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={pendingLoading}
+              onClick={() => void loadPendingChanges()}
+            >
               刷新
             </Button>
           }
@@ -211,14 +253,16 @@ export function RulesTab() {
               { title: "备注", dataIndex: "comment", ellipsis: true },
               {
                 title: "操作",
-                width: 160,
+                width: 180,
+                className: "yunshu-table-actions-cell",
                 render: (_: unknown, r: AlertMonitorRuleChangeItem) => (
-                  <Space>
+                  <Space size={0} wrap className="yunshu-table-actions">
                     <Button
                       size="small"
-                      type="primary"
+                      type="link"
                       onClick={() =>
-                        void approveMonitorRuleChange(r.id).then(async () => {
+                        void approveMonitorRuleChange(r.id, approveIdemKey).then(async () => {
+                          rotateApproveIdemKey();
                           message.success("已批准并应用");
                           await loadPendingChanges();
                           await ctx.loadRules(ctx.projectContextId);
@@ -229,6 +273,7 @@ export function RulesTab() {
                     </Button>
                     <Button
                       size="small"
+                      type="link"
                       danger
                       onClick={() =>
                         void rejectMonitorRuleChange(r.id).then(() => {
@@ -257,7 +302,7 @@ export function RulesTab() {
           total: ctx.ruleTotal,
           onChange: (page, pageSize) => ctx.onRuleTableChange(page, pageSize),
         })}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1280 }}
       />
 
       <Modal
@@ -302,24 +347,47 @@ export function RulesTab() {
         />
         {selected ? (
           <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-            <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: "请选择数据源" }]}>
-              <Select
-                options={datasources.map((d: AlertDatasourceItem) => ({
-                  value: d.id,
-                  label: `${d.name}${d.project_id ? ` (项目 ${d.project_id})` : ""}`,
-                }))}
+            {selected.group === "log" || selected.labels?.rule_kind === "log" ? (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="日志告警无需数据源"
+                description="将创建 rule_kind=log 规则，由平台日志评估器对 ES 计数/突增判定后走统一通知链路。请选择顶栏项目上下文。"
               />
-            </Form.Item>
+            ) : (
+              <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: "请选择数据源" }]}>
+                <Select
+                  options={datasources.map((d: AlertDatasourceItem) => ({
+                    value: d.id,
+                    label: d.project_name ? `${d.project_name} / ${d.name}` : d.name,
+                  }))}
+                />
+              </Form.Item>
+            )}
             <Form.Item name="name" label="规则名称">
               <Input />
             </Form.Item>
-            {selected.default_params?.threshold != null ? (
-              <Form.Item name="threshold" label="阈值 threshold">
-                <InputNumber style={{ width: "100%" }} />
+            <Form.Item name="severity" label="告警级别" rules={[{ required: true, message: "请选择级别" }]}>
+              <Select
+                options={[
+                  { value: "critical", label: "critical" },
+                  { value: "warning", label: "warning" },
+                  { value: "info", label: "info" },
+                ]}
+              />
+            </Form.Item>
+            {Object.keys(selected.default_params || {}).map((key) => (
+              <Form.Item key={key} name={key} label={key}>
+                <InputNumber style={{ width: "100%" }} stringMode />
               </Form.Item>
-            ) : null}
+            ))}
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              将写入 labels.category={selected.labels?.category || selected.group}，可在订阅树按 category 匹配路由。
+              {selected.group === "slo"
+                ? "SLO 模板为多窗口燃尽 PromQL，请按实际 SLI 指标修改 job/error_metric/total_metric/budget。"
+                : selected.group === "log"
+                  ? "创建后可在规则列表中配置处理人、值班；触发后走统一告警入站与订阅树通知。"
+                  : `将写入 labels.category=${selected.labels?.category || selected.group}，可在订阅树按 category 匹配路由。`}
             </Typography.Text>
           </Form>
         ) : null}
@@ -401,7 +469,12 @@ export function RulesTab() {
             rules={[{ required: true, message: "请粘贴 YAML" }]}
             extra="支持标准 groups[].rules[].alert；recording 规则自动跳过。"
           >
-            <Input.TextArea rows={12} placeholder={"groups:\n  - name: example\n    rules:\n      - alert: InstanceDown\n        expr: up == 0\n        for: 2m\n        labels:\n          severity: critical"} />
+            <Input.TextArea
+              rows={12}
+              placeholder={
+                "groups:\n  - name: example\n    rules:\n      - alert: InstanceDown\n        expr: up == 0\n        for: 2m\n        labels:\n          severity: critical"
+              }
+            />
           </Form.Item>
         </Form>
         {importPreview.length > 0 ? (

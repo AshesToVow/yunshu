@@ -2,12 +2,15 @@ package k8s
 
 import (
 	"context"
-
-	"yunshu/internal/model"
 	"log/slog"
+	"time"
+
+	"yunshu/internal/config"
+	"yunshu/internal/dictconfig"
+	"yunshu/internal/model"
 	"yunshu/internal/plugin"
+	"yunshu/internal/repository"
 	"yunshu/internal/service"
-	"yunshu/internal/service/k8s/eventforward"
 
 	"gorm.io/gorm"
 )
@@ -67,8 +70,15 @@ func (m *module) Models() []any {
 	}
 }
 
+func (m *module) PreMigrate(db *gorm.DB) error {
+	return migrateDropLegacyK8sGrantUnique(db)
+}
+
 func (m *module) PostMigrate(db *gorm.DB) error {
 	if err := migrateK8sLegacyRoleCodeToPrincipal(db); err != nil {
+		return err
+	}
+	if err := migrateK8sGrantsToK8mRoles(db); err != nil {
 		return err
 	}
 	return migrateDropLegacyK8sCasbinPolicies(db)
@@ -78,26 +88,60 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil || rt.DB == nil || rt.Config == nil {
 		return nil
 	}
-	runtimeSvc, _ := rt.K8sRuntime.(*service.K8sRuntimeService)
+	runtimeSvc, _ := plugin.As[*service.K8sRuntimeService](rt.K8sRuntime)
 	if runtimeSvc == nil {
 		return nil
 	}
-	mgr, err := eventforward.NewManager(
-		nil,
-		runtimeSvc,
-		rt.YamlK8sEventForwardBase,
-		rt.Config.Alert,
-		rt.Config.App.Port,
-		rt.DB,
-	)
+	start := func() (*service.EventForwardManager, error) {
+		return service.NewEventForwardManager(
+			repository.NewK8sEventForwardRepository(rt.DB),
+			runtimeSvc,
+			rt.YamlK8sEventForwardBase,
+			rt.Config.Alert,
+			rt.Config.App.Port,
+			func(ctx context.Context) config.K8sEventForwardConfig {
+				return dictconfig.ResolveK8sEventForwardConfig(
+					ctx, rt.DB, rt.YamlK8sEventForwardBase, dictconfig.DefaultK8sEventForwardDictTypes(),
+				)
+			},
+		)
+	}
+	mgr, err := start()
 	if err != nil {
 		slog.Default().With("component", "k8s.event_forward").Error(
-			"Failed to init K8s event forward manager; event alerting disabled until fix/restart",
+			"Failed to init K8s event forward manager; will retry in background",
 			"error", err,
 		)
+		go m.retryEventForward(bgCtx, start)
 		return nil
 	}
 	mgr.Start()
-	eventforward.SetActive(mgr)
+	service.SetEventForwardActive(mgr)
 	return nil
+}
+
+func (m *module) retryEventForward(bgCtx context.Context, start func() (*service.EventForwardManager, error)) {
+	log := slog.Default().With("component", "k8s.event_forward")
+	delay := 5 * time.Second
+	const maxDelay = 5 * time.Minute
+	for {
+		select {
+		case <-bgCtx.Done():
+			return
+		case <-time.After(delay):
+		}
+		mgr, err := start()
+		if err != nil {
+			log.Warn("K8s event forward manager retry failed", "error", err, "next_retry", delay.String())
+			delay *= 2
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+			continue
+		}
+		mgr.Start()
+		service.SetEventForwardActive(mgr)
+		log.Info("K8s event forward manager started after retry")
+		return
+	}
 }

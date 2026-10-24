@@ -45,3 +45,13 @@ func (h *OverviewHandler) ReleaseByPerson(c *gin.Context) {
 	}
 	response.Success(c, data)
 }
+
+// Screen 智慧运维大屏聚合数据。
+func (h *OverviewHandler) Screen(c *gin.Context) {
+	data, err := h.svc.Screen(c.Request.Context())
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, data)
+}

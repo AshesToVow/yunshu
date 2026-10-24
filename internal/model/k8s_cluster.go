@@ -25,13 +25,13 @@ type K8sCluster struct {
 
 	// Kubeconfig is stored encrypted (AES-GCM via security.encryption_key) so the backend can register via Kom.
 	// Excluded from API responses; only used internally. Legacy plaintext rows are accepted on read.
-	Kubeconfig string `json:"-" gorm:"type:longtext;not null;comment:可写凭证 kubeconfig(加密)"`
+	Kubeconfig string `json:"-" gorm:"type:text;not null;comment:可写凭证 kubeconfig(加密)"`
 
 	// KubeconfigReadonly 可选只读凭证；空则只读操作回退到 Kubeconfig。
-	KubeconfigReadonly string `json:"-" gorm:"type:longtext;comment:只读凭证 kubeconfig(加密)"`
+	KubeconfigReadonly string `json:"-" gorm:"type:text;comment:只读凭证 kubeconfig(加密)"`
 
 	// DirectConfig 直连配置 JSON（加密），当 ConnectionMode=direct 时使用
-	DirectConfig string `json:"-" gorm:"type:longtext;comment:直连配置JSON(加密)"`
+	DirectConfig string `json:"-" gorm:"type:text;comment:直连配置JSON(加密)"`
 
 	// ImpersonateEnabled 已废弃：保留列兼容旧库，运行时忽略，一律视为关闭。
 	ImpersonateEnabled bool `json:"impersonate_enabled" gorm:"not null;default:0;comment:已废弃-用户伪装"`

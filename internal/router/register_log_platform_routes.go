@@ -5,19 +5,20 @@ import (
 )
 
 // RegisterLogPlatformRoutes 日志平台全局能力（保留策略、ES 存储概览）。
-func RegisterLogPlatformRoutes(api *gin.RouterGroup, d *RouteDeps) {
+func RegisterLogPlatformRoutes(api *gin.RouterGroup, d LogPlatformRouteDeps) {
 	g := api.Group("/log-platform")
-	g.Use(d.authMiddleware, d.authorize, d.opAudit)
-	g.GET("/retention", d.logPlatformHandler.GetGlobalRetention)
-	g.PUT("/retention", d.logPlatformHandler.UpsertGlobalRetention)
-	g.GET("/retention/list", d.logPlatformHandler.ListRetentionPolicies)
-	g.GET("/es-storage", d.logPlatformHandler.StorageStats)
-	g.DELETE("/es-indices/:index", d.logPlatformHandler.DeleteESIndex)
-	g.GET("/es-config", d.loggieHandler.ESConfigPreview)
-	g.GET("/kafka-stats", d.logPlatformHandler.KafkaStats)
-	g.GET("/kafka-config", d.logPlatformHandler.KafkaConfigPreview)
-	g.DELETE("/kafka-topics/:topic", d.logPlatformHandler.DeleteKafkaTopic)
-	g.POST("/retention/cleanup", d.logPlatformHandler.RunCleanup)
+	g.Use(d.AuthMiddleware(), d.Authorize(), d.OpAudit())
+	g.GET("/retention", d.LogPlatformHandler().GetGlobalRetention)
+	g.PUT("/retention", d.LogPlatformHandler().UpsertGlobalRetention)
+	g.GET("/retention/list", d.LogPlatformHandler().ListRetentionPolicies)
+	g.GET("/es-storage", d.LogPlatformHandler().StorageStats)
+	g.DELETE("/es-indices/:index", d.LogPlatformHandler().DeleteESIndex)
+	g.GET("/es-config", d.LoggieHandler().ESConfigPreview)
+	g.PUT("/es-connection", d.LoggieHandler().SetESConnection)
+	g.GET("/kafka-stats", d.LogPlatformHandler().KafkaStats)
+	g.GET("/kafka-config", d.LogPlatformHandler().KafkaConfigPreview)
+	g.DELETE("/kafka-topics/:topic", d.LogPlatformHandler().DeleteKafkaTopic)
+	g.POST("/retention/cleanup", d.LogPlatformHandler().RunCleanup)
 
-	api.POST("/loggie/heartbeat/report", d.loggieHandler.ReportHeartbeat)
+	api.POST("/loggie/heartbeat/report", d.LoggieHandler().ReportHeartbeat)
 }

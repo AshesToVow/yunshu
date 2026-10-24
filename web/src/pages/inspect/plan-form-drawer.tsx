@@ -1,19 +1,6 @@
 // 巡检计划表单与巡检项/报告版式编辑弹窗（RF-10）。
 // 由 web/src/pages/project-inspect-page.tsx 原样搬迁，页面只保留状态与编排。
-import {
-  Alert,
-  Button,
-  Col,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Row,
-  Select,
-  Space,
-  Switch,
-  message,
-} from "antd";
+import { Alert, Button, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Switch, message } from "antd";
 import type { FormInstance } from "antd/es/form";
 import { Link } from "react-router-dom";
 import type { AlertDatasourceItem } from "../../services/alert-platform";
@@ -105,7 +92,7 @@ export function InspectPlanFormSection({
             </Form.Item>
             <Form.Item
               name="datasource_id"
-              label="Prometheus 数据源"
+              label="Prometheus / VictoriaMetrics 数据源"
               rules={[{ required: true, message: "请选择数据源" }]}
               extra={<Link to={`/alert-monitor-platform/datasources?project_id=${projectId}`}>管理数据源</Link>}
             >
@@ -118,11 +105,7 @@ export function InspectPlanFormSection({
                 placeholder="选择项目内数据源"
               />
             </Form.Item>
-            <Form.Item
-              name="cron_spec"
-              label="Cron 表达式"
-              extra="秒 分 时 日 月 周；可选手动输入自定义表达式"
-            >
+            <Form.Item name="cron_spec" label="Cron 表达式" extra="秒 分 时 日 月 周；可选手动输入自定义表达式">
               <Select
                 showSearch
                 allowClear
@@ -134,9 +117,7 @@ export function InspectPlanFormSection({
                     <div style={{ padding: 8 }}>
                       <Input
                         placeholder="自定义 Cron，回车填入"
-                        onPressEnter={(e) =>
-                          planForm.setFieldValue("cron_spec", (e.target as HTMLInputElement).value)
-                        }
+                        onPressEnter={(e) => planForm.setFieldValue("cron_spec", (e.target as HTMLInputElement).value)}
                       />
                     </div>
                   </>
@@ -167,11 +148,7 @@ export function InspectPlanFormSection({
             <Form.Item name="retain_days" label="报告保留天数（0=不清理）">
               <InputNumber min={0} max={3650} style={{ width: "100%" }} />
             </Form.Item>
-            <Form.Item
-              name="recipients"
-              label="邮件收件人"
-              extra="多个地址用逗号或空格分隔；需平台已配置发信"
-            >
+            <Form.Item name="recipients" label="邮件收件人" extra="多个地址用逗号或空格分隔；需平台已配置发信">
               <Input.TextArea rows={2} placeholder="ops@example.com, oncall@example.com" />
             </Form.Item>
           </Col>

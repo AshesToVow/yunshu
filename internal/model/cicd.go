@@ -231,7 +231,7 @@ type CicdRunStage struct {
 	StartedAt    *time.Time     `json:"started_at,omitempty"`
 	FinishedAt   *time.Time     `json:"finished_at,omitempty"`
 	DurationSec  int            `json:"duration_sec"`
-	Logs         string         `json:"logs" gorm:"type:longtext"`
+	Logs         string         `json:"logs" gorm:"type:text"`
 	ErrorMessage string         `json:"error_message" gorm:"size:1024"`
 	ExtraJSON    string         `json:"extra_json" gorm:"type:text;comment:阶段扩展（如 Sonar 指标）"`
 	CreatedAt    time.Time      `json:"created_at"`

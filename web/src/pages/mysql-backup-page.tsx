@@ -189,7 +189,9 @@ export function MysqlBackupPage() {
   useEffect(() => {
     if (!projectId) return;
     void loadInstances();
-    void listMysqldumpOptions(projectId).then(setMysqldumpOptions).catch(() => setMysqldumpOptions([]));
+    void listMysqldumpOptions(projectId)
+      .then(setMysqldumpOptions)
+      .catch(() => setMysqldumpOptions([]));
     setJobQuery((q) => ({ ...q, page: 1 }));
   }, [projectId, loadInstances]);
 
@@ -319,9 +321,7 @@ export function MysqlBackupPage() {
     const payload: MysqlBackupInstancePayload = {
       ...v,
       notify_enabled: v.notify_enabled,
-      notify_user_ids: v.notify_enabled
-        ? buildNotifyUserIds(primaryId, v.notify_extra_user_ids)
-        : [],
+      notify_user_ids: v.notify_enabled ? buildNotifyUserIds(primaryId, v.notify_extra_user_ids) : [],
     };
     delete (payload as { notify_extra_user_ids?: number[] }).notify_extra_user_ids;
     // 编辑时留空 = 不修改库中已保存密码；勿把空串提交上去
@@ -353,17 +353,26 @@ export function MysqlBackupPage() {
       render: (_, r) => r.server_name || `服务器 ID ${r.server_id}`,
       width: 160,
     },
-    { title: "MySQL", render: (_, r) => {
-      if (r.mysql_socket) return `${r.mysql_user}@socket:${r.mysql_socket}`;
-      return `${r.mysql_user}@${r.mysql_host}:${r.mysql_port}`;
-    }, ellipsis: true },
+    {
+      title: "MySQL",
+      render: (_, r) => {
+        if (r.mysql_socket) return `${r.mysql_user}@socket:${r.mysql_socket}`;
+        return `${r.mysql_user}@${r.mysql_host}:${r.mysql_port}`;
+      },
+      ellipsis: true,
+    },
     {
       title: "范围",
       width: 120,
       render: (_, r) => {
         if (isXtrabackupMode(r.backup_mode)) return <Tag>全量</Tag>;
         const s = r.backup_scope || "all";
-        if (s === "table") return <Tag color="cyan">{r.database_name}.{r.table_name}</Tag>;
+        if (s === "table")
+          return (
+            <Tag color="cyan">
+              {r.database_name}.{r.table_name}
+            </Tag>
+          );
         if (s === "database") return <Tag color="geekblue">{r.database_name || r.database_names || "单库"}</Tag>;
         return <Tag>全部库</Tag>;
       },
@@ -458,7 +467,10 @@ export function MysqlBackupPage() {
             执行备份
           </Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
-          <Popconfirm title="确定删除？" onConfirm={() => void deleteMysqlBackupInstance(projectId!, row.id).then(() => load())}>
+          <Popconfirm
+            title="确定删除？"
+            onConfirm={() => void deleteMysqlBackupInstance(projectId!, row.id).then(() => load())}
+          >
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -506,7 +518,8 @@ export function MysqlBackupPage() {
           running: "进行中",
           cancelled: "已取消",
         };
-        const color = s === "success" ? "success" : s === "failed" ? "error" : s === "cancelled" ? "warning" : "processing";
+        const color =
+          s === "success" ? "success" : s === "failed" ? "error" : s === "cancelled" ? "warning" : "processing";
         return <Tag color={color}>{labels[s] || s}</Tag>;
       },
     },
@@ -610,17 +623,21 @@ export function MysqlBackupPage() {
         style={{ marginBottom: 12 }}
         message={
           <span>
-            复用项目内服务器 SSH 凭据；归档至 MinIO 请在{" "}
-            <Link to="/dict-entries?keyword=minio_">数据字典</Link> 维护 <Typography.Text code>minio_*</Typography.Text>（连接与桶名）、
+            复用项目内服务器 SSH 凭据；归档至 MinIO 请在 <Link to="/dict-entries?keyword=minio_">数据字典</Link> 维护{" "}
+            <Typography.Text code>minio_*</Typography.Text>（连接与桶名）、
             <Typography.Text code>mysql_backup_scheduler_enabled</Typography.Text>（定时 Worker 总开关）等项。
             各实例的「备份 Cron」在下方表单填写（如每天 2 点）；字典中的{" "}
-            <Typography.Text code>mysql_backup_scheduler_tick_spec</Typography.Text> 仅为后台轮询间隔（默认每 30 秒检查是否到点），不是备份时间。
-            备份任务结束（成功/失败/取消）可在<strong>各备份实例</strong>中开启邮件通知：默认通知创建/主接收人（当前登录用户），并可下拉添加其他平台用户；须确保 <Typography.Text code>mail_*</Typography.Text> SMTP 可用。
-            MinIO 对象路径为 <Typography.Text code>前缀/项目名_IP_端口_时间.sql.gz</Typography.Text>（无 project_id 子目录）。
-            <strong>mysqldump</strong>：逻辑备份；<strong>xtrabackup / innobackupex</strong>：经 SSH 执行物理热备（MySQL 5.7 常用 innobackupex）。
-            文件命名统一为 <Typography.Text code>项目名_IP_端口_年月日_时分秒</Typography.Text>（CST，.sql.gz / .tar.gz）。
-            「检查备份」<strong>仅 xtrabackup 物理备份</strong>：按前缀匹配最新 <Typography.Text code>*.tar.gz</Typography.Text> 及同名日志（末行含 completed 标记）；mysqldump 逻辑备份无此按钮，请在「备份记录」查看任务结果。
-            上传 MinIO 可关；上传后<strong>不删除</strong>远端文件。
+            <Typography.Text code>mysql_backup_scheduler_tick_spec</Typography.Text> 仅为后台轮询间隔（默认每 30
+            秒检查是否到点），不是备份时间。 备份任务结束（成功/失败/取消）可在<strong>各备份实例</strong>
+            中开启邮件通知：默认通知创建/主接收人（当前登录用户），并可下拉添加其他平台用户；须确保{" "}
+            <Typography.Text code>mail_*</Typography.Text> SMTP 可用。 MinIO 对象路径为{" "}
+            <Typography.Text code>前缀/项目名_IP_端口_时间.sql.gz</Typography.Text>（无 project_id 子目录）。
+            <strong>mysqldump</strong>：逻辑备份；<strong>xtrabackup / innobackupex</strong>：经 SSH 执行物理热备（MySQL
+            5.7 常用 innobackupex）。 文件命名统一为{" "}
+            <Typography.Text code>项目名_IP_端口_年月日_时分秒</Typography.Text>（CST，.sql.gz / .tar.gz）。
+            「检查备份」<strong>仅 xtrabackup 物理备份</strong>：按前缀匹配最新{" "}
+            <Typography.Text code>*.tar.gz</Typography.Text> 及同名日志（末行含 completed 标记）；mysqldump
+            逻辑备份无此按钮，请在「备份记录」查看任务结果。 上传 MinIO 可关；上传后<strong>不删除</strong>远端文件。
           </span>
         }
       />
@@ -629,7 +646,16 @@ export function MysqlBackupPage() {
           {
             key: "instances",
             label: "备份实例",
-            children: <Table rowKey="id" loading={loading} columns={instanceColumns} dataSource={instances} scroll={{ x: 1100 }} pagination={false} />,
+            children: (
+              <Table
+                rowKey="id"
+                loading={loading}
+                columns={instanceColumns}
+                dataSource={instances}
+                scroll={{ x: 1100 }}
+                pagination={false}
+              />
+            ),
           },
           {
             key: "jobs",
@@ -673,7 +699,11 @@ export function MysqlBackupPage() {
             <Input />
           </Form.Item>
           <Form.Item name="server_id" label="目标服务器（SSH）" rules={[{ required: true }]}>
-            <Select options={servers.map((s) => ({ label: `${s.name} (${s.host})`, value: s.id }))} showSearch optionFilterProp="label" />
+            <Select
+              options={servers.map((s) => ({ label: `${s.name} (${s.host})`, value: s.id }))}
+              showSearch
+              optionFilterProp="label"
+            />
           </Form.Item>
           <Form.Item name="backup_mode" label="备份模式" rules={[{ required: true }]}>
             <Select
@@ -770,7 +800,11 @@ export function MysqlBackupPage() {
                           </Form.Item>
                         </>
                       ) : (
-                        <Form.Item name="database_names" label="多库（可选，逗号分隔）" extra="留空表示 --all-databases">
+                        <Form.Item
+                          name="database_names"
+                          label="多库（可选，逗号分隔）"
+                          extra="留空表示 --all-databases"
+                        >
                           <Input placeholder="db1,db2" />
                         </Form.Item>
                       )
@@ -1009,7 +1043,12 @@ export function MysqlBackupPage() {
         {logJob ? (
           <Space direction="vertical" style={{ width: "100%" }} size="middle">
             {logJob.error_message ? (
-              <Alert type="error" showIcon message="错误信息" description={<pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{logJob.error_message}</pre>} />
+              <Alert
+                type="error"
+                showIcon
+                message="错误信息"
+                description={<pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{logJob.error_message}</pre>}
+              />
             ) : null}
             <div>
               <Typography.Text type="secondary">执行日志（mysqldump 输出或远端 xtrabackup 日志尾部）</Typography.Text>

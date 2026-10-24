@@ -7,12 +7,15 @@ import (
 )
 
 // AlertMonitorRule 平台侧监控告警规则：周期性对 Prometheus 执行 PromQL，满足 for 后产生告警并走现有 Webhook/通道链路。
+// RuleKind=log 时走日志评估器；RuleKind=slo 仍为 PromQL（专用模板）。
 type AlertMonitorRule struct {
 	ID uint `json:"id" gorm:"primaryKey;comment:主键ID"`
 
-	DatasourceID uint   `json:"datasource_id" gorm:"not null;index;index:idx_alert_rule_eval,priority:1;comment:告警数据源ID"`
+	DatasourceID uint   `json:"datasource_id" gorm:"not null;default:0;index;index:idx_alert_rule_eval,priority:1;comment:告警数据源ID；日志规则可为0"`
+	ProjectID    uint   `json:"project_id" gorm:"not null;default:0;index;comment:项目ID；日志规则必填，PromQL 可从数据源继承"`
 	Name         string `json:"name" gorm:"size:128;not null;index;comment:规则名称"`
-	Expr         string `json:"expr" gorm:"type:text;not null;comment:PromQL 表达式"`
+	RuleKind     string `json:"rule_kind" gorm:"size:16;not null;default:promql;index;comment:promql|log|slo"`
+	Expr         string `json:"expr" gorm:"type:text;not null;comment:PromQL 表达式；日志规则存 JSON 配置"`
 
 	ForSeconds          int `json:"for_seconds" gorm:"not null;default:0;comment:持续满足秒数，类比 Prometheus for"`
 	EvalIntervalSeconds int `json:"eval_interval_seconds" gorm:"not null;default:30;comment:评估间隔秒"`
@@ -23,10 +26,23 @@ type AlertMonitorRule struct {
 	AnnotationsJSON string `json:"annotations_json" gorm:"type:text;comment:附加 annotations JSON"`
 	Enabled         bool   `json:"enabled" gorm:"not null;default:true;index;index:idx_alert_rule_eval,priority:2;comment:是否启用"`
 
+	Origin               string `json:"origin" gorm:"size:16;not null;default:manual;index;comment:manual|inspect|template"`
+	OriginInspectItemID  uint   `json:"origin_inspect_item_id" gorm:"not null;default:0;index;comment:来源巡检项ID"`
+
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
+
+const (
+	AlertRuleKindPromQL = "promql"
+	AlertRuleKindLog    = "log"
+	AlertRuleKindSLO    = "slo"
+
+	AlertRuleOriginManual   = "manual"
+	AlertRuleOriginInspect  = "inspect"
+	AlertRuleOriginTemplate = "template"
+)
 
 func (AlertMonitorRule) TableName() string {
 	return "alert_monitor_rules"

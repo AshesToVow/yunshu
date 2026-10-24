@@ -1,8 +1,23 @@
-import { DeleteOutlined, EyeOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Drawer, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography, message } from "antd";
+import { DeleteOutlined, ExperimentOutlined, EyeOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Drawer,
+  Input,
+  Modal,
+  Select,
+  Space,
+  Steps,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import {
   deleteBuildRun,
@@ -15,7 +30,8 @@ import {
   type CicdBuildRun,
   type CicdRunStage,
 } from "../services/cicd";
-import { analyzeCicdBuildFailAI, type AICicdBuildFailResult } from "../services/ai";
+import { analyzeCicdBuildFailAI, startAIInvestigation, type AICicdBuildFailResult } from "../services/ai";
+import { useAiEnabled } from "../hooks/use-ai-enabled";
 import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
@@ -45,6 +61,8 @@ function buildArtifactType(row: CicdBuildRun): "minio" | "helm" | "image" | null
 }
 
 export function CicdBuildRecordsPage() {
+  const navigate = useNavigate();
+  const { enabled: aiEnabled } = useAiEnabled();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [serviceKeyword, setServiceKeyword] = useState("");
@@ -65,6 +83,7 @@ export function CicdBuildRecordsPage() {
   const [logLoading, setLogLoading] = useState(false);
   const logPreRef = useRef<HTMLPreElement>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiInvestigateLoading, setAiInvestigateLoading] = useState(false);
   const [aiResult, setAiResult] = useState<AICicdBuildFailResult | null>(null);
 
   useEffect(() => {
@@ -126,6 +145,10 @@ export function CicdBuildRecordsPage() {
 
   async function handleAIAnalyze(run: CicdBuildRun | null) {
     if (!projectId || !run || aiLoading) return;
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
     setAiLoading(true);
     try {
       const res = await analyzeCicdBuildFailAI({ project_id: projectId, run_id: run.id });
@@ -139,6 +162,30 @@ export function CicdBuildRecordsPage() {
       message.error(extractApiErrorMessage(e, "AI 分析失败"));
     } finally {
       setAiLoading(false);
+    }
+  }
+
+  async function handleAIInvestigate(run: CicdBuildRun | null) {
+    if (!projectId || !run || aiInvestigateLoading) return;
+    if (!aiEnabled) {
+      message.warning("AI 未启用，请在数据字典开启 ai_enabled 并配置模型");
+      return;
+    }
+    setAiInvestigateLoading(true);
+    try {
+      const inv = await startAIInvestigation({
+        kind: "cicd",
+        title: `构建调查 #${run.build_number || run.id}`,
+        project_id: projectId,
+        run_id: run.id,
+        resource: String(run.id),
+      });
+      message.success(`调查已完成 #${inv.id}${inv.status === "awaiting_approval" ? "（待审批）" : ""}`);
+      navigate(`/ai/investigations?id=${inv.id}`);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "AI 调查失败"));
+    } finally {
+      setAiInvestigateLoading(false);
     }
   }
 
@@ -236,7 +283,12 @@ export function CicdBuildRecordsPage() {
 
   return (
     <div className="page-stack">
-      <PageTelemetryHeader label="[ CI ]" title="CI 打包记录" subtitle="Jenkins 构建历史与 Console 日志" meta={[`TOTAL / ${total}`]} />
+      <PageTelemetryHeader
+        label="[ CI ]"
+        title="CI 打包记录"
+        subtitle="Jenkins 构建历史与 Console 日志"
+        meta={[`TOTAL / ${total}`]}
+      />
       <Card bordered={false}>
         <Space wrap style={{ marginBottom: 16 }}>
           <Select
@@ -249,7 +301,14 @@ export function CicdBuildRecordsPage() {
               setPage(1);
             }}
           />
-          <Input.Search placeholder="搜索应用/构建人" style={{ width: 240 }} onSearch={(v) => { setServiceKeyword(v); setPage(1); }} />
+          <Input.Search
+            placeholder="搜索应用/构建人"
+            style={{ width: 240 }}
+            onSearch={(v) => {
+              setServiceKeyword(v);
+              setPage(1);
+            }}
+          />
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
             刷新
           </Button>
@@ -260,7 +319,15 @@ export function CicdBuildRecordsPage() {
           columns={columns}
           dataSource={rows}
           scroll={{ x: 1200 }}
-          pagination={{ current: page, pageSize, total, onChange: (p, ps) => { setPage(p); setPageSize(ps); } }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            onChange: (p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            },
+          }}
         />
       </Card>
 
@@ -276,14 +343,24 @@ export function CicdBuildRecordsPage() {
           setAiResult(null);
         }}
         extra={
-          <Button
-            type="primary"
-            loading={aiLoading}
-            disabled={!detail || !projectId}
-            onClick={() => void handleAIAnalyze(detail)}
-          >
-            AI 分析
-          </Button>
+          <Space>
+            <Button
+              type="primary"
+              loading={aiLoading}
+              disabled={!detail || !projectId}
+              onClick={() => void handleAIAnalyze(detail)}
+            >
+              AI 分析
+            </Button>
+            <Button
+              icon={<ExperimentOutlined />}
+              loading={aiInvestigateLoading}
+              disabled={!detail || !projectId}
+              onClick={() => void handleAIInvestigate(detail)}
+            >
+              AI 调查
+            </Button>
+          </Space>
         }
       >
         {detail && (
@@ -370,9 +447,7 @@ export function CicdBuildRecordsPage() {
                           ) : null}
                         </Space>
                       )}
-                      {st.error_message ? (
-                        <Typography.Text type="danger">{st.error_message}</Typography.Text>
-                      ) : null}
+                      {st.error_message ? <Typography.Text type="danger">{st.error_message}</Typography.Text> : null}
                       <pre
                         style={{
                           maxHeight: 220,
@@ -415,9 +490,7 @@ export function CicdBuildRecordsPage() {
                 </span>
               ))}
             </div>
-            {detail.image_address ? (
-              <Link to="/cicd/image-browser">在仓库中查看镜像 →</Link>
-            ) : null}
+            {detail.image_address ? <Link to="/cicd/image-browser">在仓库中查看镜像 →</Link> : null}
             {artifactsMeta.length > 0 && (
               <Table
                 size="small"
@@ -455,11 +528,7 @@ export function CicdBuildRecordsPage() {
             <Button onClick={() => logRun && void fetchLog(logRun, false)} loading={logLoading}>
               刷新
             </Button>
-            <Button
-              loading={aiLoading}
-              disabled={!logRun || !projectId}
-              onClick={() => void handleAIAnalyze(logRun)}
-            >
+            <Button loading={aiLoading} disabled={!logRun || !projectId} onClick={() => void handleAIAnalyze(logRun)}>
               AI 分析
             </Button>
             <Button type="primary" onClick={() => setLogOpen(false)}>

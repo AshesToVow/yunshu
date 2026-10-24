@@ -14,7 +14,7 @@ type K8sWorkloadSnapshot struct {
 	Namespace string         `json:"namespace" gorm:"size:128;not null;index"`
 	Kind      string         `json:"kind" gorm:"size:64;not null"`
 	Name      string         `json:"name" gorm:"size:256;not null;index"`
-	YAML      string         `json:"yaml" gorm:"type:longtext;not null"`
+	YAML      string         `json:"yaml" gorm:"type:text;not null"`
 	ActorID   *uint          `json:"actor_id"`
 	Reason    string         `json:"reason" gorm:"size:128"`
 	CreatedAt time.Time      `json:"created_at"`

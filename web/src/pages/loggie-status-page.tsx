@@ -9,7 +9,24 @@ import {
   SyncOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Checkbox, Dropdown, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Dropdown,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -58,7 +75,10 @@ export function LoggieStatusPage() {
   const [addServerId, setAddServerId] = useState<number>();
   const [form] = Form.useForm();
 
-  const projectOptions = useMemo(() => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })), [projects]);
+  const projectOptions = useMemo(
+    () => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })),
+    [projects],
+  );
   const addServerOptions = useMemo(
     () =>
       rows.map((r) => ({
@@ -247,21 +267,20 @@ export function LoggieStatusPage() {
       title: "监控/FD",
       width: 140,
       render: (_, r) => {
-        const active = r.live_probe?.reachable
-          ? r.live_probe.active_fd_count
-          : (r.active_fd_count ?? 0);
-        const inactive = r.live_probe?.reachable
-          ? r.live_probe.inactive_fd_count
-          : (r.inactive_fd_count ?? 0);
+        const active = r.live_probe?.reachable ? r.live_probe.active_fd_count : (r.active_fd_count ?? 0);
+        const inactive = r.live_probe?.reachable ? r.live_probe.inactive_fd_count : (r.inactive_fd_count ?? 0);
         const tip = [
           "活跃 FD / 不活跃 FD（追平后 active 常为 0，有 inactive 仍表示已挂载文件）",
           "「采集」= 近期有写入 ES，与 FD 是否活跃无关",
           r.live_probe?.error || r.monitor_detail || `索引 yunshu-agent-${r.server_id}-*`,
-        ].filter(Boolean).join("；");
+        ]
+          .filter(Boolean)
+          .join("；");
         return (
           <Tooltip title={tip}>
             <span>
-              {r.monitor_reachable || r.live_probe?.reachable ? `:${r.monitor_port ?? 9196}` : "-"} / {active}+{inactive}
+              {r.monitor_reachable || r.live_probe?.reachable ? `:${r.monitor_port ?? 9196}` : "-"} / {active}+
+              {inactive}
             </span>
           </Tooltip>
         );
@@ -277,8 +296,9 @@ export function LoggieStatusPage() {
     { title: "错误", dataIndex: "last_error", ellipsis: true, width: 160 },
     {
       title: "操作",
-      width: 260,
+      width: 360,
       fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_, r) => {
         const busy = (a: AgentAction) => actionLoading === `${a}-${r.server_id}`;
         const more = [
@@ -303,14 +323,27 @@ export function LoggieStatusPage() {
           },
         ];
         return (
-          <Space size={4} wrap={false}>
+          <Space size={4} wrap className="yunshu-table-actions">
             <Button size="small" type="link" icon={<ThunderboltOutlined />} onClick={() => void openBootstrap(r)}>
               引导
             </Button>
-            <Button size="small" type="link" icon={<PoweroffOutlined />} loading={busy("install")} onClick={() => void runDeployAction(r, "install")}>
+            <Button
+              size="small"
+              type="link"
+              icon={<PoweroffOutlined />}
+              loading={busy("install")}
+              onClick={() => void runDeployAction(r, "install")}
+            >
               安装
             </Button>
-            <Button size="small" type="link" icon={<SyncOutlined />} disabled={!r.registered} loading={busy("sync")} onClick={() => void runDeployAction(r, "sync")}>
+            <Button
+              size="small"
+              type="link"
+              icon={<SyncOutlined />}
+              disabled={!r.registered}
+              loading={busy("sync")}
+              onClick={() => void runDeployAction(r, "sync")}
+            >
               热更
             </Button>
             <Popconfirm
@@ -322,7 +355,14 @@ export function LoggieStatusPage() {
               disabled={!r.registered}
               onConfirm={() => void runDeployAction(r, "uninstall")}
             >
-              <Button size="small" type="link" danger icon={<DeleteOutlined />} disabled={!r.registered} loading={busy("uninstall")}>
+              <Button
+                size="small"
+                type="link"
+                danger
+                icon={<DeleteOutlined />}
+                disabled={!r.registered}
+                loading={busy("uninstall")}
+              >
                 删除
               </Button>
             </Popconfirm>
@@ -434,7 +474,11 @@ export function LoggieStatusPage() {
               placeholder="选择服务器"
             />
           </Form.Item>
-          <Alert type="info" showIcon message="流程：引导生成 Token/配置 → 一键安装（上传离线二进制 + 启用 Loggie 与心跳）" />
+          <Alert
+            type="info"
+            showIcon
+            message="流程：引导生成 Token/配置 → 一键安装（上传离线二进制 + 启用 Loggie 与心跳）"
+          />
         </Form>
       </Modal>
 
@@ -449,7 +493,11 @@ export function LoggieStatusPage() {
         footer={
           bootstrapResult ? (
             <Space>
-              <Button onClick={() => bootstrapResult && downloadLoggieBundle(bootstrapResult)} type="primary" icon={<DownloadOutlined />}>
+              <Button
+                onClick={() => bootstrapResult && downloadLoggieBundle(bootstrapResult)}
+                type="primary"
+                icon={<DownloadOutlined />}
+              >
                 下载全部文件
               </Button>
               <Button
@@ -472,12 +520,23 @@ export function LoggieStatusPage() {
         }
       >
         {!bootstrapResult ? (
-          <Form form={form} layout="vertical" initialValues={{ auto_from_log_sources: true, deploy_dir: "/export/loggie" }}>
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={{ auto_from_log_sources: true, deploy_dir: "/export/loggie" }}
+          >
             <Form.Item name="auto_from_log_sources" valuePropName="checked">
               <Checkbox>从 CMDB 日志源自动生成 pipeline（字段含 service_name / project / server）</Checkbox>
             </Form.Item>
             {bootstrapSources.length > 0 ? (
-              <Table size="small" rowKey="log_source_id" columns={sourceColumns} dataSource={bootstrapSources} pagination={false} style={{ marginBottom: 16 }} />
+              <Table
+                size="small"
+                rowKey="log_source_id"
+                columns={sourceColumns}
+                dataSource={bootstrapSources}
+                pagination={false}
+                style={{ marginBottom: 16 }}
+              />
             ) : (
               <Tag color="warning" style={{ marginBottom: 12 }}>
                 该服务器暂无已启用的文件类日志源

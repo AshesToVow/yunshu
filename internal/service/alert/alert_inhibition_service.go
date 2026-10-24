@@ -289,6 +289,12 @@ func (s *AlertInhibitionService) CheckInhibition(ctx context.Context, targetLabe
 		if m == nil {
 			continue
 		}
+		// 项目级抑制规则仅作用于同项目告警；全局规则 (project_id=0) 仍可跨项目
+		if rule.ProjectID > 0 {
+			if parseLabelUintOrZero(targetLabels["project_id"]) != rule.ProjectID {
+				continue
+			}
+		}
 
 		// 首先检查目标告警是否匹配目标条件
 		if !matchLabels(targetLabels, m.targetMatchLabels, m.targetMatchRegex) {

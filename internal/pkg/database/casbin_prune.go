@@ -9,9 +9,11 @@ func PruneInvalidCasbinRules(db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
-	switch db.Dialector.Name() {
-	case "postgres":
+	switch {
+	case IsPostgres(db.Dialector.Name()):
 		return db.Exec(`DELETE FROM casbin_rule WHERE ptype IS NULL OR ptype = '' OR ptype !~ '^(p|g)[0-9]*$'`).Error
+	case IsDameng(db.Dialector.Name()):
+		return db.Exec(`DELETE FROM casbin_rule WHERE ptype IS NULL OR ptype = '' OR NOT REGEXP_LIKE(ptype, '^(p|g)[0-9]*$')`).Error
 	default:
 		return db.Exec(`DELETE FROM casbin_rule WHERE ptype IS NULL OR ptype = '' OR ptype NOT REGEXP '^(p|g)[0-9]*$'`).Error
 	}

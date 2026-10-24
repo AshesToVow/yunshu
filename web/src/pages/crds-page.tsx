@@ -27,7 +27,7 @@ export function CrdsPage() {
       api={{
         list: async ({ clusterId, keyword }) => await listCrds(clusterId, keyword),
         detail: async ({ clusterId, name }) => await getCrdDetail(clusterId, name),
-        apply: async ({ clusterId, manifest }) => await applyCrd(clusterId, manifest),
+        apply: async ({ clusterId, manifest, idemKey }) => await applyCrd(clusterId, manifest, idemKey),
         remove: async (args) => await deleteCrd(args.clusterId, args.name, args),
       }}
       createTemplate={() => `apiVersion: apiextensions.k8s.io/v1

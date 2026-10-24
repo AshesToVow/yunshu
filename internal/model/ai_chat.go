@@ -16,7 +16,7 @@ type AiChatSession struct {
 	Provider      string         `json:"provider" gorm:"size:64"`
 	EnableTools   bool           `json:"enable_tools" gorm:"not null;default:true"`
 	EnableWrite   bool           `json:"enable_write" gorm:"not null;default:false"`
-	ContextJSON   string         `json:"context_json,omitempty" gorm:"type:mediumtext"` // 结构化 Memory
+	ContextJSON   string         `json:"context_json,omitempty" gorm:"type:text"` // 结构化 Memory
 	LastMessageAt *time.Time     `json:"last_message_at,omitempty" gorm:"index"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
@@ -30,8 +30,8 @@ type AiChatMessage struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	SessionID uint      `json:"session_id" gorm:"not null;index"`
 	Role      string    `json:"role" gorm:"size:16;not null;index"` // user|assistant
-	Content   string    `json:"content" gorm:"type:longtext"`
-	MetaJSON  string    `json:"meta_json,omitempty" gorm:"type:mediumtext"`
+	Content   string    `json:"content" gorm:"type:text"`
+	MetaJSON  string    `json:"meta_json,omitempty" gorm:"type:text"`
 	CreatedAt time.Time `json:"created_at" gorm:"index"`
 }
 
