@@ -3,21 +3,21 @@ package handler
 import (
 	"context"
 	"strconv"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
-	workflowsvc "yunshu/internal/service/workflow"
 
 	"github.com/gin-gonic/gin"
 )
 
 type WorkflowHandler struct {
-	svc *workflowsvc.Service
+	svc *service.WorkflowService
 }
 
-func NewWorkflowHandler(svc *workflowsvc.Service) *WorkflowHandler {
+func NewWorkflowHandler(svc *service.WorkflowService) *WorkflowHandler {
 	return &WorkflowHandler{svc: svc}
 }
 
@@ -29,7 +29,7 @@ func (h *WorkflowHandler) GetDefinition(c *gin.Context) {
 	domain := c.Param("domain")
 	projectID, _ := strconv.ParseUint(c.Param("project_id"), 10, 64)
 	ticketType := c.DefaultQuery("ticket_type", model.WorkflowTicketTypeDefault)
-	def, err := h.svc.GetDefinition(c.Request.Context(), workflowsvc.DefinitionKey{
+	def, err := h.svc.GetDefinition(c.Request.Context(), service.DefinitionKey{
 		Domain: domain, ProjectID: uint(projectID), TicketType: ticketType,
 	}, defaultStagesForDomain(domain))
 	if err != nil {
@@ -43,15 +43,15 @@ func (h *WorkflowHandler) UpsertDefinition(c *gin.Context) {
 	domain := c.Param("domain")
 	projectID, _ := strconv.ParseUint(c.Param("project_id"), 10, 64)
 	ticketType := c.DefaultQuery("ticket_type", model.WorkflowTicketTypeDefault)
-	ServeJSON(c, func(ctx context.Context, req workflowsvc.DefinitionUpsertRequest) (*workflowsvc.DefinitionResponse, error) {
-		return h.svc.UpsertDefinition(ctx, workflowsvc.DefinitionKey{
+	ServeJSON(c, func(ctx context.Context, req service.DefinitionUpsertRequest) (*service.DefinitionResponse, error) {
+		return h.svc.UpsertDefinition(ctx, service.DefinitionKey{
 			Domain: domain, ProjectID: uint(projectID), TicketType: ticketType,
 		}, req)
 	})
 }
 
 func (h *WorkflowHandler) ListPending(c *gin.Context) {
-	var q workflowsvc.PendingListQuery
+	var q service.PendingListQuery
 	if err := c.ShouldBindQuery(&q); err != nil {
 		response.Error(c, constants.ErrBadRequest)
 		return
@@ -85,13 +85,13 @@ func (h *WorkflowHandler) ReviewPendingStep(c *gin.Context) {
 		response.Error(c, constants.ErrNotLoggedIn)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req workflowsvc.ReviewStepRequest) (*workflowsvc.TicketDetail, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ReviewStepRequest) (*service.TicketDetail, error) {
 		return h.svc.ReviewStep(ctx, ticketID, stepID, req, actor)
 	})
 }
 
 func (h *WorkflowHandler) ListTickets(c *gin.Context) {
-	var q workflowsvc.TicketListQuery
+	var q service.WorkflowTicketListQuery
 	if err := c.ShouldBindQuery(&q); err != nil {
 		response.Error(c, constants.ErrBadRequest)
 		return
@@ -120,7 +120,7 @@ func (h *WorkflowHandler) TicketDetail(c *gin.Context) {
 
 func (h *WorkflowHandler) CreateTicket(c *gin.Context) {
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeJSON201(c, func(ctx context.Context, req workflowsvc.CreateTicketRequest) (*workflowsvc.TicketDetail, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.CreateTicketRequest) (*service.TicketDetail, error) {
 		return h.svc.CreateTicket(ctx, req, actor)
 	})
 }
@@ -141,7 +141,7 @@ func (h *WorkflowHandler) ReviewStep(c *gin.Context) {
 		response.Error(c, constants.ErrNotLoggedIn)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req workflowsvc.ReviewStepRequest) (*workflowsvc.TicketDetail, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ReviewStepRequest) (*service.TicketDetail, error) {
 		return h.svc.ReviewStep(ctx, ticketID, stepID, req, actor)
 	})
 }
@@ -172,7 +172,7 @@ func (h *WorkflowHandler) CreateIncidentFromAlert(c *gin.Context) {
 
 // CreateIncidentFromAlertRef POST /alerts/to-ticket：支持 alert_event_id 或 fingerprint。
 func (h *WorkflowHandler) CreateIncidentFromAlertRef(c *gin.Context) {
-	var req workflowsvc.CreateIncidentFromAlertRefRequest
+	var req service.CreateIncidentFromAlertRefRequest
 	_ = c.ShouldBindJSON(&req)
 	actor, ok := auth.CurrentUserFromContext(c)
 	if !ok {
@@ -187,16 +187,16 @@ func (h *WorkflowHandler) CreateIncidentFromAlertRef(c *gin.Context) {
 	response.Success(c, data)
 }
 
-func defaultStagesForDomain(domain string) []workflowsvc.StageItem {
+func defaultStagesForDomain(domain string) []service.StageItem {
 	switch domain {
 	case model.WorkflowDomainDbmgmt:
-		return workflowsvc.DefaultDbmgmtStages()
+		return service.DefaultDbmgmtStages()
 	case model.WorkflowDomainCicd:
-		return workflowsvc.DefaultCicdStages()
+		return service.DefaultCicdStages()
 	case model.WorkflowDomainIncident:
-		return workflowsvc.DefaultIncidentStages()
+		return service.DefaultIncidentStages()
 	case model.WorkflowDomainAI:
-		return []workflowsvc.StageItem{{
+		return []service.StageItem{{
 			StageKey: "ai_ops", StageName: "AI 运维审批", SortOrder: 10,
 			Enabled: true, AssigneeRuleType: model.WorkflowAssigneePlatformRole,
 		}}

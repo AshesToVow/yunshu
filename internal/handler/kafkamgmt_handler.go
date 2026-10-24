@@ -2,16 +2,16 @@ package handler
 
 import (
 	"yunshu/internal/pkg/response"
-	kafkamgmtsvc "yunshu/internal/service/kafkamgmt"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type KafkamgmtHandler struct {
-	svc *kafkamgmtsvc.Service
+	svc *service.KafkamgmtService
 }
 
-func NewKafkamgmtHandler(svc *kafkamgmtsvc.Service) *KafkamgmtHandler {
+func NewKafkamgmtHandler(svc *service.KafkamgmtService) *KafkamgmtHandler {
 	return &KafkamgmtHandler{svc: svc}
 }
 
@@ -25,7 +25,7 @@ func (h *KafkamgmtHandler) ListConnections(c *gin.Context) {
 }
 
 func (h *KafkamgmtHandler) CreateConnection(c *gin.Context) {
-	var req kafkamgmtsvc.ConnectionUpsertRequest
+	var req service.KafkamgmtConnectionUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -53,7 +53,7 @@ func (h *KafkamgmtHandler) UpdateConnection(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req kafkamgmtsvc.ConnectionUpsertRequest
+	var req service.KafkamgmtConnectionUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -94,7 +94,7 @@ func (h *KafkamgmtHandler) PingConnection(c *gin.Context) {
 }
 
 func (h *KafkamgmtHandler) TestConnection(c *gin.Context) {
-	var req kafkamgmtsvc.TestConnectionRequest
+	var req service.KafkamgmtTestConnectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -150,7 +150,7 @@ func (h *KafkamgmtHandler) GetTopicConfig(c *gin.Context) {
 }
 
 func (h *KafkamgmtHandler) CreateTopic(c *gin.Context) {
-	var req kafkamgmtsvc.CreateTopicRequest
+	var req service.CreateTopicRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -163,7 +163,7 @@ func (h *KafkamgmtHandler) CreateTopic(c *gin.Context) {
 }
 
 func (h *KafkamgmtHandler) DeleteTopic(c *gin.Context) {
-	var req kafkamgmtsvc.DeleteTopicRequest
+	var req service.DeleteTopicRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -176,7 +176,7 @@ func (h *KafkamgmtHandler) DeleteTopic(c *gin.Context) {
 }
 
 func (h *KafkamgmtHandler) CreatePartitions(c *gin.Context) {
-	var req kafkamgmtsvc.CreatePartitionsRequest
+	var req service.CreatePartitionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -189,7 +189,7 @@ func (h *KafkamgmtHandler) CreatePartitions(c *gin.Context) {
 }
 
 func (h *KafkamgmtHandler) Produce(c *gin.Context) {
-	var req kafkamgmtsvc.ProduceRequest
+	var req service.ProduceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -202,7 +202,7 @@ func (h *KafkamgmtHandler) Produce(c *gin.Context) {
 }
 
 func (h *KafkamgmtHandler) Consume(c *gin.Context) {
-	var req kafkamgmtsvc.ConsumeRequest
+	var req service.ConsumeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -249,7 +249,7 @@ func (h *KafkamgmtHandler) GetGroupLag(c *gin.Context) {
 }
 
 func (h *KafkamgmtHandler) DeleteGroup(c *gin.Context) {
-	var req kafkamgmtsvc.DeleteGroupRequest
+	var req service.DeleteGroupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

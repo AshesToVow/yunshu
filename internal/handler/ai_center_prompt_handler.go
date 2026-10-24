@@ -3,7 +3,7 @@ package handler
 import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	aisvc "yunshu/internal/service/ai"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -41,7 +41,7 @@ func (h *AIHandler) PublishPrompt(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.PromptPublishRequest
+	var req service.PromptPublishRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -92,7 +92,7 @@ func (h *AIHandler) GetPrompt(c *gin.Context) {
 }
 
 func (h *AIHandler) CreatePrompt(c *gin.Context) {
-	var req aisvc.PromptUpsertRequest
+	var req service.PromptUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -118,7 +118,7 @@ func (h *AIHandler) UpdatePrompt(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.PromptUpsertRequest
+	var req service.PromptUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

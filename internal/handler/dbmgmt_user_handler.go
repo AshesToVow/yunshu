@@ -4,11 +4,11 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,7 +42,7 @@ func (h *DbmgmtHandler) ListAppUserRequests(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeQuery(c, func(ctx context.Context, q dbmgmtsvc.AppUserRequestListQuery) (*pagination.Result[dbmgmtsvc.AppUserRequestItem], error) {
+	ServeQuery(c, func(ctx context.Context, q service.AppUserRequestListQuery) (*pagination.Result[service.AppUserRequestItem], error) {
 		q.ProjectID = projectID
 		if q.Mine {
 			if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
@@ -59,7 +59,7 @@ func (h *DbmgmtHandler) CreateAppUserRequest(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req dbmgmtsvc.AppUserRequestCreateRequest) (*dbmgmtsvc.AppUserRequestItem, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.AppUserRequestCreateRequest) (*service.AppUserRequestItem, error) {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.CreateAppUserRequest(ctx, projectID, req, actor)
 	})
@@ -76,7 +76,7 @@ func (h *DbmgmtHandler) ApproveAppUserRequest(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.ReviewRequest) error {
+	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req service.DbmgmtReviewRequest) error {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.ApproveAppUserRequest(ctx, projectID, requestID, req.Comment, actor)
 	})
@@ -93,7 +93,7 @@ func (h *DbmgmtHandler) RejectAppUserRequest(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.ReviewRequest) error {
+	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req service.DbmgmtReviewRequest) error {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.RejectAppUserRequest(ctx, projectID, requestID, req.Comment, actor)
 	})

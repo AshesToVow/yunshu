@@ -6,8 +6,6 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
-	"yunshu/internal/service/alert"
-	k8ssvc "yunshu/internal/service/k8s"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,18 +32,18 @@ func NewPlatformFeaturesHandler(
 	}
 }
 
-func (h *PlatformFeaturesHandler) ruleChangeSvc() *alert.AlertRuleChangeService {
-	return alert.NewAlertRuleChangeService(h.ruleChangeRepo, h.monitorRules)
+func (h *PlatformFeaturesHandler) ruleChangeSvc() *service.AlertRuleChangeService {
+	return service.NewAlertRuleChangeService(h.ruleChangeRepo, h.monitorRules)
 }
 
-func (h *PlatformFeaturesHandler) crTemplateSvc() *k8ssvc.K8sCrTemplateService {
-	return k8ssvc.NewK8sCrTemplateService(h.crTemplateRepo)
+func (h *PlatformFeaturesHandler) crTemplateSvc() *service.K8sCrTemplateService {
+	return service.NewK8sCrTemplateService(h.crTemplateRepo)
 }
 
 func (h *PlatformFeaturesHandler) ListPromqlSavedQueries(c *gin.Context) {
 	userID, _ := currentAlertUser(c)
 	ServeQuery(c, func(ctx context.Context, _ struct{}) (gin.H, error) {
-		svc := alert.NewPromqlSavedQueryService(h.promqlSavedRepo)
+		svc := service.NewPromqlSavedQueryService(h.promqlSavedRepo)
 		list, err := svc.List(ctx, userID)
 		if err != nil {
 			return nil, err
@@ -56,8 +54,8 @@ func (h *PlatformFeaturesHandler) ListPromqlSavedQueries(c *gin.Context) {
 
 func (h *PlatformFeaturesHandler) CreatePromqlSavedQuery(c *gin.Context) {
 	userID, _ := currentAlertUser(c)
-	ServeJSON(c, func(ctx context.Context, req alert.PromqlSavedQueryUpsertRequest) (any, error) {
-		return alert.NewPromqlSavedQueryService(h.promqlSavedRepo).Create(ctx, userID, req)
+	ServeJSON(c, func(ctx context.Context, req service.PromqlSavedQueryUpsertRequest) (any, error) {
+		return service.NewPromqlSavedQueryService(h.promqlSavedRepo).Create(ctx, userID, req)
 	})
 }
 
@@ -68,7 +66,7 @@ func (h *PlatformFeaturesHandler) DeletePromqlSavedQuery(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := alert.NewPromqlSavedQueryService(h.promqlSavedRepo).Delete(c.Request.Context(), userID, id); err != nil {
+	if err := service.NewPromqlSavedQueryService(h.promqlSavedRepo).Delete(c.Request.Context(), userID, id); err != nil {
 		abortService(c, err)
 		return
 	}
@@ -77,7 +75,7 @@ func (h *PlatformFeaturesHandler) DeletePromqlSavedQuery(c *gin.Context) {
 
 func (h *PlatformFeaturesHandler) ProposeRuleChange(c *gin.Context) {
 	userID, _ := currentAlertUser(c)
-	ServeJSON(c, func(ctx context.Context, req alert.ProposeRuleChangeRequest) (any, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ProposeRuleChangeRequest) (any, error) {
 		return h.ruleChangeSvc().Propose(ctx, userID, req)
 	})
 }
@@ -155,7 +153,7 @@ func (h *PlatformFeaturesHandler) UpdateCrTemplate(c *gin.Context) {
 		abortService(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req k8ssvc.K8sCrTemplateUpsertRequest) (any, error) {
+	ServeJSON(c, func(ctx context.Context, req service.K8sCrTemplateUpsertRequest) (any, error) {
 		return h.crTemplateSvc().Update(ctx, id, req)
 	})
 }

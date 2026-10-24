@@ -3,7 +3,7 @@ package handler
 import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	aisvc "yunshu/internal/service/ai"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -52,7 +52,7 @@ func (h *AIHandler) GetSOP(c *gin.Context) {
 }
 
 func (h *AIHandler) CreateSOP(c *gin.Context) {
-	var req aisvc.SOPUpsertRequest
+	var req service.SOPUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -78,7 +78,7 @@ func (h *AIHandler) UpdateSOP(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.SOPUpsertRequest
+	var req service.SOPUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -123,7 +123,7 @@ func (h *AIHandler) GetCase(c *gin.Context) {
 }
 
 func (h *AIHandler) CreateCase(c *gin.Context) {
-	var req aisvc.IncidentCaseUpsertRequest
+	var req service.IncidentCaseUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -149,7 +149,7 @@ func (h *AIHandler) UpdateCase(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.IncidentCaseUpsertRequest
+	var req service.IncidentCaseUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -178,7 +178,7 @@ func (h *AIHandler) DeleteCase(c *gin.Context) {
 }
 
 func (h *AIHandler) CreateKB(c *gin.Context) {
-	var req aisvc.KBUpsertRequest
+	var req service.KBUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -199,7 +199,7 @@ func (h *AIHandler) UpdateKB(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.KBUpsertRequest
+	var req service.KBUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -257,7 +257,7 @@ func (h *AIHandler) GetKBDocument(c *gin.Context) {
 }
 
 func (h *AIHandler) CreateKBDocument(c *gin.Context) {
-	var req aisvc.KBDocUpsertRequest
+	var req service.KBDocUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -283,7 +283,7 @@ func (h *AIHandler) UpdateKBDocument(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.KBDocUpsertRequest
+	var req service.KBDocUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

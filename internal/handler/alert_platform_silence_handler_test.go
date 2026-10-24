@@ -14,7 +14,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/repository"
-	"yunshu/internal/service/alert"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -70,10 +70,52 @@ func (f *silenceRepoFake) ListPaged(ctx context.Context, projectID uint, keyword
 
 var _ repository.AlertSilenceRepo = (*silenceRepoFake)(nil)
 
+type memberRepoFake struct{}
+
+func (m *memberRepoFake) ListByProject(ctx context.Context, projectID uint) ([]model.ProjectMember, error) {
+	return nil, nil
+}
+
+func (m *memberRepoFake) ListUserIDsByProject(ctx context.Context, projectID uint) ([]uint, error) {
+	return nil, nil
+}
+
+func (m *memberRepoFake) DeleteByUserID(ctx context.Context, userID uint) error { return nil }
+
+func (m *memberRepoFake) ListRolesByUserAndProjectIDs(ctx context.Context, userID uint, projectIDs []uint) (map[uint]string, error) {
+	return nil, nil
+}
+
+func (m *memberRepoFake) ListProjectIDsByUser(ctx context.Context, userID uint) ([]uint, error) {
+	return nil, nil
+}
+
+func (m *memberRepoFake) GetByID(ctx context.Context, id uint) (*model.ProjectMember, error) {
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (m *memberRepoFake) GetByProjectAndUser(ctx context.Context, projectID uint, userID uint) (*model.ProjectMember, error) {
+	if projectID == 1 && userID == 11 {
+		return &model.ProjectMember{ProjectID: projectID, UserID: userID}, nil
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (m *memberRepoFake) Create(ctx context.Context, row *model.ProjectMember) error { return nil }
+func (m *memberRepoFake) Save(ctx context.Context, row *model.ProjectMember) error  { return nil }
+func (m *memberRepoFake) DeleteByID(ctx context.Context, id uint) error             { return nil }
+func (m *memberRepoFake) DeleteByProject(ctx context.Context, projectID uint) error { return nil }
+
+func (m *memberRepoFake) ListDisplayByProject(ctx context.Context, projectID uint) ([]repository.ProjectMemberListRow, error) {
+	return nil, nil
+}
+
+var _ repository.ProjectMemberRepo = (*memberRepoFake)(nil)
+
 func newSilenceHandlerEngine(t *testing.T, repo *silenceRepoFake) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	silenceSvc := alert.NewAlertSilenceService(repo, nil)
+	silenceSvc := service.NewAlertSilenceService(repo, &memberRepoFake{})
 	h := handler.NewAlertPlatformHandler(nil, silenceSvc, nil, nil, nil, nil, nil)
 	eng := gin.New()
 	eng.Use(middleware.ErrorHandler())
@@ -82,7 +124,10 @@ func newSilenceHandlerEngine(t *testing.T, repo *silenceRepoFake) *gin.Engine {
 		c.Set(auth.ContextUserKey, &auth.CurrentUser{ID: 11})
 		h.CreateSilence(c)
 	})
-	eng.DELETE("/silences/:id", h.DeleteSilence)
+	eng.DELETE("/silences/:id", func(c *gin.Context) {
+		c.Set(auth.ContextUserKey, &auth.CurrentUser{ID: 11})
+		h.DeleteSilence(c)
+	})
 	return eng
 }
 

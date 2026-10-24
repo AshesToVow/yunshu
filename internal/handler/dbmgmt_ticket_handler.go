@@ -4,13 +4,13 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/goinception"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +21,7 @@ func (h *DbmgmtHandler) ListTickets(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeQuery(c, func(ctx context.Context, q dbmgmtsvc.TicketListQuery) (*pagination.Result[dbmgmtsvc.TicketItem], error) {
+	ServeQuery(c, func(ctx context.Context, q service.DbmgmtTicketListQuery) (*pagination.Result[service.TicketItem], error) {
 		q.ProjectID = projectID
 		if q.Mine {
 			if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
@@ -110,7 +110,7 @@ func (h *DbmgmtHandler) SubmitRollbackTicket(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.SubmitRollbackTicketRequest) (*dbmgmtsvc.ExecuteResponse, error) {
+	ServeJSON(c, func(ctx context.Context, req service.SubmitRollbackTicketRequest) (*service.ExecuteResponse, error) {
 		return h.svc.SubmitRollbackTicket(ctx, projectID, ticketID, req, actor)
 	})
 }
@@ -169,7 +169,7 @@ func (h *DbmgmtHandler) ControlTicketOSC(c *gin.Context) {
 	}
 	sqlsha1 := c.Param("sqlsha1")
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.OSCControlRequest) (*goinception.ReviewSet, error) {
+	ServeJSON(c, func(ctx context.Context, req service.OSCControlRequest) (*goinception.ReviewSet, error) {
 		return h.svc.ControlTicketOSC(ctx, projectID, ticketID, sqlsha1, req.Command, actor)
 	})
 }
@@ -185,7 +185,7 @@ func (h *DbmgmtHandler) ApproveTicket(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.ReviewRequest) error {
+	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req service.DbmgmtReviewRequest) error {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.ApproveTicket(ctx, projectID, ticketID, req.Comment, actor)
 	})
@@ -202,7 +202,7 @@ func (h *DbmgmtHandler) RejectTicket(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.ReviewRequest) error {
+	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req service.DbmgmtReviewRequest) error {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.RejectTicket(ctx, projectID, ticketID, req.Comment, actor)
 	})

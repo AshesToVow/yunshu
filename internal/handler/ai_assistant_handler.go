@@ -3,7 +3,7 @@ package handler
 import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	aisvc "yunshu/internal/service/ai"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +18,7 @@ func (h *AIHandler) EmbedKnowledge(c *gin.Context) {
 }
 
 func (h *AIHandler) PodDiagnose(c *gin.Context) {
-	var req aisvc.PodDiagnoseAIRequest
+	var req service.PodDiagnoseAIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -37,7 +37,7 @@ func (h *AIHandler) PodDiagnose(c *gin.Context) {
 }
 
 func (h *AIHandler) GenerateK8sYAML(c *gin.Context) {
-	var req aisvc.GenerateK8sYAMLRequest
+	var req service.GenerateK8sYAMLRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -56,7 +56,7 @@ func (h *AIHandler) GenerateK8sYAML(c *gin.Context) {
 }
 
 func (h *AIHandler) CicdBuildFail(c *gin.Context) {
-	var req aisvc.CicdBuildFailAIRequest
+	var req service.CicdBuildFailAIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -75,7 +75,7 @@ func (h *AIHandler) CicdBuildFail(c *gin.Context) {
 }
 
 func (h *AIHandler) AlertExplain(c *gin.Context) {
-	var req aisvc.AlertExplainAIRequest
+	var req service.AlertExplainAIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -94,7 +94,7 @@ func (h *AIHandler) AlertExplain(c *gin.Context) {
 }
 
 func (h *AIHandler) LogAnalyze(c *gin.Context) {
-	var req aisvc.LogAnalyzeAIRequest
+	var req service.LogAnalyzeAIRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -113,7 +113,7 @@ func (h *AIHandler) LogAnalyze(c *gin.Context) {
 }
 
 func (h *AIHandler) PipelineAdjust(c *gin.Context) {
-	var req aisvc.PipelineAdjustRequest
+	var req service.PipelineAdjustRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -132,7 +132,7 @@ func (h *AIHandler) PipelineAdjust(c *gin.Context) {
 }
 
 func (h *AIHandler) ListApprovals(c *gin.Context) {
-	var q aisvc.ApprovalListQuery
+	var q service.ApprovalListQuery
 	_ = c.ShouldBindQuery(&q)
 	user, _ := auth.CurrentUserFromContext(c)
 	res, err := h.svc.ListApprovals(auth.RequestContext(c), user, q)
@@ -151,7 +151,7 @@ func (h *AIHandler) ReviewApproval(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.ReviewApprovalRequest
+	var req service.ReviewApprovalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

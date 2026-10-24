@@ -3,25 +3,25 @@ package handler
 import (
 	"context"
 	"strconv"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/platformtpl"
 
 	"github.com/gin-gonic/gin"
 )
 
 type PlatformTemplateHandler struct {
-	svc *platformtpl.Service
+	svc *service.PlatformTplService
 }
 
-func NewPlatformTemplateHandler(svc *platformtpl.Service) *PlatformTemplateHandler {
+func NewPlatformTemplateHandler(svc *service.PlatformTplService) *PlatformTemplateHandler {
 	return &PlatformTemplateHandler{svc: svc}
 }
 
 func (h *PlatformTemplateHandler) List(c *gin.Context) {
-	var q platformtpl.ListQuery
+	var q service.ListQuery
 	if err := c.ShouldBindQuery(&q); err != nil {
 		response.Error(c, constants.ErrBadRequest)
 		return
@@ -54,7 +54,7 @@ func (h *PlatformTemplateHandler) Create(c *gin.Context) {
 	if actor != nil {
 		actorID = actor.ID
 	}
-	ServeJSON201(c, func(ctx context.Context, req platformtpl.UpsertRequest) (*platformtpl.TemplateItem, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.UpsertRequest) (*service.TemplateItem, error) {
 		return h.svc.Create(ctx, req, actorID)
 	})
 }
@@ -65,7 +65,7 @@ func (h *PlatformTemplateHandler) Update(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req platformtpl.UpsertRequest) (*platformtpl.TemplateItem, error) {
+	ServeJSON(c, func(ctx context.Context, req service.UpsertRequest) (*service.TemplateItem, error) {
 		return h.svc.Update(ctx, id, req)
 	})
 }
@@ -94,7 +94,7 @@ func (h *PlatformTemplateHandler) SaveDraft(c *gin.Context) {
 	if actor != nil {
 		actorID = actor.ID
 	}
-	ServeJSON(c, func(ctx context.Context, req platformtpl.SaveDraftRequest) (*platformtpl.VersionItem, error) {
+	ServeJSON(c, func(ctx context.Context, req service.SaveDraftRequest) (*service.VersionItem, error) {
 		return h.svc.SaveDraft(ctx, id, req, actorID)
 	})
 }

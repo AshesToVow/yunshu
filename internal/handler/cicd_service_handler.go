@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/cicd"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +21,7 @@ func (h *CicdHandler) ListServices(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeQuery(c, func(ctx context.Context, q cicd.ServiceListQuery) (*pagination.Result[cicd.ServiceItem], error) {
+	ServeQuery(c, func(ctx context.Context, q service.CicdServiceListQuery) (*pagination.Result[service.CicdServiceItem], error) {
 		q.ProjectID = projectID
 		q.Actor = actor
 		return h.svc.ListServices(ctx, q)
@@ -63,7 +63,7 @@ func (h *CicdHandler) CreateService(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req cicd.ServiceUpsertRequest) (*model.CicdService, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.CicdServiceUpsertRequest) (*model.CicdService, error) {
 		req.ProjectID = projectID
 		return h.svc.UpsertService(ctx, 0, req)
 	})
@@ -85,7 +85,7 @@ func (h *CicdHandler) UpdateService(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req cicd.ServiceUpsertRequest
+	var req service.CicdServiceUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -158,7 +158,7 @@ func (h *CicdHandler) UpsertCiConfig(c *gin.Context) {
 	if !h.requireCicdServiceAccess(c, projectID, serviceID, "manage") {
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req cicd.CiConfigUpsertRequest) (*cicd.CiConfigUpsertResult, error) {
+	ServeJSON(c, func(ctx context.Context, req service.CiConfigUpsertRequest) (*service.CiConfigUpsertResult, error) {
 		return h.svc.UpsertCiConfig(ctx, projectID, serviceID, req)
 	})
 }
@@ -199,7 +199,7 @@ func (h *CicdHandler) CreateDeployConfig(c *gin.Context) {
 	if !h.requireCicdServiceAccess(c, projectID, serviceID, "manage") {
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req cicd.DeployConfigUpsertRequest) (*cicd.DeployConfigUpsertResult, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.DeployConfigUpsertRequest) (*service.DeployConfigUpsertResult, error) {
 		return h.svc.UpsertDeployConfig(ctx, projectID, serviceID, 0, req)
 	})
 }
@@ -223,7 +223,7 @@ func (h *CicdHandler) UpdateDeployConfig(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req cicd.DeployConfigUpsertRequest
+	var req service.DeployConfigUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -277,7 +277,7 @@ func (h *CicdHandler) DownloadHelmScaffold(c *gin.Context) {
 	if !h.requireCicdServiceAccess(c, projectID, serviceID, "view") {
 		return
 	}
-	var q cicd.HelmScaffoldQuery
+	var q service.HelmScaffoldQuery
 	_ = c.ShouldBindQuery(&q)
 	filename, data, err := h.svc.BuildHelmScaffoldZip(c.Request.Context(), projectID, serviceID, q)
 	if err != nil {
@@ -300,7 +300,7 @@ func (h *CicdHandler) DownloadHelmScaffoldPreview(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var q cicd.HelmScaffoldQuery
+	var q service.HelmScaffoldQuery
 	if err := c.ShouldBindQuery(&q); err != nil {
 		response.Error(c, err)
 		return

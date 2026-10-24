@@ -2,11 +2,11 @@ package handler
 
 import (
 	"context"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/cicd"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +27,7 @@ func (h *CicdHandler) TriggerBuild(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req cicd.TriggerBuildRequest
+	var req service.TriggerBuildRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -78,7 +78,7 @@ func (h *CicdHandler) ListBuildRuns(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeQuery(c, func(ctx context.Context, q cicd.BuildRunListQuery) (*pagination.Result[cicd.BuildRunItem], error) {
+	ServeQuery(c, func(ctx context.Context, q service.BuildRunListQuery) (*pagination.Result[service.BuildRunItem], error) {
 		q.ProjectID = projectID
 		q.Actor = actor
 		return h.svc.ListBuildRuns(ctx, q)
@@ -167,7 +167,7 @@ func (h *CicdHandler) ListBuildRunArtifactsMeta(c *gin.Context) {
 
 // JenkinsCallback Jenkins 阶段/门禁/制品 HMAC 回调（无登录）。
 func (h *CicdHandler) JenkinsCallback(c *gin.Context) {
-	body, err := cicd.ReadCallbackBody(c)
+	body, err := service.ReadCallbackBody(c)
 	if err != nil {
 		response.Error(c, err)
 		return

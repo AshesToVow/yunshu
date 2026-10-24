@@ -3,16 +3,16 @@ package handler
 import (
 	"strconv"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
-	esmgmtsvc "yunshu/internal/service/esmgmt"
 
 	"github.com/gin-gonic/gin"
 )
 
 func (h *EsmgmtHandler) SearchDocs(c *gin.Context) {
-	var req esmgmtsvc.SearchDocsRequest
+	var req service.SearchDocsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -41,7 +41,7 @@ func (h *EsmgmtHandler) GetDoc(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) UpsertDoc(c *gin.Context) {
-	var req esmgmtsvc.UpsertDocRequest
+	var req service.UpsertDocRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -94,7 +94,7 @@ func (h *EsmgmtHandler) GetTemplate(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) PutTemplate(c *gin.Context) {
-	var req esmgmtsvc.PutTemplateRequest
+	var req service.PutTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -124,7 +124,7 @@ func (h *EsmgmtHandler) DeleteTemplate(c *gin.Context) {
 }
 
 func (h *EsmgmtHandler) CreateReindex(c *gin.Context) {
-	var req esmgmtsvc.ReindexRequest
+	var req service.ReindexRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

@@ -3,16 +3,16 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	aisvc "yunshu/internal/service/ai"
 
 	"github.com/gin-gonic/gin"
 )
 
 func (h *AIHandler) Chat(c *gin.Context) {
-	var req aisvc.ChatRequest
+	var req service.ChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -31,7 +31,7 @@ func (h *AIHandler) Chat(c *gin.Context) {
 }
 
 func (h *AIHandler) ChatStream(c *gin.Context) {
-	var req aisvc.ChatRequest
+	var req service.ChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -48,7 +48,7 @@ func (h *AIHandler) ChatStream(c *gin.Context) {
 	c.Status(200)
 	c.Writer.Flush()
 
-	writeEvent := func(ev aisvc.ChatEvent) {
+	writeEvent := func(ev service.ChatEvent) {
 		raw, err := json.Marshal(ev)
 		if err != nil {
 			return
@@ -59,12 +59,12 @@ func (h *AIHandler) ChatStream(c *gin.Context) {
 
 	_, err := h.svc.ChatStream(auth.RequestContext(c), uid, user, req, writeEvent)
 	if err != nil {
-		writeEvent(aisvc.ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
+		writeEvent(service.ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
 	}
 }
 
 func (h *AIHandler) StartInvestigation(c *gin.Context) {
-	var req aisvc.StartInvestigationRequest
+	var req service.StartInvestigationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -83,7 +83,7 @@ func (h *AIHandler) StartInvestigation(c *gin.Context) {
 }
 
 func (h *AIHandler) ListInvestigations(c *gin.Context) {
-	var q aisvc.InvestigationListQuery
+	var q service.InvestigationListQuery
 	_ = c.ShouldBindQuery(&q)
 	user, _ := auth.CurrentUserFromContext(c)
 	var uid uint
@@ -120,7 +120,7 @@ func (h *AIHandler) GetInvestigation(c *gin.Context) {
 }
 
 func (h *AIHandler) ListSessions(c *gin.Context) {
-	var q aisvc.SessionListQuery
+	var q service.SessionListQuery
 	_ = c.ShouldBindQuery(&q)
 	user, _ := auth.CurrentUserFromContext(c)
 	var uid uint
@@ -136,7 +136,7 @@ func (h *AIHandler) ListSessions(c *gin.Context) {
 }
 
 func (h *AIHandler) CreateSession(c *gin.Context) {
-	var req aisvc.SessionCreateRequest
+	var req service.SessionCreateRequest
 	_ = c.ShouldBindJSON(&req)
 	user, _ := auth.CurrentUserFromContext(c)
 	var uid uint
@@ -180,7 +180,7 @@ func (h *AIHandler) UpdateSession(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.SessionUpdateRequest
+	var req service.SessionUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

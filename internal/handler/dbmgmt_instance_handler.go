@@ -2,11 +2,11 @@ package handler
 
 import (
 	"context"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +18,7 @@ func (h *DbmgmtHandler) ListInstances(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeQuery(c, func(ctx context.Context, q dbmgmtsvc.InstanceListQuery) (*pagination.Result[dbmgmtsvc.InstanceItem], error) {
+	ServeQuery(c, func(ctx context.Context, q service.InstanceListQuery) (*pagination.Result[service.InstanceItem], error) {
 		q.ProjectID = projectID
 		q.Actor = actor
 		return h.svc.ListInstances(ctx, q)
@@ -51,7 +51,7 @@ func (h *DbmgmtHandler) CreateInstance(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req dbmgmtsvc.InstanceUpsertRequest) (*dbmgmtsvc.InstanceItem, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.InstanceUpsertRequest) (*service.InstanceItem, error) {
 		req.ProjectID = projectID
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.UpsertInstance(ctx, 0, req, actor)
@@ -69,7 +69,7 @@ func (h *DbmgmtHandler) UpdateInstance(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req dbmgmtsvc.InstanceUpsertRequest
+	var req service.InstanceUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

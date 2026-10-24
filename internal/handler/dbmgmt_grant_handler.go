@@ -3,11 +3,11 @@ package handler
 import (
 	"context"
 	"strconv"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -38,7 +38,7 @@ func (h *DbmgmtHandler) CreateGrant(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req dbmgmtsvc.GrantUpsertRequest) (*dbmgmtsvc.GrantItem, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.GrantUpsertRequest) (*service.GrantItem, error) {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.CreateGrant(ctx, projectID, req, actor)
 	})
@@ -55,7 +55,7 @@ func (h *DbmgmtHandler) UpdateGrant(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req dbmgmtsvc.GrantUpdateRequest
+	var req service.GrantUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -128,7 +128,7 @@ func (h *DbmgmtHandler) UpsertApprovalFlow(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.ApprovalFlowUpsertRequest) (*dbmgmtsvc.ApprovalFlowResponse, error) {
+	ServeJSON(c, func(ctx context.Context, req service.DbmgmtApprovalFlowUpsertRequest) (*service.DbmgmtApprovalFlowResponse, error) {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.UpsertApprovalFlow(ctx, projectID, req, actor)
 	})
@@ -140,7 +140,7 @@ func (h *DbmgmtHandler) ListAccessRequests(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeQuery(c, func(ctx context.Context, q dbmgmtsvc.AccessRequestListQuery) (*pagination.Result[dbmgmtsvc.AccessRequestItem], error) {
+	ServeQuery(c, func(ctx context.Context, q service.AccessRequestListQuery) (*pagination.Result[service.AccessRequestItem], error) {
 		q.ProjectID = projectID
 		if q.Mine {
 			if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
@@ -157,7 +157,7 @@ func (h *DbmgmtHandler) CreateAccessRequest(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON201(c, func(ctx context.Context, req dbmgmtsvc.AccessRequestCreateRequest) (*dbmgmtsvc.AccessRequestItem, error) {
+	ServeJSON201(c, func(ctx context.Context, req service.AccessRequestCreateRequest) (*service.AccessRequestItem, error) {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.CreateAccessRequest(ctx, projectID, req, actor)
 	})
@@ -174,7 +174,7 @@ func (h *DbmgmtHandler) ApproveAccessRequest(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.AccessApproveRequest) error {
+	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req service.AccessApproveRequest) error {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.ApproveAccessRequest(ctx, projectID, requestID, req, actor)
 	})
@@ -191,7 +191,7 @@ func (h *DbmgmtHandler) RejectAccessRequest(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req dbmgmtsvc.ReviewRequest) error {
+	ServeJSONOK(c, gin.H{"ok": true}, func(ctx context.Context, req service.DbmgmtReviewRequest) error {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.RejectAccessRequest(ctx, projectID, requestID, req.Comment, actor)
 	})

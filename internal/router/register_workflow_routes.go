@@ -3,12 +3,12 @@ package router
 import (
 	"context"
 	"log/slog"
+	"yunshu/internal/service"
 
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/config"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/repository"
-	systemsvc "yunshu/internal/service/system"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,7 +33,7 @@ func registerPermissionSyncRoute(permissions *gin.RouterGroup, d interface{ App(
 		return
 	}
 	permissions.POST("/sync-routes", func(c *gin.Context) {
-		syncSvc := systemsvc.NewPermissionSyncService(repository.NewPermissionRepository(d.App().DB), &d.App().Config.Plugins)
+		syncSvc := service.NewPermissionSyncService(repository.NewPermissionRepository(d.App().DB), &d.App().Config.Plugins)
 		result, err := syncSvc.SyncFromEngine(c.Request.Context(), d.App().Engine)
 		if err != nil {
 			response.Error(c, err)
@@ -47,7 +47,7 @@ func syncAPIPermissionsOnBoot(d *RouteDeps, plugins *config.PluginsConfig) {
 	if d == nil || d.App() == nil || d.App().Engine == nil {
 		return
 	}
-	syncSvc := systemsvc.NewPermissionSyncService(repository.NewPermissionRepository(d.App().DB), plugins)
+	syncSvc := service.NewPermissionSyncService(repository.NewPermissionRepository(d.App().DB), plugins)
 	result, err := syncSvc.SyncFromEngine(context.Background(), d.App().Engine)
 	log := slog.Default().With("component", "permission.sync")
 	if err != nil {

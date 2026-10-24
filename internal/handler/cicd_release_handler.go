@@ -3,12 +3,12 @@ package handler
 import (
 	"context"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/cicd"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,7 +29,7 @@ func (h *CicdHandler) TriggerRelease(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req cicd.TriggerReleaseRequest
+	var req service.TriggerReleaseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -58,7 +58,7 @@ func (h *CicdHandler) ListReleaseRuns(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeQuery(c, func(ctx context.Context, q cicd.ReleaseRunListQuery) (*pagination.Result[cicd.ReleaseRunItem], error) {
+	ServeQuery(c, func(ctx context.Context, q service.ReleaseRunListQuery) (*pagination.Result[service.ReleaseRunItem], error) {
 		q.ProjectID = projectID
 		q.Actor = actor
 		if q.Mine {
@@ -158,7 +158,7 @@ func (h *CicdHandler) ApproveReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	req, ok := bindOptionalJSON[service.ReviewReleaseRequest](c)
 	if !ok {
 		return
 	}
@@ -176,7 +176,7 @@ func (h *CicdHandler) RejectReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	req, ok := bindOptionalJSON[service.ReviewReleaseRequest](c)
 	if !ok {
 		return
 	}
@@ -222,7 +222,7 @@ func (h *CicdHandler) PlatformRollbackRelease(c *gin.Context) {
 		return
 	}
 	actor := h.cicdActor(c)
-	ServeJSON(c, func(ctx context.Context, req cicd.PlatformRollbackRequest) (map[string]any, error) {
+	ServeJSON(c, func(ctx context.Context, req service.PlatformRollbackRequest) (map[string]any, error) {
 		return h.svc.PlatformRollbackRelease(ctx, projectID, runID, req, actor)
 	})
 }
@@ -233,7 +233,7 @@ func (h *CicdHandler) PromoteProgressiveRelease(c *gin.Context) {
 		return
 	}
 	actor := h.cicdActor(c)
-	ServeJSON(c, func(ctx context.Context, req cicd.ProgressivePromoteRequest) (map[string]any, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ProgressivePromoteRequest) (map[string]any, error) {
 		return h.svc.PromoteProgressiveRelease(ctx, projectID, runID, req, actor)
 	})
 }
@@ -244,7 +244,7 @@ func (h *CicdHandler) AbortProgressiveRelease(c *gin.Context) {
 		return
 	}
 	actor := h.cicdActor(c)
-	ServeJSON(c, func(ctx context.Context, req cicd.ProgressiveAbortRequest) (map[string]any, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ProgressiveAbortRequest) (map[string]any, error) {
 		return h.svc.AbortProgressiveRelease(ctx, projectID, runID, req, actor)
 	})
 }
@@ -254,7 +254,7 @@ func (h *CicdHandler) TerminateReleaseRun(c *gin.Context) {
 	if !ok {
 		return
 	}
-	req, ok := bindOptionalJSON[cicd.ReviewReleaseRequest](c)
+	req, ok := bindOptionalJSON[service.ReviewReleaseRequest](c)
 	if !ok {
 		return
 	}
@@ -273,7 +273,7 @@ func (h *CicdHandler) BatchApproveReleaseRuns(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req cicd.BatchReleaseIDsRequest
+	var req service.BatchReleaseIDsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -293,7 +293,7 @@ func (h *CicdHandler) BatchRejectReleaseRuns(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req cicd.BatchReleaseIDsRequest
+	var req service.BatchReleaseIDsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -308,14 +308,14 @@ func (h *CicdHandler) BatchRejectReleaseRuns(c *gin.Context) {
 }
 
 func (h *CicdHandler) BatchExecuteReleaseRuns(c *gin.Context) {
-	h.batchReleaseAction(c, func(ctx context.Context, projectID uint, req cicd.BatchReleaseIDsRequest, userID *uint, _ string) (any, error) {
+	h.batchReleaseAction(c, func(ctx context.Context, projectID uint, req service.BatchReleaseIDsRequest, userID *uint, _ string) (any, error) {
 		n, err := h.svc.BatchExecuteReleaseRuns(ctx, projectID, req.IDs, userID)
 		return gin.H{"count": n}, err
 	})
 }
 
 func (h *CicdHandler) BatchTerminateReleaseRuns(c *gin.Context) {
-	h.batchReleaseAction(c, func(ctx context.Context, projectID uint, req cicd.BatchReleaseIDsRequest, userID *uint, name string) (any, error) {
+	h.batchReleaseAction(c, func(ctx context.Context, projectID uint, req service.BatchReleaseIDsRequest, userID *uint, name string) (any, error) {
 		n, err := h.svc.BatchTerminateReleaseRuns(ctx, projectID, req.IDs, userID, name, req.Comment)
 		return gin.H{"count": n}, err
 	})
@@ -323,14 +323,14 @@ func (h *CicdHandler) BatchTerminateReleaseRuns(c *gin.Context) {
 
 func (h *CicdHandler) batchReleaseAction(
 	c *gin.Context,
-	fn func(ctx context.Context, projectID uint, req cicd.BatchReleaseIDsRequest, userID *uint, name string) (any, error),
+	fn func(ctx context.Context, projectID uint, req service.BatchReleaseIDsRequest, userID *uint, name string) (any, error),
 ) {
 	projectID, err := parseUintParam(c, "id")
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	var req cicd.BatchReleaseIDsRequest
+	var req service.BatchReleaseIDsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -379,7 +379,7 @@ func (h *CicdHandler) UpsertApprovalFlow(c *gin.Context) {
 		return
 	}
 	actor := h.cicdActor(c)
-	ServeJSON(c, func(ctx context.Context, req cicd.ApprovalFlowUpsertRequest) (*cicd.ApprovalFlowResponse, error) {
+	ServeJSON(c, func(ctx context.Context, req service.CicdApprovalFlowUpsertRequest) (*service.CicdApprovalFlowResponse, error) {
 		return h.svc.UpsertApprovalFlow(ctx, projectID, req, actor)
 	})
 }

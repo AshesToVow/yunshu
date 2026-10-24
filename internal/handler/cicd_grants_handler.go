@@ -4,11 +4,11 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/cicd"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,7 +46,7 @@ func (h *CicdHandler) UpsertCicdGrant(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeJSON(c, func(ctx context.Context, req cicd.CicdGrantUpsertRequest) (*model.CicdAccessGrant, error) {
+	ServeJSON(c, func(ctx context.Context, req service.CicdGrantUpsertRequest) (*model.CicdAccessGrant, error) {
 		req.ProjectID = projectID
 		if actor != nil {
 			id := actor.ID
@@ -63,7 +63,7 @@ func (h *CicdHandler) BulkUpsertCicdGrants(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeJSON(c, func(ctx context.Context, req cicd.CicdGrantBulkRequest) (gin.H, error) {
+	ServeJSON(c, func(ctx context.Context, req service.CicdGrantBulkRequest) (gin.H, error) {
 		req.ProjectID = projectID
 		if actor != nil {
 			id := actor.ID
@@ -103,7 +103,7 @@ func (h *CicdHandler) BootstrapCicdGrants(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	req := cicd.BootstrapCicdGrantsRequest{ProjectID: projectID}
+	req := service.BootstrapCicdGrantsRequest{ProjectID: projectID}
 	if actor != nil {
 		id := actor.ID
 		req.CreatedBy = &id

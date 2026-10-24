@@ -11,13 +11,6 @@ import (
 	"yunshu/internal/middleware"
 	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/service"
-	cicdsvc "yunshu/internal/service/cicd"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
-	esmgmtsvc "yunshu/internal/service/esmgmt"
-	kafkamgmtsvc "yunshu/internal/service/kafkamgmt"
-	inspectsvc "yunshu/internal/service/inspect"
-	"yunshu/internal/service/platformtpl"
-	workflowsvc "yunshu/internal/service/workflow"
 
 	"github.com/gin-gonic/gin"
 )
@@ -87,32 +80,32 @@ type RouteDeps struct {
 	serviceAccountHandler   *handler.ServiceAccountHandler
 	overviewHandler         *handler.OverviewHandler
 
-	projectHandler     *handler.ProjectHandler
+	projectHandler        *handler.ProjectHandler
 	projectCatalogHandler *handler.ProjectCatalogHandler
-	cmdbHandler        *handler.CMDBHandler
-	mysqlBackupSvc     *service.MysqlBackupService
-	mysqlBackupHandler *handler.MysqlBackupHandler
-	dbmgmtSvc          *dbmgmtsvc.Service
-	dbmgmtHandler      *handler.DbmgmtHandler
-	alertSvc           *service.AlertService
-	cicdSvc            *cicdsvc.Service
-	cicdHandler        *handler.CicdHandler
-	logPlatformHandler *handler.LogPlatformHandler
-	loggieHandler      *handler.LoggieHandler
-	clusterLogHandler  *handler.ClusterLogHandler
-	logRetentionSvc    *service.LogRetentionService
-	logIntelSvc        *service.LogIntelligenceService
-	kafkaToESSvc       *service.KafkaToESService
-	inspectSvc         *inspectsvc.Service
-	inspectHandler     *handler.InspectHandler
-	aiHandler          *handler.AIHandler
-	esmgmtSvc          *esmgmtsvc.Service
-	esmgmtHandler      *handler.EsmgmtHandler
-	kafkamgmtSvc       *kafkamgmtsvc.Service
-	kafkamgmtHandler   *handler.KafkamgmtHandler
-	platformFeatures   *handler.PlatformFeaturesHandler
-	workflowHandler    *handler.WorkflowHandler
-	platformTplHandler *handler.PlatformTemplateHandler
+	cmdbHandler           *handler.CMDBHandler
+	mysqlBackupSvc        *service.MysqlBackupService
+	mysqlBackupHandler    *handler.MysqlBackupHandler
+	dbmgmtSvc             *service.DbmgmtService
+	dbmgmtHandler         *handler.DbmgmtHandler
+	alertSvc              *service.AlertService
+	cicdSvc               *service.CicdService
+	cicdHandler           *handler.CicdHandler
+	logPlatformHandler    *handler.LogPlatformHandler
+	loggieHandler         *handler.LoggieHandler
+	clusterLogHandler     *handler.ClusterLogHandler
+	logRetentionSvc       *service.LogRetentionService
+	logIntelSvc           *service.LogIntelligenceService
+	kafkaToESSvc          *service.KafkaToESService
+	inspectSvc            *service.InspectService
+	inspectHandler        *handler.InspectHandler
+	aiHandler             *handler.AIHandler
+	esmgmtSvc             *service.EsmgmtService
+	esmgmtHandler         *handler.EsmgmtHandler
+	kafkamgmtSvc          *service.KafkamgmtService
+	kafkamgmtHandler      *handler.KafkamgmtHandler
+	platformFeatures      *handler.PlatformFeaturesHandler
+	workflowHandler       *handler.WorkflowHandler
+	platformTplHandler    *handler.PlatformTemplateHandler
 }
 
 // K8sRuntimeService 供 k8s 插件后台任务使用。
@@ -132,7 +125,7 @@ func (d *RouteDeps) MysqlBackupService() *service.MysqlBackupService {
 }
 
 // EsmgmtService 供 esmgmt 插件调度器使用。
-func (d *RouteDeps) EsmgmtService() *esmgmtsvc.Service {
+func (d *RouteDeps) EsmgmtService() *service.EsmgmtService {
 	if d == nil {
 		return nil
 	}
@@ -140,7 +133,7 @@ func (d *RouteDeps) EsmgmtService() *esmgmtsvc.Service {
 }
 
 // DbmgmtService 供 dbmgmt 插件后台任务使用。
-func (d *RouteDeps) DbmgmtService() *dbmgmtsvc.Service {
+func (d *RouteDeps) DbmgmtService() *service.DbmgmtService {
 	if d == nil {
 		return nil
 	}
@@ -148,7 +141,7 @@ func (d *RouteDeps) DbmgmtService() *dbmgmtsvc.Service {
 }
 
 // CicdService 供 cicd 插件后台任务使用。
-func (d *RouteDeps) CicdService() *cicdsvc.Service {
+func (d *RouteDeps) CicdService() *service.CicdService {
 	if d == nil {
 		return nil
 	}
@@ -188,7 +181,7 @@ func (d *RouteDeps) LogIntelligenceService() *service.LogIntelligenceService {
 }
 
 // InspectService 供 inspect 插件调度器使用。
-func (d *RouteDeps) InspectService() *inspectsvc.Service {
+func (d *RouteDeps) InspectService() *service.InspectService {
 	if d == nil {
 		return nil
 	}
@@ -291,35 +284,35 @@ func assembleRouteDeps(
 		projectHandler:        handlers.Project,
 		projectCatalogHandler: handlers.ProjectCatalog,
 		cmdbHandler:           handlers.CMDB,
-		mysqlBackupSvc:     svcs.MysqlBackup,
-		mysqlBackupHandler: handlers.MysqlBackup,
-		dbmgmtSvc:          svcs.Dbmgmt,
-		dbmgmtHandler:      handlers.Dbmgmt,
-		alertSvc:           svcs.Alert,
-		cicdSvc:            svcs.Cicd,
-		cicdHandler:        handlers.Cicd,
-		logPlatformHandler: handlers.LogPlatform,
-		loggieHandler:      handlers.Loggie,
-		clusterLogHandler:  handlers.ClusterLog,
-		logRetentionSvc:    svcs.LogRetention,
-		logIntelSvc:        svcs.LogIntelligence,
-		kafkaToESSvc:       svcs.KafkaToES,
-		inspectSvc:         svcs.Inspect,
-		inspectHandler:     handlers.Inspect,
-		aiHandler:          handlers.AI,
-		esmgmtSvc:          svcs.Esmgmt,
-		esmgmtHandler:      handlers.Esmgmt,
-		kafkamgmtSvc:       svcs.Kafkamgmt,
-		kafkamgmtHandler:   handlers.Kafkamgmt,
-		platformFeatures:   handler.NewPlatformFeaturesHandler(svcs.AlertMonitorRule, repos.AlertRuleChange, repos.PromqlSavedQuery, repos.K8sCrTemplate),
-		workflowHandler: handler.NewWorkflowHandler(func() *workflowsvc.Service {
-			wf := workflowsvc.NewService(
+		mysqlBackupSvc:        svcs.MysqlBackup,
+		mysqlBackupHandler:    handlers.MysqlBackup,
+		dbmgmtSvc:             svcs.Dbmgmt,
+		dbmgmtHandler:         handlers.Dbmgmt,
+		alertSvc:              svcs.Alert,
+		cicdSvc:               svcs.Cicd,
+		cicdHandler:           handlers.Cicd,
+		logPlatformHandler:    handlers.LogPlatform,
+		loggieHandler:         handlers.Loggie,
+		clusterLogHandler:     handlers.ClusterLog,
+		logRetentionSvc:       svcs.LogRetention,
+		logIntelSvc:           svcs.LogIntelligence,
+		kafkaToESSvc:          svcs.KafkaToES,
+		inspectSvc:            svcs.Inspect,
+		inspectHandler:        handlers.Inspect,
+		aiHandler:             handlers.AI,
+		esmgmtSvc:             svcs.Esmgmt,
+		esmgmtHandler:         handlers.Esmgmt,
+		kafkamgmtSvc:          svcs.Kafkamgmt,
+		kafkamgmtHandler:      handlers.Kafkamgmt,
+		platformFeatures:      handler.NewPlatformFeaturesHandler(svcs.AlertMonitorRule, repos.AlertRuleChange, repos.PromqlSavedQuery, repos.K8sCrTemplate),
+		workflowHandler: handler.NewWorkflowHandler(func() *service.WorkflowService {
+			wf := service.NewWorkflowService(
 				repos.Workflow, repos.UserGroup, repos.AlertDuty, repos.User,
 			)
 			wf.SetAlertEventRepo(repos.AlertEvent)
 			return wf
 		}()),
-		platformTplHandler: handler.NewPlatformTemplateHandler(platformtpl.NewService(
+		platformTplHandler: handler.NewPlatformTemplateHandler(service.NewPlatformTplService(
 			repos.PlatformTemplate,
 			func(ctx context.Context) (*objectstore.Client, error) {
 				return objectstore.NewFromDB(ctx, app.DB)
@@ -329,7 +322,7 @@ func assembleRouteDeps(
 	return deps, nil
 }
 
-func wireCicdK8sHooks(cicdSvc *cicdsvc.Service, wl *service.K8sWorkloadService) {
+func wireCicdK8sHooks(cicdSvc *service.CicdService, wl *service.K8sWorkloadService) {
 	if cicdSvc == nil || wl == nil {
 		return
 	}
@@ -365,7 +358,7 @@ func wireCicdK8sHooks(cicdSvc *cicdsvc.Service, wl *service.K8sWorkloadService) 
 			"message":       res.Message,
 		}, nil
 	})
-	cicdSvc.SetK8sProgressive(cicdsvc.K8sProgressiveFns{
+	cicdSvc.SetK8sProgressive(service.K8sProgressiveFns{
 		EnsureCanary: func(ctx context.Context, clusterID uint, ns, stable, canary, image string, replicas int32) (map[string]any, error) {
 			return wl.ProgressiveEnsureCanaryDeployment(ctx, service.ProgressiveEnsureCanaryRequest{
 				ClusterID:      clusterID,

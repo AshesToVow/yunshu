@@ -3,7 +3,7 @@ package handler
 import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	aisvc "yunshu/internal/service/ai"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -56,7 +56,7 @@ func (h *AIHandler) GetTool(c *gin.Context) {
 }
 
 func (h *AIHandler) CreateTool(c *gin.Context) {
-	var req aisvc.ToolUpsertRequest
+	var req service.ToolUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -77,7 +77,7 @@ func (h *AIHandler) UpdateTool(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.ToolUpsertRequest
+	var req service.ToolUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

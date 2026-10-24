@@ -5,22 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"log/slog"
 	"yunshu/internal/bootstrap"
 	"yunshu/internal/config"
 	"yunshu/internal/dictconfig"
 	"yunshu/internal/interfaces"
-	"log/slog"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/objectstore"
 	"yunshu/internal/service"
-	aisvc "yunshu/internal/service/ai"
-	"yunshu/internal/service/alert"
-	cicdsvc "yunshu/internal/service/cicd"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
-	esmgmtsvc "yunshu/internal/service/esmgmt"
-	kafkamgmtsvc "yunshu/internal/service/kafkamgmt"
-	inspectsvc "yunshu/internal/service/inspect"
-	workflowsvc "yunshu/internal/service/workflow"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/google/wire"
@@ -76,8 +68,8 @@ func provideAlertStateService(
 	eventRepo interfaces.AlertEventRepository,
 	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository,
 	cfg config.AlertConfig,
-) alert.AlertStateService {
-	return alert.NewRedisAlertStateService(
+) service.AlertStateService {
+	return service.NewRedisAlertStateService(
 		redisClient,
 		eventRepo,
 		firingDeliveryRepo,
@@ -101,7 +93,7 @@ func provideAlertServiceOptions(
 	firingDeliveryRepo interfaces.AlertFiringDeliveryRepository,
 	cloudExpiryRepo interfaces.CloudExpiryRuleRepository,
 	cloudAccountRepo interfaces.CloudAccountRepository,
-	stateSvc alert.AlertStateService,
+	stateSvc service.AlertStateService,
 	subscriptionRepo interfaces.AlertSubscriptionRepository,
 	inhibitionRuleRepo interfaces.AlertInhibitionRuleRepository,
 	ackRepo interfaces.AlertAckRepository,
@@ -168,18 +160,18 @@ func attachAlertLogSearch(svc *service.AlertService, logSearch *service.LogSearc
 
 // attachAIOptionalDeps 在组合根注入 AI 跨域可选依赖（替代 assembleRouteDeps 内 Set*Deps）。
 func attachAIOptionalDeps(
-	svc *aisvc.Service,
+	svc *service.AIService,
 	serverRepo interfaces.ServerRepository,
 	cmdbSvc *service.CMDBService,
-	dbmgmtSvc *dbmgmtsvc.Service,
-	esmgmtSvc *esmgmtsvc.Service,
+	dbmgmtSvc *service.DbmgmtService,
+	esmgmtSvc *service.EsmgmtService,
 	projectMgmt *service.ProjectMgmtService,
 	loggieAgent *service.LoggieAgentService,
 	clusterLog *service.ClusterLogService,
 	ds *service.AlertDatasourceService,
 	changeSvc *service.ChangeEventService,
 	silenceSvc *service.AlertSilenceService,
-) *aisvc.Service {
+) *service.AIService {
 	if svc == nil {
 		return nil
 	}
@@ -191,7 +183,7 @@ func attachAIOptionalDeps(
 }
 
 // attachCicdK8sHooks 注入 CICD 发布就绪检查与 rollout undo（替代 assembleRouteDeps 旁路）。
-func attachCicdK8sHooks(cicdSvc *cicdsvc.Service, wl *service.K8sWorkloadService) *cicdsvc.Service {
+func attachCicdK8sHooks(cicdSvc *service.CicdService, wl *service.K8sWorkloadService) *service.CicdService {
 	wireCicdK8sHooks(cicdSvc, wl)
 	return cicdSvc
 }
@@ -296,12 +288,12 @@ func provideDbmgmtService(
 	sender mailer.Sender,
 	appName AppDisplayName,
 	cfg config.DbmgmtConfig,
-) (*dbmgmtsvc.Service, error) {
+) (*service.DbmgmtService, error) {
 	resolveCfg := func(ctx context.Context) config.DbmgmtConfig {
 		return dictconfig.ResolveDbmgmtConfig(ctx, db, cfg)
 	}
-	wf := workflowsvc.NewService(workflowRepo, userGroupRepo, dutyRepo, userRepo)
-	return dbmgmtsvc.NewService(
+	wf := service.NewWorkflowService(workflowRepo, userGroupRepo, dutyRepo, userRepo)
+	return service.NewDbmgmtService(
 		dbmgmtRepo, serverRepo, projectRepo, memberRepo, userGroupRepo, userRepo, dutyRepo,
 		wf, resolveCfg, string(encryptionKey), sender, string(appName), cfg,
 	)
@@ -323,7 +315,7 @@ func provideCicdService(
 	appName AppDisplayName,
 	k8sNS *service.K8sNamespaceService,
 	wl *service.K8sWorkloadService,
-) *cicdsvc.Service {
+) *service.CicdService {
 	resolveCfg := func(ctx context.Context) config.CicdConfig {
 		base := cicdCfg
 		if base.RunSyncIntervalSeconds <= 0 {
@@ -335,7 +327,7 @@ func provideCicdService(
 	resolveMinio := func(ctx context.Context) dictconfig.MinioConfig {
 		return dictconfig.ResolveCicdMinioConfig(ctx, db)
 	}
-	svc := cicdsvc.NewService(
+	svc := service.NewCicdService(
 		cicdRepo, workflowRepo, serverRepo, projectRepo, userGroupRepo, userRepo, memberRepo, dutyRepo, catalogRepo,
 		resolveCfg, resolveMinio, sender, string(appName), k8sNS,
 	)
@@ -360,23 +352,23 @@ func provideAIService(
 	eventSvc *service.K8sEventService,
 	logSearch *service.LogSearchService,
 	esProvider *service.ElasticsearchProvider,
-	cicdSvc *cicdsvc.Service,
+	cicdSvc *service.CicdService,
 	alertSvc *service.AlertService,
 	serverRepo interfaces.ServerRepository,
 	cmdbSvc *service.CMDBService,
-	dbmgmtSvc *dbmgmtsvc.Service,
-	esmgmtSvc *esmgmtsvc.Service,
+	dbmgmtSvc *service.DbmgmtService,
+	esmgmtSvc *service.EsmgmtService,
 	projectMgmt *service.ProjectMgmtService,
 	loggieAgent *service.LoggieAgentService,
 	clusterLog *service.ClusterLogService,
 	ds *service.AlertDatasourceService,
 	changeSvc *service.ChangeEventService,
 	silenceSvc *service.AlertSilenceService,
-) *aisvc.Service {
+) *service.AIService {
 	resolveConfig := func(ctx context.Context) config.AIConfig {
 		return dictconfig.ResolveAIConfig(ctx, db, yamlAI, dictconfig.DefaultAIDictTypes())
 	}
-	svc := aisvc.NewService(
+	svc := service.NewAIService(
 		aiRepo, workflowRepo, resolveConfig, string(encryptionKey),
 		memberRepo, accessRepo, nsDenyRepo, nsAllowRepo,
 		clusterSvc, podSvc, workloadSvc, nsSvc, eventSvc,
@@ -397,15 +389,15 @@ func provideInspectService(
 	projectRepo interfaces.ProjectRepository,
 	sender mailer.Sender,
 	appName AppDisplayName,
-) *inspectsvc.Service {
+) *service.InspectService {
 	localRoot := filepath.Join("logs", "inspect-reports")
-	newStore := func(ctx context.Context) inspectsvc.ReportStore {
-		return inspectsvc.ResolveReportStore(ctx, db, localRoot)
+	newStore := func(ctx context.Context) service.ReportStore {
+		return service.ResolveReportStore(ctx, db, localRoot)
 	}
-	storageInfo := func(ctx context.Context) inspectsvc.ReportStorageInfo {
-		return inspectsvc.ResolveReportStorageInfo(ctx, db, localRoot)
+	storageInfo := func(ctx context.Context) service.ReportStorageInfo {
+		return service.ResolveReportStorageInfo(ctx, db, localRoot)
 	}
-	return inspectsvc.NewService(
+	return service.NewInspectService(
 		inspectRepo, platformTplRepo, redisClient, dsSvc, projectRepo,
 		sender, string(appName), newStore, storageInfo,
 	)
@@ -416,14 +408,14 @@ func provideEsmgmtService(
 	db *gorm.DB,
 	encryptionKey SecurityEncryptionKey,
 	es *service.ElasticsearchProvider,
-) (*esmgmtsvc.Service, error) {
+) (*service.EsmgmtService, error) {
 	newStore := func(ctx context.Context) (*objectstore.Client, error) {
 		return objectstore.NewFromDB(ctx, db)
 	}
 	resolveSched := func(ctx context.Context) dictconfig.EsmgmtBackupSchedulerConfig {
 		return dictconfig.ResolveEsmgmtBackupSchedulerConfig(ctx, db, dictconfig.DefaultEsmgmtBackupSchedulerDictTypes())
 	}
-	svc, err := esmgmtsvc.NewService(esmgmtRepo, string(encryptionKey), es, newStore, resolveSched)
+	svc, err := service.NewEsmgmtService(esmgmtRepo, string(encryptionKey), es, newStore, resolveSched)
 	if err != nil {
 		return nil, err
 	}
@@ -438,8 +430,8 @@ func provideKafkamgmtService(
 	kafkamgmtRepo interfaces.KafkamgmtRepository,
 	encryptionKey SecurityEncryptionKey,
 	kafka *service.KafkaProvider,
-) (*kafkamgmtsvc.Service, error) {
-	return kafkamgmtsvc.NewService(kafkamgmtRepo, string(encryptionKey), kafka)
+) (*service.KafkamgmtService, error) {
+	return service.NewKafkamgmtService(kafkamgmtRepo, string(encryptionKey), kafka)
 }
 
 func provideK8sHelmService(

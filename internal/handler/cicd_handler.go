@@ -3,16 +3,16 @@ package handler
 import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/service/cicd"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type CicdHandler struct {
-	svc *cicd.Service
+	svc *service.CicdService
 }
 
-func NewCicdHandler(svc *cicd.Service) *CicdHandler {
+func NewCicdHandler(svc *service.CicdService) *CicdHandler {
 	return &CicdHandler{svc: svc}
 }
 

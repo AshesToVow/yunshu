@@ -3,7 +3,7 @@ package handler
 import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	aisvc "yunshu/internal/service/ai"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,7 +18,7 @@ func (h *AIHandler) ListLLMModels(c *gin.Context) {
 }
 
 func (h *AIHandler) CreateLLMModel(c *gin.Context) {
-	var req aisvc.LLMModelUpsertRequest
+	var req service.LLMModelUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -39,7 +39,7 @@ func (h *AIHandler) UpdateLLMModel(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.LLMModelUpsertRequest
+	var req service.LLMModelUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

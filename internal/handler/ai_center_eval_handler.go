@@ -2,10 +2,10 @@ package handler
 
 import (
 	"strconv"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	aisvc "yunshu/internal/service/ai"
 
 	"github.com/gin-gonic/gin"
 )
@@ -81,7 +81,7 @@ func (h *AIHandler) GetEvalCase(c *gin.Context) {
 }
 
 func (h *AIHandler) CreateEvalCase(c *gin.Context) {
-	var req aisvc.EvalCaseUpsertRequest
+	var req service.EvalCaseUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return
@@ -102,7 +102,7 @@ func (h *AIHandler) UpdateEvalCase(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	var req aisvc.EvalCaseUpsertRequest
+	var req service.EvalCaseUpsertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, err)
 		return

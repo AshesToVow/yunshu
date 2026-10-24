@@ -1,13 +1,13 @@
 package handler
 
 import (
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
+	"yunshu/internal/service"
 )
 
 type DbmgmtHandler struct {
-	svc *dbmgmtsvc.Service
+	svc *service.DbmgmtService
 }
 
-func NewDbmgmtHandler(svc *dbmgmtsvc.Service) *DbmgmtHandler {
+func NewDbmgmtHandler(svc *service.DbmgmtService) *DbmgmtHandler {
 	return &DbmgmtHandler{svc: svc}
 }

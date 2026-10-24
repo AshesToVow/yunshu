@@ -2,11 +2,11 @@ package cicd
 
 import (
 	"context"
+	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/lifecycle"
 	"yunshu/internal/plugin"
-	cicdsvc "yunshu/internal/service/cicd"
 )
 
 func init() {
@@ -60,9 +60,9 @@ func (m *module) StartWorkers(bgCtx context.Context, rt *plugin.Runtime) error {
 	if bgCtx == nil || rt == nil {
 		return nil
 	}
-	if svc, ok := plugin.As[*cicdsvc.Service](rt.Cicd); ok && svc != nil {
-		lifecycle.Go("cicd.run-sync", func() { svc.RunSyncWorker(bgCtx) })
-		lifecycle.Go("cicd.image-cleanup", func() { svc.RunImageCleanupWorker(bgCtx) })
+	if svc, ok := plugin.As[*service.CicdService](rt.Cicd); ok && svc != nil {
+		lifecycle.Go("service.run-sync", func() { svc.RunSyncWorker(bgCtx) })
+		lifecycle.Go("service.image-cleanup", func() { svc.RunImageCleanupWorker(bgCtx) })
 	}
 	return nil
 }

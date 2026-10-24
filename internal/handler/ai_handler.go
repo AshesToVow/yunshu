@@ -3,16 +3,16 @@ package handler
 import (
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	aisvc "yunshu/internal/service/ai"
+	"yunshu/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type AIHandler struct {
-	svc *aisvc.Service
+	svc *service.AIService
 }
 
-func NewAIHandler(svc *aisvc.Service) *AIHandler {
+func NewAIHandler(svc *service.AIService) *AIHandler {
 	return &AIHandler{svc: svc}
 }
 
@@ -21,7 +21,7 @@ func (h *AIHandler) Status(c *gin.Context) {
 }
 
 func (h *AIHandler) Ping(c *gin.Context) {
-	var req aisvc.PingRequest
+	var req service.PingRequest
 	_ = c.ShouldBindJSON(&req)
 	user, _ := auth.CurrentUserFromContext(c)
 	var uid uint

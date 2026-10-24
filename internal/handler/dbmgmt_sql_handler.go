@@ -2,10 +2,10 @@ package handler
 
 import (
 	"context"
+	"yunshu/internal/service"
 
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
-	dbmgmtsvc "yunshu/internal/service/dbmgmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +21,7 @@ func (h *DbmgmtHandler) Query(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.QueryRequest) (*dbmgmtsvc.QueryResult, error) {
+	ServeJSON(c, func(ctx context.Context, req service.QueryRequest) (*service.QueryResult, error) {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.ExecuteQuery(ctx, projectID, instanceID, req, actor)
 	})
@@ -38,7 +38,7 @@ func (h *DbmgmtHandler) Execute(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.ExecuteRequest) (*dbmgmtsvc.ExecuteResponse, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ExecuteRequest) (*service.ExecuteResponse, error) {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.ExecuteSQL(ctx, projectID, instanceID, req, actor)
 	})
@@ -55,7 +55,7 @@ func (h *DbmgmtHandler) CheckSQL(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.SQLCheckRequest) (*dbmgmtsvc.SQLCheckResponse, error) {
+	ServeJSON(c, func(ctx context.Context, req service.SQLCheckRequest) (*service.SQLCheckResponse, error) {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.CheckSQL(ctx, projectID, instanceID, req, actor)
 	})
@@ -72,7 +72,7 @@ func (h *DbmgmtHandler) Import(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.ImportRequest) (*dbmgmtsvc.ExecuteResponse, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ImportRequest) (*service.ExecuteResponse, error) {
 		actor, _ := auth.CurrentUserFromContext(c)
 		return h.svc.ImportSQL(ctx, projectID, instanceID, req, actor)
 	})
@@ -110,7 +110,7 @@ func (h *DbmgmtHandler) UpsertColumnMaskRule(c *gin.Context) {
 		return
 	}
 	actor, _ := auth.CurrentUserFromContext(c)
-	ServeJSON(c, func(ctx context.Context, req dbmgmtsvc.ColumnMaskRuleUpsertRequest) (any, error) {
+	ServeJSON(c, func(ctx context.Context, req service.ColumnMaskRuleUpsertRequest) (any, error) {
 		return h.svc.UpsertColumnMaskRule(ctx, projectID, instanceID, req, actor)
 	})
 }
