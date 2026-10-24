@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint \"src/services/**/*.{ts,tsx}\" \"src/pages/login-page.tsx\" \"src/stores/**/*.{ts,tsx}\" \"src/hooks/use-admin-theme-mode.ts\" \"src/app/app.tsx\"",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:all": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write \"src/services/**/*.{ts,tsx}\" \"src/pages/login-page.tsx\" \"src/stores/**/*.{ts,tsx}\" \"src/hooks/use-admin-theme-mode.ts\" \"src/app/app.tsx\"",

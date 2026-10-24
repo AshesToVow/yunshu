@@ -1,0 +1,18 @@
+#!/bin/sh
+# 提交前检查：gofmt 校验（仅检查暂存的 Go 文件，不自动改写）。
+
+staged_go=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+
+if [ -z "$staged_go" ]; then
+  exit 0
+fi
+
+unformatted=$(gofmt -l $staged_go 2>/dev/null || true)
+
+if [ -n "$unformatted" ]; then
+  echo "以下文件未通过 gofmt，请先运行 gofmt -w 后重新提交：" >&2
+  echo "$unformatted" >&2
+  echo "" >&2
+  echo "修复命令：gofmt -w $unformatted" >&2
+  exit 1
+fi
