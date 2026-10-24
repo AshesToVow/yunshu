@@ -421,7 +421,7 @@ func buildFinalizeInstallScript(deployDir, unit string) string {
 	b.WriteString(`echo "$INFO" | grep -qi ELF || { echo "not an ELF binary: $INFO"; exit 1; }; `)
 	b.WriteString(`case "$ARCH" in `)
 	b.WriteString(`x86_64|amd64) echo "$INFO" | grep -qiE 'x86-64|x86_64|AMD64|Intel 80386' || { echo "arch mismatch: host amd64, binary=$INFO"; exit 1; } ;; `)
-	b.WriteString(`aarch64|arm64) echo "ERROR: host is arm64; offline package must be linux/arm64 ELF"; exit 1 ;; `)
+	b.WriteString(`aarch64|arm64) echo "$INFO" | grep -qiE 'aarch64|ARM64' || { echo "arch mismatch: host arm64, binary=$INFO"; exit 1; } ;; `)
 	b.WriteString(`*) echo "unsupported arch: $ARCH"; exit 1 ;; esac; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT"; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service; `)

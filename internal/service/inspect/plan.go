@@ -25,6 +25,15 @@ type PlanUpsertRequest struct {
 	Recipients       []string `json:"recipients"`
 }
 
+// isPromCompatibleMetricDS 与告警模块口径一致：Prometheus 与 VictoriaMetrics 均走 PromQL 查询。
+func isPromCompatibleMetricDS(t string) bool {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case "prometheus", "victoria", "victoriametrics":
+		return true
+	}
+	return false
+}
+
 func (s *Service) GetOrCreatePlan(ctx context.Context, projectID uint) (*model.InspectPlan, error) {
 	if projectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("project_id required")
@@ -57,7 +66,7 @@ func (s *Service) ensurePlanDefaults(ctx context.Context, plan *model.InspectPla
 	}
 	changed := false
 	if plan.DatasourceID == 0 {
-		ds, err := s.repo.FirstEnabledPrometheusDS(ctx, plan.ProjectID)
+		ds, err := s.repo.FirstEnabledPromCompatibleDS(ctx, plan.ProjectID)
 		if err == nil && ds != nil {
 			plan.DatasourceID = ds.ID
 			changed = true
@@ -97,8 +106,8 @@ func (s *Service) UpdatePlan(ctx context.Context, projectID uint, req PlanUpsert
 		if ds.ProjectID != projectID {
 			return nil, constants.ErrBadRequestWithMsg("数据源不属于当前项目")
 		}
-		if !strings.EqualFold(strings.TrimSpace(ds.Type), "prometheus") {
-			return nil, constants.ErrBadRequestWithMsg("巡检仅支持 Prometheus 数据源")
+		if !isPromCompatibleMetricDS(ds.Type) {
+			return nil, constants.ErrBadRequestWithMsg("巡检仅支持 Prometheus / VictoriaMetrics 数据源")
 		}
 		if !ds.Enabled {
 			return nil, constants.ErrBadRequestWithMsg("数据源未启用")

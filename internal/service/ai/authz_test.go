@@ -28,8 +28,16 @@ func (f *fakeClusterAccess) ListGrantsApplyingToCluster(context.Context, uint) (
 func (f *fakeClusterAccess) GetByID(context.Context, uint) (*model.K8sClusterAccessGrant, error) {
 	return nil, nil
 }
-func (f *fakeClusterAccess) Upsert(context.Context, *model.K8sClusterAccessGrant) error { return nil }
-func (f *fakeClusterAccess) DeleteByID(context.Context, uint) error                      { return nil }
+func (f *fakeClusterAccess) Upsert(context.Context, *model.K8sClusterAccessGrant) error {
+	return nil
+}
+func (f *fakeClusterAccess) DeleteByID(context.Context, uint) error { return nil }
+func (f *fakeClusterAccess) ListForPack(context.Context, k8sauth.PrincipalPack, uint) ([]model.K8sClusterAccessGrant, error) {
+	return nil, nil
+}
+func (f *fakeClusterAccess) DeleteByPrincipalCluster(context.Context, string, string, uint) error {
+	return nil
+}
 func (f *fakeClusterAccess) EffectiveTier(_ context.Context, _ k8sauth.PrincipalPack, clusterID uint) int {
 	if f == nil || f.rankByCluster == nil {
 		return 0

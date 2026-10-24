@@ -114,12 +114,17 @@ func (s *K8sPodService) namespaceAllowed(ctx context.Context, clusterID uint, na
 	if ns == "" {
 		return true
 	}
+	if k8sauth.SkipNamespacePolicy(ctx) {
+		return true
+	}
+	if scope, ok := k8sauth.RequestScopeFromContext(ctx); ok && scope.BypassAuth {
+		return true
+	}
 	u, ok := auth.RequestUserFromContext(ctx)
 	if !ok || u == nil {
 		return true
 	}
-	// super-admin 仍受 NS deny/allow 约束（与 K8sScopeAuthorize 一致）
-	if s.nsDenyRepo == nil && s.nsAllowRepo == nil {
+	if auth.IsSuperAdminRole(u.RoleCodes) {
 		return true
 	}
 	pack := k8sauth.PackFromCurrentUser(u)

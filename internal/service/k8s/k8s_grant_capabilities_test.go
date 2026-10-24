@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"yunshu/internal/pkg/k8scaps"
+	"yunshu/internal/pkg/k8srole"
 )
 
 func TestResolveGrantCapabilities(t *testing.T) {
@@ -12,10 +13,10 @@ func TestResolveGrantCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preset != k8scaps.PresetCustom {
-		t.Fatalf("preset=%s", preset)
+	if preset != k8srole.ClusterAdmin {
+		t.Fatalf("write caps map to admin preset=%s", preset)
 	}
-	if !k8scaps.Has(caps, k8scaps.Read) || !k8scaps.Has(caps, k8scaps.Exec) || !k8scaps.Has(caps, k8scaps.Scale) {
+	if !k8scaps.Has(caps, k8scaps.Apply) {
 		t.Fatalf("caps=%v", caps)
 	}
 
@@ -23,7 +24,7 @@ func TestResolveGrantCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preset != "readonly_exec" || len(caps) != 2 {
+	if preset != "readonly_exec" || !k8scaps.Has(caps, k8scaps.Exec) {
 		t.Fatalf("preset=%s caps=%v", preset, caps)
 	}
 

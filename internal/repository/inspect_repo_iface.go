@@ -26,7 +26,7 @@ type InspectRepo interface {
 	ListPlansWithRetain(ctx context.Context) ([]model.InspectPlan, error)
 
 	// Datasource helpers (plan defaults / validation)
-	FirstEnabledPrometheusDS(ctx context.Context, projectID uint) (*model.AlertDatasource, error)
+	FirstEnabledPromCompatibleDS(ctx context.Context, projectID uint) (*model.AlertDatasource, error)
 	GetDatasource(ctx context.Context, id uint) (*model.AlertDatasource, error)
 
 	// Items

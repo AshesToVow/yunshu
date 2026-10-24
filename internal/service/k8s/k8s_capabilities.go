@@ -66,9 +66,6 @@ func RequiredK8sCapability(perms []model.Permission, routePath, httpMethod, acti
 		return CapDelete
 	}
 	if method == "POST" || method == "PUT" || method == "PATCH" {
-		if strings.Contains(pathLower, "apply") || strings.Contains(pathLower, "create") {
-			return CapApply
-		}
 		return CapApply
 	}
 

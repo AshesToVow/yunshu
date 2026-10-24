@@ -26,6 +26,8 @@ type K8sClusterAccessRepo interface {
 	ListGrantsApplyingToCluster(ctx context.Context, clusterID uint) ([]model.K8sClusterAccessGrant, error)
 	ListByPrincipal(ctx context.Context, kind string, ref string) ([]model.K8sClusterAccessGrant, error)
 	ListByRoleCode(ctx context.Context, roleCode string) ([]model.K8sClusterAccessGrant, error)
+	ListForPack(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) ([]model.K8sClusterAccessGrant, error)
+	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) (error)
 	GetByID(ctx context.Context, id uint) (*model.K8sClusterAccessGrant, error)
 	DeleteByID(ctx context.Context, id uint) (error)
 	EffectiveTier(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) (int)

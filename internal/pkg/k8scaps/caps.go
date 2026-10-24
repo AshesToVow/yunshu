@@ -64,11 +64,13 @@ func All() []string {
 
 func ForPreset(preset string) []string {
 	switch strings.ToLower(strings.TrimSpace(preset)) {
-	case PresetReadonly:
+	case PresetReadonly, "cluster_readonly":
 		return []string{Read}
 	case PresetReadonlyExec:
 		return []string{Read, Exec}
-	case PresetAdmin:
+	case "cluster_pod_exec", "pod_exec":
+		return []string{Exec}
+	case PresetAdmin, "cluster_admin":
 		return All()
 	default:
 		return nil
@@ -143,10 +145,13 @@ func ParseJSON(raw string) []string {
 }
 
 func FromGrant(g model.K8sClusterAccessGrant) []string {
+	if fromRole := Normalize(ForPreset(g.Preset)); len(fromRole) > 0 {
+		return fromRole
+	}
 	if caps := ParseJSON(g.Capabilities); len(caps) > 0 {
 		return caps
 	}
-	return Normalize(ForPreset(g.Preset))
+	return nil
 }
 
 func InferPreset(caps []string) string {
@@ -220,12 +225,14 @@ func Has(have []string, need string) bool {
 
 func PresetLabelCN(preset string) string {
 	switch strings.ToLower(strings.TrimSpace(preset)) {
-	case PresetReadonly:
-		return "只读"
+	case PresetReadonly, "cluster_readonly":
+		return "集群只读"
 	case PresetReadonlyExec:
 		return "只读+Exec"
-	case PresetAdmin:
-		return "集群管理"
+	case "cluster_pod_exec", "pod_exec":
+		return "Pod Exec"
+	case PresetAdmin, "cluster_admin":
+		return "集群管理员"
 	case PresetCustom:
 		return "自定义能力包"
 	default:

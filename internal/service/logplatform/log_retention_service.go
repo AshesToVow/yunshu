@@ -319,10 +319,31 @@ func isLegacyLogsIndexPattern(pattern string) bool {
 	return p == "yunshu-logs" || p == "yunshu-logs-*" || strings.HasPrefix(p, "yunshu-logs-")
 }
 
-// matchIndexPattern 简易 glob：仅支持 * 通配（与 ES index_pattern 常见写法一致）。
+// validateRetentionIndexPattern 限制索引模式为单个 glob（小写字母/数字/.-_ 与 *），
+// 拒绝 ES 多索引语法（逗号、+ 索引运算、前导 - 排除）与 ? [] 等未支持通配，
+// 避免 matchIndexPattern 误判或删除范围扩大。
+func validateRetentionIndexPattern(pattern string) error {
+	p := strings.TrimSpace(pattern)
+	if p == "" {
+		return nil
+	}
+	if strings.ContainsAny(p, ",+?[]{}|()/\\\":<>#") || strings.ContainsAny(p, " \t\r\n") || strings.HasPrefix(p, "-") {
+		return constants.ErrBadRequestWithMsg("索引模式仅支持单个索引 glob，不支持多索引语法（逗号/+/-排除）及 ? [] 等通配")
+	}
+	for _, r := range p {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '*', r == '-', r == '_', r == '.':
+		default:
+			return constants.ErrBadRequestWithMsg("索引模式仅支持小写字母、数字、. _ - 与 * 通配")
+		}
+	}
+	return nil
+}
+
+// matchIndexPattern 简易 glob：仅支持 * 通配（与 ES index_pattern 常见写法一致），大小写不敏感。
 func matchIndexPattern(name, pattern string) bool {
-	name = strings.TrimSpace(name)
-	pattern = strings.TrimSpace(pattern)
+	name = strings.ToLower(strings.TrimSpace(name))
+	pattern = strings.ToLower(strings.TrimSpace(pattern))
 	if pattern == "" || pattern == "*" {
 		return true
 	}
@@ -544,6 +565,9 @@ func (s *LogRetentionService) upsert(ctx context.Context, projectID, serverID ui
 	it.MaxIndexCount = req.MaxIndexCount
 	it.Enabled = req.Enabled
 	if req.IndexPattern != nil {
+		if err := validateRetentionIndexPattern(*req.IndexPattern); err != nil {
+			return LogRetentionItem{}, err
+		}
 		it.IndexPattern = normalizeRetentionIndexPattern(*req.IndexPattern)
 		if strings.TrimSpace(*req.IndexPattern) == "" {
 			it.IndexPattern = ""
@@ -600,10 +624,6 @@ func retentionSource(projectID, serverID uint) string {
 		return "server"
 	}
 	return "project"
-}
-
-func projectSource(projectID uint) string {
-	return retentionSource(projectID, 0)
 }
 
 func humanBytes(n int64) string {

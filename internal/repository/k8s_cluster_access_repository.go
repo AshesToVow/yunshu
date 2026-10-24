@@ -8,6 +8,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8scaps"
+	"yunshu/internal/pkg/k8srole"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -21,14 +22,16 @@ func NewK8sClusterAccessRepository(db *gorm.DB) K8sClusterAccessRepo {
 	return &K8sClusterAccessRepository{db: db}
 }
 
-// Upsert 按 (principal_kind, principal_ref, cluster_id) 幂等写入或更新档位。
+// Upsert 按 (principal_kind, principal_ref, cluster_id, preset) 幂等写入（k8m 同一集群可多角色行）。
 func (r *K8sClusterAccessRepository) Upsert(ctx context.Context, it *model.K8sClusterAccessGrant) error {
 	if r == nil || r.db == nil {
 		return gorm.ErrInvalidDB
 	}
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "principal_kind"}, {Name: "principal_ref"}, {Name: "cluster_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"preset", "capabilities", "updated_at"}),
+		Columns: []clause.Column{
+			{Name: "principal_kind"}, {Name: "principal_ref"}, {Name: "cluster_id"}, {Name: "preset"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{"namespaces", "blacklist_namespaces", "capabilities", "updated_at"}),
 	}).Create(it).Error
 }
 
@@ -92,6 +95,54 @@ func (r *K8sClusterAccessRepository) DeleteByID(ctx context.Context, id uint) er
 	return r.db.WithContext(ctx).Delete(&model.K8sClusterAccessGrant{}, id).Error
 }
 
+func (r *K8sClusterAccessRepository) DeleteByPrincipalCluster(ctx context.Context, principalKind, principalRef string, clusterID uint) error {
+	if r == nil || r.db == nil {
+		return gorm.ErrInvalidDB
+	}
+	k := strings.TrimSpace(principalKind)
+	ref := strings.TrimSpace(principalRef)
+	if k == "" || ref == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).Where("principal_kind = ? AND principal_ref = ? AND cluster_id = ?", k, ref, clusterID).
+		Delete(&model.K8sClusterAccessGrant{}).Error
+}
+
+func principalPackQuery(q *gorm.DB, pack k8sauth.PrincipalPack) *gorm.DB {
+	rows := pack.PrincipalRows()
+	if len(rows) == 0 {
+		return q.Where("1 = 0")
+	}
+	var parts []string
+	var args []any
+	for _, row := range rows {
+		parts = append(parts, "(principal_kind = ? AND principal_ref = ?)")
+		args = append(args, row.Kind, row.Ref)
+	}
+	return q.Where(strings.Join(parts, " OR "), args...)
+}
+
+// ListForPack 主体在指定集群上的授权行（含 cluster_id=0）。
+func (r *K8sClusterAccessRepository) ListForPack(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) ([]model.K8sClusterAccessGrant, error) {
+	if r == nil || r.db == nil {
+		return nil, nil
+	}
+	if len(pack.PrincipalRows()) == 0 {
+		return []model.K8sClusterAccessGrant{}, nil
+	}
+	q := principalPackQuery(r.db.WithContext(ctx).Model(&model.K8sClusterAccessGrant{}), pack)
+	if clusterID > 0 {
+		q = q.Where("cluster_id = 0 OR cluster_id = ?", clusterID)
+	} else {
+		q = q.Where("cluster_id = 0")
+	}
+	var grants []model.K8sClusterAccessGrant
+	if err := q.Order("id ASC").Find(&grants).Error; err != nil {
+		return nil, err
+	}
+	return grants, nil
+}
+
 // EffectiveTier 返回主体集合在指定集群上的最高档位（由能力包推导，兼容旧 AccessRank）。
 func (r *K8sClusterAccessRepository) EffectiveTier(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) int {
 	return k8scaps.Rank(r.EffectiveCapabilities(ctx, pack, clusterID))
@@ -106,28 +157,11 @@ func (r *K8sClusterAccessRepository) EffectiveCapabilities(ctx context.Context, 
 	if len(rows) == 0 {
 		return nil
 	}
-	q := r.db.WithContext(ctx).Model(&model.K8sClusterAccessGrant{})
-	var parts []string
-	var args []any
-	for _, row := range rows {
-		parts = append(parts, "(principal_kind = ? AND principal_ref = ?)")
-		args = append(args, row.Kind, row.Ref)
-	}
-	q = q.Where(strings.Join(parts, " OR "), args...)
-	if clusterID > 0 {
-		q = q.Where("cluster_id = 0 OR cluster_id = ?", clusterID)
-	} else {
-		q = q.Where("cluster_id = 0")
-	}
-	var grants []model.K8sClusterAccessGrant
-	if err := q.Find(&grants).Error; err != nil || len(grants) == 0 {
+	grants, err := r.ListForPack(ctx, pack, clusterID)
+	if err != nil || len(grants) == 0 {
 		return nil
 	}
-	var merged []string
-	for _, g := range grants {
-		merged = append(merged, k8scaps.FromGrant(g)...)
-	}
-	return k8scaps.Normalize(merged)
+	return k8srole.CapsFromGrants(grants)
 }
 
 // EffectiveTierIndex 主体在各集群上的档位（cluster_id=0 表示全局档位）。
@@ -205,19 +239,6 @@ func (r *K8sClusterAccessRepository) HasAnyK8sGrant(ctx context.Context, pack k8
 		return false
 	}
 	return n > 0
-}
-
-func k8sPresetRank(p string) int {
-	switch strings.ToLower(strings.TrimSpace(p)) {
-	case "readonly":
-		return 1
-	case "readonly_exec":
-		return 2
-	case "admin":
-		return 3
-	default:
-		return 0
-	}
 }
 
 // ResolvePrincipalRef 解析 principal_ref。

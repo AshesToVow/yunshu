@@ -63,10 +63,10 @@ func (r *InspectRepository) ListPlansWithRetain(ctx context.Context) ([]model.In
 	return list, err
 }
 
-func (r *InspectRepository) FirstEnabledPrometheusDS(ctx context.Context, projectID uint) (*model.AlertDatasource, error) {
+func (r *InspectRepository) FirstEnabledPromCompatibleDS(ctx context.Context, projectID uint) (*model.AlertDatasource, error) {
 	var ds model.AlertDatasource
 	err := r.db.WithContext(ctx).
-		Where("project_id = ? AND enabled = ? AND type = ?", projectID, true, "prometheus").
+		Where("project_id = ? AND enabled = ? AND type IN ?", projectID, true, []string{"prometheus", "victoria", "victoriametrics"}).
 		Order("id ASC").First(&ds).Error
 	if err != nil {
 		return nil, err
