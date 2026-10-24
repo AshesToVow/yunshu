@@ -27,6 +27,7 @@ var bizReasonByCode = map[int]string{
 	11001: "IncludeRegexInvalid",
 	11002: "ExcludeRegexInvalid",
 	11003: "InvalidRequestParam",
+	11004: "IdempotencyConflict",
 	11020: "BadRequestWithMessage",
 	11021: "NotFoundWithMessage",
 	11022: "ForbiddenWithMessage",

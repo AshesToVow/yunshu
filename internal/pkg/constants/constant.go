@@ -78,6 +78,8 @@ var (
 	ErrIncludeRegexInvalid = BizError(http.StatusBadRequest, 11001, "「包含」筛选条件格式不正确，请检查正则表达式")
 	ErrExcludeRegexInvalid = BizError(http.StatusBadRequest, 11002, "「排除」筛选条件格式不正确，请检查正则表达式")
 	ErrInvalidRequestParam = BizError(http.StatusBadRequest, 11003, "请求参数不合法，请检查后重试")
+	// ErrIdempotencyConflict 同一 Idempotency-Key 的写请求正在处理或已处理（未缓存到结果）。
+	ErrIdempotencyConflict = BizError(http.StatusConflict, 11004, "重复的请求正在处理中，请勿重复提交")
 )
 
 // —— 认证与账号 20xxx ——

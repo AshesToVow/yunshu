@@ -46,6 +46,8 @@ func InferHTTPStatus(code int) int {
 		}
 	}
 	switch {
+	case code >= 11001 && code < 12000:
+		return http.StatusBadRequest
 	case code >= 40001 && code < 40100:
 		return http.StatusBadRequest
 	case code >= 40101 && code < 40200:
