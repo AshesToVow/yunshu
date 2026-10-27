@@ -51,61 +51,68 @@ func ResolveDbmgmtConfig(ctx context.Context, db *gorm.DB, base config.DbmgmtCon
 		return base
 	}
 	types := DefaultDbmgmtDictTypes()
-	if v, ok := FetchEnabledDictValue(ctx, db, types.QueryTimeoutSeconds); ok {
+	snap := fetchDictSnapshot(ctx, db,
+		types.QueryTimeoutSeconds, types.MaxResultRows, types.MaxImportFileMB,
+		types.ProdForceApproval, types.ForbidSelfApprove,
+		types.ApprovalSlaHours, types.ApprovalReminderIntervalHours,
+		types.PingIntervalSeconds, types.MaxConcurrentPerInstance,
+		types.GoInceptionEnabled, types.GoInceptionHost, types.GoInceptionPort, types.GoInceptionBackup,
+	)
+	if v, ok := snap.get(types.QueryTimeoutSeconds); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			base.QueryTimeoutSeconds = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.MaxResultRows); ok {
+	if v, ok := snap.get(types.MaxResultRows); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			base.MaxResultRows = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.MaxImportFileMB); ok {
+	if v, ok := snap.get(types.MaxImportFileMB); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			base.MaxImportFileMB = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.ProdForceApproval); ok {
+	if v, ok := snap.get(types.ProdForceApproval); ok {
 		base.ProdForceApproval = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.ForbidSelfApprove); ok {
+	if v, ok := snap.get(types.ForbidSelfApprove); ok {
 		base.ForbidSelfApprove = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.ApprovalSlaHours); ok {
+	if v, ok := snap.get(types.ApprovalSlaHours); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			base.ApprovalSlaHours = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.ApprovalReminderIntervalHours); ok {
+	if v, ok := snap.get(types.ApprovalReminderIntervalHours); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			base.ApprovalReminderIntervalHours = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.PingIntervalSeconds); ok {
+	if v, ok := snap.get(types.PingIntervalSeconds); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			base.PingIntervalSeconds = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.MaxConcurrentPerInstance); ok {
+	if v, ok := snap.get(types.MaxConcurrentPerInstance); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			base.MaxConcurrentPerInstance = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.GoInceptionEnabled); ok {
+	if v, ok := snap.get(types.GoInceptionEnabled); ok {
 		base.GoInceptionEnabled = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.GoInceptionHost); ok {
+	if v, ok := snap.get(types.GoInceptionHost); ok {
 		if h := strings.TrimSpace(v); h != "" {
 			base.GoInceptionHost = h
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.GoInceptionPort); ok {
+	if v, ok := snap.get(types.GoInceptionPort); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			base.GoInceptionPort = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.GoInceptionBackup); ok {
+	if v, ok := snap.get(types.GoInceptionBackup); ok {
 		base.GoInceptionBackup = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
 	}
 	return base

@@ -28,18 +28,17 @@ func DefaultCicdMinioDictTypes() CicdMinioDictTypes {
 func ResolveCicdMinioConfig(ctx context.Context, db *gorm.DB) MinioConfig {
 	base := ResolveMinioConfig(ctx, db, DefaultMinioDictTypes())
 	types := DefaultCicdMinioDictTypes()
-	if db != nil {
-		if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.AccessKey); ok {
-			base.AccessKey = v
-		}
-		if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.SecretKey); ok {
-			base.SecretKey = strings.TrimSpace(v)
-		}
+	snap := fetchDictSnapshot(ctx, db, types.AccessKey, types.SecretKey, "minio_use_ssl")
+	if v, ok := snap.getNonEmpty(types.AccessKey); ok {
+		base.AccessKey = v
+	}
+	if v, ok := snap.getNonEmpty(types.SecretKey); ok {
+		base.SecretKey = v
 	}
 	cicdCfg := ResolveCicdConfig(ctx, db, config.DefaultCicdConfig(), DefaultCicdDictTypes())
 	if ep := strings.TrimSpace(cicdCfg.MinIO.Endpoint); ep != "" {
 		useSSL := base.UseSSL
-		if v, ok := fetchEnabledDictValue(ctx, db, "minio_use_ssl"); ok {
+		if v, ok := snap.get("minio_use_ssl"); ok {
 			if b, ok2 := parseBoolLoose(v); ok2 {
 				useSSL = b
 			}

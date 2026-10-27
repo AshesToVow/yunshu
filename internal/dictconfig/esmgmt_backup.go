@@ -2,7 +2,6 @@ package dictconfig
 
 import (
 	"context"
-	"strings"
 
 	"gorm.io/gorm"
 )
@@ -37,13 +36,14 @@ func ResolveEsmgmtBackupSchedulerConfig(ctx context.Context, db *gorm.DB, types 
 	if db == nil {
 		return cfg
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.Enabled); ok {
+	snap := fetchDictSnapshot(ctx, db, types.Enabled, types.TickSpec)
+	if v, ok := snap.get(types.Enabled); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.Enabled = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.TickSpec); ok {
-		cfg.TickSpec = strings.TrimSpace(v)
+	if v, ok := snap.getNonEmpty(types.TickSpec); ok {
+		cfg.TickSpec = v
 	}
 	if cfg.TickSpec == "" {
 		cfg.TickSpec = defaultEsmgmtBackupSchedulerTick

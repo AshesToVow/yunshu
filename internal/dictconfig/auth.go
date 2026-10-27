@@ -2,7 +2,6 @@ package dictconfig
 
 import (
 	"context"
-	"strings"
 
 	"yunshu/internal/config"
 
@@ -46,48 +45,55 @@ func ResolveAuthConfig(ctx context.Context, db *gorm.DB, yamlBase config.AuthCon
 		return cfg
 	}
 
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.JWTSecret); ok {
+	snap := fetchDictSnapshot(ctx, db,
+		types.JWTSecret, types.AccessTokenTTLMinutes, types.RefreshTokenTTLHours,
+		types.CookieSecure, types.CookieDomain, types.CSPEnabled,
+		types.EmailCodeTTLSeconds, types.EmailCodeCooldownSeconds,
+		types.LoginMaxFailAttempts, types.LoginLockSeconds,
+	)
+
+	if v, ok := snap.getNonEmpty(types.JWTSecret); ok {
 		cfg.JWTSecret = v
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.AccessTokenTTLMinutes); ok {
+	if v, ok := snap.get(types.AccessTokenTTLMinutes); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n > 0 {
 			cfg.AccessTokenTTLMinutes = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.RefreshTokenTTLHours); ok {
+	if v, ok := snap.get(types.RefreshTokenTTLHours); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n > 0 {
 			cfg.RefreshTokenTTLHours = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.CookieSecure); ok {
+	if v, ok := snap.get(types.CookieSecure); ok {
 		if b, ok2 := ParseBoolLoose(v); ok2 {
 			cfg.CookieSecure = &b
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.CookieDomain); ok {
-		cfg.CookieDomain = strings.TrimSpace(v)
+	if v, ok := snap.get(types.CookieDomain); ok {
+		cfg.CookieDomain = v
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.CSPEnabled); ok {
+	if v, ok := snap.get(types.CSPEnabled); ok {
 		if b, ok2 := ParseBoolLoose(v); ok2 {
 			cfg.CSPEnabled = &b
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.EmailCodeTTLSeconds); ok {
+	if v, ok := snap.get(types.EmailCodeTTLSeconds); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n > 0 {
 			cfg.EmailCodeTTLSeconds = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.EmailCodeCooldownSeconds); ok {
+	if v, ok := snap.get(types.EmailCodeCooldownSeconds); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n > 0 {
 			cfg.EmailCodeCooldownSeconds = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.LoginMaxFailAttempts); ok {
+	if v, ok := snap.get(types.LoginMaxFailAttempts); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n > 0 {
 			cfg.LoginMaxFailAttempts = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.LoginLockSeconds); ok {
+	if v, ok := snap.get(types.LoginLockSeconds); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n > 0 {
 			cfg.LoginLockSeconds = n
 		}

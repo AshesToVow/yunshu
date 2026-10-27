@@ -48,41 +48,46 @@ func ResolveKafkaConfig(ctx context.Context, db *gorm.DB, base config.KafkaConfi
 	}
 	types := DefaultKafkaDictTypes()
 	out := base
-	if v, ok := FetchEnabledDictValue(ctx, db, types.Enabled); ok {
+	snap := fetchDictSnapshot(ctx, db,
+		types.Enabled, types.Brokers, types.Topic, "kafka_topic", types.K8sTopic,
+		types.ConsumerGroup, types.Username, types.Password,
+		types.SASLMechanism, types.BatchSize, types.Workers,
+	)
+	if v, ok := snap.get(types.Enabled); ok {
 		out.Enabled = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.Brokers); ok {
+	if v, ok := snap.getNonEmpty(types.Brokers); ok {
 		if brokers := parseESAddresses(v); len(brokers) > 0 {
 			out.Brokers = brokers
 		}
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.Topic); ok {
-		out.TopicPrefix = strings.TrimSpace(v)
-	} else if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, "kafka_topic"); ok {
-		out.TopicPrefix = strings.TrimSpace(v)
+	if v, ok := snap.getNonEmpty(types.Topic); ok {
+		out.TopicPrefix = v
+	} else if v, ok := snap.getNonEmpty("kafka_topic"); ok {
+		out.TopicPrefix = v
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.K8sTopic); ok {
-		out.K8sTopicPrefix = strings.TrimSpace(v)
+	if v, ok := snap.getNonEmpty(types.K8sTopic); ok {
+		out.K8sTopicPrefix = v
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.ConsumerGroup); ok {
-		out.ConsumerGroup = strings.TrimSpace(v)
+	if v, ok := snap.getNonEmpty(types.ConsumerGroup); ok {
+		out.ConsumerGroup = v
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.Username); ok {
-		out.Username = strings.TrimSpace(v)
+	if v, ok := snap.get(types.Username); ok {
+		out.Username = v
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.Password); ok {
+	if v, ok := snap.get(types.Password); ok {
 		out.Password = v
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.SASLMechanism); ok {
-		out.SASLMechanism = strings.TrimSpace(v)
+	if v, ok := snap.getNonEmpty(types.SASLMechanism); ok {
+		out.SASLMechanism = v
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.BatchSize); ok {
-		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+	if v, ok := snap.getNonEmpty(types.BatchSize); ok {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			out.BatchSize = n
 		}
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.Workers); ok {
-		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+	if v, ok := snap.getNonEmpty(types.Workers); ok {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			out.Workers = n
 		}
 	}

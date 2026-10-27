@@ -2,7 +2,6 @@ package dictconfig
 
 import (
 	"context"
-	"strings"
 
 	"yunshu/internal/config"
 
@@ -42,28 +41,32 @@ func ResolveMailConfig(ctx context.Context, db *gorm.DB, yamlBase config.MailCon
 	if db == nil {
 		return cfg
 	}
+	snap := fetchDictSnapshot(ctx, db,
+		types.Host, types.Port, types.Username, types.Password,
+		types.FromEmail, types.FromName, types.UseTLS,
+	)
 
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.Host); ok {
+	if v, ok := snap.getNonEmpty(types.Host); ok {
 		cfg.Host = v
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.Port); ok {
+	if v, ok := snap.get(types.Port); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.Port = n
 		}
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.Username); ok {
+	if v, ok := snap.getNonEmpty(types.Username); ok {
 		cfg.Username = v
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.Password); ok {
-		cfg.Password = strings.TrimSpace(v)
+	if v, ok := snap.getNonEmpty(types.Password); ok {
+		cfg.Password = v
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.FromEmail); ok {
+	if v, ok := snap.getNonEmpty(types.FromEmail); ok {
 		cfg.FromEmail = v
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.FromName); ok {
+	if v, ok := snap.getNonEmpty(types.FromName); ok {
 		cfg.FromName = v
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.UseTLS); ok {
+	if v, ok := snap.get(types.UseTLS); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.UseTLS = bv
 		}

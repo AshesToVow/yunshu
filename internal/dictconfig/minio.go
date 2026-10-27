@@ -48,34 +48,38 @@ func (c MinioConfig) Ready() bool {
 		strings.TrimSpace(c.Bucket) != ""
 }
 
-// ResolveMinioConfig 从数据字典读取 MinIO 配置。
+// ResolveMinioConfig 从数据字典读取 MinIO 配置（单次批量查询）。
 func ResolveMinioConfig(ctx context.Context, db *gorm.DB, types MinioDictTypes) MinioConfig {
 	var cfg MinioConfig
 	if db == nil {
 		return cfg
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.Endpoint); ok {
+	snap := fetchDictSnapshot(ctx, db,
+		types.Endpoint, types.AccessKey, types.SecretKey, types.Bucket,
+		types.UseSSL, types.Region, types.Prefix,
+	)
+	if v, ok := snap.getNonEmpty(types.Endpoint); ok {
 		cfg.Endpoint = NormalizeMinioEndpoint(v)
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.AccessKey); ok {
+	if v, ok := snap.getNonEmpty(types.AccessKey); ok {
 		cfg.AccessKey = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.SecretKey); ok {
-		cfg.SecretKey = strings.TrimSpace(v)
+	if v, ok := snap.getNonEmpty(types.SecretKey); ok {
+		cfg.SecretKey = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.Bucket); ok {
+	if v, ok := snap.getNonEmpty(types.Bucket); ok {
 		cfg.Bucket = v
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.UseSSL); ok {
+	if v, ok := snap.get(types.UseSSL); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.UseSSL = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.Region); ok {
+	if v, ok := snap.getNonEmpty(types.Region); ok {
 		cfg.Region = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.Prefix); ok {
-		cfg.Prefix = strings.TrimSuffix(strings.TrimSpace(v), "/") + "/"
+	if v, ok := snap.getNonEmpty(types.Prefix); ok {
+		cfg.Prefix = strings.TrimSuffix(v, "/") + "/"
 	} else {
 		cfg.Prefix = "mysql-backups/"
 	}

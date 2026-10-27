@@ -66,42 +66,47 @@ func ResolvePasswordPolicy(ctx context.Context, db *gorm.DB) PasswordPolicyConfi
 		return cfg
 	}
 	types := DefaultPasswordPolicyDictTypes()
-	if v, ok := FetchEnabledDictValue(ctx, db, types.MinLength); ok {
+	snap := fetchDictSnapshot(ctx, db,
+		types.MinLength, types.MaxLength,
+		types.RequireUpper, types.RequireLower, types.RequireDigit, types.RequireSpecial,
+		types.ExpiryDays, types.ForbidUsername,
+	)
+	if v, ok := snap.get(types.MinLength); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n > 0 {
 			cfg.MinLength = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.MaxLength); ok {
+	if v, ok := snap.get(types.MaxLength); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n > 0 {
 			cfg.MaxLength = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.RequireUpper); ok {
+	if v, ok := snap.get(types.RequireUpper); ok {
 		if b, ok2 := ParseBoolLoose(v); ok2 {
 			cfg.RequireUpper = b
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.RequireLower); ok {
+	if v, ok := snap.get(types.RequireLower); ok {
 		if b, ok2 := ParseBoolLoose(v); ok2 {
 			cfg.RequireLower = b
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.RequireDigit); ok {
+	if v, ok := snap.get(types.RequireDigit); ok {
 		if b, ok2 := ParseBoolLoose(v); ok2 {
 			cfg.RequireDigit = b
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.RequireSpecial); ok {
+	if v, ok := snap.get(types.RequireSpecial); ok {
 		if b, ok2 := ParseBoolLoose(v); ok2 {
 			cfg.RequireSpecial = b
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.ExpiryDays); ok {
+	if v, ok := snap.get(types.ExpiryDays); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n >= 0 {
 			cfg.ExpiryDays = n
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.ForbidUsername); ok {
+	if v, ok := snap.get(types.ForbidUsername); ok {
 		if b, ok2 := ParseBoolLoose(v); ok2 {
 			cfg.ForbidUsername = b
 		}
@@ -110,6 +115,22 @@ func ResolvePasswordPolicy(ctx context.Context, db *gorm.DB) PasswordPolicyConfi
 		cfg.MaxLength = cfg.MinLength
 	}
 	return cfg
+}
+
+// ResolvePasswordExpiryDays 仅解析过期天数。
+// 鉴权中间件每个请求都要判断密码是否过期，若走全量 ResolvePasswordPolicy 会串行查 8 次字典；
+// 此处只查一项，缺失或非法时回退默认值。
+func ResolvePasswordExpiryDays(ctx context.Context, db *gorm.DB) int {
+	expiryDays := DefaultPasswordPolicy().ExpiryDays
+	if db == nil {
+		return expiryDays
+	}
+	if v, ok := FetchEnabledDictValue(ctx, db, DefaultPasswordPolicyDictTypes().ExpiryDays); ok {
+		if n, ok2 := ParseIntLoose(v); ok2 && n >= 0 {
+			return n
+		}
+	}
+	return expiryDays
 }
 
 // PasswordPolicySummary 供前端展示的策略摘要。

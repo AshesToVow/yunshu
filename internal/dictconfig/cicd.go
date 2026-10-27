@@ -98,171 +98,180 @@ func DefaultCicdDictTypes() CicdDictTypes {
 	}
 }
 
-// ResolveCicdConfig 以 yamlBase 为底，用已启用的数据字典项覆盖。
+// ResolveCicdConfig 以 yamlBase 为底，用已启用的数据字典项覆盖（单次批量查询）。
 func ResolveCicdConfig(ctx context.Context, db *gorm.DB, yamlBase config.CicdConfig, types CicdDictTypes) config.CicdConfig {
 	cfg := yamlBase
 	if db == nil {
 		return cfg
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.Enabled); ok {
+	snap := fetchDictSnapshot(ctx, db,
+		types.Enabled,
+		types.JenkinsBaseURL, types.JenkinsUsername, types.JenkinsAPIToken, types.JenkinsJobFolder,
+		types.JenkinsfileRepo, types.JenkinsfileBranch, types.JenkinsfileFront, types.JenkinsfileBackend, types.JenkinsfileK8s,
+		types.SharedLibraryName,
+		types.GitCredentialID, types.SSHDeployCredentialID, types.MinIOCredentialID, types.HarborCredentialID,
+		types.HarborURL, types.HarborHostIP, types.HarborProjectGroup, types.HarborUsername, types.HarborPassword, types.HarborTLSVerify,
+		types.MinIOEndpoint, types.MinIOBucketFrontend, types.MinIOBucketBackend, types.MCBin, types.MCAlias,
+		types.RunSyncIntervalSeconds, types.DefaultWaitMins, types.DefaultArtifactRetain,
+		types.ApprovalSlaHours, types.ApprovalReminderIntervalHours, types.ForbidSelfApprove, types.ProdForceAudit,
+		types.SonarEnabled, types.SonarURL, types.SonarToken, types.SonarGateBlock,
+		types.CallbackHMACSecret, types.CallbackURL,
+		"minio_use_ssl", "minio_endpoint",
+	)
+	if v, ok := snap.get(types.Enabled); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.Enabled = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.JenkinsBaseURL); ok {
+	if v, ok := snap.getNonEmpty(types.JenkinsBaseURL); ok {
 		cfg.Jenkins.BaseURL = strings.TrimRight(v, "/")
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.JenkinsUsername); ok {
+	if v, ok := snap.getNonEmpty(types.JenkinsUsername); ok {
 		cfg.Jenkins.Username = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.JenkinsAPIToken); ok {
+	if v, ok := snap.getNonEmpty(types.JenkinsAPIToken); ok {
 		cfg.Jenkins.APIToken = v
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.JenkinsJobFolder); ok {
+	if v, ok := snap.get(types.JenkinsJobFolder); ok {
 		cfg.Jenkins.JobFolder = strings.Trim(v, "/")
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.JenkinsfileRepo); ok {
+	if v, ok := snap.getNonEmpty(types.JenkinsfileRepo); ok {
 		cfg.Jenkinsfile.Repo = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.JenkinsfileBranch); ok {
+	if v, ok := snap.getNonEmpty(types.JenkinsfileBranch); ok {
 		cfg.Jenkinsfile.Branch = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.JenkinsfileFront); ok {
+	if v, ok := snap.getNonEmpty(types.JenkinsfileFront); ok {
 		cfg.Jenkinsfile.Front = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.JenkinsfileBackend); ok {
+	if v, ok := snap.getNonEmpty(types.JenkinsfileBackend); ok {
 		cfg.Jenkinsfile.Backend = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.JenkinsfileK8s); ok {
+	if v, ok := snap.getNonEmpty(types.JenkinsfileK8s); ok {
 		cfg.Jenkinsfile.K8s = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.SharedLibraryName); ok {
+	if v, ok := snap.getNonEmpty(types.SharedLibraryName); ok {
 		cfg.Jenkinsfile.SharedLib = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.GitCredentialID); ok {
+	if v, ok := snap.getNonEmpty(types.GitCredentialID); ok {
 		cfg.Credentials.Git = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.SSHDeployCredentialID); ok {
+	if v, ok := snap.getNonEmpty(types.SSHDeployCredentialID); ok {
 		cfg.Credentials.SSHDeploy = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.MinIOCredentialID); ok {
+	if v, ok := snap.getNonEmpty(types.MinIOCredentialID); ok {
 		cfg.Credentials.MinIO = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborCredentialID); ok {
+	if v, ok := snap.getNonEmpty(types.HarborCredentialID); ok {
 		cfg.Credentials.Harbor = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborURL); ok {
+	if v, ok := snap.getNonEmpty(types.HarborURL); ok {
 		cfg.Harbor.URL = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborHostIP); ok {
+	if v, ok := snap.getNonEmpty(types.HarborHostIP); ok {
 		cfg.Harbor.HostIP = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborProjectGroup); ok {
+	if v, ok := snap.getNonEmpty(types.HarborProjectGroup); ok {
 		cfg.Harbor.ProjectGroup = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborUsername); ok {
+	if v, ok := snap.getNonEmpty(types.HarborUsername); ok {
 		cfg.Harbor.Username = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborPassword); ok {
+	if v, ok := snap.getNonEmpty(types.HarborPassword); ok {
 		cfg.Harbor.Password = v
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.HarborTLSVerify); ok {
+	if v, ok := snap.get(types.HarborTLSVerify); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.Harbor.TLSVerify = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.MinIOEndpoint); ok {
+	if v, ok := snap.getNonEmpty(types.MinIOEndpoint); ok {
 		cfg.MinIO.Endpoint = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.MinIOBucketFrontend); ok {
+	if v, ok := snap.getNonEmpty(types.MinIOBucketFrontend); ok {
 		cfg.MinIO.BucketFrontend = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.MinIOBucketBackend); ok {
+	if v, ok := snap.getNonEmpty(types.MinIOBucketBackend); ok {
 		cfg.MinIO.BucketBackend = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.MCBin); ok {
+	if v, ok := snap.getNonEmpty(types.MCBin); ok {
 		cfg.MinIO.MCBin = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.MCAlias); ok {
+	if v, ok := snap.getNonEmpty(types.MCAlias); ok {
 		cfg.MinIO.MCAlias = v
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.RunSyncIntervalSeconds); ok {
+	if v, ok := snap.get(types.RunSyncIntervalSeconds); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.RunSyncIntervalSeconds = n
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.DefaultWaitMins); ok {
+	if v, ok := snap.get(types.DefaultWaitMins); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.DefaultWaitMins = n
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.DefaultArtifactRetain); ok {
+	if v, ok := snap.get(types.DefaultArtifactRetain); ok {
 		if n, ok2 := parseInt(v); ok2 && n >= 0 {
 			cfg.DefaultArtifactRetain = n
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.ApprovalSlaHours); ok {
+	if v, ok := snap.get(types.ApprovalSlaHours); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.ApprovalSlaHours = n
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.ApprovalReminderIntervalHours); ok {
+	if v, ok := snap.get(types.ApprovalReminderIntervalHours); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.ApprovalReminderIntervalHours = n
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.ForbidSelfApprove); ok {
+	if v, ok := snap.get(types.ForbidSelfApprove); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.ForbidSelfApprove = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.ProdForceAudit); ok {
+	if v, ok := snap.get(types.ProdForceAudit); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.ProdForceAudit = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.SonarEnabled); ok {
+	if v, ok := snap.get(types.SonarEnabled); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.Sonar.Enabled = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.SonarURL); ok {
+	if v, ok := snap.getNonEmpty(types.SonarURL); ok {
 		cfg.Sonar.URL = strings.TrimRight(v, "/")
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.SonarToken); ok {
+	if v, ok := snap.getNonEmpty(types.SonarToken); ok {
 		cfg.Sonar.Token = v
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.SonarGateBlock); ok {
+	if v, ok := snap.get(types.SonarGateBlock); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.Sonar.GateBlock = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.CallbackHMACSecret); ok {
+	if v, ok := snap.getNonEmpty(types.CallbackHMACSecret); ok {
 		cfg.Callback.HMACSecret = v
 	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.CallbackURL); ok {
+	if v, ok := snap.getNonEmpty(types.CallbackURL); ok {
 		cfg.Callback.CallbackURL = strings.TrimSpace(v)
 	}
-	cfg.MinIO.Endpoint = resolveCicdMinIOEndpoint(ctx, db, cfg.MinIO.Endpoint)
+	cfg.MinIO.Endpoint = resolveCicdMinIOEndpoint(snap, cfg.MinIO.Endpoint)
 	return cfg
 }
 
-func resolveCicdMinIOEndpoint(ctx context.Context, db *gorm.DB, configured string) string {
+func resolveCicdMinIOEndpoint(snap dictSnapshot, configured string) string {
 	useSSL := false
-	if db != nil {
-		if v, ok := fetchEnabledDictValue(ctx, db, "minio_use_ssl"); ok {
-			if b, ok2 := parseBoolLoose(v); ok2 {
-				useSSL = b
-			}
+	if v, ok := snap.get("minio_use_ssl"); ok {
+		if b, ok2 := parseBoolLoose(v); ok2 {
+			useSSL = b
 		}
 	}
 	if ep := strings.TrimSpace(configured); ep != "" {
 		return FormatMinioEndpointURL(ep, useSSL)
 	}
-	if db == nil {
-		return ""
-	}
-	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, "minio_endpoint"); ok {
+	if v, ok := snap.getNonEmpty("minio_endpoint"); ok {
 		return FormatMinioEndpointURL(v, useSSL)
 	}
 	return ""

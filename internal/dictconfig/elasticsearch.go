@@ -47,32 +47,36 @@ func ResolveElasticsearchConfig(ctx context.Context, db *gorm.DB, base config.El
 	}
 	types := DefaultElasticsearchDictTypes()
 	out := base
-	if v, ok := FetchEnabledDictValue(ctx, db, types.Enabled); ok {
+	snap := fetchDictSnapshot(ctx, db,
+		types.Enabled, types.Addresses, types.Username, types.Password,
+		types.IndexPattern, types.K8sIndexPrefix, types.DefaultRetentionDays, types.CleanupCronSpec,
+	)
+	if v, ok := snap.get(types.Enabled); ok {
 		out.Enabled = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.Addresses); ok {
+	if v, ok := snap.getNonEmpty(types.Addresses); ok {
 		if addrs := parseESAddresses(v); len(addrs) > 0 {
 			out.Addresses = addrs
 		}
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.Username); ok {
+	if v, ok := snap.get(types.Username); ok {
 		out.Username = strings.TrimSpace(v)
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, types.Password); ok {
+	if v, ok := snap.get(types.Password); ok {
 		out.Password = v
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.IndexPattern); ok {
+	if v, ok := snap.getNonEmpty(types.IndexPattern); ok {
 		out.IndexPattern = strings.TrimSpace(v)
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.K8sIndexPrefix); ok {
+	if v, ok := snap.getNonEmpty(types.K8sIndexPrefix); ok {
 		out.K8sIndexPrefix = strings.TrimSpace(v)
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.DefaultRetentionDays); ok {
+	if v, ok := snap.getNonEmpty(types.DefaultRetentionDays); ok {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			out.DefaultRetentionDays = n
 		}
 	}
-	if v, ok := FetchEnabledDictValueNonEmpty(ctx, db, types.CleanupCronSpec); ok {
+	if v, ok := snap.getNonEmpty(types.CleanupCronSpec); ok {
 		out.CleanupCronSpec = strings.TrimSpace(v)
 	}
 	return out.Normalized()

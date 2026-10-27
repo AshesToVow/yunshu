@@ -34,13 +34,16 @@ func respondSessionStoreError(c *gin.Context, _ *logx.Logger, err error) {
 }
 
 // mustChangePassword 统一 HTTP 与 WebSocket 的强制改密判定，避免 WS 通道绕过密码过期。
+// 每个请求都会走到这里，只解析过期天数（单次字典查询），不做全量密码策略解析。
 func mustChangePassword(ctx context.Context, db *gorm.DB, user *model.User) bool {
 	if user == nil {
 		return true
 	}
-	cfg := dictconfig.ResolvePasswordPolicy(ctx, db)
-	expired := password.IsExpired(user.PasswordChangedAt, user.CreatedAt, cfg.ExpiryDays, time.Now())
-	return user.MustChangePassword || expired
+	if user.MustChangePassword {
+		return true
+	}
+	expiryDays := dictconfig.ResolvePasswordExpiryDays(ctx, db)
+	return password.IsExpired(user.PasswordChangedAt, user.CreatedAt, expiryDays, time.Now())
 }
 
 func passwordChangeAllowed(method, fullPath string) bool {

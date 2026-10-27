@@ -34,27 +34,31 @@ func ResolveK8sEventForwardConfig(ctx context.Context, db *gorm.DB, yamlBase con
 	if db == nil {
 		return cfg
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.Enabled); ok {
+	snap := fetchDictSnapshot(ctx, db,
+		types.Enabled, types.WatcherBufferSize, types.WorkerIntervalSeconds,
+		types.WorkerBatchSize, types.WorkerMaxRetries,
+	)
+	if v, ok := snap.get(types.Enabled); ok {
 		if bv, ok2 := parseBoolLoose(v); ok2 {
 			cfg.Enabled = bv
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.WatcherBufferSize); ok {
+	if v, ok := snap.get(types.WatcherBufferSize); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.WatcherBufferSize = n
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.WorkerIntervalSeconds); ok {
+	if v, ok := snap.get(types.WorkerIntervalSeconds); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.WorkerIntervalSeconds = n
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.WorkerBatchSize); ok {
+	if v, ok := snap.get(types.WorkerBatchSize); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.WorkerBatchSize = n
 		}
 	}
-	if v, ok := fetchEnabledDictValue(ctx, db, types.WorkerMaxRetries); ok {
+	if v, ok := snap.get(types.WorkerMaxRetries); ok {
 		if n, ok2 := parseInt(v); ok2 && n > 0 {
 			cfg.WorkerMaxRetries = n
 		}

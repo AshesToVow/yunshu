@@ -579,7 +579,10 @@ export type DbColumnMaskRule = {
 };
 
 export async function listDbColumnMaskRules(projectId: number, instanceId: number) {
-  return getData<DbColumnMaskRule[]>(http.get(`${base(projectId)}/instances/${instanceId}/column-mask-rules`));
+  const res = await getData<{ list?: DbColumnMaskRule[] }>(
+    http.get(`${base(projectId)}/instances/${instanceId}/column-mask-rules`),
+  );
+  return res?.list ?? [];
 }
 
 export async function upsertDbColumnMaskRule(
